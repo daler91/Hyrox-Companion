@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { chatWithCoach, type ChatMessage } from "./gemini";
+import { chatWithCoach, type ChatMessage, type TrainingContext } from "./gemini";
 import { updatePlanDaySchema, insertWorkoutLogSchema, updateWorkoutLogSchema, type InsertPlanDay } from "@shared/schema";
 
 interface CSVRow {
@@ -47,11 +47,125 @@ function parseCSV(csvText: string): CSVRow[] {
   return rows;
 }
 
+async function buildTrainingContext(): Promise<TrainingContext> {
+  const timeline = await storage.getTimeline();
+  const plans = await storage.listTrainingPlans();
+  const workoutLogs = await storage.listWorkoutLogs();
+  
+  // Count by status
+  let completedWorkouts = 0;
+  let plannedWorkouts = 0;
+  let missedWorkouts = 0;
+  let skippedWorkouts = 0;
+  
+  const exerciseBreakdown: Record<string, number> = {};
+  const recentWorkouts: TrainingContext['recentWorkouts'] = [];
+  const completedDates: Set<string> = new Set();
+  
+  for (const entry of timeline) {
+    if (entry.status === 'completed') {
+      completedWorkouts++;
+      if (entry.date) completedDates.add(entry.date);
+    } else if (entry.status === 'planned') {
+      plannedWorkouts++;
+    } else if (entry.status === 'missed') {
+      missedWorkouts++;
+    } else if (entry.status === 'skipped') {
+      skippedWorkouts++;
+    }
+    
+    // Track exercise focus for completed workouts
+    if (entry.status === 'completed' && entry.focus) {
+      const focusLower = entry.focus.toLowerCase();
+      // Check for Hyrox-specific exercises
+      const exercises = ['running', 'skierg', 'sled push', 'sled pull', 'burpees', 'rowing', 'farmers carry', 'wall balls', 'lunges'];
+      for (const exercise of exercises) {
+        if (focusLower.includes(exercise)) {
+          exerciseBreakdown[exercise] = (exerciseBreakdown[exercise] || 0) + 1;
+        }
+      }
+      // Also count the focus area itself
+      if (!exercises.some(e => focusLower.includes(e))) {
+        exerciseBreakdown[entry.focus] = (exerciseBreakdown[entry.focus] || 0) + 1;
+      }
+    }
+    
+    // Collect recent workouts (completed or logged)
+    if (entry.status === 'completed' && entry.date) {
+      recentWorkouts.push({
+        date: entry.date,
+        focus: entry.focus || '',
+        mainWorkout: entry.mainWorkout || '',
+        status: entry.status,
+      });
+    }
+  }
+  
+  // Sort recent workouts by date descending
+  recentWorkouts.sort((a, b) => b.date.localeCompare(a.date));
+  
+  // Calculate current streak (consecutive days with completed workouts)
+  let currentStreak = 0;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const sortedDates = Array.from(completedDates).sort().reverse();
+  if (sortedDates.length > 0) {
+    let checkDate = new Date(today);
+    // Allow for today or yesterday to start streak
+    const todayStr = checkDate.toISOString().split('T')[0];
+    checkDate.setDate(checkDate.getDate() - 1);
+    const yesterdayStr = checkDate.toISOString().split('T')[0];
+    
+    if (completedDates.has(todayStr) || completedDates.has(yesterdayStr)) {
+      checkDate = completedDates.has(todayStr) ? today : new Date(today.getTime() - 86400000);
+      
+      while (true) {
+        const dateStr = checkDate.toISOString().split('T')[0];
+        if (completedDates.has(dateStr)) {
+          currentStreak++;
+          checkDate.setDate(checkDate.getDate() - 1);
+        } else {
+          break;
+        }
+      }
+    }
+  }
+  
+  const totalWorkouts = completedWorkouts + plannedWorkouts + missedWorkouts + skippedWorkouts;
+  const completionRate = (completedWorkouts + missedWorkouts + skippedWorkouts) > 0
+    ? Math.round((completedWorkouts / (completedWorkouts + missedWorkouts + skippedWorkouts)) * 100)
+    : 0;
+  
+  // Get active plan info
+  let activePlan: TrainingContext['activePlan'];
+  if (plans.length > 0) {
+    const plan = plans[0]; // Use most recent plan
+    activePlan = {
+      name: plan.name,
+      totalWeeks: plan.totalWeeks,
+    };
+  }
+  
+  return {
+    totalWorkouts,
+    completedWorkouts,
+    plannedWorkouts,
+    missedWorkouts,
+    skippedWorkouts,
+    completionRate,
+    currentStreak,
+    recentWorkouts: recentWorkouts.slice(0, 10),
+    exerciseBreakdown,
+    activePlan,
+  };
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  // Chat endpoint for AI coach
+  // Chat endpoint for AI coach with training data context
   app.post("/api/chat", async (req, res) => {
     try {
       const { message, history } = req.body as {
@@ -63,7 +177,10 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Message is required" });
       }
 
-      const response = await chatWithCoach(message, history || []);
+      // Fetch training data to provide context to the AI
+      const trainingContext = await buildTrainingContext();
+      
+      const response = await chatWithCoach(message, history || [], trainingContext);
       res.json({ response });
     } catch (error) {
       console.error("Chat error:", error);
