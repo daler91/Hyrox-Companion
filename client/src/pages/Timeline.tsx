@@ -559,7 +559,37 @@ export default function Timeline() {
                             </DropdownMenu>
                           )}
 
-                          {entry.status !== "planned" && entry.planDayId && (
+                          {entry.status === "missed" && entry.planDayId && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  data-testid={`button-entry-menu-${entry.id}`}
+                                >
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                  onClick={() => handleMarkComplete(entry)}
+                                  data-testid={`button-complete-${entry.id}`}
+                                >
+                                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                                  Mark Complete
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => openEditDialog(entry)}
+                                  data-testid={`button-edit-${entry.id}`}
+                                >
+                                  <Pencil className="h-4 w-4 mr-2" />
+                                  Edit
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
+
+                          {(entry.status === "completed" || entry.status === "skipped") && entry.planDayId && (
                             <Button
                               size="icon"
                               variant="ghost"
