@@ -12,12 +12,14 @@ import LogWorkout from "@/pages/LogWorkout";
 import History from "@/pages/History";
 import Chat from "@/pages/Chat";
 import Settings from "@/pages/Settings";
+import Plan from "@/pages/Plan";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
       <Route path="/log" component={LogWorkout} />
+      <Route path="/plan" component={Plan} />
       <Route path="/history" component={History} />
       <Route path="/chat" component={Chat} />
       <Route path="/settings" component={Settings} />
