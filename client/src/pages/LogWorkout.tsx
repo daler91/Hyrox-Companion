@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +9,8 @@ import { ExerciseSelector } from "@/components/ExerciseSelector";
 import { ExerciseInput } from "@/components/ExerciseInput";
 import { useToast } from "@/hooks/use-toast";
 import { Save, ArrowLeft } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { ExerciseType } from "@/components/WorkoutCard";
 
 interface ExerciseData {
@@ -22,12 +24,41 @@ interface ExerciseData {
 
 export default function LogWorkout() {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [title, setTitle] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [selectedExercises, setSelectedExercises] = useState<ExerciseType[]>([]);
   const [exerciseData, setExerciseData] = useState<Record<ExerciseType, ExerciseData>>({} as Record<ExerciseType, ExerciseData>);
   const [notes, setNotes] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
+
+  const saveMutation = useMutation({
+    mutationFn: async (workoutData: {
+      title: string;
+      date: string;
+      focus: string;
+      mainWorkout: string;
+      notes: string | null;
+    }) => {
+      const response = await apiRequest("POST", "/api/workouts", workoutData);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workouts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/timeline"] });
+      toast({
+        title: "Workout logged",
+        description: "Your workout has been saved successfully.",
+      });
+      navigate("/timeline");
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to save workout. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleToggleExercise = (type: ExerciseType) => {
     setSelectedExercises((prev) => {
@@ -62,7 +93,7 @@ export default function LogWorkout() {
     });
   };
 
-  const handleSave = async () => {
+  const handleSave = () => {
     if (!title.trim()) {
       toast({
         title: "Missing title",
@@ -81,28 +112,23 @@ export default function LogWorkout() {
       return;
     }
 
-    setIsSaving(true);
+    const exerciseDetails = selectedExercises.map((type) => {
+      const data = exerciseData[type];
+      const parts = [];
+      if (data?.time) parts.push(`${data.time}min`);
+      if (data?.distance) parts.push(`${data.distance}m`);
+      if (data?.reps) parts.push(`${data.reps} reps`);
+      if (data?.weight) parts.push(`${data.weight}kg`);
+      return `${type}: ${parts.join(", ") || "completed"}`;
+    });
 
-    // todo: remove mock functionality - replace with actual API call
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    console.log("Saving workout:", {
+    saveMutation.mutate({
       title,
       date,
-      exercises: selectedExercises.map((type) => exerciseData[type]),
-      notes,
+      focus: title,
+      mainWorkout: exerciseDetails.join("; "),
+      notes: notes || null,
     });
-
-    toast({
-      title: "Workout logged",
-      description: "Your workout has been saved successfully.",
-    });
-
-    setTitle("");
-    setSelectedExercises([]);
-    setExerciseData({} as Record<ExerciseType, ExerciseData>);
-    setNotes("");
-    setIsSaving(false);
   };
 
   return (
@@ -189,13 +215,13 @@ export default function LogWorkout() {
 
       <Button
         onClick={handleSave}
-        disabled={isSaving}
+        disabled={saveMutation.isPending}
         className="w-full"
         size="lg"
         data-testid="button-save-workout"
       >
         <Save className="h-4 w-4 mr-2" />
-        {isSaving ? "Saving..." : "Save Workout"}
+        {saveMutation.isPending ? "Saving..." : "Save Workout"}
       </Button>
     </div>
   );
