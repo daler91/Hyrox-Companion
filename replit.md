@@ -4,11 +4,12 @@
 
 HyroxTracker is a training planning and logging application for Hyrox athletes. Hyrox is a fitness competition combining running with functional workout stations (SkiErg, sled push/pull, burpees, rowing, farmers carry, and wall balls). The app allows users to:
 
-- Log and track workouts with specific Hyrox exercises
-- Upload and manage training plans via CSV files
-- View training history and weekly summaries
-- Chat with an AI coach powered by Google Gemini for training advice
-- Customize preferences and settings
+- **Unified Timeline**: Single chronological view combining past workouts, current training, and future planned sessions
+- **CSV Training Plan Import**: Upload training plans and schedule them with a start date
+- **Workout Tracking**: Mark planned sessions as complete, skip them, or edit details
+- **Status Management**: Track planned, completed, missed, and skipped workouts
+- **AI Coach**: Chat with Gemini-powered coach for Hyrox-specific advice
+- **Filtering & Search**: Filter timeline by status (all, planned, completed)
 
 The design follows premium fitness app patterns (Strava, TrainingPeaks, Whoop) with focus on data clarity and athletic performance tracking.
 
@@ -26,7 +27,7 @@ Preferred communication style: Simple, everyday language.
 - **UI Components**: shadcn/ui component library built on Radix UI primitives
 - **Build Tool**: Vite with React plugin
 
-The frontend follows a page-based architecture with reusable components. Pages include Dashboard, LogWorkout, Plan, History, Chat, and Settings. Custom components handle Hyrox-specific UI elements like exercise selectors, workout cards, and metric displays.
+The frontend follows a page-based architecture with reusable components. Main pages include Dashboard, Timeline, Chat, and Settings. The Timeline page is the central hub combining training plan management and workout history into a unified chronological view.
 
 ### Backend Architecture
 - **Runtime**: Node.js with Express
@@ -40,7 +41,10 @@ The server handles API routes for training plans, plan days, and AI chat interac
 - **ORM**: Drizzle ORM with PostgreSQL dialect
 - **Schema Location**: `shared/schema.ts` - shared between client and server
 - **Current Implementation**: In-memory storage (`MemStorage` class) with interface ready for database migration
-- **Schema Design**: Users, TrainingPlans, and PlanDays tables with relationships
+- **Schema Design**: 
+  - Users, TrainingPlans, PlanDays, and WorkoutLogs tables
+  - PlanDays include scheduledDate and status (planned, completed, missed, skipped)
+  - Timeline is aggregated from scheduled plan days and workout logs
 
 The storage layer uses an interface pattern (`IStorage`) allowing easy swap between in-memory and database implementations.
 
