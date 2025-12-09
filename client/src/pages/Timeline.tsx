@@ -70,11 +70,13 @@ export default function Timeline() {
   const { data: timelineData = [], isLoading: timelineLoading } = useQuery<TimelineEntry[]>({
     queryKey: ["/api/timeline", selectedPlanId],
     queryFn: async () => {
-      const res = await fetch(`/api/timeline?planId=${selectedPlanId}`);
+      const url = selectedPlanId 
+        ? `/api/timeline?planId=${selectedPlanId}` 
+        : `/api/timeline`;
+      const res = await fetch(url);
       if (!res.ok) throw new Error("Failed to fetch timeline");
       return res.json();
     },
-    enabled: !!selectedPlanId,
   });
 
   const importMutation = useMutation({
@@ -169,6 +171,22 @@ export default function Timeline() {
     },
   });
 
+  const updateWorkoutMutation = useMutation({
+    mutationFn: async ({ workoutId, updates }: { workoutId: string; updates: { focus?: string; mainWorkout?: string; accessory?: string | null; notes?: string | null } }) => {
+      const response = await apiRequest("PATCH", `/api/workouts/${workoutId}`, updates);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/timeline"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/workouts"] });
+      setEditingEntry(null);
+      toast({ title: "Workout updated" });
+    },
+    onError: () => {
+      toast({ title: "Failed to update workout", variant: "destructive" });
+    },
+  });
+
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -198,7 +216,8 @@ export default function Timeline() {
   };
 
   const handleSaveEdit = () => {
-    if (!editingEntry || !editingEntry.planDayId) return;
+    if (!editingEntry) return;
+    
     const updates: Record<string, string | null> = {};
     if (editForm.focus !== editingEntry.focus) updates.focus = editForm.focus;
     if (editForm.mainWorkout !== editingEntry.mainWorkout) updates.mainWorkout = editForm.mainWorkout;
@@ -210,10 +229,17 @@ export default function Timeline() {
       return;
     }
 
-    updateDayMutation.mutate({
-      dayId: editingEntry.planDayId,
-      updates,
-    });
+    if (editingEntry.workoutLogId && !editingEntry.planDayId) {
+      updateWorkoutMutation.mutate({
+        workoutId: editingEntry.workoutLogId,
+        updates,
+      });
+    } else if (editingEntry.planDayId) {
+      updateDayMutation.mutate({
+        dayId: editingEntry.planDayId,
+        updates,
+      });
+    }
   };
 
   const handleMarkComplete = (entry: TimelineEntry) => {
@@ -378,44 +404,19 @@ export default function Timeline() {
         </CardContent>
       </Card>
 
-      {!selectedPlanId ? (
-        <Card>
-          <CardContent className="p-12 text-center">
-            <Calendar className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-            <h3 className="text-xl font-semibold mb-2">Get Started</h3>
-            <p className="text-muted-foreground mb-4">
-              Select an existing plan or import a new CSV to view your timeline
-            </p>
-            <Label htmlFor="csv-upload-main" className="cursor-pointer">
-              <Button disabled={importMutation.isPending}>
-                {importMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <FileText className="h-4 w-4 mr-2" />
-                )}
-                Import Training Plan
-              </Button>
-            </Label>
-            <Input
-              id="csv-upload-main"
-              type="file"
-              accept=".csv"
-              className="hidden"
-              onChange={handleFileUpload}
-              data-testid="input-csv-upload-main"
-            />
-          </CardContent>
-        </Card>
-      ) : timelineLoading ? (
+      {timelineLoading ? (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin" />
         </div>
       ) : filteredTimeline.length === 0 ? (
         <Card>
           <CardContent className="p-8 text-center">
+            <Calendar className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
             <p className="text-muted-foreground">
               {filterStatus === "all"
-                ? "No scheduled workouts yet. Set a start date for your plan."
+                ? selectedPlanId 
+                  ? "No scheduled workouts yet. Set a start date for your plan."
+                  : "No workouts yet. Log a workout or import a training plan to get started."
                 : `No ${filterStatus} workouts found.`}
             </p>
             {filterStatus === "all" && selectedPlanId && (
@@ -427,6 +428,28 @@ export default function Timeline() {
                 <Calendar className="h-4 w-4 mr-2" />
                 Set Start Date
               </Button>
+            )}
+            {filterStatus === "all" && !selectedPlanId && plans.length === 0 && (
+              <>
+                <Label htmlFor="csv-upload-empty" className="cursor-pointer">
+                  <Button className="mt-4" disabled={importMutation.isPending}>
+                    {importMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <FileText className="h-4 w-4 mr-2" />
+                    )}
+                    Import Training Plan
+                  </Button>
+                </Label>
+                <Input
+                  id="csv-upload-empty"
+                  type="file"
+                  accept=".csv"
+                  className="hidden"
+                  onChange={handleFileUpload}
+                  data-testid="input-csv-upload-empty"
+                />
+              </>
             )}
             {filterStatus !== "all" && (
               <Button
@@ -599,6 +622,17 @@ export default function Timeline() {
                               <Pencil className="h-4 w-4" />
                             </Button>
                           )}
+
+                          {entry.workoutLogId && !entry.planDayId && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => openEditDialog(entry)}
+                              data-testid={`button-edit-${entry.id}`}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
                       </CardContent>
                     </Card>
@@ -708,10 +742,10 @@ export default function Timeline() {
             </Button>
             <Button
               onClick={handleSaveEdit}
-              disabled={updateDayMutation.isPending}
+              disabled={updateDayMutation.isPending || updateWorkoutMutation.isPending}
               data-testid="button-save-edit"
             >
-              {updateDayMutation.isPending ? (
+              {updateDayMutation.isPending || updateWorkoutMutation.isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   Saving...
