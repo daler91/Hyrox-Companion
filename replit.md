@@ -27,7 +27,11 @@ Preferred communication style: Simple, everyday language.
 - **UI Components**: shadcn/ui component library built on Radix UI primitives
 - **Build Tool**: Vite with React plugin
 
-The frontend follows a page-based architecture with reusable components. Main pages include Dashboard, Timeline, Chat, and Settings. The Timeline page is the central hub combining training plan management and workout history into a unified chronological view.
+The frontend follows a streamlined page-based architecture:
+- **Coach** (home): AI chat interface with integrated training stats - the primary user interaction point
+- **Timeline**: Unified chronological view for training plan import, scheduling, editing, and status tracking
+- **Log Workout**: Manual workout entry form
+- **Settings**: User preferences and theme toggle
 
 ### Backend Architecture
 - **Runtime**: Node.js with Express
