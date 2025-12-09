@@ -9,15 +9,14 @@ import {
   SidebarMenuItem,
   SidebarFooter,
 } from "@/components/ui/sidebar";
-import { LayoutDashboard, Plus, History, MessageSquare, Settings, CalendarDays } from "lucide-react";
+import { LayoutDashboard, Plus, MessageSquare, Settings, CalendarRange } from "lucide-react";
 import { useLocation, Link } from "wouter";
 import { ThemeToggle } from "./ThemeToggle";
 
 const menuItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Log Workout", url: "/log", icon: Plus },
-  { title: "Training Plan", url: "/plan", icon: CalendarDays },
-  { title: "History", url: "/history", icon: History },
+  { title: "Timeline", url: "/timeline", icon: CalendarRange },
   { title: "AI Coach", url: "/chat", icon: MessageSquare },
 ];
 

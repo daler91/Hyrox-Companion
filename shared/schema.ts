@@ -1,7 +1,10 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, date } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+
+export const workoutStatusEnum = ["planned", "completed", "missed", "skipped"] as const;
+export type WorkoutStatus = (typeof workoutStatusEnum)[number];
 
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -40,6 +43,8 @@ export const planDays = pgTable("plan_days", {
   mainWorkout: text("main_workout").notNull(),
   accessory: text("accessory"),
   notes: text("notes"),
+  scheduledDate: date("scheduled_date"),
+  status: text("status").default("planned"),
 });
 
 export const insertPlanDaySchema = createInsertSchema(planDays).omit({
@@ -56,4 +61,43 @@ export type PlanDay = typeof planDays.$inferSelect;
 
 export type TrainingPlanWithDays = TrainingPlan & {
   days: PlanDay[];
+};
+
+export const workoutLogs = pgTable("workout_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  date: date("date").notNull(),
+  focus: text("focus").notNull(),
+  mainWorkout: text("main_workout").notNull(),
+  accessory: text("accessory"),
+  notes: text("notes"),
+  duration: integer("duration"),
+  rpe: integer("rpe"),
+  planDayId: varchar("plan_day_id"),
+});
+
+export const insertWorkoutLogSchema = createInsertSchema(workoutLogs).omit({
+  id: true,
+});
+
+export const updateWorkoutLogSchema = insertWorkoutLogSchema.partial();
+
+export type InsertWorkoutLog = z.infer<typeof insertWorkoutLogSchema>;
+export type UpdateWorkoutLog = z.infer<typeof updateWorkoutLogSchema>;
+export type WorkoutLog = typeof workoutLogs.$inferSelect;
+
+export type TimelineEntry = {
+  id: string;
+  date: string;
+  type: "planned" | "logged";
+  status: WorkoutStatus;
+  focus: string;
+  mainWorkout: string;
+  accessory: string | null;
+  notes: string | null;
+  duration?: number | null;
+  rpe?: number | null;
+  planDayId?: string | null;
+  workoutLogId?: string | null;
+  weekNumber?: number;
+  dayName?: string;
 };

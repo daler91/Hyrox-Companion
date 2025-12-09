@@ -9,18 +9,16 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/Dashboard";
 import LogWorkout from "@/pages/LogWorkout";
-import History from "@/pages/History";
+import Timeline from "@/pages/Timeline";
 import Chat from "@/pages/Chat";
 import Settings from "@/pages/Settings";
-import Plan from "@/pages/Plan";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
       <Route path="/log" component={LogWorkout} />
-      <Route path="/plan" component={Plan} />
-      <Route path="/history" component={History} />
+      <Route path="/timeline" component={Timeline} />
       <Route path="/chat" component={Chat} />
       <Route path="/settings" component={Settings} />
       <Route component={NotFound} />

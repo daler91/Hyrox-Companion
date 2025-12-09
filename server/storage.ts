@@ -7,6 +7,10 @@ import {
   type InsertPlanDay,
   type UpdatePlanDay,
   type TrainingPlanWithDays,
+  type WorkoutLog,
+  type InsertWorkoutLog,
+  type UpdateWorkoutLog,
+  type TimelineEntry,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 
@@ -23,17 +27,27 @@ export interface IStorage {
   createPlanDays(days: InsertPlanDay[]): Promise<PlanDay[]>;
   updatePlanDay(dayId: string, updates: UpdatePlanDay): Promise<PlanDay | undefined>;
   getPlanDay(dayId: string): Promise<PlanDay | undefined>;
+
+  createWorkoutLog(log: InsertWorkoutLog): Promise<WorkoutLog>;
+  listWorkoutLogs(): Promise<WorkoutLog[]>;
+  getWorkoutLog(logId: string): Promise<WorkoutLog | undefined>;
+  updateWorkoutLog(logId: string, updates: UpdateWorkoutLog): Promise<WorkoutLog | undefined>;
+  deleteWorkoutLog(logId: string): Promise<boolean>;
+
+  getTimeline(planId?: string): Promise<TimelineEntry[]>;
 }
 
 export class MemStorage implements IStorage {
   private users: Map<string, User>;
   private trainingPlans: Map<string, TrainingPlan>;
   private planDays: Map<string, PlanDay>;
+  private workoutLogs: Map<string, WorkoutLog>;
 
   constructor() {
     this.users = new Map();
     this.trainingPlans = new Map();
     this.planDays = new Map();
+    this.workoutLogs = new Map();
   }
 
   async getUser(id: string): Promise<User | undefined> {
@@ -116,6 +130,8 @@ export class MemStorage implements IStorage {
         mainWorkout: day.mainWorkout,
         accessory: day.accessory ?? null,
         notes: day.notes ?? null,
+        scheduledDate: day.scheduledDate ?? null,
+        status: day.status ?? "planned",
       };
       this.planDays.set(id, planDay);
       createdDays.push(planDay);
@@ -134,6 +150,127 @@ export class MemStorage implements IStorage {
 
   async getPlanDay(dayId: string): Promise<PlanDay | undefined> {
     return this.planDays.get(dayId);
+  }
+
+  async createWorkoutLog(log: InsertWorkoutLog): Promise<WorkoutLog> {
+    const id = randomUUID();
+    const workoutLog: WorkoutLog = {
+      id,
+      date: log.date,
+      focus: log.focus,
+      mainWorkout: log.mainWorkout,
+      accessory: log.accessory ?? null,
+      notes: log.notes ?? null,
+      duration: log.duration ?? null,
+      rpe: log.rpe ?? null,
+      planDayId: log.planDayId ?? null,
+    };
+    this.workoutLogs.set(id, workoutLog);
+
+    if (log.planDayId) {
+      const planDay = this.planDays.get(log.planDayId);
+      if (planDay) {
+        this.planDays.set(log.planDayId, { ...planDay, status: "completed" });
+      }
+    }
+
+    return workoutLog;
+  }
+
+  async listWorkoutLogs(): Promise<WorkoutLog[]> {
+    return Array.from(this.workoutLogs.values()).sort((a, b) => 
+      new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+  }
+
+  async getWorkoutLog(logId: string): Promise<WorkoutLog | undefined> {
+    return this.workoutLogs.get(logId);
+  }
+
+  async updateWorkoutLog(logId: string, updates: UpdateWorkoutLog): Promise<WorkoutLog | undefined> {
+    const log = this.workoutLogs.get(logId);
+    if (!log) return undefined;
+
+    const updatedLog: WorkoutLog = { ...log, ...updates };
+    this.workoutLogs.set(logId, updatedLog);
+    return updatedLog;
+  }
+
+  async deleteWorkoutLog(logId: string): Promise<boolean> {
+    return this.workoutLogs.delete(logId);
+  }
+
+  async getTimeline(planId?: string): Promise<TimelineEntry[]> {
+    const entries: TimelineEntry[] = [];
+    const today = new Date().toISOString().split("T")[0];
+
+    const planDaysArray = Array.from(this.planDays.values())
+      .filter((day) => !planId || day.planId === planId);
+
+    for (const day of planDaysArray) {
+      if (day.scheduledDate) {
+        const linkedLog = Array.from(this.workoutLogs.values()).find(
+          (log) => log.planDayId === day.id
+        );
+
+        if (linkedLog) {
+          entries.push({
+            id: `log-${linkedLog.id}`,
+            date: linkedLog.date,
+            type: "logged",
+            status: "completed",
+            focus: linkedLog.focus,
+            mainWorkout: linkedLog.mainWorkout,
+            accessory: linkedLog.accessory,
+            notes: linkedLog.notes,
+            duration: linkedLog.duration,
+            rpe: linkedLog.rpe,
+            planDayId: day.id,
+            workoutLogId: linkedLog.id,
+            weekNumber: day.weekNumber,
+            dayName: day.dayName,
+          });
+        } else {
+          const status = day.status === "skipped" ? "skipped" :
+            day.scheduledDate < today ? "missed" : "planned";
+
+          entries.push({
+            id: `plan-${day.id}`,
+            date: day.scheduledDate,
+            type: "planned",
+            status: status as any,
+            focus: day.focus,
+            mainWorkout: day.mainWorkout,
+            accessory: day.accessory,
+            notes: day.notes,
+            planDayId: day.id,
+            weekNumber: day.weekNumber,
+            dayName: day.dayName,
+          });
+        }
+      }
+    }
+
+    const standaloneWorkouts = Array.from(this.workoutLogs.values())
+      .filter((log) => !log.planDayId);
+
+    for (const log of standaloneWorkouts) {
+      entries.push({
+        id: `log-${log.id}`,
+        date: log.date,
+        type: "logged",
+        status: "completed",
+        focus: log.focus,
+        mainWorkout: log.mainWorkout,
+        accessory: log.accessory,
+        notes: log.notes,
+        duration: log.duration,
+        rpe: log.rpe,
+        workoutLogId: log.id,
+      });
+    }
+
+    return entries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }
 }
 

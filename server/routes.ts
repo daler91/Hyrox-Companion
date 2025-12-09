@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { chatWithCoach, type ChatMessage } from "./gemini";
-import { updatePlanDaySchema, type InsertPlanDay } from "@shared/schema";
+import { updatePlanDaySchema, insertWorkoutLogSchema, updateWorkoutLogSchema, type InsertPlanDay } from "@shared/schema";
 
 interface CSVRow {
   Week: string;
@@ -181,6 +181,110 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Delete plan error:", error);
       res.status(500).json({ error: "Failed to delete training plan" });
+    }
+  });
+
+  // Workout Logs endpoints
+  app.get("/api/workouts", async (_req, res) => {
+    try {
+      const logs = await storage.listWorkoutLogs();
+      res.json(logs);
+    } catch (error) {
+      console.error("List workouts error:", error);
+      res.status(500).json({ error: "Failed to list workouts" });
+    }
+  });
+
+  app.get("/api/workouts/:id", async (req, res) => {
+    try {
+      const log = await storage.getWorkoutLog(req.params.id);
+      if (!log) {
+        return res.status(404).json({ error: "Workout not found" });
+      }
+      res.json(log);
+    } catch (error) {
+      console.error("Get workout error:", error);
+      res.status(500).json({ error: "Failed to get workout" });
+    }
+  });
+
+  app.post("/api/workouts", async (req, res) => {
+    try {
+      const parseResult = insertWorkoutLogSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ error: "Invalid workout data", details: parseResult.error });
+      }
+
+      const log = await storage.createWorkoutLog(parseResult.data);
+      res.json(log);
+    } catch (error) {
+      console.error("Create workout error:", error);
+      res.status(500).json({ error: "Failed to create workout" });
+    }
+  });
+
+  app.patch("/api/workouts/:id", async (req, res) => {
+    try {
+      const parseResult = updateWorkoutLogSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ error: "Invalid update data", details: parseResult.error });
+      }
+
+      const log = await storage.updateWorkoutLog(req.params.id, parseResult.data);
+      if (!log) {
+        return res.status(404).json({ error: "Workout not found" });
+      }
+      res.json(log);
+    } catch (error) {
+      console.error("Update workout error:", error);
+      res.status(500).json({ error: "Failed to update workout" });
+    }
+  });
+
+  app.delete("/api/workouts/:id", async (req, res) => {
+    try {
+      const deleted = await storage.deleteWorkoutLog(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Workout not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete workout error:", error);
+      res.status(500).json({ error: "Failed to delete workout" });
+    }
+  });
+
+  // Timeline endpoint - unified view of plans and workouts
+  app.get("/api/timeline", async (req, res) => {
+    try {
+      const planId = req.query.planId as string | undefined;
+      const entries = await storage.getTimeline(planId);
+      res.json(entries);
+    } catch (error) {
+      console.error("Timeline error:", error);
+      res.status(500).json({ error: "Failed to get timeline" });
+    }
+  });
+
+  // Update plan day status (for marking as skipped, completed, etc.)
+  app.patch("/api/plans/days/:dayId/status", async (req, res) => {
+    try {
+      const { dayId } = req.params;
+      const { status, scheduledDate } = req.body as { status?: string; scheduledDate?: string };
+
+      const updates: Record<string, string | null> = {};
+      if (status) updates.status = status;
+      if (scheduledDate !== undefined) updates.scheduledDate = scheduledDate;
+
+      const updatedDay = await storage.updatePlanDay(dayId, updates);
+      if (!updatedDay) {
+        return res.status(404).json({ error: "Day not found" });
+      }
+
+      res.json(updatedDay);
+    } catch (error) {
+      console.error("Update day status error:", error);
+      res.status(500).json({ error: "Failed to update day status" });
     }
   });
 
