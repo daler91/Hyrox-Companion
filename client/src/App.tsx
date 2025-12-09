@@ -7,19 +7,17 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import NotFound from "@/pages/not-found";
-import Dashboard from "@/pages/Dashboard";
+import Coach from "@/pages/Coach";
 import LogWorkout from "@/pages/LogWorkout";
 import Timeline from "@/pages/Timeline";
-import Chat from "@/pages/Chat";
 import Settings from "@/pages/Settings";
 
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Dashboard} />
+      <Route path="/" component={Coach} />
       <Route path="/log" component={LogWorkout} />
       <Route path="/timeline" component={Timeline} />
-      <Route path="/chat" component={Chat} />
       <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>
