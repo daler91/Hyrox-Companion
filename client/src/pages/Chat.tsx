@@ -62,12 +62,7 @@ export default function Chat() {
         .filter((m) => m.id !== "1")
         .map((m) => ({ role: m.role, content: m.content }));
 
-      const response = await apiRequest("/api/chat", {
-        method: "POST",
-        body: JSON.stringify({ message: content, history }),
-        headers: { "Content-Type": "application/json" },
-      });
-
+      const response = await apiRequest("POST", "/api/chat", { message: content, history });
       const data = await response.json();
 
       const assistantMessage: Message = {
