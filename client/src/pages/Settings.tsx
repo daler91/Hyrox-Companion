@@ -1,28 +1,98 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Loader2 } from "lucide-react";
+
+interface Preferences {
+  weightUnit: string;
+  distanceUnit: string;
+  weeklyGoal: number;
+}
 
 export default function Settings() {
   const { toast } = useToast();
-  const [name, setName] = useState("Athlete");
+  const { user } = useAuth();
   const [weightUnit, setWeightUnit] = useState("kg");
   const [distanceUnit, setDistanceUnit] = useState("km");
-  const [notifications, setNotifications] = useState(true);
   const [weeklyGoal, setWeeklyGoal] = useState("5");
+  const [hasChanges, setHasChanges] = useState(false);
+
+  const { data: preferences, isLoading } = useQuery<Preferences>({
+    queryKey: ["/api/preferences"],
+  });
+
+  useEffect(() => {
+    if (preferences) {
+      setWeightUnit(preferences.weightUnit || "kg");
+      setDistanceUnit(preferences.distanceUnit || "km");
+      setWeeklyGoal(String(preferences.weeklyGoal || 5));
+    }
+  }, [preferences]);
+
+  const saveMutation = useMutation({
+    mutationFn: async (data: { weightUnit: string; distanceUnit: string; weeklyGoal: number }) => {
+      const response = await apiRequest("PATCH", "/api/preferences", data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/preferences"] });
+      setHasChanges(false);
+      toast({
+        title: "Settings saved",
+        description: "Your preferences have been updated.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to save settings. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleSave = () => {
-    // todo: remove mock functionality - replace with actual API call
-    console.log("Saving settings:", { name, weightUnit, distanceUnit, notifications, weeklyGoal });
-    toast({
-      title: "Settings saved",
-      description: "Your preferences have been updated.",
+    saveMutation.mutate({
+      weightUnit,
+      distanceUnit,
+      weeklyGoal: parseInt(weeklyGoal, 10),
     });
   };
+
+  const handleWeightUnitChange = (value: string) => {
+    setWeightUnit(value);
+    setHasChanges(true);
+  };
+
+  const handleDistanceUnitChange = (value: string) => {
+    setDistanceUnit(value);
+    setHasChanges(true);
+  };
+
+  const handleWeeklyGoalChange = (value: string) => {
+    setWeeklyGoal(value);
+    setHasChanges(true);
+  };
+
+  const userName = user
+    ? user.firstName && user.lastName
+      ? `${user.firstName} ${user.lastName}`
+      : user.email || "User"
+    : "User";
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 md:p-8 max-w-2xl mx-auto space-y-6">
@@ -40,13 +110,13 @@ export default function Settings() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="name">Display Name</Label>
-            <Input
-              id="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              data-testid="input-name"
-            />
+            <Label>Display Name</Label>
+            <p className="text-sm text-muted-foreground" data-testid="text-display-name">
+              {userName}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Your name is managed through your login provider
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -62,7 +132,7 @@ export default function Settings() {
               <Label>Weight Unit</Label>
               <p className="text-sm text-muted-foreground">For sled weights, wall balls, etc.</p>
             </div>
-            <Select value={weightUnit} onValueChange={setWeightUnit}>
+            <Select value={weightUnit} onValueChange={handleWeightUnitChange}>
               <SelectTrigger className="w-24" data-testid="select-weight-unit">
                 <SelectValue />
               </SelectTrigger>
@@ -77,13 +147,13 @@ export default function Settings() {
               <Label>Distance Unit</Label>
               <p className="text-sm text-muted-foreground">For running, rowing, etc.</p>
             </div>
-            <Select value={distanceUnit} onValueChange={setDistanceUnit}>
+            <Select value={distanceUnit} onValueChange={handleDistanceUnitChange}>
               <SelectTrigger className="w-24" data-testid="select-distance-unit">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="km">km</SelectItem>
-                <SelectItem value="mi">mi</SelectItem>
+                <SelectItem value="miles">miles</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -101,7 +171,7 @@ export default function Settings() {
               <Label>Weekly Workout Goal</Label>
               <p className="text-sm text-muted-foreground">Target number of workouts per week</p>
             </div>
-            <Select value={weeklyGoal} onValueChange={setWeeklyGoal}>
+            <Select value={weeklyGoal} onValueChange={handleWeeklyGoalChange}>
               <SelectTrigger className="w-24" data-testid="select-weekly-goal">
                 <SelectValue />
               </SelectTrigger>
@@ -117,28 +187,20 @@ export default function Settings() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Notifications</CardTitle>
-          <CardDescription>Manage your notification preferences</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between gap-4">
-            <div className="space-y-1">
-              <Label>Training Reminders</Label>
-              <p className="text-sm text-muted-foreground">Get reminded to log your workouts</p>
-            </div>
-            <Switch
-              checked={notifications}
-              onCheckedChange={setNotifications}
-              data-testid="switch-notifications"
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      <Button onClick={handleSave} className="w-full" data-testid="button-save-settings">
-        Save Settings
+      <Button 
+        onClick={handleSave} 
+        className="w-full" 
+        data-testid="button-save-settings"
+        disabled={!hasChanges || saveMutation.isPending}
+      >
+        {saveMutation.isPending ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+            Saving...
+          </>
+        ) : (
+          "Save Settings"
+        )}
       </Button>
     </div>
   );

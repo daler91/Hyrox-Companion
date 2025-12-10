@@ -24,12 +24,23 @@ export const users = pgTable("users", {
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
+  weightUnit: varchar("weight_unit").default("kg"),
+  distanceUnit: varchar("distance_unit").default("km"),
+  weeklyGoal: integer("weekly_goal").default(5),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
+
+export const updateUserPreferencesSchema = z.object({
+  weightUnit: z.enum(["kg", "lbs"]).optional(),
+  distanceUnit: z.enum(["km", "miles"]).optional(),
+  weeklyGoal: z.number().min(1).max(14).optional(),
+});
+
+export type UpdateUserPreferences = z.infer<typeof updateUserPreferencesSchema>;
 
 export const trainingPlans = pgTable("training_plans", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

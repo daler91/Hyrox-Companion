@@ -15,6 +15,7 @@ import {
   type InsertWorkoutLog,
   type UpdateWorkoutLog,
   type TimelineEntry,
+  type UpdateUserPreferences,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, isNull, sql } from "drizzle-orm";
@@ -22,6 +23,7 @@ import { eq, and, desc, isNull, sql } from "drizzle-orm";
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
+  updateUserPreferences(userId: string, preferences: UpdateUserPreferences): Promise<User | undefined>;
 
   createTrainingPlan(plan: InsertTrainingPlan): Promise<TrainingPlan>;
   listTrainingPlans(userId: string): Promise<TrainingPlan[]>;
@@ -58,6 +60,18 @@ export class DatabaseStorage implements IStorage {
           updatedAt: new Date(),
         },
       })
+      .returning();
+    return user;
+  }
+
+  async updateUserPreferences(userId: string, preferences: UpdateUserPreferences): Promise<User | undefined> {
+    const [user] = await db
+      .update(users)
+      .set({
+        ...preferences,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
       .returning();
     return user;
   }
