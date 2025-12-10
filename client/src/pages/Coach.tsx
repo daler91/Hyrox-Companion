@@ -1,8 +1,7 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
 import { ChatMessage } from "@/components/ChatMessage";
 import { ChatInput } from "@/components/ChatInput";
 import { QuickActions } from "@/components/QuickActions";
@@ -111,7 +110,7 @@ export default function Coach() {
     enabled: !!activePlanId,
   });
 
-  const stats = calculateStats(timeline);
+  const stats = useMemo(() => calculateStats(timeline), [timeline]);
 
   const quickSuggestions = [
     "Analyze my training this week",
