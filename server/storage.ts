@@ -1,6 +1,10 @@
 import {
+  users,
+  trainingPlans,
+  planDays,
+  workoutLogs,
   type User,
-  type InsertUser,
+  type UpsertUser,
   type TrainingPlan,
   type InsertTrainingPlan,
   type PlanDay,
@@ -12,15 +16,15 @@ import {
   type UpdateWorkoutLog,
   type TimelineEntry,
 } from "@shared/schema";
-import { randomUUID } from "crypto";
+import { db } from "./db";
+import { eq, and, desc, isNull, sql } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  upsertUser(user: UpsertUser): Promise<User>;
 
   createTrainingPlan(plan: InsertTrainingPlan): Promise<TrainingPlan>;
-  listTrainingPlans(): Promise<TrainingPlan[]>;
+  listTrainingPlans(userId: string): Promise<TrainingPlan[]>;
   getTrainingPlan(planId: string): Promise<TrainingPlanWithDays | undefined>;
   deleteTrainingPlan(planId: string): Promise<boolean>;
 
@@ -28,190 +32,164 @@ export interface IStorage {
   updatePlanDay(dayId: string, updates: UpdatePlanDay): Promise<PlanDay | undefined>;
   getPlanDay(dayId: string): Promise<PlanDay | undefined>;
 
-  createWorkoutLog(log: InsertWorkoutLog): Promise<WorkoutLog>;
-  listWorkoutLogs(): Promise<WorkoutLog[]>;
+  createWorkoutLog(log: InsertWorkoutLog & { userId: string }): Promise<WorkoutLog>;
+  listWorkoutLogs(userId: string): Promise<WorkoutLog[]>;
   getWorkoutLog(logId: string): Promise<WorkoutLog | undefined>;
   updateWorkoutLog(logId: string, updates: UpdateWorkoutLog): Promise<WorkoutLog | undefined>;
   deleteWorkoutLog(logId: string): Promise<boolean>;
 
-  getTimeline(planId?: string): Promise<TimelineEntry[]>;
+  getTimeline(userId: string, planId?: string): Promise<TimelineEntry[]>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-  private trainingPlans: Map<string, TrainingPlan>;
-  private planDays: Map<string, PlanDay>;
-  private workoutLogs: Map<string, WorkoutLog>;
-
-  constructor() {
-    this.users = new Map();
-    this.trainingPlans = new Map();
-    this.planDays = new Map();
-    this.workoutLogs = new Map();
-  }
-
+export class DatabaseStorage implements IStorage {
   async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
-  }
-
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
+  async upsertUser(userData: UpsertUser): Promise<User> {
+    const [user] = await db
+      .insert(users)
+      .values(userData)
+      .onConflictDoUpdate({
+        target: users.id,
+        set: {
+          ...userData,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
     return user;
   }
 
   async createTrainingPlan(plan: InsertTrainingPlan): Promise<TrainingPlan> {
-    const id = randomUUID();
-    const trainingPlan: TrainingPlan = {
-      id,
-      name: plan.name,
-      sourceFileName: plan.sourceFileName ?? null,
-      totalWeeks: plan.totalWeeks,
-    };
-    this.trainingPlans.set(id, trainingPlan);
+    const [trainingPlan] = await db
+      .insert(trainingPlans)
+      .values(plan)
+      .returning();
     return trainingPlan;
   }
 
-  async listTrainingPlans(): Promise<TrainingPlan[]> {
-    return Array.from(this.trainingPlans.values());
+  async listTrainingPlans(userId: string): Promise<TrainingPlan[]> {
+    return await db
+      .select()
+      .from(trainingPlans)
+      .where(eq(trainingPlans.userId, userId));
   }
 
   async getTrainingPlan(planId: string): Promise<TrainingPlanWithDays | undefined> {
-    const plan = this.trainingPlans.get(planId);
+    const [plan] = await db
+      .select()
+      .from(trainingPlans)
+      .where(eq(trainingPlans.id, planId));
+    
     if (!plan) return undefined;
 
+    const days = await db
+      .select()
+      .from(planDays)
+      .where(eq(planDays.planId, planId));
+
     const dayOrder = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-    const days = Array.from(this.planDays.values())
-      .filter((day) => day.planId === planId)
-      .sort((a, b) => {
-        if (a.weekNumber !== b.weekNumber) return a.weekNumber - b.weekNumber;
-        const aIndex = dayOrder.indexOf(a.dayName);
-        const bIndex = dayOrder.indexOf(b.dayName);
-        if (aIndex === -1 && bIndex === -1) return 0;
-        if (aIndex === -1) return 1;
-        if (bIndex === -1) return -1;
-        return aIndex - bIndex;
-      });
+    days.sort((a, b) => {
+      if (a.weekNumber !== b.weekNumber) return a.weekNumber - b.weekNumber;
+      const aIndex = dayOrder.indexOf(a.dayName);
+      const bIndex = dayOrder.indexOf(b.dayName);
+      if (aIndex === -1 && bIndex === -1) return 0;
+      if (aIndex === -1) return 1;
+      if (bIndex === -1) return -1;
+      return aIndex - bIndex;
+    });
 
     return { ...plan, days };
   }
 
   async deleteTrainingPlan(planId: string): Promise<boolean> {
-    const plan = this.trainingPlans.get(planId);
-    if (!plan) return false;
-
-    const dayEntries = Array.from(this.planDays.entries());
-    for (const [dayId, day] of dayEntries) {
-      if (day.planId === planId) {
-        this.planDays.delete(dayId);
-      }
-    }
-    this.trainingPlans.delete(planId);
-    return true;
+    await db.delete(planDays).where(eq(planDays.planId, planId));
+    const result = await db.delete(trainingPlans).where(eq(trainingPlans.id, planId));
+    return result.rowCount !== null && result.rowCount > 0;
   }
 
   async createPlanDays(days: InsertPlanDay[]): Promise<PlanDay[]> {
-    const createdDays: PlanDay[] = [];
-    for (const day of days) {
-      const id = randomUUID();
-      const planDay: PlanDay = {
-        id,
-        planId: day.planId,
-        weekNumber: day.weekNumber,
-        dayName: day.dayName,
-        focus: day.focus,
-        mainWorkout: day.mainWorkout,
-        accessory: day.accessory ?? null,
-        notes: day.notes ?? null,
-        scheduledDate: day.scheduledDate ?? null,
-        status: day.status ?? "planned",
-      };
-      this.planDays.set(id, planDay);
-      createdDays.push(planDay);
-    }
-    return createdDays;
+    if (days.length === 0) return [];
+    return await db.insert(planDays).values(days).returning();
   }
 
   async updatePlanDay(dayId: string, updates: UpdatePlanDay): Promise<PlanDay | undefined> {
-    const day = this.planDays.get(dayId);
-    if (!day) return undefined;
-
-    const updatedDay: PlanDay = { ...day, ...updates };
-    this.planDays.set(dayId, updatedDay);
+    const [updatedDay] = await db
+      .update(planDays)
+      .set(updates)
+      .where(eq(planDays.id, dayId))
+      .returning();
     return updatedDay;
   }
 
   async getPlanDay(dayId: string): Promise<PlanDay | undefined> {
-    return this.planDays.get(dayId);
+    const [day] = await db.select().from(planDays).where(eq(planDays.id, dayId));
+    return day;
   }
 
-  async createWorkoutLog(log: InsertWorkoutLog): Promise<WorkoutLog> {
-    const id = randomUUID();
-    const workoutLog: WorkoutLog = {
-      id,
-      date: log.date,
-      focus: log.focus,
-      mainWorkout: log.mainWorkout,
-      accessory: log.accessory ?? null,
-      notes: log.notes ?? null,
-      duration: log.duration ?? null,
-      rpe: log.rpe ?? null,
-      planDayId: log.planDayId ?? null,
-    };
-    this.workoutLogs.set(id, workoutLog);
+  async createWorkoutLog(log: InsertWorkoutLog & { userId: string }): Promise<WorkoutLog> {
+    const [workoutLog] = await db
+      .insert(workoutLogs)
+      .values(log)
+      .returning();
 
     if (log.planDayId) {
-      const planDay = this.planDays.get(log.planDayId);
-      if (planDay) {
-        this.planDays.set(log.planDayId, { ...planDay, status: "completed" });
-      }
+      await db
+        .update(planDays)
+        .set({ status: "completed" })
+        .where(eq(planDays.id, log.planDayId));
     }
 
     return workoutLog;
   }
 
-  async listWorkoutLogs(): Promise<WorkoutLog[]> {
-    return Array.from(this.workoutLogs.values()).sort((a, b) => 
-      new Date(b.date).getTime() - new Date(a.date).getTime()
-    );
+  async listWorkoutLogs(userId: string): Promise<WorkoutLog[]> {
+    return await db
+      .select()
+      .from(workoutLogs)
+      .where(eq(workoutLogs.userId, userId))
+      .orderBy(desc(workoutLogs.date));
   }
 
   async getWorkoutLog(logId: string): Promise<WorkoutLog | undefined> {
-    return this.workoutLogs.get(logId);
+    const [log] = await db.select().from(workoutLogs).where(eq(workoutLogs.id, logId));
+    return log;
   }
 
   async updateWorkoutLog(logId: string, updates: UpdateWorkoutLog): Promise<WorkoutLog | undefined> {
-    const log = this.workoutLogs.get(logId);
-    if (!log) return undefined;
-
-    const updatedLog: WorkoutLog = { ...log, ...updates };
-    this.workoutLogs.set(logId, updatedLog);
+    const [updatedLog] = await db
+      .update(workoutLogs)
+      .set(updates)
+      .where(eq(workoutLogs.id, logId))
+      .returning();
     return updatedLog;
   }
 
   async deleteWorkoutLog(logId: string): Promise<boolean> {
-    return this.workoutLogs.delete(logId);
+    const result = await db.delete(workoutLogs).where(eq(workoutLogs.id, logId));
+    return result.rowCount !== null && result.rowCount > 0;
   }
 
-  async getTimeline(planId?: string): Promise<TimelineEntry[]> {
+  async getTimeline(userId: string, planId?: string): Promise<TimelineEntry[]> {
     const entries: TimelineEntry[] = [];
     const today = new Date().toISOString().split("T")[0];
 
-    const planDaysArray = Array.from(this.planDays.values())
-      .filter((day) => !planId || day.planId === planId);
+    let planDaysQuery = db.select().from(planDays);
+    if (planId) {
+      planDaysQuery = planDaysQuery.where(eq(planDays.planId, planId)) as typeof planDaysQuery;
+    }
+    const allPlanDays = await planDaysQuery;
 
-    for (const day of planDaysArray) {
+    const userWorkouts = await db
+      .select()
+      .from(workoutLogs)
+      .where(eq(workoutLogs.userId, userId));
+
+    for (const day of allPlanDays) {
       if (day.scheduledDate) {
-        const linkedLog = Array.from(this.workoutLogs.values()).find(
-          (log) => log.planDayId === day.id
-        );
+        const linkedLog = userWorkouts.find((log) => log.planDayId === day.id);
 
         if (linkedLog) {
           entries.push({
@@ -251,8 +229,7 @@ export class MemStorage implements IStorage {
       }
     }
 
-    const standaloneWorkouts = Array.from(this.workoutLogs.values())
-      .filter((log) => !log.planDayId);
+    const standaloneWorkouts = userWorkouts.filter((log) => !log.planDayId);
 
     for (const log of standaloneWorkouts) {
       entries.push({
@@ -274,4 +251,4 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();

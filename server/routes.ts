@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { setupAuth, isAuthenticated } from "./replitAuth";
 import { chatWithCoach, type ChatMessage, type TrainingContext } from "./gemini";
 import { updatePlanDaySchema, insertWorkoutLogSchema, updateWorkoutLogSchema, type InsertPlanDay } from "@shared/schema";
 
@@ -47,12 +48,11 @@ function parseCSV(csvText: string): CSVRow[] {
   return rows;
 }
 
-async function buildTrainingContext(): Promise<TrainingContext> {
-  const timeline = await storage.getTimeline();
-  const plans = await storage.listTrainingPlans();
-  const workoutLogs = await storage.listWorkoutLogs();
+async function buildTrainingContext(userId: string): Promise<TrainingContext> {
+  const timeline = await storage.getTimeline(userId);
+  const plans = await storage.listTrainingPlans(userId);
+  const workoutLogs = await storage.listWorkoutLogs(userId);
   
-  // Count by status
   let completedWorkouts = 0;
   let plannedWorkouts = 0;
   let missedWorkouts = 0;
@@ -74,23 +74,19 @@ async function buildTrainingContext(): Promise<TrainingContext> {
       skippedWorkouts++;
     }
     
-    // Track exercise focus for completed workouts
     if (entry.status === 'completed' && entry.focus) {
       const focusLower = entry.focus.toLowerCase();
-      // Check for Hyrox-specific exercises
       const exercises = ['running', 'skierg', 'sled push', 'sled pull', 'burpees', 'rowing', 'farmers carry', 'wall balls', 'lunges'];
       for (const exercise of exercises) {
         if (focusLower.includes(exercise)) {
           exerciseBreakdown[exercise] = (exerciseBreakdown[exercise] || 0) + 1;
         }
       }
-      // Also count the focus area itself
       if (!exercises.some(e => focusLower.includes(e))) {
         exerciseBreakdown[entry.focus] = (exerciseBreakdown[entry.focus] || 0) + 1;
       }
     }
     
-    // Collect recent workouts (completed or logged)
     if (entry.status === 'completed' && entry.date) {
       recentWorkouts.push({
         date: entry.date,
@@ -101,10 +97,8 @@ async function buildTrainingContext(): Promise<TrainingContext> {
     }
   }
   
-  // Sort recent workouts by date descending
   recentWorkouts.sort((a, b) => b.date.localeCompare(a.date));
   
-  // Calculate current streak (consecutive days with completed workouts)
   let currentStreak = 0;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -112,7 +106,6 @@ async function buildTrainingContext(): Promise<TrainingContext> {
   const sortedDates = Array.from(completedDates).sort().reverse();
   if (sortedDates.length > 0) {
     let checkDate = new Date(today);
-    // Allow for today or yesterday to start streak
     const todayStr = checkDate.toISOString().split('T')[0];
     checkDate.setDate(checkDate.getDate() - 1);
     const yesterdayStr = checkDate.toISOString().split('T')[0];
@@ -137,10 +130,9 @@ async function buildTrainingContext(): Promise<TrainingContext> {
     ? Math.round((completedWorkouts / (completedWorkouts + missedWorkouts + skippedWorkouts)) * 100)
     : 0;
   
-  // Get active plan info
   let activePlan: TrainingContext['activePlan'];
   if (plans.length > 0) {
-    const plan = plans[0]; // Use most recent plan
+    const plan = plans[0];
     activePlan = {
       name: plan.name,
       totalWeeks: plan.totalWeeks,
@@ -165,8 +157,20 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  // Chat endpoint for AI coach with training data context
-  app.post("/api/chat", async (req, res) => {
+  await setupAuth(app);
+
+  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      res.json(user);
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
+  app.post("/api/chat", isAuthenticated, async (req: any, res) => {
     try {
       const { message, history } = req.body as {
         message: string;
@@ -177,8 +181,8 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Message is required" });
       }
 
-      // Fetch training data to provide context to the AI
-      const trainingContext = await buildTrainingContext();
+      const userId = req.user.claims.sub;
+      const trainingContext = await buildTrainingContext(userId);
       
       const response = await chatWithCoach(message, history || [], trainingContext);
       res.json({ response });
@@ -188,10 +192,10 @@ export async function registerRoutes(
     }
   });
 
-  // List all training plans
-  app.get("/api/plans", async (_req, res) => {
+  app.get("/api/plans", isAuthenticated, async (req: any, res) => {
     try {
-      const plans = await storage.listTrainingPlans();
+      const userId = req.user.claims.sub;
+      const plans = await storage.listTrainingPlans(userId);
       res.json(plans);
     } catch (error) {
       console.error("List plans error:", error);
@@ -199,8 +203,7 @@ export async function registerRoutes(
     }
   });
 
-  // Get a specific training plan with all days
-  app.get("/api/plans/:id", async (req, res) => {
+  app.get("/api/plans/:id", isAuthenticated, async (req, res) => {
     try {
       const plan = await storage.getTrainingPlan(req.params.id);
       if (!plan) {
@@ -213,8 +216,7 @@ export async function registerRoutes(
     }
   });
 
-  // Import a training plan from CSV
-  app.post("/api/plans/import", async (req, res) => {
+  app.post("/api/plans/import", isAuthenticated, async (req: any, res) => {
     try {
       const { csvContent, fileName, planName } = req.body as {
         csvContent: string;
@@ -226,6 +228,7 @@ export async function registerRoutes(
         return res.status(400).json({ error: "CSV content is required" });
       }
 
+      const userId = req.user.claims.sub;
       const rows = parseCSV(csvContent);
       if (rows.length === 0) {
         return res.status(400).json({ error: "No valid rows found in CSV" });
@@ -238,6 +241,7 @@ export async function registerRoutes(
       const totalWeeks = Math.max(...weekNumbers);
 
       const plan = await storage.createTrainingPlan({
+        userId,
         name: planName || fileName?.replace(".csv", "") || "Imported Plan",
         sourceFileName: fileName || null,
         totalWeeks,
@@ -265,8 +269,7 @@ export async function registerRoutes(
     }
   });
 
-  // Update a specific day in a plan
-  app.patch("/api/plans/:planId/days/:dayId", async (req, res) => {
+  app.patch("/api/plans/:planId/days/:dayId", isAuthenticated, async (req, res) => {
     try {
       const { dayId } = req.params;
 
@@ -287,8 +290,7 @@ export async function registerRoutes(
     }
   });
 
-  // Delete a training plan
-  app.delete("/api/plans/:id", async (req, res) => {
+  app.delete("/api/plans/:id", isAuthenticated, async (req, res) => {
     try {
       const deleted = await storage.deleteTrainingPlan(req.params.id);
       if (!deleted) {
@@ -301,10 +303,10 @@ export async function registerRoutes(
     }
   });
 
-  // Workout Logs endpoints
-  app.get("/api/workouts", async (_req, res) => {
+  app.get("/api/workouts", isAuthenticated, async (req: any, res) => {
     try {
-      const logs = await storage.listWorkoutLogs();
+      const userId = req.user.claims.sub;
+      const logs = await storage.listWorkoutLogs(userId);
       res.json(logs);
     } catch (error) {
       console.error("List workouts error:", error);
@@ -312,7 +314,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/workouts/:id", async (req, res) => {
+  app.get("/api/workouts/:id", isAuthenticated, async (req, res) => {
     try {
       const log = await storage.getWorkoutLog(req.params.id);
       if (!log) {
@@ -325,14 +327,15 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/workouts", async (req, res) => {
+  app.post("/api/workouts", isAuthenticated, async (req: any, res) => {
     try {
       const parseResult = insertWorkoutLogSchema.safeParse(req.body);
       if (!parseResult.success) {
         return res.status(400).json({ error: "Invalid workout data", details: parseResult.error });
       }
 
-      const log = await storage.createWorkoutLog(parseResult.data);
+      const userId = req.user.claims.sub;
+      const log = await storage.createWorkoutLog({ ...parseResult.data, userId });
       res.json(log);
     } catch (error) {
       console.error("Create workout error:", error);
@@ -340,7 +343,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/workouts/:id", async (req, res) => {
+  app.patch("/api/workouts/:id", isAuthenticated, async (req, res) => {
     try {
       const parseResult = updateWorkoutLogSchema.safeParse(req.body);
       if (!parseResult.success) {
@@ -358,7 +361,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/workouts/:id", async (req, res) => {
+  app.delete("/api/workouts/:id", isAuthenticated, async (req, res) => {
     try {
       const deleted = await storage.deleteWorkoutLog(req.params.id);
       if (!deleted) {
@@ -371,11 +374,11 @@ export async function registerRoutes(
     }
   });
 
-  // Timeline endpoint - unified view of plans and workouts
-  app.get("/api/timeline", async (req, res) => {
+  app.get("/api/timeline", isAuthenticated, async (req: any, res) => {
     try {
+      const userId = req.user.claims.sub;
       const planId = req.query.planId as string | undefined;
-      const entries = await storage.getTimeline(planId);
+      const entries = await storage.getTimeline(userId, planId);
       res.json(entries);
     } catch (error) {
       console.error("Timeline error:", error);
@@ -383,8 +386,7 @@ export async function registerRoutes(
     }
   });
 
-  // Update plan day status (for marking as skipped, completed, etc.)
-  app.patch("/api/plans/days/:dayId/status", async (req, res) => {
+  app.patch("/api/plans/days/:dayId/status", isAuthenticated, async (req, res) => {
     try {
       const { dayId } = req.params;
       const { status, scheduledDate } = req.body as { status?: string; scheduledDate?: string };

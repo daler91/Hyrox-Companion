@@ -9,9 +9,12 @@ import {
   SidebarMenuItem,
   SidebarFooter,
 } from "@/components/ui/sidebar";
-import { MessageSquare, Plus, Settings, CalendarRange } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { MessageSquare, Plus, Settings, CalendarRange, LogOut } from "lucide-react";
 import { useLocation, Link } from "wouter";
 import { ThemeToggle } from "./ThemeToggle";
+import { useAuth } from "@/hooks/useAuth";
 
 const menuItems = [
   { title: "Coach", url: "/", icon: MessageSquare },
@@ -21,6 +24,17 @@ const menuItems = [
 
 export function AppSidebar() {
   const [location] = useLocation();
+  const { user } = useAuth();
+
+  const userInitials = user 
+    ? `${user.firstName?.charAt(0) || ''}${user.lastName?.charAt(0) || ''}`.toUpperCase() || user.email?.charAt(0).toUpperCase() || 'U'
+    : 'U';
+
+  const userName = user
+    ? user.firstName && user.lastName 
+      ? `${user.firstName} ${user.lastName}`
+      : user.email || 'User'
+    : 'User';
 
   return (
     <Sidebar>
@@ -54,7 +68,16 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="p-4">
+      <SidebarFooter className="p-4 space-y-3">
+        <div className="flex items-center gap-3 px-2">
+          <Avatar className="h-8 w-8">
+            <AvatarImage src={user?.profileImageUrl || undefined} alt={userName} className="object-cover" />
+            <AvatarFallback className="text-xs">{userInitials}</AvatarFallback>
+          </Avatar>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium truncate" data-testid="text-user-name">{userName}</p>
+          </div>
+        </div>
         <div className="flex items-center justify-between gap-2">
           <SidebarMenuButton asChild data-testid="nav-settings">
             <Link href="/settings" className="flex items-center gap-2">
@@ -62,7 +85,14 @@ export function AppSidebar() {
               <span>Settings</span>
             </Link>
           </SidebarMenuButton>
-          <ThemeToggle />
+          <div className="flex items-center gap-1">
+            <ThemeToggle />
+            <Button variant="ghost" size="icon" asChild data-testid="button-logout">
+              <a href="/api/logout" title="Log out">
+                <LogOut className="h-4 w-4" />
+              </a>
+            </Button>
+          </div>
         </div>
       </SidebarFooter>
     </Sidebar>
