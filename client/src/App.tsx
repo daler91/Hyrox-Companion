@@ -15,21 +15,7 @@ import Settings from "@/pages/Settings";
 import Landing from "@/pages/Landing";
 import { Loader2 } from "lucide-react";
 
-function Router() {
-  const { isAuthenticated, isLoading } = useAuth();
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-screen w-full">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return <Landing />;
-  }
-
+function AuthenticatedRouter() {
   return (
     <Switch>
       <Route path="/" component={Coach} />
@@ -42,12 +28,6 @@ function Router() {
 }
 
 function AuthenticatedLayout() {
-  const { isAuthenticated, isLoading } = useAuth();
-
-  if (isLoading || !isAuthenticated) {
-    return <Router />;
-  }
-
   const style = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3rem",
@@ -63,7 +43,7 @@ function AuthenticatedLayout() {
             <span className="font-semibold">HyroxTracker</span>
           </header>
           <main className="flex-1 overflow-auto">
-            <Router />
+            <AuthenticatedRouter />
           </main>
         </div>
       </div>
@@ -71,12 +51,30 @@ function AuthenticatedLayout() {
   );
 }
 
+function AppContent() {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen w-full">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Landing />;
+  }
+
+  return <AuthenticatedLayout />;
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <TooltipProvider>
-          <AuthenticatedLayout />
+          <AppContent />
           <Toaster />
         </TooltipProvider>
       </ThemeProvider>

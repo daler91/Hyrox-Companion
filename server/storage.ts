@@ -25,18 +25,18 @@ export interface IStorage {
 
   createTrainingPlan(plan: InsertTrainingPlan): Promise<TrainingPlan>;
   listTrainingPlans(userId: string): Promise<TrainingPlan[]>;
-  getTrainingPlan(planId: string): Promise<TrainingPlanWithDays | undefined>;
-  deleteTrainingPlan(planId: string): Promise<boolean>;
+  getTrainingPlan(planId: string, userId: string): Promise<TrainingPlanWithDays | undefined>;
+  deleteTrainingPlan(planId: string, userId: string): Promise<boolean>;
 
   createPlanDays(days: InsertPlanDay[]): Promise<PlanDay[]>;
-  updatePlanDay(dayId: string, updates: UpdatePlanDay): Promise<PlanDay | undefined>;
-  getPlanDay(dayId: string): Promise<PlanDay | undefined>;
+  updatePlanDay(dayId: string, updates: UpdatePlanDay, userId: string): Promise<PlanDay | undefined>;
+  getPlanDay(dayId: string, userId: string): Promise<PlanDay | undefined>;
 
   createWorkoutLog(log: InsertWorkoutLog & { userId: string }): Promise<WorkoutLog>;
   listWorkoutLogs(userId: string): Promise<WorkoutLog[]>;
-  getWorkoutLog(logId: string): Promise<WorkoutLog | undefined>;
-  updateWorkoutLog(logId: string, updates: UpdateWorkoutLog): Promise<WorkoutLog | undefined>;
-  deleteWorkoutLog(logId: string): Promise<boolean>;
+  getWorkoutLog(logId: string, userId: string): Promise<WorkoutLog | undefined>;
+  updateWorkoutLog(logId: string, updates: UpdateWorkoutLog, userId: string): Promise<WorkoutLog | undefined>;
+  deleteWorkoutLog(logId: string, userId: string): Promise<boolean>;
 
   getTimeline(userId: string, planId?: string): Promise<TimelineEntry[]>;
 }
@@ -77,11 +77,11 @@ export class DatabaseStorage implements IStorage {
       .where(eq(trainingPlans.userId, userId));
   }
 
-  async getTrainingPlan(planId: string): Promise<TrainingPlanWithDays | undefined> {
+  async getTrainingPlan(planId: string, userId: string): Promise<TrainingPlanWithDays | undefined> {
     const [plan] = await db
       .select()
       .from(trainingPlans)
-      .where(eq(trainingPlans.id, planId));
+      .where(and(eq(trainingPlans.id, planId), eq(trainingPlans.userId, userId)));
     
     if (!plan) return undefined;
 
@@ -104,7 +104,14 @@ export class DatabaseStorage implements IStorage {
     return { ...plan, days };
   }
 
-  async deleteTrainingPlan(planId: string): Promise<boolean> {
+  async deleteTrainingPlan(planId: string, userId: string): Promise<boolean> {
+    const [plan] = await db
+      .select()
+      .from(trainingPlans)
+      .where(and(eq(trainingPlans.id, planId), eq(trainingPlans.userId, userId)));
+    
+    if (!plan) return false;
+    
     await db.delete(planDays).where(eq(planDays.planId, planId));
     const result = await db.delete(trainingPlans).where(eq(trainingPlans.id, planId));
     return result.rowCount !== null && result.rowCount > 0;
@@ -115,7 +122,10 @@ export class DatabaseStorage implements IStorage {
     return await db.insert(planDays).values(days).returning();
   }
 
-  async updatePlanDay(dayId: string, updates: UpdatePlanDay): Promise<PlanDay | undefined> {
+  async updatePlanDay(dayId: string, updates: UpdatePlanDay, userId: string): Promise<PlanDay | undefined> {
+    const day = await this.getPlanDay(dayId, userId);
+    if (!day) return undefined;
+    
     const [updatedDay] = await db
       .update(planDays)
       .set(updates)
@@ -124,9 +134,14 @@ export class DatabaseStorage implements IStorage {
     return updatedDay;
   }
 
-  async getPlanDay(dayId: string): Promise<PlanDay | undefined> {
-    const [day] = await db.select().from(planDays).where(eq(planDays.id, dayId));
-    return day;
+  async getPlanDay(dayId: string, userId: string): Promise<PlanDay | undefined> {
+    const result = await db
+      .select({ planDay: planDays })
+      .from(planDays)
+      .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
+      .where(and(eq(planDays.id, dayId), eq(trainingPlans.userId, userId)));
+    
+    return result[0]?.planDay;
   }
 
   async createWorkoutLog(log: InsertWorkoutLog & { userId: string }): Promise<WorkoutLog> {
@@ -153,12 +168,18 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(workoutLogs.date));
   }
 
-  async getWorkoutLog(logId: string): Promise<WorkoutLog | undefined> {
-    const [log] = await db.select().from(workoutLogs).where(eq(workoutLogs.id, logId));
+  async getWorkoutLog(logId: string, userId: string): Promise<WorkoutLog | undefined> {
+    const [log] = await db
+      .select()
+      .from(workoutLogs)
+      .where(and(eq(workoutLogs.id, logId), eq(workoutLogs.userId, userId)));
     return log;
   }
 
-  async updateWorkoutLog(logId: string, updates: UpdateWorkoutLog): Promise<WorkoutLog | undefined> {
+  async updateWorkoutLog(logId: string, updates: UpdateWorkoutLog, userId: string): Promise<WorkoutLog | undefined> {
+    const existingLog = await this.getWorkoutLog(logId, userId);
+    if (!existingLog) return undefined;
+    
     const [updatedLog] = await db
       .update(workoutLogs)
       .set(updates)
@@ -167,7 +188,10 @@ export class DatabaseStorage implements IStorage {
     return updatedLog;
   }
 
-  async deleteWorkoutLog(logId: string): Promise<boolean> {
+  async deleteWorkoutLog(logId: string, userId: string): Promise<boolean> {
+    const existingLog = await this.getWorkoutLog(logId, userId);
+    if (!existingLog) return false;
+    
     const result = await db.delete(workoutLogs).where(eq(workoutLogs.id, logId));
     return result.rowCount !== null && result.rowCount > 0;
   }
@@ -176,18 +200,26 @@ export class DatabaseStorage implements IStorage {
     const entries: TimelineEntry[] = [];
     const today = new Date().toISOString().split("T")[0];
 
-    let planDaysQuery = db.select().from(planDays);
-    if (planId) {
-      planDaysQuery = planDaysQuery.where(eq(planDays.planId, planId)) as typeof planDaysQuery;
-    }
-    const allPlanDays = await planDaysQuery;
+    const planDayConditions = planId 
+      ? and(eq(trainingPlans.userId, userId), eq(planDays.planId, planId))
+      : eq(trainingPlans.userId, userId);
+
+    const scheduledDaysResult = await db
+      .select({ planDay: planDays })
+      .from(planDays)
+      .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
+      .where(planDayConditions);
+
+    const scheduledDays = scheduledDaysResult
+      .map(r => r.planDay)
+      .filter(d => d.scheduledDate);
 
     const userWorkouts = await db
       .select()
       .from(workoutLogs)
       .where(eq(workoutLogs.userId, userId));
 
-    for (const day of allPlanDays) {
+    for (const day of scheduledDays) {
       if (day.scheduledDate) {
         const linkedLog = userWorkouts.find((log) => log.planDayId === day.id);
 

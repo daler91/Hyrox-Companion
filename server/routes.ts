@@ -203,9 +203,10 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/plans/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/plans/:id", isAuthenticated, async (req: any, res) => {
     try {
-      const plan = await storage.getTrainingPlan(req.params.id);
+      const userId = req.user.claims.sub;
+      const plan = await storage.getTrainingPlan(req.params.id, userId);
       if (!plan) {
         return res.status(404).json({ error: "Training plan not found" });
       }
@@ -261,7 +262,7 @@ export async function registerRoutes(
 
       await storage.createPlanDays(days);
 
-      const fullPlan = await storage.getTrainingPlan(plan.id);
+      const fullPlan = await storage.getTrainingPlan(plan.id, userId);
       res.json(fullPlan);
     } catch (error) {
       console.error("Import plan error:", error);
@@ -269,16 +270,17 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/plans/:planId/days/:dayId", isAuthenticated, async (req, res) => {
+  app.patch("/api/plans/:planId/days/:dayId", isAuthenticated, async (req: any, res) => {
     try {
       const { dayId } = req.params;
+      const userId = req.user.claims.sub;
 
       const parseResult = updatePlanDaySchema.safeParse(req.body);
       if (!parseResult.success) {
         return res.status(400).json({ error: "Invalid update data", details: parseResult.error });
       }
 
-      const updatedDay = await storage.updatePlanDay(dayId, parseResult.data);
+      const updatedDay = await storage.updatePlanDay(dayId, parseResult.data, userId);
       if (!updatedDay) {
         return res.status(404).json({ error: "Day not found" });
       }
@@ -290,9 +292,10 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/plans/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/plans/:id", isAuthenticated, async (req: any, res) => {
     try {
-      const deleted = await storage.deleteTrainingPlan(req.params.id);
+      const userId = req.user.claims.sub;
+      const deleted = await storage.deleteTrainingPlan(req.params.id, userId);
       if (!deleted) {
         return res.status(404).json({ error: "Training plan not found" });
       }
@@ -314,9 +317,10 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/workouts/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/workouts/:id", isAuthenticated, async (req: any, res) => {
     try {
-      const log = await storage.getWorkoutLog(req.params.id);
+      const userId = req.user.claims.sub;
+      const log = await storage.getWorkoutLog(req.params.id, userId);
       if (!log) {
         return res.status(404).json({ error: "Workout not found" });
       }
@@ -343,14 +347,15 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/workouts/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/workouts/:id", isAuthenticated, async (req: any, res) => {
     try {
       const parseResult = updateWorkoutLogSchema.safeParse(req.body);
       if (!parseResult.success) {
         return res.status(400).json({ error: "Invalid update data", details: parseResult.error });
       }
 
-      const log = await storage.updateWorkoutLog(req.params.id, parseResult.data);
+      const userId = req.user.claims.sub;
+      const log = await storage.updateWorkoutLog(req.params.id, parseResult.data, userId);
       if (!log) {
         return res.status(404).json({ error: "Workout not found" });
       }
@@ -361,9 +366,10 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/workouts/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/workouts/:id", isAuthenticated, async (req: any, res) => {
     try {
-      const deleted = await storage.deleteWorkoutLog(req.params.id);
+      const userId = req.user.claims.sub;
+      const deleted = await storage.deleteWorkoutLog(req.params.id, userId);
       if (!deleted) {
         return res.status(404).json({ error: "Workout not found" });
       }
@@ -386,16 +392,17 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/plans/days/:dayId/status", isAuthenticated, async (req, res) => {
+  app.patch("/api/plans/days/:dayId/status", isAuthenticated, async (req: any, res) => {
     try {
       const { dayId } = req.params;
+      const userId = req.user.claims.sub;
       const { status, scheduledDate } = req.body as { status?: string; scheduledDate?: string };
 
       const updates: Record<string, string | null> = {};
       if (status) updates.status = status;
       if (scheduledDate !== undefined) updates.scheduledDate = scheduledDate;
 
-      const updatedDay = await storage.updatePlanDay(dayId, updates);
+      const updatedDay = await storage.updatePlanDay(dayId, updates, userId);
       if (!updatedDay) {
         return res.status(404).json({ error: "Day not found" });
       }
