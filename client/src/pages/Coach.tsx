@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ChatMessage } from "@/components/ChatMessage";
 import { ChatInput } from "@/components/ChatInput";
 import { QuickActions } from "@/components/QuickActions";
-import { Activity, TrendingUp, Target, Calendar, Flame, Trash2 } from "lucide-react";
+import { Activity, TrendingUp, Target, Calendar, Flame, Trash2, Loader2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { TrainingPlan, TimelineEntry, ChatMessage as DBChatMessage } from "@shared/schema";
 
@@ -242,8 +242,12 @@ export default function Coach() {
             disabled={clearHistoryMutation.isPending}
             data-testid="button-clear-chat"
           >
-            <Trash2 className="h-4 w-4 mr-2" />
-            Clear History
+            {clearHistoryMutation.isPending ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Trash2 className="h-4 w-4 mr-2" />
+            )}
+            {clearHistoryMutation.isPending ? "Clearing..." : "Clear History"}
           </Button>
         )}
       </div>

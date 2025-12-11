@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ExerciseSelector } from "@/components/ExerciseSelector";
 import { ExerciseInput } from "@/components/ExerciseInput";
 import { useToast } from "@/hooks/use-toast";
-import { Save, ArrowLeft } from "lucide-react";
+import { Save, ArrowLeft, Loader2 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { ExerciseType } from "@/components/WorkoutCard";
@@ -220,7 +220,11 @@ export default function LogWorkout() {
         size="lg"
         data-testid="button-save-workout"
       >
-        <Save className="h-4 w-4 mr-2" />
+        {saveMutation.isPending ? (
+          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+        ) : (
+          <Save className="h-4 w-4 mr-2" />
+        )}
         {saveMutation.isPending ? "Saving..." : "Save Workout"}
       </Button>
     </div>
