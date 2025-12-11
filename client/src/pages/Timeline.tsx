@@ -431,7 +431,7 @@ export default function Timeline() {
           data-testid="button-jump-to-today"
         >
           <CalendarCheck className="h-4 w-4 mr-2" />
-          Today
+          Go to Today
         </Button>
       </div>
 
