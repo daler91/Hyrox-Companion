@@ -503,12 +503,19 @@ export default function Timeline() {
         <Card>
           <CardContent className="p-8 text-center">
             <Calendar className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-            <p className="text-muted-foreground">
+            <h3 className="font-semibold mb-2">
               {filterStatus === "all"
                 ? selectedPlanId 
-                  ? "No scheduled workouts yet. Set a start date for your plan."
-                  : "No workouts yet. Log a workout or import a training plan to get started."
-                : `No ${filterStatus} workouts found.`}
+                  ? "Ready to Start Training"
+                  : "Your Training Journey Begins Here"
+                : `No ${filterStatus} workouts`}
+            </h3>
+            <p className="text-muted-foreground text-sm max-w-md mx-auto">
+              {filterStatus === "all"
+                ? selectedPlanId 
+                  ? "Set a start date for your plan to schedule workouts on your calendar. You'll see all your planned sessions here."
+                  : "Import a CSV training plan to get structured workouts, or log individual sessions as you complete them."
+                : `Try adjusting your filter or complete more workouts to see them here.`}
             </p>
             {filterStatus === "all" && selectedPlanId && (
               <Button
