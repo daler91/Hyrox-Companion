@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -43,6 +43,7 @@ import {
   FileText,
   Pencil,
   Calendar,
+  CalendarCheck,
   Loader2,
   CheckCircle2,
   Clock,
@@ -106,6 +107,12 @@ export default function Timeline() {
   });
   const [skipConfirmEntry, setSkipConfirmEntry] = useState<TimelineEntry | null>(null);
   const [csvPreview, setCsvPreview] = useState<{ fileName: string; content: string; rows: Array<{ weekNumber: number; dayName: string; focus: string; mainWorkout: string }> } | null>(null);
+  
+  const todayRef = useRef<HTMLDivElement>(null);
+  
+  const scrollToToday = () => {
+    todayRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   const { data: plans = [], isLoading: plansLoading } = useQuery<TrainingPlan[]>({
     queryKey: ["/api/plans"],
@@ -418,6 +425,14 @@ export default function Timeline() {
             Your complete training journey - past, present, and future
           </p>
         </div>
+        <Button
+          variant="outline"
+          onClick={scrollToToday}
+          data-testid="button-jump-to-today"
+        >
+          <CalendarCheck className="h-4 w-4 mr-2" />
+          Today
+        </Button>
       </div>
 
       <Card>
@@ -569,7 +584,7 @@ export default function Timeline() {
             const isPast = isBefore(dateObj, new Date()) && !isTodayDate;
 
             return (
-              <div key={date} className="relative">
+              <div key={date} className="relative" ref={isTodayDate ? todayRef : undefined}>
                 {isTodayDate && (
                   <div className="absolute -left-4 top-0 bottom-0 w-1 bg-primary rounded-full" />
                 )}
