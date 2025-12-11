@@ -126,3 +126,20 @@ export type TimelineEntry = {
   weekNumber?: number;
   dayName?: string;
 };
+
+// Chat messages for AI Coach persistence
+export const chatMessages = pgTable("chat_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  role: varchar("role", { length: 20 }).notNull(), // "user" or "assistant"
+  content: text("content").notNull(),
+  timestamp: timestamp("timestamp").defaultNow(),
+});
+
+export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({
+  id: true,
+  timestamp: true,
+});
+
+export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
+export type ChatMessage = typeof chatMessages.$inferSelect;

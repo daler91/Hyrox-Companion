@@ -1,13 +1,14 @@
 import { useState, useRef, useEffect, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/components/ui/button";
 import { ChatMessage } from "@/components/ChatMessage";
 import { ChatInput } from "@/components/ChatInput";
 import { QuickActions } from "@/components/QuickActions";
-import { Activity, TrendingUp, Target, Calendar, Flame } from "lucide-react";
-import { apiRequest } from "@/lib/queryClient";
-import type { TrainingPlan, TimelineEntry } from "@shared/schema";
+import { Activity, TrendingUp, Target, Calendar, Flame, Trash2 } from "lucide-react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import type { TrainingPlan, TimelineEntry, ChatMessage as DBChatMessage } from "@shared/schema";
 
 interface Message {
   id: string;
@@ -81,17 +82,58 @@ function calculateStats(timeline: TimelineEntry[]): TrainingStats {
   };
 }
 
+const WELCOME_MESSAGE: Message = {
+  id: "welcome",
+  role: "assistant",
+  content: "Hey! I'm your AI training coach. I can analyze your training data, suggest improvements, help with pacing strategies, and answer any Hyrox-related questions. What would you like to work on today?",
+  timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+};
+
 export default function Coach() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "1",
-      role: "assistant",
-      content: "Hey! I'm your AI training coach. I can analyze your training data, suggest improvements, help with pacing strategies, and answer any Hyrox-related questions. What would you like to work on today?",
-      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
   const [isLoading, setIsLoading] = useState(false);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const { data: chatHistory = [], isLoading: historyLoading } = useQuery<DBChatMessage[]>({
+    queryKey: ["/api/chat/history"],
+  });
+
+  useEffect(() => {
+    if (!historyLoading && chatHistory.length > 0 && !historyLoaded) {
+      const loadedMessages: Message[] = chatHistory.map((msg) => ({
+        id: msg.id,
+        role: msg.role as "user" | "assistant",
+        content: msg.content,
+        timestamp: msg.timestamp 
+          ? new Date(msg.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+          : "",
+      }));
+      setMessages([WELCOME_MESSAGE, ...loadedMessages]);
+      setHistoryLoaded(true);
+    } else if (!historyLoading && chatHistory.length === 0 && !historyLoaded) {
+      setHistoryLoaded(true);
+    }
+  }, [chatHistory, historyLoading, historyLoaded]);
+
+  const saveMessageMutation = useMutation({
+    mutationFn: async (msg: { role: string; content: string }) => {
+      const res = await apiRequest("POST", "/api/chat/message", msg);
+      return res.json();
+    },
+  });
+
+  const clearHistoryMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("DELETE", "/api/chat/history");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/chat/history"] });
+      setMessages([WELCOME_MESSAGE]);
+      setHistoryLoaded(false);
+    },
+  });
 
   const { data: plans = [] } = useQuery<TrainingPlan[]>({
     queryKey: ["/api/plans"],
@@ -136,9 +178,11 @@ export default function Coach() {
     setMessages((prev) => [...prev, userMessage]);
     setIsLoading(true);
 
+    saveMessageMutation.mutate({ role: "user", content });
+
     try {
       const history = messages
-        .filter((m) => m.id !== "1")
+        .filter((m) => m.id !== "welcome")
         .map((m) => ({ role: m.role, content: m.content }));
 
       const trainingContext = timeline.length > 0 
@@ -159,6 +203,8 @@ export default function Coach() {
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
+      
+      saveMessageMutation.mutate({ role: "assistant", content: data.response });
     } catch (error) {
       console.error("Chat error:", error);
       const errorMessage: Message = {
@@ -188,6 +234,18 @@ export default function Coach() {
             Your personal Hyrox training assistant
           </p>
         </div>
+        {messages.length > 1 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => clearHistoryMutation.mutate()}
+            disabled={clearHistoryMutation.isPending}
+            data-testid="button-clear-chat"
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Clear History
+          </Button>
+        )}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3" data-testid="stats-bar">

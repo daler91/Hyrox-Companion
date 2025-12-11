@@ -3,6 +3,7 @@ import {
   trainingPlans,
   planDays,
   workoutLogs,
+  chatMessages,
   type User,
   type UpsertUser,
   type TrainingPlan,
@@ -16,6 +17,8 @@ import {
   type UpdateWorkoutLog,
   type TimelineEntry,
   type UpdateUserPreferences,
+  type ChatMessage,
+  type InsertChatMessage,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, isNull, sql } from "drizzle-orm";
@@ -41,6 +44,10 @@ export interface IStorage {
   deleteWorkoutLog(logId: string, userId: string): Promise<boolean>;
 
   getTimeline(userId: string, planId?: string): Promise<TimelineEntry[]>;
+
+  getChatMessages(userId: string): Promise<ChatMessage[]>;
+  saveChatMessage(message: InsertChatMessage): Promise<ChatMessage>;
+  clearChatHistory(userId: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -294,6 +301,29 @@ export class DatabaseStorage implements IStorage {
     }
 
     return entries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }
+
+  async getChatMessages(userId: string): Promise<ChatMessage[]> {
+    return await db
+      .select()
+      .from(chatMessages)
+      .where(eq(chatMessages.userId, userId))
+      .orderBy(chatMessages.timestamp);
+  }
+
+  async saveChatMessage(message: InsertChatMessage): Promise<ChatMessage> {
+    const [chatMessage] = await db
+      .insert(chatMessages)
+      .values(message)
+      .returning();
+    return chatMessage;
+  }
+
+  async clearChatHistory(userId: string): Promise<boolean> {
+    const result = await db
+      .delete(chatMessages)
+      .where(eq(chatMessages.userId, userId));
+    return true;
   }
 }
 

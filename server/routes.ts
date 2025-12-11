@@ -233,6 +233,45 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/chat/history", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const messages = await storage.getChatMessages(userId);
+      res.json(messages);
+    } catch (error) {
+      console.error("Get chat history error:", error);
+      res.status(500).json({ error: "Failed to get chat history" });
+    }
+  });
+
+  app.post("/api/chat/message", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { role, content } = req.body as { role: string; content: string };
+
+      if (!role || !content) {
+        return res.status(400).json({ error: "Role and content are required" });
+      }
+
+      const message = await storage.saveChatMessage({ userId, role, content });
+      res.json(message);
+    } catch (error) {
+      console.error("Save chat message error:", error);
+      res.status(500).json({ error: "Failed to save message" });
+    }
+  });
+
+  app.delete("/api/chat/history", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      await storage.clearChatHistory(userId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Clear chat history error:", error);
+      res.status(500).json({ error: "Failed to clear chat history" });
+    }
+  });
+
   app.get("/api/plans", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
