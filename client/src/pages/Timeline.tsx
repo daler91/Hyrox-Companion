@@ -54,7 +54,7 @@ import {
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { TrainingPlan, TimelineEntry, PlanDay, InsertPlanDay } from "@shared/schema";
-import { format, parseISO, isToday, isBefore, isAfter, startOfWeek, addDays } from "date-fns";
+import { format, parseISO, isToday, isTomorrow, isYesterday, isBefore, isAfter, startOfWeek, addDays, getWeek, startOfDay, endOfDay } from "date-fns";
 
 function TimelineSkeleton() {
   return (
@@ -342,6 +342,13 @@ export default function Timeline() {
     }
   };
 
+  const getDateLabel = (dateObj: Date) => {
+    if (isToday(dateObj)) return "Today";
+    if (isTomorrow(dateObj)) return "Tomorrow";
+    if (isYesterday(dateObj)) return "Yesterday";
+    return format(dateObj, "EEEE, MMM d");
+  };
+
   const filteredTimeline = timelineData.filter((entry) => {
     if (filterStatus === "all") return true;
     return entry.status === filterStatus;
@@ -536,7 +543,7 @@ export default function Timeline() {
                     }`}
                   />
                   <span className={isTodayDate ? "" : "text-muted-foreground"}>
-                    {isTodayDate ? "Today" : format(dateObj, "EEEE, MMM d")}
+                    {getDateLabel(dateObj)}
                   </span>
                   {entries[0]?.weekNumber && (
                     <Badge variant="outline" className="ml-auto">
