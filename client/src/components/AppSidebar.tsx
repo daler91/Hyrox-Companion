@@ -68,24 +68,21 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="p-4 space-y-3">
-        <div className="flex items-center gap-3 px-2">
-          <Avatar className="h-8 w-8">
-            <AvatarImage src={user?.profileImageUrl || undefined} alt={userName} className="object-cover" />
-            <AvatarFallback className="text-xs">{userInitials}</AvatarFallback>
-          </Avatar>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate" data-testid="text-user-name">{userName}</p>
-          </div>
-        </div>
+      <SidebarFooter className="p-3">
         <div className="flex items-center justify-between gap-2">
-          <SidebarMenuButton asChild data-testid="nav-settings">
-            <Link href="/settings" className="flex items-center gap-2">
-              <Settings className="h-4 w-4" />
-              <span>Settings</span>
-            </Link>
-          </SidebarMenuButton>
+          <div className="flex items-center gap-2 min-w-0">
+            <Avatar className="h-7 w-7">
+              <AvatarImage src={user?.profileImageUrl || undefined} alt={userName} className="object-cover" />
+              <AvatarFallback className="text-xs">{userInitials}</AvatarFallback>
+            </Avatar>
+            <span className="text-sm font-medium truncate" data-testid="text-user-name">{userName}</span>
+          </div>
           <div className="flex items-center gap-1">
+            <Button variant="ghost" size="icon" asChild data-testid="nav-settings">
+              <Link href="/settings" title="Settings">
+                <Settings className="h-4 w-4" />
+              </Link>
+            </Button>
             <ThemeToggle />
             <Button variant="ghost" size="icon" asChild data-testid="button-logout">
               <a href="/api/logout" title="Log out">
