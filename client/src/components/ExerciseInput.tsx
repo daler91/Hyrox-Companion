@@ -2,11 +2,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { X, Timer, Ruler, Hash, Weight } from "lucide-react";
+import { X, Timer, Ruler, Hash, Weight, Pencil } from "lucide-react";
 import type { ExerciseType } from "./WorkoutCard";
 
 interface ExerciseData {
   type: ExerciseType;
+  customName?: string;
   time?: number;
   distance?: number;
   reps?: number;
@@ -29,6 +30,7 @@ const exerciseLabels: Record<ExerciseType, string> = {
   rowing: "Rowing",
   farmers_carry: "Farmers Carry",
   wall_balls: "Wall Balls",
+  other: "Other",
 };
 
 const exerciseFields: Record<ExerciseType, ("time" | "distance" | "reps" | "weight")[]> = {
@@ -40,6 +42,7 @@ const exerciseFields: Record<ExerciseType, ("time" | "distance" | "reps" | "weig
   rowing: ["time", "distance"],
   farmers_carry: ["time", "distance", "weight"],
   wall_balls: ["time", "reps", "weight"],
+  other: ["time", "distance", "reps", "weight"],
 };
 
 const exerciseBorderColors: Record<ExerciseType, string> = {
@@ -51,27 +54,55 @@ const exerciseBorderColors: Record<ExerciseType, string> = {
   rowing: "border-l-cyan-500",
   farmers_carry: "border-l-green-500",
   wall_balls: "border-l-pink-500",
+  other: "border-l-gray-500",
 };
 
 export function ExerciseInput({ exercise, onChange, onRemove }: ExerciseInputProps) {
   const fields = exerciseFields[exercise.type];
 
   const handleChange = (field: keyof ExerciseData, value: string) => {
-    onChange({
-      ...exercise,
-      [field]: value ? Number(value) : undefined,
-    });
+    if (field === "customName") {
+      onChange({
+        ...exercise,
+        customName: value || undefined,
+      });
+    } else {
+      onChange({
+        ...exercise,
+        [field]: value ? Number(value) : undefined,
+      });
+    }
   };
+
+  const displayLabel = exercise.type === "other" && exercise.customName 
+    ? exercise.customName 
+    : exerciseLabels[exercise.type];
 
   return (
     <Card className={`border-l-4 ${exerciseBorderColors[exercise.type]} rounded-l-none`} data-testid={`input-exercise-${exercise.type}`}>
       <CardContent className="p-4">
         <div className="flex items-center justify-between gap-2 mb-4">
-          <h4 className="font-semibold">{exerciseLabels[exercise.type]}</h4>
+          <h4 className="font-semibold">{displayLabel}</h4>
           <Button size="icon" variant="ghost" onClick={onRemove} data-testid={`button-remove-${exercise.type}`}>
             <X className="h-4 w-4" />
           </Button>
         </div>
+
+        {exercise.type === "other" && (
+          <div className="mb-4">
+            <Label className="flex items-center gap-1 text-xs text-muted-foreground mb-2">
+              <Pencil className="h-3 w-3" />
+              Exercise Name
+            </Label>
+            <Input
+              type="text"
+              placeholder="Enter exercise name"
+              value={exercise.customName || ""}
+              onChange={(e) => handleChange("customName", e.target.value)}
+              data-testid="input-custom-exercise-name"
+            />
+          </div>
+        )}
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {fields.includes("time") && (

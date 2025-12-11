@@ -7,7 +7,8 @@ import {
   Zap, 
   Ship, 
   Dumbbell, 
-  Target 
+  Target,
+  Plus
 } from "lucide-react";
 import type { ExerciseType } from "./WorkoutCard";
 
@@ -25,6 +26,7 @@ const exercises: { type: ExerciseType; label: string; icon: typeof PersonStandin
   { type: "rowing", label: "Rowing", icon: Ship },
   { type: "farmers_carry", label: "Farmers Carry", icon: Dumbbell },
   { type: "wall_balls", label: "Wall Balls", icon: Target },
+  { type: "other", label: "Other", icon: Plus },
 ];
 
 export function ExerciseSelector({ selectedExercises, onToggle }: ExerciseSelectorProps) {

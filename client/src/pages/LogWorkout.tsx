@@ -15,6 +15,7 @@ import type { ExerciseType } from "@/components/WorkoutCard";
 
 interface ExerciseData {
   type: ExerciseType;
+  customName?: string;
   time?: number;
   distance?: number;
   reps?: number;
@@ -119,7 +120,8 @@ export default function LogWorkout() {
       if (data?.distance) parts.push(`${data.distance}m`);
       if (data?.reps) parts.push(`${data.reps} reps`);
       if (data?.weight) parts.push(`${data.weight}kg`);
-      return `${type}: ${parts.join(", ") || "completed"}`;
+      const exerciseName = type === "other" && data?.customName ? data.customName : type;
+      return `${exerciseName}: ${parts.join(", ") || "completed"}`;
     });
 
     saveMutation.mutate({

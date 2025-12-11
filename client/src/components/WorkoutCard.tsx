@@ -17,7 +17,8 @@ export type ExerciseType =
   | "burpees" 
   | "rowing" 
   | "farmers_carry" 
-  | "wall_balls";
+  | "wall_balls"
+  | "other";
 
 interface WorkoutCardProps {
   id: string;
@@ -40,6 +41,7 @@ const exerciseLabels: Record<ExerciseType, string> = {
   rowing: "Rowing",
   farmers_carry: "Farmers Carry",
   wall_balls: "Wall Balls",
+  other: "Other",
 };
 
 const exerciseColors: Record<ExerciseType, string> = {
@@ -51,6 +53,7 @@ const exerciseColors: Record<ExerciseType, string> = {
   rowing: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400",
   farmers_carry: "bg-green-500/10 text-green-600 dark:text-green-400",
   wall_balls: "bg-pink-500/10 text-pink-600 dark:text-pink-400",
+  other: "bg-gray-500/10 text-gray-600 dark:text-gray-400",
 };
 
 export function WorkoutCard({ 
