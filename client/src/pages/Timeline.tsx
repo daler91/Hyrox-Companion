@@ -15,6 +15,16 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -94,6 +104,7 @@ export default function Timeline() {
     accessory: "",
     notes: "",
   });
+  const [skipConfirmEntry, setSkipConfirmEntry] = useState<TimelineEntry | null>(null);
 
   const { data: plans = [], isLoading: plansLoading } = useQuery<TrainingPlan[]>({
     queryKey: ["/api/plans"],
@@ -287,8 +298,13 @@ export default function Timeline() {
   };
 
   const handleSkip = (entry: TimelineEntry) => {
-    if (!entry.planDayId) return;
-    updateStatusMutation.mutate({ dayId: entry.planDayId, status: "skipped" });
+    setSkipConfirmEntry(entry);
+  };
+
+  const confirmSkip = () => {
+    if (!skipConfirmEntry?.planDayId) return;
+    updateStatusMutation.mutate({ dayId: skipConfirmEntry.planDayId, status: "skipped" });
+    setSkipConfirmEntry(null);
   };
 
   const getStatusBadge = (status: string) => {
@@ -787,6 +803,26 @@ export default function Timeline() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!skipConfirmEntry} onOpenChange={(open) => !open && setSkipConfirmEntry(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Skip this workout?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will mark "{skipConfirmEntry?.focus}" as skipped. You can still go back and complete it later if needed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-skip">Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmSkip}
+              data-testid="button-confirm-skip"
+            >
+              Skip Workout
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
