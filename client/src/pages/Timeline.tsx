@@ -105,6 +105,7 @@ export default function Timeline() {
     notes: "",
   });
   const [skipConfirmEntry, setSkipConfirmEntry] = useState<TimelineEntry | null>(null);
+  const [csvPreview, setCsvPreview] = useState<{ fileName: string; content: string; rows: Array<{ weekNumber: number; dayName: string; focus: string; mainWorkout: string }> } | null>(null);
 
   const { data: plans = [], isLoading: plansLoading } = useQuery<TrainingPlan[]>({
     queryKey: ["/api/plans"],
@@ -230,6 +231,32 @@ export default function Timeline() {
     },
   });
 
+  const parseCSVForPreview = (csvContent: string) => {
+    const lines = csvContent.trim().split('\n');
+    if (lines.length < 2) return [];
+    
+    const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/['"]/g, ''));
+    const weekIdx = headers.findIndex(h => h.includes('week'));
+    const dayIdx = headers.findIndex(h => h.includes('day'));
+    const focusIdx = headers.findIndex(h => h.includes('focus') || h.includes('type'));
+    const workoutIdx = headers.findIndex(h => h.includes('workout') || h.includes('main'));
+
+    const rows: Array<{ weekNumber: number; dayName: string; focus: string; mainWorkout: string }> = [];
+    
+    for (let i = 1; i < Math.min(lines.length, 11); i++) {
+      const cols = lines[i].split(',').map(c => c.trim().replace(/['"]/g, ''));
+      if (cols.length >= 4) {
+        rows.push({
+          weekNumber: parseInt(cols[weekIdx] || '1') || 1,
+          dayName: cols[dayIdx] || '',
+          focus: cols[focusIdx] || '',
+          mainWorkout: cols[workoutIdx] || '',
+        });
+      }
+    }
+    return rows;
+  };
+
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -242,10 +269,21 @@ export default function Timeline() {
     const reader = new FileReader();
     reader.onload = (e) => {
       const csvContent = e.target?.result as string;
-      importMutation.mutate({ csvContent, fileName: file.name });
+      const previewRows = parseCSVForPreview(csvContent);
+      setCsvPreview({
+        fileName: file.name,
+        content: csvContent,
+        rows: previewRows,
+      });
     };
     reader.readAsText(file);
     event.target.value = "";
+  };
+
+  const confirmImport = () => {
+    if (!csvPreview) return;
+    importMutation.mutate({ csvContent: csvPreview.content, fileName: csvPreview.fileName });
+    setCsvPreview(null);
   };
 
   const openEditDialog = (entry: TimelineEntry) => {
@@ -830,6 +868,72 @@ export default function Timeline() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={!!csvPreview} onOpenChange={(open) => !open && setCsvPreview(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Import Preview: {csvPreview?.fileName}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Preview of first {csvPreview?.rows.length} workouts from your training plan:
+            </p>
+            <div className="border rounded-md overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="text-left p-2 font-medium">Week</th>
+                      <th className="text-left p-2 font-medium">Day</th>
+                      <th className="text-left p-2 font-medium">Focus</th>
+                      <th className="text-left p-2 font-medium">Main Workout</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {csvPreview?.rows.map((row, idx) => (
+                      <tr key={idx} className="border-t">
+                        <td className="p-2">{row.weekNumber}</td>
+                        <td className="p-2">{row.dayName}</td>
+                        <td className="p-2">{row.focus}</td>
+                        <td className="p-2 max-w-[200px] truncate" title={row.mainWorkout}>
+                          {row.mainWorkout}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            {csvPreview && csvPreview.content.split('\n').length > 11 && (
+              <p className="text-xs text-muted-foreground text-center">
+                ... and {csvPreview.content.split('\n').length - 11} more workouts
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCsvPreview(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={confirmImport}
+              disabled={importMutation.isPending}
+              data-testid="button-confirm-import"
+            >
+              {importMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Importing...
+                </>
+              ) : (
+                "Confirm Import"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
