@@ -21,6 +21,7 @@ import {
   Activity,
   TrendingUp,
   Trash2,
+  Combine,
 } from "lucide-react";
 import { SiStrava } from "react-icons/si";
 import type { TimelineEntry, WorkoutStatus } from "@shared/schema";
@@ -32,6 +33,10 @@ interface TimelineWorkoutCardProps {
   onSkip: (entry: TimelineEntry) => void;
   onChangeStatus: (entry: TimelineEntry, status: WorkoutStatus) => void;
   onDelete: (entry: TimelineEntry) => void;
+  onCombine?: (entry: TimelineEntry) => void;
+  isCombining?: boolean;
+  combiningEntryId?: string | null;
+  combiningEntryDate?: string | null;
 }
 
 function getStatusBadge(status: string) {
@@ -85,14 +90,25 @@ export default function TimelineWorkoutCard({
   onSkip,
   onChangeStatus,
   onDelete,
+  onCombine,
+  isCombining,
+  combiningEntryId,
+  combiningEntryDate,
 }: TimelineWorkoutCardProps) {
   const statusOptions = getStatusChangeOptions(entry.status);
   const hasPlanDayId = !!entry.planDayId;
+  const isBeingCombined = combiningEntryId === entry.id;
+  const isSameDate = combiningEntryDate === entry.date;
+  const canBeCombinedWith = isCombining && !isBeingCombined && isSameDate;
 
   return (
     <Card
       className={`${
-        entry.status === "completed"
+        isBeingCombined
+          ? "border-primary ring-2 ring-primary/30"
+          : canBeCombinedWith
+          ? "border-primary/50 hover:border-primary cursor-pointer"
+          : entry.status === "completed"
           ? "border-green-500/20 bg-green-500/5"
           : entry.status === "missed"
           ? "border-red-500/20 bg-red-500/5"
@@ -100,6 +116,7 @@ export default function TimelineWorkoutCard({
           ? "border-yellow-500/20 bg-yellow-500/5"
           : ""
       }`}
+      onClick={canBeCombinedWith ? () => onCombine?.(entry) : undefined}
       data-testid={`card-timeline-entry-${entry.id}`}
     >
       <CardContent className="p-4">
@@ -201,6 +218,15 @@ export default function TimelineWorkoutCard({
                   <Pencil className="h-4 w-4 mr-2" />
                   Edit
                 </DropdownMenuItem>
+                {onCombine && (
+                  <DropdownMenuItem
+                    onClick={() => onCombine(entry)}
+                    data-testid={`button-combine-${entry.id}`}
+                  >
+                    <Combine className="h-4 w-4 mr-2" />
+                    Combine with...
+                  </DropdownMenuItem>
+                )}
                 {entry.status === "planned" && (
                   <DropdownMenuItem
                     onClick={() => onSkip(entry)}
@@ -248,6 +274,15 @@ export default function TimelineWorkoutCard({
                   <Pencil className="h-4 w-4 mr-2" />
                   Edit
                 </DropdownMenuItem>
+                {onCombine && (
+                  <DropdownMenuItem
+                    onClick={() => onCombine(entry)}
+                    data-testid={`button-combine-${entry.id}`}
+                  >
+                    <Combine className="h-4 w-4 mr-2" />
+                    Combine with...
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={() => onDelete(entry)}

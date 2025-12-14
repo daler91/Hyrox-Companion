@@ -65,6 +65,7 @@ export default function Timeline() {
   const [suggestionsOpen, setSuggestionsOpen] = useState(true);
   const [showAllPast, setShowAllPast] = useState(false);
   const [showAllFuture, setShowAllFuture] = useState(false);
+  const [combiningEntry, setCombiningEntry] = useState<TimelineEntry | null>(null);
   
   const todayRef = useRef<HTMLDivElement>(null);
   
@@ -389,6 +390,67 @@ export default function Timeline() {
     deleteWorkoutMutation.mutate(deleteConfirmEntry.workoutLogId);
   };
 
+  const handleCombine = (entry: TimelineEntry) => {
+    if (!combiningEntry) {
+      setCombiningEntry(entry);
+      toast({ title: "Select another workout to combine with", description: "Click on another workout on the same day" });
+    } else if (combiningEntry.id === entry.id) {
+      setCombiningEntry(null);
+      toast({ title: "Combine cancelled" });
+    } else if (combiningEntry.date !== entry.date) {
+      toast({ title: "Can only combine workouts on the same day", variant: "destructive" });
+      setCombiningEntry(null);
+    } else {
+      const combinedFocus = `${combiningEntry.focus} + ${entry.focus}`;
+      const combinedMainWorkout = `${combiningEntry.mainWorkout}\n---\n${entry.mainWorkout}`;
+      const combinedDuration = (combiningEntry.duration || 0) + (entry.duration || 0);
+      const combinedCalories = (combiningEntry.calories || 0) + (entry.calories || 0);
+      const combinedNotes = [combiningEntry.notes, entry.notes].filter(Boolean).join("\n\n");
+      
+      const combinedWorkout = {
+        date: entry.date,
+        focus: combinedFocus,
+        mainWorkout: combinedMainWorkout,
+        duration: combinedDuration || undefined,
+        calories: combinedCalories || undefined,
+        notes: combinedNotes || undefined,
+      };
+      
+      combineWorkoutsMutation.mutate({
+        newWorkout: combinedWorkout,
+        entriesToDelete: [combiningEntry, entry],
+      });
+    }
+  };
+
+  const combineWorkoutsMutation = useMutation({
+    mutationFn: async ({ newWorkout, entriesToDelete }: { newWorkout: { date: string; focus: string; mainWorkout: string; duration?: number; calories?: number; notes?: string }; entriesToDelete: TimelineEntry[] }) => {
+      const response = await apiRequest("POST", "/api/workouts", newWorkout);
+      const created = await response.json();
+      
+      for (const entry of entriesToDelete) {
+        if (entry.workoutLogId) {
+          await apiRequest("DELETE", `/api/workouts/${entry.workoutLogId}`);
+        }
+        if (entry.planDayId) {
+          await apiRequest("PATCH", `/api/plans/days/${entry.planDayId}/status`, { status: "skipped" });
+        }
+      }
+      
+      return created;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/timeline"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/workouts"] });
+      setCombiningEntry(null);
+      toast({ title: "Workouts combined!" });
+    },
+    onError: () => {
+      setCombiningEntry(null);
+      toast({ title: "Failed to combine workouts", variant: "destructive" });
+    },
+  });
+
   const filteredTimeline = timelineData.filter((entry) => {
     if (filterStatus === "all") return true;
     return entry.status === filterStatus;
@@ -546,6 +608,10 @@ export default function Timeline() {
               onSkip={handleSkip}
               onChangeStatus={handleChangeStatus}
               onDelete={handleDelete}
+              onCombine={handleCombine}
+              isCombining={!!combiningEntry}
+              combiningEntryId={combiningEntry?.id || null}
+              combiningEntryDate={combiningEntry?.date || null}
             />
           ))}
 
