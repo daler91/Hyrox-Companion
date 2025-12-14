@@ -10,6 +10,7 @@ HyroxTracker is a training planning and logging application for Hyrox athletes. 
 - **Workout Tracking**: Mark planned sessions as complete, skip them, or edit details
 - **Status Management**: Track planned, completed, missed, and skipped workouts
 - **AI Coach**: Chat with Gemini-powered coach that analyzes your personal training data for Hyrox-specific advice
+- **AI Workout Suggestions**: Timeline page offers AI-powered suggestions to optimize upcoming workouts based on past training history
 - **Filtering & Search**: Filter timeline by status (all, planned, completed)
 
 The design follows premium fitness app patterns (Strava, TrainingPeaks, Whoop) with focus on data clarity and athletic performance tracking.
