@@ -36,6 +36,7 @@ import {
   SkipConfirmDialog,
   ImportPreviewDialog,
   FloatingActionButton,
+  CombineWorkoutsDialog,
   type FilterStatus,
   type WorkoutSuggestion,
   type EditFormState,
@@ -66,6 +67,8 @@ export default function Timeline() {
   const [showAllPast, setShowAllPast] = useState(false);
   const [showAllFuture, setShowAllFuture] = useState(false);
   const [combiningEntry, setCombiningEntry] = useState<TimelineEntry | null>(null);
+  const [combineSecondEntry, setCombineSecondEntry] = useState<TimelineEntry | null>(null);
+  const [showCombineDialog, setShowCombineDialog] = useState(false);
   
   const todayRef = useRef<HTMLDivElement>(null);
   
@@ -401,26 +404,24 @@ export default function Timeline() {
       toast({ title: "Can only combine workouts on the same day", variant: "destructive" });
       setCombiningEntry(null);
     } else {
-      const combinedFocus = `${combiningEntry.focus} + ${entry.focus}`;
-      const combinedMainWorkout = `${combiningEntry.mainWorkout}\n---\n${entry.mainWorkout}`;
-      const combinedDuration = (combiningEntry.duration || 0) + (entry.duration || 0);
-      const combinedCalories = (combiningEntry.calories || 0) + (entry.calories || 0);
-      const combinedNotes = [combiningEntry.notes, entry.notes].filter(Boolean).join("\n\n");
-      
-      const combinedWorkout = {
-        date: entry.date,
-        focus: combinedFocus,
-        mainWorkout: combinedMainWorkout,
-        duration: combinedDuration || undefined,
-        calories: combinedCalories || undefined,
-        notes: combinedNotes || undefined,
-      };
-      
-      combineWorkoutsMutation.mutate({
-        newWorkout: combinedWorkout,
-        entriesToDelete: [combiningEntry, entry],
-      });
+      setCombineSecondEntry(entry);
+      setShowCombineDialog(true);
     }
+  };
+
+  const handleConfirmCombine = (combinedWorkout: {
+    date: string;
+    focus: string;
+    mainWorkout: string;
+    duration?: number;
+    calories?: number;
+    notes?: string;
+  }) => {
+    if (!combiningEntry || !combineSecondEntry) return;
+    combineWorkoutsMutation.mutate({
+      newWorkout: combinedWorkout,
+      entriesToDelete: [combiningEntry, combineSecondEntry],
+    });
   };
 
   const combineWorkoutsMutation = useMutation({
@@ -443,10 +444,14 @@ export default function Timeline() {
       queryClient.invalidateQueries({ queryKey: ["/api/timeline"] });
       queryClient.invalidateQueries({ queryKey: ["/api/workouts"] });
       setCombiningEntry(null);
+      setCombineSecondEntry(null);
+      setShowCombineDialog(false);
       toast({ title: "Workouts combined!" });
     },
     onError: () => {
       setCombiningEntry(null);
+      setCombineSecondEntry(null);
+      setShowCombineDialog(false);
       toast({ title: "Failed to combine workouts", variant: "destructive" });
     },
   });
@@ -694,6 +699,21 @@ export default function Timeline() {
         onOpenChange={() => setCsvPreview(null)}
         onConfirm={confirmImport}
         isPending={importMutation.isPending}
+      />
+
+      <CombineWorkoutsDialog
+        open={showCombineDialog}
+        onOpenChange={(open) => {
+          setShowCombineDialog(open);
+          if (!open) {
+            setCombiningEntry(null);
+            setCombineSecondEntry(null);
+          }
+        }}
+        entry1={combiningEntry}
+        entry2={combineSecondEntry}
+        onConfirm={handleConfirmCombine}
+        isPending={combineWorkoutsMutation.isPending}
       />
 
       <FloatingActionButton />

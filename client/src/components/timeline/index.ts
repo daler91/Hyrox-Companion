@@ -9,6 +9,7 @@ export { default as EditWorkoutDialog } from "./EditWorkoutDialog";
 export { default as SkipConfirmDialog } from "./SkipConfirmDialog";
 export { default as ImportPreviewDialog } from "./ImportPreviewDialog";
 export { default as FloatingActionButton } from "./FloatingActionButton";
+export { CombineWorkoutsDialog } from "./CombineWorkoutsDialog";
 export type { FilterStatus, WorkoutSuggestion } from "./types";
 export type { EditFormState } from "./EditWorkoutDialog";
 export type { CsvPreviewData } from "./ImportPreviewDialog";
