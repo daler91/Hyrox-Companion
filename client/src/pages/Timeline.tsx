@@ -1,40 +1,19 @@
 import { useState, useRef, useEffect } from "react";
-import { createPortal } from "react-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import {
   FileText,
   Calendar,
   Loader2,
-  Plus,
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
-import { Link } from "wouter";
-import type { TrainingPlan, TimelineEntry, PlanDay, InsertPlanDay } from "@shared/schema";
+import type { TrainingPlan, TimelineEntry, PlanDay } from "@shared/schema";
 import { format, parseISO, isToday, startOfWeek, addDays } from "date-fns";
 import {
   TimelineSkeleton,
@@ -42,8 +21,15 @@ import {
   TimelineFilters,
   SuggestionsPanel,
   TimelineDateGroup,
+  SchedulePlanDialog,
+  EditWorkoutDialog,
+  SkipConfirmDialog,
+  ImportPreviewDialog,
+  FloatingActionButton,
   type FilterStatus,
   type WorkoutSuggestion,
+  type EditFormState,
+  type CsvPreviewData,
 } from "@/components/timeline";
 
 export default function Timeline() {
@@ -55,14 +41,14 @@ export default function Timeline() {
   const [startDate, setStartDate] = useState<string>(
     format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd")
   );
-  const [editForm, setEditForm] = useState({
+  const [editForm, setEditForm] = useState<EditFormState>({
     focus: "",
     mainWorkout: "",
     accessory: "",
     notes: "",
   });
   const [skipConfirmEntry, setSkipConfirmEntry] = useState<TimelineEntry | null>(null);
-  const [csvPreview, setCsvPreview] = useState<{ fileName: string; content: string; rows: Array<{ weekNumber: number; dayName: string; focus: string; mainWorkout: string }> } | null>(null);
+  const [csvPreview, setCsvPreview] = useState<CsvPreviewData | null>(null);
   const [suggestions, setSuggestions] = useState<WorkoutSuggestion[]>([]);
   const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set());
   const [suggestionsOpen, setSuggestionsOpen] = useState(true);
@@ -547,220 +533,41 @@ export default function Timeline() {
         </div>
       )}
 
-      <Dialog open={!!schedulingPlanId} onOpenChange={() => setSchedulingPlanId(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Schedule Your Training Plan</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Choose when your training plan should start. Week 1 will begin on this date.
-            </p>
-            <div>
-              <Label htmlFor="start-date">Start Date (Monday)</Label>
-              <Input
-                id="start-date"
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                data-testid="input-start-date"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSchedulingPlanId(null)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() =>
-                schedulingPlanId &&
-                schedulePlanMutation.mutate({ planId: schedulingPlanId, startDate })
-              }
-              disabled={schedulePlanMutation.isPending}
-              data-testid="button-schedule-plan"
-            >
-              {schedulePlanMutation.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Scheduling...
-                </>
-              ) : (
-                "Schedule Plan"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <SchedulePlanDialog
+        open={!!schedulingPlanId}
+        onOpenChange={(open) => !open && setSchedulingPlanId(null)}
+        startDate={startDate}
+        onStartDateChange={setStartDate}
+        onSchedule={() =>
+          schedulingPlanId &&
+          schedulePlanMutation.mutate({ planId: schedulingPlanId, startDate })
+        }
+        isPending={schedulePlanMutation.isPending}
+      />
 
-      <Dialog open={!!editingEntry} onOpenChange={() => setEditingEntry(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              Edit {editingEntry?.dayName} - Week {editingEntry?.weekNumber}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="edit-focus">Focus</Label>
-              <Input
-                id="edit-focus"
-                value={editForm.focus}
-                onChange={(e) => setEditForm({ ...editForm, focus: e.target.value })}
-                data-testid="input-edit-focus"
-              />
-            </div>
-            <div>
-              <Label htmlFor="edit-main">Main Workout</Label>
-              <Textarea
-                id="edit-main"
-                value={editForm.mainWorkout}
-                onChange={(e) => setEditForm({ ...editForm, mainWorkout: e.target.value })}
-                rows={3}
-                data-testid="input-edit-main"
-              />
-            </div>
-            <div>
-              <Label htmlFor="edit-accessory">Accessory/Engine Work</Label>
-              <Textarea
-                id="edit-accessory"
-                value={editForm.accessory}
-                onChange={(e) => setEditForm({ ...editForm, accessory: e.target.value })}
-                rows={2}
-                data-testid="input-edit-accessory"
-              />
-            </div>
-            <div>
-              <Label htmlFor="edit-notes">Notes</Label>
-              <Input
-                id="edit-notes"
-                value={editForm.notes}
-                onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
-                data-testid="input-edit-notes"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingEntry(null)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSaveEdit}
-              disabled={updateDayMutation.isPending || updateWorkoutMutation.isPending}
-              data-testid="button-save-edit"
-            >
-              {updateDayMutation.isPending || updateWorkoutMutation.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                "Save Changes"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <EditWorkoutDialog
+        entry={editingEntry}
+        onOpenChange={() => setEditingEntry(null)}
+        editForm={editForm}
+        onEditFormChange={setEditForm}
+        onSave={handleSaveEdit}
+        isPending={updateDayMutation.isPending || updateWorkoutMutation.isPending}
+      />
 
-      <AlertDialog open={!!skipConfirmEntry} onOpenChange={(open) => !open && setSkipConfirmEntry(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Skip this workout?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will mark "{skipConfirmEntry?.focus}" as skipped. You can still go back and complete it later if needed.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel data-testid="button-cancel-skip">Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={confirmSkip}
-              data-testid="button-confirm-skip"
-            >
-              Skip Workout
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <SkipConfirmDialog
+        entry={skipConfirmEntry}
+        onOpenChange={() => setSkipConfirmEntry(null)}
+        onConfirm={confirmSkip}
+      />
 
-      <Dialog open={!!csvPreview} onOpenChange={(open) => !open && setCsvPreview(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              Import Preview: {csvPreview?.fileName}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Preview of first {csvPreview?.rows.length} workouts from your training plan:
-            </p>
-            <div className="border rounded-md overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/50">
-                    <tr>
-                      <th className="text-left p-2 font-medium">Week</th>
-                      <th className="text-left p-2 font-medium">Day</th>
-                      <th className="text-left p-2 font-medium">Focus</th>
-                      <th className="text-left p-2 font-medium">Main Workout</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {csvPreview?.rows.map((row, idx) => (
-                      <tr key={idx} className="border-t">
-                        <td className="p-2">{row.weekNumber}</td>
-                        <td className="p-2">{row.dayName}</td>
-                        <td className="p-2">{row.focus}</td>
-                        <td className="p-2 max-w-[200px] truncate" title={row.mainWorkout}>
-                          {row.mainWorkout}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            {csvPreview && csvPreview.content.split('\n').length > 11 && (
-              <p className="text-xs text-muted-foreground text-center">
-                ... and {csvPreview.content.split('\n').length - 11} more workouts
-              </p>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCsvPreview(null)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={confirmImport}
-              disabled={importMutation.isPending}
-              data-testid="button-confirm-import"
-            >
-              {importMutation.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Importing...
-                </>
-              ) : (
-                "Confirm Import"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ImportPreviewDialog
+        preview={csvPreview}
+        onOpenChange={() => setCsvPreview(null)}
+        onConfirm={confirmImport}
+        isPending={importMutation.isPending}
+      />
 
-      {/* Floating Action Button - rendered via portal to escape sidebar container */}
-      {createPortal(
-        <Link href="/log">
-          <Button
-            size="icon"
-            className="!fixed !bottom-6 !right-6 h-14 w-14 rounded-full shadow-lg"
-            style={{ zIndex: 9999 }}
-            data-testid="button-log-workout-fab"
-          >
-            <Plus className="h-6 w-6" />
-          </Button>
-        </Link>,
-        document.body
-      )}
+      <FloatingActionButton />
     </div>
   );
 }
