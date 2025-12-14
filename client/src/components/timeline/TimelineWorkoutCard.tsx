@@ -64,7 +64,6 @@ function getStatusBadge(status: string) {
 function getStatusChangeOptions(currentStatus: string): { status: WorkoutStatus; label: string; icon: typeof CheckCircle2 }[] {
   const allStatuses: { status: WorkoutStatus; label: string; icon: typeof CheckCircle2 }[] = [
     { status: "completed", label: "Mark Completed", icon: CheckCircle2 },
-    { status: "planned", label: "Mark Planned", icon: Clock },
     { status: "missed", label: "Mark Missed", icon: XCircle },
     { status: "skipped", label: "Mark Skipped", icon: SkipForward },
   ];

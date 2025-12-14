@@ -263,6 +263,8 @@ export class DatabaseStorage implements IStorage {
           });
         } else {
           const status = day.status === "skipped" ? "skipped" :
+            day.status === "completed" ? "completed" :
+            day.status === "missed" ? "missed" :
             day.scheduledDate < today ? "missed" : "planned";
 
           entries.push({
