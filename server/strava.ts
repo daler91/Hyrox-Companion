@@ -111,7 +111,14 @@ function formatDuration(seconds: number): string {
 
 function mapStravaActivityToWorkout(activity: StravaActivity, userId: string) {
   const durationMinutes = Math.round(activity.moving_time / 60);
-  const mainWorkout = `${formatDistance(activity.distance)}, ${formatDuration(activity.moving_time)}`;
+  
+  // Check if this is a distance-based activity (more than 100m)
+  const isDistanceActivity = activity.distance > 100;
+  
+  const mainWorkout = isDistanceActivity
+    ? `${formatDistance(activity.distance)}, ${formatDuration(activity.moving_time)}`
+    : `${formatDuration(activity.moving_time)} session`;
+  
   const accessory = activity.total_elevation_gain > 0 
     ? `Elevation: ${Math.round(activity.total_elevation_gain)}m` 
     : null;
