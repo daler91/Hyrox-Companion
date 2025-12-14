@@ -13,7 +13,7 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
-import type { TrainingPlan, TimelineEntry, PlanDay } from "@shared/schema";
+import type { TrainingPlan, TimelineEntry, PlanDay, WorkoutStatus } from "@shared/schema";
 import { format, parseISO, isToday, startOfWeek, addDays } from "date-fns";
 import {
   TimelineSkeleton,
@@ -348,6 +348,10 @@ export default function Timeline() {
     setSkipConfirmEntry(null);
   };
 
+  const handleChangeStatus = (entry: TimelineEntry, status: WorkoutStatus) => {
+    if (!entry.planDayId) return;
+    updateStatusMutation.mutate({ dayId: entry.planDayId, status });
+  };
 
   const filteredTimeline = timelineData.filter((entry) => {
     if (filterStatus === "all") return true;
@@ -504,6 +508,7 @@ export default function Timeline() {
               onMarkComplete={handleMarkComplete}
               onEdit={openEditDialog}
               onSkip={handleSkip}
+              onChangeStatus={handleChangeStatus}
             />
           ))}
 

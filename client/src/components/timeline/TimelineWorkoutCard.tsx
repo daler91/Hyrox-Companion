@@ -5,6 +5,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -15,13 +16,14 @@ import {
   SkipForward,
   MoreVertical,
 } from "lucide-react";
-import type { TimelineEntry } from "@shared/schema";
+import type { TimelineEntry, WorkoutStatus } from "@shared/schema";
 
 interface TimelineWorkoutCardProps {
   entry: TimelineEntry;
   onMarkComplete: (entry: TimelineEntry) => void;
   onEdit: (entry: TimelineEntry) => void;
   onSkip: (entry: TimelineEntry) => void;
+  onChangeStatus: (entry: TimelineEntry, status: WorkoutStatus) => void;
 }
 
 function getStatusBadge(status: string) {
@@ -59,12 +61,26 @@ function getStatusBadge(status: string) {
   }
 }
 
+function getStatusChangeOptions(currentStatus: string): { status: WorkoutStatus; label: string; icon: typeof CheckCircle2 }[] {
+  const allStatuses: { status: WorkoutStatus; label: string; icon: typeof CheckCircle2 }[] = [
+    { status: "completed", label: "Mark Completed", icon: CheckCircle2 },
+    { status: "planned", label: "Mark Planned", icon: Clock },
+    { status: "missed", label: "Mark Missed", icon: XCircle },
+    { status: "skipped", label: "Mark Skipped", icon: SkipForward },
+  ];
+  return allStatuses.filter(s => s.status !== currentStatus);
+}
+
 export default function TimelineWorkoutCard({
   entry,
   onMarkComplete,
   onEdit,
   onSkip,
+  onChangeStatus,
 }: TimelineWorkoutCardProps) {
+  const statusOptions = getStatusChangeOptions(entry.status);
+  const hasPlanDayId = !!entry.planDayId;
+
   return (
     <Card
       className={`${
@@ -109,7 +125,7 @@ export default function TimelineWorkoutCard({
             )}
           </div>
 
-          {entry.status === "planned" && entry.planDayId && (
+          {hasPlanDayId && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -121,50 +137,15 @@ export default function TimelineWorkoutCard({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  onClick={() => onMarkComplete(entry)}
-                  data-testid={`button-complete-${entry.id}`}
-                >
-                  <CheckCircle2 className="h-4 w-4 mr-2" />
-                  Mark Complete
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => onEdit(entry)}
-                  data-testid={`button-edit-${entry.id}`}
-                >
-                  <Pencil className="h-4 w-4 mr-2" />
-                  Edit
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => onSkip(entry)}
-                  data-testid={`button-skip-${entry.id}`}
-                >
-                  <SkipForward className="h-4 w-4 mr-2" />
-                  Skip
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-
-          {entry.status === "missed" && entry.planDayId && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  data-testid={`button-entry-menu-${entry.id}`}
-                >
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  onClick={() => onMarkComplete(entry)}
-                  data-testid={`button-complete-${entry.id}`}
-                >
-                  <CheckCircle2 className="h-4 w-4 mr-2" />
-                  Mark Complete
-                </DropdownMenuItem>
+                {entry.status === "planned" && (
+                  <DropdownMenuItem
+                    onClick={() => onMarkComplete(entry)}
+                    data-testid={`button-complete-${entry.id}`}
+                  >
+                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                    Mark Complete
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem
                   onClick={() => onEdit(entry)}
                   data-testid={`button-edit-${entry.id}`}
@@ -172,19 +153,32 @@ export default function TimelineWorkoutCard({
                   <Pencil className="h-4 w-4 mr-2" />
                   Edit
                 </DropdownMenuItem>
+                {entry.status === "planned" && (
+                  <DropdownMenuItem
+                    onClick={() => onSkip(entry)}
+                    data-testid={`button-skip-${entry.id}`}
+                  >
+                    <SkipForward className="h-4 w-4 mr-2" />
+                    Skip
+                  </DropdownMenuItem>
+                )}
+                {entry.status !== "planned" && (
+                  <>
+                    <DropdownMenuSeparator />
+                    {statusOptions.map(({ status, label, icon: Icon }) => (
+                      <DropdownMenuItem
+                        key={status}
+                        onClick={() => onChangeStatus(entry, status)}
+                        data-testid={`button-status-${status}-${entry.id}`}
+                      >
+                        <Icon className="h-4 w-4 mr-2" />
+                        {label}
+                      </DropdownMenuItem>
+                    ))}
+                  </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
-          )}
-
-          {(entry.status === "completed" || entry.status === "skipped") && entry.planDayId && (
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={() => onEdit(entry)}
-              data-testid={`button-edit-${entry.id}`}
-            >
-              <Pencil className="h-4 w-4" />
-            </Button>
           )}
 
           {entry.workoutLogId && !entry.planDayId && (

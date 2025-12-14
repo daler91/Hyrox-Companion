@@ -1,7 +1,7 @@
 import { forwardRef } from "react";
 import { Badge } from "@/components/ui/badge";
 import { format, isToday, isTomorrow, isYesterday, parseISO, isBefore } from "date-fns";
-import type { TimelineEntry } from "@shared/schema";
+import type { TimelineEntry, WorkoutStatus } from "@shared/schema";
 import TimelineWorkoutCard from "./TimelineWorkoutCard";
 
 interface TimelineDateGroupProps {
@@ -10,6 +10,7 @@ interface TimelineDateGroupProps {
   onMarkComplete: (entry: TimelineEntry) => void;
   onEdit: (entry: TimelineEntry) => void;
   onSkip: (entry: TimelineEntry) => void;
+  onChangeStatus: (entry: TimelineEntry, status: WorkoutStatus) => void;
 }
 
 function getDateLabel(dateObj: Date) {
@@ -20,7 +21,7 @@ function getDateLabel(dateObj: Date) {
 }
 
 const TimelineDateGroup = forwardRef<HTMLDivElement, TimelineDateGroupProps>(
-  ({ date, entries, onMarkComplete, onEdit, onSkip }, ref) => {
+  ({ date, entries, onMarkComplete, onEdit, onSkip, onChangeStatus }, ref) => {
     const dateObj = parseISO(date);
     const isTodayDate = isToday(dateObj);
     const isPast = isBefore(dateObj, new Date()) && !isTodayDate;
@@ -62,6 +63,7 @@ const TimelineDateGroup = forwardRef<HTMLDivElement, TimelineDateGroupProps>(
               onMarkComplete={onMarkComplete}
               onEdit={onEdit}
               onSkip={onSkip}
+              onChangeStatus={onChangeStatus}
             />
           ))}
         </div>
