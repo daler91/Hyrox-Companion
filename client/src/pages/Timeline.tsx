@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -137,6 +137,14 @@ export default function Timeline() {
   const scrollToToday = () => {
     todayRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
+
+  useEffect(() => {
+    if (!timelineLoading && todayRef.current) {
+      setTimeout(() => {
+        todayRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 100);
+    }
+  }, [timelineLoading]);
 
   const { data: plans = [], isLoading: plansLoading } = useQuery<TrainingPlan[]>({
     queryKey: ["/api/plans"],
@@ -750,7 +758,7 @@ export default function Timeline() {
             </Button>
           )}
 
-          {[...visiblePastGroups, ...visibleFutureGroups].map(([date, entries]) => {
+          {[...visiblePastGroups.slice().reverse(), ...visibleFutureGroups].map(([date, entries]) => {
             const dateObj = parseISO(date);
             const isTodayDate = isToday(dateObj);
             const isPast = isBefore(dateObj, new Date()) && !isTodayDate;
