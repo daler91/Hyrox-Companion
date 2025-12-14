@@ -97,7 +97,30 @@ export const workoutLogs = pgTable("workout_logs", {
   duration: integer("duration"),
   rpe: integer("rpe"),
   planDayId: varchar("plan_day_id"),
+  source: varchar("source").default("manual"), // "manual" | "strava"
+  stravaActivityId: varchar("strava_activity_id"),
 });
+
+// Strava OAuth connection storage
+export const stravaConnections = pgTable("strava_connections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().unique(),
+  stravaAthleteId: varchar("strava_athlete_id").notNull(),
+  accessToken: text("access_token").notNull(),
+  refreshToken: text("refresh_token").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  scope: text("scope"),
+  lastSyncedAt: timestamp("last_synced_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertStravaConnectionSchema = createInsertSchema(stravaConnections).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertStravaConnection = z.infer<typeof insertStravaConnectionSchema>;
+export type StravaConnection = typeof stravaConnections.$inferSelect;
 
 export const insertWorkoutLogSchema = createInsertSchema(workoutLogs).omit({
   id: true,
@@ -125,6 +148,7 @@ export type TimelineEntry = {
   workoutLogId?: string | null;
   weekNumber?: number;
   dayName?: string;
+  source?: "manual" | "strava";
 };
 
 // Chat messages for AI Coach persistence
