@@ -1,4 +1,5 @@
 import type { Express, Request, Response } from "express";
+import crypto from "crypto";
 import { storage } from "./storage";
 import { isAuthenticated } from "./replitAuth";
 
@@ -159,23 +160,42 @@ export function registerStravaRoutes(app: Express): void {
     const userId = req.user.claims.sub;
     const scope = "activity:read_all";
     
+    // Generate CSRF state token combining userId and random bytes
+    const csrfToken = crypto.randomBytes(16).toString("hex");
+    const state = `${userId}:${csrfToken}`;
+    
+    // Store CSRF token in session for validation
+    req.session.stravaOAuthState = state;
+    
     const authUrl = new URL("https://www.strava.com/oauth/authorize");
     authUrl.searchParams.set("client_id", STRAVA_CLIENT_ID);
     authUrl.searchParams.set("redirect_uri", STRAVA_REDIRECT_URI);
     authUrl.searchParams.set("response_type", "code");
     authUrl.searchParams.set("scope", scope);
-    authUrl.searchParams.set("state", userId);
+    authUrl.searchParams.set("state", state);
 
     res.json({ authUrl: authUrl.toString() });
   });
 
-  app.get("/api/strava/callback", async (req: Request, res: Response) => {
-    const { code, state: userId, error: stravaError } = req.query;
+  app.get("/api/strava/callback", async (req: any, res: Response) => {
+    const { code, state, error: stravaError } = req.query;
 
     if (stravaError) {
       console.error("Strava auth error:", stravaError);
       return res.redirect("/settings?strava=error");
     }
+
+    // Validate CSRF state token
+    if (!state || !req.session?.stravaOAuthState || state !== req.session.stravaOAuthState) {
+      console.error("Strava OAuth state mismatch - possible CSRF attack");
+      return res.redirect("/settings?strava=error");
+    }
+
+    // Extract userId from state (format: userId:csrfToken)
+    const userId = (state as string).split(":")[0];
+    
+    // Clear the state from session after validation
+    delete req.session.stravaOAuthState;
 
     if (!code || !userId || !STRAVA_CLIENT_ID || !STRAVA_CLIENT_SECRET) {
       return res.redirect("/settings?strava=error");
@@ -201,7 +221,7 @@ export function registerStravaRoutes(app: Express): void {
       const tokenData: StravaTokenResponse = await tokenResponse.json();
 
       await storage.upsertStravaConnection({
-        userId: userId as string,
+        userId,
         stravaAthleteId: String(tokenData.athlete.id),
         accessToken: tokenData.access_token,
         refreshToken: tokenData.refresh_token,
