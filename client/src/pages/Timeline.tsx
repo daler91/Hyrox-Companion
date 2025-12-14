@@ -129,6 +129,8 @@ export default function Timeline() {
   const [suggestions, setSuggestions] = useState<WorkoutSuggestion[]>([]);
   const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set());
   const [suggestionsOpen, setSuggestionsOpen] = useState(true);
+  const [showAllPast, setShowAllPast] = useState(false);
+  const [showAllFuture, setShowAllFuture] = useState(false);
   
   const todayRef = useRef<HTMLDivElement>(null);
   
@@ -476,6 +478,15 @@ export default function Timeline() {
   };
 
   const today = format(new Date(), "yyyy-MM-dd");
+  
+  const allGroups = groupByDate(filteredTimeline);
+  const pastGroups = allGroups.filter(([date]) => date < today);
+  const futureGroups = allGroups.filter(([date]) => date >= today).reverse();
+  
+  const visiblePastGroups = showAllPast ? pastGroups : pastGroups.slice(0, 7);
+  const visibleFutureGroups = showAllFuture ? futureGroups : futureGroups.slice(0, 7);
+  const hiddenPastCount = pastGroups.length - visiblePastGroups.length;
+  const hiddenFutureCount = futureGroups.length - visibleFutureGroups.length;
 
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-6">
@@ -715,7 +726,31 @@ export default function Timeline() {
         </Card>
       ) : (
         <div className="space-y-4">
-          {groupByDate(filteredTimeline).map(([date, entries]) => {
+          {hiddenPastCount > 0 && (
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => setShowAllPast(true)}
+              data-testid="button-show-more-past"
+            >
+              <ChevronUp className="h-4 w-4 mr-2" />
+              Show {hiddenPastCount} more past workout{hiddenPastCount > 1 ? 's' : ''}
+            </Button>
+          )}
+          
+          {showAllPast && pastGroups.length > 7 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full"
+              onClick={() => setShowAllPast(false)}
+              data-testid="button-hide-past"
+            >
+              Hide older workouts
+            </Button>
+          )}
+
+          {[...visiblePastGroups, ...visibleFutureGroups].map(([date, entries]) => {
             const dateObj = parseISO(date);
             const isTodayDate = isToday(dateObj);
             const isPast = isBefore(dateObj, new Date()) && !isTodayDate;
@@ -891,6 +926,30 @@ export default function Timeline() {
               </div>
             );
           })}
+
+          {hiddenFutureCount > 0 && (
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => setShowAllFuture(true)}
+              data-testid="button-show-more-future"
+            >
+              <ChevronDown className="h-4 w-4 mr-2" />
+              Show {hiddenFutureCount} more upcoming workout{hiddenFutureCount > 1 ? 's' : ''}
+            </Button>
+          )}
+          
+          {showAllFuture && futureGroups.length > 7 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full"
+              onClick={() => setShowAllFuture(false)}
+              data-testid="button-hide-future"
+            >
+              Hide later workouts
+            </Button>
+          )}
         </div>
       )}
 
