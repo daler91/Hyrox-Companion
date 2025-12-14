@@ -138,14 +138,6 @@ export default function Timeline() {
     todayRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
-  useEffect(() => {
-    if (!timelineLoading && todayRef.current) {
-      setTimeout(() => {
-        todayRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-      }, 100);
-    }
-  }, [timelineLoading]);
-
   const { data: plans = [], isLoading: plansLoading } = useQuery<TrainingPlan[]>({
     queryKey: ["/api/plans"],
   });
@@ -163,6 +155,14 @@ export default function Timeline() {
       return res.json();
     },
   });
+
+  useEffect(() => {
+    if (!timelineLoading && todayRef.current) {
+      setTimeout(() => {
+        todayRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 100);
+    }
+  }, [timelineLoading]);
 
   const importMutation = useMutation({
     mutationFn: async (data: { csvContent: string; fileName: string }) => {
