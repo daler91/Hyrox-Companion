@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
-import { chatWithCoach, type ChatMessage, type TrainingContext } from "./gemini";
+import { chatWithCoach, generateWorkoutSuggestions, type ChatMessage, type TrainingContext, type UpcomingWorkout } from "./gemini";
 import { updatePlanDaySchema, insertWorkoutLogSchema, updateWorkoutLogSchema, updateUserPreferencesSchema, type InsertPlanDay } from "@shared/schema";
 
 interface CSVRow {
@@ -491,6 +491,45 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Update day status error:", error);
       res.status(500).json({ error: "Failed to update day status" });
+    }
+  });
+
+  app.post("/api/timeline/ai-suggestions", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      
+      // Get training context (past workout data)
+      const trainingContext = await buildTrainingContext(userId);
+      
+      // Get timeline and filter for upcoming planned workouts
+      const timeline = await storage.getTimeline(userId);
+      const today = new Date().toISOString().split('T')[0];
+      
+      const upcomingWorkouts: UpcomingWorkout[] = timeline
+        .filter(entry => 
+          entry.status === 'planned' && 
+          entry.date && 
+          entry.date >= today &&
+          entry.planDayId !== null
+        )
+        .slice(0, 5)
+        .map(entry => ({
+          id: entry.planDayId!,
+          date: entry.date!,
+          focus: entry.focus || '',
+          mainWorkout: entry.mainWorkout || '',
+          accessory: entry.accessory || undefined,
+        }));
+
+      if (upcomingWorkouts.length === 0) {
+        return res.json({ suggestions: [], message: "No upcoming planned workouts found" });
+      }
+
+      const suggestions = await generateWorkoutSuggestions(trainingContext, upcomingWorkouts);
+      res.json({ suggestions });
+    } catch (error) {
+      console.error("AI suggestions error:", error);
+      res.status(500).json({ error: "Failed to generate AI suggestions" });
     }
   });
 

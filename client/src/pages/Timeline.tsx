@@ -52,7 +52,17 @@ import {
   MoreVertical,
   Plus,
   Filter,
+  Sparkles,
+  Lightbulb,
+  X,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { TrainingPlan, TimelineEntry, PlanDay, InsertPlanDay } from "@shared/schema";
 import { format, parseISO, isToday, isTomorrow, isYesterday, isBefore, isAfter, startOfWeek, addDays, getWeek, startOfDay, endOfDay } from "date-fns";
@@ -90,6 +100,15 @@ function TimelineSkeleton() {
 
 type FilterStatus = "all" | "completed" | "planned" | "missed" | "skipped";
 
+interface WorkoutSuggestion {
+  workoutId: string;
+  workoutDate: string;
+  workoutFocus: string;
+  recommendation: string;
+  rationale: string;
+  priority: "high" | "medium" | "low";
+}
+
 export default function Timeline() {
   const { toast } = useToast();
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
@@ -107,6 +126,9 @@ export default function Timeline() {
   });
   const [skipConfirmEntry, setSkipConfirmEntry] = useState<TimelineEntry | null>(null);
   const [csvPreview, setCsvPreview] = useState<{ fileName: string; content: string; rows: Array<{ weekNumber: number; dayName: string; focus: string; mainWorkout: string }> } | null>(null);
+  const [suggestions, setSuggestions] = useState<WorkoutSuggestion[]>([]);
+  const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set());
+  const [suggestionsOpen, setSuggestionsOpen] = useState(true);
   
   const todayRef = useRef<HTMLDivElement>(null);
   
@@ -126,6 +148,8 @@ export default function Timeline() {
         : `/api/timeline`;
       const res = await fetch(url);
       if (!res.ok) throw new Error("Failed to fetch timeline");
+      // Clear suggestions when timeline data changes
+      setSuggestions([]);
       return res.json();
     },
   });
@@ -237,6 +261,45 @@ export default function Timeline() {
       toast({ title: "Failed to update workout", variant: "destructive" });
     },
   });
+
+  const suggestionsMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/timeline/ai-suggestions", {});
+      return response.json();
+    },
+    onSuccess: (data: { suggestions: WorkoutSuggestion[] }) => {
+      setSuggestions(data.suggestions || []);
+      setDismissedSuggestions(new Set());
+      setSuggestionsOpen(true);
+      if (data.suggestions?.length === 0) {
+        toast({ title: "No suggestions available", description: "Your upcoming workouts look well-balanced!" });
+      }
+    },
+    onError: () => {
+      toast({ title: "Failed to get suggestions", variant: "destructive" });
+    },
+  });
+
+  const handleDismissSuggestion = (workoutId: string) => {
+    setDismissedSuggestions(prev => new Set(Array.from(prev).concat(workoutId)));
+  };
+
+  const handleApplySuggestion = (suggestion: WorkoutSuggestion) => {
+    const entry = timelineData.find(e => e.planDayId === suggestion.workoutId);
+    if (entry) {
+      setEditingEntry(entry);
+      const existingNotes = entry.notes ? `${entry.notes}\n\n` : "";
+      setEditForm({
+        focus: entry.focus,
+        mainWorkout: suggestion.recommendation,
+        accessory: entry.accessory || "",
+        notes: `${existingNotes}AI suggestion: ${suggestion.rationale}`,
+      });
+    }
+    handleDismissSuggestion(suggestion.workoutId);
+  };
+
+  const visibleSuggestions = suggestions.filter(s => !dismissedSuggestions.has(s.workoutId));
 
   const parseCSVForPreview = (csvContent: string) => {
     const lines = csvContent.trim().split('\n');
@@ -425,15 +488,89 @@ export default function Timeline() {
             Your complete training journey - past, present, and future
           </p>
         </div>
-        <Button
-          variant="outline"
-          onClick={scrollToToday}
-          data-testid="button-jump-to-today"
-        >
-          <CalendarCheck className="h-4 w-4 mr-2" />
-          Go to Today
-        </Button>
+        <div className="flex gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            onClick={() => suggestionsMutation.mutate()}
+            disabled={suggestionsMutation.isPending}
+            data-testid="button-get-suggestions"
+          >
+            {suggestionsMutation.isPending ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Sparkles className="h-4 w-4 mr-2" />
+            )}
+            AI Coach
+          </Button>
+          <Button
+            variant="outline"
+            onClick={scrollToToday}
+            data-testid="button-jump-to-today"
+          >
+            <CalendarCheck className="h-4 w-4 mr-2" />
+            Go to Today
+          </Button>
+        </div>
       </div>
+
+      {visibleSuggestions.length > 0 && (
+        <Collapsible open={suggestionsOpen} onOpenChange={setSuggestionsOpen}>
+          <Card className="border-primary/20 bg-primary/5">
+            <CardHeader className="pb-2">
+              <CollapsibleTrigger asChild>
+                <div className="flex items-center justify-between cursor-pointer">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Lightbulb className="h-4 w-4 text-primary" />
+                    AI Training Suggestions
+                    <Badge variant="secondary">{visibleSuggestions.length}</Badge>
+                  </CardTitle>
+                  {suggestionsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </div>
+              </CollapsibleTrigger>
+            </CardHeader>
+            <CollapsibleContent>
+              <CardContent className="pt-0 space-y-3">
+                {visibleSuggestions.map((suggestion) => (
+                  <div
+                    key={suggestion.workoutId}
+                    className="p-3 rounded-md bg-background border"
+                    data-testid={`suggestion-${suggestion.workoutId}`}
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge
+                          variant={suggestion.priority === "high" ? "destructive" : suggestion.priority === "medium" ? "default" : "secondary"}
+                        >
+                          {suggestion.priority}
+                        </Badge>
+                        <span className="text-sm font-medium">{suggestion.workoutFocus}</span>
+                        <span className="text-xs text-muted-foreground">{suggestion.workoutDate}</span>
+                      </div>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => handleDismissSuggestion(suggestion.workoutId)}
+                        data-testid={`dismiss-suggestion-${suggestion.workoutId}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    <p className="text-sm mb-2">{suggestion.recommendation}</p>
+                    <p className="text-xs text-muted-foreground mb-3">{suggestion.rationale}</p>
+                    <Button
+                      size="sm"
+                      onClick={() => handleApplySuggestion(suggestion)}
+                      data-testid={`apply-suggestion-${suggestion.workoutId}`}
+                    >
+                      Apply to Workout
+                    </Button>
+                  </div>
+                ))}
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
+      )}
 
       <Card>
         <CardContent className="p-4">
