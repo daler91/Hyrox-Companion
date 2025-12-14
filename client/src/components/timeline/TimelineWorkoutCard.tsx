@@ -16,6 +16,7 @@ import {
   SkipForward,
   MoreVertical,
 } from "lucide-react";
+import { SiStrava } from "react-icons/si";
 import type { TimelineEntry, WorkoutStatus } from "@shared/schema";
 
 interface TimelineWorkoutCardProps {
@@ -98,6 +99,12 @@ export default function TimelineWorkoutCard({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2 flex-wrap">
               {getStatusBadge(entry.status)}
+              {entry.source === "strava" && (
+                <Badge className="bg-[#FC4C02]/10 text-[#FC4C02]">
+                  <SiStrava className="h-3 w-3 mr-1" />
+                  Strava
+                </Badge>
+              )}
               {entry.dayName && (
                 <Badge variant="secondary">{entry.dayName}</Badge>
               )}

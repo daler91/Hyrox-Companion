@@ -4,6 +4,7 @@ import {
   planDays,
   workoutLogs,
   chatMessages,
+  stravaConnections,
   type User,
   type UpsertUser,
   type TrainingPlan,
@@ -19,6 +20,8 @@ import {
   type UpdateUserPreferences,
   type ChatMessage,
   type InsertChatMessage,
+  type StravaConnection,
+  type InsertStravaConnection,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, isNull, sql } from "drizzle-orm";
@@ -48,6 +51,12 @@ export interface IStorage {
   getChatMessages(userId: string): Promise<ChatMessage[]>;
   saveChatMessage(message: InsertChatMessage): Promise<ChatMessage>;
   clearChatHistory(userId: string): Promise<boolean>;
+
+  getStravaConnection(userId: string): Promise<StravaConnection | undefined>;
+  upsertStravaConnection(data: InsertStravaConnection): Promise<StravaConnection>;
+  deleteStravaConnection(userId: string): Promise<boolean>;
+  updateStravaLastSync(userId: string): Promise<void>;
+  getWorkoutByStravaActivityId(userId: string, stravaActivityId: string): Promise<WorkoutLog | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -260,6 +269,7 @@ export class DatabaseStorage implements IStorage {
             workoutLogId: linkedLog.id,
             weekNumber: day.weekNumber,
             dayName: day.dayName,
+            source: (linkedLog.source as "manual" | "strava") || "manual",
           });
         } else {
           const status = day.status === "skipped" ? "skipped" :
@@ -299,6 +309,7 @@ export class DatabaseStorage implements IStorage {
         duration: log.duration,
         rpe: log.rpe,
         workoutLogId: log.id,
+        source: (log.source as "manual" | "strava") || "manual",
       });
     }
 
@@ -326,6 +337,54 @@ export class DatabaseStorage implements IStorage {
       .delete(chatMessages)
       .where(eq(chatMessages.userId, userId));
     return true;
+  }
+
+  async getStravaConnection(userId: string): Promise<StravaConnection | undefined> {
+    const [connection] = await db
+      .select()
+      .from(stravaConnections)
+      .where(eq(stravaConnections.userId, userId));
+    return connection;
+  }
+
+  async upsertStravaConnection(data: InsertStravaConnection): Promise<StravaConnection> {
+    const [connection] = await db
+      .insert(stravaConnections)
+      .values(data)
+      .onConflictDoUpdate({
+        target: stravaConnections.userId,
+        set: {
+          stravaAthleteId: data.stravaAthleteId,
+          accessToken: data.accessToken,
+          refreshToken: data.refreshToken,
+          expiresAt: data.expiresAt,
+          scope: data.scope,
+        },
+      })
+      .returning();
+    return connection;
+  }
+
+  async deleteStravaConnection(userId: string): Promise<boolean> {
+    const result = await db
+      .delete(stravaConnections)
+      .where(eq(stravaConnections.userId, userId));
+    return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  async updateStravaLastSync(userId: string): Promise<void> {
+    await db
+      .update(stravaConnections)
+      .set({ lastSyncedAt: new Date() })
+      .where(eq(stravaConnections.userId, userId));
+  }
+
+  async getWorkoutByStravaActivityId(userId: string, stravaActivityId: string): Promise<WorkoutLog | undefined> {
+    const [log] = await db
+      .select()
+      .from(workoutLogs)
+      .where(and(eq(workoutLogs.userId, userId), eq(workoutLogs.stravaActivityId, stravaActivityId)));
+    return log;
   }
 }
 

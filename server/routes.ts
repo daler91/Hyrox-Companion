@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { chatWithCoach, generateWorkoutSuggestions, type ChatMessage, type TrainingContext, type UpcomingWorkout } from "./gemini";
 import { updatePlanDaySchema, insertWorkoutLogSchema, updateWorkoutLogSchema, updateUserPreferencesSchema, type InsertPlanDay } from "@shared/schema";
+import { registerStravaRoutes } from "./strava";
 
 interface CSVRow {
   Week: string;
@@ -158,6 +159,7 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   await setupAuth(app);
+  registerStravaRoutes(app);
 
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
