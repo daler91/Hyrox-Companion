@@ -131,25 +131,18 @@ export default function TimelineWorkoutCard({
                 {entry.notes}
               </p>
             )}
-            {entry.duration && (
+            {entry.duration && entry.source !== "strava" && (
               <p className="text-xs text-muted-foreground mt-1">
                 Duration: {entry.duration} min
                 {entry.rpe && ` | RPE: ${entry.rpe}`}
               </p>
             )}
-            {entry.source === "strava" && (entry.calories || entry.avgHeartrate || entry.avgWatts || entry.sufferScore || entry.avgCadence || entry.distanceMeters || entry.elevationGain || entry.avgSpeed) && (
+            {entry.source === "strava" && (entry.calories || entry.avgWatts || entry.sufferScore || entry.avgCadence || entry.avgSpeed) && (
               <div className="flex flex-wrap gap-3 mt-2 pt-2 border-t border-border/50">
                 {entry.calories && (
                   <div className="flex items-center gap-1 text-xs text-muted-foreground" data-testid={`text-calories-${entry.id}`}>
                     <Flame className="h-3 w-3 text-orange-500" />
                     <span>{entry.calories} cal</span>
-                  </div>
-                )}
-                {entry.avgHeartrate && (
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground" data-testid={`text-heartrate-${entry.id}`}>
-                    <Heart className="h-3 w-3 text-red-500" />
-                    <span>{entry.avgHeartrate} bpm</span>
-                    {entry.maxHeartrate && <span className="text-muted-foreground/60">(max {entry.maxHeartrate})</span>}
                   </div>
                 )}
                 {entry.avgWatts && (

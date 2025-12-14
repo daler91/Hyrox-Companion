@@ -145,13 +145,26 @@ function mapStravaActivityToWorkout(activity: StravaActivity, userId: string) {
   }
   const accessory = accessoryParts.length > 0 ? accessoryParts.join(" | ") : null;
 
+  // Build notes with activity name and heartrate data (so user can edit it)
+  const notesParts: string[] = [];
+  if (activity.name) {
+    notesParts.push(activity.name);
+  }
+  if (activity.average_heartrate) {
+    const hrText = activity.max_heartrate 
+      ? `Avg HR: ${Math.round(activity.average_heartrate)} bpm (max ${Math.round(activity.max_heartrate)})`
+      : `Avg HR: ${Math.round(activity.average_heartrate)} bpm`;
+    notesParts.push(hrText);
+  }
+  const notes = notesParts.length > 0 ? notesParts.join(" | ") : null;
+
   return {
     userId,
     date: activity.start_date_local.split("T")[0],
     focus: activity.sport_type || activity.type || "Workout",
     mainWorkout,
     accessory,
-    notes: activity.name,
+    notes,
     duration: durationMinutes,
     rpe: null,
     planDayId: null,
