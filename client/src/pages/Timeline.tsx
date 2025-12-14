@@ -7,7 +7,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -25,35 +24,24 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import {
   FileText,
-  Pencil,
   Calendar,
   Loader2,
-  CheckCircle2,
-  Clock,
-  XCircle,
-  SkipForward,
-  MoreVertical,
   Plus,
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
 import { Link } from "wouter";
 import type { TrainingPlan, TimelineEntry, PlanDay, InsertPlanDay } from "@shared/schema";
-import { format, parseISO, isToday, isTomorrow, isYesterday, isBefore, isAfter, startOfWeek, addDays, getWeek, startOfDay, endOfDay } from "date-fns";
+import { format, parseISO, isToday, startOfWeek, addDays } from "date-fns";
 import {
   TimelineSkeleton,
   TimelineHeader,
   TimelineFilters,
   SuggestionsPanel,
+  TimelineDateGroup,
   type FilterStatus,
   type WorkoutSuggestion,
 } from "@/components/timeline";
@@ -374,47 +362,6 @@ export default function Timeline() {
     setSkipConfirmEntry(null);
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "completed":
-        return (
-          <Badge className="bg-green-500/10 text-green-600 dark:text-green-400">
-            <CheckCircle2 className="h-3 w-3 mr-1" />
-            Completed
-          </Badge>
-        );
-      case "planned":
-        return (
-          <Badge className="bg-blue-500/10 text-blue-600 dark:text-blue-400">
-            <Clock className="h-3 w-3 mr-1" />
-            Planned
-          </Badge>
-        );
-      case "missed":
-        return (
-          <Badge className="bg-red-500/10 text-red-600 dark:text-red-400">
-            <XCircle className="h-3 w-3 mr-1" />
-            Missed
-          </Badge>
-        );
-      case "skipped":
-        return (
-          <Badge className="bg-yellow-500/10 text-yellow-600 dark:text-yellow-400">
-            <SkipForward className="h-3 w-3 mr-1" />
-            Skipped
-          </Badge>
-        );
-      default:
-        return null;
-    }
-  };
-
-  const getDateLabel = (dateObj: Date) => {
-    if (isToday(dateObj)) return "Today";
-    if (isTomorrow(dateObj)) return "Tomorrow";
-    if (isYesterday(dateObj)) return "Yesterday";
-    return format(dateObj, "EEEE, MMM d");
-  };
 
   const filteredTimeline = timelineData.filter((entry) => {
     if (filterStatus === "all") return true;
@@ -562,182 +509,17 @@ export default function Timeline() {
             </Button>
           )}
 
-          {[...visiblePastGroups.slice().reverse(), ...visibleFutureGroups].map(([date, entries]) => {
-            const dateObj = parseISO(date);
-            const isTodayDate = isToday(dateObj);
-            const isPast = isBefore(dateObj, new Date()) && !isTodayDate;
-
-            return (
-              <div key={date} className="relative" ref={isTodayDate ? todayRef : undefined}>
-                {isTodayDate && (
-                  <div className="absolute -left-4 top-0 bottom-0 w-1 bg-primary rounded-full" />
-                )}
-                <div
-                  className={`flex items-center gap-3 mb-3 ${
-                    isTodayDate ? "text-primary font-semibold" : ""
-                  }`}
-                >
-                  <div
-                    className={`h-3 w-3 rounded-full ${
-                      isTodayDate
-                        ? "bg-primary"
-                        : isPast
-                        ? "bg-muted-foreground/30"
-                        : "bg-muted-foreground/50"
-                    }`}
-                  />
-                  <span className={isTodayDate ? "" : "text-muted-foreground"}>
-                    {getDateLabel(dateObj)}
-                  </span>
-                  {entries[0]?.weekNumber && (
-                    <Badge variant="outline" className="ml-auto">
-                      Week {entries[0].weekNumber}
-                    </Badge>
-                  )}
-                </div>
-
-                <div className="space-y-2 ml-6">
-                  {entries.map((entry) => (
-                    <Card
-                      key={entry.id}
-                      className={`${
-                        entry.status === "completed"
-                          ? "border-green-500/20 bg-green-500/5"
-                          : entry.status === "missed"
-                          ? "border-red-500/20 bg-red-500/5"
-                          : entry.status === "skipped"
-                          ? "border-yellow-500/20 bg-yellow-500/5"
-                          : ""
-                      }`}
-                      data-testid={`card-timeline-entry-${entry.id}`}
-                    >
-                      <CardContent className="p-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-2 flex-wrap">
-                              {getStatusBadge(entry.status)}
-                              {entry.dayName && (
-                                <Badge variant="secondary">{entry.dayName}</Badge>
-                              )}
-                              <span className="font-medium">{entry.focus}</span>
-                            </div>
-                            <p className="text-sm text-muted-foreground mb-1">
-                              {entry.mainWorkout}
-                            </p>
-                            {entry.accessory && (
-                              <p className="text-sm text-muted-foreground/70 mb-1">
-                                {entry.accessory}
-                              </p>
-                            )}
-                            {entry.notes && (
-                              <p className="text-xs text-muted-foreground italic mt-2">
-                                {entry.notes}
-                              </p>
-                            )}
-                            {entry.duration && (
-                              <p className="text-xs text-muted-foreground mt-1">
-                                Duration: {entry.duration} min
-                                {entry.rpe && ` | RPE: ${entry.rpe}`}
-                              </p>
-                            )}
-                          </div>
-
-                          {entry.status === "planned" && entry.planDayId && (
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  data-testid={`button-entry-menu-${entry.id}`}
-                                >
-                                  <MoreVertical className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem
-                                  onClick={() => handleMarkComplete(entry)}
-                                  data-testid={`button-complete-${entry.id}`}
-                                >
-                                  <CheckCircle2 className="h-4 w-4 mr-2" />
-                                  Mark Complete
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => openEditDialog(entry)}
-                                  data-testid={`button-edit-${entry.id}`}
-                                >
-                                  <Pencil className="h-4 w-4 mr-2" />
-                                  Edit
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => handleSkip(entry)}
-                                  data-testid={`button-skip-${entry.id}`}
-                                >
-                                  <SkipForward className="h-4 w-4 mr-2" />
-                                  Skip
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          )}
-
-                          {entry.status === "missed" && entry.planDayId && (
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  data-testid={`button-entry-menu-${entry.id}`}
-                                >
-                                  <MoreVertical className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem
-                                  onClick={() => handleMarkComplete(entry)}
-                                  data-testid={`button-complete-${entry.id}`}
-                                >
-                                  <CheckCircle2 className="h-4 w-4 mr-2" />
-                                  Mark Complete
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => openEditDialog(entry)}
-                                  data-testid={`button-edit-${entry.id}`}
-                                >
-                                  <Pencil className="h-4 w-4 mr-2" />
-                                  Edit
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          )}
-
-                          {(entry.status === "completed" || entry.status === "skipped") && entry.planDayId && (
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={() => openEditDialog(entry)}
-                              data-testid={`button-edit-${entry.id}`}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                          )}
-
-                          {entry.workoutLogId && !entry.planDayId && (
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={() => openEditDialog(entry)}
-                              data-testid={`button-edit-${entry.id}`}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
+          {[...visiblePastGroups.slice().reverse(), ...visibleFutureGroups].map(([date, entries]) => (
+            <TimelineDateGroup
+              key={date}
+              ref={isToday(parseISO(date)) ? todayRef : undefined}
+              date={date}
+              entries={entries}
+              onMarkComplete={handleMarkComplete}
+              onEdit={openEditDialog}
+              onSkip={handleSkip}
+            />
+          ))}
 
           {hiddenFutureCount > 0 && (
             <Button
