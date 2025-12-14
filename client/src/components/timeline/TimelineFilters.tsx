@@ -9,11 +9,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { Upload, Loader2, Filter, Download } from "lucide-react";
 import type { TrainingPlan } from "@shared/schema";
 import type { FilterStatus } from "./types";
@@ -64,67 +59,57 @@ export default function TimelineFilters({
   return (
     <Card>
       <CardContent className="p-4">
-        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-          <div className="flex-1">
-            <Label htmlFor="plan-select" className="text-sm text-muted-foreground mb-2 block">
-              Active Training Plan
-            </Label>
-            {plansLoading ? (
-              <div className="flex items-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span className="text-sm text-muted-foreground">Loading plans...</span>
-              </div>
-            ) : plans.length > 0 ? (
-              <Select
-                value={selectedPlanId || ""}
-                onValueChange={(value) => onPlanChange(value)}
-              >
-                <SelectTrigger id="plan-select" data-testid="select-plan">
-                  <SelectValue placeholder="Select a training plan" />
-                </SelectTrigger>
-                <SelectContent>
-                  {plans.map((plan) => (
-                    <SelectItem key={plan.id} value={plan.id}>
-                      {plan.name} ({plan.totalWeeks} weeks)
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <p className="text-sm text-muted-foreground">No plans yet. Import one below.</p>
-            )}
-          </div>
-
-          <div className="flex gap-2 flex-wrap">
-            <Select value={filterStatus} onValueChange={(v) => onFilterChange(v as FilterStatus)}>
-              <SelectTrigger className="w-36" data-testid="select-filter">
-                <Filter className="h-4 w-4 mr-2" />
-                <SelectValue />
+        <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+          {plansLoading ? (
+            <div className="flex items-center gap-2 flex-1">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="text-sm text-muted-foreground">Loading plans...</span>
+            </div>
+          ) : plans.length > 0 ? (
+            <Select
+              value={selectedPlanId || ""}
+              onValueChange={(value) => onPlanChange(value)}
+            >
+              <SelectTrigger id="plan-select" aria-label="Select training plan" className="flex-1 sm:min-w-[200px]" data-testid="select-plan">
+                <SelectValue placeholder="Select a training plan" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-                <SelectItem value="planned">Planned</SelectItem>
-                <SelectItem value="missed">Missed</SelectItem>
-                <SelectItem value="skipped">Skipped</SelectItem>
+                {plans.map((plan) => (
+                  <SelectItem key={plan.id} value={plan.id}>
+                    {plan.name} ({plan.totalWeeks} weeks)
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
+          ) : (
+            <div className="flex-1 flex items-center">
+              <span className="text-sm text-muted-foreground">No plans yet</span>
+            </div>
+          )}
 
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={downloadTemplate}
-                  data-testid="button-download-template"
-                >
-                  <Download className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Download CSV template</p>
-              </TooltipContent>
-            </Tooltip>
+          <Select value={filterStatus} onValueChange={(v) => onFilterChange(v as FilterStatus)}>
+            <SelectTrigger aria-label="Filter workouts by status" className="w-full sm:w-36" data-testid="select-filter">
+              <Filter className="h-4 w-4 mr-2" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              <SelectItem value="completed">Completed</SelectItem>
+              <SelectItem value="planned">Planned</SelectItem>
+              <SelectItem value="missed">Missed</SelectItem>
+              <SelectItem value="skipped">Skipped</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={downloadTemplate}
+              data-testid="button-download-template"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Template
+            </Button>
 
             <Label htmlFor="csv-upload" className="cursor-pointer">
               <Button
@@ -137,7 +122,7 @@ export default function TimelineFilters({
                 ) : (
                   <>
                     <Upload className="h-4 w-4 mr-2" />
-                    Import CSV
+                    Import
                   </>
                 )}
               </Button>
