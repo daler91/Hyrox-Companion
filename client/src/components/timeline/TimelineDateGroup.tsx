@@ -11,6 +11,7 @@ interface TimelineDateGroupProps {
   onEdit: (entry: TimelineEntry) => void;
   onSkip: (entry: TimelineEntry) => void;
   onChangeStatus: (entry: TimelineEntry, status: WorkoutStatus) => void;
+  onDelete: (entry: TimelineEntry) => void;
 }
 
 function getDateLabel(dateObj: Date) {
@@ -21,7 +22,7 @@ function getDateLabel(dateObj: Date) {
 }
 
 const TimelineDateGroup = forwardRef<HTMLDivElement, TimelineDateGroupProps>(
-  ({ date, entries, onMarkComplete, onEdit, onSkip, onChangeStatus }, ref) => {
+  ({ date, entries, onMarkComplete, onEdit, onSkip, onChangeStatus, onDelete }, ref) => {
     const dateObj = parseISO(date);
     const isTodayDate = isToday(dateObj);
     const isPast = isBefore(dateObj, new Date()) && !isTodayDate;
@@ -64,6 +65,7 @@ const TimelineDateGroup = forwardRef<HTMLDivElement, TimelineDateGroupProps>(
               onEdit={onEdit}
               onSkip={onSkip}
               onChangeStatus={onChangeStatus}
+              onDelete={onDelete}
             />
           ))}
         </div>

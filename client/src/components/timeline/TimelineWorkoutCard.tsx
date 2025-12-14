@@ -20,6 +20,7 @@ import {
   Zap,
   Activity,
   TrendingUp,
+  Trash2,
 } from "lucide-react";
 import { SiStrava } from "react-icons/si";
 import type { TimelineEntry, WorkoutStatus } from "@shared/schema";
@@ -30,6 +31,7 @@ interface TimelineWorkoutCardProps {
   onEdit: (entry: TimelineEntry) => void;
   onSkip: (entry: TimelineEntry) => void;
   onChangeStatus: (entry: TimelineEntry, status: WorkoutStatus) => void;
+  onDelete: (entry: TimelineEntry) => void;
 }
 
 function getStatusBadge(status: string) {
@@ -82,6 +84,7 @@ export default function TimelineWorkoutCard({
   onEdit,
   onSkip,
   onChangeStatus,
+  onDelete,
 }: TimelineWorkoutCardProps) {
   const statusOptions = getStatusChangeOptions(entry.status);
   const hasPlanDayId = !!entry.planDayId;
@@ -234,14 +237,35 @@ export default function TimelineWorkoutCard({
           )}
 
           {entry.workoutLogId && !entry.planDayId && (
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={() => onEdit(entry)}
-              data-testid={`button-edit-${entry.id}`}
-            >
-              <Pencil className="h-4 w-4" />
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  data-testid={`button-entry-menu-${entry.id}`}
+                >
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={() => onEdit(entry)}
+                  data-testid={`button-edit-${entry.id}`}
+                >
+                  <Pencil className="h-4 w-4 mr-2" />
+                  Edit
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => onDelete(entry)}
+                  className="text-destructive focus:text-destructive"
+                  data-testid={`button-delete-${entry.id}`}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
       </CardContent>
