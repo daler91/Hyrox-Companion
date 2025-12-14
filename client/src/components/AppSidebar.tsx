@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { MessageSquare, Plus, Settings, CalendarRange, LogOut } from "lucide-react";
+import { MessageSquare, Settings, CalendarRange, LogOut } from "lucide-react";
 import { useLocation, Link } from "wouter";
 import { ThemeToggle } from "./ThemeToggle";
 import { useAuth } from "@/hooks/useAuth";
@@ -19,7 +19,6 @@ import { useAuth } from "@/hooks/useAuth";
 const menuItems = [
   { title: "Coach", url: "/", icon: MessageSquare },
   { title: "Timeline", url: "/timeline", icon: CalendarRange },
-  { title: "Log Workout", url: "/log", icon: Plus },
 ];
 
 export function AppSidebar() {

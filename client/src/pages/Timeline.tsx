@@ -64,6 +64,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Link } from "wouter";
 import type { TrainingPlan, TimelineEntry, PlanDay, InsertPlanDay } from "@shared/schema";
 import { format, parseISO, isToday, isTomorrow, isYesterday, isBefore, isAfter, startOfWeek, addDays, getWeek, startOfDay, endOfDay } from "date-fns";
 
@@ -1160,6 +1161,17 @@ export default function Timeline() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Floating Action Button */}
+      <Link href="/log">
+        <Button
+          size="icon"
+          className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-lg z-50"
+          data-testid="button-log-workout-fab"
+        >
+          <Plus className="h-6 w-6" />
+        </Button>
+      </Link>
     </div>
   );
 }
