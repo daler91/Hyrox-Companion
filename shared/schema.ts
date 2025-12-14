@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, date, timestamp, index, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, date, timestamp, index, jsonb, real } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -99,6 +99,17 @@ export const workoutLogs = pgTable("workout_logs", {
   planDayId: varchar("plan_day_id"),
   source: varchar("source").default("manual"), // "manual" | "strava"
   stravaActivityId: varchar("strava_activity_id"),
+  // Strava detailed metrics
+  calories: integer("calories"),
+  distanceMeters: real("distance_meters"),
+  elevationGain: real("elevation_gain"),
+  avgHeartrate: integer("avg_heartrate"),
+  maxHeartrate: integer("max_heartrate"),
+  avgSpeed: real("avg_speed"), // meters per second
+  maxSpeed: real("max_speed"), // meters per second
+  avgCadence: real("avg_cadence"),
+  avgWatts: integer("avg_watts"),
+  sufferScore: integer("suffer_score"),
 });
 
 // Strava OAuth connection storage
@@ -149,6 +160,17 @@ export type TimelineEntry = {
   weekNumber?: number;
   dayName?: string;
   source?: "manual" | "strava";
+  // Strava detailed metrics
+  calories?: number | null;
+  distanceMeters?: number | null;
+  elevationGain?: number | null;
+  avgHeartrate?: number | null;
+  maxHeartrate?: number | null;
+  avgSpeed?: number | null;
+  maxSpeed?: number | null;
+  avgCadence?: number | null;
+  avgWatts?: number | null;
+  sufferScore?: number | null;
 };
 
 // Chat messages for AI Coach persistence

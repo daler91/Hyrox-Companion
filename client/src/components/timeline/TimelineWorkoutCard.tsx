@@ -15,6 +15,11 @@ import {
   XCircle,
   SkipForward,
   MoreVertical,
+  Flame,
+  Heart,
+  Zap,
+  Activity,
+  TrendingUp,
 } from "lucide-react";
 import { SiStrava } from "react-icons/si";
 import type { TimelineEntry, WorkoutStatus } from "@shared/schema";
@@ -128,6 +133,47 @@ export default function TimelineWorkoutCard({
                 Duration: {entry.duration} min
                 {entry.rpe && ` | RPE: ${entry.rpe}`}
               </p>
+            )}
+            {entry.source === "strava" && (entry.calories || entry.avgHeartrate || entry.avgWatts || entry.sufferScore || entry.avgCadence || entry.distanceMeters || entry.elevationGain || entry.avgSpeed) && (
+              <div className="flex flex-wrap gap-3 mt-2 pt-2 border-t border-border/50">
+                {entry.calories && (
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground" data-testid={`text-calories-${entry.id}`}>
+                    <Flame className="h-3 w-3 text-orange-500" />
+                    <span>{entry.calories} cal</span>
+                  </div>
+                )}
+                {entry.avgHeartrate && (
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground" data-testid={`text-heartrate-${entry.id}`}>
+                    <Heart className="h-3 w-3 text-red-500" />
+                    <span>{entry.avgHeartrate} bpm</span>
+                    {entry.maxHeartrate && <span className="text-muted-foreground/60">(max {entry.maxHeartrate})</span>}
+                  </div>
+                )}
+                {entry.avgWatts && (
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground" data-testid={`text-power-${entry.id}`}>
+                    <Zap className="h-3 w-3 text-yellow-500" />
+                    <span>{entry.avgWatts}W</span>
+                  </div>
+                )}
+                {entry.avgCadence && (
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground" data-testid={`text-cadence-${entry.id}`}>
+                    <Activity className="h-3 w-3 text-blue-500" />
+                    <span>{Math.round(entry.avgCadence)} spm</span>
+                  </div>
+                )}
+                {entry.avgSpeed && entry.avgSpeed > 0 && (
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground" data-testid={`text-speed-${entry.id}`}>
+                    <TrendingUp className="h-3 w-3 text-green-500" />
+                    <span>{((entry.avgSpeed * 3.6)).toFixed(1)} km/h</span>
+                  </div>
+                )}
+                {entry.sufferScore && (
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground" data-testid={`text-effort-${entry.id}`}>
+                    <TrendingUp className="h-3 w-3 text-purple-500" />
+                    <span>Effort: {entry.sufferScore}</span>
+                  </div>
+                )}
+              </div>
             )}
           </div>
 

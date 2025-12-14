@@ -270,6 +270,17 @@ export class DatabaseStorage implements IStorage {
             weekNumber: day.weekNumber,
             dayName: day.dayName,
             source: (linkedLog.source as "manual" | "strava") || "manual",
+            // Strava metrics
+            calories: linkedLog.calories,
+            distanceMeters: linkedLog.distanceMeters,
+            elevationGain: linkedLog.elevationGain,
+            avgHeartrate: linkedLog.avgHeartrate,
+            maxHeartrate: linkedLog.maxHeartrate,
+            avgSpeed: linkedLog.avgSpeed,
+            maxSpeed: linkedLog.maxSpeed,
+            avgCadence: linkedLog.avgCadence,
+            avgWatts: linkedLog.avgWatts,
+            sufferScore: linkedLog.sufferScore,
           });
         } else {
           const status = day.status === "skipped" ? "skipped" :
@@ -310,6 +321,17 @@ export class DatabaseStorage implements IStorage {
         rpe: log.rpe,
         workoutLogId: log.id,
         source: (log.source as "manual" | "strava") || "manual",
+        // Strava metrics
+        calories: log.calories,
+        distanceMeters: log.distanceMeters,
+        elevationGain: log.elevationGain,
+        avgHeartrate: log.avgHeartrate,
+        maxHeartrate: log.maxHeartrate,
+        avgSpeed: log.avgSpeed,
+        maxSpeed: log.maxSpeed,
+        avgCadence: log.avgCadence,
+        avgWatts: log.avgWatts,
+        sufferScore: log.sufferScore,
       });
     }
 

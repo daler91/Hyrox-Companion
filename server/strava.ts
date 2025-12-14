@@ -38,6 +38,13 @@ interface StravaActivity {
   max_speed: number;
   average_heartrate?: number;
   max_heartrate?: number;
+  average_cadence?: number;
+  average_watts?: number;
+  kilojoules?: number;
+  calories?: number;
+  suffer_score?: number;
+  pr_count?: number;
+  achievement_count?: number;
 }
 
 async function refreshStravaToken(refreshToken: string): Promise<StravaTokenResponse | null> {
@@ -109,6 +116,15 @@ function formatDuration(seconds: number): string {
   return `${minutes}m`;
 }
 
+function formatPace(metersPerSecond: number): string {
+  // Convert m/s to min/km
+  if (metersPerSecond <= 0) return "";
+  const minPerKm = (1000 / metersPerSecond) / 60;
+  const mins = Math.floor(minPerKm);
+  const secs = Math.round((minPerKm - mins) * 60);
+  return `${mins}:${secs.toString().padStart(2, "0")} /km`;
+}
+
 function mapStravaActivityToWorkout(activity: StravaActivity, userId: string) {
   const durationMinutes = Math.round(activity.moving_time / 60);
   
@@ -119,9 +135,15 @@ function mapStravaActivityToWorkout(activity: StravaActivity, userId: string) {
     ? `${formatDistance(activity.distance)}, ${formatDuration(activity.moving_time)}`
     : `${formatDuration(activity.moving_time)} session`;
   
-  const accessory = activity.total_elevation_gain > 0 
-    ? `Elevation: ${Math.round(activity.total_elevation_gain)}m` 
-    : null;
+  // Build accessory info with elevation and pace if available
+  const accessoryParts: string[] = [];
+  if (activity.total_elevation_gain > 0) {
+    accessoryParts.push(`Elevation: ${Math.round(activity.total_elevation_gain)}m`);
+  }
+  if (isDistanceActivity && activity.average_speed > 0) {
+    accessoryParts.push(`Pace: ${formatPace(activity.average_speed)}`);
+  }
+  const accessory = accessoryParts.length > 0 ? accessoryParts.join(" | ") : null;
 
   return {
     userId,
@@ -135,6 +157,17 @@ function mapStravaActivityToWorkout(activity: StravaActivity, userId: string) {
     planDayId: null,
     source: "strava" as const,
     stravaActivityId: String(activity.id),
+    // Detailed Strava metrics
+    calories: activity.calories || activity.kilojoules ? Math.round((activity.calories || 0) || (activity.kilojoules || 0) * 0.239) : null,
+    distanceMeters: activity.distance || null,
+    elevationGain: activity.total_elevation_gain || null,
+    avgHeartrate: activity.average_heartrate ? Math.round(activity.average_heartrate) : null,
+    maxHeartrate: activity.max_heartrate ? Math.round(activity.max_heartrate) : null,
+    avgSpeed: activity.average_speed || null,
+    maxSpeed: activity.max_speed || null,
+    avgCadence: activity.average_cadence || null,
+    avgWatts: activity.average_watts ? Math.round(activity.average_watts) : null,
+    sufferScore: activity.suffer_score || null,
   };
 }
 
