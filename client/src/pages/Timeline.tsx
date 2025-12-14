@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -1162,16 +1163,19 @@ export default function Timeline() {
         </DialogContent>
       </Dialog>
 
-      {/* Floating Action Button */}
-      <Link href="/log">
-        <Button
-          size="icon"
-          className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-lg z-50"
-          data-testid="button-log-workout-fab"
-        >
-          <Plus className="h-6 w-6" />
-        </Button>
-      </Link>
+      {/* Floating Action Button - rendered via portal to escape sidebar container */}
+      {createPortal(
+        <Link href="/log">
+          <Button
+            size="icon"
+            className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-lg z-50"
+            data-testid="button-log-workout-fab"
+          >
+            <Plus className="h-6 w-6" />
+          </Button>
+        </Link>,
+        document.body
+      )}
     </div>
   );
 }
