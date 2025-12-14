@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -26,13 +26,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -40,11 +33,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Upload,
   FileText,
   Pencil,
   Calendar,
-  CalendarCheck,
   Loader2,
   CheckCircle2,
   Clock,
@@ -52,64 +43,20 @@ import {
   SkipForward,
   MoreVertical,
   Plus,
-  Filter,
-  Sparkles,
-  Lightbulb,
-  X,
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
 import type { TrainingPlan, TimelineEntry, PlanDay, InsertPlanDay } from "@shared/schema";
 import { format, parseISO, isToday, isTomorrow, isYesterday, isBefore, isAfter, startOfWeek, addDays, getWeek, startOfDay, endOfDay } from "date-fns";
-
-function TimelineSkeleton() {
-  return (
-    <div className="space-y-4">
-      {[1, 2, 3].map((group) => (
-        <div key={group}>
-          <div className="flex items-center gap-3 mb-3">
-            <Skeleton className="h-3 w-3 rounded-full" />
-            <Skeleton className="h-4 w-32" />
-            <Skeleton className="h-5 w-16 ml-auto" />
-          </div>
-          <div className="space-y-2 ml-6">
-            {[1, 2].map((item) => (
-              <Card key={item}>
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Skeleton className="h-5 w-20" />
-                    <Skeleton className="h-5 w-16" />
-                    <Skeleton className="h-4 w-24" />
-                  </div>
-                  <Skeleton className="h-4 w-full mb-2" />
-                  <Skeleton className="h-4 w-3/4" />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-type FilterStatus = "all" | "completed" | "planned" | "missed" | "skipped";
-
-interface WorkoutSuggestion {
-  workoutId: string;
-  workoutDate: string;
-  workoutFocus: string;
-  recommendation: string;
-  rationale: string;
-  priority: "high" | "medium" | "low";
-}
+import {
+  TimelineSkeleton,
+  TimelineHeader,
+  TimelineFilters,
+  SuggestionsPanel,
+  type FilterStatus,
+  type WorkoutSuggestion,
+} from "@/components/timeline";
 
 export default function Timeline() {
   const { toast } = useToast();
@@ -500,175 +447,30 @@ export default function Timeline() {
 
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-6">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight" data-testid="text-page-title">
-            Training Timeline
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Your complete training journey - past, present, and future
-          </p>
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          <Button
-            variant="outline"
-            onClick={() => suggestionsMutation.mutate()}
-            disabled={suggestionsMutation.isPending}
-            data-testid="button-get-suggestions"
-          >
-            {suggestionsMutation.isPending ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <Sparkles className="h-4 w-4 mr-2" />
-            )}
-            AI Coach
-          </Button>
-          <Button
-            variant="outline"
-            onClick={scrollToToday}
-            data-testid="button-jump-to-today"
-          >
-            <CalendarCheck className="h-4 w-4 mr-2" />
-            Go to Today
-          </Button>
-        </div>
-      </div>
+      <TimelineHeader
+        onAICoach={() => suggestionsMutation.mutate()}
+        onScrollToToday={scrollToToday}
+        isLoading={suggestionsMutation.isPending}
+      />
 
-      {visibleSuggestions.length > 0 && (
-        <Collapsible open={suggestionsOpen} onOpenChange={setSuggestionsOpen}>
-          <Card className="border-primary/20 bg-primary/5">
-            <CardHeader className="pb-2">
-              <CollapsibleTrigger asChild>
-                <div className="flex items-center justify-between cursor-pointer">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Lightbulb className="h-4 w-4 text-primary" />
-                    AI Training Suggestions
-                    <Badge variant="secondary">{visibleSuggestions.length}</Badge>
-                  </CardTitle>
-                  {suggestionsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                </div>
-              </CollapsibleTrigger>
-            </CardHeader>
-            <CollapsibleContent>
-              <CardContent className="pt-0 space-y-3">
-                {visibleSuggestions.map((suggestion) => (
-                  <div
-                    key={suggestion.workoutId}
-                    className="p-3 rounded-md bg-background border"
-                    data-testid={`suggestion-${suggestion.workoutId}`}
-                  >
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Badge
-                          variant={suggestion.priority === "high" ? "destructive" : suggestion.priority === "medium" ? "default" : "secondary"}
-                        >
-                          {suggestion.priority}
-                        </Badge>
-                        <span className="text-sm font-medium">{suggestion.workoutFocus}</span>
-                        <span className="text-xs text-muted-foreground">{suggestion.workoutDate}</span>
-                      </div>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => handleDismissSuggestion(suggestion.workoutId)}
-                        data-testid={`dismiss-suggestion-${suggestion.workoutId}`}
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </div>
-                    <p className="text-sm mb-2">{suggestion.recommendation}</p>
-                    <p className="text-xs text-muted-foreground mb-3">{suggestion.rationale}</p>
-                    <Button
-                      size="sm"
-                      onClick={() => handleApplySuggestion(suggestion)}
-                      data-testid={`apply-suggestion-${suggestion.workoutId}`}
-                    >
-                      Apply to Workout
-                    </Button>
-                  </div>
-                ))}
-              </CardContent>
-            </CollapsibleContent>
-          </Card>
-        </Collapsible>
-      )}
+      <SuggestionsPanel
+        suggestions={visibleSuggestions}
+        isOpen={suggestionsOpen}
+        onOpenChange={setSuggestionsOpen}
+        onDismiss={handleDismissSuggestion}
+        onApply={handleApplySuggestion}
+      />
 
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-            <div className="flex-1">
-              <Label htmlFor="plan-select" className="text-sm text-muted-foreground mb-2 block">
-                Active Training Plan
-              </Label>
-              {plansLoading ? (
-                <div className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span className="text-sm text-muted-foreground">Loading plans...</span>
-                </div>
-              ) : plans.length > 0 ? (
-                <Select
-                  value={selectedPlanId || ""}
-                  onValueChange={(value) => setSelectedPlanId(value)}
-                >
-                  <SelectTrigger id="plan-select" data-testid="select-plan">
-                    <SelectValue placeholder="Select a training plan" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {plans.map((plan) => (
-                      <SelectItem key={plan.id} value={plan.id}>
-                        {plan.name} ({plan.totalWeeks} weeks)
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <p className="text-sm text-muted-foreground">No plans yet. Import one below.</p>
-              )}
-            </div>
-
-            <div className="flex gap-2 flex-wrap">
-              <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as FilterStatus)}>
-                <SelectTrigger className="w-36" data-testid="select-filter">
-                  <Filter className="h-4 w-4 mr-2" />
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
-                  <SelectItem value="planned">Planned</SelectItem>
-                  <SelectItem value="missed">Missed</SelectItem>
-                  <SelectItem value="skipped">Skipped</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Label htmlFor="csv-upload" className="cursor-pointer">
-                <Button
-                  variant="outline"
-                  className="pointer-events-none"
-                  disabled={importMutation.isPending}
-                >
-                  {importMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <>
-                      <Upload className="h-4 w-4 mr-2" />
-                      Import CSV
-                    </>
-                  )}
-                </Button>
-              </Label>
-              <Input
-                id="csv-upload"
-                type="file"
-                accept=".csv"
-                className="hidden"
-                onChange={handleFileUpload}
-                data-testid="input-csv-upload"
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <TimelineFilters
+        plans={plans}
+        plansLoading={plansLoading}
+        selectedPlanId={selectedPlanId}
+        onPlanChange={setSelectedPlanId}
+        filterStatus={filterStatus}
+        onFilterChange={setFilterStatus}
+        onFileUpload={handleFileUpload}
+        isImporting={importMutation.isPending}
+      />
 
       {timelineLoading ? (
         <TimelineSkeleton />
