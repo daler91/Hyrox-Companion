@@ -129,6 +129,8 @@ Return ONLY valid JSON array with no markdown formatting. Each suggestion should
 - rationale: why this change helps Hyrox performance (1 sentence)
 - priority: "high", "medium", or "low"
 
+IMPORTANT: Prioritize suggestions for workouts happening soonest (today, tomorrow, this week). Focus on the nearest upcoming sessions first, as these are most actionable for the athlete.
+
 Limit to 1 suggestion per workout, max 5 suggestions total. Only suggest changes where meaningful improvements can be made.`;
 
 export async function generateWorkoutSuggestions(

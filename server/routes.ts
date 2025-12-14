@@ -512,6 +512,7 @@ export async function registerRoutes(
           entry.date >= today &&
           entry.planDayId !== null
         )
+        .sort((a, b) => a.date!.localeCompare(b.date!))
         .slice(0, 5)
         .map(entry => ({
           id: entry.planDayId!,
