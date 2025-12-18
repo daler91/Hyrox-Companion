@@ -596,7 +596,7 @@ export default function Timeline() {
           </div>
           )}
 
-          <FloatingActionButton coachPanelOpen={coachOpen} />
+          <FloatingActionButton coachPanelOpen={coachOpen} onCoachToggle={() => setCoachOpen(!coachOpen)} />
 
           <SchedulePlanDialog
             open={!!schedulingPlanId}
