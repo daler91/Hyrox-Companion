@@ -268,6 +268,18 @@ export function CoachPanel({ isOpen, onClose, timeline = [] }: CoachPanelProps) 
     }
   }, [messages]);
 
+  // Scroll to bottom when panel opens
+  useEffect(() => {
+    if (isOpen && scrollRef.current) {
+      // Small delay to ensure content is rendered
+      setTimeout(() => {
+        if (scrollRef.current) {
+          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
+      }, 50);
+    }
+  }, [isOpen]);
+
   const handleSend = async (content: string) => {
     const userMessage: Message = {
       id: Date.now().toString(),
