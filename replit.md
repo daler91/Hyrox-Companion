@@ -31,10 +31,14 @@ Preferred communication style: Simple, everyday language.
 
 The frontend follows a streamlined page-based architecture:
 - **Landing**: Public page for unauthenticated users with login CTAs
-- **Coach** (home): AI chat interface with integrated training stats - the primary user interaction point
-- **Timeline**: Unified chronological view for training plan import, scheduling, editing, and status tracking
+- **Timeline** (home): Unified chronological view with integrated AI Coach side panel - the single main screen experience
 - **Log Workout**: Manual workout entry form
 - **Settings**: User preferences and theme toggle
+
+The Timeline consolidates training management and AI coaching into one view:
+- Toggleable AI Coach panel (side column on desktop, full-screen overlay on mobile)
+- Training plan import, scheduling, editing, and status tracking
+- Workout merging and quick actions all in one place
 
 ### Backend Architecture
 - **Runtime**: Node.js with Express
