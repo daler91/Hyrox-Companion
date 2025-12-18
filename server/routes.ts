@@ -374,6 +374,29 @@ export async function registerRoutes(
     }
   });
 
+  // Simplified route for updating plan day by dayId only (used by AI suggestions)
+  app.patch("/api/plans/days/:dayId", isAuthenticated, async (req: any, res) => {
+    try {
+      const { dayId } = req.params;
+      const userId = req.user.claims.sub;
+
+      const parseResult = updatePlanDaySchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ error: "Invalid update data", details: parseResult.error });
+      }
+
+      const updatedDay = await storage.updatePlanDay(dayId, parseResult.data, userId);
+      if (!updatedDay) {
+        return res.status(404).json({ error: "Day not found" });
+      }
+
+      res.json(updatedDay);
+    } catch (error) {
+      console.error("Update day error:", error);
+      res.status(500).json({ error: "Failed to update day" });
+    }
+  });
+
   app.delete("/api/plans/:id", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
