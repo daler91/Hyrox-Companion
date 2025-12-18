@@ -446,8 +446,6 @@ export default function Timeline() {
       <div className="flex-1 overflow-auto p-4 md:p-8">
         <div className="max-w-5xl mx-auto space-y-6">
           <TimelineHeader
-            coachOpen={coachOpen}
-            onToggleCoach={() => setCoachOpen(!coachOpen)}
             onScrollToToday={scrollToToday}
           />
 
