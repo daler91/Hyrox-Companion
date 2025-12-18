@@ -539,6 +539,8 @@ export async function registerRoutes(
             workoutId: s.workoutId,
             date: workout?.date || s.workoutDate || '',
             focus: workout?.focus || s.workoutFocus || '',
+            targetField: s.targetField || 'notes',
+            action: s.action || 'append',
             recommendation: s.recommendation,
             rationale: s.rationale,
             priority: s.priority,

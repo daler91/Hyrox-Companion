@@ -105,6 +105,8 @@ export interface WorkoutSuggestion {
   workoutId: string;
   workoutDate: string;
   workoutFocus: string;
+  targetField: "mainWorkout" | "accessory" | "notes";
+  action: "replace" | "append";
   recommendation: string;
   rationale: string;
   priority: "high" | "medium" | "low";
@@ -125,11 +127,18 @@ Return ONLY valid JSON array with no markdown formatting. Each suggestion should
 - workoutId: the ID of the upcoming workout
 - workoutDate: the scheduled date
 - workoutFocus: the original focus of the workout
-- recommendation: specific change to make (1-2 sentences)
+- targetField: which part to modify - "mainWorkout", "accessory", or "notes"
+- action: "replace" to replace the field entirely, or "append" to add to existing content
+- recommendation: the specific text to add or replace (just the workout content, not explanation)
 - rationale: why this change helps Hyrox performance (1 sentence)
 - priority: "high", "medium", or "low"
 
-IMPORTANT: Prioritize suggestions for workouts happening soonest (today, tomorrow, this week). Focus on the nearest upcoming sessions first, as these are most actionable for the athlete.
+IMPORTANT RULES:
+1. Use "append" for notes to preserve existing workout instructions
+2. Use "replace" for mainWorkout only when suggesting a completely different exercise
+3. Use "append" for accessory to add extra work without removing existing accessory
+4. The recommendation field should contain ONLY the workout text to insert, not explanations
+5. Prioritize suggestions for workouts happening soonest (today, tomorrow, this week)
 
 Limit to 1 suggestion per workout, max 5 suggestions total. Only suggest changes where meaningful improvements can be made.`;
 
@@ -185,7 +194,12 @@ export async function generateWorkoutSuggestions(
 
     const suggestions = JSON.parse(jsonMatch[0]) as WorkoutSuggestion[];
     return suggestions.filter(s => 
-      s.workoutId && s.recommendation && s.rationale && s.priority
+      s.workoutId && 
+      s.recommendation && 
+      s.rationale && 
+      s.priority &&
+      ["mainWorkout", "accessory", "notes"].includes(s.targetField) &&
+      ["replace", "append"].includes(s.action)
     );
   } catch (error) {
     console.error("Gemini suggestions error:", error);

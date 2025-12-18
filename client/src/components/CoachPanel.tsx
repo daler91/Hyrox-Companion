@@ -3,10 +3,11 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { ChatMessage } from "@/components/ChatMessage";
 import { ChatInput } from "@/components/ChatInput";
 import { QuickActions } from "@/components/QuickActions";
-import { Activity, TrendingUp, Target, Calendar, Flame, Trash2, Loader2, X, MessageSquare } from "lucide-react";
+import { Activity, TrendingUp, Target, Calendar, Flame, Trash2, Loader2, X, MessageSquare, Check, XIcon, Zap } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { TrainingPlan, TimelineEntry, ChatMessage as DBChatMessage } from "@shared/schema";
 
@@ -15,6 +16,17 @@ interface Message {
   role: "user" | "assistant";
   content: string;
   timestamp: string;
+}
+
+interface Suggestion {
+  workoutId: string;
+  date: string;
+  focus: string;
+  targetField: "mainWorkout" | "accessory" | "notes";
+  action: "replace" | "append";
+  recommendation: string;
+  rationale: string;
+  priority: "high" | "medium" | "low";
 }
 
 interface TrainingStats {
@@ -100,6 +112,8 @@ export function CoachPanel({ isOpen, onClose, timeline = [] }: CoachPanelProps) 
   const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
   const [isLoading, setIsLoading] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [pendingSuggestions, setPendingSuggestions] = useState<Suggestion[]>([]);
+  const [applyingId, setApplyingId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const { data: chatHistory = [], isLoading: historyLoading } = useQuery<DBChatMessage[]>({
@@ -148,15 +162,14 @@ export function CoachPanel({ isOpen, onClose, timeline = [] }: CoachPanelProps) 
       const res = await apiRequest("POST", "/api/timeline/ai-suggestions", {});
       return res.json();
     },
-    onSuccess: (data: { suggestions: Array<{ workoutId: string; date: string; focus: string; recommendation: string; rationale: string }> }) => {
+    onSuccess: (data: { suggestions: Suggestion[] }) => {
       let responseContent: string;
       if (!data.suggestions || data.suggestions.length === 0) {
         responseContent = "Your upcoming workouts look well-balanced! I don't have any specific improvements to suggest right now.";
+        setPendingSuggestions([]);
       } else {
-        const suggestionsText = data.suggestions.map((s, i) => 
-          `**${i + 1}. ${s.focus} (${s.date})**\n${s.recommendation}\n_${s.rationale}_`
-        ).join("\n\n");
-        responseContent = `Here are my suggestions for your upcoming workouts:\n\n${suggestionsText}`;
+        responseContent = `I have ${data.suggestions.length} suggestion${data.suggestions.length > 1 ? 's' : ''} for your upcoming workouts. Review them below and click Apply to add them to your plan.`;
+        setPendingSuggestions(data.suggestions);
       }
       
       const suggestionsMessage: Message = {
@@ -179,6 +192,66 @@ export function CoachPanel({ isOpen, onClose, timeline = [] }: CoachPanelProps) 
       setMessages((prev) => [...prev, errorMessage]);
     },
   });
+
+  const handleApplySuggestion = async (suggestion: Suggestion) => {
+    setApplyingId(suggestion.workoutId);
+    try {
+      const workoutEntry = timeline.find(e => e.planDayId === suggestion.workoutId);
+      if (!workoutEntry) {
+        const errorMessage: Message = {
+          id: Date.now().toString(),
+          role: "assistant",
+          content: `Could not find the workout for ${suggestion.focus} (${suggestion.date}). The suggestion is still available to retry.`,
+          timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        };
+        setMessages(prev => [...prev, errorMessage]);
+        return;
+      }
+
+      const currentValue = (workoutEntry[suggestion.targetField] as string) || "";
+      let newValue: string;
+      
+      if (suggestion.action === "append") {
+        if (currentValue.trim()) {
+          newValue = `${currentValue}\n\nAI suggestion: ${suggestion.recommendation}`;
+        } else {
+          newValue = `AI suggestion: ${suggestion.recommendation}`;
+        }
+      } else {
+        newValue = suggestion.recommendation;
+      }
+
+      await apiRequest("PATCH", `/api/plans/days/${suggestion.workoutId}`, {
+        [suggestion.targetField]: newValue,
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["/api/timeline"] });
+      setPendingSuggestions(prev => prev.filter(s => s.workoutId !== suggestion.workoutId));
+      
+      const confirmMessage: Message = {
+        id: Date.now().toString(),
+        role: "assistant",
+        content: `Applied suggestion to ${suggestion.focus} (${suggestion.date}). The ${suggestion.targetField === "mainWorkout" ? "main workout" : suggestion.targetField} has been updated.`,
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      };
+      setMessages(prev => [...prev, confirmMessage]);
+    } catch (error) {
+      console.error("Apply suggestion error:", error);
+      const errorMessage: Message = {
+        id: Date.now().toString(),
+        role: "assistant",
+        content: `Failed to apply suggestion to ${suggestion.focus}. Please try again.`,
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setApplyingId(null);
+    }
+  };
+
+  const handleDismissSuggestion = (workoutId: string) => {
+    setPendingSuggestions(prev => prev.filter(s => s.workoutId !== workoutId));
+  };
 
   const stats = useMemo(() => calculateStats(timeline), [timeline]);
 
@@ -321,6 +394,19 @@ export function CoachPanel({ isOpen, onClose, timeline = [] }: CoachPanelProps) 
               timestamp={message.timestamp}
             />
           ))}
+          {pendingSuggestions.length > 0 && (
+            <div className="space-y-2">
+              {pendingSuggestions.map((suggestion) => (
+                <SuggestionCard
+                  key={suggestion.workoutId}
+                  suggestion={suggestion}
+                  onApply={() => handleApplySuggestion(suggestion)}
+                  onDismiss={() => handleDismissSuggestion(suggestion.workoutId)}
+                  isApplying={applyingId === suggestion.workoutId}
+                />
+              ))}
+            </div>
+          )}
           {isProcessing && (
             <div className="flex items-center gap-2 text-muted-foreground">
               <div className="flex gap-1">
@@ -356,5 +442,81 @@ function StatBadge({ icon: Icon, value, label, color }: StatBadgeProps) {
       <span className="text-sm font-semibold font-mono">{value}</span>
       <span className="text-[10px] text-muted-foreground">{label}</span>
     </div>
+  );
+}
+
+interface SuggestionCardProps {
+  suggestion: Suggestion;
+  onApply: () => void;
+  onDismiss: () => void;
+  isApplying: boolean;
+}
+
+function SuggestionCard({ suggestion, onApply, onDismiss, isApplying }: SuggestionCardProps) {
+  const fieldLabel = suggestion.targetField === "mainWorkout" 
+    ? "Main Workout" 
+    : suggestion.targetField === "accessory" 
+      ? "Accessory" 
+      : "Notes";
+  
+  const actionLabel = suggestion.action === "append" ? "Add to" : "Replace";
+  
+  const priorityColor = suggestion.priority === "high" 
+    ? "bg-red-500/10 text-red-600 dark:text-red-400" 
+    : suggestion.priority === "medium" 
+      ? "bg-orange-500/10 text-orange-600 dark:text-orange-400" 
+      : "bg-blue-500/10 text-blue-600 dark:text-blue-400";
+
+  return (
+    <Card className="p-3 space-y-2" data-testid={`suggestion-card-${suggestion.workoutId}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-medium text-sm truncate">{suggestion.focus}</span>
+            <Badge variant="secondary" className="text-[10px] shrink-0">
+              {suggestion.date}
+            </Badge>
+            <Badge className={`text-[10px] shrink-0 ${priorityColor}`}>
+              {suggestion.priority}
+            </Badge>
+          </div>
+          <div className="flex items-center gap-1 mt-1">
+            <Zap className="h-3 w-3 text-primary shrink-0" />
+            <span className="text-xs text-muted-foreground">
+              {actionLabel} {fieldLabel}
+            </span>
+          </div>
+        </div>
+      </div>
+      
+      <p className="text-sm">{suggestion.recommendation}</p>
+      <p className="text-xs text-muted-foreground italic">{suggestion.rationale}</p>
+      
+      <div className="flex items-center gap-2 pt-1">
+        <Button
+          size="sm"
+          onClick={onApply}
+          disabled={isApplying}
+          data-testid={`button-apply-${suggestion.workoutId}`}
+        >
+          {isApplying ? (
+            <Loader2 className="h-3 w-3 animate-spin mr-1" />
+          ) : (
+            <Check className="h-3 w-3 mr-1" />
+          )}
+          Apply
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={onDismiss}
+          disabled={isApplying}
+          data-testid={`button-dismiss-${suggestion.workoutId}`}
+        >
+          <XIcon className="h-3 w-3 mr-1" />
+          Dismiss
+        </Button>
+      </div>
+    </Card>
   );
 }
