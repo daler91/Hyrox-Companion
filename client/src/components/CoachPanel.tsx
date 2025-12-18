@@ -27,57 +27,58 @@ interface TrainingStats {
 
 function calculateStats(timeline: TimelineEntry[]): TrainingStats {
   const now = new Date();
+  const todayStr = now.toISOString().split("T")[0];
+  
   const startOfWeek = new Date(now);
   startOfWeek.setDate(now.getDate() - now.getDay());
   startOfWeek.setHours(0, 0, 0, 0);
+  const startOfWeekStr = startOfWeek.toISOString().split("T")[0];
   
   const endOfWeek = new Date(startOfWeek);
-  endOfWeek.setDate(startOfWeek.getDate() + 7);
+  endOfWeek.setDate(startOfWeek.getDate() + 6);
+  const endOfWeekStr = endOfWeek.toISOString().split("T")[0];
 
-  const thisWeekEntries = timeline.filter(entry => {
-    const entryDate = new Date(entry.date);
-    return entryDate >= startOfWeek && entryDate < endOfWeek;
-  });
+  const thisWeekEntries = timeline.filter(entry => 
+    entry.date >= startOfWeekStr && entry.date <= endOfWeekStr
+  );
 
+  const completedAll = timeline.filter(e => e.status === "completed");
   const completedThisWeek = thisWeekEntries.filter(e => e.status === "completed").length;
   const totalThisWeek = thisWeekEntries.length;
-  const plannedUpcoming = timeline.filter(e => {
-    const entryDate = new Date(e.date);
-    return entryDate >= now && e.status === "planned";
-  }).length;
-
-  const completedDates = new Set(
-    timeline
-      .filter(e => e.status === "completed")
-      .map(e => {
-        const d = new Date(e.date);
-        d.setHours(0, 0, 0, 0);
-        return d.getTime();
-      })
-  );
   
-  const uniqueDays = Array.from(completedDates).sort((a, b) => b - a);
+  const plannedUpcoming = timeline.filter(e => 
+    e.date >= todayStr && e.status === "planned"
+  ).length;
+
+  const completedDatesSet = new Set(
+    completedAll.map(e => e.date)
+  );
+  const uniqueDays = Array.from(completedDatesSet).sort().reverse();
   
   let streak = 0;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const checkDate = new Date(now);
+  checkDate.setHours(0, 0, 0, 0);
   
-  for (let i = 0; i < uniqueDays.length; i++) {
-    const expectedDate = today.getTime() - (i * 24 * 60 * 60 * 1000);
-    if (uniqueDays[i] === expectedDate) {
+  for (let i = 0; i <= uniqueDays.length; i++) {
+    const expectedDateStr = checkDate.toISOString().split("T")[0];
+    if (uniqueDays.includes(expectedDateStr)) {
       streak++;
-    } else if (i === 0 && uniqueDays[i] === expectedDate - (24 * 60 * 60 * 1000)) {
-      streak++;
+      checkDate.setDate(checkDate.getDate() - 1);
+    } else if (i === 0) {
+      checkDate.setDate(checkDate.getDate() - 1);
     } else {
       break;
     }
   }
 
+  const allCompleted = completedAll.length;
+  const allPastDue = timeline.filter(e => e.date < todayStr && e.status !== "planned").length;
+
   return {
     workoutsThisWeek: totalThisWeek,
     completedThisWeek,
     plannedUpcoming,
-    completionRate: totalThisWeek > 0 ? Math.round((completedThisWeek / totalThisWeek) * 100) : 0,
+    completionRate: allPastDue > 0 ? Math.round((allCompleted / allPastDue) * 100) : 0,
     currentStreak: streak,
   };
 }
