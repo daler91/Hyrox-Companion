@@ -528,7 +528,22 @@ export async function registerRoutes(
         return res.json({ suggestions: [], message: "No upcoming planned workouts found" });
       }
 
-      const suggestions = await generateWorkoutSuggestions(trainingContext, upcomingWorkouts);
+      const rawSuggestions = await generateWorkoutSuggestions(trainingContext, upcomingWorkouts);
+      
+      // Map suggestions to include date and focus from original workout data
+      const workoutMap = new Map(upcomingWorkouts.map(w => [w.id, w]));
+      const suggestions = rawSuggestions.map(s => {
+        const workout = workoutMap.get(s.workoutId);
+        return {
+          workoutId: s.workoutId,
+          date: workout?.date || s.workoutDate || '',
+          focus: workout?.focus || s.workoutFocus || '',
+          recommendation: s.recommendation,
+          rationale: s.rationale,
+          priority: s.priority,
+        };
+      });
+      
       res.json({ suggestions });
     } catch (error) {
       console.error("AI suggestions error:", error);
