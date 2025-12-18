@@ -22,7 +22,9 @@ import {
   Loader2,
   ChevronDown,
   ChevronUp,
+  MessageSquare,
 } from "lucide-react";
+import { CoachPanel } from "@/components/CoachPanel";
 import type { TrainingPlan, TimelineEntry, PlanDay, WorkoutStatus } from "@shared/schema";
 import { format, parseISO, isToday, startOfWeek, addDays } from "date-fns";
 import {
@@ -69,6 +71,7 @@ export default function Timeline() {
   const [combiningEntry, setCombiningEntry] = useState<TimelineEntry | null>(null);
   const [combineSecondEntry, setCombineSecondEntry] = useState<TimelineEntry | null>(null);
   const [showCombineDialog, setShowCombineDialog] = useState(false);
+  const [coachOpen, setCoachOpen] = useState(false);
   
   const todayRef = useRef<HTMLDivElement>(null);
   
@@ -486,22 +489,35 @@ export default function Timeline() {
   const hiddenFutureCount = futureGroups.length - visibleFutureGroups.length;
 
   return (
-    <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-6">
-      <TimelineHeader
-        onAICoach={() => suggestionsMutation.mutate()}
-        onScrollToToday={scrollToToday}
-        isLoading={suggestionsMutation.isPending}
-      />
+    <div className="flex h-full">
+      <div className="flex-1 overflow-auto p-4 md:p-8">
+        <div className="max-w-5xl mx-auto space-y-6">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <TimelineHeader
+              onAICoach={() => suggestionsMutation.mutate()}
+              onScrollToToday={scrollToToday}
+              isLoading={suggestionsMutation.isPending}
+            />
+            <Button
+              variant={coachOpen ? "default" : "outline"}
+              onClick={() => setCoachOpen(!coachOpen)}
+              className="gap-2"
+              data-testid="button-toggle-coach"
+            >
+              <MessageSquare className="h-4 w-4" />
+              <span className="hidden sm:inline">AI Coach</span>
+            </Button>
+          </div>
 
-      <SuggestionsPanel
-        suggestions={visibleSuggestions}
-        isOpen={suggestionsOpen}
-        onOpenChange={setSuggestionsOpen}
-        onDismiss={handleDismissSuggestion}
-        onApply={handleApplySuggestion}
-      />
+          <SuggestionsPanel
+            suggestions={visibleSuggestions}
+            isOpen={suggestionsOpen}
+            onOpenChange={setSuggestionsOpen}
+            onDismiss={handleDismissSuggestion}
+            onApply={handleApplySuggestion}
+          />
 
-      <TimelineFilters
+          <TimelineFilters
         plans={plans}
         plansLoading={plansLoading}
         selectedPlanId={selectedPlanId}
@@ -643,80 +659,105 @@ export default function Timeline() {
               Hide later workouts
             </Button>
           )}
+          </div>
+          )}
+
+          <FloatingActionButton />
+
+          <SchedulePlanDialog
+            open={!!schedulingPlanId}
+            onOpenChange={(open) => !open && setSchedulingPlanId(null)}
+            startDate={startDate}
+            onStartDateChange={setStartDate}
+            onSchedule={() =>
+              schedulingPlanId &&
+              schedulePlanMutation.mutate({ planId: schedulingPlanId, startDate })
+            }
+            isPending={schedulePlanMutation.isPending}
+          />
+
+          <EditWorkoutDialog
+            entry={editingEntry}
+            onOpenChange={() => setEditingEntry(null)}
+            editForm={editForm}
+            onEditFormChange={setEditForm}
+            onSave={handleSaveEdit}
+            isPending={updateDayMutation.isPending || updateWorkoutMutation.isPending}
+          />
+
+          <SkipConfirmDialog
+            entry={skipConfirmEntry}
+            onOpenChange={() => setSkipConfirmEntry(null)}
+            onConfirm={confirmSkip}
+          />
+
+          <AlertDialog open={!!deleteConfirmEntry} onOpenChange={() => setDeleteConfirmEntry(null)}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete Workout</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Are you sure you want to delete this workout? This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={confirmDelete}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  data-testid="button-confirm-delete"
+                >
+                  {deleteWorkoutMutation.isPending ? "Deleting..." : "Delete"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          <ImportPreviewDialog
+            preview={csvPreview}
+            onOpenChange={() => setCsvPreview(null)}
+            onConfirm={confirmImport}
+            isPending={importMutation.isPending}
+          />
+
+          <CombineWorkoutsDialog
+            open={showCombineDialog}
+            onOpenChange={(open) => {
+              setShowCombineDialog(open);
+              if (!open) {
+                setCombiningEntry(null);
+                setCombineSecondEntry(null);
+              }
+            }}
+            entry1={combiningEntry}
+            entry2={combineSecondEntry}
+            onConfirm={handleConfirmCombine}
+            isPending={combineWorkoutsMutation.isPending}
+          />
+        </div>
+      </div>
+      
+      {coachOpen && (
+        <div className="w-80 lg:w-96 flex-shrink-0 hidden md:block">
+          <CoachPanel 
+            isOpen={coachOpen} 
+            onClose={() => setCoachOpen(false)} 
+            timeline={timelineData}
+          />
         </div>
       )}
-
-      <SchedulePlanDialog
-        open={!!schedulingPlanId}
-        onOpenChange={(open) => !open && setSchedulingPlanId(null)}
-        startDate={startDate}
-        onStartDateChange={setStartDate}
-        onSchedule={() =>
-          schedulingPlanId &&
-          schedulePlanMutation.mutate({ planId: schedulingPlanId, startDate })
-        }
-        isPending={schedulePlanMutation.isPending}
-      />
-
-      <EditWorkoutDialog
-        entry={editingEntry}
-        onOpenChange={() => setEditingEntry(null)}
-        editForm={editForm}
-        onEditFormChange={setEditForm}
-        onSave={handleSaveEdit}
-        isPending={updateDayMutation.isPending || updateWorkoutMutation.isPending}
-      />
-
-      <SkipConfirmDialog
-        entry={skipConfirmEntry}
-        onOpenChange={() => setSkipConfirmEntry(null)}
-        onConfirm={confirmSkip}
-      />
-
-      <AlertDialog open={!!deleteConfirmEntry} onOpenChange={() => setDeleteConfirmEntry(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Workout</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this workout? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              data-testid="button-confirm-delete"
-            >
-              {deleteWorkoutMutation.isPending ? "Deleting..." : "Delete"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <ImportPreviewDialog
-        preview={csvPreview}
-        onOpenChange={() => setCsvPreview(null)}
-        onConfirm={confirmImport}
-        isPending={importMutation.isPending}
-      />
-
-      <CombineWorkoutsDialog
-        open={showCombineDialog}
-        onOpenChange={(open) => {
-          setShowCombineDialog(open);
-          if (!open) {
-            setCombiningEntry(null);
-            setCombineSecondEntry(null);
-          }
-        }}
-        entry1={combiningEntry}
-        entry2={combineSecondEntry}
-        onConfirm={handleConfirmCombine}
-        isPending={combineWorkoutsMutation.isPending}
-      />
-
-      <FloatingActionButton />
+      
+      {coachOpen && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={() => setCoachOpen(false)} />
+          <div className="absolute right-0 top-0 bottom-0 w-full max-w-sm bg-background shadow-lg">
+            <CoachPanel 
+              isOpen={coachOpen} 
+              onClose={() => setCoachOpen(false)} 
+              timeline={timelineData}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

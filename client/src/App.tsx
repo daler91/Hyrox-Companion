@@ -8,7 +8,6 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { useAuth } from "@/hooks/useAuth";
 import NotFound from "@/pages/not-found";
-import Coach from "@/pages/Coach";
 import LogWorkout from "@/pages/LogWorkout";
 import Timeline from "@/pages/Timeline";
 import Settings from "@/pages/Settings";
@@ -18,9 +17,8 @@ import { Loader2 } from "lucide-react";
 function AuthenticatedRouter() {
   return (
     <Switch>
-      <Route path="/" component={Coach} />
+      <Route path="/" component={Timeline} />
       <Route path="/log" component={LogWorkout} />
-      <Route path="/timeline" component={Timeline} />
       <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>
