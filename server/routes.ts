@@ -532,17 +532,19 @@ export async function registerRoutes(
       
       // Map suggestions to include date and focus from original workout data
       const workoutMap = new Map(upcomingWorkouts.map(w => [w.id, w]));
-      const suggestions = rawSuggestions.map(s => {
-        const workout = workoutMap.get(s.workoutId);
-        return {
-          workoutId: s.workoutId,
-          date: workout?.date || s.workoutDate || '',
-          focus: workout?.focus || s.workoutFocus || '',
-          recommendation: s.recommendation,
-          rationale: s.rationale,
-          priority: s.priority,
-        };
-      });
+      const suggestions = rawSuggestions
+        .map(s => {
+          const workout = workoutMap.get(s.workoutId);
+          return {
+            workoutId: s.workoutId,
+            date: workout?.date || s.workoutDate || '',
+            focus: workout?.focus || s.workoutFocus || '',
+            recommendation: s.recommendation,
+            rationale: s.rationale,
+            priority: s.priority,
+          };
+        })
+        .filter(s => s.date && s.focus && s.recommendation);
       
       res.json({ suggestions });
     } catch (error) {
