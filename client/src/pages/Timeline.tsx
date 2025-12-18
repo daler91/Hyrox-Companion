@@ -596,7 +596,7 @@ export default function Timeline() {
           </div>
           )}
 
-          <FloatingActionButton />
+          <FloatingActionButton coachPanelOpen={coachOpen} />
 
           <SchedulePlanDialog
             open={!!schedulingPlanId}
