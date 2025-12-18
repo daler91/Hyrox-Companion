@@ -15,18 +15,17 @@ export default function FloatingActionButton({ coachPanelOpen, onCoachToggle }: 
 
   return createPortal(
     <div 
-      className={`!fixed !bottom-6 flex flex-col gap-3 transition-all duration-300 ${rightPosition}`}
+      className={`!fixed !bottom-6 flex flex-col gap-3 items-end transition-all duration-300 ${rightPosition}`}
       style={{ zIndex: 9999 }}
     >
       <Button
-        size="icon"
-        variant={coachPanelOpen ? "default" : "secondary"}
-        className="rounded-full shadow-lg h-12 w-12"
+        variant={coachPanelOpen ? "default" : "outline"}
+        className="rounded-full shadow-lg gap-2"
         onClick={onCoachToggle}
         data-testid="button-coach-fab"
-        title="AI Coach"
       >
-        <MessageSquare className="h-5 w-5" />
+        <MessageSquare className="h-4 w-4" />
+        <span>AI Coach</span>
       </Button>
       <Link href="/log">
         <Button
