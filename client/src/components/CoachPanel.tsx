@@ -142,12 +142,50 @@ export function CoachPanel({ isOpen, onClose, timeline = [] }: CoachPanelProps) 
     },
   });
 
+  const suggestionsMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/timeline/ai-suggestions", {});
+      return res.json();
+    },
+    onSuccess: (data: { suggestions: Array<{ workoutId: string; date: string; focus: string; recommendation: string; rationale: string }> }) => {
+      let responseContent: string;
+      if (!data.suggestions || data.suggestions.length === 0) {
+        responseContent = "Your upcoming workouts look well-balanced! I don't have any specific improvements to suggest right now.";
+      } else {
+        const suggestionsText = data.suggestions.map((s, i) => 
+          `**${i + 1}. ${s.focus} (${s.date})**\n${s.recommendation}\n_${s.rationale}_`
+        ).join("\n\n");
+        responseContent = `Here are my suggestions for your upcoming workouts:\n\n${suggestionsText}`;
+      }
+      
+      const suggestionsMessage: Message = {
+        id: Date.now().toString(),
+        role: "assistant",
+        content: responseContent,
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      };
+      setMessages((prev) => [...prev, suggestionsMessage]);
+      saveMessageMutation.mutate({ role: "assistant", content: responseContent });
+    },
+    onError: () => {
+      const errorContent = "Sorry, I couldn't analyze your workouts right now. Please try again.";
+      const errorMessage: Message = {
+        id: Date.now().toString(),
+        role: "assistant",
+        content: errorContent,
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    },
+  });
+
   const stats = useMemo(() => calculateStats(timeline), [timeline]);
 
-  const quickSuggestions = [
-    "Analyze my training",
-    "Pacing tips",
-    "Sled push help",
+  const quickActions = [
+    { id: "suggestions", label: "Get workout suggestions" },
+    { id: "analyze", label: "Analyze my training" },
+    { id: "pacing", label: "Pacing tips" },
+    { id: "sled", label: "Sled push help" },
   ];
 
   useEffect(() => {
@@ -208,9 +246,23 @@ export function CoachPanel({ isOpen, onClose, timeline = [] }: CoachPanelProps) 
     }
   };
 
-  const handleQuickAction = (suggestion: string) => {
-    handleSend(suggestion);
+  const handleQuickAction = (action: { id: string; label: string }) => {
+    if (action.id === "suggestions") {
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        role: "user",
+        content: action.label,
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      };
+      setMessages((prev) => [...prev, userMessage]);
+      saveMessageMutation.mutate({ role: "user", content: action.label });
+      suggestionsMutation.mutate();
+    } else {
+      handleSend(action.label);
+    }
   };
+
+  const isProcessing = isLoading || suggestionsMutation.isPending;
 
   if (!isOpen) return null;
 
@@ -268,7 +320,7 @@ export function CoachPanel({ isOpen, onClose, timeline = [] }: CoachPanelProps) 
               timestamp={message.timestamp}
             />
           ))}
-          {isLoading && (
+          {isProcessing && (
             <div className="flex items-center gap-2 text-muted-foreground">
               <div className="flex gap-1">
                 <span className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
@@ -282,8 +334,8 @@ export function CoachPanel({ isOpen, onClose, timeline = [] }: CoachPanelProps) 
       </ScrollArea>
       
       <div className="flex-shrink-0 p-2 border-t space-y-2">
-        <QuickActions suggestions={quickSuggestions} onSelect={handleQuickAction} />
-        <ChatInput onSend={handleSend} isLoading={isLoading} />
+        <QuickActions actions={quickActions} onSelect={handleQuickAction} disabled={isProcessing} />
+        <ChatInput onSend={handleSend} isLoading={isProcessing} />
       </div>
     </div>
   );

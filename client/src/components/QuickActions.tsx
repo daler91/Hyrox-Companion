@@ -1,23 +1,30 @@
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
-interface QuickActionsProps {
-  suggestions: string[];
-  onSelect: (suggestion: string) => void;
+export interface QuickAction {
+  id: string;
+  label: string;
 }
 
-export function QuickActions({ suggestions, onSelect }: QuickActionsProps) {
+interface QuickActionsProps {
+  actions: QuickAction[];
+  onSelect: (action: QuickAction) => void;
+  disabled?: boolean;
+}
+
+export function QuickActions({ actions, onSelect, disabled }: QuickActionsProps) {
   return (
     <div className="flex flex-wrap gap-2" data-testid="quick-actions">
-      {suggestions.map((suggestion, index) => (
-        <Badge
-          key={index}
+      {actions.map((action) => (
+        <Button
+          key={action.id}
           variant="secondary"
-          className="cursor-pointer"
-          onClick={() => onSelect(suggestion)}
-          data-testid={`button-suggestion-${index}`}
+          size="sm"
+          disabled={disabled}
+          onClick={() => onSelect(action)}
+          data-testid={`button-action-${action.id}`}
         >
-          {suggestion}
-        </Badge>
+          {action.label}
+        </Button>
       ))}
     </div>
   );

@@ -1,16 +1,16 @@
 import { Button } from "@/components/ui/button";
-import { Sparkles, CalendarCheck, Loader2 } from "lucide-react";
+import { MessageSquare, CalendarCheck } from "lucide-react";
 
 interface TimelineHeaderProps {
-  onAICoach: () => void;
+  coachOpen: boolean;
+  onToggleCoach: () => void;
   onScrollToToday: () => void;
-  isLoading: boolean;
 }
 
 export default function TimelineHeader({
-  onAICoach,
+  coachOpen,
+  onToggleCoach,
   onScrollToToday,
-  isLoading,
 }: TimelineHeaderProps) {
   return (
     <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -25,24 +25,20 @@ export default function TimelineHeader({
       <div className="flex gap-2 flex-wrap">
         <Button
           variant="outline"
-          onClick={onAICoach}
-          disabled={isLoading}
-          data-testid="button-get-suggestions"
-        >
-          {isLoading ? (
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-          ) : (
-            <Sparkles className="h-4 w-4 mr-2" />
-          )}
-          AI Coach
-        </Button>
-        <Button
-          variant="outline"
           onClick={onScrollToToday}
           data-testid="button-jump-to-today"
         >
           <CalendarCheck className="h-4 w-4 mr-2" />
           Go to Today
+        </Button>
+        <Button
+          variant={coachOpen ? "default" : "outline"}
+          onClick={onToggleCoach}
+          className="gap-2"
+          data-testid="button-toggle-coach"
+        >
+          <MessageSquare className="h-4 w-4" />
+          <span className="hidden sm:inline">AI Coach</span>
         </Button>
       </div>
     </div>

@@ -22,7 +22,6 @@ import {
   Loader2,
   ChevronDown,
   ChevronUp,
-  MessageSquare,
 } from "lucide-react";
 import { CoachPanel } from "@/components/CoachPanel";
 import type { TrainingPlan, TimelineEntry, PlanDay, WorkoutStatus } from "@shared/schema";
@@ -31,7 +30,6 @@ import {
   TimelineSkeleton,
   TimelineHeader,
   TimelineFilters,
-  SuggestionsPanel,
   TimelineDateGroup,
   SchedulePlanDialog,
   EditWorkoutDialog,
@@ -40,7 +38,6 @@ import {
   FloatingActionButton,
   CombineWorkoutsDialog,
   type FilterStatus,
-  type WorkoutSuggestion,
   type EditFormState,
   type CsvPreviewData,
 } from "@/components/timeline";
@@ -63,9 +60,6 @@ export default function Timeline() {
   const [skipConfirmEntry, setSkipConfirmEntry] = useState<TimelineEntry | null>(null);
   const [deleteConfirmEntry, setDeleteConfirmEntry] = useState<TimelineEntry | null>(null);
   const [csvPreview, setCsvPreview] = useState<CsvPreviewData | null>(null);
-  const [suggestions, setSuggestions] = useState<WorkoutSuggestion[]>([]);
-  const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set());
-  const [suggestionsOpen, setSuggestionsOpen] = useState(true);
   const [showAllPast, setShowAllPast] = useState(false);
   const [showAllFuture, setShowAllFuture] = useState(false);
   const [combiningEntry, setCombiningEntry] = useState<TimelineEntry | null>(null);
@@ -91,8 +85,6 @@ export default function Timeline() {
         : `/api/timeline`;
       const res = await fetch(url);
       if (!res.ok) throw new Error("Failed to fetch timeline");
-      // Clear suggestions when timeline data changes
-      setSuggestions([]);
       return res.json();
     },
   });
@@ -228,45 +220,6 @@ export default function Timeline() {
       toast({ title: "Failed to delete workout", variant: "destructive" });
     },
   });
-
-  const suggestionsMutation = useMutation({
-    mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/timeline/ai-suggestions", {});
-      return response.json();
-    },
-    onSuccess: (data: { suggestions: WorkoutSuggestion[] }) => {
-      setSuggestions(data.suggestions || []);
-      setDismissedSuggestions(new Set());
-      setSuggestionsOpen(true);
-      if (data.suggestions?.length === 0) {
-        toast({ title: "No suggestions available", description: "Your upcoming workouts look well-balanced!" });
-      }
-    },
-    onError: () => {
-      toast({ title: "Failed to get suggestions", variant: "destructive" });
-    },
-  });
-
-  const handleDismissSuggestion = (workoutId: string) => {
-    setDismissedSuggestions(prev => new Set(Array.from(prev).concat(workoutId)));
-  };
-
-  const handleApplySuggestion = (suggestion: WorkoutSuggestion) => {
-    const entry = timelineData.find(e => e.planDayId === suggestion.workoutId);
-    if (entry) {
-      setEditingEntry(entry);
-      const existingNotes = entry.notes ? `${entry.notes}\n\n` : "";
-      setEditForm({
-        focus: entry.focus,
-        mainWorkout: suggestion.recommendation,
-        accessory: entry.accessory || "",
-        notes: `${existingNotes}AI suggestion: ${suggestion.rationale}`,
-      });
-    }
-    handleDismissSuggestion(suggestion.workoutId);
-  };
-
-  const visibleSuggestions = suggestions.filter(s => !dismissedSuggestions.has(s.workoutId));
 
   const parseCSVForPreview = (csvContent: string) => {
     const lines = csvContent.trim().split('\n');
@@ -492,29 +445,10 @@ export default function Timeline() {
     <div className="flex h-full">
       <div className="flex-1 overflow-auto p-4 md:p-8">
         <div className="max-w-5xl mx-auto space-y-6">
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <TimelineHeader
-              onAICoach={() => suggestionsMutation.mutate()}
-              onScrollToToday={scrollToToday}
-              isLoading={suggestionsMutation.isPending}
-            />
-            <Button
-              variant={coachOpen ? "default" : "outline"}
-              onClick={() => setCoachOpen(!coachOpen)}
-              className="gap-2"
-              data-testid="button-toggle-coach"
-            >
-              <MessageSquare className="h-4 w-4" />
-              <span className="hidden sm:inline">AI Coach</span>
-            </Button>
-          </div>
-
-          <SuggestionsPanel
-            suggestions={visibleSuggestions}
-            isOpen={suggestionsOpen}
-            onOpenChange={setSuggestionsOpen}
-            onDismiss={handleDismissSuggestion}
-            onApply={handleApplySuggestion}
+          <TimelineHeader
+            coachOpen={coachOpen}
+            onToggleCoach={() => setCoachOpen(!coachOpen)}
+            onScrollToToday={scrollToToday}
           />
 
           <TimelineFilters
