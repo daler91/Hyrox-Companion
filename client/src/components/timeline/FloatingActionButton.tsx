@@ -19,7 +19,6 @@ export default function FloatingActionButton({ coachPanelOpen, onCoachToggle }: 
       style={{ zIndex: 9999 }}
     >
       <Button
-        variant={coachPanelOpen ? "default" : "outline"}
         className="rounded-full shadow-lg gap-2"
         onClick={onCoachToggle}
         data-testid="button-coach-fab"
