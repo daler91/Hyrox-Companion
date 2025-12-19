@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { SiStrava } from "react-icons/si";
 import type { TimelineEntry, WorkoutStatus } from "@shared/schema";
+import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 
 interface TimelineWorkoutCardProps {
   entry: TimelineEntry;
@@ -95,6 +96,17 @@ export default function TimelineWorkoutCard({
   combiningEntryId,
   combiningEntryDate,
 }: TimelineWorkoutCardProps) {
+  const { distanceUnit } = useUnitPreferences();
+  
+  const formatSpeed = (metersPerSecond: number) => {
+    if (distanceUnit === "miles") {
+      const mph = metersPerSecond * 2.23694;
+      return `${mph.toFixed(1)} mph`;
+    }
+    const kmh = metersPerSecond * 3.6;
+    return `${kmh.toFixed(1)} km/h`;
+  };
+  
   const statusOptions = getStatusChangeOptions(entry.status);
   const hasPlanDayId = !!entry.planDayId;
   const isBeingCombined = combiningEntryId === entry.id;
@@ -177,7 +189,7 @@ export default function TimelineWorkoutCard({
                 {entry.avgSpeed && entry.avgSpeed > 0 && (
                   <div className="flex items-center gap-1 text-xs text-muted-foreground" data-testid={`text-speed-${entry.id}`}>
                     <TrendingUp className="h-3 w-3 text-green-500" />
-                    <span>{((entry.avgSpeed * 3.6)).toFixed(1)} km/h</span>
+                    <span>{formatSpeed(entry.avgSpeed)}</span>
                   </div>
                 )}
                 {entry.sufferScore && (

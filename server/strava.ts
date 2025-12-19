@@ -102,7 +102,11 @@ async function getValidAccessToken(userId: string): Promise<string | null> {
   return refreshed.access_token;
 }
 
-function formatDistance(meters: number): string {
+function formatDistance(meters: number, distanceUnit: string = "km"): string {
+  if (distanceUnit === "miles") {
+    const miles = meters / 1609.344;
+    return `${miles.toFixed(2)} mi`;
+  }
   const km = meters / 1000;
   return `${km.toFixed(2)} km`;
 }
@@ -116,32 +120,43 @@ function formatDuration(seconds: number): string {
   return `${minutes}m`;
 }
 
-function formatPace(metersPerSecond: number): string {
-  // Convert m/s to min/km
+function formatPace(metersPerSecond: number, distanceUnit: string = "km"): string {
   if (metersPerSecond <= 0) return "";
+  if (distanceUnit === "miles") {
+    // Convert m/s to min/mile
+    const minPerMile = (1609.344 / metersPerSecond) / 60;
+    const mins = Math.floor(minPerMile);
+    const secs = Math.round((minPerMile - mins) * 60);
+    return `${mins}:${secs.toString().padStart(2, "0")} /mi`;
+  }
+  // Convert m/s to min/km
   const minPerKm = (1000 / metersPerSecond) / 60;
   const mins = Math.floor(minPerKm);
   const secs = Math.round((minPerKm - mins) * 60);
   return `${mins}:${secs.toString().padStart(2, "0")} /km`;
 }
 
-function mapStravaActivityToWorkout(activity: StravaActivity, userId: string) {
+function mapStravaActivityToWorkout(activity: StravaActivity, userId: string, distanceUnit: string = "km") {
   const durationMinutes = Math.round(activity.moving_time / 60);
   
   // Check if this is a distance-based activity (more than 100m)
   const isDistanceActivity = activity.distance > 100;
   
   const mainWorkout = isDistanceActivity
-    ? `${formatDistance(activity.distance)}, ${formatDuration(activity.moving_time)}`
+    ? `${formatDistance(activity.distance, distanceUnit)}, ${formatDuration(activity.moving_time)}`
     : `${formatDuration(activity.moving_time)} session`;
   
   // Build accessory info with elevation and pace if available
   const accessoryParts: string[] = [];
   if (activity.total_elevation_gain > 0) {
-    accessoryParts.push(`Elevation: ${Math.round(activity.total_elevation_gain)}m`);
+    const elevationUnit = distanceUnit === "miles" ? "ft" : "m";
+    const elevation = distanceUnit === "miles" 
+      ? Math.round(activity.total_elevation_gain * 3.28084)
+      : Math.round(activity.total_elevation_gain);
+    accessoryParts.push(`Elevation: ${elevation}${elevationUnit}`);
   }
   if (isDistanceActivity && activity.average_speed > 0) {
-    accessoryParts.push(`Pace: ${formatPace(activity.average_speed)}`);
+    accessoryParts.push(`Pace: ${formatPace(activity.average_speed, distanceUnit)}`);
   }
   const accessory = accessoryParts.length > 0 ? accessoryParts.join(" | ") : null;
 
@@ -310,6 +325,10 @@ export function registerStravaRoutes(app: Express): void {
         return res.status(401).json({ error: "Strava not connected or token expired" });
       }
 
+      // Fetch user preferences for distance unit
+      const user = await storage.getUser(userId);
+      const distanceUnit = user?.distanceUnit || "km";
+
       const activitiesResponse = await fetch(
         "https://www.strava.com/api/v3/athlete/activities?per_page=30",
         {
@@ -334,7 +353,7 @@ export function registerStravaRoutes(app: Express): void {
           continue;
         }
 
-        const workoutData = mapStravaActivityToWorkout(activity, userId);
+        const workoutData = mapStravaActivityToWorkout(activity, userId, distanceUnit);
         await storage.createWorkoutLog(workoutData);
         imported++;
       }
