@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect, useMemo } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
@@ -7,134 +7,13 @@ import { ChatMessage } from "@/components/ChatMessage";
 import { ChatInput } from "@/components/ChatInput";
 import { QuickActions } from "@/components/QuickActions";
 import { Activity, TrendingUp, Target, Calendar, Flame, Trash2, Loader2 } from "lucide-react";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { TrainingPlan, TimelineEntry, ChatMessage as DBChatMessage } from "@shared/schema";
+import type { TrainingPlan, TimelineEntry } from "@shared/schema";
+import { calculateStats, type TrainingStats } from "@/lib/statsUtils";
+import { useChatSession, type Message } from "@/hooks/useChatSession";
 
-interface Message {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  timestamp: string;
-}
-
-interface TrainingStats {
-  workoutsThisWeek: number;
-  completedThisWeek: number;
-  plannedUpcoming: number;
-  completionRate: number;
-  currentStreak: number;
-}
-
-function calculateStats(timeline: TimelineEntry[]): TrainingStats {
-  const now = new Date();
-  const startOfWeek = new Date(now);
-  startOfWeek.setDate(now.getDate() - now.getDay());
-  startOfWeek.setHours(0, 0, 0, 0);
-  
-  const endOfWeek = new Date(startOfWeek);
-  endOfWeek.setDate(startOfWeek.getDate() + 7);
-
-  const thisWeekEntries = timeline.filter(entry => {
-    const entryDate = new Date(entry.date);
-    return entryDate >= startOfWeek && entryDate < endOfWeek;
-  });
-
-  const completedThisWeek = thisWeekEntries.filter(e => e.status === "completed").length;
-  const totalThisWeek = thisWeekEntries.length;
-  const plannedUpcoming = timeline.filter(e => {
-    const entryDate = new Date(e.date);
-    return entryDate >= now && e.status === "planned";
-  }).length;
-
-  const completedDates = new Set(
-    timeline
-      .filter(e => e.status === "completed")
-      .map(e => {
-        const d = new Date(e.date);
-        d.setHours(0, 0, 0, 0);
-        return d.getTime();
-      })
-  );
-  
-  const uniqueDays = Array.from(completedDates).sort((a, b) => b - a);
-  
-  let streak = 0;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  
-  for (let i = 0; i < uniqueDays.length; i++) {
-    const expectedDate = today.getTime() - (i * 24 * 60 * 60 * 1000);
-    if (uniqueDays[i] === expectedDate) {
-      streak++;
-    } else if (i === 0 && uniqueDays[i] === expectedDate - (24 * 60 * 60 * 1000)) {
-      streak++;
-    } else {
-      break;
-    }
-  }
-
-  return {
-    workoutsThisWeek: totalThisWeek,
-    completedThisWeek,
-    plannedUpcoming,
-    completionRate: totalThisWeek > 0 ? Math.round((completedThisWeek / totalThisWeek) * 100) : 0,
-    currentStreak: streak,
-  };
-}
-
-const WELCOME_MESSAGE: Message = {
-  id: "welcome",
-  role: "assistant",
-  content: "Hey! I'm your AI training coach. I can analyze your training data, suggest improvements, help with pacing strategies, and answer any Hyrox-related questions. What would you like to work on today?",
-  timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-};
+const COACH_WELCOME_MESSAGE = "Hey! I'm your AI training coach. I can analyze your training data, suggest improvements, help with pacing strategies, and answer any Hyrox-related questions. What would you like to work on today?";
 
 export default function Coach() {
-  const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [historyLoaded, setHistoryLoaded] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  const { data: chatHistory = [], isLoading: historyLoading } = useQuery<DBChatMessage[]>({
-    queryKey: ["/api/chat/history"],
-  });
-
-  useEffect(() => {
-    if (!historyLoading && chatHistory.length > 0 && !historyLoaded) {
-      const loadedMessages: Message[] = chatHistory.map((msg) => ({
-        id: msg.id,
-        role: msg.role as "user" | "assistant",
-        content: msg.content,
-        timestamp: msg.timestamp 
-          ? new Date(msg.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-          : "",
-      }));
-      setMessages([WELCOME_MESSAGE, ...loadedMessages]);
-      setHistoryLoaded(true);
-    } else if (!historyLoading && chatHistory.length === 0 && !historyLoaded) {
-      setHistoryLoaded(true);
-    }
-  }, [chatHistory, historyLoading, historyLoaded]);
-
-  const saveMessageMutation = useMutation({
-    mutationFn: async (msg: { role: string; content: string }) => {
-      const res = await apiRequest("POST", "/api/chat/message", msg);
-      return res.json();
-    },
-  });
-
-  const clearHistoryMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("DELETE", "/api/chat/history");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/chat/history"] });
-      setMessages([WELCOME_MESSAGE]);
-      setHistoryLoaded(false);
-    },
-  });
-
   const { data: plans = [] } = useQuery<TrainingPlan[]>({
     queryKey: ["/api/plans"],
   });
@@ -154,73 +33,32 @@ export default function Coach() {
 
   const stats = useMemo(() => calculateStats(timeline), [timeline]);
 
-  const quickSuggestions = [
-    "Analyze my training this week",
-    "How should I pace my next Hyrox?",
-    "What should I focus on next?",
-    "Tips for improving sled push",
+  const trainingContext = timeline.length > 0 
+    ? `\n\nCurrent training context: ${stats.completedThisWeek} workouts completed this week, ${stats.plannedUpcoming} planned upcoming, ${stats.completionRate}% completion rate, ${stats.currentStreak} day streak.`
+    : "";
+
+  const {
+    messages,
+    isLoading,
+    scrollRef,
+    sendMessage,
+    clearHistory,
+    isClearingHistory,
+    hasMessages,
+  } = useChatSession({
+    welcomeMessage: COACH_WELCOME_MESSAGE,
+    trainingContext,
+  });
+
+  const quickActions = [
+    { id: "analyze", label: "Analyze my training this week" },
+    { id: "pacing", label: "How should I pace my next Hyrox?" },
+    { id: "focus", label: "What should I focus on next?" },
+    { id: "sled", label: "Tips for improving sled push" },
   ];
 
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages]);
-
-  const handleSend = async (content: string) => {
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: "user",
-      content,
-      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
-    setIsLoading(true);
-
-    saveMessageMutation.mutate({ role: "user", content });
-
-    try {
-      const history = messages
-        .filter((m) => m.id !== "welcome")
-        .map((m) => ({ role: m.role, content: m.content }));
-
-      const trainingContext = timeline.length > 0 
-        ? `\n\nCurrent training context: ${stats.completedThisWeek} workouts completed this week, ${stats.plannedUpcoming} planned upcoming, ${stats.completionRate}% completion rate, ${stats.currentStreak} day streak.`
-        : "";
-
-      const response = await apiRequest("POST", "/api/chat", { 
-        message: content + trainingContext, 
-        history 
-      });
-      const data = await response.json();
-
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: data.response,
-        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      };
-
-      setMessages((prev) => [...prev, assistantMessage]);
-      
-      saveMessageMutation.mutate({ role: "assistant", content: data.response });
-    } catch (error) {
-      console.error("Chat error:", error);
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: "Sorry, I encountered an error. Please try again.",
-        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleQuickAction = (suggestion: string) => {
-    handleSend(suggestion);
+  const handleQuickAction = (action: { id: string; label: string }) => {
+    sendMessage(action.label);
   };
 
   return (
@@ -234,20 +72,20 @@ export default function Coach() {
             Your personal Hyrox training assistant
           </p>
         </div>
-        {messages.length > 1 && (
+        {hasMessages && (
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => clearHistoryMutation.mutate()}
-            disabled={clearHistoryMutation.isPending}
+            onClick={clearHistory}
+            disabled={isClearingHistory}
             data-testid="button-clear-chat"
           >
-            {clearHistoryMutation.isPending ? (
+            {isClearingHistory ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
             ) : (
               <Trash2 className="h-4 w-4 mr-2" />
             )}
-            {clearHistoryMutation.isPending ? "Clearing..." : "Clear History"}
+            {isClearingHistory ? "Clearing..." : "Clear History"}
           </Button>
         )}
       </div>
@@ -348,8 +186,8 @@ export default function Coach() {
           </div>
         </ScrollArea>
         <div className="flex-shrink-0 p-4 border-t space-y-3 max-w-3xl mx-auto w-full">
-          <QuickActions suggestions={quickSuggestions} onSelect={handleQuickAction} />
-          <ChatInput onSend={handleSend} isLoading={isLoading} />
+          <QuickActions actions={quickActions} onSelect={handleQuickAction} />
+          <ChatInput onSend={sendMessage} isLoading={isLoading} />
         </div>
       </Card>
     </div>

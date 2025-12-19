@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect, useMemo } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useState, useEffect, useMemo } from "react";
+import { useMutation } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
@@ -9,14 +9,10 @@ import { ChatInput } from "@/components/ChatInput";
 import { QuickActions } from "@/components/QuickActions";
 import { Activity, TrendingUp, Target, Calendar, Flame, Trash2, Loader2, X, MessageSquare, Check, XIcon, Zap } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { TrainingPlan, TimelineEntry, ChatMessage as DBChatMessage } from "@shared/schema";
-
-interface Message {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  timestamp: string;
-}
+import { calculateStats, type TrainingStats } from "@/lib/statsUtils";
+import { useChatSession, type Message } from "@/hooks/useChatSession";
+import { getCurrentTimeString } from "@/lib/dateUtils";
+import type { TimelineEntry } from "@shared/schema";
 
 interface Suggestion {
   workoutId: string;
@@ -29,79 +25,6 @@ interface Suggestion {
   priority: "high" | "medium" | "low";
 }
 
-interface TrainingStats {
-  workoutsThisWeek: number;
-  completedThisWeek: number;
-  plannedUpcoming: number;
-  completionRate: number;
-  currentStreak: number;
-}
-
-function calculateStats(timeline: TimelineEntry[]): TrainingStats {
-  const now = new Date();
-  const todayStr = now.toISOString().split("T")[0];
-  
-  const startOfWeek = new Date(now);
-  startOfWeek.setDate(now.getDate() - now.getDay());
-  startOfWeek.setHours(0, 0, 0, 0);
-  const startOfWeekStr = startOfWeek.toISOString().split("T")[0];
-  
-  const endOfWeek = new Date(startOfWeek);
-  endOfWeek.setDate(startOfWeek.getDate() + 6);
-  const endOfWeekStr = endOfWeek.toISOString().split("T")[0];
-
-  const thisWeekEntries = timeline.filter(entry => 
-    entry.date >= startOfWeekStr && entry.date <= endOfWeekStr
-  );
-
-  const completedAll = timeline.filter(e => e.status === "completed");
-  const completedThisWeek = thisWeekEntries.filter(e => e.status === "completed").length;
-  const totalThisWeek = thisWeekEntries.length;
-  
-  const plannedUpcoming = timeline.filter(e => 
-    e.date >= todayStr && e.status === "planned"
-  ).length;
-
-  const completedDatesSet = new Set(
-    completedAll.map(e => e.date)
-  );
-  const uniqueDays = Array.from(completedDatesSet).sort().reverse();
-  
-  let streak = 0;
-  const checkDate = new Date(now);
-  checkDate.setHours(0, 0, 0, 0);
-  
-  for (let i = 0; i <= uniqueDays.length; i++) {
-    const expectedDateStr = checkDate.toISOString().split("T")[0];
-    if (uniqueDays.includes(expectedDateStr)) {
-      streak++;
-      checkDate.setDate(checkDate.getDate() - 1);
-    } else if (i === 0) {
-      checkDate.setDate(checkDate.getDate() - 1);
-    } else {
-      break;
-    }
-  }
-
-  const allCompleted = completedAll.length;
-  const allPastDue = timeline.filter(e => e.date < todayStr && e.status !== "planned").length;
-
-  return {
-    workoutsThisWeek: totalThisWeek,
-    completedThisWeek,
-    plannedUpcoming,
-    completionRate: allPastDue > 0 ? Math.round((allCompleted / allPastDue) * 100) : 0,
-    currentStreak: streak,
-  };
-}
-
-const WELCOME_MESSAGE: Message = {
-  id: "welcome",
-  role: "assistant",
-  content: "Hey! I'm your AI training coach. Ask me about pacing, training tips, or anything Hyrox-related!",
-  timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-};
-
 interface CoachPanelProps {
   isOpen: boolean;
   onClose: () => void;
@@ -109,51 +32,48 @@ interface CoachPanelProps {
 }
 
 export function CoachPanel({ isOpen, onClose, timeline = [] }: CoachPanelProps) {
-  const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [historyLoaded, setHistoryLoaded] = useState(false);
   const [pendingSuggestions, setPendingSuggestions] = useState<Suggestion[]>([]);
   const [applyingId, setApplyingId] = useState<string | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [localMessages, setLocalMessages] = useState<Message[]>([]);
 
-  const { data: chatHistory = [], isLoading: historyLoading } = useQuery<DBChatMessage[]>({
-    queryKey: ["/api/chat/history"],
-    enabled: isOpen,
+  const stats = useMemo(() => calculateStats(timeline), [timeline]);
+
+  const trainingContext = timeline.length > 0 
+    ? `\n\nCurrent training context: ${stats.completedThisWeek} workouts completed this week, ${stats.plannedUpcoming} planned upcoming, ${stats.completionRate}% completion rate, ${stats.currentStreak} day streak.`
+    : "";
+
+  const {
+    messages: hookMessages,
+    isLoading,
+    scrollRef,
+    sendMessage,
+    clearHistory,
+    isClearingHistory,
+    scrollToBottom,
+  } = useChatSession({ 
+    trainingContext,
+    useStreaming: true,
   });
 
-  useEffect(() => {
-    if (!historyLoading && chatHistory.length > 0 && !historyLoaded) {
-      const loadedMessages: Message[] = chatHistory.map((msg) => ({
-        id: msg.id,
-        role: msg.role as "user" | "assistant",
-        content: msg.content,
-        timestamp: msg.timestamp 
-          ? new Date(msg.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-          : "",
-      }));
-      setMessages([WELCOME_MESSAGE, ...loadedMessages]);
-      setHistoryLoaded(true);
-    } else if (!historyLoading && chatHistory.length === 0 && !historyLoaded) {
-      setHistoryLoaded(true);
+  const messages = useMemo(() => {
+    const allMessages = [...hookMessages];
+    for (const localMsg of localMessages) {
+      if (!allMessages.find(m => m.id === localMsg.id)) {
+        allMessages.push(localMsg);
+      }
     }
-  }, [chatHistory, historyLoading, historyLoaded]);
+    allMessages.sort((a, b) => {
+      if (a.id === "welcome") return -1;
+      if (b.id === "welcome") return 1;
+      return Number(a.id) - Number(b.id);
+    });
+    return allMessages;
+  }, [hookMessages, localMessages]);
 
   const saveMessageMutation = useMutation({
     mutationFn: async (msg: { role: string; content: string }) => {
       const res = await apiRequest("POST", "/api/chat/message", msg);
       return res.json();
-    },
-  });
-
-  const clearHistoryMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("DELETE", "/api/chat/history");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/chat/history"] });
-      setMessages([WELCOME_MESSAGE]);
-      setHistoryLoaded(false);
     },
   });
 
@@ -176,9 +96,9 @@ export function CoachPanel({ isOpen, onClose, timeline = [] }: CoachPanelProps) 
         id: Date.now().toString(),
         role: "assistant",
         content: responseContent,
-        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        timestamp: getCurrentTimeString(),
       };
-      setMessages((prev) => [...prev, suggestionsMessage]);
+      setLocalMessages(prev => [...prev, suggestionsMessage]);
       saveMessageMutation.mutate({ role: "assistant", content: responseContent });
     },
     onError: () => {
@@ -187,9 +107,9 @@ export function CoachPanel({ isOpen, onClose, timeline = [] }: CoachPanelProps) 
         id: Date.now().toString(),
         role: "assistant",
         content: errorContent,
-        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        timestamp: getCurrentTimeString(),
       };
-      setMessages((prev) => [...prev, errorMessage]);
+      setLocalMessages(prev => [...prev, errorMessage]);
     },
   });
 
@@ -202,9 +122,9 @@ export function CoachPanel({ isOpen, onClose, timeline = [] }: CoachPanelProps) 
           id: Date.now().toString(),
           role: "assistant",
           content: `Could not find the workout for ${suggestion.focus} (${suggestion.date}). The suggestion is still available to retry.`,
-          timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          timestamp: getCurrentTimeString(),
         };
-        setMessages(prev => [...prev, errorMessage]);
+        setLocalMessages(prev => [...prev, errorMessage]);
         return;
       }
 
@@ -232,18 +152,18 @@ export function CoachPanel({ isOpen, onClose, timeline = [] }: CoachPanelProps) 
         id: Date.now().toString(),
         role: "assistant",
         content: `Applied suggestion to ${suggestion.focus} (${suggestion.date}). The ${suggestion.targetField === "mainWorkout" ? "main workout" : suggestion.targetField} has been updated.`,
-        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        timestamp: getCurrentTimeString(),
       };
-      setMessages(prev => [...prev, confirmMessage]);
+      setLocalMessages(prev => [...prev, confirmMessage]);
     } catch (error) {
       console.error("Apply suggestion error:", error);
       const errorMessage: Message = {
         id: Date.now().toString(),
         role: "assistant",
         content: `Failed to apply suggestion to ${suggestion.focus}. Please try again.`,
-        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        timestamp: getCurrentTimeString(),
       };
-      setMessages(prev => [...prev, errorMessage]);
+      setLocalMessages(prev => [...prev, errorMessage]);
     } finally {
       setApplyingId(null);
     }
@@ -253,8 +173,6 @@ export function CoachPanel({ isOpen, onClose, timeline = [] }: CoachPanelProps) 
     setPendingSuggestions(prev => prev.filter(s => s.workoutId !== workoutId));
   };
 
-  const stats = useMemo(() => calculateStats(timeline), [timeline]);
-
   const quickActions = [
     { id: "suggestions", label: "Get workout suggestions" },
     { id: "analyze", label: "Analyze my training" },
@@ -263,174 +181,19 @@ export function CoachPanel({ isOpen, onClose, timeline = [] }: CoachPanelProps) 
   ];
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages]);
-
-  // Scroll to bottom when panel opens
-  useEffect(() => {
-    if (isOpen && scrollRef.current) {
-      // Small delay to ensure content is rendered
+    if (isOpen) {
       setTimeout(() => {
-        if (scrollRef.current) {
-          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-        }
+        scrollToBottom();
       }, 50);
     }
-  }, [isOpen]);
+  }, [isOpen, scrollToBottom]);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, scrollToBottom]);
 
   const handleSend = async (content: string) => {
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: "user",
-      content,
-      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
-    setIsLoading(true);
-
-    saveMessageMutation.mutate({ role: "user", content });
-
-    const assistantMessageId = (Date.now() + 1).toString();
-    let fullResponse = "";
-
-    try {
-      const history = messages
-        .filter((m) => m.id !== "welcome")
-        .map((m) => ({ role: m.role, content: m.content }));
-
-      const trainingContext = timeline.length > 0 
-        ? `\n\nCurrent training context: ${stats.completedThisWeek} workouts completed this week, ${stats.plannedUpcoming} planned upcoming, ${stats.completionRate}% completion rate, ${stats.currentStreak} day streak.`
-        : "";
-
-      // Create placeholder message for streaming
-      const placeholderMessage: Message = {
-        id: assistantMessageId,
-        role: "assistant",
-        content: "",
-        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      };
-      setMessages((prev) => [...prev, placeholderMessage]);
-
-      // Use streaming endpoint
-      const response = await fetch("/api/chat/stream", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ 
-          message: content + trainingContext, 
-          history 
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Stream request failed");
-      }
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-
-      if (!reader) {
-        throw new Error("No response body");
-      }
-
-      // Buffer for incomplete SSE frames
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        
-        // Process complete SSE events (separated by double newline)
-        const events = buffer.split("\n\n");
-        // Keep the last incomplete event in the buffer
-        buffer = events.pop() || "";
-
-        for (const event of events) {
-          const lines = event.split("\n");
-          for (const line of lines) {
-            if (line.startsWith("data: ")) {
-              try {
-                const data = JSON.parse(line.slice(6));
-                if (data.text) {
-                  fullResponse += data.text;
-                  setMessages((prev) =>
-                    prev.map((m) =>
-                      m.id === assistantMessageId
-                        ? { ...m, content: fullResponse }
-                        : m
-                    )
-                  );
-                }
-                if (data.done) {
-                  // Streaming complete
-                }
-                if (data.error) {
-                  throw new Error(data.error);
-                }
-              } catch (parseError) {
-                // Skip malformed JSON lines
-              }
-            }
-          }
-        }
-      }
-      
-      // Process any remaining buffer content
-      if (buffer.trim()) {
-        const lines = buffer.split("\n");
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              if (data.text) {
-                fullResponse += data.text;
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.id === assistantMessageId
-                      ? { ...m, content: fullResponse }
-                      : m
-                  )
-                );
-              }
-            } catch (parseError) {
-              // Skip malformed JSON
-            }
-          }
-        }
-      }
-
-      // Save the complete response to history
-      if (fullResponse) {
-        saveMessageMutation.mutate({ role: "assistant", content: fullResponse });
-      }
-    } catch (error) {
-      console.error("Chat error:", error);
-      // Update or add error message
-      if (fullResponse) {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantMessageId
-              ? { ...m, content: fullResponse + "\n\n(Stream interrupted)" }
-              : m
-          )
-        );
-      } else {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantMessageId
-              ? { ...m, content: "Sorry, I encountered an error. Please try again." }
-              : m
-          )
-        );
-      }
-    } finally {
-      setIsLoading(false);
-    }
+    await sendMessage(content);
   };
 
   const handleQuickAction = (action: { id: string; label: string }) => {
@@ -439,14 +202,20 @@ export function CoachPanel({ isOpen, onClose, timeline = [] }: CoachPanelProps) 
         id: Date.now().toString(),
         role: "user",
         content: action.label,
-        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        timestamp: getCurrentTimeString(),
       };
-      setMessages((prev) => [...prev, userMessage]);
+      setLocalMessages(prev => [...prev, userMessage]);
       saveMessageMutation.mutate({ role: "user", content: action.label });
       suggestionsMutation.mutate();
     } else {
       handleSend(action.label);
     }
+  };
+
+  const handleClearHistory = () => {
+    clearHistory();
+    setLocalMessages([]);
+    setPendingSuggestions([]);
   };
 
   const isProcessing = isLoading || suggestionsMutation.isPending;
@@ -465,12 +234,12 @@ export function CoachPanel({ isOpen, onClose, timeline = [] }: CoachPanelProps) 
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => clearHistoryMutation.mutate()}
-              disabled={clearHistoryMutation.isPending}
+              onClick={handleClearHistory}
+              disabled={isClearingHistory}
               title="Clear chat"
               data-testid="button-clear-chat"
             >
-              {clearHistoryMutation.isPending ? (
+              {isClearingHistory ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <Trash2 className="h-4 w-4" />
