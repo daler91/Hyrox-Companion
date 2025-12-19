@@ -178,7 +178,7 @@ export async function generateWorkoutSuggestions(
     prompt += `\nAnalyze the data and provide suggestions for the upcoming workouts.`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3-flash-preview",
       config: {
         systemInstruction: SUGGESTIONS_PROMPT,
       },
@@ -226,7 +226,7 @@ export async function chatWithCoach(
     const systemPrompt = buildSystemPrompt(trainingContext);
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3-flash-preview",
       config: {
         systemInstruction: systemPrompt,
       },
@@ -259,7 +259,7 @@ export async function* streamChatWithCoach(
     const systemPrompt = buildSystemPrompt(trainingContext);
 
     const response = await ai.models.generateContentStream({
-      model: "gemini-2.5-flash",
+      model: "gemini-3-flash-preview",
       config: {
         systemInstruction: systemPrompt,
       },
