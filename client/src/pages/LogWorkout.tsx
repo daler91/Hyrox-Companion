@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ExerciseSelector } from "@/components/ExerciseSelector";
 import { ExerciseInput } from "@/components/ExerciseInput";
 import { useToast } from "@/hooks/use-toast";
+import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { Save, ArrowLeft, Loader2 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -26,11 +27,13 @@ interface ExerciseData {
 export default function LogWorkout() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
+  const { weightUnit, distanceUnit, weightLabel } = useUnitPreferences();
   const [title, setTitle] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [selectedExercises, setSelectedExercises] = useState<ExerciseType[]>([]);
   const [exerciseData, setExerciseData] = useState<Record<ExerciseType, ExerciseData>>({} as Record<ExerciseType, ExerciseData>);
   const [notes, setNotes] = useState("");
+  const distanceLabel = distanceUnit === "km" ? "m" : "ft";
 
   const saveMutation = useMutation({
     mutationFn: async (workoutData: {
@@ -117,9 +120,9 @@ export default function LogWorkout() {
       const data = exerciseData[type];
       const parts = [];
       if (data?.time) parts.push(`${data.time}min`);
-      if (data?.distance) parts.push(`${data.distance}m`);
+      if (data?.distance) parts.push(`${data.distance}${distanceLabel}`);
       if (data?.reps) parts.push(`${data.reps} reps`);
-      if (data?.weight) parts.push(`${data.weight}kg`);
+      if (data?.weight) parts.push(`${data.weight}${weightLabel}`);
       const exerciseName = type === "other" && data?.customName ? data.customName : type;
       return `${exerciseName}: ${parts.join(", ") || "completed"}`;
     });
@@ -195,6 +198,8 @@ export default function LogWorkout() {
               exercise={exerciseData[type] || { type }}
               onChange={handleExerciseChange}
               onRemove={() => handleRemoveExercise(type)}
+              weightUnit={weightUnit}
+              distanceUnit={distanceUnit}
             />
           ))}
         </div>

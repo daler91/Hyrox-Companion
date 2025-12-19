@@ -19,6 +19,8 @@ interface ExerciseInputProps {
   exercise: ExerciseData;
   onChange: (exercise: ExerciseData) => void;
   onRemove: () => void;
+  weightUnit?: "kg" | "lbs";
+  distanceUnit?: "km" | "miles";
 }
 
 const exerciseLabels: Record<ExerciseType, string> = {
@@ -57,8 +59,9 @@ const exerciseBorderColors: Record<ExerciseType, string> = {
   other: "border-l-gray-500",
 };
 
-export function ExerciseInput({ exercise, onChange, onRemove }: ExerciseInputProps) {
+export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg", distanceUnit = "km" }: ExerciseInputProps) {
   const fields = exerciseFields[exercise.type];
+  const distanceLabel = distanceUnit === "km" ? "m" : "ft";
 
   const handleChange = (field: keyof ExerciseData, value: string) => {
     if (field === "customName") {
@@ -124,7 +127,7 @@ export function ExerciseInput({ exercise, onChange, onRemove }: ExerciseInputPro
             <div className="space-y-2">
               <Label className="flex items-center gap-1 text-xs text-muted-foreground">
                 <Ruler className="h-3 w-3" />
-                Distance (m)
+                Distance ({distanceLabel})
               </Label>
               <Input
                 type="number"
@@ -154,7 +157,7 @@ export function ExerciseInput({ exercise, onChange, onRemove }: ExerciseInputPro
             <div className="space-y-2">
               <Label className="flex items-center gap-1 text-xs text-muted-foreground">
                 <Weight className="h-3 w-3" />
-                Weight (kg)
+                Weight ({weightUnit})
               </Label>
               <Input
                 type="number"
