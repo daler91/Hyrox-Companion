@@ -239,3 +239,41 @@ export async function chatWithCoach(
     throw new Error("Failed to get response from AI coach");
   }
 }
+
+export async function* streamChatWithCoach(
+  userMessage: string,
+  conversationHistory: ChatMessage[] = [],
+  trainingContext?: TrainingContext
+): AsyncGenerator<string> {
+  try {
+    const messages = conversationHistory.map((msg) => ({
+      role: msg.role === "user" ? "user" : "model",
+      parts: [{ text: msg.content }],
+    }));
+
+    messages.push({
+      role: "user",
+      parts: [{ text: userMessage }],
+    });
+
+    const systemPrompt = buildSystemPrompt(trainingContext);
+
+    const response = await ai.models.generateContentStream({
+      model: "gemini-2.5-flash",
+      config: {
+        systemInstruction: systemPrompt,
+      },
+      contents: messages,
+    });
+
+    for await (const chunk of response) {
+      const text = chunk.text;
+      if (text) {
+        yield text;
+      }
+    }
+  } catch (error) {
+    console.error("Gemini streaming API error:", error);
+    throw new Error("Failed to get streaming response from AI coach");
+  }
+}

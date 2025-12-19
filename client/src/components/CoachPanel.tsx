@@ -293,6 +293,9 @@ export function CoachPanel({ isOpen, onClose, timeline = [] }: CoachPanelProps) 
 
     saveMessageMutation.mutate({ role: "user", content });
 
+    const assistantMessageId = (Date.now() + 1).toString();
+    let fullResponse = "";
+
     try {
       const history = messages
         .filter((m) => m.id !== "welcome")
@@ -302,31 +305,129 @@ export function CoachPanel({ isOpen, onClose, timeline = [] }: CoachPanelProps) 
         ? `\n\nCurrent training context: ${stats.completedThisWeek} workouts completed this week, ${stats.plannedUpcoming} planned upcoming, ${stats.completionRate}% completion rate, ${stats.currentStreak} day streak.`
         : "";
 
-      const response = await apiRequest("POST", "/api/chat", { 
-        message: content + trainingContext, 
-        history 
-      });
-      const data = await response.json();
-
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
+      // Create placeholder message for streaming
+      const placeholderMessage: Message = {
+        id: assistantMessageId,
         role: "assistant",
-        content: data.response,
+        content: "",
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       };
+      setMessages((prev) => [...prev, placeholderMessage]);
 
-      setMessages((prev) => [...prev, assistantMessage]);
+      // Use streaming endpoint
+      const response = await fetch("/api/chat/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ 
+          message: content + trainingContext, 
+          history 
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Stream request failed");
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+        throw new Error("No response body");
+      }
+
+      // Buffer for incomplete SSE frames
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        
+        // Process complete SSE events (separated by double newline)
+        const events = buffer.split("\n\n");
+        // Keep the last incomplete event in the buffer
+        buffer = events.pop() || "";
+
+        for (const event of events) {
+          const lines = event.split("\n");
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                if (data.text) {
+                  fullResponse += data.text;
+                  setMessages((prev) =>
+                    prev.map((m) =>
+                      m.id === assistantMessageId
+                        ? { ...m, content: fullResponse }
+                        : m
+                    )
+                  );
+                }
+                if (data.done) {
+                  // Streaming complete
+                }
+                if (data.error) {
+                  throw new Error(data.error);
+                }
+              } catch (parseError) {
+                // Skip malformed JSON lines
+              }
+            }
+          }
+        }
+      }
       
-      saveMessageMutation.mutate({ role: "assistant", content: data.response });
+      // Process any remaining buffer content
+      if (buffer.trim()) {
+        const lines = buffer.split("\n");
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.text) {
+                fullResponse += data.text;
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === assistantMessageId
+                      ? { ...m, content: fullResponse }
+                      : m
+                  )
+                );
+              }
+            } catch (parseError) {
+              // Skip malformed JSON
+            }
+          }
+        }
+      }
+
+      // Save the complete response to history
+      if (fullResponse) {
+        saveMessageMutation.mutate({ role: "assistant", content: fullResponse });
+      }
     } catch (error) {
       console.error("Chat error:", error);
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: "Sorry, I encountered an error. Please try again.",
-        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
+      // Update or add error message
+      if (fullResponse) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMessageId
+              ? { ...m, content: fullResponse + "\n\n(Stream interrupted)" }
+              : m
+          )
+        );
+      } else {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMessageId
+              ? { ...m, content: "Sorry, I encountered an error. Please try again." }
+              : m
+          )
+        );
+      }
     } finally {
       setIsLoading(false);
     }

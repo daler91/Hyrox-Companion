@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
-import { chatWithCoach, generateWorkoutSuggestions, type ChatMessage, type TrainingContext, type UpcomingWorkout } from "./gemini";
+import { chatWithCoach, streamChatWithCoach, generateWorkoutSuggestions, type ChatMessage, type TrainingContext, type UpcomingWorkout } from "./gemini";
 import { updatePlanDaySchema, insertWorkoutLogSchema, updateWorkoutLogSchema, updateUserPreferencesSchema, type InsertPlanDay } from "@shared/schema";
 import { registerStravaRoutes } from "./strava";
 
@@ -231,6 +231,49 @@ export async function registerRoutes(
       res.json({ response });
     } catch (error) {
       console.error("Chat error:", error);
+      res.status(500).json({ error: "Failed to get response from AI coach" });
+    }
+  });
+
+  // Streaming chat endpoint using Server-Sent Events
+  app.post("/api/chat/stream", isAuthenticated, async (req: any, res) => {
+    try {
+      const { message, history } = req.body as {
+        message: string;
+        history?: ChatMessage[];
+      };
+
+      if (!message || typeof message !== "string") {
+        return res.status(400).json({ error: "Message is required" });
+      }
+
+      const userId = req.user.claims.sub;
+      const trainingContext = await buildTrainingContext(userId);
+
+      // Set up SSE headers
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+      res.flushHeaders();
+
+      try {
+        const stream = streamChatWithCoach(message, history || [], trainingContext);
+        
+        for await (const chunk of stream) {
+          // Send each chunk as an SSE data event
+          res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+        }
+        
+        // Send completion event
+        res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+        res.end();
+      } catch (streamError) {
+        console.error("Stream error:", streamError);
+        res.write(`data: ${JSON.stringify({ error: "Stream error" })}\n\n`);
+        res.end();
+      }
+    } catch (error) {
+      console.error("Chat stream error:", error);
       res.status(500).json({ error: "Failed to get response from AI coach" });
     }
   });
