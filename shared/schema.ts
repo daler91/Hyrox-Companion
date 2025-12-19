@@ -48,7 +48,9 @@ export const trainingPlans = pgTable("training_plans", {
   name: text("name").notNull(),
   sourceFileName: text("source_file_name"),
   totalWeeks: integer("total_weeks").notNull(),
-});
+}, (table) => [
+  index("idx_training_plans_user_id").on(table.userId),
+]);
 
 export const insertTrainingPlanSchema = createInsertSchema(trainingPlans).omit({
   id: true,
@@ -68,7 +70,11 @@ export const planDays = pgTable("plan_days", {
   notes: text("notes"),
   scheduledDate: date("scheduled_date"),
   status: text("status").default("planned"),
-});
+}, (table) => [
+  index("idx_plan_days_plan_id").on(table.planId),
+  index("idx_plan_days_scheduled_date").on(table.scheduledDate),
+  index("idx_plan_days_status").on(table.status),
+]);
 
 export const insertPlanDaySchema = createInsertSchema(planDays).omit({
   id: true,
@@ -110,7 +116,11 @@ export const workoutLogs = pgTable("workout_logs", {
   avgCadence: real("avg_cadence"),
   avgWatts: integer("avg_watts"),
   sufferScore: integer("suffer_score"),
-});
+}, (table) => [
+  index("idx_workout_logs_user_id").on(table.userId),
+  index("idx_workout_logs_date").on(table.date),
+  index("idx_workout_logs_user_date").on(table.userId, table.date),
+]);
 
 // Strava OAuth connection storage
 export const stravaConnections = pgTable("strava_connections", {
@@ -180,7 +190,9 @@ export const chatMessages = pgTable("chat_messages", {
   role: varchar("role", { length: 20 }).notNull(), // "user" or "assistant"
   content: text("content").notNull(),
   timestamp: timestamp("timestamp").defaultNow(),
-});
+}, (table) => [
+  index("idx_chat_messages_user_id").on(table.userId),
+]);
 
 export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({
   id: true,
