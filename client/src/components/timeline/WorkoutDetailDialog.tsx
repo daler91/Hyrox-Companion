@@ -94,6 +94,7 @@ export default function WorkoutDetailDialog({
 }: WorkoutDetailDialogProps) {
   const { distanceUnit } = useUnitPreferences();
   const [isEditing, setIsEditing] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [editForm, setEditForm] = useState({
     focus: "",
     mainWorkout: "",
@@ -132,7 +133,16 @@ export default function WorkoutDetailDialog({
 
   const handleClose = () => {
     setIsEditing(false);
+    setConfirmingDelete(false);
     onClose();
+  };
+
+  const handleDeleteClick = () => {
+    if (confirmingDelete) {
+      onDelete(entry);
+    } else {
+      setConfirmingDelete(true);
+    }
   };
 
   return (
@@ -345,7 +355,7 @@ export default function WorkoutDetailDialog({
             </>
           ) : (
             <>
-              <div className="flex gap-2 sm:mr-auto">
+              <div className="flex gap-2 sm:mr-auto flex-wrap">
                 {canEdit && (
                   <Button
                     variant="outline"
@@ -366,13 +376,11 @@ export default function WorkoutDetailDialog({
                     Combine
                   </Button>
                 )}
-              </div>
-              <div className="flex gap-2">
                 {canDelete && (
                   <Button
-                    variant="outline"
-                    className="text-destructive"
-                    onClick={() => onDelete(entry)}
+                    variant={confirmingDelete ? "destructive" : "outline"}
+                    className={confirmingDelete ? "" : "text-destructive"}
+                    onClick={handleDeleteClick}
                     disabled={isDeleting}
                     data-testid="button-detail-delete"
                   >
@@ -381,13 +389,22 @@ export default function WorkoutDetailDialog({
                     ) : (
                       <Trash2 className="h-4 w-4 mr-1" />
                     )}
-                    Delete
+                    {confirmingDelete ? "Confirm Delete" : "Delete"}
                   </Button>
                 )}
-                <Button variant="outline" onClick={handleClose}>
-                  Close
-                </Button>
+                {confirmingDelete && (
+                  <Button
+                    variant="outline"
+                    onClick={() => setConfirmingDelete(false)}
+                    data-testid="button-detail-cancel-delete"
+                  >
+                    Cancel
+                  </Button>
+                )}
               </div>
+              <Button variant="outline" onClick={handleClose}>
+                Close
+              </Button>
             </>
           )}
         </DialogFooter>
