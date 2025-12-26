@@ -12,6 +12,16 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Separator } from "@/components/ui/separator";
 import {
   Loader2,
@@ -138,11 +148,12 @@ export default function WorkoutDetailDialog({
   };
 
   const handleDeleteClick = () => {
-    if (confirmingDelete) {
-      onDelete(entry);
-    } else {
-      setConfirmingDelete(true);
-    }
+    setConfirmingDelete(true);
+  };
+
+  const handleConfirmDelete = () => {
+    onDelete(entry);
+    setConfirmingDelete(false);
   };
 
   return (
@@ -378,8 +389,8 @@ export default function WorkoutDetailDialog({
                 )}
                 {canDelete && (
                   <Button
-                    variant={confirmingDelete ? "destructive" : "outline"}
-                    className={confirmingDelete ? "" : "text-destructive"}
+                    variant="outline"
+                    className="text-destructive"
                     onClick={handleDeleteClick}
                     disabled={isDeleting}
                     data-testid="button-detail-delete"
@@ -389,16 +400,7 @@ export default function WorkoutDetailDialog({
                     ) : (
                       <Trash2 className="h-4 w-4 mr-1" />
                     )}
-                    {confirmingDelete ? "Confirm Delete" : "Delete"}
-                  </Button>
-                )}
-                {confirmingDelete && (
-                  <Button
-                    variant="outline"
-                    onClick={() => setConfirmingDelete(false)}
-                    data-testid="button-detail-cancel-delete"
-                  >
-                    Cancel
+                    Delete
                   </Button>
                 )}
               </div>
@@ -409,6 +411,27 @@ export default function WorkoutDetailDialog({
           )}
         </DialogFooter>
       </DialogContent>
+
+      <AlertDialog open={confirmingDelete} onOpenChange={setConfirmingDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Workout</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this workout? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-delete"
+            >
+              {isDeleting ? "Deleting..." : "Confirm"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }
