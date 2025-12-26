@@ -51,7 +51,6 @@ export default function Timeline() {
     format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd")
   );
   const [skipConfirmEntry, setSkipConfirmEntry] = useState<TimelineEntry | null>(null);
-  const [deleteConfirmEntry, setDeleteConfirmEntry] = useState<TimelineEntry | null>(null);
   const [csvPreview, setCsvPreview] = useState<CsvPreviewData | null>(null);
   const [showAllPast, setShowAllPast] = useState(false);
   const [showAllFuture, setShowAllFuture] = useState(false);
@@ -206,8 +205,24 @@ export default function Timeline() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/timeline"] });
       queryClient.invalidateQueries({ queryKey: ["/api/workouts"] });
-      setDeleteConfirmEntry(null);
+      setDetailEntry(null);
       toast({ title: "Workout deleted" });
+    },
+    onError: () => {
+      toast({ title: "Failed to delete workout", variant: "destructive" });
+    },
+  });
+
+  const deletePlanDayMutation = useMutation({
+    mutationFn: async (dayId: string) => {
+      const response = await apiRequest("DELETE", `/api/plans/days/${dayId}`);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/timeline"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/plans"] });
+      setDetailEntry(null);
+      toast({ title: "Workout removed from plan" });
     },
     onError: () => {
       toast({ title: "Failed to delete workout", variant: "destructive" });
@@ -317,12 +332,11 @@ export default function Timeline() {
   };
 
   const handleDelete = (entry: TimelineEntry) => {
-    setDeleteConfirmEntry(entry);
-  };
-
-  const confirmDelete = () => {
-    if (!deleteConfirmEntry?.workoutLogId) return;
-    deleteWorkoutMutation.mutate(deleteConfirmEntry.workoutLogId);
+    if (entry.workoutLogId && !entry.planDayId) {
+      deleteWorkoutMutation.mutate(entry.workoutLogId);
+    } else if (entry.planDayId) {
+      deletePlanDayMutation.mutate(entry.planDayId);
+    }
   };
 
   const handleCombine = (entry: TimelineEntry) => {
@@ -599,7 +613,7 @@ export default function Timeline() {
               handleCombine(entry);
             }}
             isSaving={updateDayMutation.isPending || updateWorkoutMutation.isPending}
-            isDeleting={deleteWorkoutMutation.isPending}
+            isDeleting={deleteWorkoutMutation.isPending || deletePlanDayMutation.isPending}
           />
 
           <SkipConfirmDialog
@@ -607,27 +621,6 @@ export default function Timeline() {
             onOpenChange={() => setSkipConfirmEntry(null)}
             onConfirm={confirmSkip}
           />
-
-          <AlertDialog open={!!deleteConfirmEntry} onOpenChange={() => setDeleteConfirmEntry(null)}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete Workout</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Are you sure you want to delete this workout? This action cannot be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={confirmDelete}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  data-testid="button-confirm-delete"
-                >
-                  {deleteWorkoutMutation.isPending ? "Deleting..." : "Delete"}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
 
           <ImportPreviewDialog
             preview={csvPreview}

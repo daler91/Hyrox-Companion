@@ -562,6 +562,21 @@ export async function registerRoutes(
     }
   });
 
+  app.delete("/api/plans/days/:dayId", isAuthenticated, async (req: any, res) => {
+    try {
+      const { dayId } = req.params;
+      const userId = req.user.claims.sub;
+      const deleted = await storage.deletePlanDay(dayId, userId);
+      if (!deleted) {
+        return res.status(404).json({ error: "Plan day not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete plan day error:", error);
+      res.status(500).json({ error: "Failed to delete plan day" });
+    }
+  });
+
   app.post("/api/timeline/ai-suggestions", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;

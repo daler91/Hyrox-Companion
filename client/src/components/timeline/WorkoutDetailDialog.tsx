@@ -119,7 +119,7 @@ export default function WorkoutDetailDialog({
   const hasPlanDayId = !!entry.planDayId;
   const hasWorkoutLogId = !!entry.workoutLogId;
   const canEdit = hasPlanDayId || hasWorkoutLogId;
-  const canDelete = hasWorkoutLogId && !hasPlanDayId;
+  const canDelete = hasPlanDayId || hasWorkoutLogId;
   const canChangeStatus = hasPlanDayId;
 
   const handleSave = () => {

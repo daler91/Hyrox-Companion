@@ -39,6 +39,7 @@ export interface IStorage {
   createPlanDays(days: InsertPlanDay[]): Promise<PlanDay[]>;
   updatePlanDay(dayId: string, updates: UpdatePlanDay, userId: string): Promise<PlanDay | undefined>;
   getPlanDay(dayId: string, userId: string): Promise<PlanDay | undefined>;
+  deletePlanDay(dayId: string, userId: string): Promise<boolean>;
 
   createWorkoutLog(log: InsertWorkoutLog & { userId: string }): Promise<WorkoutLog>;
   listWorkoutLogs(userId: string): Promise<WorkoutLog[]>;
@@ -172,6 +173,14 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(planDays.id, dayId), eq(trainingPlans.userId, userId)));
     
     return result[0]?.planDay;
+  }
+
+  async deletePlanDay(dayId: string, userId: string): Promise<boolean> {
+    const existingDay = await this.getPlanDay(dayId, userId);
+    if (!existingDay) return false;
+    
+    const result = await db.delete(planDays).where(eq(planDays.id, dayId));
+    return result.rowCount !== null && result.rowCount > 0;
   }
 
   async createWorkoutLog(log: InsertWorkoutLog & { userId: string }): Promise<WorkoutLog> {
