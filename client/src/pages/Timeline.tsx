@@ -32,13 +32,12 @@ import {
   TimelineFilters,
   TimelineDateGroup,
   SchedulePlanDialog,
-  EditWorkoutDialog,
+  WorkoutDetailDialog,
   SkipConfirmDialog,
   ImportPreviewDialog,
   FloatingActionButton,
   CombineWorkoutsDialog,
   type FilterStatus,
-  type EditFormState,
   type CsvPreviewData,
 } from "@/components/timeline";
 
@@ -46,17 +45,11 @@ export default function Timeline() {
   const { toast } = useToast();
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
-  const [editingEntry, setEditingEntry] = useState<TimelineEntry | null>(null);
+  const [detailEntry, setDetailEntry] = useState<TimelineEntry | null>(null);
   const [schedulingPlanId, setSchedulingPlanId] = useState<string | null>(null);
   const [startDate, setStartDate] = useState<string>(
     format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd")
   );
-  const [editForm, setEditForm] = useState<EditFormState>({
-    focus: "",
-    mainWorkout: "",
-    accessory: "",
-    notes: "",
-  });
   const [skipConfirmEntry, setSkipConfirmEntry] = useState<TimelineEntry | null>(null);
   const [deleteConfirmEntry, setDeleteConfirmEntry] = useState<TimelineEntry | null>(null);
   const [csvPreview, setCsvPreview] = useState<CsvPreviewData | null>(null);
@@ -167,7 +160,7 @@ export default function Timeline() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/timeline"] });
-      setEditingEntry(null);
+      setDetailEntry(null);
       toast({ title: "Entry updated" });
     },
     onError: () => {
@@ -197,7 +190,7 @@ export default function Timeline() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/timeline"] });
       queryClient.invalidateQueries({ queryKey: ["/api/workouts"] });
-      setEditingEntry(null);
+      setDetailEntry(null);
       toast({ title: "Workout updated" });
     },
     onError: () => {
@@ -276,38 +269,21 @@ export default function Timeline() {
     setCsvPreview(null);
   };
 
-  const openEditDialog = (entry: TimelineEntry) => {
-    setEditingEntry(entry);
-    setEditForm({
-      focus: entry.focus,
-      mainWorkout: entry.mainWorkout,
-      accessory: entry.accessory || "",
-      notes: entry.notes || "",
-    });
+  const openDetailDialog = (entry: TimelineEntry) => {
+    setDetailEntry(entry);
   };
 
-  const handleSaveEdit = () => {
-    if (!editingEntry) return;
-    
-    const updates: Record<string, string | null> = {};
-    if (editForm.focus !== editingEntry.focus) updates.focus = editForm.focus;
-    if (editForm.mainWorkout !== editingEntry.mainWorkout) updates.mainWorkout = editForm.mainWorkout;
-    if ((editForm.accessory || null) !== editingEntry.accessory) updates.accessory = editForm.accessory || null;
-    if ((editForm.notes || null) !== editingEntry.notes) updates.notes = editForm.notes || null;
+  const handleSaveFromDetail = (updates: { focus: string; mainWorkout: string; accessory: string | null; notes: string | null }) => {
+    if (!detailEntry) return;
 
-    if (Object.keys(updates).length === 0) {
-      setEditingEntry(null);
-      return;
-    }
-
-    if (editingEntry.workoutLogId && !editingEntry.planDayId) {
+    if (detailEntry.workoutLogId && !detailEntry.planDayId) {
       updateWorkoutMutation.mutate({
-        workoutId: editingEntry.workoutLogId,
+        workoutId: detailEntry.workoutLogId,
         updates,
       });
-    } else if (editingEntry.planDayId) {
+    } else if (detailEntry.planDayId) {
       updateDayMutation.mutate({
-        dayId: editingEntry.planDayId,
+        dayId: detailEntry.planDayId,
         updates,
       });
     }
@@ -557,11 +533,8 @@ export default function Timeline() {
               date={date}
               entries={entries}
               onMarkComplete={handleMarkComplete}
-              onEdit={openEditDialog}
-              onSkip={handleSkip}
-              onChangeStatus={handleChangeStatus}
-              onDelete={handleDelete}
-              onCombine={handleCombine}
+              onClick={openDetailDialog}
+              onCombineSelect={handleCombine}
               isCombining={!!combiningEntry}
               combiningEntryId={combiningEntry?.id || null}
               combiningEntryDate={combiningEntry?.date || null}
@@ -608,13 +581,25 @@ export default function Timeline() {
             isPending={schedulePlanMutation.isPending}
           />
 
-          <EditWorkoutDialog
-            entry={editingEntry}
-            onOpenChange={() => setEditingEntry(null)}
-            editForm={editForm}
-            onEditFormChange={setEditForm}
-            onSave={handleSaveEdit}
-            isPending={updateDayMutation.isPending || updateWorkoutMutation.isPending}
+          <WorkoutDetailDialog
+            entry={detailEntry}
+            onClose={() => setDetailEntry(null)}
+            onMarkComplete={(entry) => {
+              handleMarkComplete(entry);
+              setDetailEntry(null);
+            }}
+            onChangeStatus={(entry, status) => {
+              handleChangeStatus(entry, status);
+              setDetailEntry(null);
+            }}
+            onSave={handleSaveFromDetail}
+            onDelete={handleDelete}
+            onCombine={(entry) => {
+              setDetailEntry(null);
+              handleCombine(entry);
+            }}
+            isSaving={updateDayMutation.isPending || updateWorkoutMutation.isPending}
+            isDeleting={deleteWorkoutMutation.isPending}
           />
 
           <SkipConfirmDialog

@@ -1,18 +1,15 @@
 import { forwardRef } from "react";
 import { Badge } from "@/components/ui/badge";
 import { format, isToday, isTomorrow, isYesterday, parseISO, isBefore } from "date-fns";
-import type { TimelineEntry, WorkoutStatus } from "@shared/schema";
+import type { TimelineEntry } from "@shared/schema";
 import TimelineWorkoutCard from "./TimelineWorkoutCard";
 
 interface TimelineDateGroupProps {
   date: string;
   entries: TimelineEntry[];
   onMarkComplete: (entry: TimelineEntry) => void;
-  onEdit: (entry: TimelineEntry) => void;
-  onSkip: (entry: TimelineEntry) => void;
-  onChangeStatus: (entry: TimelineEntry, status: WorkoutStatus) => void;
-  onDelete: (entry: TimelineEntry) => void;
-  onCombine?: (entry: TimelineEntry) => void;
+  onClick: (entry: TimelineEntry) => void;
+  onCombineSelect?: (entry: TimelineEntry) => void;
   isCombining?: boolean;
   combiningEntryId?: string | null;
   combiningEntryDate?: string | null;
@@ -26,7 +23,7 @@ function getDateLabel(dateObj: Date) {
 }
 
 const TimelineDateGroup = forwardRef<HTMLDivElement, TimelineDateGroupProps>(
-  ({ date, entries, onMarkComplete, onEdit, onSkip, onChangeStatus, onDelete, onCombine, isCombining, combiningEntryId, combiningEntryDate }, ref) => {
+  ({ date, entries, onMarkComplete, onClick, onCombineSelect, isCombining, combiningEntryId, combiningEntryDate }, ref) => {
     const dateObj = parseISO(date);
     const isTodayDate = isToday(dateObj);
     const isPast = isBefore(dateObj, new Date()) && !isTodayDate;
@@ -66,11 +63,8 @@ const TimelineDateGroup = forwardRef<HTMLDivElement, TimelineDateGroupProps>(
               key={entry.id}
               entry={entry}
               onMarkComplete={onMarkComplete}
-              onEdit={onEdit}
-              onSkip={onSkip}
-              onChangeStatus={onChangeStatus}
-              onDelete={onDelete}
-              onCombine={onCombine}
+              onClick={onClick}
+              onCombineSelect={onCombineSelect}
               isCombining={isCombining}
               combiningEntryId={combiningEntryId}
               combiningEntryDate={combiningEntryDate}

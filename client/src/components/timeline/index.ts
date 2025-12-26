@@ -6,6 +6,7 @@ export { default as TimelineWorkoutCard } from "./TimelineWorkoutCard";
 export { default as TimelineDateGroup } from "./TimelineDateGroup";
 export { default as SchedulePlanDialog } from "./SchedulePlanDialog";
 export { default as EditWorkoutDialog } from "./EditWorkoutDialog";
+export { default as WorkoutDetailDialog } from "./WorkoutDetailDialog";
 export { default as SkipConfirmDialog } from "./SkipConfirmDialog";
 export { default as ImportPreviewDialog } from "./ImportPreviewDialog";
 export { default as FloatingActionButton } from "./FloatingActionButton";

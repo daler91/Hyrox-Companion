@@ -2,40 +2,26 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Pencil,
   CheckCircle2,
   Clock,
   XCircle,
   SkipForward,
-  MoreVertical,
   Flame,
-  Heart,
   Zap,
   Activity,
   TrendingUp,
-  Trash2,
-  Combine,
+  Circle,
 } from "lucide-react";
 import { SiStrava } from "react-icons/si";
-import type { TimelineEntry, WorkoutStatus } from "@shared/schema";
+import type { TimelineEntry } from "@shared/schema";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { formatSpeed } from "@shared/unitConversion";
 
 interface TimelineWorkoutCardProps {
   entry: TimelineEntry;
   onMarkComplete: (entry: TimelineEntry) => void;
-  onEdit: (entry: TimelineEntry) => void;
-  onSkip: (entry: TimelineEntry) => void;
-  onChangeStatus: (entry: TimelineEntry, status: WorkoutStatus) => void;
-  onDelete: (entry: TimelineEntry) => void;
-  onCombine?: (entry: TimelineEntry) => void;
+  onClick: (entry: TimelineEntry) => void;
+  onCombineSelect?: (entry: TimelineEntry) => void;
   isCombining?: boolean;
   combiningEntryId?: string | null;
   combiningEntryDate?: string | null;
@@ -76,42 +62,42 @@ function getStatusBadge(status: string) {
   }
 }
 
-function getStatusChangeOptions(currentStatus: string): { status: WorkoutStatus; label: string; icon: typeof CheckCircle2 }[] {
-  const allStatuses: { status: WorkoutStatus; label: string; icon: typeof CheckCircle2 }[] = [
-    { status: "completed", label: "Mark Completed", icon: CheckCircle2 },
-    { status: "missed", label: "Mark Missed", icon: XCircle },
-    { status: "skipped", label: "Mark Skipped", icon: SkipForward },
-  ];
-  return allStatuses.filter(s => s.status !== currentStatus);
-}
-
 export default function TimelineWorkoutCard({
   entry,
   onMarkComplete,
-  onEdit,
-  onSkip,
-  onChangeStatus,
-  onDelete,
-  onCombine,
+  onClick,
+  onCombineSelect,
   isCombining,
   combiningEntryId,
   combiningEntryDate,
 }: TimelineWorkoutCardProps) {
   const { distanceUnit } = useUnitPreferences();
   
-  const statusOptions = getStatusChangeOptions(entry.status);
-  const hasPlanDayId = !!entry.planDayId;
   const isBeingCombined = combiningEntryId === entry.id;
   const isSameDate = combiningEntryDate === entry.date;
   const canBeCombinedWith = isCombining && !isBeingCombined && isSameDate;
+  const isPlanned = entry.status === "planned" && entry.planDayId;
+
+  const handleCardClick = (e: React.MouseEvent) => {
+    if (canBeCombinedWith) {
+      onCombineSelect?.(entry);
+    } else {
+      onClick(entry);
+    }
+  };
+
+  const handleCompleteClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onMarkComplete(entry);
+  };
 
   return (
     <Card
-      className={`${
+      className={`cursor-pointer transition-colors hover-elevate ${
         isBeingCombined
           ? "border-primary ring-2 ring-primary/30"
           : canBeCombinedWith
-          ? "border-primary/50 hover:border-primary cursor-pointer"
+          ? "border-primary/50 hover:border-primary"
           : entry.status === "completed"
           ? "border-green-500/20 bg-green-500/5"
           : entry.status === "missed"
@@ -120,11 +106,29 @@ export default function TimelineWorkoutCard({
           ? "border-yellow-500/20 bg-yellow-500/5"
           : ""
       }`}
-      onClick={canBeCombinedWith ? () => onCombine?.(entry) : undefined}
+      onClick={handleCardClick}
       data-testid={`card-timeline-entry-${entry.id}`}
     >
       <CardContent className="p-4">
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          {isPlanned && (
+            <Button
+              size="icon"
+              variant="ghost"
+              className="shrink-0 mt-0.5 text-muted-foreground hover:text-green-600"
+              onClick={handleCompleteClick}
+              data-testid={`button-complete-${entry.id}`}
+            >
+              <Circle className="h-5 w-5" />
+            </Button>
+          )}
+          
+          {entry.status === "completed" && (
+            <div className="shrink-0 mt-0.5 text-green-600">
+              <CheckCircle2 className="h-5 w-5" />
+            </div>
+          )}
+
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2 flex-wrap">
               {getStatusBadge(entry.status)}
@@ -193,112 +197,6 @@ export default function TimelineWorkoutCard({
               </div>
             )}
           </div>
-
-          {hasPlanDayId && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  data-testid={`button-entry-menu-${entry.id}`}
-                >
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {entry.status === "planned" && (
-                  <DropdownMenuItem
-                    onClick={() => onMarkComplete(entry)}
-                    data-testid={`button-complete-${entry.id}`}
-                  >
-                    <CheckCircle2 className="h-4 w-4 mr-2" />
-                    Mark Complete
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuItem
-                  onClick={() => onEdit(entry)}
-                  data-testid={`button-edit-${entry.id}`}
-                >
-                  <Pencil className="h-4 w-4 mr-2" />
-                  Edit
-                </DropdownMenuItem>
-                {onCombine && (
-                  <DropdownMenuItem
-                    onClick={() => onCombine(entry)}
-                    data-testid={`button-combine-${entry.id}`}
-                  >
-                    <Combine className="h-4 w-4 mr-2" />
-                    Combine with...
-                  </DropdownMenuItem>
-                )}
-                {entry.status === "planned" && (
-                  <DropdownMenuItem
-                    onClick={() => onSkip(entry)}
-                    data-testid={`button-skip-${entry.id}`}
-                  >
-                    <SkipForward className="h-4 w-4 mr-2" />
-                    Skip
-                  </DropdownMenuItem>
-                )}
-                {entry.status !== "planned" && (
-                  <>
-                    <DropdownMenuSeparator />
-                    {statusOptions.map(({ status, label, icon: Icon }) => (
-                      <DropdownMenuItem
-                        key={status}
-                        onClick={() => onChangeStatus(entry, status)}
-                        data-testid={`button-status-${status}-${entry.id}`}
-                      >
-                        <Icon className="h-4 w-4 mr-2" />
-                        {label}
-                      </DropdownMenuItem>
-                    ))}
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-
-          {entry.workoutLogId && !entry.planDayId && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  data-testid={`button-entry-menu-${entry.id}`}
-                >
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  onClick={() => onEdit(entry)}
-                  data-testid={`button-edit-${entry.id}`}
-                >
-                  <Pencil className="h-4 w-4 mr-2" />
-                  Edit
-                </DropdownMenuItem>
-                {onCombine && (
-                  <DropdownMenuItem
-                    onClick={() => onCombine(entry)}
-                    data-testid={`button-combine-${entry.id}`}
-                  >
-                    <Combine className="h-4 w-4 mr-2" />
-                    Combine with...
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={() => onDelete(entry)}
-                  className="text-destructive focus:text-destructive"
-                  data-testid={`button-delete-${entry.id}`}
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
         </div>
       </CardContent>
     </Card>
