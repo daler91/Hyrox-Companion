@@ -46,6 +46,7 @@ export interface IStorage {
   getWorkoutLog(logId: string, userId: string): Promise<WorkoutLog | undefined>;
   updateWorkoutLog(logId: string, updates: UpdateWorkoutLog, userId: string): Promise<WorkoutLog | undefined>;
   deleteWorkoutLog(logId: string, userId: string): Promise<boolean>;
+  deleteWorkoutLogByPlanDayId(planDayId: string, userId: string): Promise<boolean>;
 
   getTimeline(userId: string, planId?: string): Promise<TimelineEntry[]>;
 
@@ -232,6 +233,13 @@ export class DatabaseStorage implements IStorage {
     if (!existingLog) return false;
     
     const result = await db.delete(workoutLogs).where(eq(workoutLogs.id, logId));
+    return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  async deleteWorkoutLogByPlanDayId(planDayId: string, userId: string): Promise<boolean> {
+    const result = await db
+      .delete(workoutLogs)
+      .where(and(eq(workoutLogs.planDayId, planDayId), eq(workoutLogs.userId, userId)));
     return result.rowCount !== null && result.rowCount > 0;
   }
 

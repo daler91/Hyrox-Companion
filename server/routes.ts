@@ -550,6 +550,11 @@ export async function registerRoutes(
       if (status) updates.status = status;
       if (scheduledDate !== undefined) updates.scheduledDate = scheduledDate;
 
+      // If changing to a non-completed status, delete any linked workout log
+      if (status && status !== "completed") {
+        await storage.deleteWorkoutLogByPlanDayId(dayId, userId);
+      }
+
       const updatedDay = await storage.updatePlanDay(dayId, updates, userId);
       if (!updatedDay) {
         return res.status(404).json({ error: "Day not found" });
