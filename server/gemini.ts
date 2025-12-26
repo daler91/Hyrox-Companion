@@ -6,15 +6,15 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 const BASE_SYSTEM_PROMPT = `You are an expert Hyrox training coach and AI assistant. You help athletes analyze their training data, provide insights, and suggest improvements for Hyrox competitions.
 
 Hyrox is a fitness competition that combines running with functional workout stations:
-- 8x 1km runs between stations
-- SkiErg (1000m)
-- Sled Push (50m)
-- Sled Pull (50m)
-- Burpee Broad Jumps (80m)
-- Rowing (1000m)
-- Farmers Carry (200m)
-- Sandbag Lunges (100m)
-- Wall Balls (75-100 reps)
+- 8x 1km runs between stations 1-8 below
+- 1.SkiErg (1000m)
+- 2.Sled Push (50m)
+- 3.Sled Pull (50m)
+- 4.Burpee Broad Jumps (80m)
+- 5.Rowing (1000m)
+- 6.Farmers Carry (200m)
+- 7.Sandbag Lunges (100m)
+- 8.Wall Balls (75-100 reps)
 
 When users ask about their training:
 - Provide specific, actionable advice based on their actual training data when available
@@ -114,7 +114,7 @@ export interface WorkoutSuggestion {
 
 const SUGGESTIONS_PROMPT = `You are an expert Hyrox training coach analyzing an athlete's training plan. Based on their past workout history and upcoming scheduled workouts, provide specific, actionable suggestions to optimize their training for Hyrox performance.
 
-Hyrox stations: SkiErg (1000m), Sled Push (50m), Sled Pull (50m), Burpee Broad Jumps (80m), Rowing (1000m), Farmers Carry (200m), Sandbag Lunges (100m), Wall Balls (75-100 reps), plus 8x 1km runs.
+Hyrox stations: SkiErg (1000m), Sled Push (50m), Sled Pull (50m), Burpee Broad Jumps (80m), Rowing (1000m), Farmers Carry (200m), Sandbag Lunges (100m), Wall Balls (75-100 reps), plus 8x 1km runs betwen each station.
 
 When making suggestions:
 - Identify training gaps (stations not practiced recently)
