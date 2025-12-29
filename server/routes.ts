@@ -560,6 +560,28 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/plans/:planId/schedule", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { planId } = req.params;
+      const { startDate } = req.body;
+
+      if (!startDate) {
+        return res.status(400).json({ error: "Start date is required" });
+      }
+
+      const success = await storage.schedulePlan(planId, startDate, userId);
+      if (!success) {
+        return res.status(404).json({ error: "Training plan not found" });
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Schedule plan error:", error);
+      res.status(500).json({ error: "Failed to schedule training plan" });
+    }
+  });
+
   app.get("/api/workouts", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;

@@ -40,6 +40,7 @@ export interface IStorage {
   updatePlanDay(dayId: string, updates: UpdatePlanDay, userId: string): Promise<PlanDay | undefined>;
   getPlanDay(dayId: string, userId: string): Promise<PlanDay | undefined>;
   deletePlanDay(dayId: string, userId: string): Promise<boolean>;
+  schedulePlan(planId: string, startDate: string, userId: string): Promise<boolean>;
 
   createWorkoutLog(log: InsertWorkoutLog & { userId: string }): Promise<WorkoutLog>;
   listWorkoutLogs(userId: string): Promise<WorkoutLog[]>;
@@ -182,6 +183,41 @@ export class DatabaseStorage implements IStorage {
     
     const result = await db.delete(planDays).where(eq(planDays.id, dayId));
     return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  async schedulePlan(planId: string, startDate: string, userId: string): Promise<boolean> {
+    const plan = await this.getTrainingPlan(planId, userId);
+    if (!plan) return false;
+
+    const dayNameToOffset: Record<string, number> = {
+      "Monday": 0,
+      "Tuesday": 1,
+      "Wednesday": 2,
+      "Thursday": 3,
+      "Friday": 4,
+      "Saturday": 5,
+      "Sunday": 6,
+    };
+
+    const start = new Date(startDate);
+    const startDayOfWeek = start.getDay();
+    const mondayOffset = startDayOfWeek === 0 ? -6 : 1 - startDayOfWeek;
+    const weekOneMonday = new Date(start);
+    weekOneMonday.setDate(start.getDate() + mondayOffset);
+
+    for (const day of plan.days) {
+      const weekOffset = ((day.weekNumber || 1) - 1) * 7;
+      const dayOffset = dayNameToOffset[day.dayName || "Monday"] || 0;
+      const scheduledDate = new Date(weekOneMonday);
+      scheduledDate.setDate(weekOneMonday.getDate() + weekOffset + dayOffset);
+
+      await db
+        .update(planDays)
+        .set({ scheduledDate: scheduledDate.toISOString().split("T")[0] })
+        .where(eq(planDays.id, day.id));
+    }
+
+    return true;
   }
 
   async createWorkoutLog(log: InsertWorkoutLog & { userId: string }): Promise<WorkoutLog> {
