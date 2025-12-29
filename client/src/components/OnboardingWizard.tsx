@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { format, addDays } from "date-fns";
 import {
   Dialog,
   DialogContent,
@@ -10,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Input } from "@/components/ui/input";
+import { Calendar } from "@/components/ui/calendar";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -24,6 +25,7 @@ import {
   Sparkles,
   FileText,
   Check,
+  CalendarDays,
 } from "lucide-react";
 
 interface OnboardingWizardProps {
@@ -31,7 +33,7 @@ interface OnboardingWizardProps {
   onComplete: (choice: "sample" | "import" | "skip") => void;
 }
 
-type Step = "welcome" | "units" | "goal" | "plan";
+type Step = "welcome" | "units" | "goal" | "plan" | "schedule";
 
 const goals = [
   { id: "first", label: "Complete my first Hyrox", icon: Target, description: "New to Hyrox and building foundation" },
@@ -46,6 +48,8 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
   const [weightUnit, setWeightUnit] = useState<"kg" | "lbs">("kg");
   const [distanceUnit, setDistanceUnit] = useState<"km" | "miles">("km");
   const [selectedGoal, setSelectedGoal] = useState<string>("first");
+  const [createdPlanId, setCreatedPlanId] = useState<string | null>(null);
+  const [startDate, setStartDate] = useState<Date>(addDays(new Date(), 1));
 
   const updatePreferencesMutation = useMutation({
     mutationFn: async (prefs: { weightUnit: string; distanceUnit: string }) => {
@@ -63,15 +67,30 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
       const response = await apiRequest("POST", "/api/plans/sample", {});
       return response.json();
     },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/plans"] });
+      setCreatedPlanId(data.id);
+      setStep("schedule");
+    },
+    onError: () => {
+      toast({ title: "Failed to create plan", variant: "destructive" });
+    },
+  });
+
+  const schedulePlanMutation = useMutation({
+    mutationFn: async ({ planId, startDate }: { planId: string; startDate: string }) => {
+      const response = await apiRequest("POST", `/api/plans/${planId}/schedule`, { startDate });
+      return response.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/plans"] });
       queryClient.invalidateQueries({ queryKey: ["/api/timeline"] });
-      toast({ title: "Training plan created! Set a start date to begin." });
+      toast({ title: "Your training plan is ready!", description: "Workouts have been scheduled on your timeline." });
       markOnboardingComplete();
       onComplete("sample");
     },
     onError: () => {
-      toast({ title: "Failed to create plan", variant: "destructive" });
+      toast({ title: "Failed to schedule plan", variant: "destructive" });
     },
   });
 
@@ -86,7 +105,6 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
       try {
         await updatePreferencesMutation.mutateAsync({ weightUnit, distanceUnit });
       } catch (error) {
-        // If preferences update fails, still proceed (preferences can be changed later)
         console.log("Could not save preferences, continuing anyway");
       }
       setStep("goal");
@@ -99,10 +117,20 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
     if (step === "units") setStep("welcome");
     else if (step === "goal") setStep("units");
     else if (step === "plan") setStep("goal");
+    else if (step === "schedule") setStep("plan");
   };
 
   const handleUseSamplePlan = () => {
     samplePlanMutation.mutate();
+  };
+
+  const handleSchedulePlan = () => {
+    if (createdPlanId) {
+      schedulePlanMutation.mutate({
+        planId: createdPlanId,
+        startDate: format(startDate, "yyyy-MM-dd"),
+      });
+    }
   };
 
   const handleImportPlan = () => {
@@ -115,8 +143,9 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
     onComplete("skip");
   };
 
-  const steps: Step[] = ["welcome", "units", "goal", "plan"];
-  const currentStepIndex = steps.indexOf(step);
+  const displaySteps: Step[] = ["welcome", "units", "goal", "plan", "schedule"];
+  const progressSteps = step === "schedule" ? 5 : 4;
+  const currentStepIndex = displaySteps.indexOf(step);
 
   return (
     <Dialog open={open} onOpenChange={() => {}}>
@@ -127,19 +156,21 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
             {step === "units" && "Set Your Preferences"}
             {step === "goal" && "What's Your Goal?"}
             {step === "plan" && "Choose Your Path"}
+            {step === "schedule" && "When Do You Start?"}
           </DialogTitle>
           <DialogDescription>
             {step === "welcome" && "Let's get you set up in just a few steps."}
             {step === "units" && "Choose your preferred measurement units."}
             {step === "goal" && "This helps us tailor your experience."}
             {step === "plan" && "How would you like to start training?"}
+            {step === "schedule" && "Pick the first day of your 8-week program."}
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex gap-1 my-2">
-          {steps.map((s, i) => (
+          {Array.from({ length: progressSteps }).map((_, i) => (
             <div
-              key={s}
+              key={i}
               className={`h-1 flex-1 rounded-full transition-colors ${
                 i <= currentStepIndex ? "bg-primary" : "bg-muted"
               }`}
@@ -290,11 +321,30 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
               </Button>
             </div>
           )}
+
+          {step === "schedule" && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                <CalendarDays className="h-4 w-4" />
+                <span>Your plan will start on {format(startDate, "EEEE, MMMM d, yyyy")}</span>
+              </div>
+              <div className="flex justify-center">
+                <Calendar
+                  mode="single"
+                  selected={startDate}
+                  onSelect={(date) => date && setStartDate(date)}
+                  disabled={(date) => date < new Date()}
+                  className="rounded-md border"
+                  data-testid="calendar-start-date"
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="flex justify-between pt-2">
           {step !== "welcome" && step !== "plan" ? (
-            <Button variant="ghost" onClick={handleBack}>
+            <Button variant="ghost" onClick={handleBack} disabled={schedulePlanMutation.isPending}>
               <ChevronLeft className="h-4 w-4 mr-1" />
               Back
             </Button>
@@ -302,7 +352,19 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
             <div />
           )}
 
-          {step !== "plan" && (
+          {step === "schedule" ? (
+            <Button
+              onClick={handleSchedulePlan}
+              disabled={schedulePlanMutation.isPending}
+              data-testid="button-onboarding-start-plan"
+            >
+              {schedulePlanMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+              ) : null}
+              Start Training
+              <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          ) : step !== "plan" ? (
             <Button
               onClick={handleNext}
               disabled={updatePreferencesMutation.isPending}
@@ -313,7 +375,7 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
               {step === "welcome" ? "Get Started" : "Continue"}
               <ChevronRight className="h-4 w-4 ml-1" />
             </Button>
-          )}
+          ) : null}
         </div>
       </DialogContent>
     </Dialog>
