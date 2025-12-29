@@ -16,7 +16,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { useIsMobile } from "@/hooks/use-mobile";
 import {
   FileText,
   Calendar,
@@ -50,7 +49,6 @@ import {
 
 export default function Timeline() {
   const { toast } = useToast();
-  const isMobile = useIsMobile();
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
   const [detailEntry, setDetailEntry] = useState<TimelineEntry | null>(null);
@@ -112,13 +110,17 @@ export default function Timeline() {
 
   // Auto-open coach after onboarding completes (desktop only)
   useEffect(() => {
-    if (!showOnboarding && onboardingTriggered && !hasAutoOpenedCoach && !isMobile) {
+    if (!showOnboarding && onboardingTriggered && !hasAutoOpenedCoach) {
       setHasAutoOpenedCoach(true);
       setTimeout(() => {
-        setCoachOpen(true);
+        // Check mobile state at execution time to avoid race with hook initialization
+        const isCurrentlyMobile = window.innerWidth < 768;
+        if (!isCurrentlyMobile) {
+          setCoachOpen(true);
+        }
       }, 500);
     }
-  }, [showOnboarding, onboardingTriggered, hasAutoOpenedCoach, isMobile]);
+  }, [showOnboarding, onboardingTriggered, hasAutoOpenedCoach]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
