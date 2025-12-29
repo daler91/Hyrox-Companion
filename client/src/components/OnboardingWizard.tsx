@@ -49,11 +49,12 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
 
   const updatePreferencesMutation = useMutation({
     mutationFn: async (prefs: { weightUnit: string; distanceUnit: string }) => {
-      const response = await apiRequest("PATCH", "/api/user/preferences", prefs);
+      const response = await apiRequest("PATCH", "/api/preferences", prefs);
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/preferences"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
     },
   });
 
@@ -82,7 +83,12 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
     if (step === "welcome") {
       setStep("units");
     } else if (step === "units") {
-      await updatePreferencesMutation.mutateAsync({ weightUnit, distanceUnit });
+      try {
+        await updatePreferencesMutation.mutateAsync({ weightUnit, distanceUnit });
+      } catch (error) {
+        // If preferences update fails, still proceed (preferences can be changed later)
+        console.log("Could not save preferences, continuing anyway");
+      }
       setStep("goal");
     } else if (step === "goal") {
       setStep("plan");
