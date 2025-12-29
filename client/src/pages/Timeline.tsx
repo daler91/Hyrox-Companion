@@ -65,9 +65,8 @@ export default function Timeline() {
   const [showCombineDialog, setShowCombineDialog] = useState(false);
   const [coachOpen, setCoachOpen] = useState(false);
   const [hasAutoOpenedCoach, setHasAutoOpenedCoach] = useState(false);
-  const [showOnboarding, setShowOnboarding] = useState(() => {
-    return !localStorage.getItem("hyrox-onboarding-complete");
-  });
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingTriggered, setOnboardingTriggered] = useState(false);
   
   const todayRef = useRef<HTMLDivElement>(null);
   
@@ -101,14 +100,23 @@ export default function Timeline() {
 
   const isNewUser = !plansLoading && !timelineLoading && plans.length === 0 && timelineData.length === 0;
 
+  // Trigger onboarding for new users who haven't completed it
   useEffect(() => {
-    if (isNewUser && !hasAutoOpenedCoach && !plansLoading && !timelineLoading && !showOnboarding) {
+    if (isNewUser && !onboardingTriggered && !localStorage.getItem("hyrox-onboarding-complete")) {
+      setOnboardingTriggered(true);
+      setShowOnboarding(true);
+    }
+  }, [isNewUser, onboardingTriggered]);
+
+  // Auto-open coach after onboarding completes
+  useEffect(() => {
+    if (!showOnboarding && onboardingTriggered && !hasAutoOpenedCoach) {
       setHasAutoOpenedCoach(true);
       setTimeout(() => {
         setCoachOpen(true);
       }, 500);
     }
-  }, [isNewUser, hasAutoOpenedCoach, plansLoading, timelineLoading, showOnboarding]);
+  }, [showOnboarding, onboardingTriggered, hasAutoOpenedCoach]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -484,7 +492,7 @@ export default function Timeline() {
   return (
     <>
       <OnboardingWizard
-        open={showOnboarding && isNewUser}
+        open={showOnboarding}
         onComplete={handleOnboardingComplete}
       />
       <Input
