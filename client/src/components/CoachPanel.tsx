@@ -29,12 +29,14 @@ interface CoachPanelProps {
   isOpen: boolean;
   onClose: () => void;
   timeline?: TimelineEntry[];
+  isNewUser?: boolean;
 }
 
-export function CoachPanel({ isOpen, onClose, timeline = [] }: CoachPanelProps) {
+export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }: CoachPanelProps) {
   const [pendingSuggestions, setPendingSuggestions] = useState<Suggestion[]>([]);
   const [applyingId, setApplyingId] = useState<string | null>(null);
   const [localMessages, setLocalMessages] = useState<Message[]>([]);
+  const [hasShownWelcome, setHasShownWelcome] = useState(false);
 
   const stats = useMemo(() => calculateStats(timeline), [timeline]);
 
@@ -187,6 +189,19 @@ export function CoachPanel({ isOpen, onClose, timeline = [] }: CoachPanelProps) 
       }, 50);
     }
   }, [isOpen, scrollToBottom]);
+
+  useEffect(() => {
+    if (isOpen && isNewUser && !hasShownWelcome && messages.length === 0) {
+      setHasShownWelcome(true);
+      const welcomeMessage: Message = {
+        id: "new-user-welcome",
+        role: "assistant",
+        content: "Welcome to HyroxTracker! I'm your AI training coach, here to help you prepare for Hyrox.\n\nTo get started, you can:\n- **Use our 8-week training plan** - a structured program covering running, strength, and all Hyrox stations\n- **Import your own plan** - if you have a CSV training plan\n- **Log individual workouts** - track sessions as you complete them\n\nOnce you have some training data, I can analyze your progress, suggest improvements, and help with pacing strategies. What would you like to know about Hyrox training?",
+        timestamp: getCurrentTimeString(),
+      };
+      setLocalMessages([welcomeMessage]);
+    }
+  }, [isOpen, isNewUser, hasShownWelcome, messages.length]);
 
   useEffect(() => {
     scrollToBottom();

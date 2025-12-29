@@ -22,8 +22,14 @@ import {
   Loader2,
   ChevronDown,
   ChevronUp,
+  Dumbbell,
+  Target,
+  Zap,
+  Sparkles,
 } from "lucide-react";
+import { Link } from "wouter";
 import { CoachPanel } from "@/components/CoachPanel";
+import { OnboardingWizard } from "@/components/OnboardingWizard";
 import type { TrainingPlan, TimelineEntry, PlanDay, WorkoutStatus } from "@shared/schema";
 import { format, parseISO, isToday, startOfWeek, addDays } from "date-fns";
 import {
@@ -58,6 +64,10 @@ export default function Timeline() {
   const [combineSecondEntry, setCombineSecondEntry] = useState<TimelineEntry | null>(null);
   const [showCombineDialog, setShowCombineDialog] = useState(false);
   const [coachOpen, setCoachOpen] = useState(false);
+  const [hasAutoOpenedCoach, setHasAutoOpenedCoach] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(() => {
+    return !localStorage.getItem("hyrox-onboarding-complete");
+  });
   
   const todayRef = useRef<HTMLDivElement>(null);
   
@@ -89,6 +99,31 @@ export default function Timeline() {
     }
   }, [timelineLoading]);
 
+  const isNewUser = !plansLoading && !timelineLoading && plans.length === 0 && timelineData.length === 0;
+
+  useEffect(() => {
+    if (isNewUser && !hasAutoOpenedCoach && !plansLoading && !timelineLoading && !showOnboarding) {
+      setHasAutoOpenedCoach(true);
+      setTimeout(() => {
+        setCoachOpen(true);
+      }, 500);
+    }
+  }, [isNewUser, hasAutoOpenedCoach, plansLoading, timelineLoading, showOnboarding]);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleOnboardingComplete = (choice: "sample" | "import" | "skip") => {
+    setShowOnboarding(false);
+    if (choice === "import" && fileInputRef.current) {
+      setTimeout(() => {
+        fileInputRef.current?.click();
+      }, 100);
+    } else if (choice === "sample") {
+      queryClient.invalidateQueries({ queryKey: ["/api/plans"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/timeline"] });
+    }
+  };
+
   const importMutation = useMutation({
     mutationFn: async (data: { csvContent: string; fileName: string }) => {
       const response = await apiRequest("POST", "/api/plans/import", data);
@@ -101,6 +136,21 @@ export default function Timeline() {
     },
     onError: () => {
       toast({ title: "Failed to import plan", variant: "destructive" });
+    },
+  });
+
+  const samplePlanMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/plans/sample", {});
+      return response.json();
+    },
+    onSuccess: (plan) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/plans"] });
+      setSchedulingPlanId(plan.id);
+      toast({ title: "Sample plan created! Now set a start date." });
+    },
+    onError: () => {
+      toast({ title: "Failed to create sample plan", variant: "destructive" });
     },
   });
 
@@ -432,6 +482,19 @@ export default function Timeline() {
   const hiddenFutureCount = futureGroups.length - visibleFutureGroups.length;
 
   return (
+    <>
+      <OnboardingWizard
+        open={showOnboarding && isNewUser}
+        onComplete={handleOnboardingComplete}
+      />
+      <Input
+        ref={fileInputRef}
+        type="file"
+        accept=".csv"
+        className="hidden"
+        onChange={handleFileUpload}
+        data-testid="input-csv-upload-onboarding"
+      />
     <div className="flex h-full">
       <div className="flex-1 overflow-auto p-4 md:p-8">
         <div className="max-w-5xl mx-auto space-y-6">
@@ -453,64 +516,112 @@ export default function Timeline() {
       {timelineLoading ? (
         <TimelineSkeleton />
       ) : filteredTimeline.length === 0 ? (
-        <Card>
-          <CardContent className="p-8 text-center">
-            <Calendar className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-            <h3 className="font-semibold mb-2">
-              {filterStatus === "all"
-                ? selectedPlanId 
-                  ? "Ready to Start Training"
-                  : "Your Training Journey Begins Here"
-                : `No ${filterStatus} workouts`}
-            </h3>
-            <p className="text-muted-foreground text-sm max-w-md mx-auto">
-              {filterStatus === "all"
-                ? selectedPlanId 
-                  ? "Set a start date for your plan to schedule workouts on your calendar. You'll see all your planned sessions here."
-                  : "Import a CSV training plan to get structured workouts, or log individual sessions as you complete them."
-                : `Try adjusting your filter or complete more workouts to see them here.`}
-            </p>
-            {filterStatus === "all" && selectedPlanId && (
-              <Button
-                className="mt-4"
-                onClick={() => setSchedulingPlanId(selectedPlanId)}
-                data-testid="button-set-start-date"
-              >
-                <Calendar className="h-4 w-4 mr-2" />
-                Set Start Date
-              </Button>
-            )}
-            {filterStatus === "all" && !selectedPlanId && plans.length === 0 && (
-              <>
-                <Label htmlFor="csv-upload-empty" className="cursor-pointer">
-                  <Button className="mt-4" disabled={importMutation.isPending}>
-                    {importMutation.isPending ? (
+        <Card className="overflow-visible">
+          <CardContent className="p-8 md:p-12">
+            {filterStatus === "all" && !selectedPlanId && plans.length === 0 ? (
+              <div className="text-center space-y-6">
+                <div className="flex justify-center gap-3 mb-2">
+                  <div className="p-3 rounded-full bg-primary/10">
+                    <Target className="h-6 w-6 text-primary" />
+                  </div>
+                  <div className="p-3 rounded-full bg-primary/10">
+                    <Dumbbell className="h-6 w-6 text-primary" />
+                  </div>
+                  <div className="p-3 rounded-full bg-primary/10">
+                    <Zap className="h-6 w-6 text-primary" />
+                  </div>
+                </div>
+                
+                <div>
+                  <h2 className="text-2xl font-bold mb-2">Welcome to HyroxTracker</h2>
+                  <p className="text-muted-foreground max-w-md mx-auto">
+                    Your personal training companion for Hyrox preparation. Track workouts, follow structured plans, and get AI-powered coaching.
+                  </p>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
+                  <Button 
+                    size="lg" 
+                    onClick={() => samplePlanMutation.mutate()}
+                    disabled={samplePlanMutation.isPending}
+                    data-testid="button-use-sample-plan"
+                  >
+                    {samplePlanMutation.isPending ? (
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                     ) : (
-                      <FileText className="h-4 w-4 mr-2" />
+                      <Sparkles className="h-4 w-4 mr-2" />
                     )}
-                    Import Training Plan
+                    Use 8-Week Hyrox Plan
                   </Button>
-                </Label>
-                <Input
-                  id="csv-upload-empty"
-                  type="file"
-                  accept=".csv"
-                  className="hidden"
-                  onChange={handleFileUpload}
-                  data-testid="input-csv-upload-empty"
-                />
-              </>
-            )}
-            {filterStatus !== "all" && (
-              <Button
-                variant="outline"
-                className="mt-4"
-                onClick={() => setFilterStatus("all")}
-                data-testid="button-clear-filter"
-              >
-                Show All
-              </Button>
+                  <div>
+                    <Label htmlFor="csv-upload-empty" className="cursor-pointer">
+                      <Button size="lg" variant="outline" disabled={importMutation.isPending} data-testid="button-import-plan-empty">
+                        {importMutation.isPending ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <FileText className="h-4 w-4 mr-2" />
+                        )}
+                        Import Your Own
+                      </Button>
+                    </Label>
+                    <Input
+                      id="csv-upload-empty"
+                      type="file"
+                      accept=".csv"
+                      className="hidden"
+                      onChange={handleFileUpload}
+                      data-testid="input-csv-upload-empty"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-center pt-2">
+                  <Link href="/log">
+                    <Button variant="ghost" data-testid="button-log-workout-empty">
+                      <Dumbbell className="h-4 w-4 mr-2" />
+                      Or just log a workout
+                    </Button>
+                  </Link>
+                </div>
+
+                <p className="text-xs text-muted-foreground pt-2">
+                  New to Hyrox? Ask our AI Coach for training recommendations.
+                </p>
+              </div>
+            ) : filterStatus === "all" && selectedPlanId ? (
+              <div className="text-center space-y-4">
+                <Calendar className="h-12 w-12 mx-auto text-muted-foreground opacity-50" />
+                <div>
+                  <h3 className="font-semibold mb-2">Ready to Start Training</h3>
+                  <p className="text-muted-foreground text-sm max-w-md mx-auto">
+                    Set a start date for your plan to schedule workouts on your calendar.
+                  </p>
+                </div>
+                <Button
+                  onClick={() => setSchedulingPlanId(selectedPlanId)}
+                  data-testid="button-set-start-date"
+                >
+                  <Calendar className="h-4 w-4 mr-2" />
+                  Set Start Date
+                </Button>
+              </div>
+            ) : (
+              <div className="text-center space-y-4">
+                <Calendar className="h-12 w-12 mx-auto text-muted-foreground opacity-50" />
+                <div>
+                  <h3 className="font-semibold mb-2">No {filterStatus} workouts</h3>
+                  <p className="text-muted-foreground text-sm">
+                    Try adjusting your filter or complete more workouts to see them here.
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={() => setFilterStatus("all")}
+                  data-testid="button-clear-filter"
+                >
+                  Show All
+                </Button>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -652,6 +763,7 @@ export default function Timeline() {
             isOpen={coachOpen} 
             onClose={() => setCoachOpen(false)} 
             timeline={timelineData}
+            isNewUser={isNewUser}
           />
         </div>
       )}
@@ -664,10 +776,12 @@ export default function Timeline() {
               isOpen={coachOpen} 
               onClose={() => setCoachOpen(false)} 
               timeline={timelineData}
+              isNewUser={isNewUser}
             />
           </div>
         </div>
       )}
     </div>
+    </>
   );
 }
