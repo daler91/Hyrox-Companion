@@ -53,7 +53,7 @@ export default function LogWorkout() {
         title: "Workout logged",
         description: "Your workout has been saved successfully.",
       });
-      navigate("/timeline");
+      navigate("/");
     },
     onError: () => {
       toast({
