@@ -364,7 +364,9 @@ export async function registerRoutes(
       if (weekNumbers.length === 0) {
         return res.status(400).json({ error: "No valid week numbers found in CSV" });
       }
-      const totalWeeks = Math.max(...weekNumbers);
+      // Count unique weeks instead of using max week number
+      const uniqueWeeks = new Set(weekNumbers);
+      const totalWeeks = uniqueWeeks.size;
 
       const plan = await storage.createTrainingPlan({
         userId,
@@ -375,15 +377,19 @@ export async function registerRoutes(
 
       const days: InsertPlanDay[] = rows
         .filter((row) => row.Week && row.Day)
-        .map((row) => ({
-          planId: plan.id,
-          weekNumber: parseInt(row.Week) || 1,
-          dayName: row.Day,
-          focus: row.Focus || "",
-          mainWorkout: row["Main Workout"] || "",
-          accessory: row["Accessory/Engine Work"] || null,
-          notes: row.Notes || null,
-        }));
+        .map((row) => {
+          // Support both "Accessory" and "Accessory/Engine Work" column names
+          const accessory = (row as any)["Accessory"] || row["Accessory/Engine Work"] || null;
+          return {
+            planId: plan.id,
+            weekNumber: parseInt(row.Week) || 1,
+            dayName: row.Day,
+            focus: row.Focus || "",
+            mainWorkout: row["Main Workout"] || "",
+            accessory,
+            notes: row.Notes || null,
+          };
+        });
 
       await storage.createPlanDays(days);
 
