@@ -668,6 +668,52 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/export", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const format = (req.query.format as string) || "csv";
+      
+      const timeline = await storage.getTimeline(userId);
+      const plans = await storage.listTrainingPlans(userId);
+      
+      if (format === "json") {
+        res.setHeader("Content-Type", "application/json");
+        res.setHeader("Content-Disposition", "attachment; filename=hyrox-training-data.json");
+        return res.json({ timeline, plans, exportedAt: new Date().toISOString() });
+      }
+      
+      // CSV format
+      const csvRows = ["Date,Type,Status,Focus,Main Workout,Accessory,Notes,Duration,RPE"];
+      
+      for (const entry of timeline) {
+        const escapeCsv = (val: string | null | undefined) => {
+          if (val == null) return "";
+          const str = String(val).replace(/"/g, '""');
+          return str.includes(",") || str.includes("\n") || str.includes('"') ? `"${str}"` : str;
+        };
+        
+        csvRows.push([
+          escapeCsv(entry.date),
+          escapeCsv(entry.type),
+          escapeCsv(entry.status),
+          escapeCsv(entry.focus),
+          escapeCsv(entry.mainWorkout),
+          escapeCsv(entry.accessory),
+          escapeCsv(entry.notes),
+          entry.duration != null ? String(entry.duration) : "",
+          entry.rpe != null ? String(entry.rpe) : "",
+        ].join(","));
+      }
+      
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", "attachment; filename=hyrox-training-data.csv");
+      res.send(csvRows.join("\n"));
+    } catch (error) {
+      console.error("Export error:", error);
+      res.status(500).json({ error: "Failed to export data" });
+    }
+  });
+
   app.patch("/api/plans/days/:dayId/status", isAuthenticated, async (req: any, res) => {
     try {
       const { dayId } = req.params;

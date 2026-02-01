@@ -7,7 +7,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Loader2, Link2, RefreshCw, Unlink } from "lucide-react";
+import { Loader2, Link2, RefreshCw, Unlink, Download, FileSpreadsheet, FileJson } from "lucide-react";
 import { SiStrava } from "react-icons/si";
 import { useLocation, useSearch } from "wouter";
 import { Badge } from "@/components/ui/badge";
@@ -361,6 +361,43 @@ export default function Settings() {
               </SelectContent>
             </Select>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Download className="h-5 w-5" />
+            Export Data
+          </CardTitle>
+          <CardDescription>Download your training data for backup or analysis</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              variant="outline"
+              onClick={() => {
+                window.location.href = "/api/export?format=csv";
+              }}
+              data-testid="button-export-csv"
+            >
+              <FileSpreadsheet className="h-4 w-4 mr-2" />
+              Export as CSV
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                window.location.href = "/api/export?format=json";
+              }}
+              data-testid="button-export-json"
+            >
+              <FileJson className="h-4 w-4 mr-2" />
+              Export as JSON
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            CSV includes your workout history. JSON includes full data with training plans.
+          </p>
         </CardContent>
       </Card>
 
