@@ -5,6 +5,7 @@ import { setupAuth, isAuthenticated } from "./replitAuth";
 import { chatWithCoach, streamChatWithCoach, generateWorkoutSuggestions, type ChatMessage, type TrainingContext, type UpcomingWorkout } from "./gemini";
 import { updatePlanDaySchema, insertWorkoutLogSchema, updateWorkoutLogSchema, updateUserPreferencesSchema, type InsertPlanDay } from "@shared/schema";
 import { registerStravaRoutes } from "./strava";
+import { parse } from "csv-parse/sync";
 
 interface CSVRow {
   Week: string;
@@ -16,37 +17,19 @@ interface CSVRow {
 }
 
 function parseCSV(csvText: string): CSVRow[] {
-  const lines = csvText.trim().split("\n");
-  if (lines.length < 2) return [];
-
-  const headers = lines[0].split(",").map((h) => h.trim());
-  const rows: CSVRow[] = [];
-
-  for (let i = 1; i < lines.length; i++) {
-    const values: string[] = [];
-    let current = "";
-    let inQuotes = false;
-
-    for (const char of lines[i]) {
-      if (char === '"') {
-        inQuotes = !inQuotes;
-      } else if (char === "," && !inQuotes) {
-        values.push(current.trim());
-        current = "";
-      } else {
-        current += char;
-      }
-    }
-    values.push(current.trim());
-
-    const row: Record<string, string> = {};
-    headers.forEach((header, index) => {
-      row[header] = values[index] || "";
+  try {
+    const records = parse(csvText, {
+      columns: true,
+      skip_empty_lines: true,
+      trim: true,
+      relax_quotes: true,
+      relax_column_count: true,
     });
-    rows.push(row as unknown as CSVRow);
+    return records as CSVRow[];
+  } catch (error) {
+    console.error("CSV parse error:", error);
+    return [];
   }
-
-  return rows;
 }
 
 async function buildTrainingContext(userId: string): Promise<TrainingContext> {
