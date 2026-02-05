@@ -205,8 +205,15 @@ export class DatabaseStorage implements IStorage {
     const weekOneMonday = new Date(start);
     weekOneMonday.setDate(start.getDate() + mondayOffset);
 
+    // Find minimum week number to normalize (e.g., weeks 9-16 become weeks 1-8)
+    if (plan.days.length === 0) return true;
+    const weekNumbers = plan.days.map(d => d.weekNumber || 1);
+    const minWeek = Math.min(...weekNumbers);
+
     for (const day of plan.days) {
-      const weekOffset = ((day.weekNumber || 1) - 1) * 7;
+      // Normalize week number so the first week in the plan starts at week 1
+      const normalizedWeek = (day.weekNumber || 1) - minWeek + 1;
+      const weekOffset = (normalizedWeek - 1) * 7;
       const dayOffset = dayNameToOffset[day.dayName || "Monday"] || 0;
       const scheduledDate = new Date(weekOneMonday);
       scheduledDate.setDate(weekOneMonday.getDate() + weekOffset + dayOffset);
