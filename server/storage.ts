@@ -295,21 +295,21 @@ export class DatabaseStorage implements IStorage {
       : eq(trainingPlans.userId, userId);
 
     const scheduledDaysResult = await db
-      .select({ planDay: planDays })
+      .select({ planDay: planDays, planName: trainingPlans.name, planId: trainingPlans.id })
       .from(planDays)
       .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
       .where(planDayConditions);
 
     const scheduledDays = scheduledDaysResult
-      .map(r => r.planDay)
-      .filter(d => d.scheduledDate);
+      .filter(r => r.planDay.scheduledDate);
 
     const userWorkouts = await db
       .select()
       .from(workoutLogs)
       .where(eq(workoutLogs.userId, userId));
 
-    for (const day of scheduledDays) {
+    for (const row of scheduledDays) {
+      const day = row.planDay;
       if (day.scheduledDate) {
         const linkedLog = userWorkouts.find((log) => log.planDayId === day.id);
 
@@ -329,8 +329,9 @@ export class DatabaseStorage implements IStorage {
             workoutLogId: linkedLog.id,
             weekNumber: day.weekNumber,
             dayName: day.dayName,
+            planName: row.planName,
+            planId: row.planId,
             source: (linkedLog.source as "manual" | "strava") || "manual",
-            // Strava metrics
             calories: linkedLog.calories,
             distanceMeters: linkedLog.distanceMeters,
             elevationGain: linkedLog.elevationGain,
@@ -360,6 +361,8 @@ export class DatabaseStorage implements IStorage {
             planDayId: day.id,
             weekNumber: day.weekNumber,
             dayName: day.dayName,
+            planName: row.planName,
+            planId: row.planId,
           });
         }
       }

@@ -169,6 +169,8 @@ export type TimelineEntry = {
   workoutLogId?: string | null;
   weekNumber?: number;
   dayName?: string;
+  planName?: string | null;
+  planId?: string | null;
   source?: "manual" | "strava";
   // Strava detailed metrics
   calories?: number | null;

@@ -11,6 +11,7 @@ import {
   Activity,
   TrendingUp,
   Circle,
+  BookOpen,
 } from "lucide-react";
 import { SiStrava } from "react-icons/si";
 import type { TimelineEntry } from "@shared/schema";
@@ -136,6 +137,12 @@ export default function TimelineWorkoutCard({
                 <Badge className="bg-[#FC4C02]/10 text-[#FC4C02]">
                   <SiStrava className="h-3 w-3 mr-1" />
                   Strava
+                </Badge>
+              )}
+              {entry.planName && (
+                <Badge variant="outline" className="text-muted-foreground" data-testid={`badge-plan-${entry.id}`}>
+                  <BookOpen className="h-3 w-3 mr-1" />
+                  {entry.planName}
                 </Badge>
               )}
               {entry.dayName && (

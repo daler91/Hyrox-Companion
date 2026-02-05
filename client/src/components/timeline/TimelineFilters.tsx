@@ -39,7 +39,7 @@ interface TimelineFiltersProps {
   plans: TrainingPlan[];
   plansLoading: boolean;
   selectedPlanId: string | null;
-  onPlanChange: (planId: string) => void;
+  onPlanChange: (planId: string | null) => void;
   filterStatus: FilterStatus;
   onFilterChange: (status: FilterStatus) => void;
   onFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
@@ -67,13 +67,14 @@ export default function TimelineFilters({
             </div>
           ) : plans.length > 0 ? (
             <Select
-              value={selectedPlanId || ""}
-              onValueChange={(value) => onPlanChange(value)}
+              value={selectedPlanId || "__all__"}
+              onValueChange={(value) => onPlanChange(value === "__all__" ? null : value)}
             >
               <SelectTrigger id="plan-select" aria-label="Select training plan" className="flex-1 sm:min-w-[200px]" data-testid="select-plan">
-                <SelectValue placeholder="Select a training plan" />
+                <SelectValue placeholder="All Plans" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="__all__">All Plans</SelectItem>
                 {plans.map((plan) => (
                   <SelectItem key={plan.id} value={plan.id}>
                     {plan.name} ({plan.totalWeeks} weeks)
