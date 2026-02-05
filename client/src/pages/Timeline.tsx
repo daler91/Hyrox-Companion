@@ -166,6 +166,20 @@ export default function Timeline() {
     },
   });
 
+  const renamePlanMutation = useMutation({
+    mutationFn: async ({ planId, name }: { planId: string; name: string }) => {
+      await apiRequest("PATCH", `/api/plans/${planId}`, { name });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/plans"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/timeline"] });
+      toast({ title: "Plan renamed" });
+    },
+    onError: () => {
+      toast({ title: "Failed to rename plan", variant: "destructive" });
+    },
+  });
+
   const schedulePlanMutation = useMutation({
     mutationFn: async ({ planId, startDate }: { planId: string; startDate: string }) => {
       // Use backend endpoint which handles week normalization (e.g., weeks 9-16 → 1-8)
@@ -509,6 +523,8 @@ export default function Timeline() {
         onFilterChange={setFilterStatus}
         onFileUpload={handleFileUpload}
         isImporting={importMutation.isPending}
+        onRenamePlan={(planId, name) => renamePlanMutation.mutate({ planId, name })}
+        isRenaming={renamePlanMutation.isPending}
       />
 
       {timelineLoading ? (

@@ -34,6 +34,7 @@ export interface IStorage {
   createTrainingPlan(plan: InsertTrainingPlan): Promise<TrainingPlan>;
   listTrainingPlans(userId: string): Promise<TrainingPlan[]>;
   getTrainingPlan(planId: string, userId: string): Promise<TrainingPlanWithDays | undefined>;
+  renameTrainingPlan(planId: string, name: string, userId: string): Promise<TrainingPlan | undefined>;
   deleteTrainingPlan(planId: string, userId: string): Promise<boolean>;
 
   createPlanDays(days: InsertPlanDay[]): Promise<PlanDay[]>;
@@ -135,6 +136,15 @@ export class DatabaseStorage implements IStorage {
     });
 
     return { ...plan, days };
+  }
+
+  async renameTrainingPlan(planId: string, name: string, userId: string): Promise<TrainingPlan | undefined> {
+    const [updated] = await db
+      .update(trainingPlans)
+      .set({ name })
+      .where(and(eq(trainingPlans.id, planId), eq(trainingPlans.userId, userId)))
+      .returning();
+    return updated;
   }
 
   async deleteTrainingPlan(planId: string, userId: string): Promise<boolean> {

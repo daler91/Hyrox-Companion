@@ -535,6 +535,24 @@ export async function registerRoutes(
     }
   });
 
+  app.patch("/api/plans/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { name } = req.body;
+      if (!name || typeof name !== "string" || name.trim().length === 0) {
+        return res.status(400).json({ error: "Name is required" });
+      }
+      const updated = await storage.renameTrainingPlan(req.params.id, name.trim(), userId);
+      if (!updated) {
+        return res.status(404).json({ error: "Training plan not found" });
+      }
+      res.json(updated);
+    } catch (error) {
+      console.error("Rename plan error:", error);
+      res.status(500).json({ error: "Failed to rename training plan" });
+    }
+  });
+
   app.delete("/api/plans/:id", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
