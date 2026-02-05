@@ -168,22 +168,8 @@ export default function Timeline() {
 
   const schedulePlanMutation = useMutation({
     mutationFn: async ({ planId, startDate }: { planId: string; startDate: string }) => {
-      const response = await apiRequest("GET", `/api/plans/${planId}`);
-      const plan = await response.json();
-      
-      const dayOrder = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-      const start = parseISO(startDate);
-      
-      for (const day of plan.days as PlanDay[]) {
-        const weekOffset = (day.weekNumber - 1) * 7;
-        const dayIndex = dayOrder.indexOf(day.dayName);
-        const scheduledDate = addDays(start, weekOffset + (dayIndex >= 0 ? dayIndex : 0));
-        
-        await apiRequest("PATCH", `/api/plans/days/${day.id}/status`, {
-          scheduledDate: format(scheduledDate, "yyyy-MM-dd"),
-          status: "planned",
-        });
-      }
+      // Use backend endpoint which handles week normalization (e.g., weeks 9-16 → 1-8)
+      await apiRequest("POST", `/api/plans/${planId}/schedule`, { startDate });
     },
     onSuccess: () => {
       const planIdToSelect = schedulingPlanId;
