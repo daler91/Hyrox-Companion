@@ -14,7 +14,7 @@ import {
   BookOpen,
 } from "lucide-react";
 import { SiStrava } from "react-icons/si";
-import type { TimelineEntry } from "@shared/schema";
+import { type TimelineEntry, type ExerciseSet, EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { formatSpeed } from "@shared/unitConversion";
 
@@ -26,6 +26,27 @@ interface TimelineWorkoutCardProps {
   isCombining?: boolean;
   combiningEntryId?: string | null;
   combiningEntryDate?: string | null;
+}
+
+const categoryChipColors: Record<string, string> = {
+  hyrox_station: "bg-orange-500/10 text-orange-600 dark:text-orange-400",
+  running: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
+  strength: "bg-purple-500/10 text-purple-600 dark:text-purple-400",
+  conditioning: "bg-red-500/10 text-red-600 dark:text-red-400",
+};
+
+function formatExerciseChip(set: ExerciseSet, weightUnit: string, distanceUnit: string): string {
+  const def = EXERCISE_DEFINITIONS[set.exerciseName as ExerciseName];
+  const name = set.exerciseName === "custom" && set.customLabel ? set.customLabel : def?.label || set.exerciseName;
+  const parts: string[] = [];
+  if (set.sets && set.reps) parts.push(`${set.sets}x${set.reps}`);
+  else if (set.sets) parts.push(`${set.sets}s`);
+  else if (set.reps) parts.push(`${set.reps}r`);
+  if (set.weight) parts.push(`${set.weight}${weightUnit}`);
+  const dLabel = distanceUnit === "km" ? "m" : "ft";
+  if (set.distance) parts.push(`${set.distance}${dLabel}`);
+  if (set.time) parts.push(`${set.time}min`);
+  return parts.length > 0 ? `${name} ${parts.join(" ")}` : name;
 }
 
 function getStatusBadge(status: string) {
@@ -72,7 +93,7 @@ export default function TimelineWorkoutCard({
   combiningEntryId,
   combiningEntryDate,
 }: TimelineWorkoutCardProps) {
-  const { distanceUnit } = useUnitPreferences();
+  const { distanceUnit, weightUnit, weightLabel } = useUnitPreferences();
   
   const isBeingCombined = combiningEntryId === entry.id;
   const isSameDate = combiningEntryDate === entry.date;
@@ -150,9 +171,23 @@ export default function TimelineWorkoutCard({
               )}
               <span className="font-medium">{entry.focus}</span>
             </div>
-            <p className="text-sm text-muted-foreground mb-1">
-              {entry.mainWorkout}
-            </p>
+            {entry.exerciseSets && entry.exerciseSets.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5 mb-1" data-testid={`exercise-chips-${entry.id}`}>
+                {entry.exerciseSets.map((set) => (
+                  <Badge
+                    key={set.id}
+                    variant="secondary"
+                    className={`text-xs font-normal ${categoryChipColors[set.category] || ""}`}
+                  >
+                    {formatExerciseChip(set, weightLabel, distanceUnit)}
+                  </Badge>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground mb-1">
+                {entry.mainWorkout}
+              </p>
+            )}
             {entry.accessory && (
               <p className="text-sm text-muted-foreground/70 mb-1">
                 {entry.accessory}

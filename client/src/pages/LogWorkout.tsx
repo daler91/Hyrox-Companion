@@ -6,22 +6,28 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ExerciseSelector } from "@/components/ExerciseSelector";
-import { ExerciseInput } from "@/components/ExerciseInput";
+import { ExerciseInput, type StructuredExercise } from "@/components/ExerciseInput";
 import { useToast } from "@/hooks/use-toast";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { Save, ArrowLeft, Loader2 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { ExerciseType } from "@/components/WorkoutCard";
+import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
 
-interface ExerciseData {
-  type: ExerciseType;
-  customName?: string;
-  time?: number;
-  distance?: number;
-  reps?: number;
-  weight?: number;
-  notes?: string;
+function generateSummary(exercises: StructuredExercise[], weightUnit: string, distanceUnit: string): string {
+  const distLabel = distanceUnit === "km" ? "m" : "ft";
+  return exercises.map((ex) => {
+    const def = EXERCISE_DEFINITIONS[ex.exerciseName];
+    const name = ex.exerciseName === "custom" && ex.customLabel ? ex.customLabel : def?.label || ex.exerciseName;
+    const parts: string[] = [];
+    if (ex.sets && ex.reps) parts.push(`${ex.sets}x${ex.reps}`);
+    else if (ex.sets) parts.push(`${ex.sets} sets`);
+    else if (ex.reps) parts.push(`${ex.reps} reps`);
+    if (ex.weight) parts.push(`${ex.weight}${weightUnit}`);
+    if (ex.distance) parts.push(`${ex.distance}${distLabel}`);
+    if (ex.time) parts.push(`${ex.time}min`);
+    return `${name}: ${parts.join(", ") || "completed"}`;
+  }).join("; ");
 }
 
 export default function LogWorkout() {
@@ -30,19 +36,12 @@ export default function LogWorkout() {
   const { weightUnit, distanceUnit, weightLabel } = useUnitPreferences();
   const [title, setTitle] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
-  const [selectedExercises, setSelectedExercises] = useState<ExerciseType[]>([]);
-  const [exerciseData, setExerciseData] = useState<Record<ExerciseType, ExerciseData>>({} as Record<ExerciseType, ExerciseData>);
+  const [selectedExercises, setSelectedExercises] = useState<ExerciseName[]>([]);
+  const [exerciseData, setExerciseData] = useState<Record<string, StructuredExercise>>({});
   const [notes, setNotes] = useState("");
-  const distanceLabel = distanceUnit === "km" ? "m" : "ft";
 
   const saveMutation = useMutation({
-    mutationFn: async (workoutData: {
-      title: string;
-      date: string;
-      focus: string;
-      mainWorkout: string;
-      notes: string | null;
-    }) => {
+    mutationFn: async (workoutData: Record<string, any>) => {
       const response = await apiRequest("POST", "/api/workouts", workoutData);
       return response.json();
     },
@@ -64,35 +63,39 @@ export default function LogWorkout() {
     },
   });
 
-  const handleToggleExercise = (type: ExerciseType) => {
+  const handleToggleExercise = (name: ExerciseName) => {
     setSelectedExercises((prev) => {
-      if (prev.includes(type)) {
+      if (prev.includes(name)) {
         const newData = { ...exerciseData };
-        delete newData[type];
+        delete newData[name];
         setExerciseData(newData);
-        return prev.filter((t) => t !== type);
+        return prev.filter((n) => n !== name);
       } else {
+        const def = EXERCISE_DEFINITIONS[name];
         setExerciseData((prevData) => ({
           ...prevData,
-          [type]: { type },
+          [name]: {
+            exerciseName: name,
+            category: def.category,
+          },
         }));
-        return [...prev, type];
+        return [...prev, name];
       }
     });
   };
 
-  const handleExerciseChange = (exercise: ExerciseData) => {
+  const handleExerciseChange = (exercise: StructuredExercise) => {
     setExerciseData((prev) => ({
       ...prev,
-      [exercise.type]: exercise,
+      [exercise.exerciseName]: exercise,
     }));
   };
 
-  const handleRemoveExercise = (type: ExerciseType) => {
-    setSelectedExercises((prev) => prev.filter((t) => t !== type));
+  const handleRemoveExercise = (name: ExerciseName) => {
+    setSelectedExercises((prev) => prev.filter((n) => n !== name));
     setExerciseData((prev) => {
       const newData = { ...prev };
-      delete newData[type];
+      delete newData[name];
       return newData;
     });
   };
@@ -116,23 +119,16 @@ export default function LogWorkout() {
       return;
     }
 
-    const exerciseDetails = selectedExercises.map((type) => {
-      const data = exerciseData[type];
-      const parts = [];
-      if (data?.time) parts.push(`${data.time}min`);
-      if (data?.distance) parts.push(`${data.distance}${distanceLabel}`);
-      if (data?.reps) parts.push(`${data.reps} reps`);
-      if (data?.weight) parts.push(`${data.weight}${weightLabel}`);
-      const exerciseName = type === "other" && data?.customName ? data.customName : type;
-      return `${exerciseName}: ${parts.join(", ") || "completed"}`;
-    });
+    const exercises = selectedExercises.map((name) => exerciseData[name]).filter(Boolean);
+    const mainWorkout = generateSummary(exercises, weightLabel, distanceUnit);
 
     saveMutation.mutate({
       title,
       date,
       focus: title,
-      mainWorkout: exerciseDetails.join("; "),
+      mainWorkout,
       notes: notes || null,
+      exercises,
     });
   };
 
@@ -192,12 +188,12 @@ export default function LogWorkout() {
       {selectedExercises.length > 0 && (
         <div className="space-y-4">
           <h2 className="text-lg font-semibold">Exercise Details</h2>
-          {selectedExercises.map((type) => (
+          {selectedExercises.map((name) => (
             <ExerciseInput
-              key={type}
-              exercise={exerciseData[type] || { type }}
+              key={name}
+              exercise={exerciseData[name] || { exerciseName: name, category: EXERCISE_DEFINITIONS[name].category }}
               onChange={handleExerciseChange}
-              onRemove={() => handleRemoveExercise(type)}
+              onRemove={() => handleRemoveExercise(name)}
               weightUnit={weightUnit}
               distanceUnit={distanceUnit}
             />

@@ -2,96 +2,73 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { X, Timer, Ruler, Hash, Weight, Pencil } from "lucide-react";
-import type { ExerciseType } from "./WorkoutCard";
+import { X, Timer, Ruler, Hash, Weight, Pencil, Layers } from "lucide-react";
+import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
 
-interface ExerciseData {
-  type: ExerciseType;
-  customName?: string;
-  time?: number;
-  distance?: number;
+export interface StructuredExercise {
+  exerciseName: ExerciseName;
+  category: string;
+  customLabel?: string;
+  sets?: number;
   reps?: number;
   weight?: number;
+  distance?: number;
+  time?: number;
   notes?: string;
 }
 
 interface ExerciseInputProps {
-  exercise: ExerciseData;
-  onChange: (exercise: ExerciseData) => void;
+  exercise: StructuredExercise;
+  onChange: (exercise: StructuredExercise) => void;
   onRemove: () => void;
   weightUnit?: "kg" | "lbs";
   distanceUnit?: "km" | "miles";
 }
 
-const exerciseLabels: Record<ExerciseType, string> = {
-  running: "Running",
-  skierg: "SkiErg",
-  sled_push: "Sled Push",
-  sled_pull: "Sled Pull",
-  burpees: "Burpees",
-  rowing: "Rowing",
-  farmers_carry: "Farmers Carry",
-  wall_balls: "Wall Balls",
-  other: "Other",
-};
-
-const exerciseFields: Record<ExerciseType, ("time" | "distance" | "reps" | "weight")[]> = {
-  running: ["time", "distance"],
-  skierg: ["time", "distance"],
-  sled_push: ["time", "distance", "weight"],
-  sled_pull: ["time", "distance", "weight"],
-  burpees: ["time", "reps"],
-  rowing: ["time", "distance"],
-  farmers_carry: ["time", "distance", "weight"],
-  wall_balls: ["time", "reps", "weight"],
-  other: ["time", "distance", "reps", "weight"],
-};
-
-const exerciseBorderColors: Record<ExerciseType, string> = {
+const categoryColors: Record<string, string> = {
+  hyrox_station: "border-l-orange-500",
   running: "border-l-blue-500",
-  skierg: "border-l-purple-500",
-  sled_push: "border-l-orange-500",
-  sled_pull: "border-l-amber-500",
-  burpees: "border-l-red-500",
-  rowing: "border-l-cyan-500",
-  farmers_carry: "border-l-green-500",
-  wall_balls: "border-l-pink-500",
-  other: "border-l-gray-500",
+  strength: "border-l-purple-500",
+  conditioning: "border-l-red-500",
+};
+
+type FieldKey = "sets" | "reps" | "weight" | "distance" | "time";
+
+const fieldConfig: Record<FieldKey, { icon: typeof Timer; getLabel: (wu: string, du: string) => string }> = {
+  sets: { icon: Layers, getLabel: () => "Sets" },
+  reps: { icon: Hash, getLabel: () => "Reps" },
+  weight: { icon: Weight, getLabel: (wu) => `Weight (${wu})` },
+  distance: { icon: Ruler, getLabel: (_, du) => `Distance (${du === "km" ? "m" : "ft"})` },
+  time: { icon: Timer, getLabel: () => "Time (min)" },
 };
 
 export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg", distanceUnit = "km" }: ExerciseInputProps) {
-  const fields = exerciseFields[exercise.type];
-  const distanceLabel = distanceUnit === "km" ? "m" : "ft";
+  const def = EXERCISE_DEFINITIONS[exercise.exerciseName];
+  const fields = def ? (def.fields as readonly string[]) : ["sets", "reps", "weight", "distance", "time"];
+  const borderColor = categoryColors[exercise.category] || "border-l-gray-500";
+  const displayLabel = exercise.exerciseName === "custom" && exercise.customLabel
+    ? exercise.customLabel
+    : def?.label || exercise.exerciseName;
 
-  const handleChange = (field: keyof ExerciseData, value: string) => {
-    if (field === "customName") {
-      onChange({
-        ...exercise,
-        customName: value || undefined,
-      });
+  const handleChange = (field: string, value: string) => {
+    if (field === "customLabel") {
+      onChange({ ...exercise, customLabel: value || undefined });
     } else {
-      onChange({
-        ...exercise,
-        [field]: value ? Number(value) : undefined,
-      });
+      onChange({ ...exercise, [field]: value ? Number(value) : undefined });
     }
   };
 
-  const displayLabel = exercise.type === "other" && exercise.customName 
-    ? exercise.customName 
-    : exerciseLabels[exercise.type];
-
   return (
-    <Card className={`border-l-4 ${exerciseBorderColors[exercise.type]} rounded-l-none`} data-testid={`input-exercise-${exercise.type}`}>
+    <Card className={`border-l-4 ${borderColor} rounded-l-none`} data-testid={`input-exercise-${exercise.exerciseName}`}>
       <CardContent className="p-4">
         <div className="flex items-center justify-between gap-2 mb-4">
           <h4 className="font-semibold">{displayLabel}</h4>
-          <Button size="icon" variant="ghost" onClick={onRemove} data-testid={`button-remove-${exercise.type}`}>
+          <Button size="icon" variant="ghost" onClick={onRemove} data-testid={`button-remove-${exercise.exerciseName}`}>
             <X className="h-4 w-4" />
           </Button>
         </div>
 
-        {exercise.type === "other" && (
+        {exercise.exerciseName === "custom" && (
           <div className="mb-4">
             <Label className="flex items-center gap-1 text-xs text-muted-foreground mb-2">
               <Pencil className="h-3 w-3" />
@@ -100,74 +77,34 @@ export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg",
             <Input
               type="text"
               placeholder="Enter exercise name"
-              value={exercise.customName || ""}
-              onChange={(e) => handleChange("customName", e.target.value)}
+              value={exercise.customLabel || ""}
+              onChange={(e) => handleChange("customLabel", e.target.value)}
               data-testid="input-custom-exercise-name"
             />
           </div>
         )}
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {fields.includes("time") && (
-            <div className="space-y-2">
-              <Label className="flex items-center gap-1 text-xs text-muted-foreground">
-                <Timer className="h-3 w-3" />
-                Time (min)
-              </Label>
-              <Input
-                type="number"
-                placeholder="0"
-                value={exercise.time || ""}
-                onChange={(e) => handleChange("time", e.target.value)}
-                data-testid={`input-time-${exercise.type}`}
-              />
-            </div>
-          )}
-          {fields.includes("distance") && (
-            <div className="space-y-2">
-              <Label className="flex items-center gap-1 text-xs text-muted-foreground">
-                <Ruler className="h-3 w-3" />
-                Distance ({distanceLabel})
-              </Label>
-              <Input
-                type="number"
-                placeholder="0"
-                value={exercise.distance || ""}
-                onChange={(e) => handleChange("distance", e.target.value)}
-                data-testid={`input-distance-${exercise.type}`}
-              />
-            </div>
-          )}
-          {fields.includes("reps") && (
-            <div className="space-y-2">
-              <Label className="flex items-center gap-1 text-xs text-muted-foreground">
-                <Hash className="h-3 w-3" />
-                Reps
-              </Label>
-              <Input
-                type="number"
-                placeholder="0"
-                value={exercise.reps || ""}
-                onChange={(e) => handleChange("reps", e.target.value)}
-                data-testid={`input-reps-${exercise.type}`}
-              />
-            </div>
-          )}
-          {fields.includes("weight") && (
-            <div className="space-y-2">
-              <Label className="flex items-center gap-1 text-xs text-muted-foreground">
-                <Weight className="h-3 w-3" />
-                Weight ({weightUnit})
-              </Label>
-              <Input
-                type="number"
-                placeholder="0"
-                value={exercise.weight || ""}
-                onChange={(e) => handleChange("weight", e.target.value)}
-                data-testid={`input-weight-${exercise.type}`}
-              />
-            </div>
-          )}
+          {(fields as FieldKey[]).map((field) => {
+            const config = fieldConfig[field];
+            if (!config) return null;
+            const Icon = config.icon;
+            return (
+              <div key={field} className="space-y-2">
+                <Label className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Icon className="h-3 w-3" />
+                  {config.getLabel(weightUnit, distanceUnit)}
+                </Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  value={exercise[field] || ""}
+                  onChange={(e) => handleChange(field, e.target.value)}
+                  data-testid={`input-${field}-${exercise.exerciseName}`}
+                />
+              </div>
+            );
+          })}
         </div>
       </CardContent>
     </Card>

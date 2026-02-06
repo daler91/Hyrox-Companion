@@ -154,6 +154,68 @@ export type InsertWorkoutLog = z.infer<typeof insertWorkoutLogSchema>;
 export type UpdateWorkoutLog = z.infer<typeof updateWorkoutLogSchema>;
 export type WorkoutLog = typeof workoutLogs.$inferSelect;
 
+export const exerciseCategoryEnum = ["hyrox_station", "running", "strength", "conditioning"] as const;
+export type ExerciseCategory = (typeof exerciseCategoryEnum)[number];
+
+export const EXERCISE_DEFINITIONS = {
+  skierg: { label: "SkiErg", category: "hyrox_station" as const, fields: ["distance", "time", "weight"] as const },
+  sled_push: { label: "Sled Push", category: "hyrox_station" as const, fields: ["distance", "time", "weight"] as const },
+  sled_pull: { label: "Sled Pull", category: "hyrox_station" as const, fields: ["distance", "time", "weight"] as const },
+  burpee_broad_jump: { label: "Burpee Broad Jump", category: "hyrox_station" as const, fields: ["distance", "time", "reps"] as const },
+  rowing: { label: "Rowing", category: "hyrox_station" as const, fields: ["distance", "time"] as const },
+  farmers_carry: { label: "Farmers Carry", category: "hyrox_station" as const, fields: ["distance", "time", "weight"] as const },
+  sandbag_lunges: { label: "Sandbag Lunges", category: "hyrox_station" as const, fields: ["distance", "time", "weight"] as const },
+  wall_balls: { label: "Wall Balls", category: "hyrox_station" as const, fields: ["reps", "time", "weight"] as const },
+  easy_run: { label: "Easy Run", category: "running" as const, fields: ["distance", "time"] as const },
+  tempo_run: { label: "Tempo Run", category: "running" as const, fields: ["distance", "time"] as const },
+  interval_run: { label: "Intervals", category: "running" as const, fields: ["distance", "time", "sets"] as const },
+  long_run: { label: "Long Run", category: "running" as const, fields: ["distance", "time"] as const },
+  back_squat: { label: "Back Squat", category: "strength" as const, fields: ["sets", "reps", "weight"] as const },
+  front_squat: { label: "Front Squat", category: "strength" as const, fields: ["sets", "reps", "weight"] as const },
+  deadlift: { label: "Deadlift", category: "strength" as const, fields: ["sets", "reps", "weight"] as const },
+  romanian_deadlift: { label: "Romanian Deadlift", category: "strength" as const, fields: ["sets", "reps", "weight"] as const },
+  bench_press: { label: "Bench Press", category: "strength" as const, fields: ["sets", "reps", "weight"] as const },
+  overhead_press: { label: "Overhead Press", category: "strength" as const, fields: ["sets", "reps", "weight"] as const },
+  pull_up: { label: "Pull-ups", category: "strength" as const, fields: ["sets", "reps", "weight"] as const },
+  bent_over_row: { label: "Bent Over Row", category: "strength" as const, fields: ["sets", "reps", "weight"] as const },
+  lunges: { label: "Lunges", category: "strength" as const, fields: ["sets", "reps", "weight"] as const },
+  hip_thrust: { label: "Hip Thrust", category: "strength" as const, fields: ["sets", "reps", "weight"] as const },
+  burpees: { label: "Burpees", category: "conditioning" as const, fields: ["sets", "reps", "time"] as const },
+  box_jumps: { label: "Box Jumps", category: "conditioning" as const, fields: ["sets", "reps", "time"] as const },
+  assault_bike: { label: "Assault Bike", category: "conditioning" as const, fields: ["distance", "time"] as const },
+  kettlebell_swings: { label: "KB Swings", category: "conditioning" as const, fields: ["sets", "reps", "weight"] as const },
+  battle_ropes: { label: "Battle Ropes", category: "conditioning" as const, fields: ["sets", "time"] as const },
+  custom: { label: "Custom", category: "conditioning" as const, fields: ["sets", "reps", "weight", "distance", "time"] as const },
+} as const;
+
+export type ExerciseName = keyof typeof EXERCISE_DEFINITIONS;
+export const exerciseNames = Object.keys(EXERCISE_DEFINITIONS) as ExerciseName[];
+
+export const exerciseSets = pgTable("exercise_sets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  workoutLogId: varchar("workout_log_id").notNull(),
+  exerciseName: varchar("exercise_name").notNull(),
+  customLabel: text("custom_label"),
+  category: varchar("category").notNull(),
+  sets: integer("sets"),
+  reps: integer("reps"),
+  weight: real("weight"),
+  distance: real("distance"),
+  time: real("time"),
+  notes: text("notes"),
+  sortOrder: integer("sort_order").default(0),
+}, (table) => [
+  index("idx_exercise_sets_workout_log_id").on(table.workoutLogId),
+  index("idx_exercise_sets_exercise_name").on(table.exerciseName),
+]);
+
+export const insertExerciseSetSchema = createInsertSchema(exerciseSets).omit({
+  id: true,
+});
+
+export type InsertExerciseSet = z.infer<typeof insertExerciseSetSchema>;
+export type ExerciseSet = typeof exerciseSets.$inferSelect;
+
 export type TimelineEntry = {
   id: string;
   date: string;
@@ -172,7 +234,7 @@ export type TimelineEntry = {
   planName?: string | null;
   planId?: string | null;
   source?: "manual" | "strava";
-  // Strava detailed metrics
+  exerciseSets?: ExerciseSet[];
   calories?: number | null;
   distanceMeters?: number | null;
   elevationGain?: number | null;

@@ -77,11 +77,52 @@ async function buildTrainingContext(userId: string): Promise<TrainingContext> {
         focus: entry.focus || '',
         mainWorkout: entry.mainWorkout || '',
         status: entry.status,
+        exerciseDetails: entry.exerciseSets?.map(es => ({
+          name: es.exerciseName,
+          sets: es.sets,
+          reps: es.reps,
+          weight: es.weight ? parseFloat(es.weight) : null,
+          distance: es.distance ? parseFloat(es.distance) : null,
+          time: es.time ? parseFloat(es.time) : null,
+        })),
       });
     }
   }
   
   recentWorkouts.sort((a, b) => b.date.localeCompare(a.date));
+  
+  const structuredExerciseStats: Record<string, { count: number; maxWeight?: number; maxDistance?: number; bestTime?: number; avgReps?: number }> = {};
+  const completedWorkoutLogIds = timeline
+    .filter(e => e.status === 'completed' && e.workoutLogId)
+    .map(e => e.workoutLogId!);
+  
+  if (completedWorkoutLogIds.length > 0) {
+    const allSets = await storage.getExerciseSetsByWorkoutLogs(completedWorkoutLogIds);
+    for (const es of allSets) {
+      if (!structuredExerciseStats[es.exerciseName]) {
+        structuredExerciseStats[es.exerciseName] = { count: 0 };
+      }
+      const stat = structuredExerciseStats[es.exerciseName];
+      stat.count++;
+      if (es.weight) {
+        const w = parseFloat(es.weight);
+        if (!stat.maxWeight || w > stat.maxWeight) stat.maxWeight = w;
+      }
+      if (es.distance) {
+        const d = parseFloat(es.distance);
+        if (!stat.maxDistance || d > stat.maxDistance) stat.maxDistance = d;
+      }
+      if (es.time) {
+        const t = parseFloat(es.time);
+        if (!stat.bestTime || t < stat.bestTime) stat.bestTime = t;
+      }
+      if (es.reps) {
+        stat.avgReps = stat.avgReps 
+          ? Math.round((stat.avgReps * (stat.count - 1) + es.reps) / stat.count)
+          : es.reps;
+      }
+    }
+  }
   
   let currentStreak = 0;
   const today = new Date();
@@ -133,6 +174,7 @@ async function buildTrainingContext(userId: string): Promise<TrainingContext> {
     currentStreak,
     recentWorkouts: recentWorkouts.slice(0, 10),
     exerciseBreakdown,
+    structuredExerciseStats: Object.keys(structuredExerciseStats).length > 0 ? structuredExerciseStats : undefined,
     activePlan,
   };
 }
@@ -616,13 +658,33 @@ export async function registerRoutes(
 
   app.post("/api/workouts", isAuthenticated, async (req: any, res) => {
     try {
-      const parseResult = insertWorkoutLogSchema.safeParse(req.body);
+      const { exercises, ...workoutData } = req.body;
+      const parseResult = insertWorkoutLogSchema.safeParse(workoutData);
       if (!parseResult.success) {
         return res.status(400).json({ error: "Invalid workout data", details: parseResult.error });
       }
 
       const userId = req.user.claims.sub;
       const log = await storage.createWorkoutLog({ ...parseResult.data, userId });
+
+      if (exercises && Array.isArray(exercises) && exercises.length > 0) {
+        const exerciseSetData = exercises.map((ex: any, i: number) => ({
+          workoutLogId: log.id,
+          exerciseName: ex.exerciseName,
+          customLabel: ex.customLabel || null,
+          category: ex.category,
+          sets: ex.sets || null,
+          reps: ex.reps || null,
+          weight: ex.weight || null,
+          distance: ex.distance || null,
+          time: ex.time || null,
+          notes: ex.notes || null,
+          sortOrder: i,
+        }));
+        const savedSets = await storage.createExerciseSets(exerciseSetData);
+        return res.json({ ...log, exerciseSets: savedSets });
+      }
+
       res.json(log);
     } catch (error) {
       console.error("Create workout error:", error);
@@ -632,7 +694,8 @@ export async function registerRoutes(
 
   app.patch("/api/workouts/:id", isAuthenticated, async (req: any, res) => {
     try {
-      const parseResult = updateWorkoutLogSchema.safeParse(req.body);
+      const { exercises, ...updateData } = req.body;
+      const parseResult = updateWorkoutLogSchema.safeParse(updateData);
       if (!parseResult.success) {
         return res.status(400).json({ error: "Invalid update data", details: parseResult.error });
       }
@@ -642,6 +705,28 @@ export async function registerRoutes(
       if (!log) {
         return res.status(404).json({ error: "Workout not found" });
       }
+
+      if (exercises && Array.isArray(exercises)) {
+        await storage.deleteExerciseSetsByWorkoutLog(log.id);
+        if (exercises.length > 0) {
+          const exerciseSetData = exercises.map((ex: any, i: number) => ({
+            workoutLogId: log.id,
+            exerciseName: ex.exerciseName,
+            customLabel: ex.customLabel || null,
+            category: ex.category,
+            sets: ex.sets || null,
+            reps: ex.reps || null,
+            weight: ex.weight || null,
+            distance: ex.distance || null,
+            time: ex.time || null,
+            notes: ex.notes || null,
+            sortOrder: i,
+          }));
+          const savedSets = await storage.createExerciseSets(exerciseSetData);
+          return res.json({ ...log, exerciseSets: savedSets });
+        }
+      }
+
       res.json(log);
     } catch (error) {
       console.error("Update workout error:", error);
@@ -652,6 +737,7 @@ export async function registerRoutes(
   app.delete("/api/workouts/:id", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
+      await storage.deleteExerciseSetsByWorkoutLog(req.params.id);
       const deleted = await storage.deleteWorkoutLog(req.params.id, userId);
       if (!deleted) {
         return res.status(404).json({ error: "Workout not found" });
@@ -660,6 +746,17 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Delete workout error:", error);
       res.status(500).json({ error: "Failed to delete workout" });
+    }
+  });
+
+  app.get("/api/exercises/:exerciseName/history", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const history = await storage.getExerciseHistory(userId, req.params.exerciseName);
+      res.json(history);
+    } catch (error) {
+      console.error("Exercise history error:", error);
+      res.status(500).json({ error: "Failed to get exercise history" });
     }
   });
 

@@ -5,6 +5,7 @@ import {
   workoutLogs,
   chatMessages,
   stravaConnections,
+  exerciseSets,
   type User,
   type UpsertUser,
   type TrainingPlan,
@@ -22,9 +23,11 @@ import {
   type InsertChatMessage,
   type StravaConnection,
   type InsertStravaConnection,
+  type ExerciseSet,
+  type InsertExerciseSet,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, isNull, sql } from "drizzle-orm";
+import { eq, and, desc, asc, isNull, sql, inArray } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -61,6 +64,12 @@ export interface IStorage {
   deleteStravaConnection(userId: string): Promise<boolean>;
   updateStravaLastSync(userId: string): Promise<void>;
   getWorkoutByStravaActivityId(userId: string, stravaActivityId: string): Promise<WorkoutLog | undefined>;
+
+  createExerciseSets(sets: InsertExerciseSet[]): Promise<ExerciseSet[]>;
+  getExerciseSetsByWorkoutLog(workoutLogId: string): Promise<ExerciseSet[]>;
+  getExerciseSetsByWorkoutLogs(workoutLogIds: string[]): Promise<ExerciseSet[]>;
+  deleteExerciseSetsByWorkoutLog(workoutLogId: string): Promise<boolean>;
+  getExerciseHistory(userId: string, exerciseName: string): Promise<(ExerciseSet & { date: string })[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -408,6 +417,25 @@ export class DatabaseStorage implements IStorage {
       });
     }
 
+    const workoutLogIds = entries
+      .filter(e => e.workoutLogId)
+      .map(e => e.workoutLogId!);
+    
+    if (workoutLogIds.length > 0) {
+      const allSets = await this.getExerciseSetsByWorkoutLogs(workoutLogIds);
+      const setsByWorkoutId = new Map<string, typeof allSets>();
+      for (const s of allSets) {
+        const existing = setsByWorkoutId.get(s.workoutLogId) || [];
+        existing.push(s);
+        setsByWorkoutId.set(s.workoutLogId, existing);
+      }
+      for (const entry of entries) {
+        if (entry.workoutLogId) {
+          entry.exerciseSets = setsByWorkoutId.get(entry.workoutLogId) || [];
+        }
+      }
+    }
+
     return entries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }
 
@@ -480,6 +508,62 @@ export class DatabaseStorage implements IStorage {
       .from(workoutLogs)
       .where(and(eq(workoutLogs.userId, userId), eq(workoutLogs.stravaActivityId, stravaActivityId)));
     return log;
+  }
+
+  async createExerciseSets(sets: InsertExerciseSet[]): Promise<ExerciseSet[]> {
+    if (sets.length === 0) return [];
+    return await db.insert(exerciseSets).values(sets).returning();
+  }
+
+  async getExerciseSetsByWorkoutLog(workoutLogId: string): Promise<ExerciseSet[]> {
+    return await db
+      .select()
+      .from(exerciseSets)
+      .where(eq(exerciseSets.workoutLogId, workoutLogId))
+      .orderBy(asc(exerciseSets.sortOrder));
+  }
+
+  async getExerciseSetsByWorkoutLogs(workoutLogIds: string[]): Promise<ExerciseSet[]> {
+    if (workoutLogIds.length === 0) return [];
+    return await db
+      .select()
+      .from(exerciseSets)
+      .where(inArray(exerciseSets.workoutLogId, workoutLogIds))
+      .orderBy(asc(exerciseSets.sortOrder));
+  }
+
+  async deleteExerciseSetsByWorkoutLog(workoutLogId: string): Promise<boolean> {
+    const result = await db
+      .delete(exerciseSets)
+      .where(eq(exerciseSets.workoutLogId, workoutLogId));
+    return true;
+  }
+
+  async getExerciseHistory(userId: string, exerciseName: string): Promise<(ExerciseSet & { date: string })[]> {
+    const rows = await db
+      .select({
+        id: exerciseSets.id,
+        workoutLogId: exerciseSets.workoutLogId,
+        exerciseName: exerciseSets.exerciseName,
+        customLabel: exerciseSets.customLabel,
+        category: exerciseSets.category,
+        sets: exerciseSets.sets,
+        reps: exerciseSets.reps,
+        weight: exerciseSets.weight,
+        distance: exerciseSets.distance,
+        time: exerciseSets.time,
+        notes: exerciseSets.notes,
+        sortOrder: exerciseSets.sortOrder,
+        date: workoutLogs.date,
+      })
+      .from(exerciseSets)
+      .innerJoin(workoutLogs, eq(exerciseSets.workoutLogId, workoutLogs.id))
+      .where(and(
+        eq(workoutLogs.userId, userId),
+        eq(exerciseSets.exerciseName, exerciseName)
+      ))
+      .orderBy(desc(workoutLogs.date));
+    return rows;
   }
 }
 

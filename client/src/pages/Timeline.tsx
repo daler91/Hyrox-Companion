@@ -244,7 +244,7 @@ export default function Timeline() {
   });
 
   const updateWorkoutMutation = useMutation({
-    mutationFn: async ({ workoutId, updates }: { workoutId: string; updates: { focus?: string; mainWorkout?: string; accessory?: string | null; notes?: string | null } }) => {
+    mutationFn: async ({ workoutId, updates }: { workoutId: string; updates: Record<string, any> }) => {
       const response = await apiRequest("PATCH", `/api/workouts/${workoutId}`, updates);
       return response.json();
     },
@@ -350,13 +350,18 @@ export default function Timeline() {
     setDetailEntry(entry);
   };
 
-  const handleSaveFromDetail = (updates: { focus: string; mainWorkout: string; accessory: string | null; notes: string | null }) => {
+  const handleSaveFromDetail = (updates: { focus: string; mainWorkout: string; accessory: string | null; notes: string | null; exercises?: any[] }) => {
     if (!detailEntry) return;
 
     if (detailEntry.workoutLogId && !detailEntry.planDayId) {
       updateWorkoutMutation.mutate({
         workoutId: detailEntry.workoutLogId,
-        updates,
+        updates: { ...updates, exercises: updates.exercises },
+      });
+    } else if (detailEntry.workoutLogId && detailEntry.planDayId) {
+      updateWorkoutMutation.mutate({
+        workoutId: detailEntry.workoutLogId,
+        updates: { ...updates, exercises: updates.exercises },
       });
     } else if (detailEntry.planDayId) {
       updateDayMutation.mutate({

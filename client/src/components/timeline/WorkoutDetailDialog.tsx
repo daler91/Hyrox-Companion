@@ -40,20 +40,43 @@ import {
   X,
 } from "lucide-react";
 import { SiStrava } from "react-icons/si";
-import type { TimelineEntry, WorkoutStatus } from "@shared/schema";
+import { type TimelineEntry, type WorkoutStatus, type ExerciseSet, EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { formatSpeed } from "@shared/unitConversion";
+import { ExerciseSelector } from "@/components/ExerciseSelector";
+import { ExerciseInput, type StructuredExercise } from "@/components/ExerciseInput";
 
 interface WorkoutDetailDialogProps {
   entry: TimelineEntry | null;
   onClose: () => void;
   onMarkComplete: (entry: TimelineEntry) => void;
   onChangeStatus: (entry: TimelineEntry, status: WorkoutStatus) => void;
-  onSave: (updates: { focus: string; mainWorkout: string; accessory: string | null; notes: string | null }) => void;
+  onSave: (updates: { focus: string; mainWorkout: string; accessory: string | null; notes: string | null; exercises?: StructuredExercise[] }) => void;
   onDelete: (entry: TimelineEntry) => void;
   onCombine?: (entry: TimelineEntry) => void;
   isSaving?: boolean;
   isDeleting?: boolean;
+}
+
+const categoryChipColors: Record<string, string> = {
+  hyrox_station: "bg-orange-500/10 text-orange-600 dark:text-orange-400",
+  running: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
+  strength: "bg-purple-500/10 text-purple-600 dark:text-purple-400",
+  conditioning: "bg-red-500/10 text-red-600 dark:text-red-400",
+};
+
+function formatExerciseChip(set: ExerciseSet, weightUnit: string, distanceUnit: string): string {
+  const def = EXERCISE_DEFINITIONS[set.exerciseName as ExerciseName];
+  const name = set.exerciseName === "custom" && set.customLabel ? set.customLabel : def?.label || set.exerciseName;
+  const parts: string[] = [];
+  if (set.sets && set.reps) parts.push(`${set.sets}x${set.reps}`);
+  else if (set.sets) parts.push(`${set.sets}s`);
+  else if (set.reps) parts.push(`${set.reps}r`);
+  if (set.weight) parts.push(`${set.weight}${weightUnit}`);
+  const dLabel = distanceUnit === "km" ? "m" : "ft";
+  if (set.distance) parts.push(`${set.distance}${dLabel}`);
+  if (set.time) parts.push(`${set.time}min`);
+  return parts.length > 0 ? `${name} ${parts.join(" ")}` : name;
 }
 
 function getStatusBadge(status: string) {
@@ -91,6 +114,20 @@ function getStatusBadge(status: string) {
   }
 }
 
+function exerciseSetsToStructured(sets: ExerciseSet[]): StructuredExercise[] {
+  return sets.map(s => ({
+    exerciseName: s.exerciseName as ExerciseName,
+    category: s.category,
+    customLabel: s.customLabel || undefined,
+    sets: s.sets || undefined,
+    reps: s.reps || undefined,
+    weight: s.weight || undefined,
+    distance: s.distance || undefined,
+    time: s.time || undefined,
+    notes: s.notes || undefined,
+  }));
+}
+
 export default function WorkoutDetailDialog({
   entry,
   onClose,
@@ -102,7 +139,7 @@ export default function WorkoutDetailDialog({
   isSaving,
   isDeleting,
 }: WorkoutDetailDialogProps) {
-  const { distanceUnit } = useUnitPreferences();
+  const { distanceUnit, weightUnit, weightLabel } = useUnitPreferences();
   const [isEditing, setIsEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -111,6 +148,9 @@ export default function WorkoutDetailDialog({
     accessory: "",
     notes: "",
   });
+  const [editExercises, setEditExercises] = useState<ExerciseName[]>([]);
+  const [editExerciseData, setEditExerciseData] = useState<Record<string, StructuredExercise>>({});
+  const hasStructuredData = entry?.exerciseSets && entry.exerciseSets.length > 0;
 
   useEffect(() => {
     if (entry) {
@@ -120,6 +160,19 @@ export default function WorkoutDetailDialog({
         accessory: entry.accessory || "",
         notes: entry.notes || "",
       });
+      if (entry.exerciseSets && entry.exerciseSets.length > 0) {
+        const structured = exerciseSetsToStructured(entry.exerciseSets);
+        const names = structured.map(s => s.exerciseName);
+        const data: Record<string, StructuredExercise> = {};
+        for (const s of structured) {
+          data[s.exerciseName] = s;
+        }
+        setEditExercises(names);
+        setEditExerciseData(data);
+      } else {
+        setEditExercises([]);
+        setEditExerciseData({});
+      }
       setIsEditing(false);
     }
   }, [entry]);
@@ -132,12 +185,52 @@ export default function WorkoutDetailDialog({
   const canDelete = hasPlanDayId || hasWorkoutLogId;
   const canChangeStatus = hasPlanDayId;
 
+  const handleToggleExercise = (name: ExerciseName) => {
+    setEditExercises((prev) => {
+      if (prev.includes(name)) {
+        const newData = { ...editExerciseData };
+        delete newData[name];
+        setEditExerciseData(newData);
+        return prev.filter((n) => n !== name);
+      } else {
+        const def = EXERCISE_DEFINITIONS[name];
+        setEditExerciseData((prevData) => ({
+          ...prevData,
+          [name]: { exerciseName: name, category: def.category },
+        }));
+        return [...prev, name];
+      }
+    });
+  };
+
   const handleSave = () => {
+    const exercises = editExercises.length > 0
+      ? editExercises.map((name) => editExerciseData[name]).filter(Boolean)
+      : undefined;
+
+    let mainWorkout = editForm.mainWorkout;
+    if (exercises && exercises.length > 0) {
+      const distLabel = distanceUnit === "km" ? "m" : "ft";
+      mainWorkout = exercises.map((ex) => {
+        const def = EXERCISE_DEFINITIONS[ex.exerciseName];
+        const name = ex.exerciseName === "custom" && ex.customLabel ? ex.customLabel : def?.label || ex.exerciseName;
+        const parts: string[] = [];
+        if (ex.sets && ex.reps) parts.push(`${ex.sets}x${ex.reps}`);
+        else if (ex.sets) parts.push(`${ex.sets} sets`);
+        else if (ex.reps) parts.push(`${ex.reps} reps`);
+        if (ex.weight) parts.push(`${ex.weight}${weightLabel}`);
+        if (ex.distance) parts.push(`${ex.distance}${distLabel}`);
+        if (ex.time) parts.push(`${ex.time}min`);
+        return `${name}: ${parts.join(", ") || "completed"}`;
+      }).join("; ");
+    }
+
     onSave({
       focus: editForm.focus,
-      mainWorkout: editForm.mainWorkout,
+      mainWorkout,
       accessory: editForm.accessory || null,
       notes: editForm.notes || null,
+      exercises,
     });
   };
 
@@ -158,7 +251,7 @@ export default function WorkoutDetailDialog({
 
   return (
     <Dialog open={!!entry} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center gap-2 flex-wrap">
             {getStatusBadge(entry.status)}
@@ -191,16 +284,44 @@ export default function WorkoutDetailDialog({
                 data-testid="input-detail-focus"
               />
             </div>
-            <div>
-              <Label htmlFor="detail-main">Main Workout</Label>
-              <Textarea
-                id="detail-main"
-                value={editForm.mainWorkout}
-                onChange={(e) => setEditForm({ ...editForm, mainWorkout: e.target.value })}
-                rows={3}
-                data-testid="input-detail-main"
-              />
-            </div>
+
+            {hasWorkoutLogId ? (
+              <>
+                <div>
+                  <Label className="mb-2 block">Exercises</Label>
+                  <ExerciseSelector
+                    selectedExercises={editExercises}
+                    onToggle={handleToggleExercise}
+                  />
+                </div>
+                {editExercises.length > 0 && (
+                  <div className="space-y-3">
+                    {editExercises.map((name) => (
+                      <ExerciseInput
+                        key={name}
+                        exercise={editExerciseData[name] || { exerciseName: name, category: EXERCISE_DEFINITIONS[name].category }}
+                        onChange={(ex) => setEditExerciseData(prev => ({ ...prev, [ex.exerciseName]: ex }))}
+                        onRemove={() => handleToggleExercise(name)}
+                        weightUnit={weightUnit}
+                        distanceUnit={distanceUnit}
+                      />
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : (
+              <div>
+                <Label htmlFor="detail-main">Main Workout</Label>
+                <Textarea
+                  id="detail-main"
+                  value={editForm.mainWorkout}
+                  onChange={(e) => setEditForm({ ...editForm, mainWorkout: e.target.value })}
+                  rows={3}
+                  data-testid="input-detail-main"
+                />
+              </div>
+            )}
+
             <div>
               <Label htmlFor="detail-accessory">Accessory/Engine Work</Label>
               <Textarea
@@ -223,9 +344,23 @@ export default function WorkoutDetailDialog({
           </div>
         ) : (
           <div className="space-y-3">
-            <div>
-              <p className="text-sm text-muted-foreground">{entry.mainWorkout}</p>
-            </div>
+            {hasStructuredData ? (
+              <div className="flex flex-wrap gap-1.5" data-testid="detail-exercise-chips">
+                {entry.exerciseSets!.map((set) => (
+                  <Badge
+                    key={set.id}
+                    variant="secondary"
+                    className={`text-xs font-normal ${categoryChipColors[set.category] || ""}`}
+                  >
+                    {formatExerciseChip(set, weightLabel, distanceUnit)}
+                  </Badge>
+                ))}
+              </div>
+            ) : (
+              <div>
+                <p className="text-sm text-muted-foreground">{entry.mainWorkout}</p>
+              </div>
+            )}
             {entry.accessory && (
               <div>
                 <p className="text-xs font-medium text-muted-foreground/70 mb-1">Accessory</p>

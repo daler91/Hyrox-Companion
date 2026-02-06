@@ -45,8 +45,23 @@ export interface TrainingContext {
     focus: string;
     mainWorkout: string;
     status: string;
+    exerciseDetails?: Array<{
+      name: string;
+      sets?: number | null;
+      reps?: number | null;
+      weight?: number | null;
+      distance?: number | null;
+      time?: number | null;
+    }>;
   }>;
   exerciseBreakdown: Record<string, number>;
+  structuredExerciseStats?: Record<string, {
+    count: number;
+    maxWeight?: number;
+    maxDistance?: number;
+    bestTime?: number;
+    avgReps?: number;
+  }>;
   activePlan?: {
     name: string;
     totalWeeks: number;
@@ -81,10 +96,34 @@ function buildSystemPrompt(trainingContext?: TrainingContext): string {
     }
   }
 
+  if (trainingContext.structuredExerciseStats && Object.keys(trainingContext.structuredExerciseStats).length > 0) {
+    contextSection += `\n\nStructured Exercise Performance:`;
+    for (const [exercise, stats] of Object.entries(trainingContext.structuredExerciseStats)) {
+      let line = `\n- ${exercise}: trained ${stats.count}x`;
+      if (stats.maxWeight) line += `, max weight: ${stats.maxWeight}`;
+      if (stats.maxDistance) line += `, max distance: ${stats.maxDistance}`;
+      if (stats.bestTime) line += `, best time: ${stats.bestTime}min`;
+      if (stats.avgReps) line += `, avg reps: ${stats.avgReps}`;
+      contextSection += line;
+    }
+  }
+
   if (trainingContext.recentWorkouts.length > 0) {
     contextSection += `\n\nRecent Workouts (last 7):`;
     for (const workout of trainingContext.recentWorkouts.slice(0, 7)) {
-      contextSection += `\n- ${workout.date}: ${workout.focus || 'General'} - ${workout.mainWorkout || 'No details'} (${workout.status})`;
+      let line = `\n- ${workout.date}: ${workout.focus || 'General'} - ${workout.mainWorkout || 'No details'} (${workout.status})`;
+      if (workout.exerciseDetails && workout.exerciseDetails.length > 0) {
+        const details = workout.exerciseDetails.map(ex => {
+          const parts = [ex.name];
+          if (ex.sets && ex.reps) parts.push(`${ex.sets}x${ex.reps}`);
+          if (ex.weight) parts.push(`@${ex.weight}`);
+          if (ex.distance) parts.push(`${ex.distance}m`);
+          if (ex.time) parts.push(`${ex.time}min`);
+          return parts.join(' ');
+        });
+        line += ` [${details.join(', ')}]`;
+      }
+      contextSection += line;
     }
   }
 
