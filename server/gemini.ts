@@ -289,6 +289,111 @@ export async function chatWithCoach(
   }
 }
 
+export interface ParsedExercise {
+  exerciseName: string;
+  category: string;
+  customLabel?: string;
+  sets: Array<{
+    setNumber: number;
+    reps?: number;
+    weight?: number;
+    distance?: number;
+    time?: number;
+  }>;
+}
+
+const PARSE_EXERCISES_PROMPT = `You are an expert fitness data parser. Your job is to take free-text workout descriptions and convert them into structured exercise data.
+
+Available exercises and their keys:
+HYROX STATIONS: skierg, sled_push, sled_pull, burpee_broad_jump, rowing, farmers_carry, sandbag_lunges, wall_balls
+RUNNING: easy_run, tempo_run, interval_run, long_run
+STRENGTH: back_squat, front_squat, deadlift, romanian_deadlift, bench_press, overhead_press, pull_up, bent_over_row, lunges, hip_thrust
+CONDITIONING: burpees, box_jumps, assault_bike, kettlebell_swings, battle_ropes
+
+Categories: hyrox_station, running, strength, conditioning
+
+If an exercise doesn't match any of the above, use "custom" as the exerciseName and put the actual name in customLabel.
+
+Return ONLY a valid JSON array with no markdown formatting. Each element should be:
+{
+  "exerciseName": "<key from list above or 'custom'>",
+  "category": "<category>",
+  "customLabel": "<only if exerciseName is 'custom', the actual exercise name>",
+  "sets": [
+    { "setNumber": 1, "reps": <number or null>, "weight": <number or null>, "distance": <number or null>, "time": <number or null> }
+  ]
+}
+
+IMPORTANT RULES:
+1. For "4x8 back squat at 70kg", create 4 set objects each with reps=8, weight=70
+2. For "3x10 at 60/65/70kg", create 3 sets with different weights
+3. Weight should be in kg (the user's input unit will be handled separately)
+4. Distance for running should be in meters (convert km to m: 5km = 5000m)
+5. Time should be in minutes
+6. If someone says "5 sets of 5 reps" that means 5 set objects each with reps=5
+7. For running like "30 min easy run" create 1 set with time=30
+8. For "5km run in 25 min" create 1 set with distance=5000, time=25
+9. Parse ALL exercises mentioned, even if described casually
+10. When weight varies per set (pyramid, ramp up), create individual sets with specific weights
+11. If only "reps" is mentioned without sets count, assume 1 set`;
+
+const VALID_EXERCISE_NAMES = new Set([
+  "skierg", "sled_push", "sled_pull", "burpee_broad_jump", "rowing",
+  "farmers_carry", "sandbag_lunges", "wall_balls",
+  "easy_run", "tempo_run", "interval_run", "long_run",
+  "back_squat", "front_squat", "deadlift", "romanian_deadlift",
+  "bench_press", "overhead_press", "pull_up", "bent_over_row", "lunges", "hip_thrust",
+  "burpees", "box_jumps", "assault_bike", "kettlebell_swings", "battle_ropes", "custom",
+]);
+
+const VALID_CATEGORIES = new Set(["hyrox_station", "running", "strength", "conditioning"]);
+
+export async function parseExercisesFromText(text: string, weightUnit: string = "kg"): Promise<ParsedExercise[]> {
+  try {
+    const unitNote = weightUnit === "lbs"
+      ? `\nIMPORTANT: The user uses pounds (lbs) for weight. If they write "70" assume lbs. If they explicitly say "kg", convert to lbs (multiply by 2.2 and round). Return all weights in lbs.`
+      : `\nThe user uses kilograms (kg) for weight. If they write "70" assume kg. If they explicitly say "lbs", convert to kg (divide by 2.2 and round). Return all weights in kg.`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      config: {
+        systemInstruction: PARSE_EXERCISES_PROMPT + unitNote,
+      },
+      contents: [{ role: "user", parts: [{ text: `Parse this workout description into structured exercise data:\n\n${text}` }] }],
+    });
+
+    const responseText = response.text || "[]";
+    const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) {
+      return [];
+    }
+
+    const parsed = JSON.parse(jsonMatch[0]) as ParsedExercise[];
+    return parsed.filter(ex =>
+      ex.exerciseName &&
+      ex.category &&
+      ex.sets &&
+      Array.isArray(ex.sets) &&
+      ex.sets.length > 0
+    ).map(ex => {
+      const isKnown = VALID_EXERCISE_NAMES.has(ex.exerciseName);
+      const validCategory = VALID_CATEGORIES.has(ex.category);
+      return {
+        exerciseName: isKnown ? ex.exerciseName : "custom",
+        category: validCategory ? ex.category : "conditioning",
+        customLabel: isKnown ? ex.customLabel : (ex.customLabel || ex.exerciseName),
+        sets: ex.sets.map((s, i) => ({
+          ...s,
+          setNumber: s.setNumber || i + 1,
+        })),
+      };
+    });
+  } catch (error) {
+    console.error("Gemini exercise parsing error:", error);
+    throw new Error("Failed to parse exercises from text");
+  }
+}
+
 export async function* streamChatWithCoach(
   userMessage: string,
   conversationHistory: ChatMessage[] = [],

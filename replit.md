@@ -11,6 +11,7 @@ HyroxTracker is a training planning and logging application for Hyrox athletes. 
 - **Status Management**: Track planned, completed, missed, and skipped workouts
 - **AI Coach**: Chat with Gemini-powered coach that analyzes your personal training data for Hyrox-specific advice
 - **AI Workout Suggestions**: Timeline page offers AI-powered suggestions to optimize upcoming workouts based on past training history
+- **AI Text-to-Exercise Parsing**: Free text workout descriptions (e.g. "4x8 back squat at 70kg") are parsed by Gemini into structured per-set exercise data for review before saving
 - **Filtering & Search**: Filter timeline by status (all, planned, completed)
 
 The design follows premium fitness app patterns (Strava, TrainingPeaks, Whoop) with focus on data clarity and athletic performance tracking.
@@ -75,9 +76,12 @@ The storage layer uses an interface pattern (`IStorage`) with all methods requir
 ### AI Integration
 - **Provider**: Google Gemini API via `@google/genai` SDK
 - **Model**: gemini-2.5-flash
-- **Use Case**: AI training coach that provides Hyrox-specific advice, workout analysis, and pacing strategies
+- **Use Cases**: 
+  - AI training coach that provides Hyrox-specific advice, workout analysis, and pacing strategies
+  - AI text-to-exercise parsing: converts free-text workout descriptions into structured per-set exercise data
 - **Implementation**: Server-side chat function with conversation history and personalized training context
 - **Training Context**: AI receives user's workout stats, completion rate, streak, exercise breakdown, structured exercise performance stats (max weight, best time, distances), and recent workouts with per-exercise details
+- **Text Parsing**: POST /api/parse-exercises accepts free text, passes user's weightUnit preference to Gemini for correct unit handling, validates/normalizes exercise names and categories on server side before returning structured data
 
 ## External Dependencies
 

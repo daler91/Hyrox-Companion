@@ -9,7 +9,7 @@ import { ExerciseSelector } from "@/components/ExerciseSelector";
 import { ExerciseInput, createDefaultSet, type StructuredExercise } from "@/components/ExerciseInput";
 import { useToast } from "@/hooks/use-toast";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
-import { Save, ArrowLeft, Loader2, Dumbbell, Type } from "lucide-react";
+import { Save, ArrowLeft, Loader2, Dumbbell, Type, Sparkles } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
@@ -65,6 +65,74 @@ export default function LogWorkout() {
   const [selectedExercises, setSelectedExercises] = useState<ExerciseName[]>([]);
   const [exerciseData, setExerciseData] = useState<Record<string, StructuredExercise>>({});
   const [notes, setNotes] = useState("");
+
+  const parseMutation = useMutation({
+    mutationFn: async (text: string) => {
+      const response = await apiRequest("POST", "/api/parse-exercises", { text });
+      return response.json();
+    },
+    onSuccess: (parsed: Array<{ exerciseName: string; category: string; customLabel?: string; sets: Array<{ setNumber: number; reps?: number; weight?: number; distance?: number; time?: number }> }>) => {
+      if (parsed.length === 0) {
+        toast({
+          title: "No exercises found",
+          description: "AI couldn't identify any exercises in your text. Try being more specific, e.g. '4x8 back squat at 70kg'.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const newSelected: ExerciseName[] = [];
+      const newData: Record<string, StructuredExercise> = {};
+
+      for (const ex of parsed) {
+        const name = ex.exerciseName as ExerciseName;
+        const isKnown = name in EXERCISE_DEFINITIONS;
+        const key = isKnown ? name : "custom";
+        
+        if (key === "custom" && newSelected.includes("custom")) {
+          const existing = newData["custom"];
+          if (existing) {
+            existing.sets.push(...ex.sets.map((s, i) => ({ ...s, setNumber: existing.sets.length + i + 1 })));
+            existing.customLabel = (existing.customLabel || "") + ", " + (ex.customLabel || ex.exerciseName);
+          }
+          continue;
+        }
+
+        if (!newSelected.includes(key)) {
+          newSelected.push(key);
+        }
+
+        newData[key] = {
+          exerciseName: key,
+          category: isKnown ? EXERCISE_DEFINITIONS[key].category : ex.category,
+          customLabel: isKnown ? undefined : (ex.customLabel || ex.exerciseName),
+          sets: ex.sets.map((s, i) => ({
+            setNumber: s.setNumber || i + 1,
+            reps: s.reps,
+            weight: s.weight,
+            distance: s.distance,
+            time: s.time,
+          })),
+        };
+      }
+
+      setSelectedExercises(newSelected);
+      setExerciseData(newData);
+      setUseTextMode(false);
+
+      toast({
+        title: "Exercises parsed",
+        description: `Found ${parsed.length} exercise${parsed.length !== 1 ? "s" : ""}. Review the details below.`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Parsing failed",
+        description: "AI couldn't parse your workout text. Please try again or enter exercises manually.",
+        variant: "destructive",
+      });
+    },
+  });
 
   const saveMutation = useMutation({
     mutationFn: async (workoutData: Record<string, any>) => {
@@ -244,14 +312,37 @@ export default function LogWorkout() {
           <CardHeader>
             <CardTitle className="text-lg">Workout Description</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             <Textarea
-              placeholder="Describe your workout... e.g., 4x8 back squat at 70kg, 20 min tempo run"
+              placeholder={"Describe your workout, e.g.:\n4x8 back squat at 70kg\n3x10 bent over rows at 50kg\n5km tempo run in 25 min\n1000m skierg"}
               value={freeText}
               onChange={(e) => setFreeText(e.target.value)}
               className="min-h-[120px]"
               data-testid="input-freetext"
             />
+            <Button
+              onClick={() => {
+                if (!freeText.trim()) {
+                  toast({ title: "No text", description: "Please describe your workout first.", variant: "destructive" });
+                  return;
+                }
+                parseMutation.mutate(freeText);
+              }}
+              disabled={parseMutation.isPending || !freeText.trim()}
+              variant="outline"
+              className="w-full"
+              data-testid="button-parse-ai"
+            >
+              {parseMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4 mr-2" />
+              )}
+              {parseMutation.isPending ? "Parsing with AI..." : "Parse with AI"}
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              AI will convert your text into structured exercises you can review and edit before saving.
+            </p>
           </CardContent>
         </Card>
       ) : (

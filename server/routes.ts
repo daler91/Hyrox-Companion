@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
-import { chatWithCoach, streamChatWithCoach, generateWorkoutSuggestions, type ChatMessage, type TrainingContext, type UpcomingWorkout } from "./gemini";
+import { chatWithCoach, streamChatWithCoach, generateWorkoutSuggestions, parseExercisesFromText, type ChatMessage, type TrainingContext, type UpcomingWorkout } from "./gemini";
 import { updatePlanDaySchema, insertWorkoutLogSchema, updateWorkoutLogSchema, updateUserPreferencesSchema, type InsertPlanDay } from "@shared/schema";
 import { registerStravaRoutes } from "./strava";
 import { parse } from "csv-parse/sync";
@@ -275,6 +275,23 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error updating preferences:", error);
       res.status(500).json({ error: "Failed to update preferences" });
+    }
+  });
+
+  app.post("/api/parse-exercises", isAuthenticated, async (req: any, res) => {
+    try {
+      const { text } = req.body as { text: string };
+      if (!text || !text.trim()) {
+        return res.status(400).json({ error: "Text is required" });
+      }
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      const weightUnit = user?.weightUnit || "kg";
+      const exercises = await parseExercisesFromText(text.trim(), weightUnit);
+      res.json(exercises);
+    } catch (error) {
+      console.error("Error parsing exercises:", error);
+      res.status(500).json({ error: "Failed to parse exercises" });
     }
   });
 
