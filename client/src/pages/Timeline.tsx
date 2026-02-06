@@ -230,12 +230,13 @@ export default function Timeline() {
   });
 
   const logWorkoutMutation = useMutation({
-    mutationFn: async (data: { planDayId: string; date: string; focus: string; mainWorkout: string; accessory?: string; notes?: string }) => {
+    mutationFn: async (data: { planDayId: string; date: string; focus: string; mainWorkout: string; accessory?: string; notes?: string; exercises?: any[] }) => {
       const response = await apiRequest("POST", "/api/workouts", data);
       return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/timeline"] });
+      setDetailEntry(null);
       toast({ title: "Workout logged!" });
     },
     onError: () => {
@@ -353,15 +354,20 @@ export default function Timeline() {
   const handleSaveFromDetail = (updates: { focus: string; mainWorkout: string; accessory: string | null; notes: string | null; exercises?: any[] }) => {
     if (!detailEntry) return;
 
-    if (detailEntry.workoutLogId && !detailEntry.planDayId) {
+    if (detailEntry.workoutLogId) {
       updateWorkoutMutation.mutate({
         workoutId: detailEntry.workoutLogId,
         updates: { ...updates, exercises: updates.exercises },
       });
-    } else if (detailEntry.workoutLogId && detailEntry.planDayId) {
-      updateWorkoutMutation.mutate({
-        workoutId: detailEntry.workoutLogId,
-        updates: { ...updates, exercises: updates.exercises },
+    } else if (detailEntry.planDayId && updates.exercises && updates.exercises.length > 0) {
+      logWorkoutMutation.mutate({
+        planDayId: detailEntry.planDayId,
+        date: detailEntry.date,
+        focus: updates.focus,
+        mainWorkout: updates.mainWorkout,
+        accessory: updates.accessory || undefined,
+        notes: updates.notes || undefined,
+        exercises: updates.exercises,
       });
     } else if (detailEntry.planDayId) {
       updateDayMutation.mutate({
@@ -742,7 +748,7 @@ export default function Timeline() {
               setDetailEntry(null);
               handleCombine(entry);
             }}
-            isSaving={updateDayMutation.isPending || updateWorkoutMutation.isPending}
+            isSaving={updateDayMutation.isPending || updateWorkoutMutation.isPending || logWorkoutMutation.isPending}
             isDeleting={deleteWorkoutMutation.isPending || deletePlanDayMutation.isPending}
           />
 

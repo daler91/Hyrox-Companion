@@ -285,40 +285,37 @@ export default function WorkoutDetailDialog({
               />
             </div>
 
-            {hasWorkoutLogId ? (
-              <>
-                <div>
-                  <Label className="mb-2 block">Exercises</Label>
-                  <ExerciseSelector
-                    selectedExercises={editExercises}
-                    onToggle={handleToggleExercise}
+            <div>
+              <Label htmlFor="detail-main">Main Workout</Label>
+              <Textarea
+                id="detail-main"
+                value={editForm.mainWorkout}
+                onChange={(e) => setEditForm({ ...editForm, mainWorkout: e.target.value })}
+                rows={2}
+                data-testid="input-detail-main"
+                placeholder="Workout description (auto-updates when exercises are added)"
+              />
+            </div>
+
+            <div>
+              <Label className="mb-2 block">Exercises</Label>
+              <ExerciseSelector
+                selectedExercises={editExercises}
+                onToggle={handleToggleExercise}
+              />
+            </div>
+            {editExercises.length > 0 && (
+              <div className="space-y-3">
+                {editExercises.map((name) => (
+                  <ExerciseInput
+                    key={name}
+                    exercise={editExerciseData[name] || { exerciseName: name, category: EXERCISE_DEFINITIONS[name].category }}
+                    onChange={(ex) => setEditExerciseData(prev => ({ ...prev, [ex.exerciseName]: ex }))}
+                    onRemove={() => handleToggleExercise(name)}
+                    weightUnit={weightUnit}
+                    distanceUnit={distanceUnit}
                   />
-                </div>
-                {editExercises.length > 0 && (
-                  <div className="space-y-3">
-                    {editExercises.map((name) => (
-                      <ExerciseInput
-                        key={name}
-                        exercise={editExerciseData[name] || { exerciseName: name, category: EXERCISE_DEFINITIONS[name].category }}
-                        onChange={(ex) => setEditExerciseData(prev => ({ ...prev, [ex.exerciseName]: ex }))}
-                        onRemove={() => handleToggleExercise(name)}
-                        weightUnit={weightUnit}
-                        distanceUnit={distanceUnit}
-                      />
-                    ))}
-                  </div>
-                )}
-              </>
-            ) : (
-              <div>
-                <Label htmlFor="detail-main">Main Workout</Label>
-                <Textarea
-                  id="detail-main"
-                  value={editForm.mainWorkout}
-                  onChange={(e) => setEditForm({ ...editForm, mainWorkout: e.target.value })}
-                  rows={3}
-                  data-testid="input-detail-main"
-                />
+                ))}
               </div>
             )}
 
