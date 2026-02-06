@@ -6,6 +6,49 @@ import { chatWithCoach, streamChatWithCoach, generateWorkoutSuggestions, type Ch
 import { updatePlanDaySchema, insertWorkoutLogSchema, updateWorkoutLogSchema, updateUserPreferencesSchema, type InsertPlanDay } from "@shared/schema";
 import { registerStravaRoutes } from "./strava";
 import { parse } from "csv-parse/sync";
+import type { InsertExerciseSet } from "@shared/schema";
+
+function expandExercisesToSetRows(exercises: any[], workoutLogId: string): InsertExerciseSet[] {
+  const rows: InsertExerciseSet[] = [];
+  let sortOrder = 0;
+  for (const ex of exercises) {
+    if (ex.sets && Array.isArray(ex.sets)) {
+      for (const set of ex.sets) {
+        rows.push({
+          workoutLogId,
+          exerciseName: ex.exerciseName,
+          customLabel: ex.customLabel || null,
+          category: ex.category,
+          setNumber: set.setNumber || 1,
+          reps: set.reps ?? null,
+          weight: set.weight ?? null,
+          distance: set.distance ?? null,
+          time: set.time ?? null,
+          notes: set.notes || null,
+          sortOrder: sortOrder++,
+        });
+      }
+    } else {
+      const numSets = ex.numSets || 1;
+      for (let s = 1; s <= numSets; s++) {
+        rows.push({
+          workoutLogId,
+          exerciseName: ex.exerciseName,
+          customLabel: ex.customLabel || null,
+          category: ex.category,
+          setNumber: s,
+          reps: ex.reps ?? null,
+          weight: ex.weight ?? null,
+          distance: ex.distance ?? null,
+          time: ex.time ?? null,
+          notes: ex.notes || null,
+          sortOrder: sortOrder++,
+        });
+      }
+    }
+  }
+  return rows;
+}
 
 interface CSVRow {
   Week: string;
@@ -79,11 +122,11 @@ async function buildTrainingContext(userId: string): Promise<TrainingContext> {
         status: entry.status,
         exerciseDetails: entry.exerciseSets?.map(es => ({
           name: es.exerciseName,
-          sets: es.sets,
+          setNumber: es.setNumber,
           reps: es.reps,
-          weight: es.weight ? parseFloat(es.weight) : null,
-          distance: es.distance ? parseFloat(es.distance) : null,
-          time: es.time ? parseFloat(es.time) : null,
+          weight: es.weight,
+          distance: es.distance,
+          time: es.time,
         })),
       });
     }
@@ -105,16 +148,13 @@ async function buildTrainingContext(userId: string): Promise<TrainingContext> {
       const stat = structuredExerciseStats[es.exerciseName];
       stat.count++;
       if (es.weight) {
-        const w = parseFloat(es.weight);
-        if (!stat.maxWeight || w > stat.maxWeight) stat.maxWeight = w;
+        if (!stat.maxWeight || es.weight > stat.maxWeight) stat.maxWeight = es.weight;
       }
       if (es.distance) {
-        const d = parseFloat(es.distance);
-        if (!stat.maxDistance || d > stat.maxDistance) stat.maxDistance = d;
+        if (!stat.maxDistance || es.distance > stat.maxDistance) stat.maxDistance = es.distance;
       }
       if (es.time) {
-        const t = parseFloat(es.time);
-        if (!stat.bestTime || t < stat.bestTime) stat.bestTime = t;
+        if (!stat.bestTime || es.time < stat.bestTime) stat.bestTime = es.time;
       }
       if (es.reps) {
         stat.avgReps = stat.avgReps 
@@ -668,19 +708,7 @@ export async function registerRoutes(
       const log = await storage.createWorkoutLog({ ...parseResult.data, userId });
 
       if (exercises && Array.isArray(exercises) && exercises.length > 0) {
-        const exerciseSetData = exercises.map((ex: any, i: number) => ({
-          workoutLogId: log.id,
-          exerciseName: ex.exerciseName,
-          customLabel: ex.customLabel || null,
-          category: ex.category,
-          sets: ex.sets || null,
-          reps: ex.reps || null,
-          weight: ex.weight || null,
-          distance: ex.distance || null,
-          time: ex.time || null,
-          notes: ex.notes || null,
-          sortOrder: i,
-        }));
+        const exerciseSetData = expandExercisesToSetRows(exercises, log.id);
         const savedSets = await storage.createExerciseSets(exerciseSetData);
         return res.json({ ...log, exerciseSets: savedSets });
       }
@@ -709,19 +737,7 @@ export async function registerRoutes(
       if (exercises && Array.isArray(exercises)) {
         await storage.deleteExerciseSetsByWorkoutLog(log.id);
         if (exercises.length > 0) {
-          const exerciseSetData = exercises.map((ex: any, i: number) => ({
-            workoutLogId: log.id,
-            exerciseName: ex.exerciseName,
-            customLabel: ex.customLabel || null,
-            category: ex.category,
-            sets: ex.sets || null,
-            reps: ex.reps || null,
-            weight: ex.weight || null,
-            distance: ex.distance || null,
-            time: ex.time || null,
-            notes: ex.notes || null,
-            sortOrder: i,
-          }));
+          const exerciseSetData = expandExercisesToSetRows(exercises, log.id);
           const savedSets = await storage.createExerciseSets(exerciseSetData);
           return res.json({ ...log, exerciseSets: savedSets });
         }

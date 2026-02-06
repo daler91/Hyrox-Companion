@@ -47,7 +47,7 @@ export interface TrainingContext {
     status: string;
     exerciseDetails?: Array<{
       name: string;
-      sets?: number | null;
+      setNumber?: number | null;
       reps?: number | null;
       weight?: number | null;
       distance?: number | null;
@@ -113,13 +113,23 @@ function buildSystemPrompt(trainingContext?: TrainingContext): string {
     for (const workout of trainingContext.recentWorkouts.slice(0, 7)) {
       let line = `\n- ${workout.date}: ${workout.focus || 'General'} - ${workout.mainWorkout || 'No details'} (${workout.status})`;
       if (workout.exerciseDetails && workout.exerciseDetails.length > 0) {
-        const details = workout.exerciseDetails.map(ex => {
-          const parts = [ex.name];
-          if (ex.sets && ex.reps) parts.push(`${ex.sets}x${ex.reps}`);
-          if (ex.weight) parts.push(`@${ex.weight}`);
-          if (ex.distance) parts.push(`${ex.distance}m`);
-          if (ex.time) parts.push(`${ex.time}min`);
-          return parts.join(' ');
+        type ExDetail = { name: string; setNumber?: number | null; reps?: number | null; weight?: number | null; distance?: number | null; time?: number | null };
+        const grouped = new Map<string, ExDetail[]>();
+        for (const ex of workout.exerciseDetails) {
+          if (!grouped.has(ex.name)) grouped.set(ex.name, []);
+          grouped.get(ex.name)!.push(ex);
+        }
+        const details: string[] = [];
+        grouped.forEach((sets, name) => {
+          const parts = [name];
+          const firstSet = sets[0];
+          const allSameReps = sets.every((s: ExDetail) => s.reps === firstSet.reps);
+          if (allSameReps && firstSet.reps && sets.length > 1) parts.push(`${sets.length}x${firstSet.reps}`);
+          else if (firstSet.reps) parts.push(`${sets.length > 1 ? sets.length + "x" : ""}${firstSet.reps}reps`);
+          if (firstSet.weight) parts.push(`@${firstSet.weight}`);
+          if (firstSet.distance) parts.push(`${firstSet.distance}m`);
+          if (firstSet.time) parts.push(`${firstSet.time}min`);
+          details.push(parts.join(' '));
         });
         line += ` [${details.join(', ')}]`;
       }

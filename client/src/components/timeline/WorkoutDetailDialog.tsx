@@ -46,14 +46,14 @@ import { type TimelineEntry, type WorkoutStatus, type ExerciseSet, EXERCISE_DEFI
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { formatSpeed } from "@shared/unitConversion";
 import { ExerciseSelector } from "@/components/ExerciseSelector";
-import { ExerciseInput, type StructuredExercise } from "@/components/ExerciseInput";
+import { ExerciseInput, createDefaultSet, type StructuredExercise } from "@/components/ExerciseInput";
 
 interface WorkoutDetailDialogProps {
   entry: TimelineEntry | null;
   onClose: () => void;
   onMarkComplete: (entry: TimelineEntry) => void;
   onChangeStatus: (entry: TimelineEntry, status: WorkoutStatus) => void;
-  onSave: (updates: { focus: string; mainWorkout: string; accessory: string | null; notes: string | null; exercises?: StructuredExercise[] }) => void;
+  onSave: (updates: { focus: string; mainWorkout: string; accessory: string | null; notes: string | null; exercises?: any[] }) => void;
   onDelete: (entry: TimelineEntry) => void;
   onCombine?: (entry: TimelineEntry) => void;
   isSaving?: boolean;
@@ -67,18 +67,81 @@ const categoryChipColors: Record<string, string> = {
   conditioning: "bg-red-500/10 text-red-600 dark:text-red-400",
 };
 
-function formatExerciseChip(set: ExerciseSet, weightUnit: string, distanceUnit: string): string {
-  const def = EXERCISE_DEFINITIONS[set.exerciseName as ExerciseName];
-  const name = set.exerciseName === "custom" && set.customLabel ? set.customLabel : def?.label || set.exerciseName;
+interface GroupedExercise {
+  exerciseName: string;
+  customLabel?: string | null;
+  category: string;
+  sets: ExerciseSet[];
+}
+
+function groupExerciseSets(dbSets: ExerciseSet[]): GroupedExercise[] {
+  const groups: GroupedExercise[] = [];
+  const seen = new Map<string, GroupedExercise>();
+  for (const s of dbSets) {
+    const key = s.exerciseName;
+    if (!seen.has(key)) {
+      const group: GroupedExercise = { exerciseName: s.exerciseName, customLabel: s.customLabel, category: s.category, sets: [] };
+      seen.set(key, group);
+      groups.push(group);
+    }
+    seen.get(key)!.sets.push(s);
+  }
+  return groups;
+}
+
+function formatGroupedChip(group: GroupedExercise, weightUnit: string, distanceUnit: string): string {
+  const def = EXERCISE_DEFINITIONS[group.exerciseName as ExerciseName];
+  const name = group.exerciseName === "custom" && group.customLabel ? group.customLabel : def?.label || group.exerciseName;
+  const sets = group.sets;
+  if (sets.length === 0) return name;
+
+  const firstSet = sets[0];
+  const allSameReps = sets.every(s => s.reps === firstSet.reps);
+  const allSameWeight = sets.every(s => s.weight === firstSet.weight);
   const parts: string[] = [];
-  if (set.sets && set.reps) parts.push(`${set.sets}x${set.reps}`);
-  else if (set.sets) parts.push(`${set.sets}s`);
-  else if (set.reps) parts.push(`${set.reps}r`);
-  if (set.weight) parts.push(`${set.weight}${weightUnit}`);
+
+  if (allSameReps && firstSet.reps && sets.length > 1) {
+    parts.push(`${sets.length}x${firstSet.reps}`);
+  } else if (firstSet.reps && sets.length === 1) {
+    parts.push(`${firstSet.reps}r`);
+  } else if (sets.length > 1) {
+    parts.push(`${sets.length}s`);
+  }
+
+  if (allSameWeight && firstSet.weight) parts.push(`${firstSet.weight}${weightUnit}`);
+  else if (!allSameWeight) {
+    const weights = Array.from(new Set(sets.map(s => s.weight).filter(Boolean)));
+    if (weights.length > 0) parts.push(`${weights.join("/")}${weightUnit}`);
+  }
+
   const dLabel = distanceUnit === "km" ? "m" : "ft";
-  if (set.distance) parts.push(`${set.distance}${dLabel}`);
-  if (set.time) parts.push(`${set.time}min`);
+  if (firstSet.distance) parts.push(`${firstSet.distance}${dLabel}`);
+  if (firstSet.time) parts.push(`${firstSet.time}min`);
   return parts.length > 0 ? `${name} ${parts.join(" ")}` : name;
+}
+
+function exerciseSetsToStructured(dbSets: ExerciseSet[]): { names: ExerciseName[]; data: Record<string, StructuredExercise> } {
+  const groups = groupExerciseSets(dbSets);
+  const names: ExerciseName[] = [];
+  const data: Record<string, StructuredExercise> = {};
+  for (const group of groups) {
+    const exName = group.exerciseName as ExerciseName;
+    names.push(exName);
+    data[exName] = {
+      exerciseName: exName,
+      category: group.category,
+      customLabel: group.customLabel || undefined,
+      sets: group.sets.map(s => ({
+        setNumber: s.setNumber,
+        reps: s.reps ?? undefined,
+        weight: s.weight ?? undefined,
+        distance: s.distance ?? undefined,
+        time: s.time ?? undefined,
+        notes: s.notes ?? undefined,
+      })),
+    };
+  }
+  return { names, data };
 }
 
 function getStatusBadge(status: string) {
@@ -116,20 +179,6 @@ function getStatusBadge(status: string) {
   }
 }
 
-function exerciseSetsToStructured(sets: ExerciseSet[]): StructuredExercise[] {
-  return sets.map(s => ({
-    exerciseName: s.exerciseName as ExerciseName,
-    category: s.category,
-    customLabel: s.customLabel || undefined,
-    sets: s.sets || undefined,
-    reps: s.reps || undefined,
-    weight: s.weight || undefined,
-    distance: s.distance || undefined,
-    time: s.time || undefined,
-    notes: s.notes || undefined,
-  }));
-}
-
 export default function WorkoutDetailDialog({
   entry,
   onClose,
@@ -164,12 +213,7 @@ export default function WorkoutDetailDialog({
         notes: entry.notes || "",
       });
       if (entry.exerciseSets && entry.exerciseSets.length > 0) {
-        const structured = exerciseSetsToStructured(entry.exerciseSets);
-        const names = structured.map(s => s.exerciseName);
-        const data: Record<string, StructuredExercise> = {};
-        for (const s of structured) {
-          data[s.exerciseName] = s;
-        }
+        const { names, data } = exerciseSetsToStructured(entry.exerciseSets);
         setEditExercises(names);
         setEditExerciseData(data);
         setUseTextMode(false);
@@ -189,6 +233,7 @@ export default function WorkoutDetailDialog({
   const canEdit = hasPlanDayId || hasWorkoutLogId;
   const canDelete = hasPlanDayId || hasWorkoutLogId;
   const canChangeStatus = hasPlanDayId;
+  const grouped = hasStructuredData ? groupExerciseSets(entry.exerciseSets!) : [];
 
   const handleToggleExercise = (name: ExerciseName) => {
     setEditExercises((prev) => {
@@ -201,7 +246,7 @@ export default function WorkoutDetailDialog({
         const def = EXERCISE_DEFINITIONS[name];
         setEditExerciseData((prevData) => ({
           ...prevData,
-          [name]: { exerciseName: name, category: def.category },
+          [name]: { exerciseName: name, category: def.category, sets: [createDefaultSet(1)] },
         }));
         return [...prev, name];
       }
@@ -224,13 +269,16 @@ export default function WorkoutDetailDialog({
         ? exercises.map((ex) => {
             const def = EXERCISE_DEFINITIONS[ex.exerciseName];
             const name = ex.exerciseName === "custom" && ex.customLabel ? ex.customLabel : def?.label || ex.exerciseName;
+            const sets = ex.sets || [];
+            if (sets.length === 0) return `${name}: completed`;
+            const firstSet = sets[0];
+            const allSame = sets.every(s => s.reps === firstSet.reps && s.weight === firstSet.weight);
             const parts: string[] = [];
-            if (ex.sets && ex.reps) parts.push(`${ex.sets}x${ex.reps}`);
-            else if (ex.sets) parts.push(`${ex.sets} sets`);
-            else if (ex.reps) parts.push(`${ex.reps} reps`);
-            if (ex.weight) parts.push(`${ex.weight}${weightLabel}`);
-            if (ex.distance) parts.push(`${ex.distance}${distLabel}`);
-            if (ex.time) parts.push(`${ex.time}min`);
+            if (allSame && sets.length > 1 && firstSet.reps) parts.push(`${sets.length}x${firstSet.reps}`);
+            else if (firstSet.reps) parts.push(`${firstSet.reps} reps`);
+            if (allSame && firstSet.weight) parts.push(`${firstSet.weight}${weightLabel}`);
+            if (firstSet.distance) parts.push(`${firstSet.distance}${distLabel}`);
+            if (firstSet.time) parts.push(`${firstSet.time}min`);
             return `${name}: ${parts.join(", ") || "completed"}`;
           }).join("; ")
         : editForm.mainWorkout;
@@ -240,7 +288,19 @@ export default function WorkoutDetailDialog({
         mainWorkout,
         accessory: editForm.accessory || null,
         notes: editForm.notes || null,
-        exercises: exercises.length > 0 ? exercises : undefined,
+        exercises: exercises.length > 0 ? exercises.map(ex => ({
+          exerciseName: ex.exerciseName,
+          customLabel: ex.customLabel,
+          category: ex.category,
+          sets: (ex.sets || []).map(s => ({
+            setNumber: s.setNumber,
+            reps: s.reps,
+            weight: s.weight,
+            distance: s.distance,
+            time: s.time,
+            notes: s.notes,
+          })),
+        })) : undefined,
       });
     }
   };
@@ -341,7 +401,7 @@ export default function WorkoutDetailDialog({
                     {editExercises.map((name) => (
                       <ExerciseInput
                         key={name}
-                        exercise={editExerciseData[name] || { exerciseName: name, category: EXERCISE_DEFINITIONS[name].category }}
+                        exercise={editExerciseData[name] || { exerciseName: name, category: EXERCISE_DEFINITIONS[name].category, sets: [createDefaultSet(1)] }}
                         onChange={(ex) => setEditExerciseData(prev => ({ ...prev, [ex.exerciseName]: ex }))}
                         onRemove={() => handleToggleExercise(name)}
                         weightUnit={weightUnit}
@@ -382,13 +442,13 @@ export default function WorkoutDetailDialog({
           <div className="space-y-3">
             {hasStructuredData ? (
               <div className="flex flex-wrap gap-1.5" data-testid="detail-exercise-chips">
-                {entry.exerciseSets!.map((set) => (
+                {grouped.map((group, idx) => (
                   <Badge
-                    key={set.id}
+                    key={`${group.exerciseName}-${idx}`}
                     variant="secondary"
-                    className={`text-xs font-normal ${categoryChipColors[set.category] || ""}`}
+                    className={`text-xs font-normal ${categoryChipColors[group.category] || ""}`}
                   >
-                    {formatExerciseChip(set, weightLabel, distanceUnit)}
+                    {formatGroupedChip(group, weightLabel, distanceUnit)}
                   </Badge>
                 ))}
               </div>

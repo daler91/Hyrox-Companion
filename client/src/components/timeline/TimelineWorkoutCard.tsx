@@ -35,17 +35,48 @@ const categoryChipColors: Record<string, string> = {
   conditioning: "bg-red-500/10 text-red-600 dark:text-red-400",
 };
 
-function formatExerciseChip(set: ExerciseSet, weightUnit: string, distanceUnit: string): string {
-  const def = EXERCISE_DEFINITIONS[set.exerciseName as ExerciseName];
-  const name = set.exerciseName === "custom" && set.customLabel ? set.customLabel : def?.label || set.exerciseName;
+interface GroupedExercise {
+  exerciseName: string;
+  customLabel?: string | null;
+  category: string;
+  sets: ExerciseSet[];
+}
+
+function groupExerciseSets(dbSets: ExerciseSet[]): GroupedExercise[] {
+  const groups: GroupedExercise[] = [];
+  const seen = new Map<string, GroupedExercise>();
+  for (const s of dbSets) {
+    const key = s.exerciseName;
+    if (!seen.has(key)) {
+      const group: GroupedExercise = { exerciseName: s.exerciseName, customLabel: s.customLabel, category: s.category, sets: [] };
+      seen.set(key, group);
+      groups.push(group);
+    }
+    seen.get(key)!.sets.push(s);
+  }
+  return groups;
+}
+
+function formatGroupedChip(group: GroupedExercise, weightUnit: string, distanceUnit: string): string {
+  const def = EXERCISE_DEFINITIONS[group.exerciseName as ExerciseName];
+  const name = group.exerciseName === "custom" && group.customLabel ? group.customLabel : def?.label || group.exerciseName;
+  const sets = group.sets;
+  if (sets.length === 0) return name;
+  const firstSet = sets[0];
+  const allSameReps = sets.every(s => s.reps === firstSet.reps);
+  const allSameWeight = sets.every(s => s.weight === firstSet.weight);
   const parts: string[] = [];
-  if (set.sets && set.reps) parts.push(`${set.sets}x${set.reps}`);
-  else if (set.sets) parts.push(`${set.sets}s`);
-  else if (set.reps) parts.push(`${set.reps}r`);
-  if (set.weight) parts.push(`${set.weight}${weightUnit}`);
+  if (allSameReps && firstSet.reps && sets.length > 1) {
+    parts.push(`${sets.length}x${firstSet.reps}`);
+  } else if (firstSet.reps && sets.length === 1) {
+    parts.push(`${firstSet.reps}r`);
+  } else if (sets.length > 1) {
+    parts.push(`${sets.length}s`);
+  }
+  if (allSameWeight && firstSet.weight) parts.push(`${firstSet.weight}${weightUnit}`);
   const dLabel = distanceUnit === "km" ? "m" : "ft";
-  if (set.distance) parts.push(`${set.distance}${dLabel}`);
-  if (set.time) parts.push(`${set.time}min`);
+  if (firstSet.distance) parts.push(`${firstSet.distance}${dLabel}`);
+  if (firstSet.time) parts.push(`${firstSet.time}min`);
   return parts.length > 0 ? `${name} ${parts.join(" ")}` : name;
 }
 
@@ -173,13 +204,13 @@ export default function TimelineWorkoutCard({
             </div>
             {entry.exerciseSets && entry.exerciseSets.length > 0 ? (
               <div className="flex flex-wrap gap-1.5 mb-1" data-testid={`exercise-chips-${entry.id}`}>
-                {entry.exerciseSets.map((set) => (
+                {groupExerciseSets(entry.exerciseSets).map((group, idx) => (
                   <Badge
-                    key={set.id}
+                    key={`${group.exerciseName}-${idx}`}
                     variant="secondary"
-                    className={`text-xs font-normal ${categoryChipColors[set.category] || ""}`}
+                    className={`text-xs font-normal ${categoryChipColors[group.category] || ""}`}
                   >
-                    {formatExerciseChip(set, weightLabel, distanceUnit)}
+                    {formatGroupedChip(group, weightLabel, distanceUnit)}
                   </Badge>
                 ))}
               </div>

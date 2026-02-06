@@ -547,7 +547,7 @@ export class DatabaseStorage implements IStorage {
         exerciseName: exerciseSets.exerciseName,
         customLabel: exerciseSets.customLabel,
         category: exerciseSets.category,
-        sets: exerciseSets.sets,
+        setNumber: exerciseSets.setNumber,
         reps: exerciseSets.reps,
         weight: exerciseSets.weight,
         distance: exerciseSets.distance,

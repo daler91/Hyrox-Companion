@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ExerciseSelector } from "@/components/ExerciseSelector";
-import { ExerciseInput, type StructuredExercise } from "@/components/ExerciseInput";
+import { ExerciseInput, createDefaultSet, type StructuredExercise } from "@/components/ExerciseInput";
 import { useToast } from "@/hooks/use-toast";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { Save, ArrowLeft, Loader2, Dumbbell, Type } from "lucide-react";
@@ -19,15 +19,39 @@ function generateSummary(exercises: StructuredExercise[], weightUnit: string, di
   return exercises.map((ex) => {
     const def = EXERCISE_DEFINITIONS[ex.exerciseName];
     const name = ex.exerciseName === "custom" && ex.customLabel ? ex.customLabel : def?.label || ex.exerciseName;
+    const sets = ex.sets || [];
+    if (sets.length === 0) return `${name}: completed`;
+    const firstSet = sets[0];
+    const allSame = sets.every(s => s.reps === firstSet.reps && s.weight === firstSet.weight);
     const parts: string[] = [];
-    if (ex.sets && ex.reps) parts.push(`${ex.sets}x${ex.reps}`);
-    else if (ex.sets) parts.push(`${ex.sets} sets`);
-    else if (ex.reps) parts.push(`${ex.reps} reps`);
-    if (ex.weight) parts.push(`${ex.weight}${weightUnit}`);
-    if (ex.distance) parts.push(`${ex.distance}${distLabel}`);
-    if (ex.time) parts.push(`${ex.time}min`);
+    if (allSame && sets.length > 1 && firstSet.reps) {
+      parts.push(`${sets.length}x${firstSet.reps}`);
+    } else if (firstSet.reps) {
+      parts.push(`${sets.length > 1 ? sets.length + " sets, " : ""}${firstSet.reps} reps`);
+    } else if (sets.length > 1) {
+      parts.push(`${sets.length} sets`);
+    }
+    if (allSame && firstSet.weight) parts.push(`${firstSet.weight}${weightUnit}`);
+    if (firstSet.distance) parts.push(`${firstSet.distance}${distLabel}`);
+    if (firstSet.time) parts.push(`${firstSet.time}min`);
     return `${name}: ${parts.join(", ") || "completed"}`;
   }).join("; ");
+}
+
+function exerciseToPayload(ex: StructuredExercise) {
+  return {
+    exerciseName: ex.exerciseName,
+    customLabel: ex.customLabel,
+    category: ex.category,
+    sets: (ex.sets || []).map(s => ({
+      setNumber: s.setNumber,
+      reps: s.reps,
+      weight: s.weight,
+      distance: s.distance,
+      time: s.time,
+      notes: s.notes,
+    })),
+  };
 }
 
 export default function LogWorkout() {
@@ -79,6 +103,7 @@ export default function LogWorkout() {
           [name]: {
             exerciseName: name,
             category: def.category,
+            sets: [createDefaultSet(1)],
           },
         }));
         return [...prev, name];
@@ -147,7 +172,7 @@ export default function LogWorkout() {
         focus: title,
         mainWorkout,
         notes: notes || null,
-        exercises,
+        exercises: exercises.map(exerciseToPayload),
       });
     }
   };
@@ -221,7 +246,7 @@ export default function LogWorkout() {
           </CardHeader>
           <CardContent>
             <Textarea
-              placeholder="Describe your workout..."
+              placeholder="Describe your workout... e.g., 4x8 back squat at 70kg, 20 min tempo run"
               value={freeText}
               onChange={(e) => setFreeText(e.target.value)}
               className="min-h-[120px]"
@@ -249,7 +274,7 @@ export default function LogWorkout() {
               {selectedExercises.map((name) => (
                 <ExerciseInput
                   key={name}
-                  exercise={exerciseData[name] || { exerciseName: name, category: EXERCISE_DEFINITIONS[name].category }}
+                  exercise={exerciseData[name] || { exerciseName: name, category: EXERCISE_DEFINITIONS[name].category, sets: [createDefaultSet(1)] }}
                   onChange={handleExerciseChange}
                   onRemove={() => handleRemoveExercise(name)}
                   weightUnit={weightUnit}

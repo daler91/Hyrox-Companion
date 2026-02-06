@@ -197,7 +197,7 @@ export const exerciseSets = pgTable("exercise_sets", {
   exerciseName: varchar("exercise_name").notNull(),
   customLabel: text("custom_label"),
   category: varchar("category").notNull(),
-  sets: integer("sets"),
+  setNumber: integer("set_number").notNull().default(1),
   reps: integer("reps"),
   weight: real("weight"),
   distance: real("distance"),
