@@ -38,6 +38,8 @@ import {
   Combine,
   Save,
   X,
+  Type,
+  Dumbbell,
 } from "lucide-react";
 import { SiStrava } from "react-icons/si";
 import { type TimelineEntry, type WorkoutStatus, type ExerciseSet, EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
@@ -142,6 +144,7 @@ export default function WorkoutDetailDialog({
   const { distanceUnit, weightUnit, weightLabel } = useUnitPreferences();
   const [isEditing, setIsEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [useTextMode, setUseTextMode] = useState(false);
   const [editForm, setEditForm] = useState({
     focus: "",
     mainWorkout: "",
@@ -169,9 +172,11 @@ export default function WorkoutDetailDialog({
         }
         setEditExercises(names);
         setEditExerciseData(data);
+        setUseTextMode(false);
       } else {
         setEditExercises([]);
         setEditExerciseData({});
+        setUseTextMode(true);
       }
       setIsEditing(false);
     }
@@ -204,34 +209,40 @@ export default function WorkoutDetailDialog({
   };
 
   const handleSave = () => {
-    const exercises = editExercises.length > 0
-      ? editExercises.map((name) => editExerciseData[name]).filter(Boolean)
-      : undefined;
-
-    let mainWorkout = editForm.mainWorkout;
-    if (exercises && exercises.length > 0) {
+    if (useTextMode) {
+      onSave({
+        focus: editForm.focus,
+        mainWorkout: editForm.mainWorkout,
+        accessory: editForm.accessory || null,
+        notes: editForm.notes || null,
+        exercises: [],
+      });
+    } else {
+      const exercises = editExercises.map((name) => editExerciseData[name]).filter(Boolean);
       const distLabel = distanceUnit === "km" ? "m" : "ft";
-      mainWorkout = exercises.map((ex) => {
-        const def = EXERCISE_DEFINITIONS[ex.exerciseName];
-        const name = ex.exerciseName === "custom" && ex.customLabel ? ex.customLabel : def?.label || ex.exerciseName;
-        const parts: string[] = [];
-        if (ex.sets && ex.reps) parts.push(`${ex.sets}x${ex.reps}`);
-        else if (ex.sets) parts.push(`${ex.sets} sets`);
-        else if (ex.reps) parts.push(`${ex.reps} reps`);
-        if (ex.weight) parts.push(`${ex.weight}${weightLabel}`);
-        if (ex.distance) parts.push(`${ex.distance}${distLabel}`);
-        if (ex.time) parts.push(`${ex.time}min`);
-        return `${name}: ${parts.join(", ") || "completed"}`;
-      }).join("; ");
-    }
+      const mainWorkout = exercises.length > 0
+        ? exercises.map((ex) => {
+            const def = EXERCISE_DEFINITIONS[ex.exerciseName];
+            const name = ex.exerciseName === "custom" && ex.customLabel ? ex.customLabel : def?.label || ex.exerciseName;
+            const parts: string[] = [];
+            if (ex.sets && ex.reps) parts.push(`${ex.sets}x${ex.reps}`);
+            else if (ex.sets) parts.push(`${ex.sets} sets`);
+            else if (ex.reps) parts.push(`${ex.reps} reps`);
+            if (ex.weight) parts.push(`${ex.weight}${weightLabel}`);
+            if (ex.distance) parts.push(`${ex.distance}${distLabel}`);
+            if (ex.time) parts.push(`${ex.time}min`);
+            return `${name}: ${parts.join(", ") || "completed"}`;
+          }).join("; ")
+        : editForm.mainWorkout;
 
-    onSave({
-      focus: editForm.focus,
-      mainWorkout,
-      accessory: editForm.accessory || null,
-      notes: editForm.notes || null,
-      exercises,
-    });
+      onSave({
+        focus: editForm.focus,
+        mainWorkout,
+        accessory: editForm.accessory || null,
+        notes: editForm.notes || null,
+        exercises: exercises.length > 0 ? exercises : undefined,
+      });
+    }
   };
 
   const handleClose = () => {
@@ -285,38 +296,66 @@ export default function WorkoutDetailDialog({
               />
             </div>
 
-            <div>
-              <Label htmlFor="detail-main">Main Workout</Label>
-              <Textarea
-                id="detail-main"
-                value={editForm.mainWorkout}
-                onChange={(e) => setEditForm({ ...editForm, mainWorkout: e.target.value })}
-                rows={2}
-                data-testid="input-detail-main"
-                placeholder="Workout description (auto-updates when exercises are added)"
-              />
+            <div className="flex items-center gap-2">
+              <Button
+                variant={useTextMode ? "outline" : "default"}
+                size="sm"
+                onClick={() => setUseTextMode(false)}
+                data-testid="button-mode-exercises"
+              >
+                <Dumbbell className="h-4 w-4 mr-1" />
+                Exercises
+              </Button>
+              <Button
+                variant={useTextMode ? "default" : "outline"}
+                size="sm"
+                onClick={() => setUseTextMode(true)}
+                data-testid="button-mode-freetext"
+              >
+                <Type className="h-4 w-4 mr-1" />
+                Free Text
+              </Button>
             </div>
 
-            <div>
-              <Label className="mb-2 block">Exercises</Label>
-              <ExerciseSelector
-                selectedExercises={editExercises}
-                onToggle={handleToggleExercise}
-              />
-            </div>
-            {editExercises.length > 0 && (
-              <div className="space-y-3">
-                {editExercises.map((name) => (
-                  <ExerciseInput
-                    key={name}
-                    exercise={editExerciseData[name] || { exerciseName: name, category: EXERCISE_DEFINITIONS[name].category }}
-                    onChange={(ex) => setEditExerciseData(prev => ({ ...prev, [ex.exerciseName]: ex }))}
-                    onRemove={() => handleToggleExercise(name)}
-                    weightUnit={weightUnit}
-                    distanceUnit={distanceUnit}
-                  />
-                ))}
+            {useTextMode ? (
+              <div>
+                <Textarea
+                  id="detail-main"
+                  value={editForm.mainWorkout}
+                  onChange={(e) => setEditForm({ ...editForm, mainWorkout: e.target.value })}
+                  rows={3}
+                  data-testid="input-detail-main"
+                  placeholder="Describe your workout..."
+                />
               </div>
+            ) : (
+              <>
+                <div>
+                  <ExerciseSelector
+                    selectedExercises={editExercises}
+                    onToggle={handleToggleExercise}
+                  />
+                </div>
+                {editExercises.length > 0 && (
+                  <div className="space-y-3">
+                    {editExercises.map((name) => (
+                      <ExerciseInput
+                        key={name}
+                        exercise={editExerciseData[name] || { exerciseName: name, category: EXERCISE_DEFINITIONS[name].category }}
+                        onChange={(ex) => setEditExerciseData(prev => ({ ...prev, [ex.exerciseName]: ex }))}
+                        onRemove={() => handleToggleExercise(name)}
+                        weightUnit={weightUnit}
+                        distanceUnit={distanceUnit}
+                      />
+                    ))}
+                  </div>
+                )}
+                {editExercises.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-2">
+                    Add exercises using the button above
+                  </p>
+                )}
+              </>
             )}
 
             <div>

@@ -9,7 +9,7 @@ import { ExerciseSelector } from "@/components/ExerciseSelector";
 import { ExerciseInput, type StructuredExercise } from "@/components/ExerciseInput";
 import { useToast } from "@/hooks/use-toast";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
-import { Save, ArrowLeft, Loader2 } from "lucide-react";
+import { Save, ArrowLeft, Loader2, Dumbbell, Type } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
@@ -36,6 +36,8 @@ export default function LogWorkout() {
   const { weightUnit, distanceUnit, weightLabel } = useUnitPreferences();
   const [title, setTitle] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [useTextMode, setUseTextMode] = useState(false);
+  const [freeText, setFreeText] = useState("");
   const [selectedExercises, setSelectedExercises] = useState<ExerciseName[]>([]);
   const [exerciseData, setExerciseData] = useState<Record<string, StructuredExercise>>({});
   const [notes, setNotes] = useState("");
@@ -110,26 +112,44 @@ export default function LogWorkout() {
       return;
     }
 
-    if (selectedExercises.length === 0) {
-      toast({
-        title: "No exercises",
-        description: "Please add at least one exercise.",
-        variant: "destructive",
+    if (useTextMode) {
+      if (!freeText.trim()) {
+        toast({
+          title: "Missing workout details",
+          description: "Please describe your workout.",
+          variant: "destructive",
+        });
+        return;
+      }
+      saveMutation.mutate({
+        title,
+        date,
+        focus: title,
+        mainWorkout: freeText,
+        notes: notes || null,
       });
-      return;
+    } else {
+      if (selectedExercises.length === 0) {
+        toast({
+          title: "No exercises",
+          description: "Please add at least one exercise.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const exercises = selectedExercises.map((name) => exerciseData[name]).filter(Boolean);
+      const mainWorkout = generateSummary(exercises, weightLabel, distanceUnit);
+
+      saveMutation.mutate({
+        title,
+        date,
+        focus: title,
+        mainWorkout,
+        notes: notes || null,
+        exercises,
+      });
     }
-
-    const exercises = selectedExercises.map((name) => exerciseData[name]).filter(Boolean);
-    const mainWorkout = generateSummary(exercises, weightLabel, distanceUnit);
-
-    saveMutation.mutate({
-      title,
-      date,
-      focus: title,
-      mainWorkout,
-      notes: notes || null,
-      exercises,
-    });
   };
 
   return (
@@ -173,32 +193,72 @@ export default function LogWorkout() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Select Exercises</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ExerciseSelector
-            selectedExercises={selectedExercises}
-            onToggle={handleToggleExercise}
-          />
-        </CardContent>
-      </Card>
+      <div className="flex items-center gap-2">
+        <Button
+          variant={useTextMode ? "outline" : "default"}
+          size="sm"
+          onClick={() => setUseTextMode(false)}
+          data-testid="button-mode-exercises"
+        >
+          <Dumbbell className="h-4 w-4 mr-1" />
+          Exercises
+        </Button>
+        <Button
+          variant={useTextMode ? "default" : "outline"}
+          size="sm"
+          onClick={() => setUseTextMode(true)}
+          data-testid="button-mode-freetext"
+        >
+          <Type className="h-4 w-4 mr-1" />
+          Free Text
+        </Button>
+      </div>
 
-      {selectedExercises.length > 0 && (
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold">Exercise Details</h2>
-          {selectedExercises.map((name) => (
-            <ExerciseInput
-              key={name}
-              exercise={exerciseData[name] || { exerciseName: name, category: EXERCISE_DEFINITIONS[name].category }}
-              onChange={handleExerciseChange}
-              onRemove={() => handleRemoveExercise(name)}
-              weightUnit={weightUnit}
-              distanceUnit={distanceUnit}
+      {useTextMode ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Workout Description</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Textarea
+              placeholder="Describe your workout..."
+              value={freeText}
+              onChange={(e) => setFreeText(e.target.value)}
+              className="min-h-[120px]"
+              data-testid="input-freetext"
             />
-          ))}
-        </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Select Exercises</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ExerciseSelector
+                selectedExercises={selectedExercises}
+                onToggle={handleToggleExercise}
+              />
+            </CardContent>
+          </Card>
+
+          {selectedExercises.length > 0 && (
+            <div className="space-y-4">
+              <h2 className="text-lg font-semibold">Exercise Details</h2>
+              {selectedExercises.map((name) => (
+                <ExerciseInput
+                  key={name}
+                  exercise={exerciseData[name] || { exerciseName: name, category: EXERCISE_DEFINITIONS[name].category }}
+                  onChange={handleExerciseChange}
+                  onRemove={() => handleRemoveExercise(name)}
+                  weightUnit={weightUnit}
+                  distanceUnit={distanceUnit}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       <Card>
