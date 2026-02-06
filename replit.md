@@ -57,8 +57,10 @@ The server handles API routes for training plans, plan days, workout logs, and A
   - Users table with Replit Auth profile data
   - Sessions table for session management
   - TrainingPlans, PlanDays, and WorkoutLogs tables - all linked to userId
+  - ExerciseSets table linked to WorkoutLogs for structured exercise tracking (sets, reps, weight, distance, time)
   - PlanDays include scheduledDate and status (planned, completed, missed, skipped)
   - Timeline is aggregated from scheduled plan days and workout logs, filtered by user
+  - 40+ predefined exercises across 4 categories (hyrox_station, running, strength, conditioning) defined in shared/schema.ts
 
 The storage layer uses an interface pattern (`IStorage`) with all methods requiring userId for data isolation between users.
 
@@ -75,7 +77,7 @@ The storage layer uses an interface pattern (`IStorage`) with all methods requir
 - **Model**: gemini-2.5-flash
 - **Use Case**: AI training coach that provides Hyrox-specific advice, workout analysis, and pacing strategies
 - **Implementation**: Server-side chat function with conversation history and personalized training context
-- **Training Context**: AI receives user's workout stats, completion rate, streak, exercise breakdown, and recent workouts
+- **Training Context**: AI receives user's workout stats, completion rate, streak, exercise breakdown, structured exercise performance stats (max weight, best time, distances), and recent workouts with per-exercise details
 
 ## External Dependencies
 
