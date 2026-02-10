@@ -6,6 +6,7 @@ import {
   chatMessages,
   stravaConnections,
   exerciseSets,
+  customExercises,
   type User,
   type UpsertUser,
   type TrainingPlan,
@@ -25,6 +26,8 @@ import {
   type InsertStravaConnection,
   type ExerciseSet,
   type InsertExerciseSet,
+  type CustomExercise,
+  type InsertCustomExercise,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, asc, isNull, sql, inArray } from "drizzle-orm";
@@ -70,6 +73,12 @@ export interface IStorage {
   getExerciseSetsByWorkoutLogs(workoutLogIds: string[]): Promise<ExerciseSet[]>;
   deleteExerciseSetsByWorkoutLog(workoutLogId: string): Promise<boolean>;
   getExerciseHistory(userId: string, exerciseName: string): Promise<(ExerciseSet & { date: string })[]>;
+
+  getCustomExercises(userId: string): Promise<CustomExercise[]>;
+  upsertCustomExercise(data: InsertCustomExercise): Promise<CustomExercise>;
+
+  getWorkoutsWithoutExerciseSets(userId: string): Promise<WorkoutLog[]>;
+  getAllExerciseSetsWithDates(userId: string): Promise<(ExerciseSet & { date: string })[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -564,6 +573,67 @@ export class DatabaseStorage implements IStorage {
       ))
       .orderBy(desc(workoutLogs.date));
     return rows;
+  }
+
+  async getCustomExercises(userId: string): Promise<CustomExercise[]> {
+    return await db
+      .select()
+      .from(customExercises)
+      .where(eq(customExercises.userId, userId));
+  }
+
+  async upsertCustomExercise(data: InsertCustomExercise): Promise<CustomExercise> {
+    const existing = await db
+      .select()
+      .from(customExercises)
+      .where(and(
+        eq(customExercises.userId, data.userId),
+        eq(customExercises.name, data.name)
+      ));
+    if (existing.length > 0) return existing[0];
+    const [created] = await db.insert(customExercises).values(data).returning();
+    return created;
+  }
+
+  async getWorkoutsWithoutExerciseSets(userId: string): Promise<WorkoutLog[]> {
+    const allLogs = await db
+      .select()
+      .from(workoutLogs)
+      .where(eq(workoutLogs.userId, userId));
+
+    if (allLogs.length === 0) return [];
+
+    const logIds = allLogs.map(l => l.id);
+    const setsExist = await db
+      .select({ workoutLogId: exerciseSets.workoutLogId })
+      .from(exerciseSets)
+      .where(inArray(exerciseSets.workoutLogId, logIds));
+
+    const idsWithSets = new Set(setsExist.map(s => s.workoutLogId));
+    return allLogs.filter(l => !idsWithSets.has(l.id) && l.mainWorkout && l.mainWorkout.trim().length > 0);
+  }
+
+  async getAllExerciseSetsWithDates(userId: string): Promise<(ExerciseSet & { date: string })[]> {
+    return await db
+      .select({
+        id: exerciseSets.id,
+        workoutLogId: exerciseSets.workoutLogId,
+        exerciseName: exerciseSets.exerciseName,
+        customLabel: exerciseSets.customLabel,
+        category: exerciseSets.category,
+        setNumber: exerciseSets.setNumber,
+        reps: exerciseSets.reps,
+        weight: exerciseSets.weight,
+        distance: exerciseSets.distance,
+        time: exerciseSets.time,
+        notes: exerciseSets.notes,
+        sortOrder: exerciseSets.sortOrder,
+        date: workoutLogs.date,
+      })
+      .from(exerciseSets)
+      .innerJoin(workoutLogs, eq(exerciseSets.workoutLogId, workoutLogs.id))
+      .where(eq(workoutLogs.userId, userId))
+      .orderBy(desc(workoutLogs.date));
   }
 }
 

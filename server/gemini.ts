@@ -348,16 +348,21 @@ const VALID_EXERCISE_NAMES = new Set([
 
 const VALID_CATEGORIES = new Set(["hyrox_station", "running", "strength", "conditioning"]);
 
-export async function parseExercisesFromText(text: string, weightUnit: string = "kg"): Promise<ParsedExercise[]> {
+export async function parseExercisesFromText(text: string, weightUnit: string = "kg", customExerciseNames?: string[]): Promise<ParsedExercise[]> {
   try {
     const unitNote = weightUnit === "lbs"
       ? `\nIMPORTANT: The user uses pounds (lbs) for weight. If they write "70" assume lbs. If they explicitly say "kg", convert to lbs (multiply by 2.2 and round). Return all weights in lbs.`
       : `\nThe user uses kilograms (kg) for weight. If they write "70" assume kg. If they explicitly say "lbs", convert to kg (divide by 2.2 and round). Return all weights in kg.`;
 
+    let customNote = "";
+    if (customExerciseNames && customExerciseNames.length > 0) {
+      customNote = `\n\nThe user has previously saved these custom exercises. If you recognize any of them in the text, use "custom" as exerciseName and use the matching name as customLabel: ${customExerciseNames.join(", ")}`;
+    }
+
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       config: {
-        systemInstruction: PARSE_EXERCISES_PROMPT + unitNote,
+        systemInstruction: PARSE_EXERCISES_PROMPT + unitNote + customNote,
       },
       contents: [{ role: "user", parts: [{ text: `Parse this workout description into structured exercise data:\n\n${text}` }] }],
     });

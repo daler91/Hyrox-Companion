@@ -247,6 +247,25 @@ export type TimelineEntry = {
   sufferScore?: number | null;
 };
 
+// Custom exercises saved by users for AI recognition
+export const customExercises = pgTable("custom_exercises", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  name: text("name").notNull(),
+  category: varchar("category").notNull().default("conditioning"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_custom_exercises_user_id").on(table.userId),
+]);
+
+export const insertCustomExerciseSchema = createInsertSchema(customExercises).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertCustomExercise = z.infer<typeof insertCustomExerciseSchema>;
+export type CustomExercise = typeof customExercises.$inferSelect;
+
 // Chat messages for AI Coach persistence
 export const chatMessages = pgTable("chat_messages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

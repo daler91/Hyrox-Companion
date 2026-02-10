@@ -7,7 +7,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Loader2, Link2, RefreshCw, Unlink, Download, FileSpreadsheet, FileJson } from "lucide-react";
+import { Loader2, Link2, RefreshCw, Unlink, Download, FileSpreadsheet, FileJson, Sparkles } from "lucide-react";
 import { SiStrava } from "react-icons/si";
 import { useLocation, useSearch } from "wouter";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +34,8 @@ export default function Settings() {
   const [distanceUnit, setDistanceUnit] = useState("km");
   const [weeklyGoal, setWeeklyGoal] = useState("5");
   const [hasChanges, setHasChanges] = useState(false);
+  const [unstructuredCount, setUnstructuredCount] = useState<number | null>(null);
+  const [parseResults, setParseResults] = useState<{ success: number; failed: number } | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(search);
@@ -147,6 +149,50 @@ export default function Settings() {
       toast({
         title: "Sync Failed",
         description: "Failed to sync activities from Strava.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const findUnstructuredMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("GET", "/api/workouts/unstructured");
+      return response.json();
+    },
+    onSuccess: (data: any[]) => {
+      setUnstructuredCount(data.length);
+      toast({
+        title: "Search Complete",
+        description: `Found ${data.length} workouts without structured exercise data.`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Search Failed",
+        description: "Failed to find unstructured workouts.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const batchReparseMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/workouts/batch-reparse");
+      return response.json();
+    },
+    onSuccess: (data: { total: number; parsed: number; failed: number }) => {
+      setParseResults({ success: data.parsed, failed: data.failed });
+      queryClient.invalidateQueries({ queryKey: ["/api/timeline"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/workouts"] });
+      toast({
+        title: "Parsing Complete",
+        description: `Parsed ${data.parsed} workouts successfully. ${data.failed} could not be parsed.`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Parsing Failed",
+        description: "Failed to parse workouts with AI.",
         variant: "destructive",
       });
     },
@@ -361,6 +407,86 @@ export default function Settings() {
               </SelectContent>
             </Select>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5" />
+            Structure Old Workouts
+          </CardTitle>
+          <CardDescription>Use AI to convert free-text workout descriptions into structured exercise data</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {unstructuredCount === null && parseResults === null ? (
+            <div>
+              <p className="text-sm text-muted-foreground mb-4">
+                Find and parse unstructured workout descriptions to extract exercise data using AI.
+              </p>
+              <Button
+                onClick={() => findUnstructuredMutation.mutate()}
+                disabled={findUnstructuredMutation.isPending}
+                data-testid="button-find-unstructured"
+                variant="outline"
+              >
+                {findUnstructuredMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    Searching...
+                  </>
+                ) : (
+                  "Find Unstructured Workouts"
+                )}
+              </Button>
+            </div>
+          ) : null}
+
+          {unstructuredCount !== null && parseResults === null ? (
+            <div>
+              <p className="text-sm text-muted-foreground mb-4" data-testid="text-unstructured-count">
+                Found {unstructuredCount} workouts without structured exercise data
+              </p>
+              {unstructuredCount > 0 ? (
+                <Button
+                  onClick={() => batchReparseMutation.mutate()}
+                  disabled={batchReparseMutation.isPending}
+                  data-testid="button-batch-reparse"
+                >
+                  {batchReparseMutation.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      Parsing...
+                    </>
+                  ) : (
+                    "Parse All with AI"
+                  )}
+                </Button>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  All your workouts are already structured.
+                </p>
+              )}
+            </div>
+          ) : null}
+
+          {parseResults !== null ? (
+            <div>
+              <p className="text-sm text-muted-foreground mb-4" data-testid="text-parse-results">
+                Parsed {parseResults.success} workouts successfully. {parseResults.failed} could not be parsed.
+              </p>
+              <Button
+                onClick={() => {
+                  setUnstructuredCount(null);
+                  setParseResults(null);
+                }}
+                variant="outline"
+                size="sm"
+              >
+                Run Again
+              </Button>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 

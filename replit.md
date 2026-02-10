@@ -34,7 +34,8 @@ The frontend follows a streamlined page-based architecture:
 - **Landing**: Public page for unauthenticated users with login CTAs
 - **Timeline** (home): Unified chronological view with integrated AI Coach side panel - the single main screen experience
 - **Log Workout**: Manual workout entry form
-- **Settings**: User preferences and theme toggle
+- **Analytics**: Personal records, exercise progression charts, and volume analytics
+- **Settings**: User preferences, batch re-parse old workouts, theme toggle
 
 The Timeline consolidates training management and AI coaching into one view:
 - Toggleable AI Coach panel (side column on desktop, full-screen overlay on mobile)
@@ -59,6 +60,7 @@ The server handles API routes for training plans, plan days, workout logs, and A
   - Sessions table for session management
   - TrainingPlans, PlanDays, and WorkoutLogs tables - all linked to userId
   - ExerciseSets table linked to WorkoutLogs for structured exercise tracking (sets, reps, weight, distance, time)
+  - CustomExercises table (userId, name, category) to remember user's custom exercise names for future AI recognition
   - PlanDays include scheduledDate and status (planned, completed, missed, skipped)
   - Timeline is aggregated from scheduled plan days and workout logs, filtered by user
   - 40+ predefined exercises across 4 categories (hyrox_station, running, strength, conditioning) defined in shared/schema.ts
@@ -75,10 +77,11 @@ The storage layer uses an interface pattern (`IStorage`) with all methods requir
 
 ### AI Integration
 - **Provider**: Google Gemini API via `@google/genai` SDK
-- **Model**: gemini-2.5-flash
+- **Model**: gemini-3-flash-preview
 - **Use Cases**: 
   - AI training coach that provides Hyrox-specific advice, workout analysis, and pacing strategies
   - AI text-to-exercise parsing: converts free-text workout descriptions into structured per-set exercise data
+  - Custom exercise recognition: AI parser receives user's saved custom exercise names for better matching
 - **Implementation**: Server-side chat function with conversation history and personalized training context
 - **Training Context**: AI receives user's workout stats, completion rate, streak, exercise breakdown, structured exercise performance stats (max weight, best time, distances), and recent workouts with per-exercise details
 - **Text Parsing**: POST /api/parse-exercises accepts free text, passes user's weightUnit preference to Gemini for correct unit handling, validates/normalizes exercise names and categories on server side before returning structured data

@@ -11,6 +11,7 @@ import NotFound from "@/pages/not-found";
 import LogWorkout from "@/pages/LogWorkout";
 import Timeline from "@/pages/Timeline";
 import Settings from "@/pages/Settings";
+import Analytics from "@/pages/Analytics";
 import Landing from "@/pages/Landing";
 import { Loader2 } from "lucide-react";
 
@@ -19,6 +20,7 @@ function AuthenticatedRouter() {
     <Switch>
       <Route path="/" component={Timeline} />
       <Route path="/log" component={LogWorkout} />
+      <Route path="/analytics" component={Analytics} />
       <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>

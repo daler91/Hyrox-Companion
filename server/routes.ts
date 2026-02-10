@@ -287,11 +287,192 @@ export async function registerRoutes(
       const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
       const weightUnit = user?.weightUnit || "kg";
-      const exercises = await parseExercisesFromText(text.trim(), weightUnit);
+      const userCustomExercises = await storage.getCustomExercises(userId);
+      const customNames = userCustomExercises.map(e => e.name);
+      const exercises = await parseExercisesFromText(text.trim(), weightUnit, customNames);
       res.json(exercises);
     } catch (error) {
       console.error("Error parsing exercises:", error);
       res.status(500).json({ error: "Failed to parse exercises" });
+    }
+  });
+
+  app.get("/api/workouts/unstructured", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const workouts = await storage.getWorkoutsWithoutExerciseSets(userId);
+      res.json(workouts);
+    } catch (error) {
+      console.error("Error fetching unstructured workouts:", error);
+      res.status(500).json({ error: "Failed to fetch workouts" });
+    }
+  });
+
+  app.post("/api/workouts/:id/reparse", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const workoutId = req.params.id;
+      const workout = await storage.getWorkoutLog(workoutId, userId);
+      if (!workout) {
+        return res.status(404).json({ error: "Workout not found" });
+      }
+      const textToParse = [workout.mainWorkout, workout.accessory].filter(Boolean).join("\n");
+      if (!textToParse.trim()) {
+        return res.status(400).json({ error: "No text to parse" });
+      }
+      const user = await storage.getUser(userId);
+      const weightUnit = user?.weightUnit || "kg";
+      const exercises = await parseExercisesFromText(textToParse.trim(), weightUnit);
+      if (exercises.length === 0) {
+        return res.json({ exercises: [], saved: false });
+      }
+      const setRows = expandExercisesToSetRows(exercises, workoutId);
+      await storage.deleteExerciseSetsByWorkoutLog(workoutId);
+      await storage.createExerciseSets(setRows);
+      res.json({ exercises, saved: true, setCount: setRows.length });
+    } catch (error) {
+      console.error("Error re-parsing workout:", error);
+      res.status(500).json({ error: "Failed to re-parse workout" });
+    }
+  });
+
+  app.post("/api/workouts/batch-reparse", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const workouts = await storage.getWorkoutsWithoutExerciseSets(userId);
+      const user = await storage.getUser(userId);
+      const weightUnit = user?.weightUnit || "kg";
+
+      let parsed = 0;
+      let failed = 0;
+      for (const workout of workouts) {
+        try {
+          const textToParse = [workout.mainWorkout, workout.accessory].filter(Boolean).join("\n");
+          if (!textToParse.trim()) { failed++; continue; }
+          const exercises = await parseExercisesFromText(textToParse.trim(), weightUnit);
+          if (exercises.length === 0) { failed++; continue; }
+          const setRows = expandExercisesToSetRows(exercises, workout.id);
+          await storage.createExerciseSets(setRows);
+          parsed++;
+        } catch {
+          failed++;
+        }
+      }
+      res.json({ total: workouts.length, parsed, failed });
+    } catch (error) {
+      console.error("Batch reparse error:", error);
+      res.status(500).json({ error: "Failed to batch re-parse workouts" });
+    }
+  });
+
+  app.get("/api/custom-exercises", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const exercises = await storage.getCustomExercises(userId);
+      res.json(exercises);
+    } catch (error) {
+      console.error("Error fetching custom exercises:", error);
+      res.status(500).json({ error: "Failed to fetch custom exercises" });
+    }
+  });
+
+  app.post("/api/custom-exercises", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { name, category } = req.body as { name: string; category?: string };
+      if (!name || !name.trim()) {
+        return res.status(400).json({ error: "Name is required" });
+      }
+      const exercise = await storage.upsertCustomExercise({
+        userId,
+        name: name.trim(),
+        category: category || "conditioning",
+      });
+      res.json(exercise);
+    } catch (error) {
+      console.error("Error saving custom exercise:", error);
+      res.status(500).json({ error: "Failed to save custom exercise" });
+    }
+  });
+
+  app.get("/api/personal-records", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const allSets = await storage.getAllExerciseSetsWithDates(userId);
+
+      const prs: Record<string, { category: string; customLabel?: string | null; maxWeight?: { value: number; date: string; workoutLogId: string }; maxDistance?: { value: number; date: string; workoutLogId: string }; bestTime?: { value: number; date: string; workoutLogId: string } }> = {};
+
+      for (const set of allSets) {
+        if (!prs[set.exerciseName]) prs[set.exerciseName] = { category: set.category, customLabel: set.customLabel };
+        const pr = prs[set.exerciseName];
+        if (set.weight && (!pr.maxWeight || set.weight > pr.maxWeight.value)) {
+          pr.maxWeight = { value: set.weight, date: set.date, workoutLogId: set.workoutLogId };
+        }
+        if (set.distance && (!pr.maxDistance || set.distance > pr.maxDistance.value)) {
+          pr.maxDistance = { value: set.distance, date: set.date, workoutLogId: set.workoutLogId };
+        }
+        if (set.time && set.time > 0 && (!pr.bestTime || set.time < pr.bestTime.value)) {
+          pr.bestTime = { value: set.time, date: set.date, workoutLogId: set.workoutLogId };
+        }
+      }
+
+      res.json(prs);
+    } catch (error) {
+      console.error("Error fetching PRs:", error);
+      res.status(500).json({ error: "Failed to fetch personal records" });
+    }
+  });
+
+  app.get("/api/exercise-analytics", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const allSets = await storage.getAllExerciseSetsWithDates(userId);
+
+      const byExercise: Record<string, Array<{ date: string; workoutLogId: string; setNumber: number; reps?: number | null; weight?: number | null; distance?: number | null; time?: number | null }>> = {};
+
+      for (const set of allSets) {
+        if (!byExercise[set.exerciseName]) byExercise[set.exerciseName] = [];
+        byExercise[set.exerciseName].push({
+          date: set.date,
+          workoutLogId: set.workoutLogId,
+          setNumber: set.setNumber,
+          reps: set.reps,
+          weight: set.weight,
+          distance: set.distance,
+          time: set.time,
+        });
+      }
+
+      const analytics: Record<string, Array<{ date: string; totalVolume: number; maxWeight: number; totalSets: number; totalReps: number; totalDistance: number }>> = {};
+
+      for (const [exercise, sets] of Object.entries(byExercise)) {
+        const byDate: Record<string, typeof sets> = {};
+        for (const s of sets) {
+          if (!byDate[s.date]) byDate[s.date] = [];
+          byDate[s.date].push(s);
+        }
+
+        analytics[exercise] = Object.entries(byDate)
+          .map(([date, daySets]) => {
+            let totalVolume = 0;
+            let maxWeight = 0;
+            let totalReps = 0;
+            let totalDistance = 0;
+            for (const s of daySets) {
+              if (s.weight && s.reps) totalVolume += s.weight * s.reps;
+              if (s.weight && s.weight > maxWeight) maxWeight = s.weight;
+              if (s.reps) totalReps += s.reps;
+              if (s.distance) totalDistance += s.distance;
+            }
+            return { date, totalVolume, maxWeight, totalSets: daySets.length, totalReps, totalDistance };
+          })
+          .sort((a, b) => a.date.localeCompare(b.date));
+      }
+
+      res.json(analytics);
+    } catch (error) {
+      console.error("Error fetching exercise analytics:", error);
+      res.status(500).json({ error: "Failed to fetch exercise analytics" });
     }
   });
 
@@ -727,6 +908,13 @@ export async function registerRoutes(
       if (exercises && Array.isArray(exercises) && exercises.length > 0) {
         const exerciseSetData = expandExercisesToSetRows(exercises, log.id);
         const savedSets = await storage.createExerciseSets(exerciseSetData);
+
+        for (const ex of exercises) {
+          if (ex.exerciseName === "custom" && ex.customLabel) {
+            await storage.upsertCustomExercise({ userId, name: ex.customLabel, category: ex.category || "conditioning" });
+          }
+        }
+
         return res.json({ ...log, exerciseSets: savedSets });
       }
 
@@ -756,6 +944,13 @@ export async function registerRoutes(
         if (exercises.length > 0) {
           const exerciseSetData = expandExercisesToSetRows(exercises, log.id);
           const savedSets = await storage.createExerciseSets(exerciseSetData);
+
+          for (const ex of exercises) {
+            if (ex.exerciseName === "custom" && ex.customLabel) {
+              await storage.upsertCustomExercise({ userId, name: ex.customLabel, category: ex.category || "conditioning" });
+            }
+          }
+
           return res.json({ ...log, exerciseSets: savedSets });
         }
       }
@@ -813,22 +1008,41 @@ export async function registerRoutes(
       const timeline = await storage.getTimeline(userId);
       const plans = await storage.listTrainingPlans(userId);
       
+      const allExerciseSets = await storage.getAllExerciseSetsWithDates(userId);
+
       if (format === "json") {
         res.setHeader("Content-Type", "application/json");
         res.setHeader("Content-Disposition", "attachment; filename=hyrox-training-data.json");
-        return res.json({ timeline, plans, exportedAt: new Date().toISOString() });
+        const workoutLogTitles: Record<string, string> = {};
+        for (const entry of timeline) {
+          if (entry.workoutLogId) workoutLogTitles[entry.workoutLogId] = entry.focus || "";
+        }
+        const exerciseSetRows = allExerciseSets.map(s => ({
+          date: s.date,
+          workoutTitle: workoutLogTitles[s.workoutLogId] || "",
+          exerciseName: s.exerciseName,
+          customLabel: s.customLabel,
+          category: s.category,
+          setNumber: s.setNumber,
+          reps: s.reps,
+          weight: s.weight,
+          distance: s.distance,
+          time: s.time,
+          notes: s.notes,
+        }));
+        return res.json({ timeline, plans, exerciseSets: exerciseSetRows, exportedAt: new Date().toISOString() });
       }
       
-      // CSV format
+      const escapeCsv = (val: string | null | undefined) => {
+        if (val == null) return "";
+        const str = String(val).replace(/"/g, '""');
+        return str.includes(",") || str.includes("\n") || str.includes('"') ? `"${str}"` : str;
+      };
+
+      // CSV format - workouts summary
       const csvRows = ["Date,Type,Status,Focus,Main Workout,Accessory,Notes,Duration,RPE"];
       
       for (const entry of timeline) {
-        const escapeCsv = (val: string | null | undefined) => {
-          if (val == null) return "";
-          const str = String(val).replace(/"/g, '""');
-          return str.includes(",") || str.includes("\n") || str.includes('"') ? `"${str}"` : str;
-        };
-        
         csvRows.push([
           escapeCsv(entry.date),
           escapeCsv(entry.type),
@@ -840,6 +1054,31 @@ export async function registerRoutes(
           entry.duration != null ? String(entry.duration) : "",
           entry.rpe != null ? String(entry.rpe) : "",
         ].join(","));
+      }
+
+      // Add exercise sets section
+      if (allExerciseSets.length > 0) {
+        csvRows.push("");
+        csvRows.push("--- EXERCISE SETS (Per-Set Data) ---");
+        csvRows.push("Date,Workout,Exercise,Category,Set #,Reps,Weight,Distance (m),Time (min),Notes");
+        const workoutLogTitles: Record<string, string> = {};
+        for (const entry of timeline) {
+          if (entry.workoutLogId) workoutLogTitles[entry.workoutLogId] = entry.focus || "";
+        }
+        for (const s of allExerciseSets) {
+          csvRows.push([
+            escapeCsv(s.date),
+            escapeCsv(workoutLogTitles[s.workoutLogId] || ""),
+            escapeCsv(s.customLabel || s.exerciseName),
+            escapeCsv(s.category),
+            String(s.setNumber),
+            s.reps != null ? String(s.reps) : "",
+            s.weight != null ? String(s.weight) : "",
+            s.distance != null ? String(s.distance) : "",
+            s.time != null ? String(s.time) : "",
+            escapeCsv(s.notes),
+          ].join(","));
+        }
       }
       
       res.setHeader("Content-Type", "text/csv");

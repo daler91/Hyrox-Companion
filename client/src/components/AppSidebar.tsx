@@ -11,13 +11,14 @@ import {
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Settings, CalendarRange, LogOut } from "lucide-react";
+import { Settings, CalendarRange, LogOut, BarChart3 } from "lucide-react";
 import { useLocation, Link } from "wouter";
 import { ThemeToggle } from "./ThemeToggle";
 import { useAuth } from "@/hooks/useAuth";
 
 const menuItems = [
   { title: "Training", url: "/", icon: CalendarRange },
+  { title: "Analytics", url: "/analytics", icon: BarChart3 },
 ];
 
 export function AppSidebar() {
