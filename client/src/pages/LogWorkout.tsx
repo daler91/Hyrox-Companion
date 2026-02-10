@@ -43,6 +43,7 @@ function exerciseToPayload(ex: StructuredExercise) {
     exerciseName: ex.exerciseName,
     customLabel: ex.customLabel,
     category: ex.category,
+    confidence: ex.confidence,
     sets: (ex.sets || []).map(s => ({
       setNumber: s.setNumber,
       reps: s.reps,
@@ -71,7 +72,7 @@ export default function LogWorkout() {
       const response = await apiRequest("POST", "/api/parse-exercises", { text });
       return response.json();
     },
-    onSuccess: (parsed: Array<{ exerciseName: string; category: string; customLabel?: string; sets: Array<{ setNumber: number; reps?: number; weight?: number; distance?: number; time?: number }> }>) => {
+    onSuccess: (parsed: Array<{ exerciseName: string; category: string; customLabel?: string; confidence?: number; sets: Array<{ setNumber: number; reps?: number; weight?: number; distance?: number; time?: number }> }>) => {
       if (parsed.length === 0) {
         toast({
           title: "No exercises found",
@@ -106,6 +107,7 @@ export default function LogWorkout() {
           exerciseName: key,
           category: isKnown ? EXERCISE_DEFINITIONS[key].category : ex.category,
           customLabel: isKnown ? undefined : (ex.customLabel || ex.exerciseName),
+          confidence: ex.confidence,
           sets: ex.sets.map((s, i) => ({
             setNumber: s.setNumber || i + 1,
             reps: s.reps,
@@ -120,9 +122,12 @@ export default function LogWorkout() {
       setExerciseData(newData);
       setUseTextMode(false);
 
+      const lowConfCount = parsed.filter(e => e.confidence != null && e.confidence < 80).length;
       toast({
         title: "Exercises parsed",
-        description: `Found ${parsed.length} exercise${parsed.length !== 1 ? "s" : ""}. Review the details below.`,
+        description: lowConfCount > 0
+          ? `Found ${parsed.length} exercise${parsed.length !== 1 ? "s" : ""}. ${lowConfCount} may need review (low confidence).`
+          : `Found ${parsed.length} exercise${parsed.length !== 1 ? "s" : ""}. Review the details below.`,
       });
     },
     onError: () => {

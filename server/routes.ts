@@ -24,6 +24,7 @@ function expandExercisesToSetRows(exercises: any[], workoutLogId: string): Inser
           weight: set.weight ?? null,
           distance: set.distance ?? null,
           time: set.time ?? null,
+          confidence: ex.confidence ?? null,
           notes: set.notes || null,
           sortOrder: sortOrder++,
         });

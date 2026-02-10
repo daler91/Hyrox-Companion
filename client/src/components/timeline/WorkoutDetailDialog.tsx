@@ -75,6 +75,7 @@ interface GroupedExercise {
   exerciseName: string;
   customLabel?: string | null;
   category: string;
+  confidence?: number | null;
   sets: ExerciseSet[];
 }
 
@@ -82,9 +83,11 @@ function groupExerciseSets(dbSets: ExerciseSet[]): GroupedExercise[] {
   const groups: GroupedExercise[] = [];
   const seen = new Map<string, GroupedExercise>();
   for (const s of dbSets) {
-    const key = s.exerciseName;
+    const key = s.exerciseName === "custom" && s.customLabel
+      ? `custom:${s.customLabel}`
+      : s.exerciseName;
     if (!seen.has(key)) {
-      const group: GroupedExercise = { exerciseName: s.exerciseName, customLabel: s.customLabel, category: s.category, sets: [] };
+      const group: GroupedExercise = { exerciseName: s.exerciseName, customLabel: s.customLabel, category: s.category, confidence: s.confidence, sets: [] };
       seen.set(key, group);
       groups.push(group);
     }
@@ -135,6 +138,7 @@ function exerciseSetsToStructured(dbSets: ExerciseSet[]): { names: ExerciseName[
       exerciseName: exName,
       category: group.category,
       customLabel: group.customLabel || undefined,
+      confidence: group.confidence ?? undefined,
       sets: group.sets.map(s => ({
         setNumber: s.setNumber,
         reps: s.reps ?? undefined,
@@ -236,7 +240,7 @@ export default function WorkoutDetailDialog({
       const response = await apiRequest("POST", "/api/parse-exercises", { text });
       return response.json();
     },
-    onSuccess: (parsed: Array<{ exerciseName: string; category: string; customLabel?: string; sets: Array<{ setNumber: number; reps?: number; weight?: number; distance?: number; time?: number }> }>) => {
+    onSuccess: (parsed: Array<{ exerciseName: string; category: string; customLabel?: string; confidence?: number; sets: Array<{ setNumber: number; reps?: number; weight?: number; distance?: number; time?: number }> }>) => {
       if (parsed.length === 0) {
         toast({ title: "No exercises found", description: "AI couldn't identify any exercises. Try being more specific.", variant: "destructive" });
         return;
@@ -260,13 +264,20 @@ export default function WorkoutDetailDialog({
           exerciseName: key,
           category: isKnown ? EXERCISE_DEFINITIONS[key].category : ex.category,
           customLabel: isKnown ? undefined : (ex.customLabel || ex.exerciseName),
+          confidence: ex.confidence,
           sets: ex.sets.map((s, i) => ({ setNumber: s.setNumber || i + 1, reps: s.reps, weight: s.weight, distance: s.distance, time: s.time })),
         };
       }
       setEditExercises(newSelected);
       setEditExerciseData(newData);
       setUseTextMode(false);
-      toast({ title: "Exercises parsed", description: `Found ${parsed.length} exercise${parsed.length !== 1 ? "s" : ""}. Review below.` });
+      const lowConfCount = parsed.filter(e => e.confidence != null && e.confidence < 80).length;
+      toast({
+        title: "Exercises parsed",
+        description: lowConfCount > 0
+          ? `Found ${parsed.length} exercise${parsed.length !== 1 ? "s" : ""}. ${lowConfCount} may need review (low confidence).`
+          : `Found ${parsed.length} exercise${parsed.length !== 1 ? "s" : ""}. Review below.`,
+      });
     },
     onError: () => {
       toast({ title: "Parsing failed", description: "AI couldn't parse your text. Try again or enter manually.", variant: "destructive" });
@@ -339,6 +350,7 @@ export default function WorkoutDetailDialog({
           exerciseName: ex.exerciseName,
           customLabel: ex.customLabel,
           category: ex.category,
+          confidence: ex.confidence,
           sets: (ex.sets || []).map(s => ({
             setNumber: s.setNumber,
             reps: s.reps,

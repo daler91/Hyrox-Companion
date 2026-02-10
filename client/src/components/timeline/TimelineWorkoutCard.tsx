@@ -56,6 +56,7 @@ interface GroupedExercise {
   exerciseName: string;
   customLabel?: string | null;
   category: string;
+  confidence?: number | null;
   sets: ExerciseSet[];
 }
 
@@ -67,7 +68,7 @@ function groupExerciseSets(dbSets: ExerciseSet[]): GroupedExercise[] {
       ? `custom:${s.customLabel}`
       : s.exerciseName;
     if (!seen.has(key)) {
-      const group: GroupedExercise = { exerciseName: s.exerciseName, customLabel: s.customLabel, category: s.category, sets: [] };
+      const group: GroupedExercise = { exerciseName: s.exerciseName, customLabel: s.customLabel, category: s.category, confidence: s.confidence, sets: [] };
       seen.set(key, group);
       groups.push(group);
     }
@@ -241,15 +242,25 @@ export default function TimelineWorkoutCard({
                 {groupExerciseSets(entry.exerciseSets).map((group, idx) => {
                   const isCustom = group.exerciseName === "custom";
                   const isPR = hasPRInWorkout(group, entry.workoutLogId ?? undefined, personalRecords);
+                  const conf = group.confidence;
+                  const showConfidence = conf != null && conf < 90;
+                  const confColor = conf != null
+                    ? conf >= 80 ? "text-green-500" : conf >= 60 ? "text-yellow-500" : "text-red-500"
+                    : "";
                   return (
                     <Badge
                       key={`${group.exerciseName}-${idx}`}
                       variant="secondary"
                       className={`text-xs font-normal ${categoryChipColors[group.category] || ""} ${isPR ? "ring-1 ring-yellow-500/50" : ""}`}
-                      data-testid={isPR ? `badge-pr-${entry.id}-${idx}` : undefined}
+                      data-testid={isPR ? `badge-pr-${entry.id}-${idx}` : `badge-exercise-${entry.id}-${idx}`}
                     >
                       {isPR && <Trophy className="h-3 w-3 mr-0.5 text-yellow-500" />}
                       {formatGroupedChip(group, weightLabel, distanceUnit)}
+                      {showConfidence && (
+                        <span className={`ml-1 text-[10px] font-medium ${confColor}`} data-testid={`confidence-score-${entry.id}-${idx}`}>
+                          {conf}%
+                        </span>
+                      )}
                       {isCustom && <HelpCircle className="h-3 w-3 ml-0.5 text-muted-foreground/60" />}
                     </Badge>
                   );

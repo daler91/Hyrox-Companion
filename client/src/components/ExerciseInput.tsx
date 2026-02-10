@@ -3,7 +3,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { X, Timer, Ruler, Hash, Weight, Pencil, Plus, Minus, Copy } from "lucide-react";
+import { X, Timer, Ruler, Hash, Weight, Pencil, Plus, Minus, Copy, AlertTriangle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
 
 export interface SetData {
@@ -19,6 +20,7 @@ export interface StructuredExercise {
   exerciseName: ExerciseName;
   category: string;
   customLabel?: string;
+  confidence?: number;
   sets: SetData[];
 }
 
@@ -113,9 +115,25 @@ export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg",
     <Card className={`border-l-4 ${borderColor} rounded-l-none`} data-testid={`input-exercise-${exercise.exerciseName}`}>
       <CardContent className="p-4">
         <div className="flex items-center justify-between gap-2 mb-4">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <h4 className="font-semibold">{displayLabel}</h4>
             <span className="text-xs text-muted-foreground">{sets.length} {sets.length === 1 ? "set" : "sets"}</span>
+            {exercise.confidence != null && exercise.confidence < 90 && (
+              <Badge
+                variant="secondary"
+                className={`text-[10px] ${
+                  exercise.confidence >= 80
+                    ? "bg-green-500/10 text-green-600 dark:text-green-400"
+                    : exercise.confidence >= 60
+                    ? "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
+                    : "bg-red-500/10 text-red-600 dark:text-red-400"
+                }`}
+                data-testid={`badge-confidence-${exercise.exerciseName}`}
+              >
+                {exercise.confidence < 60 && <AlertTriangle className="h-3 w-3 mr-0.5" />}
+                AI {exercise.confidence}%
+              </Badge>
+            )}
           </div>
           <Button size="icon" variant="ghost" onClick={onRemove} data-testid={`button-remove-${exercise.exerciseName}`}>
             <X className="h-4 w-4" />

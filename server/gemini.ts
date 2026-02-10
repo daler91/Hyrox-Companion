@@ -293,6 +293,7 @@ export interface ParsedExercise {
   exerciseName: string;
   category: string;
   customLabel?: string;
+  confidence?: number;
   sets: Array<{
     setNumber: number;
     reps?: number;
@@ -319,10 +320,18 @@ Return ONLY a valid JSON array with no markdown formatting. Each element should 
   "exerciseName": "<key from list above or 'custom'>",
   "category": "<category>",
   "customLabel": "<only if exerciseName is 'custom', the actual exercise name>",
+  "confidence": <integer 0-100 representing how confident you are in the exercise mapping>,
   "sets": [
     { "setNumber": 1, "reps": <number or null>, "weight": <number or null>, "distance": <number or null>, "time": <number or null> }
   ]
 }
+
+CONFIDENCE SCORING:
+- 95-100: Exact match to a known exercise (e.g. "back squat" -> back_squat)
+- 80-94: Strong match with minor ambiguity (e.g. "squats" -> back_squat)
+- 60-79: Reasonable guess but could be wrong (e.g. "presses" -> bench_press vs overhead_press)
+- 40-59: Weak match, mapped to custom (e.g. unfamiliar abbreviation)
+- 0-39: Very uncertain, likely custom exercise with unclear details
 
 IMPORTANT RULES:
 1. For "4x8 back squat at 70kg", create 4 set objects each with reps=8, weight=70
@@ -383,10 +392,12 @@ export async function parseExercisesFromText(text: string, weightUnit: string = 
     ).map(ex => {
       const isKnown = VALID_EXERCISE_NAMES.has(ex.exerciseName);
       const validCategory = VALID_CATEGORIES.has(ex.category);
+      const confidence = typeof ex.confidence === "number" ? Math.min(100, Math.max(0, Math.round(ex.confidence))) : (isKnown ? 95 : 50);
       return {
         exerciseName: isKnown ? ex.exerciseName : "custom",
         category: validCategory ? ex.category : "conditioning",
         customLabel: isKnown ? ex.customLabel : (ex.customLabel || ex.exerciseName),
+        confidence,
         sets: ex.sets.map((s, i) => ({
           ...s,
           setNumber: s.setNumber || i + 1,

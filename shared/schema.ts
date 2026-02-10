@@ -203,6 +203,7 @@ export const exerciseSets = pgTable("exercise_sets", {
   distance: real("distance"),
   time: real("time"),
   notes: text("notes"),
+  confidence: integer("confidence"),
   sortOrder: integer("sort_order").default(0),
 }, (table) => [
   index("idx_exercise_sets_workout_log_id").on(table.workoutLogId),
