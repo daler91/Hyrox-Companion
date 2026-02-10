@@ -78,6 +78,10 @@ export default function Timeline() {
     queryKey: ["/api/plans"],
   });
 
+  const { data: personalRecords } = useQuery<Record<string, any>>({
+    queryKey: ["/api/personal-records"],
+  });
+
   const { data: timelineData = [], isLoading: timelineLoading } = useQuery<TimelineEntry[]>({
     queryKey: ["/api/timeline", selectedPlanId],
     queryFn: async () => {
@@ -688,6 +692,7 @@ export default function Timeline() {
               isCombining={!!combiningEntry}
               combiningEntryId={combiningEntry?.id || null}
               combiningEntryDate={combiningEntry?.date || null}
+              personalRecords={personalRecords}
             />
           ))}
 

@@ -13,6 +13,7 @@ interface TimelineDateGroupProps {
   isCombining?: boolean;
   combiningEntryId?: string | null;
   combiningEntryDate?: string | null;
+  personalRecords?: Record<string, any>;
 }
 
 function getDateLabel(dateObj: Date) {
@@ -23,7 +24,7 @@ function getDateLabel(dateObj: Date) {
 }
 
 const TimelineDateGroup = forwardRef<HTMLDivElement, TimelineDateGroupProps>(
-  ({ date, entries, onMarkComplete, onClick, onCombineSelect, isCombining, combiningEntryId, combiningEntryDate }, ref) => {
+  ({ date, entries, onMarkComplete, onClick, onCombineSelect, isCombining, combiningEntryId, combiningEntryDate, personalRecords }, ref) => {
     const dateObj = parseISO(date);
     const isTodayDate = isToday(dateObj);
     const isPast = isBefore(dateObj, new Date()) && !isTodayDate;
@@ -68,6 +69,7 @@ const TimelineDateGroup = forwardRef<HTMLDivElement, TimelineDateGroupProps>(
               isCombining={isCombining}
               combiningEntryId={combiningEntryId}
               combiningEntryDate={combiningEntryDate}
+              personalRecords={personalRecords}
             />
           ))}
         </div>

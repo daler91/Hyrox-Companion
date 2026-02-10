@@ -403,8 +403,11 @@ export async function registerRoutes(
       const prs: Record<string, { category: string; customLabel?: string | null; maxWeight?: { value: number; date: string; workoutLogId: string }; maxDistance?: { value: number; date: string; workoutLogId: string }; bestTime?: { value: number; date: string; workoutLogId: string } }> = {};
 
       for (const set of allSets) {
-        if (!prs[set.exerciseName]) prs[set.exerciseName] = { category: set.category, customLabel: set.customLabel };
-        const pr = prs[set.exerciseName];
+        const prKey = set.exerciseName === "custom" && set.customLabel
+          ? `custom:${set.customLabel}`
+          : set.exerciseName;
+        if (!prs[prKey]) prs[prKey] = { category: set.category, customLabel: set.customLabel };
+        const pr = prs[prKey];
         if (set.weight && (!pr.maxWeight || set.weight > pr.maxWeight.value)) {
           pr.maxWeight = { value: set.weight, date: set.date, workoutLogId: set.workoutLogId };
         }
@@ -431,8 +434,11 @@ export async function registerRoutes(
       const byExercise: Record<string, Array<{ date: string; workoutLogId: string; setNumber: number; reps?: number | null; weight?: number | null; distance?: number | null; time?: number | null }>> = {};
 
       for (const set of allSets) {
-        if (!byExercise[set.exerciseName]) byExercise[set.exerciseName] = [];
-        byExercise[set.exerciseName].push({
+        const exerciseKey = set.exerciseName === "custom" && set.customLabel
+          ? `custom:${set.customLabel}`
+          : set.exerciseName;
+        if (!byExercise[exerciseKey]) byExercise[exerciseKey] = [];
+        byExercise[exerciseKey].push({
           date: set.date,
           workoutLogId: set.workoutLogId,
           setNumber: set.setNumber,

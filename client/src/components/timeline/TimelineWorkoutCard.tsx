@@ -12,11 +12,27 @@ import {
   TrendingUp,
   Circle,
   BookOpen,
+  HelpCircle,
+  Trophy,
 } from "lucide-react";
 import { SiStrava } from "react-icons/si";
 import { type TimelineEntry, type ExerciseSet, EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { formatSpeed } from "@shared/unitConversion";
+
+interface PRValue {
+  value: number;
+  date: string;
+  workoutLogId: string;
+}
+
+interface PREntry {
+  category: string;
+  customLabel?: string | null;
+  maxWeight?: PRValue;
+  maxDistance?: PRValue;
+  bestTime?: PRValue;
+}
 
 interface TimelineWorkoutCardProps {
   entry: TimelineEntry;
@@ -26,6 +42,7 @@ interface TimelineWorkoutCardProps {
   isCombining?: boolean;
   combiningEntryId?: string | null;
   combiningEntryDate?: string | null;
+  personalRecords?: Record<string, PREntry>;
 }
 
 const categoryChipColors: Record<string, string> = {
@@ -46,7 +63,9 @@ function groupExerciseSets(dbSets: ExerciseSet[]): GroupedExercise[] {
   const groups: GroupedExercise[] = [];
   const seen = new Map<string, GroupedExercise>();
   for (const s of dbSets) {
-    const key = s.exerciseName;
+    const key = s.exerciseName === "custom" && s.customLabel
+      ? `custom:${s.customLabel}`
+      : s.exerciseName;
     if (!seen.has(key)) {
       const group: GroupedExercise = { exerciseName: s.exerciseName, customLabel: s.customLabel, category: s.category, sets: [] };
       seen.set(key, group);
@@ -78,6 +97,20 @@ function formatGroupedChip(group: GroupedExercise, weightUnit: string, distanceU
   if (firstSet.distance) parts.push(`${firstSet.distance}${dLabel}`);
   if (firstSet.time) parts.push(`${firstSet.time}min`);
   return parts.length > 0 ? `${name} ${parts.join(" ")}` : name;
+}
+
+function hasPRInWorkout(group: GroupedExercise, workoutLogId: string | undefined, prs?: Record<string, PREntry>): boolean {
+  if (!prs || !workoutLogId) return false;
+  const prKey = group.exerciseName === "custom" && group.customLabel
+    ? `custom:${group.customLabel}`
+    : group.exerciseName;
+  const pr = prs[prKey];
+  if (!pr) return false;
+  return (
+    (pr.maxWeight?.workoutLogId === workoutLogId) ||
+    (pr.maxDistance?.workoutLogId === workoutLogId) ||
+    (pr.bestTime?.workoutLogId === workoutLogId)
+  );
 }
 
 function getStatusBadge(status: string) {
@@ -123,6 +156,7 @@ export default function TimelineWorkoutCard({
   isCombining,
   combiningEntryId,
   combiningEntryDate,
+  personalRecords,
 }: TimelineWorkoutCardProps) {
   const { distanceUnit, weightUnit, weightLabel } = useUnitPreferences();
   
@@ -204,15 +238,22 @@ export default function TimelineWorkoutCard({
             </div>
             {entry.exerciseSets && entry.exerciseSets.length > 0 ? (
               <div className="flex flex-wrap gap-1.5 mb-1" data-testid={`exercise-chips-${entry.id}`}>
-                {groupExerciseSets(entry.exerciseSets).map((group, idx) => (
-                  <Badge
-                    key={`${group.exerciseName}-${idx}`}
-                    variant="secondary"
-                    className={`text-xs font-normal ${categoryChipColors[group.category] || ""}`}
-                  >
-                    {formatGroupedChip(group, weightLabel, distanceUnit)}
-                  </Badge>
-                ))}
+                {groupExerciseSets(entry.exerciseSets).map((group, idx) => {
+                  const isCustom = group.exerciseName === "custom";
+                  const isPR = hasPRInWorkout(group, entry.workoutLogId ?? undefined, personalRecords);
+                  return (
+                    <Badge
+                      key={`${group.exerciseName}-${idx}`}
+                      variant="secondary"
+                      className={`text-xs font-normal ${categoryChipColors[group.category] || ""} ${isPR ? "ring-1 ring-yellow-500/50" : ""}`}
+                      data-testid={isPR ? `badge-pr-${entry.id}-${idx}` : undefined}
+                    >
+                      {isPR && <Trophy className="h-3 w-3 mr-0.5 text-yellow-500" />}
+                      {formatGroupedChip(group, weightLabel, distanceUnit)}
+                      {isCustom && <HelpCircle className="h-3 w-3 ml-0.5 text-muted-foreground/60" />}
+                    </Badge>
+                  );
+                })}
               </div>
             ) : (
               <p className="text-sm text-muted-foreground mb-1">

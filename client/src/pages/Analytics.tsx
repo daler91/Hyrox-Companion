@@ -56,6 +56,7 @@ const categoryLabels: Record<string, string> = {
 };
 
 function getExerciseLabel(name: string, customLabel?: string | null): string {
+  if (name.startsWith("custom:")) return name.slice(7);
   if (name === "custom" && customLabel) return customLabel;
   const def = EXERCISE_DEFINITIONS[name as ExerciseName];
   return def?.label || name;
@@ -141,7 +142,7 @@ export default function Analytics() {
   const availableExercises = useMemo(() => {
     if (!personalRecords) return [];
     return personalRecords.map(pr => ({
-      value: pr.exerciseName === "custom" ? `custom:${pr.customLabel}` : pr.exerciseName,
+      value: pr.exerciseName,
       label: getExerciseLabel(pr.exerciseName, pr.customLabel),
       category: pr.category,
     }));
@@ -149,8 +150,7 @@ export default function Analytics() {
 
   const analyticsData = useMemo(() => {
     if (!allAnalytics || !selectedExercise) return null;
-    const exerciseKey = selectedExercise.startsWith("custom:") ? "custom" : selectedExercise;
-    const data = allAnalytics[exerciseKey];
+    const data = allAnalytics[selectedExercise];
     if (!data || data.length === 0) return null;
     return { data };
   }, [allAnalytics, selectedExercise]);
