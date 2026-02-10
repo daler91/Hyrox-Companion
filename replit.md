@@ -11,7 +11,9 @@ HyroxTracker is a training planning and logging application for Hyrox athletes. 
 - **Status Management**: Track planned, completed, missed, and skipped workouts
 - **AI Coach**: Chat with Gemini-powered coach that analyzes your personal training data for Hyrox-specific advice
 - **AI Workout Suggestions**: Timeline page offers AI-powered suggestions to optimize upcoming workouts based on past training history
-- **AI Text-to-Exercise Parsing**: Free text workout descriptions (e.g. "4x8 back squat at 70kg") are parsed by Gemini into structured per-set exercise data for review before saving
+- **AI Text-to-Exercise Parsing**: Free text workout descriptions (e.g. "4x8 back squat at 70kg") are parsed by Gemini into structured per-set exercise data with confidence scores (0-100) for review before saving
+- **Parse Confidence Scores**: Each AI-parsed exercise shows a confidence percentage indicating how certain the AI is about the exercise mapping. Scores below 90 show colored badges (green 80-89, yellow 60-79, red <60)
+- **PR Detection**: Personal records are automatically detected per exercise (heaviest weight, fastest time, longest distance) and shown with trophy badges on timeline workout cards
 - **Filtering & Search**: Filter timeline by status (all, planned, completed)
 
 The design follows premium fitness app patterns (Strava, TrainingPeaks, Whoop) with focus on data clarity and athletic performance tracking.
@@ -59,7 +61,7 @@ The server handles API routes for training plans, plan days, workout logs, and A
   - Users table with Replit Auth profile data
   - Sessions table for session management
   - TrainingPlans, PlanDays, and WorkoutLogs tables - all linked to userId
-  - ExerciseSets table linked to WorkoutLogs for structured exercise tracking (sets, reps, weight, distance, time)
+  - ExerciseSets table linked to WorkoutLogs for structured exercise tracking (sets, reps, weight, distance, time, confidence score)
   - CustomExercises table (userId, name, category) to remember user's custom exercise names for future AI recognition
   - PlanDays include scheduledDate and status (planned, completed, missed, skipped)
   - Timeline is aggregated from scheduled plan days and workout logs, filtered by user

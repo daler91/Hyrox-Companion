@@ -127,15 +127,17 @@ function formatGroupedChip(group: GroupedExercise, weightUnit: string, distanceU
   return parts.length > 0 ? `${name} ${parts.join(" ")}` : name;
 }
 
-function exerciseSetsToStructured(dbSets: ExerciseSet[]): { names: ExerciseName[]; data: Record<string, StructuredExercise> } {
+function exerciseSetsToStructured(dbSets: ExerciseSet[]): { names: string[]; data: Record<string, StructuredExercise> } {
   const groups = groupExerciseSets(dbSets);
-  const names: ExerciseName[] = [];
+  const names: string[] = [];
   const data: Record<string, StructuredExercise> = {};
   for (const group of groups) {
-    const exName = group.exerciseName as ExerciseName;
-    names.push(exName);
-    data[exName] = {
-      exerciseName: exName,
+    const key = group.exerciseName === "custom" && group.customLabel
+      ? `custom:${group.customLabel}`
+      : group.exerciseName;
+    names.push(key);
+    data[key] = {
+      exerciseName: group.exerciseName as ExerciseName,
       category: group.category,
       customLabel: group.customLabel || undefined,
       confidence: group.confidence ?? undefined,
@@ -209,7 +211,7 @@ export default function WorkoutDetailDialog({
     accessory: "",
     notes: "",
   });
-  const [editExercises, setEditExercises] = useState<ExerciseName[]>([]);
+  const [editExercises, setEditExercises] = useState<string[]>([]);
   const [editExerciseData, setEditExerciseData] = useState<Record<string, StructuredExercise>>({});
   const hasStructuredData = entry?.exerciseSets && entry.exerciseSets.length > 0;
 
@@ -245,24 +247,17 @@ export default function WorkoutDetailDialog({
         toast({ title: "No exercises found", description: "AI couldn't identify any exercises. Try being more specific.", variant: "destructive" });
         return;
       }
-      const newSelected: ExerciseName[] = [];
+      const newSelected: string[] = [];
       const newData: Record<string, StructuredExercise> = {};
       for (const ex of parsed) {
         const name = ex.exerciseName as ExerciseName;
         const isKnown = name in EXERCISE_DEFINITIONS;
-        const key = isKnown ? name : "custom";
-        if (key === "custom" && newSelected.includes("custom")) {
-          const existing = newData["custom"];
-          if (existing) {
-            existing.sets.push(...ex.sets.map((s, i) => ({ ...s, setNumber: existing.sets.length + i + 1 })));
-            existing.customLabel = (existing.customLabel || "") + ", " + (ex.customLabel || ex.exerciseName);
-          }
-          continue;
-        }
+        const exName = isKnown ? name : "custom";
+        const key = exName === "custom" ? `custom:${ex.customLabel || ex.exerciseName}` : exName;
         if (!newSelected.includes(key)) newSelected.push(key);
         newData[key] = {
-          exerciseName: key,
-          category: isKnown ? EXERCISE_DEFINITIONS[key].category : ex.category,
+          exerciseName: exName as ExerciseName,
+          category: isKnown ? EXERCISE_DEFINITIONS[name].category : ex.category,
           customLabel: isKnown ? undefined : (ex.customLabel || ex.exerciseName),
           confidence: ex.confidence,
           sets: ex.sets.map((s, i) => ({ setNumber: s.setNumber || i + 1, reps: s.reps, weight: s.weight, distance: s.distance, time: s.time })),
@@ -295,11 +290,12 @@ export default function WorkoutDetailDialog({
 
   const handleToggleExercise = (name: ExerciseName) => {
     setEditExercises((prev) => {
-      if (prev.includes(name)) {
+      const matchingKey = prev.find(k => k === name || (name === "custom" && k.startsWith("custom:")));
+      if (matchingKey) {
         const newData = { ...editExerciseData };
-        delete newData[name];
+        delete newData[matchingKey];
         setEditExerciseData(newData);
-        return prev.filter((n) => n !== name);
+        return prev.filter((n) => n !== matchingKey);
       } else {
         const def = EXERCISE_DEFINITIONS[name];
         setEditExerciseData((prevData) => ({
@@ -474,22 +470,26 @@ export default function WorkoutDetailDialog({
               <>
                 <div>
                   <ExerciseSelector
-                    selectedExercises={editExercises}
+                    selectedExercises={editExercises.map(k => (k.startsWith("custom:") ? "custom" : k) as ExerciseName)}
                     onToggle={handleToggleExercise}
                   />
                 </div>
                 {editExercises.length > 0 && (
                   <div className="space-y-3">
-                    {editExercises.map((name) => (
-                      <ExerciseInput
-                        key={name}
-                        exercise={editExerciseData[name] || { exerciseName: name, category: EXERCISE_DEFINITIONS[name].category, sets: [createDefaultSet(1)] }}
-                        onChange={(ex) => setEditExerciseData(prev => ({ ...prev, [ex.exerciseName]: ex }))}
-                        onRemove={() => handleToggleExercise(name)}
-                        weightUnit={weightUnit}
-                        distanceUnit={distanceUnit}
-                      />
-                    ))}
+                    {editExercises.map((key) => {
+                      const exData = editExerciseData[key];
+                      const baseExName = (key.startsWith("custom:") ? "custom" : key) as ExerciseName;
+                      return (
+                        <ExerciseInput
+                          key={key}
+                          exercise={exData || { exerciseName: baseExName, category: EXERCISE_DEFINITIONS[baseExName]?.category || "conditioning", sets: [createDefaultSet(1)] }}
+                          onChange={(ex) => setEditExerciseData(prev => ({ ...prev, [key]: ex }))}
+                          onRemove={() => handleToggleExercise(baseExName)}
+                          weightUnit={weightUnit}
+                          distanceUnit={distanceUnit}
+                        />
+                      );
+                    })}
                   </div>
                 )}
                 {editExercises.length === 0 && (
