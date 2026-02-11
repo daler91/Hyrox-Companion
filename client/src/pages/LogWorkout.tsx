@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { ExerciseSelector } from "@/components/ExerciseSelector";
 import { ExerciseInput, createDefaultSet, type StructuredExercise } from "@/components/ExerciseInput";
 import { useToast } from "@/hooks/use-toast";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
-import { Save, ArrowLeft, Loader2, Dumbbell, Type, Sparkles } from "lucide-react";
+import { Save, ArrowLeft, Loader2, Dumbbell, Type, Sparkles, GripVertical } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
@@ -63,9 +63,25 @@ export default function LogWorkout() {
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [useTextMode, setUseTextMode] = useState(false);
   const [freeText, setFreeText] = useState("");
-  const [selectedExercises, setSelectedExercises] = useState<ExerciseName[]>([]);
+  const [exerciseBlocks, setExerciseBlocks] = useState<string[]>([]);
   const [exerciseData, setExerciseData] = useState<Record<string, StructuredExercise>>({});
   const [notes, setNotes] = useState("");
+  const blockCounterRef = useRef(0);
+
+  const makeBlockId = (name: string) => {
+    blockCounterRef.current += 1;
+    return `${name}__${blockCounterRef.current}`;
+  };
+
+  const getBlockExerciseName = (blockId: string): ExerciseName => {
+    const name = blockId.split("__")[0];
+    if (name.startsWith("custom:")) return "custom" as ExerciseName;
+    return name as ExerciseName;
+  };
+
+  const getSelectedExerciseNames = (): ExerciseName[] => {
+    return exerciseBlocks.map(getBlockExerciseName);
+  };
 
   const parseMutation = useMutation({
     mutationFn: async (text: string) => {
@@ -82,30 +98,19 @@ export default function LogWorkout() {
         return;
       }
 
-      const newSelected: ExerciseName[] = [];
+      const newBlocks: string[] = [];
       const newData: Record<string, StructuredExercise> = {};
 
       for (const ex of parsed) {
-        const name = ex.exerciseName as ExerciseName;
-        const isKnown = name in EXERCISE_DEFINITIONS;
-        const key = isKnown ? name : "custom";
-        
-        if (key === "custom" && newSelected.includes("custom")) {
-          const existing = newData["custom"];
-          if (existing) {
-            existing.sets.push(...ex.sets.map((s, i) => ({ ...s, setNumber: existing.sets.length + i + 1 })));
-            existing.customLabel = (existing.customLabel || "") + ", " + (ex.customLabel || ex.exerciseName);
-          }
-          continue;
-        }
+        const rawName = ex.exerciseName as ExerciseName;
+        const isKnown = rawName in EXERCISE_DEFINITIONS;
+        const exName = isKnown ? rawName : ("custom" as ExerciseName);
+        const blockId = makeBlockId(exName === "custom" ? `custom:${ex.customLabel || ex.exerciseName}` : exName);
 
-        if (!newSelected.includes(key)) {
-          newSelected.push(key);
-        }
-
-        newData[key] = {
-          exerciseName: key,
-          category: isKnown ? EXERCISE_DEFINITIONS[key].category : ex.category,
+        newBlocks.push(blockId);
+        newData[blockId] = {
+          exerciseName: exName,
+          category: isKnown ? EXERCISE_DEFINITIONS[rawName].category : ex.category,
           customLabel: isKnown ? undefined : (ex.customLabel || ex.exerciseName),
           confidence: ex.confidence,
           sets: ex.sets.map((s, i) => ({
@@ -118,7 +123,7 @@ export default function LogWorkout() {
         };
       }
 
-      setSelectedExercises(newSelected);
+      setExerciseBlocks(newBlocks);
       setExerciseData(newData);
       setUseTextMode(false);
 
@@ -162,42 +167,34 @@ export default function LogWorkout() {
     },
   });
 
-  const handleToggleExercise = (name: ExerciseName) => {
-    setSelectedExercises((prev) => {
-      if (prev.includes(name)) {
-        const newData = { ...exerciseData };
-        delete newData[name];
-        setExerciseData(newData);
-        return prev.filter((n) => n !== name);
-      } else {
-        const def = EXERCISE_DEFINITIONS[name];
-        setExerciseData((prevData) => ({
-          ...prevData,
-          [name]: {
-            exerciseName: name,
-            category: def.category,
-            sets: [createDefaultSet(1)],
-          },
-        }));
-        return [...prev, name];
-      }
-    });
-  };
-
-  const handleExerciseChange = (exercise: StructuredExercise) => {
-    setExerciseData((prev) => ({
+  const handleAddExercise = (name: ExerciseName) => {
+    const blockId = makeBlockId(name);
+    const def = EXERCISE_DEFINITIONS[name];
+    setExerciseBlocks(prev => [...prev, blockId]);
+    setExerciseData(prev => ({
       ...prev,
-      [exercise.exerciseName]: exercise,
+      [blockId]: {
+        exerciseName: name,
+        category: def.category,
+        sets: [createDefaultSet(1)],
+      },
     }));
   };
 
-  const handleRemoveExercise = (name: ExerciseName) => {
-    setSelectedExercises((prev) => prev.filter((n) => n !== name));
-    setExerciseData((prev) => {
+  const handleRemoveBlock = (blockId: string) => {
+    setExerciseBlocks(prev => prev.filter(b => b !== blockId));
+    setExerciseData(prev => {
       const newData = { ...prev };
-      delete newData[name];
+      delete newData[blockId];
       return newData;
     });
+  };
+
+  const handleExerciseChange = (blockId: string, exercise: StructuredExercise) => {
+    setExerciseData(prev => ({
+      ...prev,
+      [blockId]: exercise,
+    }));
   };
 
   const handleSave = () => {
@@ -227,7 +224,7 @@ export default function LogWorkout() {
         notes: notes || null,
       });
     } else {
-      if (selectedExercises.length === 0) {
+      if (exerciseBlocks.length === 0) {
         toast({
           title: "No exercises",
           description: "Please add at least one exercise.",
@@ -236,7 +233,7 @@ export default function LogWorkout() {
         return;
       }
 
-      const exercises = selectedExercises.map((name) => exerciseData[name]).filter(Boolean);
+      const exercises = exerciseBlocks.map(id => exerciseData[id]).filter(Boolean);
       const mainWorkout = generateSummary(exercises, weightLabel, distanceUnit);
 
       saveMutation.mutate({
@@ -354,29 +351,43 @@ export default function LogWorkout() {
         <>
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Select Exercises</CardTitle>
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <CardTitle className="text-lg">Select Exercises</CardTitle>
+                <p className="text-xs text-muted-foreground">Click an exercise to add it. You can add the same exercise multiple times.</p>
+              </div>
             </CardHeader>
             <CardContent>
               <ExerciseSelector
-                selectedExercises={selectedExercises}
-                onToggle={handleToggleExercise}
+                selectedExercises={getSelectedExerciseNames()}
+                onToggle={() => {}}
+                onAdd={handleAddExercise}
+                allowDuplicates
               />
             </CardContent>
           </Card>
 
-          {selectedExercises.length > 0 && (
+          {exerciseBlocks.length > 0 && (
             <div className="space-y-4">
               <h2 className="text-lg font-semibold">Exercise Details</h2>
-              {selectedExercises.map((name) => (
-                <ExerciseInput
-                  key={name}
-                  exercise={exerciseData[name] || { exerciseName: name, category: EXERCISE_DEFINITIONS[name].category, sets: [createDefaultSet(1)] }}
-                  onChange={handleExerciseChange}
-                  onRemove={() => handleRemoveExercise(name)}
-                  weightUnit={weightUnit}
-                  distanceUnit={distanceUnit}
-                />
-              ))}
+              <p className="text-xs text-muted-foreground">Exercises are ordered as you added them. Remove and re-add to reorder.</p>
+              {exerciseBlocks.map((blockId, idx) => {
+                const exData = exerciseData[blockId];
+                if (!exData) return null;
+                const blockCount = exerciseBlocks.filter(b => getBlockExerciseName(b) === exData.exerciseName).length;
+                const blockIndex = exerciseBlocks.filter((b, i) => i <= idx && getBlockExerciseName(b) === exData.exerciseName).length;
+                const showBlockNumber = blockCount > 1;
+                return (
+                  <ExerciseInput
+                    key={blockId}
+                    exercise={exData}
+                    onChange={(ex) => handleExerciseChange(blockId, ex)}
+                    onRemove={() => handleRemoveBlock(blockId)}
+                    weightUnit={weightUnit}
+                    distanceUnit={distanceUnit}
+                    blockLabel={showBlockNumber ? `#${blockIndex}` : undefined}
+                  />
+                );
+              })}
             </div>
           )}
         </>

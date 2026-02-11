@@ -20,6 +20,8 @@ import { EXERCISE_DEFINITIONS, type ExerciseName, type ExerciseCategory } from "
 interface ExerciseSelectorProps {
   selectedExercises: ExerciseName[];
   onToggle: (name: ExerciseName) => void;
+  onAdd?: (name: ExerciseName) => void;
+  allowDuplicates?: boolean;
 }
 
 const exerciseIcons: Partial<Record<ExerciseName, typeof Wind>> = {
@@ -62,13 +64,15 @@ const categoryLabels: Record<ExerciseCategory, string> = {
 
 const categoryOrder: ExerciseCategory[] = ["hyrox_station", "running", "strength", "conditioning"];
 
-export function ExerciseSelector({ selectedExercises, onToggle }: ExerciseSelectorProps) {
+export function ExerciseSelector({ selectedExercises, onToggle, onAdd, allowDuplicates = false }: ExerciseSelectorProps) {
   const exercisesByCategory = categoryOrder.map(cat => ({
     category: cat,
     label: categoryLabels[cat],
     exercises: (Object.entries(EXERCISE_DEFINITIONS) as [ExerciseName, typeof EXERCISE_DEFINITIONS[ExerciseName]][])
       .filter(([, def]) => def.category === cat),
   }));
+
+  const countOf = (name: ExerciseName) => selectedExercises.filter(n => n === name).length;
 
   return (
     <div className="space-y-4" data-testid="exercise-selector">
@@ -77,18 +81,30 @@ export function ExerciseSelector({ selectedExercises, onToggle }: ExerciseSelect
           <p className="text-xs font-medium text-muted-foreground mb-2">{label}</p>
           <div className="flex flex-wrap gap-2">
             {exercises.map(([name, def]) => {
-              const isSelected = selectedExercises.includes(name);
+              const count = countOf(name);
+              const isSelected = count > 0;
               const Icon = exerciseIcons[name] || Plus;
               return (
                 <Button
                   key={name}
                   variant={isSelected ? "default" : "outline"}
                   size="sm"
-                  onClick={() => onToggle(name)}
+                  onClick={() => {
+                    if (allowDuplicates && onAdd) {
+                      onAdd(name);
+                    } else {
+                      onToggle(name);
+                    }
+                  }}
                   data-testid={`button-exercise-${name}`}
                 >
                   <Icon className="h-3.5 w-3.5 mr-1.5" />
                   {def.label}
+                  {allowDuplicates && count > 0 && (
+                    <Badge variant="secondary" className="ml-1.5 h-4 min-w-[1rem] px-1 text-[10px]">
+                      {count}
+                    </Badge>
+                  )}
                 </Button>
               );
             })}

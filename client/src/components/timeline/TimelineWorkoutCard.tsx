@@ -61,18 +61,20 @@ interface GroupedExercise {
 }
 
 function groupExerciseSets(dbSets: ExerciseSet[]): GroupedExercise[] {
+  const sorted = [...dbSets].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
   const groups: GroupedExercise[] = [];
-  const seen = new Map<string, GroupedExercise>();
-  for (const s of dbSets) {
+  let currentKey: string | null = null;
+  let currentGroup: GroupedExercise | null = null;
+  for (const s of sorted) {
     const key = s.exerciseName === "custom" && s.customLabel
       ? `custom:${s.customLabel}`
       : s.exerciseName;
-    if (!seen.has(key)) {
-      const group: GroupedExercise = { exerciseName: s.exerciseName, customLabel: s.customLabel, category: s.category, confidence: s.confidence, sets: [] };
-      seen.set(key, group);
-      groups.push(group);
+    if (key !== currentKey) {
+      currentGroup = { exerciseName: s.exerciseName, customLabel: s.customLabel, category: s.category, confidence: s.confidence, sets: [] };
+      groups.push(currentGroup);
+      currentKey = key;
     }
-    seen.get(key)!.sets.push(s);
+    currentGroup!.sets.push(s);
   }
   return groups;
 }

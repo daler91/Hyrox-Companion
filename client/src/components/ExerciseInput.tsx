@@ -30,6 +30,7 @@ interface ExerciseInputProps {
   onRemove: () => void;
   weightUnit?: "kg" | "lbs";
   distanceUnit?: "km" | "miles";
+  blockLabel?: string;
 }
 
 const categoryColors: Record<string, string> = {
@@ -75,7 +76,7 @@ export function createExerciseFromSets(exerciseName: ExerciseName, dbSets: Array
   };
 }
 
-export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg", distanceUnit = "km" }: ExerciseInputProps) {
+export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg", distanceUnit = "km", blockLabel }: ExerciseInputProps) {
   const def = EXERCISE_DEFINITIONS[exercise.exerciseName];
   const fields = getFields(exercise.exerciseName);
   const borderColor = categoryColors[exercise.category] || "border-l-gray-500";
@@ -116,7 +117,7 @@ export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg",
       <CardContent className="p-4">
         <div className="flex items-center justify-between gap-2 mb-4">
           <div className="flex items-center gap-2 flex-wrap">
-            <h4 className="font-semibold">{displayLabel}</h4>
+            <h4 className="font-semibold">{displayLabel}{blockLabel ? ` ${blockLabel}` : ""}</h4>
             <span className="text-xs text-muted-foreground">{sets.length} {sets.length === 1 ? "set" : "sets"}</span>
             {exercise.confidence != null && exercise.confidence < 90 && (
               <Badge

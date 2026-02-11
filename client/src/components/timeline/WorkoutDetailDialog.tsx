@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -80,18 +80,20 @@ interface GroupedExercise {
 }
 
 function groupExerciseSets(dbSets: ExerciseSet[]): GroupedExercise[] {
+  const sorted = [...dbSets].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
   const groups: GroupedExercise[] = [];
-  const seen = new Map<string, GroupedExercise>();
-  for (const s of dbSets) {
+  let currentKey: string | null = null;
+  let currentGroup: GroupedExercise | null = null;
+  for (const s of sorted) {
     const key = s.exerciseName === "custom" && s.customLabel
       ? `custom:${s.customLabel}`
       : s.exerciseName;
-    if (!seen.has(key)) {
-      const group: GroupedExercise = { exerciseName: s.exerciseName, customLabel: s.customLabel, category: s.category, confidence: s.confidence, sets: [] };
-      seen.set(key, group);
-      groups.push(group);
+    if (key !== currentKey) {
+      currentGroup = { exerciseName: s.exerciseName, customLabel: s.customLabel, category: s.category, confidence: s.confidence, sets: [] };
+      groups.push(currentGroup);
+      currentKey = key;
     }
-    seen.get(key)!.sets.push(s);
+    currentGroup!.sets.push(s);
   }
   return groups;
 }
@@ -131,10 +133,14 @@ function exerciseSetsToStructured(dbSets: ExerciseSet[]): { names: string[]; dat
   const groups = groupExerciseSets(dbSets);
   const names: string[] = [];
   const data: Record<string, StructuredExercise> = {};
+  const counter = new Map<string, number>();
   for (const group of groups) {
-    const key = group.exerciseName === "custom" && group.customLabel
+    const baseName = group.exerciseName === "custom" && group.customLabel
       ? `custom:${group.customLabel}`
       : group.exerciseName;
+    const count = (counter.get(baseName) || 0) + 1;
+    counter.set(baseName, count);
+    const key = `${baseName}__${count}`;
     names.push(key);
     data[key] = {
       exerciseName: group.exerciseName as ExerciseName,
@@ -214,6 +220,17 @@ export default function WorkoutDetailDialog({
   const [editExercises, setEditExercises] = useState<string[]>([]);
   const [editExerciseData, setEditExerciseData] = useState<Record<string, StructuredExercise>>({});
   const hasStructuredData = entry?.exerciseSets && entry.exerciseSets.length > 0;
+  const blockCounterRef = useRef(100);
+
+  const makeBlockId = (name: string) => {
+    blockCounterRef.current += 1;
+    return `${name}__${blockCounterRef.current}`;
+  };
+
+  const getBlockExerciseName = (blockId: string): string => {
+    const parts = blockId.split("__");
+    return parts.slice(0, -1).join("__") || parts[0];
+  };
 
   useEffect(() => {
     if (entry) {
@@ -247,23 +264,23 @@ export default function WorkoutDetailDialog({
         toast({ title: "No exercises found", description: "AI couldn't identify any exercises. Try being more specific.", variant: "destructive" });
         return;
       }
-      const newSelected: string[] = [];
+      const newBlocks: string[] = [];
       const newData: Record<string, StructuredExercise> = {};
       for (const ex of parsed) {
-        const name = ex.exerciseName as ExerciseName;
-        const isKnown = name in EXERCISE_DEFINITIONS;
-        const exName = isKnown ? name : "custom";
-        const key = exName === "custom" ? `custom:${ex.customLabel || ex.exerciseName}` : exName;
-        if (!newSelected.includes(key)) newSelected.push(key);
-        newData[key] = {
-          exerciseName: exName as ExerciseName,
-          category: isKnown ? EXERCISE_DEFINITIONS[name].category : ex.category,
+        const rawName = ex.exerciseName as ExerciseName;
+        const isKnown = rawName in EXERCISE_DEFINITIONS;
+        const exName = isKnown ? rawName : ("custom" as ExerciseName);
+        const blockId = makeBlockId(exName === "custom" ? `custom:${ex.customLabel || ex.exerciseName}` : exName);
+        newBlocks.push(blockId);
+        newData[blockId] = {
+          exerciseName: exName,
+          category: isKnown ? EXERCISE_DEFINITIONS[rawName].category : ex.category,
           customLabel: isKnown ? undefined : (ex.customLabel || ex.exerciseName),
           confidence: ex.confidence,
           sets: ex.sets.map((s, i) => ({ setNumber: s.setNumber || i + 1, reps: s.reps, weight: s.weight, distance: s.distance, time: s.time })),
         };
       }
-      setEditExercises(newSelected);
+      setEditExercises(newBlocks);
       setEditExerciseData(newData);
       setUseTextMode(false);
       const lowConfCount = parsed.filter(e => e.confidence != null && e.confidence < 80).length;
@@ -288,22 +305,29 @@ export default function WorkoutDetailDialog({
   const canChangeStatus = hasPlanDayId;
   const grouped = hasStructuredData ? groupExerciseSets(entry.exerciseSets!) : [];
 
-  const handleToggleExercise = (name: ExerciseName) => {
-    setEditExercises((prev) => {
-      const matchingKey = prev.find(k => k === name || (name === "custom" && k.startsWith("custom:")));
-      if (matchingKey) {
-        const newData = { ...editExerciseData };
-        delete newData[matchingKey];
-        setEditExerciseData(newData);
-        return prev.filter((n) => n !== matchingKey);
-      } else {
-        const def = EXERCISE_DEFINITIONS[name];
-        setEditExerciseData((prevData) => ({
-          ...prevData,
-          [name]: { exerciseName: name, category: def.category, sets: [createDefaultSet(1)] },
-        }));
-        return [...prev, name];
-      }
+  const handleAddExercise = (name: ExerciseName) => {
+    const blockId = makeBlockId(name);
+    const def = EXERCISE_DEFINITIONS[name];
+    setEditExercises(prev => [...prev, blockId]);
+    setEditExerciseData(prev => ({
+      ...prev,
+      [blockId]: { exerciseName: name, category: def.category, sets: [createDefaultSet(1)] },
+    }));
+  };
+
+  const handleRemoveBlock = (blockId: string) => {
+    setEditExercises(prev => prev.filter(b => b !== blockId));
+    setEditExerciseData(prev => {
+      const newData = { ...prev };
+      delete newData[blockId];
+      return newData;
+    });
+  };
+
+  const getSelectedExerciseNames = (): ExerciseName[] => {
+    return editExercises.map(blockId => {
+      const baseName = getBlockExerciseName(blockId);
+      return (baseName.startsWith("custom:") ? "custom" : baseName) as ExerciseName;
     });
   };
 
@@ -469,24 +493,32 @@ export default function WorkoutDetailDialog({
             ) : (
               <>
                 <div>
+                  <p className="text-xs text-muted-foreground mb-2">Click an exercise to add it. You can add the same exercise multiple times.</p>
                   <ExerciseSelector
-                    selectedExercises={editExercises.map(k => (k.startsWith("custom:") ? "custom" : k) as ExerciseName)}
-                    onToggle={handleToggleExercise}
+                    selectedExercises={getSelectedExerciseNames()}
+                    onToggle={() => {}}
+                    onAdd={handleAddExercise}
+                    allowDuplicates
                   />
                 </div>
                 {editExercises.length > 0 && (
                   <div className="space-y-3">
-                    {editExercises.map((key) => {
-                      const exData = editExerciseData[key];
-                      const baseExName = (key.startsWith("custom:") ? "custom" : key) as ExerciseName;
+                    {editExercises.map((blockId, idx) => {
+                      const exData = editExerciseData[blockId];
+                      if (!exData) return null;
+                      const exName = exData.exerciseName;
+                      const blockCount = editExercises.filter(b => editExerciseData[b]?.exerciseName === exName).length;
+                      const blockIndex = editExercises.filter((b, i) => i <= idx && editExerciseData[b]?.exerciseName === exName).length;
+                      const showBlockNumber = blockCount > 1;
                       return (
                         <ExerciseInput
-                          key={key}
-                          exercise={exData || { exerciseName: baseExName, category: EXERCISE_DEFINITIONS[baseExName]?.category || "conditioning", sets: [createDefaultSet(1)] }}
-                          onChange={(ex) => setEditExerciseData(prev => ({ ...prev, [key]: ex }))}
-                          onRemove={() => handleToggleExercise(baseExName)}
+                          key={blockId}
+                          exercise={exData}
+                          onChange={(ex) => setEditExerciseData(prev => ({ ...prev, [blockId]: ex }))}
+                          onRemove={() => handleRemoveBlock(blockId)}
                           weightUnit={weightUnit}
                           distanceUnit={distanceUnit}
+                          blockLabel={showBlockNumber ? `#${blockIndex}` : undefined}
                         />
                       );
                     })}
