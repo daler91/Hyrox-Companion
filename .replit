@@ -7,7 +7,7 @@ channel = "stable-24_05"
 
 [deployment]
 deploymentTarget = "autoscale"
-build = ["npm", "run", "build"]
+build = ["bash", "-c", "npx tsx script/cleanup-orphans.ts && npx drizzle-kit push --force && npm run build"]
 run = ["npm", "run", "start"]
 publicDir = "dist/public"
 
