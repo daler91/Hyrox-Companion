@@ -67,20 +67,12 @@ export default function Timeline() {
   const [hasAutoOpenedCoach, setHasAutoOpenedCoach] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingTriggered, setOnboardingTriggered] = useState(false);
-  const [emailCheckDone, setEmailCheckDone] = useState(false);
   
   const todayRef = useRef<HTMLDivElement>(null);
   
   const scrollToToday = () => {
     todayRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
-
-  useEffect(() => {
-    if (!emailCheckDone) {
-      setEmailCheckDone(true);
-      fetch("/api/emails/check", { method: "POST" }).catch(() => {});
-    }
-  }, [emailCheckDone]);
 
   const { data: plans = [], isLoading: plansLoading } = useQuery<TrainingPlan[]>({
     queryKey: ["/api/plans"],

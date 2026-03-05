@@ -30,7 +30,7 @@ import {
   type InsertCustomExercise,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, asc, isNull, sql, inArray } from "drizzle-orm";
+import { eq, and, desc, asc, isNull, isNotNull, sql, inArray } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -83,6 +83,7 @@ export interface IStorage {
 
   updateLastWeeklySummaryAt(userId: string): Promise<void>;
   updateLastMissedReminderAt(userId: string): Promise<void>;
+  getUsersWithEmailNotifications(): Promise<User[]>;
   getMissedWorkoutsForDate(userId: string, date: string): Promise<{ date: string; focus: string; mainWorkout: string; planName?: string }[]>;
   getWeeklyStats(userId: string, weekStart: string, weekEnd: string): Promise<{ completedCount: number; plannedCount: number; missedCount: number; skippedCount: number; totalDuration: number }>;
 }
@@ -655,6 +656,15 @@ export class DatabaseStorage implements IStorage {
 
   async updateLastMissedReminderAt(userId: string): Promise<void> {
     await db.update(users).set({ lastMissedReminderAt: new Date() }).where(eq(users.id, userId));
+  }
+
+  async getUsersWithEmailNotifications(): Promise<User[]> {
+    return await db.select().from(users).where(
+      and(
+        eq(users.emailNotifications, 1),
+        isNotNull(users.email)
+      )
+    );
   }
 
   async getMissedWorkoutsForDate(userId: string, date: string): Promise<{ date: string; focus: string; mainWorkout: string; planName?: string }[]> {
