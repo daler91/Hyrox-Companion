@@ -44,7 +44,7 @@ export type UpdateUserPreferences = z.infer<typeof updateUserPreferencesSchema>;
 
 export const trainingPlans = pgTable("training_plans", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull(),
   name: text("name").notNull(),
   sourceFileName: text("source_file_name"),
   totalWeeks: integer("total_weeks").notNull(),
@@ -61,7 +61,7 @@ export type TrainingPlan = typeof trainingPlans.$inferSelect;
 
 export const planDays = pgTable("plan_days", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  planId: varchar("plan_id").notNull().references(() => trainingPlans.id, { onDelete: "cascade" }),
+  planId: varchar("plan_id").notNull(),
   weekNumber: integer("week_number").notNull(),
   dayName: text("day_name").notNull(),
   focus: text("focus").notNull(),
@@ -95,7 +95,7 @@ export type TrainingPlanWithDays = TrainingPlan & {
 
 export const workoutLogs = pgTable("workout_logs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull(),
   date: date("date").notNull(),
   focus: text("focus").notNull(),
   mainWorkout: text("main_workout").notNull(),
@@ -103,7 +103,7 @@ export const workoutLogs = pgTable("workout_logs", {
   notes: text("notes"),
   duration: integer("duration"),
   rpe: integer("rpe"),
-  planDayId: varchar("plan_day_id").references(() => planDays.id, { onDelete: "set null" }),
+  planDayId: varchar("plan_day_id"),
   source: varchar("source").default("manual"),
   stravaActivityId: varchar("strava_activity_id"),
   calories: integer("calories"),
@@ -126,7 +126,7 @@ export const workoutLogs = pgTable("workout_logs", {
 // Strava OAuth connection storage
 export const stravaConnections = pgTable("strava_connections", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull().unique().references(() => users.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().unique(),
   stravaAthleteId: varchar("strava_athlete_id").notNull(),
   accessToken: text("access_token").notNull(),
   refreshToken: text("refresh_token").notNull(),
@@ -194,7 +194,7 @@ export const exerciseNames = Object.keys(EXERCISE_DEFINITIONS) as ExerciseName[]
 
 export const exerciseSets = pgTable("exercise_sets", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  workoutLogId: varchar("workout_log_id").notNull().references(() => workoutLogs.id, { onDelete: "cascade" }),
+  workoutLogId: varchar("workout_log_id").notNull(),
   exerciseName: varchar("exercise_name").notNull(),
   customLabel: text("custom_label"),
   category: varchar("category").notNull(),
@@ -253,7 +253,7 @@ export type TimelineEntry = {
 // Custom exercises saved by users for AI recognition
 export const customExercises = pgTable("custom_exercises", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull(),
   name: text("name").notNull(),
   category: varchar("category").notNull().default("conditioning"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -273,7 +273,7 @@ export type CustomExercise = typeof customExercises.$inferSelect;
 // Chat messages for AI Coach persistence
 export const chatMessages = pgTable("chat_messages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull(),
   role: varchar("role", { length: 20 }).notNull(),
   content: text("content").notNull(),
   timestamp: timestamp("timestamp").defaultNow(),
