@@ -27,6 +27,9 @@ export const users = pgTable("users", {
   weightUnit: varchar("weight_unit").default("kg"),
   distanceUnit: varchar("distance_unit").default("km"),
   weeklyGoal: integer("weekly_goal").default(5),
+  emailNotifications: integer("email_notifications").default(1),
+  lastWeeklySummaryAt: timestamp("last_weekly_summary_at"),
+  lastMissedReminderAt: timestamp("last_missed_reminder_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -38,6 +41,7 @@ export const updateUserPreferencesSchema = z.object({
   weightUnit: z.enum(["kg", "lbs"]).optional(),
   distanceUnit: z.enum(["km", "miles"]).optional(),
   weeklyGoal: z.number().min(1).max(14).optional(),
+  emailNotifications: z.number().min(0).max(1).optional(),
 });
 
 export type UpdateUserPreferences = z.infer<typeof updateUserPreferencesSchema>;
