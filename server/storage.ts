@@ -80,6 +80,11 @@ export interface IStorage {
 
   getWorkoutsWithoutExerciseSets(userId: string): Promise<WorkoutLog[]>;
   getAllExerciseSetsWithDates(userId: string): Promise<(ExerciseSet & { date: string })[]>;
+
+  updateLastWeeklySummaryAt(userId: string): Promise<void>;
+  updateLastMissedReminderAt(userId: string): Promise<void>;
+  getMissedWorkoutsForDate(userId: string, date: string): Promise<{ date: string; focus: string; mainWorkout: string; planName?: string }[]>;
+  getWeeklyStats(userId: string, weekStart: string, weekEnd: string): Promise<{ completedCount: number; plannedCount: number; missedCount: number; skippedCount: number; totalDuration: number }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -643,6 +648,71 @@ export class DatabaseStorage implements IStorage {
       .innerJoin(workoutLogs, eq(exerciseSets.workoutLogId, workoutLogs.id))
       .where(eq(workoutLogs.userId, userId))
       .orderBy(desc(workoutLogs.date));
+  }
+  async updateLastWeeklySummaryAt(userId: string): Promise<void> {
+    await db.update(users).set({ lastWeeklySummaryAt: new Date() }).where(eq(users.id, userId));
+  }
+
+  async updateLastMissedReminderAt(userId: string): Promise<void> {
+    await db.update(users).set({ lastMissedReminderAt: new Date() }).where(eq(users.id, userId));
+  }
+
+  async getMissedWorkoutsForDate(userId: string, date: string): Promise<{ date: string; focus: string; mainWorkout: string; planName?: string }[]> {
+    const results = await db
+      .select({
+        date: planDays.scheduledDate,
+        focus: planDays.focus,
+        mainWorkout: planDays.mainWorkout,
+        planName: trainingPlans.name,
+      })
+      .from(planDays)
+      .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
+      .where(
+        and(
+          eq(trainingPlans.userId, userId),
+          eq(planDays.scheduledDate, date),
+          eq(planDays.status, 'missed')
+        )
+      );
+    return results.map(r => ({
+      date: r.date || date,
+      focus: r.focus,
+      mainWorkout: r.mainWorkout,
+      planName: r.planName || undefined,
+    }));
+  }
+
+  async getWeeklyStats(userId: string, weekStart: string, weekEnd: string): Promise<{ completedCount: number; plannedCount: number; missedCount: number; skippedCount: number; totalDuration: number }> {
+    const logs = await db
+      .select({ duration: workoutLogs.duration })
+      .from(workoutLogs)
+      .where(
+        and(
+          eq(workoutLogs.userId, userId),
+          sql`${workoutLogs.date} >= ${weekStart}`,
+          sql`${workoutLogs.date} <= ${weekEnd}`
+        )
+      );
+
+    const days = await db
+      .select({ status: planDays.status })
+      .from(planDays)
+      .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
+      .where(
+        and(
+          eq(trainingPlans.userId, userId),
+          sql`${planDays.scheduledDate} >= ${weekStart}`,
+          sql`${planDays.scheduledDate} <= ${weekEnd}`
+        )
+      );
+
+    const completedCount = logs.length;
+    const plannedCount = days.filter(d => d.status === 'planned').length;
+    const missedCount = days.filter(d => d.status === 'missed').length;
+    const skippedCount = days.filter(d => d.status === 'skipped').length;
+    const totalDuration = logs.reduce((sum, l) => sum + (l.duration || 0), 0);
+
+    return { completedCount, plannedCount, missedCount, skippedCount, totalDuration };
   }
 }
 

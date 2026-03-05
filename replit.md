@@ -17,6 +17,7 @@ HyroxTracker is a training planning and logging application for Hyrox athletes. 
 - **Filtering & Search**: Filter timeline by status (all, planned, completed)
 - **Drag-and-Drop Reordering**: Exercises on Log Workout page and in workout edit dialogs can be reordered via drag handles using @dnd-kit
 - **AI Rate Limiting**: Per-user rate limits on AI endpoints (10/min chat, 5/min parsing, 3/min suggestions) with 429 responses
+- **Email Notifications**: Weekly training summaries (sent on Mondays) and missed workout reminders via Resend, with per-user opt-in/out toggle in Settings
 - **Database Integrity**: Composite indexes for performance, unique constraint on custom exercises, application-level data cleanup on startup for orphaned records
 
 The design follows premium fitness app patterns (Strava, TrainingPeaks, Whoop) with focus on data clarity and athletic performance tracking.

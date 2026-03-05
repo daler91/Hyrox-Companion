@@ -7,6 +7,7 @@ import { updatePlanDaySchema, insertWorkoutLogSchema, updateWorkoutLogSchema, up
 import { registerStravaRoutes } from "./strava";
 import { parse } from "csv-parse/sync";
 import type { InsertExerciseSet } from "@shared/schema";
+import { sendWeeklySummary, sendMissedWorkoutReminder, type WeeklySummaryData, type MissedWorkoutData } from "./email";
 
 const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
 
@@ -288,6 +289,7 @@ export async function registerRoutes(
         weightUnit: user.weightUnit || "kg",
         distanceUnit: user.distanceUnit || "km",
         weeklyGoal: user.weeklyGoal || 5,
+        emailNotifications: user.emailNotifications ?? 1,
       });
     } catch (error) {
       console.error("Error fetching preferences:", error);
@@ -311,10 +313,102 @@ export async function registerRoutes(
         weightUnit: user.weightUnit,
         distanceUnit: user.distanceUnit,
         weeklyGoal: user.weeklyGoal,
+        emailNotifications: user.emailNotifications ?? 1,
       });
     } catch (error) {
       console.error("Error updating preferences:", error);
       res.status(500).json({ error: "Failed to update preferences" });
+    }
+  });
+
+  app.post("/api/emails/check", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      if (!user || !user.email || !user.emailNotifications) {
+        return res.json({ sent: [] });
+      }
+
+      const sent: string[] = [];
+      const now = new Date();
+      const today = now.toISOString().split('T')[0];
+      const dayOfWeek = now.getDay();
+
+      if (dayOfWeek === 1) {
+        const lastSent = user.lastWeeklySummaryAt;
+        const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        if (!lastSent || lastSent < sevenDaysAgo) {
+          const weekEnd = new Date(now);
+          weekEnd.setDate(weekEnd.getDate() - 1);
+          const weekStart = new Date(weekEnd);
+          weekStart.setDate(weekStart.getDate() - 6);
+          const weekStartStr = weekStart.toISOString().split('T')[0];
+          const weekEndStr = weekEnd.toISOString().split('T')[0];
+
+          const stats = await storage.getWeeklyStats(userId, weekStartStr, weekEndStr);
+          const timeline = await storage.getTimeline(userId);
+          const completedDates = timeline
+            .filter(e => e.status === 'completed' && e.date)
+            .map(e => e.date)
+            .sort();
+          let streak = 0;
+          if (completedDates.length > 0) {
+            const d = new Date(today);
+            d.setDate(d.getDate() - 1);
+            while (completedDates.includes(d.toISOString().split('T')[0])) {
+              streak++;
+              d.setDate(d.getDate() - 1);
+            }
+          }
+
+          const total = stats.completedCount + stats.missedCount + stats.skippedCount;
+          const summaryData: WeeklySummaryData = {
+            completedCount: stats.completedCount,
+            plannedCount: stats.plannedCount,
+            missedCount: stats.missedCount,
+            skippedCount: stats.skippedCount,
+            completionRate: total > 0 ? Math.round((stats.completedCount / total) * 100) : 0,
+            currentStreak: streak,
+            prsThisWeek: 0,
+            totalDuration: stats.totalDuration,
+            weekStartDate: weekStartStr,
+            weekEndDate: weekEndStr,
+          };
+
+          const success = await sendWeeklySummary(user, summaryData);
+          if (success) {
+            await storage.updateLastWeeklySummaryAt(userId);
+            sent.push('weekly_summary');
+          }
+        }
+      }
+
+      const lastMissedSent = user.lastMissedReminderAt;
+      const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      if (!lastMissedSent || lastMissedSent < oneDayAgo) {
+        const yesterday = new Date(now);
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayStr = yesterday.toISOString().split('T')[0];
+        const missed = await storage.getMissedWorkoutsForDate(userId, yesterdayStr);
+        if (missed.length > 0) {
+          const missedData: MissedWorkoutData[] = missed.map(m => ({
+            date: m.date,
+            focus: m.focus,
+            mainWorkout: m.mainWorkout,
+            planName: m.planName,
+          }));
+          const success = await sendMissedWorkoutReminder(user, missedData);
+          if (success) {
+            await storage.updateLastMissedReminderAt(userId);
+            sent.push('missed_reminder');
+          }
+        }
+      }
+
+      res.json({ sent });
+    } catch (error) {
+      console.error("Error checking emails:", error);
+      res.json({ sent: [], error: "Email check failed" });
     }
   });
 

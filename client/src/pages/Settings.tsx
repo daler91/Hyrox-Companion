@@ -7,8 +7,9 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Loader2, Link2, RefreshCw, Unlink, Download, FileSpreadsheet, FileJson, Sparkles } from "lucide-react";
+import { Loader2, Link2, RefreshCw, Unlink, Download, FileSpreadsheet, FileJson, Sparkles, Mail } from "lucide-react";
 import { SiStrava } from "react-icons/si";
+import { Switch } from "@/components/ui/switch";
 import { useLocation, useSearch } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow } from "date-fns";
@@ -17,6 +18,7 @@ interface Preferences {
   weightUnit: string;
   distanceUnit: string;
   weeklyGoal: number;
+  emailNotifications: number;
 }
 
 interface StravaStatus {
@@ -33,6 +35,7 @@ export default function Settings() {
   const [weightUnit, setWeightUnit] = useState("kg");
   const [distanceUnit, setDistanceUnit] = useState("km");
   const [weeklyGoal, setWeeklyGoal] = useState("5");
+  const [emailNotifications, setEmailNotifications] = useState(true);
   const [hasChanges, setHasChanges] = useState(false);
   const [unstructuredCount, setUnstructuredCount] = useState<number | null>(null);
   const [parseResults, setParseResults] = useState<{ success: number; failed: number } | null>(null);
@@ -69,11 +72,12 @@ export default function Settings() {
       setWeightUnit(preferences.weightUnit || "kg");
       setDistanceUnit(preferences.distanceUnit || "km");
       setWeeklyGoal(String(preferences.weeklyGoal || 5));
+      setEmailNotifications(preferences.emailNotifications === 1);
     }
   }, [preferences]);
 
   const saveMutation = useMutation({
-    mutationFn: async (data: { weightUnit: string; distanceUnit: string; weeklyGoal: number }) => {
+    mutationFn: async (data: { weightUnit: string; distanceUnit: string; weeklyGoal: number; emailNotifications: number }) => {
       const response = await apiRequest("PATCH", "/api/preferences", data);
       return response.json();
     },
@@ -203,6 +207,7 @@ export default function Settings() {
       weightUnit,
       distanceUnit,
       weeklyGoal: parseInt(weeklyGoal, 10),
+      emailNotifications: emailNotifications ? 1 : 0,
     });
   };
 
@@ -406,6 +411,24 @@ export default function Settings() {
                 <SelectItem value="7">7</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-1">
+              <Label className="flex items-center gap-2">
+                <Mail className="h-4 w-4" />
+                Email Notifications
+              </Label>
+              <p className="text-sm text-muted-foreground">Receive weekly training summaries and missed workout reminders</p>
+            </div>
+            <Switch
+              checked={emailNotifications}
+              onCheckedChange={(checked) => {
+                setEmailNotifications(checked);
+                setHasChanges(true);
+              }}
+              data-testid="switch-email-notifications"
+            />
           </div>
         </CardContent>
       </Card>
