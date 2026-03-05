@@ -63,17 +63,20 @@ app.use((req, res, next) => {
 
 async function cleanOrphanedData() {
   try {
+    await db.execute(sql`BEGIN`);
     await db.execute(sql`DELETE FROM exercise_sets WHERE workout_log_id NOT IN (SELECT id FROM workout_logs)`);
-    await db.execute(sql`UPDATE workout_logs SET plan_day_id = NULL WHERE plan_day_id IS NOT NULL AND plan_day_id NOT IN (SELECT id FROM plan_days)`);
-    await db.execute(sql`DELETE FROM plan_days WHERE plan_id NOT IN (SELECT id FROM training_plans)`);
-    await db.execute(sql`DELETE FROM workout_logs WHERE user_id NOT IN (SELECT id FROM users)`);
-    await db.execute(sql`DELETE FROM training_plans WHERE user_id NOT IN (SELECT id FROM users)`);
     await db.execute(sql`DELETE FROM chat_messages WHERE user_id NOT IN (SELECT id FROM users)`);
     await db.execute(sql`DELETE FROM custom_exercises WHERE user_id NOT IN (SELECT id FROM users)`);
     await db.execute(sql`DELETE FROM strava_connections WHERE user_id NOT IN (SELECT id FROM users)`);
-    await db.execute(sql`DELETE FROM custom_exercises WHERE id NOT IN (SELECT DISTINCT ON (user_id, name) id FROM custom_exercises ORDER BY user_id, name, created_at ASC)`);
+    await db.execute(sql`UPDATE workout_logs SET plan_day_id = NULL WHERE plan_day_id IS NOT NULL AND plan_day_id NOT IN (SELECT id FROM plan_days)`);
+    await db.execute(sql`DELETE FROM plan_days WHERE plan_id NOT IN (SELECT id FROM training_plans)`);
+    await db.execute(sql`UPDATE workout_logs SET plan_day_id = NULL WHERE plan_day_id IS NOT NULL AND plan_day_id NOT IN (SELECT id FROM plan_days)`);
+    await db.execute(sql`DELETE FROM workout_logs WHERE user_id NOT IN (SELECT id FROM users)`);
+    await db.execute(sql`DELETE FROM training_plans WHERE user_id NOT IN (SELECT id FROM users)`);
+    await db.execute(sql`COMMIT`);
     log("Orphaned data cleanup complete", "db");
   } catch (error) {
+    await db.execute(sql`ROLLBACK`).catch(() => {});
     log(`Orphaned data cleanup skipped: ${error}`, "db");
   }
 }
