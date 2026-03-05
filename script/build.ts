@@ -1,6 +1,7 @@
 import { build as esbuild } from "esbuild";
 import { build as viteBuild } from "vite";
 import { rm, readFile } from "fs/promises";
+import { execSync } from "child_process";
 import pg from "pg";
 
 async function cleanOrphanedData() {
@@ -65,8 +66,24 @@ const allowlist = [
   "zod-validation-error",
 ];
 
+async function runDbPush() {
+  if (!process.env.DATABASE_URL) {
+    console.log("No DATABASE_URL, skipping db:push");
+    return;
+  }
+  try {
+    console.log("Running database schema push...");
+    execSync("npx drizzle-kit push --force", { stdio: "inherit" });
+    console.log("Database schema push complete");
+  } catch (error) {
+    console.log("Database schema push failed:", error);
+    throw error;
+  }
+}
+
 async function buildAll() {
   await cleanOrphanedData();
+  await runDbPush();
   await rm("dist", { recursive: true, force: true });
 
   console.log("building client...");
