@@ -55,6 +55,7 @@ export interface IStorage {
   updateWorkoutLog(logId: string, updates: UpdateWorkoutLog, userId: string): Promise<WorkoutLog | undefined>;
   deleteWorkoutLog(logId: string, userId: string): Promise<boolean>;
   deleteWorkoutLogByPlanDayId(planDayId: string, userId: string): Promise<boolean>;
+  getWorkoutLogByPlanDayId(planDayId: string, userId: string): Promise<WorkoutLog | undefined>;
 
   getTimeline(userId: string, planId?: string): Promise<TimelineEntry[]>;
 
@@ -312,6 +313,15 @@ export class DatabaseStorage implements IStorage {
       .delete(workoutLogs)
       .where(and(eq(workoutLogs.planDayId, planDayId), eq(workoutLogs.userId, userId)));
     return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  async getWorkoutLogByPlanDayId(planDayId: string, userId: string): Promise<WorkoutLog | undefined> {
+    const [log] = await db
+      .select()
+      .from(workoutLogs)
+      .where(and(eq(workoutLogs.planDayId, planDayId), eq(workoutLogs.userId, userId)))
+      .limit(1);
+    return log;
   }
 
   async getTimeline(userId: string, planId?: string): Promise<TimelineEntry[]> {
@@ -583,16 +593,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async upsertCustomExercise(data: InsertCustomExercise): Promise<CustomExercise> {
-    const existing = await db
-      .select()
-      .from(customExercises)
-      .where(and(
-        eq(customExercises.userId, data.userId),
-        eq(customExercises.name, data.name)
-      ));
-    if (existing.length > 0) return existing[0];
-    const [created] = await db.insert(customExercises).values(data).returning();
-    return created;
+    const [result] = await db
+      .insert(customExercises)
+      .values(data)
+      .onConflictDoUpdate({
+        target: [customExercises.userId, customExercises.name],
+        set: { category: data.category },
+      })
+      .returning();
+    return result;
   }
 
   async getWorkoutsWithoutExerciseSets(userId: string): Promise<WorkoutLog[]> {

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, date, timestamp, index, jsonb, real } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, date, timestamp, index, jsonb, real, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -44,7 +44,7 @@ export type UpdateUserPreferences = z.infer<typeof updateUserPreferencesSchema>;
 
 export const trainingPlans = pgTable("training_plans", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   sourceFileName: text("source_file_name"),
   totalWeeks: integer("total_weeks").notNull(),
@@ -61,7 +61,7 @@ export type TrainingPlan = typeof trainingPlans.$inferSelect;
 
 export const planDays = pgTable("plan_days", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  planId: varchar("plan_id").notNull(),
+  planId: varchar("plan_id").notNull().references(() => trainingPlans.id, { onDelete: "cascade" }),
   weekNumber: integer("week_number").notNull(),
   dayName: text("day_name").notNull(),
   focus: text("focus").notNull(),
@@ -74,6 +74,7 @@ export const planDays = pgTable("plan_days", {
   index("idx_plan_days_plan_id").on(table.planId),
   index("idx_plan_days_scheduled_date").on(table.scheduledDate),
   index("idx_plan_days_status").on(table.status),
+  index("idx_plan_days_plan_week").on(table.planId, table.weekNumber),
 ]);
 
 export const insertPlanDaySchema = createInsertSchema(planDays).omit({
@@ -94,7 +95,7 @@ export type TrainingPlanWithDays = TrainingPlan & {
 
 export const workoutLogs = pgTable("workout_logs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   date: date("date").notNull(),
   focus: text("focus").notNull(),
   mainWorkout: text("main_workout").notNull(),
@@ -102,17 +103,16 @@ export const workoutLogs = pgTable("workout_logs", {
   notes: text("notes"),
   duration: integer("duration"),
   rpe: integer("rpe"),
-  planDayId: varchar("plan_day_id"),
-  source: varchar("source").default("manual"), // "manual" | "strava"
+  planDayId: varchar("plan_day_id").references(() => planDays.id, { onDelete: "set null" }),
+  source: varchar("source").default("manual"),
   stravaActivityId: varchar("strava_activity_id"),
-  // Strava detailed metrics
   calories: integer("calories"),
   distanceMeters: real("distance_meters"),
   elevationGain: real("elevation_gain"),
   avgHeartrate: integer("avg_heartrate"),
   maxHeartrate: integer("max_heartrate"),
-  avgSpeed: real("avg_speed"), // meters per second
-  maxSpeed: real("max_speed"), // meters per second
+  avgSpeed: real("avg_speed"),
+  maxSpeed: real("max_speed"),
   avgCadence: real("avg_cadence"),
   avgWatts: integer("avg_watts"),
   sufferScore: integer("suffer_score"),
@@ -120,12 +120,13 @@ export const workoutLogs = pgTable("workout_logs", {
   index("idx_workout_logs_user_id").on(table.userId),
   index("idx_workout_logs_date").on(table.date),
   index("idx_workout_logs_user_date").on(table.userId, table.date),
+  index("idx_workout_logs_plan_day_id").on(table.planDayId),
 ]);
 
 // Strava OAuth connection storage
 export const stravaConnections = pgTable("strava_connections", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull().unique(),
+  userId: varchar("user_id").notNull().unique().references(() => users.id, { onDelete: "cascade" }),
   stravaAthleteId: varchar("strava_athlete_id").notNull(),
   accessToken: text("access_token").notNull(),
   refreshToken: text("refresh_token").notNull(),
@@ -193,7 +194,7 @@ export const exerciseNames = Object.keys(EXERCISE_DEFINITIONS) as ExerciseName[]
 
 export const exerciseSets = pgTable("exercise_sets", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  workoutLogId: varchar("workout_log_id").notNull(),
+  workoutLogId: varchar("workout_log_id").notNull().references(() => workoutLogs.id, { onDelete: "cascade" }),
   exerciseName: varchar("exercise_name").notNull(),
   customLabel: text("custom_label"),
   category: varchar("category").notNull(),
@@ -208,6 +209,7 @@ export const exerciseSets = pgTable("exercise_sets", {
 }, (table) => [
   index("idx_exercise_sets_workout_log_id").on(table.workoutLogId),
   index("idx_exercise_sets_exercise_name").on(table.exerciseName),
+  index("idx_exercise_sets_workout_sort").on(table.workoutLogId, table.sortOrder),
 ]);
 
 export const insertExerciseSetSchema = createInsertSchema(exerciseSets).omit({
@@ -251,12 +253,13 @@ export type TimelineEntry = {
 // Custom exercises saved by users for AI recognition
 export const customExercises = pgTable("custom_exercises", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   category: varchar("category").notNull().default("conditioning"),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_custom_exercises_user_id").on(table.userId),
+  uniqueIndex("idx_custom_exercises_user_name").on(table.userId, table.name),
 ]);
 
 export const insertCustomExerciseSchema = createInsertSchema(customExercises).omit({
@@ -270,12 +273,13 @@ export type CustomExercise = typeof customExercises.$inferSelect;
 // Chat messages for AI Coach persistence
 export const chatMessages = pgTable("chat_messages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull(),
-  role: varchar("role", { length: 20 }).notNull(), // "user" or "assistant"
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  role: varchar("role", { length: 20 }).notNull(),
   content: text("content").notNull(),
   timestamp: timestamp("timestamp").defaultNow(),
 }, (table) => [
   index("idx_chat_messages_user_id").on(table.userId),
+  index("idx_chat_messages_user_time").on(table.userId, table.timestamp),
 ]);
 
 export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({

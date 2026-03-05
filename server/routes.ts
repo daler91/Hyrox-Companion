@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
@@ -7,6 +7,45 @@ import { updatePlanDaySchema, insertWorkoutLogSchema, updateWorkoutLogSchema, up
 import { registerStravaRoutes } from "./strava";
 import { parse } from "csv-parse/sync";
 import type { InsertExerciseSet } from "@shared/schema";
+
+const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
+
+function rateLimiter(category: string, maxRequests: number, windowMs: number = 60000) {
+  return (req: any, res: Response, next: NextFunction) => {
+    const userId = req.user?.claims?.sub;
+    if (!userId) {
+      return next();
+    }
+    const key = `${category}:${userId}`;
+    const now = Date.now();
+    const bucket = rateLimitBuckets.get(key);
+
+    if (!bucket || now >= bucket.resetAt) {
+      rateLimitBuckets.set(key, { count: 1, resetAt: now + windowMs });
+      return next();
+    }
+
+    if (bucket.count >= maxRequests) {
+      const retryAfterSec = Math.ceil((bucket.resetAt - now) / 1000);
+      res.setHeader("Retry-After", String(retryAfterSec));
+      return res.status(429).json({
+        error: `Too many requests. Please wait ${retryAfterSec} seconds before trying again.`,
+      });
+    }
+
+    bucket.count++;
+    return next();
+  };
+}
+
+setInterval(() => {
+  const now = Date.now();
+  rateLimitBuckets.forEach((bucket, key) => {
+    if (now >= bucket.resetAt) {
+      rateLimitBuckets.delete(key);
+    }
+  });
+}, 120000);
 
 function expandExercisesToSetRows(exercises: any[], workoutLogId: string): InsertExerciseSet[] {
   const rows: InsertExerciseSet[] = [];
@@ -279,7 +318,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/parse-exercises", isAuthenticated, async (req: any, res) => {
+  app.post("/api/parse-exercises", isAuthenticated, rateLimiter("parse", 5), async (req: any, res) => {
     try {
       const { text } = req.body as { text: string };
       if (!text || !text.trim()) {
@@ -483,7 +522,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/chat", isAuthenticated, async (req: any, res) => {
+  app.post("/api/chat", isAuthenticated, rateLimiter("chat", 10), async (req: any, res) => {
     try {
       const { message, history } = req.body as {
         message: string;
@@ -506,7 +545,7 @@ export async function registerRoutes(
   });
 
   // Streaming chat endpoint using Server-Sent Events
-  app.post("/api/chat/stream", isAuthenticated, async (req: any, res) => {
+  app.post("/api/chat/stream", isAuthenticated, rateLimiter("chat", 10), async (req: any, res) => {
     try {
       const { message, history } = req.body as {
         message: string;
@@ -808,6 +847,13 @@ export async function registerRoutes(
       const parseResult = updatePlanDaySchema.safeParse(req.body);
       if (!parseResult.success) {
         return res.status(400).json({ error: "Invalid update data", details: parseResult.error });
+      }
+
+      if (parseResult.data.mainWorkout !== undefined) {
+        const linkedLog = await storage.getWorkoutLogByPlanDayId(dayId, userId);
+        if (linkedLog) {
+          await storage.deleteExerciseSetsByWorkoutLog(linkedLog.id);
+        }
       }
 
       const updatedDay = await storage.updatePlanDay(dayId, parseResult.data, userId);
@@ -1139,7 +1185,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/timeline/ai-suggestions", isAuthenticated, async (req: any, res) => {
+  app.post("/api/timeline/ai-suggestions", isAuthenticated, rateLimiter("suggestions", 3), async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       

@@ -40,10 +40,6 @@ export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }
 
   const stats = useMemo(() => calculateStats(timeline), [timeline]);
 
-  const trainingContext = timeline.length > 0 
-    ? `\n\nCurrent training context: ${stats.completedThisWeek} workouts completed this week, ${stats.plannedUpcoming} planned upcoming, ${stats.completionRate}% completion rate, ${stats.currentStreak} day streak.`
-    : "";
-
   const {
     messages: hookMessages,
     isLoading,
@@ -53,7 +49,6 @@ export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }
     isClearingHistory,
     scrollToBottom,
   } = useChatSession({ 
-    trainingContext,
     useStreaming: true,
   });
 
@@ -148,6 +143,10 @@ export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }
       });
 
       queryClient.invalidateQueries({ queryKey: ["/api/timeline"] });
+      if (suggestion.action === "replace" && suggestion.targetField === "mainWorkout") {
+        queryClient.invalidateQueries({ queryKey: ["/api/exercise-analytics"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/personal-records"] });
+      }
       setPendingSuggestions(prev => prev.filter(s => s.workoutId !== suggestion.workoutId));
       
       const confirmMessage: Message = {

@@ -13,6 +13,23 @@ import { Save, ArrowLeft, Loader2, Dumbbell, Type, Sparkles, GripVertical } from
 import { Link, useLocation } from "wouter";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 function generateSummary(exercises: StructuredExercise[], weightUnit: string, distanceUnit: string): string {
   const distLabel = distanceUnit === "km" ? "m" : "ft";
@@ -36,6 +53,52 @@ function generateSummary(exercises: StructuredExercise[], weightUnit: string, di
     if (firstSet.time) parts.push(`${firstSet.time}min`);
     return `${name}: ${parts.join(", ") || "completed"}`;
   }).join("; ");
+}
+
+interface SortableExerciseBlockProps {
+  blockId: string;
+  exData: StructuredExercise;
+  blockLabel?: string;
+  weightUnit: string;
+  distanceUnit: string;
+  onChange: (blockId: string, ex: StructuredExercise) => void;
+  onRemove: (blockId: string) => void;
+}
+
+function SortableExerciseBlock({ blockId, exData, blockLabel, weightUnit, distanceUnit, onChange, onRemove }: SortableExerciseBlockProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: blockId });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    position: "relative" as const,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <div className="absolute left-0 top-3 z-10 cursor-grab active:cursor-grabbing touch-none p-1" {...attributes} {...listeners} data-testid={`drag-handle-${blockId}`}>
+        <GripVertical className="h-4 w-4 text-muted-foreground" />
+      </div>
+      <div className="pl-6">
+        <ExerciseInput
+          exercise={exData}
+          onChange={(ex) => onChange(blockId, ex)}
+          onRemove={() => onRemove(blockId)}
+          weightUnit={weightUnit}
+          distanceUnit={distanceUnit}
+          blockLabel={blockLabel}
+        />
+      </div>
+    </div>
+  );
 }
 
 function exerciseToPayload(ex: StructuredExercise) {
@@ -67,6 +130,22 @@ export default function LogWorkout() {
   const [exerciseData, setExerciseData] = useState<Record<string, StructuredExercise>>({});
   const [notes, setNotes] = useState("");
   const blockCounterRef = useRef(0);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      setExerciseBlocks((prev) => {
+        const oldIndex = prev.indexOf(active.id as string);
+        const newIndex = prev.indexOf(over.id as string);
+        return arrayMove(prev, oldIndex, newIndex);
+      });
+    }
+  };
 
   const makeBlockId = (name: string) => {
     blockCounterRef.current += 1;
@@ -369,25 +448,30 @@ export default function LogWorkout() {
           {exerciseBlocks.length > 0 && (
             <div className="space-y-4">
               <h2 className="text-lg font-semibold">Exercise Details</h2>
-              <p className="text-xs text-muted-foreground">Exercises are ordered as you added them. Remove and re-add to reorder.</p>
-              {exerciseBlocks.map((blockId, idx) => {
-                const exData = exerciseData[blockId];
-                if (!exData) return null;
-                const blockCount = exerciseBlocks.filter(b => getBlockExerciseName(b) === exData.exerciseName).length;
-                const blockIndex = exerciseBlocks.filter((b, i) => i <= idx && getBlockExerciseName(b) === exData.exerciseName).length;
-                const showBlockNumber = blockCount > 1;
-                return (
-                  <ExerciseInput
-                    key={blockId}
-                    exercise={exData}
-                    onChange={(ex) => handleExerciseChange(blockId, ex)}
-                    onRemove={() => handleRemoveBlock(blockId)}
-                    weightUnit={weightUnit}
-                    distanceUnit={distanceUnit}
-                    blockLabel={showBlockNumber ? `#${blockIndex}` : undefined}
-                  />
-                );
-              })}
+              <p className="text-xs text-muted-foreground">Drag the handle to reorder exercises.</p>
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                <SortableContext items={exerciseBlocks} strategy={verticalListSortingStrategy}>
+                  {exerciseBlocks.map((blockId, idx) => {
+                    const exData = exerciseData[blockId];
+                    if (!exData) return null;
+                    const blockCount = exerciseBlocks.filter(b => getBlockExerciseName(b) === exData.exerciseName).length;
+                    const blockIndex = exerciseBlocks.filter((b, i) => i <= idx && getBlockExerciseName(b) === exData.exerciseName).length;
+                    const showBlockNumber = blockCount > 1;
+                    return (
+                      <SortableExerciseBlock
+                        key={blockId}
+                        blockId={blockId}
+                        exData={exData}
+                        blockLabel={showBlockNumber ? `#${blockIndex}` : undefined}
+                        weightUnit={weightUnit}
+                        distanceUnit={distanceUnit}
+                        onChange={handleExerciseChange}
+                        onRemove={handleRemoveBlock}
+                      />
+                    );
+                  })}
+                </SortableContext>
+              </DndContext>
             </div>
           )}
         </>

@@ -42,6 +42,7 @@ import {
   Type,
   Dumbbell,
   Sparkles,
+  GripVertical,
 } from "lucide-react";
 import { SiStrava } from "react-icons/si";
 import { type TimelineEntry, type WorkoutStatus, type ExerciseSet, EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
@@ -51,6 +52,23 @@ import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { formatSpeed } from "@shared/unitConversion";
 import { ExerciseSelector } from "@/components/ExerciseSelector";
 import { ExerciseInput, createDefaultSet, type StructuredExercise } from "@/components/ExerciseInput";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 interface WorkoutDetailDialogProps {
   entry: TimelineEntry | null;
@@ -160,6 +178,52 @@ function exerciseSetsToStructured(dbSets: ExerciseSet[]): { names: string[]; dat
   return { names, data };
 }
 
+interface SortableDialogBlockProps {
+  blockId: string;
+  exData: StructuredExercise;
+  blockLabel?: string;
+  weightUnit: string;
+  distanceUnit: string;
+  onChange: (blockId: string, ex: StructuredExercise) => void;
+  onRemove: (blockId: string) => void;
+}
+
+function SortableDialogBlock({ blockId, exData, blockLabel, weightUnit, distanceUnit, onChange, onRemove }: SortableDialogBlockProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: blockId });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    position: "relative" as const,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <div className="absolute left-0 top-3 z-10 cursor-grab active:cursor-grabbing touch-none p-1" {...attributes} {...listeners} data-testid={`drag-handle-dialog-${blockId}`}>
+        <GripVertical className="h-4 w-4 text-muted-foreground" />
+      </div>
+      <div className="pl-6">
+        <ExerciseInput
+          exercise={exData}
+          onChange={(ex) => onChange(blockId, ex)}
+          onRemove={() => onRemove(blockId)}
+          weightUnit={weightUnit}
+          distanceUnit={distanceUnit}
+          blockLabel={blockLabel}
+        />
+      </div>
+    </div>
+  );
+}
+
 function getStatusBadge(status: string) {
   switch (status) {
     case "completed":
@@ -221,6 +285,22 @@ export default function WorkoutDetailDialog({
   const [editExerciseData, setEditExerciseData] = useState<Record<string, StructuredExercise>>({});
   const hasStructuredData = entry?.exerciseSets && entry.exerciseSets.length > 0;
   const blockCounterRef = useRef(100);
+
+  const dialogSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const handleEditDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      setEditExercises((prev) => {
+        const oldIndex = prev.indexOf(active.id as string);
+        const newIndex = prev.indexOf(over.id as string);
+        return arrayMove(prev, oldIndex, newIndex);
+      });
+    }
+  };
 
   const makeBlockId = (name: string) => {
     blockCounterRef.current += 1;
@@ -503,25 +583,30 @@ export default function WorkoutDetailDialog({
                 </div>
                 {editExercises.length > 0 && (
                   <div className="space-y-3">
-                    {editExercises.map((blockId, idx) => {
-                      const exData = editExerciseData[blockId];
-                      if (!exData) return null;
-                      const exName = exData.exerciseName;
-                      const blockCount = editExercises.filter(b => editExerciseData[b]?.exerciseName === exName).length;
-                      const blockIndex = editExercises.filter((b, i) => i <= idx && editExerciseData[b]?.exerciseName === exName).length;
-                      const showBlockNumber = blockCount > 1;
-                      return (
-                        <ExerciseInput
-                          key={blockId}
-                          exercise={exData}
-                          onChange={(ex) => setEditExerciseData(prev => ({ ...prev, [blockId]: ex }))}
-                          onRemove={() => handleRemoveBlock(blockId)}
-                          weightUnit={weightUnit}
-                          distanceUnit={distanceUnit}
-                          blockLabel={showBlockNumber ? `#${blockIndex}` : undefined}
-                        />
-                      );
-                    })}
+                    <DndContext sensors={dialogSensors} collisionDetection={closestCenter} onDragEnd={handleEditDragEnd}>
+                      <SortableContext items={editExercises} strategy={verticalListSortingStrategy}>
+                        {editExercises.map((blockId, idx) => {
+                          const exData = editExerciseData[blockId];
+                          if (!exData) return null;
+                          const exName = exData.exerciseName;
+                          const blockCount = editExercises.filter(b => editExerciseData[b]?.exerciseName === exName).length;
+                          const blockIndex = editExercises.filter((b, i) => i <= idx && editExerciseData[b]?.exerciseName === exName).length;
+                          const showBlockNumber = blockCount > 1;
+                          return (
+                            <SortableDialogBlock
+                              key={blockId}
+                              blockId={blockId}
+                              exData={exData}
+                              blockLabel={showBlockNumber ? `#${blockIndex}` : undefined}
+                              weightUnit={weightUnit}
+                              distanceUnit={distanceUnit}
+                              onChange={(id, ex) => setEditExerciseData(prev => ({ ...prev, [id]: ex }))}
+                              onRemove={handleRemoveBlock}
+                            />
+                          );
+                        })}
+                      </SortableContext>
+                    </DndContext>
                   </div>
                 )}
                 {editExercises.length === 0 && (

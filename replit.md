@@ -15,6 +15,9 @@ HyroxTracker is a training planning and logging application for Hyrox athletes. 
 - **Parse Confidence Scores**: Each AI-parsed exercise shows a confidence percentage indicating how certain the AI is about the exercise mapping. Scores below 90 show colored badges (green 80-89, yellow 60-79, red <60)
 - **PR Detection**: Personal records are automatically detected per exercise (heaviest weight, fastest time, longest distance) and shown with trophy badges on timeline workout cards
 - **Filtering & Search**: Filter timeline by status (all, planned, completed)
+- **Drag-and-Drop Reordering**: Exercises on Log Workout page and in workout edit dialogs can be reordered via drag handles using @dnd-kit
+- **AI Rate Limiting**: Per-user rate limits on AI endpoints (10/min chat, 5/min parsing, 3/min suggestions) with 429 responses
+- **Database Integrity**: Foreign keys with cascading deletes on all tables, composite indexes for performance, unique constraint on custom exercises
 
 The design follows premium fitness app patterns (Strava, TrainingPeaks, Whoop) with focus on data clarity and athletic performance tracking.
 

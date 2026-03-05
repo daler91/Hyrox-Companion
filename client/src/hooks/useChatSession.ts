@@ -13,7 +13,6 @@ export interface Message {
 
 interface UseChatSessionOptions {
   welcomeMessage?: string;
-  trainingContext?: string;
   useStreaming?: boolean;
 }
 
@@ -22,7 +21,6 @@ const DEFAULT_WELCOME = "Hey! I'm your AI training coach. Ask me about pacing, t
 export function useChatSession(options: UseChatSessionOptions = {}) {
   const { 
     welcomeMessage = DEFAULT_WELCOME,
-    trainingContext = "",
     useStreaming = true,
   } = options;
 
@@ -109,10 +107,6 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         .filter((m) => m.id !== "welcome")
         .map((m) => ({ role: m.role, content: m.content }));
 
-      const messageWithContext = trainingContext 
-        ? `${content}${trainingContext}` 
-        : content;
-
       if (useStreaming) {
         const placeholderMessage: Message = {
           id: assistantMessageId,
@@ -127,7 +121,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
           headers: { "Content-Type": "application/json" },
           credentials: "include",
           body: JSON.stringify({ 
-            message: messageWithContext, 
+            message: content, 
             history 
           }),
         });
@@ -209,7 +203,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         }
       } else {
         const response = await apiRequest("POST", "/api/chat", { 
-          message: messageWithContext, 
+          message: content, 
           history 
         });
         const data = await response.json();
@@ -249,7 +243,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     } finally {
       setIsLoading(false);
     }
-  }, [messages, trainingContext, useStreaming, saveMessageMutation]);
+  }, [messages, useStreaming, saveMessageMutation]);
 
   const clearHistory = useCallback(() => {
     clearHistoryMutation.mutate();
