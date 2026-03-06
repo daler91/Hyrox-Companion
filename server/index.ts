@@ -4,8 +4,6 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
-import { startEmailScheduler } from "./emailScheduler";
-import { storage } from "./storage";
 
 const app = express();
 const httpServer = createServer(app);
@@ -118,7 +116,6 @@ async function cleanOrphanedData() {
     },
     () => {
       log(`serving on port ${port}`);
-      startEmailScheduler(storage);
     },
   );
 })();

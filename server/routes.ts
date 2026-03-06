@@ -7,7 +7,7 @@ import { updatePlanDaySchema, insertWorkoutLogSchema, updateWorkoutLogSchema, up
 import { registerStravaRoutes } from "./strava";
 import { parse } from "csv-parse/sync";
 import type { InsertExerciseSet } from "@shared/schema";
-import { checkAndSendEmailsForUser } from "./emailScheduler";
+import { checkAndSendEmailsForUser, runEmailCronJob } from "./emailScheduler";
 
 const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
 
@@ -333,6 +333,21 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error checking emails:", error);
       res.json({ sent: [], error: "Email check failed" });
+    }
+  });
+
+  app.get("/api/cron/emails", async (req, res) => {
+    const secret = (req.headers["x-cron-secret"] as string) || (req.query.secret as string);
+    const cronSecret = process.env.CRON_SECRET;
+    if (!cronSecret || secret !== cronSecret) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    try {
+      const result = await runEmailCronJob(storage);
+      res.json(result);
+    } catch (error) {
+      console.error("Cron email error:", error);
+      res.status(500).json({ error: "Cron job failed" });
     }
   });
 

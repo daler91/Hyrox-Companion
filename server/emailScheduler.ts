@@ -3,8 +3,6 @@ import type { User } from "@shared/schema";
 import { sendWeeklySummary, sendMissedWorkoutReminder, type WeeklySummaryData, type MissedWorkoutData } from "./email";
 import { log } from "./index";
 
-const SCHEDULER_INTERVAL_MS = 30 * 60 * 1000;
-
 export async function checkAndSendEmailsForUser(storage: IStorage, user: User): Promise<string[]> {
   const sent: string[] = [];
   if (!user.email || !user.emailNotifications) return sent;
@@ -87,37 +85,38 @@ export async function checkAndSendEmailsForUser(storage: IStorage, user: User): 
   return sent;
 }
 
-export function startEmailScheduler(storage: IStorage): void {
-  log("Email scheduler started (runs every 30 minutes)", "email");
+export async function runEmailCronJob(storage: IStorage): Promise<{ usersChecked: number; emailsSent: number; details: string[] }> {
+  const details: string[] = [];
+  let emailsSent = 0;
 
-  const runCheck = async () => {
-    try {
-      const usersToCheck = await storage.getUsersWithEmailNotifications();
-      if (usersToCheck.length === 0) return;
-
-      log(`Checking emails for ${usersToCheck.length} user(s)`, "email");
-      let totalSent = 0;
-
-      for (const user of usersToCheck) {
-        try {
-          const sent = await checkAndSendEmailsForUser(storage, user);
-          totalSent += sent.length;
-          if (sent.length > 0) {
-            log(`Sent ${sent.join(', ')} to ${user.email}`, "email");
-          }
-        } catch (err) {
-          log(`Email check failed for user ${user.id}: ${err}`, "email");
-        }
-      }
-
-      if (totalSent > 0) {
-        log(`Email scheduler completed: ${totalSent} email(s) sent`, "email");
-      }
-    } catch (err) {
-      log(`Email scheduler error: ${err}`, "email");
+  try {
+    const usersToCheck = await storage.getUsersWithEmailNotifications();
+    if (usersToCheck.length === 0) {
+      return { usersChecked: 0, emailsSent: 0, details: ["No users with email notifications enabled"] };
     }
-  };
 
-  runCheck();
-  setInterval(runCheck, SCHEDULER_INTERVAL_MS);
+    log(`Cron: Checking emails for ${usersToCheck.length} user(s)`, "email");
+
+    for (const user of usersToCheck) {
+      try {
+        const sent = await checkAndSendEmailsForUser(storage, user);
+        emailsSent += sent.length;
+        if (sent.length > 0) {
+          const detail = `Sent ${sent.join(', ')} to ${user.email}`;
+          details.push(detail);
+          log(detail, "email");
+        }
+      } catch (err) {
+        const detail = `Failed for user ${user.id}: ${err}`;
+        details.push(detail);
+        log(detail, "email");
+      }
+    }
+
+    log(`Cron complete: ${emailsSent} email(s) sent to ${usersToCheck.length} user(s)`, "email");
+    return { usersChecked: usersToCheck.length, emailsSent, details };
+  } catch (err) {
+    log(`Cron error: ${err}`, "email");
+    throw err;
+  }
 }
