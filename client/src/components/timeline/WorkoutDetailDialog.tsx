@@ -1,71 +1,16 @@
 import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Separator } from "@/components/ui/separator";
-import {
-  Loader2,
-  CheckCircle2,
-  Clock,
-  XCircle,
-  SkipForward,
-  Pencil,
-  Trash2,
-  Flame,
-  Zap,
-  Activity,
-  TrendingUp,
-  Combine,
-  Save,
-  X,
-  Type,
-  Dumbbell,
-  Sparkles,
-  GripVertical,
-} from "lucide-react";
-import { SiStrava } from "react-icons/si";
-import { type TimelineEntry, type WorkoutStatus, type ExerciseSet, type ExerciseName } from "@shared/schema";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { type TimelineEntry, type WorkoutStatus } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
-import { formatSpeed } from "@shared/unitConversion";
-import { ExerciseSelector } from "@/components/ExerciseSelector";
-import { ExerciseInput, type StructuredExercise } from "@/components/ExerciseInput";
-import { categoryChipColors, getExerciseLabel, groupExerciseSets, formatExerciseSummary, type GroupedExercise } from "@/lib/exerciseUtils";
-import {
-  DndContext,
-  closestCenter,
-} from "@dnd-kit/core";
-import {
-  SortableContext,
-  verticalListSortingStrategy,
-  useSortable,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+import { getExerciseLabel, groupExerciseSets } from "@/lib/exerciseUtils";
 import {
   useWorkoutEditor,
-  getBlockExerciseName,
   exerciseToPayload,
 } from "@/hooks/useWorkoutEditor";
+import { WorkoutDetailHeader } from "./WorkoutDetailHeader";
+import { exerciseSetsToStructured, WorkoutDetailView, WorkoutDetailEditForm } from "./WorkoutDetailExercises";
+import { StatusChangeSection, WorkoutDetailFooter, DeleteConfirmDialog } from "./WorkoutDetailActions";
 
 interface WorkoutDetailDialogProps {
   entry: TimelineEntry | null;
@@ -77,119 +22,6 @@ interface WorkoutDetailDialogProps {
   onCombine?: (entry: TimelineEntry) => void;
   isSaving?: boolean;
   isDeleting?: boolean;
-}
-
-
-function exerciseSetsToStructured(dbSets: ExerciseSet[]): { names: string[]; data: Record<string, StructuredExercise> } {
-  const groups = groupExerciseSets(dbSets);
-  const names: string[] = [];
-  const data: Record<string, StructuredExercise> = {};
-  const counter = new Map<string, number>();
-  for (const group of groups) {
-    const baseName = group.exerciseName === "custom" && group.customLabel
-      ? `custom:${group.customLabel}`
-      : group.exerciseName;
-    const count = (counter.get(baseName) || 0) + 1;
-    counter.set(baseName, count);
-    const key = `${baseName}__${count}`;
-    names.push(key);
-    data[key] = {
-      exerciseName: group.exerciseName as ExerciseName,
-      category: group.category,
-      customLabel: group.customLabel || undefined,
-      confidence: group.confidence ?? undefined,
-      sets: group.sets.map(s => ({
-        setNumber: s.setNumber,
-        reps: s.reps ?? undefined,
-        weight: s.weight ?? undefined,
-        distance: s.distance ?? undefined,
-        time: s.time ?? undefined,
-        notes: s.notes ?? undefined,
-      })),
-    };
-  }
-  return { names, data };
-}
-
-interface SortableDialogBlockProps {
-  blockId: string;
-  exData: StructuredExercise;
-  blockLabel?: string;
-  weightUnit: string;
-  distanceUnit: string;
-  onChange: (blockId: string, ex: StructuredExercise) => void;
-  onRemove: (blockId: string) => void;
-}
-
-function SortableDialogBlock({ blockId, exData, blockLabel, weightUnit, distanceUnit, onChange, onRemove }: SortableDialogBlockProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: blockId });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-    position: "relative" as const,
-  };
-
-  return (
-    <div ref={setNodeRef} style={style}>
-      <div className="absolute left-0 top-3 z-10 cursor-grab active:cursor-grabbing touch-none p-1" {...attributes} {...listeners} data-testid={`drag-handle-dialog-${blockId}`}>
-        <GripVertical className="h-4 w-4 text-muted-foreground" />
-      </div>
-      <div className="pl-6">
-        <ExerciseInput
-          exercise={exData}
-          onChange={(ex) => onChange(blockId, ex)}
-          onRemove={() => onRemove(blockId)}
-          weightUnit={weightUnit}
-          distanceUnit={distanceUnit}
-          blockLabel={blockLabel}
-        />
-      </div>
-    </div>
-  );
-}
-
-function getStatusBadge(status: string) {
-  switch (status) {
-    case "completed":
-      return (
-        <Badge className="bg-green-500/10 text-green-600 dark:text-green-400">
-          <CheckCircle2 className="h-3 w-3 mr-1" />
-          Completed
-        </Badge>
-      );
-    case "planned":
-      return (
-        <Badge className="bg-blue-500/10 text-blue-600 dark:text-blue-400">
-          <Clock className="h-3 w-3 mr-1" />
-          Planned
-        </Badge>
-      );
-    case "missed":
-      return (
-        <Badge className="bg-red-500/10 text-red-600 dark:text-red-400">
-          <XCircle className="h-3 w-3 mr-1" />
-          Missed
-        </Badge>
-      );
-    case "skipped":
-      return (
-        <Badge className="bg-yellow-500/10 text-yellow-600 dark:text-yellow-400">
-          <SkipForward className="h-3 w-3 mr-1" />
-          Skipped
-        </Badge>
-      );
-    default:
-      return null;
-  }
 }
 
 export default function WorkoutDetailDialog({
@@ -302,398 +134,86 @@ export default function WorkoutDetailDialog({
     onClose();
   };
 
-  const handleDeleteClick = () => {
-    setConfirmingDelete(true);
-  };
-
-  const handleConfirmDelete = () => {
-    onDelete(entry);
-    setConfirmingDelete(false);
+  const handleParseText = () => {
+    if (!editForm.mainWorkout.trim()) {
+      toast({ title: "No text", description: "Please describe your workout first.", variant: "destructive" });
+      return;
+    }
+    parseMutation.mutate(editForm.mainWorkout);
   };
 
   return (
     <Dialog open={!!entry} onOpenChange={(open) => !open && handleClose()}>
       <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <div className="flex items-center gap-2 flex-wrap">
-            {getStatusBadge(entry.status)}
-            {entry.source === "strava" && (
-              <Badge className="bg-[#FC4C02]/10 text-[#FC4C02]">
-                <SiStrava className="h-3 w-3 mr-1" />
-                Strava
-              </Badge>
-            )}
-            {entry.dayName && (
-              <Badge variant="secondary">{entry.dayName}</Badge>
-            )}
-          </div>
-          <DialogTitle className="text-left mt-2">
-            {isEditing ? "Edit Workout" : entry.focus}
-          </DialogTitle>
-          <DialogDescription className="sr-only">
-            View and manage workout details
-          </DialogDescription>
-        </DialogHeader>
+        <WorkoutDetailHeader
+          status={entry.status}
+          source={entry.source}
+          dayName={entry.dayName}
+          focus={entry.focus}
+          isEditing={isEditing}
+        />
 
         {isEditing ? (
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="detail-focus">Focus</Label>
-              <Input
-                id="detail-focus"
-                value={editForm.focus}
-                onChange={(e) => setEditForm({ ...editForm, focus: e.target.value })}
-                data-testid="input-detail-focus"
-              />
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Button
-                variant={useTextMode ? "outline" : "default"}
-                size="sm"
-                onClick={() => setUseTextMode(false)}
-                data-testid="button-mode-exercises"
-              >
-                <Dumbbell className="h-4 w-4 mr-1" />
-                Exercises
-              </Button>
-              <Button
-                variant={useTextMode ? "default" : "outline"}
-                size="sm"
-                onClick={() => setUseTextMode(true)}
-                data-testid="button-mode-freetext"
-              >
-                <Type className="h-4 w-4 mr-1" />
-                Free Text
-              </Button>
-            </div>
-
-            {useTextMode ? (
-              <div className="space-y-3">
-                <Textarea
-                  id="detail-main"
-                  value={editForm.mainWorkout}
-                  onChange={(e) => setEditForm({ ...editForm, mainWorkout: e.target.value })}
-                  rows={3}
-                  data-testid="input-detail-main"
-                  placeholder={"Describe your workout, e.g.:\n4x8 back squat at 70kg\n5km tempo run in 25 min"}
-                />
-                <Button
-                  onClick={() => {
-                    if (!editForm.mainWorkout.trim()) {
-                      toast({ title: "No text", description: "Please describe your workout first.", variant: "destructive" });
-                      return;
-                    }
-                    parseMutation.mutate(editForm.mainWorkout);
-                  }}
-                  disabled={parseMutation.isPending || !editForm.mainWorkout.trim()}
-                  variant="outline"
-                  className="w-full"
-                  data-testid="button-detail-parse-ai"
-                >
-                  {parseMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Sparkles className="h-4 w-4 mr-2" />
-                  )}
-                  {parseMutation.isPending ? "Parsing with AI..." : "Parse with AI"}
-                </Button>
-                <p className="text-xs text-muted-foreground">
-                  AI will convert your text into structured exercises you can review and edit.
-                </p>
-              </div>
-            ) : (
-              <>
-                <div>
-                  <p className="text-xs text-muted-foreground mb-2">Click an exercise to add it. You can add the same exercise multiple times.</p>
-                  <ExerciseSelector
-                    selectedExercises={getSelectedExerciseNames()}
-                    onToggle={() => {}}
-                    onAdd={handleAddExercise}
-                    allowDuplicates
-                  />
-                </div>
-                {editExercises.length > 0 && (
-                  <div className="space-y-3">
-                    <DndContext sensors={dialogSensors} collisionDetection={closestCenter} onDragEnd={handleEditDragEnd}>
-                      <SortableContext items={editExercises} strategy={verticalListSortingStrategy}>
-                        {editExercises.map((blockId, idx) => {
-                          const exData = editExerciseData[blockId];
-                          if (!exData) return null;
-                          const exName = exData.exerciseName;
-                          const blockCount = editExercises.filter(b => editExerciseData[b]?.exerciseName === exName).length;
-                          const blockIndex = editExercises.filter((b, i) => i <= idx && editExerciseData[b]?.exerciseName === exName).length;
-                          const showBlockNumber = blockCount > 1;
-                          return (
-                            <SortableDialogBlock
-                              key={blockId}
-                              blockId={blockId}
-                              exData={exData}
-                              blockLabel={showBlockNumber ? `#${blockIndex}` : undefined}
-                              weightUnit={weightUnit}
-                              distanceUnit={distanceUnit}
-                              onChange={updateBlock}
-                              onRemove={handleRemoveBlock}
-                            />
-                          );
-                        })}
-                      </SortableContext>
-                    </DndContext>
-                  </div>
-                )}
-                {editExercises.length === 0 && (
-                  <p className="text-sm text-muted-foreground text-center py-2">
-                    Add exercises using the button above
-                  </p>
-                )}
-              </>
-            )}
-
-            <div>
-              <Label htmlFor="detail-accessory">Accessory/Engine Work</Label>
-              <Textarea
-                id="detail-accessory"
-                value={editForm.accessory}
-                onChange={(e) => setEditForm({ ...editForm, accessory: e.target.value })}
-                rows={2}
-                data-testid="input-detail-accessory"
-              />
-            </div>
-            <div>
-              <Label htmlFor="detail-notes">Notes</Label>
-              <Input
-                id="detail-notes"
-                value={editForm.notes}
-                onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
-                data-testid="input-detail-notes"
-              />
-            </div>
-          </div>
+          <WorkoutDetailEditForm
+            editForm={editForm}
+            setEditForm={setEditForm}
+            useTextMode={useTextMode}
+            setUseTextMode={setUseTextMode}
+            editExercises={editExercises}
+            editExerciseData={editExerciseData}
+            dialogSensors={dialogSensors}
+            handleEditDragEnd={handleEditDragEnd}
+            handleAddExercise={handleAddExercise}
+            handleRemoveBlock={handleRemoveBlock}
+            updateBlock={updateBlock}
+            getSelectedExerciseNames={getSelectedExerciseNames}
+            parseMutation={parseMutation}
+            weightUnit={weightUnit}
+            distanceUnit={distanceUnit}
+            onParseText={handleParseText}
+          />
         ) : (
-          <div className="space-y-3">
-            {hasStructuredData ? (
-              <div className="flex flex-wrap gap-1.5" data-testid="detail-exercise-chips">
-                {grouped.map((group, idx) => (
-                  <Badge
-                    key={`${group.exerciseName}-${idx}`}
-                    variant="secondary"
-                    className={`text-xs font-normal ${categoryChipColors[group.category] || ""}`}
-                  >
-                    {formatExerciseSummary(group, weightLabel, distanceUnit)}
-                  </Badge>
-                ))}
-              </div>
-            ) : (
-              <div>
-                <p className="text-sm text-muted-foreground">{entry.mainWorkout}</p>
-              </div>
-            )}
-            {entry.accessory && (
-              <div>
-                <p className="text-xs font-medium text-muted-foreground/70 mb-1">Accessory</p>
-                <p className="text-sm text-muted-foreground/70">{entry.accessory}</p>
-              </div>
-            )}
-            {entry.notes && (
-              <div>
-                <p className="text-xs font-medium text-muted-foreground/70 mb-1">Notes</p>
-                <p className="text-sm text-muted-foreground italic">{entry.notes}</p>
-              </div>
-            )}
-            {entry.duration && entry.source !== "strava" && (
-              <p className="text-xs text-muted-foreground">
-                Duration: {entry.duration} min
-                {entry.rpe && ` | RPE: ${entry.rpe}`}
-              </p>
-            )}
-            {entry.source === "strava" && (entry.calories || entry.avgWatts || entry.sufferScore || entry.avgCadence || entry.avgSpeed) && (
-              <div className="flex flex-wrap gap-3 pt-2 border-t border-border/50">
-                {entry.calories && (
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <Flame className="h-3 w-3 text-orange-500" />
-                    <span>{entry.calories} cal</span>
-                  </div>
-                )}
-                {entry.avgWatts && (
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <Zap className="h-3 w-3 text-yellow-500" />
-                    <span>{entry.avgWatts}W</span>
-                  </div>
-                )}
-                {entry.avgCadence && (
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <Activity className="h-3 w-3 text-blue-500" />
-                    <span>{Math.round(entry.avgCadence)} spm</span>
-                  </div>
-                )}
-                {entry.avgSpeed && entry.avgSpeed > 0 && (
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <TrendingUp className="h-3 w-3 text-green-500" />
-                    <span>{formatSpeed(entry.avgSpeed, distanceUnit)}</span>
-                  </div>
-                )}
-                {entry.sufferScore && (
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <TrendingUp className="h-3 w-3 text-purple-500" />
-                    <span>Effort: {entry.sufferScore}</span>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+          <WorkoutDetailView
+            entry={entry}
+            grouped={grouped}
+            hasStructuredData={!!hasStructuredData}
+            weightLabel={weightLabel}
+            distanceUnit={distanceUnit}
+          />
         )}
 
         {canChangeStatus && !isEditing && (
-          <>
-            <Separator />
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-muted-foreground">Change Status</p>
-              <div className="flex flex-wrap gap-2">
-                {entry.status !== "completed" && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="text-green-600 border-green-200 dark:border-green-800"
-                    onClick={() => onMarkComplete(entry)}
-                    data-testid="button-detail-complete"
-                  >
-                    <CheckCircle2 className="h-4 w-4 mr-1" />
-                    Complete
-                  </Button>
-                )}
-                {entry.status !== "skipped" && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="text-yellow-600 border-yellow-200 dark:border-yellow-800"
-                    onClick={() => onChangeStatus(entry, "skipped")}
-                    data-testid="button-detail-skip"
-                  >
-                    <SkipForward className="h-4 w-4 mr-1" />
-                    Skip
-                  </Button>
-                )}
-                {entry.status !== "missed" && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="text-red-600 border-red-200 dark:border-red-800"
-                    onClick={() => onChangeStatus(entry, "missed")}
-                    data-testid="button-detail-missed"
-                  >
-                    <XCircle className="h-4 w-4 mr-1" />
-                    Missed
-                  </Button>
-                )}
-                {entry.status !== "planned" && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="text-blue-600 border-blue-200 dark:border-blue-800"
-                    onClick={() => onChangeStatus(entry, "planned")}
-                    data-testid="button-detail-planned"
-                  >
-                    <Clock className="h-4 w-4 mr-1" />
-                    Planned
-                  </Button>
-                )}
-              </div>
-            </div>
-          </>
+          <StatusChangeSection
+            entry={entry}
+            onMarkComplete={onMarkComplete}
+            onChangeStatus={onChangeStatus}
+          />
         )}
 
-        <DialogFooter className="flex-col sm:flex-row gap-2">
-          {isEditing ? (
-            <>
-              <Button
-                variant="outline"
-                onClick={() => setIsEditing(false)}
-                className="sm:mr-auto"
-              >
-                <X className="h-4 w-4 mr-1" />
-                Cancel
-              </Button>
-              <Button
-                onClick={handleSave}
-                disabled={isSaving}
-                data-testid="button-detail-save"
-              >
-                {isSaving ? (
-                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                ) : (
-                  <Save className="h-4 w-4 mr-1" />
-                )}
-                Save Changes
-              </Button>
-            </>
-          ) : (
-            <>
-              <div className="flex gap-2 sm:mr-auto flex-wrap">
-                {canEdit && (
-                  <Button
-                    variant="outline"
-                    onClick={() => setIsEditing(true)}
-                    data-testid="button-detail-edit"
-                  >
-                    <Pencil className="h-4 w-4 mr-1" />
-                    Edit
-                  </Button>
-                )}
-                {onCombine && (
-                  <Button
-                    variant="outline"
-                    onClick={() => onCombine(entry)}
-                    data-testid="button-detail-combine"
-                  >
-                    <Combine className="h-4 w-4 mr-1" />
-                    Combine
-                  </Button>
-                )}
-                {canDelete && (
-                  <Button
-                    variant="outline"
-                    className="text-destructive"
-                    onClick={handleDeleteClick}
-                    disabled={isDeleting}
-                    data-testid="button-detail-delete"
-                  >
-                    {isDeleting ? (
-                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                    ) : (
-                      <Trash2 className="h-4 w-4 mr-1" />
-                    )}
-                    Delete
-                  </Button>
-                )}
-              </div>
-              <Button variant="outline" onClick={handleClose}>
-                Close
-              </Button>
-            </>
-          )}
-        </DialogFooter>
+        <WorkoutDetailFooter
+          isEditing={isEditing}
+          canEdit={canEdit}
+          canDelete={canDelete}
+          isSaving={isSaving}
+          isDeleting={isDeleting}
+          onEdit={() => setIsEditing(true)}
+          onCancelEdit={() => setIsEditing(false)}
+          onSave={handleSave}
+          onDelete={() => setConfirmingDelete(true)}
+          onClose={handleClose}
+          onCombine={onCombine ? () => onCombine(entry) : undefined}
+        />
       </DialogContent>
 
-      <AlertDialog open={confirmingDelete} onOpenChange={setConfirmingDelete}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Workout</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this workout? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleConfirmDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              data-testid="button-confirm-delete"
-            >
-              {isDeleting ? "Deleting..." : "Confirm"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteConfirmDialog
+        open={confirmingDelete}
+        onOpenChange={setConfirmingDelete}
+        onConfirm={() => {
+          onDelete(entry);
+          setConfirmingDelete(false);
+        }}
+        isDeleting={isDeleting}
+      />
     </Dialog>
   );
 }

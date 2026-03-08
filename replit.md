@@ -43,12 +43,17 @@ The frontend follows a streamlined page-based architecture:
 - **Timeline** (home): Unified chronological view with integrated AI Coach side panel - the single main screen experience
 - **Log Workout**: Manual workout entry form
 - **Analytics**: Personal records, exercise progression charts, and volume analytics
-- **Settings**: User preferences, batch re-parse old workouts, theme toggle
+- **Settings**: User preferences, Strava integration, data export, batch re-parse old workouts
 
 The Timeline consolidates training management and AI coaching into one view:
 - Toggleable AI Coach panel (side column on desktop, full-screen overlay on mobile)
 - Training plan import, scheduling, editing, and status tracking
 - Workout merging and quick actions all in one place
+
+Key component directories:
+- `client/src/components/timeline/` — Timeline sub-components (workout cards, dialogs, filters, headers)
+- `client/src/components/settings/` — Settings page sections (ProfileSection, StravaSection, PreferencesSection, DataToolsSection)
+- `client/src/components/ui/` — shadcn/ui primitives (25 components, trimmed from unused originals)
 
 ### Backend Architecture
 - **Runtime**: Node.js with Express
@@ -62,9 +67,22 @@ Routes are split into domain-based modules under `server/routes/`:
 - `server/routes/analytics.ts` — personal records, exercise volume stats
 - `server/routes/workouts.ts` — workout CRUD, exercise history, re-parse, data export, timeline
 - `server/routes/plans.ts` — training plan CRUD, CSV import, sample plan, scheduling, plan day updates
-- `server/routes.ts` — main orchestrator mounting sub-routers + auth, preferences, email cron routes
+- `server/routes/auth.ts` — user profile endpoint (`/api/auth/user`)
+- `server/routes/preferences.ts` — user preferences GET/PATCH (`/api/preferences`)
+- `server/routes/email.ts` — email check and cron endpoints (`/api/emails/check`, `/api/cron/emails`)
+- `server/routes.ts` — pure orchestrator mounting all sub-routers + Strava routes
 - `server/routeUtils.ts` — shared helpers (rate limiter, expandExercisesToSetRows, buildTrainingContext)
 - `server/samplePlan.ts` — hardcoded 8-week sample training plan data
+
+The storage layer is split into domain modules under `server/storage/`:
+- `server/storage/IStorage.ts` — storage interface with all method signatures
+- `server/storage/users.ts` — user CRUD, preferences, chat, Strava connections, custom exercises
+- `server/storage/workouts.ts` — workout log CRUD, exercise sets CRUD, exercise history
+- `server/storage/plans.ts` — training plan CRUD, plan days, scheduling, marking missed days
+- `server/storage/timeline.ts` — timeline assembly from plans and workouts
+- `server/storage/analytics.ts` — exercise analytics, missed workouts, weekly stats
+- `server/storage/index.ts` — composes domain storages into `DatabaseStorage` class, exports singleton
+- `server/storage.ts` — re-export shim for backward compatibility
 
 All data routes require authentication and filter by userId for privacy. Static files are served from the built client in production, with Vite dev server middleware in development.
 
