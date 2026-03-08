@@ -18,6 +18,32 @@ declare module "http" {
 
 app.use(compression());
 
+app.use((_req, res, next) => {
+  res.setHeader("X-Frame-Options", "SAMEORIGIN");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  const isDev = process.env.NODE_ENV !== "production";
+  const connectSrc = isDev
+    ? "connect-src 'self' https://www.strava.com ws: wss:"
+    : "connect-src 'self' https://www.strava.com";
+  const scriptSrc = isDev
+    ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
+    : "script-src 'self' 'unsafe-inline'";
+  res.setHeader(
+    "Content-Security-Policy",
+    [
+      "default-src 'self'",
+      scriptSrc,
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "font-src 'self' https://fonts.gstatic.com",
+      "img-src 'self' data: https:",
+      connectSrc,
+    ].join("; ")
+  );
+  next();
+});
+
 app.use(
   express.json({
     verify: (req, _res, buf) => {
