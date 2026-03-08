@@ -49,4 +49,3 @@ integrations = ["javascript_openai:1.0.0", "javascript_mem_db:1.0.0", "javascrip
 [userenv]
 
 [userenv.shared]
-CRON_SECRET = "5c4439be5df0d57f2fa27e7a0721d9acfd3275a3a5906ffb57b9363f8b3d81a8"
