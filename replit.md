@@ -19,6 +19,7 @@ HyroxTracker is a training planning and logging application for Hyrox athletes. 
 - **AI Rate Limiting**: Per-user rate limits on AI endpoints (10/min chat, 5/min parsing, 3/min suggestions) with 429 responses
 - **Email Notifications**: Weekly training summaries (sent on Mondays) and missed workout reminders via Resend, with per-user opt-in/out toggle in Settings. External cron endpoint (`GET /api/cron/emails` with `x-cron-secret` header or `?secret=` query param, validated against `CRON_SECRET` env var) processes all opted-in users — designed to be called by an external cron service (e.g., cron-job.org) at a set time like 8am CST daily
 - **Database Integrity**: Composite indexes for performance, unique constraint on custom exercises, application-level data cleanup on startup for orphaned records
+- **Performance Optimizations**: HTTP compression (gzip/brotli), lazy-loaded route code splitting, bulk SQL updates in schedulePlan, optimized timeline queries with Map lookups and parallel fetching, single-query getWorkoutsWithoutExerciseSets using LEFT JOIN
 
 The design follows premium fitness app patterns (Strava, TrainingPeaks, Whoop) with focus on data clarity and athletic performance tracking.
 

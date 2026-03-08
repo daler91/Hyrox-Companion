@@ -261,13 +261,13 @@ export class DatabaseStorage implements IStorage {
     const weekOneMonday = new Date(start);
     weekOneMonday.setDate(start.getDate() + mondayOffset);
 
-    // Find minimum week number to normalize (e.g., weeks 9-16 become weeks 1-8)
     if (plan.days.length === 0) return true;
     const weekNumbers = plan.days.map(d => d.weekNumber || 1);
     const minWeek = Math.min(...weekNumbers);
 
     const today = getTodayStr();
 
+    const dateUpdates: { id: string; scheduledDate: string; resetStatus: boolean }[] = [];
     for (const day of plan.days) {
       const normalizedWeek = (day.weekNumber || 1) - minWeek + 1;
       const weekOffset = (normalizedWeek - 1) * 7;
@@ -275,16 +275,23 @@ export class DatabaseStorage implements IStorage {
       const scheduledDate = new Date(weekOneMonday);
       scheduledDate.setDate(weekOneMonday.getDate() + weekOffset + dayOffset);
       const dateStr = scheduledDate.toISOString().split("T")[0];
+      dateUpdates.push({
+        id: day.id,
+        scheduledDate: dateStr,
+        resetStatus: day.status === 'missed' && dateStr >= today,
+      });
+    }
 
-      const updates: Record<string, string> = { scheduledDate: dateStr };
-      if (day.status === 'missed' && dateStr >= today) {
-        updates.status = 'planned';
-      }
+    if (dateUpdates.length === 0) return true;
 
-      await db
-        .update(planDays)
-        .set(updates)
-        .where(eq(planDays.id, day.id));
+    const caseParts = dateUpdates.map(u => sql`WHEN ${u.id} THEN ${u.scheduledDate}::date`);
+    const caseExpr = sql.join(caseParts, sql` `);
+    const allIds = dateUpdates.map(u => u.id);
+    await db.execute(sql`UPDATE plan_days SET scheduled_date = CASE id ${caseExpr} END WHERE id IN ${allIds}`);
+
+    const resetUpdateIds = dateUpdates.filter(u => u.resetStatus).map(u => u.id);
+    if (resetUpdateIds.length > 0) {
+      await db.update(planDays).set({ status: 'planned' }).where(inArray(planDays.id, resetUpdateIds));
     }
 
     return true;
@@ -375,15 +382,30 @@ export class DatabaseStorage implements IStorage {
     const scheduledDays = scheduledDaysResult
       .filter(r => r.planDay.scheduledDate);
 
-    const userWorkouts = await db
-      .select()
-      .from(workoutLogs)
-      .where(eq(workoutLogs.userId, userId));
+    const planDayIds = scheduledDays.map(r => r.planDay.id);
+
+    const [linkedWorkouts, standaloneWorkouts] = await Promise.all([
+      planDayIds.length > 0
+        ? db.select().from(workoutLogs).where(
+            and(eq(workoutLogs.userId, userId), inArray(workoutLogs.planDayId, planDayIds))
+          )
+        : Promise.resolve([]),
+      db.select().from(workoutLogs).where(
+        and(eq(workoutLogs.userId, userId), isNull(workoutLogs.planDayId))
+      ),
+    ]);
+
+    const workoutsByPlanDayId = new Map<string, WorkoutLog>();
+    for (const log of linkedWorkouts) {
+      if (log.planDayId) {
+        workoutsByPlanDayId.set(log.planDayId, log);
+      }
+    }
 
     for (const row of scheduledDays) {
       const day = row.planDay;
       if (day.scheduledDate) {
-        const linkedLog = userWorkouts.find((log) => log.planDayId === day.id);
+        const linkedLog = workoutsByPlanDayId.get(day.id);
 
         if (linkedLog) {
           entries.push({
@@ -429,8 +451,6 @@ export class DatabaseStorage implements IStorage {
         }
       }
     }
-
-    const standaloneWorkouts = userWorkouts.filter((log) => !log.planDayId);
 
     for (const log of standaloneWorkouts) {
       entries.push({
@@ -618,21 +638,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getWorkoutsWithoutExerciseSets(userId: string): Promise<WorkoutLog[]> {
-    const allLogs = await db
-      .select()
+    const results = await db
+      .select({ workoutLog: workoutLogs })
       .from(workoutLogs)
-      .where(eq(workoutLogs.userId, userId));
-
-    if (allLogs.length === 0) return [];
-
-    const logIds = allLogs.map(l => l.id);
-    const setsExist = await db
-      .select({ workoutLogId: exerciseSets.workoutLogId })
-      .from(exerciseSets)
-      .where(inArray(exerciseSets.workoutLogId, logIds));
-
-    const idsWithSets = new Set(setsExist.map(s => s.workoutLogId));
-    return allLogs.filter(l => !idsWithSets.has(l.id) && l.mainWorkout && l.mainWorkout.trim().length > 0);
+      .leftJoin(exerciseSets, eq(workoutLogs.id, exerciseSets.workoutLogId))
+      .where(
+        and(
+          eq(workoutLogs.userId, userId),
+          isNull(exerciseSets.id),
+          isNotNull(workoutLogs.mainWorkout),
+          sql`TRIM(${workoutLogs.mainWorkout}) <> ''`
+        )
+      );
+    return results.map(r => r.workoutLog);
   }
 
   async getAllExerciseSetsWithDates(userId: string): Promise<(ExerciseSet & { date: string })[]> {

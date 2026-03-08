@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -8,22 +9,33 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { useAuth } from "@/hooks/useAuth";
 import NotFound from "@/pages/not-found";
-import LogWorkout from "@/pages/LogWorkout";
 import Timeline from "@/pages/Timeline";
-import Settings from "@/pages/Settings";
-import Analytics from "@/pages/Analytics";
-import Landing from "@/pages/Landing";
 import { Loader2 } from "lucide-react";
+
+const LogWorkout = lazy(() => import("@/pages/LogWorkout"));
+const Settings = lazy(() => import("@/pages/Settings"));
+const Analytics = lazy(() => import("@/pages/Analytics"));
+const Landing = lazy(() => import("@/pages/Landing"));
+
+function LazyFallback() {
+  return (
+    <div className="flex items-center justify-center h-full">
+      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+    </div>
+  );
+}
 
 function AuthenticatedRouter() {
   return (
-    <Switch>
-      <Route path="/" component={Timeline} />
-      <Route path="/log" component={LogWorkout} />
-      <Route path="/analytics" component={Analytics} />
-      <Route path="/settings" component={Settings} />
-      <Route component={NotFound} />
-    </Switch>
+    <Suspense fallback={<LazyFallback />}>
+      <Switch>
+        <Route path="/" component={Timeline} />
+        <Route path="/log" component={LogWorkout} />
+        <Route path="/analytics" component={Analytics} />
+        <Route path="/settings" component={Settings} />
+        <Route component={NotFound} />
+      </Switch>
+    </Suspense>
   );
 }
 
@@ -63,7 +75,11 @@ function AppContent() {
   }
 
   if (!isAuthenticated) {
-    return <Landing />;
+    return (
+      <Suspense fallback={<LazyFallback />}>
+        <Landing />
+      </Suspense>
+    );
   }
 
   return <AuthenticatedLayout />;

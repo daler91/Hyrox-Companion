@@ -79,6 +79,7 @@ export const planDays = pgTable("plan_days", {
   index("idx_plan_days_scheduled_date").on(table.scheduledDate),
   index("idx_plan_days_status").on(table.status),
   index("idx_plan_days_plan_week").on(table.planId, table.weekNumber),
+  index("idx_plan_days_plan_status").on(table.planId, table.status),
 ]);
 
 export const insertPlanDaySchema = createInsertSchema(planDays).omit({
@@ -214,6 +215,7 @@ export const exerciseSets = pgTable("exercise_sets", {
   index("idx_exercise_sets_workout_log_id").on(table.workoutLogId),
   index("idx_exercise_sets_exercise_name").on(table.exerciseName),
   index("idx_exercise_sets_workout_sort").on(table.workoutLogId, table.sortOrder),
+  index("idx_exercise_sets_workout_exercise").on(table.workoutLogId, table.exerciseName),
 ]);
 
 export const insertExerciseSetSchema = createInsertSchema(exerciseSets).omit({
