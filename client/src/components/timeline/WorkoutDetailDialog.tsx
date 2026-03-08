@@ -1,5 +1,4 @@
-import { useState, useEffect, useRef } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -45,30 +44,28 @@ import {
   GripVertical,
 } from "lucide-react";
 import { SiStrava } from "react-icons/si";
-import { type TimelineEntry, type WorkoutStatus, type ExerciseSet, EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
-import { apiRequest } from "@/lib/queryClient";
+import { type TimelineEntry, type WorkoutStatus, type ExerciseSet, type ExerciseName } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { formatSpeed } from "@shared/unitConversion";
 import { ExerciseSelector } from "@/components/ExerciseSelector";
-import { ExerciseInput, createDefaultSet, type StructuredExercise } from "@/components/ExerciseInput";
+import { ExerciseInput, type StructuredExercise } from "@/components/ExerciseInput";
+import { categoryChipColors, getExerciseLabel, groupExerciseSets, formatExerciseSummary, type GroupedExercise } from "@/lib/exerciseUtils";
 import {
   DndContext,
   closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
 } from "@dnd-kit/core";
 import {
   SortableContext,
-  sortableKeyboardCoordinates,
   verticalListSortingStrategy,
   useSortable,
-  arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import {
+  useWorkoutEditor,
+  getBlockExerciseName,
+  exerciseToPayload,
+} from "@/hooks/useWorkoutEditor";
 
 interface WorkoutDetailDialogProps {
   entry: TimelineEntry | null;
@@ -82,70 +79,6 @@ interface WorkoutDetailDialogProps {
   isDeleting?: boolean;
 }
 
-const categoryChipColors: Record<string, string> = {
-  hyrox_station: "bg-orange-500/10 text-orange-600 dark:text-orange-400",
-  running: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
-  strength: "bg-purple-500/10 text-purple-600 dark:text-purple-400",
-  conditioning: "bg-red-500/10 text-red-600 dark:text-red-400",
-};
-
-interface GroupedExercise {
-  exerciseName: string;
-  customLabel?: string | null;
-  category: string;
-  confidence?: number | null;
-  sets: ExerciseSet[];
-}
-
-function groupExerciseSets(dbSets: ExerciseSet[]): GroupedExercise[] {
-  const sorted = [...dbSets].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
-  const groups: GroupedExercise[] = [];
-  let currentKey: string | null = null;
-  let currentGroup: GroupedExercise | null = null;
-  for (const s of sorted) {
-    const key = s.exerciseName === "custom" && s.customLabel
-      ? `custom:${s.customLabel}`
-      : s.exerciseName;
-    if (key !== currentKey) {
-      currentGroup = { exerciseName: s.exerciseName, customLabel: s.customLabel, category: s.category, confidence: s.confidence, sets: [] };
-      groups.push(currentGroup);
-      currentKey = key;
-    }
-    currentGroup!.sets.push(s);
-  }
-  return groups;
-}
-
-function formatGroupedChip(group: GroupedExercise, weightUnit: string, distanceUnit: string): string {
-  const def = EXERCISE_DEFINITIONS[group.exerciseName as ExerciseName];
-  const name = group.exerciseName === "custom" && group.customLabel ? group.customLabel : def?.label || group.exerciseName;
-  const sets = group.sets;
-  if (sets.length === 0) return name;
-
-  const firstSet = sets[0];
-  const allSameReps = sets.every(s => s.reps === firstSet.reps);
-  const allSameWeight = sets.every(s => s.weight === firstSet.weight);
-  const parts: string[] = [];
-
-  if (allSameReps && firstSet.reps && sets.length > 1) {
-    parts.push(`${sets.length}x${firstSet.reps}`);
-  } else if (firstSet.reps && sets.length === 1) {
-    parts.push(`${firstSet.reps}r`);
-  } else if (sets.length > 1) {
-    parts.push(`${sets.length}s`);
-  }
-
-  if (allSameWeight && firstSet.weight) parts.push(`${firstSet.weight}${weightUnit}`);
-  else if (!allSameWeight) {
-    const weights = Array.from(new Set(sets.map(s => s.weight).filter(Boolean)));
-    if (weights.length > 0) parts.push(`${weights.join("/")}${weightUnit}`);
-  }
-
-  const dLabel = distanceUnit === "km" ? "m" : "ft";
-  if (firstSet.distance) parts.push(`${firstSet.distance}${dLabel}`);
-  if (firstSet.time) parts.push(`${firstSet.time}min`);
-  return parts.length > 0 ? `${name} ${parts.join(" ")}` : name;
-}
 
 function exerciseSetsToStructured(dbSets: ExerciseSet[]): { names: string[]; data: Record<string, StructuredExercise> } {
   const groups = groupExerciseSets(dbSets);
@@ -274,43 +207,28 @@ export default function WorkoutDetailDialog({
   const { distanceUnit, weightUnit, weightLabel } = useUnitPreferences();
   const [isEditing, setIsEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [useTextMode, setUseTextMode] = useState(false);
   const [editForm, setEditForm] = useState({
     focus: "",
     mainWorkout: "",
     accessory: "",
     notes: "",
   });
-  const [editExercises, setEditExercises] = useState<string[]>([]);
-  const [editExerciseData, setEditExerciseData] = useState<Record<string, StructuredExercise>>({});
   const hasStructuredData = entry?.exerciseSets && entry.exerciseSets.length > 0;
-  const blockCounterRef = useRef(100);
 
-  const dialogSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
-
-  const handleEditDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (over && active.id !== over.id) {
-      setEditExercises((prev) => {
-        const oldIndex = prev.indexOf(active.id as string);
-        const newIndex = prev.indexOf(over.id as string);
-        return arrayMove(prev, oldIndex, newIndex);
-      });
-    }
-  };
-
-  const makeBlockId = (name: string) => {
-    blockCounterRef.current += 1;
-    return `${name}__${blockCounterRef.current}`;
-  };
-
-  const getBlockExerciseName = (blockId: string): string => {
-    const parts = blockId.split("__");
-    return parts.slice(0, -1).join("__") || parts[0];
-  };
+  const {
+    exerciseBlocks: editExercises,
+    exerciseData: editExerciseData,
+    useTextMode,
+    setUseTextMode,
+    sensors: dialogSensors,
+    handleDragEnd: handleEditDragEnd,
+    addExercise: handleAddExercise,
+    removeBlock: handleRemoveBlock,
+    updateBlock,
+    getSelectedExerciseNames,
+    parseMutation,
+    resetEditor,
+  } = useWorkoutEditor({ initialBlockCounter: 100 });
 
   useEffect(() => {
     if (entry) {
@@ -322,59 +240,13 @@ export default function WorkoutDetailDialog({
       });
       if (entry.exerciseSets && entry.exerciseSets.length > 0) {
         const { names, data } = exerciseSetsToStructured(entry.exerciseSets);
-        setEditExercises(names);
-        setEditExerciseData(data);
-        setUseTextMode(false);
+        resetEditor(names, data, false);
       } else {
-        setEditExercises([]);
-        setEditExerciseData({});
-        setUseTextMode(true);
+        resetEditor([], {}, true);
       }
       setIsEditing(false);
     }
-  }, [entry]);
-
-  const parseMutation = useMutation({
-    mutationFn: async (text: string) => {
-      const response = await apiRequest("POST", "/api/parse-exercises", { text });
-      return response.json();
-    },
-    onSuccess: (parsed: Array<{ exerciseName: string; category: string; customLabel?: string; confidence?: number; sets: Array<{ setNumber: number; reps?: number; weight?: number; distance?: number; time?: number }> }>) => {
-      if (parsed.length === 0) {
-        toast({ title: "No exercises found", description: "AI couldn't identify any exercises. Try being more specific.", variant: "destructive" });
-        return;
-      }
-      const newBlocks: string[] = [];
-      const newData: Record<string, StructuredExercise> = {};
-      for (const ex of parsed) {
-        const rawName = ex.exerciseName as ExerciseName;
-        const isKnown = rawName in EXERCISE_DEFINITIONS;
-        const exName = isKnown ? rawName : ("custom" as ExerciseName);
-        const blockId = makeBlockId(exName === "custom" ? `custom:${ex.customLabel || ex.exerciseName}` : exName);
-        newBlocks.push(blockId);
-        newData[blockId] = {
-          exerciseName: exName,
-          category: isKnown ? EXERCISE_DEFINITIONS[rawName].category : ex.category,
-          customLabel: isKnown ? undefined : (ex.customLabel || ex.exerciseName),
-          confidence: ex.confidence,
-          sets: ex.sets.map((s, i) => ({ setNumber: s.setNumber || i + 1, reps: s.reps, weight: s.weight, distance: s.distance, time: s.time })),
-        };
-      }
-      setEditExercises(newBlocks);
-      setEditExerciseData(newData);
-      setUseTextMode(false);
-      const lowConfCount = parsed.filter(e => e.confidence != null && e.confidence < 80).length;
-      toast({
-        title: "Exercises parsed",
-        description: lowConfCount > 0
-          ? `Found ${parsed.length} exercise${parsed.length !== 1 ? "s" : ""}. ${lowConfCount} may need review (low confidence).`
-          : `Found ${parsed.length} exercise${parsed.length !== 1 ? "s" : ""}. Review below.`,
-      });
-    },
-    onError: () => {
-      toast({ title: "Parsing failed", description: "AI couldn't parse your text. Try again or enter manually.", variant: "destructive" });
-    },
-  });
+  }, [entry, resetEditor]);
 
   if (!entry) return null;
 
@@ -384,32 +256,6 @@ export default function WorkoutDetailDialog({
   const canDelete = hasPlanDayId || hasWorkoutLogId;
   const canChangeStatus = hasPlanDayId;
   const grouped = hasStructuredData ? groupExerciseSets(entry.exerciseSets!) : [];
-
-  const handleAddExercise = (name: ExerciseName) => {
-    const blockId = makeBlockId(name);
-    const def = EXERCISE_DEFINITIONS[name];
-    setEditExercises(prev => [...prev, blockId]);
-    setEditExerciseData(prev => ({
-      ...prev,
-      [blockId]: { exerciseName: name, category: def.category, sets: [createDefaultSet(1)] },
-    }));
-  };
-
-  const handleRemoveBlock = (blockId: string) => {
-    setEditExercises(prev => prev.filter(b => b !== blockId));
-    setEditExerciseData(prev => {
-      const newData = { ...prev };
-      delete newData[blockId];
-      return newData;
-    });
-  };
-
-  const getSelectedExerciseNames = (): ExerciseName[] => {
-    return editExercises.map(blockId => {
-      const baseName = getBlockExerciseName(blockId);
-      return (baseName.startsWith("custom:") ? "custom" : baseName) as ExerciseName;
-    });
-  };
 
   const handleSave = () => {
     if (useTextMode) {
@@ -425,8 +271,7 @@ export default function WorkoutDetailDialog({
       const distLabel = distanceUnit === "km" ? "m" : "ft";
       const mainWorkout = exercises.length > 0
         ? exercises.map((ex) => {
-            const def = EXERCISE_DEFINITIONS[ex.exerciseName];
-            const name = ex.exerciseName === "custom" && ex.customLabel ? ex.customLabel : def?.label || ex.exerciseName;
+            const name = getExerciseLabel(ex.exerciseName, ex.customLabel);
             const sets = ex.sets || [];
             if (sets.length === 0) return `${name}: completed`;
             const firstSet = sets[0];
@@ -446,20 +291,7 @@ export default function WorkoutDetailDialog({
         mainWorkout,
         accessory: editForm.accessory || null,
         notes: editForm.notes || null,
-        exercises: exercises.length > 0 ? exercises.map(ex => ({
-          exerciseName: ex.exerciseName,
-          customLabel: ex.customLabel,
-          category: ex.category,
-          confidence: ex.confidence,
-          sets: (ex.sets || []).map(s => ({
-            setNumber: s.setNumber,
-            reps: s.reps,
-            weight: s.weight,
-            distance: s.distance,
-            time: s.time,
-            notes: s.notes,
-          })),
-        })) : undefined,
+        exercises: exercises.length > 0 ? exercises.map(exerciseToPayload) : undefined,
       });
     }
   };
@@ -600,7 +432,7 @@ export default function WorkoutDetailDialog({
                               blockLabel={showBlockNumber ? `#${blockIndex}` : undefined}
                               weightUnit={weightUnit}
                               distanceUnit={distanceUnit}
-                              onChange={(id, ex) => setEditExerciseData(prev => ({ ...prev, [id]: ex }))}
+                              onChange={updateBlock}
                               onRemove={handleRemoveBlock}
                             />
                           );
@@ -647,7 +479,7 @@ export default function WorkoutDetailDialog({
                     variant="secondary"
                     className={`text-xs font-normal ${categoryChipColors[group.category] || ""}`}
                   >
-                    {formatGroupedChip(group, weightLabel, distanceUnit)}
+                    {formatExerciseSummary(group, weightLabel, distanceUnit)}
                   </Badge>
                 ))}
               </div>

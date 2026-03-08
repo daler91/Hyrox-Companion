@@ -19,6 +19,7 @@ import { SiStrava } from "react-icons/si";
 import { type TimelineEntry, type ExerciseSet, EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { formatSpeed } from "@shared/unitConversion";
+import { categoryChipColors, groupExerciseSets, formatExerciseSummary, type GroupedExercise } from "@/lib/exerciseUtils";
 
 interface PRValue {
   value: number;
@@ -45,62 +46,6 @@ interface TimelineWorkoutCardProps {
   personalRecords?: Record<string, PREntry>;
 }
 
-const categoryChipColors: Record<string, string> = {
-  hyrox_station: "bg-orange-500/10 text-orange-600 dark:text-orange-400",
-  running: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
-  strength: "bg-purple-500/10 text-purple-600 dark:text-purple-400",
-  conditioning: "bg-red-500/10 text-red-600 dark:text-red-400",
-};
-
-interface GroupedExercise {
-  exerciseName: string;
-  customLabel?: string | null;
-  category: string;
-  confidence?: number | null;
-  sets: ExerciseSet[];
-}
-
-function groupExerciseSets(dbSets: ExerciseSet[]): GroupedExercise[] {
-  const sorted = [...dbSets].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
-  const groups: GroupedExercise[] = [];
-  let currentKey: string | null = null;
-  let currentGroup: GroupedExercise | null = null;
-  for (const s of sorted) {
-    const key = s.exerciseName === "custom" && s.customLabel
-      ? `custom:${s.customLabel}`
-      : s.exerciseName;
-    if (key !== currentKey) {
-      currentGroup = { exerciseName: s.exerciseName, customLabel: s.customLabel, category: s.category, confidence: s.confidence, sets: [] };
-      groups.push(currentGroup);
-      currentKey = key;
-    }
-    currentGroup!.sets.push(s);
-  }
-  return groups;
-}
-
-function formatGroupedChip(group: GroupedExercise, weightUnit: string, distanceUnit: string): string {
-  const def = EXERCISE_DEFINITIONS[group.exerciseName as ExerciseName];
-  const name = group.exerciseName === "custom" && group.customLabel ? group.customLabel : def?.label || group.exerciseName;
-  const sets = group.sets;
-  if (sets.length === 0) return name;
-  const firstSet = sets[0];
-  const allSameReps = sets.every(s => s.reps === firstSet.reps);
-  const allSameWeight = sets.every(s => s.weight === firstSet.weight);
-  const parts: string[] = [];
-  if (allSameReps && firstSet.reps && sets.length > 1) {
-    parts.push(`${sets.length}x${firstSet.reps}`);
-  } else if (firstSet.reps && sets.length === 1) {
-    parts.push(`${firstSet.reps}r`);
-  } else if (sets.length > 1) {
-    parts.push(`${sets.length}s`);
-  }
-  if (allSameWeight && firstSet.weight) parts.push(`${firstSet.weight}${weightUnit}`);
-  const dLabel = distanceUnit === "km" ? "m" : "ft";
-  if (firstSet.distance) parts.push(`${firstSet.distance}${dLabel}`);
-  if (firstSet.time) parts.push(`${firstSet.time}min`);
-  return parts.length > 0 ? `${name} ${parts.join(" ")}` : name;
-}
 
 function hasPRInWorkout(group: GroupedExercise, workoutLogId: string | undefined, prs?: Record<string, PREntry>): boolean {
   if (!prs || !workoutLogId) return false;
@@ -257,7 +202,7 @@ export default function TimelineWorkoutCard({
                       data-testid={isPR ? `badge-pr-${entry.id}-${idx}` : `badge-exercise-${entry.id}-${idx}`}
                     >
                       {isPR && <Trophy className="h-3 w-3 mr-0.5 text-yellow-500" />}
-                      {formatGroupedChip(group, weightLabel, distanceUnit)}
+                      {formatExerciseSummary(group, weightLabel, distanceUnit)}
                       {showConfidence && (
                         <span className={`ml-1 text-[10px] font-medium ${confColor}`} data-testid={`confidence-score-${entry.id}-${idx}`}>
                           {conf}%

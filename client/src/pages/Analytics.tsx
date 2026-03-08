@@ -4,8 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, Trophy, TrendingUp, Dumbbell, Timer, Ruler, Weight } from "lucide-react";
-import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
+import { categoryChipColors, categoryLabels, getExerciseLabel } from "@/lib/exerciseUtils";
 import { useState, useMemo } from "react";
 
 interface PRValue {
@@ -39,27 +39,6 @@ interface ExerciseAnalyticDay {
   totalSets: number;
   totalReps: number;
   totalDistance: number;
-}
-
-const categoryColors: Record<string, string> = {
-  hyrox_station: "bg-orange-500/10 text-orange-600 dark:text-orange-400",
-  running: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
-  strength: "bg-purple-500/10 text-purple-600 dark:text-purple-400",
-  conditioning: "bg-red-500/10 text-red-600 dark:text-red-400",
-};
-
-const categoryLabels: Record<string, string> = {
-  hyrox_station: "Hyrox Station",
-  running: "Running",
-  strength: "Strength",
-  conditioning: "Conditioning",
-};
-
-function getExerciseLabel(name: string, customLabel?: string | null): string {
-  if (name.startsWith("custom:")) return name.slice(7);
-  if (name === "custom" && customLabel) return customLabel;
-  const def = EXERCISE_DEFINITIONS[name as ExerciseName];
-  return def?.label || name;
 }
 
 function formatDate(d: string): string {
@@ -203,7 +182,7 @@ export default function Analytics() {
                   <CardContent className="p-3">
                     <div className="flex items-center gap-2 mb-2 flex-wrap">
                       <span className="font-medium text-sm">{getExerciseLabel(pr.exerciseName, pr.customLabel)}</span>
-                      <Badge variant="secondary" className={`text-xs ${categoryColors[pr.category] || ""}`}>
+                      <Badge variant="secondary" className={`text-xs ${categoryChipColors[pr.category] || ""}`}>
                         {categoryLabels[pr.category] || pr.category}
                       </Badge>
                     </div>

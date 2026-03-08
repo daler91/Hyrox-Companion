@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,54 +6,29 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ExerciseSelector } from "@/components/ExerciseSelector";
-import { ExerciseInput, createDefaultSet, type StructuredExercise } from "@/components/ExerciseInput";
+import { ExerciseInput, type StructuredExercise } from "@/components/ExerciseInput";
 import { useToast } from "@/hooks/use-toast";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { Save, ArrowLeft, Loader2, Dumbbell, Type, Sparkles, GripVertical } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
+import { type ExerciseName } from "@shared/schema";
 import {
   DndContext,
   closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
 } from "@dnd-kit/core";
 import {
   SortableContext,
-  sortableKeyboardCoordinates,
   verticalListSortingStrategy,
   useSortable,
-  arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-
-function generateSummary(exercises: StructuredExercise[], weightUnit: string, distanceUnit: string): string {
-  const distLabel = distanceUnit === "km" ? "m" : "ft";
-  return exercises.map((ex) => {
-    const def = EXERCISE_DEFINITIONS[ex.exerciseName];
-    const name = ex.exerciseName === "custom" && ex.customLabel ? ex.customLabel : def?.label || ex.exerciseName;
-    const sets = ex.sets || [];
-    if (sets.length === 0) return `${name}: completed`;
-    const firstSet = sets[0];
-    const allSame = sets.every(s => s.reps === firstSet.reps && s.weight === firstSet.weight);
-    const parts: string[] = [];
-    if (allSame && sets.length > 1 && firstSet.reps) {
-      parts.push(`${sets.length}x${firstSet.reps}`);
-    } else if (firstSet.reps) {
-      parts.push(`${sets.length > 1 ? sets.length + " sets, " : ""}${firstSet.reps} reps`);
-    } else if (sets.length > 1) {
-      parts.push(`${sets.length} sets`);
-    }
-    if (allSame && firstSet.weight) parts.push(`${firstSet.weight}${weightUnit}`);
-    if (firstSet.distance) parts.push(`${firstSet.distance}${distLabel}`);
-    if (firstSet.time) parts.push(`${firstSet.time}min`);
-    return `${name}: ${parts.join(", ") || "completed"}`;
-  }).join("; ");
-}
+import {
+  useWorkoutEditor,
+  getBlockExerciseName,
+  exerciseToPayload,
+  generateSummary,
+} from "@/hooks/useWorkoutEditor";
 
 interface SortableExerciseBlockProps {
   blockId: string;
@@ -101,127 +76,28 @@ function SortableExerciseBlock({ blockId, exData, blockLabel, weightUnit, distan
   );
 }
 
-function exerciseToPayload(ex: StructuredExercise) {
-  return {
-    exerciseName: ex.exerciseName,
-    customLabel: ex.customLabel,
-    category: ex.category,
-    confidence: ex.confidence,
-    sets: (ex.sets || []).map(s => ({
-      setNumber: s.setNumber,
-      reps: s.reps,
-      weight: s.weight,
-      distance: s.distance,
-      time: s.time,
-      notes: s.notes,
-    })),
-  };
-}
-
 export default function LogWorkout() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const { weightUnit, distanceUnit, weightLabel } = useUnitPreferences();
   const [title, setTitle] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
-  const [useTextMode, setUseTextMode] = useState(false);
   const [freeText, setFreeText] = useState("");
-  const [exerciseBlocks, setExerciseBlocks] = useState<string[]>([]);
-  const [exerciseData, setExerciseData] = useState<Record<string, StructuredExercise>>({});
   const [notes, setNotes] = useState("");
-  const blockCounterRef = useRef(0);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (over && active.id !== over.id) {
-      setExerciseBlocks((prev) => {
-        const oldIndex = prev.indexOf(active.id as string);
-        const newIndex = prev.indexOf(over.id as string);
-        return arrayMove(prev, oldIndex, newIndex);
-      });
-    }
-  };
-
-  const makeBlockId = (name: string) => {
-    blockCounterRef.current += 1;
-    return `${name}__${blockCounterRef.current}`;
-  };
-
-  const getBlockExerciseName = (blockId: string): ExerciseName => {
-    const name = blockId.split("__")[0];
-    if (name.startsWith("custom:")) return "custom" as ExerciseName;
-    return name as ExerciseName;
-  };
-
-  const getSelectedExerciseNames = (): ExerciseName[] => {
-    return exerciseBlocks.map(getBlockExerciseName);
-  };
-
-  const parseMutation = useMutation({
-    mutationFn: async (text: string) => {
-      const response = await apiRequest("POST", "/api/parse-exercises", { text });
-      return response.json();
-    },
-    onSuccess: (parsed: Array<{ exerciseName: string; category: string; customLabel?: string; confidence?: number; sets: Array<{ setNumber: number; reps?: number; weight?: number; distance?: number; time?: number }> }>) => {
-      if (parsed.length === 0) {
-        toast({
-          title: "No exercises found",
-          description: "AI couldn't identify any exercises in your text. Try being more specific, e.g. '4x8 back squat at 70kg'.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      const newBlocks: string[] = [];
-      const newData: Record<string, StructuredExercise> = {};
-
-      for (const ex of parsed) {
-        const rawName = ex.exerciseName as ExerciseName;
-        const isKnown = rawName in EXERCISE_DEFINITIONS;
-        const exName = isKnown ? rawName : ("custom" as ExerciseName);
-        const blockId = makeBlockId(exName === "custom" ? `custom:${ex.customLabel || ex.exerciseName}` : exName);
-
-        newBlocks.push(blockId);
-        newData[blockId] = {
-          exerciseName: exName,
-          category: isKnown ? EXERCISE_DEFINITIONS[rawName].category : ex.category,
-          customLabel: isKnown ? undefined : (ex.customLabel || ex.exerciseName),
-          confidence: ex.confidence,
-          sets: ex.sets.map((s, i) => ({
-            setNumber: s.setNumber || i + 1,
-            reps: s.reps,
-            weight: s.weight,
-            distance: s.distance,
-            time: s.time,
-          })),
-        };
-      }
-
-      setExerciseBlocks(newBlocks);
-      setExerciseData(newData);
-      setUseTextMode(false);
-
-      const lowConfCount = parsed.filter(e => e.confidence != null && e.confidence < 80).length;
-      toast({
-        title: "Exercises parsed",
-        description: lowConfCount > 0
-          ? `Found ${parsed.length} exercise${parsed.length !== 1 ? "s" : ""}. ${lowConfCount} may need review (low confidence).`
-          : `Found ${parsed.length} exercise${parsed.length !== 1 ? "s" : ""}. Review the details below.`,
-      });
-    },
-    onError: () => {
-      toast({
-        title: "Parsing failed",
-        description: "AI couldn't parse your workout text. Please try again or enter exercises manually.",
-        variant: "destructive",
-      });
-    },
-  });
+  const {
+    exerciseBlocks,
+    exerciseData,
+    useTextMode,
+    setUseTextMode,
+    sensors,
+    handleDragEnd,
+    addExercise,
+    removeBlock,
+    updateBlock,
+    getSelectedExerciseNames,
+    parseMutation,
+  } = useWorkoutEditor();
 
   const saveMutation = useMutation({
     mutationFn: async (workoutData: Record<string, any>) => {
@@ -245,36 +121,6 @@ export default function LogWorkout() {
       });
     },
   });
-
-  const handleAddExercise = (name: ExerciseName) => {
-    const blockId = makeBlockId(name);
-    const def = EXERCISE_DEFINITIONS[name];
-    setExerciseBlocks(prev => [...prev, blockId]);
-    setExerciseData(prev => ({
-      ...prev,
-      [blockId]: {
-        exerciseName: name,
-        category: def.category,
-        sets: [createDefaultSet(1)],
-      },
-    }));
-  };
-
-  const handleRemoveBlock = (blockId: string) => {
-    setExerciseBlocks(prev => prev.filter(b => b !== blockId));
-    setExerciseData(prev => {
-      const newData = { ...prev };
-      delete newData[blockId];
-      return newData;
-    });
-  };
-
-  const handleExerciseChange = (blockId: string, exercise: StructuredExercise) => {
-    setExerciseData(prev => ({
-      ...prev,
-      [blockId]: exercise,
-    }));
-  };
 
   const handleSave = () => {
     if (!title.trim()) {
@@ -439,7 +285,7 @@ export default function LogWorkout() {
               <ExerciseSelector
                 selectedExercises={getSelectedExerciseNames()}
                 onToggle={() => {}}
-                onAdd={handleAddExercise}
+                onAdd={addExercise}
                 allowDuplicates
               />
             </CardContent>
@@ -454,8 +300,8 @@ export default function LogWorkout() {
                   {exerciseBlocks.map((blockId, idx) => {
                     const exData = exerciseData[blockId];
                     if (!exData) return null;
-                    const blockCount = exerciseBlocks.filter(b => getBlockExerciseName(b) === exData.exerciseName).length;
-                    const blockIndex = exerciseBlocks.filter((b, i) => i <= idx && getBlockExerciseName(b) === exData.exerciseName).length;
+                    const blockCount = exerciseBlocks.filter(b => getBlockExerciseName(b) === getBlockExerciseName(blockId)).length;
+                    const blockIndex = exerciseBlocks.filter((b, i) => i <= idx && getBlockExerciseName(b) === getBlockExerciseName(blockId)).length;
                     const showBlockNumber = blockCount > 1;
                     return (
                       <SortableExerciseBlock
@@ -465,8 +311,8 @@ export default function LogWorkout() {
                         blockLabel={showBlockNumber ? `#${blockIndex}` : undefined}
                         weightUnit={weightUnit}
                         distanceUnit={distanceUnit}
-                        onChange={handleExerciseChange}
-                        onRemove={handleRemoveBlock}
+                        onChange={updateBlock}
+                        onRemove={removeBlock}
                       />
                     );
                   })}

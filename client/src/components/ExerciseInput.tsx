@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { X, Timer, Ruler, Hash, Weight, Pencil, Plus, Minus, Copy, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
+import { categoryBorderColors } from "@/lib/exerciseUtils";
 
 export interface SetData {
   setNumber: number;
@@ -32,13 +33,6 @@ interface ExerciseInputProps {
   distanceUnit?: "km" | "miles";
   blockLabel?: string;
 }
-
-const categoryColors: Record<string, string> = {
-  hyrox_station: "border-l-orange-500",
-  running: "border-l-blue-500",
-  strength: "border-l-purple-500",
-  conditioning: "border-l-red-500",
-};
 
 type FieldKey = "reps" | "weight" | "distance" | "time";
 
@@ -79,7 +73,7 @@ export function createExerciseFromSets(exerciseName: ExerciseName, dbSets: Array
 export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg", distanceUnit = "km", blockLabel }: ExerciseInputProps) {
   const def = EXERCISE_DEFINITIONS[exercise.exerciseName];
   const fields = getFields(exercise.exerciseName);
-  const borderColor = categoryColors[exercise.category] || "border-l-gray-500";
+  const borderColor = categoryBorderColors[exercise.category] || "border-l-gray-500";
   const displayLabel = exercise.exerciseName === "custom" && exercise.customLabel
     ? exercise.customLabel
     : def?.label || exercise.exerciseName;

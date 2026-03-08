@@ -16,6 +16,7 @@ import {
   CircleDot,
 } from "lucide-react";
 import { EXERCISE_DEFINITIONS, type ExerciseName, type ExerciseCategory } from "@shared/schema";
+import { categoryLabels } from "@/lib/exerciseUtils";
 
 interface ExerciseSelectorProps {
   selectedExercises: ExerciseName[];
@@ -55,19 +56,17 @@ const exerciseIcons: Partial<Record<ExerciseName, typeof Wind>> = {
   custom: Plus,
 };
 
-const categoryLabels: Record<ExerciseCategory, string> = {
+const selectorCategoryLabels: Record<ExerciseCategory, string> = {
+  ...categoryLabels,
   hyrox_station: "Hyrox Stations",
-  running: "Running",
-  strength: "Strength",
-  conditioning: "Conditioning",
-};
+} as Record<ExerciseCategory, string>;
 
 const categoryOrder: ExerciseCategory[] = ["hyrox_station", "running", "strength", "conditioning"];
 
 export function ExerciseSelector({ selectedExercises, onToggle, onAdd, allowDuplicates = false }: ExerciseSelectorProps) {
   const exercisesByCategory = categoryOrder.map(cat => ({
     category: cat,
-    label: categoryLabels[cat],
+    label: selectorCategoryLabels[cat],
     exercises: (Object.entries(EXERCISE_DEFINITIONS) as [ExerciseName, typeof EXERCISE_DEFINITIONS[ExerciseName]][])
       .filter(([, def]) => def.category === cat),
   }));

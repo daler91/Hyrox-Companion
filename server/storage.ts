@@ -89,6 +89,26 @@ export interface IStorage {
   getWeeklyStats(userId: string, weekStart: string, weekEnd: string): Promise<{ completedCount: number; plannedCount: number; missedCount: number; skippedCount: number; totalDuration: number }>;
 }
 
+function getTodayStr(): string {
+  return new Date().toISOString().split("T")[0];
+}
+
+function mapWorkoutLogToTimelineFields(log: WorkoutLog) {
+  return {
+    source: (log.source as "manual" | "strava") || "manual",
+    calories: log.calories,
+    distanceMeters: log.distanceMeters,
+    elevationGain: log.elevationGain,
+    avgHeartrate: log.avgHeartrate,
+    maxHeartrate: log.maxHeartrate,
+    avgSpeed: log.avgSpeed,
+    maxSpeed: log.maxSpeed,
+    avgCadence: log.avgCadence,
+    avgWatts: log.avgWatts,
+    sufferScore: log.sufferScore,
+  };
+}
+
 export class DatabaseStorage implements IStorage {
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
@@ -246,7 +266,7 @@ export class DatabaseStorage implements IStorage {
     const weekNumbers = plan.days.map(d => d.weekNumber || 1);
     const minWeek = Math.min(...weekNumbers);
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = getTodayStr();
 
     for (const day of plan.days) {
       const normalizedWeek = (day.weekNumber || 1) - minWeek + 1;
@@ -340,7 +360,7 @@ export class DatabaseStorage implements IStorage {
 
   async getTimeline(userId: string, planId?: string): Promise<TimelineEntry[]> {
     const entries: TimelineEntry[] = [];
-    const today = new Date().toISOString().split("T")[0];
+    const today = getTodayStr();
 
     const planDayConditions = planId 
       ? and(eq(trainingPlans.userId, userId), eq(planDays.planId, planId))
@@ -383,17 +403,7 @@ export class DatabaseStorage implements IStorage {
             dayName: day.dayName,
             planName: row.planName,
             planId: row.planId,
-            source: (linkedLog.source as "manual" | "strava") || "manual",
-            calories: linkedLog.calories,
-            distanceMeters: linkedLog.distanceMeters,
-            elevationGain: linkedLog.elevationGain,
-            avgHeartrate: linkedLog.avgHeartrate,
-            maxHeartrate: linkedLog.maxHeartrate,
-            avgSpeed: linkedLog.avgSpeed,
-            maxSpeed: linkedLog.maxSpeed,
-            avgCadence: linkedLog.avgCadence,
-            avgWatts: linkedLog.avgWatts,
-            sufferScore: linkedLog.sufferScore,
+            ...mapWorkoutLogToTimelineFields(linkedLog),
           });
         } else {
           const status = day.status === "skipped" ? "skipped" :
@@ -435,18 +445,7 @@ export class DatabaseStorage implements IStorage {
         duration: log.duration,
         rpe: log.rpe,
         workoutLogId: log.id,
-        source: (log.source as "manual" | "strava") || "manual",
-        // Strava metrics
-        calories: log.calories,
-        distanceMeters: log.distanceMeters,
-        elevationGain: log.elevationGain,
-        avgHeartrate: log.avgHeartrate,
-        maxHeartrate: log.maxHeartrate,
-        avgSpeed: log.avgSpeed,
-        maxSpeed: log.maxSpeed,
-        avgCadence: log.avgCadence,
-        avgWatts: log.avgWatts,
-        sufferScore: log.sufferScore,
+        ...mapWorkoutLogToTimelineFields(log),
       });
     }
 
@@ -676,7 +675,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async markMissedPlanDays(): Promise<number> {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getTodayStr();
     const result = await db
       .update(planDays)
       .set({ status: 'missed' })

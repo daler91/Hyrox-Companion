@@ -55,7 +55,16 @@ The Timeline consolidates training management and AI coaching into one view:
 - **Authentication**: Replit Auth (OIDC) with PostgreSQL session storage
 - **Build**: esbuild for production bundling with selective dependency bundling
 
-The server handles API routes for training plans, plan days, workout logs, and AI chat interactions. All data routes require authentication and filter by userId for privacy. Static files are served from the built client in production, with Vite dev server middleware in development.
+Routes are split into domain-based modules under `server/routes/`:
+- `server/routes/ai.ts` — AI chat, streaming chat, exercise parsing, AI suggestions
+- `server/routes/analytics.ts` — personal records, exercise volume stats
+- `server/routes/workouts.ts` — workout CRUD, exercise history, re-parse, data export, timeline
+- `server/routes/plans.ts` — training plan CRUD, CSV import, sample plan, scheduling, plan day updates
+- `server/routes.ts` — main orchestrator mounting sub-routers + auth, preferences, email cron routes
+- `server/routeUtils.ts` — shared helpers (rate limiter, expandExercisesToSetRows, buildTrainingContext)
+- `server/samplePlan.ts` — hardcoded 8-week sample training plan data
+
+All data routes require authentication and filter by userId for privacy. Static files are served from the built client in production, with Vite dev server middleware in development.
 
 ### Data Storage
 - **ORM**: Drizzle ORM with PostgreSQL dialect
