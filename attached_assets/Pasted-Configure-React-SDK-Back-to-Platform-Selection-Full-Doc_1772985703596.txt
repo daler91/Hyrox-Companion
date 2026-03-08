@@ -1,0 +1,89 @@
+Configure React SDK
+
+Back to Platform Selection
+Full Documentation
+In this quick guide you'll use npm, yarn, or pnpm to set up:
+
+
+Error Monitoring
+
+
+Logs
+
+
+Metrics
+
+
+Session Replay
+
+
+Tracing
+Install
+Add the Sentry SDK as a dependency using npm, yarn, or pnpm:
+npm
+yarn
+pnpm
+
+npm install --save @sentry/react
+Configure SDK
+
+Copy DSN
+Initialize Sentry as early as possible in your application's lifecycle.
+JavaScript
+
+import * as Sentry from "@sentry/react";
+
+Sentry.init({
+  dsn: "https://aad83957dafd605dd1cb06ff69e5ec9b@o4511009584709632.ingest.us.sentry.io/4511009623900160",
+  // Setting this option to true will send default PII data to Sentry.
+  // For example, automatic IP address collection on events
+  sendDefaultPii: true,
+  // Enable logs to be sent to Sentry
+  enableLogs: true
+});
+
+const container = document.getElementById("app");
+const root = createRoot(container);
+root.render(<App />);
+Upload Source Maps (Optional)
+
+AI-Assisted Setup (Optional)
+
+
+Copy Prompt
+Verify
+This snippet contains an intentional error and can be used as a test to make sure that everything's working as expected.
+React
+
+import * as Sentry from '@sentry/react';
+// Add this button component to your app to test Sentry's error tracking
+function ErrorButton() {
+  return (
+    <button
+      onClick={() => {
+        // Send a log before throwing the error
+        Sentry.logger.info('User triggered test error', {
+          action: 'test_error_button_click',
+        });
+        // Send a test metric before throwing the error
+        Sentry.metrics.count('test_counter', 1);
+        throw new Error('This is your first error!');
+      }}
+    >
+      Break the world
+    </button>
+  );
+}
+Additional Information
+React Features: Learn about our first class integration with the React framework.
+Logging Integrations: Add logging integrations to automatically capture logs from your application.
+Metrics: Learn how to track custom metrics to monitor your application performance and business KPIs.
+
+Take me to Issues
+Privacy Policy
+Terms of Use
+Service Status
+API
+Docs
+Contribute
+
