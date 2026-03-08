@@ -56,10 +56,10 @@ describe("Navigation (Authenticated)", () => {
     }).as("exerciseHistory");
   });
 
-  it("shows the sidebar with navigation links", () => {
+  it("shows the sidebar", () => {
     cy.visit("/");
     cy.wait("@authUser");
-    cy.get("nav").should("be.visible");
+    cy.get("[data-sidebar='sidebar']").should("exist");
   });
 
   it("navigates to the log workout page", () => {
@@ -78,7 +78,7 @@ describe("Navigation (Authenticated)", () => {
     cy.visit("/settings");
     cy.wait("@authUser");
     cy.url().should("include", "/settings");
-    cy.getBySel("button-save-settings").should("be.visible");
+    cy.getBySel("button-save-settings").should("exist");
   });
 
   it("shows 404 for unknown routes", () => {

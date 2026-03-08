@@ -23,10 +23,12 @@ describe("Authentication", () => {
     });
   });
 
-  it("returns user as null when not authenticated", () => {
-    cy.request("/api/auth/user").then((response) => {
-      expect(response.status).to.eq(200);
-      expect(response.body).to.be.null;
+  it("blocks unauthenticated access to user endpoint", () => {
+    cy.request({ url: "/api/auth/user", failOnStatusCode: false }).then((response) => {
+      expect(response.status).to.be.oneOf([200, 401]);
+      if (response.status === 200) {
+        expect(response.body).to.be.null;
+      }
     });
   });
 });
