@@ -84,6 +84,7 @@ export interface IStorage {
   updateLastWeeklySummaryAt(userId: string): Promise<void>;
   updateLastMissedReminderAt(userId: string): Promise<void>;
   getUsersWithEmailNotifications(): Promise<User[]>;
+  markMissedPlanDays(): Promise<number>;
   getMissedWorkoutsForDate(userId: string, date: string): Promise<{ date: string; focus: string; mainWorkout: string; planName?: string }[]>;
   getWeeklyStats(userId: string, weekStart: string, weekEnd: string): Promise<{ completedCount: number; plannedCount: number; missedCount: number; skippedCount: number; totalDuration: number }>;
 }
@@ -245,17 +246,24 @@ export class DatabaseStorage implements IStorage {
     const weekNumbers = plan.days.map(d => d.weekNumber || 1);
     const minWeek = Math.min(...weekNumbers);
 
+    const today = new Date().toISOString().split('T')[0];
+
     for (const day of plan.days) {
-      // Normalize week number so the first week in the plan starts at week 1
       const normalizedWeek = (day.weekNumber || 1) - minWeek + 1;
       const weekOffset = (normalizedWeek - 1) * 7;
       const dayOffset = dayNameToOffset[day.dayName || "Monday"] || 0;
       const scheduledDate = new Date(weekOneMonday);
       scheduledDate.setDate(weekOneMonday.getDate() + weekOffset + dayOffset);
+      const dateStr = scheduledDate.toISOString().split("T")[0];
+
+      const updates: Record<string, string> = { scheduledDate: dateStr };
+      if (day.status === 'missed' && dateStr >= today) {
+        updates.status = 'planned';
+      }
 
       await db
         .update(planDays)
-        .set({ scheduledDate: scheduledDate.toISOString().split("T")[0] })
+        .set(updates)
         .where(eq(planDays.id, day.id));
     }
 
@@ -665,6 +673,21 @@ export class DatabaseStorage implements IStorage {
         isNotNull(users.email)
       )
     );
+  }
+
+  async markMissedPlanDays(): Promise<number> {
+    const today = new Date().toISOString().split('T')[0];
+    const result = await db
+      .update(planDays)
+      .set({ status: 'missed' })
+      .where(
+        and(
+          eq(planDays.status, 'planned'),
+          sql`${planDays.scheduledDate} < ${today}`
+        )
+      )
+      .returning({ id: planDays.id });
+    return result.length;
   }
 
   async getMissedWorkoutsForDate(userId: string, date: string): Promise<{ date: string; focus: string; mainWorkout: string; planName?: string }[]> {

@@ -4,6 +4,7 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
+import { storage } from "./storage";
 
 const app = express();
 const httpServer = createServer(app);
@@ -83,6 +84,12 @@ async function cleanOrphanedData() {
 
 (async () => {
   await cleanOrphanedData();
+  try {
+    const marked = await storage.markMissedPlanDays();
+    if (marked > 0) log(`Marked ${marked} past planned day(s) as missed`, "db");
+  } catch (error) {
+    log(`Mark missed days skipped: ${error}`, "db");
+  }
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

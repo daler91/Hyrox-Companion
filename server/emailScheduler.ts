@@ -90,6 +90,11 @@ export async function runEmailCronJob(storage: IStorage): Promise<{ usersChecked
   let emailsSent = 0;
 
   try {
+    const markedMissed = await storage.markMissedPlanDays();
+    if (markedMissed > 0) {
+      log(`Marked ${markedMissed} past planned day(s) as missed`, "email");
+    }
+
     const usersToCheck = await storage.getUsersWithEmailNotifications();
     if (usersToCheck.length === 0) {
       return { usersChecked: 0, emailsSent: 0, details: ["No users with email notifications enabled"] };
