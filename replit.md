@@ -124,3 +124,4 @@ The storage layer uses an interface pattern (`IStorage`) with all methods requir
 - **Type Checking**: TypeScript with strict mode
 - **CSS Processing**: PostCSS with Tailwind CSS and autoprefixer
 - **Database Migrations**: drizzle-kit for schema migrations
+- **E2E Testing**: Cypress.io with Cypress Cloud (project ID: `dy8p9y`). Config in `cypress.config.ts`, tests in `cypress/e2e/`. Custom `getBySel` command for `data-testid` selectors. CircleCI config in `.circleci/config.yml` runs tests with `CYPRESS_RECORD_KEY` env var. Run locally with `npx cypress open` or `npx cypress run`
