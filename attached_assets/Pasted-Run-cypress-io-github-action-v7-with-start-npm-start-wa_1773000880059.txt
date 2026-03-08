@@ -1,0 +1,88 @@
+Run cypress-io/github-action@v7
+  with:
+    start: npm start
+    wait-on: http://localhost:5000
+    wait-on-timeout: 60
+    record: true
+    parallel: true
+    install: false
+    component: false
+    package-manager-cache: true
+    publish-summary: true
+  env:
+    CYPRESS_RECORD_KEY: ***
+    GITHUB_TOKEN: ***
+    DATABASE_URL: ***
+    SESSION_SECRET: ***
+    GEMINI_API_KEY: ***
+    SENTRY_DSN: ***
+    VITE_SENTRY_DSN: ***
+    STRAVA_CLIENT_ID: 
+    STRAVA_CLIENT_SECRET: 
+    PORT: 5000
+Skipping install because install parameter is false
+start server command "npm start"
+current working directory "/home/runner/work/Hyrox-Companion/Hyrox-Companion"
+waiting on "http://localhost:5000" with timeout of 60 seconds
+/opt/hostedtoolcache/node/20.20.0/x64/bin/npm start
+
+> rest-express@1.0.0 start
+> NODE_ENV=production node dist/index.cjs
+
+8:12:17 PM [db] Orphaned data cleanup skipped: AggregateError
+8:12:17 PM [db] Mark missed days skipped: AggregateError
+REPL_ID not set — skipping Replit Auth setup (auth routes disabled)
+8:12:17 PM [express] serving on port 5000
+Unable to fetch related PR data for commit: 'a122ca1344d5f12b37efe4b82e527b9c11f77927':  RequestError [HttpError]: Resource not accessible by integration - https://docs.github.com/rest/commits/commits#list-pull-requests-associated-with-a-commit
+    at fetchWrapper (/home/runner/work/_actions/cypress-io/github-action/v7/dist/index.js:100508:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async detectPrNumber (/home/runner/work/_actions/cypress-io/github-action/v7/dist/index.js:101674:22)
+    at async runTests (/home/runner/work/_actions/cypress-io/github-action/v7/dist/index.js:101995:3) {
+  status: 403,
+  request: {
+    method: 'GET',
+    url: 'https://api.github.com/repos/daler91/Hyrox-Companion/commits/a122ca1344d5f12b37efe4b82e527b9c11f77927/pulls',
+    headers: {
+      accept: 'application/vnd.github.v3+json',
+      'user-agent': 'octokit-core.js/7.0.6 Node.js/24',
+      authorization: 'token [REDACTED]'
+    },
+    request: { hook: [Function: bound bound register] }
+  },
+  response: {
+    url: 'https://api.github.com/repos/daler91/Hyrox-Companion/commits/a122ca1344d5f12b37efe4b82e527b9c11f77927/pulls',
+    status: 403,
+    headers: {
+      'access-control-allow-origin': '*',
+      'access-control-expose-headers': 'ETag, Link, Location, Retry-After, X-GitHub-OTP, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Used, X-RateLimit-Resource, X-RateLimit-Reset, X-OAuth-Scopes, X-Accepted-OAuth-Scopes, X-Poll-Interval, X-GitHub-Media-Type, X-GitHub-SSO, X-GitHub-Request-Id, Deprecation, Sunset',
+      'content-encoding': 'gzip',
+      'content-security-policy': "default-src 'none'",
+      'content-type': 'application/json; charset=utf-8',
+      date: 'Sun, 08 Mar 2026 20:12:18 GMT',
+      'referrer-policy': 'origin-when-cross-origin, strict-origin-when-cross-origin',
+      server: 'github.com',
+      'strict-transport-security': 'max-age=31536000; includeSubdomains; preload',
+      'transfer-encoding': 'chunked',
+      vary: 'Accept-Encoding, Accept, X-Requested-With',
+      'x-accepted-github-permissions': 'pull_requests=read',
+      'x-content-type-options': 'nosniff',
+      'x-frame-options': 'deny',
+      'x-github-api-version-selected': '2022-11-28',
+      'x-github-media-type': 'github.v3; format=json',
+      'x-github-request-id': '1400:84C00:B8CE94D:BCC61EC:69ADD821',
+      'x-ratelimit-limit': '5000',
+      'x-ratelimit-remaining': '4999',
+      'x-ratelimit-reset': '1773004338',
+      'x-ratelimit-resource': 'core',
+      'x-ratelimit-used': '1',
+      'x-xss-protection': '0'
+    },
+    data: {
+      message: 'Resource not accessible by integration',
+      documentation_url: 'https://docs.github.com/rest/commits/commits#list-pull-requests-associated-with-a-commit',
+      status: '403'
+    }
+  },
+  [cause]: undefined
+}
+Error: Resource not accessible by integration - https://docs.github.com/rest/actions/workflow-runs#get-a-workflow-run
