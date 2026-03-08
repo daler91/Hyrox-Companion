@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/node";
 import express, { type Request, Response, NextFunction } from "express";
 import compression from "compression";
 import { registerRoutes } from "./routes";
@@ -6,6 +7,14 @@ import { createServer } from "http";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 import { storage } from "./storage";
+
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV || "development",
+    sendDefaultPii: true,
+  });
+}
 
 const app = express();
 const httpServer = createServer(app);
@@ -25,8 +34,8 @@ app.use((_req, res, next) => {
   res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
   const isDev = process.env.NODE_ENV !== "production";
   const connectSrc = isDev
-    ? "connect-src 'self' https://www.strava.com ws: wss:"
-    : "connect-src 'self' https://www.strava.com";
+    ? "connect-src 'self' https://www.strava.com https://*.ingest.us.sentry.io ws: wss:"
+    : "connect-src 'self' https://www.strava.com https://*.ingest.us.sentry.io";
   const scriptSrc = isDev
     ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
     : "script-src 'self' 'unsafe-inline'";
@@ -125,8 +134,8 @@ async function cleanOrphanedData() {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
 
+    Sentry.captureException(err);
     res.status(status).json({ message });
-    throw err;
   });
 
   // importantly only setup vite in development and after

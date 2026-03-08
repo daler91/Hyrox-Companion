@@ -49,3 +49,5 @@ integrations = ["javascript_openai:1.0.0", "javascript_mem_db:1.0.0", "javascrip
 [userenv]
 
 [userenv.shared]
+SENTRY_DSN = "https://aad83957dafd605dd1cb06ff69e5ec9b@o4511009584709632.ingest.us.sentry.io/4511009623900160"
+VITE_SENTRY_DSN = "https://aad83957dafd605dd1cb06ff69e5ec9b@o4511009584709632.ingest.us.sentry.io/4511009623900160"

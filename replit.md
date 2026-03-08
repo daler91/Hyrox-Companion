@@ -109,6 +109,7 @@ The storage layer uses an interface pattern (`IStorage`) with all methods requir
 - **Google Gemini API**: AI coach functionality requiring `GEMINI_API_KEY` environment variable
 - **PostgreSQL**: Database backend requiring `DATABASE_URL` environment variable
 - **Replit Auth**: OIDC authentication via `ISSUER_URL` (defaults to Replit)
+- **Sentry.io**: Error monitoring for frontend (`@sentry/react` in `client/src/main.tsx`) and backend (`@sentry/node` in `server/index.ts`). DSN loaded from `SENTRY_DSN` (backend) and `VITE_SENTRY_DSN` (frontend) environment variables. CSP allows `https://*.ingest.us.sentry.io` for event reporting
 
 ### Key Libraries
 - **UI Framework**: Radix UI primitives (accordion, dialog, dropdown-menu, tabs, etc.)
