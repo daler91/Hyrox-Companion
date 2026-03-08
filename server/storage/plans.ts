@@ -10,10 +10,7 @@ import {
 } from "@shared/schema";
 import { db } from "../db";
 import { eq, and, sql, inArray } from "drizzle-orm";
-
-function getTodayStr(): string {
-  return new Date().toISOString().split("T")[0];
-}
+import { toDateStr } from "../types";
 
 export class PlanStorage {
   async createTrainingPlan(plan: InsertTrainingPlan): Promise<TrainingPlan> {
@@ -139,7 +136,7 @@ export class PlanStorage {
     const weekNumbers = plan.days.map(d => d.weekNumber || 1);
     const minWeek = Math.min(...weekNumbers);
 
-    const today = getTodayStr();
+    const today = toDateStr();
 
     const dateUpdates: { id: string; scheduledDate: string; resetStatus: boolean }[] = [];
     for (const day of plan.days) {
@@ -148,7 +145,7 @@ export class PlanStorage {
       const dayOffset = dayNameToOffset[day.dayName || "Monday"] || 0;
       const scheduledDate = new Date(weekOneMonday);
       scheduledDate.setDate(weekOneMonday.getDate() + weekOffset + dayOffset);
-      const dateStr = scheduledDate.toISOString().split("T")[0];
+      const dateStr = toDateStr(scheduledDate);
       dateUpdates.push({
         id: day.id,
         scheduledDate: dateStr,
@@ -172,7 +169,7 @@ export class PlanStorage {
   }
 
   async markMissedPlanDays(): Promise<number> {
-    const today = getTodayStr();
+    const today = toDateStr();
     const result = await db
       .update(planDays)
       .set({ status: 'missed' })

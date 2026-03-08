@@ -1,12 +1,13 @@
 import { Router } from "express";
 import { isAuthenticated } from "../replitAuth";
 import { storage } from "../storage";
+import { getUserId } from "../types";
 
 const router = Router();
 
 router.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
   try {
-    const userId = req.user.claims.sub;
+    const userId = getUserId(req);
     const user = await storage.getUser(userId);
     res.json(user);
   } catch (error) {

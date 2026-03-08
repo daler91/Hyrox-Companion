@@ -2,13 +2,15 @@ import type { IStorage } from "./storage";
 import type { User } from "@shared/schema";
 import { sendWeeklySummary, sendMissedWorkoutReminder, type WeeklySummaryData, type MissedWorkoutData } from "./email";
 import { log } from "./index";
+import { toDateStr } from "./types";
+import { calculateStreak } from "./routeUtils";
 
 export async function checkAndSendEmailsForUser(storage: IStorage, user: User): Promise<string[]> {
   const sent: string[] = [];
   if (!user.email || !user.emailNotifications) return sent;
 
   const now = new Date();
-  const today = now.toISOString().split('T')[0];
+  const today = toDateStr(now);
   const dayOfWeek = now.getDay();
 
   if (dayOfWeek === 1) {
@@ -19,24 +21,17 @@ export async function checkAndSendEmailsForUser(storage: IStorage, user: User): 
       weekEnd.setDate(weekEnd.getDate() - 1);
       const weekStart = new Date(weekEnd);
       weekStart.setDate(weekStart.getDate() - 6);
-      const weekStartStr = weekStart.toISOString().split('T')[0];
-      const weekEndStr = weekEnd.toISOString().split('T')[0];
+      const weekStartStr = toDateStr(weekStart);
+      const weekEndStr = toDateStr(weekEnd);
 
       const stats = await storage.getWeeklyStats(user.id, weekStartStr, weekEndStr);
       const timeline = await storage.getTimeline(user.id);
-      const completedDates = timeline
-        .filter(e => e.status === 'completed' && e.date)
-        .map(e => e.date)
-        .sort();
-      let streak = 0;
-      if (completedDates.length > 0) {
-        const d = new Date(today);
-        d.setDate(d.getDate() - 1);
-        while (completedDates.includes(d.toISOString().split('T')[0])) {
-          streak++;
-          d.setDate(d.getDate() - 1);
-        }
-      }
+      const completedDates = new Set(
+        timeline
+          .filter(e => e.status === "completed" && e.date)
+          .map(e => e.date!)
+      );
+      const streak = calculateStreak(completedDates);
 
       const total = stats.completedCount + stats.missedCount + stats.skippedCount;
       const summaryData: WeeklySummaryData = {
@@ -55,7 +50,7 @@ export async function checkAndSendEmailsForUser(storage: IStorage, user: User): 
       const success = await sendWeeklySummary(user, summaryData);
       if (success) {
         await storage.updateLastWeeklySummaryAt(user.id);
-        sent.push('weekly_summary');
+        sent.push("weekly_summary");
       }
     }
   }
@@ -65,7 +60,7 @@ export async function checkAndSendEmailsForUser(storage: IStorage, user: User): 
   if (!lastMissedSent || lastMissedSent < oneDayAgo) {
     const yesterday = new Date(now);
     yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    const yesterdayStr = toDateStr(yesterday);
     const missed = await storage.getMissedWorkoutsForDate(user.id, yesterdayStr);
     if (missed.length > 0) {
       const missedData: MissedWorkoutData[] = missed.map(m => ({
@@ -77,7 +72,7 @@ export async function checkAndSendEmailsForUser(storage: IStorage, user: User): 
       const success = await sendMissedWorkoutReminder(user, missedData);
       if (success) {
         await storage.updateLastMissedReminderAt(user.id);
-        sent.push('missed_reminder');
+        sent.push("missed_reminder");
       }
     }
   }
@@ -107,7 +102,7 @@ export async function runEmailCronJob(storage: IStorage): Promise<{ usersChecked
         const sent = await checkAndSendEmailsForUser(storage, user);
         emailsSent += sent.length;
         if (sent.length > 0) {
-          const detail = `Sent ${sent.join(', ')} to ${user.email}`;
+          const detail = `Sent ${sent.join(", ")} to ${user.email}`;
           details.push(detail);
           log(detail, "email");
         }

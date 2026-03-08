@@ -1,17 +1,14 @@
-import type { Express, Request, Response } from "express";
+import type { Express, Response } from "express";
 import crypto from "crypto";
 import { storage } from "./storage";
 import { isAuthenticated } from "./replitAuth";
-import { 
-  formatDistance as formatDistanceShared, 
-  formatPace as formatPaceShared,
-  formatElevation,
-  type DistanceUnit 
-} from "@shared/unitConversion";
+import { type DistanceUnit } from "@shared/unitConversion";
+import { mapStravaActivityToWorkout, type StravaActivity } from "./services/stravaMapper";
+import { getUserId } from "./types";
 
 const STRAVA_CLIENT_ID = process.env.STRAVA_CLIENT_ID;
 const STRAVA_CLIENT_SECRET = process.env.STRAVA_CLIENT_SECRET;
-const STRAVA_REDIRECT_URI = process.env.REPLIT_DOMAINS 
+const STRAVA_REDIRECT_URI = process.env.REPLIT_DOMAINS
   ? `https://${process.env.REPLIT_DOMAINS.split(",")[0]}/api/strava/callback`
   : "http://localhost:5000/api/strava/callback";
 
@@ -27,30 +24,6 @@ interface StravaTokenResponse {
     firstname: string;
     lastname: string;
   };
-}
-
-interface StravaActivity {
-  id: number;
-  name: string;
-  type: string;
-  sport_type: string;
-  start_date: string;
-  start_date_local: string;
-  distance: number;
-  moving_time: number;
-  elapsed_time: number;
-  total_elevation_gain: number;
-  average_speed: number;
-  max_speed: number;
-  average_heartrate?: number;
-  max_heartrate?: number;
-  average_cadence?: number;
-  average_watts?: number;
-  kilojoules?: number;
-  calories?: number;
-  suffer_score?: number;
-  pr_count?: number;
-  achievement_count?: number;
 }
 
 async function refreshStravaToken(refreshToken: string): Promise<StravaTokenResponse | null> {
@@ -108,94 +81,12 @@ async function getValidAccessToken(userId: string): Promise<string | null> {
   return refreshed.access_token;
 }
 
-function formatStravaDistance(meters: number, distanceUnit: DistanceUnit): string {
-  const km = meters / 1000;
-  if (distanceUnit === "miles") {
-    const miles = km * 0.621371;
-    return `${miles.toFixed(2)} mi`;
-  }
-  return `${km.toFixed(2)} km`;
-}
-
-function formatDuration(seconds: number): string {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  if (hours > 0) {
-    return `${hours}h ${minutes}m`;
-  }
-  return `${minutes}m`;
-}
-
-function formatStravaPace(metersPerSecond: number, distanceUnit: DistanceUnit): string {
-  if (metersPerSecond <= 0) return "";
-  return formatPaceShared(metersPerSecond, distanceUnit);
-}
-
-function mapStravaActivityToWorkout(activity: StravaActivity, userId: string, distanceUnit: DistanceUnit = "km") {
-  const durationMinutes = Math.round(activity.moving_time / 60);
-  
-  // Check if this is a distance-based activity (more than 100m)
-  const isDistanceActivity = activity.distance > 100;
-  
-  const mainWorkout = isDistanceActivity
-    ? `${formatStravaDistance(activity.distance, distanceUnit)}, ${formatDuration(activity.moving_time)}`
-    : `${formatDuration(activity.moving_time)} session`;
-  
-  // Build accessory info with elevation and pace if available
-  const accessoryParts: string[] = [];
-  if (activity.total_elevation_gain > 0) {
-    accessoryParts.push(`Elevation: ${formatElevation(activity.total_elevation_gain, distanceUnit)}`);
-  }
-  if (isDistanceActivity && activity.average_speed > 0) {
-    accessoryParts.push(`Pace: ${formatStravaPace(activity.average_speed, distanceUnit)}`);
-  }
-  const accessory = accessoryParts.length > 0 ? accessoryParts.join(" | ") : null;
-
-  // Build notes with activity name and heartrate data (so user can edit it)
-  const notesParts: string[] = [];
-  if (activity.name) {
-    notesParts.push(activity.name);
-  }
-  if (activity.average_heartrate) {
-    const hrText = activity.max_heartrate 
-      ? `Avg HR: ${Math.round(activity.average_heartrate)} bpm (max ${Math.round(activity.max_heartrate)})`
-      : `Avg HR: ${Math.round(activity.average_heartrate)} bpm`;
-    notesParts.push(hrText);
-  }
-  const notes = notesParts.length > 0 ? notesParts.join(" | ") : null;
-
-  return {
-    userId,
-    date: activity.start_date_local.split("T")[0],
-    focus: activity.sport_type || activity.type || "Workout",
-    mainWorkout,
-    accessory,
-    notes,
-    duration: durationMinutes,
-    rpe: null,
-    planDayId: null,
-    source: "strava" as const,
-    stravaActivityId: String(activity.id),
-    // Detailed Strava metrics
-    calories: activity.calories || activity.kilojoules ? Math.round((activity.calories || 0) || (activity.kilojoules || 0) * 0.239) : null,
-    distanceMeters: activity.distance || null,
-    elevationGain: activity.total_elevation_gain || null,
-    avgHeartrate: activity.average_heartrate ? Math.round(activity.average_heartrate) : null,
-    maxHeartrate: activity.max_heartrate ? Math.round(activity.max_heartrate) : null,
-    avgSpeed: activity.average_speed || null,
-    maxSpeed: activity.max_speed || null,
-    avgCadence: activity.average_cadence || null,
-    avgWatts: activity.average_watts ? Math.round(activity.average_watts) : null,
-    sufferScore: activity.suffer_score || null,
-  };
-}
-
 export function registerStravaRoutes(app: Express): void {
   app.get("/api/strava/status", isAuthenticated, async (req: any, res: Response) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = getUserId(req);
       const connection = await storage.getStravaConnection(userId);
-      
+
       if (!connection) {
         return res.json({ connected: false });
       }
@@ -216,16 +107,14 @@ export function registerStravaRoutes(app: Express): void {
       return res.status(500).json({ error: "Strava integration not configured" });
     }
 
-    const userId = req.user.claims.sub;
+    const userId = getUserId(req);
     const scope = "activity:read_all";
-    
-    // Generate CSRF state token combining userId and random bytes
+
     const csrfToken = crypto.randomBytes(16).toString("hex");
     const state = `${userId}:${csrfToken}`;
-    
-    // Store CSRF token in session for validation
-    req.session.stravaOAuthState = state;
-    
+
+    (req as any).session.stravaOAuthState = state;
+
     const authUrl = new URL("https://www.strava.com/oauth/authorize");
     authUrl.searchParams.set("client_id", STRAVA_CLIENT_ID);
     authUrl.searchParams.set("redirect_uri", STRAVA_REDIRECT_URI);
@@ -244,16 +133,13 @@ export function registerStravaRoutes(app: Express): void {
       return res.redirect("/settings?strava=error");
     }
 
-    // Validate CSRF state token
     if (!state || !req.session?.stravaOAuthState || state !== req.session.stravaOAuthState) {
       console.error("Strava OAuth state mismatch - possible CSRF attack");
       return res.redirect("/settings?strava=error");
     }
 
-    // Extract userId from state (format: userId:csrfToken)
     const userId = (state as string).split(":")[0];
-    
-    // Clear the state from session after validation
+
     delete req.session.stravaOAuthState;
 
     if (!code || !userId || !STRAVA_CLIENT_ID || !STRAVA_CLIENT_SECRET) {
@@ -298,7 +184,7 @@ export function registerStravaRoutes(app: Express): void {
 
   app.delete("/api/strava/disconnect", isAuthenticated, async (req: any, res: Response) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = getUserId(req);
       await storage.deleteStravaConnection(userId);
       res.json({ success: true });
     } catch (error) {
@@ -309,14 +195,13 @@ export function registerStravaRoutes(app: Express): void {
 
   app.post("/api/strava/sync", isAuthenticated, async (req: any, res: Response) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = getUserId(req);
       const accessToken = await getValidAccessToken(userId);
 
       if (!accessToken) {
         return res.status(401).json({ error: "Strava not connected or token expired" });
       }
 
-      // Fetch user preferences for distance unit
       const user = await storage.getUser(userId);
       const distanceUnit = (user?.distanceUnit || "km") as DistanceUnit;
 
@@ -338,7 +223,7 @@ export function registerStravaRoutes(app: Express): void {
 
       for (const activity of activities) {
         const existingLog = await storage.getWorkoutByStravaActivityId(userId, String(activity.id));
-        
+
         if (existingLog) {
           skipped++;
           continue;

@@ -8,10 +8,7 @@ import {
 import { db } from "../db";
 import { eq, and, isNull, inArray, sql, desc } from "drizzle-orm";
 import type { WorkoutStorage } from "./workouts";
-
-function getTodayStr(): string {
-  return new Date().toISOString().split("T")[0];
-}
+import { toDateStr } from "../types";
 
 function mapWorkoutLogToTimelineFields(log: WorkoutLog) {
   return {
@@ -34,7 +31,7 @@ export class TimelineStorage {
 
   async getTimeline(userId: string, planId?: string): Promise<TimelineEntry[]> {
     const entries: TimelineEntry[] = [];
-    const today = getTodayStr();
+    const today = toDateStr();
 
     const planDayConditions = planId 
       ? and(eq(trainingPlans.userId, userId), eq(planDays.planId, planId))

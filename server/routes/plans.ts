@@ -4,6 +4,7 @@ import { storage } from "../storage";
 import { updatePlanDaySchema, type InsertPlanDay } from "@shared/schema";
 import { parse } from "csv-parse/sync";
 import { samplePlanDays } from "../samplePlan";
+import { getUserId } from "../types";
 
 const router = Router();
 
@@ -34,7 +35,7 @@ function parseCSV(csvText: string): CSVRow[] {
 
 router.get("/api/plans", isAuthenticated, async (req: any, res) => {
   try {
-    const userId = req.user.claims.sub;
+    const userId = getUserId(req);
     const plans = await storage.listTrainingPlans(userId);
     res.json(plans);
   } catch (error) {
@@ -45,7 +46,7 @@ router.get("/api/plans", isAuthenticated, async (req: any, res) => {
 
 router.get("/api/plans/:id", isAuthenticated, async (req: any, res) => {
   try {
-    const userId = req.user.claims.sub;
+    const userId = getUserId(req);
     const plan = await storage.getTrainingPlan(req.params.id, userId);
     if (!plan) {
       return res.status(404).json({ error: "Training plan not found" });
@@ -69,7 +70,7 @@ router.post("/api/plans/import", isAuthenticated, async (req: any, res) => {
       return res.status(400).json({ error: "CSV content is required" });
     }
 
-    const userId = req.user.claims.sub;
+    const userId = getUserId(req);
     const rows = parseCSV(csvContent);
     if (rows.length === 0) {
       return res.status(400).json({ error: "No valid rows found in CSV" });
@@ -116,7 +117,7 @@ router.post("/api/plans/import", isAuthenticated, async (req: any, res) => {
 
 router.post("/api/plans/sample", isAuthenticated, async (req: any, res) => {
   try {
-    const userId = req.user.claims.sub;
+    const userId = getUserId(req);
 
     const plan = await storage.createTrainingPlan({
       userId,
@@ -148,7 +149,7 @@ router.post("/api/plans/sample", isAuthenticated, async (req: any, res) => {
 router.patch("/api/plans/:planId/days/:dayId", isAuthenticated, async (req: any, res) => {
   try {
     const { dayId } = req.params;
-    const userId = req.user.claims.sub;
+    const userId = getUserId(req);
 
     const parseResult = updatePlanDaySchema.safeParse(req.body);
     if (!parseResult.success) {
@@ -170,7 +171,7 @@ router.patch("/api/plans/:planId/days/:dayId", isAuthenticated, async (req: any,
 router.patch("/api/plans/days/:dayId", isAuthenticated, async (req: any, res) => {
   try {
     const { dayId } = req.params;
-    const userId = req.user.claims.sub;
+    const userId = getUserId(req);
 
     const parseResult = updatePlanDaySchema.safeParse(req.body);
     if (!parseResult.success) {
@@ -198,7 +199,7 @@ router.patch("/api/plans/days/:dayId", isAuthenticated, async (req: any, res) =>
 
 router.patch("/api/plans/:id", isAuthenticated, async (req: any, res) => {
   try {
-    const userId = req.user.claims.sub;
+    const userId = getUserId(req);
     const { name } = req.body;
     if (!name || typeof name !== "string" || name.trim().length === 0) {
       return res.status(400).json({ error: "Name is required" });
@@ -216,7 +217,7 @@ router.patch("/api/plans/:id", isAuthenticated, async (req: any, res) => {
 
 router.delete("/api/plans/:id", isAuthenticated, async (req: any, res) => {
   try {
-    const userId = req.user.claims.sub;
+    const userId = getUserId(req);
     const deleted = await storage.deleteTrainingPlan(req.params.id, userId);
     if (!deleted) {
       return res.status(404).json({ error: "Training plan not found" });
@@ -230,7 +231,7 @@ router.delete("/api/plans/:id", isAuthenticated, async (req: any, res) => {
 
 router.post("/api/plans/:planId/schedule", isAuthenticated, async (req: any, res) => {
   try {
-    const userId = req.user.claims.sub;
+    const userId = getUserId(req);
     const { planId } = req.params;
     const { startDate } = req.body;
 
@@ -253,7 +254,7 @@ router.post("/api/plans/:planId/schedule", isAuthenticated, async (req: any, res
 router.patch("/api/plans/days/:dayId/status", isAuthenticated, async (req: any, res) => {
   try {
     const { dayId } = req.params;
-    const userId = req.user.claims.sub;
+    const userId = getUserId(req);
     const { status, scheduledDate } = req.body as { status?: string; scheduledDate?: string };
 
     const updates: Record<string, string | null> = {};
@@ -279,7 +280,7 @@ router.patch("/api/plans/days/:dayId/status", isAuthenticated, async (req: any, 
 router.delete("/api/plans/days/:dayId", isAuthenticated, async (req: any, res) => {
   try {
     const { dayId } = req.params;
-    const userId = req.user.claims.sub;
+    const userId = getUserId(req);
     const deleted = await storage.deletePlanDay(dayId, userId);
     if (!deleted) {
       return res.status(404).json({ error: "Plan day not found" });

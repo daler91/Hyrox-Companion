@@ -3,6 +3,7 @@ import { isAuthenticated } from "../replitAuth";
 import { storage } from "../storage";
 import { chatWithCoach, streamChatWithCoach, generateWorkoutSuggestions, parseExercisesFromText, type ChatMessage, type UpcomingWorkout } from "../gemini";
 import { rateLimiter, buildTrainingContext } from "../routeUtils";
+import { toDateStr, getUserId } from "../types";
 
 const router = Router();
 
@@ -12,7 +13,7 @@ router.post("/api/parse-exercises", isAuthenticated, rateLimiter("parse", 5), as
     if (!text || !text.trim()) {
       return res.status(400).json({ error: "Text is required" });
     }
-    const userId = req.user.claims.sub;
+    const userId = getUserId(req);
     const user = await storage.getUser(userId);
     const weightUnit = user?.weightUnit || "kg";
     const userCustomExercises = await storage.getCustomExercises(userId);
@@ -36,7 +37,7 @@ router.post("/api/chat", isAuthenticated, rateLimiter("chat", 10), async (req: a
       return res.status(400).json({ error: "Message is required" });
     }
 
-    const userId = req.user.claims.sub;
+    const userId = getUserId(req);
     const trainingContext = await buildTrainingContext(userId);
 
     const response = await chatWithCoach(message, history || [], trainingContext);
@@ -58,7 +59,7 @@ router.post("/api/chat/stream", isAuthenticated, rateLimiter("chat", 10), async 
       return res.status(400).json({ error: "Message is required" });
     }
 
-    const userId = req.user.claims.sub;
+    const userId = getUserId(req);
     const trainingContext = await buildTrainingContext(userId);
 
     res.setHeader("Content-Type", "text/event-stream");
@@ -88,7 +89,7 @@ router.post("/api/chat/stream", isAuthenticated, rateLimiter("chat", 10), async 
 
 router.get("/api/chat/history", isAuthenticated, async (req: any, res) => {
   try {
-    const userId = req.user.claims.sub;
+    const userId = getUserId(req);
     const messages = await storage.getChatMessages(userId);
     res.json(messages);
   } catch (error) {
@@ -99,7 +100,7 @@ router.get("/api/chat/history", isAuthenticated, async (req: any, res) => {
 
 router.post("/api/chat/message", isAuthenticated, async (req: any, res) => {
   try {
-    const userId = req.user.claims.sub;
+    const userId = getUserId(req);
     const { role, content } = req.body as { role: string; content: string };
 
     if (!role || !content) {
@@ -116,7 +117,7 @@ router.post("/api/chat/message", isAuthenticated, async (req: any, res) => {
 
 router.delete("/api/chat/history", isAuthenticated, async (req: any, res) => {
   try {
-    const userId = req.user.claims.sub;
+    const userId = getUserId(req);
     await storage.clearChatHistory(userId);
     res.json({ success: true });
   } catch (error) {
@@ -127,16 +128,16 @@ router.delete("/api/chat/history", isAuthenticated, async (req: any, res) => {
 
 router.post("/api/timeline/ai-suggestions", isAuthenticated, rateLimiter("suggestions", 3), async (req: any, res) => {
   try {
-    const userId = req.user.claims.sub;
+    const userId = getUserId(req);
 
     const trainingContext = await buildTrainingContext(userId);
 
     const timeline = await storage.getTimeline(userId);
-    const today = new Date().toISOString().split('T')[0];
+    const today = toDateStr();
 
     const upcomingWorkouts: UpcomingWorkout[] = timeline
       .filter(entry =>
-        entry.status === 'planned' &&
+        entry.status === "planned" &&
         entry.date &&
         entry.date >= today &&
         entry.planDayId !== null
@@ -146,8 +147,8 @@ router.post("/api/timeline/ai-suggestions", isAuthenticated, rateLimiter("sugges
       .map(entry => ({
         id: entry.planDayId!,
         date: entry.date!,
-        focus: entry.focus || '',
-        mainWorkout: entry.mainWorkout || '',
+        focus: entry.focus || "",
+        mainWorkout: entry.mainWorkout || "",
         accessory: entry.accessory || undefined,
       }));
 
@@ -163,10 +164,10 @@ router.post("/api/timeline/ai-suggestions", isAuthenticated, rateLimiter("sugges
         const workout = workoutMap.get(s.workoutId);
         return {
           workoutId: s.workoutId,
-          date: workout?.date || s.workoutDate || '',
-          focus: workout?.focus || s.workoutFocus || '',
-          targetField: s.targetField || 'notes',
-          action: s.action || 'append',
+          date: workout?.date || s.workoutDate || "",
+          focus: workout?.focus || s.workoutFocus || "",
+          targetField: s.targetField || "notes",
+          action: s.action || "append",
           recommendation: s.recommendation,
           rationale: s.rationale,
           priority: s.priority,

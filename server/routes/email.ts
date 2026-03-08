@@ -2,12 +2,13 @@ import { Router } from "express";
 import { isAuthenticated } from "../replitAuth";
 import { storage } from "../storage";
 import { checkAndSendEmailsForUser, runEmailCronJob } from "../emailScheduler";
+import { getUserId } from "../types";
 
 const router = Router();
 
 router.post("/api/emails/check", isAuthenticated, async (req: any, res) => {
   try {
-    const userId = req.user.claims.sub;
+    const userId = getUserId(req);
     const user = await storage.getUser(userId);
     if (!user) {
       return res.json({ sent: [] });

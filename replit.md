@@ -64,15 +64,25 @@ Key component directories:
 
 Routes are split into domain-based modules under `server/routes/`:
 - `server/routes/ai.ts` — AI chat, streaming chat, exercise parsing, AI suggestions
-- `server/routes/analytics.ts` — personal records, exercise volume stats
-- `server/routes/workouts.ts` — workout CRUD, exercise history, re-parse, data export, timeline
+- `server/routes/analytics.ts` — personal records, exercise volume stats (delegates to analyticsService)
+- `server/routes/workouts.ts` — workout CRUD, exercise history, re-parse, data export, timeline (delegates to exportService)
 - `server/routes/plans.ts` — training plan CRUD, CSV import, sample plan, scheduling, plan day updates
 - `server/routes/auth.ts` — user profile endpoint (`/api/auth/user`)
 - `server/routes/preferences.ts` — user preferences GET/PATCH (`/api/preferences`)
 - `server/routes/email.ts` — email check and cron endpoints (`/api/emails/check`, `/api/cron/emails`)
 - `server/routes.ts` — pure orchestrator mounting all sub-routers + Strava routes
-- `server/routeUtils.ts` — shared helpers (rate limiter, expandExercisesToSetRows, buildTrainingContext)
+
+Shared utilities and types:
+- `server/types.ts` — `AuthenticatedRequest` type (typed Express Request with user claims), `toDateStr()` date formatting helper
+- `server/routeUtils.ts` — rate limiter, expandExercisesToSetRows, buildTrainingContext (decomposed into calculateTrainingStats, getExerciseBreakdown, calculateStreak, collectRecentWorkouts), upsertCustomExercisesFromSets, reparseWorkout
+- `server/prompts.ts` — AI prompt constants (BASE_SYSTEM_PROMPT, SUGGESTIONS_PROMPT, PARSE_EXERCISES_PROMPT), validation sets, buildSystemPrompt function
+- `server/maintenance.ts` — startup cleanup (cleanOrphanedData, markMissedPlanDays) extracted from index.ts
 - `server/samplePlan.ts` — hardcoded 8-week sample training plan data
+
+Extracted service modules under `server/services/`:
+- `server/services/exportService.ts` — CSV and JSON export generation (extracted from workouts route)
+- `server/services/analyticsService.ts` — personal records calculation and exercise analytics aggregation (extracted from analytics route)
+- `server/services/stravaMapper.ts` — Strava activity-to-workout mapping and formatting helpers (extracted from strava.ts)
 
 The storage layer is split into domain modules under `server/storage/`:
 - `server/storage/IStorage.ts` — storage interface with all method signatures

@@ -2,12 +2,13 @@ import { Router } from "express";
 import { isAuthenticated } from "../replitAuth";
 import { storage } from "../storage";
 import { updateUserPreferencesSchema } from "@shared/schema";
+import { getUserId } from "../types";
 
 const router = Router();
 
 router.get('/api/preferences', isAuthenticated, async (req: any, res) => {
   try {
-    const userId = req.user.claims.sub;
+    const userId = getUserId(req);
     const user = await storage.getUser(userId);
     if (!user) {
       return res.status(404).json({ error: "User not found" });
@@ -26,7 +27,7 @@ router.get('/api/preferences', isAuthenticated, async (req: any, res) => {
 
 router.patch('/api/preferences', isAuthenticated, async (req: any, res) => {
   try {
-    const userId = req.user.claims.sub;
+    const userId = getUserId(req);
     const parseResult = updateUserPreferencesSchema.safeParse(req.body);
     if (!parseResult.success) {
       return res.status(400).json({ error: "Invalid preferences data", details: parseResult.error });
