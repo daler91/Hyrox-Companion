@@ -142,4 +142,4 @@ The storage layer uses an interface pattern (`IStorage`) with all methods requir
 - **Type Checking**: TypeScript with strict mode
 - **CSS Processing**: PostCSS with Tailwind CSS and autoprefixer
 - **Database Migrations**: drizzle-kit for schema migrations
-- **E2E Testing**: Cypress.io with Cypress Cloud (project ID: `dy8p9y`). Config in `cypress.config.ts`, tests in `cypress/e2e/`. Custom `getBySel` command for `data-testid` selectors. GitHub Actions workflow in `.github/workflows/cypress.yml` runs tests on push/PR with `CYPRESS_RECORD_KEY` secret. Run locally with `npx cypress open` or `npx cypress run`
+- **E2E Testing**: Cypress.io with Cypress Cloud (project ID: `dy8p9y`). Config in `cypress.config.ts`, 8 test specs in `cypress/e2e/` (landing, auth, navigation, timeline, settings, log-workout, analytics, api-validation). Shared auth intercept helper in `cypress/support/authIntercepts.ts`. Custom `getBySel` command for `data-testid` selectors. GitHub Actions workflow in `.github/workflows/cypress.yml` runs tests on push/PR with `CYPRESS_RECORD_KEY` secret. Run locally with `npx cypress open` or `npx cypress run`

@@ -1,59 +1,8 @@
+import { setupAuthIntercepts } from "../support/authIntercepts";
+
 describe("Navigation (Authenticated)", () => {
   beforeEach(() => {
-    cy.intercept("GET", "/api/auth/user", {
-      statusCode: 200,
-      body: {
-        id: "test-user-123",
-        username: "testathlete",
-        profileImageUrl: null,
-        email: "test@example.com",
-      },
-    }).as("authUser");
-
-    cy.intercept("GET", "/api/preferences", {
-      statusCode: 200,
-      body: {
-        weightUnit: "kg",
-        distanceUnit: "km",
-        weeklyGoal: 5,
-        emailNotifications: false,
-      },
-    }).as("preferences");
-
-    cy.intercept("GET", "/api/timeline*", {
-      statusCode: 200,
-      body: [],
-    }).as("timeline");
-
-    cy.intercept("GET", "/api/plans", {
-      statusCode: 200,
-      body: [],
-    }).as("plans");
-
-    cy.intercept("GET", "/api/workouts*", {
-      statusCode: 200,
-      body: [],
-    }).as("workouts");
-
-    cy.intercept("GET", "/api/personal-records", {
-      statusCode: 200,
-      body: [],
-    }).as("records");
-
-    cy.intercept("GET", "/api/exercise-analytics*", {
-      statusCode: 200,
-      body: [],
-    }).as("exerciseAnalytics");
-
-    cy.intercept("GET", "/api/strava/status", {
-      statusCode: 200,
-      body: { connected: false },
-    }).as("stravaStatus");
-
-    cy.intercept("GET", "/api/exercise-history*", {
-      statusCode: 200,
-      body: [],
-    }).as("exerciseHistory");
+    setupAuthIntercepts();
   });
 
   it("shows the sidebar", () => {
