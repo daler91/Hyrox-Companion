@@ -100,6 +100,10 @@ export async function reparseWorkout(
   weightUnit: string
 ): Promise<{ exercises: any[]; setCount: number } | null> {
   const { parseExercisesFromText } = await import("./gemini");
+  const { exerciseSets } = await import("@shared/schema");
+  const { db } = await import("./db");
+  const { eq } = await import("drizzle-orm");
+
   const textToParse = [workout.mainWorkout, workout.accessory].filter(Boolean).join("\n");
   if (!textToParse.trim()) return null;
 
@@ -107,8 +111,14 @@ export async function reparseWorkout(
   if (exercises.length === 0) return null;
 
   const setRows = expandExercisesToSetRows(exercises, workout.id);
-  await storage.deleteExerciseSetsByWorkoutLog(workout.id);
-  await storage.createExerciseSets(setRows);
+
+  await db.transaction(async (tx) => {
+    await tx.delete(exerciseSets).where(eq(exerciseSets.workoutLogId, workout.id));
+    if (setRows.length > 0) {
+      await tx.insert(exerciseSets).values(setRows);
+    }
+  });
+
   return { exercises, setCount: setRows.length };
 }
 

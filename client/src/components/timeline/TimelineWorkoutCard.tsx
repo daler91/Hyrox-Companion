@@ -65,7 +65,7 @@ function getStatusBadge(status: string) {
   switch (status) {
     case "completed":
       return (
-        <Badge className="bg-green-500/10 text-green-600 dark:text-green-400">
+        <Badge className="bg-success/10 text-success">
           <CheckCircle2 className="h-3 w-3 mr-1" />
           Completed
         </Badge>
@@ -134,7 +134,7 @@ export default function TimelineWorkoutCard({
           : canBeCombinedWith
           ? "border-primary/50 hover:border-primary"
           : entry.status === "completed"
-          ? "border-green-500/20 bg-green-500/5"
+          ? "border-success/20 bg-success/5"
           : entry.status === "missed"
           ? "border-red-500/20 bg-red-500/5"
           : entry.status === "skipped"
@@ -150,16 +150,17 @@ export default function TimelineWorkoutCard({
             <Button
               size="icon"
               variant="ghost"
-              className="shrink-0 mt-0.5 text-muted-foreground hover:text-green-600"
+              className="shrink-0 mt-0.5 text-muted-foreground hover:text-success"
               onClick={handleCompleteClick}
               data-testid={`button-complete-${entry.id}`}
+              aria-label={`Mark ${entry.focus} as complete`}
             >
               <Circle className="h-5 w-5" />
             </Button>
           )}
           
           {entry.status === "completed" && (
-            <div className="shrink-0 mt-0.5 text-green-600">
+            <div className="shrink-0 mt-0.5 text-success">
               <CheckCircle2 className="h-5 w-5" />
             </div>
           )}

@@ -105,7 +105,7 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
       try {
         await updatePreferencesMutation.mutateAsync({ weightUnit, distanceUnit });
       } catch (error) {
-        console.log("Could not save preferences, continuing anyway");
+        toast({ title: "Could not save preferences", description: "Your unit preferences were not saved. You can update them later in settings.", variant: "destructive" });
       }
       setStep("goal");
     } else if (step === "goal") {
@@ -167,7 +167,7 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex gap-1 my-2">
+        <div className="flex gap-1 my-2" role="progressbar" aria-valuenow={currentStepIndex + 1} aria-valuemin={1} aria-valuemax={progressSteps} aria-label={`Step ${currentStepIndex + 1} of ${progressSteps}`}>
           {Array.from({ length: progressSteps }).map((_, i) => (
             <div
               key={i}

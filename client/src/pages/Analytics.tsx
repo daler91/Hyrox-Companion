@@ -4,9 +4,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, Trophy, TrendingUp, Dumbbell, Timer, Ruler, Weight } from "lucide-react";
+import { Link } from "wouter";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { categoryChipColors, categoryLabels, getExerciseLabel } from "@/lib/exerciseUtils";
 import { useState, useMemo } from "react";
+import { subDays, format } from "date-fns";
 
 interface PRValue {
   value: number;
@@ -88,9 +90,17 @@ export default function Analytics() {
   const { weightLabel, distanceUnit } = useUnitPreferences();
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [selectedExercise, setSelectedExercise] = useState<string | null>(null);
+  const [dateRange, setDateRange] = useState<string>("90");
+
+  const dateParams = useMemo(() => {
+    if (dateRange === "all") return "";
+    const from = format(subDays(new Date(), Number(dateRange)), "yyyy-MM-dd");
+    return `?from=${from}`;
+  }, [dateRange]);
 
   const { data: rawPRs, isLoading: prsLoading } = useQuery<Record<string, RawPREntry & { category: string; customLabel?: string | null }>>({
-    queryKey: ["/api/personal-records"],
+    queryKey: ["/api/personal-records", dateRange],
+    queryFn: () => fetch(`/api/personal-records${dateParams}`).then(r => r.json()),
   });
 
   const personalRecords = useMemo(() => {
@@ -109,7 +119,8 @@ export default function Analytics() {
   }, [rawPRs]);
 
   const { data: allAnalytics, isLoading: analyticsLoading } = useQuery<Record<string, ExerciseAnalyticDay[]>>({
-    queryKey: ["/api/exercise-analytics"],
+    queryKey: ["/api/exercise-analytics", dateRange],
+    queryFn: () => fetch(`/api/exercise-analytics${dateParams}`).then(r => r.json()),
   });
 
   const filteredPRs = useMemo(() => {
@@ -151,18 +162,32 @@ export default function Analytics() {
               <Trophy className="h-5 w-5 text-yellow-500" />
               <CardTitle>Personal Records</CardTitle>
             </div>
-            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="w-40" data-testid="select-pr-category">
-                <SelectValue placeholder="All Categories" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
-                <SelectItem value="hyrox_station">Hyrox Station</SelectItem>
-                <SelectItem value="running">Running</SelectItem>
-                <SelectItem value="strength">Strength</SelectItem>
-                <SelectItem value="conditioning">Conditioning</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Select value={dateRange} onValueChange={setDateRange}>
+                <SelectTrigger className="w-36" data-testid="select-date-range">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="30">Last 30 days</SelectItem>
+                  <SelectItem value="90">Last 90 days</SelectItem>
+                  <SelectItem value="180">Last 6 months</SelectItem>
+                  <SelectItem value="365">Last year</SelectItem>
+                  <SelectItem value="all">All time</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                <SelectTrigger className="w-40" data-testid="select-pr-category">
+                  <SelectValue placeholder="All Categories" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Categories</SelectItem>
+                  <SelectItem value="hyrox_station">Hyrox Station</SelectItem>
+                  <SelectItem value="running">Running</SelectItem>
+                  <SelectItem value="strength">Strength</SelectItem>
+                  <SelectItem value="conditioning">Conditioning</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <CardDescription>Your best performances across all exercises</CardDescription>
         </CardHeader>
@@ -172,9 +197,18 @@ export default function Analytics() {
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : filteredPRs.length === 0 ? (
-            <p className="text-muted-foreground text-sm py-4" data-testid="text-no-prs">
-              No personal records yet. Log workouts with structured exercise data to see your PRs here.
-            </p>
+            <div className="text-center py-4 space-y-3" data-testid="text-no-prs">
+              <Dumbbell className="h-10 w-10 mx-auto text-muted-foreground/40" />
+              <p className="text-muted-foreground text-sm">
+                No personal records yet. Log workouts with structured exercise data to see your PRs here.
+              </p>
+              <Link href="/log">
+                <Button variant="outline" data-testid="button-log-workout-from-analytics">
+                  <Dumbbell className="h-4 w-4 mr-2" />
+                  Log a Workout
+                </Button>
+              </Link>
+            </div>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
               {filteredPRs.map((pr) => (

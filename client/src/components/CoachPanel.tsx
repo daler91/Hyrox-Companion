@@ -98,8 +98,13 @@ export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }
       setLocalMessages(prev => [...prev, suggestionsMessage]);
       saveMessageMutation.mutate({ role: "assistant", content: responseContent });
     },
-    onError: () => {
-      const errorContent = "Sorry, I couldn't analyze your workouts right now. Please try again.";
+    onError: (error: any) => {
+      let errorContent = "Sorry, I couldn't analyze your workouts right now. Please try again.";
+      if (error?.message?.includes("429") || error?.status === 429) {
+        errorContent = "You're sending requests too quickly. Please wait a moment and try again.";
+      } else if (error?.message?.includes("network") || error?.message?.includes("fetch")) {
+        errorContent = "Network error — please check your connection and try again.";
+      }
       const errorMessage: Message = {
         id: Date.now().toString(),
         role: "assistant",
@@ -251,6 +256,7 @@ export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }
               onClick={handleClearHistory}
               disabled={isClearingHistory}
               title="Clear chat"
+              aria-label="Clear chat history"
               data-testid="button-clear-chat"
             >
               {isClearingHistory ? (
@@ -265,6 +271,7 @@ export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }
             size="icon"
             onClick={onClose}
             title="Close coach"
+            aria-label="Close coach panel"
             data-testid="button-close-coach"
           >
             <X className="h-4 w-4" />

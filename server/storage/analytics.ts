@@ -6,10 +6,14 @@ import {
   type ExerciseSet,
 } from "@shared/schema";
 import { db } from "../db";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, gte, lte } from "drizzle-orm";
 
 export class AnalyticsStorage {
-  async getAllExerciseSetsWithDates(userId: string): Promise<(ExerciseSet & { date: string })[]> {
+  async getAllExerciseSetsWithDates(userId: string, from?: string, to?: string): Promise<(ExerciseSet & { date: string })[]> {
+    const conditions = [eq(workoutLogs.userId, userId)];
+    if (from) conditions.push(gte(workoutLogs.date, from));
+    if (to) conditions.push(lte(workoutLogs.date, to));
+
     return await db
       .select({
         id: exerciseSets.id,
@@ -29,7 +33,7 @@ export class AnalyticsStorage {
       })
       .from(exerciseSets)
       .innerJoin(workoutLogs, eq(exerciseSets.workoutLogId, workoutLogs.id))
-      .where(eq(workoutLogs.userId, userId))
+      .where(and(...conditions))
       .orderBy(desc(workoutLogs.date));
   }
 

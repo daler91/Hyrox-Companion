@@ -130,7 +130,7 @@ export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg",
               </Badge>
             )}
           </div>
-          <Button size="icon" variant="ghost" onClick={onRemove} data-testid={`button-remove-${exercise.exerciseName}`}>
+          <Button size="icon" variant="ghost" onClick={onRemove} data-testid={`button-remove-${exercise.exerciseName}`} aria-label={`Remove ${displayLabel}`}>
             <X className="h-4 w-4" />
           </Button>
         </div>
@@ -179,7 +179,7 @@ export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg",
                     data-testid={`input-${field}-${exercise.exerciseName}-${idx}`}
                   />
                 ))}
-                <Button size="icon" variant="ghost" onClick={() => removeSet(idx)} disabled={sets.length <= 1} className="h-6 w-6" data-testid={`button-remove-set-${idx}`}>
+                <Button size="icon" variant="ghost" onClick={() => removeSet(idx)} disabled={sets.length <= 1} className="h-6 w-6" data-testid={`button-remove-set-${idx}`} aria-label={`Remove set ${idx + 1}`}>
                   <Minus className="h-3 w-3" />
                 </Button>
               </div>
