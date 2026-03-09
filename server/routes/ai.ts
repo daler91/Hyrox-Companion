@@ -7,6 +7,42 @@ import { toDateStr, getUserId } from "../types";
 
 const router = Router();
 
+const MAX_MESSAGE_LENGTH = 5000;
+const MAX_HISTORY_ITEMS = 20;
+
+function validateChatBody(body: any): { message: string; history: ChatMessage[] } | { error: string } {
+  const { message, history } = body || {};
+
+  if (!message || typeof message !== "string" || !message.trim()) {
+    return { error: "Message is required" };
+  }
+  if (message.length > MAX_MESSAGE_LENGTH) {
+    return { error: `Message must be ${MAX_MESSAGE_LENGTH} characters or less` };
+  }
+
+  let validatedHistory: ChatMessage[] = [];
+  if (history) {
+    if (!Array.isArray(history)) {
+      return { error: "History must be an array" };
+    }
+    const trimmed = history.slice(-MAX_HISTORY_ITEMS);
+    for (const item of trimmed) {
+      if (!item || typeof item.role !== "string" || typeof item.content !== "string") {
+        return { error: "Each history item must have a role and content string" };
+      }
+      if (item.role !== "user" && item.role !== "assistant") {
+        return { error: "History item role must be 'user' or 'assistant'" };
+      }
+      if (item.content.length > MAX_MESSAGE_LENGTH) {
+        return { error: `History item content must be ${MAX_MESSAGE_LENGTH} characters or less` };
+      }
+      validatedHistory.push({ role: item.role, content: item.content });
+    }
+  }
+
+  return { message, history: validatedHistory };
+}
+
 router.post("/api/parse-exercises", isAuthenticated, rateLimiter("parse", 5), async (req: any, res) => {
   try {
     const { text } = req.body as { text: string };
@@ -28,19 +64,16 @@ router.post("/api/parse-exercises", isAuthenticated, rateLimiter("parse", 5), as
 
 router.post("/api/chat", isAuthenticated, rateLimiter("chat", 10), async (req: any, res) => {
   try {
-    const { message, history } = req.body as {
-      message: string;
-      history?: ChatMessage[];
-    };
-
-    if (!message || typeof message !== "string") {
-      return res.status(400).json({ error: "Message is required" });
+    const validated = validateChatBody(req.body);
+    if ("error" in validated) {
+      return res.status(400).json({ error: validated.error });
     }
+    const { message, history } = validated;
 
     const userId = getUserId(req);
     const trainingContext = await buildTrainingContext(userId);
 
-    const response = await chatWithCoach(message, history || [], trainingContext);
+    const response = await chatWithCoach(message, history, trainingContext);
     res.json({ response });
   } catch (error) {
     console.error("Chat error:", error);
@@ -50,14 +83,11 @@ router.post("/api/chat", isAuthenticated, rateLimiter("chat", 10), async (req: a
 
 router.post("/api/chat/stream", isAuthenticated, rateLimiter("chat", 10), async (req: any, res) => {
   try {
-    const { message, history } = req.body as {
-      message: string;
-      history?: ChatMessage[];
-    };
-
-    if (!message || typeof message !== "string") {
-      return res.status(400).json({ error: "Message is required" });
+    const validated = validateChatBody(req.body);
+    if ("error" in validated) {
+      return res.status(400).json({ error: validated.error });
     }
+    const { message, history } = validated;
 
     const userId = getUserId(req);
     const trainingContext = await buildTrainingContext(userId);
@@ -68,7 +98,7 @@ router.post("/api/chat/stream", isAuthenticated, rateLimiter("chat", 10), async 
     res.flushHeaders();
 
     try {
-      const stream = streamChatWithCoach(message, history || [], trainingContext);
+      const stream = streamChatWithCoach(message, history, trainingContext);
 
       for await (const chunk of stream) {
         res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);

@@ -17,6 +17,7 @@ interface UseChatSessionOptions {
 }
 
 const DEFAULT_WELCOME = "Hey! I'm your AI training coach. Ask me about pacing, training tips, or anything Hyrox-related!";
+const MAX_HISTORY_MESSAGES = 20;
 
 export function useChatSession(options: UseChatSessionOptions = {}) {
   const { 
@@ -35,6 +36,12 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   const [isLoading, setIsLoading] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const messagesRef = useRef<Message[]>(messages);
+  const isSubmittingRef = useRef(false);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   const { data: chatHistory = [], isLoading: historyLoading } = useQuery<DBChatMessage[]>({
     queryKey: ["/api/chat/history"],
@@ -87,8 +94,11 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   }, [messages, scrollToBottom]);
 
   const sendMessage = useCallback(async (content: string) => {
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+
     const userMessage: Message = {
-      id: Date.now().toString(),
+      id: crypto.randomUUID(),
       role: "user",
       content,
       timestamp: getCurrentTimeString(),
@@ -99,13 +109,14 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
 
     saveMessageMutation.mutate({ role: "user", content });
 
-    const assistantMessageId = (Date.now() + 1).toString();
+    const assistantMessageId = crypto.randomUUID();
     let fullResponse = "";
 
     try {
-      const history = messages
+      const history = messagesRef.current
         .filter((m) => m.id !== "welcome")
-        .map((m) => ({ role: m.role, content: m.content }));
+        .map((m) => ({ role: m.role, content: m.content }))
+        .slice(-MAX_HISTORY_MESSAGES);
 
       if (useStreaming) {
         const placeholderMessage: Message = {
@@ -242,8 +253,9 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       }
     } finally {
       setIsLoading(false);
+      isSubmittingRef.current = false;
     }
-  }, [messages, useStreaming, saveMessageMutation]);
+  }, [useStreaming, saveMessageMutation]);
 
   const clearHistory = useCallback(() => {
     clearHistoryMutation.mutate();
