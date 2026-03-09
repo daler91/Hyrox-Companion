@@ -89,7 +89,7 @@ export function WorkoutCard({
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="icon" variant="ghost" data-testid={`button-workout-menu-${id}`}>
+              <Button size="icon" variant="ghost" data-testid={`button-workout-menu-${id}`} aria-label="More workout options">
                 <MoreVertical className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
