@@ -211,9 +211,7 @@ export function buildMissedWorkoutEmail(user: User, missed: MissedWorkoutData[])
 
 function getAppUrl(): string {
   if (process.env.REPLIT_DEPLOYMENT_URL) return `https://${process.env.REPLIT_DEPLOYMENT_URL}`;
-  if (process.env.REPL_SLUG && process.env.REPL_OWNER) {
-    return `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
-  }
+  if (process.env.REPLIT_DEV_DOMAIN) return `https://${process.env.REPLIT_DEV_DOMAIN}`;
   return 'https://hyroxtracker.replit.app';
 }
 
