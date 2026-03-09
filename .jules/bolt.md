@@ -1,0 +1,3 @@
+## 2024-03-24 - React List Rendering Performance
+**Learning:** When dealing with long lists rendered by a parent component that also holds significant complex state (like managing dialogs and sliding panels in `Timeline.tsx`), any interaction with that state will cause the *entire* list to re-render. Since `TimelineWorkoutCard` executes expensive logic per item (like grouping array items and calculating PR checks), this cascades into a noticeable delay.
+**Action:** Always consider wrapping list item components in `React.memo` if the parent component is heavily stateful. Furthermore, use `useMemo` to memoize derived data within those item components (like `groupExerciseSets` from an `entry.exerciseSets` array) so even if a re-render is forced, the computation is skipped.

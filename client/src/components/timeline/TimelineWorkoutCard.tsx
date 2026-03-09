@@ -1,3 +1,4 @@
+import React, { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -96,7 +97,12 @@ function getStatusBadge(status: string) {
   }
 }
 
-export default function TimelineWorkoutCard({
+// ⚡ Bolt Optimization:
+// React.memo prevents this card from re-rendering unless its specific entry or props change.
+// This is critical because this component is rendered in a long list in `Timeline.tsx`.
+// Previously, toggling the sidebar or a dialog would cause *every* card to re-render.
+// Expected Impact: Eliminates O(N) re-renders when parent state changes.
+const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
   entry,
   onMarkComplete,
   onClick,
@@ -112,6 +118,16 @@ export default function TimelineWorkoutCard({
   const isSameDate = combiningEntryDate === entry.date;
   const canBeCombinedWith = isCombining && !isBeingCombined && isSameDate;
   const isPlanned = entry.status === "planned" && entry.planDayId;
+
+  // ⚡ Bolt Optimization:
+  // Memoize the grouping of exercise sets to avoid recalculating the grouped array
+  // and performing O(N) array mapping on every single render.
+  // Expected Impact: Reduces CPU time per card render by caching the grouped data.
+  const groupedExerciseSets = useMemo(() => {
+    return entry.exerciseSets && entry.exerciseSets.length > 0
+      ? groupExerciseSets(entry.exerciseSets)
+      : [];
+  }, [entry.exerciseSets]);
 
   const handleCardClick = (e: React.MouseEvent) => {
     if (canBeCombinedWith) {
@@ -185,9 +201,9 @@ export default function TimelineWorkoutCard({
               )}
               <span className="font-medium">{entry.focus}</span>
             </div>
-            {entry.exerciseSets && entry.exerciseSets.length > 0 ? (
+            {groupedExerciseSets.length > 0 ? (
               <div className="flex flex-wrap gap-1.5 mb-1" data-testid={`exercise-chips-${entry.id}`}>
-                {groupExerciseSets(entry.exerciseSets).map((group, idx) => {
+                {groupedExerciseSets.map((group, idx) => {
                   const isCustom = group.exerciseName === "custom";
                   const isPR = hasPRInWorkout(group, entry.workoutLogId ?? undefined, personalRecords);
                   const conf = group.confidence;
@@ -274,4 +290,6 @@ export default function TimelineWorkoutCard({
       </CardContent>
     </Card>
   );
-}
+});
+
+export default TimelineWorkoutCard;
