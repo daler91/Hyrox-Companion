@@ -52,4 +52,12 @@ AI response robustness (`server/gemini.ts`):
 - **Type Checking**: TypeScript.
 - **CSS Processing**: PostCSS with Tailwind CSS.
 - **Database Migrations**: `drizzle-kit`.
+- **Unit Testing**: Vitest (config: `vitest.config.ts`). Run with `npx vitest run` (single run) or `npx vitest` (watch mode).
 - **E2E Testing**: Cypress.io with Cypress Cloud integration.
+
+### Unit Test Locations
+- `server/services/analyticsService.test.ts` — `calculatePersonalRecords`, `calculateExerciseAnalytics`
+- `server/routeUtils.test.ts` — `calculateStreak`, `expandExercisesToSetRows`
+- `server/gemini.test.ts` — `isRetryableError`, `retryWithBackoff`, Zod schemas (`workoutSuggestionSchema`, `parsedExerciseSchema`, `exerciseSetSchema`)
+- `shared/unitConversion.test.ts` — weight/distance conversion, formatting utilities
+- `server/services/stravaMapper.test.ts` — `mapStravaActivityToWorkout`

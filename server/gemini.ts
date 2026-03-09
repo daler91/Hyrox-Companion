@@ -8,7 +8,13 @@ import {
   buildSystemPrompt,
 } from "./prompts";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+let _ai: GoogleGenAI | null = null;
+function getAiClient(): GoogleGenAI {
+  if (!_ai) {
+    _ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+  }
+  return _ai;
+}
 
 export interface ChatMessage {
   role: "user" | "assistant";
@@ -85,7 +91,7 @@ export interface ParsedExercise {
   }>;
 }
 
-const workoutSuggestionSchema = z.object({
+export const workoutSuggestionSchema = z.object({
   workoutId: z.string(),
   workoutDate: z.string(),
   workoutFocus: z.string(),
@@ -96,7 +102,7 @@ const workoutSuggestionSchema = z.object({
   priority: z.enum(["high", "medium", "low"]),
 });
 
-const exerciseSetSchema = z.object({
+export const exerciseSetSchema = z.object({
   setNumber: z.number().optional(),
   reps: z.number().optional().nullable(),
   weight: z.number().optional().nullable(),
@@ -104,7 +110,7 @@ const exerciseSetSchema = z.object({
   time: z.number().optional().nullable(),
 });
 
-const parsedExerciseSchema = z.object({
+export const parsedExerciseSchema = z.object({
   exerciseName: z.string(),
   category: z.string(),
   customLabel: z.string().optional().nullable(),
@@ -112,7 +118,7 @@ const parsedExerciseSchema = z.object({
   sets: z.array(exerciseSetSchema).min(1),
 });
 
-function isRetryableError(error: unknown): boolean {
+export function isRetryableError(error: unknown): boolean {
   if (error instanceof Error) {
     const msg = error.message.toLowerCase();
     if (msg.includes("429") || msg.includes("rate limit")) return true;
@@ -122,7 +128,7 @@ function isRetryableError(error: unknown): boolean {
   return false;
 }
 
-async function retryWithBackoff<T>(
+export async function retryWithBackoff<T>(
   fn: () => Promise<T>,
   label: string,
   maxRetries: number = 2,
@@ -186,7 +192,7 @@ export async function generateWorkoutSuggestions(
     prompt += `\nAnalyze the data and provide suggestions for the upcoming workouts.`;
 
     const response = await retryWithBackoff(
-      () => ai.models.generateContent({
+      () => getAiClient().models.generateContent({
         model: "gemini-3-flash-preview",
         config: {
           systemInstruction: SUGGESTIONS_PROMPT,
@@ -242,7 +248,7 @@ export async function chatWithCoach(
 
     const systemPrompt = buildSystemPrompt(trainingContext);
 
-    const response = await ai.models.generateContent({
+    const response = await getAiClient().models.generateContent({
       model: "gemini-3-flash-preview",
       config: {
         systemInstruction: systemPrompt,
@@ -269,7 +275,7 @@ export async function parseExercisesFromText(text: string, weightUnit: string = 
     }
 
     const response = await retryWithBackoff(
-      () => ai.models.generateContent({
+      () => getAiClient().models.generateContent({
         model: "gemini-3-flash-preview",
         config: {
           systemInstruction: PARSE_EXERCISES_PROMPT + unitNote + customNote,
@@ -346,7 +352,7 @@ export async function* streamChatWithCoach(
 
     const systemPrompt = buildSystemPrompt(trainingContext);
 
-    const response = await ai.models.generateContentStream({
+    const response = await getAiClient().models.generateContentStream({
       model: "gemini-3-flash-preview",
       config: {
         systemInstruction: systemPrompt,
