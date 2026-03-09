@@ -1,4 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
+import { z } from "zod";
 import {
   SUGGESTIONS_PROMPT,
   PARSE_EXERCISES_PROMPT,
@@ -84,6 +85,71 @@ export interface ParsedExercise {
   }>;
 }
 
+const workoutSuggestionSchema = z.object({
+  workoutId: z.string(),
+  workoutDate: z.string(),
+  workoutFocus: z.string(),
+  targetField: z.enum(["mainWorkout", "accessory", "notes"]),
+  action: z.enum(["replace", "append"]),
+  recommendation: z.string(),
+  rationale: z.string(),
+  priority: z.enum(["high", "medium", "low"]),
+});
+
+const exerciseSetSchema = z.object({
+  setNumber: z.number().optional(),
+  reps: z.number().optional().nullable(),
+  weight: z.number().optional().nullable(),
+  distance: z.number().optional().nullable(),
+  time: z.number().optional().nullable(),
+});
+
+const parsedExerciseSchema = z.object({
+  exerciseName: z.string(),
+  category: z.string(),
+  customLabel: z.string().optional().nullable(),
+  confidence: z.number().min(0).max(100).optional().nullable(),
+  sets: z.array(exerciseSetSchema).min(1),
+});
+
+function isRetryableError(error: unknown): boolean {
+  if (error instanceof Error) {
+    const msg = error.message.toLowerCase();
+    if (msg.includes("429") || msg.includes("rate limit")) return true;
+    if (msg.includes("500") || msg.includes("503") || msg.includes("internal server error")) return true;
+    if (msg.includes("network") || msg.includes("econnreset") || msg.includes("timeout") || msg.includes("fetch failed")) return true;
+  }
+  return false;
+}
+
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  label: string,
+  maxRetries: number = 2,
+  baseDelayMs: number = 1000,
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (attempt < maxRetries && isRetryableError(error)) {
+        const delay = baseDelayMs * Math.pow(2, attempt);
+        console.warn(`[gemini] ${label} attempt ${attempt + 1} failed (retrying in ${delay}ms):`, error instanceof Error ? error.message : error);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      } else {
+        break;
+      }
+    }
+  }
+  throw lastError;
+}
+
+function truncate(text: string, maxLen: number = 500): string {
+  return text.length > maxLen ? text.slice(0, maxLen) + "..." : text;
+}
+
 export async function generateWorkoutSuggestions(
   trainingContext: TrainingContext,
   upcomingWorkouts: UpcomingWorkout[]
@@ -119,31 +185,41 @@ export async function generateWorkoutSuggestions(
 
     prompt += `\nAnalyze the data and provide suggestions for the upcoming workouts.`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      config: {
-        systemInstruction: SUGGESTIONS_PROMPT,
-      },
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-    });
+    const response = await retryWithBackoff(
+      () => ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        config: {
+          systemInstruction: SUGGESTIONS_PROMPT,
+          responseMimeType: "application/json",
+        },
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+      }),
+      "suggestions",
+    );
 
     const text = response.text || "[]";
-    const jsonMatch = text.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) {
+
+    let raw: unknown;
+    try {
+      raw = JSON.parse(text);
+    } catch (parseErr) {
+      console.error("[gemini] suggestions JSON.parse failed. Raw response:", truncate(text));
       return [];
     }
 
-    const suggestions = JSON.parse(jsonMatch[0]) as WorkoutSuggestion[];
-    return suggestions.filter(s =>
-      s.workoutId &&
-      s.recommendation &&
-      s.rationale &&
-      s.priority &&
-      ["mainWorkout", "accessory", "notes"].includes(s.targetField) &&
-      ["replace", "append"].includes(s.action)
-    );
+    const rawArray = Array.isArray(raw) ? raw : [];
+    const validated: WorkoutSuggestion[] = [];
+    for (const item of rawArray) {
+      const result = workoutSuggestionSchema.safeParse(item);
+      if (result.success) {
+        validated.push(result.data);
+      } else {
+        console.warn("[gemini] Dropping invalid suggestion:", result.error.issues, "Raw item:", JSON.stringify(item).slice(0, 200));
+      }
+    }
+    return validated;
   } catch (error) {
-    console.error("Gemini suggestions error:", error);
+    console.error("[gemini] suggestions error:", error);
     return [];
   }
 }
@@ -192,44 +268,62 @@ export async function parseExercisesFromText(text: string, weightUnit: string = 
       customNote = `\n\nThe user has previously saved these custom exercises. If you recognize any of them in the text, use "custom" as exerciseName and use the matching name as customLabel: ${customExerciseNames.join(", ")}`;
     }
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      config: {
-        systemInstruction: PARSE_EXERCISES_PROMPT + unitNote + customNote,
-      },
-      contents: [{ role: "user", parts: [{ text: `Parse this workout description into structured exercise data:\n\n${text}` }] }],
-    });
+    const response = await retryWithBackoff(
+      () => ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        config: {
+          systemInstruction: PARSE_EXERCISES_PROMPT + unitNote + customNote,
+          responseMimeType: "application/json",
+        },
+        contents: [{ role: "user", parts: [{ text: `Parse this workout description into structured exercise data:\n\n${text}` }] }],
+      }),
+      "exercise-parse",
+    );
 
     const responseText = response.text || "[]";
-    const jsonMatch = responseText.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) {
-      return [];
+
+    let raw: unknown;
+    try {
+      raw = JSON.parse(responseText);
+    } catch (parseErr) {
+      console.error("[gemini] exercise-parse JSON.parse failed. Raw response:", truncate(responseText));
+      throw new Error("AI returned invalid JSON for exercise parsing");
     }
 
-    const parsed = JSON.parse(jsonMatch[0]) as ParsedExercise[];
-    return parsed.filter(ex =>
-      ex.exerciseName &&
-      ex.category &&
-      ex.sets &&
-      Array.isArray(ex.sets) &&
-      ex.sets.length > 0
-    ).map(ex => {
+    const rawArray = Array.isArray(raw) ? raw : [];
+    const zodResult = z.array(parsedExerciseSchema).safeParse(rawArray);
+
+    if (!zodResult.success) {
+      console.error("[gemini] exercise-parse Zod validation failed:", zodResult.error.issues);
+      console.error("[gemini] Raw parsed data:", truncate(JSON.stringify(rawArray)));
+      throw new Error("AI returned malformed exercise data");
+    }
+
+    return zodResult.data.map(ex => {
       const isKnown = VALID_EXERCISE_NAMES.has(ex.exerciseName);
       const validCategory = VALID_CATEGORIES.has(ex.category);
-      const confidence = typeof ex.confidence === "number" ? Math.min(100, Math.max(0, Math.round(ex.confidence))) : (isKnown ? 95 : 50);
+      const confidence = typeof ex.confidence === "number" && ex.confidence !== null
+        ? Math.min(100, Math.max(0, Math.round(ex.confidence)))
+        : (isKnown ? 95 : 50);
       return {
         exerciseName: isKnown ? ex.exerciseName : "custom",
         category: validCategory ? ex.category : "conditioning",
-        customLabel: isKnown ? ex.customLabel : (ex.customLabel || ex.exerciseName),
+        customLabel: isKnown ? ex.customLabel || undefined : (ex.customLabel || ex.exerciseName),
         confidence,
         sets: ex.sets.map((s, i) => ({
-          ...s,
           setNumber: s.setNumber || i + 1,
+          ...(s.reps != null && { reps: s.reps }),
+          ...(s.weight != null && { weight: s.weight }),
+          ...(s.distance != null && { distance: s.distance }),
+          ...(s.time != null && { time: s.time }),
         })),
       };
     });
   } catch (error) {
-    console.error("Gemini exercise parsing error:", error);
+    if (error instanceof Error && (error.message === "AI returned invalid JSON for exercise parsing" || error.message === "AI returned malformed exercise data")) {
+      throw error;
+    }
+    console.error("[gemini] exercise-parse error:", error);
     throw new Error("Failed to parse exercises from text");
   }
 }

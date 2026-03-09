@@ -25,6 +25,12 @@ Replit Auth, an OpenID Connect provider, handles user authentication. Session da
 ### AI Integration
 The Google Gemini API (gemini-3-flash-preview model) powers the AI features. This includes an AI training coach that provides Hyrox-specific advice, workout analysis, and pacing strategies, as well as AI text-to-exercise parsing for converting free-text workout descriptions into structured data. The AI also benefits from custom exercise recognition based on user-saved names. The server-side implementation manages conversation history and provides personalized training context to the AI, including user stats and recent workout data.
 
+AI response robustness (`server/gemini.ts`):
+- **JSON mode**: `responseMimeType: "application/json"` on suggestion and exercise-parse calls ensures Gemini returns raw JSON (no markdown fences or preamble)
+- **Zod validation**: Parsed AI responses are validated with Zod schemas (`workoutSuggestionSchema`, `parsedExerciseSchema`) — malformed items are logged and dropped (suggestions) or throw with clear messages (exercises)
+- **Retry with backoff**: Transient failures (429 rate limit, 500/503 server errors, network errors) retry up to 2 times with exponential backoff (1s, 2s); non-retryable errors fail immediately
+- **Error logging**: Parse failures log truncated raw response text; Zod failures log validation issues and raw data for debugging
+
 ## External Dependencies
 
 ### Third-Party Services
