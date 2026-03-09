@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { calculateStreak, expandExercisesToSetRows } from "./routeUtils";
+import { calculateStreak } from "./routeUtils";
+import { expandExercisesToSetRows } from "./services/workoutService";
 
 describe("calculateStreak", () => {
   beforeEach(() => {

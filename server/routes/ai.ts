@@ -2,7 +2,8 @@ import { Router } from "express";
 import { isAuthenticated } from "../replitAuth";
 import { storage } from "../storage";
 import { chatWithCoach, streamChatWithCoach, generateWorkoutSuggestions, parseExercisesFromText, type ChatMessage, type UpcomingWorkout } from "../gemini";
-import { rateLimiter, buildTrainingContext } from "../routeUtils";
+import { rateLimiter } from "../routeUtils";
+import { buildTrainingContext } from "../services/aiService";
 import { toDateStr, getUserId } from "../types";
 
 const router = Router();

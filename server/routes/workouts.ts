@@ -2,8 +2,8 @@ import { Router } from "express";
 import { isAuthenticated } from "../replitAuth";
 import { storage } from "../storage";
 import { insertWorkoutLogSchema, updateWorkoutLogSchema } from "@shared/schema";
-import { expandExercisesToSetRows, upsertCustomExercisesFromSets, reparseWorkout } from "../routeUtils";
 import { generateCSV, generateJSON } from "../services/exportService";
+import { createWorkout, updateWorkout, reparseWorkout } from "../services/workoutService";
 import { getUserId } from "../types";
 
 const router = Router();
@@ -133,16 +133,8 @@ router.post("/api/workouts", isAuthenticated, async (req: any, res) => {
     }
 
     const userId = getUserId(req);
-    const log = await storage.createWorkoutLog({ ...parseResult.data, userId });
-
-    if (exercises && Array.isArray(exercises) && exercises.length > 0) {
-      const exerciseSetData = expandExercisesToSetRows(exercises, log.id);
-      const savedSets = await storage.createExerciseSets(exerciseSetData);
-      await upsertCustomExercisesFromSets(exercises, userId);
-      return res.json({ ...log, exerciseSets: savedSets });
-    }
-
-    res.json(log);
+    const result = await createWorkout(parseResult.data, exercises, userId);
+    res.json(result);
   } catch (error) {
     console.error("Create workout error:", error);
     res.status(500).json({ error: "Failed to create workout" });
@@ -158,22 +150,12 @@ router.patch("/api/workouts/:id", isAuthenticated, async (req: any, res) => {
     }
 
     const userId = getUserId(req);
-    const log = await storage.updateWorkoutLog(req.params.id, parseResult.data, userId);
-    if (!log) {
+    const result = await updateWorkout(req.params.id, parseResult.data, exercises, userId);
+    if (!result) {
       return res.status(404).json({ error: "Workout not found" });
     }
 
-    if (exercises && Array.isArray(exercises)) {
-      await storage.deleteExerciseSetsByWorkoutLog(log.id);
-      if (exercises.length > 0) {
-        const exerciseSetData = expandExercisesToSetRows(exercises, log.id);
-        const savedSets = await storage.createExerciseSets(exerciseSetData);
-        await upsertCustomExercisesFromSets(exercises, userId);
-        return res.json({ ...log, exerciseSets: savedSets });
-      }
-    }
-
-    res.json(log);
+    res.json(result);
   } catch (error) {
     console.error("Update workout error:", error);
     res.status(500).json({ error: "Failed to update workout" });

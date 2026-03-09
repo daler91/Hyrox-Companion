@@ -10,6 +10,7 @@ import {
 } from "@shared/schema";
 import { db } from "../db";
 import { eq, and, desc, asc, isNull, isNotNull, sql, inArray } from "drizzle-orm";
+import { queryExerciseSetsWithDates } from "./shared";
 
 export class WorkoutStorage {
   async createWorkoutLog(log: InsertWorkoutLog & { userId: string }): Promise<WorkoutLog> {
@@ -118,31 +119,7 @@ export class WorkoutStorage {
   }
 
   async getExerciseHistory(userId: string, exerciseName: string): Promise<(ExerciseSet & { date: string })[]> {
-    const rows = await db
-      .select({
-        id: exerciseSets.id,
-        workoutLogId: exerciseSets.workoutLogId,
-        exerciseName: exerciseSets.exerciseName,
-        customLabel: exerciseSets.customLabel,
-        category: exerciseSets.category,
-        setNumber: exerciseSets.setNumber,
-        reps: exerciseSets.reps,
-        weight: exerciseSets.weight,
-        distance: exerciseSets.distance,
-        time: exerciseSets.time,
-        notes: exerciseSets.notes,
-        confidence: exerciseSets.confidence,
-        sortOrder: exerciseSets.sortOrder,
-        date: workoutLogs.date,
-      })
-      .from(exerciseSets)
-      .innerJoin(workoutLogs, eq(exerciseSets.workoutLogId, workoutLogs.id))
-      .where(and(
-        eq(workoutLogs.userId, userId),
-        eq(exerciseSets.exerciseName, exerciseName)
-      ))
-      .orderBy(desc(workoutLogs.date));
-    return rows;
+    return await queryExerciseSetsWithDates(userId, { exerciseName });
   }
 
   async getWorkoutsWithoutExerciseSets(userId: string): Promise<WorkoutLog[]> {

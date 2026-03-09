@@ -71,10 +71,12 @@ export class PlanStorage {
       .where(and(eq(trainingPlans.id, planId), eq(trainingPlans.userId, userId)));
     
     if (!plan) return false;
-    
-    await db.delete(planDays).where(eq(planDays.planId, planId));
-    const result = await db.delete(trainingPlans).where(eq(trainingPlans.id, planId));
-    return result.rowCount !== null && result.rowCount > 0;
+
+    return await db.transaction(async (tx) => {
+      await tx.delete(planDays).where(eq(planDays.planId, planId));
+      const result = await tx.delete(trainingPlans).where(eq(trainingPlans.id, planId));
+      return result.rowCount !== null && result.rowCount > 0;
+    });
   }
 
   async createPlanDays(days: InsertPlanDay[]): Promise<PlanDay[]> {
@@ -155,17 +157,19 @@ export class PlanStorage {
 
     if (dateUpdates.length === 0) return true;
 
-    const caseParts = dateUpdates.map(u => sql`WHEN ${u.id} THEN ${u.scheduledDate}::date`);
-    const caseExpr = sql.join(caseParts, sql` `);
-    const allIds = dateUpdates.map(u => u.id);
-    await db.execute(sql`UPDATE plan_days SET scheduled_date = CASE id ${caseExpr} END WHERE id IN ${allIds}`);
+    return await db.transaction(async (tx) => {
+      const caseParts = dateUpdates.map(u => sql`WHEN ${u.id} THEN ${u.scheduledDate}::date`);
+      const caseExpr = sql.join(caseParts, sql` `);
+      const allIds = dateUpdates.map(u => u.id);
+      await tx.execute(sql`UPDATE plan_days SET scheduled_date = CASE id ${caseExpr} END WHERE id IN ${allIds}`);
 
-    const resetUpdateIds = dateUpdates.filter(u => u.resetStatus).map(u => u.id);
-    if (resetUpdateIds.length > 0) {
-      await db.update(planDays).set({ status: 'planned' }).where(inArray(planDays.id, resetUpdateIds));
-    }
+      const resetUpdateIds = dateUpdates.filter(u => u.resetStatus).map(u => u.id);
+      if (resetUpdateIds.length > 0) {
+        await tx.update(planDays).set({ status: 'planned' }).where(inArray(planDays.id, resetUpdateIds));
+      }
 
-    return true;
+      return true;
+    });
   }
 
   async markMissedPlanDays(): Promise<number> {

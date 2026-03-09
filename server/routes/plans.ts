@@ -1,37 +1,11 @@
 import { Router } from "express";
 import { isAuthenticated } from "../replitAuth";
 import { storage } from "../storage";
-import { updatePlanDaySchema, type InsertPlanDay } from "@shared/schema";
-import { parse } from "csv-parse/sync";
-import { samplePlanDays } from "../samplePlan";
+import { updatePlanDaySchema } from "@shared/schema";
 import { getUserId } from "../types";
+import { importPlanFromCSV, createSamplePlan, updatePlanDayWithCleanup } from "../services/planService";
 
 const router = Router();
-
-interface CSVRow {
-  Week: string;
-  Day: string;
-  Focus: string;
-  "Main Workout": string;
-  "Accessory/Engine Work": string;
-  Notes: string;
-}
-
-function parseCSV(csvText: string): CSVRow[] {
-  try {
-    const records = parse(csvText, {
-      columns: true,
-      skip_empty_lines: true,
-      trim: true,
-      relax_quotes: true,
-      relax_column_count: true,
-    });
-    return records as CSVRow[];
-  } catch (error) {
-    console.error("CSV parse error:", error);
-    return [];
-  }
-}
 
 router.get("/api/plans", isAuthenticated, async (req: any, res) => {
   try {
@@ -71,45 +45,12 @@ router.post("/api/plans/import", isAuthenticated, async (req: any, res) => {
     }
 
     const userId = getUserId(req);
-    const rows = parseCSV(csvContent);
-    if (rows.length === 0) {
-      return res.status(400).json({ error: "No valid rows found in CSV" });
-    }
-
-    const weekNumbers = rows.map((r) => parseInt(r.Week)).filter((n) => !isNaN(n) && n > 0);
-    if (weekNumbers.length === 0) {
-      return res.status(400).json({ error: "No valid week numbers found in CSV" });
-    }
-    const uniqueWeeks = new Set(weekNumbers);
-    const totalWeeks = uniqueWeeks.size;
-
-    const plan = await storage.createTrainingPlan({
-      userId,
-      name: planName || fileName?.replace(".csv", "") || "Imported Plan",
-      sourceFileName: fileName || null,
-      totalWeeks,
-    });
-
-    const days: InsertPlanDay[] = rows
-      .filter((row) => row.Week && row.Day)
-      .map((row) => {
-        const accessory = (row as any)["Accessory"] || row["Accessory/Engine Work"] || null;
-        return {
-          planId: plan.id,
-          weekNumber: parseInt(row.Week) || 1,
-          dayName: row.Day,
-          focus: row.Focus || "",
-          mainWorkout: row["Main Workout"] || "",
-          accessory,
-          notes: row.Notes || null,
-        };
-      });
-
-    await storage.createPlanDays(days);
-
-    const fullPlan = await storage.getTrainingPlan(plan.id, userId);
+    const fullPlan = await importPlanFromCSV(csvContent, userId, { fileName, planName });
     res.json(fullPlan);
-  } catch (error) {
+  } catch (error: any) {
+    if (error.message === "No valid rows found in CSV" || error.message === "No valid week numbers found in CSV") {
+      return res.status(400).json({ error: error.message });
+    }
     console.error("Import plan error:", error);
     res.status(500).json({ error: "Failed to import training plan" });
   }
@@ -118,27 +59,7 @@ router.post("/api/plans/import", isAuthenticated, async (req: any, res) => {
 router.post("/api/plans/sample", isAuthenticated, async (req: any, res) => {
   try {
     const userId = getUserId(req);
-
-    const plan = await storage.createTrainingPlan({
-      userId,
-      name: "8-Week Hyrox Training Plan",
-      sourceFileName: null,
-      totalWeeks: 8,
-    });
-
-    const days: InsertPlanDay[] = samplePlanDays.map((d) => ({
-      planId: plan.id,
-      weekNumber: d.week,
-      dayName: d.day,
-      focus: d.focus,
-      mainWorkout: d.main,
-      accessory: d.accessory,
-      notes: d.notes,
-    }));
-
-    await storage.createPlanDays(days);
-
-    const fullPlan = await storage.getTrainingPlan(plan.id, userId);
+    const fullPlan = await createSamplePlan(userId);
     res.json(fullPlan);
   } catch (error) {
     console.error("Create sample plan error:", error);
@@ -178,14 +99,7 @@ router.patch("/api/plans/days/:dayId", isAuthenticated, async (req: any, res) =>
       return res.status(400).json({ error: "Invalid update data", details: parseResult.error });
     }
 
-    if (parseResult.data.mainWorkout !== undefined) {
-      const linkedLog = await storage.getWorkoutLogByPlanDayId(dayId, userId);
-      if (linkedLog) {
-        await storage.deleteExerciseSetsByWorkoutLog(linkedLog.id);
-      }
-    }
-
-    const updatedDay = await storage.updatePlanDay(dayId, parseResult.data, userId);
+    const updatedDay = await updatePlanDayWithCleanup(dayId, parseResult.data, userId);
     if (!updatedDay) {
       return res.status(404).json({ error: "Day not found" });
     }

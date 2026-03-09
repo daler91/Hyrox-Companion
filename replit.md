@@ -13,8 +13,31 @@ Preferred communication style: Simple, everyday language.
 ### Frontend Architecture
 The frontend is built with React and TypeScript, utilizing Wouter for client-side routing and TanStack React Query for server state management. Styling is handled by Tailwind CSS with CSS variables for theming, and UI components are derived from shadcn/ui, based on Radix UI primitives. Vite serves as the build tool. The application features a streamlined, page-based architecture including a public Landing page, a unified Timeline for training management and AI coaching, a Log Workout form, Analytics for performance tracking, and Settings for user preferences. The Timeline is the core experience, integrating AI coaching, plan management, and workout actions.
 
+#### Component Organization
+Larger components are split into focused sub-components in domain directories:
+- `components/onboarding/` — Wizard step components (`WelcomeStep`, `UnitsStep`, `GoalStep`, `PlanStep`, `ScheduleStep`); parent `OnboardingWizard.tsx` manages navigation and state
+- `components/coach/` — `StatBadge`, `SuggestionCard`, `SuggestionsTab` (with `useSuggestions` hook); parent `CoachPanel.tsx` is a thin orchestrator
+- `components/analytics/` — `MiniBarChart` extracted from Analytics page
+- `components/workout/` — `SortableExerciseBlock` extracted from LogWorkout page
+
 ### Backend Architecture
-The backend is a Node.js Express application written in TypeScript with ESM modules. It provides RESTful endpoints under the `/api` prefix, secured with authentication middleware. Replit Auth (OIDC) is used for authentication, with PostgreSQL storing session data. Routes are organized into domain-based modules (e.g., `ai`, `analytics`, `workouts`, `plans`, `auth`, `preferences`, `email`). Shared utilities, types, AI prompt constants, and maintenance scripts are structured for modularity. Service modules are extracted for export, analytics, and Strava mapping.
+The backend is a Node.js Express application written in TypeScript with ESM modules. It provides RESTful endpoints under the `/api` prefix, secured with authentication middleware. Replit Auth (OIDC) is used for authentication, with PostgreSQL storing session data. Routes are organized into domain-based modules (e.g., `ai`, `analytics`, `workouts`, `plans`, `auth`, `preferences`, `email`). Route handlers are thin wrappers that validate input and delegate to service modules.
+
+#### Service Layer (`server/services/`)
+- `workoutService.ts` — Workout create/update orchestration with `db.transaction()`, exercise-to-set-row expansion, custom exercise upsert, AI reparse
+- `planService.ts` — CSV import parsing/transformation, sample plan creation, plan-day update with linked workout cleanup
+- `aiService.ts` — `buildTrainingContext()` for assembling training stats, exercise breakdown, and recent workouts for AI prompts
+- `analyticsService.ts` — Personal records calculation, exercise analytics aggregation
+- `exportService.ts` — CSV/JSON export generation
+- `stravaMapper.ts` — Strava activity to workout mapping
+
+#### Utilities (`server/routeUtils.ts`)
+Contains only cross-cutting concerns: `rateLimiter` middleware and `calculateStreak` helper.
+
+#### Storage Layer (`server/storage/`)
+- `shared.ts` — Shared `queryExerciseSetsWithDates()` helper used by both workout history and analytics queries (deduplicates exercise-set + workout-log innerJoin)
+- `plans.ts` — Plan scheduling and deletion wrapped in `db.transaction()` for atomicity
+- `workouts.ts`, `analytics.ts`, `users.ts`, `timeline.ts` — Domain-specific storage classes
 
 ### Data Storage
 Drizzle ORM with PostgreSQL is used for data persistence. The schema, shared between client and server, includes tables for Users, Sessions, TrainingPlans, PlanDays, WorkoutLogs, ExerciseSets, and CustomExercises. Foreign key constraints ensure data integrity, and user-scoped indexes optimize query performance. An `IStorage` interface pattern enforces data isolation per user.
@@ -57,7 +80,7 @@ AI response robustness (`server/gemini.ts`):
 
 ### Unit Test Locations
 - `server/services/analyticsService.test.ts` — `calculatePersonalRecords`, `calculateExerciseAnalytics`
-- `server/routeUtils.test.ts` — `calculateStreak`, `expandExercisesToSetRows`
+- `server/routeUtils.test.ts` — `calculateStreak` (from `routeUtils`), `expandExercisesToSetRows` (from `services/workoutService`)
 - `server/gemini.test.ts` — `isRetryableError`, `retryWithBackoff`, Zod schemas (`workoutSuggestionSchema`, `parsedExerciseSchema`, `exerciseSetSchema`)
 - `shared/unitConversion.test.ts` — weight/distance conversion, formatting utilities
 - `server/services/stravaMapper.test.ts` — `mapStravaActivityToWorkout`

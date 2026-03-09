@@ -7,34 +7,11 @@ import {
 } from "@shared/schema";
 import { db } from "../db";
 import { eq, and, desc, sql, gte, lte } from "drizzle-orm";
+import { queryExerciseSetsWithDates } from "./shared";
 
 export class AnalyticsStorage {
   async getAllExerciseSetsWithDates(userId: string, from?: string, to?: string): Promise<(ExerciseSet & { date: string })[]> {
-    const conditions = [eq(workoutLogs.userId, userId)];
-    if (from) conditions.push(gte(workoutLogs.date, from));
-    if (to) conditions.push(lte(workoutLogs.date, to));
-
-    return await db
-      .select({
-        id: exerciseSets.id,
-        workoutLogId: exerciseSets.workoutLogId,
-        exerciseName: exerciseSets.exerciseName,
-        customLabel: exerciseSets.customLabel,
-        category: exerciseSets.category,
-        setNumber: exerciseSets.setNumber,
-        reps: exerciseSets.reps,
-        weight: exerciseSets.weight,
-        distance: exerciseSets.distance,
-        time: exerciseSets.time,
-        notes: exerciseSets.notes,
-        confidence: exerciseSets.confidence,
-        sortOrder: exerciseSets.sortOrder,
-        date: workoutLogs.date,
-      })
-      .from(exerciseSets)
-      .innerJoin(workoutLogs, eq(exerciseSets.workoutLogId, workoutLogs.id))
-      .where(and(...conditions))
-      .orderBy(desc(workoutLogs.date));
+    return await queryExerciseSetsWithDates(userId, { from, to });
   }
 
   async getMissedWorkoutsForDate(userId: string, date: string): Promise<{ date: string; focus: string; mainWorkout: string; planName?: string }[]> {
