@@ -58,6 +58,21 @@ describe("metersToUserDistance", () => {
   it("converts meters to miles", () => {
     expect(metersToUserDistance(1609.34, "miles")).toBeCloseTo(1, 1);
   });
+
+  it("handles zero meters", () => {
+    expect(metersToUserDistance(0, "km")).toBe(0);
+    expect(metersToUserDistance(0, "miles")).toBe(0);
+  });
+
+  it("handles negative meters", () => {
+    expect(metersToUserDistance(-1000, "km")).toBeCloseTo(-1, 5);
+    expect(metersToUserDistance(-1609.34, "miles")).toBeCloseTo(-1, 1);
+  });
+
+  it("handles fractional meters", () => {
+    expect(metersToUserDistance(1500.5, "km")).toBeCloseTo(1.5005, 5);
+    expect(metersToUserDistance(1609.34 / 2, "miles")).toBeCloseTo(0.5, 1);
+  });
 });
 
 describe("userDistanceToMeters", () => {
@@ -67,6 +82,21 @@ describe("userDistanceToMeters", () => {
 
   it("converts miles to meters", () => {
     expect(userDistanceToMeters(1, "miles")).toBeCloseTo(1609.34, 0);
+  });
+
+  it("handles zero distance", () => {
+    expect(userDistanceToMeters(0, "km")).toBe(0);
+    expect(userDistanceToMeters(0, "miles")).toBe(0);
+  });
+
+  it("handles negative distances", () => {
+    expect(userDistanceToMeters(-5, "km")).toBeCloseTo(-5000, 0);
+    expect(userDistanceToMeters(-1, "miles")).toBeCloseTo(-1609.34, 0);
+  });
+
+  it("handles fractional distances", () => {
+    expect(userDistanceToMeters(1.5, "km")).toBeCloseTo(1500, 0);
+    expect(userDistanceToMeters(0.5, "miles")).toBeCloseTo(1609.34 / 2, 0);
   });
 });
 

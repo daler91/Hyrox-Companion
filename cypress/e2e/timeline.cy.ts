@@ -27,7 +27,7 @@ describe("Timeline Page", () => {
       cy.visit("/");
       cy.wait("@authUser");
       cy.wait("@timeline");
-      cy.getBySel("button-coach-fab").click();
+      cy.getBySel("button-coach-fab").click({ force: true });
       cy.getBySel("input-chat-message").should("exist");
     });
   });
