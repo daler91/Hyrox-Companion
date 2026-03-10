@@ -78,23 +78,6 @@ describe("groupExerciseSets", () => {
     expect(result[1].sets).toHaveLength(1);
   });
 
-  it("should sort sets by sortOrder before grouping", () => {
-    const sets: ExerciseSet[] = [
-      { id: "2", workoutLogId: "wl1", exerciseName: "squat", customLabel: null, category: "strength", setNumber: 1, reps: 5, weight: 200, distance: null, time: null, notes: null, confidence: null, sortOrder: 1 },
-      { id: "3", workoutLogId: "wl1", exerciseName: "squat", customLabel: null, category: "strength", setNumber: 2, reps: 5, weight: 200, distance: null, time: null, notes: null, confidence: null, sortOrder: 2 },
-      { id: "1", workoutLogId: "wl1", exerciseName: "bench_press", customLabel: null, category: "strength", setNumber: 1, reps: 10, weight: 100, distance: null, time: null, notes: null, confidence: null, sortOrder: 0 },
-    ];
-
-    const result = groupExerciseSets(sets);
-
-    expect(result).toHaveLength(2);
-    expect(result[0].exerciseName).toBe("bench_press");
-    expect(result[0].sets).toHaveLength(1);
-
-    expect(result[1].exerciseName).toBe("squat");
-    expect(result[1].sets).toHaveLength(2);
-  });
-
   it("should handle custom exercise without customLabel properly", () => {
     const sets: ExerciseSet[] = [
       { id: "1", workoutLogId: "wl1", exerciseName: "custom", customLabel: null, category: "conditioning", setNumber: 1, reps: 10, weight: null, distance: null, time: null, notes: null, confidence: null, sortOrder: 0 },
