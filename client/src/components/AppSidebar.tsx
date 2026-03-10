@@ -77,13 +77,13 @@ export function AppSidebar() {
             <span className="text-sm font-medium truncate" data-testid="text-user-name">{userName}</span>
           </div>
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" asChild data-testid="nav-settings">
+            <Button variant="ghost" size="icon" asChild data-testid="nav-settings" aria-label="Settings">
               <Link href="/settings" title="Settings">
                 <Settings className="h-4 w-4" />
               </Link>
             </Button>
             <ThemeToggle />
-            <Button variant="ghost" size="icon" asChild data-testid="button-logout">
+            <Button variant="ghost" size="icon" asChild data-testid="button-logout" aria-label="Log out">
               <a href="/api/logout" title="Log out">
                 <LogOut className="h-4 w-4" />
               </a>
