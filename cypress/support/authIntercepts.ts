@@ -44,9 +44,9 @@ export function setupAuthIntercepts(overrides?: {
     body: overrides?.workouts ?? [],
   }).as("workouts");
 
-  cy.intercept("GET", "/api/personal-records", {
+  cy.intercept("GET", "/api/personal-records*", {
     statusCode: 200,
-    body: overrides?.personalRecords ?? [],
+    body: overrides?.personalRecords ?? {},
   }).as("records");
 
   cy.intercept("GET", "/api/exercise-analytics*", {

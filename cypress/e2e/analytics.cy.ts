@@ -26,39 +26,31 @@ describe("Analytics Page", () => {
   describe("with PR data", () => {
     beforeEach(() => {
       setupAuthIntercepts({
-        personalRecords: [
-          {
-            exerciseName: "back_squat",
-            customLabel: null,
+        personalRecords: {
+          back_squat: {
             category: "strength",
-            maxWeight: 100,
-            bestTime: null,
-            maxDistance: null,
-            totalSessions: 12,
-            totalSets: 48,
-            totalReps: 384,
-          },
-          {
-            exerciseName: "ski_erg",
             customLabel: null,
+            maxWeight: { value: 100, date: "2024-01-01", workoutLogId: "wl1" },
+          },
+          ski_erg: {
             category: "hyrox_station",
-            maxWeight: null,
-            bestTime: 180,
-            maxDistance: 1000,
-            totalSessions: 8,
-            totalSets: 16,
-            totalReps: null,
-          },
-        ],
-        exerciseAnalytics: [
-          {
-            exerciseName: "back_squat",
             customLabel: null,
-            category: "strength",
-            totalVolume: 38400,
-            sessionCount: 12,
+            maxDistance: { value: 1000, date: "2024-01-01", workoutLogId: "wl2" },
+            bestTime: { value: 180, date: "2024-01-01", workoutLogId: "wl2" },
           },
-        ],
+        },
+        exerciseAnalytics: {
+          back_squat: [
+            {
+              date: "2024-01-01",
+              maxWeight: 100,
+              totalVolume: 38400,
+              totalSets: 48,
+              totalReps: 384,
+              totalDistance: 0,
+            }
+          ]
+        },
       });
       cy.visit("/analytics");
       cy.wait("@authUser");
@@ -75,7 +67,8 @@ describe("Analytics Page", () => {
       cy.getBySel("text-pr-weight-back_squat").should("contain", "100");
     });
 
-    it("shows volume stats section", () => {
+    it("shows volume stats section when viewing progression", () => {
+      cy.getBySel("button-view-progression-back_squat").click();
       cy.getBySel("text-total-sessions").should("exist");
       cy.getBySel("text-total-sets").should("exist");
     });

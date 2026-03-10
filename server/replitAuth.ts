@@ -27,14 +27,21 @@ export function getSession() {
     ttl: sessionTtl,
     tableName: "sessions",
   });
+  const isProduction = process.env.NODE_ENV === "production";
+  const secret = process.env.SESSION_SECRET || (isProduction ? undefined : "fallback_secret_for_tests");
+
+  if (!secret) {
+    throw new Error("SESSION_SECRET must be set in production");
+  }
+
   return session({
-    secret: process.env.SESSION_SECRET!,
+    secret,
     store: sessionStore,
     resave: false,
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: true,
+      secure: process.env.NODE_ENV === "production",
       maxAge: sessionTtl,
     },
   });
