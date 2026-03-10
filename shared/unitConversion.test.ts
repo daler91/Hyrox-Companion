@@ -33,6 +33,26 @@ describe("convertWeight", () => {
     const back = convertWeight(lbs, "lbs", "kg");
     expect(back).toBeCloseTo(original, 5);
   });
+
+  it("handles zero weight correctly", () => {
+    expect(convertWeight(0, "kg", "lbs")).toBe(0);
+    expect(convertWeight(0, "lbs", "kg")).toBe(0);
+  });
+
+  it("handles negative weights correctly", () => {
+    expect(convertWeight(-100, "kg", "lbs")).toBeCloseTo(-220.462, 1);
+    expect(convertWeight(-220.462, "lbs", "kg")).toBeCloseTo(-100, 1);
+  });
+
+  it("handles very small fractional weights", () => {
+    expect(convertWeight(0.001, "kg", "lbs")).toBeCloseTo(0.00220462, 6);
+    expect(convertWeight(0.00220462, "lbs", "kg")).toBeCloseTo(0.001, 6);
+  });
+
+  it("handles very large weights", () => {
+    expect(convertWeight(1000000, "kg", "lbs")).toBeCloseTo(2204620, 0);
+    expect(convertWeight(2204620, "lbs", "kg")).toBeCloseTo(1000000, 0);
+  });
 });
 
 describe("convertDistance", () => {
