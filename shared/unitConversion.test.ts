@@ -91,22 +91,33 @@ describe("userWeightToKg", () => {
 });
 
 describe("formatPace", () => {
-  it("formats pace in min/km", () => {
-    const pace = formatPace(3.333, "km");
-    expect(pace).toMatch(/\d+:\d{2}\/km/);
+  it("formats pace in min/km exactly", () => {
+    // 5 m/s = 18 km/h = 3:20 / km
+    expect(formatPace(5, "km")).toBe("3:20/km");
+
+    // 3.333... m/s = 12 km/h = 5:00 / km
+    expect(formatPace(3.3333333333333335, "km")).toBe("5:00/km");
+
+    // 2.5 m/s = 9 km/h = 6:40 / km
+    expect(formatPace(2.5, "km")).toBe("6:40/km");
   });
 
-  it("formats pace in min/mi", () => {
-    const pace = formatPace(3.333, "miles");
-    expect(pace).toMatch(/\d+:\d{2}\/mi/);
+  it("formats pace in min/mi exactly", () => {
+    // 5 m/s = ~11.18 mph = 5:22 / mi
+    expect(formatPace(5, "miles")).toBe("5:22/mi");
+
+    // 3.333... m/s = ~7.45 mph = 8:03 / mi
+    expect(formatPace(3.3333333333333335, "miles")).toBe("8:03/mi");
   });
 
-  it("returns N/A for zero speed", () => {
-    expect(formatPace(0, "km")).toBe("N/A");
+  it("returns - for zero speed", () => {
+    expect(formatPace(0, "km")).toBe("-");
+    expect(formatPace(0, "miles")).toBe("-");
   });
 
-  it("returns N/A for negative speed", () => {
-    expect(formatPace(-1, "km")).toBe("N/A");
+  it("returns - for negative speed", () => {
+    expect(formatPace(-1, "km")).toBe("-");
+    expect(formatPace(-1, "miles")).toBe("-");
   });
 });
 

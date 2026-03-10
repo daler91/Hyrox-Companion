@@ -35,7 +35,7 @@ export function formatElevation(meters: number, distanceUnit: DistanceUnit): str
 }
 
 export function formatPace(metersPerSecond: number, distanceUnit: DistanceUnit): string {
-  if (metersPerSecond <= 0) return "N/A";
+  if (!metersPerSecond || metersPerSecond <= 0) return "-";
   
   const secondsPerKm = 1000 / metersPerSecond;
   let secondsPerUnit: number;
