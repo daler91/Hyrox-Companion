@@ -145,6 +145,44 @@ Cypress suites cover: authentication, landing page, timeline, log workout, analy
 - **AI responses are validated** — Gemini responses use JSON mode and are validated with Zod schemas. Malformed items are logged and dropped. Transient errors retry with exponential backoff.
 - **Storage layer is user-scoped** — All queries filter by `userId` to enforce data isolation.
 
+## Platform Dependencies
+
+This project is developed on Replit but most of the codebase is fully portable. Here's the breakdown:
+
+### Replit-Specific (would need replacement to deploy elsewhere)
+
+| Component | File(s) | What it does | Portable alternative |
+|-----------|---------|--------------|---------------------|
+| **Authentication** | `server/replitAuth.ts` | OpenID Connect login via Replit Auth | NextAuth, Clerk, Passport with Google/GitHub, Auth0 |
+| **Session storage** | `server/replitAuth.ts` | PostgreSQL sessions via `connect-pg-simple` | Already portable — just needs a Postgres connection |
+| **Email URL helper** | `server/email.ts` | Uses `REPLIT_DEPLOYMENT_URL` / `REPLIT_DEV_DOMAIN` to build app links | Replace `getAppUrl()` with your domain |
+| **Run config** | `.replit` | Replit-specific run/deploy configuration | Replace with platform-specific config (Dockerfile, Procfile, etc.) |
+
+### Fully Portable (works anywhere)
+
+Everything else — which is the vast majority of the app:
+
+- **Express API server** and all route handlers
+- **Drizzle ORM + PostgreSQL** schema and storage layer
+- **React/Vite frontend** with all components and hooks
+- **Google Gemini AI** integration (just needs an API key)
+- **Resend email** sending (just needs an API key)
+- **Strava OAuth** integration
+- **Sentry** error monitoring
+- **All business logic** in the service layer
+- **All tests** (Vitest unit tests and Cypress e2e)
+
+### Migrating Off Replit
+
+If you want to deploy this elsewhere (Vercel, Railway, Fly.io, etc.):
+
+1. **Replace auth** — Swap `replitAuth.ts` with your preferred auth provider. The rest of the app only checks `req.user` and `userId`, so the interface is small.
+2. **Set `getAppUrl()`** — Update the function in `server/email.ts` to return your production domain.
+3. **Provide environment variables** — Same ones listed in the setup section above, plus your auth provider's config.
+4. **Remove `.replit`** — Replace with your platform's config (e.g., `Dockerfile`, `fly.toml`, `railway.json`).
+
+The auth swap is the only non-trivial step. Everything else is standard configuration.
+
 ## License
 
 MIT
