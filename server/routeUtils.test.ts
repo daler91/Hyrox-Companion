@@ -58,6 +58,40 @@ describe("calculateStreak", () => {
     const dates = new Set(["2026-01-14", "2026-01-13", "2026-01-12"]);
     expect(calculateStreak(dates)).toBe(3);
   });
+
+  it("counts across leap year boundary (Feb 29 to Mar 1)", () => {
+    vi.setSystemTime(new Date("2024-03-02T12:00:00Z"));
+    const dates = new Set(["2024-03-02", "2024-03-01", "2024-02-29", "2024-02-28"]);
+    expect(calculateStreak(dates)).toBe(4);
+  });
+
+  it("counts across non-leap year boundary (Feb 28 to Mar 1)", () => {
+    vi.setSystemTime(new Date("2025-03-02T12:00:00Z"));
+    const dates = new Set(["2025-03-02", "2025-03-01", "2025-02-28", "2025-02-27"]);
+    expect(calculateStreak(dates)).toBe(4);
+  });
+
+  it("counts across year boundary (Dec 31 to Jan 1)", () => {
+    vi.setSystemTime(new Date("2026-01-02T12:00:00Z"));
+    const dates = new Set(["2026-01-02", "2026-01-01", "2025-12-31", "2025-12-30"]);
+    expect(calculateStreak(dates)).toBe(4);
+  });
+
+  it("ignores future dates", () => {
+    vi.setSystemTime(new Date("2026-01-15T12:00:00Z"));
+    const dates = new Set(["2026-01-16", "2026-01-15", "2026-01-14"]);
+    expect(calculateStreak(dates)).toBe(2);
+  });
+
+  it("single old date far in the past returns 0", () => {
+    vi.setSystemTime(new Date("2026-01-15T12:00:00Z"));
+    expect(calculateStreak(new Set(["2025-01-01"]))).toBe(0);
+  });
+
+  it("returns 0 if today is completed but it is the only one and not today or yesterday", () => {
+    vi.setSystemTime(new Date("2026-01-15T12:00:00Z"));
+    expect(calculateStreak(new Set(["2026-01-10", "2026-01-09"]))).toBe(0);
+  });
 });
 
 describe("expandExercisesToSetRows", () => {
