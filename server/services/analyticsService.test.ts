@@ -19,7 +19,9 @@ function makeSet(overrides: Record<string, any> = {}) {
 
 describe("calculatePersonalRecords", () => {
   it("returns empty object for empty input", () => {
-    expect(calculatePersonalRecords([])).toEqual({});
+    const result = calculatePersonalRecords([]);
+    expect(result).toEqual({});
+    expect(Object.keys(result).length).toBe(0);
   });
 
   it("tracks maxWeight PR", () => {
