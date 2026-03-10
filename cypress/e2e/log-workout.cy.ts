@@ -5,7 +5,6 @@ describe("Log Workout Page", () => {
     setupAuthIntercepts();
     cy.visit("/log");
     cy.wait("@authUser");
-    cy.wait("@customExercises");
   });
 
   it("shows the workout form with title input", () => {
