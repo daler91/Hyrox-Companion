@@ -43,9 +43,11 @@ export function ChatInput({ onSend, isLoading, placeholder = "Ask about your tra
         size="icon"
         disabled={!message.trim() || isLoading}
         data-testid="button-send-message"
+        aria-label="Send message"
+        title={!message.trim() ? "Type a message to send" : "Send message"}
       >
         {isLoading ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
+          <Loader2 className="h-4 w-4 animate-spin" aria-label="Sending message..." />
         ) : (
           <Send className="h-4 w-4" />
         )}
