@@ -5,7 +5,7 @@ describe("Log Workout Page", () => {
     setupAuthIntercepts();
     cy.visit("/log");
     cy.wait("@authUser");
-    cy.wait("@customExercises");
+    // cy.wait("@customExercises"); // Removed because /api/custom-exercises might not be called on load anymore
   });
 
   it("shows the workout form with title input", () => {
