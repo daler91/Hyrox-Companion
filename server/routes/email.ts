@@ -22,7 +22,7 @@ router.post("/api/emails/check", isAuthenticated, async (req: any, res) => {
 });
 
 router.get("/api/cron/emails", async (req, res) => {
-  const secret = (req.headers["x-cron-secret"] as string) || (req.query.secret as string);
+  const secret = req.headers["x-cron-secret"] as string;
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret || secret !== cronSecret) {
     return res.status(401).json({ error: "Unauthorized" });
