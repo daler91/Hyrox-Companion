@@ -32,22 +32,23 @@ app.use((_req, res, next) => {
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
   res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
   const isDev = process.env.NODE_ENV !== "production";
+  const clerkDomains = "https://*.clerk.accounts.dev https://*.hyroxcompanion.life https://clerk.hyroxcompanion.life";
   const connectSrc = isDev
-    ? "connect-src 'self' https://*.clerk.accounts.dev https://www.strava.com https://*.ingest.us.sentry.io ws: wss:"
-    : "connect-src 'self' https://*.clerk.accounts.dev https://www.strava.com https://*.ingest.us.sentry.io";
+    ? `connect-src 'self' ${clerkDomains} https://www.strava.com https://*.ingest.us.sentry.io ws: wss:`
+    : `connect-src 'self' ${clerkDomains} https://www.strava.com https://*.ingest.us.sentry.io`;
   const scriptSrc = isDev
-    ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.clerk.accounts.dev"
-    : "script-src 'self' 'unsafe-inline' https://*.clerk.accounts.dev";
+    ? `script-src 'self' 'unsafe-inline' 'unsafe-eval' ${clerkDomains}`
+    : `script-src 'self' 'unsafe-inline' ${clerkDomains}`;
   res.setHeader(
     "Content-Security-Policy",
     [
       "default-src 'self'",
       scriptSrc,
-      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://*.clerk.accounts.dev",
+      `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com ${clerkDomains}`,
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: https:",
       connectSrc,
-      "frame-src 'self' https://*.clerk.accounts.dev",
+      `frame-src 'self' ${clerkDomains}`,
       "worker-src 'self' blob:",
     ].join("; ")
   );
