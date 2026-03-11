@@ -1,3 +1,4 @@
+import React, { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -96,7 +97,7 @@ function getStatusBadge(status: string) {
   }
 }
 
-export default function TimelineWorkoutCard({
+const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
   entry,
   onMarkComplete,
   onClick,
@@ -125,6 +126,15 @@ export default function TimelineWorkoutCard({
     e.stopPropagation();
     onMarkComplete(entry);
   };
+
+  // ⚡ Bolt Performance Optimization:
+  // Memoizing the parsed/grouped exercise sets prevents recalculating the sorting
+  // and grouping on every re-render (e.g. when expanding panels or scrolling),
+  // which is an O(n log n) operation when sortOrder exists.
+  const groupedExercises = useMemo(() => {
+    if (!entry.exerciseSets || entry.exerciseSets.length === 0) return [];
+    return groupExerciseSets(entry.exerciseSets);
+  }, [entry.exerciseSets]);
 
   return (
     <Card
@@ -187,7 +197,7 @@ export default function TimelineWorkoutCard({
             </div>
             {entry.exerciseSets && entry.exerciseSets.length > 0 ? (
               <div className="flex flex-wrap gap-1.5 mb-1" data-testid={`exercise-chips-${entry.id}`}>
-                {groupExerciseSets(entry.exerciseSets).map((group, idx) => {
+                {groupedExercises.map((group, idx) => {
                   const isCustom = group.exerciseName === "custom";
                   const isPR = hasPRInWorkout(group, entry.workoutLogId ?? undefined, personalRecords);
                   const conf = group.confidence;
@@ -274,4 +284,10 @@ export default function TimelineWorkoutCard({
       </CardContent>
     </Card>
   );
-}
+});
+
+// ⚡ Bolt Performance Optimization:
+// Wrap TimelineWorkoutCard in React.memo so the cards aren't re-rendered when
+// parent timeline component state changes (unless their specific entry/props change).
+// This reduces unnecessary re-renders in a potentially long list.
+export default TimelineWorkoutCard;
