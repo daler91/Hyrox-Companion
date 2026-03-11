@@ -31,8 +31,7 @@ async function ensureUserExists(clerkUserId: string): Promise<void> {
   const existing = await storage.getUser(clerkUserId);
   if (existing) return;
 
-  const client = await clerkClient();
-  const clerkUser = await client.users.getUser(clerkUserId);
+  const clerkUser = await clerkClient.users.getUser(clerkUserId);
   const email = clerkUser.emailAddresses?.[0]?.emailAddress || null;
 
   if (email) {
