@@ -1,7 +1,7 @@
 import type { Express, Response } from "express";
 import crypto from "crypto";
 import { storage } from "./storage";
-import { isAuthenticated } from "./replitAuth";
+import { isAuthenticated } from "./clerkAuth";
 import { type DistanceUnit } from "@shared/unitConversion";
 import { mapStravaActivityToWorkout, type StravaActivity } from "./services/stravaMapper";
 import { getUserId } from "./types";
@@ -11,6 +11,29 @@ const STRAVA_CLIENT_SECRET = process.env.STRAVA_CLIENT_SECRET;
 const STRAVA_REDIRECT_URI = process.env.REPLIT_DOMAINS
   ? `https://${process.env.REPLIT_DOMAINS.split(",")[0]}/api/strava/callback`
   : "http://localhost:5000/api/strava/callback";
+
+const STATE_SECRET = process.env.CLERK_SECRET_KEY || crypto.randomBytes(32).toString("hex");
+const STATE_MAX_AGE_MS = 10 * 60 * 1000;
+
+function createSignedState(userId: string): string {
+  const timestamp = Date.now().toString(36);
+  const nonce = crypto.randomBytes(8).toString("hex");
+  const payload = `${userId}:${timestamp}:${nonce}`;
+  const signature = crypto.createHmac("sha256", STATE_SECRET).update(payload).digest("hex").slice(0, 16);
+  return `${payload}:${signature}`;
+}
+
+function verifySignedState(state: string): { userId: string } | null {
+  const parts = state.split(":");
+  if (parts.length !== 4) return null;
+  const [userId, timestamp, nonce, signature] = parts;
+  const payload = `${userId}:${timestamp}:${nonce}`;
+  const expected = crypto.createHmac("sha256", STATE_SECRET).update(payload).digest("hex").slice(0, 16);
+  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
+  const ts = parseInt(timestamp, 36);
+  if (Date.now() - ts > STATE_MAX_AGE_MS) return null;
+  return { userId };
+}
 
 interface StravaTokenResponse {
   token_type: string;
@@ -110,10 +133,7 @@ export function registerStravaRoutes(app: Express): void {
     const userId = getUserId(req);
     const scope = "activity:read_all";
 
-    const csrfToken = crypto.randomBytes(16).toString("hex");
-    const state = `${userId}:${csrfToken}`;
-
-    (req as any).session.stravaOAuthState = state;
+    const state = createSignedState(userId);
 
     const authUrl = new URL("https://www.strava.com/oauth/authorize");
     authUrl.searchParams.set("client_id", STRAVA_CLIENT_ID);
@@ -133,14 +153,13 @@ export function registerStravaRoutes(app: Express): void {
       return res.redirect("/settings?strava=error");
     }
 
-    if (!state || !req.session?.stravaOAuthState || state !== req.session.stravaOAuthState) {
-      console.error("Strava OAuth state mismatch - possible CSRF attack");
+    const verified = verifySignedState(state as string);
+    if (!verified) {
+      console.error("Strava OAuth state invalid or expired - possible CSRF attack");
       return res.redirect("/settings?strava=error");
     }
 
-    const userId = (state as string).split(":")[0];
-
-    delete req.session.stravaOAuthState;
+    const userId = verified.userId;
 
     if (!code || !userId || !STRAVA_CLIENT_ID || !STRAVA_CLIENT_SECRET) {
       return res.redirect("/settings?strava=error");

@@ -1,19 +1,14 @@
 import type { Request } from "express";
+import { getAuth } from "@clerk/express";
 
-export interface AuthenticatedRequest extends Request {
-  user: {
-    claims: {
-      sub: string;
-      email?: string;
-      first_name?: string;
-      last_name?: string;
-      profile_image?: string;
-    };
-  };
-}
+export interface AuthenticatedRequest extends Request {}
 
-export function getUserId(req: any): string {
-  return (req as AuthenticatedRequest).user.claims.sub;
+export function getUserId(req: Request): string {
+  const auth = getAuth(req);
+  if (!auth || !auth.userId) {
+    throw new Error("User not authenticated");
+  }
+  return auth.userId;
 }
 
 export function toDateStr(date?: Date): string {

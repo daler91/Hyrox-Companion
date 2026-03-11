@@ -15,6 +15,7 @@ import { Settings, CalendarRange, LogOut, BarChart3 } from "lucide-react";
 import { useLocation, Link } from "wouter";
 import { ThemeToggle } from "./ThemeToggle";
 import { useAuth } from "@/hooks/useAuth";
+import { useClerk } from "@clerk/clerk-react";
 
 const menuItems = [
   { title: "Training", url: "/", icon: CalendarRange },
@@ -24,6 +25,7 @@ const menuItems = [
 export function AppSidebar() {
   const [location] = useLocation();
   const { user } = useAuth();
+  const { signOut } = useClerk();
 
   const userInitials = user 
     ? `${user.firstName?.charAt(0) || ''}${user.lastName?.charAt(0) || ''}`.toUpperCase() || user.email?.charAt(0).toUpperCase() || 'U'
@@ -83,10 +85,8 @@ export function AppSidebar() {
               </Link>
             </Button>
             <ThemeToggle />
-            <Button variant="ghost" size="icon" asChild data-testid="button-logout" aria-label="Log out">
-              <a href="/api/logout" title="Log out">
-                <LogOut className="h-4 w-4" />
-              </a>
+            <Button variant="ghost" size="icon" data-testid="button-logout" aria-label="Log out" onClick={() => signOut()} title="Log out">
+              <LogOut className="h-4 w-4" />
             </Button>
           </div>
         </div>

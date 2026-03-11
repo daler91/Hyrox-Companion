@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Activity, Calendar, MessageSquare, TrendingUp, Dumbbell, Target } from "lucide-react";
+import { SignInButton } from "@clerk/clerk-react";
 
 export default function Landing() {
   return (
@@ -13,9 +14,9 @@ export default function Landing() {
             </div>
             <span className="font-bold text-xl">HyroxTracker</span>
           </div>
-          <Button asChild data-testid="button-login-header">
-            <a href="/api/login">Log In</a>
-          </Button>
+          <SignInButton mode="modal">
+            <Button data-testid="button-login-header">Log In</Button>
+          </SignInButton>
         </div>
       </header>
 
@@ -29,9 +30,9 @@ export default function Landing() {
               <p className="text-xl text-muted-foreground mb-8">
                 Plan, track, and analyze your Hyrox training with an AI coach that knows your performance data.
               </p>
-              <Button size="lg" asChild data-testid="button-get-started">
-                <a href="/api/login">Get Started Free</a>
-              </Button>
+              <SignInButton mode="modal">
+                <Button size="lg" data-testid="button-get-started">Get Started Free</Button>
+              </SignInButton>
             </div>
           </div>
         </section>
@@ -143,9 +144,9 @@ export default function Landing() {
             <p className="text-muted-foreground mb-8">
               Join athletes preparing for their next Hyrox race.
             </p>
-            <Button size="lg" asChild data-testid="button-start-training">
-              <a href="/api/login">Start Training Today</a>
-            </Button>
+            <SignInButton mode="modal">
+              <Button size="lg" data-testid="button-start-training">Start Training Today</Button>
+            </SignInButton>
           </div>
         </section>
       </main>

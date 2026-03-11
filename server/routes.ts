@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import type { Server } from "http";
-import { setupAuth } from "./replitAuth";
+import { setupAuth } from "./clerkAuth";
 import { registerStravaRoutes } from "./strava";
 
 import aiRoutes from "./routes/ai";

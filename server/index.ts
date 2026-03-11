@@ -33,20 +33,22 @@ app.use((_req, res, next) => {
   res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
   const isDev = process.env.NODE_ENV !== "production";
   const connectSrc = isDev
-    ? "connect-src 'self' https://www.strava.com https://*.ingest.us.sentry.io ws: wss:"
-    : "connect-src 'self' https://www.strava.com https://*.ingest.us.sentry.io";
+    ? "connect-src 'self' https://*.clerk.accounts.dev https://www.strava.com https://*.ingest.us.sentry.io ws: wss:"
+    : "connect-src 'self' https://*.clerk.accounts.dev https://www.strava.com https://*.ingest.us.sentry.io";
   const scriptSrc = isDev
-    ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
-    : "script-src 'self' 'unsafe-inline'";
+    ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.clerk.accounts.dev"
+    : "script-src 'self' 'unsafe-inline' https://*.clerk.accounts.dev";
   res.setHeader(
     "Content-Security-Policy",
     [
       "default-src 'self'",
       scriptSrc,
-      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://*.clerk.accounts.dev",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: https:",
       connectSrc,
+      "frame-src 'self' https://*.clerk.accounts.dev",
+      "worker-src 'self' blob:",
     ].join("; ")
   );
   next();
