@@ -120,7 +120,7 @@ export default function TimelineFilters({
                   size="icon"
                   variant="ghost"
                   onClick={openRenameDialog}
-                  data-testid="button-rename-plan"
+                  data-testid="button-rename-plan" aria-label="Rename plan"
                 >
                   <Pencil className="h-4 w-4" />
                 </Button>
