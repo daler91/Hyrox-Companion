@@ -6,6 +6,14 @@ import { users, trainingPlans, workoutLogs, customExercises, chatMessages, strav
 import { eq } from "drizzle-orm";
 
 export async function setupAuth(app: Express) {
+  // Provide dummy keys for testing/CI environments if not set
+  if (!process.env.CLERK_PUBLISHABLE_KEY) {
+    process.env.CLERK_PUBLISHABLE_KEY = "pk_test_ZHVtbXkuY2xlcmsuYWNjb3VudHMuZGV2JA";
+  }
+  if (!process.env.CLERK_SECRET_KEY) {
+    process.env.CLERK_SECRET_KEY = "sk_test_dummy_key_for_testing_purposes";
+  }
+
   app.set("trust proxy", 1);
   app.use(clerkMiddleware());
 }
