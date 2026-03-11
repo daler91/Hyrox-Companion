@@ -54,12 +54,32 @@ async function ensureUserExists(clerkUserId: string): Promise<void> {
 
 async function migrateUserId(oldId: string, newId: string): Promise<void> {
   await db.transaction(async (tx) => {
+    const [oldUser] = await tx.select().from(users).where(eq(users.id, oldId));
+    if (!oldUser) throw new Error(`User ${oldId} not found for migration`);
+
+    await tx.update(users).set({ email: null }).where(eq(users.id, oldId));
+
+    await tx.insert(users).values({
+      id: newId,
+      email: oldUser.email,
+      firstName: oldUser.firstName,
+      lastName: oldUser.lastName,
+      profileImageUrl: oldUser.profileImageUrl,
+      hyroxDivision: oldUser.hyroxDivision,
+      fitnessLevel: oldUser.fitnessLevel,
+      targetRaceDate: oldUser.targetRaceDate,
+      personalBests: oldUser.personalBests,
+      distanceUnit: oldUser.distanceUnit,
+      updatedAt: new Date(),
+    });
+
     await tx.update(trainingPlans).set({ userId: newId }).where(eq(trainingPlans.userId, oldId));
     await tx.update(workoutLogs).set({ userId: newId }).where(eq(workoutLogs.userId, oldId));
     await tx.update(customExercises).set({ userId: newId }).where(eq(customExercises.userId, oldId));
     await tx.update(chatMessages).set({ userId: newId }).where(eq(chatMessages.userId, oldId));
     await tx.update(stravaConnections).set({ userId: newId }).where(eq(stravaConnections.userId, oldId));
-    await tx.update(users).set({ id: newId, updatedAt: new Date() }).where(eq(users.id, oldId));
+
+    await tx.delete(users).where(eq(users.id, oldId));
   });
   console.log(`Migrated user ID from ${oldId} to ${newId}`);
 }
