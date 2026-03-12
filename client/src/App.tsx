@@ -19,6 +19,10 @@ const Landing = lazy(() => import("@/pages/Landing"));
 
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
+function isCypressTest(): boolean {
+  return typeof window !== "undefined" && !!(window as any).Cypress;
+}
+
 function LazyFallback() {
   return (
     <div className="flex items-center justify-center h-full">
@@ -66,6 +70,10 @@ function AuthenticatedLayout() {
 }
 
 function AppContent() {
+  if (isCypressTest()) {
+    return <AuthenticatedLayout />;
+  }
+
   return (
     <>
       <SignedIn>
@@ -81,6 +89,19 @@ function AppContent() {
 }
 
 function App() {
+  if (isCypressTest()) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider>
+          <TooltipProvider>
+            <AppContent />
+            <Toaster />
+          </TooltipProvider>
+        </ThemeProvider>
+      </QueryClientProvider>
+    );
+  }
+
   return (
     <ClerkProvider publishableKey={clerkPubKey}>
       <QueryClientProvider client={queryClient}>

@@ -2,7 +2,9 @@ import { useUser, useAuth as useClerkAuth } from "@clerk/clerk-react";
 import { useQuery } from "@tanstack/react-query";
 import type { User } from "@shared/schema";
 
-export function useAuth() {
+const isCypressTest = typeof window !== "undefined" && !!(window as any).Cypress;
+
+function useClerkAuthImpl() {
   const { isSignedIn, isLoaded } = useClerkAuth();
   const { user: clerkUser } = useUser();
 
@@ -24,3 +26,18 @@ export function useAuth() {
     isAuthenticated: !!isSignedIn,
   };
 }
+
+function useTestAuthImpl() {
+  const { data: dbUser, isLoading } = useQuery<User>({
+    queryKey: ["/api/auth/user"],
+    retry: false,
+  });
+
+  return {
+    user: dbUser,
+    isLoading,
+    isAuthenticated: !!dbUser,
+  };
+}
+
+export const useAuth = isCypressTest ? useTestAuthImpl : useClerkAuthImpl;
