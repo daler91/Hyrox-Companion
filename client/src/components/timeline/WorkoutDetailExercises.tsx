@@ -18,6 +18,7 @@ import { type TimelineEntry, type ExerciseSet, type ExerciseName } from "@shared
 import { formatSpeed } from "@shared/unitConversion";
 import { ExerciseSelector } from "@/components/ExerciseSelector";
 import { ExerciseInput, type StructuredExercise } from "@/components/ExerciseInput";
+import React from "react";
 import { categoryChipColors, getExerciseLabel, groupExerciseSets, formatExerciseSummary, type GroupedExercise } from "@/lib/exerciseUtils";
 import {
   DndContext,
@@ -75,7 +76,7 @@ interface SortableDialogBlockProps {
   onRemove: (blockId: string) => void;
 }
 
-function SortableDialogBlock({ blockId, exData, blockLabel, weightUnit, distanceUnit, onChange, onRemove }: SortableDialogBlockProps) {
+const SortableDialogBlock = React.memo(function SortableDialogBlock({ blockId, exData, blockLabel, weightUnit, distanceUnit, onChange, onRemove }: SortableDialogBlockProps) {
   const {
     attributes,
     listeners,
@@ -109,7 +110,7 @@ function SortableDialogBlock({ blockId, exData, blockLabel, weightUnit, distance
       </div>
     </div>
   );
-}
+});
 
 interface WorkoutDetailViewProps {
   entry: TimelineEntry;
@@ -119,7 +120,7 @@ interface WorkoutDetailViewProps {
   distanceUnit: "km" | "miles";
 }
 
-export function WorkoutDetailView({ entry, grouped, hasStructuredData, weightLabel, distanceUnit }: WorkoutDetailViewProps) {
+export const WorkoutDetailView = React.memo(function WorkoutDetailView({ entry, grouped, hasStructuredData, weightLabel, distanceUnit }: WorkoutDetailViewProps) {
   return (
     <div className="space-y-3">
       {hasStructuredData ? (
@@ -193,7 +194,7 @@ export function WorkoutDetailView({ entry, grouped, hasStructuredData, weightLab
       )}
     </div>
   );
-}
+});
 
 interface EditFormState {
   focus: string;
@@ -221,7 +222,7 @@ interface WorkoutDetailEditFormProps {
   onParseText: () => void;
 }
 
-export function WorkoutDetailEditForm({
+export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
   editForm,
   setEditForm,
   useTextMode,
@@ -368,4 +369,4 @@ export function WorkoutDetailEditForm({
       </div>
     </div>
   );
-}
+});

@@ -1,4 +1,4 @@
-import { forwardRef } from "react";
+import React, { forwardRef } from "react";
 import { Badge } from "@/components/ui/badge";
 import { format, isToday, isTomorrow, isYesterday, parseISO, isBefore } from "date-fns";
 import type { TimelineEntry } from "@shared/schema";
@@ -23,7 +23,7 @@ function getDateLabel(dateObj: Date) {
   return format(dateObj, "EEEE, MMM d");
 }
 
-const TimelineDateGroup = forwardRef<HTMLDivElement, TimelineDateGroupProps>(
+const TimelineDateGroupComponent = forwardRef<HTMLDivElement, TimelineDateGroupProps>(
   ({ date, entries, onMarkComplete, onClick, onCombineSelect, isCombining, combiningEntryId, combiningEntryDate, personalRecords }, ref) => {
     const dateObj = parseISO(date);
     const isTodayDate = isToday(dateObj);
@@ -78,6 +78,10 @@ const TimelineDateGroup = forwardRef<HTMLDivElement, TimelineDateGroupProps>(
   }
 );
 
-TimelineDateGroup.displayName = "TimelineDateGroup";
+TimelineDateGroupComponent.displayName = "TimelineDateGroup";
 
+const TimelineDateGroup = React.memo(TimelineDateGroupComponent);
+// ⚡ Bolt Performance Optimization:
+// Wrap TimelineDateGroup in React.memo so that each date section doesnt re-render
+// when other parts of the timeline change (unless its own props change).
 export default TimelineDateGroup;
