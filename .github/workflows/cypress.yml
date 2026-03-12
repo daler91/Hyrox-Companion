@@ -30,7 +30,7 @@ jobs:
         with:
           start: npm start
           wait-on: 'http://localhost:5000'
-          wait-on-timeout: 60
+          wait-on-timeout: 120
           record: true
           parallel: true
           install: false
