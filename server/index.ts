@@ -65,6 +65,10 @@ app.use(
 
 app.use(express.urlencoded({ extended: false }));
 
+app.get("/api/health", (_req, res) => {
+  res.json({ status: "ok", timestamp: Date.now() });
+});
+
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
     hour: "numeric",
