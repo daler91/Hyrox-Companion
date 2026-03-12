@@ -33,6 +33,26 @@ describe("convertWeight", () => {
     const back = convertWeight(lbs, "lbs", "kg");
     expect(back).toBeCloseTo(original, 5);
   });
+
+  it("handles zero weight correctly", () => {
+    expect(convertWeight(0, "kg", "lbs")).toBe(0);
+    expect(convertWeight(0, "lbs", "kg")).toBe(0);
+  });
+
+  it("handles negative weights correctly", () => {
+    expect(convertWeight(-100, "kg", "lbs")).toBeCloseTo(-220.462, 1);
+    expect(convertWeight(-220.462, "lbs", "kg")).toBeCloseTo(-100, 1);
+  });
+
+  it("handles very small fractional weights", () => {
+    expect(convertWeight(0.001, "kg", "lbs")).toBeCloseTo(0.00220462, 6);
+    expect(convertWeight(0.00220462, "lbs", "kg")).toBeCloseTo(0.001, 6);
+  });
+
+  it("handles very large weights", () => {
+    expect(convertWeight(1000000, "kg", "lbs")).toBeCloseTo(2204620, 0);
+    expect(convertWeight(2204620, "lbs", "kg")).toBeCloseTo(1000000, 0);
+  });
 });
 
 describe("convertDistance", () => {
@@ -58,6 +78,21 @@ describe("metersToUserDistance", () => {
   it("converts meters to miles", () => {
     expect(metersToUserDistance(1609.34, "miles")).toBeCloseTo(1, 1);
   });
+
+  it("handles zero meters", () => {
+    expect(metersToUserDistance(0, "km")).toBe(0);
+    expect(metersToUserDistance(0, "miles")).toBe(0);
+  });
+
+  it("handles negative meters", () => {
+    expect(metersToUserDistance(-1000, "km")).toBeCloseTo(-1, 5);
+    expect(metersToUserDistance(-1609.34, "miles")).toBeCloseTo(-1, 1);
+  });
+
+  it("handles fractional meters", () => {
+    expect(metersToUserDistance(1500.5, "km")).toBeCloseTo(1.5005, 5);
+    expect(metersToUserDistance(1609.34 / 2, "miles")).toBeCloseTo(0.5, 1);
+  });
 });
 
 describe("userDistanceToMeters", () => {
@@ -67,6 +102,21 @@ describe("userDistanceToMeters", () => {
 
   it("converts miles to meters", () => {
     expect(userDistanceToMeters(1, "miles")).toBeCloseTo(1609.34, 0);
+  });
+
+  it("handles zero distance", () => {
+    expect(userDistanceToMeters(0, "km")).toBe(0);
+    expect(userDistanceToMeters(0, "miles")).toBe(0);
+  });
+
+  it("handles negative distances", () => {
+    expect(userDistanceToMeters(-5, "km")).toBeCloseTo(-5000, 0);
+    expect(userDistanceToMeters(-1, "miles")).toBeCloseTo(-1609.34, 0);
+  });
+
+  it("handles fractional distances", () => {
+    expect(userDistanceToMeters(1.5, "km")).toBeCloseTo(1500, 0);
+    expect(userDistanceToMeters(0.5, "miles")).toBeCloseTo(1609.34 / 2, 0);
   });
 });
 
@@ -91,22 +141,33 @@ describe("userWeightToKg", () => {
 });
 
 describe("formatPace", () => {
-  it("formats pace in min/km", () => {
-    const pace = formatPace(3.333, "km");
-    expect(pace).toMatch(/\d+:\d{2}\/km/);
+  it("formats pace in min/km exactly", () => {
+    // 5 m/s = 18 km/h = 3:20 / km
+    expect(formatPace(5, "km")).toBe("3:20/km");
+
+    // 3.333... m/s = 12 km/h = 5:00 / km
+    expect(formatPace(3.3333333333333335, "km")).toBe("5:00/km");
+
+    // 2.5 m/s = 9 km/h = 6:40 / km
+    expect(formatPace(2.5, "km")).toBe("6:40/km");
   });
 
-  it("formats pace in min/mi", () => {
-    const pace = formatPace(3.333, "miles");
-    expect(pace).toMatch(/\d+:\d{2}\/mi/);
+  it("formats pace in min/mi exactly", () => {
+    // 5 m/s = ~11.18 mph = 5:22 / mi
+    expect(formatPace(5, "miles")).toBe("5:22/mi");
+
+    // 3.333... m/s = ~7.45 mph = 8:03 / mi
+    expect(formatPace(3.3333333333333335, "miles")).toBe("8:03/mi");
   });
 
-  it("returns N/A for zero speed", () => {
-    expect(formatPace(0, "km")).toBe("N/A");
+  it("returns - for zero speed", () => {
+    expect(formatPace(0, "km")).toBe("-");
+    expect(formatPace(0, "miles")).toBe("-");
   });
 
-  it("returns N/A for negative speed", () => {
-    expect(formatPace(-1, "km")).toBe("N/A");
+  it("returns - for negative speed", () => {
+    expect(formatPace(-1, "km")).toBe("-");
+    expect(formatPace(-1, "miles")).toBe("-");
   });
 });
 

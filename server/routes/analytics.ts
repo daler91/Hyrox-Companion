@@ -1,15 +1,16 @@
 import { Router } from "express";
-import { isAuthenticated } from "../replitAuth";
+import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
 import { calculatePersonalRecords, calculateExerciseAnalytics } from "../services/analyticsService";
 import { getUserId } from "../types";
+import { dateStringSchema } from "@shared/schema";
 
 const router = Router();
 
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 function validDate(val: unknown): string | undefined {
-  if (typeof val !== "string") return undefined;
-  return DATE_RE.test(val) ? val : undefined;
+  if (!val) return undefined;
+  const parsed = dateStringSchema.safeParse(val);
+  return parsed.success ? parsed.data : undefined;
 }
 
 router.get("/api/personal-records", isAuthenticated, async (req: any, res) => {
@@ -17,6 +18,9 @@ router.get("/api/personal-records", isAuthenticated, async (req: any, res) => {
     const userId = getUserId(req);
     const from = validDate(req.query.from);
     const to = validDate(req.query.to);
+
+    if (req.query.from && !from) return res.status(400).json({ error: "Invalid 'from' date format" });
+    if (req.query.to && !to) return res.status(400).json({ error: "Invalid 'to' date format" });
     const allSets = await storage.getAllExerciseSetsWithDates(userId, from, to);
     res.json(calculatePersonalRecords(allSets));
   } catch (error) {

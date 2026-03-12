@@ -1,7 +1,7 @@
 import { Router } from "express";
-import { isAuthenticated } from "../replitAuth";
+import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
-import { updatePlanDaySchema } from "@shared/schema";
+import { updatePlanDaySchema, importPlanRequestSchema, schedulePlanRequestSchema } from "@shared/schema";
 import { getUserId } from "../types";
 import { importPlanFromCSV, createSamplePlan, updatePlanDayWithCleanup } from "../services/planService";
 
@@ -34,15 +34,11 @@ router.get("/api/plans/:id", isAuthenticated, async (req: any, res) => {
 
 router.post("/api/plans/import", isAuthenticated, async (req: any, res) => {
   try {
-    const { csvContent, fileName, planName } = req.body as {
-      csvContent: string;
-      fileName?: string;
-      planName?: string;
-    };
-
-    if (!csvContent) {
+    const parseResult = importPlanRequestSchema.safeParse(req.body);
+    if (!parseResult.success) {
       return res.status(400).json({ error: "CSV content is required" });
     }
+    const { csvContent, fileName, planName } = parseResult.data;
 
     const userId = getUserId(req);
     const fullPlan = await importPlanFromCSV(csvContent, userId, { fileName, planName });
@@ -145,13 +141,14 @@ router.delete("/api/plans/:id", isAuthenticated, async (req: any, res) => {
 
 router.post("/api/plans/:planId/schedule", isAuthenticated, async (req: any, res) => {
   try {
+    const parseResult = schedulePlanRequestSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({ error: "Invalid start date format. Must be YYYY-MM-DD" });
+    }
+    const { startDate } = parseResult.data;
+
     const userId = getUserId(req);
     const { planId } = req.params;
-    const { startDate } = req.body;
-
-    if (!startDate) {
-      return res.status(400).json({ error: "Start date is required" });
-    }
 
     const success = await storage.schedulePlan(planId, startDate, userId);
     if (!success) {

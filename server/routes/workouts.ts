@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { isAuthenticated } from "../replitAuth";
+import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
 import { insertWorkoutLogSchema, updateWorkoutLogSchema } from "@shared/schema";
 import { generateCSV, generateJSON } from "../services/exportService";
@@ -165,7 +165,7 @@ router.patch("/api/workouts/:id", isAuthenticated, async (req: any, res) => {
 router.delete("/api/workouts/:id", isAuthenticated, async (req: any, res) => {
   try {
     const userId = getUserId(req);
-    await storage.deleteExerciseSetsByWorkoutLog(req.params.id);
+    await storage.deleteExerciseSetsByWorkoutLog(req.params.id, userId);
     const deleted = await storage.deleteWorkoutLog(req.params.id, userId);
     if (!deleted) {
       return res.status(404).json({ error: "Workout not found" });

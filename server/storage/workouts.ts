@@ -111,7 +111,10 @@ export class WorkoutStorage {
       .orderBy(asc(exerciseSets.sortOrder));
   }
 
-  async deleteExerciseSetsByWorkoutLog(workoutLogId: string): Promise<boolean> {
+  async deleteExerciseSetsByWorkoutLog(workoutLogId: string, userId: string): Promise<boolean> {
+    const existingLog = await this.getWorkoutLog(workoutLogId, userId);
+    if (!existingLog) return false;
+
     await db
       .delete(exerciseSets)
       .where(eq(exerciseSets.workoutLogId, workoutLogId));

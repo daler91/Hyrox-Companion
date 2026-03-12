@@ -11,6 +11,8 @@ export function ThemeToggle() {
       variant="ghost"
       onClick={toggleTheme}
       data-testid="button-theme-toggle"
+      aria-label="Toggle theme"
+      title="Toggle theme"
     >
       {theme === "light" ? (
         <Moon className="h-5 w-5" />

@@ -43,7 +43,15 @@ Contains only cross-cutting concerns: `rateLimiter` middleware and `calculateStr
 Drizzle ORM with PostgreSQL is used for data persistence. The schema, shared between client and server, includes tables for Users, Sessions, TrainingPlans, PlanDays, WorkoutLogs, ExerciseSets, and CustomExercises. Foreign key constraints ensure data integrity, and user-scoped indexes optimize query performance. An `IStorage` interface pattern enforces data isolation per user.
 
 ### Authentication
-Replit Auth, an OpenID Connect provider, handles user authentication. Session data is stored in PostgreSQL using `connect-pg-simple`.
+Clerk handles user authentication via JWT-based sessions. The `@clerk/express` middleware on the backend validates session tokens, and `@clerk/clerk-react` provides frontend components (SignInButton, SignOutButton, useUser). On first authenticated request, the user is upserted into the local `users` table. Existing users are matched by email and their IDs are migrated in a single transaction across all related tables. Production instance configured for `hyroxcompanion.life` with `pk_live_`/`sk_live_` keys; development uses `pk_test_`/`sk_test_` keys.
+
+#### Cypress Test Bypass
+When Cypress runs, `window.Cypress` is detected at module load time. This causes:
+- `App.tsx`: Renders `AuthenticatedLayout` directly without `ClerkProvider` wrapper
+- `useAuth.ts`: Uses `useTestAuthImpl` which fetches `/api/auth/user` directly (auth state is data-driven from the API response)
+- `useSignOut.ts`: Returns a no-op function instead of Clerk's `signOut`
+- Cypress `setupAuthIntercepts()` stubs the `/api/auth/user` endpoint to return a mock user
+- Backend auth is NOT bypassed — API routes still enforce authentication via Clerk middleware
 
 ### AI Integration
 The Google Gemini API (gemini-3-flash-preview model) powers the AI features. This includes an AI training coach that provides Hyrox-specific advice, workout analysis, and pacing strategies, as well as AI text-to-exercise parsing for converting free-text workout descriptions into structured data. The AI also benefits from custom exercise recognition based on user-saved names. The server-side implementation manages conversation history and provides personalized training context to the AI, including user stats and recent workout data.
@@ -59,7 +67,7 @@ AI response robustness (`server/gemini.ts`):
 ### Third-Party Services
 - **Google Gemini API**: Used for AI coaching and exercise parsing.
 - **PostgreSQL**: The primary database backend.
-- **Replit Auth**: Provides OpenID Connect authentication.
+- **Clerk**: Provides JWT-based authentication with social login support.
 - **Sentry.io**: For error monitoring in both frontend and backend.
 
 ### Key Libraries
@@ -68,8 +76,7 @@ AI response robustness (`server/gemini.ts`):
 - **Data Fetching**: `@tanstack/react-query`.
 - **Date Handling**: `date-fns`.
 - **Database**: `drizzle-orm`, `drizzle-zod`, `pg`.
-- **Session Management**: `express-session`, `connect-pg-simple`.
-- **Auth**: `openid-client`, `passport`.
+- **Auth**: `@clerk/express`, `@clerk/clerk-react`.
 
 ### Development Tools
 - **Type Checking**: TypeScript.

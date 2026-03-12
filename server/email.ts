@@ -1,41 +1,15 @@
 import { Resend } from 'resend';
 import type { User } from '@shared/schema';
 
-let connectionSettings: any;
-
-async function getCredentials() {
-  const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
-  const xReplitToken = process.env.REPL_IDENTITY
-    ? 'repl ' + process.env.REPL_IDENTITY
-    : process.env.WEB_REPL_RENEWAL
-    ? 'depl ' + process.env.WEB_REPL_RENEWAL
-    : null;
-
-  if (!xReplitToken) {
-    throw new Error('X-Replit-Token not found for repl/depl');
+function getResendClient() {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    throw new Error('RESEND_API_KEY environment variable is not set');
   }
-
-  connectionSettings = await fetch(
-    'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=resend',
-    {
-      headers: {
-        'Accept': 'application/json',
-        'X-Replit-Token': xReplitToken
-      }
-    }
-  ).then(res => res.json()).then(data => data.items?.[0]);
-
-  if (!connectionSettings || (!connectionSettings.settings.api_key)) {
-    throw new Error('Resend not connected');
-  }
-  return { apiKey: connectionSettings.settings.api_key, fromEmail: connectionSettings.settings.from_email };
-}
-
-async function getUncachableResendClient() {
-  const { apiKey, fromEmail } = await getCredentials();
+  const fromEmail = process.env.RESEND_FROM_EMAIL || 'HyroxTracker <noreply@resend.dev>';
   return {
     client: new Resend(apiKey),
-    fromEmail: fromEmail || 'HyroxTracker <noreply@resend.dev>'
+    fromEmail,
   };
 }
 
@@ -217,7 +191,7 @@ function getAppUrl(): string {
 
 export async function sendEmail(to: string, subject: string, html: string): Promise<boolean> {
   try {
-    const { client, fromEmail } = await getUncachableResendClient();
+    const { client, fromEmail } = getResendClient();
     const result = await client.emails.send({
       from: fromEmail,
       to: [to],

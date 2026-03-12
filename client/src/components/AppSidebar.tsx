@@ -15,6 +15,7 @@ import { Settings, CalendarRange, LogOut, BarChart3 } from "lucide-react";
 import { useLocation, Link } from "wouter";
 import { ThemeToggle } from "./ThemeToggle";
 import { useAuth } from "@/hooks/useAuth";
+import { useSignOut } from "@/hooks/useSignOut";
 
 const menuItems = [
   { title: "Training", url: "/", icon: CalendarRange },
@@ -24,6 +25,7 @@ const menuItems = [
 export function AppSidebar() {
   const [location] = useLocation();
   const { user } = useAuth();
+  const signOut = useSignOut();
 
   const userInitials = user 
     ? `${user.firstName?.charAt(0) || ''}${user.lastName?.charAt(0) || ''}`.toUpperCase() || user.email?.charAt(0).toUpperCase() || 'U'
@@ -77,16 +79,14 @@ export function AppSidebar() {
             <span className="text-sm font-medium truncate" data-testid="text-user-name">{userName}</span>
           </div>
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" asChild data-testid="nav-settings">
+            <Button variant="ghost" size="icon" asChild data-testid="nav-settings" aria-label="Settings">
               <Link href="/settings" title="Settings">
                 <Settings className="h-4 w-4" />
               </Link>
             </Button>
             <ThemeToggle />
-            <Button variant="ghost" size="icon" asChild data-testid="button-logout">
-              <a href="/api/logout" title="Log out">
-                <LogOut className="h-4 w-4" />
-              </a>
+            <Button variant="ghost" size="icon" data-testid="button-logout" aria-label="Log out" onClick={() => signOut()} title="Log out">
+              <LogOut className="h-4 w-4" />
             </Button>
           </div>
         </div>

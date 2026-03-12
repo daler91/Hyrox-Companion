@@ -1,55 +1,21 @@
 import { Router } from "express";
-import { isAuthenticated } from "../replitAuth";
+import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
 import { chatWithCoach, streamChatWithCoach, generateWorkoutSuggestions, parseExercisesFromText, type ChatMessage, type UpcomingWorkout } from "../gemini";
 import { rateLimiter } from "../routeUtils";
 import { buildTrainingContext } from "../services/aiService";
 import { toDateStr, getUserId } from "../types";
+import { chatRequestSchema, parseExercisesRequestSchema, insertChatMessageSchema } from "@shared/schema";
 
 const router = Router();
 
-const MAX_MESSAGE_LENGTH = 5000;
-const MAX_HISTORY_ITEMS = 20;
-
-function validateChatBody(body: any): { message: string; history: ChatMessage[] } | { error: string } {
-  const { message, history } = body || {};
-
-  if (!message || typeof message !== "string" || !message.trim()) {
-    return { error: "Message is required" };
-  }
-  if (message.length > MAX_MESSAGE_LENGTH) {
-    return { error: `Message must be ${MAX_MESSAGE_LENGTH} characters or less` };
-  }
-
-  let validatedHistory: ChatMessage[] = [];
-  if (history) {
-    if (!Array.isArray(history)) {
-      return { error: "History must be an array" };
-    }
-    const trimmed = history.slice(-MAX_HISTORY_ITEMS);
-    for (const item of trimmed) {
-      if (!item || typeof item.role !== "string" || typeof item.content !== "string") {
-        return { error: "Each history item must have a role and content string" };
-      }
-      if (item.role !== "user" && item.role !== "assistant") {
-        return { error: "History item role must be 'user' or 'assistant'" };
-      }
-      if (item.content.length > MAX_MESSAGE_LENGTH) {
-        return { error: `History item content must be ${MAX_MESSAGE_LENGTH} characters or less` };
-      }
-      validatedHistory.push({ role: item.role, content: item.content });
-    }
-  }
-
-  return { message, history: validatedHistory };
-}
-
 router.post("/api/parse-exercises", isAuthenticated, rateLimiter("parse", 5), async (req: any, res) => {
   try {
-    const { text } = req.body as { text: string };
-    if (!text || !text.trim()) {
+    const parseResult = parseExercisesRequestSchema.safeParse(req.body);
+    if (!parseResult.success) {
       return res.status(400).json({ error: "Text is required" });
     }
+    const { text } = parseResult.data;
     const userId = getUserId(req);
     const user = await storage.getUser(userId);
     const weightUnit = user?.weightUnit || "kg";
@@ -65,11 +31,11 @@ router.post("/api/parse-exercises", isAuthenticated, rateLimiter("parse", 5), as
 
 router.post("/api/chat", isAuthenticated, rateLimiter("chat", 10), async (req: any, res) => {
   try {
-    const validated = validateChatBody(req.body);
-    if ("error" in validated) {
-      return res.status(400).json({ error: validated.error });
+    const parseResult = chatRequestSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({ error: parseResult.error.errors[0].message });
     }
-    const { message, history } = validated;
+    const { message, history } = parseResult.data;
 
     const userId = getUserId(req);
     const trainingContext = await buildTrainingContext(userId);
@@ -84,11 +50,11 @@ router.post("/api/chat", isAuthenticated, rateLimiter("chat", 10), async (req: a
 
 router.post("/api/chat/stream", isAuthenticated, rateLimiter("chat", 10), async (req: any, res) => {
   try {
-    const validated = validateChatBody(req.body);
-    if ("error" in validated) {
-      return res.status(400).json({ error: validated.error });
+    const parseResult = chatRequestSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({ error: parseResult.error.errors[0].message });
     }
-    const { message, history } = validated;
+    const { message, history } = parseResult.data;
 
     const userId = getUserId(req);
     const trainingContext = await buildTrainingContext(userId);
@@ -131,12 +97,13 @@ router.get("/api/chat/history", isAuthenticated, async (req: any, res) => {
 
 router.post("/api/chat/message", isAuthenticated, async (req: any, res) => {
   try {
-    const userId = getUserId(req);
-    const { role, content } = req.body as { role: string; content: string };
-
-    if (!role || !content) {
-      return res.status(400).json({ error: "Role and content are required" });
+    const parseResult = insertChatMessageSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({ error: "Role and content are required", details: parseResult.error });
     }
+
+    const userId = getUserId(req);
+    const { role, content } = parseResult.data;
 
     const message = await storage.saveChatMessage({ userId, role, content });
     res.json(message);

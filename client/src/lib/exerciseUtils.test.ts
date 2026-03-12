@@ -1,6 +1,125 @@
 import { describe, it, expect } from "vitest";
-import { groupExerciseSets, type GroupedExercise } from "./exerciseUtils";
+import { formatExerciseSummary, getExerciseLabel, groupExerciseSets, type GroupedExercise } from "./exerciseUtils";
 import { type ExerciseSet } from "@shared/schema";
+
+describe("getExerciseLabel", () => {
+  it("returns label for known exercise name", () => {
+    // We expect EXERCISE_DEFINITIONS to have 'bench_press' for instance, if not it just returns 'bench_press'
+    // The actual definition could be checked, but we can just use a placeholder to see if it falls back to the name if not found.
+    // If we look at the code:
+    // const def = EXERCISE_DEFINITIONS[name as ExerciseName];
+    // return def?.label || name;
+    expect(getExerciseLabel("unknown_exercise_123")).toBe("unknown_exercise_123");
+  });
+
+  it("handles custom prefix", () => {
+    expect(getExerciseLabel("custom:My Custom Exercise")).toBe("My Custom Exercise");
+  });
+
+  it("handles custom exercise with customLabel", () => {
+    expect(getExerciseLabel("custom", "Special Lift")).toBe("Special Lift");
+  });
+});
+
+describe("formatExerciseSummary", () => {
+  it("returns name if sets are empty", () => {
+    const group: GroupedExercise = {
+      exerciseName: "custom",
+      customLabel: "Test",
+      category: "strength",
+      sets: []
+    };
+    expect(formatExerciseSummary(group, "kg", "km")).toBe("Test");
+  });
+
+  it("formats single set with reps", () => {
+    const group: GroupedExercise = {
+      exerciseName: "custom",
+      customLabel: "Test",
+      category: "strength",
+      sets: [{ id: "1", workoutLogId: "1", exerciseName: "custom", category: "strength", setNumber: 1, reps: 10, weight: null, distance: null, time: null, sortOrder: 1, confidence: null, customLabel: null, notes: null }] as ExerciseSet[]
+    };
+    expect(formatExerciseSummary(group, "kg", "km")).toBe("Test 10r");
+  });
+
+  it("formats multiple sets with same reps", () => {
+    const group: GroupedExercise = {
+      exerciseName: "custom",
+      customLabel: "Test",
+      category: "strength",
+      sets: [
+        { id: "1", workoutLogId: "1", exerciseName: "custom", category: "strength", setNumber: 1, reps: 10, weight: null, distance: null, time: null, sortOrder: 1, confidence: null, customLabel: null, notes: null },
+        { id: "2", workoutLogId: "1", exerciseName: "custom", category: "strength", setNumber: 2, reps: 10, weight: null, distance: null, time: null, sortOrder: 2, confidence: null, customLabel: null, notes: null },
+        { id: "3", workoutLogId: "1", exerciseName: "custom", category: "strength", setNumber: 3, reps: 10, weight: null, distance: null, time: null, sortOrder: 3, confidence: null, customLabel: null, notes: null }
+      ] as ExerciseSet[]
+    };
+    expect(formatExerciseSummary(group, "kg", "km")).toBe("Test 3x10");
+  });
+
+  it("formats multiple sets with varying reps", () => {
+    const group: GroupedExercise = {
+      exerciseName: "custom",
+      customLabel: "Test",
+      category: "strength",
+      sets: [
+        { id: "1", workoutLogId: "1", exerciseName: "custom", category: "strength", setNumber: 1, reps: 12, weight: null, distance: null, time: null, sortOrder: 1, confidence: null, customLabel: null, notes: null },
+        { id: "2", workoutLogId: "1", exerciseName: "custom", category: "strength", setNumber: 2, reps: 10, weight: null, distance: null, time: null, sortOrder: 2, confidence: null, customLabel: null, notes: null },
+        { id: "3", workoutLogId: "1", exerciseName: "custom", category: "strength", setNumber: 3, reps: 8, weight: null, distance: null, time: null, sortOrder: 3, confidence: null, customLabel: null, notes: null }
+      ] as ExerciseSet[]
+    };
+    expect(formatExerciseSummary(group, "kg", "km")).toBe("Test 3s");
+  });
+
+  it("formats sets with same weight", () => {
+    const group: GroupedExercise = {
+      exerciseName: "custom",
+      customLabel: "Test",
+      category: "strength",
+      sets: [
+        { id: "1", workoutLogId: "1", exerciseName: "custom", category: "strength", setNumber: 1, reps: 10, weight: 50, distance: null, time: null, sortOrder: 1, confidence: null, customLabel: null, notes: null },
+        { id: "2", workoutLogId: "1", exerciseName: "custom", category: "strength", setNumber: 2, reps: 10, weight: 50, distance: null, time: null, sortOrder: 2, confidence: null, customLabel: null, notes: null }
+      ] as ExerciseSet[]
+    };
+    expect(formatExerciseSummary(group, "kg", "km")).toBe("Test 2x10 50kg");
+  });
+
+  it("formats sets with varying weights", () => {
+    const group: GroupedExercise = {
+      exerciseName: "custom",
+      customLabel: "Test",
+      category: "strength",
+      sets: [
+        { id: "1", workoutLogId: "1", exerciseName: "custom", category: "strength", setNumber: 1, reps: 10, weight: 40, distance: null, time: null, sortOrder: 1, confidence: null, customLabel: null, notes: null },
+        { id: "2", workoutLogId: "1", exerciseName: "custom", category: "strength", setNumber: 2, reps: 10, weight: 50, distance: null, time: null, sortOrder: 2, confidence: null, customLabel: null, notes: null },
+        { id: "3", workoutLogId: "1", exerciseName: "custom", category: "strength", setNumber: 3, reps: 10, weight: 60, distance: null, time: null, sortOrder: 3, confidence: null, customLabel: null, notes: null }
+      ] as ExerciseSet[]
+    };
+    expect(formatExerciseSummary(group, "lbs", "km")).toBe("Test 3x10 40/50/60lbs");
+  });
+
+  it("formats distance and time for km unit", () => {
+    const group: GroupedExercise = {
+      exerciseName: "running",
+      category: "cardio",
+      sets: [
+        { id: "1", workoutLogId: "1", exerciseName: "running", category: "cardio", setNumber: 1, reps: null, weight: null, distance: 5000, time: 25, sortOrder: 1, confidence: null, customLabel: null, notes: null }
+      ] as ExerciseSet[]
+    };
+    expect(formatExerciseSummary(group, "kg", "km")).toBe("running 5000m 25min");
+  });
+
+  it("formats distance and time for miles unit", () => {
+    const group: GroupedExercise = {
+      exerciseName: "running",
+      category: "cardio",
+      sets: [
+        { id: "1", workoutLogId: "1", exerciseName: "running", category: "cardio", setNumber: 1, reps: null, weight: null, distance: 16404, time: 25, sortOrder: 1, confidence: null, customLabel: null, notes: null }
+      ] as ExerciseSet[]
+    };
+    // Expected distance label when unit is not km is "ft"
+    expect(formatExerciseSummary(group, "lbs", "miles")).toBe("running 16404ft 25min");
+  });
+});
 
 describe("groupExerciseSets", () => {
   it("should return an empty array for empty input", () => {

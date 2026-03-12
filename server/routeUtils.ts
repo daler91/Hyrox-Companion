@@ -5,11 +5,11 @@ const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
 
 export function rateLimiter(category: string, maxRequests: number, windowMs: number = 60000) {
   return (req: any, res: Response, next: NextFunction) => {
-    const userId = req.user?.claims?.sub;
-    if (!userId) {
+    const identifier = req.auth?.userId || req.ip;
+    if (!identifier) {
       return next();
     }
-    const key = `${category}:${userId}`;
+    const key = `${category}:${identifier}`;
     const now = Date.now();
     const bucket = rateLimitBuckets.get(key);
 

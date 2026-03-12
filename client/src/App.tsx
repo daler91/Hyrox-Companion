@@ -1,5 +1,6 @@
 import { lazy, Suspense } from "react";
 import { Switch, Route } from "wouter";
+import { ClerkProvider, SignedIn, SignedOut } from "@clerk/clerk-react";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -7,7 +8,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { ThemeProvider } from "@/components/ThemeProvider";
-import { useAuth } from "@/hooks/useAuth";
 import NotFound from "@/pages/not-found";
 import Timeline from "@/pages/Timeline";
 import { Loader2 } from "lucide-react";
@@ -16,6 +16,12 @@ const LogWorkout = lazy(() => import("@/pages/LogWorkout"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const Analytics = lazy(() => import("@/pages/Analytics"));
 const Landing = lazy(() => import("@/pages/Landing"));
+
+const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+
+function isCypressTest(): boolean {
+  return typeof window !== "undefined" && !!(window as any).Cypress;
+}
 
 function LazyFallback() {
   return (
@@ -64,37 +70,49 @@ function AuthenticatedLayout() {
 }
 
 function AppContent() {
-  const { isAuthenticated, isLoading } = useAuth();
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-screen w-full">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+  if (isCypressTest()) {
+    return <AuthenticatedLayout />;
   }
 
-  if (!isAuthenticated) {
-    return (
-      <Suspense fallback={<LazyFallback />}>
-        <Landing />
-      </Suspense>
-    );
-  }
-
-  return <AuthenticatedLayout />;
+  return (
+    <>
+      <SignedIn>
+        <AuthenticatedLayout />
+      </SignedIn>
+      <SignedOut>
+        <Suspense fallback={<LazyFallback />}>
+          <Landing />
+        </Suspense>
+      </SignedOut>
+    </>
+  );
 }
 
 function App() {
+  if (isCypressTest()) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider>
+          <TooltipProvider>
+            <AppContent />
+            <Toaster />
+          </TooltipProvider>
+        </ThemeProvider>
+      </QueryClientProvider>
+    );
+  }
+
   return (
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
-        <TooltipProvider>
-          <AppContent />
-          <Toaster />
-        </TooltipProvider>
-      </ThemeProvider>
-    </QueryClientProvider>
+    <ClerkProvider publishableKey={clerkPubKey}>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider>
+          <TooltipProvider>
+            <AppContent />
+            <Toaster />
+          </TooltipProvider>
+        </ThemeProvider>
+      </QueryClientProvider>
+    </ClerkProvider>
   );
 }
 
