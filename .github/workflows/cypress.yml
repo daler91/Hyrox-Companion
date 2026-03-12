@@ -44,4 +44,7 @@ jobs:
           VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
           STRAVA_CLIENT_ID: ${{ secrets.STRAVA_CLIENT_ID }}
           STRAVA_CLIENT_SECRET: ${{ secrets.STRAVA_CLIENT_SECRET }}
+          VITE_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsuaW5zcGlyZWQucHVtYS03NC5sY2wuZGV2JA
+          CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsuaW5zcGlyZWQucHVtYS03NC5sY2wuZGV2JA
+          CLERK_SECRET_KEY: sk_test_dummy
           PORT: 5000
