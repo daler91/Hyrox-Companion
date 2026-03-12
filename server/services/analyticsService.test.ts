@@ -22,6 +22,9 @@ describe("calculatePersonalRecords", () => {
     const result = calculatePersonalRecords([]);
     expect(result).toEqual({});
     expect(Object.keys(result).length).toBe(0);
+    expect(result).not.toBeNull();
+    expect(result).not.toBeUndefined();
+    expect(typeof result).toBe("object");
     // Verify type is preserved correctly
     expect(result).toStrictEqual({});
     // We expect it to strictly match the shape of Record<string, PRRecord> which is an empty object
@@ -100,7 +103,12 @@ describe("calculatePersonalRecords", () => {
 
 describe("calculateExerciseAnalytics", () => {
   it("returns empty object for empty input", () => {
-    expect(calculateExerciseAnalytics([])).toEqual({});
+    const result = calculateExerciseAnalytics([]);
+    expect(result).toEqual({});
+    expect(Object.keys(result).length).toBe(0);
+    expect(result).not.toBeNull();
+    expect(result).not.toBeUndefined();
+    expect(typeof result).toBe('object');
   });
 
   it("calculates single-day analytics correctly", () => {
