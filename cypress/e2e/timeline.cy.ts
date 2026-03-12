@@ -7,7 +7,11 @@ describe("Timeline Page", () => {
     });
 
     it("shows empty state prompt when no plans or workouts exist", () => {
-      cy.visit("/");
+      cy.visit("/", {
+        onBeforeLoad: (win) => {
+          win.localStorage.setItem("hyrox-onboarding-complete", "true");
+        }
+      });
       cy.wait("@authUser");
       cy.wait("@timeline");
       cy.wait("@plans");
@@ -16,7 +20,11 @@ describe("Timeline Page", () => {
     });
 
     it("shows the floating action button", () => {
-      cy.visit("/");
+      cy.visit("/", {
+        onBeforeLoad: (win) => {
+          win.localStorage.setItem("hyrox-onboarding-complete", "true");
+        }
+      });
       cy.wait("@authUser");
       cy.wait("@timeline");
       cy.getBySel("button-log-workout-fab").should("exist");
@@ -24,7 +32,11 @@ describe("Timeline Page", () => {
     });
 
     it("opens the AI coach panel when coach FAB is clicked", () => {
-      cy.visit("/");
+      cy.visit("/", {
+        onBeforeLoad: (win) => {
+          win.localStorage.setItem("hyrox-onboarding-complete", "true");
+        }
+      });
       cy.wait("@authUser");
       cy.wait("@timeline");
       cy.getBySel("button-coach-fab").click();
