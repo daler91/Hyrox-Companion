@@ -25,7 +25,7 @@ export function useTimelineFilters(timelineData: TimelineEntry[]) {
       groups[entry.date].push(entry);
     });
     const allGroups = Object.entries(groups).sort(([a], [b]) =>
-      new Date(b).getTime() - new Date(a).getTime()
+      b.localeCompare(a)
     );
 
     const today = format(new Date(), "yyyy-MM-dd");
