@@ -297,3 +297,30 @@ export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({
 
 export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
 export type ChatMessage = typeof chatMessages.$inferSelect;
+
+// Request Validation Schemas
+export const dateStringSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Must be a valid date in YYYY-MM-DD format");
+
+export const chatMessageSchema = z.object({
+  role: z.enum(["user", "assistant"]),
+  content: z.string().min(1, "Message content cannot be empty").max(5000, "Message must be 5000 characters or less"),
+});
+
+export const chatRequestSchema = z.object({
+  message: z.string().min(1, "Message is required").max(5000, "Message must be 5000 characters or less"),
+  history: z.array(chatMessageSchema).optional().default([]).transform((h) => h.slice(-20)),
+});
+
+export const parseExercisesRequestSchema = z.object({
+  text: z.string().min(1, "Text is required").trim(),
+});
+
+export const importPlanRequestSchema = z.object({
+  csvContent: z.string().min(1, "CSV content is required"),
+  fileName: z.string().optional(),
+  planName: z.string().optional(),
+});
+
+export const schedulePlanRequestSchema = z.object({
+  startDate: dateStringSchema,
+});
