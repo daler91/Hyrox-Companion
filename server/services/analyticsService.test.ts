@@ -24,7 +24,6 @@ describe("calculatePersonalRecords", () => {
     expect(Object.keys(result).length).toBe(0);
     expect(result).not.toBeNull();
     expect(result).not.toBeUndefined();
-    expect(typeof result).toBe("object");
     // Verify type is preserved correctly
     expect(result).toStrictEqual({});
     // We expect it to strictly match the shape of Record<string, PRRecord> which is an empty object
