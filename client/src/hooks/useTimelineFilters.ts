@@ -26,10 +26,10 @@ export function useTimelineFilters(timelineData: TimelineEntry[]) {
     });
     const allGroups = Object.entries(groups).sort(([a], [b]) =>
       // ⚡ Bolt Performance Optimization:
-      // Compare ISO date strings ("yyyy-MM-dd") directly via localeCompare
-      // rather than allocating new Date() objects. This reduces overhead in
-      // a heavy useMemo recalculation.
-      b.localeCompare(a)
+      // Compare ISO date strings ("yyyy-MM-dd") directly via simple comparison
+      // rather than using localeCompare or allocating new Date() objects.
+      // This is significantly faster and reduces overhead in a heavy useMemo recalculation.
+      b < a ? -1 : (b > a ? 1 : 0)
     );
 
     const today = format(new Date(), "yyyy-MM-dd");
