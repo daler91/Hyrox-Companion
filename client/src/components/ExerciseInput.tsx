@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useId } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -71,6 +71,7 @@ export function createExerciseFromSets(exerciseName: ExerciseName, dbSets: Array
 }
 
 export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg", distanceUnit = "km", blockLabel }: ExerciseInputProps) {
+  const idPrefix = useId();
   const def = EXERCISE_DEFINITIONS[exercise.exerciseName];
   const fields = getFields(exercise.exerciseName);
   const borderColor = categoryBorderColors[exercise.category] || "border-l-gray-500";
@@ -137,11 +138,12 @@ export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg",
 
         {exercise.exerciseName === "custom" && (
           <div className="mb-4">
-            <Label className="flex items-center gap-1 text-xs text-muted-foreground mb-2">
+            <Label htmlFor={`${idPrefix}-custom-name`} className="flex items-center gap-1 text-xs text-muted-foreground mb-2">
               <Pencil className="h-3 w-3" />
               Exercise Name
             </Label>
             <Input
+              id={`${idPrefix}-custom-name`}
               type="text"
               placeholder="Enter exercise name"
               value={exercise.customLabel || ""}
@@ -177,6 +179,7 @@ export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg",
                     onChange={(e) => handleSetChange(idx, field, e.target.value)}
                     className="h-8 text-sm"
                     data-testid={`input-${field}-${exercise.exerciseName}-${idx}`}
+                    aria-label={`${fieldConfig[field].getLabel(weightUnit, distanceUnit)} for set ${set.setNumber}`}
                   />
                 ))}
                 <Button size="icon" variant="ghost" onClick={() => removeSet(idx)} disabled={sets.length <= 1} className="h-6 w-6" data-testid={`button-remove-set-${idx}`} aria-label={`Remove set ${idx + 1}`}>
@@ -193,13 +196,15 @@ export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg",
             {fields.map((field) => {
               const config = fieldConfig[field];
               const Icon = config.icon;
+              const inputId = `${idPrefix}-${field}`;
               return (
                 <div key={field} className="space-y-2">
-                  <Label className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Label htmlFor={inputId} className="flex items-center gap-1 text-xs text-muted-foreground">
                     <Icon className="h-3 w-3" />
                     {config.getLabel(weightUnit, distanceUnit)}
                   </Label>
                   <Input
+                    id={inputId}
                     type="number"
                     placeholder="0"
                     value={sets[0]?.[field] ?? ""}
