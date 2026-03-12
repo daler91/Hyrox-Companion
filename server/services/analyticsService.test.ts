@@ -22,6 +22,9 @@ describe("calculatePersonalRecords", () => {
     const result = calculatePersonalRecords([]);
     expect(result).toEqual({});
     expect(Object.keys(result).length).toBe(0);
+    expect(result).not.toBeNull();
+    expect(result).not.toBeUndefined();
+    expect(typeof result).toBe('object');
   });
 
   it("tracks maxWeight PR", () => {
@@ -97,7 +100,12 @@ describe("calculatePersonalRecords", () => {
 
 describe("calculateExerciseAnalytics", () => {
   it("returns empty object for empty input", () => {
-    expect(calculateExerciseAnalytics([])).toEqual({});
+    const result = calculateExerciseAnalytics([]);
+    expect(result).toEqual({});
+    expect(Object.keys(result).length).toBe(0);
+    expect(result).not.toBeNull();
+    expect(result).not.toBeUndefined();
+    expect(typeof result).toBe('object');
   });
 
   it("calculates single-day analytics correctly", () => {
