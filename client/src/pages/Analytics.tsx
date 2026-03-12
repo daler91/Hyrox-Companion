@@ -97,7 +97,42 @@ export default function Analytics() {
     if (!allAnalytics || !selectedExercise) return null;
     const data = allAnalytics[selectedExercise];
     if (!data || data.length === 0) return null;
-    return { data };
+
+    // ⚡ Bolt Performance Optimization:
+    // Pre-calculate array aggregations (some, reduce) inside useMemo to avoid
+    // multiple O(n) array traversals during every render. This improves render
+    // performance significantly for users with extensive exercise histories.
+    let hasVolume = false;
+    let hasMaxWeight = false;
+    let hasTotalReps = false;
+    let hasTotalDistance = false;
+
+    let totalSets = 0;
+    let totalReps = 0;
+    let totalVolume = 0;
+
+    for (let i = 0; i < data.length; i++) {
+      const d = data[i];
+      if (d.totalVolume > 0) hasVolume = true;
+      if (d.maxWeight > 0) hasMaxWeight = true;
+      if (d.totalReps > 0) hasTotalReps = true;
+      if (d.totalDistance > 0) hasTotalDistance = true;
+
+      totalSets += d.totalSets;
+      totalReps += d.totalReps;
+      totalVolume += d.totalVolume;
+    }
+
+    return {
+      data,
+      hasVolume,
+      hasMaxWeight,
+      hasTotalReps,
+      hasTotalDistance,
+      totalSets,
+      totalReps,
+      totalVolume
+    };
   }, [allAnalytics, selectedExercise]);
 
   const isLoading = prsLoading;
@@ -288,16 +323,16 @@ export default function Analytics() {
               <p className="text-muted-foreground text-sm py-4">No data available for this exercise yet.</p>
             ) : (
               <div className="grid gap-6 sm:grid-cols-2">
-                {analyticsData.data.some(d => d.totalVolume > 0) && (
+                {analyticsData.hasVolume && (
                   <MiniBarChart data={analyticsData.data} valueKey="totalVolume" color="bg-primary/60" label={`Volume (reps x ${weightLabel})`} />
                 )}
-                {analyticsData.data.some(d => d.maxWeight > 0) && (
+                {analyticsData.hasMaxWeight && (
                   <MiniBarChart data={analyticsData.data} valueKey="maxWeight" color="bg-purple-500/60" label={`Max Weight (${weightLabel})`} />
                 )}
-                {analyticsData.data.some(d => d.totalReps > 0) && (
+                {analyticsData.hasTotalReps && (
                   <MiniBarChart data={analyticsData.data} valueKey="totalReps" color="bg-blue-500/60" label="Total Reps" />
                 )}
-                {analyticsData.data.some(d => d.totalDistance > 0) && (
+                {analyticsData.hasTotalDistance && (
                   <MiniBarChart data={analyticsData.data} valueKey="totalDistance" color="bg-green-500/60" label={`Total Distance (${dLabel})`} />
                 )}
                 <div className="sm:col-span-2">
@@ -309,20 +344,20 @@ export default function Analytics() {
                     </div>
                     <div className="bg-muted/50 p-4 rounded-lg">
                       <p className="text-2xl font-bold" data-testid="text-total-sets">
-                        {analyticsData.data.reduce((a, d) => a + d.totalSets, 0)}
+                        {analyticsData.totalSets}
                       </p>
                       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Sets</p>
                     </div>
                     <div className="bg-muted/50 p-4 rounded-lg">
                       <p className="text-2xl font-bold" data-testid="text-total-reps">
-                        {analyticsData.data.reduce((a, d) => a + d.totalReps, 0)}
+                        {analyticsData.totalReps}
                       </p>
                       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Reps</p>
                     </div>
-                    {analyticsData.data.some(d => d.totalVolume > 0) && (
+                    {analyticsData.hasVolume && (
                       <div className="bg-muted/50 p-4 rounded-lg">
                         <p className="text-2xl font-bold" data-testid="text-total-volume">
-                          {Math.round(analyticsData.data.reduce((a, d) => a + d.totalVolume, 0)).toLocaleString()}
+                          {Math.round(analyticsData.totalVolume).toLocaleString()}
                         </p>
                         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Volume ({weightLabel})</p>
                       </div>
