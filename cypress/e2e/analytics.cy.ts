@@ -59,16 +59,20 @@ describe("Analytics Page", () => {
     });
 
     it("shows PR cards for exercises", () => {
+      cy.getBySel("tab-prs").click();
       cy.getBySel("card-pr-back_squat").should("exist");
       cy.getBySel("card-pr-ski_erg").should("exist");
     });
 
     it("displays weight PR value", () => {
+      cy.getBySel("tab-prs").click();
       cy.getBySel("text-pr-weight-back_squat").should("contain", "100");
     });
 
     it("shows volume stats section", () => {
-      cy.getBySel("button-view-progression-back_squat").click();
+      cy.getBySel("tab-trends").click();
+      cy.getBySel("select-exercise-progression").click();
+      cy.get('[role="option"]').contains("Back Squat").click();
       cy.getBySel("text-total-sessions").should("exist");
       cy.getBySel("text-total-sets").should("exist");
     });

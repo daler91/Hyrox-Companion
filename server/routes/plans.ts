@@ -4,6 +4,7 @@ import { storage } from "../storage";
 import { updatePlanDaySchema, importPlanRequestSchema, schedulePlanRequestSchema } from "@shared/schema";
 import { getUserId } from "../types";
 import { importPlanFromCSV, createSamplePlan, updatePlanDayWithCleanup } from "../services/planService";
+import { rateLimiter } from "../routeUtils";
 
 const router = Router();
 
@@ -32,7 +33,7 @@ router.get("/api/plans/:id", isAuthenticated, async (req: any, res) => {
   }
 });
 
-router.post("/api/plans/import", isAuthenticated, async (req: any, res) => {
+router.post("/api/plans/import", isAuthenticated, rateLimiter("planImport", 5), async (req: any, res) => {
   try {
     const parseResult = importPlanRequestSchema.safeParse(req.body);
     if (!parseResult.success) {
