@@ -36,7 +36,6 @@ export default defineConfig({
           "vendor-react": ["react", "react-dom", "wouter"],
           "vendor-ui": ["lucide-react"],
           "vendor-query": ["@tanstack/react-query"],
-          "vendor-charts": ["recharts"],
         },
       },
     },

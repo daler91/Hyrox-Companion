@@ -3,7 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Trophy, TrendingUp, Dumbbell, Timer, Ruler, Weight } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Loader2, Trophy, TrendingUp, Dumbbell, Timer, Ruler, Weight, Activity } from "lucide-react";
 import { Link } from "wouter";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { categoryChipColors, categoryLabels, getExerciseLabel } from "@/lib/exerciseUtils";
@@ -104,31 +105,47 @@ export default function Analytics() {
 
   return (
     <div className="max-w-4xl mx-auto p-4 md:p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold" data-testid="text-analytics-title">Analytics</h1>
-        <p className="text-muted-foreground">Personal records and exercise progression</p>
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold" data-testid="text-analytics-title">Analytics</h1>
+          <p className="text-muted-foreground">Personal records and exercise progression</p>
+        </div>
+
+        <Select value={dateRange} onValueChange={setDateRange}>
+          <SelectTrigger className="w-36" data-testid="select-date-range">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="30">Last 30 days</SelectItem>
+            <SelectItem value="90">Last 90 days</SelectItem>
+            <SelectItem value="180">Last 6 months</SelectItem>
+            <SelectItem value="365">Last year</SelectItem>
+            <SelectItem value="all">All time</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
-      <Card>
-        <CardHeader>
+      <Tabs defaultValue="trends" className="w-full">
+        <TabsList className="grid w-full grid-cols-2 mb-6">
+          <TabsTrigger value="trends" data-testid="tab-trends">
+            <Activity className="h-4 w-4 mr-2" />
+            Trends & Progression
+          </TabsTrigger>
+          <TabsTrigger value="prs" data-testid="tab-prs">
+            <Trophy className="h-4 w-4 mr-2" />
+            Personal Records
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="prs" className="space-y-6">
+          <Card>
+            <CardHeader>
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2">
               <Trophy className="h-5 w-5 text-yellow-500" />
               <CardTitle>Personal Records</CardTitle>
             </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <Select value={dateRange} onValueChange={setDateRange}>
-                <SelectTrigger className="w-36" data-testid="select-date-range">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="30">Last 30 days</SelectItem>
-                  <SelectItem value="90">Last 90 days</SelectItem>
-                  <SelectItem value="180">Last 6 months</SelectItem>
-                  <SelectItem value="365">Last year</SelectItem>
-                  <SelectItem value="all">All time</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="flex items-center gap-2">
               <Select value={categoryFilter} onValueChange={setCategoryFilter}>
                 <SelectTrigger className="w-40" data-testid="select-pr-category">
                   <SelectValue placeholder="All Categories" />
@@ -164,70 +181,70 @@ export default function Analytics() {
               </Link>
             </div>
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="divide-y border rounded-lg overflow-hidden">
               {filteredPRs.map((pr) => (
-                <Card key={`${pr.exerciseName}-${pr.customLabel || ""}`} className="border" data-testid={`card-pr-${pr.exerciseName}`}>
-                  <CardContent className="p-3">
-                    <div className="flex items-center gap-2 mb-2 flex-wrap">
-                      <span className="font-medium text-sm">{getExerciseLabel(pr.exerciseName, pr.customLabel)}</span>
-                      <Badge variant="secondary" className={`text-xs ${categoryChipColors[pr.category] || ""}`}>
+                <div key={`${pr.exerciseName}-${pr.customLabel || ""}`} className="p-4 bg-card hover:bg-muted/30 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4" data-testid={`card-pr-${pr.exerciseName}`}>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-semibold">{getExerciseLabel(pr.exerciseName, pr.customLabel)}</h3>
+                      <Badge variant="secondary" className={`text-[10px] ${categoryChipColors[pr.category] || ""}`}>
                         {categoryLabels[pr.category] || pr.category}
                       </Badge>
                     </div>
-                    <div className="grid grid-cols-3 gap-2">
-                      {pr.maxWeight != null && (
-                        <div className="text-center">
-                          <Weight className="h-3.5 w-3.5 mx-auto text-muted-foreground mb-0.5" />
-                          <p className="text-sm font-semibold" data-testid={`text-pr-weight-${pr.exerciseName}`}>
-                            {pr.maxWeight}{weightLabel}
-                          </p>
-                          <p className="text-[10px] text-muted-foreground">Max Weight</p>
-                          {pr.maxWeightDate && <p className="text-[10px] text-muted-foreground/60">{formatDate(pr.maxWeightDate)}</p>}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-6 text-sm">
+                    {pr.maxWeight != null && (
+                      <div className="flex items-center gap-2">
+                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                          <Weight className="h-4 w-4 text-primary" />
                         </div>
-                      )}
-                      {pr.maxDistance != null && (
-                        <div className="text-center">
-                          <Ruler className="h-3.5 w-3.5 mx-auto text-muted-foreground mb-0.5" />
-                          <p className="text-sm font-semibold" data-testid={`text-pr-distance-${pr.exerciseName}`}>
-                            {pr.maxDistance}{dLabel}
+                        <div>
+                          <p className="font-bold tabular-nums" data-testid={`text-pr-weight-${pr.exerciseName}`}>
+                            {pr.maxWeight}<span className="text-muted-foreground text-xs font-normal ml-0.5">{weightLabel}</span>
                           </p>
-                          <p className="text-[10px] text-muted-foreground">Max Distance</p>
-                          {pr.maxDistanceDate && <p className="text-[10px] text-muted-foreground/60">{formatDate(pr.maxDistanceDate)}</p>}
+                          {pr.maxWeightDate && <p className="text-[10px] text-muted-foreground">{formatDate(pr.maxWeightDate)}</p>}
                         </div>
-                      )}
-                      {pr.bestTime != null && (
-                        <div className="text-center">
-                          <Timer className="h-3.5 w-3.5 mx-auto text-muted-foreground mb-0.5" />
-                          <p className="text-sm font-semibold" data-testid={`text-pr-time-${pr.exerciseName}`}>
-                            {pr.bestTime}min
+                      </div>
+                    )}
+
+                    {pr.maxDistance != null && (
+                      <div className="flex items-center gap-2">
+                        <div className="h-8 w-8 rounded-full bg-blue-500/10 flex items-center justify-center">
+                          <Ruler className="h-4 w-4 text-blue-500" />
+                        </div>
+                        <div>
+                          <p className="font-bold tabular-nums" data-testid={`text-pr-distance-${pr.exerciseName}`}>
+                            {pr.maxDistance}<span className="text-muted-foreground text-xs font-normal ml-0.5">{dLabel}</span>
                           </p>
-                          <p className="text-[10px] text-muted-foreground">Best Time</p>
-                          {pr.bestTimeDate && <p className="text-[10px] text-muted-foreground/60">{formatDate(pr.bestTimeDate)}</p>}
+                          {pr.maxDistanceDate && <p className="text-[10px] text-muted-foreground">{formatDate(pr.maxDistanceDate)}</p>}
                         </div>
-                      )}
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="w-full mt-2 text-xs"
-                      onClick={() => {
-                        const key = pr.exerciseName === "custom" ? `custom:${pr.customLabel}` : pr.exerciseName;
-                        setSelectedExercise(key === selectedExercise ? null : key);
-                      }}
-                      data-testid={`button-view-progression-${pr.exerciseName}`}
-                    >
-                      <TrendingUp className="h-3 w-3 mr-1" />
-                      {selectedExercise === (pr.exerciseName === "custom" ? `custom:${pr.customLabel}` : pr.exerciseName) ? "Hide" : "View"} Progression
-                    </Button>
-                  </CardContent>
-                </Card>
+                      </div>
+                    )}
+
+                    {pr.bestTime != null && (
+                      <div className="flex items-center gap-2">
+                        <div className="h-8 w-8 rounded-full bg-green-500/10 flex items-center justify-center">
+                          <Timer className="h-4 w-4 text-green-500" />
+                        </div>
+                        <div>
+                          <p className="font-bold tabular-nums" data-testid={`text-pr-time-${pr.exerciseName}`}>
+                            {pr.bestTime}<span className="text-muted-foreground text-xs font-normal ml-0.5">min</span>
+                          </p>
+                          {pr.bestTimeDate && <p className="text-[10px] text-muted-foreground">{formatDate(pr.bestTimeDate)}</p>}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               ))}
             </div>
           )}
         </CardContent>
       </Card>
+      </TabsContent>
 
-      {selectedExercise && (
+      <TabsContent value="trends" className="space-y-6">
         <Card data-testid="card-exercise-progression">
           <CardHeader>
             <div className="flex items-center gap-2">
@@ -237,11 +254,33 @@ export default function Analytics() {
               </CardTitle>
             </div>
             <CardDescription>
-              {availableExercises.find(e => e.value === selectedExercise)?.label || selectedExercise}
+              Select an exercise to view its detailed history and progression
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {analyticsLoading ? (
+            <div className="mb-6">
+              <Select value={selectedExercise || undefined} onValueChange={setSelectedExercise}>
+                <SelectTrigger data-testid="select-exercise-progression">
+                  <SelectValue placeholder="Select an exercise..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableExercises.map((e) => (
+                    <SelectItem key={e.value} value={e.value}>
+                      {e.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {!selectedExercise ? (
+              <div className="flex items-center justify-center py-12 text-center text-muted-foreground bg-muted/20 rounded-lg border border-dashed">
+                <div>
+                  <TrendingUp className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
+                  <p>Select an exercise from the dropdown above to view its progression.</p>
+                </div>
+              </div>
+            ) : analyticsLoading ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
@@ -263,29 +302,29 @@ export default function Analytics() {
                 )}
                 <div className="sm:col-span-2">
                   <p className="text-xs text-muted-foreground font-medium mb-2">Summary</p>
-                  <div className="flex gap-4 flex-wrap">
-                    <div className="text-center">
-                      <p className="text-lg font-semibold" data-testid="text-total-sessions">{analyticsData.data.length}</p>
-                      <p className="text-xs text-muted-foreground">Sessions</p>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="bg-muted/50 p-4 rounded-lg">
+                      <p className="text-2xl font-bold" data-testid="text-total-sessions">{analyticsData.data.length}</p>
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Sessions</p>
                     </div>
-                    <div className="text-center">
-                      <p className="text-lg font-semibold" data-testid="text-total-sets">
+                    <div className="bg-muted/50 p-4 rounded-lg">
+                      <p className="text-2xl font-bold" data-testid="text-total-sets">
                         {analyticsData.data.reduce((a, d) => a + d.totalSets, 0)}
                       </p>
-                      <p className="text-xs text-muted-foreground">Total Sets</p>
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Sets</p>
                     </div>
-                    <div className="text-center">
-                      <p className="text-lg font-semibold" data-testid="text-total-reps">
+                    <div className="bg-muted/50 p-4 rounded-lg">
+                      <p className="text-2xl font-bold" data-testid="text-total-reps">
                         {analyticsData.data.reduce((a, d) => a + d.totalReps, 0)}
                       </p>
-                      <p className="text-xs text-muted-foreground">Total Reps</p>
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Reps</p>
                     </div>
                     {analyticsData.data.some(d => d.totalVolume > 0) && (
-                      <div className="text-center">
-                        <p className="text-lg font-semibold" data-testid="text-total-volume">
+                      <div className="bg-muted/50 p-4 rounded-lg">
+                        <p className="text-2xl font-bold" data-testid="text-total-volume">
                           {Math.round(analyticsData.data.reduce((a, d) => a + d.totalVolume, 0)).toLocaleString()}
                         </p>
-                        <p className="text-xs text-muted-foreground">Total Volume ({weightLabel})</p>
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Volume ({weightLabel})</p>
                       </div>
                     )}
                   </div>
@@ -294,7 +333,8 @@ export default function Analytics() {
             )}
           </CardContent>
         </Card>
-      )}
+      </TabsContent>
+      </Tabs>
     </div>
   );
 }
