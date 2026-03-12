@@ -15,10 +15,12 @@ describe("Analytics Page", () => {
     });
 
     it("shows no personal records message when empty", () => {
+      cy.getBySel("tab-prs").click();
       cy.getBySel("text-no-prs").should("exist");
     });
 
     it("shows the category filter", () => {
+      cy.getBySel("tab-prs").click();
       cy.getBySel("select-pr-category").should("exist");
     });
   });
