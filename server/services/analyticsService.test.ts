@@ -27,6 +27,7 @@ describe("calculatePersonalRecords", () => {
     // Verify type is preserved correctly
     expect(result).toStrictEqual({});
     // We expect it to strictly match the shape of Record<string, PRRecord> which is an empty object
+    expect(typeof result).toBe('object');
   });
 
   it("tracks maxWeight PR", () => {
