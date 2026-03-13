@@ -33,7 +33,7 @@ declare global {
 function getVoiceErrorMessage(errorCode: string): string | null {
   switch (errorCode) {
     case "not-allowed":
-      return "Microphone access denied. Please allow microphone permissions in your browser settings and try again.";
+      return "Microphone access denied. Please allow microphone permissions in your browser settings (click the lock icon in the address bar) and reload the page.";
     case "service-not-allowed":
       return "Speech recognition is not available in this browser or context. Try opening the app directly (not in an embedded frame).";
     case "network":
@@ -61,8 +61,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
   const { onResult, onInterim, onError, continuous = true, lang = "en-US" } = options;
   const [isListening, setIsListening] = useState(false);
   const [interimTranscript, setInterimTranscript] = useState("");
-  const [hasApi, setHasApi] = useState(false);
-  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [isSupported, setIsSupported] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const onResultRef = useRef(onResult);
   const onInterimRef = useRef(onInterim);
@@ -74,35 +73,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
 
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      setHasApi(false);
-      return;
-    }
-
-    setHasApi(true);
-
-    let cleanup: (() => void) | undefined;
-
-    (async () => {
-      try {
-        if (navigator.permissions) {
-          const status = await navigator.permissions.query({ name: "microphone" as PermissionName });
-          if (status.state === "denied") {
-            setPermissionDenied(true);
-          }
-          const onChange = () => {
-            setPermissionDenied(status.state === "denied");
-          };
-          status.addEventListener("change", onChange);
-          cleanup = () => status.removeEventListener("change", onChange);
-        }
-      } catch {
-      }
-    })();
-
-    return () => {
-      cleanup?.();
-    };
+    setIsSupported(!!SpeechRecognition);
   }, []);
 
   const startListening = useCallback(() => {
@@ -198,13 +169,9 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
     };
   }, []);
 
-  const isSupported = hasApi && !permissionDenied;
-
   return {
     isListening,
     isSupported,
-    hasApi,
-    permissionDenied,
     interimTranscript,
     startListening,
     stopListening,

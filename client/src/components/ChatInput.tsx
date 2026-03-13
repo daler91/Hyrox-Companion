@@ -27,7 +27,7 @@ export function ChatInput({ onSend, isLoading, placeholder = "Ask about your tra
     toast({ title: "Voice Input", description: msg, variant: "destructive" });
   }, [toast]);
 
-  const { isListening, isSupported, permissionDenied, interimTranscript, stopListening, toggleListening } = useVoiceInput({
+  const { isListening, isSupported, interimTranscript, stopListening, toggleListening } = useVoiceInput({
     onResult: handleVoiceResult,
     onError: handleVoiceError,
   });
@@ -70,9 +70,7 @@ export function ChatInput({ onSend, isLoading, placeholder = "Ask about your tra
         <VoiceButton
           isListening={isListening}
           isSupported={isSupported}
-          permissionDenied={permissionDenied}
           onClick={toggleListening}
-          onPermissionDeniedClick={() => handleVoiceError("Microphone access is blocked. Please allow microphone permissions in your browser settings (click the lock icon in the address bar) and reload the page.")}
         />
         <Button
           type="submit"

@@ -9,36 +9,25 @@ interface VoiceButtonProps {
   size?: "icon" | "sm" | "default";
   className?: string;
   "data-testid"?: string;
-  permissionDenied?: boolean;
-  onPermissionDeniedClick?: () => void;
 }
 
-export function VoiceButton({ isListening, isSupported, onClick, size = "icon", className, "data-testid": dataTestId, permissionDenied, onPermissionDeniedClick }: VoiceButtonProps) {
-  if (!isSupported && !permissionDenied) return null;
-
-  const handleClick = () => {
-    if (permissionDenied && onPermissionDeniedClick) {
-      onPermissionDeniedClick();
-      return;
-    }
-    onClick();
-  };
+export function VoiceButton({ isListening, isSupported, onClick, size = "icon", className, "data-testid": dataTestId }: VoiceButtonProps) {
+  if (!isSupported) return null;
 
   return (
     <Button
       type="button"
       variant={isListening ? "destructive" : "outline"}
       size={size}
-      onClick={handleClick}
+      onClick={onClick}
       className={cn(
         "relative",
         isListening && "animate-pulse",
-        permissionDenied && "opacity-50",
         className,
       )}
       data-testid={dataTestId || "button-voice-input"}
-      aria-label={permissionDenied ? "Microphone access denied" : isListening ? "Stop voice input" : "Start voice input"}
-      title={permissionDenied ? "Microphone blocked — tap for details" : isListening ? "Stop recording" : "Use voice input"}
+      aria-label={isListening ? "Stop voice input" : "Start voice input"}
+      title={isListening ? "Stop recording" : "Use voice input"}
     >
       {isListening ? (
         <MicOff className="h-4 w-4" />

@@ -243,7 +243,7 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
     toast({ title: "Voice Input", description: msg, variant: "destructive" });
   }, [toast]);
 
-  const { isListening: isMainListening, isSupported, permissionDenied: mainPermDenied, interimTranscript: mainInterim, startListening: startMainListening, stopListening: stopMainListening, toggleListening: toggleMainListening } = useVoiceInput({
+  const { isListening: isMainListening, isSupported, interimTranscript: mainInterim, startListening: startMainListening, stopListening: stopMainListening, toggleListening: toggleMainListening } = useVoiceInput({
     onResult: handleMainVoiceResult,
     onError: handleVoiceError,
   });
@@ -295,22 +295,17 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
           <Type className="h-4 w-4 mr-1" />
           Free Text
         </Button>
-        {(isSupported || mainPermDenied) && (
+        {isSupported && (
           <Button
             variant="outline"
             size="sm"
             onClick={() => {
-              if (mainPermDenied) {
-                handleVoiceError("Microphone access is blocked. Please allow microphone permissions in your browser settings (click the lock icon in the address bar) and reload the page.");
-                return;
-              }
               stopAllVoice();
               if (!useTextMode) setUseTextMode(true);
               startMainListening();
             }}
-            className={mainPermDenied ? "opacity-50" : ""}
             data-testid="button-detail-mode-voice"
-            title={mainPermDenied ? "Microphone blocked — tap for details" : "Use voice input"}
+            title="Use voice input"
           >
             <Mic className="h-4 w-4 mr-1" />
             Voice
@@ -343,9 +338,7 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
             <VoiceButton
               isListening={isMainListening}
               isSupported={isSupported}
-              permissionDenied={mainPermDenied}
               onClick={toggleMainListening}
-              onPermissionDeniedClick={() => handleVoiceError("Microphone access is blocked. Please allow microphone permissions in your browser settings (click the lock icon in the address bar) and reload the page.")}
               className="absolute top-2 right-2"
             />
           </div>
