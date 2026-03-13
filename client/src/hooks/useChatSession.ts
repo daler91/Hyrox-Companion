@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useSaveMessageMutation, useClearHistoryMutation } from "./useChatMutations";
 import { getCurrentTimeString, formatTime } from "@/lib/dateUtils";
 import type { ChatMessage as DBChatMessage } from "@shared/schema";
 
@@ -64,23 +65,11 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     }
   }, [chatHistory, historyLoading, historyLoaded]);
 
-  const saveMessageMutation = useMutation({
-    mutationFn: async (msg: { role: string; content: string }) => {
-      const res = await apiRequest("POST", "/api/chat/message", msg);
-      return res.json();
-    },
-  });
+  const saveMessageMutation = useSaveMessageMutation();
 
-  const clearHistoryMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("DELETE", "/api/chat/history");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/chat/history"] });
-      setMessages([welcomeMessageObj]);
-      setHistoryLoaded(false);
-    },
+  const clearHistoryMutation = useClearHistoryMutation(() => {
+    setMessages([welcomeMessageObj]);
+    setHistoryLoaded(false);
   });
 
   const scrollToBottom = useCallback(() => {

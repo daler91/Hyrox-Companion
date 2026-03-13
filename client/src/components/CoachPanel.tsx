@@ -11,6 +11,7 @@ import { Activity, TrendingUp, Target, Calendar, Flame, Trash2, Loader2, X, Mess
 import { apiRequest } from "@/lib/queryClient";
 import { calculateStats } from "@/lib/statsUtils";
 import { useChatSession, type Message } from "@/hooks/useChatSession";
+import { useSaveMessageMutation } from "@/hooks/useChatMutations";
 import { getCurrentTimeString } from "@/lib/dateUtils";
 import type { TimelineEntry } from "@shared/schema";
 
@@ -61,12 +62,7 @@ export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }
     return allMessages;
   }, [hookMessages, localMessages]);
 
-  const saveMessageMutation = useMutation({
-    mutationFn: async (msg: { role: string; content: string }) => {
-      const res = await apiRequest("POST", "/api/chat/message", msg);
-      return res.json();
-    },
-  });
+  const saveMessageMutation = useSaveMessageMutation();
 
   const addLocalMessage = useCallback((message: Message) => {
     setLocalMessages(prev => [...prev, message]);
