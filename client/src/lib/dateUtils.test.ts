@@ -26,6 +26,29 @@ describe('dateUtils', () => {
       const date = new Date('2024-02-29T12:00:00Z');
       expect(toISODateString(date)).toBe('2024-02-29');
     });
+
+    it('should correctly pad single digit months and days', () => {
+      const date = new Date('2023-05-05T12:00:00Z');
+      expect(toISODateString(date)).toBe('2023-05-05');
+    });
+
+    it('should correctly handle end of year boundaries', () => {
+      const date = new Date('2023-12-31T23:59:59Z');
+      expect(toISODateString(date)).toBe('2023-12-31');
+    });
+
+    it('should correctly handle start of year boundaries', () => {
+      const date = new Date('2024-01-01T00:00:00Z');
+      expect(toISODateString(date)).toBe('2024-01-01');
+    });
+
+    it('should strip time components regardless of time of day', () => {
+      const morningDate = new Date('2023-08-15T00:00:01Z');
+      expect(toISODateString(morningDate)).toBe('2023-08-15');
+
+      const eveningDate = new Date('2023-08-15T23:59:59Z');
+      expect(toISODateString(eveningDate)).toBe('2023-08-15');
+    });
   });
 
   describe('Functions relying on current time', () => {
