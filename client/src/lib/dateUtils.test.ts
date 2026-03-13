@@ -180,21 +180,47 @@ describe('dateUtils', () => {
     });
 
     describe('formatTime', () => {
-      it('should format time correctly', () => {
-        // The locale string might vary depending on the environment running the tests.
-        // We'll mock it slightly or check the general format to avoid flaky tests due to locale.
+      it('should format time correctly using toLocaleTimeString with proper options', () => {
         const mockTime = new Date('2023-10-18T14:30:00');
+        const spy = vi.spyOn(mockTime, 'toLocaleTimeString').mockReturnValue('14:30');
+
         const formatted = formatTime(mockTime);
-        // It should contain the hours and minutes in some form, typically HH:MM or h:mm AM/PM
-        expect(formatted).toMatch(/([0-9]{1,2}):([0-9]{2})/);
+
+        expect(formatted).toBe('14:30');
+        expect(spy).toHaveBeenCalledWith([], { hour: '2-digit', minute: '2-digit' });
+
+        spy.mockRestore();
+      });
+
+      it('should handle different time correctly', () => {
+        const mockTime = new Date('2023-10-18T05:05:00');
+        const spy = vi.spyOn(mockTime, 'toLocaleTimeString').mockReturnValue('05:05 AM');
+
+        const formatted = formatTime(mockTime);
+
+        expect(formatted).toBe('05:05 AM');
+        expect(spy).toHaveBeenCalledWith([], { hour: '2-digit', minute: '2-digit' });
+
+        spy.mockRestore();
+      });
+
+      it('should handle an invalid date gracefully', () => {
+        const invalidDate = new Date('invalid');
+        const formatted = formatTime(invalidDate);
+        expect(formatted).toBe('Invalid Date'); // toLocaleTimeString returns 'Invalid Date'
       });
     });
 
     describe('getCurrentTimeString', () => {
-      it('should return formatted current time', () => {
+      it('should return formatted current time using toLocaleTimeString', () => {
+        const spy = vi.spyOn(Date.prototype, 'toLocaleTimeString').mockReturnValue('12:00');
+
         const timeStr = getCurrentTimeString();
-        expect(typeof timeStr).toBe('string');
-        expect(timeStr).toMatch(/([0-9]{1,2}):([0-9]{2})/);
+
+        expect(timeStr).toBe('12:00');
+        expect(spy).toHaveBeenCalledWith([], { hour: '2-digit', minute: '2-digit' });
+
+        spy.mockRestore();
       });
     });
   });
