@@ -1,0 +1,3 @@
+## 2024-11-20 - Pre-calculate array aggregations in useMemo
+ **Learning:** In React components with large datasets, calling O(n) operations like `Array.prototype.some` and `Array.prototype.reduce` multiple times during every render (especially inside the returned JSX) can cause significant performance bottlenecks and slow down rendering.
+ **Action:** Pre-calculate these array aggregations inside a `useMemo` hook using a single `O(n)` traversal (e.g., a single `for` loop) and return the aggregated values. This significantly reduces render time for large datasets and avoids unnecessary recalculations.
