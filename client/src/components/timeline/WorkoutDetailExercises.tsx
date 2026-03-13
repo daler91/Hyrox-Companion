@@ -243,7 +243,7 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
     toast({ title: "Voice Input", description: msg, variant: "destructive" });
   }, [toast]);
 
-  const { isListening: isMainListening, isSupported, interimTranscript: mainInterim, startListening: startMainListening, stopListening: stopMainListening, toggleListening: toggleMainListening } = useVoiceInput({
+  const { isListening: isMainListening, isSupported, permissionDenied: mainPermDenied, interimTranscript: mainInterim, startListening: startMainListening, stopListening: stopMainListening, toggleListening: toggleMainListening } = useVoiceInput({
     onResult: handleMainVoiceResult,
     onError: handleVoiceError,
   });
@@ -295,16 +295,18 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
           <Type className="h-4 w-4 mr-1" />
           Free Text
         </Button>
-        {isSupported && (
+        {(isSupported || mainPermDenied) && (
           <Button
             variant="outline"
             size="sm"
+            disabled={mainPermDenied}
             onClick={() => {
               stopAllVoice();
               if (!useTextMode) setUseTextMode(true);
               startMainListening();
             }}
             data-testid="button-detail-mode-voice"
+            title={mainPermDenied ? "Microphone blocked — allow in browser settings" : "Use voice input"}
           >
             <Mic className="h-4 w-4 mr-1" />
             Voice
@@ -334,14 +336,13 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
                 {mainInterim}
               </div>
             )}
-            {isSupported && (
-              <VoiceButton
-                isListening={isMainListening}
-                isSupported={isSupported}
-                onClick={toggleMainListening}
-                className="absolute top-2 right-2"
-              />
-            )}
+            <VoiceButton
+              isListening={isMainListening}
+              isSupported={isSupported}
+              permissionDenied={mainPermDenied}
+              onClick={toggleMainListening}
+              className="absolute top-2 right-2"
+            />
           </div>
           <Button
             onClick={() => {

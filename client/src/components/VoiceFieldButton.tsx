@@ -22,7 +22,7 @@ export function VoiceFieldButton({ onTranscript, onStopRef, size = "icon", class
     toast({ title: "Voice Input", description: message, variant: "destructive" });
   }, [toast]);
 
-  const { isListening, isSupported, stopListening, toggleListening } = useVoiceInput({
+  const { isListening, isSupported, permissionDenied, stopListening, toggleListening } = useVoiceInput({
     onResult: handleResult,
     onError: handleError,
   });
@@ -35,6 +35,7 @@ export function VoiceFieldButton({ onTranscript, onStopRef, size = "icon", class
     <VoiceButton
       isListening={isListening}
       isSupported={isSupported}
+      permissionDenied={permissionDenied}
       onClick={toggleListening}
       size={size}
       className={className}

@@ -9,10 +9,11 @@ interface VoiceButtonProps {
   size?: "icon" | "sm" | "default";
   className?: string;
   "data-testid"?: string;
+  permissionDenied?: boolean;
 }
 
-export function VoiceButton({ isListening, isSupported, onClick, size = "icon", className, "data-testid": dataTestId }: VoiceButtonProps) {
-  if (!isSupported) return null;
+export function VoiceButton({ isListening, isSupported, onClick, size = "icon", className, "data-testid": dataTestId, permissionDenied }: VoiceButtonProps) {
+  if (!isSupported && !permissionDenied) return null;
 
   return (
     <Button
@@ -20,14 +21,16 @@ export function VoiceButton({ isListening, isSupported, onClick, size = "icon", 
       variant={isListening ? "destructive" : "outline"}
       size={size}
       onClick={onClick}
+      disabled={permissionDenied}
       className={cn(
         "relative",
         isListening && "animate-pulse",
+        permissionDenied && "opacity-50",
         className,
       )}
       data-testid={dataTestId || "button-voice-input"}
-      aria-label={isListening ? "Stop voice input" : "Start voice input"}
-      title={isListening ? "Stop recording" : "Use voice input"}
+      aria-label={permissionDenied ? "Microphone access denied" : isListening ? "Stop voice input" : "Start voice input"}
+      title={permissionDenied ? "Microphone blocked — allow in browser settings" : isListening ? "Stop recording" : "Use voice input"}
     >
       {isListening ? (
         <MicOff className="h-4 w-4" />

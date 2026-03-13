@@ -27,7 +27,7 @@ export function ChatInput({ onSend, isLoading, placeholder = "Ask about your tra
     toast({ title: "Voice Input", description: msg, variant: "destructive" });
   }, [toast]);
 
-  const { isListening, isSupported, interimTranscript, stopListening, toggleListening } = useVoiceInput({
+  const { isListening, isSupported, permissionDenied, interimTranscript, stopListening, toggleListening } = useVoiceInput({
     onResult: handleVoiceResult,
     onError: handleVoiceError,
   });
@@ -70,6 +70,7 @@ export function ChatInput({ onSend, isLoading, placeholder = "Ask about your tra
         <VoiceButton
           isListening={isListening}
           isSupported={isSupported}
+          permissionDenied={permissionDenied}
           onClick={toggleListening}
         />
         <Button

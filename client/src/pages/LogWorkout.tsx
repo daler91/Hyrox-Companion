@@ -63,7 +63,7 @@ export default function LogWorkout() {
     });
   }, []);
 
-  const { isListening, isSupported, interimTranscript, startListening, stopListening, toggleListening } = useVoiceInput({
+  const { isListening, isSupported, permissionDenied, interimTranscript, startListening, stopListening, toggleListening } = useVoiceInput({
     onResult: handleVoiceResult,
     onError: handleVoiceError,
   });
@@ -75,7 +75,7 @@ export default function LogWorkout() {
     });
   }, []);
 
-  const { isListening: isNotesListening, isSupported: isNotesSupported, interimTranscript: notesInterim, stopListening: stopNotesListening, toggleListening: toggleNotesListening } = useVoiceInput({
+  const { isListening: isNotesListening, isSupported: isNotesSupported, permissionDenied: isNotesDenied, interimTranscript: notesInterim, stopListening: stopNotesListening, toggleListening: toggleNotesListening } = useVoiceInput({
     onResult: handleNotesVoiceResult,
     onError: handleVoiceError,
   });
@@ -222,15 +222,17 @@ export default function LogWorkout() {
           <Type className="h-4 w-4 mr-1" />
           Free Text
         </Button>
-        {isSupported && (
+        {(isSupported || permissionDenied) && (
           <Button
             variant="outline"
             size="sm"
+            disabled={permissionDenied}
             onClick={() => {
               if (!useTextMode) setUseTextMode(true);
               if (!isListening) startListening();
             }}
             data-testid="button-mode-voice"
+            title={permissionDenied ? "Microphone blocked — allow in browser settings" : "Use voice input"}
           >
             <Mic className="h-4 w-4 mr-1" />
             Voice
@@ -243,14 +245,13 @@ export default function LogWorkout() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg">Workout Description</CardTitle>
-              {isSupported && (
-                <VoiceButton
-                  isListening={isListening}
-                  isSupported={isSupported}
-                  onClick={toggleListening}
-                  className=""
-                />
-              )}
+              <VoiceButton
+                isListening={isListening}
+                isSupported={isSupported}
+                permissionDenied={permissionDenied}
+                onClick={toggleListening}
+                className=""
+              />
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -358,6 +359,7 @@ export default function LogWorkout() {
             <VoiceButton
               isListening={isNotesListening}
               isSupported={isNotesSupported}
+              permissionDenied={isNotesDenied}
               onClick={toggleNotesListening}
               data-testid="button-voice-notes"
             />

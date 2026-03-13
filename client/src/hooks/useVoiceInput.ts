@@ -61,7 +61,8 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
   const { onResult, onInterim, onError, continuous = true, lang = "en-US" } = options;
   const [isListening, setIsListening] = useState(false);
   const [interimTranscript, setInterimTranscript] = useState("");
-  const [isSupported, setIsSupported] = useState(false);
+  const [hasApi, setHasApi] = useState(false);
+  const [permissionDenied, setPermissionDenied] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const onResultRef = useRef(onResult);
   const onInterimRef = useRef(onInterim);
@@ -74,11 +75,11 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      setIsSupported(false);
+      setHasApi(false);
       return;
     }
 
-    setIsSupported(true);
+    setHasApi(true);
 
     let cleanup: (() => void) | undefined;
 
@@ -87,10 +88,10 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
         if (navigator.permissions) {
           const status = await navigator.permissions.query({ name: "microphone" as PermissionName });
           if (status.state === "denied") {
-            setIsSupported(false);
+            setPermissionDenied(true);
           }
           const onChange = () => {
-            setIsSupported(status.state !== "denied");
+            setPermissionDenied(status.state === "denied");
           };
           status.addEventListener("change", onChange);
           cleanup = () => status.removeEventListener("change", onChange);
@@ -210,9 +211,13 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
     };
   }, []);
 
+  const isSupported = hasApi && !permissionDenied;
+
   return {
     isListening,
     isSupported,
+    hasApi,
+    permissionDenied,
     interimTranscript,
     startListening,
     stopListening,
