@@ -30,6 +30,9 @@ vi.mock('@tanstack/react-query', async (importOriginal) => {
   const mod = await importOriginal<typeof import('@tanstack/react-query')>();
   return {
     ...mod,
+    useQueryClient: vi.fn(() => ({
+      invalidateQueries: queryClient.queryClient.invalidateQueries,
+    })),
     useQuery: vi.fn(() => ({ data: [], isLoading: false })),
     useMutation: vi.fn(({ mutationFn, onSuccess }: any) => ({
       mutate: async (...args: any[]) => {
