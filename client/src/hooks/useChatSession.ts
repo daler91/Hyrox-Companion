@@ -151,25 +151,28 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
           for (const event of events) {
             const lines = event.split("\n");
             for (const line of lines) {
-              if (line.startsWith("data: ")) {
-                try {
-                  const data = JSON.parse(line.slice(6));
-                  if (data.text) {
-                    fullResponse += data.text;
-                    setMessages((prev) =>
-                      prev.map((m) =>
-                        m.id === assistantMessageId
-                          ? { ...m, content: fullResponse }
-                          : m
-                      )
-                    );
-                  }
-                  if (data.error) {
-                    throw new Error(data.error);
-                  }
-                } catch (parseError) {
-                  // Skip malformed JSON lines
-                }
+              if (!line.startsWith("data: ")) continue;
+
+              let data;
+              try {
+                data = JSON.parse(line.slice(6));
+              } catch (parseError) {
+                // Skip malformed JSON lines
+                continue;
+              }
+
+              if (data.text) {
+                fullResponse += data.text;
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === assistantMessageId
+                      ? { ...m, content: fullResponse }
+                      : m
+                  )
+                );
+              }
+              if (data.error) {
+                throw new Error(data.error);
               }
             }
           }
@@ -178,22 +181,28 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         if (buffer.trim()) {
           const lines = buffer.split("\n");
           for (const line of lines) {
-            if (line.startsWith("data: ")) {
-              try {
-                const data = JSON.parse(line.slice(6));
-                if (data.text) {
-                  fullResponse += data.text;
-                  setMessages((prev) =>
-                    prev.map((m) =>
-                      m.id === assistantMessageId
-                        ? { ...m, content: fullResponse }
-                        : m
-                    )
-                  );
-                }
-              } catch (parseError) {
-                // Skip malformed JSON
-              }
+            if (!line.startsWith("data: ")) continue;
+
+            let data;
+            try {
+              data = JSON.parse(line.slice(6));
+            } catch (parseError) {
+              // Skip malformed JSON
+              continue;
+            }
+
+            if (data.text) {
+              fullResponse += data.text;
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantMessageId
+                    ? { ...m, content: fullResponse }
+                    : m
+                )
+              );
+            }
+            if (data.error) {
+              throw new Error(data.error);
             }
           }
         }
