@@ -1,4 +1,5 @@
 import { Router } from "express";
+import crypto from "crypto";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
 import { checkAndSendEmailsForUser, runEmailCronJob } from "../emailScheduler";
@@ -24,9 +25,20 @@ router.post("/api/emails/check", isAuthenticated, async (req: any, res) => {
 router.get("/api/cron/emails", async (req, res) => {
   const secret = req.headers["x-cron-secret"] as string;
   const cronSecret = process.env.CRON_SECRET;
-  if (!cronSecret || secret !== cronSecret) {
+
+  if (!cronSecret || !secret) {
     return res.status(401).json({ error: "Unauthorized" });
   }
+
+  // Use timingSafeEqual with hashed values to prevent timing attacks
+  // and safely handle different string lengths.
+  const secretHash = crypto.createHash("sha256").update(secret).digest();
+  const cronSecretHash = crypto.createHash("sha256").update(cronSecret).digest();
+
+  if (!crypto.timingSafeEqual(secretHash, cronSecretHash)) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
   try {
     const result = await runEmailCronJob(storage);
     res.json(result);
