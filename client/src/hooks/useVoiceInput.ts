@@ -30,33 +30,68 @@ declare global {
   }
 }
 
+function getVoiceErrorMessage(errorCode: string): string | null {
+  switch (errorCode) {
+    case "not-allowed":
+      return "Microphone access denied. Please allow microphone permissions in your browser settings and try again.";
+    case "service-not-allowed":
+      return "Speech recognition is not available in this browser or context. Try opening the app directly (not in an embedded frame).";
+    case "network":
+      return "Network error during speech recognition. Please check your internet connection and try again.";
+    case "no-speech":
+      return "No speech was detected. Please try again and speak clearly into your microphone.";
+    case "audio-capture":
+      return "No microphone was found. Please connect a microphone and try again.";
+    case "aborted":
+      return null;
+    default:
+      return `Voice input error: ${errorCode}. Please try again.`;
+  }
+}
+
 interface UseVoiceInputOptions {
   onResult?: (transcript: string) => void;
   onInterim?: (transcript: string) => void;
+  onError?: (message: string) => void;
   continuous?: boolean;
   lang?: string;
 }
 
 export function useVoiceInput(options: UseVoiceInputOptions = {}) {
-  const { onResult, onInterim, continuous = true, lang = "en-US" } = options;
+  const { onResult, onInterim, onError, continuous = true, lang = "en-US" } = options;
   const [isListening, setIsListening] = useState(false);
   const [interimTranscript, setInterimTranscript] = useState("");
   const [isSupported, setIsSupported] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const onResultRef = useRef(onResult);
   const onInterimRef = useRef(onInterim);
+  const onErrorRef = useRef(onError);
 
   onResultRef.current = onResult;
   onInterimRef.current = onInterim;
+  onErrorRef.current = onError;
 
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     setIsSupported(!!SpeechRecognition);
   }, []);
 
-  const startListening = useCallback(() => {
+  const startListening = useCallback(async () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return;
+
+    try {
+      if (typeof navigator !== "undefined" && navigator.permissions) {
+        const permissionStatus = await navigator.permissions.query(
+          { name: "microphone" as PermissionName }
+        );
+        if (permissionStatus.state === "denied") {
+          onErrorRef.current?.("Microphone access is blocked. Please allow microphone permissions in your browser settings (click the lock icon in the address bar) and try again.");
+          return;
+        }
+      }
+    } catch {
+    }
 
     if (recognitionRef.current) {
       recognitionRef.current.abort();
@@ -97,8 +132,9 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      if (event.error !== "aborted") {
-        console.error("Speech recognition error:", event.error);
+      const message = getVoiceErrorMessage(event.error);
+      if (message) {
+        onErrorRef.current?.(message);
       }
       setIsListening(false);
       setInterimTranscript("");
@@ -109,7 +145,15 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
       setInterimTranscript("");
     };
 
-    recognition.start();
+    try {
+      recognition.start();
+    } catch (err) {
+      recognitionRef.current = null;
+      setIsListening(false);
+      setInterimTranscript("");
+      const msg = err instanceof Error ? err.message : "Failed to start voice input";
+      onErrorRef.current?.(`Microphone error: ${msg}. Please check your browser permissions and try again.`);
+    }
   }, [continuous, lang]);
 
   const stopListening = useCallback(() => {

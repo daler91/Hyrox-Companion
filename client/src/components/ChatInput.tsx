@@ -4,6 +4,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Send, Loader2 } from "lucide-react";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
 import { VoiceButton } from "@/components/VoiceButton";
+import { useToast } from "@/hooks/use-toast";
 
 interface ChatInputProps {
   onSend: (message: string) => void;
@@ -13,6 +14,7 @@ interface ChatInputProps {
 
 export function ChatInput({ onSend, isLoading, placeholder = "Ask about your training..." }: ChatInputProps) {
   const [message, setMessage] = useState("");
+  const { toast } = useToast();
 
   const handleVoiceResult = useCallback((transcript: string) => {
     setMessage(prev => {
@@ -21,8 +23,13 @@ export function ChatInput({ onSend, isLoading, placeholder = "Ask about your tra
     });
   }, []);
 
+  const handleVoiceError = useCallback((msg: string) => {
+    toast({ title: "Voice Input", description: msg, variant: "destructive" });
+  }, [toast]);
+
   const { isListening, isSupported, interimTranscript, stopListening, toggleListening } = useVoiceInput({
     onResult: handleVoiceResult,
+    onError: handleVoiceError,
   });
 
   const handleSubmit = (e: React.FormEvent) => {

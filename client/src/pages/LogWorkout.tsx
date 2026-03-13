@@ -52,6 +52,10 @@ export default function LogWorkout() {
     parseMutation,
   } = useWorkoutEditor();
 
+  const handleVoiceError = useCallback((msg: string) => {
+    toast({ title: "Voice Input", description: msg, variant: "destructive" });
+  }, [toast]);
+
   const handleVoiceResult = useCallback((transcript: string) => {
     setFreeText(prev => {
       const separator = prev && !prev.endsWith(" ") && !prev.endsWith("\n") ? " " : "";
@@ -61,6 +65,7 @@ export default function LogWorkout() {
 
   const { isListening, isSupported, interimTranscript, startListening, stopListening, toggleListening } = useVoiceInput({
     onResult: handleVoiceResult,
+    onError: handleVoiceError,
   });
 
   const handleNotesVoiceResult = useCallback((transcript: string) => {
@@ -72,6 +77,7 @@ export default function LogWorkout() {
 
   const { isListening: isNotesListening, isSupported: isNotesSupported, interimTranscript: notesInterim, stopListening: stopNotesListening, toggleListening: toggleNotesListening } = useVoiceInput({
     onResult: handleNotesVoiceResult,
+    onError: handleVoiceError,
   });
 
   const saveMutation = useMutation({

@@ -38,6 +38,7 @@ import type { UseMutationResult } from "@tanstack/react-query";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
 import { VoiceButton } from "@/components/VoiceButton";
 import { VoiceFieldButton } from "@/components/VoiceFieldButton";
+import { useToast } from "@/hooks/use-toast";
 
 
 interface SortableDialogBlockProps {
@@ -236,8 +237,15 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
     appendToField("mainWorkout", transcript);
   }, [appendToField]);
 
+  const { toast } = useToast();
+
+  const handleVoiceError = useCallback((msg: string) => {
+    toast({ title: "Voice Input", description: msg, variant: "destructive" });
+  }, [toast]);
+
   const { isListening: isMainListening, isSupported, interimTranscript: mainInterim, startListening: startMainListening, stopListening: stopMainListening, toggleListening: toggleMainListening } = useVoiceInput({
     onResult: handleMainVoiceResult,
+    onError: handleVoiceError,
   });
 
   const stopAllVoice = useCallback(() => {
