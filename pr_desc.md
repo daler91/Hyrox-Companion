@@ -1,11 +1,10 @@
-🎯 **What:** The vulnerability fixed
-Missing rate limiting on potentially expensive route endpoints, including the `/api/plans/import`, `/api/plans/sample`, and `/api/plans/:planId/schedule` endpoints.
+🧪 [testing improvement] Add unit tests for importPlanFromCSV
 
-⚠️ **Risk:** The potential impact if left unfixed
-Malicious actors or erroneous automated scripts could repeatedly call these endpoints, leading to significant CPU/memory consumption and potential Denial of Service (DoS) for the application.
-
-🛡️ **Solution:** How the fix addresses the vulnerability
-We audited the `server/routes/plans.ts` file and confirmed that the `/api/plans/import` endpoint was previously patched with the `rateLimiter` middleware. As a best practice, we have applied the `rateLimiter` middleware to other expensive and unprotected route handlers (`/api/plans/sample` and `/api/plans/:planId/schedule`) using appropriate categories (`planSample`, `planSchedule`) and limits.
-
-✅ **Verification:**
-Tests pass successfully and ensure standard functionality is untouched.
+🎯 **What:** The `importPlanFromCSV` function in `server/services/planService.ts` lacked tests for its plan creation and CSV parsing logic. This gap made refactoring the plan import feature risky.
+📊 **Coverage:** The new test suite in `server/services/planService.test.ts` now covers:
+- Successful import of a valid CSV, verifying correct mapping to `createTrainingPlan` and `createPlanDays`.
+- Error handling for empty CSVs or missing valid rows.
+- Error handling for missing or invalid week numbers.
+- Fallback logic for handling the "Accessory" header when "Accessory/Engine Work" is missing.
+- Default logic for plan naming using `options.planName` and `options.fileName`.
+✨ **Result:** Increased unit test coverage for `planService`, ensuring that CSV parsing edge cases and the database interactions via `storage` are correctly validated and reliable.
