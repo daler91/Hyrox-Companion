@@ -1,4 +1,4 @@
-import type { Express, Response } from "express";
+import type { Express, Request, Response } from "express";
 import crypto from "crypto";
 import { storage } from "./storage";
 import { isAuthenticated } from "./clerkAuth";
@@ -105,7 +105,7 @@ async function getValidAccessToken(userId: string): Promise<string | null> {
 }
 
 export function registerStravaRoutes(app: Express): void {
-  app.get("/api/strava/status", isAuthenticated, async (req: any, res: Response) => {
+  app.get("/api/strava/status", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const userId = getUserId(req);
       const connection = await storage.getStravaConnection(userId);
@@ -125,7 +125,7 @@ export function registerStravaRoutes(app: Express): void {
     }
   });
 
-  app.get("/api/strava/auth", isAuthenticated, async (req: any, res: Response) => {
+  app.get("/api/strava/auth", isAuthenticated, async (req: Request, res: Response) => {
     if (!STRAVA_CLIENT_ID) {
       return res.status(500).json({ error: "Strava integration not configured" });
     }
@@ -145,7 +145,7 @@ export function registerStravaRoutes(app: Express): void {
     res.json({ authUrl: authUrl.toString() });
   });
 
-  app.get("/api/strava/callback", async (req: any, res: Response) => {
+  app.get("/api/strava/callback", async (req: Request, res: Response) => {
     const { code, state, error: stravaError } = req.query;
 
     if (stravaError) {
@@ -201,7 +201,7 @@ export function registerStravaRoutes(app: Express): void {
     }
   });
 
-  app.delete("/api/strava/disconnect", isAuthenticated, async (req: any, res: Response) => {
+  app.delete("/api/strava/disconnect", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const userId = getUserId(req);
       await storage.deleteStravaConnection(userId);
@@ -212,7 +212,7 @@ export function registerStravaRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/strava/sync", isAuthenticated, async (req: any, res: Response) => {
+  app.post("/api/strava/sync", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const userId = getUserId(req);
       const accessToken = await getValidAccessToken(userId);

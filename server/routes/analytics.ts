@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, Request, Response } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
 import { calculatePersonalRecords, calculateExerciseAnalytics } from "../services/analyticsService";
@@ -13,7 +13,7 @@ function validDate(val: unknown): string | undefined {
   return parsed.success ? parsed.data : undefined;
 }
 
-router.get("/api/personal-records", isAuthenticated, async (req: any, res) => {
+router.get("/api/personal-records", isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
     const from = validDate(req.query.from);
@@ -29,7 +29,7 @@ router.get("/api/personal-records", isAuthenticated, async (req: any, res) => {
   }
 });
 
-router.get("/api/exercise-analytics", isAuthenticated, async (req: any, res) => {
+router.get("/api/exercise-analytics", isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
     const from = validDate(req.query.from);

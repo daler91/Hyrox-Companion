@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, Request, Response } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
 import { insertWorkoutLogSchema, updateWorkoutLogSchema } from "@shared/schema";
@@ -8,7 +8,7 @@ import { getUserId } from "../types";
 
 const router = Router();
 
-router.get("/api/workouts/unstructured", isAuthenticated, async (req: any, res) => {
+router.get("/api/workouts/unstructured", isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
     const workouts = await storage.getWorkoutsWithoutExerciseSets(userId);
@@ -19,7 +19,7 @@ router.get("/api/workouts/unstructured", isAuthenticated, async (req: any, res) 
   }
 });
 
-router.post("/api/workouts/:id/reparse", isAuthenticated, async (req: any, res) => {
+router.post("/api/workouts/:id/reparse", isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
     const workoutId = req.params.id;
@@ -40,7 +40,7 @@ router.post("/api/workouts/:id/reparse", isAuthenticated, async (req: any, res) 
   }
 });
 
-router.post("/api/workouts/batch-reparse", isAuthenticated, async (req: any, res) => {
+router.post("/api/workouts/batch-reparse", isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
     const workouts = await storage.getWorkoutsWithoutExerciseSets(userId);
@@ -69,7 +69,7 @@ router.post("/api/workouts/batch-reparse", isAuthenticated, async (req: any, res
   }
 });
 
-router.get("/api/custom-exercises", isAuthenticated, async (req: any, res) => {
+router.get("/api/custom-exercises", isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
     const exercises = await storage.getCustomExercises(userId);
@@ -80,7 +80,7 @@ router.get("/api/custom-exercises", isAuthenticated, async (req: any, res) => {
   }
 });
 
-router.post("/api/custom-exercises", isAuthenticated, async (req: any, res) => {
+router.post("/api/custom-exercises", isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
     const { name, category } = req.body as { name: string; category?: string };
@@ -99,7 +99,7 @@ router.post("/api/custom-exercises", isAuthenticated, async (req: any, res) => {
   }
 });
 
-router.get("/api/workouts", isAuthenticated, async (req: any, res) => {
+router.get("/api/workouts", isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
     const logs = await storage.listWorkoutLogs(userId);
@@ -110,7 +110,7 @@ router.get("/api/workouts", isAuthenticated, async (req: any, res) => {
   }
 });
 
-router.get("/api/workouts/:id", isAuthenticated, async (req: any, res) => {
+router.get("/api/workouts/:id", isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
     const log = await storage.getWorkoutLog(req.params.id, userId);
@@ -124,7 +124,7 @@ router.get("/api/workouts/:id", isAuthenticated, async (req: any, res) => {
   }
 });
 
-router.post("/api/workouts", isAuthenticated, async (req: any, res) => {
+router.post("/api/workouts", isAuthenticated, async (req: Request, res: Response) => {
   try {
     const { exercises, ...workoutData } = req.body;
     const parseResult = insertWorkoutLogSchema.safeParse(workoutData);
@@ -141,7 +141,7 @@ router.post("/api/workouts", isAuthenticated, async (req: any, res) => {
   }
 });
 
-router.patch("/api/workouts/:id", isAuthenticated, async (req: any, res) => {
+router.patch("/api/workouts/:id", isAuthenticated, async (req: Request, res: Response) => {
   try {
     const { exercises, ...updateData } = req.body;
     const parseResult = updateWorkoutLogSchema.safeParse(updateData);
@@ -162,7 +162,7 @@ router.patch("/api/workouts/:id", isAuthenticated, async (req: any, res) => {
   }
 });
 
-router.delete("/api/workouts/:id", isAuthenticated, async (req: any, res) => {
+router.delete("/api/workouts/:id", isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
     await storage.deleteExerciseSetsByWorkoutLog(req.params.id, userId);
@@ -177,7 +177,7 @@ router.delete("/api/workouts/:id", isAuthenticated, async (req: any, res) => {
   }
 });
 
-router.get("/api/exercises/:exerciseName/history", isAuthenticated, async (req: any, res) => {
+router.get("/api/exercises/:exerciseName/history", isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
     const history = await storage.getExerciseHistory(userId, req.params.exerciseName);
@@ -188,7 +188,7 @@ router.get("/api/exercises/:exerciseName/history", isAuthenticated, async (req: 
   }
 });
 
-router.get("/api/timeline", isAuthenticated, async (req: any, res) => {
+router.get("/api/timeline", isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
     const planId = req.query.planId as string | undefined;
@@ -200,7 +200,7 @@ router.get("/api/timeline", isAuthenticated, async (req: any, res) => {
   }
 });
 
-router.get("/api/export", isAuthenticated, async (req: any, res) => {
+router.get("/api/export", isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
     const format = (req.query.format as string) || "csv";

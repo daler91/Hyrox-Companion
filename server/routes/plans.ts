@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, Request, Response } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
 import { updatePlanDaySchema, importPlanRequestSchema, schedulePlanRequestSchema } from "@shared/schema";
@@ -8,7 +8,7 @@ import { rateLimiter } from "../routeUtils";
 
 const router = Router();
 
-router.get("/api/plans", isAuthenticated, async (req: any, res) => {
+router.get("/api/plans", isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
     const plans = await storage.listTrainingPlans(userId);
@@ -19,7 +19,7 @@ router.get("/api/plans", isAuthenticated, async (req: any, res) => {
   }
 });
 
-router.get("/api/plans/:id", isAuthenticated, async (req: any, res) => {
+router.get("/api/plans/:id", isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
     const plan = await storage.getTrainingPlan(req.params.id, userId);
@@ -33,7 +33,7 @@ router.get("/api/plans/:id", isAuthenticated, async (req: any, res) => {
   }
 });
 
-router.post("/api/plans/import", isAuthenticated, rateLimiter("planImport", 5), async (req: any, res) => {
+router.post("/api/plans/import", isAuthenticated, rateLimiter("planImport", 5), async (req: Request, res: Response) => {
   try {
     const parseResult = importPlanRequestSchema.safeParse(req.body);
     if (!parseResult.success) {
@@ -53,7 +53,7 @@ router.post("/api/plans/import", isAuthenticated, rateLimiter("planImport", 5), 
   }
 });
 
-router.post("/api/plans/sample", isAuthenticated, async (req: any, res) => {
+router.post("/api/plans/sample", isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
     const fullPlan = await createSamplePlan(userId);
@@ -64,7 +64,7 @@ router.post("/api/plans/sample", isAuthenticated, async (req: any, res) => {
   }
 });
 
-router.patch("/api/plans/:planId/days/:dayId", isAuthenticated, async (req: any, res) => {
+router.patch("/api/plans/:planId/days/:dayId", isAuthenticated, async (req: Request, res: Response) => {
   try {
     const { dayId } = req.params;
     const userId = getUserId(req);
@@ -86,7 +86,7 @@ router.patch("/api/plans/:planId/days/:dayId", isAuthenticated, async (req: any,
   }
 });
 
-router.patch("/api/plans/days/:dayId", isAuthenticated, async (req: any, res) => {
+router.patch("/api/plans/days/:dayId", isAuthenticated, async (req: Request, res: Response) => {
   try {
     const { dayId } = req.params;
     const userId = getUserId(req);
@@ -108,7 +108,7 @@ router.patch("/api/plans/days/:dayId", isAuthenticated, async (req: any, res) =>
   }
 });
 
-router.patch("/api/plans/:id", isAuthenticated, async (req: any, res) => {
+router.patch("/api/plans/:id", isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
     const { name } = req.body;
@@ -126,7 +126,7 @@ router.patch("/api/plans/:id", isAuthenticated, async (req: any, res) => {
   }
 });
 
-router.delete("/api/plans/:id", isAuthenticated, async (req: any, res) => {
+router.delete("/api/plans/:id", isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
     const deleted = await storage.deleteTrainingPlan(req.params.id, userId);
@@ -140,7 +140,7 @@ router.delete("/api/plans/:id", isAuthenticated, async (req: any, res) => {
   }
 });
 
-router.post("/api/plans/:planId/schedule", isAuthenticated, async (req: any, res) => {
+router.post("/api/plans/:planId/schedule", isAuthenticated, async (req: Request, res: Response) => {
   try {
     const parseResult = schedulePlanRequestSchema.safeParse(req.body);
     if (!parseResult.success) {
@@ -163,7 +163,7 @@ router.post("/api/plans/:planId/schedule", isAuthenticated, async (req: any, res
   }
 });
 
-router.patch("/api/plans/days/:dayId/status", isAuthenticated, async (req: any, res) => {
+router.patch("/api/plans/days/:dayId/status", isAuthenticated, async (req: Request, res: Response) => {
   try {
     const { dayId } = req.params;
     const userId = getUserId(req);
@@ -189,7 +189,7 @@ router.patch("/api/plans/days/:dayId/status", isAuthenticated, async (req: any, 
   }
 });
 
-router.delete("/api/plans/days/:dayId", isAuthenticated, async (req: any, res) => {
+router.delete("/api/plans/days/:dayId", isAuthenticated, async (req: Request, res: Response) => {
   try {
     const { dayId } = req.params;
     const userId = getUserId(req);

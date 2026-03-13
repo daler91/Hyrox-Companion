@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, Request, Response } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
 import { checkAndSendEmailsForUser, runEmailCronJob } from "../emailScheduler";
@@ -6,7 +6,7 @@ import { getUserId } from "../types";
 
 const router = Router();
 
-router.post("/api/emails/check", isAuthenticated, async (req: any, res) => {
+router.post("/api/emails/check", isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
     const user = await storage.getUser(userId);

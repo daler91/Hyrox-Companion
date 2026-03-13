@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import express from "express";
+import express, { Request, Response, NextFunction } from "express";
 import request from "supertest";
 import plansRouter from "../plans";
 import { rateLimiter } from "../../routeUtils";
 
 // Mock the clerkAuth middleware to simulate authentication
 vi.mock("../../clerkAuth", () => ({
-  isAuthenticated: (req: any, res: any, next: any) => {
-    req.auth = { userId: "test_user_id" };
+  isAuthenticated: (req: Request, res: Response, next: NextFunction) => {
+    (req as any).auth = { userId: "test_user_id" };
     next();
   },
 }));
