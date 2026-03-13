@@ -1,6 +1,133 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { calculateStreak } from "./routeUtils";
+import type { Response, NextFunction } from "express";
+import { calculateStreak, rateLimiter, clearRateLimitBuckets } from "./routeUtils";
 import { expandExercisesToSetRows } from "./services/workoutService";
+
+describe("rateLimiter", () => {
+  let req: any;
+  let res: any;
+  let next: NextFunction;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-15T12:00:00Z"));
+    clearRateLimitBuckets();
+
+    req = {
+      auth: { userId: "user123" },
+      ip: "192.168.1.1",
+    };
+
+    res = {
+      setHeader: vi.fn(),
+      status: vi.fn().mockReturnThis(),
+      json: vi.fn(),
+    };
+
+    next = vi.fn();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it("calls next() for requests under the limit", () => {
+    const middleware = rateLimiter("api", 2, 60000);
+
+    middleware(req, res as Response, next);
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(res.status).not.toHaveBeenCalled();
+
+    middleware(req, res as Response, next);
+    expect(next).toHaveBeenCalledTimes(2);
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it("returns 429 when maxRequests is exceeded", () => {
+    const middleware = rateLimiter("api", 2, 60000);
+
+    middleware(req, res as Response, next); // 1st request (ok)
+    middleware(req, res as Response, next); // 2nd request (ok)
+    middleware(req, res as Response, next); // 3rd request (blocked)
+
+    expect(next).toHaveBeenCalledTimes(2);
+    expect(res.status).toHaveBeenCalledWith(429);
+    expect(res.json).toHaveBeenCalledWith({
+      error: "Too many requests. Please wait 60 seconds before trying again.",
+    });
+    expect(res.setHeader).toHaveBeenCalledWith("Retry-After", "60");
+  });
+
+  it("resets limit after windowMs passes", () => {
+    const middleware = rateLimiter("api", 1, 60000);
+
+    middleware(req, res as Response, next); // 1st request (ok)
+    expect(next).toHaveBeenCalledTimes(1);
+
+    middleware(req, res as Response, next); // 2nd request (blocked)
+    expect(res.status).toHaveBeenCalledWith(429);
+
+    // Advance time by 60 seconds
+    vi.advanceTimersByTime(60000);
+
+    middleware(req, res as Response, next); // 3rd request (ok again)
+    expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  it("distinguishes between different users", () => {
+    const middleware = rateLimiter("api", 1, 60000);
+
+    // User 1 requests
+    middleware(req, res as Response, next); // 1st request user1 (ok)
+    expect(next).toHaveBeenCalledTimes(1);
+
+    // User 2 requests
+    const req2 = { ...req, auth: { userId: "user456" } };
+    middleware(req2, res as Response, next); // 1st request user2 (ok)
+    expect(next).toHaveBeenCalledTimes(2);
+
+    // User 1 requests again (blocked)
+    middleware(req, res as Response, next); // 2nd request user1 (blocked)
+    expect(res.status).toHaveBeenCalledWith(429);
+  });
+
+  it("uses ip address if userId is missing", () => {
+    const middleware = rateLimiter("api", 1, 60000);
+    const reqIp = { ip: "10.0.0.1" };
+
+    middleware(reqIp, res as Response, next); // 1st request ip (ok)
+    expect(next).toHaveBeenCalledTimes(1);
+
+    middleware(reqIp, res as Response, next); // 2nd request ip (blocked)
+    expect(res.status).toHaveBeenCalledWith(429);
+  });
+
+  it("calls next() and bypasses rate limiting if neither userId nor ip is present", () => {
+    const middleware = rateLimiter("api", 1, 60000);
+    const reqEmpty = {};
+
+    middleware(reqEmpty, res as Response, next); // 1st request empty (ok)
+    middleware(reqEmpty, res as Response, next); // 2nd request empty (ok)
+
+    expect(next).toHaveBeenCalledTimes(2);
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it("distinguishes between different categories for the same user", () => {
+    const apiLimiter = rateLimiter("api", 1, 60000);
+    const authLimiter = rateLimiter("auth", 1, 60000);
+
+    apiLimiter(req, res as Response, next); // 1st api request (ok)
+    expect(next).toHaveBeenCalledTimes(1);
+
+    authLimiter(req, res as Response, next); // 1st auth request (ok)
+    expect(next).toHaveBeenCalledTimes(2);
+
+    apiLimiter(req, res as Response, next); // 2nd api request (blocked)
+    expect(res.status).toHaveBeenCalledWith(429);
+  });
+});
 
 describe("calculateStreak", () => {
   beforeEach(() => {
