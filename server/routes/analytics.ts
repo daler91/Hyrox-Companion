@@ -34,6 +34,10 @@ router.get("/api/exercise-analytics", isAuthenticated, async (req: any, res) => 
     const userId = getUserId(req);
     const from = validDate(req.query.from);
     const to = validDate(req.query.to);
+
+    if (req.query.from && !from) return res.status(400).json({ error: "Invalid 'from' date format" });
+    if (req.query.to && !to) return res.status(400).json({ error: "Invalid 'to' date format" });
+
     const allSets = await storage.getAllExerciseSetsWithDates(userId, from, to);
     res.json(calculateExerciseAnalytics(allSets));
   } catch (error) {

@@ -98,6 +98,7 @@ describe("Analytics Routes", () => {
       expect(response.body).toEqual({ error: "Invalid 'to' date format" });
     });
 
+
     it("should return 500 when storage throws an error", async () => {
       // Mock the storage to throw an error
       const mockStorage = await import("../../storage");
@@ -137,6 +138,37 @@ describe("Analytics Routes", () => {
       expect(response.body).toEqual({
         "Bench Press": { totalVolume: 1000, setsCount: 1, history: [] }
       });
+    });
+
+    it("should handle from and to date queries properly", async () => {
+      // Mock the storage response
+      const mockStorage = await import("../../storage");
+      const { storage } = mockStorage as any;
+      storage.getAllExerciseSetsWithDates.mockResolvedValue([]);
+
+      // Mock the analytics service response
+      const mockAnalyticsService = await import("../../services/analyticsService");
+      const { calculateExerciseAnalytics } = mockAnalyticsService as any;
+      calculateExerciseAnalytics.mockReturnValue({});
+
+      const response = await request(app).get("/api/exercise-analytics?from=2024-01-01&to=2024-12-31");
+
+      expect(response.status).toBe(200);
+      expect(storage.getAllExerciseSetsWithDates).toHaveBeenCalledWith("test_user_id", "2024-01-01", "2024-12-31");
+    });
+
+    it("should return 400 for invalid from date", async () => {
+      const response = await request(app).get("/api/exercise-analytics?from=invalid-date");
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ error: "Invalid 'from' date format" });
+    });
+
+    it("should return 400 for invalid to date", async () => {
+      const response = await request(app).get("/api/exercise-analytics?to=invalid-date");
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ error: "Invalid 'to' date format" });
     });
 
     it("should return 500 when storage throws an error", async () => {
