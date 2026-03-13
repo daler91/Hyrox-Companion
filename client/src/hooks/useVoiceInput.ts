@@ -30,10 +30,13 @@ declare global {
   }
 }
 
-function getVoiceErrorMessage(errorCode: string): string | null {
+function getVoiceErrorMessage(errorCode: string, micGranted: boolean): string | null {
   switch (errorCode) {
     case "not-allowed":
-      return "Microphone access denied. Please allow microphone permissions in your browser settings (click the lock icon in the address bar) and reload the page.";
+      if (micGranted) {
+        return "Speech recognition service is unavailable. Your microphone is working, but the browser's speech service could not start. Try restarting your browser or using Chrome.";
+      }
+      return "Microphone access denied. Please click the lock icon in the address bar, set Microphone to Allow, and reload the page.";
     case "service-not-allowed":
       return "Speech recognition is not available in this browser or context. Try opening the app directly (not in an embedded frame).";
     case "network":
@@ -47,6 +50,22 @@ function getVoiceErrorMessage(errorCode: string): string | null {
     default:
       return `Voice input error: ${errorCode}. Please try again.`;
   }
+}
+
+function getUserMediaErrorMessage(err: unknown): string {
+  if (err instanceof DOMException) {
+    switch (err.name) {
+      case "NotAllowedError":
+        return "Microphone access denied. Please click the lock icon in the address bar, set Microphone to Allow, and reload the page.";
+      case "NotFoundError":
+        return "No microphone found. Please connect a microphone and try again.";
+      case "NotReadableError":
+        return "Microphone is in use by another application. Please close other apps using the mic and try again.";
+      default:
+        return `Could not access microphone: ${err.message}`;
+    }
+  }
+  return "Could not access microphone. Please check your browser settings and try again.";
 }
 
 interface UseVoiceInputOptions {
@@ -76,9 +95,21 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
     setIsSupported(!!SpeechRecognition);
   }, []);
 
-  const startListening = useCallback(() => {
+  const micGrantedRef = useRef(false);
+
+  const startListening = useCallback(async () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return;
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(track => track.stop());
+      micGrantedRef.current = true;
+    } catch (err) {
+      micGrantedRef.current = false;
+      onErrorRef.current?.(getUserMediaErrorMessage(err));
+      return;
+    }
 
     if (recognitionRef.current) {
       recognitionRef.current.abort();
@@ -119,7 +150,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      const message = getVoiceErrorMessage(event.error);
+      const message = getVoiceErrorMessage(event.error, micGrantedRef.current);
       if (message) {
         onErrorRef.current?.(message);
       }
