@@ -88,5 +88,4 @@ async function migrateUserId(oldId: string, newId: string): Promise<void> {
 
     await tx.delete(users).where(eq(users.id, oldId));
   });
-  console.log(`Migrated user ID from ${oldId} to ${newId}`);
 }
