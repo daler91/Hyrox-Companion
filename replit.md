@@ -53,6 +53,14 @@ When Cypress runs, `window.Cypress` is detected at module load time. This causes
 - Cypress `setupAuthIntercepts()` stubs the `/api/auth/user` endpoint to return a mock user
 - Backend auth is NOT bypassed — API routes still enforce authentication via Clerk middleware
 
+### Voice Input
+The app supports browser-native speech recognition for hands-free interaction via the Web Speech API (`SpeechRecognition`). Key files:
+- `client/src/hooks/useVoiceInput.ts` — Reusable hook wrapping the SpeechRecognition API with start/stop/toggle, interim transcript, and browser support detection
+- `client/src/components/VoiceButton.tsx` — Microphone button component with listening state feedback
+- Integrated into `ChatInput.tsx` (AI Coach chat) and `LogWorkout.tsx` (free-text workout dictation)
+- The "Voice" mode button on the Log Workout page switches to free-text mode and starts listening automatically
+- Interim transcripts are shown separately (not mixed into the textarea value) to prevent state corruption
+
 ### AI Integration
 The Google Gemini API (gemini-3-flash-preview model) powers the AI features. This includes an AI training coach that provides Hyrox-specific advice, workout analysis, and pacing strategies, as well as AI text-to-exercise parsing for converting free-text workout descriptions into structured data. The AI also benefits from custom exercise recognition based on user-saved names. The server-side implementation manages conversation history and provides personalized training context to the AI, including user stats and recent workout data.
 

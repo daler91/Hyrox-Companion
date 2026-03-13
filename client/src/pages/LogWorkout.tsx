@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,8 +8,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { ExerciseSelector } from "@/components/ExerciseSelector";
 import { useToast } from "@/hooks/use-toast";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
-import { Save, ArrowLeft, Loader2, Dumbbell, Type, Sparkles } from "lucide-react";
+import { Save, ArrowLeft, Loader2, Dumbbell, Type, Sparkles, Mic } from "lucide-react";
 import { Link, useLocation } from "wouter";
+import { useVoiceInput } from "@/hooks/useVoiceInput";
+import { VoiceButton } from "@/components/VoiceButton";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   DndContext,
@@ -50,6 +52,17 @@ export default function LogWorkout() {
     parseMutation,
   } = useWorkoutEditor();
 
+  const handleVoiceResult = useCallback((transcript: string) => {
+    setFreeText(prev => {
+      const separator = prev && !prev.endsWith(" ") && !prev.endsWith("\n") ? " " : "";
+      return prev + separator + transcript;
+    });
+  }, []);
+
+  const { isListening, isSupported, interimTranscript, startListening, stopListening, toggleListening } = useVoiceInput({
+    onResult: handleVoiceResult,
+  });
+
   const saveMutation = useMutation({
     mutationFn: async (workoutData: Record<string, any>) => {
       const response = await apiRequest("POST", "/api/workouts", workoutData);
@@ -74,6 +87,8 @@ export default function LogWorkout() {
   });
 
   const handleSave = () => {
+    if (isListening) stopListening();
+
     if (!title.trim()) {
       toast({
         title: "Missing title",
@@ -168,7 +183,10 @@ export default function LogWorkout() {
         <Button
           variant={useTextMode ? "outline" : "default"}
           size="sm"
-          onClick={() => setUseTextMode(false)}
+          onClick={() => {
+            if (isListening) stopListening();
+            setUseTextMode(false);
+          }}
           data-testid="button-mode-exercises"
         >
           <Dumbbell className="h-4 w-4 mr-1" />
@@ -177,29 +195,70 @@ export default function LogWorkout() {
         <Button
           variant={useTextMode ? "default" : "outline"}
           size="sm"
-          onClick={() => setUseTextMode(true)}
+          onClick={() => {
+            if (isListening) stopListening();
+            setUseTextMode(true);
+          }}
           data-testid="button-mode-freetext"
         >
           <Type className="h-4 w-4 mr-1" />
           Free Text
         </Button>
+        {isSupported && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if (!useTextMode) setUseTextMode(true);
+              if (!isListening) {
+                setTimeout(() => startListening(), 100);
+              }
+            }}
+            data-testid="button-mode-voice"
+          >
+            <Mic className="h-4 w-4 mr-1" />
+            Voice
+          </Button>
+        )}
       </div>
 
       {useTextMode ? (
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Workout Description</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg">Workout Description</CardTitle>
+              {isSupported && (
+                <VoiceButton
+                  isListening={isListening}
+                  isSupported={isSupported}
+                  onClick={toggleListening}
+                  className=""
+                />
+              )}
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
+            {isListening && (
+              <div className="flex items-center gap-2 text-sm text-primary bg-primary/10 rounded-md px-3 py-2" data-testid="voice-listening-indicator">
+                <Mic className="h-4 w-4 animate-pulse" />
+                <span>Listening... speak your workout</span>
+              </div>
+            )}
             <Textarea
-              placeholder={"Describe your workout, e.g.:\n4x8 back squat at 70kg\n3x10 bent over rows at 50kg\n5km tempo run in 25 min\n1000m skierg"}
+              placeholder={isListening ? "Listening... describe your workout" : "Describe your workout, e.g.:\n4x8 back squat at 70kg\n3x10 bent over rows at 50kg\n5km tempo run in 25 min\n1000m skierg"}
               value={freeText}
               onChange={(e) => setFreeText(e.target.value)}
               className="min-h-[120px]"
               data-testid="input-freetext"
             />
+            {isListening && interimTranscript && (
+              <div className="px-3 py-1 text-xs text-muted-foreground italic truncate" data-testid="voice-interim-freetext">
+                {interimTranscript}
+              </div>
+            )}
             <Button
               onClick={() => {
+                if (isListening) stopListening();
                 if (!freeText.trim()) {
                   toast({ title: "No text", description: "Please describe your workout first.", variant: "destructive" });
                   return;
@@ -219,7 +278,9 @@ export default function LogWorkout() {
               {parseMutation.isPending ? "Parsing with AI..." : "Parse with AI"}
             </Button>
             <p className="text-xs text-muted-foreground">
-              AI will convert your text into structured exercises you can review and edit before saving.
+              {isSupported
+                ? "Use the microphone to dictate your workout, or type it. AI will convert it into structured exercises."
+                : "AI will convert your text into structured exercises you can review and edit before saving."}
             </p>
           </CardContent>
         </Card>
