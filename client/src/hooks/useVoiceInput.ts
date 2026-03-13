@@ -73,27 +73,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
 
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      setIsSupported(false);
-      return;
-    }
-
-    setIsSupported(true);
-
-    (async () => {
-      try {
-        if (navigator.permissions) {
-          const status = await navigator.permissions.query({ name: "microphone" as PermissionName });
-          if (status.state === "denied") {
-            setIsSupported(false);
-          }
-          status.addEventListener("change", () => {
-            setIsSupported(status.state !== "denied");
-          });
-        }
-      } catch {
-      }
-    })();
+    setIsSupported(!!SpeechRecognition);
   }, []);
 
   const startListening = useCallback(async () => {
