@@ -15,7 +15,7 @@ const STRAVA_REDIRECT_URI = process.env.REPLIT_DOMAINS
 const STATE_SECRET = process.env.CLERK_SECRET_KEY || crypto.randomBytes(32).toString("hex");
 const STATE_MAX_AGE_MS = 10 * 60 * 1000;
 
-function createSignedState(userId: string): string {
+export function createSignedState(userId: string): string {
   const timestamp = Date.now().toString(36);
   const nonce = crypto.randomBytes(8).toString("hex");
   const payload = `${userId}:${timestamp}:${nonce}`;
@@ -23,7 +23,7 @@ function createSignedState(userId: string): string {
   return `${payload}:${signature}`;
 }
 
-function verifySignedState(state: string): { userId: string } | null {
+export function verifySignedState(state: string): { userId: string } | null {
   const parts = state.split(":");
   if (parts.length !== 4) return null;
   const [userId, timestamp, nonce, signature] = parts;
