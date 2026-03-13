@@ -15,14 +15,16 @@ export function useCombineWorkouts() {
       const response = await apiRequest("POST", "/api/workouts", newWorkout);
       const created = await response.json();
 
+      const deletePromises = [];
       for (const entry of entriesToDelete) {
         if (entry.workoutLogId) {
-          await apiRequest("DELETE", `/api/workouts/${entry.workoutLogId}`);
+          deletePromises.push(apiRequest("DELETE", `/api/workouts/${entry.workoutLogId}`));
         }
         if (entry.planDayId) {
-          await apiRequest("PATCH", `/api/plans/days/${entry.planDayId}/status`, { status: "skipped" });
+          deletePromises.push(apiRequest("PATCH", `/api/plans/days/${entry.planDayId}/status`, { status: "skipped" }));
         }
       }
+      await Promise.all(deletePromises);
 
       return created;
     },
