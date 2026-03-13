@@ -47,13 +47,6 @@ export function expandExercisesToSetRows(exercises: any[], workoutLogId: string)
   return rows;
 }
 
-export async function upsertCustomExercisesFromSets(exercises: any[], userId: string): Promise<void> {
-  for (const ex of exercises) {
-    if (ex.exerciseName === "custom" && ex.customLabel) {
-      await storage.upsertCustomExercise({ userId, name: ex.customLabel, category: ex.category || "conditioning" });
-    }
-  }
-}
 
 export async function reparseWorkout(
   workout: { id: string; mainWorkout?: string | null; accessory?: string | null },
