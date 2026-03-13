@@ -3,6 +3,11 @@ import { toDateStr } from "./types";
 
 const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
 
+// Exported for testing only
+export function clearRateLimitBuckets() {
+  rateLimitBuckets.clear();
+}
+
 export function rateLimiter(category: string, maxRequests: number, windowMs: number = 60000) {
   return (req: any, res: Response, next: NextFunction) => {
     const identifier = req.auth?.userId || req.ip;
