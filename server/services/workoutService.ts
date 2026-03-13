@@ -106,13 +106,22 @@ export async function createWorkout(
       const exerciseSetData = expandExercisesToSetRows(exercises, log.id);
       const savedSets = await tx.insert(exerciseSets).values(exerciseSetData).returning();
 
-      for (const ex of exercises) {
-        if (ex.exerciseName === "custom" && ex.customLabel) {
-          await tx
-            .insert(customExercises)
-            .values({ userId, name: ex.customLabel, category: ex.category || "conditioning" })
-            .onConflictDoNothing();
-        }
+      const customExsToInsert = exercises
+        .filter((ex) => ex.exerciseName === "custom" && ex.customLabel)
+        .map((ex) => ({
+          userId,
+          name: ex.customLabel,
+          category: ex.category || "conditioning",
+        }));
+
+      // Deduplicate by name to prevent redundant inserts in the same bulk operation
+      const uniqueCustomExs = Array.from(new Map(customExsToInsert.map(item => [item.name, item])).values());
+
+      if (uniqueCustomExs.length > 0) {
+        await tx
+          .insert(customExercises)
+          .values(uniqueCustomExs)
+          .onConflictDoNothing();
       }
 
       return { ...log, exerciseSets: savedSets };
@@ -148,13 +157,22 @@ export async function updateWorkout(
         const exerciseSetData = expandExercisesToSetRows(exercises, log.id);
         const savedSets = await tx.insert(exerciseSets).values(exerciseSetData).returning();
 
-        for (const ex of exercises) {
-          if (ex.exerciseName === "custom" && ex.customLabel) {
-            await tx
-              .insert(customExercises)
-              .values({ userId, name: ex.customLabel, category: ex.category || "conditioning" })
-              .onConflictDoNothing();
-          }
+        const customExsToInsert = exercises
+          .filter((ex) => ex.exerciseName === "custom" && ex.customLabel)
+          .map((ex) => ({
+            userId,
+            name: ex.customLabel,
+            category: ex.category || "conditioning",
+          }));
+
+        // Deduplicate by name to prevent redundant inserts in the same bulk operation
+        const uniqueCustomExs = Array.from(new Map(customExsToInsert.map(item => [item.name, item])).values());
+
+        if (uniqueCustomExs.length > 0) {
+          await tx
+            .insert(customExercises)
+            .values(uniqueCustomExs)
+            .onConflictDoNothing();
         }
 
         return { ...log, exerciseSets: savedSets };
