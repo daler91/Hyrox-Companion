@@ -203,7 +203,7 @@ export default function WorkoutDetailDialog({
           isSaving={isSaving}
           isDeleting={isDeleting}
           onEdit={() => setIsEditing(true)}
-          onCancelEdit={() => setIsEditing(false)}
+          onCancelEdit={() => { stopAllVoiceRef.current?.(); setIsEditing(false); }}
           onSave={handleSave}
           onDelete={() => setConfirmingDelete(true)}
           onClose={handleClose}

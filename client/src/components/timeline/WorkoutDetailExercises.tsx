@@ -267,7 +267,7 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
           variant={useTextMode ? "outline" : "default"}
           size="sm"
           onClick={() => {
-            if (isMainListening) stopMainListening();
+            stopAllVoice();
             setUseTextMode(false);
           }}
           data-testid="button-mode-exercises"
@@ -279,7 +279,7 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
           variant={useTextMode ? "default" : "outline"}
           size="sm"
           onClick={() => {
-            if (isMainListening) stopMainListening();
+            stopAllVoice();
             setUseTextMode(true);
           }}
           data-testid="button-mode-freetext"
