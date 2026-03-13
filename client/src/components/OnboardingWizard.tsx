@@ -66,6 +66,16 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
     if (step === "goal") setStep("plan");
   };
 
+  const handleSkip = () => {
+    markComplete();
+    onComplete("skip");
+  };
+
+  const handleImportPlan = () => {
+    markComplete();
+    onComplete("import");
+  };
+
   const idx = STEPS.indexOf(step);
   const total = step === "schedule" ? 5 : 4;
 
@@ -87,7 +97,7 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
           {step === "welcome" && <WelcomeStep />}
           {step === "units" && <UnitsStep weightUnit={weightUnit} distanceUnit={distanceUnit} onWeightUnitChange={setWeightUnit} onDistanceUnitChange={setDistanceUnit} />}
           {step === "goal" && <GoalStep selectedGoal={selectedGoal} onGoalChange={setSelectedGoal} />}
-          {step === "plan" && <PlanStep isPending={sampleMutation.isPending} onUseSamplePlan={() => sampleMutation.mutate()} onImportPlan={() => { markComplete(); onComplete("import"); }} onSkip={() => { markComplete(); onComplete("skip"); }} />}
+          {step === "plan" && <PlanStep isPending={sampleMutation.isPending} onUseSamplePlan={() => sampleMutation.mutate()} onImportPlan={handleImportPlan} onSkip={handleSkip} />}
           {step === "schedule" && <ScheduleStep startDate={startDate} onStartDateChange={setStartDate} />}
         </div>
 
