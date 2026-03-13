@@ -28,7 +28,7 @@ interface StravaActivity {
   achievement_count?: number;
 }
 
-function formatStravaDistance(meters: number, distanceUnit: DistanceUnit): string {
+export function formatStravaDistance(meters: number, distanceUnit: DistanceUnit): string {
   const km = meters / 1000;
   if (distanceUnit === "miles") {
     const miles = km * 0.621371;
