@@ -49,18 +49,29 @@ router.post("/api/workouts/batch-reparse", isAuthenticated, async (req: any, res
 
     let parsed = 0;
     let failed = 0;
-    for (const workout of workouts) {
-      try {
-        const result = await reparseWorkout(workout, weightUnit);
-        if (result) {
-          parsed++;
+
+    // Process workouts concurrently in chunks to improve performance
+    // while preventing overload of the Gemini AI service and database
+    const CONCURRENCY_LIMIT = 5;
+    for (let i = 0; i < workouts.length; i += CONCURRENCY_LIMIT) {
+      const chunk = workouts.slice(i, i + CONCURRENCY_LIMIT);
+
+      const chunkResults = await Promise.allSettled(
+        chunk.map(workout => reparseWorkout(workout, weightUnit))
+      );
+
+      chunkResults.forEach((result, index) => {
+        if (result.status === 'fulfilled') {
+          if (result.value) {
+            parsed++;
+          } else {
+            failed++;
+          }
         } else {
+          console.error(`Batch reparse failed for workout ${chunk[index].id}:`, result.reason);
           failed++;
         }
-      } catch (error) {
-        console.error(`Batch reparse failed for workout ${workout.id}:`, error);
-        failed++;
-      }
+      });
     }
     res.json({ total: workouts.length, parsed, failed });
   } catch (error) {
