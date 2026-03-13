@@ -15,20 +15,44 @@ interface CSVRow {
   Notes: string;
 }
 
-function parseCSV(csvText: string): CSVRow[] {
+function getCSVParseOptions() {
+  return {
+    columns: true,
+    skip_empty_lines: true,
+    trim: true,
+    relax_quotes: true,
+    relax_column_count: true,
+  } as const;
+}
+
+function parseCSVContent(csvText: string): unknown[] {
   try {
-    const records = parse(csvText, {
-      columns: true,
-      skip_empty_lines: true,
-      trim: true,
-      relax_quotes: true,
-      relax_column_count: true,
-    });
-    return records as CSVRow[];
+    return parse(csvText, getCSVParseOptions());
   } catch (error) {
     console.error("CSV parse error:", error);
     return [];
   }
+}
+
+function validateAndMapCSVRows(records: unknown[]): CSVRow[] {
+  if (!Array.isArray(records)) return [];
+
+  return records.map(record => {
+    const row = record as Record<string, any>;
+    return {
+      Week: String(row.Week || ''),
+      Day: String(row.Day || ''),
+      Focus: String(row.Focus || ''),
+      "Main Workout": String(row["Main Workout"] || ''),
+      "Accessory/Engine Work": String(row["Accessory/Engine Work"] || row["Accessory"] || ''),
+      Notes: String(row.Notes || ''),
+    } as CSVRow;
+  });
+}
+
+function parseCSV(csvText: string): CSVRow[] {
+  const records = parseCSVContent(csvText);
+  return validateAndMapCSVRows(records);
 }
 
 export async function importPlanFromCSV(
