@@ -158,10 +158,14 @@ export class PlanStorage {
     if (dateUpdates.length === 0) return true;
 
     return await db.transaction(async (tx) => {
-      const caseParts = dateUpdates.map(u => sql`WHEN ${u.id} THEN ${u.scheduledDate}::date`);
-      const caseExpr = sql.join(caseParts, sql` `);
-      const allIds = dateUpdates.map(u => u.id);
-      await tx.execute(sql`UPDATE plan_days SET scheduled_date = CASE id ${caseExpr} END WHERE id IN ${allIds}`);
+      // Secure batch update using individual parameterized queries within the transaction
+      await Promise.all(
+        dateUpdates.map(u =>
+          tx.update(planDays)
+            .set({ scheduledDate: u.scheduledDate })
+            .where(eq(planDays.id, u.id))
+        )
+      );
 
       const resetUpdateIds = dateUpdates.filter(u => u.resetStatus).map(u => u.id);
       if (resetUpdateIds.length > 0) {
