@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { isAuthenticated } from "../clerkAuth";
+import { rateLimiter } from "../routeUtils";
 import { storage } from "../storage";
 import { insertWorkoutLogSchema, updateWorkoutLogSchema } from "@shared/schema";
 import { generateCSV, generateJSON } from "../services/exportService";
@@ -135,7 +136,7 @@ router.get("/api/workouts/:id", isAuthenticated, async (req: any, res) => {
   }
 });
 
-router.post("/api/workouts", isAuthenticated, async (req: any, res) => {
+router.post("/api/workouts", isAuthenticated, rateLimiter("workout", 40), async (req: any, res) => {
   try {
     const { exercises, ...workoutData } = req.body;
     const parseResult = insertWorkoutLogSchema.safeParse(workoutData);
