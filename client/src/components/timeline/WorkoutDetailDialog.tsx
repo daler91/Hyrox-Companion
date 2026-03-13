@@ -9,7 +9,8 @@ import {
   exerciseToPayload,
 } from "@/hooks/useWorkoutEditor";
 import { WorkoutDetailHeader } from "./WorkoutDetailHeader";
-import { exerciseSetsToStructured, WorkoutDetailView, WorkoutDetailEditForm } from "./WorkoutDetailExercises";
+import { WorkoutDetailView, WorkoutDetailEditForm } from "./WorkoutDetailExercises";
+import { exerciseSetsToStructured } from "@/lib/exerciseUtils";
 import { StatusChangeSection, WorkoutDetailFooter, DeleteConfirmDialog } from "./WorkoutDetailActions";
 
 interface WorkoutDetailDialogProps {
