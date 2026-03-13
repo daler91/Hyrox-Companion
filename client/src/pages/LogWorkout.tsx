@@ -226,13 +226,17 @@ export default function LogWorkout() {
           <Button
             variant="outline"
             size="sm"
-            disabled={permissionDenied}
             onClick={() => {
+              if (permissionDenied) {
+                handleVoiceError("Microphone access is blocked. Please allow microphone permissions in your browser settings (click the lock icon in the address bar) and reload the page.");
+                return;
+              }
               if (!useTextMode) setUseTextMode(true);
               if (!isListening) startListening();
             }}
+            className={permissionDenied ? "opacity-50" : ""}
             data-testid="button-mode-voice"
-            title={permissionDenied ? "Microphone blocked — allow in browser settings" : "Use voice input"}
+            title={permissionDenied ? "Microphone blocked — tap for details" : "Use voice input"}
           >
             <Mic className="h-4 w-4 mr-1" />
             Voice
@@ -250,6 +254,7 @@ export default function LogWorkout() {
                 isSupported={isSupported}
                 permissionDenied={permissionDenied}
                 onClick={toggleListening}
+                onPermissionDeniedClick={() => handleVoiceError("Microphone access is blocked. Please allow microphone permissions in your browser settings (click the lock icon in the address bar) and reload the page.")}
                 className=""
               />
             </div>
@@ -361,6 +366,7 @@ export default function LogWorkout() {
               isSupported={isNotesSupported}
               permissionDenied={isNotesDenied}
               onClick={toggleNotesListening}
+              onPermissionDeniedClick={() => handleVoiceError("Microphone access is blocked. Please allow microphone permissions in your browser settings (click the lock icon in the address bar) and reload the page.")}
               data-testid="button-voice-notes"
             />
           </div>

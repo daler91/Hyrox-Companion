@@ -22,6 +22,10 @@ export function VoiceFieldButton({ onTranscript, onStopRef, size = "icon", class
     toast({ title: "Voice Input", description: message, variant: "destructive" });
   }, [toast]);
 
+  const handlePermissionDenied = useCallback(() => {
+    toast({ title: "Voice Input", description: "Microphone access is blocked. Please allow microphone permissions in your browser settings (click the lock icon in the address bar) and reload the page.", variant: "destructive" });
+  }, [toast]);
+
   const { isListening, isSupported, permissionDenied, stopListening, toggleListening } = useVoiceInput({
     onResult: handleResult,
     onError: handleError,
@@ -37,6 +41,7 @@ export function VoiceFieldButton({ onTranscript, onStopRef, size = "icon", class
       isSupported={isSupported}
       permissionDenied={permissionDenied}
       onClick={toggleListening}
+      onPermissionDeniedClick={handlePermissionDenied}
       size={size}
       className={className}
       data-testid={dataTestId}

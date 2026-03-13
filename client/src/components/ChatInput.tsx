@@ -72,6 +72,7 @@ export function ChatInput({ onSend, isLoading, placeholder = "Ask about your tra
           isSupported={isSupported}
           permissionDenied={permissionDenied}
           onClick={toggleListening}
+          onPermissionDeniedClick={() => handleVoiceError("Microphone access is blocked. Please allow microphone permissions in your browser settings (click the lock icon in the address bar) and reload the page.")}
         />
         <Button
           type="submit"

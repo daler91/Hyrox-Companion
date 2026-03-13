@@ -299,14 +299,18 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
           <Button
             variant="outline"
             size="sm"
-            disabled={mainPermDenied}
             onClick={() => {
+              if (mainPermDenied) {
+                handleVoiceError("Microphone access is blocked. Please allow microphone permissions in your browser settings (click the lock icon in the address bar) and reload the page.");
+                return;
+              }
               stopAllVoice();
               if (!useTextMode) setUseTextMode(true);
               startMainListening();
             }}
+            className={mainPermDenied ? "opacity-50" : ""}
             data-testid="button-detail-mode-voice"
-            title={mainPermDenied ? "Microphone blocked — allow in browser settings" : "Use voice input"}
+            title={mainPermDenied ? "Microphone blocked — tap for details" : "Use voice input"}
           >
             <Mic className="h-4 w-4 mr-1" />
             Voice
@@ -341,6 +345,7 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
               isSupported={isSupported}
               permissionDenied={mainPermDenied}
               onClick={toggleMainListening}
+              onPermissionDeniedClick={() => handleVoiceError("Microphone access is blocked. Please allow microphone permissions in your browser settings (click the lock icon in the address bar) and reload the page.")}
               className="absolute top-2 right-2"
             />
           </div>
