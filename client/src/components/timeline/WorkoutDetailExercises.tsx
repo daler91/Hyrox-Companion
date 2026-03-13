@@ -292,8 +292,9 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
             variant="outline"
             size="sm"
             onClick={() => {
+              stopAllVoice();
               if (!useTextMode) setUseTextMode(true);
-              if (!isMainListening) startMainListening();
+              startMainListening();
             }}
             data-testid="button-detail-mode-voice"
           >

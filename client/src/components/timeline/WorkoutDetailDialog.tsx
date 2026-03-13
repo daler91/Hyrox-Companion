@@ -81,13 +81,14 @@ export default function WorkoutDetailDialog({
     }
   }, [entry, resetEditor]);
 
+  const stopAllVoiceRef = useRef<(() => void) | null>(null);
+
   if (!entry) return null;
 
   const hasPlanDayId = !!entry.planDayId;
   const hasWorkoutLogId = !!entry.workoutLogId;
   const canEdit = hasPlanDayId || hasWorkoutLogId;
   const canDelete = hasPlanDayId || hasWorkoutLogId;
-  const stopAllVoiceRef = useRef<(() => void) | null>(null);
 
   const canChangeStatus = hasPlanDayId;
   const grouped = hasStructuredData ? groupExerciseSets(entry.exerciseSets!) : [];
