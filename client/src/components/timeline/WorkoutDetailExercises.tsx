@@ -19,7 +19,7 @@ import { formatSpeed } from "@shared/unitConversion";
 import { ExerciseSelector } from "@/components/ExerciseSelector";
 import { ExerciseInput, type StructuredExercise } from "@/components/ExerciseInput";
 import React from "react";
-import { categoryChipColors, getExerciseLabel, groupExerciseSets, formatExerciseSummary, type GroupedExercise } from "@/lib/exerciseUtils";
+import { categoryChipColors, getExerciseLabel, groupExerciseSets, formatExerciseSummary, exerciseSetsToStructured, type GroupedExercise } from "@/lib/exerciseUtils";
 import {
   DndContext,
   closestCenter,
@@ -35,36 +35,6 @@ import { CSS } from "@dnd-kit/utilities";
 import type { DragEndEvent } from "@dnd-kit/core";
 import type { UseMutationResult } from "@tanstack/react-query";
 
-export function exerciseSetsToStructured(dbSets: ExerciseSet[]): { names: string[]; data: Record<string, StructuredExercise> } {
-  const groups = groupExerciseSets(dbSets);
-  const names: string[] = [];
-  const data: Record<string, StructuredExercise> = {};
-  const counter = new Map<string, number>();
-  for (const group of groups) {
-    const baseName = group.exerciseName === "custom" && group.customLabel
-      ? `custom:${group.customLabel}`
-      : group.exerciseName;
-    const count = (counter.get(baseName) || 0) + 1;
-    counter.set(baseName, count);
-    const key = `${baseName}__${count}`;
-    names.push(key);
-    data[key] = {
-      exerciseName: group.exerciseName as ExerciseName,
-      category: group.category,
-      customLabel: group.customLabel || undefined,
-      confidence: group.confidence ?? undefined,
-      sets: group.sets.map(s => ({
-        setNumber: s.setNumber,
-        reps: s.reps ?? undefined,
-        weight: s.weight ?? undefined,
-        distance: s.distance ?? undefined,
-        time: s.time ?? undefined,
-        notes: s.notes ?? undefined,
-      })),
-    };
-  }
-  return { names, data };
-}
 
 interface SortableDialogBlockProps {
   blockId: string;
