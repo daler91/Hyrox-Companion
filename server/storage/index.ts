@@ -26,6 +26,7 @@ class DatabaseStorage implements IStorage {
   updateStravaLastSync = this.userStorage.updateStravaLastSync.bind(this.userStorage);
   getCustomExercises = this.userStorage.getCustomExercises.bind(this.userStorage);
   upsertCustomExercise = this.userStorage.upsertCustomExercise.bind(this.userStorage);
+  upsertCustomExercises = this.userStorage.upsertCustomExercises.bind(this.userStorage);
   updateLastWeeklySummaryAt = this.userStorage.updateLastWeeklySummaryAt.bind(this.userStorage);
   updateLastMissedReminderAt = this.userStorage.updateLastMissedReminderAt.bind(this.userStorage);
   getUsersWithEmailNotifications = this.userStorage.getUsersWithEmailNotifications.bind(this.userStorage);

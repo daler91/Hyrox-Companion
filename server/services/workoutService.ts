@@ -48,10 +48,22 @@ export function expandExercisesToSetRows(exercises: any[], workoutLogId: string)
 }
 
 export async function upsertCustomExercisesFromSets(exercises: any[], userId: string): Promise<void> {
-  for (const ex of exercises) {
-    if (ex.exerciseName === "custom" && ex.customLabel) {
-      await storage.upsertCustomExercise({ userId, name: ex.customLabel, category: ex.category || "conditioning" });
-    }
+  const seen = new Set<string>();
+  const customExs = exercises
+    .filter((ex) => {
+      if (ex.exerciseName !== "custom" || !ex.customLabel) return false;
+      if (seen.has(ex.customLabel)) return false;
+      seen.add(ex.customLabel);
+      return true;
+    })
+    .map((ex) => ({
+      userId,
+      name: ex.customLabel,
+      category: ex.category || "conditioning",
+    }));
+
+  if (customExs.length > 0) {
+    await storage.upsertCustomExercises(customExs);
   }
 }
 
@@ -106,13 +118,22 @@ export async function createWorkout(
       const exerciseSetData = expandExercisesToSetRows(exercises, log.id);
       const savedSets = await tx.insert(exerciseSets).values(exerciseSetData).returning();
 
-      for (const ex of exercises) {
-        if (ex.exerciseName === "custom" && ex.customLabel) {
-          await tx
-            .insert(customExercises)
-            .values({ userId, name: ex.customLabel, category: ex.category || "conditioning" })
-            .onConflictDoNothing();
-        }
+      const seen = new Set<string>();
+      const customExs = exercises
+        .filter((ex) => {
+          if (ex.exerciseName !== "custom" || !ex.customLabel) return false;
+          if (seen.has(ex.customLabel)) return false;
+          seen.add(ex.customLabel);
+          return true;
+        })
+        .map((ex) => ({
+          userId,
+          name: ex.customLabel,
+          category: ex.category || "conditioning",
+        }));
+
+      if (customExs.length > 0) {
+        await tx.insert(customExercises).values(customExs).onConflictDoNothing();
       }
 
       return { ...log, exerciseSets: savedSets };
@@ -148,13 +169,22 @@ export async function updateWorkout(
         const exerciseSetData = expandExercisesToSetRows(exercises, log.id);
         const savedSets = await tx.insert(exerciseSets).values(exerciseSetData).returning();
 
-        for (const ex of exercises) {
-          if (ex.exerciseName === "custom" && ex.customLabel) {
-            await tx
-              .insert(customExercises)
-              .values({ userId, name: ex.customLabel, category: ex.category || "conditioning" })
-              .onConflictDoNothing();
-          }
+        const seen = new Set<string>();
+        const customExs = exercises
+          .filter((ex) => {
+            if (ex.exerciseName !== "custom" || !ex.customLabel) return false;
+            if (seen.has(ex.customLabel)) return false;
+            seen.add(ex.customLabel);
+            return true;
+          })
+          .map((ex) => ({
+            userId,
+            name: ex.customLabel,
+            category: ex.category || "conditioning",
+          }));
+
+        if (customExs.length > 0) {
+          await tx.insert(customExercises).values(customExs).onConflictDoNothing();
         }
 
         return { ...log, exerciseSets: savedSets };

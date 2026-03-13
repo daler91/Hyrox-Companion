@@ -14,7 +14,7 @@ import {
   type InsertCustomExercise,
 } from "@shared/schema";
 import { db } from "../db";
-import { eq, and, isNotNull } from "drizzle-orm";
+import { eq, and, isNotNull, sql } from "drizzle-orm";
 
 export class UserStorage {
   async getUser(id: string): Promise<User | undefined> {
@@ -129,6 +129,31 @@ export class UserStorage {
       })
       .returning();
     return result;
+  }
+
+  async upsertCustomExercises(data: InsertCustomExercise[]): Promise<CustomExercise[]> {
+    if (data.length === 0) return [];
+
+    // Deduplicate in-memory by name and userId to avoid PostgreSQL error:
+    // "ON CONFLICT DO UPDATE command cannot affect row a second time"
+    const uniqueData = Array.from(
+      data.reduce((map, item) => {
+        const key = `${item.userId}:${item.name}`;
+        if (!map.has(key)) {
+          map.set(key, item);
+        }
+        return map;
+      }, new Map<string, InsertCustomExercise>()).values()
+    );
+
+    return await db
+      .insert(customExercises)
+      .values(uniqueData)
+      .onConflictDoUpdate({
+        target: [customExercises.userId, customExercises.name],
+        set: { category: sql`EXCLUDED.category` },
+      })
+      .returning();
   }
 
   async updateLastWeeklySummaryAt(userId: string): Promise<void> {

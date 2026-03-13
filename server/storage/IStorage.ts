@@ -67,6 +67,7 @@ export interface IStorage {
 
   getCustomExercises(userId: string): Promise<CustomExercise[]>;
   upsertCustomExercise(data: InsertCustomExercise): Promise<CustomExercise>;
+  upsertCustomExercises(data: InsertCustomExercise[]): Promise<CustomExercise[]>;
 
   getWorkoutsWithoutExerciseSets(userId: string): Promise<WorkoutLog[]>;
   getAllExerciseSetsWithDates(userId: string, from?: string, to?: string): Promise<(ExerciseSet & { date: string })[]>;
