@@ -41,6 +41,16 @@ export default function EditWorkoutDialog({
   const editFormRef = useRef(editForm);
   editFormRef.current = editForm;
 
+  const stopMainRef = useRef<(() => void) | null>(null);
+  const stopAccessoryRef = useRef<(() => void) | null>(null);
+  const stopNotesRef = useRef<(() => void) | null>(null);
+
+  const stopAllVoice = useCallback(() => {
+    stopMainRef.current?.();
+    stopAccessoryRef.current?.();
+    stopNotesRef.current?.();
+  }, []);
+
   const appendToField = useCallback((field: keyof EditFormState, text: string) => {
     const current = editFormRef.current;
     const val = current[field];
@@ -51,8 +61,18 @@ export default function EditWorkoutDialog({
     });
   }, [onEditFormChange]);
 
+  const handleSave = useCallback(() => {
+    stopAllVoice();
+    onSave();
+  }, [stopAllVoice, onSave]);
+
+  const handleClose = useCallback(() => {
+    stopAllVoice();
+    onOpenChange(false);
+  }, [stopAllVoice, onOpenChange]);
+
   return (
-    <Dialog open={!!entry} onOpenChange={(open) => !open && onOpenChange(false)}>
+    <Dialog open={!!entry} onOpenChange={(open) => !open && handleClose()}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>
@@ -72,7 +92,7 @@ export default function EditWorkoutDialog({
           <div>
             <div className="flex items-center justify-between mb-1">
               <Label htmlFor="edit-main">Main Workout</Label>
-              <VoiceFieldButton onTranscript={(text) => appendToField("mainWorkout", text)} data-testid="button-voice-edit-main" />
+              <VoiceFieldButton onTranscript={(text) => appendToField("mainWorkout", text)} onStopRef={stopMainRef} data-testid="button-voice-edit-main" />
             </div>
             <Textarea
               id="edit-main"
@@ -85,7 +105,7 @@ export default function EditWorkoutDialog({
           <div>
             <div className="flex items-center justify-between mb-1">
               <Label htmlFor="edit-accessory">Accessory/Engine Work</Label>
-              <VoiceFieldButton onTranscript={(text) => appendToField("accessory", text)} data-testid="button-voice-edit-accessory" />
+              <VoiceFieldButton onTranscript={(text) => appendToField("accessory", text)} onStopRef={stopAccessoryRef} data-testid="button-voice-edit-accessory" />
             </div>
             <Textarea
               id="edit-accessory"
@@ -98,7 +118,7 @@ export default function EditWorkoutDialog({
           <div>
             <div className="flex items-center justify-between mb-1">
               <Label htmlFor="edit-notes">Notes</Label>
-              <VoiceFieldButton onTranscript={(text) => appendToField("notes", text)} data-testid="button-voice-edit-notes" />
+              <VoiceFieldButton onTranscript={(text) => appendToField("notes", text)} onStopRef={stopNotesRef} data-testid="button-voice-edit-notes" />
             </div>
             <Input
               id="edit-notes"
@@ -109,11 +129,11 @@ export default function EditWorkoutDialog({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={handleClose}>
             Cancel
           </Button>
           <Button
-            onClick={onSave}
+            onClick={handleSave}
             disabled={isPending}
             data-testid="button-save-edit"
           >

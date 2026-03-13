@@ -4,18 +4,24 @@ import { VoiceButton } from "@/components/VoiceButton";
 
 interface VoiceFieldButtonProps {
   onTranscript: (text: string) => void;
+  onStopRef?: React.MutableRefObject<(() => void) | null>;
   size?: "icon" | "sm" | "default";
   className?: string;
+  "data-testid"?: string;
 }
 
-export function VoiceFieldButton({ onTranscript, size = "icon", className }: VoiceFieldButtonProps) {
+export function VoiceFieldButton({ onTranscript, onStopRef, size = "icon", className, "data-testid": dataTestId }: VoiceFieldButtonProps) {
   const handleResult = useCallback((transcript: string) => {
     onTranscript(transcript);
   }, [onTranscript]);
 
-  const { isListening, isSupported, toggleListening } = useVoiceInput({
+  const { isListening, isSupported, stopListening, toggleListening } = useVoiceInput({
     onResult: handleResult,
   });
+
+  if (onStopRef) {
+    onStopRef.current = stopListening;
+  }
 
   return (
     <VoiceButton
@@ -24,6 +30,7 @@ export function VoiceFieldButton({ onTranscript, size = "icon", className }: Voi
       onClick={toggleListening}
       size={size}
       className={className}
+      data-testid={dataTestId}
     />
   );
 }

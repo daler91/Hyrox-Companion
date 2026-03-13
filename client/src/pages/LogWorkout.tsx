@@ -12,7 +12,6 @@ import { Save, ArrowLeft, Loader2, Dumbbell, Type, Sparkles, Mic } from "lucide-
 import { Link, useLocation } from "wouter";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
 import { VoiceButton } from "@/components/VoiceButton";
-import { VoiceFieldButton } from "@/components/VoiceFieldButton";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   DndContext,
@@ -64,6 +63,17 @@ export default function LogWorkout() {
     onResult: handleVoiceResult,
   });
 
+  const handleNotesVoiceResult = useCallback((transcript: string) => {
+    setNotes(prev => {
+      const separator = prev && !prev.endsWith(" ") && !prev.endsWith("\n") ? " " : "";
+      return prev + separator + transcript;
+    });
+  }, []);
+
+  const { isListening: isNotesListening, isSupported: isNotesSupported, interimTranscript: notesInterim, stopListening: stopNotesListening, toggleListening: toggleNotesListening } = useVoiceInput({
+    onResult: handleNotesVoiceResult,
+  });
+
   const saveMutation = useMutation({
     mutationFn: async (workoutData: Record<string, any>) => {
       const response = await apiRequest("POST", "/api/workouts", workoutData);
@@ -89,6 +99,7 @@ export default function LogWorkout() {
 
   const handleSave = () => {
     if (isListening) stopListening();
+    if (isNotesListening) stopNotesListening();
 
     if (!title.trim()) {
       toast({
@@ -338,13 +349,11 @@ export default function LogWorkout() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="text-lg">Notes</CardTitle>
-            <VoiceFieldButton
-              onTranscript={(text) => {
-                setNotes(prev => {
-                  const separator = prev && !prev.endsWith(" ") && !prev.endsWith("\n") ? " " : "";
-                  return prev + separator + text;
-                });
-              }}
+            <VoiceButton
+              isListening={isNotesListening}
+              isSupported={isNotesSupported}
+              onClick={toggleNotesListening}
+              data-testid="button-voice-notes"
             />
           </div>
         </CardHeader>
@@ -356,6 +365,11 @@ export default function LogWorkout() {
             className="min-h-[100px]"
             data-testid="input-workout-notes"
           />
+          {isNotesListening && notesInterim && (
+            <p className="text-sm text-muted-foreground mt-1 italic" data-testid="text-notes-interim">
+              {notesInterim}
+            </p>
+          )}
         </CardContent>
       </Card>
 

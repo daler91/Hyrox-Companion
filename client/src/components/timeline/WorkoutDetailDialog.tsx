@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { type TimelineEntry, type WorkoutStatus } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
@@ -87,10 +87,13 @@ export default function WorkoutDetailDialog({
   const hasWorkoutLogId = !!entry.workoutLogId;
   const canEdit = hasPlanDayId || hasWorkoutLogId;
   const canDelete = hasPlanDayId || hasWorkoutLogId;
+  const stopAllVoiceRef = useRef<(() => void) | null>(null);
+
   const canChangeStatus = hasPlanDayId;
   const grouped = hasStructuredData ? groupExerciseSets(entry.exerciseSets!) : [];
 
   const handleSave = () => {
+    stopAllVoiceRef.current?.();
     if (useTextMode) {
       onSave({
         focus: editForm.focus,
@@ -130,6 +133,7 @@ export default function WorkoutDetailDialog({
   };
 
   const handleClose = () => {
+    stopAllVoiceRef.current?.();
     setIsEditing(false);
     setConfirmingDelete(false);
     onClose();
@@ -172,6 +176,7 @@ export default function WorkoutDetailDialog({
             weightUnit={weightUnit}
             distanceUnit={distanceUnit}
             onParseText={handleParseText}
+            stopAllVoiceRef={stopAllVoiceRef}
           />
         ) : (
           <WorkoutDetailView

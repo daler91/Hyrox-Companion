@@ -8,9 +8,10 @@ interface VoiceButtonProps {
   onClick: () => void;
   size?: "icon" | "sm" | "default";
   className?: string;
+  "data-testid"?: string;
 }
 
-export function VoiceButton({ isListening, isSupported, onClick, size = "icon", className }: VoiceButtonProps) {
+export function VoiceButton({ isListening, isSupported, onClick, size = "icon", className, "data-testid": dataTestId }: VoiceButtonProps) {
   if (!isSupported) return null;
 
   return (
@@ -24,7 +25,7 @@ export function VoiceButton({ isListening, isSupported, onClick, size = "icon", 
         isListening && "animate-pulse",
         className,
       )}
-      data-testid="button-voice-input"
+      data-testid={dataTestId || "button-voice-input"}
       aria-label={isListening ? "Stop voice input" : "Start voice input"}
       title={isListening ? "Stop recording" : "Use voice input"}
     >

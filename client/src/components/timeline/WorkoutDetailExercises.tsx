@@ -194,6 +194,7 @@ interface WorkoutDetailEditFormProps {
   weightUnit: "kg" | "lbs";
   distanceUnit: "km" | "miles";
   onParseText: () => void;
+  stopAllVoiceRef?: React.MutableRefObject<(() => void) | null>;
 }
 
 export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
@@ -213,9 +214,13 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
   weightUnit,
   distanceUnit,
   onParseText,
+  stopAllVoiceRef,
 }: WorkoutDetailEditFormProps) {
   const editFormRef = React.useRef(editForm);
   editFormRef.current = editForm;
+
+  const stopAccessoryRef = React.useRef<(() => void) | null>(null);
+  const stopNotesRef = React.useRef<(() => void) | null>(null);
 
   const appendToField = useCallback((field: keyof EditFormState, text: string) => {
     const current = editFormRef.current;
@@ -234,6 +239,16 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
   const { isListening: isMainListening, isSupported, interimTranscript: mainInterim, startListening: startMainListening, stopListening: stopMainListening, toggleListening: toggleMainListening } = useVoiceInput({
     onResult: handleMainVoiceResult,
   });
+
+  const stopAllVoice = useCallback(() => {
+    stopMainListening();
+    stopAccessoryRef.current?.();
+    stopNotesRef.current?.();
+  }, [stopMainListening]);
+
+  if (stopAllVoiceRef) {
+    stopAllVoiceRef.current = stopAllVoice;
+  }
 
   return (
     <div className="space-y-4">
@@ -392,7 +407,7 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
       <div>
         <div className="flex items-center justify-between mb-1">
           <Label htmlFor="detail-accessory">Accessory/Engine Work</Label>
-          <VoiceFieldButton onTranscript={(text) => appendToField("accessory", text)} />
+          <VoiceFieldButton onTranscript={(text) => appendToField("accessory", text)} onStopRef={stopAccessoryRef} data-testid="button-voice-detail-accessory" />
         </div>
         <Textarea
           id="detail-accessory"
@@ -405,7 +420,7 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
       <div>
         <div className="flex items-center justify-between mb-1">
           <Label htmlFor="detail-notes">Notes</Label>
-          <VoiceFieldButton onTranscript={(text) => appendToField("notes", text)} />
+          <VoiceFieldButton onTranscript={(text) => appendToField("notes", text)} onStopRef={stopNotesRef} data-testid="button-voice-detail-notes" />
         </div>
         <Input
           id="detail-notes"
