@@ -12,6 +12,7 @@ interface CSVRow {
   Focus: string;
   "Main Workout": string;
   "Accessory/Engine Work": string;
+  Accessory?: string;
   Notes: string;
 }
 
@@ -44,7 +45,8 @@ function validateAndMapCSVRows(records: unknown[]): CSVRow[] {
       Day: String(row.Day || ''),
       Focus: String(row.Focus || ''),
       "Main Workout": String(row["Main Workout"] || ''),
-      "Accessory/Engine Work": String(row["Accessory/Engine Work"] || row["Accessory"] || ''),
+      "Accessory/Engine Work": String(row["Accessory/Engine Work"] || ''),
+      Accessory: String(row["Accessory"] || ''),
       Notes: String(row.Notes || ''),
     } as CSVRow;
   });
@@ -82,7 +84,7 @@ export async function importPlanFromCSV(
   const days: InsertPlanDay[] = rows
     .filter((row) => row.Week && row.Day)
     .map((row) => {
-      const accessory = (row as any)["Accessory"] || row["Accessory/Engine Work"] || null;
+      const accessory = row.Accessory || row["Accessory/Engine Work"] || null;
       return {
         planId: plan.id,
         weekNumber: parseInt(row.Week) || 1,
