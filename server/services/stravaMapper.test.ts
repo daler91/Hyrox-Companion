@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { mapStravaActivityToWorkout } from "./stravaMapper";
+import { mapStravaActivityToWorkout, formatStravaDistance } from "./stravaMapper";
 import type { StravaActivity } from "./stravaMapper";
 
 function makeActivity(overrides: Partial<StravaActivity> = {}): StravaActivity {
@@ -136,5 +136,29 @@ describe("mapStravaActivityToWorkout", () => {
     expect(result.avgWatts).toBe(200);
     expect(result.sufferScore).toBe(75);
     expect(result.elevationGain).toBe(120);
+  });
+});
+
+describe("formatStravaDistance", () => {
+  it("formats positive distances correctly in km", () => {
+    expect(formatStravaDistance(1000, "km")).toBe("1.00 km");
+    expect(formatStravaDistance(1500, "km")).toBe("1.50 km");
+    expect(formatStravaDistance(5432, "km")).toBe("5.43 km");
+  });
+
+  it("formats positive distances correctly in miles", () => {
+    // 1609.34 meters is ~1.00 miles
+    expect(formatStravaDistance(1609.344, "miles")).toBe("1.00 mi");
+    expect(formatStravaDistance(5000, "miles")).toBe("3.11 mi"); // 5km is ~3.11 miles
+  });
+
+  it("handles 0 meters correctly", () => {
+    expect(formatStravaDistance(0, "km")).toBe("0.00 km");
+    expect(formatStravaDistance(0, "miles")).toBe("0.00 mi");
+  });
+
+  it("handles negative distances correctly", () => {
+    expect(formatStravaDistance(-1000, "km")).toBe("-1.00 km");
+    expect(formatStravaDistance(-1609.344, "miles")).toBe("-1.00 mi");
   });
 });
