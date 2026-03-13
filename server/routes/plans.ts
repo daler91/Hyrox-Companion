@@ -53,7 +53,7 @@ router.post("/api/plans/import", isAuthenticated, rateLimiter("planImport", 5), 
   }
 });
 
-router.post("/api/plans/sample", isAuthenticated, async (req: any, res) => {
+router.post("/api/plans/sample", isAuthenticated, rateLimiter("planSample", 5), async (req: any, res) => {
   try {
     const userId = getUserId(req);
     const fullPlan = await createSamplePlan(userId);
@@ -140,7 +140,7 @@ router.delete("/api/plans/:id", isAuthenticated, async (req: any, res) => {
   }
 });
 
-router.post("/api/plans/:planId/schedule", isAuthenticated, async (req: any, res) => {
+router.post("/api/plans/:planId/schedule", isAuthenticated, rateLimiter("planSchedule", 10), async (req: any, res) => {
   try {
     const parseResult = schedulePlanRequestSchema.safeParse(req.body);
     if (!parseResult.success) {
