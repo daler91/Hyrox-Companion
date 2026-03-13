@@ -13,12 +13,13 @@ import {
   Dumbbell,
   Sparkles,
   GripVertical,
+  Mic,
 } from "lucide-react";
 import { type TimelineEntry, type ExerciseSet, type ExerciseName } from "@shared/schema";
 import { formatSpeed } from "@shared/unitConversion";
 import { ExerciseSelector } from "@/components/ExerciseSelector";
 import { ExerciseInput, type StructuredExercise } from "@/components/ExerciseInput";
-import React from "react";
+import React, { useCallback, useState, useEffect } from "react";
 import { categoryChipColors, getExerciseLabel, groupExerciseSets, formatExerciseSummary, exerciseSetsToStructured, type GroupedExercise } from "@/lib/exerciseUtils";
 import {
   DndContext,
@@ -34,6 +35,9 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import type { DragEndEvent } from "@dnd-kit/core";
 import type { UseMutationResult } from "@tanstack/react-query";
+import { useVoiceInput } from "@/hooks/useVoiceInput";
+import { VoiceButton } from "@/components/VoiceButton";
+import { VoiceFieldButton } from "@/components/VoiceFieldButton";
 
 
 interface SortableDialogBlockProps {
@@ -210,6 +214,27 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
   distanceUnit,
   onParseText,
 }: WorkoutDetailEditFormProps) {
+  const editFormRef = React.useRef(editForm);
+  editFormRef.current = editForm;
+
+  const appendToField = useCallback((field: keyof EditFormState, text: string) => {
+    const current = editFormRef.current;
+    const val = current[field];
+    const separator = val && !val.endsWith(" ") && !val.endsWith("\n") ? " " : "";
+    setEditForm({
+      ...current,
+      [field]: val + separator + text,
+    });
+  }, [setEditForm]);
+
+  const handleMainVoiceResult = useCallback((transcript: string) => {
+    appendToField("mainWorkout", transcript);
+  }, [appendToField]);
+
+  const { isListening: isMainListening, isSupported, interimTranscript: mainInterim, startListening: startMainListening, stopListening: stopMainListening, toggleListening: toggleMainListening } = useVoiceInput({
+    onResult: handleMainVoiceResult,
+  });
+
   return (
     <div className="space-y-4">
       <div>
@@ -226,7 +251,10 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
         <Button
           variant={useTextMode ? "outline" : "default"}
           size="sm"
-          onClick={() => setUseTextMode(false)}
+          onClick={() => {
+            if (isMainListening) stopMainListening();
+            setUseTextMode(false);
+          }}
           data-testid="button-mode-exercises"
         >
           <Dumbbell className="h-4 w-4 mr-1" />
@@ -235,26 +263,67 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
         <Button
           variant={useTextMode ? "default" : "outline"}
           size="sm"
-          onClick={() => setUseTextMode(true)}
+          onClick={() => {
+            if (isMainListening) stopMainListening();
+            setUseTextMode(true);
+          }}
           data-testid="button-mode-freetext"
         >
           <Type className="h-4 w-4 mr-1" />
           Free Text
         </Button>
+        {isSupported && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if (!useTextMode) setUseTextMode(true);
+              if (!isMainListening) startMainListening();
+            }}
+            data-testid="button-detail-mode-voice"
+          >
+            <Mic className="h-4 w-4 mr-1" />
+            Voice
+          </Button>
+        )}
       </div>
 
       {useTextMode ? (
         <div className="space-y-3">
-          <Textarea
-            id="detail-main"
-            value={editForm.mainWorkout}
-            onChange={(e) => setEditForm({ ...editForm, mainWorkout: e.target.value })}
-            rows={3}
-            data-testid="input-detail-main"
-            placeholder={"Describe your workout, e.g.:\n4x8 back squat at 70kg\n5km tempo run in 25 min"}
-          />
+          {isMainListening && (
+            <div className="flex items-center gap-2 text-sm text-primary bg-primary/10 rounded-md px-3 py-2" data-testid="voice-detail-listening-indicator">
+              <Mic className="h-4 w-4 animate-pulse" />
+              <span>Listening... speak your workout</span>
+            </div>
+          )}
+          <div className="relative">
+            <Textarea
+              id="detail-main"
+              value={editForm.mainWorkout}
+              onChange={(e) => setEditForm({ ...editForm, mainWorkout: e.target.value })}
+              rows={3}
+              data-testid="input-detail-main"
+              placeholder={isMainListening ? "Listening... describe your workout" : "Describe your workout, e.g.:\n4x8 back squat at 70kg\n5km tempo run in 25 min"}
+            />
+            {isMainListening && mainInterim && (
+              <div className="px-3 py-1 text-xs text-muted-foreground italic truncate" data-testid="voice-detail-interim">
+                {mainInterim}
+              </div>
+            )}
+            {isSupported && (
+              <VoiceButton
+                isListening={isMainListening}
+                isSupported={isSupported}
+                onClick={toggleMainListening}
+                className="absolute top-2 right-2"
+              />
+            )}
+          </div>
           <Button
-            onClick={onParseText}
+            onClick={() => {
+              if (isMainListening) stopMainListening();
+              onParseText();
+            }}
             disabled={parseMutation.isPending || !editForm.mainWorkout.trim()}
             variant="outline"
             className="w-full"
@@ -268,7 +337,9 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
             {parseMutation.isPending ? "Parsing with AI..." : "Parse with AI"}
           </Button>
           <p className="text-xs text-muted-foreground">
-            AI will convert your text into structured exercises you can review and edit.
+            {isSupported
+              ? "Use the microphone to dictate your workout, or type it. AI will convert it into structured exercises."
+              : "AI will convert your text into structured exercises you can review and edit."}
           </p>
         </div>
       ) : (
@@ -319,7 +390,10 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
       )}
 
       <div>
-        <Label htmlFor="detail-accessory">Accessory/Engine Work</Label>
+        <div className="flex items-center justify-between mb-1">
+          <Label htmlFor="detail-accessory">Accessory/Engine Work</Label>
+          <VoiceFieldButton onTranscript={(text) => appendToField("accessory", text)} />
+        </div>
         <Textarea
           id="detail-accessory"
           value={editForm.accessory}
@@ -329,7 +403,10 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
         />
       </div>
       <div>
-        <Label htmlFor="detail-notes">Notes</Label>
+        <div className="flex items-center justify-between mb-1">
+          <Label htmlFor="detail-notes">Notes</Label>
+          <VoiceFieldButton onTranscript={(text) => appendToField("notes", text)} />
+        </div>
         <Input
           id="detail-notes"
           value={editForm.notes}

@@ -12,6 +12,7 @@ import { Save, ArrowLeft, Loader2, Dumbbell, Type, Sparkles, Mic } from "lucide-
 import { Link, useLocation } from "wouter";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
 import { VoiceButton } from "@/components/VoiceButton";
+import { VoiceFieldButton } from "@/components/VoiceFieldButton";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   DndContext,
@@ -210,9 +211,7 @@ export default function LogWorkout() {
             size="sm"
             onClick={() => {
               if (!useTextMode) setUseTextMode(true);
-              if (!isListening) {
-                setTimeout(() => startListening(), 100);
-              }
+              if (!isListening) startListening();
             }}
             data-testid="button-mode-voice"
           >
@@ -337,7 +336,17 @@ export default function LogWorkout() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Notes</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-lg">Notes</CardTitle>
+            <VoiceFieldButton
+              onTranscript={(text) => {
+                setNotes(prev => {
+                  const separator = prev && !prev.endsWith(" ") && !prev.endsWith("\n") ? " " : "";
+                  return prev + separator + text;
+                });
+              }}
+            />
+          </div>
         </CardHeader>
         <CardContent>
           <Textarea

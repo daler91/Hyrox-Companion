@@ -1,3 +1,4 @@
+import { useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Loader2 } from "lucide-react";
 import type { TimelineEntry } from "@shared/schema";
+import { VoiceFieldButton } from "@/components/VoiceFieldButton";
 
 export interface EditFormState {
   focus: string;
@@ -36,6 +38,19 @@ export default function EditWorkoutDialog({
   onSave,
   isPending,
 }: EditWorkoutDialogProps) {
+  const editFormRef = useRef(editForm);
+  editFormRef.current = editForm;
+
+  const appendToField = useCallback((field: keyof EditFormState, text: string) => {
+    const current = editFormRef.current;
+    const val = current[field];
+    const separator = val && !val.endsWith(" ") && !val.endsWith("\n") ? " " : "";
+    onEditFormChange({
+      ...current,
+      [field]: val + separator + text,
+    });
+  }, [onEditFormChange]);
+
   return (
     <Dialog open={!!entry} onOpenChange={(open) => !open && onOpenChange(false)}>
       <DialogContent>
@@ -55,7 +70,10 @@ export default function EditWorkoutDialog({
             />
           </div>
           <div>
-            <Label htmlFor="edit-main">Main Workout</Label>
+            <div className="flex items-center justify-between mb-1">
+              <Label htmlFor="edit-main">Main Workout</Label>
+              <VoiceFieldButton onTranscript={(text) => appendToField("mainWorkout", text)} data-testid="button-voice-edit-main" />
+            </div>
             <Textarea
               id="edit-main"
               value={editForm.mainWorkout}
@@ -65,7 +83,10 @@ export default function EditWorkoutDialog({
             />
           </div>
           <div>
-            <Label htmlFor="edit-accessory">Accessory/Engine Work</Label>
+            <div className="flex items-center justify-between mb-1">
+              <Label htmlFor="edit-accessory">Accessory/Engine Work</Label>
+              <VoiceFieldButton onTranscript={(text) => appendToField("accessory", text)} data-testid="button-voice-edit-accessory" />
+            </div>
             <Textarea
               id="edit-accessory"
               value={editForm.accessory}
@@ -75,7 +96,10 @@ export default function EditWorkoutDialog({
             />
           </div>
           <div>
-            <Label htmlFor="edit-notes">Notes</Label>
+            <div className="flex items-center justify-between mb-1">
+              <Label htmlFor="edit-notes">Notes</Label>
+              <VoiceFieldButton onTranscript={(text) => appendToField("notes", text)} data-testid="button-voice-edit-notes" />
+            </div>
             <Input
               id="edit-notes"
               value={editForm.notes}
