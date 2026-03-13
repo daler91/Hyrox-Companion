@@ -337,7 +337,7 @@ importers:
         specifier: 5.6.3
         version: 5.6.3
       vite:
-        specifier: ^5.4.20
+        specifier: ^5.4.21
         version: 5.4.21(@types/node@20.16.11)(lightningcss@1.31.1)
       vitest:
         specifier: ^3.0.5
