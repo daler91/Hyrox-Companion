@@ -65,7 +65,8 @@ function getUserMediaErrorMessage(err: unknown): string {
         return `Could not access microphone: ${err.message}`;
     }
   }
-  return "Could not access microphone. Please check your browser settings and try again.";
+  const msg = err instanceof Error ? err.message : String(err);
+  return `Could not access microphone: ${msg}`;
 }
 
 interface UseVoiceInputOptions {
