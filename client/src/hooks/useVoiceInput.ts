@@ -105,22 +105,9 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
     };
   }, []);
 
-  const startListening = useCallback(async () => {
+  const startListening = useCallback(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return;
-
-    try {
-      if (typeof navigator !== "undefined" && navigator.permissions) {
-        const permissionStatus = await navigator.permissions.query(
-          { name: "microphone" as PermissionName }
-        );
-        if (permissionStatus.state === "denied") {
-          onErrorRef.current?.("Microphone access is blocked. Please allow microphone permissions in your browser settings (click the lock icon in the address bar) and try again.");
-          return;
-        }
-      }
-    } catch {
-    }
 
     if (recognitionRef.current) {
       recognitionRef.current.abort();
