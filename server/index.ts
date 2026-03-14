@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/node";
 import express, { type Request, Response, NextFunction } from "express";
 import compression from "compression";
+import helmet from "helmet";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
@@ -26,37 +27,33 @@ declare module "http" {
 
 app.use(compression());
 
-app.use((req, res, next) => {
-  res.setHeader("X-Frame-Options", "SAMEORIGIN");
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
-  res.setHeader("Permissions-Policy", "camera=(), microphone=(self), geolocation=()");
+const isDev = process.env.NODE_ENV !== "production";
+const clerkDomains = "https://*.clerk.accounts.dev https://*.hyroxcompanion.life https://clerk.hyroxcompanion.life";
+const connectSrc = isDev
+  ? ["'self'", clerkDomains, "https://www.strava.com", "https://*.ingest.us.sentry.io", "ws:", "wss:"]
+  : ["'self'", clerkDomains, "https://www.strava.com", "https://*.ingest.us.sentry.io"];
+const scriptSrc = isDev
+  ? ["'self'", "'unsafe-inline'", "'unsafe-eval'", clerkDomains]
+  : ["'self'", "'unsafe-inline'", clerkDomains];
 
-  // 🛡️ Sentinel: Enforce strict transport security (HSTS) on secure connections
-  if (req.secure || req.headers["x-forwarded-proto"] === "https") {
-    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
-  }
-  const isDev = process.env.NODE_ENV !== "production";
-  const clerkDomains = "https://*.clerk.accounts.dev https://*.hyroxcompanion.life https://clerk.hyroxcompanion.life";
-  const connectSrc = isDev
-    ? `connect-src 'self' ${clerkDomains} https://www.strava.com https://*.ingest.us.sentry.io ws: wss:`
-    : `connect-src 'self' ${clerkDomains} https://www.strava.com https://*.ingest.us.sentry.io`;
-  const scriptSrc = isDev
-    ? `script-src 'self' 'unsafe-inline' 'unsafe-eval' ${clerkDomains}`
-    : `script-src 'self' 'unsafe-inline' ${clerkDomains}`;
-  res.setHeader(
-    "Content-Security-Policy",
-    [
-      "default-src 'self'",
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
       scriptSrc,
-      `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com ${clerkDomains}`,
-      "font-src 'self' https://fonts.gstatic.com",
-      "img-src 'self' data: https:",
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", clerkDomains],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      imgSrc: ["'self'", "data:", "https:"],
       connectSrc,
-      `frame-src 'self' ${clerkDomains}`,
-      "worker-src 'self' blob:",
-    ].join("; ")
-  );
+      frameSrc: ["'self'", clerkDomains],
+      workerSrc: ["'self'", "blob:"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+}));
+
+app.use((req, res, next) => {
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(self), geolocation=()");
   next();
 });
 
