@@ -89,6 +89,14 @@ export class WorkoutStorage {
     return log;
   }
 
+  async getWorkoutsByStravaActivityIds(userId: string, stravaActivityIds: string[]): Promise<WorkoutLog[]> {
+    if (stravaActivityIds.length === 0) return [];
+    return await db
+      .select()
+      .from(workoutLogs)
+      .where(and(eq(workoutLogs.userId, userId), inArray(workoutLogs.stravaActivityId, stravaActivityIds)));
+  }
+
   async createExerciseSets(sets: InsertExerciseSet[]): Promise<ExerciseSet[]> {
     if (sets.length === 0) return [];
     return await db.insert(exerciseSets).values(sets).returning();
