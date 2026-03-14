@@ -24,10 +24,8 @@ export async function checkAndSendEmailsForUser(storage: IStorage, user: User): 
       const weekStartStr = toDateStr(weekStart);
       const weekEndStr = toDateStr(weekEnd);
 
-      const [stats, timeline] = await Promise.all([
-        storage.getWeeklyStats(user.id, weekStartStr, weekEndStr),
-        storage.getTimeline(user.id)
-      ]);
+      const stats = await storage.getWeeklyStats(user.id, weekStartStr, weekEndStr);
+      const timeline = await storage.getTimeline(user.id);
       const completedDates = new Set(
         timeline
           .filter(e => e.status === "completed" && e.date)

@@ -80,11 +80,13 @@ async function migrateUserId(oldId: string, newId: string): Promise<void> {
       updatedAt: new Date(),
     });
 
-    await tx.update(trainingPlans).set({ userId: newId }).where(eq(trainingPlans.userId, oldId));
-    await tx.update(workoutLogs).set({ userId: newId }).where(eq(workoutLogs.userId, oldId));
-    await tx.update(customExercises).set({ userId: newId }).where(eq(customExercises.userId, oldId));
-    await tx.update(chatMessages).set({ userId: newId }).where(eq(chatMessages.userId, oldId));
-    await tx.update(stravaConnections).set({ userId: newId }).where(eq(stravaConnections.userId, oldId));
+    await Promise.all([
+      tx.update(trainingPlans).set({ userId: newId }).where(eq(trainingPlans.userId, oldId)),
+      tx.update(workoutLogs).set({ userId: newId }).where(eq(workoutLogs.userId, oldId)),
+      tx.update(customExercises).set({ userId: newId }).where(eq(customExercises.userId, oldId)),
+      tx.update(chatMessages).set({ userId: newId }).where(eq(chatMessages.userId, oldId)),
+      tx.update(stravaConnections).set({ userId: newId }).where(eq(stravaConnections.userId, oldId)),
+    ]);
 
     await tx.delete(users).where(eq(users.id, oldId));
   });
