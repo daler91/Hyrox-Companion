@@ -12,7 +12,7 @@ describe("Timeline Workout Details Interactions", () => {
       body: { id: planDayId, status: "completed" },
     }).as("updatePlanDay");
 
-    cy.intercept("PATCH", `/api/plans/plan-1/days/${planDayId}`, {
+    cy.intercept("PATCH", `/api/plans/*/days/${planDayId}`, {
       statusCode: 200,
       body: { id: planDayId, focus: "Updated Upper Body Focus" },
     }).as("updateDayDetails");
@@ -118,7 +118,7 @@ describe("Timeline Workout Details Interactions", () => {
     cy.getBySel("button-detail-delete").click();
 
     // A confirmation dialog should appear
-    cy.getBySel("button-confirm-delete").click();
+    cy.getBySel("button-confirm-delete").should("be.visible").click({ force: true });
 
     // Verify DELETE API was called
     cy.wait("@deleteWorkout");

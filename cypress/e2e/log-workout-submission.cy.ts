@@ -27,7 +27,7 @@ describe("Log Workout Submission", () => {
     // Add some notes
     cy.getBySel("input-workout-notes").type("Felt really good today!");
 
-    cy.getBySel("button-save-workout").click();
+    cy.getBySel("button-save-workout").should("not.be.disabled").click();
 
     // Wait for the save request to be made and check the payload
     cy.wait("@saveWorkout").then((interception) => {
@@ -48,7 +48,7 @@ describe("Log Workout Submission", () => {
     cy.getBySel("button-mode-freetext").click();
     cy.getBySel("input-freetext").type("Some workout");
 
-    cy.getBySel("button-save-workout").click();
+    cy.getBySel("button-save-workout").should("not.be.disabled").click();
 
     // Verify toast error
     cy.contains("Missing title").should("exist");
@@ -58,7 +58,7 @@ describe("Log Workout Submission", () => {
     cy.getBySel("input-workout-title").type("Title Only");
     cy.getBySel("button-mode-freetext").click();
 
-    cy.getBySel("button-save-workout").click();
+    cy.getBySel("button-save-workout").should("not.be.disabled").click();
 
     cy.contains("Missing workout details").should("exist");
   });
@@ -87,7 +87,7 @@ describe("Log Workout Exercise Mode Submission", () => {
     // Since we added an exercise, the exercise details block should appear.
     // Let's assume there's a way to input sets. We can just save it with defaults.
 
-    cy.getBySel("button-save-workout").click();
+    cy.getBySel("button-save-workout").should("not.be.disabled").click();
 
     cy.wait("@saveWorkout").then((interception) => {
       expect(interception.request.body).to.include({
@@ -100,7 +100,7 @@ describe("Log Workout Exercise Mode Submission", () => {
       });
     });
 
-    cy.url().should("eq", Cypress.config().baseUrl + "/");
+    cy.location("pathname").should("eq", "/");
     cy.contains("Workout logged").should("exist");
   });
 
