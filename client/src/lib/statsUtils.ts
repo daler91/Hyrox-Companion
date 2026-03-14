@@ -19,26 +19,44 @@ export function calculateStats(timeline: TimelineEntry[]): TrainingStats {
   const startOfWeekStr = getStartOfWeekString();
   const endOfWeekStr = getEndOfWeekString();
 
-  const thisWeekEntries = timeline.filter(entry => 
-    isDateInRange(entry.date, startOfWeekStr, endOfWeekStr)
-  );
-
-  const completedThisWeek = thisWeekEntries.filter(e => e.status === "completed").length;
-  const totalThisWeek = thisWeekEntries.length;
+  // ⚡ Bolt Performance Optimization:
+  // Instead of multiple O(N) array filters to compute stats, we iterate
+  // over the timeline exactly once. This reduces overhead, especially
+  // for users with long workout histories.
+  let completedThisWeek = 0;
+  let totalThisWeek = 0;
+  let plannedUpcoming = 0;
+  let totalPastAndToday = 0;
+  let completedPastAndTodayCount = 0;
   
-  const plannedUpcoming = timeline.filter(e => 
-    e.date >= todayStr && e.status === "planned"
-  ).length;
+  const completedDatesSet = new Set<string>();
 
-  // For completion rate: only count entries from today or earlier
-  const pastAndTodayEntries = timeline.filter(e => e.date <= todayStr);
-  const completedPastAndToday = pastAndTodayEntries.filter(e => e.status === "completed");
-  const totalPastAndToday = pastAndTodayEntries.length;
+  for (let i = 0; i < timeline.length; i++) {
+    const entry = timeline[i];
 
-  // For streak calculation: only use completed entries
-  const completedDatesSet = new Set(
-    completedPastAndToday.map(e => e.date)
-  );
+    // Check if in current week
+    if (isDateInRange(entry.date, startOfWeekStr, endOfWeekStr)) {
+      totalThisWeek++;
+      if (entry.status === "completed") {
+        completedThisWeek++;
+      }
+    }
+
+    // Planned upcoming
+    if (entry.date >= todayStr && entry.status === "planned") {
+      plannedUpcoming++;
+    }
+
+    // Past and today entries
+    if (entry.date <= todayStr) {
+      totalPastAndToday++;
+      if (entry.status === "completed") {
+        completedDatesSet.add(entry.date);
+        completedPastAndTodayCount++;
+      }
+    }
+  }
+
   const uniqueDays = Array.from(completedDatesSet).sort().reverse();
   
   let streak = 0;
@@ -61,7 +79,7 @@ export function calculateStats(timeline: TimelineEntry[]): TrainingStats {
     workoutsThisWeek: totalThisWeek,
     completedThisWeek,
     plannedUpcoming,
-    completionRate: totalPastAndToday > 0 ? Math.round((completedPastAndToday.length / totalPastAndToday) * 100) : 0,
+    completionRate: totalPastAndToday > 0 ? Math.round((completedPastAndTodayCount / totalPastAndToday) * 100) : 0,
     currentStreak: streak,
   };
 }
