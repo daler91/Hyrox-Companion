@@ -30,6 +30,10 @@ declare global {
   }
 }
 
+const MAX_RETRIES = 2;
+const RETRY_DELAY_MS = 500;
+const RETRYABLE_ERRORS = new Set(["network", "no-speech"]);
+
 function getVoiceErrorMessage(errorCode: string, micGranted: boolean): string | null {
   switch (errorCode) {
     case "not-allowed":
@@ -86,6 +90,10 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
   const onResultRef = useRef(onResult);
   const onInterimRef = useRef(onInterim);
   const onErrorRef = useRef(onError);
+  const micGrantedRef = useRef(false);
+  const retryCountRef = useRef(0);
+  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stoppedByUserRef = useRef(false);
 
   onResultRef.current = onResult;
   onInterimRef.current = onInterim;
@@ -96,21 +104,16 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
     setIsSupported(!!SpeechRecognition);
   }, []);
 
-  const micGrantedRef = useRef(false);
+  const clearRetryTimeout = useCallback(() => {
+    if (retryTimeoutRef.current !== null) {
+      clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = null;
+    }
+  }, []);
 
-  const startListening = useCallback(async () => {
+  const startRecognition = useCallback(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return;
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach(track => track.stop());
-      micGrantedRef.current = true;
-    } catch (err) {
-      micGrantedRef.current = false;
-      onErrorRef.current?.(getUserMediaErrorMessage(err));
-      return;
-    }
 
     if (recognitionRef.current) {
       recognitionRef.current.abort();
@@ -123,6 +126,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
     recognitionRef.current = recognition;
 
     recognition.onstart = () => {
+      retryCountRef.current = 0;
       setIsListening(true);
     };
 
@@ -151,15 +155,30 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      if (stoppedByUserRef.current) return;
+
+      if (RETRYABLE_ERRORS.has(event.error) && retryCountRef.current < MAX_RETRIES) {
+        retryCountRef.current++;
+        retryTimeoutRef.current = setTimeout(() => {
+          if (!stoppedByUserRef.current) {
+            startRecognition();
+          }
+        }, RETRY_DELAY_MS);
+        return;
+      }
+
       const message = getVoiceErrorMessage(event.error, micGrantedRef.current);
       if (message) {
         onErrorRef.current?.(message);
       }
+      retryCountRef.current = 0;
       setIsListening(false);
       setInterimTranscript("");
     };
 
     recognition.onend = () => {
+      if (stoppedByUserRef.current) return;
+      if (retryTimeoutRef.current !== null) return;
       setIsListening(false);
       setInterimTranscript("");
     };
@@ -168,6 +187,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
       recognition.start();
     } catch (err) {
       recognitionRef.current = null;
+      retryCountRef.current = 0;
       setIsListening(false);
       setInterimTranscript("");
       const msg = err instanceof Error ? err.message : "Failed to start voice input";
@@ -175,14 +195,38 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
     }
   }, [continuous, lang]);
 
+  const startListening = useCallback(async () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+
+    stoppedByUserRef.current = false;
+    retryCountRef.current = 0;
+    clearRetryTimeout();
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(track => track.stop());
+      micGrantedRef.current = true;
+    } catch (err) {
+      micGrantedRef.current = false;
+      onErrorRef.current?.(getUserMediaErrorMessage(err));
+      return;
+    }
+
+    startRecognition();
+  }, [startRecognition, clearRetryTimeout]);
+
   const stopListening = useCallback(() => {
+    stoppedByUserRef.current = true;
+    clearRetryTimeout();
+    retryCountRef.current = 0;
     if (recognitionRef.current) {
       recognitionRef.current.stop();
       recognitionRef.current = null;
     }
     setIsListening(false);
     setInterimTranscript("");
-  }, []);
+  }, [clearRetryTimeout]);
 
   const toggleListening = useCallback(() => {
     if (isListening) {
@@ -194,12 +238,13 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
 
   useEffect(() => {
     return () => {
+      clearRetryTimeout();
       if (recognitionRef.current) {
         recognitionRef.current.abort();
         recognitionRef.current = null;
       }
     };
-  }, []);
+  }, [clearRetryTimeout]);
 
   return {
     isListening,
