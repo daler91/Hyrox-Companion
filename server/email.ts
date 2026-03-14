@@ -202,7 +202,6 @@ export async function sendEmail(to: string, subject: string, html: string): Prom
       console.error('Resend error:', result.error);
       return false;
     }
-    console.log(`Email sent to ${to}: ${subject}`);
     return true;
   } catch (error) {
     console.error('Failed to send email:', error);
