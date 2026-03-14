@@ -124,7 +124,7 @@
     "postcss": "^8.4.47",
     "supertest": "^7.2.2",
     "tailwindcss": "^3.4.17",
-    "tsx": "^4.19.3",
+    "tsx": "^4.21.0",
     "typescript": "5.6.3",
     "vite": "^5.4.21",
     "vitest": "^3.0.5"
@@ -136,6 +136,5 @@
     "overrides": {
       "esbuild": ">=0.25.0"
     }
-
   }
 }
