@@ -46,17 +46,27 @@ function calculateTrainingStats(timeline: TimelineEntry[]) {
   return { completedWorkouts, plannedWorkouts, missedWorkouts, skippedWorkouts, totalWorkouts, completionRate, completedDates };
 }
 
+const hyroxRegex = new RegExp(HYROX_EXERCISES.join('|'), 'gi');
+
 function getExerciseBreakdown(timeline: TimelineEntry[]): Record<string, number> {
   const breakdown: Record<string, number> = {};
   for (const entry of timeline) {
     if (entry.status === "completed" && entry.focus) {
-      const focusLower = entry.focus.toLowerCase();
       let matched = false;
-      for (const exercise of HYROX_EXERCISES) {
-        if (focusLower.includes(exercise)) {
+      let match;
+      hyroxRegex.lastIndex = 0;
+
+      // We only want to count each unique exercise ONCE per workout log entry
+      // to match the previous string.includes() behavior.
+      const seenInEntry = new Set<string>();
+
+      while ((match = hyroxRegex.exec(entry.focus)) !== null) {
+        const exercise = match[0].toLowerCase();
+        if (!seenInEntry.has(exercise)) {
+          seenInEntry.add(exercise);
           breakdown[exercise] = (breakdown[exercise] || 0) + 1;
-          matched = true;
         }
+        matched = true;
       }
       if (!matched) {
         breakdown[entry.focus] = (breakdown[entry.focus] || 0) + 1;
