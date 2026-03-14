@@ -64,7 +64,7 @@ CONDITIONING: burpees, box_jumps, assault_bike, kettlebell_swings, battle_ropes
 
 Categories: hyrox_station, running, strength, conditioning
 
-If an exercise doesn't match any of the above, use "custom" as the exerciseName and put the actual name in customLabel.
+If an exercise doesn't match any of the above, use "custom" as the exerciseName. You MUST use your best judgment to determine the standard, correctly spelled name of that exercise (e.g., fix "bicep culrs" to "Bicep Curls", or "push ups" to "Push-ups") and put that cleaned name in the customLabel field.
 
 Return ONLY a valid JSON array with no markdown formatting. Each element should be:
 {
@@ -95,7 +95,8 @@ IMPORTANT RULES:
 8. For "5km run in 25 min" create 1 set with distance=5000, time=25
 9. Parse ALL exercises mentioned, even if described casually
 10. When weight varies per set (pyramid, ramp up), create individual sets with specific weights
-11. If only "reps" is mentioned without sets count, assume 1 set`;
+11. If only "reps" is mentioned without sets count, assume 1 set
+12. If exerciseName is "custom", YOU MUST provide a clear, standardized exercise name in customLabel. Example: "did 3x10 bicep curlz" -> {"exerciseName": "custom", "customLabel": "Bicep Curls", ...}`;
 
 export const VALID_EXERCISE_NAMES = new Set([
   "skierg", "sled_push", "sled_pull", "burpee_broad_jump", "rowing",
