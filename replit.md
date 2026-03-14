@@ -91,7 +91,7 @@ AI response robustness (`server/gemini.ts`):
 - **CSS Processing**: PostCSS with Tailwind CSS.
 - **Database Migrations**: `drizzle-kit`.
 - **Unit Testing**: Vitest (config: `vitest.config.ts`). Run with `npx vitest run` (single run) or `npx vitest` (watch mode).
-- **E2E Testing**: Cypress.io with Cypress Cloud integration.
+- **E2E Testing**: Cypress.io with Cypress Cloud (project ID: `dy8p9y`). Config in `cypress.config.ts`, tests in `cypress/e2e/`. Custom `getBySel` command for `data-testid` selectors. GitHub Actions workflow in `.github/workflows/cypress.yml`. Run locally with `npx cypress open` or `npx cypress run`.
 
 ### Unit Test Locations
 - `server/services/analyticsService.test.ts` — `calculatePersonalRecords`, `calculateExerciseAnalytics`
