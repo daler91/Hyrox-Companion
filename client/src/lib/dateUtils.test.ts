@@ -91,6 +91,28 @@ describe('dateUtils', () => {
         const start = getStartOfWeek(specificDate);
         expect(toISODateString(start)).toBe('2023-10-15');
       });
+
+      it('should correctly handle month transitions', () => {
+        const specificDate = new Date('2024-03-01T15:00:00Z'); // Friday
+        const start = getStartOfWeek(specificDate);
+        expect(toISODateString(start)).toBe('2024-02-25');
+      });
+
+      it('should correctly handle year transitions', () => {
+        const specificDate = new Date('2024-01-02T15:00:00Z'); // Tuesday
+        const start = getStartOfWeek(specificDate);
+        expect(toISODateString(start)).toBe('2023-12-31');
+      });
+
+      it('should correctly handle leap year transitions vs non-leap year', () => {
+        // Leap year: 2024-03-01 (Friday) -> Start of week (Sunday) is 2024-02-25
+        const leapDate = new Date('2024-03-01T15:00:00Z');
+        expect(toISODateString(getStartOfWeek(leapDate))).toBe('2024-02-25');
+
+        // Non-leap year: 2023-03-01 (Wednesday) -> Start of week (Sunday) is 2023-02-26
+        const nonLeapDate = new Date('2023-03-01T15:00:00Z');
+        expect(toISODateString(getStartOfWeek(nonLeapDate))).toBe('2023-02-26');
+      });
     });
 
     describe('getEndOfWeek', () => {
