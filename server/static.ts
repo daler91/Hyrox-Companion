@@ -1,6 +1,7 @@
 import express, { type Express } from "express";
 import fs from "fs";
 import path from "path";
+import rateLimit from "express-rate-limit";
 
 export function serveStatic(app: Express) {
   const distPath = path.resolve(__dirname, "public");
@@ -20,7 +21,12 @@ export function serveStatic(app: Express) {
 
   app.use(express.static(distPath, { maxAge: 0, index: false }));
 
-  app.use("*", (_req, res) => {
+  const fallbackLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100,
+  });
+
+  app.use("*", fallbackLimiter, (_req, res) => {
     res.setHeader("Cache-Control", "no-cache");
     res.sendFile(path.resolve(distPath, "index.html"));
   });
