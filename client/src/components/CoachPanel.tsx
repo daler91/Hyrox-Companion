@@ -49,9 +49,12 @@ export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }
 
   const messages = useMemo(() => {
     const allMessages = [...hookMessages];
+    const existingIds = new Set(allMessages.map(m => m.id));
+
     for (const localMsg of localMessages) {
-      if (!allMessages.find(m => m.id === localMsg.id)) {
+      if (!existingIds.has(localMsg.id)) {
         allMessages.push(localMsg);
+        existingIds.add(localMsg.id);
       }
     }
     allMessages.sort((a, b) => {
