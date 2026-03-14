@@ -66,6 +66,8 @@ export default function SuggestionsPanel({
                     variant="ghost"
                     onClick={() => onDismiss(suggestion.workoutId)}
                     data-testid={`dismiss-suggestion-${suggestion.workoutId}`}
+                    aria-label="Dismiss suggestion"
+                    title="Dismiss suggestion"
                   >
                     <X className="h-3 w-3" />
                   </Button>
