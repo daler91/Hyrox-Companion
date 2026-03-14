@@ -36,11 +36,9 @@ function buildWorkoutLogTitles(timeline: TimelineEntry[]): Record<string, string
 }
 
 export async function generateJSON(userId: string, storage: IStorage) {
-  const [timeline, plans, allExerciseSets] = await Promise.all([
-    storage.getTimeline(userId),
-    storage.listTrainingPlans(userId),
-    storage.getAllExerciseSetsWithDates(userId),
-  ]);
+  const timeline = await storage.getTimeline(userId);
+  const plans = await storage.listTrainingPlans(userId);
+  const allExerciseSets = await storage.getAllExerciseSetsWithDates(userId);
   const workoutLogTitles = buildWorkoutLogTitles(timeline);
 
   const exerciseSetRows = allExerciseSets.map((s: ExerciseSetRow) => ({
@@ -67,10 +65,8 @@ function escapeCsv(val: string | null | undefined): string {
 }
 
 export async function generateCSV(userId: string, storage: IStorage): Promise<string> {
-  const [timeline, allExerciseSets] = await Promise.all([
-    storage.getTimeline(userId),
-    storage.getAllExerciseSetsWithDates(userId),
-  ]);
+  const timeline = await storage.getTimeline(userId);
+  const allExerciseSets = await storage.getAllExerciseSetsWithDates(userId);
 
   const csvRows = ["Date,Type,Status,Focus,Main Workout,Accessory,Notes,Duration,RPE"];
 
