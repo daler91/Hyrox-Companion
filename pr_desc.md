@@ -1,12 +1,14 @@
-🎯 **What:** The `buildTrainingContext` function in `server/services/aiService.ts` was entirely missing test coverage. This function is crucial for preparing user context data before passing it to the AI for generating insights or plans, making it highly dependent on proper `storage` interactions.
+🧪 [testing improvement] Add E2E tests for complex timeline and logging workflows
 
-📊 **Coverage:** A new test suite `server/services/aiService.test.ts` was implemented. Scenarios covered include:
-- Base case (empty database/no timeline data) returning a default context with zeroed stats.
-- Accurate calculations of basic training statistics (`totalWorkouts`, `completedWorkouts`, `completionRate`) using mocked timeline data.
-- Correct calculation of the `currentStreak` using mocked system dates to avoid flaky timeline evaluations.
-- Proper collection and date-sorting of `recentWorkouts`, ensuring a hard cutoff length of 10 workouts.
-- Correct computation of `structuredExerciseStats` containing max weights, max distances, best times, and average reps based on simulated `getExerciseSetsByWorkoutLogs` returns.
-- Accurate selection of the `activePlan` from the mock storage module.
-- Proper parsing of `focus` fields using the `HYROX_EXERCISES` constants to formulate the `exerciseBreakdown`.
+🎯 What
+Added two new Cypress end-to-end test files to cover the full workout submission flow and complex timeline interactions:
+- `log-workout-submission.cy.ts`: Verifies successful submission of both free-text mode and exercise mode workouts, and checks error states for missing data.
+- `timeline-workout-details.cy.ts`: Verifies interactions with the timeline detail dialog, including marking workouts complete/missed, editing details, and deleting workouts.
 
-✨ **Result:** Enhanced test coverage for `aiService.ts`. The business logic for `buildTrainingContext` is now firmly verified and isolated from actual database interactions, ensuring regressions can be quickly caught when modifying workout aggregation logic in the future.
+📊 Coverage
+- Real-world interaction flows that go beyond simple element existence checks.
+- Form submissions intercepted properly with mocked API responses.
+- Timeline dialog interactions, actions, and UI state updates.
+
+✨ Result
+Significantly increased confidence that the core user flows (logging a workout and interacting with the timeline) work correctly without regressions, addressing the previous lack of functional E2E test coverage in these critical areas.
