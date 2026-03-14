@@ -94,7 +94,6 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
   const retryCountRef = useRef(0);
   const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stoppedByUserRef = useRef(false);
-  const lastEmittedFinalRef = useRef("");
 
   onResultRef.current = onResult;
   onInterimRef.current = onInterim;
@@ -128,20 +127,18 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
 
     recognition.onstart = () => {
       setIsListening(true);
-      lastEmittedFinalRef.current = "";
     };
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       retryCountRef.current = 0;
-      let fullFinalTranscript = "";
+      let finalTranscript = "";
       let interim = "";
 
-      // Reconstruct the full final transcript from all results
-      for (let i = 0; i < event.results.length; i++) {
+      for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
         if (result.isFinal) {
-          fullFinalTranscript += result[0].transcript;
-        } else if (i >= event.resultIndex) {
+          finalTranscript += result[0].transcript;
+        } else {
           interim += result[0].transcript;
         }
       }
@@ -151,18 +148,9 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
         onInterimRef.current?.(interim);
       }
 
-      if (fullFinalTranscript) {
+      if (finalTranscript) {
         setInterimTranscript("");
-        const previouslyEmitted = lastEmittedFinalRef.current;
-
-        if (fullFinalTranscript.length > previouslyEmitted.length && fullFinalTranscript.startsWith(previouslyEmitted)) {
-          const newPortion = fullFinalTranscript.slice(previouslyEmitted.length);
-          lastEmittedFinalRef.current = fullFinalTranscript;
-          onResultRef.current?.(newPortion);
-        } else if (!fullFinalTranscript.startsWith(previouslyEmitted)) {
-          lastEmittedFinalRef.current = fullFinalTranscript;
-          onResultRef.current?.(fullFinalTranscript);
-        }
+        onResultRef.current?.(finalTranscript);
       }
     };
 
@@ -214,7 +202,6 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
 
     stoppedByUserRef.current = false;
     retryCountRef.current = 0;
-    lastEmittedFinalRef.current = "";
     clearRetryTimeout();
 
     try {
