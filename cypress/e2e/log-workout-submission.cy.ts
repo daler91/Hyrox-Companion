@@ -96,7 +96,7 @@ describe("Log Workout Exercise Mode Submission", () => {
       });
       // Ensure exercises array is present and contains back_squat
       expect(interception.request.body.exercises[0]).to.include({
-        name: "back_squat"
+        exerciseName: "back_squat"
       });
     });
 

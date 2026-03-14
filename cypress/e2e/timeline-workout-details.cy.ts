@@ -26,6 +26,7 @@ describe("Timeline Workout Details Interactions", () => {
     // Intercept DELETE for deleting a workout
     cy.intercept("DELETE", `/api/plans/days/${planDayId}`, {
       statusCode: 200,
+      body: { success: true },
     }).as("deleteWorkout");
 
     setupAuthIntercepts({
