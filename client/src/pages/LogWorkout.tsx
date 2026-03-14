@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -51,6 +51,29 @@ export default function LogWorkout() {
     getSelectedExerciseNames,
     parseMutation,
   } = useWorkoutEditor();
+
+  const { blockCounts, blockIndices } = React.useMemo(() => {
+    const counts: Record<string, number> = {};
+    const indices: Record<string, number> = {};
+    const runningCounts: Record<string, number> = {};
+
+    for (const blockId of exerciseBlocks) {
+      const name = getBlockExerciseName(blockId);
+      if (name) {
+        counts[name] = (counts[name] || 0) + 1;
+      }
+    }
+
+    for (const blockId of exerciseBlocks) {
+      const name = getBlockExerciseName(blockId);
+      if (name) {
+        runningCounts[name] = (runningCounts[name] || 0) + 1;
+        indices[blockId] = runningCounts[name];
+      }
+    }
+
+    return { blockCounts: counts, blockIndices: indices };
+  }, [exerciseBlocks]);
 
   const handleVoiceError = useCallback((msg: string) => {
     toast({ title: "Voice Input", description: msg, variant: "destructive" });
@@ -324,11 +347,12 @@ export default function LogWorkout() {
               <p className="text-xs text-muted-foreground">Drag the handle to reorder exercises.</p>
               <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                 <SortableContext items={exerciseBlocks} strategy={verticalListSortingStrategy}>
-                  {exerciseBlocks.map((blockId, idx) => {
+                  {exerciseBlocks.map((blockId) => {
                     const exData = exerciseData[blockId];
                     if (!exData) return null;
-                    const blockCount = exerciseBlocks.filter(b => getBlockExerciseName(b) === getBlockExerciseName(blockId)).length;
-                    const blockIndex = exerciseBlocks.filter((b, i) => i <= idx && getBlockExerciseName(b) === getBlockExerciseName(blockId)).length;
+                    const name = getBlockExerciseName(blockId);
+                    const blockCount = name ? blockCounts[name] || 1 : 1;
+                    const blockIndex = name ? blockIndices[blockId] || 1 : 1;
                     const showBlockNumber = blockCount > 1;
                     return (
                       <SortableExerciseBlock

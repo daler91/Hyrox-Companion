@@ -239,6 +239,31 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
 
   const { toast } = useToast();
 
+  const { blockCounts, blockIndices } = React.useMemo(() => {
+    const counts: Record<string, number> = {};
+    const indices: Record<string, number> = {};
+    const runningCounts: Record<string, number> = {};
+
+    for (const blockId of editExercises) {
+      const exData = editExerciseData[blockId];
+      if (exData && exData.exerciseName) {
+        const name = exData.exerciseName;
+        counts[name] = (counts[name] || 0) + 1;
+      }
+    }
+
+    for (const blockId of editExercises) {
+      const exData = editExerciseData[blockId];
+      if (exData && exData.exerciseName) {
+        const name = exData.exerciseName;
+        runningCounts[name] = (runningCounts[name] || 0) + 1;
+        indices[blockId] = runningCounts[name];
+      }
+    }
+
+    return { blockCounts: counts, blockIndices: indices };
+  }, [editExercises, editExerciseData]);
+
   const handleVoiceError = useCallback((msg: string) => {
     toast({ title: "Voice Input", description: msg, variant: "destructive" });
   }, [toast]);
@@ -380,12 +405,12 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
             <div className="space-y-3">
               <DndContext sensors={dialogSensors} collisionDetection={closestCenter} onDragEnd={handleEditDragEnd}>
                 <SortableContext items={editExercises} strategy={verticalListSortingStrategy}>
-                  {editExercises.map((blockId, idx) => {
+                  {editExercises.map((blockId) => {
                     const exData = editExerciseData[blockId];
                     if (!exData) return null;
                     const exName = exData.exerciseName;
-                    const blockCount = editExercises.filter(b => editExerciseData[b]?.exerciseName === exName).length;
-                    const blockIndex = editExercises.filter((b, i) => i <= idx && editExerciseData[b]?.exerciseName === exName).length;
+                    const blockCount = exName ? blockCounts[exName] || 1 : 1;
+                    const blockIndex = blockIndices[blockId] || 1;
                     const showBlockNumber = blockCount > 1;
                     return (
                       <SortableDialogBlock

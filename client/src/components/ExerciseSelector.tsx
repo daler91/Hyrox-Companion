@@ -16,6 +16,7 @@ import {
   CircleDot,
 } from "lucide-react";
 import { EXERCISE_DEFINITIONS, type ExerciseName, type ExerciseCategory } from "@shared/schema";
+import React from "react";
 import { categoryLabels } from "@/lib/exerciseUtils";
 
 interface ExerciseSelectorProps {
@@ -71,7 +72,15 @@ export function ExerciseSelector({ selectedExercises, onToggle, onAdd, allowDupl
       .filter(([, def]) => def.category === cat),
   }));
 
-  const countOf = (name: ExerciseName) => selectedExercises.filter(n => n === name).length;
+  const selectedCounts = React.useMemo(() => {
+    const counts: Partial<Record<ExerciseName, number>> = {};
+    for (const name of selectedExercises) {
+      counts[name] = (counts[name] || 0) + 1;
+    }
+    return counts;
+  }, [selectedExercises]);
+
+  const countOf = (name: ExerciseName) => selectedCounts[name] || 0;
 
   return (
     <div className="space-y-4" data-testid="exercise-selector">
