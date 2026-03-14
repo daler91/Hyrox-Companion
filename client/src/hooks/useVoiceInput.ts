@@ -160,6 +160,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
       if (RETRYABLE_ERRORS.has(event.error) && retryCountRef.current < MAX_RETRIES) {
         retryCountRef.current++;
         retryTimeoutRef.current = setTimeout(() => {
+          retryTimeoutRef.current = null;
           if (!stoppedByUserRef.current) {
             startRecognition();
           }
