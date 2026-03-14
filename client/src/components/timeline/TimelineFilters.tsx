@@ -18,11 +18,6 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Upload, Loader2, Filter, Download, Pencil } from "lucide-react";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import type { TrainingPlan } from "@shared/schema";
 import type { FilterStatus } from "./types";
 
@@ -121,21 +116,14 @@ export default function TimelineFilters({
                 </SelectContent>
               </Select>
               {selectedPlanId && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={openRenameDialog}
-                      data-testid="button-rename-plan" aria-label="Rename plan"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Rename plan</p>
-                  </TooltipContent>
-                </Tooltip>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={openRenameDialog}
+                  data-testid="button-rename-plan" aria-label="Rename plan" title="Rename plan"
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
               )}
             </div>
           ) : (

@@ -21,11 +21,6 @@ import { type TimelineEntry, type ExerciseSet, EXERCISE_DEFINITIONS, type Exerci
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { formatSpeed } from "@shared/unitConversion";
 import { categoryChipColors, groupExerciseSets, formatExerciseSummary, type GroupedExercise } from "@/lib/exerciseUtils";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 
 interface PRValue {
   value: number;
@@ -162,23 +157,17 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
       <CardContent className="p-4">
         <div className="flex items-start gap-3">
           {isPlanned && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="shrink-0 mt-0.5 text-muted-foreground hover:text-success"
-                  onClick={handleCompleteClick}
-                  data-testid={`button-complete-${entry.id}`}
-                  aria-label={`Mark ${entry.focus} as complete`}
-                >
-                  <Circle className="h-5 w-5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Mark {entry.focus} as complete</p>
-              </TooltipContent>
-            </Tooltip>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="shrink-0 mt-0.5 text-muted-foreground hover:text-success"
+              onClick={handleCompleteClick}
+              data-testid={`button-complete-${entry.id}`}
+              aria-label={`Mark ${entry.focus} as complete`}
+              title={`Mark ${entry.focus} as complete`}
+            >
+              <Circle className="h-5 w-5" />
+            </Button>
           )}
           
           {entry.status === "completed" && (
