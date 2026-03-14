@@ -1,0 +1,158 @@
+import { useState, useCallback } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
+import { useToast } from "@/hooks/use-toast";
+import { useVoiceInput } from "@/hooks/useVoiceInput";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { generateSummary, exerciseToPayload } from "@/hooks/useWorkoutEditor";
+import type { StructuredExercise } from "@/components/ExerciseInput";
+
+interface UseWorkoutFormProps {
+  useTextMode: boolean;
+  exerciseBlocks: string[];
+  exerciseData: Record<string, StructuredExercise>;
+  weightLabel: string;
+  distanceUnit: string;
+}
+
+export function useWorkoutForm({
+  useTextMode,
+  exerciseBlocks,
+  exerciseData,
+  weightLabel,
+  distanceUnit,
+}: UseWorkoutFormProps) {
+  const { toast } = useToast();
+  const [, navigate] = useLocation();
+
+  const [title, setTitle] = useState("");
+  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [freeText, setFreeText] = useState("");
+  const [notes, setNotes] = useState("");
+
+  const handleVoiceError = useCallback(
+    (msg: string) => {
+      toast({ title: "Voice Input", description: msg, variant: "destructive" });
+    },
+    [toast]
+  );
+
+  const handleVoiceResult = useCallback((transcript: string) => {
+    setFreeText((prev) => {
+      const separator =
+        prev && !prev.endsWith(" ") && !prev.endsWith("\n") ? " " : "";
+      return prev + separator + transcript;
+    });
+  }, []);
+
+  const handleNotesVoiceResult = useCallback((transcript: string) => {
+    setNotes((prev) => {
+      const separator =
+        prev && !prev.endsWith(" ") && !prev.endsWith("\n") ? " " : "";
+      return prev + separator + transcript;
+    });
+  }, []);
+
+  const voiceInput = useVoiceInput({
+    onResult: handleVoiceResult,
+    onError: handleVoiceError,
+  });
+
+  const notesVoiceInput = useVoiceInput({
+    onResult: handleNotesVoiceResult,
+    onError: handleVoiceError,
+  });
+
+  const saveMutation = useMutation({
+    mutationFn: async (workoutData: Record<string, any>) => {
+      const response = await apiRequest("POST", "/api/workouts", workoutData);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workouts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/timeline"] });
+      toast({
+        title: "Workout logged",
+        description: "Your workout has been saved successfully.",
+      });
+      navigate("/");
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to save workout. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleSave = () => {
+    if (voiceInput.isListening) voiceInput.stopListening();
+    if (notesVoiceInput.isListening) notesVoiceInput.stopListening();
+
+    if (!title.trim()) {
+      toast({
+        title: "Missing title",
+        description: "Please enter a workout title.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (useTextMode) {
+      if (!freeText.trim()) {
+        toast({
+          title: "Missing workout details",
+          description: "Please describe your workout.",
+          variant: "destructive",
+        });
+        return;
+      }
+      saveMutation.mutate({
+        title,
+        date,
+        focus: title,
+        mainWorkout: freeText,
+        notes: notes || null,
+      });
+    } else {
+      if (exerciseBlocks.length === 0) {
+        toast({
+          title: "No exercises",
+          description: "Please add at least one exercise.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const exercises = exerciseBlocks
+        .map((id) => exerciseData[id])
+        .filter(Boolean);
+      const mainWorkout = generateSummary(exercises, weightLabel, distanceUnit);
+
+      saveMutation.mutate({
+        title,
+        date,
+        focus: title,
+        mainWorkout,
+        notes: notes || null,
+        exercises: exercises.map(exerciseToPayload),
+      });
+    }
+  };
+
+  return {
+    title,
+    setTitle,
+    date,
+    setDate,
+    freeText,
+    setFreeText,
+    notes,
+    setNotes,
+    voiceInput,
+    notesVoiceInput,
+    saveMutation,
+    handleSave,
+  };
+}
