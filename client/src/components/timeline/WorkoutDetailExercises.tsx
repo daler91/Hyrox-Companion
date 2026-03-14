@@ -95,6 +95,53 @@ interface WorkoutDetailViewProps {
   distanceUnit: "km" | "miles";
 }
 
+
+interface WorkoutDetailStravaMetricsProps {
+  entry: TimelineEntry;
+  distanceUnit: "km" | "miles";
+}
+
+const WorkoutDetailStravaMetrics = React.memo(function WorkoutDetailStravaMetrics({ entry, distanceUnit }: WorkoutDetailStravaMetricsProps) {
+  if (entry.source !== "strava" || (!entry.calories && !entry.avgWatts && !entry.sufferScore && !entry.avgCadence && !entry.avgSpeed)) {
+    return null;
+  }
+
+  return (
+    <div className="flex flex-wrap gap-3 pt-2 border-t border-border/50">
+      {entry.calories && (
+        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+          <Flame className="h-3 w-3 text-orange-500" />
+          <span>{entry.calories} cal</span>
+        </div>
+      )}
+      {entry.avgWatts && (
+        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+          <Zap className="h-3 w-3 text-yellow-500" />
+          <span>{entry.avgWatts}W</span>
+        </div>
+      )}
+      {entry.avgCadence && (
+        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+          <Activity className="h-3 w-3 text-blue-500" />
+          <span>{Math.round(entry.avgCadence)} spm</span>
+        </div>
+      )}
+      {entry.avgSpeed && entry.avgSpeed > 0 && (
+        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+          <TrendingUp className="h-3 w-3 text-green-500" />
+          <span>{formatSpeed(entry.avgSpeed, distanceUnit)}</span>
+        </div>
+      )}
+      {entry.sufferScore && (
+        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+          <TrendingUp className="h-3 w-3 text-purple-500" />
+          <span>Effort: {entry.sufferScore}</span>
+        </div>
+      )}
+    </div>
+  );
+});
+
 export const WorkoutDetailView = React.memo(function WorkoutDetailView({ entry, grouped, hasStructuredData, weightLabel, distanceUnit }: WorkoutDetailViewProps) {
   return (
     <div className="space-y-3">
@@ -133,40 +180,7 @@ export const WorkoutDetailView = React.memo(function WorkoutDetailView({ entry, 
           {entry.rpe && ` | RPE: ${entry.rpe}`}
         </p>
       )}
-      {entry.source === "strava" && (entry.calories || entry.avgWatts || entry.sufferScore || entry.avgCadence || entry.avgSpeed) && (
-        <div className="flex flex-wrap gap-3 pt-2 border-t border-border/50">
-          {entry.calories && (
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Flame className="h-3 w-3 text-orange-500" />
-              <span>{entry.calories} cal</span>
-            </div>
-          )}
-          {entry.avgWatts && (
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Zap className="h-3 w-3 text-yellow-500" />
-              <span>{entry.avgWatts}W</span>
-            </div>
-          )}
-          {entry.avgCadence && (
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Activity className="h-3 w-3 text-blue-500" />
-              <span>{Math.round(entry.avgCadence)} spm</span>
-            </div>
-          )}
-          {entry.avgSpeed && entry.avgSpeed > 0 && (
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <TrendingUp className="h-3 w-3 text-green-500" />
-              <span>{formatSpeed(entry.avgSpeed, distanceUnit)}</span>
-            </div>
-          )}
-          {entry.sufferScore && (
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <TrendingUp className="h-3 w-3 text-purple-500" />
-              <span>Effort: {entry.sufferScore}</span>
-            </div>
-          )}
-        </div>
-      )}
+      <WorkoutDetailStravaMetrics entry={entry} distanceUnit={distanceUnit} />
     </div>
   );
 });
@@ -197,6 +211,210 @@ interface WorkoutDetailEditFormProps {
   onParseText: () => void;
   stopAllVoiceRef?: React.MutableRefObject<(() => void) | null>;
 }
+
+
+interface WorkoutTextModeProps {
+  editForm: EditFormState;
+  setEditForm: (form: EditFormState) => void;
+  isMainListening: boolean;
+  isSupported: boolean;
+  mainInterim: string;
+  startMainListening: () => void;
+  stopMainListening: () => void;
+  toggleMainListening: () => void;
+  onParseText: () => void;
+  parseMutation: UseMutationResult<any, Error, string, unknown>;
+}
+
+const WorkoutTextMode = React.memo(function WorkoutTextMode({
+  editForm,
+  setEditForm,
+  isMainListening,
+  isSupported,
+  mainInterim,
+  startMainListening,
+  stopMainListening,
+  toggleMainListening,
+  onParseText,
+  parseMutation,
+}: WorkoutTextModeProps) {
+  return (
+    <div className="space-y-3">
+      {isMainListening && (
+        <div className="flex items-center gap-2 text-sm text-primary bg-primary/10 rounded-md px-3 py-2" data-testid="voice-detail-listening-indicator">
+          <Mic className="h-4 w-4 animate-pulse" />
+          <span>Listening... speak your workout</span>
+        </div>
+      )}
+      <div className="relative">
+        <Textarea
+          id="detail-main"
+          value={editForm.mainWorkout}
+          onChange={(e) => setEditForm({ ...editForm, mainWorkout: e.target.value })}
+          rows={3}
+          data-testid="input-detail-main"
+          placeholder={isMainListening ? "Listening... describe your workout" : "Describe your workout, e.g.:\n4x8 back squat at 70kg\n5km tempo run in 25 min"}
+        />
+        {isMainListening && mainInterim && (
+          <div className="px-3 py-1 text-xs text-muted-foreground italic truncate" data-testid="voice-detail-interim">
+            {mainInterim}
+          </div>
+        )}
+        <VoiceButton
+          isListening={isMainListening}
+          isSupported={isSupported}
+          onClick={toggleMainListening}
+          className="absolute top-2 right-2"
+        />
+      </div>
+      <Button
+        onClick={() => {
+          if (isMainListening) stopMainListening();
+          onParseText();
+        }}
+        disabled={parseMutation.isPending || !editForm.mainWorkout.trim()}
+        variant="outline"
+        className="w-full"
+        data-testid="button-detail-parse-ai"
+      >
+        {parseMutation.isPending ? (
+          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+        ) : (
+          <Sparkles className="h-4 w-4 mr-2" />
+        )}
+        {parseMutation.isPending ? "Parsing with AI..." : "Parse with AI"}
+      </Button>
+      <p className="text-xs text-muted-foreground">
+        {isSupported
+          ? "Use the microphone to dictate your workout, or type it. AI will convert it into structured exercises."
+          : "AI will convert your text into structured exercises you can review and edit."}
+      </p>
+    </div>
+  );
+});
+
+interface WorkoutBlockModeProps {
+  editExercises: string[];
+  editExerciseData: Record<string, StructuredExercise>;
+  dialogSensors: SensorDescriptor<SensorOptions>[];
+  handleEditDragEnd: (event: DragEndEvent) => void;
+  handleAddExercise: (name: ExerciseName) => void;
+  handleRemoveBlock: (blockId: string) => void;
+  updateBlock: (blockId: string, ex: StructuredExercise) => void;
+  getSelectedExerciseNames: () => ExerciseName[];
+  weightUnit: "kg" | "lbs";
+  distanceUnit: "km" | "miles";
+  blockCounts: Record<string, number>;
+  blockIndices: Record<string, number>;
+}
+
+const WorkoutBlockMode = React.memo(function WorkoutBlockMode({
+  editExercises,
+  editExerciseData,
+  dialogSensors,
+  handleEditDragEnd,
+  handleAddExercise,
+  handleRemoveBlock,
+  updateBlock,
+  getSelectedExerciseNames,
+  weightUnit,
+  distanceUnit,
+  blockCounts,
+  blockIndices,
+}: WorkoutBlockModeProps) {
+  return (
+    <>
+      <div>
+        <p className="text-xs text-muted-foreground mb-2">Click an exercise to add it. You can add the same exercise multiple times.</p>
+        <ExerciseSelector
+          selectedExercises={getSelectedExerciseNames()}
+          onToggle={() => {}}
+          onAdd={handleAddExercise}
+          allowDuplicates
+        />
+      </div>
+      {editExercises.length > 0 && (
+        <div className="space-y-3">
+          <DndContext sensors={dialogSensors} collisionDetection={closestCenter} onDragEnd={handleEditDragEnd}>
+            <SortableContext items={editExercises} strategy={verticalListSortingStrategy}>
+              {editExercises.map((blockId) => {
+                const exData = editExerciseData[blockId];
+                if (!exData) return null;
+                const exName = exData.exerciseName;
+                const blockCount = exName ? blockCounts[exName] || 1 : 1;
+                const blockIndex = blockIndices[blockId] || 1;
+                const showBlockNumber = blockCount > 1;
+                return (
+                  <SortableDialogBlock
+                    key={blockId}
+                    blockId={blockId}
+                    exData={exData}
+                    blockLabel={showBlockNumber ? `#${blockIndex}` : undefined}
+                    weightUnit={weightUnit}
+                    distanceUnit={distanceUnit}
+                    onChange={updateBlock}
+                    onRemove={handleRemoveBlock}
+                  />
+                );
+              })}
+            </SortableContext>
+          </DndContext>
+        </div>
+      )}
+      {editExercises.length === 0 && (
+        <p className="text-sm text-muted-foreground text-center py-2">
+          Add exercises using the button above
+        </p>
+      )}
+    </>
+  );
+});
+
+interface WorkoutAccessoryNotesProps {
+  editForm: EditFormState;
+  setEditForm: (form: EditFormState) => void;
+  appendToField: (field: keyof EditFormState, text: string) => void;
+  stopAccessoryRef: React.MutableRefObject<(() => void) | null>;
+  stopNotesRef: React.MutableRefObject<(() => void) | null>;
+}
+
+const WorkoutAccessoryNotes = React.memo(function WorkoutAccessoryNotes({
+  editForm,
+  setEditForm,
+  appendToField,
+  stopAccessoryRef,
+  stopNotesRef,
+}: WorkoutAccessoryNotesProps) {
+  return (
+    <>
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <Label htmlFor="detail-accessory">Accessory/Engine Work</Label>
+          <VoiceFieldButton onTranscript={(text) => appendToField("accessory", text)} onStopRef={stopAccessoryRef} data-testid="button-voice-detail-accessory" />
+        </div>
+        <Textarea
+          id="detail-accessory"
+          value={editForm.accessory}
+          onChange={(e) => setEditForm({ ...editForm, accessory: e.target.value })}
+          rows={2}
+          data-testid="input-detail-accessory"
+        />
+      </div>
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <Label htmlFor="detail-notes">Notes</Label>
+          <VoiceFieldButton onTranscript={(text) => appendToField("notes", text)} onStopRef={stopNotesRef} data-testid="button-voice-detail-notes" />
+        </div>
+        <Input
+          id="detail-notes"
+          value={editForm.notes}
+          onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+          data-testid="input-detail-notes"
+        />
+      </div>
+    </>
+  );
+});
 
 export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
   editForm,
@@ -283,6 +501,7 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
     stopAllVoiceRef.current = stopAllVoice;
   }
 
+
   return (
     <div className="space-y-4">
       <div>
@@ -339,129 +558,43 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
       </div>
 
       {useTextMode ? (
-        <div className="space-y-3">
-          {isMainListening && (
-            <div className="flex items-center gap-2 text-sm text-primary bg-primary/10 rounded-md px-3 py-2" data-testid="voice-detail-listening-indicator">
-              <Mic className="h-4 w-4 animate-pulse" />
-              <span>Listening... speak your workout</span>
-            </div>
-          )}
-          <div className="relative">
-            <Textarea
-              id="detail-main"
-              value={editForm.mainWorkout}
-              onChange={(e) => setEditForm({ ...editForm, mainWorkout: e.target.value })}
-              rows={3}
-              data-testid="input-detail-main"
-              placeholder={isMainListening ? "Listening... describe your workout" : "Describe your workout, e.g.:\n4x8 back squat at 70kg\n5km tempo run in 25 min"}
-            />
-            {isMainListening && mainInterim && (
-              <div className="px-3 py-1 text-xs text-muted-foreground italic truncate" data-testid="voice-detail-interim">
-                {mainInterim}
-              </div>
-            )}
-            <VoiceButton
-              isListening={isMainListening}
-              isSupported={isSupported}
-              onClick={toggleMainListening}
-              className="absolute top-2 right-2"
-            />
-          </div>
-          <Button
-            onClick={() => {
-              if (isMainListening) stopMainListening();
-              onParseText();
-            }}
-            disabled={parseMutation.isPending || !editForm.mainWorkout.trim()}
-            variant="outline"
-            className="w-full"
-            data-testid="button-detail-parse-ai"
-          >
-            {parseMutation.isPending ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <Sparkles className="h-4 w-4 mr-2" />
-            )}
-            {parseMutation.isPending ? "Parsing with AI..." : "Parse with AI"}
-          </Button>
-          <p className="text-xs text-muted-foreground">
-            {isSupported
-              ? "Use the microphone to dictate your workout, or type it. AI will convert it into structured exercises."
-              : "AI will convert your text into structured exercises you can review and edit."}
-          </p>
-        </div>
+        <WorkoutTextMode
+          editForm={editForm}
+          setEditForm={setEditForm}
+          isMainListening={isMainListening}
+          isSupported={isSupported}
+          mainInterim={mainInterim}
+          startMainListening={startMainListening}
+          stopMainListening={stopMainListening}
+          toggleMainListening={toggleMainListening}
+          onParseText={onParseText}
+          parseMutation={parseMutation}
+        />
       ) : (
-        <>
-          <div>
-            <p className="text-xs text-muted-foreground mb-2">Click an exercise to add it. You can add the same exercise multiple times.</p>
-            <ExerciseSelector
-              selectedExercises={getSelectedExerciseNames()}
-              onToggle={() => {}}
-              onAdd={handleAddExercise}
-              allowDuplicates
-            />
-          </div>
-          {editExercises.length > 0 && (
-            <div className="space-y-3">
-              <DndContext sensors={dialogSensors} collisionDetection={closestCenter} onDragEnd={handleEditDragEnd}>
-                <SortableContext items={editExercises} strategy={verticalListSortingStrategy}>
-                  {editExercises.map((blockId) => {
-                    const exData = editExerciseData[blockId];
-                    if (!exData) return null;
-                    const exName = exData.exerciseName;
-                    const blockCount = exName ? blockCounts[exName] || 1 : 1;
-                    const blockIndex = blockIndices[blockId] || 1;
-                    const showBlockNumber = blockCount > 1;
-                    return (
-                      <SortableDialogBlock
-                        key={blockId}
-                        blockId={blockId}
-                        exData={exData}
-                        blockLabel={showBlockNumber ? `#${blockIndex}` : undefined}
-                        weightUnit={weightUnit}
-                        distanceUnit={distanceUnit}
-                        onChange={updateBlock}
-                        onRemove={handleRemoveBlock}
-                      />
-                    );
-                  })}
-                </SortableContext>
-              </DndContext>
-            </div>
-          )}
-          {editExercises.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-2">
-              Add exercises using the button above
-            </p>
-          )}
-        </>
+        <WorkoutBlockMode
+          editExercises={editExercises}
+          editExerciseData={editExerciseData}
+          dialogSensors={dialogSensors}
+          handleEditDragEnd={handleEditDragEnd}
+          handleAddExercise={handleAddExercise}
+          handleRemoveBlock={handleRemoveBlock}
+          updateBlock={updateBlock}
+          getSelectedExerciseNames={getSelectedExerciseNames}
+          weightUnit={weightUnit}
+          distanceUnit={distanceUnit}
+          blockCounts={blockCounts}
+          blockIndices={blockIndices}
+        />
       )}
 
-      <div>
-        <div className="flex items-center justify-between mb-1">
-          <Label htmlFor="detail-accessory">Accessory/Engine Work</Label>
-          <VoiceFieldButton onTranscript={(text) => appendToField("accessory", text)} onStopRef={stopAccessoryRef} data-testid="button-voice-detail-accessory" />
-        </div>
-        <Textarea
-          id="detail-accessory"
-          value={editForm.accessory}
-          onChange={(e) => setEditForm({ ...editForm, accessory: e.target.value })}
-          rows={2}
-          data-testid="input-detail-accessory"
-        />
-      </div>
-      <div>
-        <div className="flex items-center justify-between mb-1">
-          <Label htmlFor="detail-notes">Notes</Label>
-          <VoiceFieldButton onTranscript={(text) => appendToField("notes", text)} onStopRef={stopNotesRef} data-testid="button-voice-detail-notes" />
-        </div>
-        <Input
-          id="detail-notes"
-          value={editForm.notes}
-          onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
-          data-testid="input-detail-notes"
-        />
-      </div>
+      <WorkoutAccessoryNotes
+        editForm={editForm}
+        setEditForm={setEditForm}
+        appendToField={appendToField}
+        stopAccessoryRef={stopAccessoryRef}
+        stopNotesRef={stopNotesRef}
+      />
     </div>
   );
+
 });
