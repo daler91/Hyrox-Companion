@@ -37,7 +37,13 @@ export function verifySignedState(state: string): { userId: string } | null {
   const [userId, timestamp, nonce, signature] = parts;
   const payload = `${userId}:${timestamp}:${nonce}`;
   const expected = crypto.createHmac("sha256", STATE_SECRET).update(payload).digest("hex").slice(0, 16);
-  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
+
+  // Use timingSafeEqual with hashed values to prevent timing attacks
+  // and safely handle different string lengths.
+  const signatureHash = crypto.createHash("sha256").update(signature).digest();
+  const expectedHash = crypto.createHash("sha256").update(expected).digest();
+
+  if (!crypto.timingSafeEqual(signatureHash, expectedHash)) return null;
   const ts = parseInt(timestamp, 36);
   if (Date.now() - ts > STATE_MAX_AGE_MS) return null;
   return { userId };
