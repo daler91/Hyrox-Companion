@@ -130,6 +130,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
     };
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
+      retryCountRef.current = 0;
       let finalTranscript = "";
       let interim = "";
 
