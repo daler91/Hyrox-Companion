@@ -46,10 +46,17 @@ function calculateTrainingStats(timeline: TimelineEntry[]) {
   return { completedWorkouts, plannedWorkouts, missedWorkouts, skippedWorkouts, totalWorkouts, completionRate, completedDates };
 }
 
+const HYROX_EXERCISE_REGEX = new RegExp(HYROX_EXERCISES.join('|'), 'i');
+
 function getExerciseBreakdown(timeline: TimelineEntry[]): Record<string, number> {
   const breakdown: Record<string, number> = {};
   for (const entry of timeline) {
     if (entry.status === "completed" && entry.focus) {
+      if (!HYROX_EXERCISE_REGEX.test(entry.focus)) {
+        breakdown[entry.focus] = (breakdown[entry.focus] || 0) + 1;
+        continue;
+      }
+
       const focusLower = entry.focus.toLowerCase();
       let matched = false;
       for (const exercise of HYROX_EXERCISES) {
