@@ -39,7 +39,7 @@ describe("Log Workout Submission", () => {
     });
 
     // It should redirect to home/timeline
-    cy.url().should("eq", Cypress.config().baseUrl + "/");
+    cy.location("pathname").should("eq", "/");
     cy.contains("Workout logged").should("exist");
   });
 

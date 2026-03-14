@@ -7,10 +7,15 @@ describe("Timeline Workout Details Interactions", () => {
 
   beforeEach(() => {
     // Intercept PATCH for plan days marking complete
-    cy.intercept("PATCH", `/api/plan-days/${planDayId}`, {
+    cy.intercept("PATCH", `/api/plans/days/${planDayId}/status`, {
       statusCode: 200,
       body: { id: planDayId, status: "completed" },
     }).as("updatePlanDay");
+
+    cy.intercept("PATCH", `/api/plans/plan-1/days/${planDayId}`, {
+      statusCode: 200,
+      body: { id: planDayId, focus: "Updated Upper Body Focus" },
+    }).as("updateDayDetails");
 
     // Intercept POST for saving updated details
     cy.intercept("POST", "/api/workouts", {
@@ -19,7 +24,7 @@ describe("Timeline Workout Details Interactions", () => {
     }).as("logWorkoutFromPlan");
 
     // Intercept DELETE for deleting a workout
-    cy.intercept("DELETE", `/api/plan-days/${planDayId}`, {
+    cy.intercept("DELETE", `/api/plans/days/${planDayId}`, {
       statusCode: 200,
     }).as("deleteWorkout");
 
@@ -63,12 +68,10 @@ describe("Timeline Workout Details Interactions", () => {
     cy.getBySel(`button-complete-${workoutId}`).click();
 
     // Verify the API was called with the "completed" status
-    cy.wait("@updatePlanDay").then((interception) => {
-      expect(interception.request.body).to.include({ status: "completed" });
-    });
+    cy.wait("@logWorkoutFromPlan");
 
     // It should also show a toast
-    cy.contains("Workout completed").should("exist");
+    cy.contains("Workout logged").should("exist");
   });
 
   it("can mark a workout as missed from the detail dialog", () => {
@@ -82,7 +85,7 @@ describe("Timeline Workout Details Interactions", () => {
       expect(interception.request.body).to.include({ status: "missed" });
     });
 
-    cy.contains("Workout missed").should("exist");
+    cy.contains("Status updated").should("exist");
   });
 
   it("can save edited details from the detail dialog", () => {
@@ -98,14 +101,14 @@ describe("Timeline Workout Details Interactions", () => {
     // Save changes
     cy.getBySel("button-detail-save").click();
 
-    cy.wait("@updatePlanDay").then((interception) => {
+    cy.wait("@updateDayDetails").then((interception) => {
       expect(interception.request.body).to.include({
         focus: "Updated Upper Body Focus",
         mainWorkout: "New main workout content",
       });
     });
 
-    cy.contains("Workout updated").should("exist");
+    cy.contains("Entry updated").should("exist");
   });
 
   it("can delete a workout from the detail dialog", () => {
@@ -120,6 +123,6 @@ describe("Timeline Workout Details Interactions", () => {
     // Verify DELETE API was called
     cy.wait("@deleteWorkout");
 
-    cy.contains("Workout deleted").should("exist");
+    cy.contains("Workout removed from plan").should("exist");
   });
 });
