@@ -126,7 +126,6 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
     recognitionRef.current = recognition;
 
     recognition.onstart = () => {
-      retryCountRef.current = 0;
       setIsListening(true);
     };
 
