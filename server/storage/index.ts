@@ -38,6 +38,7 @@ class DatabaseStorage implements IStorage {
   deleteWorkoutLogByPlanDayId = this.workoutStorage.deleteWorkoutLogByPlanDayId.bind(this.workoutStorage);
   getWorkoutLogByPlanDayId = this.workoutStorage.getWorkoutLogByPlanDayId.bind(this.workoutStorage);
   getWorkoutByStravaActivityId = this.workoutStorage.getWorkoutByStravaActivityId.bind(this.workoutStorage);
+  getWorkoutsByStravaActivityIds = this.workoutStorage.getWorkoutsByStravaActivityIds.bind(this.workoutStorage);
   createExerciseSets = this.workoutStorage.createExerciseSets.bind(this.workoutStorage);
   getExerciseSetsByWorkoutLog = this.workoutStorage.getExerciseSetsByWorkoutLog.bind(this.workoutStorage);
   getExerciseSetsByWorkoutLogs = this.workoutStorage.getExerciseSetsByWorkoutLogs.bind(this.workoutStorage);

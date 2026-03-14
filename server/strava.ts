@@ -237,13 +237,16 @@ export function registerStravaRoutes(app: Express): void {
       }
 
       const activities: StravaActivity[] = await activitiesResponse.json();
+
+      const activityIds = activities.map(a => String(a.id));
+      const existingWorkouts = await storage.getWorkoutsByStravaActivityIds(userId, activityIds);
+      const existingStravaIds = new Set(existingWorkouts.map(w => w.stravaActivityId));
+
       let imported = 0;
       let skipped = 0;
 
       for (const activity of activities) {
-        const existingLog = await storage.getWorkoutByStravaActivityId(userId, String(activity.id));
-
-        if (existingLog) {
+        if (existingStravaIds.has(String(activity.id))) {
           skipped++;
           continue;
         }
