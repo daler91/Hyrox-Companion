@@ -87,6 +87,15 @@ describe('strava service state signing', () => {
       expect(verifySignedState(parts.join(':'))).toBeNull();
     });
 
+    it('returns null instead of throwing an exception for length mismatch (DoS protection)', () => {
+      const state = createSignedState('user_123');
+      // Append an extra character to the signature, changing its length.
+      // Prior to the fix, crypto.timingSafeEqual would throw an error here.
+      const tamperedState = state + 'a';
+      expect(() => verifySignedState(tamperedState)).not.toThrow();
+      expect(verifySignedState(tamperedState)).toBeNull();
+    });
+
     it('returns null if state is expired', () => {
       // STATE_MAX_AGE_MS is 10 * 60 * 1000 = 600,000ms
       const state = createSignedState('user_123');
