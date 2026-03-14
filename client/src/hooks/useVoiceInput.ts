@@ -33,6 +33,7 @@ declare global {
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 500;
 const RETRYABLE_ERRORS = new Set(["network", "no-speech"]);
+const DEDUP_WINDOW_MS = 3000;
 
 function getVoiceErrorMessage(errorCode: string, micGranted: boolean): string | null {
   switch (errorCode) {
@@ -94,6 +95,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
   const retryCountRef = useRef(0);
   const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stoppedByUserRef = useRef(false);
+  const recentEmissionsRef = useRef<Array<{ text: string; time: number }>>([]);
 
   onResultRef.current = onResult;
   onInterimRef.current = onInterim;
@@ -150,7 +152,18 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
 
       if (finalTranscript) {
         setInterimTranscript("");
-        onResultRef.current?.(finalTranscript);
+        const now = Date.now();
+        const normalized = finalTranscript.trim().toLowerCase();
+        recentEmissionsRef.current = recentEmissionsRef.current.filter(
+          (e) => now - e.time < DEDUP_WINDOW_MS
+        );
+        const isDuplicate = recentEmissionsRef.current.some(
+          (e) => e.text === normalized
+        );
+        if (!isDuplicate) {
+          recentEmissionsRef.current.push({ text: normalized, time: now });
+          onResultRef.current?.(finalTranscript);
+        }
       }
     };
 
@@ -202,6 +215,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
 
     stoppedByUserRef.current = false;
     retryCountRef.current = 0;
+    recentEmissionsRef.current = [];
     clearRetryTimeout();
 
     try {
