@@ -3,13 +3,14 @@ import { toDateStr } from "./types";
 
 const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
 export const MAX_RATE_LIMIT_BUCKETS = 10000;
+export const DEFAULT_WINDOW_MS = 60000;
 
 // Exported for testing only
 export function clearRateLimitBuckets() {
   rateLimitBuckets.clear();
 }
 
-export function rateLimiter(category: string, maxRequests: number, windowMs: number = 60000) {
+export function rateLimiter(category: string, maxRequests: number, windowMs: number = DEFAULT_WINDOW_MS) {
   return (req: any, res: Response, next: NextFunction) => {
     const identifier = req.auth?.userId || req.ip;
     if (!identifier) {
