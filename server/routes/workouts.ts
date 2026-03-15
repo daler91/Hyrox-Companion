@@ -4,7 +4,7 @@ import { rateLimiter } from "../routeUtils";
 import { storage } from "../storage";
 import { insertWorkoutLogSchema, updateWorkoutLogSchema } from "@shared/schema";
 import { generateCSV, generateJSON } from "../services/exportService";
-import { createWorkout, updateWorkout, reparseWorkout } from "../services/workoutService";
+import { createWorkout, updateWorkout, reparseWorkout, prepareParsedWorkout, saveParsedWorkout } from "../services/workoutService";
 import { getUserId } from "../types";
 
 const router = Router();
@@ -41,6 +41,46 @@ router.post("/api/workouts/:id/reparse", isAuthenticated, async (req: any, res) 
   }
 });
 
+async function processBatchChunk(
+  chunk: any[],
+  weightUnit: string
+): Promise<{ parsed: number; failed: number }> {
+  let parsed = 0;
+  let failed = 0;
+
+  // Parse workouts concurrently in chunks to optimize AI service usage
+  const chunkResults = await Promise.allSettled(
+    chunk.map(workout => prepareParsedWorkout(workout, weightUnit))
+  );
+
+  // Save each successfully parsed workout sequentially to prevent DB connection strain
+  for (let j = 0; j < chunkResults.length; j++) {
+    const result = chunkResults[j];
+    const workout = chunk[j];
+
+    if (result.status === 'rejected') {
+      console.error(`Batch reparse failed for workout ${workout.id}:`, result.reason);
+      failed++;
+      continue;
+    }
+
+    if (!result.value) {
+      failed++;
+      continue;
+    }
+
+    try {
+      await saveParsedWorkout(workout.id, result.value.setRows);
+      parsed++;
+    } catch (dbError) {
+      console.error(`Failed to save re-parsed workout ${workout.id}:`, dbError);
+      failed++;
+    }
+  }
+
+  return { parsed, failed };
+}
+
 router.post("/api/workouts/batch-reparse", isAuthenticated, async (req: any, res) => {
   try {
     const userId = getUserId(req);
@@ -48,33 +88,19 @@ router.post("/api/workouts/batch-reparse", isAuthenticated, async (req: any, res
     const user = await storage.getUser(userId);
     const weightUnit = user?.weightUnit || "kg";
 
-    let parsed = 0;
-    let failed = 0;
+    let totalParsed = 0;
+    let totalFailed = 0;
 
     // Process workouts concurrently in chunks to improve performance
     // while preventing overload of the Gemini AI service and database
     const CONCURRENCY_LIMIT = 5;
     for (let i = 0; i < workouts.length; i += CONCURRENCY_LIMIT) {
       const chunk = workouts.slice(i, i + CONCURRENCY_LIMIT);
-
-      const chunkResults = await Promise.allSettled(
-        chunk.map(workout => reparseWorkout(workout, weightUnit))
-      );
-
-      chunkResults.forEach((result, index) => {
-        if (result.status === 'fulfilled') {
-          if (result.value) {
-            parsed++;
-          } else {
-            failed++;
-          }
-        } else {
-          console.error(`Batch reparse failed for workout ${chunk[index].id}:`, result.reason);
-          failed++;
-        }
-      });
+      const { parsed, failed } = await processBatchChunk(chunk, weightUnit);
+      totalParsed += parsed;
+      totalFailed += failed;
     }
-    res.json({ total: workouts.length, parsed, failed });
+    res.json({ total: workouts.length, parsed: totalParsed, failed: totalFailed });
   } catch (error) {
     console.error("Batch reparse error:", error);
     res.status(500).json({ error: "Failed to batch re-parse workouts" });
