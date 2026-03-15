@@ -102,7 +102,7 @@ function getStatusBadge(status: string) {
 
 interface WorkoutStravaStatsProps {
   readonly entry: TimelineEntry;
-  readonly distanceUnit: DistanceUnit | string;
+  readonly distanceUnit: string;
 }
 
 function WorkoutStravaStats({ entry, distanceUnit }: WorkoutStravaStatsProps) {
