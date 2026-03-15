@@ -158,7 +158,8 @@ export function registerStravaRoutes(app: Express): void {
     const { code, state, error: stravaError } = req.query;
 
     if (stravaError) {
-      console.error("Strava auth error:", stravaError);
+      const sanitizedError = String(stravaError).replace(/[\r\n]/g, "");
+      console.error("Strava auth error:", sanitizedError);
       return res.redirect("/settings?strava=error");
     }
 
