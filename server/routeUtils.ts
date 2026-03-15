@@ -2,6 +2,7 @@ import type { Response, NextFunction } from "express";
 import { toDateStr } from "./types";
 
 const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
+export const MAX_RATE_LIMIT_BUCKETS = 10000;
 
 // Exported for testing only
 export function clearRateLimitBuckets() {
@@ -19,6 +20,23 @@ export function rateLimiter(category: string, maxRequests: number, windowMs: num
     const bucket = rateLimitBuckets.get(key);
 
     if (!bucket || now >= bucket.resetAt) {
+      if (rateLimitBuckets.size >= MAX_RATE_LIMIT_BUCKETS) {
+        // Immediate cleanup of expired entries
+        rateLimitBuckets.forEach((b, k) => {
+          if (now >= b.resetAt) {
+            rateLimitBuckets.delete(k);
+          }
+        });
+
+        // If still at the limit, evict the oldest entry (FIFO) to protect memory
+        if (rateLimitBuckets.size >= MAX_RATE_LIMIT_BUCKETS) {
+          const oldestKey = rateLimitBuckets.keys().next().value;
+          if (oldestKey) {
+             rateLimitBuckets.delete(oldestKey);
+          }
+        }
+      }
+
       rateLimitBuckets.set(key, { count: 1, resetAt: now + windowMs });
       return next();
     }
