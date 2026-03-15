@@ -15,11 +15,7 @@ import {
   GripVertical,
   Mic,
 } from "lucide-react";
-import {
-  type TimelineEntry,
-  type ExerciseSet,
-  type ExerciseName,
-} from "@shared/schema";
+import type { TimelineEntry, ExerciseName } from "@shared/schema";
 import { formatSpeed } from "@shared/unitConversion";
 import { ExerciseSelector } from "@/components/ExerciseSelector";
 import {
@@ -29,10 +25,7 @@ import {
 import React, { useCallback, useState, useEffect } from "react";
 import {
   categoryChipColors,
-  getExerciseLabel,
-  groupExerciseSets,
   formatExerciseSummary,
-  exerciseSetsToStructured,
   type GroupedExercise,
 } from "@/lib/exerciseUtils";
 import {
