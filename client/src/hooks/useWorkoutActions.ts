@@ -39,7 +39,7 @@ export function useWorkoutActions(selectedPlanId: string | null) {
   });
 
   const logWorkoutMutation = useMutation({
-    mutationFn: async (data: { planDayId: string; date: string; focus: string; mainWorkout: string; accessory?: string; notes?: string; exercises?: any[] }) => {
+    mutationFn: async (data: { planDayId: string; date: string; focus: string; mainWorkout: string; accessory?: string; notes?: string; rpe?: number; exercises?: any[] }) => {
       const response = await apiRequest("POST", "/api/workouts", data);
       return response.json();
     },
@@ -105,7 +105,7 @@ export function useWorkoutActions(selectedPlanId: string | null) {
     setDetailEntry(entry);
   }, []);
 
-  const handleSaveFromDetail = useCallback((updates: { focus: string; mainWorkout: string; accessory: string | null; notes: string | null; exercises?: any[] }) => {
+  const handleSaveFromDetail = useCallback((updates: { focus: string; mainWorkout: string; accessory: string | null; notes: string | null; rpe?: number | null; exercises?: any[] }) => {
     if (!detailEntry) return;
 
     if (detailEntry.workoutLogId) {
@@ -126,6 +126,7 @@ export function useWorkoutActions(selectedPlanId: string | null) {
         mainWorkout: updates.mainWorkout,
         accessory: updates.accessory || undefined,
         notes: updates.notes || undefined,
+        rpe: updates.rpe ?? undefined,
         exercises: updates.exercises,
       });
       return;

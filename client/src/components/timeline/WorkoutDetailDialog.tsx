@@ -11,6 +11,7 @@ import {
 import { WorkoutDetailHeader } from "./WorkoutDetailHeader";
 import { WorkoutDetailView, WorkoutDetailEditForm } from "./WorkoutDetailExercises";
 import { exerciseSetsToStructured } from "@/lib/exerciseUtils";
+import { RpeSelector } from "@/components/RpeSelector";
 import { StatusChangeSection, WorkoutDetailFooter, DeleteConfirmDialog } from "./WorkoutDetailActions";
 
 interface WorkoutDetailDialogProps {
@@ -18,7 +19,7 @@ interface WorkoutDetailDialogProps {
   onClose: () => void;
   onMarkComplete: (entry: TimelineEntry) => void;
   onChangeStatus: (entry: TimelineEntry, status: WorkoutStatus) => void;
-  onSave: (updates: { focus: string; mainWorkout: string; accessory: string | null; notes: string | null; exercises?: any[] }) => void;
+  onSave: (updates: { focus: string; mainWorkout: string; accessory: string | null; notes: string | null; rpe?: number | null; exercises?: any[] }) => void;
   onDelete: (entry: TimelineEntry) => void;
   onCombine?: (entry: TimelineEntry) => void;
   isSaving?: boolean;
@@ -40,6 +41,7 @@ export default function WorkoutDetailDialog({
   const { distanceUnit, weightUnit, weightLabel } = useUnitPreferences();
   const [isEditing, setIsEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [editRpe, setEditRpe] = useState<number | null>(null);
   const [editForm, setEditForm] = useState({
     focus: "",
     mainWorkout: "",
@@ -71,6 +73,7 @@ export default function WorkoutDetailDialog({
         accessory: entry.accessory || "",
         notes: entry.notes || "",
       });
+      setEditRpe(entry.rpe ?? null);
       if (entry.exerciseSets && entry.exerciseSets.length > 0) {
         const { names, data } = exerciseSetsToStructured(entry.exerciseSets);
         resetEditor(names, data, false);
@@ -101,6 +104,7 @@ export default function WorkoutDetailDialog({
         mainWorkout: editForm.mainWorkout,
         accessory: editForm.accessory || null,
         notes: editForm.notes || null,
+        rpe: editRpe,
         exercises: [],
       });
     } else {
@@ -128,6 +132,7 @@ export default function WorkoutDetailDialog({
         mainWorkout,
         accessory: editForm.accessory || null,
         notes: editForm.notes || null,
+        rpe: editRpe,
         exercises: exercises.length > 0 ? exercises.map(exerciseToPayload) : undefined,
       });
     }
@@ -160,25 +165,30 @@ export default function WorkoutDetailDialog({
         />
 
         {isEditing ? (
-          <WorkoutDetailEditForm
-            editForm={editForm}
-            setEditForm={setEditForm}
-            useTextMode={useTextMode}
-            setUseTextMode={setUseTextMode}
-            editExercises={editExercises}
-            editExerciseData={editExerciseData}
-            dialogSensors={dialogSensors}
-            handleEditDragEnd={handleEditDragEnd}
-            handleAddExercise={handleAddExercise}
-            handleRemoveBlock={handleRemoveBlock}
-            updateBlock={updateBlock}
-            getSelectedExerciseNames={getSelectedExerciseNames}
-            parseMutation={parseMutation}
-            weightUnit={weightUnit}
-            distanceUnit={distanceUnit}
-            onParseText={handleParseText}
-            stopAllVoiceRef={stopAllVoiceRef}
-          />
+          <>
+            <WorkoutDetailEditForm
+              editForm={editForm}
+              setEditForm={setEditForm}
+              useTextMode={useTextMode}
+              setUseTextMode={setUseTextMode}
+              editExercises={editExercises}
+              editExerciseData={editExerciseData}
+              dialogSensors={dialogSensors}
+              handleEditDragEnd={handleEditDragEnd}
+              handleAddExercise={handleAddExercise}
+              handleRemoveBlock={handleRemoveBlock}
+              updateBlock={updateBlock}
+              getSelectedExerciseNames={getSelectedExerciseNames}
+              parseMutation={parseMutation}
+              weightUnit={weightUnit}
+              distanceUnit={distanceUnit}
+              onParseText={handleParseText}
+              stopAllVoiceRef={stopAllVoiceRef}
+            />
+            {entry.source !== "strava" && (
+              <RpeSelector value={editRpe} onChange={setEditRpe} compact />
+            )}
+          </>
         ) : (
           <WorkoutDetailView
             entry={entry}

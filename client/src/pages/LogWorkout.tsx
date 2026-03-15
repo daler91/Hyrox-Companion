@@ -7,7 +7,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { ExerciseSelector } from "@/components/ExerciseSelector";
 import { useToast } from "@/hooks/use-toast";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
-import { Save, ArrowLeft, Loader2, Dumbbell, Type, Sparkles, Mic, Gauge } from "lucide-react";
+import { Save, ArrowLeft, Loader2, Dumbbell, Type, Sparkles, Mic } from "lucide-react";
+import { RpeSelector } from "@/components/RpeSelector";
 import { Link } from "wouter";
 import { VoiceButton } from "@/components/VoiceButton";
 import {
@@ -143,40 +144,7 @@ export default function LogWorkout() {
               />
             </div>
           </div>
-          <div className="space-y-2">
-            <Label className="flex items-center gap-1">
-              <Gauge className="h-3.5 w-3.5" />
-              RPE (Rate of Perceived Exertion)
-            </Label>
-            <div className="flex items-center gap-1.5" data-testid="input-rpe-selector">
-              {Array.from({ length: 10 }, (_, i) => i + 1).map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => setRpe(rpe === value ? null : value)}
-                  className={`h-8 w-8 rounded-md text-sm font-medium transition-colors ${
-                    rpe === value
-                      ? value <= 3
-                        ? "bg-green-500 text-white"
-                        : value <= 6
-                        ? "bg-yellow-500 text-white"
-                        : value <= 8
-                        ? "bg-orange-500 text-white"
-                        : "bg-red-500 text-white"
-                      : "bg-muted hover:bg-muted/80 text-muted-foreground"
-                  }`}
-                  data-testid={`button-rpe-${value}`}
-                >
-                  {value}
-                </button>
-              ))}
-              {rpe && (
-                <span className="ml-2 text-xs text-muted-foreground" data-testid="text-rpe-label">
-                  {rpe <= 3 ? "Easy" : rpe <= 6 ? "Moderate" : rpe <= 8 ? "Hard" : "Max Effort"}
-                </span>
-              )}
-            </div>
-          </div>
+          <RpeSelector value={rpe} onChange={setRpe} />
         </CardContent>
       </Card>
 

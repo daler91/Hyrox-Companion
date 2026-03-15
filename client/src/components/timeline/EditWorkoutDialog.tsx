@@ -13,12 +13,14 @@ import {
 import { Loader2 } from "lucide-react";
 import type { TimelineEntry } from "@shared/schema";
 import { VoiceFieldButton } from "@/components/VoiceFieldButton";
+import { RpeSelector } from "@/components/RpeSelector";
 
 export interface EditFormState {
   focus: string;
   mainWorkout: string;
   accessory: string;
   notes: string;
+  rpe: number | null;
 }
 
 interface EditWorkoutDialogProps {
@@ -52,7 +54,7 @@ export default function EditWorkoutDialog({
   }, []);
 
   const appendToField = useCallback(
-    (field: keyof EditFormState, text: string) => {
+    (field: "focus" | "mainWorkout" | "accessory" | "notes", text: string) => {
       const current = editFormRef.current;
       const val = current[field];
       const separator =
@@ -153,6 +155,13 @@ export default function EditWorkoutDialog({
               placeholder="Add any observations or notes..."
             />
           </div>
+          {entry?.source !== "strava" && (
+            <RpeSelector
+              value={editForm.rpe}
+              onChange={(rpe) => onEditFormChange({ ...editForm, rpe })}
+              compact
+            />
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={handleClose}>
