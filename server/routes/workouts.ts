@@ -4,7 +4,7 @@ import { rateLimiter } from "../routeUtils";
 import { storage } from "../storage";
 import { insertWorkoutLogSchema, updateWorkoutLogSchema } from "@shared/schema";
 import { generateCSV, generateJSON } from "../services/exportService";
-import { createWorkout, updateWorkout, reparseWorkout } from "../services/workoutService";
+import { createWorkout, updateWorkout, reparseWorkout, prepareParsedWorkout, saveParsedWorkout } from "../services/workoutService";
 import { getUserId } from "../types";
 
 const router = Router();
@@ -57,22 +57,33 @@ router.post("/api/workouts/batch-reparse", isAuthenticated, async (req: any, res
     for (let i = 0; i < workouts.length; i += CONCURRENCY_LIMIT) {
       const chunk = workouts.slice(i, i + CONCURRENCY_LIMIT);
 
+      // Parse workouts concurrently in chunks to optimize AI service usage
       const chunkResults = await Promise.allSettled(
-        chunk.map(workout => reparseWorkout(workout, weightUnit))
+        chunk.map(workout => prepareParsedWorkout(workout, weightUnit))
       );
 
-      chunkResults.forEach((result, index) => {
+      // Save each successfully parsed workout sequentially to prevent DB connection strain
+      for (let j = 0; j < chunkResults.length; j++) {
+        const result = chunkResults[j];
+        const workout = chunk[j];
+
         if (result.status === 'fulfilled') {
           if (result.value) {
-            parsed++;
+            try {
+              await saveParsedWorkout(workout.id, result.value.setRows);
+              parsed++;
+            } catch (dbError) {
+              console.error(`Failed to save re-parsed workout ${workout.id}:`, dbError);
+              failed++;
+            }
           } else {
             failed++;
           }
         } else {
-          console.error(`Batch reparse failed for workout ${chunk[index].id}:`, result.reason);
+          console.error(`Batch reparse failed for workout ${workout.id}:`, result.reason);
           failed++;
         }
-      });
+      }
     }
     res.json({ total: workouts.length, parsed, failed });
   } catch (error) {

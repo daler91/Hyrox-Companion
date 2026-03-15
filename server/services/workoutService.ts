@@ -48,13 +48,11 @@ export function expandExercisesToSetRows(exercises: any[], workoutLogId: string)
 }
 
 
-export async function reparseWorkout(
+export async function prepareParsedWorkout(
   workout: { id: string; mainWorkout?: string | null; accessory?: string | null },
   weightUnit: string
-): Promise<{ exercises: any[]; setCount: number } | null> {
+): Promise<{ exercises: any[]; setRows: InsertExerciseSet[] } | null> {
   const { parseExercisesFromText } = await import("../gemini");
-  const { exerciseSets } = await import("@shared/schema");
-  const { eq } = await import("drizzle-orm");
 
   const textToParse = [workout.mainWorkout, workout.accessory].filter(Boolean).join("\n");
   if (!textToParse.trim()) return null;
@@ -63,15 +61,32 @@ export async function reparseWorkout(
   if (exercises.length === 0) return null;
 
   const setRows = expandExercisesToSetRows(exercises, workout.id);
+  return { exercises, setRows };
+}
 
+export async function saveParsedWorkout(
+  workoutId: string,
+  setRows: InsertExerciseSet[]
+): Promise<number> {
   await db.transaction(async (tx) => {
-    await tx.delete(exerciseSets).where(eq(exerciseSets.workoutLogId, workout.id));
+    await tx.delete(exerciseSets).where(eq(exerciseSets.workoutLogId, workoutId));
     if (setRows.length > 0) {
       await tx.insert(exerciseSets).values(setRows);
     }
   });
 
-  return { exercises, setCount: setRows.length };
+  return setRows.length;
+}
+
+export async function reparseWorkout(
+  workout: { id: string; mainWorkout?: string | null; accessory?: string | null },
+  weightUnit: string
+): Promise<{ exercises: any[]; setCount: number } | null> {
+  const prepared = await prepareParsedWorkout(workout, weightUnit);
+  if (!prepared) return null;
+
+  const setCount = await saveParsedWorkout(workout.id, prepared.setRows);
+  return { exercises: prepared.exercises, setCount };
 }
 
 export type CreateWorkoutResult = WorkoutLog & { exerciseSets?: ExerciseSet[] };
