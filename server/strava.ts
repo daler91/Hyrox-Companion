@@ -39,7 +39,7 @@ export function verifySignedState(state: string): { userId: string } | null {
   const expectedHash = crypto.createHash("sha256").update(expected).digest();
 
   if (!crypto.timingSafeEqual(signatureHash, expectedHash)) return null;
-  const ts = parseInt(timestamp, 36);
+  const ts = Number.parseInt(timestamp, 36);
   if (Date.now() - ts > STATE_MAX_AGE_MS) return null;
   return { userId };
 }
