@@ -69,7 +69,7 @@ function escapeCsv(val: string | null | undefined): string {
   // that could be interpreted as a formula in spreadsheet software (=, +, -, @, |).
   const formulaProtected = CSV_FORMULA_CHARACTERS.test(rawStr) ? `'${rawStr}` : rawStr;
 
-  const escaped = formulaProtected.replace(/"/g, '""');
+  const escaped = formulaProtected.replaceAll('"', '""');
   // If the value contains characters that require quoting (comma, newline, or double quote), wrap it in quotes.
   return CSV_QUOTABLE_CHARACTERS.test(escaped) ? `"${escaped}"` : escaped;
 }
