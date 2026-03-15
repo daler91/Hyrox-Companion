@@ -4,6 +4,7 @@ import { toDateStr } from "./types";
 const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
 export const MAX_RATE_LIMIT_BUCKETS = 10000;
 export const DEFAULT_WINDOW_MS = 60000;
+export const CLEANUP_INTERVAL_MS = 120000;
 
 // Exported for testing only
 export function clearRateLimitBuckets() {
@@ -62,7 +63,7 @@ setInterval(() => {
       rateLimitBuckets.delete(key);
     }
   });
-}, 120000);
+}, CLEANUP_INTERVAL_MS);
 
 export function calculateStreak(completedDates: Set<string>): number {
   if (completedDates.size === 0) return 0;
