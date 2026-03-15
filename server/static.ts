@@ -1,6 +1,11 @@
 import express, { type Express } from "express";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 import rateLimit from "express-rate-limit";
 
 export function serveStatic(app: Express) {
