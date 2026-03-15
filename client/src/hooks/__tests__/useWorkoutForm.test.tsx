@@ -71,11 +71,10 @@ describe('useWorkoutForm', () => {
     let callCount = 0;
     vi.mocked(voiceInputHook.useVoiceInput).mockImplementation((params) => {
       callCount++;
-      if (callCount === 1) {
-        // First call is for main text
+      const isFirst = callCount % 2 !== 0;
+      if (isFirst) {
         return mockVoiceInput as any;
       }
-      // Second call is for notes
       return mockNotesVoiceInput as any;
     });
   });
@@ -83,6 +82,7 @@ describe('useWorkoutForm', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
+
 
   const defaultProps = {
     useTextMode: true,
@@ -92,8 +92,36 @@ describe('useWorkoutForm', () => {
     distanceUnit: 'km',
   };
 
+  const setupVoiceMocks = () => {
+    let mainVoiceHandler: any;
+    let notesVoiceHandler: any;
+    let renderCallCount = 0;
+
+    vi.mocked(voiceInputHook.useVoiceInput).mockImplementation((params) => {
+      renderCallCount++;
+      // Reset count every 2 calls (since there are 2 hooks per render)
+      const isFirst = renderCallCount % 2 !== 0;
+
+      if (isFirst) {
+        mainVoiceHandler = params;
+        return mockVoiceInput as any;
+      } else {
+        notesVoiceHandler = params;
+        return mockNotesVoiceInput as any;
+      }
+    });
+
+    return {
+      getMainHandler: () => mainVoiceHandler,
+      getNotesHandler: () => notesVoiceHandler
+    };
+  };
+
+  const renderFormHook = (props = defaultProps) => renderHook(() => useWorkoutForm(props), { wrapper });
+
+
   it('initializes with default state', () => {
-    const { result } = renderHook(() => useWorkoutForm(defaultProps), { wrapper });
+    const { result } = renderFormHook(defaultProps);
 
     expect(result.current.title).toBe('');
     expect(result.current.date).toBe(new Date().toISOString().split('T')[0]);
@@ -103,7 +131,7 @@ describe('useWorkoutForm', () => {
 
   describe('State management', () => {
     it('updates state fields correctly', () => {
-      const { result } = renderHook(() => useWorkoutForm(defaultProps), { wrapper });
+      const { result } = renderFormHook(defaultProps);
 
       act(() => {
         result.current.setTitle('My Workout');
@@ -121,19 +149,9 @@ describe('useWorkoutForm', () => {
 
   describe('Voice Input Handlers', () => {
     it('appends voice result with a space if needed', () => {
-      let mainVoiceHandler: any;
-      let notesVoiceHandler: any;
+      const handlers = setupVoiceMocks();
 
-      vi.mocked(voiceInputHook.useVoiceInput).mockImplementation((params) => {
-        if (!mainVoiceHandler) {
-          mainVoiceHandler = params;
-          return mockVoiceInput as any;
-        }
-        notesVoiceHandler = params;
-        return mockNotesVoiceInput as any;
-      });
-
-      const { result } = renderHook(() => useWorkoutForm(defaultProps), { wrapper });
+      const { result } = renderFormHook(defaultProps);
 
       act(() => {
         result.current.setFreeText('Running');
@@ -141,8 +159,8 @@ describe('useWorkoutForm', () => {
       });
 
       act(() => {
-        mainVoiceHandler.onResult('is fun');
-        notesVoiceHandler.onResult('and fun');
+        handlers.getMainHandler().onResult('is fun');
+        handlers.getNotesHandler().onResult('and fun');
       });
 
       expect(result.current.freeText).toBe('Running is fun');
@@ -150,24 +168,16 @@ describe('useWorkoutForm', () => {
     });
 
     it('does not append space if text already ends with a space or newline', () => {
-      let mainVoiceHandler: any;
+      const handlers = setupVoiceMocks();
 
-      vi.mocked(voiceInputHook.useVoiceInput).mockImplementation((params) => {
-        if (!mainVoiceHandler) {
-          mainVoiceHandler = params;
-          return mockVoiceInput as any;
-        }
-        return mockNotesVoiceInput as any;
-      });
-
-      const { result } = renderHook(() => useWorkoutForm(defaultProps), { wrapper });
+      const { result } = renderFormHook(defaultProps);
 
       act(() => {
         result.current.setFreeText('Running ');
       });
 
       act(() => {
-        mainVoiceHandler.onResult('is fun');
+        handlers.getMainHandler().onResult('is fun');
       });
 
       expect(result.current.freeText).toBe('Running is fun');
@@ -177,27 +187,19 @@ describe('useWorkoutForm', () => {
       });
 
       act(() => {
-        mainVoiceHandler.onResult('is fun');
+        handlers.getMainHandler().onResult('is fun');
       });
 
       expect(result.current.freeText).toBe('Running\nis fun');
     });
 
     it('triggers destructive toast on voice error', () => {
-      let mainVoiceHandler: any;
+      const handlers = setupVoiceMocks();
 
-      vi.mocked(voiceInputHook.useVoiceInput).mockImplementation((params) => {
-        if (!mainVoiceHandler) {
-          mainVoiceHandler = params;
-          return mockVoiceInput as any;
-        }
-        return mockNotesVoiceInput as any;
-      });
-
-      renderHook(() => useWorkoutForm(defaultProps), { wrapper });
+      renderFormHook(defaultProps);
 
       act(() => {
-        mainVoiceHandler.onError('Microphone not found');
+        handlers.getMainHandler().onError('Microphone not found');
       });
 
       expect(mockToast).toHaveBeenCalledWith({
@@ -216,10 +218,11 @@ describe('useWorkoutForm', () => {
       let callCount = 0;
       vi.mocked(voiceInputHook.useVoiceInput).mockImplementation(() => {
         callCount++;
-        return callCount === 1 ? activeVoiceInput as any : activeNotesVoiceInput as any;
+        const isFirst = callCount % 2 !== 0;
+        return isFirst ? activeVoiceInput as any : activeNotesVoiceInput as any;
       });
 
-      const { result } = renderHook(() => useWorkoutForm(defaultProps), { wrapper });
+      const { result } = renderFormHook(defaultProps);
 
       act(() => {
         result.current.handleSave();
@@ -230,7 +233,7 @@ describe('useWorkoutForm', () => {
     });
 
     it('requires a title', () => {
-      const { result } = renderHook(() => useWorkoutForm(defaultProps), { wrapper });
+      const { result } = renderFormHook(defaultProps);
 
       act(() => {
         result.current.handleSave();
@@ -245,7 +248,7 @@ describe('useWorkoutForm', () => {
     });
 
     it('requires freeText when useTextMode is true', () => {
-      const { result } = renderHook(() => useWorkoutForm({ ...defaultProps, useTextMode: true }), { wrapper });
+      const { result } = renderFormHook({ ...defaultProps, useTextMode: true });
 
       act(() => {
         result.current.setTitle('My Workout');
@@ -265,7 +268,7 @@ describe('useWorkoutForm', () => {
     });
 
     it('requires at least one exercise block when useTextMode is false', () => {
-      const { result } = renderHook(() => useWorkoutForm({ ...defaultProps, useTextMode: false, exerciseBlocks: [] }), { wrapper });
+      const { result } = renderFormHook({ ...defaultProps, useTextMode: false, exerciseBlocks: [] });
 
       act(() => {
         result.current.setTitle('My Builder Workout');
@@ -286,7 +289,7 @@ describe('useWorkoutForm', () => {
 
   describe('Successful Save (handleSave)', () => {
     it('saves successfully in Text Mode', async () => {
-      const { result } = renderHook(() => useWorkoutForm({ ...defaultProps, useTextMode: true }), { wrapper });
+      const { result } = renderFormHook({ ...defaultProps, useTextMode: true });
 
       act(() => {
         result.current.setTitle('My Run');
@@ -329,7 +332,7 @@ describe('useWorkoutForm', () => {
         exerciseData: mockExerciseData as any,
       };
 
-      const { result } = renderHook(() => useWorkoutForm(props), { wrapper });
+      const { result } = renderFormHook(props);
 
       act(() => {
         result.current.setTitle('Leg Day');
@@ -360,7 +363,7 @@ describe('useWorkoutForm', () => {
     });
 
     it('handles saving with null notes if notes are empty', async () => {
-      const { result } = renderHook(() => useWorkoutForm({ ...defaultProps, useTextMode: true }), { wrapper });
+      const { result } = renderFormHook({ ...defaultProps, useTextMode: true });
 
       act(() => {
         result.current.setTitle('My Run');
@@ -383,7 +386,7 @@ describe('useWorkoutForm', () => {
 
   describe('Mutation Side Effects', () => {
     it('triggers success callbacks and navigation on successful save', async () => {
-      const { result } = renderHook(() => useWorkoutForm({ ...defaultProps, useTextMode: true }), { wrapper });
+      const { result } = renderFormHook({ ...defaultProps, useTextMode: true });
 
       act(() => {
         result.current.setTitle('Success Workout');
@@ -408,7 +411,7 @@ describe('useWorkoutForm', () => {
     it('triggers error toast on failed save', async () => {
       vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(new Error('Network Error'));
 
-      const { result } = renderHook(() => useWorkoutForm({ ...defaultProps, useTextMode: true }), { wrapper });
+      const { result } = renderFormHook({ ...defaultProps, useTextMode: true });
 
       act(() => {
         result.current.setTitle('Failed Workout');
