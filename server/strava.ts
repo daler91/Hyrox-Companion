@@ -18,6 +18,7 @@ const STATE_SECRET = process.env.CLERK_SECRET_KEY || crypto.randomBytes(32).toSt
 const stravaAuthLimiter = rateLimiter("stravaAuth", 20, 15 * 60 * 1000); // 20 requests per 15 minutes
 const STATE_MAX_AGE_MS = 10 * 60 * 1000;
 
+
 export function createSignedState(userId: string): string {
   const timestamp = Date.now().toString(36);
   const nonce = crypto.randomBytes(8).toString("hex");
@@ -158,7 +159,7 @@ export function registerStravaRoutes(app: Express): void {
     const { code, state, error: stravaError } = req.query;
 
     if (stravaError) {
-      console.error("Strava auth error:", stravaError);
+      console.error("Strava auth error received from provider");
       return res.redirect("/settings?strava=error");
     }
 
