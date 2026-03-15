@@ -97,7 +97,7 @@ export default function Settings() {
     saveMutation.mutate({
       weightUnit,
       distanceUnit,
-      weeklyGoal: parseInt(weeklyGoal, 10),
+      weeklyGoal: Number.parseInt(weeklyGoal, 10),
       emailNotifications: emailNotifications ? 1 : 0,
     });
   };
