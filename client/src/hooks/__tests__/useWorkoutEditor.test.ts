@@ -1,6 +1,97 @@
 import { describe, it, expect } from 'vitest';
-import { generateSummary } from '../useWorkoutEditor';
+import { generateSummary, exerciseToPayload } from '../useWorkoutEditor';
 import type { StructuredExercise } from '@/components/ExerciseInput';
+
+describe('exerciseToPayload', () => {
+  it('should map a basic exercise to payload', () => {
+    const ex: StructuredExercise = {
+      exerciseName: 'bench_press',
+      category: 'strength',
+      sets: [
+        { setNumber: 1, reps: 10, weight: 60, notes: 'felt good' }
+      ]
+    };
+
+    const payload = exerciseToPayload(ex);
+    expect(payload).toEqual({
+      exerciseName: 'bench_press',
+      customLabel: undefined,
+      category: 'strength',
+      confidence: undefined,
+      sets: [
+        {
+          setNumber: 1,
+          reps: 10,
+          weight: 60,
+          distance: undefined,
+          time: undefined,
+          notes: 'felt good'
+        }
+      ]
+    });
+  });
+
+  it('should handle custom exercises and confidence', () => {
+    const ex: StructuredExercise = {
+      exerciseName: 'custom',
+      customLabel: 'My Custom Exercise',
+      category: 'custom',
+      confidence: 95,
+      sets: [
+        { setNumber: 1, reps: 12 }
+      ]
+    };
+
+    const payload = exerciseToPayload(ex);
+    expect(payload.exerciseName).toBe('custom');
+    expect(payload.customLabel).toBe('My Custom Exercise');
+    expect(payload.confidence).toBe(95);
+  });
+
+  it('should handle multiple sets with all fields', () => {
+    const ex: StructuredExercise = {
+      exerciseName: 'rowing',
+      category: 'hyrox_station',
+      sets: [
+        { setNumber: 1, distance: 1000, time: 4.5, notes: 'warmup' },
+        { setNumber: 2, distance: 1000, time: 4.2, notes: 'sprint' }
+      ]
+    };
+
+    const payload = exerciseToPayload(ex);
+    expect(payload.sets).toHaveLength(2);
+    expect(payload.sets[0]).toEqual({
+      setNumber: 1,
+      reps: undefined,
+      weight: undefined,
+      distance: 1000,
+      time: 4.5,
+      notes: 'warmup'
+    });
+  });
+
+  it('should handle empty sets array', () => {
+    const ex: StructuredExercise = {
+      exerciseName: 'skierg',
+      category: 'hyrox_station',
+      sets: []
+    };
+
+    const payload = exerciseToPayload(ex);
+    expect(payload.sets).toEqual([]);
+  });
+
+  it('should handle undefined sets property by returning empty array', () => {
+    // @ts-expect-error - testing runtime safety for missing sets
+    const ex: StructuredExercise = {
+      exerciseName: 'skierg',
+      category: 'hyrox_station',
+    };
+
+    const payload = exerciseToPayload(ex);
+    expect(payload.sets).toEqual([]);
+  });
+});
 
 describe('generateSummary', () => {
   it('should handle exercises with no sets', () => {
