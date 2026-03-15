@@ -8,17 +8,21 @@ RUN apk add --no-cache libc6-compat \
 
 WORKDIR /app
 
+# Switch to the non-root 'node' user provided by the alpine image
+# Ensure /app is owned by node so npm install/build works
+RUN chown node:node /app
+USER node
+
 # Copy only dependency files to leverage layer caching
-COPY package.json pnpm-lock.yaml ./
+COPY --chown=node:node package.json pnpm-lock.yaml ./
 
 # Install all dependencies (including devDependencies for building)
 RUN pnpm install --frozen-lockfile
 
 # Copy the rest of the application code
-COPY . .
+COPY --chown=node:node . .
 
 # Build the frontend and backend
-# (Ensure script/build.ts is not ignored in .dockerignore if it's needed)
 RUN pnpm run build
 
 # Stage 2: Production runtime stage
@@ -30,12 +34,17 @@ RUN corepack enable \
 
 WORKDIR /app
 
+# Switch to the non-root 'node' user
+RUN chown node:node /app
+USER node
+
 # Set Node environment to production
 ENV NODE_ENV=production
+ENV PORT=5000
 
 # Copy dependency files and build outputs from the builder stage
-COPY --from=builder /app/package.json /app/pnpm-lock.yaml ./
-COPY --from=builder /app/dist ./dist
+COPY --chown=node:node --from=builder /app/package.json /app/pnpm-lock.yaml ./
+COPY --chown=node:node --from=builder /app/dist ./dist
 
 # Install only production dependencies
 RUN pnpm install --prod --frozen-lockfile
