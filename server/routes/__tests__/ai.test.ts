@@ -1,7 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import express from "express";
 import request from "supertest";
 import aiRouter from "../ai";
+import { storage } from "../../storage";
+import { parseExercisesFromText, chatWithCoach, streamChatWithCoach, generateWorkoutSuggestions } from "../../gemini";
+import { buildTrainingContext } from "../../services/aiService";
 
 // Mock the clerkAuth middleware to simulate authentication
 vi.mock("../../clerkAuth", () => ({
@@ -57,19 +60,19 @@ describe("POST /api/parse-exercises", () => {
     app.use(aiRouter);
   });
 
-  it("should successfully parse exercises and return them", async () => {
-    const mockStorage = await import("../../storage");
-    const { storage } = mockStorage as any;
-    const mockGemini = await import("../../gemini");
-    const { parseExercisesFromText } = mockGemini as any;
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
-    storage.getUser.mockResolvedValue({ weightUnit: "lbs" });
-    storage.getCustomExercises.mockResolvedValue([{ name: "Custom Squat" }]);
+  it("should successfully parse exercises and return them", async () => {
+
+    (storage.getUser as any).mockResolvedValue({ weightUnit: "lbs" });
+    (storage.getCustomExercises as any).mockResolvedValue([{ name: "Custom Squat" }]);
 
     const mockParsedExercises = [
       { name: "Bench Press", sets: [{ weight: 135, reps: 10 }] }
     ];
-    parseExercisesFromText.mockResolvedValue(mockParsedExercises);
+    (parseExercisesFromText as any).mockResolvedValue(mockParsedExercises);
 
     const response = await request(app)
       .post("/api/parse-exercises")
@@ -92,9 +95,7 @@ describe("POST /api/parse-exercises", () => {
   });
 
   it("should return 500 on internal error", async () => {
-    const mockStorage = await import("../../storage");
-    const { storage } = mockStorage as any;
-    storage.getUser.mockRejectedValue(new Error("Database error"));
+    (storage.getUser as any).mockRejectedValue(new Error("Database error"));
 
     const response = await request(app)
       .post("/api/parse-exercises")
@@ -105,14 +106,10 @@ describe("POST /api/parse-exercises", () => {
   });
 
   it("should rate limit requests after 5 attempts", async () => {
-    const mockStorage = await import("../../storage");
-    const { storage } = mockStorage as any;
-    const mockGemini = await import("../../gemini");
-    const { parseExercisesFromText } = mockGemini as any;
 
-    storage.getUser.mockResolvedValue({ weightUnit: "kg" });
-    storage.getCustomExercises.mockResolvedValue([]);
-    parseExercisesFromText.mockResolvedValue([]);
+    (storage.getUser as any).mockResolvedValue({ weightUnit: "kg" });
+    (storage.getCustomExercises as any).mockResolvedValue([]);
+    (parseExercisesFromText as any).mockResolvedValue([]);
 
     const payload = { text: "Squat 100x5" };
 
@@ -149,13 +146,9 @@ describe("POST /api/chat", () => {
   });
 
   it("should successfully chat with coach and return response", async () => {
-    const mockAiService = await import("../../services/aiService");
-    const { buildTrainingContext } = mockAiService as any;
-    const mockGemini = await import("../../gemini");
-    const { chatWithCoach } = mockGemini as any;
 
-    buildTrainingContext.mockResolvedValue("Training context");
-    chatWithCoach.mockResolvedValue("Coach response");
+    (buildTrainingContext as any).mockResolvedValue("Training context");
+    (chatWithCoach as any).mockResolvedValue("Coach response");
 
     const response = await request(app)
       .post("/api/chat")
@@ -176,9 +169,7 @@ describe("POST /api/chat", () => {
   });
 
   it("should return 500 on internal error", async () => {
-    const mockAiService = await import("../../services/aiService");
-    const { buildTrainingContext } = mockAiService as any;
-    buildTrainingContext.mockRejectedValue(new Error("Database error"));
+    (buildTrainingContext as any).mockRejectedValue(new Error("Database error"));
 
     const response = await request(app)
       .post("/api/chat")
@@ -202,19 +193,13 @@ describe("POST /api/chat/stream", () => {
   });
 
   it("should successfully stream chat response", async () => {
-    const mockAiService = await import("../../services/aiService");
-    const { buildTrainingContext } = mockAiService as any;
-    const mockGemini = await import("../../gemini");
-    const { streamChatWithCoach } = mockGemini as any;
 
-    buildTrainingContext.mockResolvedValue("Training context");
+    (buildTrainingContext as any).mockResolvedValue("Training context");
 
-    // Create an async generator for the stream mock
-    async function* mockStream() {
+    (streamChatWithCoach as any).mockImplementation(async function* () {
       yield "Hello";
       yield " World";
-    }
-    streamChatWithCoach.mockReturnValue(mockStream());
+    });
 
     const response = await request(app)
       .post("/api/chat/stream")
@@ -234,17 +219,12 @@ describe("POST /api/chat/stream", () => {
   });
 
   it("should handle stream errors gracefully", async () => {
-    const mockAiService = await import("../../services/aiService");
-    const { buildTrainingContext } = mockAiService as any;
-    const mockGemini = await import("../../gemini");
-    const { streamChatWithCoach } = mockGemini as any;
 
-    buildTrainingContext.mockResolvedValue("Training context");
+    (buildTrainingContext as any).mockResolvedValue("Training context");
 
-    async function* errorStream() {
+    (streamChatWithCoach as any).mockImplementation(async function* () {
       throw new Error("Stream failure");
-    }
-    streamChatWithCoach.mockReturnValue(errorStream());
+    });
 
     const response = await request(app)
       .post("/api/chat/stream")
@@ -269,11 +249,9 @@ describe("Chat History and Messages Routes", () => {
   });
 
   it("should get chat history", async () => {
-    const mockStorage = await import("../../storage");
-    const { storage } = mockStorage as any;
 
     const mockMessages = [{ id: 1, role: "user", content: "Hi" }];
-    storage.getChatMessages.mockResolvedValue(mockMessages);
+    (storage.getChatMessages as any).mockResolvedValue(mockMessages);
 
     const response = await request(app).get("/api/chat/history");
 
@@ -283,10 +261,8 @@ describe("Chat History and Messages Routes", () => {
   });
 
   it("should return 500 when getting history fails", async () => {
-    const mockStorage = await import("../../storage");
-    const { storage } = mockStorage as any;
 
-    storage.getChatMessages.mockRejectedValue(new Error("Database Error"));
+    (storage.getChatMessages as any).mockRejectedValue(new Error("Database Error"));
 
     const response = await request(app).get("/api/chat/history");
 
@@ -295,11 +271,9 @@ describe("Chat History and Messages Routes", () => {
   });
 
   it("should save chat message", async () => {
-    const mockStorage = await import("../../storage");
-    const { storage } = mockStorage as any;
 
     const savedMessage = { id: 1, userId: "test_user_id", role: "user", content: "Hello" };
-    storage.saveChatMessage.mockResolvedValue(savedMessage);
+    (storage.saveChatMessage as any).mockResolvedValue(savedMessage);
 
     const response = await request(app)
       .post("/api/chat/message")
@@ -324,10 +298,8 @@ describe("Chat History and Messages Routes", () => {
   });
 
   it("should clear chat history", async () => {
-    const mockStorage = await import("../../storage");
-    const { storage } = mockStorage as any;
 
-    storage.clearChatHistory.mockResolvedValue(undefined);
+    (storage.clearChatHistory as any).mockResolvedValue(undefined);
 
     const response = await request(app).delete("/api/chat/history");
 
@@ -337,10 +309,8 @@ describe("Chat History and Messages Routes", () => {
   });
 
   it("should return 500 when clearing history fails", async () => {
-    const mockStorage = await import("../../storage");
-    const { storage } = mockStorage as any;
 
-    storage.clearChatHistory.mockRejectedValue(new Error("Delete failed"));
+    (storage.clearChatHistory as any).mockRejectedValue(new Error("Delete failed"));
 
     const response = await request(app).delete("/api/chat/history");
 
@@ -362,14 +332,8 @@ describe("POST /api/timeline/ai-suggestions", () => {
   });
 
   it("should successfully generate suggestions", async () => {
-    const mockStorage = await import("../../storage");
-    const { storage } = mockStorage as any;
-    const mockAiService = await import("../../services/aiService");
-    const { buildTrainingContext } = mockAiService as any;
-    const mockGemini = await import("../../gemini");
-    const { generateWorkoutSuggestions } = mockGemini as any;
 
-    buildTrainingContext.mockResolvedValue("Training context");
+    (buildTrainingContext as any).mockResolvedValue("Training context");
 
     const mockTimeline = [
       {
@@ -395,7 +359,7 @@ describe("POST /api/timeline/ai-suggestions", () => {
         mainWorkout: "Pullups",
       },
     ];
-    storage.getTimeline.mockResolvedValue(mockTimeline);
+    (storage.getTimeline as any).mockResolvedValue(mockTimeline);
 
     const rawSuggestions = [
       {
@@ -407,7 +371,7 @@ describe("POST /api/timeline/ai-suggestions", () => {
         priority: "high",
       },
     ];
-    generateWorkoutSuggestions.mockResolvedValue(rawSuggestions);
+    (generateWorkoutSuggestions as any).mockResolvedValue(rawSuggestions);
 
     const response = await request(app).post("/api/timeline/ai-suggestions");
 
@@ -441,14 +405,10 @@ describe("POST /api/timeline/ai-suggestions", () => {
   });
 
   it("should handle no upcoming planned workouts gracefully", async () => {
-    const mockStorage = await import("../../storage");
-    const { storage } = mockStorage as any;
-    const mockAiService = await import("../../services/aiService");
-    const { buildTrainingContext } = mockAiService as any;
 
-    buildTrainingContext.mockResolvedValue("Training context");
+    (buildTrainingContext as any).mockResolvedValue("Training context");
     // No planned, future workouts
-    storage.getTimeline.mockResolvedValue([
+    (storage.getTimeline as any).mockResolvedValue([
       {
         status: "completed",
         date: "2024-03-12",
@@ -467,10 +427,8 @@ describe("POST /api/timeline/ai-suggestions", () => {
   });
 
   it("should return 500 on error", async () => {
-    const mockStorage = await import("../../storage");
-    const { storage } = mockStorage as any;
 
-    storage.getTimeline.mockRejectedValue(new Error("DB Error"));
+    (storage.getTimeline as any).mockRejectedValue(new Error("DB Error"));
 
     const response = await request(app).post("/api/timeline/ai-suggestions");
 
