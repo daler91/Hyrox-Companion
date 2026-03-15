@@ -7,9 +7,9 @@ import { VoiceButton } from "@/components/VoiceButton";
 import { useToast } from "@/hooks/use-toast";
 
 interface ChatInputProps {
-  onSend: (message: string) => void;
-  isLoading?: boolean;
-  placeholder?: string;
+  readonly onSend: (message: string) => void;
+  readonly isLoading?: boolean;
+  readonly placeholder?: string;
 }
 
 export function ChatInput({ onSend, isLoading, placeholder = "Ask about your training..." }: ChatInputProps) {
