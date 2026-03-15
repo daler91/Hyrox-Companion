@@ -1,5 +1,5 @@
 import { Router } from "express";
-import crypto from "crypto";
+import crypto from "node:crypto";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
 import { checkAndSendEmailsForUser, runEmailCronJob } from "../emailScheduler";

@@ -1,5 +1,5 @@
 import type { Express, Response } from "express";
-import crypto from "crypto";
+import crypto from "node:crypto";
 import { storage } from "./storage";
 import { isAuthenticated } from "./clerkAuth";
 import { type DistanceUnit } from "@shared/unitConversion";

@@ -4,7 +4,7 @@ import compression from "compression";
 import helmet from "helmet";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
-import { createServer } from "http";
+import { createServer } from "node:http";
 import { storage } from "./storage";
 import { runStartupMaintenance } from "./maintenance";
 

@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import type { Server } from "http";
+import type { Server } from "node:http";
 import { setupAuth } from "./clerkAuth";
 import { registerStravaRoutes } from "./strava";
 
