@@ -60,16 +60,15 @@ export async function generateJSON(userId: string, storage: IStorage) {
 
 function escapeCsv(val: string | null | undefined): string {
   if (val == null) return "";
-  let str = String(val);
+  const rawStr = String(val);
 
   // CSV Injection protection: prepend a single quote if the value starts with a character
   // that could be interpreted as a formula in spreadsheet software (=, +, -, @, |).
-  if (str.length > 0 && /^[=\+\-@|]/.test(str)) {
-    str = `'${str}`;
-  }
+  const formulaProtected = /^[=\+\-@|]/.test(rawStr) ? `'${rawStr}` : rawStr;
 
-  const escaped = str.replace(/"/g, '""');
-  return escaped.includes(",") || escaped.includes("\n") || escaped.includes('"') ? `"${escaped}"` : escaped;
+  const escaped = formulaProtected.replace(/"/g, '""');
+  // If the value contains characters that require quoting (comma, newline, or double quote), wrap it in quotes.
+  return /[,\n"]/.test(escaped) ? `"${escaped}"` : escaped;
 }
 
 function generateTimelineCsvRows(timeline: TimelineEntry[]): string[] {
