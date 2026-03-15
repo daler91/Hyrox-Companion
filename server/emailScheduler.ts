@@ -96,17 +96,34 @@ export async function runEmailCronJob(storage: IStorage): Promise<{ usersChecked
 
     log(`Cron: Checking emails for ${usersToCheck.length} user(s)`, "email");
 
-    for (const user of usersToCheck) {
-      try {
-        const sent = await checkAndSendEmailsForUser(storage, user);
-        emailsSent += sent.length;
-        if (sent.length > 0) {
-          const detail = `Sent ${sent.join(", ")} to ${user.email}`;
+    const results = await Promise.allSettled(
+      usersToCheck.map(async (user) => {
+        try {
+          const sent = await checkAndSendEmailsForUser(storage, user);
+          return { success: true as const, user, sent };
+        } catch (err) {
+          return { success: false as const, user, err };
+        }
+      })
+    );
+
+    for (const result of results) {
+      if (result.status === "fulfilled") {
+        const res = result.value;
+        if (res.success) {
+          emailsSent += res.sent.length;
+          if (res.sent.length > 0) {
+            const detail = `Sent ${res.sent.join(", ")} to ${res.user.email}`;
+            details.push(detail);
+            log(detail, "email");
+          }
+        } else {
+          const detail = `Failed for user ${res.user.id}: ${res.err}`;
           details.push(detail);
           log(detail, "email");
         }
-      } catch (err) {
-        const detail = `Failed for user ${user.id}: ${err}`;
+      } else {
+        const detail = `Unexpected failure: ${result.reason}`;
         details.push(detail);
         log(detail, "email");
       }
