@@ -18,8 +18,9 @@ try {
   const appPath = path.join(cachePath, version, 'Cypress', 'resources', 'app');
   const simpleGitPath = path.join(appPath, 'node_modules', 'simple-git');
   const serializeJsPath = path.join(appPath, 'node_modules', 'serialize-javascript');
+  const engineIoPath = path.join(appPath, 'node_modules', '@packages', 'socket', 'node_modules', 'socket.io', 'node_modules', 'engine.io');
 
-  if (fs.existsSync(appPath) && (fs.existsSync(simpleGitPath) || fs.existsSync(serializeJsPath))) {
+  if (fs.existsSync(appPath) && (fs.existsSync(simpleGitPath) || fs.existsSync(serializeJsPath) || fs.existsSync(engineIoPath))) {
     console.log(`Patching Cypress dependencies in ${appPath}`);
 
     const tempDir = path.join(appPath, '.temp-patch-deps');
@@ -29,13 +30,25 @@ try {
     const depsToInstall = [];
     if (fs.existsSync(simpleGitPath)) depsToInstall.push('simple-git@^3.32.3');
     if (fs.existsSync(serializeJsPath)) depsToInstall.push('serialize-javascript@^7.0.3');
+    if (fs.existsSync(engineIoPath)) depsToInstall.push('engine.io@^5.2.1');
 
     if (depsToInstall.length > 0) {
       execFileSync(npmCmd, ['install', ...depsToInstall], { cwd: tempDir, stdio: 'inherit' });
 
       const sourceDir = path.join(tempDir, 'node_modules');
       if (fs.existsSync(sourceDir)) {
-        fs.cpSync(sourceDir, path.join(appPath, 'node_modules'), { recursive: true });
+        if (fs.existsSync(simpleGitPath) || fs.existsSync(serializeJsPath)) {
+          fs.cpSync(sourceDir, path.join(appPath, 'node_modules'), { recursive: true });
+        }
+
+        // Copy engine.io specifically to its nested location
+        if (fs.existsSync(engineIoPath)) {
+          const sourceEngineIo = path.join(sourceDir, 'engine.io');
+          if (fs.existsSync(sourceEngineIo)) {
+             fs.cpSync(sourceEngineIo, engineIoPath, { recursive: true });
+          }
+        }
+
         console.log(`Successfully patched ${depsToInstall.join(', ')} in Cypress cache`);
       }
     }
