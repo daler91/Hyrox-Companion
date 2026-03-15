@@ -77,7 +77,6 @@ export default function LogWorkout() {
     isListening: isNotesListening,
     isSupported: isNotesSupported,
     interimTranscript: notesInterim,
-    stopListening: stopNotesListening,
     toggleListening: toggleNotesListening,
   } = notesVoiceInput;
 
