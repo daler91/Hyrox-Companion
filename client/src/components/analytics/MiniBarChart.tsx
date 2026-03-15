@@ -95,8 +95,8 @@ export function MiniBarChart({
               radius={[4, 4, 0, 0]}
               maxBarSize={40}
             >
-              {data.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={fillColor} fillOpacity={0.8} />
+              {data.map((entry) => (
+                <Cell key={`cell-${entry.date}`} fill={fillColor} fillOpacity={0.8} />
               ))}
             </Bar>
           </BarChart>
