@@ -21,20 +21,24 @@ interface SuggestionCardProps {
   isApplying: boolean;
 }
 
+const FIELD_LABELS: Record<Suggestion["targetField"], string> = {
+  mainWorkout: "Main Workout",
+  accessory: "Accessory",
+  notes: "Notes",
+};
+
+const PRIORITY_COLORS: Record<Suggestion["priority"], string> = {
+  high: "bg-red-500/10 text-red-600 dark:text-red-400",
+  medium: "bg-orange-500/10 text-orange-600 dark:text-orange-400",
+  low: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
+};
+
 export function SuggestionCard({ suggestion, onApply, onDismiss, isApplying }: SuggestionCardProps) {
-  const fieldLabel = suggestion.targetField === "mainWorkout" 
-    ? "Main Workout" 
-    : suggestion.targetField === "accessory" 
-      ? "Accessory" 
-      : "Notes";
+  const fieldLabel = FIELD_LABELS[suggestion.targetField] || "Notes";
   
   const actionLabel = suggestion.action === "append" ? "Add to" : "Replace";
   
-  const priorityColor = suggestion.priority === "high" 
-    ? "bg-red-500/10 text-red-600 dark:text-red-400" 
-    : suggestion.priority === "medium" 
-      ? "bg-orange-500/10 text-orange-600 dark:text-orange-400" 
-      : "bg-blue-500/10 text-blue-600 dark:text-blue-400";
+  const priorityColor = PRIORITY_COLORS[suggestion.priority] || PRIORITY_COLORS.low;
 
   return (
     <Card className="p-3 space-y-2" data-testid={`suggestion-card-${suggestion.workoutId}`}>
