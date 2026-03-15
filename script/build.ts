@@ -49,6 +49,7 @@ async function buildAll() {
     platform: "node",
     bundle: true,
     format: "esm",
+    target: "es2022",
     outfile: "dist/index.js",
     define: {
       "process.env.NODE_ENV": '"production"',
