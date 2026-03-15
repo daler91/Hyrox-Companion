@@ -20,7 +20,7 @@ const Landing = lazy(() => import("@/pages/Landing"));
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
 function isCypressTest(): boolean {
-  return typeof globalThis.window !== "undefined" && "Cypress" in globalThis.window;
+  return typeof globalThis !== "undefined" && "Cypress" in globalThis;
 }
 
 function LazyFallback() {
