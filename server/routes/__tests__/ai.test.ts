@@ -238,9 +238,15 @@ describe("POST /api/chat/stream", () => {
 
     (buildTrainingContext as any).mockResolvedValue(MOCK_TRAINING_CONTEXT);
 
-    (streamChatWithCoach as any).mockImplementation(async function* () {
-      throw new Error("Stream failure");
-    });
+    (streamChatWithCoach as any).mockImplementation(() => ({
+      [Symbol.asyncIterator]() {
+        return {
+          next() {
+            return Promise.reject(new Error("Stream failure"));
+          }
+        };
+      }
+    }));
 
     const response = await request(app)
       .post(CHAT_STREAM_ENDPOINT)
