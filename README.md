@@ -40,7 +40,7 @@ A full-stack training planning and logging application for [Hyrox](https://hyrox
 
 ## Code Health & Security
 
-- **SonarCloud Integration** — Continuous code quality analysis via GitHub Actions (`build.yml`) with strict TypeScript enforcement.
+- **SonarCloud Integration** — Continuous code quality analysis via GitHub Actions (`build.yml`), configured in `sonar-project.properties`.
 - **Security Hardened** — Protected against vulnerabilities like CSV Injection.
 - **Performance Optimized** — Async operations parallelized using `Promise.allSettled()` for heavy batch jobs.
 
