@@ -1,13 +1,12 @@
-🎯 **What**
-Extracted a nested ternary operation used for generating `userName` into independent `if-else` statements.
+🧹 **What**
+Fixed a SonarQube `typescript:S1854` code smell by removing an unused destructuring assignment.
 
 💡 **Why**
-This change resolves a SonarQube code smell (`typescript:S3358`: "Ternary operators should not be nested"), which negatively impacted code maintainability and readability. By using a standard `if-else` block, the intent of the logic (falling back sequentially from full name to email to a default string) becomes much clearer and less error-prone.
+The variable `weightUnit` was extracted from `useUnitPreferences()` but never used within `TimelineWorkoutCard.tsx`. Removing unused variables improves code maintainability, reduces noise, and resolves the SonarQube finding.
 
 ✅ **Verification**
-- Replaced the nested ternary exactly with the user-provided, identical `if-else` logic.
-- Ran frontend tests and TypeScript type checking (via `npm run test` and `npm run check`) to ensure no regressions were introduced. Tests passed successfully.
-- Conducted a code review to confirm that the changes correctly address the code smell without altering existing functionality.
+- Verified the removal of `weightUnit`.
+- Ensured `weightLabel` and `distanceUnit` (which are used) remain untouched.
 
 ✨ **Result**
-Improved readability and maintainability of the `AppSidebar` component without changing its behavior.
+Code smell resolved without altering existing component functionality.
