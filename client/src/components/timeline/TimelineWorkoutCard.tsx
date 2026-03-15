@@ -100,13 +100,22 @@ function getStatusBadge(status: string) {
 
 
 
-function WorkoutStravaStats({ entry, distanceUnit }: { readonly entry: TimelineEntry; readonly distanceUnit: DistanceUnit | string }) {
-  if (
-    entry.source !== "strava" ||
-    (!entry.calories && !entry.avgWatts && !entry.sufferScore && !entry.avgCadence && !entry.avgSpeed)
-  ) {
-    return null;
-  }
+interface WorkoutStravaStatsProps {
+  readonly entry: TimelineEntry;
+  readonly distanceUnit: DistanceUnit | string;
+}
+
+function WorkoutStravaStats({ entry, distanceUnit }: WorkoutStravaStatsProps) {
+  if (entry.source !== "strava") return null;
+
+  const hasStravaStats =
+    entry.calories ||
+    entry.avgWatts ||
+    entry.sufferScore ||
+    entry.avgCadence ||
+    entry.avgSpeed;
+
+  if (!hasStravaStats) return null;
 
   return (
     <div className="flex flex-wrap gap-3 mt-2 pt-2 border-t border-border/50">
