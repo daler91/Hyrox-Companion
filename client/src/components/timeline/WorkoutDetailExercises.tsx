@@ -465,7 +465,7 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
 
     for (const blockId of editExercises) {
       const exData = editExerciseData[blockId];
-      if (exData && exData.exerciseName) {
+      if (exData?.exerciseName) {
         const name = exData.exerciseName;
         counts[name] = (counts[name] || 0) + 1;
       }
@@ -473,7 +473,7 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
 
     for (const blockId of editExercises) {
       const exData = editExerciseData[blockId];
-      if (exData && exData.exerciseName) {
+      if (exData?.exerciseName) {
         const name = exData.exerciseName;
         runningCounts[name] = (runningCounts[name] || 0) + 1;
         indices[blockId] = runningCounts[name];
