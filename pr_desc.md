@@ -1,14 +1,10 @@
-🧪 [testing improvement] Add E2E tests for complex timeline and logging workflows
+🔒 [security fix] Update ws package to resolve CVE-2024-37890
 
-🎯 What
-Added two new Cypress end-to-end test files to cover the full workout submission flow and complex timeline interactions:
-- `log-workout-submission.cy.ts`: Verifies successful submission of both free-text mode and exercise mode workouts, and checks error states for missing data.
-- `timeline-workout-details.cy.ts`: Verifies interactions with the timeline detail dialog, including marking workouts complete/missed, editing details, and deleting workouts.
+🎯 **What**
+Updated the `ws` package to version 8.19.0 to address CVE-2024-37890 (a vulnerability in versions < 8.17.1). Also synced `package.json`, `package-lock.json`, and `pnpm-lock.yaml`.
 
-📊 Coverage
-- Real-world interaction flows that go beyond simple element existence checks.
-- Form submissions intercepted properly with mocked API responses.
-- Timeline dialog interactions, actions, and UI state updates.
+⚠️ **Risk**
+The vulnerability (CVE-2024-37890) is a High severity issue where a request with a number of headers exceeding the server's threshold could be used to crash a ws server, leading to Denial of Service (DoS).
 
-✨ Result
-Significantly increased confidence that the core user flows (logging a workout and interacting with the timeline) work correctly without regressions, addressing the previous lack of functional E2E test coverage in these critical areas.
+🛡️ **Solution**
+Updated `ws` directly using `pnpm add ws@latest` to forcefully resolve the dependency to the fixed version (8.19.0) across the entire project and sync all lockfiles.
