@@ -274,6 +274,84 @@ describe('useWorkoutActions', () => {
         expect(mockToast).toHaveBeenCalledWith({ title: "Failed to update status", variant: "destructive" });
       });
     });
-  });
+
+    it('triggers error toast on failed updateDayMutation', async () => {
+      vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(new Error('Network Error'));
+      const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
+      const mockEntry = { planDayId: 'pd-1', date: '2024-01-01', focus: 'strength' };
+
+      act(() => {
+        result.current.openDetailDialog(mockEntry as any);
+      });
+
+      act(() => {
+        result.current.handleSaveFromDetail({ focus: 'cardio', mainWorkout: 'run', accessory: null, notes: null });
+      });
+
+      await waitFor(() => {
+        expect(mockToast).toHaveBeenCalledWith({ title: "Failed to update entry", variant: "destructive" });
+      });
+    });
+
+    it('triggers error toast on failed logWorkoutMutation', async () => {
+      vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(new Error('Network Error'));
+      const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
+      const mockEntry = { planDayId: 'pd-1', date: '2024-01-01', focus: 'strength' };
+
+      act(() => {
+        result.current.handleMarkComplete(mockEntry as any);
+      });
+
+      await waitFor(() => {
+        expect(mockToast).toHaveBeenCalledWith({ title: "Failed to log workout", variant: "destructive" });
+      });
+    });
+
+    it('triggers error toast on failed updateWorkoutMutation', async () => {
+      vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(new Error('Network Error'));
+      const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
+      const mockEntry = { workoutLogId: 'w-1', date: '2024-01-01', focus: 'strength' };
+
+      act(() => {
+        result.current.openDetailDialog(mockEntry as any);
+      });
+
+      act(() => {
+        result.current.handleSaveFromDetail({ focus: 'cardio', mainWorkout: 'run', accessory: null, notes: null });
+      });
+
+      await waitFor(() => {
+        expect(mockToast).toHaveBeenCalledWith({ title: "Failed to update workout", variant: "destructive" });
+      });
+    });
+
+    it('triggers error toast on failed deleteWorkoutMutation', async () => {
+      vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(new Error('Network Error'));
+      const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
+      const mockEntry = { workoutLogId: 'w-1', date: '2024-01-01', focus: 'strength' };
+
+      act(() => {
+        result.current.handleDelete(mockEntry as any);
+      });
+
+      await waitFor(() => {
+        expect(mockToast).toHaveBeenCalledWith({ title: "Failed to delete workout", variant: "destructive" });
+      });
+    });
+
+    it('triggers error toast on failed deletePlanDayMutation', async () => {
+      vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(new Error('Network Error'));
+      const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
+      const mockEntry = { planDayId: 'pd-1', date: '2024-01-01', focus: 'strength' };
+
+      act(() => {
+        result.current.handleDelete(mockEntry as any);
+      });
+
+      await waitFor(() => {
+        expect(mockToast).toHaveBeenCalledWith({ title: "Failed to delete workout", variant: "destructive" });
+      });
+    });
+});
 
 });
