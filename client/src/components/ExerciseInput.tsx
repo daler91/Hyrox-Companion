@@ -1,12 +1,13 @@
-import { useState, useId } from "react";
+import { useState, useId, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { X, Timer, Ruler, Hash, Weight, Pencil, Plus, Minus, Copy, AlertTriangle } from "lucide-react";
+import { X, Timer, Ruler, Hash, Weight, Pencil, Plus, Minus, Copy, AlertTriangle, TriangleAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
 import { categoryBorderColors } from "@/lib/exerciseUtils";
+import { getExerciseMissingFields } from "@/lib/exerciseWarnings";
 
 export interface SetData {
   setNumber: number;
@@ -22,6 +23,7 @@ export interface StructuredExercise {
   category: string;
   customLabel?: string;
   confidence?: number;
+  missingFields?: string[];
   sets: SetData[];
 }
 
@@ -88,6 +90,10 @@ export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg",
 
   const sets = exercise.sets.length > 0 ? exercise.sets : [createDefaultSet(1)];
 
+  const missingFields = useMemo(() => {
+    return getExerciseMissingFields(exercise);
+  }, [exercise]);
+
   const handleSetChange = (idx: number, field: string, value: string) => {
     const newSets = [...sets];
     newSets[idx] = { ...newSets[idx], [field]: value ? Number(value) : undefined };
@@ -136,6 +142,13 @@ export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg",
             <X className="h-4 w-4" />
           </Button>
         </div>
+
+        {missingFields.length > 0 && (
+          <div className="flex items-start gap-2 mb-3 p-2 rounded-md bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 text-xs" data-testid={`warning-missing-${exercise.exerciseName}`}>
+            <TriangleAlert className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+            <span>Missing {missingFields.join(", ").toLowerCase()} — add for better tracking</span>
+          </div>
+        )}
 
         {exercise.exerciseName === "custom" && (
           <div className="mb-4">

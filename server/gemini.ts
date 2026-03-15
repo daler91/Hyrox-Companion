@@ -82,6 +82,7 @@ export interface ParsedExercise {
   category: string;
   customLabel?: string;
   confidence?: number;
+  missingFields?: string[];
   sets: Array<{
     setNumber: number;
     reps?: number;
@@ -115,6 +116,7 @@ export const parsedExerciseSchema = z.object({
   category: z.string(),
   customLabel: z.string().optional().nullable(),
   confidence: z.number().min(0).max(100).optional().nullable(),
+  missingFields: z.array(z.string()).optional().nullable(),
   sets: z.array(exerciseSetSchema).min(1),
 });
 
@@ -329,6 +331,7 @@ and use the matching name as customLabel: ${customExerciseNames.join(", ")}`;
         category: validCategory ? ex.category : "conditioning",
         customLabel: isKnown ? ex.customLabel || undefined : (ex.customLabel || ex.exerciseName),
         confidence,
+        missingFields: Array.isArray(ex.missingFields) ? ex.missingFields.filter(f => typeof f === "string" && f.length > 0) : undefined,
         sets: ex.sets.map((s, i) => ({
           setNumber: s.setNumber || i + 1,
           ...(s.reps != null && { reps: s.reps }),

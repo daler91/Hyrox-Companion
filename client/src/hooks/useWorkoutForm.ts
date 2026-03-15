@@ -6,6 +6,7 @@ import { useVoiceInput } from "@/hooks/useVoiceInput";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { generateSummary, exerciseToPayload } from "@/hooks/useWorkoutEditor";
 import type { StructuredExercise } from "@/components/ExerciseInput";
+import { getMissingFieldWarnings } from "@/lib/exerciseWarnings";
 
 interface UseWorkoutFormProps {
   useTextMode: boolean;
@@ -29,6 +30,7 @@ export function useWorkoutForm({
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [freeText, setFreeText] = useState("");
   const [notes, setNotes] = useState("");
+  const [rpe, setRpe] = useState<number | null>(null);
 
   const handleVoiceError = useCallback(
     (msg: string) => {
@@ -114,6 +116,7 @@ export function useWorkoutForm({
         focus: title,
         mainWorkout: freeText,
         notes: notes || null,
+        rpe: rpe || null,
       });
     } else {
       if (exerciseBlocks.length === 0) {
@@ -128,6 +131,16 @@ export function useWorkoutForm({
       const exercises = exerciseBlocks
         .map((id) => exerciseData[id])
         .filter(Boolean);
+
+      const allWarnings = exercises.flatMap((ex) => getMissingFieldWarnings(ex));
+      if (allWarnings.length > 0) {
+        const uniqueWarnings = [...new Set(allWarnings)];
+        toast({
+          title: "Some data is missing",
+          description: uniqueWarnings.slice(0, 3).join(". ") + (uniqueWarnings.length > 3 ? ` (+${uniqueWarnings.length - 3} more)` : "") + ". Saving anyway — you can edit later.",
+        });
+      }
+
       const mainWorkout = generateSummary(exercises, weightLabel, distanceUnit);
 
       saveMutation.mutate({
@@ -136,6 +149,7 @@ export function useWorkoutForm({
         focus: title,
         mainWorkout,
         notes: notes || null,
+        rpe: rpe || null,
         exercises: exercises.map(exerciseToPayload),
       });
     }
@@ -150,6 +164,8 @@ export function useWorkoutForm({
     setFreeText,
     notes,
     setNotes,
+    rpe,
+    setRpe,
     voiceInput,
     notesVoiceInput,
     saveMutation,

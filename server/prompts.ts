@@ -75,6 +75,7 @@ Return ONLY a valid JSON array with no markdown formatting. Each element should 
   "category": "<category>",
   "customLabel": "<only if exerciseName is 'custom', the actual exercise name>",
   "confidence": <integer 0-100 representing how confident you are in the exercise mapping>,
+  "missingFields": ["<field names the user did NOT mention that are important for this exercise type>"],
   "sets": [
     { "setNumber": 1, "reps": <number or null>, "weight": <number or null>, "distance": <number or null>, "time": <number or null> }
   ]
@@ -99,7 +100,16 @@ IMPORTANT RULES:
 9. Parse ALL exercises mentioned, even if described casually
 10. When weight varies per set (pyramid, ramp up), create individual sets with specific weights
 11. If only "reps" is mentioned without sets count, assume 1 set
-12. If exerciseName is "custom", YOU MUST provide a clear, standardized exercise name in customLabel. Example: "did 3x10 bicep curlz" -> {"exerciseName": "custom", "customLabel": "Bicep Curls", ...}`;
+12. If exerciseName is "custom", YOU MUST provide a clear, standardized exercise name in customLabel. Example: "did 3x10 bicep curlz" -> {"exerciseName": "custom", "customLabel": "Bicep Curls", ...}
+13. MISSING FIELDS: For each exercise, identify key fields the user did NOT mention in their text. Use these rules:
+    - Strength exercises: flag "Weight" if no weight mentioned, "Reps" if no reps
+    - Running exercises: flag "Distance" if no distance, "Time" if no time/duration
+    - Hyrox stations: flag "Time" if no time/duration mentioned
+    - Conditioning: flag "Reps" if no reps mentioned
+    - Only flag fields that are relevant to the exercise type
+    - Example: "4x8 back squat" with no weight -> missingFields: ["Weight"]
+    - Example: "5km run" with no time -> missingFields: ["Time"]
+    - If all key fields are present, use an empty array: missingFields: []`;
 
 export const VALID_EXERCISE_NAMES = new Set([
   "skierg", "sled_push", "sled_pull", "burpee_broad_jump", "rowing",

@@ -61,6 +61,12 @@ The app supports browser-native speech recognition for hands-free interaction vi
 - The "Voice" mode button on the Log Workout page switches to free-text mode and starts listening automatically
 - Interim transcripts are shown separately (not mixed into the textarea value) to prevent state corruption
 
+### Data Entry Quality
+The app includes several features to improve workout data quality:
+- **RPE (Rate of Perceived Exertion)**: A 1-10 effort scale selector on the Log Workout page. Color-coded (green/yellow/orange/red) with effort labels (Easy/Moderate/Hard/Max Effort). Stored on `workout_logs.rpe`. Toggle to deselect.
+- **Missing Data Warnings**: Inline yellow warning banners on exercise cards when key fields are empty (e.g., weight for strength, time for Hyrox stations, distance for runs). Also shows a toast notification on save listing which exercises have gaps. Implemented in `client/src/lib/exerciseWarnings.ts` with category-based field requirements.
+- **AI Missing Field Detection**: The AI exercise parser flags fields the user didn't mention in their text description (e.g., "4x8 squat" → flags "Weight" as missing). The `missingFields` array flows through the `parsedExerciseSchema` and appears as warnings on parsed exercise cards.
+
 ### AI Integration
 The Google Gemini API (gemini-3-flash-preview model) powers the AI features. This includes an AI training coach that provides Hyrox-specific advice, workout analysis, and pacing strategies, as well as AI text-to-exercise parsing for converting free-text workout descriptions into structured data. The AI also benefits from custom exercise recognition based on user-saved names. The server-side implementation manages conversation history and provides personalized training context to the AI, including user stats and recent workout data.
 

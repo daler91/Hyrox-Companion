@@ -14,6 +14,7 @@ export interface ParsedExercise {
   category: string;
   customLabel?: string;
   confidence?: number;
+  missingFields?: string[];
   sets: Array<{ setNumber: number; reps?: number; weight?: number; distance?: number; time?: number }>;
 }
 
@@ -161,6 +162,7 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
           category: isKnown ? EXERCISE_DEFINITIONS[rawName].category : ex.category,
           customLabel: isKnown ? undefined : (ex.customLabel || ex.exerciseName),
           confidence: ex.confidence,
+          missingFields: ex.missingFields,
           sets: ex.sets.map((s, i) => ({
             setNumber: s.setNumber || i + 1,
             reps: s.reps,
@@ -176,12 +178,18 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
       setUseTextMode(false);
 
       const lowConfCount = parsed.filter(e => e.confidence != null && e.confidence < 80).length;
-      toast({
-        title: "Exercises parsed",
-        description: lowConfCount > 0
-          ? `Found ${parsed.length} exercise${parsed.length !== 1 ? "s" : ""}. ${lowConfCount} may need review (low confidence).`
-          : `Found ${parsed.length} exercise${parsed.length !== 1 ? "s" : ""}. Review the details below.`,
-      });
+      const missingCount = parsed.filter(e => e.missingFields && e.missingFields.length > 0).length;
+      let description = `Found ${parsed.length} exercise${parsed.length !== 1 ? "s" : ""}.`;
+      if (lowConfCount > 0) {
+        description += ` ${lowConfCount} may need review (low confidence).`;
+      }
+      if (missingCount > 0) {
+        description += ` ${missingCount} ha${missingCount === 1 ? "s" : "ve"} missing data — check the yellow warnings.`;
+      }
+      if (lowConfCount === 0 && missingCount === 0) {
+        description += " Review the details below.";
+      }
+      toast({ title: "Exercises parsed", description });
     },
     onError: () => {
       toast({

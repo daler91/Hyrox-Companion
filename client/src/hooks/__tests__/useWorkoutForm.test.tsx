@@ -309,6 +309,7 @@ describe('useWorkoutForm', () => {
           focus: 'My Run',
           mainWorkout: 'Ran 5k in 25 mins',
           notes: 'Felt great',
+          rpe: null,
         });
       });
     });
@@ -355,6 +356,7 @@ describe('useWorkoutForm', () => {
           focus: 'Leg Day',
           mainWorkout: 'Squat: 10 reps, 100kg',
           notes: 'Heavy lifts',
+          rpe: null,
           exercises: [
             { exerciseName: 'squat', sets: [{ reps: 10, weight: 100 }] }
           ]
