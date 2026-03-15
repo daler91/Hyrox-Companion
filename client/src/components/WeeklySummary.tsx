@@ -24,7 +24,7 @@ export function WeeklySummary({ days, totalWorkouts, totalHours, totalDistance }
           {days.map((day, index) => {
             const heightPercent = day.maxVolume > 0 ? (day.volume / day.maxVolume) * 100 : 0;
             return (
-              <div key={index} className="flex-1 flex flex-col items-center gap-2">
+              <div key={day.day} className="flex-1 flex flex-col items-center gap-2">
                 <div className="w-full flex items-end justify-center h-16">
                   <div
                     className={`w-full max-w-8 rounded-t-md transition-all ${

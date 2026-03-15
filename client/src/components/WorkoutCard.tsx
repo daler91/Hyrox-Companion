@@ -125,7 +125,7 @@ export function WorkoutCard({
         <div className="flex flex-wrap gap-2 mt-3">
           {exercises.slice(0, 4).map((exercise, index) => (
             <Badge 
-              key={index} 
+              key={`${id}-${exercise}-${index}`}
               variant="secondary" 
               className={`${exerciseColors[exercise]} border-0`}
             >
