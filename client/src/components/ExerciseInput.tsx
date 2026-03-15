@@ -70,6 +70,13 @@ export function createExerciseFromSets(exerciseName: ExerciseName, dbSets: Array
   };
 }
 
+
+function getConfidenceClasses(confidence: number): string {
+  if (confidence >= 80) return "bg-green-500/10 text-green-600 dark:text-green-400";
+  if (confidence >= 60) return "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400";
+  return "bg-red-500/10 text-red-600 dark:text-red-400";
+}
+
 export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg", distanceUnit = "km", blockLabel }: ExerciseInputProps) {
   const idPrefix = useId();
   const def = EXERCISE_DEFINITIONS[exercise.exerciseName];
@@ -107,17 +114,6 @@ export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg",
 
   const showMultiSetView = fields.includes("reps") || fields.includes("weight");
 
-  let confidenceClasses = "";
-  if (exercise.confidence != null) {
-    if (exercise.confidence >= 80) {
-      confidenceClasses = "bg-green-500/10 text-green-600 dark:text-green-400";
-    } else if (exercise.confidence >= 60) {
-      confidenceClasses = "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400";
-    } else {
-      confidenceClasses = "bg-red-500/10 text-red-600 dark:text-red-400";
-    }
-  }
-
   return (
     <Card className={`border-l-4 ${borderColor} rounded-l-none`} data-testid={`input-exercise-${exercise.exerciseName}`}>
       <CardContent className="p-4">
@@ -128,7 +124,7 @@ export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg",
             {exercise.confidence != null && exercise.confidence < 90 && (
               <Badge
                 variant="secondary"
-                className={`text-[10px] ${confidenceClasses}`}
+                className={`text-[10px] ${getConfidenceClasses(exercise.confidence)}`}
                 data-testid={`badge-confidence-${exercise.exerciseName}`}
               >
                 {exercise.confidence < 60 && <AlertTriangle className="h-3 w-3 mr-0.5" />}
