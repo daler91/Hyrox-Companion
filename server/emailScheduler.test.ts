@@ -25,7 +25,7 @@ describe('emailScheduler', () => {
       emailNotifications: true,
       firstName: 'John',
       lastName: 'Doe',
-      password: 'hashedpassword',
+      password: 'dummy_hash_value',
       role: 'user',
       unitPreference: 'metric',
       targetRaceId: null,
