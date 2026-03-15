@@ -136,86 +136,94 @@ export default function Timeline() {
         isRenaming={renamePlanMutation.isPending}
       />
 
-      {timelineLoading ? (
-        <TimelineSkeleton />
-      ) : filteredTimeline.length === 0 ? (
-        <TimelineEmptyState
-          filterStatus={filterStatus}
-          selectedPlanId={selectedPlanId}
-          plans={plans}
-          samplePlanMutation={samplePlanMutation}
-          importMutation={importMutation}
-          handleFileUpload={handleFileUpload}
-          setSchedulingPlanId={setSchedulingPlanId}
-          setFilterStatus={setFilterStatus}
-        />
-      ) : (
-        <div className="space-y-4">
-          {hiddenPastCount > 0 && (
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => setShowAllPast(true)}
-              data-testid="button-show-more-past"
-            >
-              <ChevronUp className="h-4 w-4 mr-2" />
-              Show {hiddenPastCount} more past workout{hiddenPastCount > 1 ? 's' : ''}
-            </Button>
-          )}
-          
-          {showAllPast && pastGroups.length > 7 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full"
-              onClick={() => setShowAllPast(false)}
-              data-testid="button-hide-past"
-            >
-              Hide older workouts
-            </Button>
-          )}
+      {(() => {
+        if (timelineLoading) {
+          return <TimelineSkeleton />;
+        }
 
-          {[...visiblePastGroups.slice().reverse(), ...visibleFutureGroups].map(([date, entries]) => (
-            <TimelineDateGroup
-              key={date}
-              ref={isToday(parseISO(date)) ? todayRef : undefined}
-              date={date}
-              entries={entries}
-              onMarkComplete={handleMarkComplete}
-              onClick={openDetailDialog}
-              onCombineSelect={handleCombine}
-              isCombining={!!combiningEntry}
-              combiningEntryId={combiningEntry?.id || null}
-              combiningEntryDate={combiningEntry?.date || null}
-              personalRecords={personalRecords}
+        if (filteredTimeline.length === 0) {
+          return (
+            <TimelineEmptyState
+              filterStatus={filterStatus}
+              selectedPlanId={selectedPlanId}
+              plans={plans}
+              samplePlanMutation={samplePlanMutation}
+              importMutation={importMutation}
+              handleFileUpload={handleFileUpload}
+              setSchedulingPlanId={setSchedulingPlanId}
+              setFilterStatus={setFilterStatus}
             />
-          ))}
+          );
+        }
 
-          {hiddenFutureCount > 0 && (
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => setShowAllFuture(true)}
-              data-testid="button-show-more-future"
-            >
-              <ChevronDown className="h-4 w-4 mr-2" />
-              Show {hiddenFutureCount} more upcoming workout{hiddenFutureCount > 1 ? 's' : ''}
-            </Button>
-          )}
-          
-          {showAllFuture && futureGroups.length > 7 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full"
-              onClick={() => setShowAllFuture(false)}
-              data-testid="button-hide-future"
-            >
-              Hide later workouts
-            </Button>
-          )}
+        return (
+          <div className="space-y-4">
+            {hiddenPastCount > 0 && (
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => setShowAllPast(true)}
+                data-testid="button-show-more-past"
+              >
+                <ChevronUp className="h-4 w-4 mr-2" />
+                Show {hiddenPastCount} more past workout{hiddenPastCount > 1 ? 's' : ''}
+              </Button>
+            )}
+
+            {showAllPast && pastGroups.length > 7 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full"
+                onClick={() => setShowAllPast(false)}
+                data-testid="button-hide-past"
+              >
+                Hide older workouts
+              </Button>
+            )}
+
+            {[...visiblePastGroups.slice().reverse(), ...visibleFutureGroups].map(([date, entries]) => (
+              <TimelineDateGroup
+                key={date}
+                ref={isToday(parseISO(date)) ? todayRef : undefined}
+                date={date}
+                entries={entries}
+                onMarkComplete={handleMarkComplete}
+                onClick={openDetailDialog}
+                onCombineSelect={handleCombine}
+                isCombining={!!combiningEntry}
+                combiningEntryId={combiningEntry?.id || null}
+                combiningEntryDate={combiningEntry?.date || null}
+                personalRecords={personalRecords}
+              />
+            ))}
+
+            {hiddenFutureCount > 0 && (
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => setShowAllFuture(true)}
+                data-testid="button-show-more-future"
+              >
+                <ChevronDown className="h-4 w-4 mr-2" />
+                Show {hiddenFutureCount} more upcoming workout{hiddenFutureCount > 1 ? 's' : ''}
+              </Button>
+            )}
+
+            {showAllFuture && futureGroups.length > 7 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full"
+                onClick={() => setShowAllFuture(false)}
+                data-testid="button-hide-future"
+              >
+                Hide later workouts
+              </Button>
+            )}
           </div>
-          )}
+        );
+      })()}
 
           <FloatingActionButton coachPanelOpen={coachOpen} onCoachToggle={() => setCoachOpen(!coachOpen)} />
 
