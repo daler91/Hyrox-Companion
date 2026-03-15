@@ -40,7 +40,7 @@ A full-stack training planning and logging application for [Hyrox](https://hyrox
 
 ## Code Health & Security
 
-- **SonarCloud Integration** — Continuous code quality analysis via GitHub Actions (`build.yml`, `sonarcloud.yml`) with strict TypeScript enforcement.
+- **SonarCloud Integration** — Continuous code quality analysis via GitHub Actions (`build.yml`) with strict TypeScript enforcement.
 - **Security Hardened** — Protected against vulnerabilities like CSV Injection.
 - **Performance Optimized** — Async operations parallelized using `Promise.allSettled()` for heavy batch jobs.
 
@@ -77,7 +77,7 @@ A full-stack training planning and logging application for [Hyrox](https://hyrox
 ├── shared/
 │   └── schema.ts            # Drizzle schema + Zod types (shared frontend/backend)
 ├── cypress/e2e/             # End-to-end test suites
-├── .github/workflows/       # CI: Cypress tests, SonarCloud analysis
+├── .github/workflows/       # CI: Cypress tests, SonarCloud, Trivy, dependency review
 └── sonar-project.properties # SonarCloud configuration
 ```
 
