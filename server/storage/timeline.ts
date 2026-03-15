@@ -105,18 +105,17 @@ export class TimelineStorage {
     if (workoutLogIds.length === 0) return;
 
     const allSets = await this.workoutStorage.getExerciseSetsByWorkoutLogs(workoutLogIds);
-    const setsByWorkoutId = new Map<string, typeof allSets>();
+    const setsByWorkoutId: Record<string, typeof allSets> = Object.create(null);
     for (const s of allSets) {
-      const existing = setsByWorkoutId.get(s.workoutLogId);
-      if (existing) {
-        existing.push(s);
+      if (setsByWorkoutId[s.workoutLogId]) {
+        setsByWorkoutId[s.workoutLogId].push(s);
       } else {
-        setsByWorkoutId.set(s.workoutLogId, [s]);
+        setsByWorkoutId[s.workoutLogId] = [s];
       }
     }
     for (const entry of entries) {
       if (entry.workoutLogId) {
-        entry.exerciseSets = setsByWorkoutId.get(entry.workoutLogId) || [];
+        entry.exerciseSets = setsByWorkoutId[entry.workoutLogId] || [];
       }
     }
   }
