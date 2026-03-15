@@ -58,10 +58,20 @@ export async function generateJSON(userId: string, storage: IStorage) {
   return { timeline, plans, exerciseSets: exerciseSetRows, exportedAt: new Date().toISOString() };
 }
 
+const CSV_FORMULA_CHARACTERS = /^[+\-=@|]/;
+const CSV_QUOTABLE_CHARACTERS = /[,\n"]/;
+
 function escapeCsv(val: string | null | undefined): string {
   if (val == null) return "";
-  const str = String(val).replace(/"/g, '""');
-  return str.includes(",") || str.includes("\n") || str.includes('"') ? `"${str}"` : str;
+  const rawStr = String(val);
+
+  // CSV Injection protection: prepend a single quote if the value starts with a character
+  // that could be interpreted as a formula in spreadsheet software (=, +, -, @, |).
+  const formulaProtected = CSV_FORMULA_CHARACTERS.test(rawStr) ? `'${rawStr}` : rawStr;
+
+  const escaped = formulaProtected.replaceAll('"', '""');
+  // If the value contains characters that require quoting (comma, newline, or double quote), wrap it in quotes.
+  return CSV_QUOTABLE_CHARACTERS.test(escaped) ? `"${escaped}"` : escaped;
 }
 
 function generateTimelineCsvRows(timeline: TimelineEntry[]): string[] {
