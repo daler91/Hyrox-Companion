@@ -1,0 +1,3 @@
+🎯 **What:** The testing gap addressed was the untested `useWorkoutForm` custom hook which handles complex state, voice integrations, validations, and workout logging.
+📊 **Coverage:** Added tests for initial state, voice input logic, form validation (missing titles/details), payload generation for both Text and Builder modes, and React Query mutation side-effects (toasts, invalidation, navigation).
+✨ **Result:** Enhanced test coverage ensures zero regressions during future refactoring of form submission logic.
