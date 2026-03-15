@@ -1,8 +1,8 @@
 import express, { type Express } from "express";
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
 
-import { fileURLToPath } from "url";
+import { fileURLToPath } from "node:url";
 import rateLimit from "express-rate-limit";
 
 const currentFilename = fileURLToPath(import.meta.url);
