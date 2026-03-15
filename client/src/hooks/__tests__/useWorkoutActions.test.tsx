@@ -75,16 +75,43 @@ describe('useWorkoutActions', () => {
   });
 
   describe('Handler methods', () => {
-    describe('handleSaveFromDetail', () => {
-      it('does nothing if detailEntry is null', async () => {
+
+    describe('Early returns (no-op paths)', () => {
+      it('does nothing on actions if required ids or states are missing', () => {
         const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
+        const entryWithoutIds = { date: '2024-01-01', focus: 'strength', mainWorkout: 'lift' } as any;
 
         act(() => {
+          // Missing detailEntry
           result.current.handleSaveFromDetail({ focus: 'cardio', mainWorkout: 'run', accessory: null, notes: null });
+          // Missing planDayId
+          result.current.handleMarkComplete(entryWithoutIds);
+          // Missing skipConfirmEntry / planDayId
+          result.current.confirmSkip();
+          // Missing planDayId
+          result.current.handleChangeStatus(entryWithoutIds, 'completed');
+          // Missing both planDayId and workoutLogId
+          result.current.handleDelete(entryWithoutIds);
+        });
+
+        expect(queryClientLib.apiRequest).not.toHaveBeenCalled();
+
+        act(() => {
+          result.current.openDetailDialog(entryWithoutIds);
+        });
+
+        act(() => {
+          // detailEntry has no workoutLogId and no planDayId
+          result.current.handleSaveFromDetail({ focus: 'cardio', mainWorkout: 'run', accessory: null, notes: null, exercises: [{ name: 'run' }] });
         });
 
         expect(queryClientLib.apiRequest).not.toHaveBeenCalled();
       });
+    });
+
+    describe('handleSaveFromDetail', () => {
+
+
 
       it('updates existing workout without exercises if none provided', async () => {
         const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
@@ -150,21 +177,7 @@ describe('useWorkoutActions', () => {
         });
       });
 
-      it('does nothing if detailEntry has no workoutLogId and no planDayId', async () => {
-        const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
-        const mockEntry = { date: '2024-01-01', focus: 'strength' };
 
-        act(() => {
-          result.current.openDetailDialog(mockEntry as any);
-        });
-
-        const updates = { focus: 'cardio', mainWorkout: 'run', accessory: null, notes: null, exercises: [{ name: 'run' }] };
-        act(() => {
-          result.current.handleSaveFromDetail(updates);
-        });
-
-        expect(queryClientLib.apiRequest).not.toHaveBeenCalled();
-      });
 
       it('updates plan day if detailEntry has planDayId but updates have no exercises', async () => {
         const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
@@ -251,16 +264,7 @@ describe('useWorkoutActions', () => {
     });
 
     describe('handleMarkComplete', () => {
-      it('does nothing if entry has no planDayId', async () => {
-        const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
-        const mockEntry = { date: '2024-01-01', focus: 'strength', mainWorkout: 'lift' }; // no planDayId
 
-        act(() => {
-          result.current.handleMarkComplete(mockEntry as any);
-        });
-
-        expect(queryClientLib.apiRequest).not.toHaveBeenCalled();
-      });
 
       it('logs a workout based on planDayId', async () => {
         const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
@@ -284,15 +288,7 @@ describe('useWorkoutActions', () => {
     });
 
     describe('confirmSkip', () => {
-      it('does nothing if skipConfirmEntry is null or has no planDayId', async () => {
-        const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
 
-        act(() => {
-          result.current.confirmSkip();
-        });
-
-        expect(queryClientLib.apiRequest).not.toHaveBeenCalled();
-      });
 
       it('updates plan day status to skipped and resets skipConfirmEntry', async () => {
         const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
@@ -314,16 +310,7 @@ describe('useWorkoutActions', () => {
     });
 
     describe('handleChangeStatus', () => {
-      it('does nothing if entry has no planDayId', async () => {
-        const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
-        const mockEntry = { date: '2024-01-01', focus: 'cardio' }; // no planDayId
 
-        act(() => {
-          result.current.handleChangeStatus(mockEntry as any, 'completed');
-        });
-
-        expect(queryClientLib.apiRequest).not.toHaveBeenCalled();
-      });
 
       it('updates plan day status', async () => {
         const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
@@ -340,16 +327,7 @@ describe('useWorkoutActions', () => {
     });
 
     describe('handleDelete', () => {
-      it('does nothing if neither workoutLogId nor planDayId are present', async () => {
-        const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
-        const mockEntry = { date: '2024-01-01', focus: 'strength' }; // no ids
 
-        act(() => {
-          result.current.handleDelete(mockEntry as any);
-        });
-
-        expect(queryClientLib.apiRequest).not.toHaveBeenCalled();
-      });
 
       it('deletes workout if workoutLogId is present and planDayId is not', async () => {
         const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
