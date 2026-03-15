@@ -70,6 +70,12 @@ export function createExerciseFromSets(exerciseName: ExerciseName, dbSets: Array
   };
 }
 
+function getConfidenceClasses(confidence: number): string {
+  if (confidence >= 80) return "bg-green-500/10 text-green-600 dark:text-green-400";
+  if (confidence >= 60) return "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400";
+  return "bg-red-500/10 text-red-600 dark:text-red-400";
+}
+
 export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg", distanceUnit = "km", blockLabel }: ExerciseInputProps) {
   const idPrefix = useId();
   const def = EXERCISE_DEFINITIONS[exercise.exerciseName];
@@ -116,16 +122,10 @@ export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg",
           <div className="flex items-center gap-2 flex-wrap">
             <h4 className="font-semibold">{displayLabel}{blockLabel ? ` ${blockLabel}` : ""}</h4>
             <span className="text-xs text-muted-foreground">{sets.length} {sets.length === 1 ? "set" : "sets"}</span>
-            {exercise.confidence != null && exercise.confidence < 90 && (
+{exercise.confidence != null && exercise.confidence < 90 && (
               <Badge
                 variant="secondary"
-                className={`text-[10px] ${
-                  exercise.confidence >= 80
-                    ? "bg-green-500/10 text-green-600 dark:text-green-400"
-                    : exercise.confidence >= 60
-                      ? "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
-                      : "bg-red-500/10 text-red-600 dark:text-red-400"
-                }`}
+                className={`text-[10px] ${getConfidenceClasses(exercise.confidence)}`}
                 data-testid={`badge-confidence-${exercise.exerciseName}`}
               >
                 {exercise.confidence < 60 && <AlertTriangle className="h-3 w-3 mr-0.5" />}
