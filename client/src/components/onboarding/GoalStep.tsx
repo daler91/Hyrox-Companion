@@ -22,9 +22,10 @@ export function GoalStep({ selectedGoal, onGoalChange }: GoalStepProps) {
       className="space-y-3"
     >
       {goals.map((goal) => (
-        <div
+        <button
+          type="button"
           key={goal.id}
-          className={`flex items-center space-x-3 p-3 rounded-md border cursor-pointer transition-colors ${
+          className={`w-full text-left flex items-center space-x-3 p-3 rounded-md border cursor-pointer transition-colors ${
             selectedGoal === goal.id
               ? "border-primary bg-primary/5"
               : "border-border hover:bg-muted/50"
@@ -42,7 +43,7 @@ export function GoalStep({ selectedGoal, onGoalChange }: GoalStepProps) {
           {selectedGoal === goal.id && (
             <Check className="h-4 w-4 text-primary" />
           )}
-        </div>
+        </button>
       ))}
     </RadioGroup>
   );
