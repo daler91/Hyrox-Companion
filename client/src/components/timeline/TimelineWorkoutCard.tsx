@@ -37,14 +37,14 @@ interface PREntry {
 }
 
 interface TimelineWorkoutCardProps {
-  entry: TimelineEntry;
-  onMarkComplete: (entry: TimelineEntry) => void;
-  onClick: (entry: TimelineEntry) => void;
-  onCombineSelect?: (entry: TimelineEntry) => void;
-  isCombining?: boolean;
-  combiningEntryId?: string | null;
-  combiningEntryDate?: string | null;
-  personalRecords?: Record<string, PREntry>;
+  readonly entry: TimelineEntry;
+  readonly onMarkComplete: (entry: TimelineEntry) => void;
+  readonly onClick: (entry: TimelineEntry) => void;
+  readonly onCombineSelect?: (entry: TimelineEntry) => void;
+  readonly isCombining?: boolean;
+  readonly combiningEntryId?: string | null;
+  readonly combiningEntryDate?: string | null;
+  readonly personalRecords?: Record<string, PREntry>;
 }
 
 
@@ -97,6 +97,125 @@ function getStatusBadge(status: string) {
   }
 }
 
+
+
+
+interface WorkoutStravaStatsProps {
+  readonly entry: TimelineEntry;
+  readonly distanceUnit: string;
+}
+
+function WorkoutStravaStats({ entry, distanceUnit }: WorkoutStravaStatsProps) {
+  if (entry.source !== "strava") return null;
+
+  const hasStravaStats =
+    entry.calories ||
+    entry.avgWatts ||
+    entry.sufferScore ||
+    entry.avgCadence ||
+    entry.avgSpeed;
+
+  if (!hasStravaStats) return null;
+
+  return (
+    <div className="flex flex-wrap gap-3 mt-2 pt-2 border-t border-border/50">
+      {entry.calories && (
+        <div className="flex items-center gap-1 text-xs text-muted-foreground" data-testid={`text-calories-${entry.id}`}>
+          <Flame className="h-3 w-3 text-orange-500" />
+          <span>{entry.calories} cal</span>
+        </div>
+      )}
+      {entry.avgWatts && (
+        <div className="flex items-center gap-1 text-xs text-muted-foreground" data-testid={`text-power-${entry.id}`}>
+          <Zap className="h-3 w-3 text-yellow-500" />
+          <span>{entry.avgWatts}W</span>
+        </div>
+      )}
+      {entry.avgCadence && (
+        <div className="flex items-center gap-1 text-xs text-muted-foreground" data-testid={`text-cadence-${entry.id}`}>
+          <Activity className="h-3 w-3 text-blue-500" />
+          <span>{Math.round(entry.avgCadence)} spm</span>
+        </div>
+      )}
+      {entry.avgSpeed && entry.avgSpeed > 0 && (
+        <div className="flex items-center gap-1 text-xs text-muted-foreground" data-testid={`text-speed-${entry.id}`}>
+          <TrendingUp className="h-3 w-3 text-green-500" />
+          <span>{formatSpeed(entry.avgSpeed, distanceUnit as any)}</span>
+        </div>
+      )}
+      {entry.sufferScore && (
+        <div className="flex items-center gap-1 text-xs text-muted-foreground" data-testid={`text-effort-${entry.id}`}>
+          <TrendingUp className="h-3 w-3 text-purple-500" />
+          <span>Effort: {entry.sufferScore}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ExerciseChips({
+  entryId,
+  groupedExercises,
+  workoutLogId,
+  personalRecords,
+  weightLabel,
+  distanceUnit,
+}: {
+  readonly entryId: string;
+  readonly groupedExercises: GroupedExercise[];
+  readonly workoutLogId: string | undefined;
+  readonly personalRecords?: Record<string, PREntry>;
+  readonly weightLabel: string;
+  readonly distanceUnit: string;
+}) {
+  return (
+    <div className="flex flex-wrap gap-1.5 mb-1" data-testid={`exercise-chips-${entryId}`}>
+      {groupedExercises.map((group, idx) => {
+        const isCustom = group.exerciseName === "custom";
+        const isPR = hasPRInWorkout(group, workoutLogId, personalRecords);
+        const conf = group.confidence;
+        const showConfidence = conf != null && conf < 90;
+        let confColor = "";
+        if (conf != null) {
+          if (conf >= 80) {
+            confColor = "text-green-500";
+          } else if (conf >= 60) {
+            confColor = "text-yellow-500";
+          } else {
+            confColor = "text-red-500";
+          }
+        }
+        return (
+          <Badge
+            key={`${group.exerciseName}-${idx}`}
+            variant="secondary"
+            className={`text-xs font-normal ${categoryChipColors[group.category] || ""} ${isPR ? "ring-1 ring-yellow-500/50" : ""}`}
+            data-testid={isPR ? `badge-pr-${entryId}-${idx}` : `badge-exercise-${entryId}-${idx}`}
+          >
+            {isPR && <Trophy className="h-3 w-3 mr-0.5 text-yellow-500" />}
+            {formatExerciseSummary(group, weightLabel, distanceUnit)}
+            {showConfidence && (
+              <span className={`ml-1 text-[10px] font-medium ${confColor}`} data-testid={`confidence-score-${entryId}-${idx}`}>
+                {conf}%
+              </span>
+            )}
+            {isCustom && <HelpCircle className="h-3 w-3 ml-0.5 text-muted-foreground/60" />}
+          </Badge>
+        );
+      })}
+    </div>
+  );
+}
+
+function getCardClasses(isBeingCombined: boolean | undefined, canBeCombinedWith: boolean | undefined, status: string) {
+  if (isBeingCombined) return "border-primary ring-2 ring-primary/30";
+  if (canBeCombinedWith) return "border-primary/50 hover:border-primary";
+  if (status === "completed") return "border-success/20 bg-success/5";
+  if (status === "missed") return "border-red-500/20 bg-red-500/5";
+  if (status === "skipped") return "border-yellow-500/20 bg-yellow-500/5";
+  return "";
+}
+
 const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
   entry,
   onMarkComplete,
@@ -138,19 +257,7 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
 
   return (
     <Card
-      className={`cursor-pointer transition-colors hover-elevate ${
-        isBeingCombined
-          ? "border-primary ring-2 ring-primary/30"
-          : canBeCombinedWith
-          ? "border-primary/50 hover:border-primary"
-          : entry.status === "completed"
-          ? "border-success/20 bg-success/5"
-          : entry.status === "missed"
-          ? "border-red-500/20 bg-red-500/5"
-          : entry.status === "skipped"
-          ? "border-yellow-500/20 bg-yellow-500/5"
-          : ""
-      }`}
+      className={`cursor-pointer transition-colors hover-elevate ${getCardClasses(isBeingCombined, canBeCombinedWith, entry.status)}`}
       onClick={handleCardClick}
       data-testid={`card-timeline-entry-${entry.id}`}
     >
@@ -196,34 +303,14 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
               <span className="font-medium">{entry.focus}</span>
             </div>
             {entry.exerciseSets && entry.exerciseSets.length > 0 ? (
-              <div className="flex flex-wrap gap-1.5 mb-1" data-testid={`exercise-chips-${entry.id}`}>
-                {groupedExercises.map((group, idx) => {
-                  const isCustom = group.exerciseName === "custom";
-                  const isPR = hasPRInWorkout(group, entry.workoutLogId ?? undefined, personalRecords);
-                  const conf = group.confidence;
-                  const showConfidence = conf != null && conf < 90;
-                  const confColor = conf != null
-                    ? conf >= 80 ? "text-green-500" : conf >= 60 ? "text-yellow-500" : "text-red-500"
-                    : "";
-                  return (
-                    <Badge
-                      key={`${group.exerciseName}-${idx}`}
-                      variant="secondary"
-                      className={`text-xs font-normal ${categoryChipColors[group.category] || ""} ${isPR ? "ring-1 ring-yellow-500/50" : ""}`}
-                      data-testid={isPR ? `badge-pr-${entry.id}-${idx}` : `badge-exercise-${entry.id}-${idx}`}
-                    >
-                      {isPR && <Trophy className="h-3 w-3 mr-0.5 text-yellow-500" />}
-                      {formatExerciseSummary(group, weightLabel, distanceUnit)}
-                      {showConfidence && (
-                        <span className={`ml-1 text-[10px] font-medium ${confColor}`} data-testid={`confidence-score-${entry.id}-${idx}`}>
-                          {conf}%
-                        </span>
-                      )}
-                      {isCustom && <HelpCircle className="h-3 w-3 ml-0.5 text-muted-foreground/60" />}
-                    </Badge>
-                  );
-                })}
-              </div>
+              <ExerciseChips
+                entryId={entry.id}
+                groupedExercises={groupedExercises}
+                workoutLogId={entry.workoutLogId ?? undefined}
+                personalRecords={personalRecords}
+                weightLabel={weightLabel}
+                distanceUnit={distanceUnit}
+              />
             ) : (
               <p className="text-sm text-muted-foreground mb-1">
                 {entry.mainWorkout}
@@ -245,40 +332,7 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
                 {entry.rpe && ` | RPE: ${entry.rpe}`}
               </p>
             )}
-            {entry.source === "strava" && (entry.calories || entry.avgWatts || entry.sufferScore || entry.avgCadence || entry.avgSpeed) && (
-              <div className="flex flex-wrap gap-3 mt-2 pt-2 border-t border-border/50">
-                {entry.calories && (
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground" data-testid={`text-calories-${entry.id}`}>
-                    <Flame className="h-3 w-3 text-orange-500" />
-                    <span>{entry.calories} cal</span>
-                  </div>
-                )}
-                {entry.avgWatts && (
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground" data-testid={`text-power-${entry.id}`}>
-                    <Zap className="h-3 w-3 text-yellow-500" />
-                    <span>{entry.avgWatts}W</span>
-                  </div>
-                )}
-                {entry.avgCadence && (
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground" data-testid={`text-cadence-${entry.id}`}>
-                    <Activity className="h-3 w-3 text-blue-500" />
-                    <span>{Math.round(entry.avgCadence)} spm</span>
-                  </div>
-                )}
-                {entry.avgSpeed && entry.avgSpeed > 0 && (
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground" data-testid={`text-speed-${entry.id}`}>
-                    <TrendingUp className="h-3 w-3 text-green-500" />
-                    <span>{formatSpeed(entry.avgSpeed, distanceUnit)}</span>
-                  </div>
-                )}
-                {entry.sufferScore && (
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground" data-testid={`text-effort-${entry.id}`}>
-                    <TrendingUp className="h-3 w-3 text-purple-500" />
-                    <span>Effort: {entry.sufferScore}</span>
-                  </div>
-                )}
-              </div>
-            )}
+            <WorkoutStravaStats entry={entry} distanceUnit={distanceUnit} />
           </div>
         </div>
       </CardContent>
