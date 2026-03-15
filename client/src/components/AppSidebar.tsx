@@ -31,11 +31,14 @@ export function AppSidebar() {
     ? `${user.firstName?.charAt(0) || ''}${user.lastName?.charAt(0) || ''}`.toUpperCase() || user.email?.charAt(0).toUpperCase() || 'U'
     : 'U';
 
-  const userName = user
-    ? user.firstName && user.lastName 
-      ? `${user.firstName} ${user.lastName}`
-      : user.email || 'User'
-    : 'User';
+  let userName = 'User';
+  if (user) {
+    if (user.firstName && user.lastName) {
+      userName = `${user.firstName} ${user.lastName}`;
+    } else {
+      userName = user.email || 'User';
+    }
+  }
 
   return (
     <Sidebar>
