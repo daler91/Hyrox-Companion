@@ -9,7 +9,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { getExerciseLabel } from "@/lib/exerciseUtils";
 
-interface ParsedExercise {
+export interface ParsedExercise {
   exerciseName: string;
   category: string;
   customLabel?: string;

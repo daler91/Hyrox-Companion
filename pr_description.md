@@ -1,12 +1,7 @@
-🧹 **What**
-Fixed a SonarQube `typescript:S1854` code smell by removing an unused destructuring assignment.
+🎯 **What:** The `UseMutationResult` for the `parseMutation` property in `WorkoutDetailEditFormProps` and `WorkoutTextModeProps` inside `client/src/components/timeline/WorkoutDetailExercises.tsx` was typed with `any`. This was updated to correctly use the `ParsedExercise[]` type which is now explicitly exported from `client/src/hooks/useWorkoutEditor.ts`.
 
-💡 **Why**
-The variable `weightUnit` was extracted from `useUnitPreferences()` but never used within `TimelineWorkoutCard.tsx`. Removing unused variables improves code maintainability, reduces noise, and resolves the SonarQube finding.
+💡 **Why:** By replacing `any` with the specific expected type (`ParsedExercise[]`), type safety is increased, catching potential property access errors at compile time and making the codebase cleaner and more maintainable.
 
-✅ **Verification**
-- Verified the removal of `weightUnit`.
-- Ensured `weightLabel` and `distanceUnit` (which are used) remain untouched.
+✅ **Verification:** Verified by running `npm run test -- client/src` ensuring tests still pass. No other code was modified. The `pnpm-lock.yaml` file was reverted to ensure the git history remained clean.
 
-✨ **Result**
-Code smell resolved without altering existing component functionality.
+✨ **Result:** The `WorkoutDetailEditFormProps` and `WorkoutTextModeProps` mutation interfaces are fully typed.
