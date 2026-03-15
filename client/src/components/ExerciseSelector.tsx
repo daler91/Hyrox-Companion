@@ -64,14 +64,18 @@ const selectorCategoryLabels: Record<ExerciseCategory, string> = {
 
 const categoryOrder: ExerciseCategory[] = ["hyrox_station", "running", "strength", "conditioning"];
 
-export function ExerciseSelector({ selectedExercises, onToggle, onAdd, allowDuplicates = false }: ExerciseSelectorProps) {
-  const exercisesByCategory = categoryOrder.map(cat => ({
-    category: cat,
-    label: selectorCategoryLabels[cat],
-    exercises: (Object.entries(EXERCISE_DEFINITIONS) as [ExerciseName, typeof EXERCISE_DEFINITIONS[ExerciseName]][])
-      .filter(([, def]) => def.category === cat),
-  }));
+// ⚡ Bolt Performance Optimization:
+// Move static array allocation and filtering outside of the component.
+// This prevents O(N) object entries allocation and O(N) array filtering
+// from running on every single render of the ExerciseSelector.
+const exercisesByCategory = categoryOrder.map(cat => ({
+  category: cat,
+  label: selectorCategoryLabels[cat],
+  exercises: (Object.entries(EXERCISE_DEFINITIONS) as [ExerciseName, typeof EXERCISE_DEFINITIONS[ExerciseName]][])
+    .filter(([, def]) => def.category === cat),
+}));
 
+export function ExerciseSelector({ selectedExercises, onToggle, onAdd, allowDuplicates = false }: ExerciseSelectorProps) {
   const selectedCounts = React.useMemo(() => {
     const counts: Partial<Record<ExerciseName, number>> = {};
     for (const name of selectedExercises) {
