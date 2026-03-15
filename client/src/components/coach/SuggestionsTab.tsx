@@ -104,7 +104,6 @@ export function useSuggestions({ timeline, addLocalMessage, saveMessage }: UseSu
       };
       addLocalMessage(confirmMessage);
     } catch (error) {
-      console.error("Apply suggestion error:", error);
       const errorMessage: Message = {
         id: Date.now().toString(),
         role: "assistant",

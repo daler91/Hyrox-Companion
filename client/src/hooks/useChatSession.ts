@@ -225,7 +225,6 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         saveMessageMutation.mutate({ role: "assistant", content: data.response });
       }
     } catch (error) {
-      console.error("Chat error:", error);
       if (fullResponse) {
         setMessages((prev) =>
           prev.map((m) =>
