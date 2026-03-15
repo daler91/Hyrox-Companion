@@ -67,7 +67,7 @@ export async function importPlanFromCSV(
     throw new Error("No valid rows found in CSV");
   }
 
-  const weekNumbers = rows.map((r) => parseInt(r.Week)).filter((n) => !isNaN(n) && n > 0);
+  const weekNumbers = rows.map((r) => parseInt(r.Week)).filter((n) => !Number.isNaN(n) && n > 0);
   if (weekNumbers.length === 0) {
     throw new Error("No valid week numbers found in CSV");
   }
