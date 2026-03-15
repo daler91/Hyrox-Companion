@@ -246,14 +246,26 @@ describe('useWorkoutActions', () => {
 
   describe('API Callbacks and Toast notifications', () => {
 
-    it.each([
+
+    type MutationTestCase = [
+      string,
+      { planDayId?: string; workoutLogId?: string; date: string; focus: string },
+      'handleSaveFromDetail' | 'handleMarkComplete' | 'handleDelete',
+      any[],
+      boolean,
+      string
+    ];
+
+    const mutationTestCases: MutationTestCase[] = [
       ['updateDayMutation', { planDayId: 'pd-1', date: '2024-01-01', focus: 'strength' }, 'handleSaveFromDetail', [{ focus: 'cardio', mainWorkout: 'run', accessory: null, notes: null }], true, 'Failed to update entry'],
       ['logWorkoutMutation', { planDayId: 'pd-1', date: '2024-01-01', focus: 'strength' }, 'handleMarkComplete', [{}], false, 'Failed to log workout'],
       ['updateWorkoutMutation', { workoutLogId: 'w-1', date: '2024-01-01', focus: 'strength' }, 'handleSaveFromDetail', [{ focus: 'cardio', mainWorkout: 'run', accessory: null, notes: null }], true, 'Failed to update workout'],
       ['deleteWorkoutMutation', { workoutLogId: 'w-1', date: '2024-01-01', focus: 'strength' }, 'handleDelete', [{}], false, 'Failed to delete workout'],
       ['deletePlanDayMutation', { planDayId: 'pd-1', date: '2024-01-01', focus: 'strength' }, 'handleDelete', [{}], false, 'Failed to delete workout']
-    ])('triggers error toast on failed %s', async (_, mockEntry, action, args, needsDialog, expectedTitle) => {
-      vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(new Error('Network Error'));
+    ];
+
+    it.each(mutationTestCases)('triggers error toast on failed %s', async (_, mockEntry, actionName, args, needsDialog, expectedTitle) => {
+      vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(new Error('API Failure'));
       const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
 
       if (needsDialog) {
@@ -263,10 +275,12 @@ describe('useWorkoutActions', () => {
       }
 
       act(() => {
-        if (action === 'handleDelete' || action === 'handleMarkComplete') {
-          (result.current as any)[action](mockEntry as any);
-        } else {
-          (result.current as any)[action](...args);
+        if (actionName === 'handleDelete') {
+          result.current.handleDelete(mockEntry as any);
+        } else if (actionName === 'handleMarkComplete') {
+          result.current.handleMarkComplete(mockEntry as any);
+        } else if (actionName === 'handleSaveFromDetail') {
+          result.current.handleSaveFromDetail(args[0]);
         }
       });
 
