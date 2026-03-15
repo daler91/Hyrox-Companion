@@ -5,6 +5,71 @@ import { useSaveMessageMutation, useClearHistoryMutation } from "./useChatMutati
 import { getCurrentTimeString, formatTime } from "@/lib/dateUtils";
 import type { ChatMessage as DBChatMessage } from "@shared/schema";
 
+
+function processStreamLines(
+  lines: string[],
+  currentResponse: string,
+  assistantMessageId: string,
+  setMessages: React.Dispatch<React.SetStateAction<Message[]>>
+): string {
+  let updatedResponse = currentResponse;
+  for (const line of lines) {
+    if (!line.startsWith("data: ")) continue;
+    let data;
+    try {
+      data = JSON.parse(line.slice(6));
+    } catch (parseError) {
+      continue;
+    }
+    if (data.text) {
+      updatedResponse += data.text;
+      const newResponse = updatedResponse; // capture in closure
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantMessageId
+            ? { ...m, content: newResponse }
+            : m
+        )
+      );
+    }
+    if (data.error) {
+      throw new Error(data.error);
+    }
+  }
+  return updatedResponse;
+}
+
+async function handleStreamResponse(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  decoder: TextDecoder,
+  assistantMessageId: string,
+  setMessages: React.Dispatch<React.SetStateAction<Message[]>>
+): Promise<string> {
+  let fullResponse = "";
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const events = buffer.split("\n\n");
+    buffer = events.pop() || "";
+
+    for (const event of events) {
+      const lines = event.split("\n");
+      fullResponse = processStreamLines(lines, fullResponse, assistantMessageId, setMessages);
+    }
+  }
+
+  if (buffer.trim()) {
+    const lines = buffer.split("\n");
+    fullResponse = processStreamLines(lines, fullResponse, assistantMessageId, setMessages);
+  }
+
+  return fullResponse;
+}
+
 export interface Message {
   id: string;
   role: "user" | "assistant";
@@ -137,75 +202,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
           throw new Error("No response body");
         }
 
-        let buffer = "";
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          
-          const events = buffer.split("\n\n");
-          buffer = events.pop() || "";
-
-          for (const event of events) {
-            const lines = event.split("\n");
-            for (const line of lines) {
-              if (!line.startsWith("data: ")) continue;
-
-              let data;
-              try {
-                data = JSON.parse(line.slice(6));
-              } catch (parseError) {
-                // Skip malformed JSON lines
-                continue;
-              }
-
-              if (data.text) {
-                fullResponse += data.text;
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.id === assistantMessageId
-                      ? { ...m, content: fullResponse }
-                      : m
-                  )
-                );
-              }
-              if (data.error) {
-                throw new Error(data.error);
-              }
-            }
-          }
-        }
-        
-        if (buffer.trim()) {
-          const lines = buffer.split("\n");
-          for (const line of lines) {
-            if (!line.startsWith("data: ")) continue;
-
-            let data;
-            try {
-              data = JSON.parse(line.slice(6));
-            } catch (parseError) {
-              // Skip malformed JSON
-              continue;
-            }
-
-            if (data.text) {
-              fullResponse += data.text;
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantMessageId
-                    ? { ...m, content: fullResponse }
-                    : m
-                )
-              );
-            }
-            if (data.error) {
-              throw new Error(data.error);
-            }
-          }
-        }
+        fullResponse = await handleStreamResponse(reader, decoder, assistantMessageId, setMessages);
 
         if (fullResponse) {
           saveMessageMutation.mutate({ role: "assistant", content: fullResponse });
