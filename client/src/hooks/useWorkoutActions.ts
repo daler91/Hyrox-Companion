@@ -113,7 +113,12 @@ export function useWorkoutActions(selectedPlanId: string | null) {
         workoutId: detailEntry.workoutLogId,
         updates: { ...updates, exercises: updates.exercises },
       });
-    } else if (detailEntry.planDayId && updates.exercises && updates.exercises.length > 0) {
+      return;
+    }
+
+    if (!detailEntry.planDayId) return;
+
+    if (updates.exercises && updates.exercises.length > 0) {
       logWorkoutMutation.mutate({
         planDayId: detailEntry.planDayId,
         date: detailEntry.date,
@@ -123,12 +128,13 @@ export function useWorkoutActions(selectedPlanId: string | null) {
         notes: updates.notes || undefined,
         exercises: updates.exercises,
       });
-    } else if (detailEntry.planDayId) {
-      updateDayMutation.mutate({
-        dayId: detailEntry.planDayId,
-        updates,
-      });
+      return;
     }
+
+    updateDayMutation.mutate({
+      dayId: detailEntry.planDayId,
+      updates,
+    });
   }, [detailEntry, updateWorkoutMutation, logWorkoutMutation, updateDayMutation]);
 
   const handleMarkComplete = useCallback((entry: TimelineEntry) => {
