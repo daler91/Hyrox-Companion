@@ -9,6 +9,9 @@ WORKDIR /app
 # Copy dependency files
 COPY package.json pnpm-lock.yaml ./
 
+# Copy scripts needed for postinstall
+COPY script/ ./script/
+
 # Install all dependencies (including devDependencies for building)
 RUN pnpm install --frozen-lockfile
 
@@ -16,7 +19,6 @@ RUN pnpm install --frozen-lockfile
 COPY client/ ./client/
 COPY server/ ./server/
 COPY shared/ ./shared/
-COPY script/ ./script/
 COPY tsconfig.json vite.config.ts components.json tailwind.config.ts postcss.config.js drizzle.config.ts ./
 
 # Build the frontend and backend
@@ -37,6 +39,7 @@ ENV PORT=5000
 # Copy dependency files and build outputs from the builder stage
 COPY --from=builder /app/package.json /app/pnpm-lock.yaml ./
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/script ./script
 
 # Install only production dependencies
 RUN pnpm install --prod --frozen-lockfile
