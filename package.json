@@ -11,7 +11,7 @@
     "db:push": "drizzle-kit push",
     "test": "vitest run",
     "test:watch": "vitest",
-    "postinstall": "node script/patch-cypress-simple-git.js"
+    "postinstall": "node script/patch-cypress-deps.js"
   },
   "dependencies": {
     "@clerk/clerk-react": "^5.61.3",
