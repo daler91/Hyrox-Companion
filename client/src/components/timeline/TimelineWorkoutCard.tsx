@@ -271,6 +271,7 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
               onClick={handleCompleteClick}
               data-testid={`button-complete-${entry.id}`}
               aria-label={`Mark ${entry.focus} as complete`}
+              title={`Mark ${entry.focus} as complete`}
             >
               <Circle className="h-5 w-5" />
             </Button>
