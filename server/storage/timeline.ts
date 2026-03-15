@@ -4,6 +4,8 @@ import {
   workoutLogs,
   type WorkoutLog,
   type TimelineEntry,
+  type PlanDay,
+  type WorkoutStatus,
 } from "@shared/schema";
 import { db } from "../db";
 import { eq, and, isNull, inArray, sql, desc } from "drizzle-orm";
@@ -26,8 +28,98 @@ function mapWorkoutLogToTimelineFields(log: WorkoutLog) {
   };
 }
 
+function calculatePlanDayStatus(dayStatus: string | null, scheduledDate: string, today: string): WorkoutStatus {
+  if (dayStatus === "skipped") return "skipped";
+  if (dayStatus === "completed") return "completed";
+  if (dayStatus === "missed") return "missed";
+  if (scheduledDate < today) return "missed";
+  return "planned";
+}
+
+function createLinkedWorkoutEntry(day: PlanDay, linkedLog: WorkoutLog, row: { planName: string; planId: string }): TimelineEntry {
+  return {
+    id: `log-${linkedLog.id}`,
+    date: linkedLog.date,
+    type: "logged",
+    status: "completed",
+    focus: linkedLog.focus,
+    mainWorkout: linkedLog.mainWorkout,
+    accessory: linkedLog.accessory,
+    notes: linkedLog.notes,
+    duration: linkedLog.duration,
+    rpe: linkedLog.rpe,
+    planDayId: day.id,
+    workoutLogId: linkedLog.id,
+    weekNumber: day.weekNumber,
+    dayName: day.dayName,
+    planName: row.planName,
+    planId: row.planId,
+    ...mapWorkoutLogToTimelineFields(linkedLog),
+  };
+}
+
+function createPlannedDayEntry(day: PlanDay, row: { planName: string; planId: string }, today: string): TimelineEntry {
+  const status = calculatePlanDayStatus(day.status, day.scheduledDate!, today);
+  return {
+    id: `plan-${day.id}`,
+    date: day.scheduledDate!,
+    type: "planned",
+    status: status,
+    focus: day.focus,
+    mainWorkout: day.mainWorkout,
+    accessory: day.accessory,
+    notes: day.notes,
+    planDayId: day.id,
+    weekNumber: day.weekNumber,
+    dayName: day.dayName,
+    planName: row.planName,
+    planId: row.planId,
+  };
+}
+
+function createStandaloneWorkoutEntry(log: WorkoutLog): TimelineEntry {
+  return {
+    id: `log-${log.id}`,
+    date: log.date,
+    type: "logged",
+    status: "completed",
+    focus: log.focus,
+    mainWorkout: log.mainWorkout,
+    accessory: log.accessory,
+    notes: log.notes,
+    duration: log.duration,
+    rpe: log.rpe,
+    workoutLogId: log.id,
+    ...mapWorkoutLogToTimelineFields(log),
+  };
+}
+
 export class TimelineStorage {
   constructor(private workoutStorage: WorkoutStorage) {}
+
+  private async attachExerciseSets(entries: TimelineEntry[]): Promise<void> {
+    const workoutLogIds = entries
+      .filter(e => e.workoutLogId)
+      .map(e => e.workoutLogId!);
+
+    if (workoutLogIds.length === 0) return;
+
+    const allSets = await this.workoutStorage.getExerciseSetsByWorkoutLogs(workoutLogIds);
+    const setsByWorkoutId = new Map<string, typeof allSets>();
+    for (const s of allSets) {
+      const existing = setsByWorkoutId.get(s.workoutLogId);
+      if (existing) {
+        existing.push(s);
+      } else {
+        setsByWorkoutId.set(s.workoutLogId, [s]);
+      }
+    }
+    for (const entry of entries) {
+      if (entry.workoutLogId) {
+        entry.exerciseSets = setsByWorkoutId.get(entry.workoutLogId) || [];
+      }
+    }
+  }
 
   async getTimeline(userId: string, planId?: string): Promise<TimelineEntry[]> {
     const entries: TimelineEntry[] = [];
@@ -70,90 +162,19 @@ export class TimelineStorage {
       const day = row.planDay;
       if (day.scheduledDate) {
         const linkedLog = workoutsByPlanDayId.get(day.id);
-
         if (linkedLog) {
-          entries.push({
-            id: `log-${linkedLog.id}`,
-            date: linkedLog.date,
-            type: "logged",
-            status: "completed",
-            focus: linkedLog.focus,
-            mainWorkout: linkedLog.mainWorkout,
-            accessory: linkedLog.accessory,
-            notes: linkedLog.notes,
-            duration: linkedLog.duration,
-            rpe: linkedLog.rpe,
-            planDayId: day.id,
-            workoutLogId: linkedLog.id,
-            weekNumber: day.weekNumber,
-            dayName: day.dayName,
-            planName: row.planName,
-            planId: row.planId,
-            ...mapWorkoutLogToTimelineFields(linkedLog),
-          });
+          entries.push(createLinkedWorkoutEntry(day, linkedLog, { planName: row.planName, planId: row.planId }));
         } else {
-          const status = day.status === "skipped" ? "skipped" :
-            day.status === "completed" ? "completed" :
-            day.status === "missed" ? "missed" :
-            day.scheduledDate < today ? "missed" : "planned";
-
-          entries.push({
-            id: `plan-${day.id}`,
-            date: day.scheduledDate,
-            type: "planned",
-            status: status as any,
-            focus: day.focus,
-            mainWorkout: day.mainWorkout,
-            accessory: day.accessory,
-            notes: day.notes,
-            planDayId: day.id,
-            weekNumber: day.weekNumber,
-            dayName: day.dayName,
-            planName: row.planName,
-            planId: row.planId,
-          });
+          entries.push(createPlannedDayEntry(day, { planName: row.planName, planId: row.planId }, today));
         }
       }
     }
 
     for (const log of standaloneWorkouts) {
-      entries.push({
-        id: `log-${log.id}`,
-        date: log.date,
-        type: "logged",
-        status: "completed",
-        focus: log.focus,
-        mainWorkout: log.mainWorkout,
-        accessory: log.accessory,
-        notes: log.notes,
-        duration: log.duration,
-        rpe: log.rpe,
-        workoutLogId: log.id,
-        ...mapWorkoutLogToTimelineFields(log),
-      });
+      entries.push(createStandaloneWorkoutEntry(log));
     }
 
-    const workoutLogIds = entries
-      .filter(e => e.workoutLogId)
-      .map(e => e.workoutLogId!);
-    
-    if (workoutLogIds.length > 0) {
-      const allSets = await this.workoutStorage.getExerciseSetsByWorkoutLogs(workoutLogIds);
-      const setsByWorkoutId = new Map<string, typeof allSets>();
-      for (const s of allSets) {
-        const existing = setsByWorkoutId.get(s.workoutLogId);
-        if (existing) {
-          existing.push(s);
-        } else {
-          setsByWorkoutId.set(s.workoutLogId, [s]);
-        }
-      }
-      for (const entry of entries) {
-        if (entry.workoutLogId) {
-          entry.exerciseSets = setsByWorkoutId.get(entry.workoutLogId) || [];
-        }
-      }
-    }
+    await this.attachExerciseSets(entries);
 
     return entries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }
