@@ -106,16 +106,14 @@ export class TimelineStorage {
 
     const allSets = await this.workoutStorage.getExerciseSetsByWorkoutLogs(workoutLogIds);
     const setsByWorkoutId: Record<string, typeof allSets> = Object.create(null);
-    for (let i = 0; i < allSets.length; i++) {
-      const s = allSets[i];
+    for (const s of allSets) {
       if (setsByWorkoutId[s.workoutLogId]) {
         setsByWorkoutId[s.workoutLogId].push(s);
       } else {
         setsByWorkoutId[s.workoutLogId] = [s];
       }
     }
-    for (let i = 0; i < entries.length; i++) {
-      const entry = entries[i];
+    for (const entry of entries) {
       if (entry.workoutLogId) {
         entry.exerciseSets = setsByWorkoutId[entry.workoutLogId] || [];
       }
