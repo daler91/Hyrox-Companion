@@ -19,7 +19,7 @@ import {
 import { SiStrava } from "react-icons/si";
 import { type TimelineEntry, type ExerciseSet, EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
-import { formatSpeed, type DistanceUnit } from "@shared/unitConversion";
+import { formatSpeed } from "@shared/unitConversion";
 import { categoryChipColors, groupExerciseSets, formatExerciseSummary, type GroupedExercise } from "@/lib/exerciseUtils";
 
 interface PRValue {
