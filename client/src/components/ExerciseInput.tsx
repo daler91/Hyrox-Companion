@@ -168,7 +168,7 @@ export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg",
               <div />
             </div>
             {sets.map((set, idx) => (
-              <div key={idx} className="grid gap-2 items-center" style={{ gridTemplateColumns: `2rem ${fields.map(() => "1fr").join(" ")} 2rem` }} data-testid={`set-row-${exercise.exerciseName}-${idx}`}>
+              <div key={set.setNumber} className="grid gap-2 items-center" style={{ gridTemplateColumns: `2rem ${fields.map(() => "1fr").join(" ")} 2rem` }} data-testid={`set-row-${exercise.exerciseName}-${idx}`}>
                 <span className="text-xs text-muted-foreground text-center">{set.setNumber}</span>
                 {fields.map((field) => (
                   <Input
