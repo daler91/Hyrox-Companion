@@ -4,6 +4,7 @@ import { useWorkoutActions } from '../useWorkoutActions';
 import * as queryClientLib from '@/lib/queryClient';
 import * as toastHook from '@/hooks/use-toast';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { TimelineEntry } from '@shared/schema';
 import React from 'react';
 
 // Setup test QueryClient
@@ -56,7 +57,7 @@ describe('useWorkoutActions', () => {
       const mockEntry = { id: 1, date: '2024-01-01', focus: 'strength' };
 
       act(() => {
-        result.current.openDetailDialog(mockEntry as any);
+        result.current.openDetailDialog(mockEntry as unknown as TimelineEntry);
       });
 
       expect(result.current.detailEntry).toEqual(mockEntry);
@@ -67,7 +68,7 @@ describe('useWorkoutActions', () => {
       const mockEntry = { id: 1, date: '2024-01-01', focus: 'cardio' };
 
       act(() => {
-        result.current.handleSkip(mockEntry as any);
+        result.current.handleSkip(mockEntry as unknown as TimelineEntry);
       });
 
       expect(result.current.skipConfirmEntry).toEqual(mockEntry);
@@ -81,7 +82,7 @@ describe('useWorkoutActions', () => {
         const mockEntry = { workoutLogId: 'w-1', date: '2024-01-01', focus: 'strength' };
 
         act(() => {
-          result.current.openDetailDialog(mockEntry as any);
+          result.current.openDetailDialog(mockEntry as unknown as TimelineEntry);
         });
 
         const updates = { focus: 'cardio', mainWorkout: 'run', accessory: null, notes: null };
@@ -103,7 +104,7 @@ describe('useWorkoutActions', () => {
         const mockEntry = { planDayId: 'pd-1', date: '2024-01-01', focus: 'strength' };
 
         act(() => {
-          result.current.openDetailDialog(mockEntry as any);
+          result.current.openDetailDialog(mockEntry as unknown as TimelineEntry);
         });
 
         const updates = { focus: 'cardio', mainWorkout: 'run', accessory: null, notes: null, exercises: [{ name: 'run' }] };
@@ -130,7 +131,7 @@ describe('useWorkoutActions', () => {
         const mockEntry = { planDayId: 'pd-1', date: '2024-01-01', focus: 'strength' };
 
         act(() => {
-          result.current.openDetailDialog(mockEntry as any);
+          result.current.openDetailDialog(mockEntry as unknown as TimelineEntry);
         });
 
         const updates = { focus: 'cardio', mainWorkout: 'run', accessory: null, notes: null };
@@ -151,7 +152,7 @@ describe('useWorkoutActions', () => {
         const mockEntry = { planDayId: 'pd-1', date: '2024-01-01', focus: 'strength', mainWorkout: 'lift', accessory: 'curls', notes: 'good' };
 
         act(() => {
-          result.current.handleMarkComplete(mockEntry as any);
+          result.current.handleMarkComplete(mockEntry as unknown as TimelineEntry);
         });
 
         await waitFor(() => {
@@ -173,7 +174,7 @@ describe('useWorkoutActions', () => {
         const mockEntry = { planDayId: 'pd-1', date: '2024-01-01', focus: 'cardio' };
 
         act(() => {
-          result.current.handleSkip(mockEntry as any);
+          result.current.handleSkip(mockEntry as unknown as TimelineEntry);
         });
 
         act(() => {
@@ -193,7 +194,7 @@ describe('useWorkoutActions', () => {
         const mockEntry = { planDayId: 'pd-1', date: '2024-01-01', focus: 'cardio' };
 
         act(() => {
-          result.current.handleChangeStatus(mockEntry as any, 'completed');
+          result.current.handleChangeStatus(mockEntry as unknown as TimelineEntry, 'completed');
         });
 
         await waitFor(() => {
@@ -208,7 +209,7 @@ describe('useWorkoutActions', () => {
         const mockEntry = { workoutLogId: 'w-1', date: '2024-01-01', focus: 'strength' };
 
         act(() => {
-          result.current.handleDelete(mockEntry as any);
+          result.current.handleDelete(mockEntry as unknown as TimelineEntry);
         });
 
         await waitFor(() => {
@@ -221,7 +222,7 @@ describe('useWorkoutActions', () => {
         const mockEntry = { planDayId: 'pd-1', date: '2024-01-01', focus: 'strength' };
 
         act(() => {
-          result.current.handleDelete(mockEntry as any);
+          result.current.handleDelete(mockEntry as unknown as TimelineEntry);
         });
 
         await waitFor(() => {
@@ -234,7 +235,7 @@ describe('useWorkoutActions', () => {
         const mockEntry = { planDayId: 'pd-1', workoutLogId: 'w-1', date: '2024-01-01', focus: 'strength' };
 
         act(() => {
-          result.current.handleDelete(mockEntry as any);
+          result.current.handleDelete(mockEntry as unknown as TimelineEntry);
         });
 
         await waitFor(() => {
@@ -245,12 +246,55 @@ describe('useWorkoutActions', () => {
   });
 
   describe('API Callbacks and Toast notifications', () => {
+
+
+    type MutationTestCase = [
+      string,
+      { planDayId?: string; workoutLogId?: string; date: string; focus: string },
+      'handleSaveFromDetail' | 'handleMarkComplete' | 'handleDelete',
+      any[],
+      boolean,
+      string
+    ];
+
+    const mutationTestCases: MutationTestCase[] = [
+      ['updateDayMutation', { planDayId: 'pd-1', date: '2024-01-01', focus: 'strength' }, 'handleSaveFromDetail', [{ focus: 'cardio', mainWorkout: 'run', accessory: null, notes: null }], true, 'Failed to update entry'],
+      ['logWorkoutMutation', { planDayId: 'pd-1', date: '2024-01-01', focus: 'strength' }, 'handleMarkComplete', [{}], false, 'Failed to log workout'],
+      ['updateWorkoutMutation', { workoutLogId: 'w-1', date: '2024-01-01', focus: 'strength' }, 'handleSaveFromDetail', [{ focus: 'cardio', mainWorkout: 'run', accessory: null, notes: null }], true, 'Failed to update workout'],
+      ['deleteWorkoutMutation', { workoutLogId: 'w-1', date: '2024-01-01', focus: 'strength' }, 'handleDelete', [{}], false, 'Failed to delete workout'],
+      ['deletePlanDayMutation', { planDayId: 'pd-1', date: '2024-01-01', focus: 'strength' }, 'handleDelete', [{}], false, 'Failed to delete workout']
+    ];
+
+    it.each(mutationTestCases)('triggers error toast on failed %s', async (_, mockEntry, actionName, args, needsDialog, expectedTitle) => {
+      vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(new Error('API Failure'));
+      const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
+
+      if (needsDialog) {
+        act(() => {
+          result.current.openDetailDialog(mockEntry as unknown as TimelineEntry);
+        });
+      }
+
+      act(() => {
+        if (actionName === 'handleDelete') {
+          result.current.handleDelete(mockEntry as unknown as TimelineEntry);
+        } else if (actionName === 'handleMarkComplete') {
+          result.current.handleMarkComplete(mockEntry as unknown as TimelineEntry);
+        } else if (actionName === 'handleSaveFromDetail') {
+          result.current.handleSaveFromDetail(args[0]);
+        }
+      });
+
+      await waitFor(() => {
+        expect(mockToast).toHaveBeenCalledWith({ title: expectedTitle, variant: "destructive" });
+      });
+    });
     it('triggers success toast and invalidates timeline on successful status update', async () => {
       const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
       const mockEntry = { planDayId: 'pd-1', date: '2024-01-01', focus: 'cardio' };
 
       act(() => {
-        result.current.handleChangeStatus(mockEntry as any, 'completed');
+        result.current.handleChangeStatus(mockEntry as unknown as TimelineEntry, 'completed');
       });
 
       await waitFor(() => {
@@ -267,13 +311,13 @@ describe('useWorkoutActions', () => {
       const mockEntry = { planDayId: 'pd-1', date: '2024-01-01', focus: 'cardio' };
 
       act(() => {
-        result.current.handleChangeStatus(mockEntry as any, 'completed');
+        result.current.handleChangeStatus(mockEntry as unknown as TimelineEntry, 'completed');
       });
 
       await waitFor(() => {
         expect(mockToast).toHaveBeenCalledWith({ title: "Failed to update status", variant: "destructive" });
       });
     });
-  });
+});
 
 });
