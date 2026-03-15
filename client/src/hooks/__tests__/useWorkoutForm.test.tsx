@@ -325,7 +325,7 @@ describe('useWorkoutForm', () => {
         sets: [{ reps: 10, weight: 100 }],
       } as any);
 
-      const props = {
+      const props: any = {
         ...defaultProps,
         useTextMode: false,
         exerciseBlocks: ['block-1', 'invalid-block'], // 'invalid-block' is missing from data

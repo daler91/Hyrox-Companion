@@ -15,12 +15,26 @@ import {
   GripVertical,
   Mic,
 } from "lucide-react";
-import { type TimelineEntry, type ExerciseSet, type ExerciseName } from "@shared/schema";
+import {
+  type TimelineEntry,
+  type ExerciseSet,
+  type ExerciseName,
+} from "@shared/schema";
 import { formatSpeed } from "@shared/unitConversion";
 import { ExerciseSelector } from "@/components/ExerciseSelector";
-import { ExerciseInput, type StructuredExercise } from "@/components/ExerciseInput";
+import {
+  ExerciseInput,
+  type StructuredExercise,
+} from "@/components/ExerciseInput";
 import React, { useCallback, useState, useEffect } from "react";
-import { categoryChipColors, getExerciseLabel, groupExerciseSets, formatExerciseSummary, exerciseSetsToStructured, type GroupedExercise } from "@/lib/exerciseUtils";
+import {
+  categoryChipColors,
+  getExerciseLabel,
+  groupExerciseSets,
+  formatExerciseSummary,
+  exerciseSetsToStructured,
+  type GroupedExercise,
+} from "@/lib/exerciseUtils";
 import {
   DndContext,
   closestCenter,
@@ -41,7 +55,6 @@ import { VoiceButton } from "@/components/VoiceButton";
 import { VoiceFieldButton } from "@/components/VoiceFieldButton";
 import { useToast } from "@/hooks/use-toast";
 
-
 interface SortableDialogBlockProps {
   blockId: string;
   exData: StructuredExercise;
@@ -52,7 +65,15 @@ interface SortableDialogBlockProps {
   onRemove: (blockId: string) => void;
 }
 
-const SortableDialogBlock = React.memo(function SortableDialogBlock({ blockId, exData, blockLabel, weightUnit, distanceUnit, onChange, onRemove }: SortableDialogBlockProps) {
+const SortableDialogBlock = React.memo(function SortableDialogBlock({
+  blockId,
+  exData,
+  blockLabel,
+  weightUnit,
+  distanceUnit,
+  onChange,
+  onRemove,
+}: SortableDialogBlockProps) {
   const {
     attributes,
     listeners,
@@ -71,7 +92,12 @@ const SortableDialogBlock = React.memo(function SortableDialogBlock({ blockId, e
 
   return (
     <div ref={setNodeRef} style={style}>
-      <div className="absolute left-0 top-3 z-10 cursor-grab active:cursor-grabbing touch-none p-1" {...attributes} {...listeners} data-testid={`drag-handle-dialog-${blockId}`}>
+      <div
+        className="absolute left-0 top-3 z-10 cursor-grab active:cursor-grabbing touch-none p-1"
+        {...attributes}
+        {...listeners}
+        data-testid={`drag-handle-dialog-${blockId}`}
+      >
         <GripVertical className="h-4 w-4 text-muted-foreground" />
       </div>
       <div className="pl-6">
@@ -96,58 +122,78 @@ interface WorkoutDetailViewProps {
   distanceUnit: "km" | "miles";
 }
 
-
 interface WorkoutDetailStravaMetricsProps {
   entry: TimelineEntry;
   distanceUnit: "km" | "miles";
 }
 
-const WorkoutDetailStravaMetrics = React.memo(function WorkoutDetailStravaMetrics({ entry, distanceUnit }: WorkoutDetailStravaMetricsProps) {
-  if (entry.source !== "strava" || (!entry.calories && !entry.avgWatts && !entry.sufferScore && !entry.avgCadence && !entry.avgSpeed)) {
-    return null;
-  }
+const WorkoutDetailStravaMetrics = React.memo(
+  function WorkoutDetailStravaMetrics({
+    entry,
+    distanceUnit,
+  }: WorkoutDetailStravaMetricsProps) {
+    if (
+      entry.source !== "strava" ||
+      (!entry.calories &&
+        !entry.avgWatts &&
+        !entry.sufferScore &&
+        !entry.avgCadence &&
+        !entry.avgSpeed)
+    ) {
+      return null;
+    }
 
-  return (
-    <div className="flex flex-wrap gap-3 pt-2 border-t border-border/50">
-      {entry.calories && (
-        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-          <Flame className="h-3 w-3 text-orange-500" />
-          <span>{entry.calories} cal</span>
-        </div>
-      )}
-      {entry.avgWatts && (
-        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-          <Zap className="h-3 w-3 text-yellow-500" />
-          <span>{entry.avgWatts}W</span>
-        </div>
-      )}
-      {entry.avgCadence && (
-        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-          <Activity className="h-3 w-3 text-blue-500" />
-          <span>{Math.round(entry.avgCadence)} spm</span>
-        </div>
-      )}
-      {entry.avgSpeed && entry.avgSpeed > 0 && (
-        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-          <TrendingUp className="h-3 w-3 text-green-500" />
-          <span>{formatSpeed(entry.avgSpeed, distanceUnit)}</span>
-        </div>
-      )}
-      {entry.sufferScore && (
-        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-          <TrendingUp className="h-3 w-3 text-purple-500" />
-          <span>Effort: {entry.sufferScore}</span>
-        </div>
-      )}
-    </div>
-  );
-});
+    return (
+      <div className="flex flex-wrap gap-3 pt-2 border-t border-border/50">
+        {entry.calories && (
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Flame className="h-3 w-3 text-orange-500" />
+            <span>{entry.calories} cal</span>
+          </div>
+        )}
+        {entry.avgWatts && (
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Zap className="h-3 w-3 text-yellow-500" />
+            <span>{entry.avgWatts}W</span>
+          </div>
+        )}
+        {entry.avgCadence && (
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Activity className="h-3 w-3 text-blue-500" />
+            <span>{Math.round(entry.avgCadence)} spm</span>
+          </div>
+        )}
+        {entry.avgSpeed && entry.avgSpeed > 0 && (
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <TrendingUp className="h-3 w-3 text-green-500" />
+            <span>{formatSpeed(entry.avgSpeed, distanceUnit)}</span>
+          </div>
+        )}
+        {entry.sufferScore && (
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <TrendingUp className="h-3 w-3 text-purple-500" />
+            <span>Effort: {entry.sufferScore}</span>
+          </div>
+        )}
+      </div>
+    );
+  },
+);
 
-export const WorkoutDetailView = React.memo(function WorkoutDetailView({ entry, grouped, hasStructuredData, weightLabel, distanceUnit }: WorkoutDetailViewProps) {
+export const WorkoutDetailView = React.memo(function WorkoutDetailView({
+  entry,
+  grouped,
+  hasStructuredData,
+  weightLabel,
+  distanceUnit,
+}: WorkoutDetailViewProps) {
   return (
     <div className="space-y-3">
       {hasStructuredData ? (
-        <div className="flex flex-wrap gap-1.5" data-testid="detail-exercise-chips">
+        <div
+          className="flex flex-wrap gap-1.5"
+          data-testid="detail-exercise-chips"
+        >
           {grouped.map((group, idx) => (
             <Badge
               key={`${group.exerciseName}-${idx}`}
@@ -165,13 +211,17 @@ export const WorkoutDetailView = React.memo(function WorkoutDetailView({ entry, 
       )}
       {entry.accessory && (
         <div>
-          <p className="text-xs font-medium text-muted-foreground/70 mb-1">Accessory</p>
+          <p className="text-xs font-medium text-muted-foreground/70 mb-1">
+            Accessory
+          </p>
           <p className="text-sm text-muted-foreground/70">{entry.accessory}</p>
         </div>
       )}
       {entry.notes && (
         <div>
-          <p className="text-xs font-medium text-muted-foreground/70 mb-1">Notes</p>
+          <p className="text-xs font-medium text-muted-foreground/70 mb-1">
+            Notes
+          </p>
           <p className="text-sm text-muted-foreground italic">{entry.notes}</p>
         </div>
       )}
@@ -213,7 +263,6 @@ interface WorkoutDetailEditFormProps {
   stopAllVoiceRef?: React.MutableRefObject<(() => void) | null>;
 }
 
-
 interface WorkoutTextModeProps {
   editForm: EditFormState;
   setEditForm: (form: EditFormState) => void;
@@ -242,7 +291,10 @@ const WorkoutTextMode = React.memo(function WorkoutTextMode({
   return (
     <div className="space-y-3">
       {isMainListening && (
-        <div className="flex items-center gap-2 text-sm text-primary bg-primary/10 rounded-md px-3 py-2" data-testid="voice-detail-listening-indicator">
+        <div
+          className="flex items-center gap-2 text-sm text-primary bg-primary/10 rounded-md px-3 py-2"
+          data-testid="voice-detail-listening-indicator"
+        >
           <Mic className="h-4 w-4 animate-pulse" />
           <span>Listening... speak your workout</span>
         </div>
@@ -251,13 +303,22 @@ const WorkoutTextMode = React.memo(function WorkoutTextMode({
         <Textarea
           id="detail-main"
           value={editForm.mainWorkout}
-          onChange={(e) => setEditForm({ ...editForm, mainWorkout: e.target.value })}
+          onChange={(e) =>
+            setEditForm({ ...editForm, mainWorkout: e.target.value })
+          }
           rows={3}
           data-testid="input-detail-main"
-          placeholder={isMainListening ? "Listening... describe your workout" : "Describe your workout, e.g.:\n4x8 back squat at 70kg\n5km tempo run in 25 min"}
+          placeholder={
+            isMainListening
+              ? "Listening... describe your workout"
+              : "Describe your workout, e.g.:\n4x8 back squat at 70kg\n5km tempo run in 25 min"
+          }
         />
         {isMainListening && mainInterim && (
-          <div className="px-3 py-1 text-xs text-muted-foreground italic truncate" data-testid="voice-detail-interim">
+          <div
+            className="px-3 py-1 text-xs text-muted-foreground italic truncate"
+            data-testid="voice-detail-interim"
+          >
             {mainInterim}
           </div>
         )}
@@ -326,7 +387,10 @@ const WorkoutBlockMode = React.memo(function WorkoutBlockMode({
   return (
     <>
       <div>
-        <p className="text-xs text-muted-foreground mb-2">Click an exercise to add it. You can add the same exercise multiple times.</p>
+        <p className="text-xs text-muted-foreground mb-2">
+          Click an exercise to add it. You can add the same exercise multiple
+          times.
+        </p>
         <ExerciseSelector
           selectedExercises={getSelectedExerciseNames()}
           onToggle={() => {}}
@@ -336,8 +400,15 @@ const WorkoutBlockMode = React.memo(function WorkoutBlockMode({
       </div>
       {editExercises.length > 0 && (
         <div className="space-y-3">
-          <DndContext sensors={dialogSensors} collisionDetection={closestCenter} onDragEnd={handleEditDragEnd}>
-            <SortableContext items={editExercises} strategy={verticalListSortingStrategy}>
+          <DndContext
+            sensors={dialogSensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleEditDragEnd}
+          >
+            <SortableContext
+              items={editExercises}
+              strategy={verticalListSortingStrategy}
+            >
               {editExercises.map((blockId) => {
                 const exData = editExerciseData[blockId];
                 if (!exData) return null;
@@ -391,12 +462,18 @@ const WorkoutAccessoryNotes = React.memo(function WorkoutAccessoryNotes({
       <div>
         <div className="flex items-center justify-between mb-1">
           <Label htmlFor="detail-accessory">Accessory/Engine Work</Label>
-          <VoiceFieldButton onTranscript={(text) => appendToField("accessory", text)} onStopRef={stopAccessoryRef} data-testid="button-voice-detail-accessory" />
+          <VoiceFieldButton
+            onTranscript={(text) => appendToField("accessory", text)}
+            onStopRef={stopAccessoryRef}
+            data-testid="button-voice-detail-accessory"
+          />
         </div>
         <Textarea
           id="detail-accessory"
           value={editForm.accessory}
-          onChange={(e) => setEditForm({ ...editForm, accessory: e.target.value })}
+          onChange={(e) =>
+            setEditForm({ ...editForm, accessory: e.target.value })
+          }
           rows={2}
           data-testid="input-detail-accessory"
         />
@@ -404,13 +481,18 @@ const WorkoutAccessoryNotes = React.memo(function WorkoutAccessoryNotes({
       <div>
         <div className="flex items-center justify-between mb-1">
           <Label htmlFor="detail-notes">Notes</Label>
-          <VoiceFieldButton onTranscript={(text) => appendToField("notes", text)} onStopRef={stopNotesRef} data-testid="button-voice-detail-notes" />
+          <VoiceFieldButton
+            onTranscript={(text) => appendToField("notes", text)}
+            onStopRef={stopNotesRef}
+            data-testid="button-voice-detail-notes"
+          />
         </div>
         <Input
           id="detail-notes"
           value={editForm.notes}
           onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
           data-testid="input-detail-notes"
+          placeholder="Add any observations or notes..."
         />
       </div>
     </>
@@ -442,19 +524,26 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
   const stopAccessoryRef = React.useRef<(() => void) | null>(null);
   const stopNotesRef = React.useRef<(() => void) | null>(null);
 
-  const appendToField = useCallback((field: keyof EditFormState, text: string) => {
-    const current = editFormRef.current;
-    const val = current[field];
-    const separator = val && !val.endsWith(" ") && !val.endsWith("\n") ? " " : "";
-    setEditForm({
-      ...current,
-      [field]: val + separator + text,
-    });
-  }, [setEditForm]);
+  const appendToField = useCallback(
+    (field: keyof EditFormState, text: string) => {
+      const current = editFormRef.current;
+      const val = current[field];
+      const separator =
+        val && !val.endsWith(" ") && !val.endsWith("\n") ? " " : "";
+      setEditForm({
+        ...current,
+        [field]: val + separator + text,
+      });
+    },
+    [setEditForm],
+  );
 
-  const handleMainVoiceResult = useCallback((transcript: string) => {
-    appendToField("mainWorkout", transcript);
-  }, [appendToField]);
+  const handleMainVoiceResult = useCallback(
+    (transcript: string) => {
+      appendToField("mainWorkout", transcript);
+    },
+    [appendToField],
+  );
 
   const { toast } = useToast();
 
@@ -483,11 +572,21 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
     return { blockCounts: counts, blockIndices: indices };
   }, [editExercises, editExerciseData]);
 
-  const handleVoiceError = useCallback((msg: string) => {
-    toast({ title: "Voice Input", description: msg, variant: "destructive" });
-  }, [toast]);
+  const handleVoiceError = useCallback(
+    (msg: string) => {
+      toast({ title: "Voice Input", description: msg, variant: "destructive" });
+    },
+    [toast],
+  );
 
-  const { isListening: isMainListening, isSupported, interimTranscript: mainInterim, startListening: startMainListening, stopListening: stopMainListening, toggleListening: toggleMainListening } = useVoiceInput({
+  const {
+    isListening: isMainListening,
+    isSupported,
+    interimTranscript: mainInterim,
+    startListening: startMainListening,
+    stopListening: stopMainListening,
+    toggleListening: toggleMainListening,
+  } = useVoiceInput({
     onResult: handleMainVoiceResult,
     onError: handleVoiceError,
   });
@@ -502,7 +601,6 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
     stopAllVoiceRef.current = stopAllVoice;
   }
 
-
   return (
     <div className="space-y-4">
       <div>
@@ -512,6 +610,7 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
           value={editForm.focus}
           onChange={(e) => setEditForm({ ...editForm, focus: e.target.value })}
           data-testid="input-detail-focus"
+          placeholder="e.g., Upper Body Strength, Active Recovery..."
         />
       </div>
 
@@ -597,5 +696,4 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
       />
     </div>
   );
-
 });
