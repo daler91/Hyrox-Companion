@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { Response, NextFunction } from "express";
-import { calculateStreak, rateLimiter, clearRateLimitBuckets } from "./routeUtils";
+import { calculateStreak, rateLimiter, clearRateLimitBuckets, MAX_RATE_LIMIT_BUCKETS } from "./routeUtils";
 import { expandExercisesToSetRows } from "./services/workoutService";
 
 describe("rateLimiter", () => {
@@ -126,6 +126,72 @@ describe("rateLimiter", () => {
 
     apiLimiter(req, res as Response, next); // 2nd api request (blocked)
     expect(res.status).toHaveBeenCalledWith(429);
+  });
+
+  it("evicts oldest entry when MAX_RATE_LIMIT_BUCKETS is reached", () => {
+    const middleware = rateLimiter("api", 1, 60000);
+
+    // Fill the map to its maximum capacity
+    for (let i = 0; i < MAX_RATE_LIMIT_BUCKETS; i++) {
+      const mockReq = { ...req, ip: `10.0.0.${i}`, auth: undefined };
+      middleware(mockReq, res as Response, next);
+    }
+
+    expect(next).toHaveBeenCalledTimes(MAX_RATE_LIMIT_BUCKETS);
+
+    // Now the map should be exactly at capacity
+    // The very first IP was 10.0.0.0
+    // Requesting it again now would normally be a 429 Too Many Requests if it was still in the map
+    // However, we are about to add a new IP which will evict 10.0.0.0
+
+    const overflowingReq = { ...req, ip: "10.0.0.99999", auth: undefined };
+    middleware(overflowingReq, res as Response, next); // This should evict 10.0.0.0 and succeed
+
+    expect(next).toHaveBeenCalledTimes(MAX_RATE_LIMIT_BUCKETS + 1);
+
+    // To prove 10.0.0.0 was evicted, sending a request for it should NOT return 429
+    // It should succeed because it acts like a completely new request
+    const firstReq = { ...req, ip: "10.0.0.0", auth: undefined };
+    middleware(firstReq, res as Response, next);
+
+    expect(next).toHaveBeenCalledTimes(MAX_RATE_LIMIT_BUCKETS + 2);
+    expect(res.status).not.toHaveBeenCalled();
+
+    // But if we immediately request it AGAIN, it should be 429 (proving it's now tracked again)
+    middleware(firstReq, res as Response, next);
+    expect(res.status).toHaveBeenCalledWith(429);
+  });
+
+  it("performs inline cleanup when limit is reached", () => {
+    const middleware = rateLimiter("api", 1, 60000);
+
+    // Add one entry
+    const mockReq1 = { ...req, ip: "10.0.0.1", auth: undefined };
+    middleware(mockReq1, res as Response, next);
+
+    // Fast forward time so it expires
+    vi.advanceTimersByTime(60000);
+
+    // Fill the map up to the limit MINUS 1 (because the expired one is still there taking up space)
+    for (let i = 2; i <= MAX_RATE_LIMIT_BUCKETS; i++) {
+      const mockReq = { ...req, ip: `10.0.0.${i}`, auth: undefined };
+      middleware(mockReq, res as Response, next);
+    }
+
+    expect(next).toHaveBeenCalledTimes(MAX_RATE_LIMIT_BUCKETS);
+
+    // Now the size is exactly MAX_RATE_LIMIT_BUCKETS
+    // The next insertion should trigger an inline cleanup and remove the first entry (10.0.0.1)
+    // because it expired. Thus it shouldn't need to evict anything actively, just clean up.
+
+    const newReq = { ...req, ip: "10.0.1.1", auth: undefined };
+    middleware(newReq, res as Response, next);
+    expect(next).toHaveBeenCalledTimes(MAX_RATE_LIMIT_BUCKETS + 1);
+
+    // Now if we request the very first one that expired (10.0.0.1), it should succeed
+    middleware(mockReq1, res as Response, next);
+    expect(next).toHaveBeenCalledTimes(MAX_RATE_LIMIT_BUCKETS + 2);
+    expect(res.status).not.toHaveBeenCalled();
   });
 });
 
