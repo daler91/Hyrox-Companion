@@ -2,7 +2,7 @@ import { Router } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { rateLimiter } from "../routeUtils";
 import { storage } from "../storage";
-import { insertWorkoutLogSchema, updateWorkoutLogSchema } from "@shared/schema";
+import { insertWorkoutLogSchema, updateWorkoutLogSchema, insertCustomExerciseSchema, exercisesPayloadSchema } from "@shared/schema";
 import { generateCSV, generateJSON } from "../services/exportService";
 import { createWorkout, updateWorkout, reparseWorkout, prepareParsedWorkout, saveParsedWorkout } from "../services/workoutService";
 import { getUserId } from "../types";
@@ -118,13 +118,20 @@ router.get("/api/custom-exercises", isAuthenticated, async (req: any, res) => {
   }
 });
 
-router.post("/api/custom-exercises", isAuthenticated, async (req: any, res) => {
+router.post("/api/custom-exercises", isAuthenticated, rateLimiter("customExercise", 20), async (req: any, res) => {
   try {
     const userId = getUserId(req);
-    const { name, category } = req.body as { name: string; category?: string };
-    if (!name || !name.trim()) {
-      return res.status(400).json({ error: "Name is required" });
+
+    // Add default userId to body for safeParse if needed by schema, though we override it below
+    const payload = { ...req.body, userId };
+    const parseResult = insertCustomExerciseSchema.safeParse(payload);
+
+    if (!parseResult.success) {
+      return res.status(400).json({ error: parseResult.error.errors[0].message });
     }
+
+    const { name, category } = parseResult.data;
+
     const exercise = await storage.upsertCustomExercise({
       userId,
       name: name.trim(),
@@ -170,8 +177,17 @@ router.post("/api/workouts", isAuthenticated, rateLimiter("workout", 40), async 
       return res.status(400).json({ error: "Invalid workout data", details: parseResult.error });
     }
 
+    let validatedExercises = exercises;
+    if (exercises) {
+      const exercisesParseResult = exercisesPayloadSchema.safeParse(exercises);
+      if (!exercisesParseResult.success) {
+        return res.status(400).json({ error: "Invalid exercises data", details: exercisesParseResult.error });
+      }
+      validatedExercises = exercisesParseResult.data;
+    }
+
     const userId = getUserId(req);
-    const result = await createWorkout(parseResult.data, exercises, userId);
+    const result = await createWorkout(parseResult.data, validatedExercises, userId);
     res.json(result);
   } catch (error) {
     console.error("Create workout error:", error);
@@ -187,8 +203,17 @@ router.patch("/api/workouts/:id", isAuthenticated, async (req: any, res) => {
       return res.status(400).json({ error: "Invalid update data", details: parseResult.error });
     }
 
+    let validatedExercises = exercises;
+    if (exercises) {
+      const exercisesParseResult = exercisesPayloadSchema.safeParse(exercises);
+      if (!exercisesParseResult.success) {
+        return res.status(400).json({ error: "Invalid exercises data", details: exercisesParseResult.error });
+      }
+      validatedExercises = exercisesParseResult.data;
+    }
+
     const userId = getUserId(req);
-    const result = await updateWorkout(req.params.id, parseResult.data, exercises, userId);
+    const result = await updateWorkout(req.params.id, parseResult.data, validatedExercises, userId);
     if (!result) {
       return res.status(404).json({ error: "Workout not found" });
     }
