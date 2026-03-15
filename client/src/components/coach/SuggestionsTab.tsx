@@ -103,8 +103,7 @@ export function useSuggestions({ timeline, addLocalMessage, saveMessage }: UseSu
         timestamp: getCurrentTimeString(),
       };
       addLocalMessage(confirmMessage);
-    } catch (error) {
-      console.error("Apply suggestion error:", error);
+    } catch {
       const errorMessage: Message = {
         id: Date.now().toString(),
         role: "assistant",
