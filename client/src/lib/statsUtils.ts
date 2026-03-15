@@ -57,23 +57,7 @@ export function calculateStats(timeline: TimelineEntry[]): TrainingStats {
     }
   }
 
-  const uniqueDays = Array.from(completedDatesSet).sort().reverse();
-  
-  let streak = 0;
-  const checkDate = new Date();
-  checkDate.setHours(0, 0, 0, 0);
-  
-  for (let i = 0; i <= uniqueDays.length; i++) {
-    const expectedDateStr = checkDate.toISOString().split("T")[0];
-    if (uniqueDays.includes(expectedDateStr)) {
-      streak++;
-      checkDate.setDate(checkDate.getDate() - 1);
-    } else if (i === 0) {
-      checkDate.setDate(checkDate.getDate() - 1);
-    } else {
-      break;
-    }
-  }
+  const streak = calculateStreak(completedDatesSet);
 
   return {
     workoutsThisWeek: totalThisWeek,
@@ -82,4 +66,33 @@ export function calculateStats(timeline: TimelineEntry[]): TrainingStats {
     completionRate: totalPastAndToday > 0 ? Math.round((completedPastAndTodayCount / totalPastAndToday) * 100) : 0,
     currentStreak: streak,
   };
+}
+
+export function calculateStreak(completedDates: Set<string>): number {
+  if (completedDates.size === 0) return 0;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayStr = today.toISOString().split("T")[0];
+
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().split("T")[0];
+
+  if (!completedDates.has(todayStr) && !completedDates.has(yesterdayStr)) return 0;
+
+  let streak = 0;
+  let checkDate = completedDates.has(todayStr) ? new Date(today) : new Date(yesterday);
+
+  while (true) {
+    const dateStr = checkDate.toISOString().split("T")[0];
+    if (completedDates.has(dateStr)) {
+      streak++;
+      checkDate.setDate(checkDate.getDate() - 1);
+    } else {
+      break;
+    }
+  }
+
+  return streak;
 }
