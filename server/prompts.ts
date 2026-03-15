@@ -139,14 +139,8 @@ function formatExerciseDetails(exerciseDetails: NonNullable<TrainingContext["rec
   return details.join(", ");
 }
 
-export function buildSystemPrompt(trainingContext?: TrainingContext): string {
-  if (!trainingContext || trainingContext.totalWorkouts === 0) {
-    return BASE_SYSTEM_PROMPT + `\n\nNote: This athlete hasn't logged any training data yet. Encourage them to start tracking their workouts to receive personalized insights.`;
-  }
-
-  let contextSection = `\n\n--- ATHLETE'S TRAINING DATA ---\n`;
-  
-  contextSection += `\nOverall Stats:
+function buildOverallStats(trainingContext: TrainingContext): string {
+  let section = `\nOverall Stats:
 - Total workouts tracked: ${trainingContext.totalWorkouts}
 - Completed: ${trainingContext.completedWorkouts}
 - Planned (upcoming): ${trainingContext.plannedWorkouts}
@@ -156,38 +150,61 @@ export function buildSystemPrompt(trainingContext?: TrainingContext): string {
 - Current streak: ${trainingContext.currentStreak} day${trainingContext.currentStreak !== 1 ? "s" : ""}`;
 
   if (trainingContext.activePlan) {
-    contextSection += `\n\nActive Training Plan: "${trainingContext.activePlan.name}" (${trainingContext.activePlan.totalWeeks} weeks)`;
+    section += `\n\nActive Training Plan: "${trainingContext.activePlan.name}" (${trainingContext.activePlan.totalWeeks} weeks)`;
+  }
+  return section;
+}
+
+function buildExerciseFocus(trainingContext: TrainingContext): string {
+  if (Object.keys(trainingContext.exerciseBreakdown).length === 0) return "";
+
+  let section = `\n\nExercise Focus (times trained):`;
+  for (const [exercise, count] of Object.entries(trainingContext.exerciseBreakdown)) {
+    section += `\n- ${exercise}: ${count}x`;
+  }
+  return section;
+}
+
+function buildStructuredPerformance(trainingContext: TrainingContext): string {
+  if (!trainingContext.structuredExerciseStats || Object.keys(trainingContext.structuredExerciseStats).length === 0) return "";
+
+  let section = `\n\nStructured Exercise Performance:`;
+  for (const [exercise, stats] of Object.entries(trainingContext.structuredExerciseStats)) {
+    let line = `\n- ${exercise}: trained ${stats.count}x`;
+    if (stats.maxWeight) line += `, max weight: ${stats.maxWeight}`;
+    if (stats.maxDistance) line += `, max distance: ${stats.maxDistance}`;
+    if (stats.bestTime) line += `, best time: ${stats.bestTime}min`;
+    if (stats.avgReps) line += `, avg reps: ${stats.avgReps}`;
+    section += line;
+  }
+  return section;
+}
+
+function buildRecentWorkouts(trainingContext: TrainingContext): string {
+  if (trainingContext.recentWorkouts.length === 0) return "";
+
+  let section = `\n\nRecent Workouts (last 7):`;
+  for (const workout of trainingContext.recentWorkouts.slice(0, 7)) {
+    let line = `\n- ${workout.date}: ${workout.focus || "General"} - ${workout.mainWorkout || "No details"} (${workout.status})`;
+    if (workout.exerciseDetails && workout.exerciseDetails.length > 0) {
+      line += ` [${formatExerciseDetails(workout.exerciseDetails)}]`;
+    }
+    section += line;
+  }
+  return section;
+}
+
+export function buildSystemPrompt(trainingContext?: TrainingContext): string {
+  if (!trainingContext || trainingContext.totalWorkouts === 0) {
+    return BASE_SYSTEM_PROMPT + `\n\nNote: This athlete hasn't logged any training data yet. Encourage them to start tracking their workouts to receive personalized insights.`;
   }
 
-  if (Object.keys(trainingContext.exerciseBreakdown).length > 0) {
-    contextSection += `\n\nExercise Focus (times trained):`;
-    for (const [exercise, count] of Object.entries(trainingContext.exerciseBreakdown)) {
-      contextSection += `\n- ${exercise}: ${count}x`;
-    }
-  }
+  let contextSection = `\n\n--- ATHLETE'S TRAINING DATA ---\n`;
 
-  if (trainingContext.structuredExerciseStats && Object.keys(trainingContext.structuredExerciseStats).length > 0) {
-    contextSection += `\n\nStructured Exercise Performance:`;
-    for (const [exercise, stats] of Object.entries(trainingContext.structuredExerciseStats)) {
-      let line = `\n- ${exercise}: trained ${stats.count}x`;
-      if (stats.maxWeight) line += `, max weight: ${stats.maxWeight}`;
-      if (stats.maxDistance) line += `, max distance: ${stats.maxDistance}`;
-      if (stats.bestTime) line += `, best time: ${stats.bestTime}min`;
-      if (stats.avgReps) line += `, avg reps: ${stats.avgReps}`;
-      contextSection += line;
-    }
-  }
-
-  if (trainingContext.recentWorkouts.length > 0) {
-    contextSection += `\n\nRecent Workouts (last 7):`;
-    for (const workout of trainingContext.recentWorkouts.slice(0, 7)) {
-      let line = `\n- ${workout.date}: ${workout.focus || "General"} - ${workout.mainWorkout || "No details"} (${workout.status})`;
-      if (workout.exerciseDetails && workout.exerciseDetails.length > 0) {
-        line += ` [${formatExerciseDetails(workout.exerciseDetails)}]`;
-      }
-      contextSection += line;
-    }
-  }
+  contextSection += buildOverallStats(trainingContext);
+  contextSection += buildExerciseFocus(trainingContext);
+  contextSection += buildStructuredPerformance(trainingContext);
+  contextSection += buildRecentWorkouts(trainingContext);
 
   contextSection += `\n\n--- END TRAINING DATA ---\n\nUse this data to provide personalized coaching. Reference specific workouts and patterns when relevant.`;
 
