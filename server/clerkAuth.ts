@@ -72,10 +72,7 @@ async function migrateUserId(oldId: string, newId: string): Promise<void> {
       firstName: oldUser.firstName,
       lastName: oldUser.lastName,
       profileImageUrl: oldUser.profileImageUrl,
-      hyroxDivision: oldUser.hyroxDivision,
-      fitnessLevel: oldUser.fitnessLevel,
-      targetRaceDate: oldUser.targetRaceDate,
-      personalBests: oldUser.personalBests,
+
       distanceUnit: oldUser.distanceUnit,
       updatedAt: new Date(),
     });
