@@ -295,17 +295,10 @@ export default function Timeline() {
       
       {coachOpen && (
         <div className="fixed inset-0 z-50 md:hidden">
-          <div
-            className="absolute inset-0 bg-background/80 backdrop-blur-sm cursor-pointer"
+          <button
+            type="button"
+            className="absolute inset-0 bg-background/80 backdrop-blur-sm w-full h-full border-none p-0 focus:outline-none cursor-pointer"
             onClick={() => setCoachOpen(false)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                setCoachOpen(false);
-              }
-            }}
-            role="button"
-            tabIndex={0}
             aria-label="Close coach panel"
           />
           <div className="absolute right-0 top-0 bottom-0 w-full max-w-sm bg-background shadow-lg">
