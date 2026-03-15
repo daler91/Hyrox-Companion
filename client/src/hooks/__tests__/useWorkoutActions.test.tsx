@@ -245,6 +245,35 @@ describe('useWorkoutActions', () => {
   });
 
   describe('API Callbacks and Toast notifications', () => {
+
+    it.each([
+      ['updateDayMutation', { planDayId: 'pd-1', date: '2024-01-01', focus: 'strength' }, 'handleSaveFromDetail', [{ focus: 'cardio', mainWorkout: 'run', accessory: null, notes: null }], true, 'Failed to update entry'],
+      ['logWorkoutMutation', { planDayId: 'pd-1', date: '2024-01-01', focus: 'strength' }, 'handleMarkComplete', [{}], false, 'Failed to log workout'],
+      ['updateWorkoutMutation', { workoutLogId: 'w-1', date: '2024-01-01', focus: 'strength' }, 'handleSaveFromDetail', [{ focus: 'cardio', mainWorkout: 'run', accessory: null, notes: null }], true, 'Failed to update workout'],
+      ['deleteWorkoutMutation', { workoutLogId: 'w-1', date: '2024-01-01', focus: 'strength' }, 'handleDelete', [{}], false, 'Failed to delete workout'],
+      ['deletePlanDayMutation', { planDayId: 'pd-1', date: '2024-01-01', focus: 'strength' }, 'handleDelete', [{}], false, 'Failed to delete workout']
+    ])('triggers error toast on failed %s', async (_, mockEntry, action, args, needsDialog, expectedTitle) => {
+      vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(new Error('Network Error'));
+      const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
+
+      if (needsDialog) {
+        act(() => {
+          result.current.openDetailDialog(mockEntry as any);
+        });
+      }
+
+      act(() => {
+        if (action === 'handleDelete' || action === 'handleMarkComplete') {
+          (result.current as any)[action](mockEntry as any);
+        } else {
+          (result.current as any)[action](...args);
+        }
+      });
+
+      await waitFor(() => {
+        expect(mockToast).toHaveBeenCalledWith({ title: expectedTitle, variant: "destructive" });
+      });
+    });
     it('triggers success toast and invalidates timeline on successful status update', async () => {
       const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
       const mockEntry = { planDayId: 'pd-1', date: '2024-01-01', focus: 'cardio' };
@@ -272,84 +301,6 @@ describe('useWorkoutActions', () => {
 
       await waitFor(() => {
         expect(mockToast).toHaveBeenCalledWith({ title: "Failed to update status", variant: "destructive" });
-      });
-    });
-
-    it('triggers error toast on failed updateDayMutation', async () => {
-      vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(new Error('Network Error'));
-      const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
-      const mockEntry = { planDayId: 'pd-1', date: '2024-01-01', focus: 'strength' };
-
-      act(() => {
-        result.current.openDetailDialog(mockEntry as any);
-      });
-
-      act(() => {
-        result.current.handleSaveFromDetail({ focus: 'cardio', mainWorkout: 'run', accessory: null, notes: null });
-      });
-
-      await waitFor(() => {
-        expect(mockToast).toHaveBeenCalledWith({ title: "Failed to update entry", variant: "destructive" });
-      });
-    });
-
-    it('triggers error toast on failed logWorkoutMutation', async () => {
-      vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(new Error('Network Error'));
-      const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
-      const mockEntry = { planDayId: 'pd-1', date: '2024-01-01', focus: 'strength' };
-
-      act(() => {
-        result.current.handleMarkComplete(mockEntry as any);
-      });
-
-      await waitFor(() => {
-        expect(mockToast).toHaveBeenCalledWith({ title: "Failed to log workout", variant: "destructive" });
-      });
-    });
-
-    it('triggers error toast on failed updateWorkoutMutation', async () => {
-      vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(new Error('Network Error'));
-      const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
-      const mockEntry = { workoutLogId: 'w-1', date: '2024-01-01', focus: 'strength' };
-
-      act(() => {
-        result.current.openDetailDialog(mockEntry as any);
-      });
-
-      act(() => {
-        result.current.handleSaveFromDetail({ focus: 'cardio', mainWorkout: 'run', accessory: null, notes: null });
-      });
-
-      await waitFor(() => {
-        expect(mockToast).toHaveBeenCalledWith({ title: "Failed to update workout", variant: "destructive" });
-      });
-    });
-
-    it('triggers error toast on failed deleteWorkoutMutation', async () => {
-      vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(new Error('Network Error'));
-      const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
-      const mockEntry = { workoutLogId: 'w-1', date: '2024-01-01', focus: 'strength' };
-
-      act(() => {
-        result.current.handleDelete(mockEntry as any);
-      });
-
-      await waitFor(() => {
-        expect(mockToast).toHaveBeenCalledWith({ title: "Failed to delete workout", variant: "destructive" });
-      });
-    });
-
-    it('triggers error toast on failed deletePlanDayMutation', async () => {
-      vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(new Error('Network Error'));
-      const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
-      const mockEntry = { planDayId: 'pd-1', date: '2024-01-01', focus: 'strength' };
-
-      act(() => {
-        result.current.handleDelete(mockEntry as any);
-      });
-
-      await waitFor(() => {
-        expect(mockToast).toHaveBeenCalledWith({ title: "Failed to delete workout", variant: "destructive" });
       });
     });
 });

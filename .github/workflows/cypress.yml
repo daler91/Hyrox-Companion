@@ -16,14 +16,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
+          cache: 'pnpm'
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm i
 
       - name: Build application
         run: npm run build
@@ -49,7 +54,8 @@ jobs:
         with:
           record: true
           parallel: true
-          install: false
+          install: true
+          install-command: pnpm i
         env:
           CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
