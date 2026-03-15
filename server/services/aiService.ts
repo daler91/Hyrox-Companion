@@ -134,8 +134,10 @@ async function getStructuredExerciseStats(timeline: TimelineEntry[]) {
 }
 
 export async function buildTrainingContext(userId: string): Promise<TrainingContext> {
-  const timeline = await storage.getTimeline(userId);
-  const plans = await storage.listTrainingPlans(userId);
+  const [timeline, plans] = await Promise.all([
+    storage.getTimeline(userId),
+    storage.listTrainingPlans(userId),
+  ]);
 
   const { completedWorkouts, plannedWorkouts, missedWorkouts, skippedWorkouts, totalWorkouts, completionRate, completedDates } = calculateTrainingStats(timeline);
   const exerciseBreakdown = getExerciseBreakdown(timeline);
