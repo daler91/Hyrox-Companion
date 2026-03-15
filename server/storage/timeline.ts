@@ -58,11 +58,11 @@ function createLinkedWorkoutEntry(day: PlanDay, linkedLog: WorkoutLog, row: { pl
   };
 }
 
-function createPlannedDayEntry(day: PlanDay, row: { planName: string; planId: string }, today: string): TimelineEntry {
-  const status = calculatePlanDayStatus(day.status, day.scheduledDate!, today);
+function createPlannedDayEntry(day: PlanDay, scheduledDate: string, row: { planName: string; planId: string }, today: string): TimelineEntry {
+  const status = calculatePlanDayStatus(day.status, scheduledDate, today);
   return {
     id: `plan-${day.id}`,
-    date: day.scheduledDate!,
+    date: scheduledDate,
     type: "planned",
     status: status,
     focus: day.focus,
@@ -165,7 +165,7 @@ export class TimelineStorage {
         if (linkedLog) {
           entries.push(createLinkedWorkoutEntry(day, linkedLog, { planName: row.planName, planId: row.planId }));
         } else {
-          entries.push(createPlannedDayEntry(day, { planName: row.planName, planId: row.planId }, today));
+          entries.push(createPlannedDayEntry(day, day.scheduledDate, { planName: row.planName, planId: row.planId }, today));
         }
       }
     }
