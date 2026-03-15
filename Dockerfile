@@ -2,7 +2,7 @@
 FROM node:20-alpine AS builder
 
 # Upgrade zlib to mitigate CVE-2026-22184 and install pnpm
-RUN apk upgrade --no-cache zlib && npm install -g pnpm@9.12.0
+RUN apk upgrade --no-cache zlib && npm install -g npm@latest pnpm@9.12.0
 
 WORKDIR /app
 
@@ -28,7 +28,7 @@ RUN pnpm run build
 FROM node:20-alpine AS runner
 
 # Upgrade zlib to mitigate CVE-2026-22184 and install pnpm
-RUN apk upgrade --no-cache zlib && npm install -g pnpm@9.12.0
+RUN apk upgrade --no-cache zlib && npm install -g npm@latest pnpm@9.12.0
 
 WORKDIR /app
 
