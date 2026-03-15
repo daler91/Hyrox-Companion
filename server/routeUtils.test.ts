@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { Response, NextFunction } from "express";
-import { calculateStreak, rateLimiter, clearRateLimitBuckets, MAX_RATE_LIMIT_BUCKETS } from "./routeUtils";
+import { calculateStreak, rateLimiter, clearRateLimitBuckets, MAX_RATE_LIMIT_BUCKETS, DEFAULT_WINDOW_MS } from "./routeUtils";
 import { expandExercisesToSetRows } from "./services/workoutService";
 
 describe("rateLimiter", () => {
@@ -33,7 +33,7 @@ describe("rateLimiter", () => {
   });
 
   it("calls next() for requests under the limit", () => {
-    const middleware = rateLimiter("api", 2, 60000);
+    const middleware = rateLimiter("api", 2, DEFAULT_WINDOW_MS);
 
     middleware(req, res as Response, next);
     expect(next).toHaveBeenCalledTimes(1);
@@ -45,7 +45,7 @@ describe("rateLimiter", () => {
   });
 
   it("returns 429 when maxRequests is exceeded", () => {
-    const middleware = rateLimiter("api", 2, 60000);
+    const middleware = rateLimiter("api", 2, DEFAULT_WINDOW_MS);
 
     middleware(req, res as Response, next); // 1st request (ok)
     middleware(req, res as Response, next); // 2nd request (ok)
@@ -60,7 +60,7 @@ describe("rateLimiter", () => {
   });
 
   it("resets limit after windowMs passes", () => {
-    const middleware = rateLimiter("api", 1, 60000);
+    const middleware = rateLimiter("api", 1, DEFAULT_WINDOW_MS);
 
     middleware(req, res as Response, next); // 1st request (ok)
     expect(next).toHaveBeenCalledTimes(1);
@@ -69,14 +69,14 @@ describe("rateLimiter", () => {
     expect(res.status).toHaveBeenCalledWith(429);
 
     // Advance time by 60 seconds
-    vi.advanceTimersByTime(60000);
+    vi.advanceTimersByTime(DEFAULT_WINDOW_MS);
 
     middleware(req, res as Response, next); // 3rd request (ok again)
     expect(next).toHaveBeenCalledTimes(2);
   });
 
   it("distinguishes between different users", () => {
-    const middleware = rateLimiter("api", 1, 60000);
+    const middleware = rateLimiter("api", 1, DEFAULT_WINDOW_MS);
 
     // User 1 requests
     middleware(req, res as Response, next); // 1st request user1 (ok)
@@ -93,7 +93,7 @@ describe("rateLimiter", () => {
   });
 
   it("uses ip address if userId is missing", () => {
-    const middleware = rateLimiter("api", 1, 60000);
+    const middleware = rateLimiter("api", 1, DEFAULT_WINDOW_MS);
     const reqIp = { ip: "user-cleanup-1" };
 
     middleware(reqIp, res as Response, next); // 1st request ip (ok)
@@ -104,7 +104,7 @@ describe("rateLimiter", () => {
   });
 
   it("calls next() and bypasses rate limiting if neither userId nor ip is present", () => {
-    const middleware = rateLimiter("api", 1, 60000);
+    const middleware = rateLimiter("api", 1, DEFAULT_WINDOW_MS);
     const reqEmpty = {};
 
     middleware(reqEmpty, res as Response, next); // 1st request empty (ok)
@@ -115,8 +115,8 @@ describe("rateLimiter", () => {
   });
 
   it("distinguishes between different categories for the same user", () => {
-    const apiLimiter = rateLimiter("api", 1, 60000);
-    const authLimiter = rateLimiter("auth", 1, 60000);
+    const apiLimiter = rateLimiter("api", 1, DEFAULT_WINDOW_MS);
+    const authLimiter = rateLimiter("auth", 1, DEFAULT_WINDOW_MS);
 
     apiLimiter(req, res as Response, next); // 1st api request (ok)
     expect(next).toHaveBeenCalledTimes(1);
@@ -129,7 +129,7 @@ describe("rateLimiter", () => {
   });
 
   it("evicts oldest entry when MAX_RATE_LIMIT_BUCKETS is reached", () => {
-    const middleware = rateLimiter("api", 1, 60000);
+    const middleware = rateLimiter("api", 1, DEFAULT_WINDOW_MS);
 
     // Fill the map to its maximum capacity
     for (let i = 0; i < MAX_RATE_LIMIT_BUCKETS; i++) {
@@ -163,14 +163,14 @@ describe("rateLimiter", () => {
   });
 
   it("performs inline cleanup when limit is reached", () => {
-    const middleware = rateLimiter("api", 1, 60000);
+    const middleware = rateLimiter("api", 1, DEFAULT_WINDOW_MS);
 
     // Add one entry
     const mockReq1 = { ...req, auth: { userId: "user-cleanup-1" } };
     middleware(mockReq1, res as Response, next);
 
     // Fast forward time so it expires
-    vi.advanceTimersByTime(60000);
+    vi.advanceTimersByTime(DEFAULT_WINDOW_MS);
 
     // Fill the map up to the limit MINUS 1 (because the expired one is still there taking up space)
     for (let i = 2; i <= MAX_RATE_LIMIT_BUCKETS; i++) {
