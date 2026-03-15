@@ -58,7 +58,7 @@ export async function generateJSON(userId: string, storage: IStorage) {
   return { timeline, plans, exerciseSets: exerciseSetRows, exportedAt: new Date().toISOString() };
 }
 
-const CSV_FORMULA_CHARACTERS = /^[=\+\-@|]/;
+const CSV_FORMULA_CHARACTERS = /^[+\-=@|]/;
 const CSV_QUOTABLE_CHARACTERS = /[,\n"]/;
 
 function escapeCsv(val: string | null | undefined): string {
