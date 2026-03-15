@@ -56,6 +56,7 @@ describe('useChatSession', () => {
     global.fetch = vi.fn();
     // Default apiRequest mock to return a simple response to avoid 'json' of undefined errors
     vi.mocked(queryClient.apiRequest).mockResolvedValue({
+      ok: true,
       json: () => Promise.resolve({})
     } as Response);
 
@@ -100,11 +101,8 @@ describe('useChatSession', () => {
   });
 
   it('should handle chat session error recovery (stream request failed)', async () => {
-    // Mock fetch to simulate a stream request failure (e.g. 500 error)
-    global.fetch = vi.fn().mockResolvedValueOnce({
-      ok: false,
-      status: 500,
-    });
+    // Mock apiRequest to simulate a stream request failure (e.g. 500 error)
+    vi.mocked(queryClient.apiRequest).mockRejectedValue(new Error('500: Internal Server Error'));
 
     const { result } = renderHook(() => useChatSession({ useStreaming: true }), { wrapper });
 
@@ -123,8 +121,8 @@ describe('useChatSession', () => {
   });
 
   it('should handle chat session error recovery (fetch throws network error)', async () => {
-    // Mock fetch to simulate a network error
-    global.fetch = vi.fn().mockRejectedValueOnce(new Error('Network Error'));
+    // Mock apiRequest to simulate a network error
+    vi.mocked(queryClient.apiRequest).mockRejectedValue(new Error('Network Error'));
 
     const { result } = renderHook(() => useChatSession({ useStreaming: true }), { wrapper });
 
@@ -148,10 +146,10 @@ describe('useChatSession', () => {
       }
     });
 
-    global.fetch = vi.fn().mockResolvedValueOnce({
+    vi.mocked(queryClient.apiRequest).mockResolvedValue({
       ok: true,
       body: mockStream,
-    });
+    } as unknown as Response);
 
     const { result } = renderHook(() => useChatSession({ useStreaming: true }), { wrapper });
 

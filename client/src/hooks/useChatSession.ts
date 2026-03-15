@@ -181,19 +181,10 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         };
         setMessages((prev) => [...prev, placeholderMessage]);
 
-        const response = await fetch("/api/chat/stream", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ 
-            message: content, 
-            history 
-          }),
+        const response = await apiRequest("POST", "/api/chat/stream", {
+          message: content,
+          history
         });
-
-        if (!response.ok) {
-          throw new Error("Stream request failed");
-        }
 
         const reader = response.body?.getReader();
         const decoder = new TextDecoder();
