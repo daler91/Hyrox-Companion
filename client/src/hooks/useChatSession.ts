@@ -224,7 +224,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         setMessages((prev) => [...prev, assistantMessage]);
         saveMessageMutation.mutate({ role: "assistant", content: data.response });
       }
-    } catch (error) {
+    } catch {
       if (fullResponse) {
         setMessages((prev) =>
           prev.map((m) =>
