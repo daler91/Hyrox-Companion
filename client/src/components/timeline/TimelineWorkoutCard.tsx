@@ -107,7 +107,7 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
   combiningEntryDate,
   personalRecords,
 }: TimelineWorkoutCardProps) {
-  const { distanceUnit, weightUnit, weightLabel } = useUnitPreferences();
+  const { distanceUnit, weightLabel } = useUnitPreferences();
   
   const isBeingCombined = combiningEntryId === entry.id;
   const isSameDate = combiningEntryDate === entry.date;
