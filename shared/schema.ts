@@ -270,7 +270,10 @@ export const customExercises = pgTable("custom_exercises", {
   uniqueIndex("idx_custom_exercises_user_name").on(table.userId, table.name),
 ]);
 
-export const insertCustomExerciseSchema = createInsertSchema(customExercises).omit({
+export const insertCustomExerciseSchema = createInsertSchema(customExercises, {
+  name: z.string().trim().min(1, "Name is required").max(100, "Name must be 100 characters or less"),
+  category: z.string().trim().max(50, "Category must be 50 characters or less").optional(),
+}).omit({
   id: true,
   createdAt: true,
 });
@@ -324,3 +327,28 @@ export const importPlanRequestSchema = z.object({
 export const schedulePlanRequestSchema = z.object({
   startDate: dateStringSchema,
 });
+
+export const exerciseSetSchema = z.object({
+  setNumber: z.number().optional().nullable(),
+  reps: z.number().optional().nullable(),
+  weight: z.number().optional().nullable(),
+  distance: z.number().optional().nullable(),
+  time: z.number().optional().nullable(),
+  notes: z.string().optional().nullable(),
+}).passthrough();
+
+export const incomingExerciseSchema = z.object({
+  exerciseName: z.string().min(1).max(255),
+  customLabel: z.string().max(255).optional().nullable(),
+  category: z.string().max(50).optional().nullable(),
+  numSets: z.number().min(1).max(50).optional().nullable(),
+  reps: z.number().optional().nullable(),
+  weight: z.number().optional().nullable(),
+  distance: z.number().optional().nullable(),
+  time: z.number().optional().nullable(),
+  confidence: z.number().min(0).max(100).optional().nullable(),
+  notes: z.string().optional().nullable(),
+  sets: z.array(exerciseSetSchema).max(50).optional().nullable(),
+}).passthrough();
+
+export const exercisesPayloadSchema = z.array(incomingExerciseSchema).max(200);

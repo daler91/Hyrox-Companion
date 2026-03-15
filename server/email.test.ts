@@ -8,7 +8,7 @@ describe('email generation', () => {
     email: 'test@example.com',
     firstName: 'John',
     lastName: 'Doe',
-    password: 'hashedpassword',
+    password: 'dummy_hash_value',
     role: 'user',
     unitPreference: 'metric',
     targetRaceId: null,
