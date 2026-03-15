@@ -35,6 +35,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import type { DragEndEvent } from "@dnd-kit/core";
 import type { UseMutationResult } from "@tanstack/react-query";
+import type { ParsedExercise } from "@/hooks/useWorkoutEditor";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
 import { VoiceButton } from "@/components/VoiceButton";
 import { VoiceFieldButton } from "@/components/VoiceFieldButton";
@@ -205,7 +206,7 @@ interface WorkoutDetailEditFormProps {
   handleRemoveBlock: (blockId: string) => void;
   updateBlock: (blockId: string, ex: StructuredExercise) => void;
   getSelectedExerciseNames: () => ExerciseName[];
-  parseMutation: UseMutationResult<any, Error, string, unknown>;
+  parseMutation: UseMutationResult<ParsedExercise[], Error, string, unknown>;
   weightUnit: "kg" | "lbs";
   distanceUnit: "km" | "miles";
   onParseText: () => void;
@@ -223,7 +224,7 @@ interface WorkoutTextModeProps {
   stopMainListening: () => void;
   toggleMainListening: () => void;
   onParseText: () => void;
-  parseMutation: UseMutationResult<any, Error, string, unknown>;
+  parseMutation: UseMutationResult<ParsedExercise[], Error, string, unknown>;
 }
 
 const WorkoutTextMode = React.memo(function WorkoutTextMode({

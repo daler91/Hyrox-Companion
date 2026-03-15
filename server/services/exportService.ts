@@ -102,8 +102,10 @@ function generateExerciseSetsCsvRows(allExerciseSets: ExerciseSetRow[], workoutL
 }
 
 export async function generateCSV(userId: string, storage: IStorage): Promise<string> {
-  const timeline = await storage.getTimeline(userId);
-  const allExerciseSets = await storage.getAllExerciseSetsWithDates(userId);
+  const [timeline, allExerciseSets] = await Promise.all([
+    storage.getTimeline(userId),
+    storage.getAllExerciseSetsWithDates(userId),
+  ]);
 
   const csvRows = ["Date,Type,Status,Focus,Main Workout,Accessory,Notes,Duration,RPE"];
   csvRows.push(...generateTimelineCsvRows(timeline));

@@ -23,7 +23,9 @@ class MockSpeechRecognition {
   stop() {
     this.onend?.();
   }
-  abort() {}
+  abort() {
+    // Intentionally blank - mock implementation for testing
+  }
 }
 
 function makeResultEvent(

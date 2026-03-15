@@ -107,6 +107,17 @@ export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg",
 
   const showMultiSetView = fields.includes("reps") || fields.includes("weight");
 
+  let confidenceClasses = "";
+  if (exercise.confidence != null) {
+    if (exercise.confidence >= 80) {
+      confidenceClasses = "bg-green-500/10 text-green-600 dark:text-green-400";
+    } else if (exercise.confidence >= 60) {
+      confidenceClasses = "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400";
+    } else {
+      confidenceClasses = "bg-red-500/10 text-red-600 dark:text-red-400";
+    }
+  }
+
   return (
     <Card className={`border-l-4 ${borderColor} rounded-l-none`} data-testid={`input-exercise-${exercise.exerciseName}`}>
       <CardContent className="p-4">
@@ -117,13 +128,7 @@ export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg",
             {exercise.confidence != null && exercise.confidence < 90 && (
               <Badge
                 variant="secondary"
-                className={`text-[10px] ${
-                  exercise.confidence >= 80
-                    ? "bg-green-500/10 text-green-600 dark:text-green-400"
-                    : exercise.confidence >= 60
-                    ? "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
-                    : "bg-red-500/10 text-red-600 dark:text-red-400"
-                }`}
+                className={`text-[10px] ${confidenceClasses}`}
                 data-testid={`badge-confidence-${exercise.exerciseName}`}
               >
                 {exercise.confidence < 60 && <AlertTriangle className="h-3 w-3 mr-0.5" />}
@@ -168,7 +173,7 @@ export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg",
               <div />
             </div>
             {sets.map((set, idx) => (
-              <div key={idx} className="grid gap-2 items-center" style={{ gridTemplateColumns: `2rem ${fields.map(() => "1fr").join(" ")} 2rem` }} data-testid={`set-row-${exercise.exerciseName}-${idx}`}>
+              <div key={set.setNumber} className="grid gap-2 items-center" style={{ gridTemplateColumns: `2rem ${fields.map(() => "1fr").join(" ")} 2rem` }} data-testid={`set-row-${exercise.exerciseName}-${idx}`}>
                 <span className="text-xs text-muted-foreground text-center">{set.setNumber}</span>
                 {fields.map((field) => (
                   <Input

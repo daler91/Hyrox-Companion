@@ -19,6 +19,12 @@ if (process.env.SENTRY_DSN) {
 const app = express();
 const httpServer = createServer(app);
 
+
+export interface AppError extends Error {
+  status?: number;
+  statusCode?: number;
+}
+
 declare module "http" {
   interface IncomingMessage {
     rawBody: unknown;
@@ -100,10 +106,10 @@ app.use((req, res, next) => {
 await runStartupMaintenance(storage);
 await registerRoutes(httpServer, app);
 
-app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-  const status = err.status || err.statusCode || 500;
-  // 🛡️ Sentinel: Prevent leaking sensitive error details to the client
-  const message = status === 500 ? "Internal Server Error" : (err.message || "An error occurred");
+  app.use((err: AppError, _req: Request, res: Response, _next: NextFunction) => {
+    const status = err.status || err.statusCode || 500;
+    // 🛡️ Sentinel: Prevent leaking sensitive error details to the client
+    const message = status === 500 ? "Internal Server Error" : (err.message || "An error occurred");
 
   Sentry.captureException(err);
   res.status(status).json({ message });

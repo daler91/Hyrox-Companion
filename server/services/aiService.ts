@@ -100,6 +100,27 @@ function collectRecentWorkouts(timeline: TimelineEntry[]): TrainingContext["rece
   return recent;
 }
 
+function updateExerciseStat(
+  stat: { count: number; maxWeight?: number; maxDistance?: number; bestTime?: number; avgReps?: number },
+  es: { weight: number | null; distance: number | null; time: number | null; reps: number | null }
+) {
+  stat.count++;
+  if (es.weight) {
+    if (!stat.maxWeight || es.weight > stat.maxWeight) stat.maxWeight = es.weight;
+  }
+  if (es.distance) {
+    if (!stat.maxDistance || es.distance > stat.maxDistance) stat.maxDistance = es.distance;
+  }
+  if (es.time) {
+    if (!stat.bestTime || es.time < stat.bestTime) stat.bestTime = es.time;
+  }
+  if (es.reps) {
+    stat.avgReps = stat.avgReps
+      ? Math.round((stat.avgReps * (stat.count - 1) + es.reps) / stat.count)
+      : es.reps;
+  }
+}
+
 async function getStructuredExerciseStats(timeline: TimelineEntry[]) {
   const completedWorkoutLogIds = timeline
     .filter(e => e.status === "completed" && e.workoutLogId)
@@ -112,30 +133,17 @@ async function getStructuredExerciseStats(timeline: TimelineEntry[]) {
   const allSets = await storage.getExerciseSetsByWorkoutLogs(completedWorkoutLogIds);
   for (const es of allSets) {
     if (!stats[es.exerciseName]) stats[es.exerciseName] = { count: 0 };
-    const stat = stats[es.exerciseName];
-    stat.count++;
-    if (es.weight) {
-      if (!stat.maxWeight || es.weight > stat.maxWeight) stat.maxWeight = es.weight;
-    }
-    if (es.distance) {
-      if (!stat.maxDistance || es.distance > stat.maxDistance) stat.maxDistance = es.distance;
-    }
-    if (es.time) {
-      if (!stat.bestTime || es.time < stat.bestTime) stat.bestTime = es.time;
-    }
-    if (es.reps) {
-      stat.avgReps = stat.avgReps
-        ? Math.round((stat.avgReps * (stat.count - 1) + es.reps) / stat.count)
-        : es.reps;
-    }
+    updateExerciseStat(stats[es.exerciseName], es);
   }
 
   return Object.keys(stats).length > 0 ? stats : undefined;
 }
 
 export async function buildTrainingContext(userId: string): Promise<TrainingContext> {
-  const timeline = await storage.getTimeline(userId);
-  const plans = await storage.listTrainingPlans(userId);
+  const [timeline, plans] = await Promise.all([
+    storage.getTimeline(userId),
+    storage.listTrainingPlans(userId),
+  ]);
 
   const { completedWorkouts, plannedWorkouts, missedWorkouts, skippedWorkouts, totalWorkouts, completionRate, completedDates } = calculateTrainingStats(timeline);
   const exerciseBreakdown = getExerciseBreakdown(timeline);

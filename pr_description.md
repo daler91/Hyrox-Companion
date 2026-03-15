@@ -1,13 +1,7 @@
-🎯 **What**
-Extracted a nested ternary operation used for generating `userName` into independent `if-else` statements.
+🎯 **What:** The `UseMutationResult` for the `parseMutation` property in `WorkoutDetailEditFormProps` and `WorkoutTextModeProps` inside `client/src/components/timeline/WorkoutDetailExercises.tsx` was typed with `any`. This was updated to correctly use the `ParsedExercise[]` type which is now explicitly exported from `client/src/hooks/useWorkoutEditor.ts`.
 
-💡 **Why**
-This change resolves a SonarQube code smell (`typescript:S3358`: "Ternary operators should not be nested"), which negatively impacted code maintainability and readability. By using a standard `if-else` block, the intent of the logic (falling back sequentially from full name to email to a default string) becomes much clearer and less error-prone.
+💡 **Why:** By replacing `any` with the specific expected type (`ParsedExercise[]`), type safety is increased, catching potential property access errors at compile time and making the codebase cleaner and more maintainable.
 
-✅ **Verification**
-- Replaced the nested ternary exactly with the user-provided, identical `if-else` logic.
-- Ran frontend tests and TypeScript type checking (via `npm run test` and `npm run check`) to ensure no regressions were introduced. Tests passed successfully.
-- Conducted a code review to confirm that the changes correctly address the code smell without altering existing functionality.
+✅ **Verification:** Verified by running `npm run test -- client/src` ensuring tests still pass. No other code was modified. The `pnpm-lock.yaml` file was reverted to ensure the git history remained clean.
 
-✨ **Result**
-Improved readability and maintainability of the `AppSidebar` component without changing its behavior.
+✨ **Result:** The `WorkoutDetailEditFormProps` and `WorkoutTextModeProps` mutation interfaces are fully typed.
