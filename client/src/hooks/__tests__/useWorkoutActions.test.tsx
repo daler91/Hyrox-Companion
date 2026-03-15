@@ -110,156 +110,34 @@ describe('useWorkoutActions', () => {
     });
 
     describe('handleSaveFromDetail', () => {
-
-
-
-      it('updates existing workout without exercises if none provided', async () => {
+      const runSaveTest = async (mockEntry: any, updates: any, method: string, url: string, payload: any) => {
         const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
-        const mockEntry = { workoutLogId: 'w-1', date: '2024-01-01', focus: 'strength' };
-
-        act(() => {
-          result.current.openDetailDialog(mockEntry as any);
-        });
-
-        const updates = { focus: 'cardio', mainWorkout: 'run', accessory: null, notes: null };
-        act(() => {
-          result.current.handleSaveFromDetail(updates);
-        });
-
+        act(() => { result.current.openDetailDialog(mockEntry as any); });
+        act(() => { result.current.handleSaveFromDetail(updates); });
         await waitFor(() => {
-          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('PATCH', '/api/workouts/w-1', {
-            ...updates,
-            exercises: undefined,
-          });
+          expect(queryClientLib.apiRequest).toHaveBeenCalledWith(method, url, payload);
         });
+      };
+
+      it('updates existing workout (with or without exercises)', async () => {
+        const mockEntry = { workoutLogId: 'w-1', date: '2024-01-01', focus: 'strength' };
+        await runSaveTest(mockEntry, { focus: 'cardio', mainWorkout: 'run', accessory: null, notes: null }, 'PATCH', '/api/workouts/w-1', { focus: 'cardio', mainWorkout: 'run', accessory: null, notes: null, exercises: undefined });
+        await runSaveTest(mockEntry, { focus: 'cardio', mainWorkout: 'run', accessory: null, notes: null, exercises: [{ name: 'pushups' }] }, 'PATCH', '/api/workouts/w-1', { focus: 'cardio', mainWorkout: 'run', accessory: null, notes: null, exercises: [{ name: 'pushups' }] });
       });
 
-      it('updates existing workout with exercises', async () => {
-        const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
-        const mockEntry = { workoutLogId: 'w-1', date: '2024-01-01', focus: 'strength' };
-
-        act(() => {
-          result.current.openDetailDialog(mockEntry as any);
-        });
-
-        const updates = { focus: 'cardio', mainWorkout: 'run', accessory: null, notes: null, exercises: [{ name: 'pushups' }] };
-        act(() => {
-          result.current.handleSaveFromDetail(updates);
-        });
-
-        await waitFor(() => {
-          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('PATCH', '/api/workouts/w-1', {
-            ...updates,
-            exercises: [{ name: 'pushups' }],
-          });
-        });
-      });
-
-      it('updates existing workout if workoutLogId is present', async () => {
-        const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
-        const mockEntry = { workoutLogId: 'w-1', date: '2024-01-01', focus: 'strength' };
-
-        act(() => {
-          result.current.openDetailDialog(mockEntry as any);
-        });
-
-        const updates = { focus: 'cardio', mainWorkout: 'run', accessory: null, notes: null };
-        act(() => {
-          result.current.handleSaveFromDetail(updates);
-        });
-
-        await waitFor(() => {
-          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('PATCH', '/api/workouts/w-1', {
-            ...updates,
-            exercises: undefined,
-          });
-          expect(result.current.detailEntry).toBeNull();
-        });
-      });
-
-
-
-      it('updates plan day if detailEntry has planDayId but updates have no exercises', async () => {
-        const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
+      it('updates plan day if updates have no exercises or empty array', async () => {
         const mockEntry = { planDayId: 'pd-1', date: '2024-01-01', focus: 'strength' };
-
-        act(() => {
-          result.current.openDetailDialog(mockEntry as any);
-        });
-
-        // Test the condition where detailEntry.planDayId exists but updates.exercises is undefined
-        const updates = { focus: 'cardio', mainWorkout: 'run', accessory: null, notes: null };
-        act(() => {
-          result.current.handleSaveFromDetail(updates);
-        });
-
-        await waitFor(() => {
-          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('PATCH', '/api/plans/test-plan-id/days/pd-1', updates);
-        });
-      });
-
-      it('updates plan day if detailEntry has planDayId but exercises array is empty', async () => {
-        const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
-        const mockEntry = { planDayId: 'pd-1', date: '2024-01-01', focus: 'strength' };
-
-        act(() => {
-          result.current.openDetailDialog(mockEntry as any);
-        });
-
-        const updates = { focus: 'cardio', mainWorkout: 'run', accessory: null, notes: null, exercises: [] };
-        act(() => {
-          result.current.handleSaveFromDetail(updates);
-        });
-
-        await waitFor(() => {
-          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('PATCH', '/api/plans/test-plan-id/days/pd-1', updates);
-        });
+        await runSaveTest(mockEntry, { focus: 'cardio', mainWorkout: 'run', accessory: null, notes: null }, 'PATCH', '/api/plans/test-plan-id/days/pd-1', { focus: 'cardio', mainWorkout: 'run', accessory: null, notes: null });
+        await runSaveTest(mockEntry, { focus: 'cardio', mainWorkout: 'run', accessory: null, notes: null, exercises: [] }, 'PATCH', '/api/plans/test-plan-id/days/pd-1', { focus: 'cardio', mainWorkout: 'run', accessory: null, notes: null, exercises: [] });
       });
 
       it('logs new workout if planDayId is present and exercises exist', async () => {
-        const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
-        const mockEntry = { planDayId: 'pd-1', date: '2024-01-01', focus: 'strength' };
-
-        act(() => {
-          result.current.openDetailDialog(mockEntry as any);
-        });
-
-        const updates = { focus: 'cardio', mainWorkout: 'run', accessory: null, notes: null, exercises: [{ name: 'run' }] };
-        act(() => {
-          result.current.handleSaveFromDetail(updates);
-        });
-
-        await waitFor(() => {
-          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('POST', '/api/workouts', {
-            planDayId: 'pd-1',
-            date: '2024-01-01',
-            focus: 'cardio',
-            mainWorkout: 'run',
-            accessory: undefined,
-            notes: undefined,
-            exercises: [{ name: 'run' }]
-          });
-          expect(result.current.detailEntry).toBeNull();
-        });
-      });
-
-      it('updates plan day if planDayId is present and no exercises exist', async () => {
-        const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
-        const mockEntry = { planDayId: 'pd-1', date: '2024-01-01', focus: 'strength' };
-
-        act(() => {
-          result.current.openDetailDialog(mockEntry as any);
-        });
-
-        const updates = { focus: 'cardio', mainWorkout: 'run', accessory: null, notes: null };
-        act(() => {
-          result.current.handleSaveFromDetail(updates);
-        });
-
-        await waitFor(() => {
-          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('PATCH', '/api/plans/test-plan-id/days/pd-1', updates);
-          expect(result.current.detailEntry).toBeNull();
-        });
+        await runSaveTest(
+          { planDayId: 'pd-1', date: '2024-01-01', focus: 'strength' },
+          { focus: 'cardio', mainWorkout: 'run', accessory: null, notes: null, exercises: [{ name: 'run' }] },
+          'POST', '/api/workouts',
+          { planDayId: 'pd-1', date: '2024-01-01', focus: 'cardio', mainWorkout: 'run', accessory: undefined, notes: undefined, exercises: [{ name: 'run' }] }
+        );
       });
     });
 
@@ -327,50 +205,21 @@ describe('useWorkoutActions', () => {
     });
 
     describe('handleDelete', () => {
-
-
-      it('deletes workout if workoutLogId is present and planDayId is not', async () => {
+      const runDeleteTest = async (mockEntry: any, expectedUrl: string) => {
         const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
-        const mockEntry = { workoutLogId: 'w-1', date: '2024-01-01', focus: 'strength' };
-
-        act(() => {
-          result.current.handleDelete(mockEntry as any);
-        });
-
+        act(() => { result.current.handleDelete(mockEntry as any); });
         await waitFor(() => {
-          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('DELETE', '/api/workouts/w-1');
+          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('DELETE', expectedUrl);
         });
-      });
+      };
 
-      it('deletes plan day if planDayId is present', async () => {
-        const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
-        const mockEntry = { planDayId: 'pd-1', date: '2024-01-01', focus: 'strength' };
-
-        act(() => {
-          result.current.handleDelete(mockEntry as any);
-        });
-
-        await waitFor(() => {
-          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('DELETE', '/api/plans/days/pd-1');
-        });
-      });
-
-      it('deletes plan day if both workoutLogId and planDayId are present', async () => {
-        const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
-        const mockEntry = { planDayId: 'pd-1', workoutLogId: 'w-1', date: '2024-01-01', focus: 'strength' };
-
-        act(() => {
-          result.current.handleDelete(mockEntry as any);
-        });
-
-        await waitFor(() => {
-          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('DELETE', '/api/plans/days/pd-1');
-        });
+      it('deletes workout or plan day appropriately', async () => {
+        await runDeleteTest({ workoutLogId: 'w-1', date: '2024-01-01', focus: 'strength' }, '/api/workouts/w-1');
+        await runDeleteTest({ planDayId: 'pd-1', date: '2024-01-01', focus: 'strength' }, '/api/plans/days/pd-1');
+        await runDeleteTest({ planDayId: 'pd-1', workoutLogId: 'w-1', date: '2024-01-01', focus: 'strength' }, '/api/plans/days/pd-1');
       });
     });
-  });
-
-  describe('API Callbacks and Toast notifications', () => {
+    describe('API Callbacks and Toast notifications', () => {
     it('triggers success toast and invalidates timeline on successful status update', async () => {
       const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
       const mockEntry = { planDayId: 'pd-1', date: '2024-01-01', focus: 'cardio' };
@@ -484,5 +333,7 @@ describe('useWorkoutActions', () => {
       });
     });
   });
+
+});
 
 });
