@@ -159,9 +159,7 @@ export function registerStravaRoutes(app: Express): void {
     const { code, state, error: stravaError } = req.query;
 
     if (stravaError) {
-      // Use encodeURIComponent to neutralize any CRLF characters for SonarCloud Log Injection (tssecurity:S5145)
-      const sanitizedError = encodeURIComponent(String(stravaError));
-      console.error("Strava auth error:", sanitizedError);
+      console.error("Strava auth error received from provider");
       return res.redirect("/settings?strava=error");
     }
 
