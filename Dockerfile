@@ -2,7 +2,7 @@
 FROM node:20-alpine AS builder
 
 # Install build dependencies and pnpm
-RUN apk add --no-cache libc6-compat && npm install -g pnpm@9.12.0
+RUN npm install -g pnpm@9.12.0
 
 WORKDIR /app
 
@@ -12,8 +12,12 @@ COPY package.json pnpm-lock.yaml ./
 # Install all dependencies (including devDependencies for building)
 RUN pnpm install --frozen-lockfile
 
-# Copy the rest of the application code
-COPY . .
+# Copy the rest of the application code explicitly to avoid COPY . . security hotspots
+COPY client/ ./client/
+COPY server/ ./server/
+COPY shared/ ./shared/
+COPY script/ ./script/
+COPY tsconfig.json vite.config.ts components.json tailwind.config.ts postcss.config.js drizzle.config.ts ./
 
 # Build the frontend and backend
 RUN pnpm run build
