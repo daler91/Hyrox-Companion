@@ -10,6 +10,11 @@ const MOCK_TRAINING_CONTEXT = "Training context";
 const CHAT_STREAM_ENDPOINT = "/api/chat/stream";
 const CHAT_ENDPOINT = "/api/chat";
 
+function parseStreamResponse(responseText: string) {
+  return responseText.split("\n\n").filter(Boolean);
+}
+
+
 // Mock the clerkAuth middleware to simulate authentication
 vi.mock("../../clerkAuth", () => ({
   isAuthenticated: (req: any, res: any, next: any) => {
@@ -220,10 +225,10 @@ describe("POST /api/chat/stream", () => {
     expect(response.headers["content-type"]).toBe("text/event-stream");
 
     // Test the event stream format
-    const textChunks = response.text.split("\n\n").filter(Boolean);
-    expect(textChunks[0]).toContain('{"text":"Hello"}');
-    expect(textChunks[1]).toContain('{"text":" World"}');
-    expect(textChunks[2]).toContain('{"done":true}');
+    const chunks = parseStreamResponse(response.text);
+    expect(chunks[0]).toContain('{"text":"Hello"}');
+    expect(chunks[1]).toContain('{"text":" World"}');
+    expect(chunks[2]).toContain('{"done":true}');
 
     expect(buildTrainingContext).toHaveBeenCalledWith("test_user_id");
     expect(streamChatWithCoach).toHaveBeenCalledWith("Hello stream", [], MOCK_TRAINING_CONTEXT);
@@ -242,11 +247,14 @@ describe("POST /api/chat/stream", () => {
       .send({ message: "Error", history: [] });
 
     expect(response.status).toBe(200);
-    const textChunks = response.text.split("\n\n").filter(Boolean);
-    expect(textChunks[0]).toContain('{"error":"Stream error"}');
+    const chunks = parseStreamResponse(response.text);
+    expect(chunks[0]).toContain('{"error":"Stream error"}');
   });
 });
 
+
+const CHAT_HISTORY_ENDPOINT = "/api/chat/history";
+const CHAT_MESSAGE_ENDPOINT = "/api/chat/message";
 describe("Chat History and Messages Routes", () => {
   let app: express.Express;
 
@@ -264,7 +272,7 @@ describe("Chat History and Messages Routes", () => {
     const mockMessages = [{ id: 1, role: "user", content: "Hi" }];
     (storage.getChatMessages as any).mockResolvedValue(mockMessages);
 
-    const response = await request(app).get("/api/chat/history");
+    const response = await request(app).get(CHAT_HISTORY_ENDPOINT);
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual(mockMessages);
@@ -275,7 +283,7 @@ describe("Chat History and Messages Routes", () => {
 
     (storage.getChatMessages as any).mockRejectedValue(new Error("Database Error"));
 
-    const response = await request(app).get("/api/chat/history");
+    const response = await request(app).get(CHAT_HISTORY_ENDPOINT);
 
     expect(response.status).toBe(500);
     expect(response.body).toHaveProperty("error", "Failed to get chat history");
@@ -287,7 +295,7 @@ describe("Chat History and Messages Routes", () => {
     (storage.saveChatMessage as any).mockResolvedValue(savedMessage);
 
     const response = await request(app)
-      .post("/api/chat/message")
+      .post(CHAT_MESSAGE_ENDPOINT)
       .send({ role: "user", content: "Hello", userId: "test_user_id" });
 
     expect(response.status).toBe(200);
@@ -301,7 +309,7 @@ describe("Chat History and Messages Routes", () => {
 
   it("should return 400 when missing role or content", async () => {
     const response = await request(app)
-      .post("/api/chat/message")
+      .post(CHAT_MESSAGE_ENDPOINT)
       .send({ role: "user" });
 
     expect(response.status).toBe(400);
@@ -312,7 +320,7 @@ describe("Chat History and Messages Routes", () => {
 
     (storage.clearChatHistory as any).mockResolvedValue(undefined);
 
-    const response = await request(app).delete("/api/chat/history");
+    const response = await request(app).delete(CHAT_HISTORY_ENDPOINT);
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ success: true });
@@ -323,13 +331,14 @@ describe("Chat History and Messages Routes", () => {
 
     (storage.clearChatHistory as any).mockRejectedValue(new Error("Delete failed"));
 
-    const response = await request(app).delete("/api/chat/history");
+    const response = await request(app).delete(CHAT_HISTORY_ENDPOINT);
 
     expect(response.status).toBe(500);
     expect(response.body).toHaveProperty("error", "Failed to clear chat history");
   });
 });
 
+const TIMELINE_SUGGESTIONS_ENDPOINT = "/api/timeline/ai-suggestions";
 describe("POST /api/timeline/ai-suggestions", () => {
   let app: express.Express;
 
@@ -384,7 +393,7 @@ describe("POST /api/timeline/ai-suggestions", () => {
     ];
     (generateWorkoutSuggestions as any).mockResolvedValue(rawSuggestions);
 
-    const response = await request(app).post("/api/timeline/ai-suggestions");
+    const response = await request(app).post(TIMELINE_SUGGESTIONS_ENDPOINT);
 
     expect(response.status).toBe(200);
     expect(response.body.suggestions).toHaveLength(1);
@@ -428,7 +437,7 @@ describe("POST /api/timeline/ai-suggestions", () => {
       },
     ]);
 
-    const response = await request(app).post("/api/timeline/ai-suggestions");
+    const response = await request(app).post(TIMELINE_SUGGESTIONS_ENDPOINT);
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({
@@ -441,7 +450,7 @@ describe("POST /api/timeline/ai-suggestions", () => {
 
     (storage.getTimeline as any).mockRejectedValue(new Error("DB Error"));
 
-    const response = await request(app).post("/api/timeline/ai-suggestions");
+    const response = await request(app).post(TIMELINE_SUGGESTIONS_ENDPOINT);
 
     expect(response.status).toBe(500);
     expect(response.body).toHaveProperty("error", "Failed to generate AI suggestions");
