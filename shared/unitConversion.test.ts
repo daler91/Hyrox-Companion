@@ -194,7 +194,7 @@ describe("formatElevation", () => {
 
   it("formats feet for miles users", () => {
     const result = formatElevation(100, "miles");
-    expect(result).toMatch(/\d+ ft/);
+    expect(result).toBe("328 ft");
   });
 });
 
