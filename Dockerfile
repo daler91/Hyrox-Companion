@@ -1,8 +1,8 @@
 # Stage 1: Build stage
 FROM node:20-alpine AS builder
 
-# Install build dependencies and pnpm
-RUN npm install -g pnpm@9.12.0
+# Upgrade zlib to mitigate CVE-2026-22184 and install pnpm
+RUN apk upgrade --no-cache zlib && npm install -g pnpm@9.12.0
 
 WORKDIR /app
 
@@ -27,8 +27,8 @@ RUN pnpm run build
 # Stage 2: Production runtime stage
 FROM node:20-alpine AS runner
 
-# Install pnpm for production dependencies
-RUN npm install -g pnpm@9.12.0
+# Upgrade zlib to mitigate CVE-2026-22184 and install pnpm
+RUN apk upgrade --no-cache zlib && npm install -g pnpm@9.12.0
 
 WORKDIR /app
 
