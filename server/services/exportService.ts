@@ -64,14 +64,10 @@ function escapeCsv(val: string | null | undefined): string {
   return str.includes(",") || str.includes("\n") || str.includes('"') ? `"${str}"` : str;
 }
 
-export async function generateCSV(userId: string, storage: IStorage): Promise<string> {
-  const timeline = await storage.getTimeline(userId);
-  const allExerciseSets = await storage.getAllExerciseSetsWithDates(userId);
-
-  const csvRows = ["Date,Type,Status,Focus,Main Workout,Accessory,Notes,Duration,RPE"];
-
+function generateTimelineCsvRows(timeline: TimelineEntry[]): string[] {
+  const rows: string[] = [];
   for (const entry of timeline) {
-    csvRows.push([
+    rows.push([
       escapeCsv(entry.date),
       escapeCsv(entry.type),
       escapeCsv(entry.status),
@@ -83,26 +79,41 @@ export async function generateCSV(userId: string, storage: IStorage): Promise<st
       entry.rpe != null ? String(entry.rpe) : "",
     ].join(","));
   }
+  return rows;
+}
+
+function generateExerciseSetsCsvRows(allExerciseSets: ExerciseSetRow[], workoutLogTitles: Record<string, string>): string[] {
+  const rows: string[] = [];
+  for (const s of allExerciseSets) {
+    rows.push([
+      escapeCsv(s.date),
+      escapeCsv(workoutLogTitles[s.workoutLogId] || ""),
+      escapeCsv(s.customLabel || s.exerciseName),
+      escapeCsv(s.category),
+      String(s.setNumber),
+      s.reps != null ? String(s.reps) : "",
+      s.weight != null ? String(s.weight) : "",
+      s.distance != null ? String(s.distance) : "",
+      s.time != null ? String(s.time) : "",
+      escapeCsv(s.notes),
+    ].join(","));
+  }
+  return rows;
+}
+
+export async function generateCSV(userId: string, storage: IStorage): Promise<string> {
+  const timeline = await storage.getTimeline(userId);
+  const allExerciseSets = await storage.getAllExerciseSetsWithDates(userId);
+
+  const csvRows = ["Date,Type,Status,Focus,Main Workout,Accessory,Notes,Duration,RPE"];
+  csvRows.push(...generateTimelineCsvRows(timeline));
 
   if (allExerciseSets.length > 0) {
     const workoutLogTitles = buildWorkoutLogTitles(timeline);
     csvRows.push("");
     csvRows.push("--- EXERCISE SETS (Per-Set Data) ---");
     csvRows.push("Date,Workout,Exercise,Category,Set #,Reps,Weight,Distance (m),Time (min),Notes");
-    for (const s of allExerciseSets) {
-      csvRows.push([
-        escapeCsv(s.date),
-        escapeCsv(workoutLogTitles[s.workoutLogId] || ""),
-        escapeCsv(s.customLabel || s.exerciseName),
-        escapeCsv(s.category),
-        String(s.setNumber),
-        s.reps != null ? String(s.reps) : "",
-        s.weight != null ? String(s.weight) : "",
-        s.distance != null ? String(s.distance) : "",
-        s.time != null ? String(s.time) : "",
-        escapeCsv(s.notes),
-      ].join(","));
-    }
+    csvRows.push(...generateExerciseSetsCsvRows(allExerciseSets, workoutLogTitles));
   }
 
   return csvRows.join("\n");
