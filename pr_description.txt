@@ -1,3 +1,13 @@
-🎯 **What:** The testing gap addressed was the untested `useWorkoutForm` custom hook which handles complex state, voice integrations, validations, and workout logging.
-📊 **Coverage:** Added tests for initial state, voice input logic, form validation (missing titles/details), payload generation for both Text and Builder modes, and React Query mutation side-effects (toasts, invalidation, navigation).
-✨ **Result:** Enhanced test coverage ensures zero regressions during future refactoring of form submission logic.
+🧹 Code Health: Refactor handleSaveFromDetail to use early returns
+
+🎯 **What:**
+Refactored the deeply nested `if...else if` chain inside the `handleSaveFromDetail` function located in `client/src/hooks/useWorkoutActions.ts` into a series of clear, flat early-return statements.
+
+💡 **Why:**
+The previous implementation used a complex fallback `else if` conditional chain that increased cognitive complexity and made it difficult to quickly scan the function's execution paths. By using early returns (guard clauses), the function now reads linearly. This improves maintainability, making it much easier for future developers to understand the logical flow, spot missing return paths, and safely modify individual conditions without accidentally breaking nested statements.
+
+✅ **Verification:**
+I confirmed the change is safe by running the entire Vitest test suite (`pnpm run test` using a mocked database connection). Specifically, the test file `client/src/hooks/__tests__/useWorkoutActions.test.tsx` passed successfully with zero failures (all 14 dedicated test assertions passed). The changes purely reorganized the flow and preserved the exact property mappings passed to the React Query mutations.
+
+✨ **Result:**
+Reduced nested cognitive complexity within `useWorkoutActions`. The file remains entirely functional while boasting dramatically improved readability and cleaner execution paths.
