@@ -10,7 +10,6 @@ export async function checkAndSendEmailsForUser(storage: IStorage, user: User): 
   if (!user.email || !user.emailNotifications) return sent;
 
   const now = new Date();
-  const today = toDateStr(now);
   const dayOfWeek = now.getDay();
 
   if (dayOfWeek === 1) {
