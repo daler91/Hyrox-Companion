@@ -14,7 +14,7 @@ A full-stack training planning and logging application for [Hyrox](https://hyrox
 - **Email Notifications** — Automated background scheduled jobs for missed workout reminders and weekly training summaries via Resend.
 - **Dark Mode** — Full light/dark theme support.
 - **Unit Preferences** — Toggle between kg/lbs and km/miles throughout the app.
-- **Voice Input** — Hands-free workout logging and AI coach chat via browser-native speech recognition. Works on desktop and mobile with automatic retry on network errors and duplicate detection for Android Chrome.
+- **Voice Input** — Hands-free workout logging and AI coach chat via browser-native speech recognition (Web Speech API). Used in Log Workout (free text + notes), Edit Workout dialog, and AI Coach chat. Includes microphone warmup, automatic retry on network errors, and time-windowed deduplication for Android Chrome compatibility.
 - **Data Export** — Export your training data as CSV or JSON.
 
 ## Tech Stack
@@ -46,7 +46,7 @@ A full-stack training planning and logging application for [Hyrox](https://hyrox
 
 ## Testing
 - **Vitest** for unit tests (369 tests across 34 files)
-- **Cypress** for end-to-end tests (10 test suites)
+- **Cypress** for end-to-end tests (10 test files)
 
 ## Project Structure
 
