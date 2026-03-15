@@ -64,7 +64,10 @@ CONDITIONING: burpees, box_jumps, assault_bike, kettlebell_swings, battle_ropes
 
 Categories: hyrox_station, running, strength, conditioning
 
-If an exercise doesn't match any of the above, use "custom" as the exerciseName. You MUST use your best judgment to determine the standard, correctly spelled name of that exercise (e.g., fix "bicep culrs" to "Bicep Curls", or "push ups" to "Push-ups") and put that cleaned name in the customLabel field.
+If an exercise doesn't match any of the above, use "custom" as the exerciseName. \
+You MUST use your best judgment to determine the standard, correctly spelled name of that exercise \
+(e.g., fix "bicep culrs" to "Bicep Curls", or "push ups" to "Push-ups") \
+and put that cleaned name in the customLabel field.
 
 Return ONLY a valid JSON array with no markdown formatting. Each element should be:
 {
