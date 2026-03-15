@@ -156,6 +156,57 @@ function truncate(text: string, maxLen: number = 500): string {
   return text.length > maxLen ? text.slice(0, maxLen) + "..." : text;
 }
 
+function parseAndValidateSuggestions(text: string): WorkoutSuggestion[] {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch (parseErr) {
+    console.error("[gemini] suggestions JSON.parse failed. Raw response:", truncate(text));
+    return [];
+  }
+
+  const rawArray = Array.isArray(raw) ? raw : [];
+  const validated: WorkoutSuggestion[] = [];
+  for (const item of rawArray) {
+    const result = workoutSuggestionSchema.safeParse(item);
+    if (result.success) {
+      validated.push(result.data);
+    } else {
+      console.warn("[gemini] Dropping invalid suggestion:", result.error.issues, "Raw item:", JSON.stringify(item).slice(0, 200));
+    }
+  }
+  return validated;
+}
+
+function buildSuggestionsPrompt(trainingContext: TrainingContext, upcomingWorkouts: UpcomingWorkout[]): string {
+  let prompt = `--- ATHLETE'S TRAINING DATA ---\n`;
+  prompt += `Completion rate: ${trainingContext.completionRate}%\n`;
+  prompt += `Current streak: ${trainingContext.currentStreak} days\n`;
+  prompt += `Completed workouts: ${trainingContext.completedWorkouts}\n`;
+
+  if (Object.keys(trainingContext.exerciseBreakdown).length > 0) {
+    prompt += `\nExercise frequency:\n`;
+    for (const [exercise, count] of Object.entries(trainingContext.exerciseBreakdown)) {
+      prompt += `- ${exercise}: ${count}x\n`;
+    }
+  }
+
+  if (trainingContext.recentWorkouts.length > 0) {
+    prompt += `\nRecent completed workouts:\n`;
+    for (const workout of trainingContext.recentWorkouts.slice(0, 10)) {
+      prompt += `- ${workout.date}: ${workout.focus} - ${workout.mainWorkout}\n`;
+    }
+  }
+
+  prompt += `\n--- UPCOMING WORKOUTS ---\n`;
+  for (const workout of upcomingWorkouts) {
+    prompt += `ID: ${workout.id}, Date: ${workout.date}, Focus: ${workout.focus}, Main: ${workout.mainWorkout}${workout.accessory ? `, Accessory: ${workout.accessory}` : ""}\n`;
+  }
+
+  prompt += `\nAnalyze the data and provide suggestions for the upcoming workouts.`;
+  return prompt;
+}
+
 export async function generateWorkoutSuggestions(
   trainingContext: TrainingContext,
   upcomingWorkouts: UpcomingWorkout[]
@@ -165,31 +216,7 @@ export async function generateWorkoutSuggestions(
       return [];
     }
 
-    let prompt = `--- ATHLETE'S TRAINING DATA ---\n`;
-    prompt += `Completion rate: ${trainingContext.completionRate}%\n`;
-    prompt += `Current streak: ${trainingContext.currentStreak} days\n`;
-    prompt += `Completed workouts: ${trainingContext.completedWorkouts}\n`;
-
-    if (Object.keys(trainingContext.exerciseBreakdown).length > 0) {
-      prompt += `\nExercise frequency:\n`;
-      for (const [exercise, count] of Object.entries(trainingContext.exerciseBreakdown)) {
-        prompt += `- ${exercise}: ${count}x\n`;
-      }
-    }
-
-    if (trainingContext.recentWorkouts.length > 0) {
-      prompt += `\nRecent completed workouts:\n`;
-      for (const workout of trainingContext.recentWorkouts.slice(0, 10)) {
-        prompt += `- ${workout.date}: ${workout.focus} - ${workout.mainWorkout}\n`;
-      }
-    }
-
-    prompt += `\n--- UPCOMING WORKOUTS ---\n`;
-    for (const workout of upcomingWorkouts) {
-      prompt += `ID: ${workout.id}, Date: ${workout.date}, Focus: ${workout.focus}, Main: ${workout.mainWorkout}${workout.accessory ? `, Accessory: ${workout.accessory}` : ""}\n`;
-    }
-
-    prompt += `\nAnalyze the data and provide suggestions for the upcoming workouts.`;
+    const prompt = buildSuggestionsPrompt(trainingContext, upcomingWorkouts);
 
     const response = await retryWithBackoff(
       () => getAiClient().models.generateContent({
@@ -205,25 +232,7 @@ export async function generateWorkoutSuggestions(
 
     const text = response.text || "[]";
 
-    let raw: unknown;
-    try {
-      raw = JSON.parse(text);
-    } catch (parseErr) {
-      console.error("[gemini] suggestions JSON.parse failed. Raw response:", truncate(text));
-      return [];
-    }
-
-    const rawArray = Array.isArray(raw) ? raw : [];
-    const validated: WorkoutSuggestion[] = [];
-    for (const item of rawArray) {
-      const result = workoutSuggestionSchema.safeParse(item);
-      if (result.success) {
-        validated.push(result.data);
-      } else {
-        console.warn("[gemini] Dropping invalid suggestion:", result.error.issues, "Raw item:", JSON.stringify(item).slice(0, 200));
-      }
-    }
-    return validated;
+    return parseAndValidateSuggestions(text);
   } catch (error) {
     console.error("[gemini] suggestions error:", error);
     return [];
