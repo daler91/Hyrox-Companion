@@ -14,6 +14,7 @@ A full-stack training planning and logging application for [Hyrox](https://hyrox
 - **Email Notifications** — Automated background scheduled jobs for missed workout reminders and weekly training summaries via Resend.
 - **Dark Mode** — Full light/dark theme support.
 - **Unit Preferences** — Toggle between kg/lbs and km/miles throughout the app.
+- **Voice Input** — Hands-free workout logging and AI coach chat via browser-native speech recognition. Works on desktop and mobile with automatic retry on network errors and duplicate detection for Android Chrome.
 - **Data Export** — Export your training data as CSV or JSON.
 
 ## Tech Stack
@@ -39,13 +40,13 @@ A full-stack training planning and logging application for [Hyrox](https://hyrox
 
 ## Code Health & Security
 
-- **SonarCloud Integration** for continuous code quality analysis and strict TypeScript enforcement.
+- **SonarCloud Integration** — Continuous code quality analysis via GitHub Actions (`build.yml`, `sonarcloud.yml`) with strict TypeScript enforcement.
 - **Security Hardened** — Protected against vulnerabilities like CSV Injection.
 - **Performance Optimized** — Async operations parallelized using `Promise.allSettled()` for heavy batch jobs.
 
 ## Testing
-- **Vitest** for unit tests (152 tests across 8 files)
-- **Cypress** for end-to-end tests (8 test suites)
+- **Vitest** for unit tests (369 tests across 34 files)
+- **Cypress** for end-to-end tests (10 test suites)
 
 ## Project Structure
 
@@ -75,14 +76,16 @@ A full-stack training planning and logging application for [Hyrox](https://hyrox
 │   └── emailScheduler.ts    # Cron-style missed workout/summary emails
 ├── shared/
 │   └── schema.ts            # Drizzle schema + Zod types (shared frontend/backend)
-└── cypress/e2e/             # End-to-end test suites
+├── cypress/e2e/             # End-to-end test suites
+├── .github/workflows/       # CI: Cypress tests, SonarCloud analysis
+└── sonar-project.properties # SonarCloud configuration
 ```
 
 ## Getting Started
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 22+
 - PostgreSQL database
 
 ### Environment Variables
@@ -129,7 +132,7 @@ npm run dev
 ### Unit Tests
 
 ```bash
-# Run all 152 tests
+# Run all tests
 npm test
 
 # Watch mode
@@ -139,7 +142,9 @@ npm run test:watch
 Test coverage includes:
 - **Analytics** — Personal records calculation, exercise analytics aggregation
 - **AI** — Retry logic, Zod schema validation, error classification
+- **Voice Input** — Time-windowed deduplication, case-insensitive matching, session reset
 - **Utilities** — Streak calculation, exercise row expansion, date/stats/unit helpers
+- **Auth** — Clerk middleware, user ID extraction, auth utilities
 - **Strava** — Activity-to-workout mapping
 
 ### End-to-End Tests
