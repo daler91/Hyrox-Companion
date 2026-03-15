@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateSummary } from '../useWorkoutEditor';
+import { generateSummary, makeBlockId, getBlockExerciseName } from '../useWorkoutEditor';
 import type { StructuredExercise } from '@/components/ExerciseInput';
 
 describe('generateSummary', () => {
@@ -186,5 +186,55 @@ describe('generateSummary', () => {
     // if (firstSet.distance) -> parts.push(`5000m`) (since distanceUnit is km)
     // so we expect 'Easy Run: 2 sets, 5000m'
     expect(generateSummary(exercises, 'kg', 'km')).toBe('Easy Run: 2 sets, 5000m');
+  });
+});
+
+
+describe('makeBlockId', () => {
+  it('should increment the counter and format the ID correctly', () => {
+    const counterRef = { current: 0 };
+
+    const id1 = makeBlockId('exercise', counterRef);
+    expect(id1).toBe('exercise__1');
+    expect(counterRef.current).toBe(1);
+
+    const id2 = makeBlockId('exercise', counterRef);
+    expect(id2).toBe('exercise__2');
+    expect(counterRef.current).toBe(2);
+  });
+
+  it('should handle empty names correctly', () => {
+    const counterRef = { current: 5 };
+    const id = makeBlockId('', counterRef);
+    expect(id).toBe('__6');
+    expect(counterRef.current).toBe(6);
+  });
+
+  it('should handle names that already contain underscores', () => {
+    const counterRef = { current: 10 };
+    const id = makeBlockId('some_complex_name', counterRef);
+    expect(id).toBe('some_complex_name__11');
+    expect(counterRef.current).toBe(11);
+  });
+});
+
+describe('getBlockExerciseName', () => {
+  it('should extract the base name from a standard block ID', () => {
+    expect(getBlockExerciseName('squat__1')).toBe('squat');
+  });
+
+  it('should extract the base name even if the name contains underscores', () => {
+    expect(getBlockExerciseName('bulgarian_split_squat__2')).toBe('bulgarian_split_squat');
+    expect(getBlockExerciseName('some__complex__name__3')).toBe('some__complex__name');
+  });
+
+  it('should return "custom" for names starting with "custom:"', () => {
+    expect(getBlockExerciseName('custom:my_exercise__1')).toBe('custom');
+    expect(getBlockExerciseName('custom:another_one__5')).toBe('custom');
+  });
+
+  it('should handle block IDs without the expected double underscore gracefully', () => {
+    expect(getBlockExerciseName('squat')).toBe('squat');
+    expect(getBlockExerciseName('squat_1')).toBe('squat_1');
   });
 });
