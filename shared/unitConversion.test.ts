@@ -174,12 +174,12 @@ describe("formatPace", () => {
 describe("formatSpeed", () => {
   it("formats speed in km/h", () => {
     const speed = formatSpeed(3.0, "km");
-    expect(speed).toMatch(/[\d.]+ km\/h/);
+    expect(speed).toBe("10.8 km/h");
   });
 
   it("formats speed in mph", () => {
     const speed = formatSpeed(3.0, "miles");
-    expect(speed).toMatch(/[\d.]+ mph/);
+    expect(speed).toBe("6.7 mph");
   });
 
   it("returns N/A for zero", () => {
