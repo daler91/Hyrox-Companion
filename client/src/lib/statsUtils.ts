@@ -57,7 +57,7 @@ export function calculateStats(timeline: TimelineEntry[]): TrainingStats {
     }
   }
 
-  const uniqueDays = Array.from(completedDatesSet).sort().reverse();
+  const uniqueDays = Array.from(completedDatesSet).sort((a, b) => a.localeCompare(b)).reverse();
   
   let streak = 0;
   const checkDate = new Date();
