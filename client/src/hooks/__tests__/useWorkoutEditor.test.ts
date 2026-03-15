@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateSummary, makeBlockId, getBlockExerciseName } from '../useWorkoutEditor';
+import { generateSummary, makeBlockId, getBlockExerciseName, exerciseToPayload } from '../useWorkoutEditor';
 import type { StructuredExercise } from '@/components/ExerciseInput';
 
 describe('generateSummary', () => {
@@ -236,5 +236,99 @@ describe('getBlockExerciseName', () => {
   it('should handle block IDs without the expected double underscore gracefully', () => {
     expect(getBlockExerciseName('squat')).toBe('squat');
     expect(getBlockExerciseName('squat_1')).toBe('squat_1');
+  });
+});
+
+describe('exerciseToPayload', () => {
+  it('should format a valid StructuredExercise with sets containing reps, weight, distance, time, and notes', () => {
+    const exercise: StructuredExercise = {
+      exerciseName: 'custom',
+      customLabel: 'Custom Workout',
+      category: 'custom',
+      confidence: 90,
+      sets: [
+        {
+          setNumber: 1,
+          reps: 10,
+          weight: 50,
+          distance: 100,
+          time: 5,
+          notes: 'Felt good'
+        },
+        {
+          setNumber: 2,
+          reps: 8,
+          weight: 55,
+          distance: 100,
+          time: 5
+        }
+      ]
+    };
+
+    const payload = exerciseToPayload(exercise);
+
+    expect(payload).toEqual({
+      exerciseName: 'custom',
+      customLabel: 'Custom Workout',
+      category: 'custom',
+      confidence: 90,
+      sets: [
+        {
+          setNumber: 1,
+          reps: 10,
+          weight: 50,
+          distance: 100,
+          time: 5,
+          notes: 'Felt good'
+        },
+        {
+          setNumber: 2,
+          reps: 8,
+          weight: 55,
+          distance: 100,
+          time: 5,
+          notes: undefined
+        }
+      ]
+    });
+  });
+
+  it('should format correctly when sets array is empty', () => {
+    const exercise: StructuredExercise = {
+      exerciseName: 'running',
+      category: 'running',
+      sets: []
+    };
+
+    const payload = exerciseToPayload(exercise);
+
+    expect(payload).toEqual({
+      exerciseName: 'running',
+      customLabel: undefined,
+      category: 'running',
+      confidence: undefined,
+      sets: []
+    });
+  });
+
+  it('should handle undefined sets gracefully', () => {
+    // Need to cast to bypass TypeScript complaining about missing sets property
+    // since StructuredExercise interface expects sets to be defined,
+    // but the function defensively handles it: `(ex.sets || []).map(...)`
+    const exercise = {
+      exerciseName: 'wall_balls',
+      category: 'hyrox_station',
+      // sets is omitted
+    } as unknown as StructuredExercise;
+
+    const payload = exerciseToPayload(exercise);
+
+    expect(payload).toEqual({
+      exerciseName: 'wall_balls',
+      customLabel: undefined,
+      category: 'hyrox_station',
+      confidence: undefined,
+      sets: []
+    });
   });
 });
