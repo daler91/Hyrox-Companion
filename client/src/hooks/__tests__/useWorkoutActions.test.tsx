@@ -25,26 +25,7 @@ vi.mock('@/hooks/use-toast', () => ({
   useToast: vi.fn(),
 }));
 
-// Mock useMutation to make testing sync without waiting on internal queryClient hooks, but triggering our onSuccess explicitly.
-vi.mock('@tanstack/react-query', async (importOriginal) => {
-  const mod = await importOriginal<typeof import('@tanstack/react-query')>();
-  return {
-    ...mod,
-    useMutation: vi.fn(({ mutationFn, onSuccess, onError }: any) => ({
-      mutate: async (...args: any[]) => {
-        try {
-          if (mutationFn) {
-            await mutationFn(...args);
-          }
-          if (onSuccess) onSuccess();
-        } catch(e) {
-          if (onError) onError();
-        }
-      },
-      isPending: false,
-    })),
-  };
-});
+
 
 describe('useWorkoutActions', () => {
   const mockToast = vi.fn();
@@ -104,15 +85,17 @@ describe('useWorkoutActions', () => {
         });
 
         const updates = { focus: 'cardio', mainWorkout: 'run', accessory: null, notes: null };
-        await act(async () => {
-          await result.current.handleSaveFromDetail(updates);
+        act(() => {
+          result.current.handleSaveFromDetail(updates);
         });
 
-        expect(queryClientLib.apiRequest).toHaveBeenCalledWith('PATCH', '/api/workouts/w-1', {
-          ...updates,
-          exercises: undefined,
+        await waitFor(() => {
+          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('PATCH', '/api/workouts/w-1', {
+            ...updates,
+            exercises: undefined,
+          });
+          expect(result.current.detailEntry).toBeNull();
         });
-        expect(result.current.detailEntry).toBeNull();
       });
 
       it('logs new workout if planDayId is present and exercises exist', async () => {
@@ -124,20 +107,22 @@ describe('useWorkoutActions', () => {
         });
 
         const updates = { focus: 'cardio', mainWorkout: 'run', accessory: null, notes: null, exercises: [{ name: 'run' }] };
-        await act(async () => {
-          await result.current.handleSaveFromDetail(updates);
+        act(() => {
+          result.current.handleSaveFromDetail(updates);
         });
 
-        expect(queryClientLib.apiRequest).toHaveBeenCalledWith('POST', '/api/workouts', {
-          planDayId: 'pd-1',
-          date: '2024-01-01',
-          focus: 'cardio',
-          mainWorkout: 'run',
-          accessory: undefined,
-          notes: undefined,
-          exercises: [{ name: 'run' }]
+        await waitFor(() => {
+          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('POST', '/api/workouts', {
+            planDayId: 'pd-1',
+            date: '2024-01-01',
+            focus: 'cardio',
+            mainWorkout: 'run',
+            accessory: undefined,
+            notes: undefined,
+            exercises: [{ name: 'run' }]
+          });
+          expect(result.current.detailEntry).toBeNull();
         });
-        expect(result.current.detailEntry).toBeNull();
       });
 
       it('updates plan day if planDayId is present and no exercises exist', async () => {
@@ -149,12 +134,14 @@ describe('useWorkoutActions', () => {
         });
 
         const updates = { focus: 'cardio', mainWorkout: 'run', accessory: null, notes: null };
-        await act(async () => {
-          await result.current.handleSaveFromDetail(updates);
+        act(() => {
+          result.current.handleSaveFromDetail(updates);
         });
 
-        expect(queryClientLib.apiRequest).toHaveBeenCalledWith('PATCH', '/api/plans/test-plan-id/days/pd-1', updates);
-        expect(result.current.detailEntry).toBeNull();
+        await waitFor(() => {
+          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('PATCH', '/api/plans/test-plan-id/days/pd-1', updates);
+          expect(result.current.detailEntry).toBeNull();
+        });
       });
     });
 
@@ -163,17 +150,19 @@ describe('useWorkoutActions', () => {
         const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
         const mockEntry = { planDayId: 'pd-1', date: '2024-01-01', focus: 'strength', mainWorkout: 'lift', accessory: 'curls', notes: 'good' };
 
-        await act(async () => {
-          await result.current.handleMarkComplete(mockEntry as any);
+        act(() => {
+          result.current.handleMarkComplete(mockEntry as any);
         });
 
-        expect(queryClientLib.apiRequest).toHaveBeenCalledWith('POST', '/api/workouts', {
-          planDayId: 'pd-1',
-          date: '2024-01-01',
-          focus: 'strength',
-          mainWorkout: 'lift',
-          accessory: 'curls',
-          notes: 'good',
+        await waitFor(() => {
+          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('POST', '/api/workouts', {
+            planDayId: 'pd-1',
+            date: '2024-01-01',
+            focus: 'strength',
+            mainWorkout: 'lift',
+            accessory: 'curls',
+            notes: 'good',
+          });
         });
       });
     });
@@ -187,12 +176,14 @@ describe('useWorkoutActions', () => {
           result.current.handleSkip(mockEntry as any);
         });
 
-        await act(async () => {
-          await result.current.confirmSkip();
+        act(() => {
+          result.current.confirmSkip();
         });
 
-        expect(queryClientLib.apiRequest).toHaveBeenCalledWith('PATCH', '/api/plans/days/pd-1/status', { status: 'skipped' });
-        expect(result.current.skipConfirmEntry).toBeNull();
+        await waitFor(() => {
+          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('PATCH', '/api/plans/days/pd-1/status', { status: 'skipped' });
+          expect(result.current.skipConfirmEntry).toBeNull();
+        });
       });
     });
 
@@ -201,11 +192,13 @@ describe('useWorkoutActions', () => {
         const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
         const mockEntry = { planDayId: 'pd-1', date: '2024-01-01', focus: 'cardio' };
 
-        await act(async () => {
-          await result.current.handleChangeStatus(mockEntry as any, 'completed');
+        act(() => {
+          result.current.handleChangeStatus(mockEntry as any, 'completed');
         });
 
-        expect(queryClientLib.apiRequest).toHaveBeenCalledWith('PATCH', '/api/plans/days/pd-1/status', { status: 'completed' });
+        await waitFor(() => {
+          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('PATCH', '/api/plans/days/pd-1/status', { status: 'completed' });
+        });
       });
     });
 
@@ -214,33 +207,39 @@ describe('useWorkoutActions', () => {
         const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
         const mockEntry = { workoutLogId: 'w-1', date: '2024-01-01', focus: 'strength' };
 
-        await act(async () => {
-          await result.current.handleDelete(mockEntry as any);
+        act(() => {
+          result.current.handleDelete(mockEntry as any);
         });
 
-        expect(queryClientLib.apiRequest).toHaveBeenCalledWith('DELETE', '/api/workouts/w-1');
+        await waitFor(() => {
+          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('DELETE', '/api/workouts/w-1');
+        });
       });
 
       it('deletes plan day if planDayId is present', async () => {
         const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
         const mockEntry = { planDayId: 'pd-1', date: '2024-01-01', focus: 'strength' };
 
-        await act(async () => {
-          await result.current.handleDelete(mockEntry as any);
+        act(() => {
+          result.current.handleDelete(mockEntry as any);
         });
 
-        expect(queryClientLib.apiRequest).toHaveBeenCalledWith('DELETE', '/api/plans/days/pd-1');
+        await waitFor(() => {
+          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('DELETE', '/api/plans/days/pd-1');
+        });
       });
 
       it('deletes plan day if both workoutLogId and planDayId are present', async () => {
         const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
         const mockEntry = { planDayId: 'pd-1', workoutLogId: 'w-1', date: '2024-01-01', focus: 'strength' };
 
-        await act(async () => {
-          await result.current.handleDelete(mockEntry as any);
+        act(() => {
+          result.current.handleDelete(mockEntry as any);
         });
 
-        expect(queryClientLib.apiRequest).toHaveBeenCalledWith('DELETE', '/api/plans/days/pd-1');
+        await waitFor(() => {
+          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('DELETE', '/api/plans/days/pd-1');
+        });
       });
     });
   });
@@ -250,12 +249,14 @@ describe('useWorkoutActions', () => {
       const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
       const mockEntry = { planDayId: 'pd-1', date: '2024-01-01', focus: 'cardio' };
 
-      await act(async () => {
-        await result.current.handleChangeStatus(mockEntry as any, 'completed');
+      act(() => {
+        result.current.handleChangeStatus(mockEntry as any, 'completed');
       });
 
-      expect(queryClientLib.queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/timeline"] });
-      expect(mockToast).toHaveBeenCalledWith({ title: "Status updated" });
+      await waitFor(() => {
+        expect(queryClientLib.queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/timeline"] });
+        expect(mockToast).toHaveBeenCalledWith({ title: "Status updated" });
+      });
     });
 
     it('triggers error toast on failed status update', async () => {
@@ -265,11 +266,14 @@ describe('useWorkoutActions', () => {
       const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
       const mockEntry = { planDayId: 'pd-1', date: '2024-01-01', focus: 'cardio' };
 
-      await act(async () => {
-        await result.current.handleChangeStatus(mockEntry as any, 'completed');
+      act(() => {
+        result.current.handleChangeStatus(mockEntry as any, 'completed');
       });
 
-      expect(mockToast).toHaveBeenCalledWith({ title: "Failed to update status", variant: "destructive" });
+      await waitFor(() => {
+        expect(mockToast).toHaveBeenCalledWith({ title: "Failed to update status", variant: "destructive" });
+      });
     });
   });
+
 });
