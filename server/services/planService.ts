@@ -67,7 +67,7 @@ export async function importPlanFromCSV(
     throw new Error("No valid rows found in CSV");
   }
 
-  const weekNumbers = rows.map((r) => parseInt(r.Week)).filter((n) => !isNaN(n) && n > 0);
+  const weekNumbers = rows.map((r) => Number.parseInt(r.Week)).filter((n) => !isNaN(n) && n > 0);
   if (weekNumbers.length === 0) {
     throw new Error("No valid week numbers found in CSV");
   }
@@ -87,7 +87,7 @@ export async function importPlanFromCSV(
       const accessory = row.Accessory || row["Accessory/Engine Work"] || null;
       return {
         planId: plan.id,
-        weekNumber: parseInt(row.Week) || 1,
+        weekNumber: Number.parseInt(row.Week) || 1,
         dayName: row.Day,
         focus: row.Focus || "",
         mainWorkout: row["Main Workout"] || "",

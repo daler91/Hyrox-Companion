@@ -97,7 +97,7 @@ export function usePlanImport({ onPlanScheduled }: UsePlanImportOptions = {}) {
       const cols = lines[i].split(',').map(c => c.trim().replace(/['"]/g, ''));
       if (cols.length >= 4) {
         rows.push({
-          weekNumber: parseInt(cols[weekIdx] || '1') || 1,
+          weekNumber: Number.parseInt(cols[weekIdx] || '1') || 1,
           dayName: cols[dayIdx] || '',
           focus: cols[focusIdx] || '',
           mainWorkout: cols[workoutIdx] || '',
