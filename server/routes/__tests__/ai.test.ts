@@ -6,6 +6,10 @@ import { storage } from "../../storage";
 import { parseExercisesFromText, chatWithCoach, streamChatWithCoach, generateWorkoutSuggestions } from "../../gemini";
 import { buildTrainingContext } from "../../services/aiService";
 
+const MOCK_TRAINING_CONTEXT = "Training context";
+const CHAT_STREAM_ENDPOINT = "/api/chat/stream";
+const CHAT_ENDPOINT = "/api/chat";
+
 // Mock the clerkAuth middleware to simulate authentication
 vi.mock("../../clerkAuth", () => ({
   isAuthenticated: (req: any, res: any, next: any) => {
@@ -136,6 +140,9 @@ describe("POST /api/parse-exercises", () => {
 describe("POST /api/chat", () => {
   let app: express.Express;
 
+
+
+
   beforeEach(async () => {
     vi.clearAllMocks();
     const routeUtils = await import("../../routeUtils");
@@ -147,22 +154,22 @@ describe("POST /api/chat", () => {
 
   it("should successfully chat with coach and return response", async () => {
 
-    (buildTrainingContext as any).mockResolvedValue("Training context");
+    (buildTrainingContext as any).mockResolvedValue(MOCK_TRAINING_CONTEXT);
     (chatWithCoach as any).mockResolvedValue("Coach response");
 
     const response = await request(app)
-      .post("/api/chat")
+      .post(CHAT_ENDPOINT)
       .send({ message: "Hello", history: [] });
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ response: "Coach response" });
     expect(buildTrainingContext).toHaveBeenCalledWith("test_user_id");
-    expect(chatWithCoach).toHaveBeenCalledWith("Hello", [], "Training context");
+    expect(chatWithCoach).toHaveBeenCalledWith("Hello", [], MOCK_TRAINING_CONTEXT);
   });
 
   it("should return 400 if message is missing", async () => {
     const response = await request(app)
-      .post("/api/chat")
+      .post(CHAT_ENDPOINT)
       .send({ history: [] });
 
     expect(response.status).toBe(400);
@@ -172,7 +179,7 @@ describe("POST /api/chat", () => {
     (buildTrainingContext as any).mockRejectedValue(new Error("Database error"));
 
     const response = await request(app)
-      .post("/api/chat")
+      .post(CHAT_ENDPOINT)
       .send({ message: "Hello", history: [] });
 
     expect(response.status).toBe(500);
@@ -182,6 +189,10 @@ describe("POST /api/chat", () => {
 
 describe("POST /api/chat/stream", () => {
   let app: express.Express;
+
+
+
+
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -194,7 +205,7 @@ describe("POST /api/chat/stream", () => {
 
   it("should successfully stream chat response", async () => {
 
-    (buildTrainingContext as any).mockResolvedValue("Training context");
+    (buildTrainingContext as any).mockResolvedValue(MOCK_TRAINING_CONTEXT);
 
     (streamChatWithCoach as any).mockImplementation(async function* () {
       yield "Hello";
@@ -202,7 +213,7 @@ describe("POST /api/chat/stream", () => {
     });
 
     const response = await request(app)
-      .post("/api/chat/stream")
+      .post(CHAT_STREAM_ENDPOINT)
       .send({ message: "Hello stream", history: [] });
 
     expect(response.status).toBe(200);
@@ -215,19 +226,19 @@ describe("POST /api/chat/stream", () => {
     expect(textChunks[2]).toContain('{"done":true}');
 
     expect(buildTrainingContext).toHaveBeenCalledWith("test_user_id");
-    expect(streamChatWithCoach).toHaveBeenCalledWith("Hello stream", [], "Training context");
+    expect(streamChatWithCoach).toHaveBeenCalledWith("Hello stream", [], MOCK_TRAINING_CONTEXT);
   });
 
   it("should handle stream errors gracefully", async () => {
 
-    (buildTrainingContext as any).mockResolvedValue("Training context");
+    (buildTrainingContext as any).mockResolvedValue(MOCK_TRAINING_CONTEXT);
 
     (streamChatWithCoach as any).mockImplementation(async function* () {
       throw new Error("Stream failure");
     });
 
     const response = await request(app)
-      .post("/api/chat/stream")
+      .post(CHAT_STREAM_ENDPOINT)
       .send({ message: "Error", history: [] });
 
     expect(response.status).toBe(200);
@@ -333,7 +344,7 @@ describe("POST /api/timeline/ai-suggestions", () => {
 
   it("should successfully generate suggestions", async () => {
 
-    (buildTrainingContext as any).mockResolvedValue("Training context");
+    (buildTrainingContext as any).mockResolvedValue(MOCK_TRAINING_CONTEXT);
 
     const mockTimeline = [
       {
@@ -406,7 +417,7 @@ describe("POST /api/timeline/ai-suggestions", () => {
 
   it("should handle no upcoming planned workouts gracefully", async () => {
 
-    (buildTrainingContext as any).mockResolvedValue("Training context");
+    (buildTrainingContext as any).mockResolvedValue(MOCK_TRAINING_CONTEXT);
     // No planned, future workouts
     (storage.getTimeline as any).mockResolvedValue([
       {
