@@ -10,7 +10,8 @@ A full-stack training planning and logging application for [Hyrox](https://hyrox
 - **AI Coach** — Chat with an AI training coach powered by Google Gemini. Get Hyrox-specific advice, workout analysis, pacing strategies, and personalized suggestions based on your training history.
 - **Analytics** — Personal records tracking, exercise progression charts, and performance breakdowns filtered by category and date range.
 - **Strava Integration** — Connect your Strava account to automatically import activities as workouts.
-- **Email Notifications** — Automated missed workout reminders and weekly training summaries via Resend.
+- **Secure Authentication** — Seamless and secure user login flow powered by Clerk.
+- **Email Notifications** — Automated background scheduled jobs for missed workout reminders and weekly training summaries via Resend.
 - **Dark Mode** — Full light/dark theme support.
 - **Unit Preferences** — Toggle between kg/lbs and km/miles throughout the app.
 - **Data Export** — Export your training data as CSV or JSON.
@@ -21,6 +22,8 @@ A full-stack training planning and logging application for [Hyrox](https://hyrox
 - **React 18** with TypeScript
 - **Vite** for development and builds
 - **Tailwind CSS** with shadcn/ui components (Radix UI primitives)
+- **Clerk React** for user authentication
+- **Sentry React** for client-side error tracking
 - **TanStack React Query** for server state management
 - **Wouter** for client-side routing
 - **dnd-kit** for drag-and-drop exercise reordering
@@ -29,11 +32,18 @@ A full-stack training planning and logging application for [Hyrox](https://hyrox
 ### Backend
 - **Node.js** with Express and TypeScript
 - **Drizzle ORM** with PostgreSQL
+- **Clerk Express** for secure route protection
 - **Google Gemini API** for AI coaching and exercise parsing
 - **Resend** for transactional emails
 - **Sentry** for error monitoring
 
-### Testing
+## Code Health & Security
+
+- **SonarCloud Integration** for continuous code quality analysis and strict TypeScript enforcement.
+- **Security Hardened** — Protected against vulnerabilities like CSV Injection.
+- **Performance Optimized** — Async operations parallelized using `Promise.allSettled()` for heavy batch jobs.
+
+## Testing
 - **Vitest** for unit tests (152 tests across 8 files)
 - **Cypress** for end-to-end tests (8 test suites)
 
@@ -80,6 +90,9 @@ A full-stack training planning and logging application for [Hyrox](https://hyrox
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `DATABASE_URL` | Yes | PostgreSQL connection string |
+| `CLERK_PUBLISHABLE_KEY` | Yes | Clerk public API key for authentication |
+| `CLERK_SECRET_KEY` | Yes | Clerk secret API key for backend verification |
+| `VITE_CLERK_PUBLISHABLE_KEY` | Yes | Vite public key for Clerk frontend |
 | `GEMINI_API_KEY` | Yes | Google Gemini API key for AI features |
 | `RESEND_API_KEY` | No | Resend API key for email notifications |
 | `SENTRY_DSN` | No | Sentry DSN for error monitoring |
