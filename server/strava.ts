@@ -17,7 +17,7 @@ const STATE_SECRET = process.env.CLERK_SECRET_KEY || crypto.randomBytes(32).toSt
 
 const stravaAuthLimiter = rateLimiter("stravaAuth", 20, 15 * 60 * 1000); // 20 requests per 15 minutes
 const STATE_MAX_AGE_MS = 10 * 60 * 1000;
-const NEWLINE_REGEX = /[\r\n]/g;
+
 
 export function createSignedState(userId: string): string {
   const timestamp = Date.now().toString(36);
@@ -159,7 +159,8 @@ export function registerStravaRoutes(app: Express): void {
     const { code, state, error: stravaError } = req.query;
 
     if (stravaError) {
-      const sanitizedError = String(stravaError).replace(NEWLINE_REGEX, "");
+      // Use encodeURIComponent to neutralize any CRLF characters for SonarCloud Log Injection (tssecurity:S5145)
+      const sanitizedError = encodeURIComponent(String(stravaError));
       console.error("Strava auth error:", sanitizedError);
       return res.redirect("/settings?strava=error");
     }
