@@ -107,16 +107,7 @@ export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg",
 
   const showMultiSetView = fields.includes("reps") || fields.includes("weight");
 
-  let confidenceClasses = "";
-  if (exercise.confidence != null) {
-    if (exercise.confidence >= 80) {
-      confidenceClasses = "bg-green-500/10 text-green-600 dark:text-green-400";
-    } else if (exercise.confidence >= 60) {
-      confidenceClasses = "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400";
-    } else {
-      confidenceClasses = "bg-red-500/10 text-red-600 dark:text-red-400";
-    }
-  }
+
 
   return (
     <Card className={`border-l-4 ${borderColor} rounded-l-none`} data-testid={`input-exercise-${exercise.exerciseName}`}>
@@ -128,7 +119,13 @@ export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg",
             {exercise.confidence != null && exercise.confidence < 90 && (
               <Badge
                 variant="secondary"
-                className={`text-[10px] ${confidenceClasses}`}
+                className={`text-[10px] ${
+                  exercise.confidence >= 80
+                    ? "bg-green-500/10 text-green-600 dark:text-green-400"
+                    : exercise.confidence >= 60
+                      ? "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
+                      : "bg-red-500/10 text-red-600 dark:text-red-400"
+                }`}
                 data-testid={`badge-confidence-${exercise.exerciseName}`}
               >
                 {exercise.confidence < 60 && <AlertTriangle className="h-3 w-3 mr-0.5" />}
