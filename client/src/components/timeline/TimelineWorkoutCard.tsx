@@ -19,7 +19,7 @@ import {
 import { SiStrava } from "react-icons/si";
 import { type TimelineEntry, type ExerciseSet, EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
-import { formatSpeed } from "@shared/unitConversion";
+import { formatSpeed, type DistanceUnit } from "@shared/unitConversion";
 import { categoryChipColors, groupExerciseSets, formatExerciseSummary, type GroupedExercise } from "@/lib/exerciseUtils";
 
 interface PRValue {
@@ -37,14 +37,14 @@ interface PREntry {
 }
 
 interface TimelineWorkoutCardProps {
-  entry: TimelineEntry;
-  onMarkComplete: (entry: TimelineEntry) => void;
-  onClick: (entry: TimelineEntry) => void;
-  onCombineSelect?: (entry: TimelineEntry) => void;
-  isCombining?: boolean;
-  combiningEntryId?: string | null;
-  combiningEntryDate?: string | null;
-  personalRecords?: Record<string, PREntry>;
+  readonly entry: TimelineEntry;
+  readonly onMarkComplete: (entry: TimelineEntry) => void;
+  readonly onClick: (entry: TimelineEntry) => void;
+  readonly onCombineSelect?: (entry: TimelineEntry) => void;
+  readonly isCombining?: boolean;
+  readonly combiningEntryId?: string | null;
+  readonly combiningEntryDate?: string | null;
+  readonly personalRecords?: Record<string, PREntry>;
 }
 
 
@@ -99,8 +99,8 @@ function getStatusBadge(status: string) {
 
 
 
-import { type DistanceUnit } from "@shared/unitConversion";
-function WorkoutStravaStats({ entry, distanceUnit }: { entry: TimelineEntry; distanceUnit: DistanceUnit | string }) {
+
+function WorkoutStravaStats({ entry, distanceUnit }: { readonly entry: TimelineEntry; readonly distanceUnit: DistanceUnit | string }) {
   if (
     entry.source !== "strava" ||
     (!entry.calories && !entry.avgWatts && !entry.sufferScore && !entry.avgCadence && !entry.avgSpeed)
@@ -152,12 +152,12 @@ function ExerciseChips({
   weightLabel,
   distanceUnit,
 }: {
-  entryId: string;
-  groupedExercises: GroupedExercise[];
-  workoutLogId: string | undefined;
-  personalRecords?: Record<string, PREntry>;
-  weightLabel: string;
-  distanceUnit: string;
+  readonly entryId: string;
+  readonly groupedExercises: GroupedExercise[];
+  readonly workoutLogId: string | undefined;
+  readonly personalRecords?: Record<string, PREntry>;
+  readonly weightLabel: string;
+  readonly distanceUnit: string;
 }) {
   return (
     <div className="flex flex-wrap gap-1.5 mb-1" data-testid={`exercise-chips-${entryId}`}>
@@ -166,9 +166,16 @@ function ExerciseChips({
         const isPR = hasPRInWorkout(group, workoutLogId, personalRecords);
         const conf = group.confidence;
         const showConfidence = conf != null && conf < 90;
-        const confColor = conf != null
-          ? conf >= 80 ? "text-green-500" : conf >= 60 ? "text-yellow-500" : "text-red-500"
-          : "";
+        let confColor = "";
+        if (conf != null) {
+          if (conf >= 80) {
+            confColor = "text-green-500";
+          } else if (conf >= 60) {
+            confColor = "text-yellow-500";
+          } else {
+            confColor = "text-red-500";
+          }
+        }
         return (
           <Badge
             key={`${group.exerciseName}-${idx}`}
