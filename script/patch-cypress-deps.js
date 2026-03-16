@@ -19,8 +19,9 @@ try {
   const simpleGitPath = path.join(appPath, 'node_modules', 'simple-git');
   const serializeJsPath = path.join(appPath, 'node_modules', 'serialize-javascript');
   const engineIoPath = path.join(appPath, 'node_modules', '@packages', 'socket', 'node_modules', 'socket.io', 'node_modules', 'engine.io');
+  const flattedPath = path.join(appPath, 'node_modules', 'flatted');
 
-  if (fs.existsSync(appPath) && (fs.existsSync(simpleGitPath) || fs.existsSync(serializeJsPath) || fs.existsSync(engineIoPath))) {
+  if (fs.existsSync(appPath) && (fs.existsSync(simpleGitPath) || fs.existsSync(serializeJsPath) || fs.existsSync(engineIoPath) || fs.existsSync(flattedPath))) {
     console.log(`Patching Cypress dependencies in ${appPath}`);
 
     const tempDir = path.join(appPath, '.temp-patch-deps');
@@ -31,13 +32,14 @@ try {
     if (fs.existsSync(simpleGitPath)) depsToInstall.push('simple-git@^3.32.3');
     if (fs.existsSync(serializeJsPath)) depsToInstall.push('serialize-javascript@^7.0.3');
     if (fs.existsSync(engineIoPath)) depsToInstall.push('engine.io@^5.2.1');
+    if (fs.existsSync(flattedPath)) depsToInstall.push('flatted@^3.4.0');
 
     if (depsToInstall.length > 0) {
       execFileSync(npmCmd, ['install', ...depsToInstall], { cwd: tempDir, stdio: 'inherit' });
 
       const sourceDir = path.join(tempDir, 'node_modules');
       if (fs.existsSync(sourceDir)) {
-        if (fs.existsSync(simpleGitPath) || fs.existsSync(serializeJsPath)) {
+        if (fs.existsSync(simpleGitPath) || fs.existsSync(serializeJsPath) || fs.existsSync(flattedPath)) {
           fs.cpSync(sourceDir, path.join(appPath, 'node_modules'), { recursive: true });
         }
 
