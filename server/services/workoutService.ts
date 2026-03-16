@@ -1,9 +1,10 @@
+import { type ParsedExercise } from "@shared/schema";
 import { storage } from "../storage";
 import { db } from "../db";
 import { workoutLogs, exerciseSets, planDays, customExercises } from "@shared/schema";
 import type { InsertWorkoutLog, UpdateWorkoutLog, InsertExerciseSet, WorkoutLog, ExerciseSet } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
-import type { ParsedExercise } from "../gemini";
+
 
 export function expandExercisesToSetRows(exercises: ParsedExercise[], workoutLogId: string): InsertExerciseSet[] {
   const rows: InsertExerciseSet[] = [];

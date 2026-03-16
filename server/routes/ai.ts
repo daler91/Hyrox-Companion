@@ -29,7 +29,7 @@ router.post("/api/parse-exercises", isAuthenticated, rateLimiter("parse", 5), as
   }
 });
 
-async function prepareChatContext(req: AuthenticatedRequest) {
+async function prepareChatContext(req: AuthenticatedRequest): Promise<{ success: false; error: string } | { success: true; message: string; history: ChatMessage[]; trainingContext: import("../gemini").TrainingContext }> {
   const parseResult = chatRequestSchema.safeParse(req.body);
   if (!parseResult.success) {
     return { success: false, error: parseResult.error.errors[0].message };
@@ -39,7 +39,7 @@ async function prepareChatContext(req: AuthenticatedRequest) {
   const userId = getUserId(req);
   const trainingContext = await buildTrainingContext(userId);
 
-  return { success: true, message, history, trainingContext };
+  return { success: true, message: message!, history, trainingContext };
 }
 
 router.post("/api/chat", isAuthenticated, rateLimiter("chat", 10), async (req: AuthenticatedRequest, res) => {

@@ -1,3 +1,4 @@
+import { type ParsedExercise } from "@shared/schema";
 import { useState, useCallback } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -39,7 +40,7 @@ export function useWorkoutActions(selectedPlanId: string | null) {
   });
 
   const logWorkoutMutation = useMutation({
-    mutationFn: async (data: { planDayId: string; date: string; focus: string; mainWorkout: string; accessory?: string; notes?: string; rpe?: number; exercises?: any[] }) => {
+    mutationFn: async (data: { planDayId: string; date: string; focus: string; mainWorkout: string; accessory?: string; notes?: string; rpe?: number; exercises?: ParsedExercise[] }) => {
       const response = await apiRequest("POST", "/api/workouts", data);
       return response.json();
     },
@@ -105,7 +106,7 @@ export function useWorkoutActions(selectedPlanId: string | null) {
     setDetailEntry(entry);
   }, []);
 
-  const handleSaveFromDetail = useCallback((updates: { focus: string; mainWorkout: string; accessory: string | null; notes: string | null; rpe?: number | null; exercises?: any[] }) => {
+  const handleSaveFromDetail = useCallback((updates: { focus: string; mainWorkout: string; accessory: string | null; notes: string | null; rpe?: number | null; exercises?: ParsedExercise[] }) => {
     if (!detailEntry) return;
 
     if (detailEntry.workoutLogId) {

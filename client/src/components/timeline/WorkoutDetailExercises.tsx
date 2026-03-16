@@ -1,3 +1,4 @@
+import { type ParsedExercise } from "@shared/schema";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,7 +43,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import type { DragEndEvent } from "@dnd-kit/core";
 import type { UseMutationResult } from "@tanstack/react-query";
-import type { ParsedExercise } from "@/hooks/useWorkoutEditor";
+
 import { useVoiceInput } from "@/hooks/useVoiceInput";
 import { VoiceButton } from "@/components/VoiceButton";
 import { VoiceFieldButton } from "@/components/VoiceFieldButton";
