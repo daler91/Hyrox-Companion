@@ -1,0 +1,7 @@
+--- client/src/components/timeline/TimelineFilters.tsx
++++ client/src/components/timeline/TimelineFilters.tsx
+@@ -40,3 +40,3 @@
+   link.click();
+-  document.body.removeChild(link);
++  link.remove();
+   URL.revokeObjectURL(url);
