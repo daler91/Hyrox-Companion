@@ -1,4 +1,4 @@
-import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
+import { EXERCISE_DEFINITIONS } from "@shared/schema";
 import type { StructuredExercise } from "@/components/ExerciseInput";
 
 interface FieldRequirement {
