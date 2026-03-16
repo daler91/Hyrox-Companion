@@ -1,6 +1,6 @@
+import { type ParsedExercise, type TimelineEntry, type WorkoutStatus } from "@shared/schema";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { type TimelineEntry, type WorkoutStatus } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { getExerciseLabel, groupExerciseSets } from "@/lib/exerciseUtils";
@@ -19,7 +19,7 @@ interface WorkoutDetailDialogProps {
   onClose: () => void;
   onMarkComplete: (entry: TimelineEntry) => void;
   onChangeStatus: (entry: TimelineEntry, status: WorkoutStatus) => void;
-  onSave: (updates: { focus: string; mainWorkout: string; accessory: string | null; notes: string | null; rpe?: number | null; exercises?: any[] }) => void;
+  onSave: (updates: { focus: string; mainWorkout: string; accessory: string | null; notes: string | null; rpe?: number | null; exercises?: ParsedExercise[] }) => void;
   onDelete: (entry: TimelineEntry) => void;
   onCombine?: (entry: TimelineEntry) => void;
   isSaving?: boolean;

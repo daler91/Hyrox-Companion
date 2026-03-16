@@ -352,3 +352,25 @@ export const incomingExerciseSchema = z.object({
 }).passthrough();
 
 export const exercisesPayloadSchema = z.array(incomingExerciseSchema).max(200);
+
+export interface ParsedExercise {
+  exerciseName: string;
+  category: string;
+  customLabel?: string;
+  confidence?: number;
+  missingFields?: string[];
+  numSets?: number;
+  reps?: number;
+  weight?: number;
+  distance?: number;
+  time?: number;
+  notes?: string;
+  sets: Array<{
+    setNumber: number;
+    reps?: number;
+    weight?: number;
+    distance?: number;
+    time?: number;
+    notes?: string;
+  }>;
+}
