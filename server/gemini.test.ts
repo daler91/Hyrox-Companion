@@ -1,18 +1,12 @@
+import { describe, it, expect, vi } from "vitest";
+import { z } from "zod";
 import { exerciseSetSchema } from "@shared/schema";
 import {
- describe, it, expect, vi } from "vitest";
-import { exerciseSetSchema } from "@shared/schema";
-import {
-
   isRetryableError,
   retryWithBackoff,
   workoutSuggestionSchema,
   parsedExerciseSchema,
-
 } from "./gemini";
-import { exerciseSetSchema } from "@shared/schema";
-import {
- z } from "zod";
 
 describe("isRetryableError", () => {
   it("returns true for 429 rate limit", () => {
