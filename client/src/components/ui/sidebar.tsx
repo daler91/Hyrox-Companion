@@ -105,8 +105,8 @@ function SidebarProvider({
       }
     }
 
-    window.addEventListener("keydown", handleKeyDown)
-    return () => window.removeEventListener("keydown", handleKeyDown)
+    globalThis.addEventListener("keydown", handleKeyDown)
+    return () => globalThis.removeEventListener("keydown", handleKeyDown)
   }, [toggleSidebar])
 
   // We add a state so that we can do data-state="expanded" or "collapsed".
@@ -610,7 +610,7 @@ function SidebarMenuSkeleton({
   // Random width between 50 to 90%.
   const width = React.useMemo(() => {
     const randomValues = new Uint32Array(1)
-    window.crypto.getRandomValues(randomValues)
+    globalThis.crypto.getRandomValues(randomValues)
     const randomFraction = randomValues[0] / (0xffffffff + 1)
     return `${Math.floor(randomFraction * 40) + 50}%`
   }, [])

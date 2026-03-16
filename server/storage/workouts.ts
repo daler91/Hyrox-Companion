@@ -74,7 +74,7 @@ export class WorkoutStorage {
     const [updatedLog] = await db
       .update(workoutLogs)
       .set(updates)
-      .where(eq(workoutLogs.id, logId))
+      .where(and(eq(workoutLogs.id, logId), eq(workoutLogs.userId, userId)))
       .returning();
     return updatedLog;
   }
@@ -83,7 +83,7 @@ export class WorkoutStorage {
     const existingLog = await this.getWorkoutLog(logId, userId);
     if (!existingLog) return false;
     
-    const result = await db.delete(workoutLogs).where(eq(workoutLogs.id, logId));
+    const result = await db.delete(workoutLogs).where(and(eq(workoutLogs.id, logId), eq(workoutLogs.userId, userId)));
     return result.rowCount !== null && result.rowCount > 0;
   }
 
@@ -147,7 +147,14 @@ export class WorkoutStorage {
 
     await db
       .delete(exerciseSets)
-      .where(eq(exerciseSets.workoutLogId, workoutLogId));
+      .where(
+        inArray(
+          exerciseSets.workoutLogId,
+          db.select({ id: workoutLogs.id })
+            .from(workoutLogs)
+            .where(and(eq(workoutLogs.id, workoutLogId), eq(workoutLogs.userId, userId)))
+        )
+      );
     return true;
   }
 

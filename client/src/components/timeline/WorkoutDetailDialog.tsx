@@ -1,6 +1,7 @@
 import { type ParsedExercise, type TimelineEntry, type WorkoutStatus } from "@shared/schema";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { getExerciseLabel, groupExerciseSets } from "@/lib/exerciseUtils";
@@ -11,7 +12,6 @@ import {
 import { WorkoutDetailHeader } from "./WorkoutDetailHeader";
 import { WorkoutDetailView, WorkoutDetailEditForm } from "./WorkoutDetailExercises";
 import { exerciseSetsToStructured } from "@/lib/exerciseUtils";
-import { RpeSelector } from "@/components/RpeSelector";
 import { StatusChangeSection, WorkoutDetailFooter, DeleteConfirmDialog } from "./WorkoutDetailActions";
 
 interface WorkoutDetailDialogProps {
@@ -155,7 +155,7 @@ export default function WorkoutDetailDialog({
 
   return (
     <Dialog open={!!entry} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+      <DialogContent className={cn("max-h-[85vh] overflow-y-auto", isEditing ? "max-w-4xl" : "max-w-lg")}>
         <WorkoutDetailHeader
           status={entry.status}
           source={entry.source}
@@ -165,8 +165,7 @@ export default function WorkoutDetailDialog({
         />
 
         {isEditing ? (
-          <>
-            <WorkoutDetailEditForm
+          <WorkoutDetailEditForm
               editForm={editForm}
               setEditForm={setEditForm}
               useTextMode={useTextMode}
@@ -184,12 +183,11 @@ export default function WorkoutDetailDialog({
               distanceUnit={distanceUnit}
               onParseText={handleParseText}
               stopAllVoiceRef={stopAllVoiceRef}
+              editRpe={editRpe}
+              setEditRpe={setEditRpe}
+              source={entry.source}
             />
-            {entry.source !== "strava" && (
-              <RpeSelector value={editRpe} onChange={setEditRpe} compact />
-            )}
-          </>
-        ) : (
+          ) : (
           <WorkoutDetailView
             entry={entry}
             grouped={grouped}

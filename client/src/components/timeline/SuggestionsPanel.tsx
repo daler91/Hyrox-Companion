@@ -24,6 +24,13 @@ function getBadgeVariant(priority: string) {
   return "secondary";
 }
 
+
+function getBadgeVariant(priority: string) {
+  if (priority === "high") return "destructive";
+  if (priority === "medium") return "default";
+  return "secondary";
+}
+
 export default function SuggestionsPanel({
   suggestions,
   isOpen,

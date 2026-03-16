@@ -144,41 +144,61 @@ export function buildWeeklySummaryEmail(user: User, data: WeeklySummaryData): { 
 export function buildMissedWorkoutEmail(user: User, missed: MissedWorkoutData[]): { subject: string; html: string } {
   const name = getUserName(user);
   const count = missed.length;
-  const subject = `${count} missed workout${count !== 1 ? 's' : ''} — get back on track`;
+  let pluralSuffix = '';
+  let wasWere = 'was';
+  if (count !== 1) {
+    pluralSuffix = 's';
+    wasWere = 'were';
+  }
+  const subject = `${count} missed workout${pluralSuffix} — get back on track`;
 
   const workoutItems = missed.map(w => `
     <div class="workout-item">
       <div class="workout-focus">${w.focus}</div>
       <div class="workout-detail">${w.mainWorkout.substring(0, 120)}${w.mainWorkout.length > 120 ? '...' : ''}</div>
-      <div class="workout-detail">${w.date}${w.planName ? ` · ${w.planName}` : ''}</div>
+      <div class="workout-date">${w.date}${w.planName ? ` • ${w.planName}` : ""}</div>
     </div>
   `).join('');
 
-  const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${baseStyles()}</style></head>
-<body style="background:#f4f4f5;padding:16px;">
-<div class="container">
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #0f172a; max-width: 600px; margin: 0 auto; padding: 20px; }
+  .header { text-align: center; margin-bottom: 30px; }
+  .header h1 { color: #0f172a; margin-bottom: 5px; }
+  .header p { color: #64748b; margin-top: 0; }
+  .content { background: #f8fafc; padding: 24px; border-radius: 8px; }
+  .workout-item { background: white; padding: 16px; margin-bottom: 12px; border-radius: 6px; border: 1px solid #e2e8f0; }
+  .workout-focus { font-weight: 600; color: #0f172a; margin-bottom: 4px; }
+  .workout-detail { color: #475569; font-size: 14px; margin-bottom: 8px; }
+  .workout-date { color: #64748b; font-size: 12px; }
+  .footer { margin-top: 30px; text-align: center; font-size: 12px; color: #94a3b8; }
+</style>
+</head>
+<body>
   <div class="header">
     <h1>Missed Workout Reminder</h1>
     <p>Don't let momentum slip away</p>
   </div>
   <div class="content">
-    <p style="font-size:16px;color:#334155;">Hey ${name}, you had ${count} planned session${count !== 1 ? 's' : ''} that ${count !== 1 ? 'were' : 'was'} missed:</p>
+    <p style="font-size:16px;color:#334155;">Hey ${name}, you had ${count} planned session${pluralSuffix} that ${wasWere} missed:</p>
     
     ${workoutItems}
 
     <p style="font-size:14px;color:#64748b;margin-top:16px;">Missing a session happens to everyone. The important thing is to get back on track. You can mark these as skipped or reschedule them in the app.</p>
 
-    <div style="text-align:center;margin-top:24px;">
-      <a href="${getAppUrl()}" class="cta">Open HyroxTracker</a>
+    <div style="margin-top: 24px; text-align: center;">
+      <a href="${process.env.APP_URL || 'https://hyrox-tracker.com'}/timeline" style="display: inline-block; background-color: #0f172a; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500;">View Timeline</a>
     </div>
   </div>
   <div class="footer">
-    <p>HyroxTracker — Train Smarter for Hyrox</p>
-    <p><a href="${getAppUrl()}/settings">Manage email preferences</a></p>
+    <p>You're receiving this because you enabled email reminders in your HyroxTracker preferences.</p>
   </div>
-</div>
-</body></html>`;
+</body>
+</html>
+  `.trim();
 
   return { subject, html };
 }

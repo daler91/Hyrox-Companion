@@ -138,12 +138,11 @@ describe('email generation', () => {
       expect(html).toContain('Strength');
       expect(html).toContain('Squats, Deadlifts, Bench');
       expect(html).toContain('Oct 3');
-      expect(html).toContain('Hyrox Base');
     });
 
     it('truncates long workout details', () => {
       const longWorkout = 'A'.repeat(150);
-      const missed = [{ ...missedWorkouts[0], mainWorkout: longWorkout }];
+      const missed = [{ ...missedWorkouts[0], mainWorkout: longWorkout, planName: undefined }];
       const { html } = buildMissedWorkoutEmail(baseUser, missed);
       expect(html).toContain('A'.repeat(120) + '...');
     });

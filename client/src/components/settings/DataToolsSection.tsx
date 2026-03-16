@@ -150,7 +150,7 @@ export function DataToolsSection() {
             <Button
               variant="outline"
               onClick={() => {
-                window.location.href = "/api/export?format=csv";
+                globalThis.location.href = "/api/export?format=csv";
               }}
               data-testid="button-export-csv"
             >
@@ -160,7 +160,7 @@ export function DataToolsSection() {
             <Button
               variant="outline"
               onClick={() => {
-                window.location.href = "/api/export?format=json";
+                globalThis.location.href = "/api/export?format=json";
               }}
               data-testid="button-export-json"
             >

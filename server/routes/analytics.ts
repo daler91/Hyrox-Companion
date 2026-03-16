@@ -1,10 +1,9 @@
-import { Router } from "express";
+import { Router, type Request } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
 import { calculatePersonalRecords, calculateExerciseAnalytics } from "../services/analyticsService";
-import { getUserId, AuthenticatedRequest } from "../types";
+import { getUserId } from "../types";
 import { dateStringSchema, ExerciseSet } from "@shared/schema";
-
 
 const router = Router();
 
@@ -29,14 +28,13 @@ function getExerciseSetsCoalesced(userId: string, from?: string, to?: string): P
   return promise;
 }
 
-
 export function validDate(val: unknown): string | undefined {
   if (!val) return undefined;
   const parsed = dateStringSchema.safeParse(val);
   return parsed.success ? parsed.data : undefined;
 }
 
-router.get("/api/personal-records", isAuthenticated, async (req: AuthenticatedRequest, res) => {
+router.get("/api/personal-records", isAuthenticated, async (req: Request, res) => {
   try {
     const userId = getUserId(req);
     const from = validDate(req.query.from);
@@ -52,7 +50,7 @@ router.get("/api/personal-records", isAuthenticated, async (req: AuthenticatedRe
   }
 });
 
-router.get("/api/exercise-analytics", isAuthenticated, async (req: AuthenticatedRequest, res) => {
+router.get("/api/exercise-analytics", isAuthenticated, async (req: Request, res) => {
   try {
     const userId = getUserId(req);
     const from = validDate(req.query.from);

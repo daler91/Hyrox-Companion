@@ -3,21 +3,12 @@ import type { TrainingContext } from "../gemini";
 import { calculateStreak } from "../routeUtils";
 import { HYROX_EXERCISES } from "../prompts";
 
-interface TimelineEntry {
-  status?: string | null;
-  date?: string | null;
-  focus?: string | null;
-  mainWorkout?: string | null;
-  workoutLogId?: string | null;
-  exerciseSets?: Array<{
-    exerciseName: string;
-    setNumber?: number | null;
-    reps?: number | null;
-    weight?: number | null;
-    distance?: number | null;
-    time?: number | null;
-  }> | null;
-}
+import type { TimelineEntry as SharedTimelineEntry } from "@shared/schema";
+
+type TimelineEntry = Pick<
+  SharedTimelineEntry,
+  "status" | "date" | "focus" | "mainWorkout" | "workoutLogId" | "exerciseSets"
+>;
 
 function calculateTrainingStats(timeline: TimelineEntry[]) {
   let completedWorkouts = 0;

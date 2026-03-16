@@ -1,4 +1,4 @@
-import { type ParsedExercise, exerciseSetSchema } from "@shared/schema";
+import { type ParsedExercise } from "@shared/schema";
 import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
 import {
@@ -8,8 +8,6 @@ import {
   VALID_CATEGORIES,
   buildSystemPrompt,
 } from "./prompts";
-
-const GEMINI_MODEL = "gemini-3-flash-preview";
 
 let _ai: GoogleGenAI | null = null;
 function getAiClient(): GoogleGenAI {
@@ -92,6 +90,13 @@ export const workoutSuggestionSchema = z.object({
   priority: z.enum(["high", "medium", "low"]),
 });
 
+export const exerciseSetSchema = z.object({
+  setNumber: z.number().optional(),
+  reps: z.number().optional().nullable(),
+  weight: z.number().optional().nullable(),
+  distance: z.number().optional().nullable(),
+  time: z.number().optional().nullable(),
+});
 
 export const parsedExerciseSchema = z.object({
   exerciseName: z.string(),
@@ -204,7 +209,7 @@ export async function generateWorkoutSuggestions(
 
     const response = await retryWithBackoff(
       () => getAiClient().models.generateContent({
-        model: GEMINI_MODEL,
+        model: "gemini-3-flash-preview",
         config: {
           systemInstruction: SUGGESTIONS_PROMPT,
           responseMimeType: "application/json",
@@ -242,7 +247,7 @@ export async function chatWithCoach(
     const systemPrompt = buildSystemPrompt(trainingContext);
 
     const response = await getAiClient().models.generateContent({
-      model: GEMINI_MODEL,
+      model: "gemini-3-flash-preview",
       config: {
         systemInstruction: systemPrompt,
       },
@@ -273,7 +278,7 @@ and use the matching name as customLabel: ${customExerciseNames.join(", ")}`;
 
     const response = await retryWithBackoff(
       () => getAiClient().models.generateContent({
-        model: GEMINI_MODEL,
+        model: "gemini-3-flash-preview",
         config: {
           systemInstruction: PARSE_EXERCISES_PROMPT + unitNote + customNote,
           responseMimeType: "application/json",
@@ -351,7 +356,7 @@ export async function* streamChatWithCoach(
     const systemPrompt = buildSystemPrompt(trainingContext);
 
     const response = await getAiClient().models.generateContentStream({
-      model: GEMINI_MODEL,
+      model: "gemini-3-flash-preview",
       config: {
         systemInstruction: systemPrompt,
       },

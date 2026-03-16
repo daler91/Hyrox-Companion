@@ -169,8 +169,9 @@
   --destructive-border: hsl(from hsl(var(--destructive)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
   --radius: 1.3rem;
   --spacing: 0.25rem;
-  --font-mono: Menlo, monospace;
-  --font-sans: Open Sans, sans-serif;
+  --font-mono: 'Geist Mono', Menlo, monospace;
+  --font-sans: 'Geist Sans', 'Open Sans', sans-serif;
+  --font-heading: 'Space Grotesk', sans-serif;
   --font-serif: Georgia, serif;
   --tracking-normal: 0em;
 }
