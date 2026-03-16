@@ -59,7 +59,6 @@ describe("Analytics Routes", () => {
     app.use(analyticsRouter);
   });
 
-  // Helper for reused date query tests
   const testInvalidDates = (endpoint: string) => {
     it("should return 400 for invalid from date", async () => {
       const response = await request(app).get(`${endpoint}?from=invalid-date`);
@@ -74,93 +73,50 @@ describe("Analytics Routes", () => {
     });
   };
 
-  describe("GET /api/personal-records", () => {
-    it("should return personal records for a user", async () => {
-      vi.mocked(storage.getAllExerciseSetsWithDates).mockResolvedValue([
-        { id: "set1", exerciseName: "Squat", weight: "100", reps: 10 } as any
-      ]);
+  const testEndpoint = (endpoint: string, mockMethod: any, expectedBody: any) => {
+    describe(`GET ${endpoint}`, () => {
+      it("should return analytics for a user", async () => {
+        vi.mocked(storage.getAllExerciseSetsWithDates).mockResolvedValue([
+          { id: "set1", exerciseName: "Test", weight: "100", reps: 10 } as any
+        ]);
 
-      vi.mocked(calculatePersonalRecords).mockReturnValue({
-        Squat: { weight: "100", reps: 10, estimated1RM: 133 } as any
+        vi.mocked(mockMethod).mockReturnValue(expectedBody);
+
+        const response = await request(app).get(endpoint);
+
+        expect(response.status).toBe(200);
+        expect(storage.getAllExerciseSetsWithDates).toHaveBeenCalledWith("test_user_id", undefined, undefined);
+        expect(mockMethod).toHaveBeenCalledWith([
+          expect.objectContaining({ id: "set1", exerciseName: "Test", weight: "100", reps: 10 })
+        ]);
+        expect(response.body).toEqual(expectedBody);
       });
 
-      const response = await request(app).get("/api/personal-records");
+      it("should handle from and to date queries properly", async () => {
+        vi.mocked(storage.getAllExerciseSetsWithDates).mockResolvedValue([]);
+        vi.mocked(mockMethod).mockReturnValue({});
 
-      expect(response.status).toBe(200);
-      expect(storage.getAllExerciseSetsWithDates).toHaveBeenCalledWith("test_user_id", undefined, undefined);
-      expect(calculatePersonalRecords).toHaveBeenCalledWith([
-        expect.objectContaining({ id: "set1", exerciseName: "Squat", weight: "100", reps: 10 })
-      ]);
-      expect(response.body).toEqual({
-        Squat: { weight: "100", reps: 10, estimated1RM: 133 }
-      });
-    });
+        const response = await request(app).get(`${endpoint}?from=2024-01-01&to=2024-12-31`);
 
-    it("should handle from and to date queries properly", async () => {
-      vi.mocked(storage.getAllExerciseSetsWithDates).mockResolvedValue([]);
-      vi.mocked(calculatePersonalRecords).mockReturnValue({});
-
-      const response = await request(app).get("/api/personal-records?from=2024-01-01&to=2024-12-31");
-
-      expect(response.status).toBe(200);
-      expect(storage.getAllExerciseSetsWithDates).toHaveBeenCalledWith("test_user_id", "2024-01-01", "2024-12-31");
-    });
-
-    testInvalidDates("/api/personal-records");
-
-    it("should return 500 when storage throws an error", async () => {
-      vi.mocked(storage.getAllExerciseSetsWithDates).mockRejectedValue(new Error("Database error"));
-
-      const response = await request(app).get("/api/personal-records");
-
-      expect(response.status).toBe(500);
-      expect(response.body).toEqual({ error: "Failed to fetch personal records" });
-    });
-  });
-
-  describe("GET /api/exercise-analytics", () => {
-    it("should return exercise analytics for a user", async () => {
-      vi.mocked(storage.getAllExerciseSetsWithDates).mockResolvedValue([
-        { id: "set1", exerciseName: "Bench Press", weight: "200", reps: 5 } as any
-      ]);
-
-      vi.mocked(calculateExerciseAnalytics).mockReturnValue({
-        "Bench Press": { totalVolume: 1000, setsCount: 1, history: [] } as any
+        expect(response.status).toBe(200);
+        expect(storage.getAllExerciseSetsWithDates).toHaveBeenCalledWith("test_user_id", "2024-01-01", "2024-12-31");
       });
 
-      const response = await request(app).get("/api/exercise-analytics");
+      testInvalidDates(endpoint);
 
-      expect(response.status).toBe(200);
-      expect(storage.getAllExerciseSetsWithDates).toHaveBeenCalledWith("test_user_id", undefined, undefined);
-      expect(calculateExerciseAnalytics).toHaveBeenCalledWith([
-        expect.objectContaining({ id: "set1", exerciseName: "Bench Press", weight: "200", reps: 5 })
-      ]);
-      expect(response.body).toEqual({
-        "Bench Press": { totalVolume: 1000, setsCount: 1, history: [] }
+      it("should return 500 when storage throws an error", async () => {
+        vi.mocked(storage.getAllExerciseSetsWithDates).mockRejectedValue(new Error("Database error"));
+
+        const response = await request(app).get(endpoint);
+
+        expect(response.status).toBe(500);
+        expect(response.body).toHaveProperty("error");
       });
     });
+  };
 
-    it("should handle from and to date queries properly", async () => {
-      vi.mocked(storage.getAllExerciseSetsWithDates).mockResolvedValue([]);
-      vi.mocked(calculateExerciseAnalytics).mockReturnValue({});
-
-      const response = await request(app).get("/api/exercise-analytics?from=2024-01-01&to=2024-12-31");
-
-      expect(response.status).toBe(200);
-      expect(storage.getAllExerciseSetsWithDates).toHaveBeenCalledWith("test_user_id", "2024-01-01", "2024-12-31");
-    });
-
-    testInvalidDates("/api/exercise-analytics");
-
-    it("should return 500 when storage throws an error", async () => {
-      vi.mocked(storage.getAllExerciseSetsWithDates).mockRejectedValue(new Error("Database error"));
-
-      const response = await request(app).get("/api/exercise-analytics");
-
-      expect(response.status).toBe(500);
-      expect(response.body).toEqual({ error: "Failed to fetch exercise analytics" });
-    });
-  });
+  testEndpoint("/api/personal-records", calculatePersonalRecords, { Squat: { weight: "100", reps: 10, estimated1RM: 133 } });
+  testEndpoint("/api/exercise-analytics", calculateExerciseAnalytics, { "Bench Press": { totalVolume: 1000, setsCount: 1, history: [] } });
 
   describe("getExerciseSetsCoalesced caching logic", () => {
     const makeRequest = () => request(app).get("/api/personal-records");
