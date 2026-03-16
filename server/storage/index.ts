@@ -8,11 +8,11 @@ import { AnalyticsStorage } from "./analytics";
 export type { IStorage } from "./IStorage";
 
 class DatabaseStorage implements IStorage {
-  private userStorage = new UserStorage();
-  private workoutStorage = new WorkoutStorage();
-  private planStorage = new PlanStorage();
-  private timelineStorage = new TimelineStorage(this.workoutStorage);
-  private analyticsStorage = new AnalyticsStorage();
+  private readonly userStorage = new UserStorage();
+  private readonly workoutStorage = new WorkoutStorage();
+  private readonly planStorage = new PlanStorage();
+  private readonly timelineStorage = new TimelineStorage(this.workoutStorage);
+  private readonly analyticsStorage = new AnalyticsStorage();
 
   getUser = this.userStorage.getUser.bind(this.userStorage);
   upsertUser = this.userStorage.upsertUser.bind(this.userStorage);
