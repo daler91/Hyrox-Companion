@@ -79,89 +79,105 @@ export default function EditWorkoutDialog({
 
   return (
     <Dialog open={!!entry} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             Edit {entry?.dayName} - Week {entry?.weekNumber}
           </DialogTitle>
         </DialogHeader>
-        <div className="space-y-4">
-          <div>
-            <Label htmlFor="edit-focus">Focus</Label>
-            <Input
-              id="edit-focus"
-              value={editForm.focus}
-              onChange={(e) =>
-                onEditFormChange({ ...editForm, focus: e.target.value })
-              }
-              data-testid="input-edit-focus"
-              placeholder="e.g., Upper Body Strength, Active Recovery..."
-            />
-          </div>
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <Label htmlFor="edit-main">Main Workout</Label>
-              <VoiceFieldButton
-                onTranscript={(text) => appendToField("mainWorkout", text)}
-                onStopRef={stopMainRef}
-                data-testid="button-voice-edit-main"
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Left Column: Metadata & Notes */}
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="edit-focus">Focus</Label>
+              <Input
+                id="edit-focus"
+                value={editForm.focus}
+                onChange={(e) =>
+                  onEditFormChange({ ...editForm, focus: e.target.value })
+                }
+                data-testid="input-edit-focus"
+                placeholder="e.g., Upper Body Strength, Active Recovery..."
               />
             </div>
-            <Textarea
-              id="edit-main"
-              value={editForm.mainWorkout}
-              onChange={(e) =>
-                onEditFormChange({ ...editForm, mainWorkout: e.target.value })
-              }
-              rows={3}
-              data-testid="input-edit-main"
-            />
-          </div>
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <Label htmlFor="edit-accessory">Accessory/Engine Work</Label>
-              <VoiceFieldButton
-                onTranscript={(text) => appendToField("accessory", text)}
-                onStopRef={stopAccessoryRef}
-                data-testid="button-voice-edit-accessory"
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <Label htmlFor="edit-notes">Notes</Label>
+                <VoiceFieldButton
+                  onTranscript={(text) => appendToField("notes", text)}
+                  onStopRef={stopNotesRef}
+                  data-testid="button-voice-edit-notes"
+                />
+              </div>
+              <Input
+                id="edit-notes"
+                value={editForm.notes}
+                onChange={(e) =>
+                  onEditFormChange({ ...editForm, notes: e.target.value })
+                }
+                data-testid="input-edit-notes"
+                placeholder="Add any observations or notes..."
               />
             </div>
-            <Textarea
-              id="edit-accessory"
-              value={editForm.accessory}
-              onChange={(e) =>
-                onEditFormChange({ ...editForm, accessory: e.target.value })
-              }
-              rows={2}
-              data-testid="input-edit-accessory"
-            />
-          </div>
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <Label htmlFor="edit-notes">Notes</Label>
-              <VoiceFieldButton
-                onTranscript={(text) => appendToField("notes", text)}
-                onStopRef={stopNotesRef}
-                data-testid="button-voice-edit-notes"
+            {entry?.source !== "strava" && (
+              <RpeSelector
+                value={editForm.rpe}
+                onChange={(rpe) => onEditFormChange({ ...editForm, rpe })}
+                compact
               />
-            </div>
-            <Input
-              id="edit-notes"
-              value={editForm.notes}
-              onChange={(e) =>
-                onEditFormChange({ ...editForm, notes: e.target.value })
-              }
-              data-testid="input-edit-notes"
-              placeholder="Add any observations or notes..."
-            />
+            )}
           </div>
-          {entry?.source !== "strava" && (
-            <RpeSelector
-              value={editForm.rpe}
-              onChange={(rpe) => onEditFormChange({ ...editForm, rpe })}
-              compact
-            />
-          )}
+
+          {/* Right Column: Workouts */}
+          <div className="space-y-4 flex flex-col">
+            <div className="flex-1 flex flex-col">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <Label htmlFor="edit-main">Main Workout</Label>
+                  <VoiceFieldButton
+                    onTranscript={(text) => appendToField("mainWorkout", text)}
+                    onStopRef={stopMainRef}
+                    data-testid="button-voice-edit-main"
+                  />
+                </div>
+                <Textarea
+                  id="edit-main"
+                  value={editForm.mainWorkout}
+                  onChange={(e) =>
+                    onEditFormChange({
+                      ...editForm,
+                      mainWorkout: e.target.value,
+                    })
+                  }
+                  rows={5}
+                  className="flex-1"
+                  data-testid="input-edit-main"
+                />
+              </div>
+            </div>
+            <div className="flex-1 flex flex-col">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <Label htmlFor="edit-accessory">Accessory/Engine Work</Label>
+                  <VoiceFieldButton
+                    onTranscript={(text) => appendToField("accessory", text)}
+                    onStopRef={stopAccessoryRef}
+                    data-testid="button-voice-edit-accessory"
+                  />
+                </div>
+                <Textarea
+                  id="edit-accessory"
+                  value={editForm.accessory}
+                  onChange={(e) =>
+                    onEditFormChange({ ...editForm, accessory: e.target.value })
+                  }
+                  rows={4}
+                  className="flex-1"
+                  data-testid="input-edit-accessory"
+                />
+              </div>
+            </div>
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={handleClose}>
