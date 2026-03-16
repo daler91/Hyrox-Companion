@@ -171,4 +171,65 @@ describe("expandExercisesToSetRows", () => {
     expect(result[0].setNumber).toBe(1);
     expect(result[0].reps).toBe(5);
   });
+
+  it("falls back to top-level properties if sets is null", () => {
+    const exercises = [
+      {
+        exerciseName: "deadlift",
+        category: "strength",
+        sets: null,
+        numSets: 2,
+        reps: 5,
+        weight: 100,
+        distance: 10,
+        time: 60,
+        notes: "Heavy",
+      },
+    ];
+
+    const result = expandExercisesToSetRows(exercises, workoutLogId);
+
+    expect(result).toHaveLength(2);
+    expect(result[0]).toMatchObject({
+      setNumber: 1,
+      reps: 5,
+      weight: 100,
+      distance: 10,
+      time: 60,
+      notes: "Heavy",
+    });
+    expect(result[1]).toMatchObject({
+      setNumber: 2,
+      reps: 5,
+      weight: 100,
+      distance: 10,
+      time: 60,
+      notes: "Heavy",
+    });
+  });
+
+  it("falls back to top-level properties if sets is not an array", () => {
+    const exercises = [
+      {
+        exerciseName: "running",
+        category: "running",
+        sets: "invalid" as any,
+        numSets: 1,
+        reps: null,
+        weight: null,
+        distance: 5000,
+        time: 1200,
+      },
+    ];
+
+    const result = expandExercisesToSetRows(exercises, workoutLogId);
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      exerciseName: "running",
+      setNumber: 1,
+      distance: 5000,
+      time: 1200,
+    });
+  });
 });
