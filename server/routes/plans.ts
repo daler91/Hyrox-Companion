@@ -44,7 +44,7 @@ router.post("/api/plans/import", isAuthenticated, rateLimiter("planImport", 5), 
     const userId = getUserId(req);
     const fullPlan = await importPlanFromCSV(csvContent, userId, { fileName, planName });
     res.json(fullPlan);
-  } catch (error: any) {
+  } catch (error: Error | any) {
     if (error.message === "No valid rows found in CSV" || error.message === "No valid week numbers found in CSV") {
       return res.status(400).json({ error: error.message });
     }
