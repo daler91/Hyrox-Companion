@@ -51,6 +51,14 @@ try {
           }
         }
 
+        // Copy axios specifically to its nested location
+        if (fs.existsSync(axiosPath)) {
+          const sourceAxios = path.join(sourceDir, 'axios');
+          if (fs.existsSync(sourceAxios)) {
+             fs.cpSync(sourceAxios, axiosPath, { recursive: true });
+          }
+        }
+
         console.log(`Successfully patched ${depsToInstall.join(', ')} in Cypress cache`);
       }
     }
