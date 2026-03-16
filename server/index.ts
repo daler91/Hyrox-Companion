@@ -19,7 +19,6 @@ if (process.env.SENTRY_DSN) {
 const app = express();
 const httpServer = createServer(app);
 
-
 export interface AppError extends Error {
   status?: number;
   statusCode?: number;
@@ -34,33 +33,56 @@ declare module "http" {
 app.use(compression());
 
 const isDev = process.env.NODE_ENV !== "production";
-const clerkDomains = "https://*.clerk.accounts.dev https://*.hyroxcompanion.life https://clerk.hyroxcompanion.life";
+const clerkDomains =
+  "https://*.clerk.accounts.dev https://*.hyroxcompanion.life https://clerk.hyroxcompanion.life";
 const connectSrc = isDev
-  ? ["'self'", clerkDomains, "https://www.strava.com", "https://*.ingest.us.sentry.io", "ws:", "wss:"]
-  : ["'self'", clerkDomains, "https://www.strava.com", "https://*.ingest.us.sentry.io"];
+  ? [
+      "'self'",
+      clerkDomains,
+      "https://www.strava.com",
+      "https://*.ingest.us.sentry.io",
+      "ws:",
+      "wss:",
+    ]
+  : [
+      "'self'",
+      clerkDomains,
+      "https://www.strava.com",
+      "https://*.ingest.us.sentry.io",
+    ];
 const scriptSrc = isDev
   ? ["'self'", "'unsafe-inline'", "'unsafe-eval'", clerkDomains]
   : ["'self'", "'unsafe-inline'", clerkDomains];
 
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc,
-      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", clerkDomains],
-      fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      imgSrc: ["'self'", "data:", "https:"],
-      connectSrc,
-      frameSrc: ["'self'", clerkDomains],
-      workerSrc: ["'self'", "blob:"],
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc,
+        styleSrc: [
+          "'self'",
+          "'unsafe-inline'",
+          "https://fonts.googleapis.com",
+          clerkDomains,
+        ],
+        fontSrc: ["'self'", "https://fonts.gstatic.com"],
+        imgSrc: ["'self'", "data:", "https:"],
+        connectSrc,
+        frameSrc: ["'self'", clerkDomains],
+        workerSrc: ["'self'", "blob:"],
+      },
     },
-  },
-  crossOriginEmbedderPolicy: false,
-  referrerPolicy: { policy: "strict-origin-when-cross-origin" },
-}));
+    crossOriginEmbedderPolicy: false,
+    referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+  }),
+);
 
 app.use((req, res, next) => {
-  res.setHeader("Permissions-Policy", "camera=(), microphone=(self), geolocation=()");
+  res.setHeader(
+    "Permissions-Policy",
+    "camera=(), microphone=(self), geolocation=()",
+  );
   next();
 });
 
@@ -106,10 +128,13 @@ app.use((req, res, next) => {
 await runStartupMaintenance(storage);
 await registerRoutes(httpServer, app);
 
-  app.use((err: AppError, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    // 🛡️ Sentinel: Prevent leaking sensitive error details to the client
-    const message = status === 500 ? "Internal Server Error" : (err.message || "An error occurred");
+app.use((err: AppError, _req: Request, res: Response, _next: NextFunction) => {
+  const status = err.status || err.statusCode || 500;
+  // 🛡️ Sentinel: Prevent leaking sensitive error details to the client
+  const message =
+    status === 500
+      ? "Internal Server Error"
+      : err.message || "An error occurred";
 
   Sentry.captureException(err);
   res.status(status).json({ message });
