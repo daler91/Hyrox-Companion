@@ -13,10 +13,7 @@ export function clearRateLimitBuckets() {
 
 export function rateLimiter(category: string, maxRequests: number, windowMs: number = DEFAULT_WINDOW_MS) {
   return (req: Request & { auth?: { userId?: string } }, res: Response, next: NextFunction) => {
-    const identifier = req.auth?.userId || req.ip;
-    if (!identifier) {
-      return next();
-    }
+    const identifier = req.auth?.userId || req.ip || "unknown-ip";
     const key = `${category}:${identifier}`;
     const now = Date.now();
     const bucket = rateLimitBuckets.get(key);

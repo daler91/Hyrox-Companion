@@ -4,9 +4,8 @@ import { storage } from "../storage";
 import { chatWithCoach, streamChatWithCoach, generateWorkoutSuggestions, parseExercisesFromText, type ChatMessage, type UpcomingWorkout } from "../gemini";
 import { rateLimiter } from "../routeUtils";
 import { buildTrainingContext } from "../services/aiService";
-import { toDateStr, getUserId } from "../types";
+import { toDateStr, getUserId, type AuthenticatedRequest } from "../types";
 import { chatRequestSchema, parseExercisesRequestSchema, insertChatMessageSchema } from "@shared/schema";
-import { AuthenticatedRequest } from "../types";
 
 
 const router = Router();
