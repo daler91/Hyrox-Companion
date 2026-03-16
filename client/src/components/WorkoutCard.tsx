@@ -8,6 +8,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 export type ExerciseType = 
   | "running" 
@@ -88,11 +94,18 @@ export function WorkoutCard({
             <h3 className="text-lg font-semibold truncate">{title}</h3>
           </div>
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button size="icon" variant="ghost" data-testid={`button-workout-menu-${id}`} aria-label="More workout options">
-                <MoreVertical className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <Button size="icon" variant="ghost" data-testid={`button-workout-menu-${id}`} aria-label="More workout options">
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent>More options</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => onEdit?.(id)} data-testid={`button-edit-${id}`}>
                 Edit
