@@ -64,10 +64,26 @@ export class AnalyticsStorage {
       );
 
     const completedCount = logs.length;
-    const plannedCount = days.filter(d => d.status === 'planned').length;
-    const missedCount = days.filter(d => d.status === 'missed').length;
-    const skippedCount = days.filter(d => d.status === 'skipped').length;
-    const totalDuration = logs.reduce((sum, l) => sum + (l.duration || 0), 0);
+
+    // ⚡ Bolt Performance Optimization:
+    // Instead of multiple O(N) array filters and reduces to compute stats, we iterate
+    // over the arrays exactly once. This reduces overhead, especially
+    // for users with long workout histories.
+    let plannedCount = 0;
+    let missedCount = 0;
+    let skippedCount = 0;
+
+    for (let i = 0; i < days.length; i++) {
+      const status = days[i].status;
+      if (status === 'planned') plannedCount++;
+      else if (status === 'missed') missedCount++;
+      else if (status === 'skipped') skippedCount++;
+    }
+
+    let totalDuration = 0;
+    for (let i = 0; i < logs.length; i++) {
+      totalDuration += logs[i].duration || 0;
+    }
 
     return { completedCount, plannedCount, missedCount, skippedCount, totalDuration };
   }
