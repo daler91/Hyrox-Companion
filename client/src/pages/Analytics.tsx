@@ -198,83 +198,91 @@ export default function Analytics() {
           <CardDescription>Your best performances across all exercises</CardDescription>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : filteredPRs.length === 0 ? (
-            <div className="text-center py-4 space-y-3" data-testid="text-no-prs">
-              <Dumbbell className="h-10 w-10 mx-auto text-muted-foreground/40" />
-              <p className="text-muted-foreground text-sm">
-                No personal records yet. Log workouts with structured exercise data to see your PRs here.
-              </p>
-              <Link href="/log">
-                <Button variant="outline" data-testid="button-log-workout-from-analytics">
-                  <Dumbbell className="h-4 w-4 mr-2" />
-                  Log a Workout
-                </Button>
-              </Link>
-            </div>
-          ) : (
-            <div className="divide-y border rounded-lg overflow-hidden">
-              {filteredPRs.map((pr) => (
-                <div key={`${pr.exerciseName}-${pr.customLabel || ""}`} className="p-4 bg-card hover:bg-muted/30 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4" data-testid={`card-pr-${pr.exerciseName}`}>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-semibold">{getExerciseLabel(pr.exerciseName, pr.customLabel)}</h3>
-                      <Badge variant="secondary" className={`text-[10px] ${categoryChipColors[pr.category] || ""}`}>
-                        {categoryLabels[pr.category] || pr.category}
-                      </Badge>
+          {(() => {
+            if (isLoading) {
+              return (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              );
+            }
+            if (filteredPRs.length === 0) {
+              return (
+                <div className="text-center py-4 space-y-3" data-testid="text-no-prs">
+                  <Dumbbell className="h-10 w-10 mx-auto text-muted-foreground/40" />
+                  <p className="text-muted-foreground text-sm">
+                    No personal records yet. Log workouts with structured exercise data to see your PRs here.
+                  </p>
+                  <Link href="/log">
+                    <Button variant="outline" data-testid="button-log-workout-from-analytics">
+                      <Dumbbell className="h-4 w-4 mr-2" />
+                      Log a Workout
+                    </Button>
+                  </Link>
+                </div>
+              );
+            }
+            return (
+              <div className="divide-y border rounded-lg overflow-hidden">
+                {filteredPRs.map((pr) => (
+                  <div key={`${pr.exerciseName}-${pr.customLabel || ""}`} className="p-4 bg-card hover:bg-muted/30 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4" data-testid={`card-pr-${pr.exerciseName}`}>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="font-semibold">{getExerciseLabel(pr.exerciseName, pr.customLabel)}</h3>
+                        <Badge variant="secondary" className={`text-[10px] ${categoryChipColors[pr.category] || ""}`}>
+                          {categoryLabels[pr.category] || pr.category}
+                        </Badge>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-6 text-sm">
+                      {pr.maxWeight != null && (
+                        <div className="flex items-center gap-2">
+                          <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                            <Weight className="h-4 w-4 text-primary" />
+                          </div>
+                          <div>
+                            <p className="font-bold tabular-nums" data-testid={`text-pr-weight-${pr.exerciseName}`}>
+                              {pr.maxWeight}<span className="text-muted-foreground text-xs font-normal ml-0.5">{weightLabel}</span>
+                            </p>
+                            {pr.maxWeightDate && <p className="text-[10px] text-muted-foreground">{formatDate(pr.maxWeightDate)}</p>}
+                          </div>
+                        </div>
+                      )}
+
+                      {pr.maxDistance != null && (
+                        <div className="flex items-center gap-2">
+                          <div className="h-8 w-8 rounded-full bg-blue-500/10 flex items-center justify-center">
+                            <Ruler className="h-4 w-4 text-blue-500" />
+                          </div>
+                          <div>
+                            <p className="font-bold tabular-nums" data-testid={`text-pr-distance-${pr.exerciseName}`}>
+                              {pr.maxDistance}<span className="text-muted-foreground text-xs font-normal ml-0.5">{dLabel}</span>
+                            </p>
+                            {pr.maxDistanceDate && <p className="text-[10px] text-muted-foreground">{formatDate(pr.maxDistanceDate)}</p>}
+                          </div>
+                        </div>
+                      )}
+
+                      {pr.bestTime != null && (
+                        <div className="flex items-center gap-2">
+                          <div className="h-8 w-8 rounded-full bg-green-500/10 flex items-center justify-center">
+                            <Timer className="h-4 w-4 text-green-500" />
+                          </div>
+                          <div>
+                            <p className="font-bold tabular-nums" data-testid={`text-pr-time-${pr.exerciseName}`}>
+                              {pr.bestTime}<span className="text-muted-foreground text-xs font-normal ml-0.5">min</span>
+                            </p>
+                            {pr.bestTimeDate && <p className="text-[10px] text-muted-foreground">{formatDate(pr.bestTimeDate)}</p>}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
-
-                  <div className="flex flex-wrap items-center gap-6 text-sm">
-                    {pr.maxWeight != null && (
-                      <div className="flex items-center gap-2">
-                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                          <Weight className="h-4 w-4 text-primary" />
-                        </div>
-                        <div>
-                          <p className="font-bold tabular-nums" data-testid={`text-pr-weight-${pr.exerciseName}`}>
-                            {pr.maxWeight}<span className="text-muted-foreground text-xs font-normal ml-0.5">{weightLabel}</span>
-                          </p>
-                          {pr.maxWeightDate && <p className="text-[10px] text-muted-foreground">{formatDate(pr.maxWeightDate)}</p>}
-                        </div>
-                      </div>
-                    )}
-
-                    {pr.maxDistance != null && (
-                      <div className="flex items-center gap-2">
-                        <div className="h-8 w-8 rounded-full bg-blue-500/10 flex items-center justify-center">
-                          <Ruler className="h-4 w-4 text-blue-500" />
-                        </div>
-                        <div>
-                          <p className="font-bold tabular-nums" data-testid={`text-pr-distance-${pr.exerciseName}`}>
-                            {pr.maxDistance}<span className="text-muted-foreground text-xs font-normal ml-0.5">{dLabel}</span>
-                          </p>
-                          {pr.maxDistanceDate && <p className="text-[10px] text-muted-foreground">{formatDate(pr.maxDistanceDate)}</p>}
-                        </div>
-                      </div>
-                    )}
-
-                    {pr.bestTime != null && (
-                      <div className="flex items-center gap-2">
-                        <div className="h-8 w-8 rounded-full bg-green-500/10 flex items-center justify-center">
-                          <Timer className="h-4 w-4 text-green-500" />
-                        </div>
-                        <div>
-                          <p className="font-bold tabular-nums" data-testid={`text-pr-time-${pr.exerciseName}`}>
-                            {pr.bestTime}<span className="text-muted-foreground text-xs font-normal ml-0.5">min</span>
-                          </p>
-                          {pr.bestTimeDate && <p className="text-[10px] text-muted-foreground">{formatDate(pr.bestTimeDate)}</p>}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            );
+          })()}
         </CardContent>
       </Card>
       </TabsContent>
@@ -308,64 +316,73 @@ export default function Analytics() {
               </Select>
             </div>
 
-            {!selectedExercise ? (
-              <div className="flex items-center justify-center py-12 text-center text-muted-foreground bg-muted/20 rounded-lg border border-dashed">
-                <div>
-                  <TrendingUp className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
-                  <p>Select an exercise from the dropdown above to view its progression.</p>
-                </div>
-              </div>
-            ) : analyticsLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : !analyticsData || analyticsData.data.length === 0 ? (
-              <p className="text-muted-foreground text-sm py-4">No data available for this exercise yet.</p>
-            ) : (
-              <div className="grid gap-6 sm:grid-cols-2">
-                {analyticsData.hasVolume && (
-                  <MiniBarChart data={analyticsData.data} valueKey="totalVolume" color="bg-primary/60" label={`Volume (reps x ${weightLabel})`} />
-                )}
-                {analyticsData.hasMaxWeight && (
-                  <MiniBarChart data={analyticsData.data} valueKey="maxWeight" color="bg-purple-500/60" label={`Max Weight (${weightLabel})`} />
-                )}
-                {analyticsData.hasTotalReps && (
-                  <MiniBarChart data={analyticsData.data} valueKey="totalReps" color="bg-blue-500/60" label="Total Reps" />
-                )}
-                {analyticsData.hasTotalDistance && (
-                  <MiniBarChart data={analyticsData.data} valueKey="totalDistance" color="bg-green-500/60" label={`Total Distance (${dLabel})`} />
-                )}
-                <div className="sm:col-span-2">
-                  <p className="text-xs text-muted-foreground font-medium mb-2">Summary</p>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="bg-muted/50 p-4 rounded-lg">
-                      <p className="text-2xl font-bold" data-testid="text-total-sessions">{analyticsData.data.length}</p>
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Sessions</p>
+            {(() => {
+              if (!selectedExercise) {
+                return (
+                  <div className="flex items-center justify-center py-12 text-center text-muted-foreground bg-muted/20 rounded-lg border border-dashed">
+                    <div>
+                      <TrendingUp className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
+                      <p>Select an exercise from the dropdown above to view its progression.</p>
                     </div>
-                    <div className="bg-muted/50 p-4 rounded-lg">
-                      <p className="text-2xl font-bold" data-testid="text-total-sets">
-                        {analyticsData.totalSets}
-                      </p>
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Sets</p>
-                    </div>
-                    <div className="bg-muted/50 p-4 rounded-lg">
-                      <p className="text-2xl font-bold" data-testid="text-total-reps">
-                        {analyticsData.totalReps}
-                      </p>
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Reps</p>
-                    </div>
-                    {analyticsData.hasVolume && (
+                  </div>
+                );
+              }
+              if (analyticsLoading) {
+                return (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                );
+              }
+              if (!analyticsData || analyticsData.data.length === 0) {
+                return <p className="text-muted-foreground text-sm py-4">No data available for this exercise yet.</p>;
+              }
+              return (
+                <div className="grid gap-6 sm:grid-cols-2">
+                  {analyticsData.hasVolume && (
+                    <MiniBarChart data={analyticsData.data} valueKey="totalVolume" color="bg-primary/60" label={`Volume (reps x ${weightLabel})`} />
+                  )}
+                  {analyticsData.hasMaxWeight && (
+                    <MiniBarChart data={analyticsData.data} valueKey="maxWeight" color="bg-purple-500/60" label={`Max Weight (${weightLabel})`} />
+                  )}
+                  {analyticsData.hasTotalReps && (
+                    <MiniBarChart data={analyticsData.data} valueKey="totalReps" color="bg-blue-500/60" label="Total Reps" />
+                  )}
+                  {analyticsData.hasTotalDistance && (
+                    <MiniBarChart data={analyticsData.data} valueKey="totalDistance" color="bg-green-500/60" label={`Total Distance (${dLabel})`} />
+                  )}
+                  <div className="sm:col-span-2">
+                    <p className="text-xs text-muted-foreground font-medium mb-2">Summary</p>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       <div className="bg-muted/50 p-4 rounded-lg">
-                        <p className="text-2xl font-bold" data-testid="text-total-volume">
-                          {Math.round(analyticsData.totalVolume).toLocaleString()}
-                        </p>
-                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Volume ({weightLabel})</p>
+                        <p className="text-2xl font-bold" data-testid="text-total-sessions">{analyticsData.data.length}</p>
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Sessions</p>
                       </div>
-                    )}
+                      <div className="bg-muted/50 p-4 rounded-lg">
+                        <p className="text-2xl font-bold" data-testid="text-total-sets">
+                          {analyticsData.totalSets}
+                        </p>
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Sets</p>
+                      </div>
+                      <div className="bg-muted/50 p-4 rounded-lg">
+                        <p className="text-2xl font-bold" data-testid="text-total-reps">
+                          {analyticsData.totalReps}
+                        </p>
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Reps</p>
+                      </div>
+                      {analyticsData.hasVolume && (
+                        <div className="bg-muted/50 p-4 rounded-lg">
+                          <p className="text-2xl font-bold" data-testid="text-total-volume">
+                            {Math.round(analyticsData.totalVolume).toLocaleString()}
+                          </p>
+                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Volume ({weightLabel})</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </CardContent>
         </Card>
       </TabsContent>
