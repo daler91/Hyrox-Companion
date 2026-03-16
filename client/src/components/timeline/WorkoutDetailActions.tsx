@@ -31,7 +31,7 @@ interface StatusChangeSectionProps {
   onChangeStatus: (entry: TimelineEntry, status: WorkoutStatus) => void;
 }
 
-export function StatusChangeSection({ entry, onMarkComplete, onChangeStatus }: StatusChangeSectionProps) {
+export function StatusChangeSection({ entry, onMarkComplete, onChangeStatus }: Readonly<StatusChangeSectionProps>) {
   return (
     <>
       <Separator />
@@ -118,7 +118,7 @@ export function WorkoutDetailFooter({
   onDelete,
   onClose,
   onCombine,
-}: WorkoutDetailFooterProps) {
+}: Readonly<WorkoutDetailFooterProps>) {
   return (
     <DialogFooter className="flex-col sm:flex-row gap-2">
       {isEditing ? (
@@ -200,7 +200,7 @@ interface DeleteConfirmDialogProps {
   isDeleting?: boolean;
 }
 
-export function DeleteConfirmDialog({ open, onOpenChange, onConfirm, isDeleting }: DeleteConfirmDialogProps) {
+export function DeleteConfirmDialog({ open, onOpenChange, onConfirm, isDeleting }: Readonly<DeleteConfirmDialogProps>) {
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>

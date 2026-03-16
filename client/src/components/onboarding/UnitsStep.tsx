@@ -8,7 +8,7 @@ interface UnitsStepProps {
   onDistanceUnitChange: (unit: "km" | "miles") => void;
 }
 
-export function UnitsStep({ weightUnit, distanceUnit, onWeightUnitChange, onDistanceUnitChange }: UnitsStepProps) {
+export function UnitsStep({ weightUnit, distanceUnit, onWeightUnitChange, onDistanceUnitChange }: Readonly<UnitsStepProps>) {
   return (
     <div className="space-y-6">
       <div className="space-y-3">

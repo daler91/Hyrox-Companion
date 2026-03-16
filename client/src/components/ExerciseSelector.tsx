@@ -75,7 +75,7 @@ const exercisesByCategory = categoryOrder.map(cat => ({
     .filter(([, def]) => def.category === cat),
 }));
 
-export function ExerciseSelector({ selectedExercises, onToggle, onAdd, allowDuplicates = false }: ExerciseSelectorProps) {
+export function ExerciseSelector({ selectedExercises, onToggle, onAdd, allowDuplicates = false }: Readonly<ExerciseSelectorProps>) {
   const selectedCounts = React.useMemo(() => {
     const counts: Partial<Record<ExerciseName, number>> = {};
     for (const name of selectedExercises) {

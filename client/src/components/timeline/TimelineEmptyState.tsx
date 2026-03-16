@@ -35,7 +35,7 @@ export default function TimelineEmptyState({
   handleFileUpload,
   setSchedulingPlanId,
   setFilterStatus,
-}: TimelineEmptyStateProps) {
+}: Readonly<TimelineEmptyStateProps>) {
   return (
     <Card className="overflow-visible">
       <CardContent className="p-8 md:p-12">

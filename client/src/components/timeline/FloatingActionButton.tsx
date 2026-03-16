@@ -8,7 +8,7 @@ interface FloatingActionButtonProps {
   onCoachToggle?: () => void;
 }
 
-export default function FloatingActionButton({ coachPanelOpen, onCoachToggle }: FloatingActionButtonProps) {
+export default function FloatingActionButton({ coachPanelOpen, onCoachToggle }: Readonly<FloatingActionButtonProps>) {
   const [, setLocation] = useLocation();
   
   const rightPosition = coachPanelOpen 

@@ -31,7 +31,7 @@ export default function ImportPreviewDialog({
   onOpenChange,
   onConfirm,
   isPending,
-}: ImportPreviewDialogProps) {
+}: Readonly<ImportPreviewDialogProps>) {
   return (
     <Dialog open={!!preview} onOpenChange={(open) => !open && onOpenChange(false)}>
       <DialogContent className="max-w-2xl">

@@ -12,7 +12,7 @@ interface ChatInputProps {
   readonly placeholder?: string;
 }
 
-export function ChatInput({ onSend, isLoading, placeholder = "Ask about your training..." }: ChatInputProps) {
+export function ChatInput({ onSend, isLoading, placeholder = "Ask about your training..." }: Readonly<ChatInputProps>) {
   const [message, setMessage] = useState("");
   const { toast } = useToast();
 

@@ -66,7 +66,7 @@ export function WorkoutCard({
   onEdit,
   onDelete,
   onDuplicate 
-}: WorkoutCardProps) {
+}: Readonly<WorkoutCardProps>) {
   const formatDuration = (mins: number) => {
     const hours = Math.floor(mins / 60);
     const minutes = mins % 60;

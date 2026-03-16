@@ -26,7 +26,7 @@ const PREV: Partial<Record<Step, Step>> = { units: "welcome", goal: "units", pla
 
 const markComplete = () => localStorage.setItem("hyrox-onboarding-complete", "true");
 
-export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
+export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizardProps>) {
   const { toast } = useToast();
   const [step, setStep] = useState<Step>("welcome");
   const [weightUnit, setWeightUnit] = useState<"kg" | "lbs">("kg");

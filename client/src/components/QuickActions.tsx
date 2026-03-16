@@ -11,7 +11,7 @@ interface QuickActionsProps {
   disabled?: boolean;
 }
 
-export function QuickActions({ actions, onSelect, disabled }: QuickActionsProps) {
+export function QuickActions({ actions, onSelect, disabled }: Readonly<QuickActionsProps>) {
   return (
     <div className="flex flex-wrap gap-2" data-testid="quick-actions">
       {actions.map((action) => (

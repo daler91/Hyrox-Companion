@@ -20,7 +20,7 @@ export default function SkipConfirmDialog({
   entry,
   onOpenChange,
   onConfirm,
-}: SkipConfirmDialogProps) {
+}: Readonly<SkipConfirmDialogProps>) {
   return (
     <AlertDialog open={!!entry} onOpenChange={(open) => !open && onOpenChange(false)}>
       <AlertDialogContent>

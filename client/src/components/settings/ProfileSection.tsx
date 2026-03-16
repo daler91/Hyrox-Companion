@@ -5,7 +5,7 @@ interface ProfileSectionProps {
   userName: string;
 }
 
-export function ProfileSection({ userName }: ProfileSectionProps) {
+export function ProfileSection({ userName }: Readonly<ProfileSectionProps>) {
   return (
     <Card>
       <CardHeader>
