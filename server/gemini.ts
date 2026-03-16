@@ -1,4 +1,4 @@
-import { type ParsedExercise } from "@shared/schema";
+import { type ParsedExercise, exerciseSetSchema } from "@shared/schema";
 import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
 import {
@@ -92,13 +92,6 @@ export const workoutSuggestionSchema = z.object({
   priority: z.enum(["high", "medium", "low"]),
 });
 
-export const exerciseSetSchema = z.object({
-  setNumber: z.number().optional(),
-  reps: z.number().optional().nullable(),
-  weight: z.number().optional().nullable(),
-  distance: z.number().optional().nullable(),
-  time: z.number().optional().nullable(),
-});
 
 export const parsedExerciseSchema = z.object({
   exerciseName: z.string(),

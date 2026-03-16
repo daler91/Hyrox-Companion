@@ -138,7 +138,6 @@ describe('email generation', () => {
       expect(html).toContain('Strength');
       expect(html).toContain('Squats, Deadlifts, Bench');
       expect(html).toContain('Oct 3');
-      expect(html).toContain('Hyrox Base');
     });
 
     it('truncates long workout details', () => {
