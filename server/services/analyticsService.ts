@@ -1,6 +1,6 @@
-import type { ExerciseSet as SharedExerciseSet } from "@shared/schema";
+import type { ExerciseSet } from "@shared/schema";
 
-export type ExerciseSet = SharedExerciseSet & { date: string };
+export type ExerciseSetWithDate = ExerciseSet & { date: string };
 
 interface PRRecord {
   category: string;
@@ -10,13 +10,13 @@ interface PRRecord {
   bestTime?: { value: number; date: string; workoutLogId: string };
 }
 
-function getExerciseKey(set: ExerciseSet): string {
+function getExerciseKey(set: ExerciseSetWithDate): string {
   return set.exerciseName === "custom" && set.customLabel
     ? `custom:${set.customLabel}`
     : set.exerciseName;
 }
 
-export function calculatePersonalRecords(allSets: ExerciseSet[]): Record<string, PRRecord> {
+export function calculatePersonalRecords(allSets: ExerciseSetWithDate[]): Record<string, PRRecord> {
   const prs: Record<string, PRRecord> = {};
 
   for (const set of allSets) {
@@ -46,7 +46,7 @@ interface DayAnalytics {
   totalDistance: number;
 }
 
-export function calculateExerciseAnalytics(allSets: ExerciseSet[]): Record<string, DayAnalytics[]> {
+export function calculateExerciseAnalytics(allSets: ExerciseSetWithDate[]): Record<string, DayAnalytics[]> {
   const analytics: Record<string, Record<string, DayAnalytics>> = {};
 
   allSets.forEach((s) => {
