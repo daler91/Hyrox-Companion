@@ -2,9 +2,9 @@ import { Router } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
 import { calculatePersonalRecords, calculateExerciseAnalytics } from "../services/analyticsService";
-import { getUserId, AuthenticatedRequest } from "../types";
+import { AuthenticatedRequest } from "../types";
 import { dateStringSchema, ExerciseSet } from "@shared/schema";
-import { handleError , withAuth } from "../routeUtils";
+import { withAuth } from "../routeUtils";
 
 
 const router = Router();
@@ -47,9 +47,7 @@ router.get("/api/personal-records", isAuthenticated, withAuth(async (req, res, u
     res.json(calculatePersonalRecords(allSets));
   }, "Error fetching PRs:", "Failed to fetch personal records"));
 
-router.get("/api/exercise-analytics", isAuthenticated, async (req: AuthenticatedRequest, res) => {
-  try {
-    const userId = getUserId(req);
+router.get("/api/exercise-analytics", isAuthenticated, withAuth(async (req, res, userId) => {
     const from = validDate(req.query.from);
     const to = validDate(req.query.to);
 
@@ -58,9 +56,6 @@ router.get("/api/exercise-analytics", isAuthenticated, async (req: Authenticated
 
     const allSets = await getExerciseSetsCoalesced(userId, from, to);
     res.json(calculateExerciseAnalytics(allSets));
-  } catch (error) {
-    return handleError(res, error, "Error fetching exercise analytics:", "Failed to fetch exercise analytics", 500);
-  }
-});
+  }, "Error fetching exercise analytics:", "Failed to fetch exercise analytics"));
 
 export default router;

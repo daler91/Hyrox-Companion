@@ -108,10 +108,7 @@ router.delete("/api/chat/history", isAuthenticated, withAuth(async (req, res, us
     res.json({ success: true });
   }, "Clear chat history error:", "Failed to clear chat history"));
 
-router.post("/api/timeline/ai-suggestions", isAuthenticated, rateLimiter("suggestions", 3), async (req: AuthenticatedRequest, res) => {
-  try {
-    const userId = getUserId(req);
-
+router.post("/api/timeline/ai-suggestions", isAuthenticated, rateLimiter("suggestions", 3), withAuth(async (req, res, userId) => {
     const trainingContext = await buildTrainingContext(userId);
 
     const timeline = await storage.getTimeline(userId);
@@ -158,9 +155,6 @@ router.post("/api/timeline/ai-suggestions", isAuthenticated, rateLimiter("sugges
       .filter(s => s.date && s.focus && s.recommendation);
 
     res.json({ suggestions });
-  } catch (error) {
-    handleError(res, error, "AI suggestions error:", "Failed to generate AI suggestions", 500);
-  }
-});
+  }, "AI suggestions error:", "Failed to generate AI suggestions"));
 
 export default router;

@@ -2,8 +2,8 @@ import { Router } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
 import { updateUserPreferencesSchema } from "@shared/schema";
-import { getUserId, AuthenticatedRequest } from "../types";
-import { handleError , withAuth } from "../routeUtils";
+import { AuthenticatedRequest } from "../types";
+import { withAuth } from "../routeUtils";
 
 const router = Router();
 
@@ -20,9 +20,7 @@ router.get('/api/preferences', isAuthenticated, withAuth(async (req, res, userId
     });
   }, "Error fetching preferences:", "Failed to fetch preferences"));
 
-router.patch('/api/preferences', isAuthenticated, async (req: AuthenticatedRequest, res) => {
-  try {
-    const userId = getUserId(req);
+router.patch('/api/preferences', isAuthenticated, withAuth(async (req, res, userId) => {
     const parseResult = updateUserPreferencesSchema.safeParse(req.body);
     if (!parseResult.success) {
       return res.status(400).json({ error: "Invalid preferences data", details: parseResult.error });
@@ -38,9 +36,6 @@ router.patch('/api/preferences', isAuthenticated, async (req: AuthenticatedReque
       weeklyGoal: user.weeklyGoal,
       emailNotifications: user.emailNotifications ?? 1,
     });
-  } catch (error) {
-    handleError(res, error, "Error updating preferences:", "Failed to update preferences", 500);
-  }
-});
+  }, "Error updating preferences:", "Failed to update preferences"));
 
 export default router;

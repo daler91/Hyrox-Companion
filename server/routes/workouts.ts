@@ -14,9 +14,7 @@ router.get("/api/workouts/unstructured", isAuthenticated, withAuth(async (req, r
     res.json(workouts);
   }, "Error fetching unstructured workouts:", "Failed to fetch workouts"));
 
-router.post("/api/workouts/:id/reparse", isAuthenticated, async (req: AuthenticatedRequest, res) => {
-  try {
-    const userId = getUserId(req);
+router.post("/api/workouts/:id/reparse", isAuthenticated, withAuth(async (req, res, userId) => {
     const workoutId = req.params.id;
     const workout = await storage.getWorkoutLog(workoutId, userId);
     if (!workout) {
@@ -29,10 +27,7 @@ router.post("/api/workouts/:id/reparse", isAuthenticated, async (req: Authentica
       return res.json({ exercises: [], saved: false });
     }
     res.json({ exercises: result.exercises, saved: true, setCount: result.setCount });
-  } catch (error) {
-    handleError(res, error, "Error re-parsing workout:", "Failed to re-parse workout", 500);
-  }
-});
+  }, "Error re-parsing workout:", "Failed to re-parse workout"));
 
 async function processBatchChunk(
   chunk: any[],
@@ -205,9 +200,7 @@ router.get("/api/timeline", isAuthenticated, withAuth(async (req, res, userId) =
     res.json(entries);
   }, "Timeline error:", "Failed to get timeline"));
 
-router.get("/api/export", isAuthenticated, rateLimiter("export", 5, 60000), async (req: AuthenticatedRequest, res) => {
-  try {
-    const userId = getUserId(req);
+router.get("/api/export", isAuthenticated, rateLimiter("export", 5, 60000), withAuth(async (req, res, userId) => {
     const format = (req.query.format as string) || "csv";
 
     if (format === "json") {
@@ -221,9 +214,6 @@ router.get("/api/export", isAuthenticated, rateLimiter("export", 5, 60000), asyn
     res.setHeader("Content-Type", "text/csv");
     res.setHeader("Content-Disposition", "attachment; filename=hyrox-training-data.csv");
     res.send(csv);
-  } catch (error) {
-    handleError(res, error, "Export error:", "Failed to export data", 500);
-  }
-});
+  }, "Export error:", "Failed to export data"));
 
 export default router;
