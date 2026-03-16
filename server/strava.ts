@@ -252,8 +252,8 @@ export function registerStravaRoutes(app: Express): void {
       const existingWorkouts = await storage.getWorkoutsByStravaActivityIds(userId, activityIds);
       const existingStravaIds = new Set(existingWorkouts.map(w => w.stravaActivityId));
 
-      let imported = 0;
       let skipped = 0;
+      const workoutsToImport = [];
 
       for (const activity of activities) {
         if (existingStravaIds.has(String(activity.id))) {
@@ -261,10 +261,13 @@ export function registerStravaRoutes(app: Express): void {
           continue;
         }
 
-        const workoutData = mapStravaActivityToWorkout(activity, userId, distanceUnit);
-        await storage.createWorkoutLog(workoutData);
-        imported++;
+        workoutsToImport.push(mapStravaActivityToWorkout(activity, userId, distanceUnit));
       }
+
+      if (workoutsToImport.length > 0) {
+        await storage.createWorkoutLogs(workoutsToImport);
+      }
+      const imported = workoutsToImport.length;
 
       await storage.updateStravaLastSync(userId);
 

@@ -40,6 +40,7 @@ export interface IStorage {
   schedulePlan(planId: string, startDate: string, userId: string): Promise<boolean>;
 
   createWorkoutLog(log: InsertWorkoutLog & { userId: string }): Promise<WorkoutLog>;
+  createWorkoutLogs(logs: (InsertWorkoutLog & { userId: string })[]): Promise<WorkoutLog[]>;
   listWorkoutLogs(userId: string): Promise<WorkoutLog[]>;
   getWorkoutLog(logId: string, userId: string): Promise<WorkoutLog | undefined>;
   updateWorkoutLog(logId: string, updates: UpdateWorkoutLog, userId: string): Promise<WorkoutLog | undefined>;
