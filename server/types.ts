@@ -5,7 +5,7 @@ export interface AuthenticatedRequest extends Request {}
 
 export function getUserId(req: Request): string {
   const auth = getAuth(req);
-  if (!auth?.userId) {
+  if (!auth || !auth.userId) {
     throw new Error("User not authenticated");
   }
   return auth.userId;

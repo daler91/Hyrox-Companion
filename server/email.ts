@@ -144,8 +144,12 @@ export function buildWeeklySummaryEmail(user: User, data: WeeklySummaryData): { 
 export function buildMissedWorkoutEmail(user: User, missed: MissedWorkoutData[]): { subject: string; html: string } {
   const name = getUserName(user);
   const count = missed.length;
-  const pluralSuffix = count !== 1 ? 's' : '';
-  const wasWere = count !== 1 ? 'were' : 'was';
+  let pluralSuffix = '';
+  let wasWere = 'was';
+  if (count !== 1) {
+    pluralSuffix = 's';
+    wasWere = 'were';
+  }
   const subject = `${count} missed workout${pluralSuffix} — get back on track`;
 
   const workoutItems = missed.map(w => `
