@@ -4,22 +4,33 @@ import { type TimelineEntry, type WorkoutStatus } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { getExerciseLabel, groupExerciseSets } from "@/lib/exerciseUtils";
-import {
-  useWorkoutEditor,
-  exerciseToPayload,
-} from "@/hooks/useWorkoutEditor";
+import { useWorkoutEditor, exerciseToPayload } from "@/hooks/useWorkoutEditor";
 import { WorkoutDetailHeader } from "./WorkoutDetailHeader";
-import { WorkoutDetailView, WorkoutDetailEditForm } from "./WorkoutDetailExercises";
+import {
+  WorkoutDetailView,
+  WorkoutDetailEditForm,
+} from "./WorkoutDetailExercises";
 import { exerciseSetsToStructured } from "@/lib/exerciseUtils";
 import { RpeSelector } from "@/components/RpeSelector";
-import { StatusChangeSection, WorkoutDetailFooter, DeleteConfirmDialog } from "./WorkoutDetailActions";
+import {
+  StatusChangeSection,
+  WorkoutDetailFooter,
+  DeleteConfirmDialog,
+} from "./WorkoutDetailActions";
 
 interface WorkoutDetailDialogProps {
   entry: TimelineEntry | null;
   onClose: () => void;
   onMarkComplete: (entry: TimelineEntry) => void;
   onChangeStatus: (entry: TimelineEntry, status: WorkoutStatus) => void;
-  onSave: (updates: { focus: string; mainWorkout: string; accessory: string | null; notes: string | null; rpe?: number | null; exercises?: any[] }) => void;
+  onSave: (updates: {
+    focus: string;
+    mainWorkout: string;
+    accessory: string | null;
+    notes: string | null;
+    rpe?: number | null;
+    exercises?: any[];
+  }) => void;
   onDelete: (entry: TimelineEntry) => void;
   onCombine?: (entry: TimelineEntry) => void;
   isSaving?: boolean;
@@ -48,7 +59,8 @@ export default function WorkoutDetailDialog({
     accessory: "",
     notes: "",
   });
-  const hasStructuredData = entry?.exerciseSets && entry.exerciseSets.length > 0;
+  const hasStructuredData =
+    entry?.exerciseSets && entry.exerciseSets.length > 0;
 
   const {
     exerciseBlocks: editExercises,
@@ -94,7 +106,9 @@ export default function WorkoutDetailDialog({
   const canDelete = hasPlanDayId || hasWorkoutLogId;
 
   const canChangeStatus = hasPlanDayId;
-  const grouped = hasStructuredData ? groupExerciseSets(entry.exerciseSets!) : [];
+  const grouped = hasStructuredData
+    ? groupExerciseSets(entry.exerciseSets!)
+    : [];
 
   const handleSave = () => {
     stopAllVoiceRef.current?.();
@@ -108,24 +122,35 @@ export default function WorkoutDetailDialog({
         exercises: [],
       });
     } else {
-      const exercises = editExercises.map((name) => editExerciseData[name]).filter(Boolean);
+      const exercises = editExercises
+        .map((name) => editExerciseData[name])
+        .filter(Boolean);
       const distLabel = distanceUnit === "km" ? "m" : "ft";
-      const mainWorkout = exercises.length > 0
-        ? exercises.map((ex) => {
-            const name = getExerciseLabel(ex.exerciseName, ex.customLabel);
-            const sets = ex.sets || [];
-            if (sets.length === 0) return `${name}: completed`;
-            const firstSet = sets[0];
-            const allSame = sets.every(s => s.reps === firstSet.reps && s.weight === firstSet.weight);
-            const parts: string[] = [];
-            if (allSame && sets.length > 1 && firstSet.reps) parts.push(`${sets.length}x${firstSet.reps}`);
-            else if (firstSet.reps) parts.push(`${firstSet.reps} reps`);
-            if (allSame && firstSet.weight) parts.push(`${firstSet.weight}${weightLabel}`);
-            if (firstSet.distance) parts.push(`${firstSet.distance}${distLabel}`);
-            if (firstSet.time) parts.push(`${firstSet.time}min`);
-            return `${name}: ${parts.join(", ") || "completed"}`;
-          }).join("; ")
-        : editForm.mainWorkout;
+      const mainWorkout =
+        exercises.length > 0
+          ? exercises
+              .map((ex) => {
+                const name = getExerciseLabel(ex.exerciseName, ex.customLabel);
+                const sets = ex.sets || [];
+                if (sets.length === 0) return `${name}: completed`;
+                const firstSet = sets[0];
+                const allSame = sets.every(
+                  (s) =>
+                    s.reps === firstSet.reps && s.weight === firstSet.weight,
+                );
+                const parts: string[] = [];
+                if (allSame && sets.length > 1 && firstSet.reps)
+                  parts.push(`${sets.length}x${firstSet.reps}`);
+                else if (firstSet.reps) parts.push(`${firstSet.reps} reps`);
+                if (allSame && firstSet.weight)
+                  parts.push(`${firstSet.weight}${weightLabel}`);
+                if (firstSet.distance)
+                  parts.push(`${firstSet.distance}${distLabel}`);
+                if (firstSet.time) parts.push(`${firstSet.time}min`);
+                return `${name}: ${parts.join(", ") || "completed"}`;
+              })
+              .join("; ")
+          : editForm.mainWorkout;
 
       onSave({
         focus: editForm.focus,
@@ -133,7 +158,8 @@ export default function WorkoutDetailDialog({
         accessory: editForm.accessory || null,
         notes: editForm.notes || null,
         rpe: editRpe,
-        exercises: exercises.length > 0 ? exercises.map(exerciseToPayload) : undefined,
+        exercises:
+          exercises.length > 0 ? exercises.map(exerciseToPayload) : undefined,
       });
     }
   };
@@ -147,7 +173,11 @@ export default function WorkoutDetailDialog({
 
   const handleParseText = () => {
     if (!editForm.mainWorkout.trim()) {
-      toast({ title: "No text", description: "Please describe your workout first.", variant: "destructive" });
+      toast({
+        title: "No text",
+        description: "Please describe your workout first.",
+        variant: "destructive",
+      });
       return;
     }
     parseMutation.mutate(editForm.mainWorkout);
@@ -155,71 +185,82 @@ export default function WorkoutDetailDialog({
 
   return (
     <Dialog open={!!entry} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
-        <WorkoutDetailHeader
-          status={entry.status}
-          source={entry.source}
-          dayName={entry.dayName}
-          focus={entry.focus}
-          isEditing={isEditing}
-        />
-
-        {isEditing ? (
-          <>
-            <WorkoutDetailEditForm
-              editForm={editForm}
-              setEditForm={setEditForm}
-              useTextMode={useTextMode}
-              setUseTextMode={setUseTextMode}
-              editExercises={editExercises}
-              editExerciseData={editExerciseData}
-              dialogSensors={dialogSensors}
-              handleEditDragEnd={handleEditDragEnd}
-              handleAddExercise={handleAddExercise}
-              handleRemoveBlock={handleRemoveBlock}
-              updateBlock={updateBlock}
-              getSelectedExerciseNames={getSelectedExerciseNames}
-              parseMutation={parseMutation}
-              weightUnit={weightUnit}
-              distanceUnit={distanceUnit}
-              onParseText={handleParseText}
-              stopAllVoiceRef={stopAllVoiceRef}
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+          {/* Left Column: Metadata & Actions */}
+          <div className="md:col-span-5 lg:col-span-4 space-y-6 md:sticky md:top-6">
+            <WorkoutDetailHeader
+              status={entry.status}
+              source={entry.source}
+              dayName={entry.dayName}
+              focus={entry.focus}
+              isEditing={isEditing}
             />
-            {entry.source !== "strava" && (
-              <RpeSelector value={editRpe} onChange={setEditRpe} compact />
+            {canChangeStatus && !isEditing && (
+              <StatusChangeSection
+                entry={entry}
+                onMarkComplete={onMarkComplete}
+                onChangeStatus={onChangeStatus}
+              />
             )}
-          </>
-        ) : (
-          <WorkoutDetailView
-            entry={entry}
-            grouped={grouped}
-            hasStructuredData={!!hasStructuredData}
-            weightLabel={weightLabel}
-            distanceUnit={distanceUnit}
-          />
-        )}
+            <div className="pt-2 pb-6 md:pb-0">
+              <WorkoutDetailFooter
+                isEditing={isEditing}
+                canEdit={canEdit}
+                canDelete={canDelete}
+                isSaving={isSaving}
+                isDeleting={isDeleting}
+                onEdit={() => setIsEditing(true)}
+                onCancelEdit={() => {
+                  stopAllVoiceRef.current?.();
+                  setIsEditing(false);
+                }}
+                onSave={handleSave}
+                onDelete={() => setConfirmingDelete(true)}
+                onClose={handleClose}
+                onCombine={onCombine ? () => onCombine(entry) : undefined}
+              />
+            </div>
+          </div>
 
-        {canChangeStatus && !isEditing && (
-          <StatusChangeSection
-            entry={entry}
-            onMarkComplete={onMarkComplete}
-            onChangeStatus={onChangeStatus}
-          />
-        )}
-
-        <WorkoutDetailFooter
-          isEditing={isEditing}
-          canEdit={canEdit}
-          canDelete={canDelete}
-          isSaving={isSaving}
-          isDeleting={isDeleting}
-          onEdit={() => setIsEditing(true)}
-          onCancelEdit={() => { stopAllVoiceRef.current?.(); setIsEditing(false); }}
-          onSave={handleSave}
-          onDelete={() => setConfirmingDelete(true)}
-          onClose={handleClose}
-          onCombine={onCombine ? () => onCombine(entry) : undefined}
-        />
+          {/* Right Column: Workout Content */}
+          <div className="md:col-span-7 lg:col-span-8 space-y-6 bg-card border rounded-lg p-4 shadow-sm">
+            {isEditing ? (
+              <>
+                <WorkoutDetailEditForm
+                  editForm={editForm}
+                  setEditForm={setEditForm}
+                  useTextMode={useTextMode}
+                  setUseTextMode={setUseTextMode}
+                  editExercises={editExercises}
+                  editExerciseData={editExerciseData}
+                  dialogSensors={dialogSensors}
+                  handleEditDragEnd={handleEditDragEnd}
+                  handleAddExercise={handleAddExercise}
+                  handleRemoveBlock={handleRemoveBlock}
+                  updateBlock={updateBlock}
+                  getSelectedExerciseNames={getSelectedExerciseNames}
+                  parseMutation={parseMutation}
+                  weightUnit={weightUnit}
+                  distanceUnit={distanceUnit}
+                  onParseText={handleParseText}
+                  stopAllVoiceRef={stopAllVoiceRef}
+                />
+                {entry.source !== "strava" && (
+                  <RpeSelector value={editRpe} onChange={setEditRpe} compact />
+                )}
+              </>
+            ) : (
+              <WorkoutDetailView
+                entry={entry}
+                grouped={grouped}
+                hasStructuredData={!!hasStructuredData}
+                weightLabel={weightLabel}
+                distanceUnit={distanceUnit}
+              />
+            )}
+          </div>
+        </div>
       </DialogContent>
 
       <DeleteConfirmDialog
