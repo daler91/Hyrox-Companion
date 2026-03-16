@@ -71,6 +71,16 @@ describe("convertDistance", () => {
 });
 
 describe("metersToUserDistance", () => {
+  it("handles very large meters", () => {
+    expect(metersToUserDistance(1000000000, "km")).toBeCloseTo(1000000, 0);
+    expect(metersToUserDistance(1000000000, "miles")).toBeCloseTo(621371, 0);
+  });
+
+  it("handles very small fractional meters", () => {
+    expect(metersToUserDistance(0.001, "km")).toBeCloseTo(0.000001, 6);
+    expect(metersToUserDistance(0.001, "miles")).toBeCloseTo(0.000000621371, 6);
+  });
+
   it("converts meters to km", () => {
     expect(metersToUserDistance(5000, "km")).toBeCloseTo(5, 5);
   });

@@ -9,24 +9,35 @@ import { getUserId, AuthenticatedRequest } from "../types";
 
 const router = Router();
 
-router.get("/api/workouts/unstructured", isAuthenticated, asyncRoute(async (req: AuthenticatedRequest, res) => {
-  const userId = getUserId(req);
-  const workouts = await storage.getWorkoutsWithoutExerciseSets(userId);
-  res.json(workouts);
-}, "Error fetching unstructured workouts:", "Failed to fetch workouts"));
-
-router.post("/api/workouts/:id/reparse", isAuthenticated, asyncRoute(async (req: AuthenticatedRequest, res) => {
-  const userId = getUserId(req);
-  const workoutId = req.params.id;
-  const workout = await storage.getWorkoutLog(workoutId, userId);
-  if (!workout) {
-    return res.status(404).json({ error: "Workout not found" });
+router.get("/api/workouts/unstructured", isAuthenticated, async (req: AuthenticatedRequest, res) => {
+  try {
+    const userId = getUserId(req);
+    const workouts = await storage.getWorkoutsWithoutExerciseSets(userId);
+    res.json(workouts);
+  } catch (error) {
+    console.error("Error fetching unstructured workouts:", error);
+    res.status(500).json({ error: "Failed to fetch workouts" });
   }
-  const user = await storage.getUser(userId);
-  const weightUnit = user?.weightUnit || "kg";
-  const result = await reparseWorkout(workout, weightUnit);
-  if (!result) {
-    return res.json({ exercises: [], saved: false });
+});
+
+router.post("/api/workouts/:id/reparse", isAuthenticated, async (req: AuthenticatedRequest, res) => {
+  try {
+    const userId = getUserId(req);
+    const workoutId = req.params.id;
+    const workout = await storage.getWorkoutLog(workoutId, userId);
+    if (!workout) {
+      return res.status(404).json({ error: "Workout not found" });
+    }
+    const user = await storage.getUser(userId);
+    const weightUnit = user?.weightUnit || "kg";
+    const result = await reparseWorkout(workout, weightUnit);
+    if (!result) {
+      return res.json({ exercises: [], saved: false });
+    }
+    res.json({ exercises: result.exercises, saved: true, setCount: result.setCount });
+  } catch (error) {
+    console.error("Error re-parsing workout:", error);
+    res.status(500).json({ error: "Failed to re-parse workout" });
   }
   res.json({ exercises: result.exercises, saved: true, setCount: result.setCount });
 }, "Error re-parsing workout:", "Failed to re-parse workout"));
@@ -71,32 +82,55 @@ async function processBatchChunk(
   return { parsed, failed };
 }
 
-router.post("/api/workouts/batch-reparse", isAuthenticated, asyncRoute(async (req: AuthenticatedRequest, res) => {
-  const userId = getUserId(req);
-  const workouts = await storage.getWorkoutsWithoutExerciseSets(userId);
-  const user = await storage.getUser(userId);
-  const weightUnit = user?.weightUnit || "kg";
-
-  let totalParsed = 0;
-  let totalFailed = 0;
-
-  // Process workouts concurrently in chunks to improve performance
-  // while preventing overload of the Gemini AI service and database
-  const CONCURRENCY_LIMIT = 5;
-  for (let i = 0; i < workouts.length; i += CONCURRENCY_LIMIT) {
-    const chunk = workouts.slice(i, i + CONCURRENCY_LIMIT);
-    const { parsed, failed } = await processBatchChunk(chunk, weightUnit);
-    totalParsed += parsed;
-    totalFailed += failed;
+function validateExercisesPayload(exercises: any) {
+  if (!exercises) return { success: true, data: exercises };
+  const parseResult = exercisesPayloadSchema.safeParse(exercises);
+  if (!parseResult.success) {
+    return { success: false, error: parseResult.error };
   }
-  res.json({ total: workouts.length, parsed: totalParsed, failed: totalFailed });
-}, "Batch reparse error:", "Failed to batch re-parse workouts"));
+  return { success: true, data: parseResult.data };
+}
 
-router.get("/api/custom-exercises", isAuthenticated, asyncRoute(async (req: AuthenticatedRequest, res) => {
-  const userId = getUserId(req);
-  const exercises = await storage.getCustomExercises(userId);
-  res.json(exercises);
-}, "Error fetching custom exercises:", "Failed to fetch custom exercises"));
+router.post("/api/workouts/batch-reparse", isAuthenticated, async (req: AuthenticatedRequest, res) => {
+  try {
+    const userId = getUserId(req);
+    const workouts = await storage.getWorkoutsWithoutExerciseSets(userId);
+    const user = await storage.getUser(userId);
+    const weightUnit = user?.weightUnit || "kg";
+
+    let totalParsed = 0;
+    let totalFailed = 0;
+
+    // Process workouts concurrently in chunks to improve performance
+    // while preventing overload of the Gemini AI service and database
+    const CONCURRENCY_LIMIT = 5;
+    for (let i = 0; i < workouts.length; i += CONCURRENCY_LIMIT) {
+      const chunk = workouts.slice(i, i + CONCURRENCY_LIMIT);
+      const { parsed, failed } = await processBatchChunk(chunk, weightUnit);
+      totalParsed += parsed;
+      totalFailed += failed;
+    }
+    res.json({ total: workouts.length, parsed: totalParsed, failed: totalFailed });
+  } catch (error) {
+    console.error("Batch reparse error:", error);
+    res.status(500).json({ error: "Failed to batch re-parse workouts" });
+  }
+});
+
+router.get("/api/custom-exercises", isAuthenticated, async (req: AuthenticatedRequest, res) => {
+  try {
+    const userId = getUserId(req);
+    const exercises = await storage.getCustomExercises(userId);
+    res.json(exercises);
+  } catch (error) {
+    console.error("Error fetching custom exercises:", error);
+    res.status(500).json({ error: "Failed to fetch custom exercises" });
+  }
+});
+
+router.post("/api/custom-exercises", isAuthenticated, rateLimiter("customExercise", 20), async (req: AuthenticatedRequest, res) => {
+  try {
+    const userId = getUserId(req);
 
 router.post("/api/custom-exercises", isAuthenticated, rateLimiter("customExercise", 20), asyncRoute(async (req: AuthenticatedRequest, res) => {
   const userId = getUserId(req);
@@ -108,52 +142,75 @@ router.post("/api/custom-exercises", isAuthenticated, rateLimiter("customExercis
   if (!parseResult.success) {
     return res.status(400).json({ error: parseResult.error.errors[0].message });
   }
+});
 
-  const { name, category } = parseResult.data;
-
-  const exercise = await storage.upsertCustomExercise({
-    userId,
-    name: name.trim(),
-    category: category || "conditioning",
-  });
-  res.json(exercise);
-}, "Error saving custom exercise:", "Failed to save custom exercise"));
-
-router.get("/api/workouts", isAuthenticated, asyncRoute(async (req: AuthenticatedRequest, res) => {
-  const userId = getUserId(req);
-  const logs = await storage.listWorkoutLogs(userId);
-  res.json(logs);
-}, "List workouts error:", "Failed to list workouts"));
-
-router.get("/api/workouts/:id", isAuthenticated, asyncRoute(async (req: AuthenticatedRequest, res) => {
-  const userId = getUserId(req);
-  const log = await storage.getWorkoutLog(req.params.id, userId);
-  if (!log) {
-    return res.status(404).json({ error: "Workout not found" });
+router.get("/api/workouts", isAuthenticated, async (req: AuthenticatedRequest, res) => {
+  try {
+    const userId = getUserId(req);
+    const logs = await storage.listWorkoutLogs(userId);
+    res.json(logs);
+  } catch (error) {
+    console.error("List workouts error:", error);
+    res.status(500).json({ error: "Failed to list workouts" });
   }
-  res.json(log);
-}, "Get workout error:", "Failed to get workout"));
+});
 
-router.post("/api/workouts", isAuthenticated, rateLimiter("workout", 40), asyncRoute(async (req: AuthenticatedRequest, res) => {
-  const { exercises, ...workoutData } = req.body;
-  const parseResult = insertWorkoutLogSchema.safeParse(workoutData);
-  if (!parseResult.success) {
-    return res.status(400).json({ error: "Invalid workout data", details: parseResult.error });
-  }
-
-  let validatedExercises = exercises;
-  if (exercises) {
-    const exercisesParseResult = exercisesPayloadSchema.safeParse(exercises);
-    if (!exercisesParseResult.success) {
-      return res.status(400).json({ error: "Invalid exercises data", details: exercisesParseResult.error });
+router.get("/api/workouts/:id", isAuthenticated, async (req: AuthenticatedRequest, res) => {
+  try {
+    const userId = getUserId(req);
+    const log = await storage.getWorkoutLog(req.params.id, userId);
+    if (!log) {
+      return res.status(404).json({ error: "Workout not found" });
     }
-    validatedExercises = exercisesParseResult.data;
+    res.json(log);
+  } catch (error) {
+    console.error("Get workout error:", error);
+    res.status(500).json({ error: "Failed to get workout" });
   }
+});
 
-  const userId = getUserId(req);
-  const result = await createWorkout(parseResult.data, validatedExercises, userId);
-  res.json(result);
-}, "Create workout error:", "Failed to create workout"));
+router.post("/api/workouts", isAuthenticated, rateLimiter("workout", 40), async (req: AuthenticatedRequest, res) => {
+  try {
+    const { exercises, ...workoutData } = req.body;
+    const parseResult = insertWorkoutLogSchema.safeParse(workoutData);
+    if (!parseResult.success) {
+      return res.status(400).json({ error: "Invalid workout data", details: parseResult.error });
+    }
+
+    const exerciseValidation = validateExercisesPayload(exercises);
+    if (!exerciseValidation.success) {
+      return res.status(400).json({ error: "Invalid exercises data", details: exerciseValidation.error });
+    }
+    const validatedExercises = exerciseValidation.data;
+
+    const userId = getUserId(req);
+    const result = await createWorkout(parseResult.data, validatedExercises, userId);
+    res.json(result);
+  } catch (error) {
+    console.error("Create workout error:", error);
+    res.status(500).json({ error: "Failed to create workout" });
+  }
+});
+
+router.patch("/api/workouts/:id", isAuthenticated, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { exercises, ...updateData } = req.body;
+    const parseResult = updateWorkoutLogSchema.safeParse(updateData);
+    if (!parseResult.success) {
+      return res.status(400).json({ error: "Invalid update data", details: parseResult.error });
+    }
+
+    const exerciseValidation = validateExercisesPayload(exercises);
+    if (!exerciseValidation.success) {
+      return res.status(400).json({ error: "Invalid exercises data", details: exerciseValidation.error });
+    }
+    const validatedExercises = exerciseValidation.data;
+
+    const userId = getUserId(req);
+    const result = await updateWorkout(req.params.id, parseResult.data, validatedExercises, userId);
+    if (!result) {
+      return res.status(404).json({ error: "Workout not found" });
+    }
 
 router.patch("/api/workouts/:id", isAuthenticated, asyncRoute(async (req: AuthenticatedRequest, res) => {
   const { exercises, ...updateData } = req.body;
@@ -161,21 +218,57 @@ router.patch("/api/workouts/:id", isAuthenticated, asyncRoute(async (req: Authen
   if (!parseResult.success) {
     return res.status(400).json({ error: "Invalid update data", details: parseResult.error });
   }
+});
 
-  let validatedExercises = exercises;
-  if (exercises) {
-    const exercisesParseResult = exercisesPayloadSchema.safeParse(exercises);
-    if (!exercisesParseResult.success) {
-      return res.status(400).json({ error: "Invalid exercises data", details: exercisesParseResult.error });
+router.delete("/api/workouts/:id", isAuthenticated, async (req: AuthenticatedRequest, res) => {
+  try {
+    const userId = getUserId(req);
+    await storage.deleteExerciseSetsByWorkoutLog(req.params.id, userId);
+    const deleted = await storage.deleteWorkoutLog(req.params.id, userId);
+    if (!deleted) {
+      return res.status(404).json({ error: "Workout not found" });
     }
-    validatedExercises = exercisesParseResult.data;
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Delete workout error:", error);
+    res.status(500).json({ error: "Failed to delete workout" });
   }
+});
 
-  const userId = getUserId(req);
-  const result = await updateWorkout(req.params.id, parseResult.data, validatedExercises, userId);
-  if (!result) {
-    return res.status(404).json({ error: "Workout not found" });
+router.get("/api/exercises/:exerciseName/history", isAuthenticated, async (req: AuthenticatedRequest, res) => {
+  try {
+    const userId = getUserId(req);
+    const history = await storage.getExerciseHistory(userId, req.params.exerciseName);
+    res.json(history);
+  } catch (error) {
+    console.error("Exercise history error:", error);
+    res.status(500).json({ error: "Failed to get exercise history" });
   }
+});
+
+router.get("/api/timeline", isAuthenticated, async (req: AuthenticatedRequest, res) => {
+  try {
+    const userId = getUserId(req);
+    const planId = req.query.planId as string | undefined;
+    const entries = await storage.getTimeline(userId, planId);
+    res.json(entries);
+  } catch (error) {
+    console.error("Timeline error:", error);
+    res.status(500).json({ error: "Failed to get timeline" });
+  }
+});
+
+router.get("/api/export", isAuthenticated, rateLimiter("export", 5, 60000), async (req: AuthenticatedRequest, res) => {
+  try {
+    const userId = getUserId(req);
+    const format = (req.query.format as string) || "csv";
+
+    if (format === "json") {
+      const data = await generateJSON(userId, storage);
+      res.setHeader("Content-Type", "application/json");
+      res.setHeader("Content-Disposition", "attachment; filename=hyrox-training-data.json");
+      return res.json(data);
+    }
 
   res.json(result);
 }, "Update workout error:", "Failed to update workout"));
