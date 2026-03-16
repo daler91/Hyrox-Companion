@@ -39,7 +39,7 @@ function downloadTemplate() {
   link.download = "hyrox_training_template.csv";
   document.body.appendChild(link);
   link.click();
-  document.body.removeChild(link);
+  link.remove();
   URL.revokeObjectURL(url);
 }
 
@@ -54,6 +54,74 @@ interface TimelineFiltersProps {
   readonly isImporting: boolean;
   readonly onRenamePlan?: (planId: string, newName: string) => void;
   readonly isRenaming?: boolean;
+}
+
+
+function renderPlanSelector(
+  plansLoading: boolean,
+  plans: TrainingPlan[],
+  selectedPlanId: string | null,
+  onPlanChange: (planId: string | null) => void,
+  setRenameName: (name: string) => void,
+  setRenameDialogOpen: (open: boolean) => void
+) {
+  if (plansLoading) {
+    return (
+      <Select disabled>
+        <SelectTrigger className="w-[200px] h-9">
+          <SelectValue placeholder="Loading plans..." />
+        </SelectTrigger>
+      </Select>
+    );
+  }
+
+  if (plans.length > 0) {
+    return (
+      <div className="flex items-center gap-2">
+        <Select
+          value={selectedPlanId || "__all__"}
+          onValueChange={(value) => onPlanChange(value === "__all__" ? null : value)}
+        >
+          <SelectTrigger className="w-[200px] h-9">
+            <SelectValue placeholder="All Plans" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">All Plans</SelectItem>
+            {plans.map((plan) => (
+              <SelectItem key={plan.id} value={plan.id}>
+                {plan.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {selectedPlanId && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9"
+            onClick={() => {
+              const plan = plans.find(p => p.id === selectedPlanId);
+              if (plan) {
+                setRenameName(plan.name);
+                setRenameDialogOpen(true);
+              }
+            }}
+            title="Rename selected plan"
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <Select disabled>
+      <SelectTrigger className="w-[200px] h-9 text-muted-foreground">
+        <SelectValue placeholder="No plans available" />
+      </SelectTrigger>
+    </Select>
+  );
 }
 
 export default function TimelineFilters({

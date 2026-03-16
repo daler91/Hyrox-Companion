@@ -50,7 +50,7 @@ export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }
   const messages = useMemo(() => {
     const allMessages = [...hookMessages];
     for (const localMsg of localMessages) {
-      if (!allMessages.find(m => m.id === localMsg.id)) {
+      if (!allMessages.some(m => m.id === localMsg.id)) {
         allMessages.push(localMsg);
       }
     }

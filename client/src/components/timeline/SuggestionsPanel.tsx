@@ -17,6 +17,13 @@ interface SuggestionsPanelProps {
   readonly onApply: (suggestion: WorkoutSuggestion) => void;
 }
 
+
+function getBadgeVariant(priority: string) {
+  if (priority === "high") return "destructive";
+  if (priority === "medium") return "default";
+  return "secondary";
+}
+
 export default function SuggestionsPanel({
   suggestions,
   isOpen,
@@ -54,7 +61,7 @@ export default function SuggestionsPanel({
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div className="flex items-center gap-2 flex-wrap">
                     <Badge
-                      variant={suggestion.priority === "high" ? "destructive" : suggestion.priority === "medium" ? "default" : "secondary"}
+                      variant={getBadgeVariant(suggestion.priority)}
                     >
                       {suggestion.priority}
                     </Badge>

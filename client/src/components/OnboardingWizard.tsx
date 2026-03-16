@@ -125,7 +125,7 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
 
         <div className="flex justify-between pt-2">
           {step !== "welcome" && step !== "plan" ? (
-            <Button variant="ghost" onClick={() => PREV[step] && setStep(PREV[step]!)} disabled={scheduleMutation.isPending}>
+            <Button variant="ghost" onClick={() => PREV[step] && setStep(PREV[step])} disabled={scheduleMutation.isPending}>
               <ChevronLeft className="h-4 w-4 mr-1" /> Back
             </Button>
           ) : <div />}
