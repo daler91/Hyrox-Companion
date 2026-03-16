@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { importPlanFromCSV, validateAndMapCSVRows, createSamplePlan, updatePlanDayWithCleanup } from "./planService";
 import { db } from "../db";
-import { eq, and } from "drizzle-orm";
-import { exerciseSets, planDays, trainingPlans, workoutLogs } from "@shared/schema";
+
+import { exerciseSets, planDays } from "@shared/schema";
 import { storage } from "../storage";
 import { samplePlanDays } from "../samplePlan";
 import * as csvParse from "csv-parse/sync";
