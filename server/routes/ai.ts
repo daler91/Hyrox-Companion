@@ -1,11 +1,10 @@
-import { AuthenticatedRequest } from "../types";
 import { Router } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
 import { chatWithCoach, streamChatWithCoach, generateWorkoutSuggestions, parseExercisesFromText, type ChatMessage, type UpcomingWorkout } from "../gemini";
 import { rateLimiter } from "../routeUtils";
 import { buildTrainingContext } from "../services/aiService";
-import { toDateStr, getUserId } from "../types";
+import { toDateStr, getUserId, AuthenticatedRequest } from "../types";
 import { chatRequestSchema, parseExercisesRequestSchema, insertChatMessageSchema } from "@shared/schema";
 
 const router = Router();
