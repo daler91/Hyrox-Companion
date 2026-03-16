@@ -1,12 +1,11 @@
-import type { Request } from "express";
-import { Router } from "express";
+import { Router, type Request } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { rateLimiter } from "../routeUtils";
 import { storage } from "../storage";
 import { insertWorkoutLogSchema, updateWorkoutLogSchema, insertCustomExerciseSchema, exercisesPayloadSchema } from "@shared/schema";
 import { generateCSV, generateJSON } from "../services/exportService";
 import { createWorkout, updateWorkout, reparseWorkout, prepareParsedWorkout, saveParsedWorkout } from "../services/workoutService";
-import { getUserId,  } from "../types";
+import { getUserId } from "../types";
 
 const router = Router();
 

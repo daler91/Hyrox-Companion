@@ -1,9 +1,8 @@
-import type { Request } from "express";
-import { Router } from "express";
+import { Router, type Request } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
 import { updateUserPreferencesSchema } from "@shared/schema";
-import { getUserId,  } from "../types";
+import { getUserId } from "../types";
 
 const router = Router();
 

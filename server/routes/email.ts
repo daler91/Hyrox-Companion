@@ -1,10 +1,9 @@
-import type { Request } from "express";
-import { Router, type Response } from "express";
+import { Router, type Request, type Response } from "express";
 import crypto from "node:crypto";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
 import { checkAndSendEmailsForUser, runEmailCronJob } from "../emailScheduler";
-import { getUserId,  } from "../types";
+import { getUserId } from "../types";
 
 const router = Router();
 

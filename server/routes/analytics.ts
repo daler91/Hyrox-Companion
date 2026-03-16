@@ -1,11 +1,9 @@
-import type { Request } from "express";
-import { Router } from "express";
+import { Router, type Request } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
 import { calculatePersonalRecords, calculateExerciseAnalytics } from "../services/analyticsService";
-import { getUserId,  } from "../types";
+import { getUserId } from "../types";
 import { dateStringSchema, ExerciseSet } from "@shared/schema";
-
 
 const router = Router();
 
@@ -29,7 +27,6 @@ function getExerciseSetsCoalesced(userId: string, from?: string, to?: string): P
   pendingRequests.set(cacheKey, promise);
   return promise;
 }
-
 
 export function validDate(val: unknown): string | undefined {
   if (!val) return undefined;
