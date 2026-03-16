@@ -32,14 +32,23 @@ router.post("/api/parse-exercises", isAuthenticated, rateLimiter("parse", 5), as
 async function prepareChatContext(req: AuthenticatedRequest): Promise<{ success: false; error: string } | { success: true; message: string; history: ChatMessage[]; trainingContext: import("../gemini").TrainingContext }> {
   const parseResult = chatRequestSchema.safeParse(req.body);
   if (!parseResult.success) {
-    return { success: false, error: parseResult.error.errors[0].message };
+    return { success: false as const, error: parseResult.error.errors[0].message };
   }
   const { message, history } = parseResult.data;
 
   const userId = getUserId(req);
   const trainingContext = await buildTrainingContext(userId);
 
-  return { success: true, message: message!, history, trainingContext };
+  if (!trainingContext) {
+    return { success: false as const, error: "Training context could not be loaded" };
+  }
+
+  return {
+    success: true as const,
+    message,
+    history: history || [],
+    trainingContext
+  };
 }
 
 router.post("/api/chat", isAuthenticated, rateLimiter("chat", 10), async (req: AuthenticatedRequest, res) => {

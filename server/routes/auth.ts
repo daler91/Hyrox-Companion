@@ -1,4 +1,3 @@
-import type { AuthenticatedRequest } from "../types";
 import { Router } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
