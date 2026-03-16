@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { toDateStr } from "./types";
+import { toDateStr, getUserId } from "./types";
+import { getAuth } from "@clerk/express";
+import type { Request } from "express";
+
+vi.mock("@clerk/express", () => ({
+  getAuth: vi.fn(),
+}));
 
 describe("toDateStr", () => {
   beforeEach(() => {
@@ -31,5 +37,25 @@ describe("toDateStr", () => {
   it("returns today's date string when undefined is provided", () => {
     vi.setSystemTime(new Date("2024-05-20T12:00:00Z"));
     expect(toDateStr(undefined)).toBe("2024-05-20");
+  });
+});
+
+describe("getUserId", () => {
+  it("throws an error when auth is null", () => {
+    vi.mocked(getAuth).mockReturnValue(null as any);
+    const req = {} as Request;
+    expect(() => getUserId(req)).toThrow("User not authenticated");
+  });
+
+  it("throws an error when auth does not have userId", () => {
+    vi.mocked(getAuth).mockReturnValue({} as any);
+    const req = {} as Request;
+    expect(() => getUserId(req)).toThrow("User not authenticated");
+  });
+
+  it("returns userId when auth is valid", () => {
+    vi.mocked(getAuth).mockReturnValue({ userId: "user_123" } as any);
+    const req = {} as Request;
+    expect(getUserId(req)).toBe("user_123");
   });
 });
