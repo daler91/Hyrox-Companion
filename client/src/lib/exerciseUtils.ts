@@ -56,6 +56,15 @@ export function groupExerciseSets(dbSets: ExerciseSet[]): GroupedExercise[] {
   return groups;
 }
 
+function getUniqueWeights(sets: ExerciseSet[]): number[] {
+  const weights: number[] = [];
+  for (const s of sets) {
+    const w = s.weight;
+    if (w && !weights.includes(w)) weights.push(w);
+  }
+  return weights;
+}
+
 export function formatExerciseSummary(group: GroupedExercise, weightUnit: string, distanceUnit: string): string {
   const name = getExerciseLabel(group.exerciseName, group.customLabel);
   const sets = group.sets;
@@ -74,15 +83,17 @@ export function formatExerciseSummary(group: GroupedExercise, weightUnit: string
     parts.push(`${sets.length}s`);
   }
 
-  if (allSameWeight && firstSet.weight) parts.push(`${firstSet.weight}${weightUnit}`);
-  else if (!allSameWeight) {
-    const weights = Array.from(new Set(sets.map(s => s.weight).filter(Boolean)));
+  if (allSameWeight && firstSet.weight) {
+    parts.push(`${firstSet.weight}${weightUnit}`);
+  } else if (!allSameWeight) {
+    const weights = getUniqueWeights(sets);
     if (weights.length > 0) parts.push(`${weights.join("/")}${weightUnit}`);
   }
 
   const dLabel = distanceUnit === "km" ? "m" : "ft";
   if (firstSet.distance) parts.push(`${firstSet.distance}${dLabel}`);
   if (firstSet.time) parts.push(`${firstSet.time}min`);
+
   return parts.length > 0 ? `${name} ${parts.join(" ")}` : name;
 }
 
