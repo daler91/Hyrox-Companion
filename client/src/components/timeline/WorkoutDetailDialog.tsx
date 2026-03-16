@@ -1,7 +1,6 @@
-import { type ParsedExercise } from "@shared/schema";
+import { type ParsedExercise, type TimelineEntry, type WorkoutStatus } from "@shared/schema";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { type TimelineEntry, type WorkoutStatus } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { getExerciseLabel, groupExerciseSets } from "@/lib/exerciseUtils";

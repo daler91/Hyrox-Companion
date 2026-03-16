@@ -1,9 +1,8 @@
-import { type ParsedExercise } from "@shared/schema";
+import { type ParsedExercise, type TimelineEntry, type PlanDay, type WorkoutStatus } from "@shared/schema";
 import { useState, useCallback } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { TimelineEntry, PlanDay, WorkoutStatus } from "@shared/schema";
 
 export function useWorkoutActions(selectedPlanId: string | null) {
   const { toast } = useToast();

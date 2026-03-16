@@ -1,4 +1,4 @@
-import { type ParsedExercise } from "@shared/schema";
+import { type ParsedExercise, type TimelineEntry, type ExerciseName } from "@shared/schema";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +16,6 @@ import {
   GripVertical,
   Mic,
 } from "lucide-react";
-import type { TimelineEntry, ExerciseName } from "@shared/schema";
 import { formatSpeed } from "@shared/unitConversion";
 import { ExerciseSelector } from "@/components/ExerciseSelector";
 import {

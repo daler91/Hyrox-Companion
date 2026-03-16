@@ -1,8 +1,6 @@
-import { type ParsedExercise } from "@shared/schema";
+import { workoutLogs, exerciseSets, planDays, customExercises, type ParsedExercise, type InsertWorkoutLog, type UpdateWorkoutLog, type InsertExerciseSet, type WorkoutLog, type ExerciseSet } from "@shared/schema";
 import { storage } from "../storage";
 import { db } from "../db";
-import { workoutLogs, exerciseSets, planDays, customExercises } from "@shared/schema";
-import type { InsertWorkoutLog, UpdateWorkoutLog, InsertExerciseSet, WorkoutLog, ExerciseSet } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 
 
