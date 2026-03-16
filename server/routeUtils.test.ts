@@ -4,7 +4,7 @@ import { calculateStreak, rateLimiter, clearRateLimitBuckets, MAX_RATE_LIMIT_BUC
 import { expandExercisesToSetRows } from "./services/workoutService";
 
 describe("rateLimiter", () => {
-  let req: any;
+  let req: Partial<import("express").Request> & { auth?: any, ip?: string };
   let res: any;
   let next: NextFunction;
 

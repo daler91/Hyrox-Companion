@@ -6,7 +6,7 @@ import { storage } from "../../storage";
 
 // Mock the clerkAuth middleware to simulate authentication
 vi.mock("../../clerkAuth", () => ({
-  isAuthenticated: (req: any, res: any, next: any) => {
+  isAuthenticated: (req: import("express").Request, res: import("express").Response, next: () => void) => {
     req.auth = { userId: "test_user_id" };
     next();
   },

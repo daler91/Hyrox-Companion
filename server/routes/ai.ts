@@ -6,10 +6,12 @@ import { rateLimiter } from "../routeUtils";
 import { buildTrainingContext } from "../services/aiService";
 import { toDateStr, getUserId } from "../types";
 import { chatRequestSchema, parseExercisesRequestSchema, insertChatMessageSchema } from "@shared/schema";
+import { AuthenticatedRequest } from "../types";
+
 
 const router = Router();
 
-router.post("/api/parse-exercises", isAuthenticated, rateLimiter("parse", 5), async (req: any, res) => {
+router.post("/api/parse-exercises", isAuthenticated, rateLimiter("parse", 5), async (req: AuthenticatedRequest, res) => {
   try {
     const parseResult = parseExercisesRequestSchema.safeParse(req.body);
     if (!parseResult.success) {
@@ -29,7 +31,7 @@ router.post("/api/parse-exercises", isAuthenticated, rateLimiter("parse", 5), as
   }
 });
 
-router.post("/api/chat", isAuthenticated, rateLimiter("chat", 10), async (req: any, res) => {
+router.post("/api/chat", isAuthenticated, rateLimiter("chat", 10), async (req: AuthenticatedRequest, res) => {
   try {
     const parseResult = chatRequestSchema.safeParse(req.body);
     if (!parseResult.success) {
@@ -48,7 +50,7 @@ router.post("/api/chat", isAuthenticated, rateLimiter("chat", 10), async (req: a
   }
 });
 
-router.post("/api/chat/stream", isAuthenticated, rateLimiter("chat", 10), async (req: any, res) => {
+router.post("/api/chat/stream", isAuthenticated, rateLimiter("chat", 10), async (req: AuthenticatedRequest, res) => {
   try {
     const parseResult = chatRequestSchema.safeParse(req.body);
     if (!parseResult.success) {
@@ -84,7 +86,7 @@ router.post("/api/chat/stream", isAuthenticated, rateLimiter("chat", 10), async 
   }
 });
 
-router.get("/api/chat/history", isAuthenticated, async (req: any, res) => {
+router.get("/api/chat/history", isAuthenticated, async (req: AuthenticatedRequest, res) => {
   try {
     const userId = getUserId(req);
     const messages = await storage.getChatMessages(userId);
@@ -95,7 +97,7 @@ router.get("/api/chat/history", isAuthenticated, async (req: any, res) => {
   }
 });
 
-router.post("/api/chat/message", isAuthenticated, async (req: any, res) => {
+router.post("/api/chat/message", isAuthenticated, async (req: AuthenticatedRequest, res) => {
   try {
     const parseResult = insertChatMessageSchema.safeParse(req.body);
     if (!parseResult.success) {
@@ -113,7 +115,7 @@ router.post("/api/chat/message", isAuthenticated, async (req: any, res) => {
   }
 });
 
-router.delete("/api/chat/history", isAuthenticated, async (req: any, res) => {
+router.delete("/api/chat/history", isAuthenticated, async (req: AuthenticatedRequest, res) => {
   try {
     const userId = getUserId(req);
     await storage.clearChatHistory(userId);
@@ -124,7 +126,7 @@ router.delete("/api/chat/history", isAuthenticated, async (req: any, res) => {
   }
 });
 
-router.post("/api/timeline/ai-suggestions", isAuthenticated, rateLimiter("suggestions", 3), async (req: any, res) => {
+router.post("/api/timeline/ai-suggestions", isAuthenticated, rateLimiter("suggestions", 3), async (req: AuthenticatedRequest, res) => {
   try {
     const userId = getUserId(req);
 

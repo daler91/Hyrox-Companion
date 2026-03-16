@@ -18,7 +18,7 @@ vi.mock("../../emailScheduler", () => ({
 
 // Mock clerkAuth
 vi.mock("../../clerkAuth", () => ({
-  isAuthenticated: (req: any, res: any, next: any) => next(),
+  isAuthenticated: (req: import("express").Request, res: import("express").Response, next: () => void) => next(),
 }));
 
 describe("Email Routes", () => {

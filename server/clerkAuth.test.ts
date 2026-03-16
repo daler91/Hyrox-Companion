@@ -31,7 +31,7 @@ vi.mock("./db", () => ({
 }));
 
 describe("isAuthenticated middleware", () => {
-  let req: any;
+  let req: Partial<import("express").Request> & { auth?: any, ip?: string };
   let res: any;
   let next: any;
 
