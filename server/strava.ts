@@ -1,11 +1,10 @@
-import type { Express, Response } from "express";
+import type { Express, Request, Response } from "express";
 import crypto from "node:crypto";
 import { storage } from "./storage";
 import { isAuthenticated } from "./clerkAuth";
 import { type DistanceUnit } from "@shared/unitConversion";
 import { mapStravaActivityToWorkout, type StravaActivity } from "./services/stravaMapper";
-import { getUserId, type AuthenticatedRequest } from "./types";
-import rateLimit from "express-rate-limit";
+import { getUserId } from "./types";
 import { rateLimiter } from "./routeUtils";
 
 const STRAVA_CLIENT_ID = process.env.STRAVA_CLIENT_ID;
@@ -16,12 +15,7 @@ const STRAVA_REDIRECT_URI = process.env.REPLIT_DOMAINS
 
 const STATE_SECRET = process.env.CLERK_SECRET_KEY || crypto.randomBytes(32).toString("hex");
 
-const stravaAuthLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  limit: 20, // 20 requests per 15 minutes
-  standardHeaders: "draft-7",
-  legacyHeaders: false,
-});
+const stravaAuthLimiter = rateLimiter("stravaAuth", 20, 15 * 60 * 1000); // 20 requests per 15 minutes
 const STATE_MAX_AGE_MS = 10 * 60 * 1000;
 
 
@@ -121,7 +115,7 @@ async function getValidAccessToken(userId: string): Promise<string | null> {
 }
 
 export function registerStravaRoutes(app: Express): void {
-  app.get("/api/strava/status", isAuthenticated, async (req: AuthenticatedRequest, res: Response) => {
+  app.get("/api/strava/status", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const userId = getUserId(req);
       const connection = await storage.getStravaConnection(userId);
@@ -141,7 +135,7 @@ export function registerStravaRoutes(app: Express): void {
     }
   });
 
-  app.get("/api/strava/auth", isAuthenticated, stravaAuthLimiter, async (req: AuthenticatedRequest, res: Response) => {
+  app.get("/api/strava/auth", isAuthenticated, stravaAuthLimiter, async (req: Request, res: Response) => {
     if (!STRAVA_CLIENT_ID) {
       return res.status(500).json({ error: "Strava integration not configured" });
     }
@@ -161,7 +155,7 @@ export function registerStravaRoutes(app: Express): void {
     res.json({ authUrl: authUrl.toString() });
   });
 
-  app.get("/api/strava/callback", stravaAuthLimiter, async (req: AuthenticatedRequest, res: Response) => {
+  app.get("/api/strava/callback", stravaAuthLimiter, async (req: Request, res: Response) => {
     const { code, state, error: stravaError } = req.query;
 
     if (stravaError) {
@@ -217,7 +211,7 @@ export function registerStravaRoutes(app: Express): void {
     }
   });
 
-  app.delete("/api/strava/disconnect", isAuthenticated, async (req: AuthenticatedRequest, res: Response) => {
+  app.delete("/api/strava/disconnect", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const userId = getUserId(req);
       await storage.deleteStravaConnection(userId);
@@ -228,7 +222,7 @@ export function registerStravaRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/strava/sync", isAuthenticated, async (req: AuthenticatedRequest, res: Response) => {
+  app.post("/api/strava/sync", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const userId = getUserId(req);
       const accessToken = await getValidAccessToken(userId);

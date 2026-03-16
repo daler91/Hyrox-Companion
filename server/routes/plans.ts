@@ -2,13 +2,14 @@ import { Router } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
 import { updatePlanDaySchema, importPlanRequestSchema, schedulePlanRequestSchema } from "@shared/schema";
-import { getUserId, AuthenticatedRequest } from "../types";
+import { getUserId } from "../types";
+import type { Request } from "express";
 import { importPlanFromCSV, createSamplePlan, updatePlanDayWithCleanup } from "../services/planService";
 import { rateLimiter } from "../routeUtils";
 
 const router = Router();
 
-router.get("/api/plans", isAuthenticated, async (req: AuthenticatedRequest, res) => {
+router.get("/api/plans", isAuthenticated, async (req: Request, res) => {
   try {
     const userId = getUserId(req);
     const plans = await storage.listTrainingPlans(userId);
@@ -19,7 +20,7 @@ router.get("/api/plans", isAuthenticated, async (req: AuthenticatedRequest, res)
   }
 });
 
-router.get("/api/plans/:id", isAuthenticated, async (req: AuthenticatedRequest, res) => {
+router.get("/api/plans/:id", isAuthenticated, async (req: Request, res) => {
   try {
     const userId = getUserId(req);
     const plan = await storage.getTrainingPlan(req.params.id, userId);
@@ -33,7 +34,7 @@ router.get("/api/plans/:id", isAuthenticated, async (req: AuthenticatedRequest, 
   }
 });
 
-router.post("/api/plans/import", isAuthenticated, rateLimiter("planImport", 5), async (req: AuthenticatedRequest, res) => {
+router.post("/api/plans/import", isAuthenticated, rateLimiter("planImport", 5), async (req: Request, res) => {
   try {
     const parseResult = importPlanRequestSchema.safeParse(req.body);
     if (!parseResult.success) {
@@ -53,7 +54,7 @@ router.post("/api/plans/import", isAuthenticated, rateLimiter("planImport", 5), 
   }
 });
 
-router.post("/api/plans/sample", isAuthenticated, rateLimiter("planSample", 5), async (req: AuthenticatedRequest, res) => {
+router.post("/api/plans/sample", isAuthenticated, rateLimiter("planSample", 5), async (req: Request, res) => {
   try {
     const userId = getUserId(req);
     const fullPlan = await createSamplePlan(userId);
@@ -64,7 +65,7 @@ router.post("/api/plans/sample", isAuthenticated, rateLimiter("planSample", 5), 
   }
 });
 
-router.patch("/api/plans/:planId/days/:dayId", isAuthenticated, async (req: AuthenticatedRequest, res) => {
+router.patch("/api/plans/:planId/days/:dayId", isAuthenticated, async (req: Request, res) => {
   try {
     const { dayId } = req.params;
     const userId = getUserId(req);
@@ -86,7 +87,7 @@ router.patch("/api/plans/:planId/days/:dayId", isAuthenticated, async (req: Auth
   }
 });
 
-router.patch("/api/plans/days/:dayId", isAuthenticated, async (req: AuthenticatedRequest, res) => {
+router.patch("/api/plans/days/:dayId", isAuthenticated, async (req: Request, res) => {
   try {
     const { dayId } = req.params;
     const userId = getUserId(req);
@@ -108,7 +109,7 @@ router.patch("/api/plans/days/:dayId", isAuthenticated, async (req: Authenticate
   }
 });
 
-router.patch("/api/plans/:id", isAuthenticated, async (req: AuthenticatedRequest, res) => {
+router.patch("/api/plans/:id", isAuthenticated, async (req: Request, res) => {
   try {
     const userId = getUserId(req);
     const { name } = req.body;
@@ -126,7 +127,7 @@ router.patch("/api/plans/:id", isAuthenticated, async (req: AuthenticatedRequest
   }
 });
 
-router.delete("/api/plans/:id", isAuthenticated, async (req: AuthenticatedRequest, res) => {
+router.delete("/api/plans/:id", isAuthenticated, async (req: Request, res) => {
   try {
     const userId = getUserId(req);
     const deleted = await storage.deleteTrainingPlan(req.params.id, userId);
@@ -140,7 +141,7 @@ router.delete("/api/plans/:id", isAuthenticated, async (req: AuthenticatedReques
   }
 });
 
-router.post("/api/plans/:planId/schedule", isAuthenticated, rateLimiter("planSchedule", 10), async (req: AuthenticatedRequest, res) => {
+router.post("/api/plans/:planId/schedule", isAuthenticated, rateLimiter("planSchedule", 10), async (req: Request, res) => {
   try {
     const parseResult = schedulePlanRequestSchema.safeParse(req.body);
     if (!parseResult.success) {
@@ -163,7 +164,7 @@ router.post("/api/plans/:planId/schedule", isAuthenticated, rateLimiter("planSch
   }
 });
 
-router.patch("/api/plans/days/:dayId/status", isAuthenticated, async (req: AuthenticatedRequest, res) => {
+router.patch("/api/plans/days/:dayId/status", isAuthenticated, async (req: Request, res) => {
   try {
     const { dayId } = req.params;
     const userId = getUserId(req);
@@ -189,7 +190,7 @@ router.patch("/api/plans/days/:dayId/status", isAuthenticated, async (req: Authe
   }
 });
 
-router.delete("/api/plans/days/:dayId", isAuthenticated, async (req: AuthenticatedRequest, res) => {
+router.delete("/api/plans/days/:dayId", isAuthenticated, async (req: Request, res) => {
   try {
     const { dayId } = req.params;
     const userId = getUserId(req);
