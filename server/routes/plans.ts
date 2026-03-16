@@ -5,8 +5,35 @@ import { updatePlanDaySchema, importPlanRequestSchema, schedulePlanRequestSchema
 import { getUserId, AuthenticatedRequest } from "../types";
 import { importPlanFromCSV, createSamplePlan, updatePlanDayWithCleanup } from "../services/planService";
 import { rateLimiter } from "../routeUtils";
+import { Response } from "express";
 
 const router = Router();
+
+async function handlePlanDayUpdate(
+  req: AuthenticatedRequest,
+  res: Response,
+  updateFn: (dayId: string, data: any, userId: string) => Promise<any>
+) {
+  try {
+    const { dayId } = req.params;
+    const userId = getUserId(req);
+
+    const parseResult = updatePlanDaySchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({ error: "Invalid update data", details: parseResult.error });
+    }
+
+    const updatedDay = await updateFn(dayId, parseResult.data, userId);
+    if (!updatedDay) {
+      return res.status(404).json({ error: "Day not found" });
+    }
+
+    res.json(updatedDay);
+  } catch (error) {
+    console.error("Update day error:", error);
+    res.status(500).json({ error: "Failed to update day" });
+  }
+}
 
 router.get("/api/plans", isAuthenticated, async (req: AuthenticatedRequest, res) => {
   try {
@@ -65,47 +92,11 @@ router.post("/api/plans/sample", isAuthenticated, rateLimiter("planSample", 5), 
 });
 
 router.patch("/api/plans/:planId/days/:dayId", isAuthenticated, async (req: AuthenticatedRequest, res) => {
-  try {
-    const { dayId } = req.params;
-    const userId = getUserId(req);
-
-    const parseResult = updatePlanDaySchema.safeParse(req.body);
-    if (!parseResult.success) {
-      return res.status(400).json({ error: "Invalid update data", details: parseResult.error });
-    }
-
-    const updatedDay = await storage.updatePlanDay(dayId, parseResult.data, userId);
-    if (!updatedDay) {
-      return res.status(404).json({ error: "Day not found" });
-    }
-
-    res.json(updatedDay);
-  } catch (error) {
-    console.error("Update day error:", error);
-    res.status(500).json({ error: "Failed to update day" });
-  }
+  return handlePlanDayUpdate(req, res, (dayId, data, userId) => storage.updatePlanDay(dayId, data, userId));
 });
 
 router.patch("/api/plans/days/:dayId", isAuthenticated, async (req: AuthenticatedRequest, res) => {
-  try {
-    const { dayId } = req.params;
-    const userId = getUserId(req);
-
-    const parseResult = updatePlanDaySchema.safeParse(req.body);
-    if (!parseResult.success) {
-      return res.status(400).json({ error: "Invalid update data", details: parseResult.error });
-    }
-
-    const updatedDay = await updatePlanDayWithCleanup(dayId, parseResult.data, userId);
-    if (!updatedDay) {
-      return res.status(404).json({ error: "Day not found" });
-    }
-
-    res.json(updatedDay);
-  } catch (error) {
-    console.error("Update day error:", error);
-    res.status(500).json({ error: "Failed to update day" });
-  }
+  return handlePlanDayUpdate(req, res, updatePlanDayWithCleanup);
 });
 
 router.patch("/api/plans/:id", isAuthenticated, async (req: AuthenticatedRequest, res) => {
