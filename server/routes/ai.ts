@@ -2,7 +2,7 @@ import { Router } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
 import { chatWithCoach, streamChatWithCoach, generateWorkoutSuggestions, parseExercisesFromText, type ChatMessage, type UpcomingWorkout } from "../gemini";
-import { rateLimiter } from "../routeUtils";
+import { rateLimiter, handleRouteError } from "../routeUtils";
 import { buildTrainingContext } from "../services/aiService";
 import { toDateStr, getUserId, AuthenticatedRequest } from "../types";
 import { chatRequestSchema, parseExercisesRequestSchema, insertChatMessageSchema } from "@shared/schema";
@@ -24,8 +24,7 @@ router.post("/api/parse-exercises", isAuthenticated, rateLimiter("parse", 5), as
     const exercises = await parseExercisesFromText(text.trim(), weightUnit, customNames);
     res.json(exercises);
   } catch (error) {
-    console.error("Error parsing exercises:", error);
-    res.status(500).json({ error: "Failed to parse exercises" });
+    handleRouteError(res, error, "Failed to parse exercises");
   }
 });
 
@@ -43,8 +42,7 @@ router.post("/api/chat", isAuthenticated, rateLimiter("chat", 10), async (req: A
     const response = await chatWithCoach(message, history, trainingContext);
     res.json({ response });
   } catch (error) {
-    console.error("Chat error:", error);
-    res.status(500).json({ error: "Failed to get response from AI coach" });
+    handleRouteError(res, error, "Failed to get response from AI coach");
   }
 });
 
@@ -79,8 +77,7 @@ router.post("/api/chat/stream", isAuthenticated, rateLimiter("chat", 10), async 
       res.end();
     }
   } catch (error) {
-    console.error("Chat stream error:", error);
-    res.status(500).json({ error: "Failed to get response from AI coach" });
+    handleRouteError(res, error, "Failed to get response from AI coach");
   }
 });
 
@@ -90,8 +87,7 @@ router.get("/api/chat/history", isAuthenticated, async (req: AuthenticatedReques
     const messages = await storage.getChatMessages(userId);
     res.json(messages);
   } catch (error) {
-    console.error("Get chat history error:", error);
-    res.status(500).json({ error: "Failed to get chat history" });
+    handleRouteError(res, error, "Failed to get chat history");
   }
 });
 
@@ -108,8 +104,7 @@ router.post("/api/chat/message", isAuthenticated, async (req: AuthenticatedReque
     const message = await storage.saveChatMessage({ userId, role, content });
     res.json(message);
   } catch (error) {
-    console.error("Save chat message error:", error);
-    res.status(500).json({ error: "Failed to save message" });
+    handleRouteError(res, error, "Failed to save message");
   }
 });
 
@@ -119,8 +114,7 @@ router.delete("/api/chat/history", isAuthenticated, async (req: AuthenticatedReq
     await storage.clearChatHistory(userId);
     res.json({ success: true });
   } catch (error) {
-    console.error("Clear chat history error:", error);
-    res.status(500).json({ error: "Failed to clear chat history" });
+    handleRouteError(res, error, "Failed to clear chat history");
   }
 });
 
@@ -175,8 +169,7 @@ router.post("/api/timeline/ai-suggestions", isAuthenticated, rateLimiter("sugges
 
     res.json({ suggestions });
   } catch (error) {
-    console.error("AI suggestions error:", error);
-    res.status(500).json({ error: "Failed to generate AI suggestions" });
+    handleRouteError(res, error, "Failed to generate AI suggestions");
   }
 });
 

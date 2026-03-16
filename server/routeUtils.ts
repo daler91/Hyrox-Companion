@@ -92,3 +92,9 @@ export function calculateStreak(completedDates: Set<string>): number {
 
   return streak;
 }
+
+
+export function handleRouteError(res: Response, error: unknown, defaultMessage: string) {
+  console.error(`${defaultMessage}:`, error);
+  res.status(500).json({ error: defaultMessage });
+}

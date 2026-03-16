@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { handleRouteError } from "../routeUtils";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
 import { calculatePersonalRecords, calculateExerciseAnalytics } from "../services/analyticsService";
@@ -47,8 +48,7 @@ router.get("/api/personal-records", isAuthenticated, async (req: AuthenticatedRe
     const allSets = await getExerciseSetsCoalesced(userId, from, to);
     res.json(calculatePersonalRecords(allSets));
   } catch (error) {
-    console.error("Error fetching PRs:", error);
-    res.status(500).json({ error: "Failed to fetch personal records" });
+    handleRouteError(res, error, "Failed to fetch personal records");
   }
 });
 
@@ -64,8 +64,7 @@ router.get("/api/exercise-analytics", isAuthenticated, async (req: Authenticated
     const allSets = await getExerciseSetsCoalesced(userId, from, to);
     res.json(calculateExerciseAnalytics(allSets));
   } catch (error) {
-    console.error("Error fetching exercise analytics:", error);
-    res.status(500).json({ error: "Failed to fetch exercise analytics" });
+    handleRouteError(res, error, "Failed to fetch exercise analytics");
   }
 });
 

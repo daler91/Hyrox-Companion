@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { handleRouteError } from "../routeUtils";
 import crypto from "node:crypto";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
@@ -43,8 +44,7 @@ router.get("/api/cron/emails", async (req, res) => {
     const result = await runEmailCronJob(storage);
     res.json(result);
   } catch (error) {
-    console.error("Cron email error:", error);
-    res.status(500).json({ error: "Cron job failed" });
+    handleRouteError(res, error, "Cron job failed");
   }
 });
 
