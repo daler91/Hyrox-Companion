@@ -377,6 +377,38 @@ const WorkoutBlockMode = React.memo(function WorkoutBlockMode({
   blockCounts,
   blockIndices,
 }: WorkoutBlockModeProps) {
+  const renderedBlocks = React.useMemo(() => {
+    return editExercises.map((blockId) => {
+      const exData = editExerciseData[blockId];
+      if (!exData) return null;
+      const exName = exData.exerciseName;
+      const blockCount = exName ? blockCounts[exName] || 1 : 1;
+      const blockIndex = blockIndices[blockId] || 1;
+      const showBlockNumber = blockCount > 1;
+      return (
+        <SortableDialogBlock
+          key={blockId}
+          blockId={blockId}
+          exData={exData}
+          blockLabel={showBlockNumber ? `#${blockIndex}` : undefined}
+          weightUnit={weightUnit}
+          distanceUnit={distanceUnit}
+          onChange={updateBlock}
+          onRemove={handleRemoveBlock}
+        />
+      );
+    });
+  }, [
+    editExercises,
+    editExerciseData,
+    blockCounts,
+    blockIndices,
+    weightUnit,
+    distanceUnit,
+    updateBlock,
+    handleRemoveBlock,
+  ]);
+
   return (
     <>
       <div>
@@ -402,26 +434,7 @@ const WorkoutBlockMode = React.memo(function WorkoutBlockMode({
               items={editExercises}
               strategy={verticalListSortingStrategy}
             >
-              {editExercises.map((blockId) => {
-                const exData = editExerciseData[blockId];
-                if (!exData) return null;
-                const exName = exData.exerciseName;
-                const blockCount = exName ? blockCounts[exName] || 1 : 1;
-                const blockIndex = blockIndices[blockId] || 1;
-                const showBlockNumber = blockCount > 1;
-                return (
-                  <SortableDialogBlock
-                    key={blockId}
-                    blockId={blockId}
-                    exData={exData}
-                    blockLabel={showBlockNumber ? `#${blockIndex}` : undefined}
-                    weightUnit={weightUnit}
-                    distanceUnit={distanceUnit}
-                    onChange={updateBlock}
-                    onRemove={handleRemoveBlock}
-                  />
-                );
-              })}
+              {renderedBlocks}
             </SortableContext>
           </DndContext>
         </div>
