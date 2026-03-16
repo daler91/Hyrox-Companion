@@ -374,3 +374,17 @@ export interface ParsedExercise {
     notes?: string;
   }>;
 }
+
+export interface PersonalRecordValue {
+  value: number;
+  date: string;
+  workoutLogId: string;
+}
+
+export interface PersonalRecord {
+  category: string;
+  customLabel?: string | null;
+  maxWeight?: PersonalRecordValue;
+  maxDistance?: PersonalRecordValue;
+  bestTime?: PersonalRecordValue;
+}

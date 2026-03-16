@@ -1,7 +1,7 @@
 import React, { forwardRef } from "react";
 import { Badge } from "@/components/ui/badge";
 import { format, isToday, isTomorrow, isYesterday, parseISO, isBefore } from "date-fns";
-import type { TimelineEntry } from "@shared/schema";
+import type { TimelineEntry, PersonalRecord } from "@shared/schema";
 import TimelineWorkoutCard from "./TimelineWorkoutCard";
 
 interface TimelineDateGroupProps {
@@ -13,7 +13,7 @@ interface TimelineDateGroupProps {
   isCombining?: boolean;
   combiningEntryId?: string | null;
   combiningEntryDate?: string | null;
-  personalRecords?: Record<string, any>;
+  personalRecords?: Record<string, PersonalRecord>;
 }
 
 function getDateLabel(dateObj: Date) {

@@ -1,14 +1,6 @@
-import type { ExerciseSet } from "@shared/schema";
+import type { ExerciseSet, PersonalRecord } from "@shared/schema";
 
 export type ExerciseSetWithDate = ExerciseSet & { date: string };
-
-interface PRRecord {
-  category: string;
-  customLabel?: string | null;
-  maxWeight?: { value: number; date: string; workoutLogId: string };
-  maxDistance?: { value: number; date: string; workoutLogId: string };
-  bestTime?: { value: number; date: string; workoutLogId: string };
-}
 
 function getExerciseKey(set: ExerciseSetWithDate): string {
   return set.exerciseName === "custom" && set.customLabel
@@ -16,8 +8,8 @@ function getExerciseKey(set: ExerciseSetWithDate): string {
     : set.exerciseName;
 }
 
-export function calculatePersonalRecords(allSets: ExerciseSetWithDate[]): Record<string, PRRecord> {
-  const prs: Record<string, PRRecord> = {};
+export function calculatePersonalRecords(allSets: ExerciseSetWithDate[]): Record<string, PersonalRecord> {
+  const prs: Record<string, PersonalRecord> = {};
 
   for (const set of allSets) {
     const prKey = getExerciseKey(set);

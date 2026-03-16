@@ -17,24 +17,10 @@ import {
   Trophy,
 } from "lucide-react";
 import { SiStrava } from "react-icons/si";
-import { type TimelineEntry, type ExerciseSet, EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
+import { type TimelineEntry, type ExerciseSet, EXERCISE_DEFINITIONS, type ExerciseName, type PersonalRecord } from "@shared/schema";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { formatSpeed } from "@shared/unitConversion";
 import { categoryChipColors, groupExerciseSets, formatExerciseSummary, type GroupedExercise } from "@/lib/exerciseUtils";
-
-interface PRValue {
-  value: number;
-  date: string;
-  workoutLogId: string;
-}
-
-interface PREntry {
-  category: string;
-  customLabel?: string | null;
-  maxWeight?: PRValue;
-  maxDistance?: PRValue;
-  bestTime?: PRValue;
-}
 
 interface TimelineWorkoutCardProps {
   readonly entry: TimelineEntry;
@@ -44,11 +30,11 @@ interface TimelineWorkoutCardProps {
   readonly isCombining?: boolean;
   readonly combiningEntryId?: string | null;
   readonly combiningEntryDate?: string | null;
-  readonly personalRecords?: Record<string, PREntry>;
+  readonly personalRecords?: Record<string, PersonalRecord>;
 }
 
 
-function hasPRInWorkout(group: GroupedExercise, workoutLogId: string | undefined, prs?: Record<string, PREntry>): boolean {
+function hasPRInWorkout(group: GroupedExercise, workoutLogId: string | undefined, prs?: Record<string, PersonalRecord>): boolean {
   if (!prs || !workoutLogId) return false;
   const prKey = group.exerciseName === "custom" && group.customLabel
     ? `custom:${group.customLabel}`
@@ -164,7 +150,7 @@ function ExerciseChips({
   readonly entryId: string;
   readonly groupedExercises: GroupedExercise[];
   readonly workoutLogId: string | undefined;
-  readonly personalRecords?: Record<string, PREntry>;
+  readonly personalRecords?: Record<string, PersonalRecord>;
   readonly weightLabel: string;
   readonly distanceUnit: string;
 }) {

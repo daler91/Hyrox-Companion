@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { TrainingPlan, TimelineEntry } from "@shared/schema";
+import type { TrainingPlan, TimelineEntry, PersonalRecord } from "@shared/schema";
 
 export function useTimelineData(selectedPlanId: string | null) {
   const todayRef = useRef<HTMLDivElement>(null);
@@ -13,7 +13,7 @@ export function useTimelineData(selectedPlanId: string | null) {
     queryKey: ["/api/plans"],
   });
 
-  const { data: personalRecords } = useQuery<Record<string, any>>({
+  const { data: personalRecords } = useQuery<Record<string, PersonalRecord>>({
     queryKey: ["/api/personal-records"],
   });
 
