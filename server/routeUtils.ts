@@ -92,3 +92,19 @@ export function calculateStreak(completedDates: Set<string>): number {
 
   return streak;
 }
+
+
+export function asyncRoute(
+  handler: (req: any, res: Response) => Promise<any>,
+  logMessage: string,
+  clientError: string = "Internal server error"
+) {
+  return async (req: any, res: Response) => {
+    try {
+      await handler(req, res);
+    } catch (error) {
+      console.error(logMessage, error);
+      res.status(500).json({ error: clientError });
+    }
+  };
+}
