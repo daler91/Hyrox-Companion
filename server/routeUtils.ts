@@ -1,4 +1,4 @@
-import type { Request, Response, NextFunction } from "express";
+import type { Response, NextFunction } from "express";
 import { toDateStr } from "./types";
 
 const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
@@ -12,8 +12,8 @@ export function clearRateLimitBuckets() {
 }
 
 export function rateLimiter(category: string, maxRequests: number, windowMs: number = DEFAULT_WINDOW_MS) {
-  return (req: Request, res: Response, next: NextFunction) => {
-    const identifier = (req as any).auth?.userId || req.ip;
+  return (req: any, res: Response, next: NextFunction) => {
+    const identifier = req.auth?.userId || req.ip;
     if (!identifier) {
       return next();
     }

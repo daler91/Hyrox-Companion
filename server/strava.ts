@@ -5,6 +5,7 @@ import { isAuthenticated } from "./clerkAuth";
 import { type DistanceUnit } from "@shared/unitConversion";
 import { mapStravaActivityToWorkout, type StravaActivity } from "./services/stravaMapper";
 import { getUserId, type AuthenticatedRequest } from "./types";
+import rateLimit from "express-rate-limit";
 import { rateLimiter } from "./routeUtils";
 
 const STRAVA_CLIENT_ID = process.env.STRAVA_CLIENT_ID;
@@ -15,7 +16,12 @@ const STRAVA_REDIRECT_URI = process.env.REPLIT_DOMAINS
 
 const STATE_SECRET = process.env.CLERK_SECRET_KEY || crypto.randomBytes(32).toString("hex");
 
-const stravaAuthLimiter = rateLimiter("stravaAuth", 20, 15 * 60 * 1000); // 20 requests per 15 minutes
+const stravaAuthLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 20, // 20 requests per 15 minutes
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+});
 const STATE_MAX_AGE_MS = 10 * 60 * 1000;
 
 
