@@ -1,3 +1,0 @@
-🎯 **What:** The `useWorkoutActions` hook was missing test coverage for its various mutation error branches (specifically, the `onError` callbacks for `updateDayMutation`, `logWorkoutMutation`, `updateWorkoutMutation`, `deleteWorkoutMutation`, and `deletePlanDayMutation`).
-📊 **Coverage:** Added test cases simulating `apiRequest` network failures for each mutation. The tests now assert that the correct error toasts (with `variant: "destructive"`) are triggered.
-✨ **Result:** Statement and lines test coverage for `useWorkoutActions.ts` improved to 100%. The test suite reliably verifies the correct application behavior during API error scenarios.
