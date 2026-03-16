@@ -121,4 +121,12 @@ describe('exportService - generateCSV', () => {
 
     expect(csv).toBe(expectedRows);
   });
+
+  it('should propagate errors when storage fails', async () => {
+    const storage = createMockStorage([], []);
+    storage.getTimeline = vi.fn().mockRejectedValue(new Error('Storage failure'));
+
+    await expect(generateCSV(mockUserId, storage)).rejects.toThrow('Storage failure');
+  });
+
 });
