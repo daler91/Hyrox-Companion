@@ -72,8 +72,10 @@ async function migrateUserId(oldId: string, newId: string): Promise<void> {
       firstName: oldUser.firstName,
       lastName: oldUser.lastName,
       profileImageUrl: oldUser.profileImageUrl,
-
+      weightUnit: oldUser.weightUnit,
       distanceUnit: oldUser.distanceUnit,
+      weeklyGoal: oldUser.weeklyGoal,
+      emailNotifications: oldUser.emailNotifications,
       updatedAt: new Date(),
     });
 
