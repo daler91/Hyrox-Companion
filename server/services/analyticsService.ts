@@ -58,7 +58,8 @@ interface DayAnalytics {
 export function calculateExerciseAnalytics(allSets: ExerciseSet[]): Record<string, DayAnalytics[]> {
   const analytics: Record<string, Record<string, DayAnalytics>> = {};
 
-  for (const s of allSets) {
+  for (let i = 0; i < allSets.length; i++) {
+    const s = allSets[i];
     const exerciseKey = getExerciseKey(s);
 
     if (!analytics[exerciseKey]) {
@@ -79,11 +80,19 @@ export function calculateExerciseAnalytics(allSets: ExerciseSet[]): Record<strin
     }
 
     const day = byDate[s.date];
-    day.totalSets++;
-    if (s.weight && s.reps) day.totalVolume += s.weight * s.reps;
-    if (s.weight && s.weight > day.maxWeight) day.maxWeight = s.weight;
-    if (s.reps) day.totalReps += s.reps;
-    if (s.distance) day.totalDistance += s.distance;
+    day.totalSets += 1;
+    if (s.weight && s.reps) {
+      day.totalVolume += s.weight * s.reps;
+    }
+    if (s.weight && s.weight > day.maxWeight) {
+      day.maxWeight = s.weight;
+    }
+    if (s.reps) {
+      day.totalReps += s.reps;
+    }
+    if (s.distance) {
+      day.totalDistance += s.distance;
+    }
   }
 
   const finalAnalytics: Record<string, DayAnalytics[]> = {};
