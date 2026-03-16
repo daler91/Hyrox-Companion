@@ -4,32 +4,22 @@ import { storage } from "../storage";
 import { updatePlanDaySchema, importPlanRequestSchema, schedulePlanRequestSchema } from "@shared/schema";
 import { getUserId, AuthenticatedRequest } from "../types";
 import { importPlanFromCSV, createSamplePlan, updatePlanDayWithCleanup } from "../services/planService";
-import { rateLimiter , handleError } from "../routeUtils";
+import { rateLimiter , handleError , withAuth } from "../routeUtils";
 
 const router = Router();
 
-router.get("/api/plans", isAuthenticated, async (req: AuthenticatedRequest, res) => {
-  try {
-    const userId = getUserId(req);
+router.get("/api/plans", isAuthenticated, withAuth(async (req, res, userId) => {
     const plans = await storage.listTrainingPlans(userId);
     res.json(plans);
-  } catch (error) {
-    return handleError(res, error, "List plans error:", "Failed to list training plans", 500);
-  }
-});
+  }, "List plans error:", "Failed to list training plans"));
 
-router.get("/api/plans/:id", isAuthenticated, async (req: AuthenticatedRequest, res) => {
-  try {
-    const userId = getUserId(req);
+router.get("/api/plans/:id", isAuthenticated, withAuth(async (req, res, userId) => {
     const plan = await storage.getTrainingPlan(req.params.id, userId);
     if (!plan) {
       return res.status(404).json({ error: "Training plan not found" });
     }
     res.json(plan);
-  } catch (error) {
-    return handleError(res, error, "Get plan error:", "Failed to get training plan", 500);
-  }
-});
+  }, "Get plan error:", "Failed to get training plan"));
 
 router.post("/api/plans/import", isAuthenticated, rateLimiter("planImport", 5), async (req: AuthenticatedRequest, res) => {
   try {
@@ -51,15 +41,10 @@ router.post("/api/plans/import", isAuthenticated, rateLimiter("planImport", 5), 
   }
 });
 
-router.post("/api/plans/sample", isAuthenticated, rateLimiter("planSample", 5), async (req: AuthenticatedRequest, res) => {
-  try {
-    const userId = getUserId(req);
+router.post("/api/plans/sample", isAuthenticated, rateLimiter("planSample", 5), withAuth(async (req, res, userId) => {
     const fullPlan = await createSamplePlan(userId);
     res.json(fullPlan);
-  } catch (error) {
-    return handleError(res, error, "Create sample plan error:", "Failed to create sample plan", 500);
-  }
-});
+  }, "Create sample plan error:", "Failed to create sample plan"));
 
 router.patch("/api/plans/:planId/days/:dayId", isAuthenticated, async (req: AuthenticatedRequest, res) => {
   try {
@@ -103,9 +88,7 @@ router.patch("/api/plans/days/:dayId", isAuthenticated, async (req: Authenticate
   }
 });
 
-router.patch("/api/plans/:id", isAuthenticated, async (req: AuthenticatedRequest, res) => {
-  try {
-    const userId = getUserId(req);
+router.patch("/api/plans/:id", isAuthenticated, withAuth(async (req, res, userId) => {
     const { name } = req.body;
     if (!name || typeof name !== "string" || name.trim().length === 0) {
       return res.status(400).json({ error: "Name is required" });
@@ -115,23 +98,15 @@ router.patch("/api/plans/:id", isAuthenticated, async (req: AuthenticatedRequest
       return res.status(404).json({ error: "Training plan not found" });
     }
     res.json(updated);
-  } catch (error) {
-    return handleError(res, error, "Rename plan error:", "Failed to rename training plan", 500);
-  }
-});
+  }, "Rename plan error:", "Failed to rename training plan"));
 
-router.delete("/api/plans/:id", isAuthenticated, async (req: AuthenticatedRequest, res) => {
-  try {
-    const userId = getUserId(req);
+router.delete("/api/plans/:id", isAuthenticated, withAuth(async (req, res, userId) => {
     const deleted = await storage.deleteTrainingPlan(req.params.id, userId);
     if (!deleted) {
       return res.status(404).json({ error: "Training plan not found" });
     }
     res.json({ success: true });
-  } catch (error) {
-    return handleError(res, error, "Delete plan error:", "Failed to delete training plan", 500);
-  }
-});
+  }, "Delete plan error:", "Failed to delete training plan"));
 
 router.post("/api/plans/:planId/schedule", isAuthenticated, rateLimiter("planSchedule", 10), async (req: AuthenticatedRequest, res) => {
   try {

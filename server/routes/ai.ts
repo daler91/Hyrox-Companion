@@ -2,7 +2,7 @@ import { Router } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
 import { chatWithCoach, streamChatWithCoach, generateWorkoutSuggestions, parseExercisesFromText, type ChatMessage, type UpcomingWorkout } from "../gemini";
-import { rateLimiter , handleError } from "../routeUtils";
+import { rateLimiter , handleError , withAuth } from "../routeUtils";
 import { buildTrainingContext } from "../services/aiService";
 import { toDateStr, getUserId, AuthenticatedRequest } from "../types";
 import { chatRequestSchema, parseExercisesRequestSchema, insertChatMessageSchema } from "@shared/schema";
@@ -81,15 +81,10 @@ router.post("/api/chat/stream", isAuthenticated, rateLimiter("chat", 10), async 
   }
 });
 
-router.get("/api/chat/history", isAuthenticated, async (req: AuthenticatedRequest, res) => {
-  try {
-    const userId = getUserId(req);
+router.get("/api/chat/history", isAuthenticated, withAuth(async (req, res, userId) => {
     const messages = await storage.getChatMessages(userId);
     res.json(messages);
-  } catch (error) {
-    handleError(res, error, "Get chat history error:", "Failed to get chat history", 500);
-  }
-});
+  }, "Get chat history error:", "Failed to get chat history"));
 
 router.post("/api/chat/message", isAuthenticated, async (req: AuthenticatedRequest, res) => {
   try {
@@ -108,15 +103,10 @@ router.post("/api/chat/message", isAuthenticated, async (req: AuthenticatedReque
   }
 });
 
-router.delete("/api/chat/history", isAuthenticated, async (req: AuthenticatedRequest, res) => {
-  try {
-    const userId = getUserId(req);
+router.delete("/api/chat/history", isAuthenticated, withAuth(async (req, res, userId) => {
     await storage.clearChatHistory(userId);
     res.json({ success: true });
-  } catch (error) {
-    handleError(res, error, "Clear chat history error:", "Failed to clear chat history", 500);
-  }
-});
+  }, "Clear chat history error:", "Failed to clear chat history"));
 
 router.post("/api/timeline/ai-suggestions", isAuthenticated, rateLimiter("suggestions", 3), async (req: AuthenticatedRequest, res) => {
   try {

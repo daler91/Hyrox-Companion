@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { isAuthenticated } from "../clerkAuth";
-import { rateLimiter , handleError } from "../routeUtils";
+import { rateLimiter , handleError , withAuth } from "../routeUtils";
 import { storage } from "../storage";
 import { insertWorkoutLogSchema, updateWorkoutLogSchema, insertCustomExerciseSchema, exercisesPayloadSchema } from "@shared/schema";
 import { generateCSV, generateJSON } from "../services/exportService";
@@ -9,15 +9,10 @@ import { getUserId, AuthenticatedRequest } from "../types";
 
 const router = Router();
 
-router.get("/api/workouts/unstructured", isAuthenticated, async (req: AuthenticatedRequest, res) => {
-  try {
-    const userId = getUserId(req);
+router.get("/api/workouts/unstructured", isAuthenticated, withAuth(async (req, res, userId) => {
     const workouts = await storage.getWorkoutsWithoutExerciseSets(userId);
     res.json(workouts);
-  } catch (error) {
-    handleError(res, error, "Error fetching unstructured workouts:", "Failed to fetch workouts", 500);
-  }
-});
+  }, "Error fetching unstructured workouts:", "Failed to fetch workouts"));
 
 router.post("/api/workouts/:id/reparse", isAuthenticated, async (req: AuthenticatedRequest, res) => {
   try {
@@ -79,9 +74,7 @@ async function processBatchChunk(
   return { parsed, failed };
 }
 
-router.post("/api/workouts/batch-reparse", isAuthenticated, async (req: AuthenticatedRequest, res) => {
-  try {
-    const userId = getUserId(req);
+router.post("/api/workouts/batch-reparse", isAuthenticated, withAuth(async (req, res, userId) => {
     const workouts = await storage.getWorkoutsWithoutExerciseSets(userId);
     const user = await storage.getUser(userId);
     const weightUnit = user?.weightUnit || "kg";
@@ -99,25 +92,14 @@ router.post("/api/workouts/batch-reparse", isAuthenticated, async (req: Authenti
       totalFailed += failed;
     }
     res.json({ total: workouts.length, parsed: totalParsed, failed: totalFailed });
-  } catch (error) {
-    handleError(res, error, "Batch reparse error:", "Failed to batch re-parse workouts", 500);
-  }
-});
+  }, "Batch reparse error:", "Failed to batch re-parse workouts"));
 
-router.get("/api/custom-exercises", isAuthenticated, async (req: AuthenticatedRequest, res) => {
-  try {
-    const userId = getUserId(req);
+router.get("/api/custom-exercises", isAuthenticated, withAuth(async (req, res, userId) => {
     const exercises = await storage.getCustomExercises(userId);
     res.json(exercises);
-  } catch (error) {
-    handleError(res, error, "Error fetching custom exercises:", "Failed to fetch custom exercises", 500);
-  }
-});
+  }, "Error fetching custom exercises:", "Failed to fetch custom exercises"));
 
-router.post("/api/custom-exercises", isAuthenticated, rateLimiter("customExercise", 20), async (req: AuthenticatedRequest, res) => {
-  try {
-    const userId = getUserId(req);
-
+router.post("/api/custom-exercises", isAuthenticated, rateLimiter("customExercise", 20), withAuth(async (req, res, userId) => {
     // Add default userId to body for safeParse if needed by schema, though we override it below
     const payload = { ...req.body, userId };
     const parseResult = insertCustomExerciseSchema.safeParse(payload);
@@ -134,33 +116,20 @@ router.post("/api/custom-exercises", isAuthenticated, rateLimiter("customExercis
       category: category || "conditioning",
     });
     res.json(exercise);
-  } catch (error) {
-    handleError(res, error, "Error saving custom exercise:", "Failed to save custom exercise", 500);
-  }
-});
+  }, "Error saving custom exercise:", "Failed to save custom exercise"));
 
-router.get("/api/workouts", isAuthenticated, async (req: AuthenticatedRequest, res) => {
-  try {
-    const userId = getUserId(req);
+router.get("/api/workouts", isAuthenticated, withAuth(async (req, res, userId) => {
     const logs = await storage.listWorkoutLogs(userId);
     res.json(logs);
-  } catch (error) {
-    handleError(res, error, "List workouts error:", "Failed to list workouts", 500);
-  }
-});
+  }, "List workouts error:", "Failed to list workouts"));
 
-router.get("/api/workouts/:id", isAuthenticated, async (req: AuthenticatedRequest, res) => {
-  try {
-    const userId = getUserId(req);
+router.get("/api/workouts/:id", isAuthenticated, withAuth(async (req, res, userId) => {
     const log = await storage.getWorkoutLog(req.params.id, userId);
     if (!log) {
       return res.status(404).json({ error: "Workout not found" });
     }
     res.json(log);
-  } catch (error) {
-    handleError(res, error, "Get workout error:", "Failed to get workout", 500);
-  }
-});
+  }, "Get workout error:", "Failed to get workout"));
 
 router.post("/api/workouts", isAuthenticated, rateLimiter("workout", 40), async (req: AuthenticatedRequest, res) => {
   try {
@@ -216,40 +185,25 @@ router.patch("/api/workouts/:id", isAuthenticated, async (req: AuthenticatedRequ
   }
 });
 
-router.delete("/api/workouts/:id", isAuthenticated, async (req: AuthenticatedRequest, res) => {
-  try {
-    const userId = getUserId(req);
+router.delete("/api/workouts/:id", isAuthenticated, withAuth(async (req, res, userId) => {
     await storage.deleteExerciseSetsByWorkoutLog(req.params.id, userId);
     const deleted = await storage.deleteWorkoutLog(req.params.id, userId);
     if (!deleted) {
       return res.status(404).json({ error: "Workout not found" });
     }
     res.json({ success: true });
-  } catch (error) {
-    handleError(res, error, "Delete workout error:", "Failed to delete workout", 500);
-  }
-});
+  }, "Delete workout error:", "Failed to delete workout"));
 
-router.get("/api/exercises/:exerciseName/history", isAuthenticated, async (req: AuthenticatedRequest, res) => {
-  try {
-    const userId = getUserId(req);
+router.get("/api/exercises/:exerciseName/history", isAuthenticated, withAuth(async (req, res, userId) => {
     const history = await storage.getExerciseHistory(userId, req.params.exerciseName);
     res.json(history);
-  } catch (error) {
-    handleError(res, error, "Exercise history error:", "Failed to get exercise history", 500);
-  }
-});
+  }, "Exercise history error:", "Failed to get exercise history"));
 
-router.get("/api/timeline", isAuthenticated, async (req: AuthenticatedRequest, res) => {
-  try {
-    const userId = getUserId(req);
+router.get("/api/timeline", isAuthenticated, withAuth(async (req, res, userId) => {
     const planId = req.query.planId as string | undefined;
     const entries = await storage.getTimeline(userId, planId);
     res.json(entries);
-  } catch (error) {
-    handleError(res, error, "Timeline error:", "Failed to get timeline", 500);
-  }
-});
+  }, "Timeline error:", "Failed to get timeline"));
 
 router.get("/api/export", isAuthenticated, rateLimiter("export", 5, 60000), async (req: AuthenticatedRequest, res) => {
   try {

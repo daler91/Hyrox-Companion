@@ -4,7 +4,7 @@ import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
 import { checkAndSendEmailsForUser, runEmailCronJob } from "../emailScheduler";
 import { getUserId, AuthenticatedRequest } from "../types";
-import { handleError } from "../routeUtils";
+import { handleError , withAuth } from "../routeUtils";
 
 const router = Router();
 

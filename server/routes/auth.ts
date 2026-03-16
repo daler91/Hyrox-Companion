@@ -2,7 +2,7 @@ import { Router } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
 import { getUserId, AuthenticatedRequest } from "../types";
-import { handleError } from "../routeUtils";
+import { handleError , withAuth } from "../routeUtils";
 
 const router = Router();
 

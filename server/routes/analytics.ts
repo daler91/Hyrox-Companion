@@ -4,7 +4,7 @@ import { storage } from "../storage";
 import { calculatePersonalRecords, calculateExerciseAnalytics } from "../services/analyticsService";
 import { getUserId, AuthenticatedRequest } from "../types";
 import { dateStringSchema, ExerciseSet } from "@shared/schema";
-import { handleError } from "../routeUtils";
+import { handleError , withAuth } from "../routeUtils";
 
 
 const router = Router();
@@ -37,9 +37,7 @@ function validDate(val: unknown): string | undefined {
   return parsed.success ? parsed.data : undefined;
 }
 
-router.get("/api/personal-records", isAuthenticated, async (req: AuthenticatedRequest, res) => {
-  try {
-    const userId = getUserId(req);
+router.get("/api/personal-records", isAuthenticated, withAuth(async (req, res, userId) => {
     const from = validDate(req.query.from);
     const to = validDate(req.query.to);
 
@@ -47,10 +45,7 @@ router.get("/api/personal-records", isAuthenticated, async (req: AuthenticatedRe
     if (req.query.to && !to) return res.status(400).json({ error: "Invalid 'to' date format" });
     const allSets = await getExerciseSetsCoalesced(userId, from, to);
     res.json(calculatePersonalRecords(allSets));
-  } catch (error) {
-    return handleError(res, error, "Error fetching PRs:", "Failed to fetch personal records", 500);
-  }
-});
+  }, "Error fetching PRs:", "Failed to fetch personal records"));
 
 router.get("/api/exercise-analytics", isAuthenticated, async (req: AuthenticatedRequest, res) => {
   try {
