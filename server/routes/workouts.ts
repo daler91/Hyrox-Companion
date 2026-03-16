@@ -263,7 +263,7 @@ router.get("/api/timeline", isAuthenticated, async (req: any, res) => {
   }
 });
 
-router.get("/api/export", isAuthenticated, async (req: any, res) => {
+router.get("/api/export", isAuthenticated, rateLimiter("export", 5, 60000), async (req: any, res) => {
   try {
     const userId = getUserId(req);
     const format = (req.query.format as string) || "csv";
