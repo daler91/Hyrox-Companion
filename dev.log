@@ -1,0 +1,7 @@
+
+> rest-express@1.0.0 dev /app
+> NODE_ENV=development tsx server/index.ts
+
+8:06:55 PM [db] Orphaned data cleanup skipped: AggregateError
+8:06:55 PM [db] Mark missed days skipped: AggregateError
+8:06:56 PM [express] serving on port 5000
