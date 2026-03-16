@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, Response } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
 import { updatePlanDaySchema, importPlanRequestSchema, schedulePlanRequestSchema } from "@shared/schema";
@@ -7,6 +7,52 @@ import { importPlanFromCSV, createSamplePlan, updatePlanDayWithCleanup } from ".
 import { rateLimiter } from "../routeUtils";
 
 const router = Router();
+
+async function handlePlanDayUpdate(
+  req: AuthenticatedRequest,
+  res: Response,
+  updateFn: (dayId: string, data: any, userId: string) => Promise<any>
+) {
+  try {
+    const { dayId } = req.params;
+    const userId = getUserId(req);
+
+    const parseResult = updatePlanDaySchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({ error: "Invalid update data", details: parseResult.error });
+    }
+
+    const updatedDay = await updateFn(dayId, parseResult.data, userId);
+    if (!updatedDay) {
+      return res.status(404).json({ error: "Day not found" });
+    }
+
+    res.json(updatedDay);
+  } catch (error) {
+    console.error("Update day error:", error);
+    res.status(500).json({ error: "Failed to update day" });
+  }
+}
+
+async function handleGetOrDeletePlan(
+  req: AuthenticatedRequest,
+  res: Response,
+  actionFn: (id: string, userId: string) => Promise<any>,
+  successMsg?: string,
+  errorPrefix = "Get"
+) {
+  try {
+    const userId = getUserId(req);
+    const result = await actionFn(req.params.id, userId);
+    if (!result) {
+      return res.status(404).json({ error: "Training plan not found" });
+    }
+    res.json(successMsg ? { success: true } : result);
+  } catch (error) {
+    console.error(`${errorPrefix} plan error:`, error);
+    res.status(500).json({ error: `Failed to ${errorPrefix.toLowerCase()} training plan` });
+  }
+}
 
 router.get("/api/plans", isAuthenticated, async (req: AuthenticatedRequest, res) => {
   try {
@@ -20,17 +66,7 @@ router.get("/api/plans", isAuthenticated, async (req: AuthenticatedRequest, res)
 });
 
 router.get("/api/plans/:id", isAuthenticated, async (req: AuthenticatedRequest, res) => {
-  try {
-    const userId = getUserId(req);
-    const plan = await storage.getTrainingPlan(req.params.id, userId);
-    if (!plan) {
-      return res.status(404).json({ error: "Training plan not found" });
-    }
-    res.json(plan);
-  } catch (error) {
-    console.error("Get plan error:", error);
-    res.status(500).json({ error: "Failed to get training plan" });
-  }
+  return handleGetOrDeletePlan(req, res, storage.getTrainingPlan.bind(storage), undefined, "Get");
 });
 
 router.post("/api/plans/import", isAuthenticated, rateLimiter("planImport", 5), async (req: AuthenticatedRequest, res) => {
@@ -65,47 +101,11 @@ router.post("/api/plans/sample", isAuthenticated, rateLimiter("planSample", 5), 
 });
 
 router.patch("/api/plans/:planId/days/:dayId", isAuthenticated, async (req: AuthenticatedRequest, res) => {
-  try {
-    const { dayId } = req.params;
-    const userId = getUserId(req);
-
-    const parseResult = updatePlanDaySchema.safeParse(req.body);
-    if (!parseResult.success) {
-      return res.status(400).json({ error: "Invalid update data", details: parseResult.error });
-    }
-
-    const updatedDay = await storage.updatePlanDay(dayId, parseResult.data, userId);
-    if (!updatedDay) {
-      return res.status(404).json({ error: "Day not found" });
-    }
-
-    res.json(updatedDay);
-  } catch (error) {
-    console.error("Update day error:", error);
-    res.status(500).json({ error: "Failed to update day" });
-  }
+  return handlePlanDayUpdate(req, res, (dayId, data, userId) => storage.updatePlanDay(dayId, data, userId));
 });
 
 router.patch("/api/plans/days/:dayId", isAuthenticated, async (req: AuthenticatedRequest, res) => {
-  try {
-    const { dayId } = req.params;
-    const userId = getUserId(req);
-
-    const parseResult = updatePlanDaySchema.safeParse(req.body);
-    if (!parseResult.success) {
-      return res.status(400).json({ error: "Invalid update data", details: parseResult.error });
-    }
-
-    const updatedDay = await updatePlanDayWithCleanup(dayId, parseResult.data, userId);
-    if (!updatedDay) {
-      return res.status(404).json({ error: "Day not found" });
-    }
-
-    res.json(updatedDay);
-  } catch (error) {
-    console.error("Update day error:", error);
-    res.status(500).json({ error: "Failed to update day" });
-  }
+  return handlePlanDayUpdate(req, res, updatePlanDayWithCleanup);
 });
 
 router.patch("/api/plans/:id", isAuthenticated, async (req: AuthenticatedRequest, res) => {
@@ -127,17 +127,7 @@ router.patch("/api/plans/:id", isAuthenticated, async (req: AuthenticatedRequest
 });
 
 router.delete("/api/plans/:id", isAuthenticated, async (req: AuthenticatedRequest, res) => {
-  try {
-    const userId = getUserId(req);
-    const deleted = await storage.deleteTrainingPlan(req.params.id, userId);
-    if (!deleted) {
-      return res.status(404).json({ error: "Training plan not found" });
-    }
-    res.json({ success: true });
-  } catch (error) {
-    console.error("Delete plan error:", error);
-    res.status(500).json({ error: "Failed to delete training plan" });
-  }
+  return handleGetOrDeletePlan(req, res, storage.deleteTrainingPlan.bind(storage), "true", "Delete");
 });
 
 router.post("/api/plans/:planId/schedule", isAuthenticated, rateLimiter("planSchedule", 10), async (req: AuthenticatedRequest, res) => {
