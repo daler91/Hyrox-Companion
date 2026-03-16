@@ -47,6 +47,33 @@ describe("Workouts Routes", () => {
   });
 
 
+
+  describe("POST /api/workouts", () => {
+    it("should return 500 when createWorkout throws an error", async () => {
+      // Mock the createWorkout to throw an error
+      const mockWorkoutService = await import("../../services/workoutService");
+      const { createWorkout } = mockWorkoutService as any;
+      createWorkout.mockRejectedValue(new Error("Service error"));
+
+
+
+      const response = await request(app)
+        .post("/api/workouts")
+        .send({
+          date: "2024-03-10",
+          notes: "Test notes",
+          focus: "Conditioning",
+          mainWorkout: "Murph",
+          exercises: []
+        });
+
+
+
+      expect(response.status).toBe(500);
+      expect(response.body).toEqual({ error: "Failed to create workout" });
+    });
+  });
+
   describe("GET /api/workouts", () => {
     it("should return a list of workout logs for a user", async () => {
       // Mock the storage response
