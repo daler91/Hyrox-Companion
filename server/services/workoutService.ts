@@ -4,6 +4,20 @@ import { db } from "../db";
 import { eq, and } from "drizzle-orm";
 
 
+export function extractAndDeduplicateCustomExercises(exercises: ParsedExercise[], userId: string) {
+  const customExsToInsert = exercises
+    .filter((ex) => ex.exerciseName === "custom" && ex.customLabel)
+    .map((ex) => ({
+      userId,
+      name: ex.customLabel!,
+      category: ex.category || "conditioning",
+    }));
+
+  return Array.from(new Map(customExsToInsert.map(item => [item.name, item])).values());
+}
+
+
+
 export function expandExercisesToSetRows(exercises: ParsedExercise[], workoutLogId: string): InsertExerciseSet[] {
   const rows: InsertExerciseSet[] = [];
   let sortOrder = 0;
@@ -115,16 +129,7 @@ export async function createWorkout(
       const exerciseSetData = expandExercisesToSetRows(exercises, log.id);
       const savedSets = await tx.insert(exerciseSets).values(exerciseSetData).returning();
 
-      const customExsToInsert = exercises
-        .filter((ex) => ex.exerciseName === "custom" && ex.customLabel)
-        .map((ex) => ({
-          userId,
-          name: ex.customLabel!,
-          category: ex.category || "conditioning",
-        }));
-
-      // Deduplicate by name to prevent redundant inserts in the same bulk operation
-      const uniqueCustomExs = Array.from(new Map(customExsToInsert.map(item => [item.name, item])).values());
+      const uniqueCustomExs = extractAndDeduplicateCustomExercises(exercises, userId);
 
       if (uniqueCustomExs.length > 0) {
         await tx
@@ -166,16 +171,7 @@ export async function updateWorkout(
         const exerciseSetData = expandExercisesToSetRows(exercises, log.id);
         const savedSets = await tx.insert(exerciseSets).values(exerciseSetData).returning();
 
-        const customExsToInsert = exercises
-          .filter((ex) => ex.exerciseName === "custom" && ex.customLabel)
-          .map((ex) => ({
-            userId,
-            name: ex.customLabel!,
-            category: ex.category || "conditioning",
-          }));
-
-        // Deduplicate by name to prevent redundant inserts in the same bulk operation
-        const uniqueCustomExs = Array.from(new Map(customExsToInsert.map(item => [item.name, item])).values());
+        const uniqueCustomExs = extractAndDeduplicateCustomExercises(exercises, userId);
 
         if (uniqueCustomExs.length > 0) {
           await tx
