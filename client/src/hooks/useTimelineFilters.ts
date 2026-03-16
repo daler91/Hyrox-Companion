@@ -24,13 +24,19 @@ export function useTimelineFilters(timelineData: TimelineEntry[]) {
       }
       groups[entry.date].push(entry);
     });
-    const allGroups = Object.entries(groups).sort(([a], [b]) =>
+    const allGroups = Object.entries(groups).sort(([a], [b]) => {
       // ⚡ Bolt Performance Optimization:
       // Compare ISO date strings ("yyyy-MM-dd") directly via simple comparison
       // rather than using localeCompare or allocating new Date() objects.
       // This is significantly faster and reduces overhead in a heavy useMemo recalculation.
-      b < a ? -1 : (b > a ? 1 : 0)
-    );
+      if (b < a) {
+        return -1;
+      }
+      if (b > a) {
+        return 1;
+      }
+      return 0;
+    });
 
     const today = format(new Date(), "yyyy-MM-dd");
     const past = allGroups.filter(([date]) => date < today);
