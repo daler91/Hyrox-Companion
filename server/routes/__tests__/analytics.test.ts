@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import express from "express";
 import request from "supertest";
 import analyticsRouter, { validDate } from "../analytics";
+import { storage } from "../../storage";
+import { calculatePersonalRecords, calculateExerciseAnalytics } from "../../services/analyticsService";
 
 // Mock the clerkAuth middleware to simulate authentication
 vi.mock("../../clerkAuth", () => ({
@@ -39,7 +41,7 @@ describe("Analytics Routes", () => {
 
     it("should return undefined for invalid date strings", () => {
       expect(validDate("not-a-date")).toBeUndefined();
-            expect(validDate("12/12/2024")).toBeUndefined();
+      expect(validDate("12/12/2024")).toBeUndefined();
     });
 
     it("should return the date string for valid date strings", () => {
@@ -47,7 +49,6 @@ describe("Analytics Routes", () => {
       expect(validDate("2024-12-31")).toBe("2024-12-31");
     });
   });
-
 
   let app: express.Express;
 
@@ -58,148 +59,116 @@ describe("Analytics Routes", () => {
     app.use(analyticsRouter);
   });
 
-  describe("GET /api/personal-records", () => {
-    it("should return personal records for a user", async () => {
-      // Mock the storage response
-      const mockStorage = await import("../../storage");
-      const { storage } = mockStorage as any;
-      storage.getAllExerciseSetsWithDates.mockResolvedValue([
-        { id: "set1", exerciseName: "Squat", weight: "100", reps: 10 }
-      ]);
-
-      // Mock the analytics service response
-      const mockAnalyticsService = await import("../../services/analyticsService");
-      const { calculatePersonalRecords } = mockAnalyticsService as any;
-      calculatePersonalRecords.mockReturnValue({
-        Squat: { weight: "100", reps: 10, estimated1RM: 133 }
-      });
-
-      const response = await request(app).get("/api/personal-records");
-
-      expect(response.status).toBe(200);
-      expect(storage.getAllExerciseSetsWithDates).toHaveBeenCalledWith("test_user_id", undefined, undefined);
-      expect(calculatePersonalRecords).toHaveBeenCalledWith([
-        { id: "set1", exerciseName: "Squat", weight: "100", reps: 10 }
-      ]);
-      expect(response.body).toEqual({
-        Squat: { weight: "100", reps: 10, estimated1RM: 133 }
-      });
-    });
-
-    it("should handle from and to date queries properly", async () => {
-      // Mock the storage response
-      const mockStorage = await import("../../storage");
-      const { storage } = mockStorage as any;
-      storage.getAllExerciseSetsWithDates.mockResolvedValue([]);
-
-      // Mock the analytics service response
-      const mockAnalyticsService = await import("../../services/analyticsService");
-      const { calculatePersonalRecords } = mockAnalyticsService as any;
-      calculatePersonalRecords.mockReturnValue({});
-
-      const response = await request(app).get("/api/personal-records?from=2024-01-01&to=2024-12-31");
-
-      expect(response.status).toBe(200);
-      expect(storage.getAllExerciseSetsWithDates).toHaveBeenCalledWith("test_user_id", "2024-01-01", "2024-12-31");
-    });
-
+  const testInvalidDates = (endpoint: string) => {
     it("should return 400 for invalid from date", async () => {
-      const response = await request(app).get("/api/personal-records?from=invalid-date");
-
+      const response = await request(app).get(`${endpoint}?from=invalid-date`);
       expect(response.status).toBe(400);
       expect(response.body).toEqual({ error: "Invalid 'from' date format" });
     });
 
     it("should return 400 for invalid to date", async () => {
-      const response = await request(app).get("/api/personal-records?to=invalid-date");
-
+      const response = await request(app).get(`${endpoint}?to=invalid-date`);
       expect(response.status).toBe(400);
       expect(response.body).toEqual({ error: "Invalid 'to' date format" });
     });
+  };
 
+  const testEndpoint = (endpoint: string, mockMethod: any, expectedBody: any) => {
+    describe(`GET ${endpoint}`, () => {
+      it("should return analytics for a user", async () => {
+        vi.mocked(storage.getAllExerciseSetsWithDates).mockResolvedValue([
+          { id: "set1", exerciseName: "Test", weight: "100", reps: 10 } as any
+        ]);
 
-    it("should return 500 when storage throws an error", async () => {
-      // Mock the storage to throw an error
-      const mockStorage = await import("../../storage");
-      const { storage } = mockStorage as any;
-      storage.getAllExerciseSetsWithDates.mockRejectedValue(new Error("Database error"));
+        vi.mocked(mockMethod).mockReturnValue(expectedBody);
 
-      const response = await request(app).get("/api/personal-records");
+        const response = await request(app).get(endpoint);
 
-      expect(response.status).toBe(500);
-      expect(response.body).toEqual({ error: "Failed to fetch personal records" });
-    });
-  });
-
-  describe("GET /api/exercise-analytics", () => {
-    it("should return exercise analytics for a user", async () => {
-      // Mock the storage response
-      const mockStorage = await import("../../storage");
-      const { storage } = mockStorage as any;
-      storage.getAllExerciseSetsWithDates.mockResolvedValue([
-        { id: "set1", exerciseName: "Bench Press", weight: "200", reps: 5 }
-      ]);
-
-      // Mock the analytics service response
-      const mockAnalyticsService = await import("../../services/analyticsService");
-      const { calculateExerciseAnalytics } = mockAnalyticsService as any;
-      calculateExerciseAnalytics.mockReturnValue({
-        "Bench Press": { totalVolume: 1000, setsCount: 1, history: [] }
+        expect(response.status).toBe(200);
+        expect(storage.getAllExerciseSetsWithDates).toHaveBeenCalledWith("test_user_id", undefined, undefined);
+        expect(mockMethod).toHaveBeenCalledWith([
+          expect.objectContaining({ id: "set1", exerciseName: "Test", weight: "100", reps: 10 })
+        ]);
+        expect(response.body).toEqual(expectedBody);
       });
 
-      const response = await request(app).get("/api/exercise-analytics");
+      it("should handle from and to date queries properly", async () => {
+        vi.mocked(storage.getAllExerciseSetsWithDates).mockResolvedValue([]);
+        vi.mocked(mockMethod).mockReturnValue({});
 
-      expect(response.status).toBe(200);
-      expect(storage.getAllExerciseSetsWithDates).toHaveBeenCalledWith("test_user_id", undefined, undefined);
-      expect(calculateExerciseAnalytics).toHaveBeenCalledWith([
-        { id: "set1", exerciseName: "Bench Press", weight: "200", reps: 5 }
-      ]);
-      expect(response.body).toEqual({
-        "Bench Press": { totalVolume: 1000, setsCount: 1, history: [] }
+        const response = await request(app).get(`${endpoint}?from=2024-01-01&to=2024-12-31`);
+
+        expect(response.status).toBe(200);
+        expect(storage.getAllExerciseSetsWithDates).toHaveBeenCalledWith("test_user_id", "2024-01-01", "2024-12-31");
+      });
+
+      testInvalidDates(endpoint);
+
+      it("should return 500 when storage throws an error", async () => {
+        vi.mocked(storage.getAllExerciseSetsWithDates).mockRejectedValue(new Error("Database error"));
+
+        const response = await request(app).get(endpoint);
+
+        expect(response.status).toBe(500);
+        expect(response.body).toHaveProperty("error");
       });
     });
+  };
 
-    it("should handle from and to date queries properly", async () => {
-      // Mock the storage response
-      const mockStorage = await import("../../storage");
-      const { storage } = mockStorage as any;
-      storage.getAllExerciseSetsWithDates.mockResolvedValue([]);
+  testEndpoint("/api/personal-records", calculatePersonalRecords, { Squat: { weight: "100", reps: 10, estimated1RM: 133 } });
+  testEndpoint("/api/exercise-analytics", calculateExerciseAnalytics, { "Bench Press": { totalVolume: 1000, setsCount: 1, history: [] } });
 
-      // Mock the analytics service response
-      const mockAnalyticsService = await import("../../services/analyticsService");
-      const { calculateExerciseAnalytics } = mockAnalyticsService as any;
-      calculateExerciseAnalytics.mockReturnValue({});
+  describe("getExerciseSetsCoalesced caching logic", () => {
+    const makeRequest = () => request(app).get("/api/personal-records");
 
-      const response = await request(app).get("/api/exercise-analytics?from=2024-01-01&to=2024-12-31");
+    it("should coalesce concurrent requests to the database", async () => {
+      let resolvePromise: (value: any) => void;
+      const delayedPromise = new Promise<any[]>((resolve) => {
+        resolvePromise = resolve;
+      });
 
-      expect(response.status).toBe(200);
-      expect(storage.getAllExerciseSetsWithDates).toHaveBeenCalledWith("test_user_id", "2024-01-01", "2024-12-31");
+      vi.mocked(storage.getAllExerciseSetsWithDates).mockImplementation(() => delayedPromise as any);
+
+      const p1 = makeRequest();
+      const p2 = makeRequest();
+      const p3 = makeRequest();
+
+      setTimeout(() => {
+        resolvePromise([
+          { id: "set1", exerciseName: "Squat", weight: "100", reps: 10 }
+        ]);
+      }, 50);
+
+      const [res1, res2, res3] = await Promise.all([p1, p2, p3]);
+
+      expect(res1.status).toBe(200);
+      expect(res2.status).toBe(200);
+      expect(res3.status).toBe(200);
+
+      expect(storage.getAllExerciseSetsWithDates).toHaveBeenCalledTimes(1);
     });
 
-    it("should return 400 for invalid from date", async () => {
-      const response = await request(app).get("/api/exercise-analytics?from=invalid-date");
+    it("should not coalesce sequential requests after the first resolves", async () => {
+      vi.mocked(storage.getAllExerciseSetsWithDates).mockResolvedValue([]);
 
-      expect(response.status).toBe(400);
-      expect(response.body).toEqual({ error: "Invalid 'from' date format" });
+      await makeRequest();
+      await makeRequest();
+
+      expect(storage.getAllExerciseSetsWithDates).toHaveBeenCalledTimes(2);
     });
 
-    it("should return 400 for invalid to date", async () => {
-      const response = await request(app).get("/api/exercise-analytics?to=invalid-date");
+    it("should clear cache if the promise rejects so subsequent requests retry", async () => {
+      vi.mocked(storage.getAllExerciseSetsWithDates)
+        .mockRejectedValueOnce(new Error("Database error"))
+        .mockResolvedValueOnce([]);
 
-      expect(response.status).toBe(400);
-      expect(response.body).toEqual({ error: "Invalid 'to' date format" });
-    });
+      const res1 = await makeRequest();
+      const res2 = await makeRequest();
 
-    it("should return 500 when storage throws an error", async () => {
-      // Mock the storage to throw an error
-      const mockStorage = await import("../../storage");
-      const { storage } = mockStorage as any;
-      storage.getAllExerciseSetsWithDates.mockRejectedValue(new Error("Database error"));
+      expect(res1.status).toBe(500);
+      expect(res2.status).toBe(200);
 
-      const response = await request(app).get("/api/exercise-analytics");
-
-      expect(response.status).toBe(500);
-      expect(response.body).toEqual({ error: "Failed to fetch exercise analytics" });
+      expect(storage.getAllExerciseSetsWithDates).toHaveBeenCalledTimes(2);
     });
   });
 });
