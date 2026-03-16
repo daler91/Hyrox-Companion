@@ -1,3 +1,4 @@
+import type { InsertWorkoutLog, ParsedExercise } from "@shared/schema";
 import { useState, useCallback } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
@@ -66,7 +67,7 @@ export function useWorkoutForm({
   });
 
   const saveMutation = useMutation({
-    mutationFn: async (workoutData: Record<string, any>) => {
+    mutationFn: async (workoutData: Omit<InsertWorkoutLog, "userId"> & { title?: string, exercises?: ParsedExercise[] }) => {
       const response = await apiRequest("POST", "/api/workouts", workoutData);
       return response.json();
     },
