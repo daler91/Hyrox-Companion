@@ -73,16 +73,20 @@ export class AnalyticsStorage {
     let missedCount = 0;
     let skippedCount = 0;
 
-    for (let i = 0; i < days.length; i++) {
-      const status = days[i].status;
-      if (status === 'planned') plannedCount++;
-      else if (status === 'missed') missedCount++;
-      else if (status === 'skipped') skippedCount++;
+    for (const day of days) {
+      const status = day.status;
+      if (status === 'planned') {
+        plannedCount++;
+      } else if (status === 'missed') {
+        missedCount++;
+      } else if (status === 'skipped') {
+        skippedCount++;
+      }
     }
 
     let totalDuration = 0;
-    for (let i = 0; i < logs.length; i++) {
-      totalDuration += logs[i].duration || 0;
+    for (const log of logs) {
+      totalDuration += log.duration || 0;
     }
 
     return { completedCount, plannedCount, missedCount, skippedCount, totalDuration };

@@ -156,7 +156,7 @@ export function buildMissedWorkoutEmail(user: User, missed: MissedWorkoutData[])
     <div class="workout-item">
       <div class="workout-focus">${w.focus}</div>
       <div class="workout-detail">${w.mainWorkout.substring(0, 120)}${w.mainWorkout.length > 120 ? '...' : ''}</div>
-      <div class="workout-date">${w.date}</div>
+      <div class="workout-date">${w.date}${w.planName ? ` · ${w.planName}` : ''}</div>
     </div>
   `).join('');
 
