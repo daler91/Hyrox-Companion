@@ -11,9 +11,9 @@ import {
 import type { TimelineEntry } from "@shared/schema";
 
 interface SkipConfirmDialogProps {
-  entry: TimelineEntry | null;
-  onOpenChange: (open: boolean) => void;
-  onConfirm: () => void;
+  readonly entry: TimelineEntry | null;
+  readonly onOpenChange: (open: boolean) => void;
+  readonly onConfirm: () => void;
 }
 
 export default function SkipConfirmDialog({

@@ -24,12 +24,12 @@ export interface EditFormState {
 }
 
 interface EditWorkoutDialogProps {
-  entry: TimelineEntry | null;
-  onOpenChange: (open: boolean) => void;
-  editForm: EditFormState;
-  onEditFormChange: (form: EditFormState) => void;
-  onSave: () => void;
-  isPending: boolean;
+  readonly entry: TimelineEntry | null;
+  readonly onOpenChange: (open: boolean) => void;
+  readonly editForm: EditFormState;
+  readonly onEditFormChange: (form: EditFormState) => void;
+  readonly onSave: () => void;
+  readonly isPending: boolean;
 }
 
 export default function EditWorkoutDialog({

@@ -25,10 +25,10 @@ const QUICK_ACTIONS = [
 ];
 
 interface CoachPanelProps {
-  isOpen: boolean;
-  onClose: () => void;
-  timeline?: TimelineEntry[];
-  isNewUser?: boolean;
+  readonly isOpen: boolean;
+  readonly onClose: () => void;
+  readonly timeline?: TimelineEntry[];
+  readonly isNewUser?: boolean;
 }
 
 export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }: CoachPanelProps) {

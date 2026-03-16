@@ -2,7 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label";
 
 interface ProfileSectionProps {
-  userName: string;
+  readonly userName: string;
 }
 
 export function ProfileSection({ userName }: ProfileSectionProps) {

@@ -10,12 +10,13 @@ import { Lightbulb, X, ChevronDown, ChevronUp } from "lucide-react";
 import type { WorkoutSuggestion } from "./types";
 
 interface SuggestionsPanelProps {
-  suggestions: WorkoutSuggestion[];
-  isOpen: boolean;
-  onOpenChange: (open: boolean) => void;
-  onDismiss: (workoutId: string) => void;
-  onApply: (suggestion: WorkoutSuggestion) => void;
+  readonly suggestions: WorkoutSuggestion[];
+  readonly isOpen: boolean;
+  readonly onOpenChange: (open: boolean) => void;
+  readonly onDismiss: (workoutId: string) => void;
+  readonly onApply: (suggestion: WorkoutSuggestion) => void;
 }
+
 
 
 function getBadgeVariant(priority: string) {

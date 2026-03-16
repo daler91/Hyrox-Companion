@@ -3,8 +3,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { CalendarDays } from "lucide-react";
 
 interface ScheduleStepProps {
-  startDate: Date;
-  onStartDateChange: (date: Date) => void;
+  readonly startDate: Date;
+  readonly onStartDateChange: (date: Date) => void;
 }
 
 export function ScheduleStep({ startDate, onStartDateChange }: ScheduleStepProps) {

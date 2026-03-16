@@ -28,12 +28,12 @@ export interface StructuredExercise {
 }
 
 interface ExerciseInputProps {
-  exercise: StructuredExercise;
-  onChange: (exercise: StructuredExercise) => void;
-  onRemove: () => void;
-  weightUnit?: "kg" | "lbs";
-  distanceUnit?: "km" | "miles";
-  blockLabel?: string;
+  readonly exercise: StructuredExercise;
+  readonly onChange: (exercise: StructuredExercise) => void;
+  readonly onRemove: () => void;
+  readonly weightUnit?: "kg" | "lbs";
+  readonly distanceUnit?: "km" | "miles";
+  readonly blockLabel?: string;
 }
 
 type FieldKey = "reps" | "weight" | "distance" | "time";

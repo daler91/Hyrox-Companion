@@ -7,10 +7,10 @@ interface DayData {
 }
 
 interface WeeklySummaryProps {
-  days: DayData[];
-  totalWorkouts: number;
-  totalHours: number;
-  totalDistance: number;
+  readonly days: DayData[];
+  readonly totalWorkouts: number;
+  readonly totalHours: number;
+  readonly totalDistance: number;
 }
 
 export function WeeklySummary({ days, totalWorkouts, totalHours, totalDistance }: WeeklySummaryProps) {

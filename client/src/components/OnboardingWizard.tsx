@@ -13,8 +13,8 @@ import { PlanStep } from "@/components/onboarding/PlanStep";
 import { ScheduleStep } from "@/components/onboarding/ScheduleStep";
 
 interface OnboardingWizardProps {
-  open: boolean;
-  onComplete: (choice: "sample" | "import" | "skip") => void;
+  readonly open: boolean;
+  readonly onComplete: (choice: "sample" | "import" | "skip") => void;
 }
 
 type Step = "welcome" | "units" | "goal" | "plan" | "schedule";

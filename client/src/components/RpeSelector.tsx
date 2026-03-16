@@ -16,10 +16,10 @@ function getRpeColor(value: number): string {
 }
 
 interface RpeSelectorProps {
-  value: number | null;
-  onChange: (value: number | null) => void;
-  showLabel?: boolean;
-  compact?: boolean;
+  readonly value: number | null;
+  readonly onChange: (value: number | null) => void;
+  readonly showLabel?: boolean;
+  readonly compact?: boolean;
 }
 
 export function RpeSelector({ value, onChange, showLabel = true, compact = false }: RpeSelectorProps) {

@@ -15,10 +15,10 @@ export interface Suggestion {
 }
 
 interface SuggestionCardProps {
-  suggestion: Suggestion;
-  onApply: () => void;
-  onDismiss: () => void;
-  isApplying: boolean;
+  readonly suggestion: Suggestion;
+  readonly onApply: () => void;
+  readonly onDismiss: () => void;
+  readonly isApplying: boolean;
 }
 
 const FIELD_LABELS: Record<Suggestion["targetField"], string> = {

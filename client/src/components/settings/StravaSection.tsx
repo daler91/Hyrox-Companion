@@ -16,8 +16,8 @@ interface StravaStatus {
 }
 
 interface StravaSectionProps {
-  stravaStatus: StravaStatus | undefined;
-  stravaLoading: boolean;
+  readonly stravaStatus: StravaStatus | undefined;
+  readonly stravaLoading: boolean;
 }
 
 export function StravaSection({ stravaStatus, stravaLoading }: StravaSectionProps) {

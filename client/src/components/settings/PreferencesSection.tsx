@@ -5,14 +5,14 @@ import { Switch } from "@/components/ui/switch";
 import { Mail } from "lucide-react";
 
 interface PreferencesSectionProps {
-  weightUnit: string;
-  distanceUnit: string;
-  weeklyGoal: string;
-  emailNotifications: boolean;
-  onWeightUnitChange: (value: string) => void;
-  onDistanceUnitChange: (value: string) => void;
-  onWeeklyGoalChange: (value: string) => void;
-  onEmailNotificationsChange: (checked: boolean) => void;
+  readonly weightUnit: string;
+  readonly distanceUnit: string;
+  readonly weeklyGoal: string;
+  readonly emailNotifications: boolean;
+  readonly onWeightUnitChange: (value: string) => void;
+  readonly onDistanceUnitChange: (value: string) => void;
+  readonly onWeeklyGoalChange: (value: string) => void;
+  readonly onEmailNotificationsChange: (checked: boolean) => void;
 }
 
 export function PreferencesSection({

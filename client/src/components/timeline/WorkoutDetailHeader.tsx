@@ -4,11 +4,11 @@ import { CheckCircle2, Clock, XCircle, SkipForward } from "lucide-react";
 import { SiStrava } from "react-icons/si";
 
 interface WorkoutDetailHeaderProps {
-  status: string;
-  source?: string;
-  dayName?: string;
-  focus: string;
-  isEditing: boolean;
+  readonly status: string;
+  readonly source?: string;
+  readonly dayName?: string;
+  readonly focus: string;
+  readonly isEditing: boolean;
 }
 
 function getStatusBadge(status: string) {

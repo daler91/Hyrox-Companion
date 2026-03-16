@@ -26,9 +26,9 @@ import {
 import { type TimelineEntry, type WorkoutStatus } from "@shared/schema";
 
 interface StatusChangeSectionProps {
-  entry: TimelineEntry;
-  onMarkComplete: (entry: TimelineEntry) => void;
-  onChangeStatus: (entry: TimelineEntry, status: WorkoutStatus) => void;
+  readonly entry: TimelineEntry;
+  readonly onMarkComplete: (entry: TimelineEntry) => void;
+  readonly onChangeStatus: (entry: TimelineEntry, status: WorkoutStatus) => void;
 }
 
 export function StatusChangeSection({ entry, onMarkComplete, onChangeStatus }: StatusChangeSectionProps) {
@@ -93,17 +93,17 @@ export function StatusChangeSection({ entry, onMarkComplete, onChangeStatus }: S
 }
 
 interface WorkoutDetailFooterProps {
-  isEditing: boolean;
-  canEdit: boolean;
-  canDelete: boolean;
-  isSaving?: boolean;
-  isDeleting?: boolean;
-  onEdit: () => void;
-  onCancelEdit: () => void;
-  onSave: () => void;
-  onDelete: () => void;
-  onClose: () => void;
-  onCombine?: () => void;
+  readonly isEditing: boolean;
+  readonly canEdit: boolean;
+  readonly canDelete: boolean;
+  readonly isSaving?: boolean;
+  readonly isDeleting?: boolean;
+  readonly onEdit: () => void;
+  readonly onCancelEdit: () => void;
+  readonly onSave: () => void;
+  readonly onDelete: () => void;
+  readonly onClose: () => void;
+  readonly onCombine?: () => void;
 }
 
 export function WorkoutDetailFooter({
@@ -194,10 +194,10 @@ export function WorkoutDetailFooter({
 }
 
 interface DeleteConfirmDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onConfirm: () => void;
-  isDeleting?: boolean;
+  readonly open: boolean;
+  readonly onOpenChange: (open: boolean) => void;
+  readonly onConfirm: () => void;
+  readonly isDeleting?: boolean;
 }
 
 export function DeleteConfirmDialog({ open, onOpenChange, onConfirm, isDeleting }: DeleteConfirmDialogProps) {

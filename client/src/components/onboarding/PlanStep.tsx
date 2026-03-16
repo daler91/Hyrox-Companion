@@ -2,10 +2,10 @@ import { Button } from "@/components/ui/button";
 import { Loader2, Sparkles, FileText } from "lucide-react";
 
 interface PlanStepProps {
-  isPending: boolean;
-  onUseSamplePlan: () => void;
-  onImportPlan: () => void;
-  onSkip: () => void;
+  readonly isPending: boolean;
+  readonly onUseSamplePlan: () => void;
+  readonly onImportPlan: () => void;
+  readonly onSkip: () => void;
 }
 
 export function PlanStep({ isPending, onUseSamplePlan, onImportPlan, onSkip }: PlanStepProps) {

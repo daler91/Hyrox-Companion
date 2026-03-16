@@ -6,9 +6,9 @@ export interface QuickAction {
 }
 
 interface QuickActionsProps {
-  actions: QuickAction[];
-  onSelect: (action: QuickAction) => void;
-  disabled?: boolean;
+  readonly actions: QuickAction[];
+  readonly onSelect: (action: QuickAction) => void;
+  readonly disabled?: boolean;
 }
 
 export function QuickActions({ actions, onSelect, disabled }: QuickActionsProps) {

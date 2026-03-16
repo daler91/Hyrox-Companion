@@ -16,10 +16,10 @@ import { FilterStatus } from "./types";
 import { TrainingPlan } from "@shared/schema";
 
 interface TimelineEmptyStateProps {
-  filterStatus: FilterStatus;
-  selectedPlanId: string | null;
-  plans: TrainingPlan[];
-  samplePlanMutation: { mutate: () => void; isPending: boolean };
+  readonly filterStatus: FilterStatus;
+  readonly selectedPlanId: string | null;
+  readonly plans: TrainingPlan[];
+  readonly samplePlanMutation: { mutate: () => void; isPending: boolean };
   importMutation: { isPending: boolean };
   handleFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   setSchedulingPlanId: (id: string) => void;

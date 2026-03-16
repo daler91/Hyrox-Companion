@@ -20,10 +20,10 @@ export interface CsvPreviewData {
 }
 
 interface ImportPreviewDialogProps {
-  preview: CsvPreviewData | null;
-  onOpenChange: (open: boolean) => void;
-  onConfirm: () => void;
-  isPending: boolean;
+  readonly preview: CsvPreviewData | null;
+  readonly onOpenChange: (open: boolean) => void;
+  readonly onConfirm: () => void;
+  readonly isPending: boolean;
 }
 
 export default function ImportPreviewDialog({

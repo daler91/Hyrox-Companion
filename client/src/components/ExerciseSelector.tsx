@@ -20,10 +20,10 @@ import React from "react";
 import { categoryLabels } from "@/lib/exerciseUtils";
 
 interface ExerciseSelectorProps {
-  selectedExercises: ExerciseName[];
-  onToggle: (name: ExerciseName) => void;
-  onAdd?: (name: ExerciseName) => void;
-  allowDuplicates?: boolean;
+  readonly selectedExercises: ExerciseName[];
+  readonly onToggle: (name: ExerciseName) => void;
+  readonly onAdd?: (name: ExerciseName) => void;
+  readonly allowDuplicates?: boolean;
 }
 
 const exerciseIcons: Partial<Record<ExerciseName, typeof Wind>> = {
