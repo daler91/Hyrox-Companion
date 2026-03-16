@@ -1,11 +1,9 @@
-import { Router } from "express";
+import { Router, type Response } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
 import { getUserId, AuthenticatedRequest } from "../types";
 
 const router = Router();
-
-import type { Response } from "express";
 
 router.get('/api/auth/user', isAuthenticated, async (req: AuthenticatedRequest, res: Response) => {
   try {
