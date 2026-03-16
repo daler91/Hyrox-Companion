@@ -3,8 +3,9 @@ import { db } from "../db";
 import { workoutLogs, exerciseSets, planDays, customExercises } from "@shared/schema";
 import type { InsertWorkoutLog, UpdateWorkoutLog, InsertExerciseSet, WorkoutLog, ExerciseSet } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
+import type { ParsedExercise } from "../gemini";
 
-export function expandExercisesToSetRows(exercises: any[], workoutLogId: string): InsertExerciseSet[] {
+export function expandExercisesToSetRows(exercises: ParsedExercise[], workoutLogId: string): InsertExerciseSet[] {
   const rows: InsertExerciseSet[] = [];
   let sortOrder = 0;
   for (const ex of exercises) {
@@ -38,6 +39,7 @@ export function expandExercisesToSetRows(exercises: any[], workoutLogId: string)
           weight: ex.weight ?? null,
           distance: ex.distance ?? null,
           time: ex.time ?? null,
+          confidence: ex.confidence ?? null,
           notes: ex.notes || null,
           sortOrder: sortOrder++,
         });
@@ -51,7 +53,7 @@ export function expandExercisesToSetRows(exercises: any[], workoutLogId: string)
 export async function prepareParsedWorkout(
   workout: { id: string; mainWorkout?: string | null; accessory?: string | null },
   weightUnit: string
-): Promise<{ exercises: any[]; setRows: InsertExerciseSet[] } | null> {
+): Promise<{ exercises: ParsedExercise[]; setRows: InsertExerciseSet[] } | null> {
   const { parseExercisesFromText } = await import("../gemini");
 
   const textToParse = [workout.mainWorkout, workout.accessory].filter(Boolean).join("\n");
@@ -81,7 +83,7 @@ export async function saveParsedWorkout(
 export async function reparseWorkout(
   workout: { id: string; mainWorkout?: string | null; accessory?: string | null },
   weightUnit: string
-): Promise<{ exercises: any[]; setCount: number } | null> {
+): Promise<{ exercises: ParsedExercise[]; setCount: number } | null> {
   const prepared = await prepareParsedWorkout(workout, weightUnit);
   if (!prepared) return null;
 
@@ -94,7 +96,7 @@ export type UpdateWorkoutResult = WorkoutLog & { exerciseSets?: ExerciseSet[] };
 
 export async function createWorkout(
   workoutData: InsertWorkoutLog,
-  exercises: any[] | undefined,
+  exercises: ParsedExercise[] | undefined,
   userId: string
 ): Promise<CreateWorkoutResult> {
   if (exercises && Array.isArray(exercises) && exercises.length > 0) {
@@ -118,7 +120,7 @@ export async function createWorkout(
         .filter((ex) => ex.exerciseName === "custom" && ex.customLabel)
         .map((ex) => ({
           userId,
-          name: ex.customLabel,
+          name: ex.customLabel!,
           category: ex.category || "conditioning",
         }));
 
@@ -142,7 +144,7 @@ export async function createWorkout(
 export async function updateWorkout(
   workoutId: string,
   updateData: UpdateWorkoutLog,
-  exercises: any[] | undefined,
+  exercises: ParsedExercise[] | undefined,
   userId: string
 ): Promise<UpdateWorkoutResult | null> {
   if (exercises && Array.isArray(exercises)) {
@@ -169,7 +171,7 @@ export async function updateWorkout(
           .filter((ex) => ex.exerciseName === "custom" && ex.customLabel)
           .map((ex) => ({
             userId,
-            name: ex.customLabel,
+            name: ex.customLabel!,
             category: ex.category || "conditioning",
           }));
 
