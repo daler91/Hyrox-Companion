@@ -56,39 +56,48 @@ interface DayAnalytics {
 }
 
 export function calculateExerciseAnalytics(allSets: ExerciseSet[]): Record<string, DayAnalytics[]> {
-  const byExercise: Record<string, ExerciseSet[]> = {};
+  const analytics: Record<string, Record<string, DayAnalytics>> = {};
 
-  for (const set of allSets) {
-    const exerciseKey = getExerciseKey(set);
-    if (!byExercise[exerciseKey]) byExercise[exerciseKey] = [];
-    byExercise[exerciseKey].push(set);
-  }
+  allSets.forEach((s) => {
+    const exerciseKey = getExerciseKey(s);
 
-  const analytics: Record<string, DayAnalytics[]> = {};
-
-  for (const [exercise, sets] of Object.entries(byExercise)) {
-    const byDate: Record<string, ExerciseSet[]> = {};
-    for (const s of sets) {
-      if (!byDate[s.date]) byDate[s.date] = [];
-      byDate[s.date].push(s);
+    if (!analytics[exerciseKey]) {
+      analytics[exerciseKey] = {};
     }
 
-    analytics[exercise] = Object.entries(byDate)
-      .map(([date, daySets]) => {
-        let totalVolume = 0;
-        let maxWeight = 0;
-        let totalReps = 0;
-        let totalDistance = 0;
-        for (const s of daySets) {
-          if (s.weight && s.reps) totalVolume += s.weight * s.reps;
-          if (s.weight && s.weight > maxWeight) maxWeight = s.weight;
-          if (s.reps) totalReps += s.reps;
-          if (s.distance) totalDistance += s.distance;
-        }
-        return { date, totalVolume, maxWeight, totalSets: daySets.length, totalReps, totalDistance };
-      })
-      .sort((a, b) => a.date.localeCompare(b.date));
-  }
+    const byDate = analytics[exerciseKey];
 
-  return analytics;
+    if (!byDate[s.date]) {
+      byDate[s.date] = {
+        date: s.date,
+        totalVolume: 0,
+        maxWeight: 0,
+        totalSets: 0,
+        totalReps: 0,
+        totalDistance: 0
+      };
+    }
+
+    const day = byDate[s.date];
+    day.totalSets += 1;
+    if (s.weight && s.reps) {
+      day.totalVolume += s.weight * s.reps;
+    }
+    if (s.weight && s.weight > day.maxWeight) {
+      day.maxWeight = s.weight;
+    }
+    if (s.reps) {
+      day.totalReps += s.reps;
+    }
+    if (s.distance) {
+      day.totalDistance += s.distance;
+    }
+  });
+
+  const finalAnalytics: Record<string, DayAnalytics[]> = {};
+  Object.entries(analytics).forEach(([exercise, data]) => {
+    finalAnalytics[exercise] = Object.values(data).sort((a, b) => a.date.localeCompare(b.date));
+  });
+
+  return finalAnalytics;
 }
