@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { importPlanFromCSV, validateAndMapCSVRows } from "./planService";
+import { importPlanFromCSV, validateAndMapCSVRows, createSamplePlan } from "./planService";
+import { storage } from "../storage";
+import { samplePlanDays } from "../samplePlan";
 import * as csvParse from "csv-parse/sync";
 
 vi.mock("csv-parse/sync", () => {
@@ -42,6 +44,65 @@ describe("planService", () => {
 
       expect(csvParse.parse).toHaveBeenCalledWith(invalidCSV, expect.any(Object));
       expect(consoleErrorSpy).toHaveBeenCalledWith("CSV parse error:", mockError);
+    });
+  });
+
+  describe("createSamplePlan", () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it("should create a sample plan and its days correctly", async () => {
+      const userId = "test-user-id";
+      const mockPlanId = "mock-plan-id";
+      const mockFullPlan = { id: mockPlanId, name: "8-Week Hyrox Training Plan", userId, days: [] };
+
+      // Mock the storage functions
+      vi.mocked(storage.createTrainingPlan).mockResolvedValue({
+        id: mockPlanId,
+        userId,
+        name: "8-Week Hyrox Training Plan",
+        sourceFileName: null,
+        totalWeeks: 8,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as any);
+
+      vi.mocked(storage.createPlanDays).mockResolvedValue(undefined as any);
+      vi.mocked(storage.getTrainingPlan).mockResolvedValue(mockFullPlan as any);
+
+      const result = await createSamplePlan(userId);
+
+      // Verify createTrainingPlan was called with correct parameters
+      expect(storage.createTrainingPlan).toHaveBeenCalledTimes(1);
+      expect(storage.createTrainingPlan).toHaveBeenCalledWith({
+        userId,
+        name: "8-Week Hyrox Training Plan",
+        sourceFileName: null,
+        totalWeeks: 8,
+      });
+
+      // Verify createPlanDays was called with correct parameters
+      expect(storage.createPlanDays).toHaveBeenCalledTimes(1);
+
+      const expectedDays = samplePlanDays.map((d) => ({
+        planId: mockPlanId,
+        weekNumber: d.week,
+        dayName: d.day,
+        focus: d.focus,
+        mainWorkout: d.main,
+        accessory: d.accessory,
+        notes: d.notes,
+      }));
+
+      expect(storage.createPlanDays).toHaveBeenCalledWith(expectedDays);
+
+      // Verify getTrainingPlan was called
+      expect(storage.getTrainingPlan).toHaveBeenCalledTimes(1);
+      expect(storage.getTrainingPlan).toHaveBeenCalledWith(mockPlanId, userId);
+
+      // Verify the returned result
+      expect(result).toEqual(mockFullPlan);
     });
   });
 
