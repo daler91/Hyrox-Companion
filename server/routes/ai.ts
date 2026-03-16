@@ -39,11 +39,15 @@ async function prepareChatContext(req: AuthenticatedRequest) {
   const userId = getUserId(req);
   const trainingContext = await buildTrainingContext(userId);
 
+  if (!trainingContext) {
+    return { success: false as const, error: "Training context could not be loaded" };
+  }
+
   return {
     success: true as const,
-    message: message as string,
-    history: (history || []) as ChatMessage[],
-    trainingContext: trainingContext as NonNullable<typeof trainingContext>
+    message,
+    history: history || [],
+    trainingContext
   };
 }
 
