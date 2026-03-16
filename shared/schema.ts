@@ -315,11 +315,11 @@ export const chatRequestSchema = z.object({
 });
 
 export const parseExercisesRequestSchema = z.object({
-  text: z.string().min(1, "Text is required").trim(),
+  text: z.string().trim().min(1, "Text is required").max(100000, "Text must be 100,000 characters or less"),
 });
 
 export const importPlanRequestSchema = z.object({
-  csvContent: z.string().min(1, "CSV content is required"),
+  csvContent: z.string().min(1, "CSV content is required").max(1000000, "CSV content must be 1,000,000 characters or less"),
   fileName: z.string().optional(),
   planName: z.string().optional(),
 });
