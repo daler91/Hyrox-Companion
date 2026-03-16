@@ -202,4 +202,66 @@ describe("Analytics Routes", () => {
       expect(response.body).toEqual({ error: "Failed to fetch exercise analytics" });
     });
   });
+
+    describe("getExerciseSetsCoalesced caching logic", () => {
+    it("should coalesce concurrent requests to the database", async () => {
+      const mockStorage = await import("../../storage");
+      const { storage } = mockStorage as any;
+
+      let resolvePromise: (value: any) => void;
+      const delayedPromise = new Promise<any[]>((resolve) => {
+        resolvePromise = resolve;
+      });
+
+      storage.getAllExerciseSetsWithDates.mockImplementation(() => delayedPromise);
+
+      // Start the requests concurrently by wrapping them in promises
+      const p1 = request(app).get("/api/personal-records");
+      const p2 = request(app).get("/api/personal-records");
+      const p3 = request(app).get("/api/personal-records");
+
+      // Give the event loop time to reach the storage call for all requests
+      setTimeout(() => {
+        resolvePromise([
+          { id: "set1", exerciseName: "Squat", weight: "100", reps: 10 }
+        ]);
+      }, 50);
+
+      const [res1, res2, res3] = await Promise.all([p1, p2, p3]);
+
+      expect(res1.status).toBe(200);
+      expect(res2.status).toBe(200);
+      expect(res3.status).toBe(200);
+
+      expect(storage.getAllExerciseSetsWithDates).toHaveBeenCalledTimes(1);
+    });
+
+    it("should not coalesce sequential requests after the first resolves", async () => {
+      const mockStorage = await import("../../storage");
+      const { storage } = mockStorage as any;
+
+      storage.getAllExerciseSetsWithDates.mockResolvedValue([]);
+
+      await request(app).get("/api/personal-records");
+      await request(app).get("/api/personal-records");
+
+      expect(storage.getAllExerciseSetsWithDates).toHaveBeenCalledTimes(2);
+    });
+
+    it("should clear cache if the promise rejects so subsequent requests retry", async () => {
+      const mockStorage = await import("../../storage");
+      const { storage } = mockStorage as any;
+
+      storage.getAllExerciseSetsWithDates.mockRejectedValueOnce(new Error("Database error"));
+      storage.getAllExerciseSetsWithDates.mockResolvedValueOnce([]);
+
+      const res1 = await request(app).get("/api/personal-records");
+      const res2 = await request(app).get("/api/personal-records");
+
+      expect(res1.status).toBe(500);
+      expect(res2.status).toBe(200);
+
+      expect(storage.getAllExerciseSetsWithDates).toHaveBeenCalledTimes(2);
+    });
+  });
 });
