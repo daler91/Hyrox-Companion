@@ -31,8 +31,7 @@ interface CoachPanelProps {
   readonly isNewUser?: boolean;
 }
 
-export function CoachPanel(props: Readonly<CoachPanelProps>) {
-  const { isOpen, onClose, timeline = [], isNewUser = false } = props;
+export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }: CoachPanelProps) {
   const [localMessages, setLocalMessages] = useState<Message[]>([]);
   const [hasShownWelcome, setHasShownWelcome] = useState(false);
 

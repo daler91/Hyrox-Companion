@@ -13,8 +13,8 @@ import { PlanStep } from "@/components/onboarding/PlanStep";
 import { ScheduleStep } from "@/components/onboarding/ScheduleStep";
 
 interface OnboardingWizardProps {
-  open: boolean;
-  onComplete: (choice: "sample" | "import" | "skip") => void;
+  readonly open: boolean;
+  readonly onComplete: (choice: "sample" | "import" | "skip") => void;
 }
 
 type Step = "welcome" | "units" | "goal" | "plan" | "schedule";
@@ -26,7 +26,7 @@ const PREV: Partial<Record<Step, Step>> = { units: "welcome", goal: "units", pla
 
 const markComplete = () => localStorage.setItem("hyrox-onboarding-complete", "true");
 
-export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizardProps>) {
+export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
   const { toast } = useToast();
   const [step, setStep] = useState<Step>("welcome");
   const [weightUnit, setWeightUnit] = useState<"kg" | "lbs">("kg");

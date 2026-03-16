@@ -44,16 +44,16 @@ function downloadTemplate() {
 }
 
 interface TimelineFiltersProps {
-  plans: TrainingPlan[];
-  plansLoading: boolean;
-  selectedPlanId: string | null;
-  onPlanChange: (planId: string | null) => void;
-  filterStatus: FilterStatus;
-  onFilterChange: (status: FilterStatus) => void;
-  onFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
-  isImporting: boolean;
-  onRenamePlan?: (planId: string, newName: string) => void;
-  isRenaming?: boolean;
+  readonly plans: TrainingPlan[];
+  readonly plansLoading: boolean;
+  readonly selectedPlanId: string | null;
+  readonly onPlanChange: (planId: string | null) => void;
+  readonly filterStatus: FilterStatus;
+  readonly onFilterChange: (status: FilterStatus) => void;
+  readonly onFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  readonly isImporting: boolean;
+  readonly onRenamePlan?: (planId: string, newName: string) => void;
+  readonly isRenaming?: boolean;
 }
 
 export default function TimelineFilters({
@@ -67,7 +67,7 @@ export default function TimelineFilters({
   isImporting,
   onRenamePlan,
   isRenaming,
-}: Readonly<TimelineFiltersProps>) {
+}: TimelineFiltersProps) {
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [renameName, setRenameName] = useState("");
 
