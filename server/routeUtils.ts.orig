@@ -56,7 +56,7 @@ export function rateLimiter(category: string, maxRequests: number, windowMs: num
   };
 }
 
-const cleanupInterval = setInterval(() => {
+setInterval(() => {
   const now = Date.now();
   rateLimitBuckets.forEach((bucket, key) => {
     if (now >= bucket.resetAt) {
@@ -64,7 +64,6 @@ const cleanupInterval = setInterval(() => {
     }
   });
 }, CLEANUP_INTERVAL_MS);
-cleanupInterval.unref();
 
 export function calculateStreak(completedDates: Set<string>): number {
   if (completedDates.size === 0) return 0;
