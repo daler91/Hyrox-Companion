@@ -1,15 +1,6 @@
-interface ExerciseSet {
-  exerciseName: string;
-  customLabel?: string | null;
-  category: string;
-  date: string;
-  workoutLogId: string;
-  setNumber: number;
-  reps?: number | null;
-  weight?: number | null;
-  distance?: number | null;
-  time?: number | null;
-}
+import type { ExerciseSet as SharedExerciseSet } from "@shared/schema";
+
+export type ExerciseSet = SharedExerciseSet & { date: string };
 
 interface PRRecord {
   category: string;
