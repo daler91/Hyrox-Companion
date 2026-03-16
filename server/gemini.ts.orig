@@ -9,8 +9,6 @@ import {
   buildSystemPrompt,
 } from "./prompts";
 
-const GEMINI_MODEL = "gemini-3-flash-preview";
-
 let _ai: GoogleGenAI | null = null;
 function getAiClient(): GoogleGenAI {
   if (!_ai) {
@@ -211,7 +209,7 @@ export async function generateWorkoutSuggestions(
 
     const response = await retryWithBackoff(
       () => getAiClient().models.generateContent({
-        model: GEMINI_MODEL,
+        model: "gemini-3-flash-preview",
         config: {
           systemInstruction: SUGGESTIONS_PROMPT,
           responseMimeType: "application/json",
@@ -249,7 +247,7 @@ export async function chatWithCoach(
     const systemPrompt = buildSystemPrompt(trainingContext);
 
     const response = await getAiClient().models.generateContent({
-      model: GEMINI_MODEL,
+      model: "gemini-3-flash-preview",
       config: {
         systemInstruction: systemPrompt,
       },
@@ -280,7 +278,7 @@ and use the matching name as customLabel: ${customExerciseNames.join(", ")}`;
 
     const response = await retryWithBackoff(
       () => getAiClient().models.generateContent({
-        model: GEMINI_MODEL,
+        model: "gemini-3-flash-preview",
         config: {
           systemInstruction: PARSE_EXERCISES_PROMPT + unitNote + customNote,
           responseMimeType: "application/json",
@@ -358,7 +356,7 @@ export async function* streamChatWithCoach(
     const systemPrompt = buildSystemPrompt(trainingContext);
 
     const response = await getAiClient().models.generateContentStream({
-      model: GEMINI_MODEL,
+      model: "gemini-3-flash-preview",
       config: {
         systemInstruction: systemPrompt,
       },
