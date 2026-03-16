@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { importPlanFromCSV, validateAndMapCSVRows, createSamplePlan } from "./planService";
+import { importPlanFromCSV, validateAndMapCSVRows, createSamplePlan, updatePlanDayWithCleanup } from "./planService";
+import { db } from "../db";
+
+import { exerciseSets, planDays } from "@shared/schema";
 import { storage } from "../storage";
 import { samplePlanDays } from "../samplePlan";
 import * as csvParse from "csv-parse/sync";
@@ -10,6 +13,14 @@ vi.mock("csv-parse/sync", () => {
   };
 });
 
+vi.mock("../db", () => {
+  return {
+    db: {
+      transaction: vi.fn(),
+    },
+  };
+});
+
 // We'll mock the storage module to avoid interacting with the database
 vi.mock("../storage", () => {
   return {
@@ -17,6 +28,7 @@ vi.mock("../storage", () => {
       createTrainingPlan: vi.fn(),
       createPlanDays: vi.fn(),
       getTrainingPlan: vi.fn(),
+      updatePlanDay: vi.fn(),
     },
   };
 });
@@ -177,8 +189,8 @@ describe("planService", () => {
         Focus: "",
         "Main Workout": "",
         "Accessory/Engine Work": "100",
-        Accessory: "", // false || '' evaluates to '', String('') is ''
-        Notes: "" // [] is truthy, so [] || '' -> [], String([]) -> ''
+        Accessory: "",
+        Notes: ""
       }]);
     });
 
@@ -201,6 +213,103 @@ describe("planService", () => {
         Accessory: "",
         Notes: ""
       }]);
+    });
+  });
+
+  describe("updatePlanDayWithCleanup", () => {
+    const dayId = "test-day-id";
+    const userId = "test-user-id";
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    const setupMockTransaction = (linkedLogs: any[], dayExistenceResult: any[], expectedResult: any[]) => {
+      const mockTx = {
+        select: vi.fn(),
+        delete: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        update: vi.fn().mockReturnThis(),
+        set: vi.fn().mockReturnThis(),
+        returning: vi.fn().mockResolvedValue(expectedResult),
+      };
+
+      mockTx.select = vi.fn()
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnValueOnce({
+            where: vi.fn().mockReturnValueOnce({
+              limit: vi.fn().mockResolvedValue(linkedLogs),
+            })
+          })
+        })
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnValueOnce({
+            innerJoin: vi.fn().mockReturnValueOnce({
+              where: vi.fn().mockResolvedValue(dayExistenceResult)
+            })
+          })
+        });
+
+      vi.mocked(db.transaction).mockImplementation(async (callback) => {
+        return await callback(mockTx as any);
+      });
+
+      return mockTx;
+    };
+
+    it("should call storage.updatePlanDay when mainWorkout is not updated", async () => {
+      const updates = { focus: "New Focus" };
+      const expectedResult = { id: dayId, focus: "New Focus" };
+
+      vi.mocked(storage.updatePlanDay).mockResolvedValue(expectedResult as any);
+
+      const result = await updatePlanDayWithCleanup(dayId, updates, userId);
+
+      expect(storage.updatePlanDay).toHaveBeenCalledTimes(1);
+      expect(storage.updatePlanDay).toHaveBeenCalledWith(dayId, updates, userId);
+      expect(db.transaction).not.toHaveBeenCalled();
+      expect(result).toEqual(expectedResult);
+    });
+
+    it("should handle mainWorkout update when no linked log exists", async () => {
+      const updates = { mainWorkout: "New Workout" };
+      const expectedResult = { id: dayId, mainWorkout: "New Workout" };
+
+      const mockTx = setupMockTransaction([], [{ planDay: { id: dayId } }], [expectedResult]);
+
+      const result = await updatePlanDayWithCleanup(dayId, updates, userId);
+
+      expect(db.transaction).toHaveBeenCalledTimes(1);
+      expect(mockTx.delete).not.toHaveBeenCalled();
+      expect(mockTx.update).toHaveBeenCalledWith(planDays);
+      expect(result).toEqual(expectedResult);
+    });
+
+    it("should delete exercise sets when mainWorkout is updated and linked log exists", async () => {
+      const updates = { mainWorkout: "New Workout" };
+      const expectedResult = { id: dayId, mainWorkout: "New Workout" };
+      const mockLinkedLog = { id: "log-id" };
+
+      const mockTx = setupMockTransaction([mockLinkedLog], [{ planDay: { id: dayId } }], [expectedResult]);
+
+      const result = await updatePlanDayWithCleanup(dayId, updates, userId);
+
+      expect(db.transaction).toHaveBeenCalledTimes(1);
+      expect(mockTx.delete).toHaveBeenCalledWith(exerciseSets);
+      expect(mockTx.update).toHaveBeenCalledWith(planDays);
+      expect(result).toEqual(expectedResult);
+    });
+
+    it("should return undefined if planDay does not exist or does not belong to user", async () => {
+      const updates = { mainWorkout: "New Workout" };
+
+      const mockTx = setupMockTransaction([], [], []);
+
+      const result = await updatePlanDayWithCleanup(dayId, updates, userId);
+
+      expect(db.transaction).toHaveBeenCalledTimes(1);
+      expect(mockTx.update).not.toHaveBeenCalled();
+      expect(result).toBeUndefined();
     });
   });
 });
