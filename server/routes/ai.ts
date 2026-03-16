@@ -39,7 +39,7 @@ async function prepareChatContext(req: AuthenticatedRequest) {
   const userId = getUserId(req);
   const trainingContext = await buildTrainingContext(userId);
 
-  return { success: true, message, history, trainingContext };
+  return { success: true, message: message!, history: history || [], trainingContext };
 }
 
 router.post("/api/chat", isAuthenticated, rateLimiter("chat", 10), async (req: AuthenticatedRequest, res) => {
@@ -50,7 +50,7 @@ router.post("/api/chat", isAuthenticated, rateLimiter("chat", 10), async (req: A
     }
     const { message, history, trainingContext } = context;
 
-    const response = await chatWithCoach(message, history, trainingContext);
+    const response = await chatWithCoach(message as string, (history as ChatMessage[]) || [], trainingContext!);
     res.json({ response });
   } catch (error) {
     console.error("Chat error:", error);
@@ -72,7 +72,7 @@ router.post("/api/chat/stream", isAuthenticated, rateLimiter("chat", 10), async 
     res.flushHeaders();
 
     try {
-      const stream = streamChatWithCoach(message, history, trainingContext);
+      const stream = streamChatWithCoach(message as string, (history as ChatMessage[]) || [], trainingContext!);
 
       for await (const chunk of stream) {
         res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
