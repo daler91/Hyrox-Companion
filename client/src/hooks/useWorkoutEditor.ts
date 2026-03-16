@@ -75,6 +75,54 @@ export function generateSummary(exercises: StructuredExercise[], weightUnit: str
   }).join("; ");
 }
 
+
+function processParsedExercises(parsed: ParsedExercise[], counterRef: MutableRefObject<number>) {
+  const newBlocks: string[] = [];
+  const newData: Record<string, StructuredExercise> = {};
+
+  for (const ex of parsed) {
+    const rawName = ex.exerciseName as ExerciseName;
+    const isKnown = rawName in EXERCISE_DEFINITIONS;
+    const exName = isKnown ? rawName : ("custom" as ExerciseName);
+    const blockId = makeBlockId(exName === "custom" ? `custom:${ex.customLabel || ex.exerciseName}` : exName, counterRef);
+
+    newBlocks.push(blockId);
+    newData[blockId] = {
+      exerciseName: exName,
+      category: isKnown ? EXERCISE_DEFINITIONS[rawName].category : ex.category,
+      customLabel: isKnown ? undefined : (ex.customLabel || ex.exerciseName),
+      confidence: ex.confidence,
+      missingFields: ex.missingFields,
+      sets: ex.sets.map((s, i) => ({
+        setNumber: s.setNumber || i + 1,
+        reps: s.reps,
+        weight: s.weight,
+        distance: s.distance,
+        time: s.time,
+      })),
+    };
+  }
+
+  return { newBlocks, newData };
+}
+
+function getParseSuccessDescription(parsed: ParsedExercise[]): string {
+  const lowConfCount = parsed.filter(e => e.confidence != null && e.confidence < 80).length;
+  const missingCount = parsed.filter(e => e.missingFields && e.missingFields.length > 0).length;
+
+  let description = `Found ${parsed.length} exercise${parsed.length !== 1 ? "s" : ""}.`;
+  if (lowConfCount > 0) {
+    description += ` ${lowConfCount} may need review (low confidence).`;
+  }
+  if (missingCount > 0) {
+    description += ` ${missingCount} ha${missingCount === 1 ? "s" : "ve"} missing data — check the yellow warnings.`;
+  }
+  if (lowConfCount === 0 && missingCount === 0) {
+    description += " Review the details below.";
+  }
+  return description;
+}
+
 export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
   const { toast } = useToast();
   const blockCounterRef = useRef(options.initialBlockCounter ?? 0);
@@ -147,49 +195,15 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
         return;
       }
 
-      const newBlocks: string[] = [];
-      const newData: Record<string, StructuredExercise> = {};
-
-      for (const ex of parsed) {
-        const rawName = ex.exerciseName as ExerciseName;
-        const isKnown = rawName in EXERCISE_DEFINITIONS;
-        const exName = isKnown ? rawName : ("custom" as ExerciseName);
-        const blockId = makeBlockId(exName === "custom" ? `custom:${ex.customLabel || ex.exerciseName}` : exName, blockCounterRef);
-
-        newBlocks.push(blockId);
-        newData[blockId] = {
-          exerciseName: exName,
-          category: isKnown ? EXERCISE_DEFINITIONS[rawName].category : ex.category,
-          customLabel: isKnown ? undefined : (ex.customLabel || ex.exerciseName),
-          confidence: ex.confidence,
-          missingFields: ex.missingFields,
-          sets: ex.sets.map((s, i) => ({
-            setNumber: s.setNumber || i + 1,
-            reps: s.reps,
-            weight: s.weight,
-            distance: s.distance,
-            time: s.time,
-          })),
-        };
-      }
-
+      const { newBlocks, newData } = processParsedExercises(parsed, blockCounterRef);
       setExerciseBlocks(newBlocks);
       setExerciseData(newData);
       setUseTextMode(false);
 
-      const lowConfCount = parsed.filter(e => e.confidence != null && e.confidence < 80).length;
-      const missingCount = parsed.filter(e => e.missingFields && e.missingFields.length > 0).length;
-      let description = `Found ${parsed.length} exercise${parsed.length !== 1 ? "s" : ""}.`;
-      if (lowConfCount > 0) {
-        description += ` ${lowConfCount} may need review (low confidence).`;
-      }
-      if (missingCount > 0) {
-        description += ` ${missingCount} ha${missingCount === 1 ? "s" : "ve"} missing data — check the yellow warnings.`;
-      }
-      if (lowConfCount === 0 && missingCount === 0) {
-        description += " Review the details below.";
-      }
-      toast({ title: "Exercises parsed", description });
+      toast({
+        title: "Exercises parsed",
+        description: getParseSuccessDescription(parsed),
+      });
     },
     onError: () => {
       toast({
