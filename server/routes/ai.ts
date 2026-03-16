@@ -32,14 +32,19 @@ router.post("/api/parse-exercises", isAuthenticated, rateLimiter("parse", 5), as
 async function prepareChatContext(req: AuthenticatedRequest) {
   const parseResult = chatRequestSchema.safeParse(req.body);
   if (!parseResult.success) {
-    return { success: false, error: parseResult.error.errors[0].message };
+    return { success: false as const, error: parseResult.error.errors[0].message };
   }
   const { message, history } = parseResult.data;
 
   const userId = getUserId(req);
   const trainingContext = await buildTrainingContext(userId);
 
-  return { success: true, message: message!, history: history || [], trainingContext };
+  return {
+    success: true as const,
+    message: message as string,
+    history: (history || []) as ChatMessage[],
+    trainingContext: trainingContext as NonNullable<typeof trainingContext>
+  };
 }
 
 router.post("/api/chat", isAuthenticated, rateLimiter("chat", 10), async (req: AuthenticatedRequest, res) => {
@@ -50,7 +55,7 @@ router.post("/api/chat", isAuthenticated, rateLimiter("chat", 10), async (req: A
     }
     const { message, history, trainingContext } = context;
 
-    const response = await chatWithCoach(message as string, (history as ChatMessage[]) || [], trainingContext!);
+    const response = await chatWithCoach(message, history, trainingContext);
     res.json({ response });
   } catch (error) {
     console.error("Chat error:", error);
@@ -72,7 +77,7 @@ router.post("/api/chat/stream", isAuthenticated, rateLimiter("chat", 10), async 
     res.flushHeaders();
 
     try {
-      const stream = streamChatWithCoach(message as string, (history as ChatMessage[]) || [], trainingContext!);
+      const stream = streamChatWithCoach(message, history, trainingContext);
 
       for await (const chunk of stream) {
         res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
