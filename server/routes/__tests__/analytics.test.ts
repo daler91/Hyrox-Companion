@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import express from "express";
 import request from "supertest";
-import analyticsRouter from "../analytics";
+import analyticsRouter, { validDate } from "../analytics";
 
 // Mock the clerkAuth middleware to simulate authentication
 vi.mock("../../clerkAuth", () => ({
@@ -30,6 +30,25 @@ vi.mock("../../services/analyticsService", () => ({
 }));
 
 describe("Analytics Routes", () => {
+  describe("validDate", () => {
+    it("should return undefined for falsy values", () => {
+      expect(validDate(undefined)).toBeUndefined();
+      expect(validDate(null)).toBeUndefined();
+      expect(validDate("")).toBeUndefined();
+    });
+
+    it("should return undefined for invalid date strings", () => {
+      expect(validDate("not-a-date")).toBeUndefined();
+            expect(validDate("12/12/2024")).toBeUndefined();
+    });
+
+    it("should return the date string for valid date strings", () => {
+      expect(validDate("2024-01-01")).toBe("2024-01-01");
+      expect(validDate("2024-12-31")).toBe("2024-12-31");
+    });
+  });
+
+
   let app: express.Express;
 
   beforeEach(() => {

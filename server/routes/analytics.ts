@@ -30,7 +30,7 @@ function getExerciseSetsCoalesced(userId: string, from?: string, to?: string): P
 }
 
 
-function validDate(val: unknown): string | undefined {
+export function validDate(val: unknown): string | undefined {
   if (!val) return undefined;
   const parsed = dateStringSchema.safeParse(val);
   return parsed.success ? parsed.data : undefined;
