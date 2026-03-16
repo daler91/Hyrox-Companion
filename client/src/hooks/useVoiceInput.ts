@@ -102,7 +102,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
   onErrorRef.current = onError;
 
   useEffect(() => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const SpeechRecognition = (globalThis as any).SpeechRecognition || (globalThis as any).webkitSpeechRecognition;
     setIsSupported(!!SpeechRecognition);
   }, []);
 
@@ -114,7 +114,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
   }, []);
 
   const startRecognition = useCallback(() => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const SpeechRecognition = (globalThis as any).SpeechRecognition || (globalThis as any).webkitSpeechRecognition;
     if (!SpeechRecognition) return;
 
     if (recognitionRef.current) {
@@ -210,7 +210,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
   }, [continuous, lang]);
 
   const startListening = useCallback(async () => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const SpeechRecognition = (globalThis as any).SpeechRecognition || (globalThis as any).webkitSpeechRecognition;
     if (!SpeechRecognition) return;
 
     stoppedByUserRef.current = false;
