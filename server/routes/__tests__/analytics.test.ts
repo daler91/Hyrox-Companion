@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import express from "express";
 import request from "supertest";
 import analyticsRouter, { validDate } from "../analytics";
+import { storage } from "../../storage";
+import { calculatePersonalRecords, calculateExerciseAnalytics } from "../../services/analyticsService";
+
 
 // Mock the clerkAuth middleware to simulate authentication
 vi.mock("../../clerkAuth", () => ({
@@ -61,14 +64,12 @@ describe("Analytics Routes", () => {
   describe("GET /api/personal-records", () => {
     it("should return personal records for a user", async () => {
       // Mock the storage response
-      const { storage } = (await import("../../storage")) as any;
-      storage.getAllExerciseSetsWithDates.mockResolvedValue([
+      (storage.getAllExerciseSetsWithDates as any).mockResolvedValue([
         { id: "set1", exerciseName: "Squat", weight: "100", reps: 10 }
       ]);
 
       // Mock the analytics service response
-      const { calculatePersonalRecords } = (await import("../../services/analyticsService")) as any;
-      calculatePersonalRecords.mockReturnValue({
+      (calculatePersonalRecords as any).mockReturnValue({
         Squat: { weight: "100", reps: 10, estimated1RM: 133 }
       });
 
@@ -86,12 +87,10 @@ describe("Analytics Routes", () => {
 
     it("should handle from and to date queries properly", async () => {
       // Mock the storage response
-      const { storage } = (await import("../../storage")) as any;
-      storage.getAllExerciseSetsWithDates.mockResolvedValue([]);
+      (storage.getAllExerciseSetsWithDates as any).mockResolvedValue([]);
 
       // Mock the analytics service response
-      const { calculatePersonalRecords } = (await import("../../services/analyticsService")) as any;
-      calculatePersonalRecords.mockReturnValue({});
+      (calculatePersonalRecords as any).mockReturnValue({});
 
       const response = await request(app).get("/api/personal-records?from=2024-01-01&to=2024-12-31");
 
@@ -116,8 +115,7 @@ describe("Analytics Routes", () => {
 
     it("should return 500 when storage throws an error", async () => {
       // Mock the storage to throw an error
-      const { storage } = (await import("../../storage")) as any;
-      storage.getAllExerciseSetsWithDates.mockRejectedValue(new Error("Database error"));
+      (storage.getAllExerciseSetsWithDates as any).mockRejectedValue(new Error("Database error"));
 
       const response = await request(app).get("/api/personal-records");
 
@@ -129,14 +127,12 @@ describe("Analytics Routes", () => {
   describe("GET /api/exercise-analytics", () => {
     it("should return exercise analytics for a user", async () => {
       // Mock the storage response
-      const { storage } = (await import("../../storage")) as any;
-      storage.getAllExerciseSetsWithDates.mockResolvedValue([
+      (storage.getAllExerciseSetsWithDates as any).mockResolvedValue([
         { id: "set1", exerciseName: "Bench Press", weight: "200", reps: 5 }
       ]);
 
       // Mock the analytics service response
-      const { calculateExerciseAnalytics } = (await import("../../services/analyticsService")) as any;
-      calculateExerciseAnalytics.mockReturnValue({
+      (calculateExerciseAnalytics as any).mockReturnValue({
         "Bench Press": { totalVolume: 1000, setsCount: 1, history: [] }
       });
 
@@ -154,12 +150,10 @@ describe("Analytics Routes", () => {
 
     it("should handle from and to date queries properly", async () => {
       // Mock the storage response
-      const { storage } = (await import("../../storage")) as any;
-      storage.getAllExerciseSetsWithDates.mockResolvedValue([]);
+      (storage.getAllExerciseSetsWithDates as any).mockResolvedValue([]);
 
       // Mock the analytics service response
-      const { calculateExerciseAnalytics } = (await import("../../services/analyticsService")) as any;
-      calculateExerciseAnalytics.mockReturnValue({});
+      (calculateExerciseAnalytics as any).mockReturnValue({});
 
       const response = await request(app).get("/api/exercise-analytics?from=2024-01-01&to=2024-12-31");
 
@@ -183,8 +177,7 @@ describe("Analytics Routes", () => {
 
     it("should return 500 when storage throws an error", async () => {
       // Mock the storage to throw an error
-      const { storage } = (await import("../../storage")) as any;
-      storage.getAllExerciseSetsWithDates.mockRejectedValue(new Error("Database error"));
+      (storage.getAllExerciseSetsWithDates as any).mockRejectedValue(new Error("Database error"));
 
       const response = await request(app).get("/api/exercise-analytics");
 
@@ -197,14 +190,13 @@ describe("Analytics Routes", () => {
     const makeRequest = () => request(app).get("/api/personal-records");
 
     it("should coalesce concurrent requests to the database", async () => {
-      const { storage } = (await import("../../storage")) as any;
 
       let resolvePromise: (value: any) => void;
       const delayedPromise = new Promise<any[]>((resolve) => {
         resolvePromise = resolve;
       });
 
-      storage.getAllExerciseSetsWithDates.mockImplementation(() => delayedPromise);
+      (storage.getAllExerciseSetsWithDates as any).mockImplementation(() => delayedPromise);
 
       // Start the requests concurrently by wrapping them in promises
       const p1 = makeRequest();
@@ -228,9 +220,8 @@ describe("Analytics Routes", () => {
     });
 
     it("should not coalesce sequential requests after the first resolves", async () => {
-      const { storage } = (await import("../../storage")) as any;
 
-      storage.getAllExerciseSetsWithDates.mockResolvedValue([]);
+      (storage.getAllExerciseSetsWithDates as any).mockResolvedValue([]);
 
       await makeRequest();
       await makeRequest();
@@ -239,10 +230,9 @@ describe("Analytics Routes", () => {
     });
 
     it("should clear cache if the promise rejects so subsequent requests retry", async () => {
-      const { storage } = (await import("../../storage")) as any;
 
-      storage.getAllExerciseSetsWithDates.mockRejectedValueOnce(new Error("Database error"));
-      storage.getAllExerciseSetsWithDates.mockResolvedValueOnce([]);
+      (storage.getAllExerciseSetsWithDates as any).mockRejectedValueOnce(new Error("Database error"));
+      (storage.getAllExerciseSetsWithDates as any).mockResolvedValueOnce([]);
 
       const res1 = await makeRequest();
       const res2 = await makeRequest();
