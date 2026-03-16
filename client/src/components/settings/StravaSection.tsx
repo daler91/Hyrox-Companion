@@ -20,7 +20,8 @@ interface StravaSectionProps {
   readonly stravaLoading: boolean;
 }
 
-export function StravaSection({ stravaStatus, stravaLoading }: StravaSectionProps) {
+export function StravaSection(props: Readonly<StravaSectionProps>) {
+  const { stravaStatus, stravaLoading } = props;
   const { toast } = useToast();
 
   const connectStravaMutation = useMutation({
