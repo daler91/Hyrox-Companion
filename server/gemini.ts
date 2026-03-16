@@ -83,12 +83,19 @@ export interface ParsedExercise {
   customLabel?: string;
   confidence?: number;
   missingFields?: string[];
+  numSets?: number;
+  reps?: number;
+  weight?: number;
+  distance?: number;
+  time?: number;
+  notes?: string;
   sets: Array<{
     setNumber: number;
     reps?: number;
     weight?: number;
     distance?: number;
     time?: number;
+    notes?: string;
   }>;
 }
 
