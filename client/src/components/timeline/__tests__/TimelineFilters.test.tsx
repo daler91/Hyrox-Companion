@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from "vitest";
 import TimelineFilters from "../TimelineFilters";
@@ -123,8 +123,7 @@ describe("TimelineFilters", () => {
     const mockCreateObjectURL = vi.fn().mockReturnValue("blob:mock-url");
     const mockRevokeObjectURL = vi.fn();
 
-    global.URL.createObjectURL = mockCreateObjectURL;
-    global.URL.revokeObjectURL = mockRevokeObjectURL;
+    vi.stubGlobal("URL", { ...global.URL, createObjectURL: mockCreateObjectURL, revokeObjectURL: mockRevokeObjectURL });
 
     const originalCreateElement = document.createElement.bind(document);
     const mockClick = vi.fn();
