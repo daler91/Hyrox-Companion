@@ -143,7 +143,7 @@ describe('email generation', () => {
 
     it('truncates long workout details', () => {
       const longWorkout = 'A'.repeat(150);
-      const missed = [{ ...missedWorkouts[0], mainWorkout: longWorkout }];
+      const missed = [{ ...missedWorkouts[0], mainWorkout: longWorkout, planName: undefined }];
       const { html } = buildMissedWorkoutEmail(baseUser, missed);
       expect(html).toContain('A'.repeat(120) + '...');
     });
