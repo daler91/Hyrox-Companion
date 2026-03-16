@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import express from "express";
 import request from "supertest";
+import type { AuthenticatedRequest } from "../../types";
 import emailRouter from "../email";
 
 // Mock storage
@@ -18,7 +19,7 @@ vi.mock("../../emailScheduler", () => ({
 
 // Mock clerkAuth
 vi.mock("../../clerkAuth", () => ({
-  isAuthenticated: (req: any, res: any, next: any) => next(),
+  isAuthenticated: (req: AuthenticatedRequest, res: any, next: any) => next(),
 }));
 
 describe("Email Routes", () => {

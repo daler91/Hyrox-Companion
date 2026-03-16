@@ -3,11 +3,11 @@ import crypto from "node:crypto";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
 import { checkAndSendEmailsForUser, runEmailCronJob } from "../emailScheduler";
-import { getUserId } from "../types";
+import { getUserId, type AuthenticatedRequest } from "../types";
 
 const router = Router();
 
-router.post("/api/emails/check", isAuthenticated, async (req: any, res) => {
+router.post("/api/emails/check", isAuthenticated, async (req: AuthenticatedRequest, res) => {
   try {
     const userId = getUserId(req);
     const user = await storage.getUser(userId);

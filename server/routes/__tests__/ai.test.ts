@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import express from "express";
 import request from "supertest";
+import type { AuthenticatedRequest } from "../../types";
 import aiRouter from "../ai";
 import { storage } from "../../storage";
 import { parseExercisesFromText, chatWithCoach, streamChatWithCoach, generateWorkoutSuggestions } from "../../gemini";
@@ -17,7 +18,7 @@ function parseStreamResponse(responseText: string) {
 
 // Mock the clerkAuth middleware to simulate authentication
 vi.mock("../../clerkAuth", () => ({
-  isAuthenticated: (req: any, res: any, next: any) => {
+  isAuthenticated: (req: AuthenticatedRequest, res: any, next: any) => {
     req.auth = { userId: "test_user_id" };
     next();
   },

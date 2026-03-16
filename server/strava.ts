@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { isAuthenticated } from "./clerkAuth";
 import { type DistanceUnit } from "@shared/unitConversion";
 import { mapStravaActivityToWorkout, type StravaActivity } from "./services/stravaMapper";
-import { getUserId } from "./types";
+import { getUserId, type AuthenticatedRequest } from "./types";
 import { rateLimiter } from "./routeUtils";
 
 const STRAVA_CLIENT_ID = process.env.STRAVA_CLIENT_ID;
@@ -115,7 +115,7 @@ async function getValidAccessToken(userId: string): Promise<string | null> {
 }
 
 export function registerStravaRoutes(app: Express): void {
-  app.get("/api/strava/status", isAuthenticated, async (req: any, res: Response) => {
+  app.get("/api/strava/status", isAuthenticated, async (req: AuthenticatedRequest, res: Response) => {
     try {
       const userId = getUserId(req);
       const connection = await storage.getStravaConnection(userId);
@@ -135,7 +135,7 @@ export function registerStravaRoutes(app: Express): void {
     }
   });
 
-  app.get("/api/strava/auth", isAuthenticated, stravaAuthLimiter, async (req: any, res: Response) => {
+  app.get("/api/strava/auth", isAuthenticated, stravaAuthLimiter, async (req: AuthenticatedRequest, res: Response) => {
     if (!STRAVA_CLIENT_ID) {
       return res.status(500).json({ error: "Strava integration not configured" });
     }
@@ -155,7 +155,7 @@ export function registerStravaRoutes(app: Express): void {
     res.json({ authUrl: authUrl.toString() });
   });
 
-  app.get("/api/strava/callback", stravaAuthLimiter, async (req: any, res: Response) => {
+  app.get("/api/strava/callback", stravaAuthLimiter, async (req: AuthenticatedRequest, res: Response) => {
     const { code, state, error: stravaError } = req.query;
 
     if (stravaError) {
@@ -211,7 +211,7 @@ export function registerStravaRoutes(app: Express): void {
     }
   });
 
-  app.delete("/api/strava/disconnect", isAuthenticated, async (req: any, res: Response) => {
+  app.delete("/api/strava/disconnect", isAuthenticated, async (req: AuthenticatedRequest, res: Response) => {
     try {
       const userId = getUserId(req);
       await storage.deleteStravaConnection(userId);
@@ -222,7 +222,7 @@ export function registerStravaRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/strava/sync", isAuthenticated, async (req: any, res: Response) => {
+  app.post("/api/strava/sync", isAuthenticated, async (req: AuthenticatedRequest, res: Response) => {
     try {
       const userId = getUserId(req);
       const accessToken = await getValidAccessToken(userId);
