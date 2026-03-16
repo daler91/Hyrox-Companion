@@ -59,7 +59,7 @@ describe('usePlanImport', () => {
       const mockEvent = {
         target: {
           files: [new File(['test content'], 'test.txt', { type: 'text/plain' })],
-          value: 'C:\\fakepath\\test.txt'
+          value: 'test.txt'
         }
       } as unknown as React.ChangeEvent<HTMLInputElement>;
 
@@ -83,22 +83,21 @@ describe('usePlanImport', () => {
       const mockEvent = {
         target: {
           files: [file],
-          value: 'C:\\fakepath\\plan.csv'
+          value: 'plan.csv'
         }
       } as unknown as React.ChangeEvent<HTMLInputElement>;
 
       // Mock FileReader
       const mockFileReader = {
-        readAsText: vi.fn(function(this: any) {
+        readAsText: vi.fn(function(this: { onload: (event: unknown) => void }) {
           if (this.onload) {
-            this.onload({ target: { result: csvContent } } as any);
+            this.onload({ target: { result: csvContent } });
           }
         }),
         onload: null
       };
 
-      const originalFileReader = global.FileReader;
-      global.FileReader = vi.fn(() => mockFileReader) as any;
+      vi.stubGlobal('FileReader', vi.fn(() => mockFileReader));
 
       act(() => {
         result.current.handleFileUpload(mockEvent);
@@ -117,7 +116,7 @@ describe('usePlanImport', () => {
         }]
       });
 
-      global.FileReader = originalFileReader;
+      vi.unstubAllGlobals();
     });
   });
 
