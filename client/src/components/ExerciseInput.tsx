@@ -28,12 +28,12 @@ export interface StructuredExercise {
 }
 
 interface ExerciseInputProps {
-  exercise: StructuredExercise;
-  onChange: (exercise: StructuredExercise) => void;
-  onRemove: () => void;
-  weightUnit?: "kg" | "lbs";
-  distanceUnit?: "km" | "miles";
-  blockLabel?: string;
+  readonly exercise: StructuredExercise;
+  readonly onChange: (exercise: StructuredExercise) => void;
+  readonly onRemove: () => void;
+  readonly weightUnit?: "kg" | "lbs";
+  readonly distanceUnit?: "km" | "miles";
+  readonly blockLabel?: string;
 }
 
 type FieldKey = "reps" | "weight" | "distance" | "time";
@@ -79,7 +79,7 @@ function getConfidenceClasses(confidence: number): string {
   return "bg-red-500/10 text-red-600 dark:text-red-400";
 }
 
-export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg", distanceUnit = "km", blockLabel }: Readonly<ExerciseInputProps>) {
+export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg", distanceUnit = "km", blockLabel }: ExerciseInputProps) {
   const idPrefix = useId();
   const def = EXERCISE_DEFINITIONS[exercise.exerciseName];
   const fields = getFields(exercise.exerciseName);

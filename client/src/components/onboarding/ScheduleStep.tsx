@@ -3,11 +3,11 @@ import { Calendar } from "@/components/ui/calendar";
 import { CalendarDays } from "lucide-react";
 
 interface ScheduleStepProps {
-  startDate: Date;
-  onStartDateChange: (date: Date) => void;
+  readonly startDate: Date;
+  readonly onStartDateChange: (date: Date) => void;
 }
 
-export function ScheduleStep({ startDate, onStartDateChange }: Readonly<ScheduleStepProps>) {
+export function ScheduleStep({ startDate, onStartDateChange }: ScheduleStepProps) {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">

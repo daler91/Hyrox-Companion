@@ -2,12 +2,12 @@ import { Button } from "@/components/ui/button";
 import { CalendarCheck } from "lucide-react";
 
 interface TimelineHeaderProps {
-  onScrollToToday: () => void;
+  readonly onScrollToToday: () => void;
 }
 
 export default function TimelineHeader({
   onScrollToToday,
-}: Readonly<TimelineHeaderProps>) {
+}: TimelineHeaderProps) {
   return (
     <div className="flex items-center justify-between gap-4 flex-wrap">
       <div>

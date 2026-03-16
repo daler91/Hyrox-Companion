@@ -2,13 +2,13 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 interface UnitsStepProps {
-  weightUnit: "kg" | "lbs";
-  distanceUnit: "km" | "miles";
-  onWeightUnitChange: (unit: "kg" | "lbs") => void;
-  onDistanceUnitChange: (unit: "km" | "miles") => void;
+  readonly weightUnit: "kg" | "lbs";
+  readonly distanceUnit: "km" | "miles";
+  readonly onWeightUnitChange: (unit: "kg" | "lbs") => void;
+  readonly onDistanceUnitChange: (unit: "km" | "miles") => void;
 }
 
-export function UnitsStep({ weightUnit, distanceUnit, onWeightUnitChange, onDistanceUnitChange }: Readonly<UnitsStepProps>) {
+export function UnitsStep({ weightUnit, distanceUnit, onWeightUnitChange, onDistanceUnitChange }: UnitsStepProps) {
   return (
     <div className="space-y-6">
       <div className="space-y-3">

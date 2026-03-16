@@ -105,7 +105,7 @@ interface WorkoutStravaStatsProps {
   readonly distanceUnit: string;
 }
 
-function WorkoutStravaStats({ entry, distanceUnit }: Readonly<WorkoutStravaStatsProps>) {
+function WorkoutStravaStats({ entry, distanceUnit }: WorkoutStravaStatsProps) {
   if (entry.source !== "strava") return null;
 
   const hasStravaStats =
@@ -225,7 +225,7 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
   combiningEntryId,
   combiningEntryDate,
   personalRecords,
-}: Readonly<TimelineWorkoutCardProps>) {
+}: TimelineWorkoutCardProps) {
   const { distanceUnit, weightLabel } = useUnitPreferences();
   
   const isBeingCombined = combiningEntryId === entry.id;

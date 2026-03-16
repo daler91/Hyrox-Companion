@@ -11,12 +11,12 @@ import {
 import { Loader2 } from "lucide-react";
 
 interface SchedulePlanDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  startDate: string;
-  onStartDateChange: (date: string) => void;
-  onSchedule: () => void;
-  isPending: boolean;
+  readonly open: boolean;
+  readonly onOpenChange: (open: boolean) => void;
+  readonly startDate: string;
+  readonly onStartDateChange: (date: string) => void;
+  readonly onSchedule: () => void;
+  readonly isPending: boolean;
 }
 
 export default function SchedulePlanDialog({
@@ -26,7 +26,7 @@ export default function SchedulePlanDialog({
   onStartDateChange,
   onSchedule,
   isPending,
-}: Readonly<SchedulePlanDialogProps>) {
+}: SchedulePlanDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>

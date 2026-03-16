@@ -21,15 +21,15 @@ export type ExerciseType =
   | "other";
 
 interface WorkoutCardProps {
-  id: string;
-  date: string;
-  title: string;
-  duration: number;
-  exercises: ExerciseType[];
-  notes?: string;
-  onEdit?: (id: string) => void;
-  onDelete?: (id: string) => void;
-  onDuplicate?: (id: string) => void;
+  readonly id: string;
+  readonly date: string;
+  readonly title: string;
+  readonly duration: number;
+  readonly exercises: ExerciseType[];
+  readonly notes?: string;
+  readonly onEdit?: (id: string) => void;
+  readonly onDelete?: (id: string) => void;
+  readonly onDuplicate?: (id: string) => void;
 }
 
 const exerciseLabels: Record<ExerciseType, string> = {
@@ -66,7 +66,7 @@ export function WorkoutCard({
   onEdit,
   onDelete,
   onDuplicate 
-}: Readonly<WorkoutCardProps>) {
+}: WorkoutCardProps) {
   const formatDuration = (mins: number) => {
     const hours = Math.floor(mins / 60);
     const minutes = mins % 60;

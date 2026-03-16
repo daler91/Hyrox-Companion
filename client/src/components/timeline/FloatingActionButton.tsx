@@ -4,11 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Plus, MessageSquare } from "lucide-react";
 
 interface FloatingActionButtonProps {
-  coachPanelOpen?: boolean;
-  onCoachToggle?: () => void;
+  readonly coachPanelOpen?: boolean;
+  readonly onCoachToggle?: () => void;
 }
 
-export default function FloatingActionButton({ coachPanelOpen, onCoachToggle }: Readonly<FloatingActionButtonProps>) {
+export default function FloatingActionButton({ coachPanelOpen, onCoachToggle }: FloatingActionButtonProps) {
   const [, setLocation] = useLocation();
   
   const rightPosition = coachPanelOpen 

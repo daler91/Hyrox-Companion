@@ -49,13 +49,13 @@ import { VoiceFieldButton } from "@/components/VoiceFieldButton";
 import { useToast } from "@/hooks/use-toast";
 
 interface SortableDialogBlockProps {
-  blockId: string;
-  exData: StructuredExercise;
-  blockLabel?: string;
-  weightUnit: "kg" | "lbs";
-  distanceUnit: "km" | "miles";
-  onChange: (blockId: string, ex: StructuredExercise) => void;
-  onRemove: (blockId: string) => void;
+  readonly blockId: string;
+  readonly exData: StructuredExercise;
+  readonly blockLabel?: string;
+  readonly weightUnit: "kg" | "lbs";
+  readonly distanceUnit: "km" | "miles";
+  readonly onChange: (blockId: string, ex: StructuredExercise) => void;
+  readonly onRemove: (blockId: string) => void;
 }
 
 const SortableDialogBlock = React.memo(function SortableDialogBlock({
@@ -66,7 +66,7 @@ const SortableDialogBlock = React.memo(function SortableDialogBlock({
   distanceUnit,
   onChange,
   onRemove,
-}: Readonly<SortableDialogBlockProps>) {
+}: SortableDialogBlockProps) {
   const {
     attributes,
     listeners,
@@ -108,23 +108,23 @@ const SortableDialogBlock = React.memo(function SortableDialogBlock({
 });
 
 interface WorkoutDetailViewProps {
-  entry: TimelineEntry;
-  grouped: GroupedExercise[];
-  hasStructuredData: boolean;
-  weightLabel: string;
-  distanceUnit: "km" | "miles";
+  readonly entry: TimelineEntry;
+  readonly grouped: GroupedExercise[];
+  readonly hasStructuredData: boolean;
+  readonly weightLabel: string;
+  readonly distanceUnit: "km" | "miles";
 }
 
 interface WorkoutDetailStravaMetricsProps {
-  entry: TimelineEntry;
-  distanceUnit: "km" | "miles";
+  readonly entry: TimelineEntry;
+  readonly distanceUnit: "km" | "miles";
 }
 
 const WorkoutDetailStravaMetrics = React.memo(
   function WorkoutDetailStravaMetrics({
     entry,
     distanceUnit,
-  }: Readonly<WorkoutDetailStravaMetricsProps>) {
+  }: WorkoutDetailStravaMetricsProps) {
     if (
       entry.source !== "strava" ||
       (!entry.calories &&
@@ -179,7 +179,7 @@ export const WorkoutDetailView = React.memo(function WorkoutDetailView({
   hasStructuredData,
   weightLabel,
   distanceUnit,
-}: Readonly<WorkoutDetailViewProps>) {
+}: WorkoutDetailViewProps) {
   return (
     <div className="space-y-3">
       {hasStructuredData ? (
@@ -237,36 +237,36 @@ interface EditFormState {
 }
 
 interface WorkoutDetailEditFormProps {
-  editForm: EditFormState;
-  setEditForm: (form: EditFormState) => void;
-  useTextMode: boolean;
-  setUseTextMode: (mode: boolean) => void;
-  editExercises: string[];
-  editExerciseData: Record<string, StructuredExercise>;
-  dialogSensors: SensorDescriptor<SensorOptions>[];
-  handleEditDragEnd: (event: DragEndEvent) => void;
-  handleAddExercise: (name: ExerciseName) => void;
-  handleRemoveBlock: (blockId: string) => void;
-  updateBlock: (blockId: string, ex: StructuredExercise) => void;
-  getSelectedExerciseNames: () => ExerciseName[];
-  parseMutation: UseMutationResult<ParsedExercise[], Error, string, unknown>;
-  weightUnit: "kg" | "lbs";
-  distanceUnit: "km" | "miles";
-  onParseText: () => void;
-  stopAllVoiceRef?: React.MutableRefObject<(() => void) | null>;
+  readonly editForm: EditFormState;
+  readonly setEditForm: (form: EditFormState) => void;
+  readonly useTextMode: boolean;
+  readonly setUseTextMode: (mode: boolean) => void;
+  readonly editExercises: string[];
+  readonly editExerciseData: Record<string, StructuredExercise>;
+  readonly dialogSensors: SensorDescriptor<SensorOptions>[];
+  readonly handleEditDragEnd: (event: DragEndEvent) => void;
+  readonly handleAddExercise: (name: ExerciseName) => void;
+  readonly handleRemoveBlock: (blockId: string) => void;
+  readonly updateBlock: (blockId: string, ex: StructuredExercise) => void;
+  readonly getSelectedExerciseNames: () => ExerciseName[];
+  readonly parseMutation: UseMutationResult<ParsedExercise[], Error, string, unknown>;
+  readonly weightUnit: "kg" | "lbs";
+  readonly distanceUnit: "km" | "miles";
+  readonly onParseText: () => void;
+  readonly stopAllVoiceRef?: React.MutableRefObject<(() => void) | null>;
 }
 
 interface WorkoutTextModeProps {
-  editForm: EditFormState;
-  setEditForm: (form: EditFormState) => void;
-  isMainListening: boolean;
-  isSupported: boolean;
-  mainInterim: string;
-  startMainListening: () => void;
-  stopMainListening: () => void;
-  toggleMainListening: () => void;
-  onParseText: () => void;
-  parseMutation: UseMutationResult<ParsedExercise[], Error, string, unknown>;
+  readonly editForm: EditFormState;
+  readonly setEditForm: (form: EditFormState) => void;
+  readonly isMainListening: boolean;
+  readonly isSupported: boolean;
+  readonly mainInterim: string;
+  readonly startMainListening: () => void;
+  readonly stopMainListening: () => void;
+  readonly toggleMainListening: () => void;
+  readonly onParseText: () => void;
+  readonly parseMutation: UseMutationResult<ParsedExercise[], Error, string, unknown>;
 }
 
 const WorkoutTextMode = React.memo(function WorkoutTextMode({
@@ -280,7 +280,7 @@ const WorkoutTextMode = React.memo(function WorkoutTextMode({
   toggleMainListening,
   onParseText,
   parseMutation,
-}: Readonly<WorkoutTextModeProps>) {
+}: WorkoutTextModeProps) {
   return (
     <div className="space-y-3">
       {isMainListening && (
@@ -349,18 +349,18 @@ const WorkoutTextMode = React.memo(function WorkoutTextMode({
 });
 
 interface WorkoutBlockModeProps {
-  editExercises: string[];
-  editExerciseData: Record<string, StructuredExercise>;
-  dialogSensors: SensorDescriptor<SensorOptions>[];
-  handleEditDragEnd: (event: DragEndEvent) => void;
-  handleAddExercise: (name: ExerciseName) => void;
-  handleRemoveBlock: (blockId: string) => void;
-  updateBlock: (blockId: string, ex: StructuredExercise) => void;
-  getSelectedExerciseNames: () => ExerciseName[];
-  weightUnit: "kg" | "lbs";
-  distanceUnit: "km" | "miles";
-  blockCounts: Record<string, number>;
-  blockIndices: Record<string, number>;
+  readonly editExercises: string[];
+  readonly editExerciseData: Record<string, StructuredExercise>;
+  readonly dialogSensors: SensorDescriptor<SensorOptions>[];
+  readonly handleEditDragEnd: (event: DragEndEvent) => void;
+  readonly handleAddExercise: (name: ExerciseName) => void;
+  readonly handleRemoveBlock: (blockId: string) => void;
+  readonly updateBlock: (blockId: string, ex: StructuredExercise) => void;
+  readonly getSelectedExerciseNames: () => ExerciseName[];
+  readonly weightUnit: "kg" | "lbs";
+  readonly distanceUnit: "km" | "miles";
+  readonly blockCounts: Record<string, number>;
+  readonly blockIndices: Record<string, number>;
 }
 
 const WorkoutBlockMode = React.memo(function WorkoutBlockMode({
@@ -376,7 +376,7 @@ const WorkoutBlockMode = React.memo(function WorkoutBlockMode({
   distanceUnit,
   blockCounts,
   blockIndices,
-}: Readonly<WorkoutBlockModeProps>) {
+}: WorkoutBlockModeProps) {
   const renderedBlocks = React.useMemo(() => {
     return editExercises.map((blockId) => {
       const exData = editExerciseData[blockId];
@@ -449,11 +449,11 @@ const WorkoutBlockMode = React.memo(function WorkoutBlockMode({
 });
 
 interface WorkoutAccessoryNotesProps {
-  editForm: EditFormState;
-  setEditForm: (form: EditFormState) => void;
-  appendToField: (field: keyof EditFormState, text: string) => void;
-  stopAccessoryRef: React.MutableRefObject<(() => void) | null>;
-  stopNotesRef: React.MutableRefObject<(() => void) | null>;
+  readonly editForm: EditFormState;
+  readonly setEditForm: (form: EditFormState) => void;
+  readonly appendToField: (field: keyof EditFormState, text: string) => void;
+  readonly stopAccessoryRef: React.MutableRefObject<(() => void) | null>;
+  readonly stopNotesRef: React.MutableRefObject<(() => void) | null>;
 }
 
 const WorkoutAccessoryNotes = React.memo(function WorkoutAccessoryNotes({
@@ -462,7 +462,7 @@ const WorkoutAccessoryNotes = React.memo(function WorkoutAccessoryNotes({
   appendToField,
   stopAccessoryRef,
   stopNotesRef,
-}: Readonly<WorkoutAccessoryNotesProps>) {
+}: WorkoutAccessoryNotesProps) {
   return (
     <>
       <div>
@@ -523,7 +523,7 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
   distanceUnit,
   onParseText,
   stopAllVoiceRef,
-}: Readonly<WorkoutDetailEditFormProps>) {
+}: WorkoutDetailEditFormProps) {
   const editFormRef = React.useRef(editForm);
   editFormRef.current = editForm;
 

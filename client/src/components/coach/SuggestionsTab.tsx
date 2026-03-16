@@ -135,13 +135,13 @@ export function useSuggestions({ timeline, addLocalMessage, saveMessage }: UseSu
 }
 
 interface SuggestionsListProps {
-  suggestions: Suggestion[];
-  applyingId: string | null;
-  onApply: (suggestion: Suggestion) => void;
-  onDismiss: (workoutId: string) => void;
+  readonly suggestions: Suggestion[];
+  readonly applyingId: string | null;
+  readonly onApply: (suggestion: Suggestion) => void;
+  readonly onDismiss: (workoutId: string) => void;
 }
 
-export function SuggestionsList({ suggestions, applyingId, onApply, onDismiss }: Readonly<SuggestionsListProps>) {
+export function SuggestionsList({ suggestions, applyingId, onApply, onDismiss }: SuggestionsListProps) {
   if (suggestions.length === 0) return null;
 
   return (

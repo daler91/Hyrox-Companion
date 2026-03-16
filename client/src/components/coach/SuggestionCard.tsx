@@ -15,10 +15,10 @@ export interface Suggestion {
 }
 
 interface SuggestionCardProps {
-  suggestion: Suggestion;
-  onApply: () => void;
-  onDismiss: () => void;
-  isApplying: boolean;
+  readonly suggestion: Suggestion;
+  readonly onApply: () => void;
+  readonly onDismiss: () => void;
+  readonly isApplying: boolean;
 }
 
 const FIELD_LABELS: Record<Suggestion["targetField"], string> = {
@@ -33,7 +33,7 @@ const PRIORITY_COLORS: Record<Suggestion["priority"], string> = {
   low: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
 };
 
-export function SuggestionCard({ suggestion, onApply, onDismiss, isApplying }: Readonly<SuggestionCardProps>) {
+export function SuggestionCard({ suggestion, onApply, onDismiss, isApplying }: SuggestionCardProps) {
   const fieldLabel = FIELD_LABELS[suggestion.targetField] || "Notes";
   
   const actionLabel = suggestion.action === "append" ? "Add to" : "Replace";

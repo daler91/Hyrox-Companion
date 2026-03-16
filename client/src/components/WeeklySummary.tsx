@@ -7,13 +7,13 @@ interface DayData {
 }
 
 interface WeeklySummaryProps {
-  days: DayData[];
-  totalWorkouts: number;
-  totalHours: number;
-  totalDistance: number;
+  readonly days: DayData[];
+  readonly totalWorkouts: number;
+  readonly totalHours: number;
+  readonly totalDistance: number;
 }
 
-export function WeeklySummary({ days, totalWorkouts, totalHours, totalDistance }: Readonly<WeeklySummaryProps>) {
+export function WeeklySummary({ days, totalWorkouts, totalHours, totalDistance }: WeeklySummaryProps) {
   return (
     <Card data-testid="card-weekly-summary">
       <CardHeader className="pb-2">

@@ -4,11 +4,11 @@ import { CheckCircle2, Clock, XCircle, SkipForward } from "lucide-react";
 import { SiStrava } from "react-icons/si";
 
 interface WorkoutDetailHeaderProps {
-  status: string;
-  source?: string;
-  dayName?: string;
-  focus: string;
-  isEditing: boolean;
+  readonly status: string;
+  readonly source?: string;
+  readonly dayName?: string;
+  readonly focus: string;
+  readonly isEditing: boolean;
 }
 
 function getStatusBadge(status: string) {
@@ -46,7 +46,7 @@ function getStatusBadge(status: string) {
   }
 }
 
-export function WorkoutDetailHeader({ status, source, dayName, focus, isEditing }: Readonly<WorkoutDetailHeaderProps>) {
+export function WorkoutDetailHeader({ status, source, dayName, focus, isEditing }: WorkoutDetailHeaderProps) {
   return (
     <DialogHeader>
       <div className="flex items-center gap-2 flex-wrap">

@@ -2,12 +2,12 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { User, Bot } from "lucide-react";
 
 interface ChatMessageProps {
-  role: "user" | "assistant";
-  content: string;
-  timestamp?: string;
+  readonly role: "user" | "assistant";
+  readonly content: string;
+  readonly timestamp?: string;
 }
 
-export function ChatMessage({ role, content, timestamp }: Readonly<ChatMessageProps>) {
+export function ChatMessage({ role, content, timestamp }: ChatMessageProps) {
   const isUser = role === "user";
 
   return (

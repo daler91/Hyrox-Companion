@@ -6,12 +6,12 @@ export interface QuickAction {
 }
 
 interface QuickActionsProps {
-  actions: QuickAction[];
-  onSelect: (action: QuickAction) => void;
-  disabled?: boolean;
+  readonly actions: QuickAction[];
+  readonly onSelect: (action: QuickAction) => void;
+  readonly disabled?: boolean;
 }
 
-export function QuickActions({ actions, onSelect, disabled }: Readonly<QuickActionsProps>) {
+export function QuickActions({ actions, onSelect, disabled }: QuickActionsProps) {
   return (
     <div className="flex flex-wrap gap-2" data-testid="quick-actions">
       {actions.map((action) => (

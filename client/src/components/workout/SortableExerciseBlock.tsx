@@ -4,16 +4,16 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
 export interface SortableExerciseBlockProps {
-  blockId: string;
-  exData: StructuredExercise;
-  blockLabel?: string;
-  weightUnit: "kg" | "lbs";
-  distanceUnit: "km" | "miles";
-  onChange: (blockId: string, ex: StructuredExercise) => void;
-  onRemove: (blockId: string) => void;
+  readonly blockId: string;
+  readonly exData: StructuredExercise;
+  readonly blockLabel?: string;
+  readonly weightUnit: "kg" | "lbs";
+  readonly distanceUnit: "km" | "miles";
+  readonly onChange: (blockId: string, ex: StructuredExercise) => void;
+  readonly onRemove: (blockId: string) => void;
 }
 
-export function SortableExerciseBlock({ blockId, exData, blockLabel, weightUnit, distanceUnit, onChange, onRemove }: Readonly<SortableExerciseBlockProps>) {
+export function SortableExerciseBlock({ blockId, exData, blockLabel, weightUnit, distanceUnit, onChange, onRemove }: SortableExerciseBlockProps) {
   const {
     attributes,
     listeners,

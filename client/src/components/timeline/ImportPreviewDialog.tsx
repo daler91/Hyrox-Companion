@@ -20,10 +20,10 @@ export interface CsvPreviewData {
 }
 
 interface ImportPreviewDialogProps {
-  preview: CsvPreviewData | null;
-  onOpenChange: (open: boolean) => void;
-  onConfirm: () => void;
-  isPending: boolean;
+  readonly preview: CsvPreviewData | null;
+  readonly onOpenChange: (open: boolean) => void;
+  readonly onConfirm: () => void;
+  readonly isPending: boolean;
 }
 
 export default function ImportPreviewDialog({
@@ -31,7 +31,7 @@ export default function ImportPreviewDialog({
   onOpenChange,
   onConfirm,
   isPending,
-}: Readonly<ImportPreviewDialogProps>) {
+}: ImportPreviewDialogProps) {
   return (
     <Dialog open={!!preview} onOpenChange={(open) => !open && onOpenChange(false)}>
       <DialogContent className="max-w-2xl">

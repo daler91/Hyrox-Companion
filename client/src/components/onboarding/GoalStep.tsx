@@ -10,11 +10,11 @@ const goals = [
 ];
 
 interface GoalStepProps {
-  selectedGoal: string;
-  onGoalChange: (goal: string) => void;
+  readonly selectedGoal: string;
+  readonly onGoalChange: (goal: string) => void;
 }
 
-export function GoalStep({ selectedGoal, onGoalChange }: Readonly<GoalStepProps>) {
+export function GoalStep({ selectedGoal, onGoalChange }: GoalStepProps) {
   return (
     <RadioGroup
       value={selectedGoal}
