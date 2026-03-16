@@ -2,59 +2,53 @@ import { Router } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
 import { chatWithCoach, streamChatWithCoach, generateWorkoutSuggestions, parseExercisesFromText, type ChatMessage, type UpcomingWorkout } from "../gemini";
-import { rateLimiter, handleRouteError } from "../routeUtils";
+import { rateLimiter, withAuth, handleRouteError } from "../routeUtils";
 import { buildTrainingContext } from "../services/aiService";
 import { toDateStr, getUserId, AuthenticatedRequest } from "../types";
 import { chatRequestSchema, parseExercisesRequestSchema, insertChatMessageSchema } from "@shared/schema";
 
 const router = Router();
 
-router.post("/api/parse-exercises", isAuthenticated, rateLimiter("parse", 5), async (req: AuthenticatedRequest, res) => {
-  try {
+router.post("/api/parse-exercises", isAuthenticated, rateLimiter("parse", 5), withAuth(async (req, res, userId) => {
+
     const parseResult = parseExercisesRequestSchema.safeParse(req.body);
     if (!parseResult.success) {
       return res.status(400).json({ error: "Text is required" });
     }
     const { text } = parseResult.data;
-    const userId = getUserId(req);
+
     const user = await storage.getUser(userId);
     const weightUnit = user?.weightUnit || "kg";
     const userCustomExercises = await storage.getCustomExercises(userId);
     const customNames = userCustomExercises.map(e => e.name);
     const exercises = await parseExercisesFromText(text.trim(), weightUnit, customNames);
     res.json(exercises);
-  } catch (error) {
-    handleRouteError(res, error, "Error parsing exercises:", "Failed to parse exercises");
-  }
-});
 
-router.post("/api/chat", isAuthenticated, rateLimiter("chat", 10), async (req: AuthenticatedRequest, res) => {
-  try {
+  }, "Error parsing exercises:", "Failed to parse exercises"));
+
+router.post("/api/chat", isAuthenticated, rateLimiter("chat", 10), withAuth(async (req, res, userId) => {
+
     const parseResult = chatRequestSchema.safeParse(req.body);
     if (!parseResult.success) {
       return res.status(400).json({ error: parseResult.error.errors[0].message });
     }
     const { message, history } = parseResult.data;
 
-    const userId = getUserId(req);
     const trainingContext = await buildTrainingContext(userId);
 
     const response = await chatWithCoach(message, history, trainingContext);
     res.json({ response });
-  } catch (error) {
-    handleRouteError(res, error, "Chat error:", "Failed to get response from AI coach");
-  }
-});
 
-router.post("/api/chat/stream", isAuthenticated, rateLimiter("chat", 10), async (req: AuthenticatedRequest, res) => {
-  try {
+  }, "Chat error:", "Failed to get response from AI coach"));
+
+router.post("/api/chat/stream", isAuthenticated, rateLimiter("chat", 10), withAuth(async (req, res, userId) => {
+
     const parseResult = chatRequestSchema.safeParse(req.body);
     if (!parseResult.success) {
       return res.status(400).json({ error: parseResult.error.errors[0].message });
     }
     const { message, history } = parseResult.data;
 
-    const userId = getUserId(req);
     const trainingContext = await buildTrainingContext(userId);
 
     res.setHeader("Content-Type", "text/event-stream");
@@ -76,53 +70,37 @@ router.post("/api/chat/stream", isAuthenticated, rateLimiter("chat", 10), async 
       res.write(`data: ${JSON.stringify({ error: "Stream error" })}\n\n`);
       res.end();
     }
-  } catch (error) {
-    handleRouteError(res, error, "Chat stream error:", "Failed to get response from AI coach");
-  }
-});
 
-router.get("/api/chat/history", isAuthenticated, async (req: AuthenticatedRequest, res) => {
-  try {
-    const userId = getUserId(req);
-    const messages = await storage.getChatMessages(userId);
+  }, "Chat stream error:", "Failed to get response from AI coach"));
+
+router.get("/api/chat/history", isAuthenticated, withAuth(async (req, res, userId) => {
+const messages = await storage.getChatMessages(userId);
     res.json(messages);
-  } catch (error) {
-    handleRouteError(res, error, "Get chat history error:", "Failed to get chat history");
-  }
-});
 
-router.post("/api/chat/message", isAuthenticated, async (req: AuthenticatedRequest, res) => {
-  try {
+  }, "Get chat history error:", "Failed to get chat history"));
+
+router.post("/api/chat/message", isAuthenticated, withAuth(async (req, res, userId) => {
+
     const parseResult = insertChatMessageSchema.safeParse(req.body);
     if (!parseResult.success) {
       return res.status(400).json({ error: "Role and content are required", details: parseResult.error });
     }
 
-    const userId = getUserId(req);
     const { role, content } = parseResult.data;
 
     const message = await storage.saveChatMessage({ userId, role, content });
     res.json(message);
-  } catch (error) {
-    handleRouteError(res, error, "Save chat message error:", "Failed to save message");
-  }
-});
 
-router.delete("/api/chat/history", isAuthenticated, async (req: AuthenticatedRequest, res) => {
-  try {
-    const userId = getUserId(req);
-    await storage.clearChatHistory(userId);
+  }, "Save chat message error:", "Failed to save message"));
+
+router.delete("/api/chat/history", isAuthenticated, withAuth(async (req, res, userId) => {
+await storage.clearChatHistory(userId);
     res.json({ success: true });
-  } catch (error) {
-    handleRouteError(res, error, "Clear chat history error:", "Failed to clear chat history");
-  }
-});
 
-router.post("/api/timeline/ai-suggestions", isAuthenticated, rateLimiter("suggestions", 3), async (req: AuthenticatedRequest, res) => {
-  try {
-    const userId = getUserId(req);
+  }, "Clear chat history error:", "Failed to clear chat history"));
 
-    const trainingContext = await buildTrainingContext(userId);
+router.post("/api/timeline/ai-suggestions", isAuthenticated, rateLimiter("suggestions", 3), withAuth(async (req, res, userId) => {
+const trainingContext = await buildTrainingContext(userId);
 
     const timeline = await storage.getTimeline(userId);
     const today = toDateStr();
@@ -168,9 +146,7 @@ router.post("/api/timeline/ai-suggestions", isAuthenticated, rateLimiter("sugges
       .filter(s => s.date && s.focus && s.recommendation);
 
     res.json({ suggestions });
-  } catch (error) {
-    handleRouteError(res, error, "AI suggestions error:", "Failed to generate AI suggestions");
-  }
-});
+
+  }, "AI suggestions error:", "Failed to generate AI suggestions"));
 
 export default router;

@@ -4,24 +4,19 @@ import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
 import { checkAndSendEmailsForUser, runEmailCronJob } from "../emailScheduler";
 import { getUserId, AuthenticatedRequest } from "../types";
-import { handleRouteError } from "../routeUtils";
+import { withAuth, handleRouteError } from "../routeUtils";
 
 const router = Router();
 
-router.post("/api/emails/check", isAuthenticated, async (req: AuthenticatedRequest, res) => {
-  try {
-    const userId = getUserId(req);
-    const user = await storage.getUser(userId);
+router.post("/api/emails/check", isAuthenticated, withAuth(async (req, res, userId) => {
+const user = await storage.getUser(userId);
     if (!user) {
       return res.json({ sent: [] });
     }
     const sent = await checkAndSendEmailsForUser(storage, user);
     res.json({ sent });
-  } catch (error) {
-    console.error("Error checking emails:", error);
-    res.json({ sent: [], error: "Email check failed" });
-  }
-});
+
+}, "Error checking emails:", "Email check failed"));
 
 router.get("/api/cron/emails", async (req, res) => {
   const secret = req.headers["x-cron-secret"] as string;

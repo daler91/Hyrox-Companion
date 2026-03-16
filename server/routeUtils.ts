@@ -1,3 +1,4 @@
+import { getUserId, AuthenticatedRequest } from "./types";
 import type { Response, NextFunction } from "express";
 import { toDateStr } from "./types";
 
@@ -96,4 +97,21 @@ export function calculateStreak(completedDates: Set<string>): number {
 export function handleRouteError(res: Response, error: unknown, consoleMsg: string, clientMsg: string) {
   console.error(consoleMsg, error);
   res.status(500).json({ error: clientMsg });
+}
+
+
+
+export function withAuth(
+  handler: (req: AuthenticatedRequest, res: Response, userId: string) => Promise<any> | any,
+  consoleMsg: string,
+  clientMsg: string
+) {
+  return async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const userId = getUserId(req);
+      await handler(req, res, userId);
+    } catch (error) {
+      handleRouteError(res, error, consoleMsg, clientMsg);
+    }
+  };
 }
