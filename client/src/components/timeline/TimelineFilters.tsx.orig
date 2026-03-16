@@ -39,7 +39,7 @@ function downloadTemplate() {
   link.download = "hyrox_training_template.csv";
   document.body.appendChild(link);
   link.click();
-  link.remove();
+  document.body.removeChild(link);
   URL.revokeObjectURL(url);
 }
 
