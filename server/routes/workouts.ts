@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { isAuthenticated } from "../clerkAuth";
-import { rateLimiter } from "../routeUtils";
+import { rateLimiter , handleError } from "../routeUtils";
 import { storage } from "../storage";
 import { insertWorkoutLogSchema, updateWorkoutLogSchema, insertCustomExerciseSchema, exercisesPayloadSchema } from "@shared/schema";
 import { generateCSV, generateJSON } from "../services/exportService";
@@ -15,8 +15,7 @@ router.get("/api/workouts/unstructured", isAuthenticated, async (req: Authentica
     const workouts = await storage.getWorkoutsWithoutExerciseSets(userId);
     res.json(workouts);
   } catch (error) {
-    console.error("Error fetching unstructured workouts:", error);
-    res.status(500).json({ error: "Failed to fetch workouts" });
+    handleError(res, error, "Error fetching unstructured workouts:", "Failed to fetch workouts", 500);
   }
 });
 
@@ -36,8 +35,7 @@ router.post("/api/workouts/:id/reparse", isAuthenticated, async (req: Authentica
     }
     res.json({ exercises: result.exercises, saved: true, setCount: result.setCount });
   } catch (error) {
-    console.error("Error re-parsing workout:", error);
-    res.status(500).json({ error: "Failed to re-parse workout" });
+    handleError(res, error, "Error re-parsing workout:", "Failed to re-parse workout", 500);
   }
 });
 
@@ -102,8 +100,7 @@ router.post("/api/workouts/batch-reparse", isAuthenticated, async (req: Authenti
     }
     res.json({ total: workouts.length, parsed: totalParsed, failed: totalFailed });
   } catch (error) {
-    console.error("Batch reparse error:", error);
-    res.status(500).json({ error: "Failed to batch re-parse workouts" });
+    handleError(res, error, "Batch reparse error:", "Failed to batch re-parse workouts", 500);
   }
 });
 
@@ -113,8 +110,7 @@ router.get("/api/custom-exercises", isAuthenticated, async (req: AuthenticatedRe
     const exercises = await storage.getCustomExercises(userId);
     res.json(exercises);
   } catch (error) {
-    console.error("Error fetching custom exercises:", error);
-    res.status(500).json({ error: "Failed to fetch custom exercises" });
+    handleError(res, error, "Error fetching custom exercises:", "Failed to fetch custom exercises", 500);
   }
 });
 
@@ -139,8 +135,7 @@ router.post("/api/custom-exercises", isAuthenticated, rateLimiter("customExercis
     });
     res.json(exercise);
   } catch (error) {
-    console.error("Error saving custom exercise:", error);
-    res.status(500).json({ error: "Failed to save custom exercise" });
+    handleError(res, error, "Error saving custom exercise:", "Failed to save custom exercise", 500);
   }
 });
 
@@ -150,8 +145,7 @@ router.get("/api/workouts", isAuthenticated, async (req: AuthenticatedRequest, r
     const logs = await storage.listWorkoutLogs(userId);
     res.json(logs);
   } catch (error) {
-    console.error("List workouts error:", error);
-    res.status(500).json({ error: "Failed to list workouts" });
+    handleError(res, error, "List workouts error:", "Failed to list workouts", 500);
   }
 });
 
@@ -164,8 +158,7 @@ router.get("/api/workouts/:id", isAuthenticated, async (req: AuthenticatedReques
     }
     res.json(log);
   } catch (error) {
-    console.error("Get workout error:", error);
-    res.status(500).json({ error: "Failed to get workout" });
+    handleError(res, error, "Get workout error:", "Failed to get workout", 500);
   }
 });
 
@@ -190,8 +183,7 @@ router.post("/api/workouts", isAuthenticated, rateLimiter("workout", 40), async 
     const result = await createWorkout(parseResult.data, validatedExercises, userId);
     res.json(result);
   } catch (error) {
-    console.error("Create workout error:", error);
-    res.status(500).json({ error: "Failed to create workout" });
+    handleError(res, error, "Create workout error:", "Failed to create workout", 500);
   }
 });
 
@@ -220,8 +212,7 @@ router.patch("/api/workouts/:id", isAuthenticated, async (req: AuthenticatedRequ
 
     res.json(result);
   } catch (error) {
-    console.error("Update workout error:", error);
-    res.status(500).json({ error: "Failed to update workout" });
+    handleError(res, error, "Update workout error:", "Failed to update workout", 500);
   }
 });
 
@@ -235,8 +226,7 @@ router.delete("/api/workouts/:id", isAuthenticated, async (req: AuthenticatedReq
     }
     res.json({ success: true });
   } catch (error) {
-    console.error("Delete workout error:", error);
-    res.status(500).json({ error: "Failed to delete workout" });
+    handleError(res, error, "Delete workout error:", "Failed to delete workout", 500);
   }
 });
 
@@ -246,8 +236,7 @@ router.get("/api/exercises/:exerciseName/history", isAuthenticated, async (req: 
     const history = await storage.getExerciseHistory(userId, req.params.exerciseName);
     res.json(history);
   } catch (error) {
-    console.error("Exercise history error:", error);
-    res.status(500).json({ error: "Failed to get exercise history" });
+    handleError(res, error, "Exercise history error:", "Failed to get exercise history", 500);
   }
 });
 
@@ -258,8 +247,7 @@ router.get("/api/timeline", isAuthenticated, async (req: AuthenticatedRequest, r
     const entries = await storage.getTimeline(userId, planId);
     res.json(entries);
   } catch (error) {
-    console.error("Timeline error:", error);
-    res.status(500).json({ error: "Failed to get timeline" });
+    handleError(res, error, "Timeline error:", "Failed to get timeline", 500);
   }
 });
 
@@ -280,8 +268,7 @@ router.get("/api/export", isAuthenticated, rateLimiter("export", 5, 60000), asyn
     res.setHeader("Content-Disposition", "attachment; filename=hyrox-training-data.csv");
     res.send(csv);
   } catch (error) {
-    console.error("Export error:", error);
-    res.status(500).json({ error: "Failed to export data" });
+    handleError(res, error, "Export error:", "Failed to export data", 500);
   }
 });
 

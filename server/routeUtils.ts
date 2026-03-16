@@ -1,5 +1,5 @@
 import type { Response, NextFunction } from "express";
-import { toDateStr } from "./types";
+import { toDateStr, AuthenticatedRequest, getUserId } from "./types";
 
 const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
 export const MAX_RATE_LIMIT_BUCKETS = 10000;
@@ -91,4 +91,24 @@ export function calculateStreak(completedDates: Set<string>): number {
   }
 
   return streak;
+}
+
+export function handleError(res: Response, error: unknown, logMessage: string, userMessage: string, status = 500) {
+  console.error(logMessage, error);
+  return res.status(status).json({ error: userMessage });
+}
+
+export function withAuth(
+  handler: (req: AuthenticatedRequest, res: Response, userId: string) => Promise<any>,
+  logMessage: string,
+  userMessage: string
+) {
+  return async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const userId = getUserId(req);
+      await handler(req, res, userId);
+    } catch (error) {
+      handleError(res, error, logMessage, userMessage);
+    }
+  };
 }

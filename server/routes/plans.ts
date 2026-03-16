@@ -4,7 +4,7 @@ import { storage } from "../storage";
 import { updatePlanDaySchema, importPlanRequestSchema, schedulePlanRequestSchema } from "@shared/schema";
 import { getUserId, AuthenticatedRequest } from "../types";
 import { importPlanFromCSV, createSamplePlan, updatePlanDayWithCleanup } from "../services/planService";
-import { rateLimiter } from "../routeUtils";
+import { rateLimiter , handleError } from "../routeUtils";
 
 const router = Router();
 
@@ -14,8 +14,7 @@ router.get("/api/plans", isAuthenticated, async (req: AuthenticatedRequest, res)
     const plans = await storage.listTrainingPlans(userId);
     res.json(plans);
   } catch (error) {
-    console.error("List plans error:", error);
-    res.status(500).json({ error: "Failed to list training plans" });
+    return handleError(res, error, "List plans error:", "Failed to list training plans", 500);
   }
 });
 
@@ -28,8 +27,7 @@ router.get("/api/plans/:id", isAuthenticated, async (req: AuthenticatedRequest, 
     }
     res.json(plan);
   } catch (error) {
-    console.error("Get plan error:", error);
-    res.status(500).json({ error: "Failed to get training plan" });
+    return handleError(res, error, "Get plan error:", "Failed to get training plan", 500);
   }
 });
 
@@ -59,8 +57,7 @@ router.post("/api/plans/sample", isAuthenticated, rateLimiter("planSample", 5), 
     const fullPlan = await createSamplePlan(userId);
     res.json(fullPlan);
   } catch (error) {
-    console.error("Create sample plan error:", error);
-    res.status(500).json({ error: "Failed to create sample plan" });
+    return handleError(res, error, "Create sample plan error:", "Failed to create sample plan", 500);
   }
 });
 
@@ -81,8 +78,7 @@ router.patch("/api/plans/:planId/days/:dayId", isAuthenticated, async (req: Auth
 
     res.json(updatedDay);
   } catch (error) {
-    console.error("Update day error:", error);
-    res.status(500).json({ error: "Failed to update day" });
+    return handleError(res, error, "Update day error:", "Failed to update day", 500);
   }
 });
 
@@ -103,8 +99,7 @@ router.patch("/api/plans/days/:dayId", isAuthenticated, async (req: Authenticate
 
     res.json(updatedDay);
   } catch (error) {
-    console.error("Update day error:", error);
-    res.status(500).json({ error: "Failed to update day" });
+    return handleError(res, error, "Update day error:", "Failed to update day", 500);
   }
 });
 
@@ -121,8 +116,7 @@ router.patch("/api/plans/:id", isAuthenticated, async (req: AuthenticatedRequest
     }
     res.json(updated);
   } catch (error) {
-    console.error("Rename plan error:", error);
-    res.status(500).json({ error: "Failed to rename training plan" });
+    return handleError(res, error, "Rename plan error:", "Failed to rename training plan", 500);
   }
 });
 
@@ -135,8 +129,7 @@ router.delete("/api/plans/:id", isAuthenticated, async (req: AuthenticatedReques
     }
     res.json({ success: true });
   } catch (error) {
-    console.error("Delete plan error:", error);
-    res.status(500).json({ error: "Failed to delete training plan" });
+    return handleError(res, error, "Delete plan error:", "Failed to delete training plan", 500);
   }
 });
 
@@ -158,8 +151,7 @@ router.post("/api/plans/:planId/schedule", isAuthenticated, rateLimiter("planSch
 
     res.json({ success: true });
   } catch (error) {
-    console.error("Schedule plan error:", error);
-    res.status(500).json({ error: "Failed to schedule training plan" });
+    return handleError(res, error, "Schedule plan error:", "Failed to schedule training plan", 500);
   }
 });
 
@@ -184,8 +176,7 @@ router.patch("/api/plans/days/:dayId/status", isAuthenticated, async (req: Authe
 
     res.json(updatedDay);
   } catch (error) {
-    console.error("Update day status error:", error);
-    res.status(500).json({ error: "Failed to update day status" });
+    return handleError(res, error, "Update day status error:", "Failed to update day status", 500);
   }
 });
 
@@ -199,8 +190,7 @@ router.delete("/api/plans/days/:dayId", isAuthenticated, async (req: Authenticat
     }
     res.json({ success: true });
   } catch (error) {
-    console.error("Delete plan day error:", error);
-    res.status(500).json({ error: "Failed to delete plan day" });
+    return handleError(res, error, "Delete plan day error:", "Failed to delete plan day", 500);
   }
 });
 

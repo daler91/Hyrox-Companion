@@ -4,6 +4,7 @@ import { storage } from "../storage";
 import { calculatePersonalRecords, calculateExerciseAnalytics } from "../services/analyticsService";
 import { getUserId, AuthenticatedRequest } from "../types";
 import { dateStringSchema, ExerciseSet } from "@shared/schema";
+import { handleError } from "../routeUtils";
 
 
 const router = Router();
@@ -47,8 +48,7 @@ router.get("/api/personal-records", isAuthenticated, async (req: AuthenticatedRe
     const allSets = await getExerciseSetsCoalesced(userId, from, to);
     res.json(calculatePersonalRecords(allSets));
   } catch (error) {
-    console.error("Error fetching PRs:", error);
-    res.status(500).json({ error: "Failed to fetch personal records" });
+    return handleError(res, error, "Error fetching PRs:", "Failed to fetch personal records", 500);
   }
 });
 
@@ -64,8 +64,7 @@ router.get("/api/exercise-analytics", isAuthenticated, async (req: Authenticated
     const allSets = await getExerciseSetsCoalesced(userId, from, to);
     res.json(calculateExerciseAnalytics(allSets));
   } catch (error) {
-    console.error("Error fetching exercise analytics:", error);
-    res.status(500).json({ error: "Failed to fetch exercise analytics" });
+    return handleError(res, error, "Error fetching exercise analytics:", "Failed to fetch exercise analytics", 500);
   }
 });
 

@@ -3,6 +3,7 @@ import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
 import { updateUserPreferencesSchema } from "@shared/schema";
 import { getUserId, AuthenticatedRequest } from "../types";
+import { handleError } from "../routeUtils";
 
 const router = Router();
 
@@ -20,8 +21,7 @@ router.get('/api/preferences', isAuthenticated, async (req: AuthenticatedRequest
       emailNotifications: user.emailNotifications ?? 1,
     });
   } catch (error) {
-    console.error("Error fetching preferences:", error);
-    res.status(500).json({ error: "Failed to fetch preferences" });
+    handleError(res, error, "Error fetching preferences:", "Failed to fetch preferences", 500);
   }
 });
 
@@ -44,8 +44,7 @@ router.patch('/api/preferences', isAuthenticated, async (req: AuthenticatedReque
       emailNotifications: user.emailNotifications ?? 1,
     });
   } catch (error) {
-    console.error("Error updating preferences:", error);
-    res.status(500).json({ error: "Failed to update preferences" });
+    handleError(res, error, "Error updating preferences:", "Failed to update preferences", 500);
   }
 });
 
