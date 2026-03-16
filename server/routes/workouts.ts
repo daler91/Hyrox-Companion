@@ -81,6 +81,15 @@ async function processBatchChunk(
   return { parsed, failed };
 }
 
+function validateExercisesPayload(exercises: any) {
+  if (!exercises) return { success: true, data: exercises };
+  const parseResult = exercisesPayloadSchema.safeParse(exercises);
+  if (!parseResult.success) {
+    return { success: false, error: parseResult.error };
+  }
+  return { success: true, data: parseResult.data };
+}
+
 router.post("/api/workouts/batch-reparse", isAuthenticated, async (req: AuthenticatedRequest, res) => {
   try {
     const userId = getUserId(req);
@@ -177,14 +186,11 @@ router.post("/api/workouts", isAuthenticated, rateLimiter("workout", 40), async 
       return res.status(400).json({ error: "Invalid workout data", details: parseResult.error });
     }
 
-    let validatedExercises = exercises;
-    if (exercises) {
-      const exercisesParseResult = exercisesPayloadSchema.safeParse(exercises);
-      if (!exercisesParseResult.success) {
-        return res.status(400).json({ error: "Invalid exercises data", details: exercisesParseResult.error });
-      }
-      validatedExercises = exercisesParseResult.data;
+    const exerciseValidation = validateExercisesPayload(exercises);
+    if (!exerciseValidation.success) {
+      return res.status(400).json({ error: "Invalid exercises data", details: exerciseValidation.error });
     }
+    const validatedExercises = exerciseValidation.data;
 
     const userId = getUserId(req);
     const result = await createWorkout(parseResult.data, validatedExercises, userId);
@@ -203,14 +209,11 @@ router.patch("/api/workouts/:id", isAuthenticated, async (req: AuthenticatedRequ
       return res.status(400).json({ error: "Invalid update data", details: parseResult.error });
     }
 
-    let validatedExercises = exercises;
-    if (exercises) {
-      const exercisesParseResult = exercisesPayloadSchema.safeParse(exercises);
-      if (!exercisesParseResult.success) {
-        return res.status(400).json({ error: "Invalid exercises data", details: exercisesParseResult.error });
-      }
-      validatedExercises = exercisesParseResult.data;
+    const exerciseValidation = validateExercisesPayload(exercises);
+    if (!exerciseValidation.success) {
+      return res.status(400).json({ error: "Invalid exercises data", details: exerciseValidation.error });
     }
+    const validatedExercises = exerciseValidation.data;
 
     const userId = getUserId(req);
     const result = await updateWorkout(req.params.id, parseResult.data, validatedExercises, userId);

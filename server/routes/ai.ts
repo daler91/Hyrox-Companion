@@ -29,16 +29,26 @@ router.post("/api/parse-exercises", isAuthenticated, rateLimiter("parse", 5), as
   }
 });
 
+async function prepareChatContext(req: AuthenticatedRequest) {
+  const parseResult = chatRequestSchema.safeParse(req.body);
+  if (!parseResult.success) {
+    return { success: false, error: parseResult.error.errors[0].message };
+  }
+  const { message, history } = parseResult.data;
+
+  const userId = getUserId(req);
+  const trainingContext = await buildTrainingContext(userId);
+
+  return { success: true, message, history, trainingContext };
+}
+
 router.post("/api/chat", isAuthenticated, rateLimiter("chat", 10), async (req: AuthenticatedRequest, res) => {
   try {
-    const parseResult = chatRequestSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      return res.status(400).json({ error: parseResult.error.errors[0].message });
+    const context = await prepareChatContext(req);
+    if (!context.success) {
+      return res.status(400).json({ error: context.error });
     }
-    const { message, history } = parseResult.data;
-
-    const userId = getUserId(req);
-    const trainingContext = await buildTrainingContext(userId);
+    const { message, history, trainingContext } = context;
 
     const response = await chatWithCoach(message, history, trainingContext);
     res.json({ response });
@@ -50,14 +60,11 @@ router.post("/api/chat", isAuthenticated, rateLimiter("chat", 10), async (req: A
 
 router.post("/api/chat/stream", isAuthenticated, rateLimiter("chat", 10), async (req: AuthenticatedRequest, res) => {
   try {
-    const parseResult = chatRequestSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      return res.status(400).json({ error: parseResult.error.errors[0].message });
+    const context = await prepareChatContext(req);
+    if (!context.success) {
+      return res.status(400).json({ error: context.error });
     }
-    const { message, history } = parseResult.data;
-
-    const userId = getUserId(req);
-    const trainingContext = await buildTrainingContext(userId);
+    const { message, history, trainingContext } = context;
 
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");

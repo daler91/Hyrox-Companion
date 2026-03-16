@@ -35,7 +35,7 @@ function parseCSVContent(csvText: string): unknown[] {
   }
 }
 
-function validateAndMapCSVRows(records: unknown[]): CSVRow[] {
+export function validateAndMapCSVRows(records: unknown[]): CSVRow[] {
   if (!Array.isArray(records)) return [];
 
   return records.map(record => {

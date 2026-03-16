@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { importPlanFromCSV } from "./planService";
+import { importPlanFromCSV, validateAndMapCSVRows } from "./planService";
 import * as csvParse from "csv-parse/sync";
 
 vi.mock("csv-parse/sync", () => {
@@ -42,6 +42,104 @@ describe("planService", () => {
 
       expect(csvParse.parse).toHaveBeenCalledWith(invalidCSV, expect.any(Object));
       expect(consoleErrorSpy).toHaveBeenCalledWith("CSV parse error:", mockError);
+    });
+  });
+
+  describe("validateAndMapCSVRows", () => {
+    it("should return an empty array if records is not an array", () => {
+      expect(validateAndMapCSVRows(null as any)).toEqual([]);
+      expect(validateAndMapCSVRows(undefined as any)).toEqual([]);
+      expect(validateAndMapCSVRows("not an array" as any)).toEqual([]);
+      expect(validateAndMapCSVRows({} as any)).toEqual([]);
+    });
+
+    it("should map a complete record correctly", () => {
+      const records = [{
+        Week: "1",
+        Day: "Monday",
+        Focus: "Strength",
+        "Main Workout": "Squats",
+        "Accessory/Engine Work": "Lunges",
+        Accessory: "Calf Raises",
+        Notes: "Go heavy"
+      }];
+
+      const result = validateAndMapCSVRows(records);
+
+      expect(result).toEqual([{
+        Week: "1",
+        Day: "Monday",
+        Focus: "Strength",
+        "Main Workout": "Squats",
+        "Accessory/Engine Work": "Lunges",
+        Accessory: "Calf Raises",
+        Notes: "Go heavy"
+      }]);
+    });
+
+    it("should handle missing properties by defaulting to empty strings", () => {
+      const records = [{
+        Week: "2",
+        Day: "Tuesday"
+        // Missing Focus, Main Workout, Accessory/Engine Work, Accessory, Notes
+      }];
+
+      const result = validateAndMapCSVRows(records);
+
+      expect(result).toEqual([{
+        Week: "2",
+        Day: "Tuesday",
+        Focus: "",
+        "Main Workout": "",
+        "Accessory/Engine Work": "",
+        Accessory: "",
+        Notes: ""
+      }]);
+    });
+
+    it("should convert numeric or non-string values to strings", () => {
+      const records = [{
+        Week: 3,
+        Day: { name: "Wednesday" },
+        Focus: null,
+        "Main Workout": undefined,
+        "Accessory/Engine Work": 100,
+        Accessory: false,
+        Notes: []
+      }];
+
+      const result = validateAndMapCSVRows(records);
+
+      expect(result).toEqual([{
+        Week: "3",
+        Day: "[object Object]",
+        Focus: "",
+        "Main Workout": "",
+        "Accessory/Engine Work": "100",
+        Accessory: "", // false || '' evaluates to '', String('') is ''
+        Notes: "" // [] is truthy, so [] || '' -> [], String([]) -> ''
+      }]);
+    });
+
+    it("should ignore unexpected extra properties", () => {
+      const records = [{
+        Week: "4",
+        Day: "Thursday",
+        ExtraField: "Should be ignored",
+        AnotherOne: 123
+      }];
+
+      const result = validateAndMapCSVRows(records);
+
+      expect(result).toEqual([{
+        Week: "4",
+        Day: "Thursday",
+        Focus: "",
+        "Main Workout": "",
+        "Accessory/Engine Work": "",
+        Accessory: "",
+        Notes: ""
+      }]);
     });
   });
 });
