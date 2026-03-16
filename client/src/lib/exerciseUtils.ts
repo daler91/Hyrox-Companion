@@ -76,7 +76,11 @@ export function formatExerciseSummary(group: GroupedExercise, weightUnit: string
 
   if (allSameWeight && firstSet.weight) parts.push(`${firstSet.weight}${weightUnit}`);
   else if (!allSameWeight) {
-    const weights = Array.from(new Set(sets.map(s => s.weight).filter(Boolean)));
+    const weights: number[] = [];
+    for (let i = 0; i < sets.length; i++) {
+      const w = sets[i].weight;
+      if (w && !weights.includes(w)) weights.push(w);
+    }
     if (weights.length > 0) parts.push(`${weights.join("/")}${weightUnit}`);
   }
 
