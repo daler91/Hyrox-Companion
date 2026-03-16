@@ -315,7 +315,7 @@ export const chatRequestSchema = z.object({
 });
 
 export const parseExercisesRequestSchema = z.object({
-  text: z.string().min(1, "Text is required").trim(),
+  text: z.string().trim().min(1, "Text is required").max(100000, "Text must be 100,000 characters or less"),
 });
 
 export const importPlanRequestSchema = z.object({
