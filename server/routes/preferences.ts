@@ -2,11 +2,11 @@ import { Router } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
 import { updateUserPreferencesSchema } from "@shared/schema";
-import { getUserId } from "../types";
+import { getUserId, AuthenticatedRequest } from "../types";
 
 const router = Router();
 
-router.get('/api/preferences', isAuthenticated, async (req: any, res) => {
+router.get('/api/preferences', isAuthenticated, async (req: AuthenticatedRequest, res) => {
   try {
     const userId = getUserId(req);
     const user = await storage.getUser(userId);
@@ -25,7 +25,7 @@ router.get('/api/preferences', isAuthenticated, async (req: any, res) => {
   }
 });
 
-router.patch('/api/preferences', isAuthenticated, async (req: any, res) => {
+router.patch('/api/preferences', isAuthenticated, async (req: AuthenticatedRequest, res) => {
   try {
     const userId = getUserId(req);
     const parseResult = updateUserPreferencesSchema.safeParse(req.body);
