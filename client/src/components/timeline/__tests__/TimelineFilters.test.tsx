@@ -120,10 +120,10 @@ describe("TimelineFilters", () => {
   it("handles CSV download template", async () => {
     const user = userEvent.setup();
 
-    window.URL.createObjectURL = vi.fn();
-    window.URL.revokeObjectURL = vi.fn();
-    const mockCreateObjectURL = vi.spyOn(window.URL, 'createObjectURL').mockReturnValue("blob:mock-url");
-    const mockRevokeObjectURL = vi.spyOn(window.URL, 'revokeObjectURL').mockImplementation(() => {});
+    const mockCreateObjectURL = vi.fn().mockReturnValue("blob:mock-url");
+    const mockRevokeObjectURL = vi.fn();
+    Object.defineProperty(window.URL, 'createObjectURL', { writable: true, value: mockCreateObjectURL });
+    Object.defineProperty(window.URL, 'revokeObjectURL', { writable: true, value: mockRevokeObjectURL });
 
     const originalCreateElement = document.createElement.bind(document);
     const mockClick = vi.fn();
