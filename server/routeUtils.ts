@@ -1,5 +1,5 @@
-import type { Response, NextFunction } from "express";
-import { toDateStr, type AuthenticatedRequest } from "./types";
+import type { Request, Response, NextFunction } from "express";
+import { toDateStr } from "./types";
 
 const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
 export const MAX_RATE_LIMIT_BUCKETS = 10000;
@@ -12,7 +12,7 @@ export function clearRateLimitBuckets() {
 }
 
 export function rateLimiter(category: string, maxRequests: number, windowMs: number = DEFAULT_WINDOW_MS) {
-  return (req: import("express").Request & { auth?: { userId?: string } }, res: Response, next: NextFunction) => {
+  return (req: Request & { auth?: { userId?: string } }, res: Response, next: NextFunction) => {
     const identifier = req.auth?.userId || req.ip;
     if (!identifier) {
       return next();

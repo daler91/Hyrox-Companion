@@ -5,8 +5,7 @@ import { storage } from "../storage";
 import { insertWorkoutLogSchema, updateWorkoutLogSchema, insertCustomExerciseSchema, exercisesPayloadSchema } from "@shared/schema";
 import { generateCSV, generateJSON } from "../services/exportService";
 import { createWorkout, updateWorkout, reparseWorkout, prepareParsedWorkout, saveParsedWorkout } from "../services/workoutService";
-import { getUserId } from "../types";
-import { AuthenticatedRequest } from "../types";
+import { getUserId, type AuthenticatedRequest } from "../types";
 
 
 const router = Router();

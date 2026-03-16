@@ -2,8 +2,7 @@ import { Router } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
 import { updateUserPreferencesSchema } from "@shared/schema";
-import { getUserId } from "../types";
-import { AuthenticatedRequest } from "../types";
+import { getUserId, type AuthenticatedRequest } from "../types";
 
 
 const router = Router();

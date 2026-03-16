@@ -3,8 +3,7 @@ import crypto from "node:crypto";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
 import { checkAndSendEmailsForUser, runEmailCronJob } from "../emailScheduler";
-import { getUserId } from "../types";
-import { AuthenticatedRequest } from "../types";
+import { getUserId, type AuthenticatedRequest } from "../types";
 
 
 const router = Router();

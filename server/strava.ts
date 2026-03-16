@@ -1,12 +1,11 @@
-import type { Express, Response } from "express";
+import type { Express, Request, Response } from "express";
 import crypto from "node:crypto";
 import { storage } from "./storage";
 import { isAuthenticated } from "./clerkAuth";
 import { type DistanceUnit } from "@shared/unitConversion";
 import { mapStravaActivityToWorkout, type StravaActivity } from "./services/stravaMapper";
-import { getUserId } from "./types";
+import { getUserId, type AuthenticatedRequest } from "./types";
 import { rateLimiter } from "./routeUtils";
-import { AuthenticatedRequest } from "./types";
 
 
 const STRAVA_CLIENT_ID = process.env.STRAVA_CLIENT_ID;
@@ -157,7 +156,7 @@ export function registerStravaRoutes(app: Express): void {
     res.json({ authUrl: authUrl.toString() });
   });
 
-  app.get("/api/strava/callback", stravaAuthLimiter, async (req: import("express").Request, res: Response) => {
+  app.get("/api/strava/callback", stravaAuthLimiter, async (req: Request, res: Response) => {
     const { code, state, error: stravaError } = req.query;
 
     if (stravaError) {
