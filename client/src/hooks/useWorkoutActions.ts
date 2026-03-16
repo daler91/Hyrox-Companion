@@ -1,4 +1,4 @@
-import { type ParsedExercise, type TimelineEntry, type PlanDay, type WorkoutStatus } from "@shared/schema";
+import { type ParsedExercise, type TimelineEntry, type PlanDay, type WorkoutStatus, type UpdateWorkoutLog } from "@shared/schema";
 import { useState, useCallback } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -54,7 +54,7 @@ export function useWorkoutActions(selectedPlanId: string | null) {
   });
 
   const updateWorkoutMutation = useMutation({
-    mutationFn: async ({ workoutId, updates }: { workoutId: string; updates: Record<string, any> }) => {
+    mutationFn: async ({ workoutId, updates }: { workoutId: string; updates: UpdateWorkoutLog & { exercises?: ParsedExercise[] } }) => {
       const response = await apiRequest("PATCH", `/api/workouts/${workoutId}`, updates);
       return response.json();
     },
