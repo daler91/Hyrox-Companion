@@ -121,27 +121,25 @@ describe('usePlanImport', () => {
   });
 
   describe('Mutations', () => {
+    // Shared helper for testing common mutation error states to reduce code duplication
+    const testErrorState = async (trigger: (res: any) => void, expectedErrorTitle: string) => {
+      vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(new Error('API Failure'));
+      const { result } = renderHook(() => usePlanImport(), { wrapper });
+      act(() => trigger(result));
+      await waitFor(() => {
+        expect(mockToast).toHaveBeenCalledWith({ title: expectedErrorTitle, variant: "destructive" });
+      });
+    };
+
     it('confirmImport handles import mutation and cleans up preview', async () => {
       const { result } = renderHook(() => usePlanImport(), { wrapper });
-
-      // First set a preview
       act(() => {
-        result.current.setCsvPreview({
-          fileName: 'plan.csv',
-          content: 'csv data',
-          rows: []
-        });
+        result.current.setCsvPreview({ fileName: 'plan.csv', content: 'csv data', rows: [] });
       });
-
-      act(() => {
-        result.current.confirmImport();
-      });
+      act(() => { result.current.confirmImport(); });
 
       await waitFor(() => {
-        expect(queryClientLib.apiRequest).toHaveBeenCalledWith('POST', '/api/plans/import', {
-          csvContent: 'csv data',
-          fileName: 'plan.csv'
-        });
+        expect(queryClientLib.apiRequest).toHaveBeenCalledWith('POST', '/api/plans/import', { csvContent: 'csv data', fileName: 'plan.csv' });
         expect(queryClientLib.queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/plans"] });
         expect(result.current.schedulingPlanId).toBe('test-plan-id');
         expect(mockToast).toHaveBeenCalledWith({ title: "Plan imported! Now set a start date." });
@@ -149,36 +147,25 @@ describe('usePlanImport', () => {
       });
     });
 
+
     it('handles import error', async () => {
       vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(new Error('Import failed'));
       const { result } = renderHook(() => usePlanImport(), { wrapper });
-
       act(() => {
-        result.current.setCsvPreview({
-          fileName: 'plan.csv',
-          content: 'csv data',
-          rows: []
-        });
+        result.current.setCsvPreview({ fileName: 'plan.csv', content: 'csv data', rows: [] });
       });
-
       act(() => {
         result.current.confirmImport();
       });
-
       await waitFor(() => {
-        expect(mockToast).toHaveBeenCalledWith({
-          title: "Failed to import plan",
-          variant: "destructive"
-        });
+        expect(mockToast).toHaveBeenCalledWith({ title: "Failed to import plan", variant: "destructive" });
       });
     });
 
+
     it('samplePlanMutation creates a sample plan', async () => {
       const { result } = renderHook(() => usePlanImport(), { wrapper });
-
-      act(() => {
-        result.current.samplePlanMutation.mutate();
-      });
+      act(() => { result.current.samplePlanMutation.mutate(); });
 
       await waitFor(() => {
         expect(queryClientLib.apiRequest).toHaveBeenCalledWith('POST', '/api/plans/sample', {});
@@ -189,27 +176,12 @@ describe('usePlanImport', () => {
     });
 
     it('handles sample plan creation error', async () => {
-      vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(new Error('Sample creation failed'));
-      const { result } = renderHook(() => usePlanImport(), { wrapper });
-
-      act(() => {
-        result.current.samplePlanMutation.mutate();
-      });
-
-      await waitFor(() => {
-        expect(mockToast).toHaveBeenCalledWith({
-          title: "Failed to create sample plan",
-          variant: "destructive"
-        });
-      });
+      await testErrorState((res) => res.current.samplePlanMutation.mutate(), "Failed to create sample plan");
     });
 
     it('renamePlanMutation renames a plan', async () => {
       const { result } = renderHook(() => usePlanImport(), { wrapper });
-
-      act(() => {
-        result.current.renamePlanMutation.mutate({ planId: 'p1', name: 'New Name' });
-      });
+      act(() => { result.current.renamePlanMutation.mutate({ planId: 'p1', name: 'New Name' }); });
 
       await waitFor(() => {
         expect(queryClientLib.apiRequest).toHaveBeenCalledWith('PATCH', '/api/plans/p1', { name: 'New Name' });
@@ -220,33 +192,14 @@ describe('usePlanImport', () => {
     });
 
     it('handles plan rename error', async () => {
-      vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(new Error('Rename failed'));
-      const { result } = renderHook(() => usePlanImport(), { wrapper });
-
-      act(() => {
-        result.current.renamePlanMutation.mutate({ planId: 'p1', name: 'New Name' });
-      });
-
-      await waitFor(() => {
-        expect(mockToast).toHaveBeenCalledWith({
-          title: "Failed to rename plan",
-          variant: "destructive"
-        });
-      });
+      await testErrorState((res) => res.current.renamePlanMutation.mutate({ planId: 'p1', name: 'New Name' }), "Failed to rename plan");
     });
 
     it('schedulePlanMutation schedules a plan', async () => {
       const mockOnPlanScheduled = vi.fn();
       const { result } = renderHook(() => usePlanImport({ onPlanScheduled: mockOnPlanScheduled }), { wrapper });
-
-      // First set a schedulingPlanId
-      act(() => {
-        result.current.setSchedulingPlanId('test-plan-id');
-      });
-
-      act(() => {
-        result.current.schedulePlanMutation.mutate({ planId: 'test-plan-id', startDate: '2023-10-01' });
-      });
+      act(() => { result.current.setSchedulingPlanId('test-plan-id'); });
+      act(() => { result.current.schedulePlanMutation.mutate({ planId: 'test-plan-id', startDate: '2023-10-01' }); });
 
       await waitFor(() => {
         expect(queryClientLib.apiRequest).toHaveBeenCalledWith('POST', '/api/plans/test-plan-id/schedule', { startDate: '2023-10-01' });
@@ -259,19 +212,7 @@ describe('usePlanImport', () => {
     });
 
     it('handles plan schedule error', async () => {
-      vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(new Error('Schedule failed'));
-      const { result } = renderHook(() => usePlanImport(), { wrapper });
-
-      act(() => {
-        result.current.schedulePlanMutation.mutate({ planId: 'p1', startDate: '2023-10-01' });
-      });
-
-      await waitFor(() => {
-        expect(mockToast).toHaveBeenCalledWith({
-          title: "Failed to schedule plan",
-          variant: "destructive"
-        });
-      });
+      await testErrorState((res) => res.current.schedulePlanMutation.mutate({ planId: 'p1', startDate: '2023-10-01' }), "Failed to schedule plan");
     });
   });
 });
