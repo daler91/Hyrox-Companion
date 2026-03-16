@@ -80,8 +80,8 @@ router.post("/api/plans/import", isAuthenticated, rateLimiter("planImport", 5), 
     const userId = getUserId(req);
     const fullPlan = await importPlanFromCSV(csvContent, userId, { fileName, planName });
     res.json(fullPlan);
-  } catch (error: any) {
-    if (error.message === "No valid rows found in CSV" || error.message === "No valid week numbers found in CSV") {
+  } catch (error: unknown) {
+    if (error instanceof Error && (error.message === "No valid rows found in CSV" || error.message === "No valid week numbers found in CSV")) {
       return res.status(400).json({ error: error.message });
     }
     console.error("Import plan error:", error);
@@ -130,7 +130,7 @@ router.delete("/api/plans/:id", isAuthenticated, async (req: AuthenticatedReques
   return handleGetOrDeletePlan(req, res, storage.deleteTrainingPlan.bind(storage), "true", "Delete");
 });
 
-router.post("/api/plans/:planId/schedule", isAuthenticated, rateLimiter("planSchedule", 10), async (req: AuthenticatedRequest, res) => {
+router.post("/api/plans/:planId/schedule", isAuthenticated, rateLimiter("planSchedule", 10), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const parseResult = schedulePlanRequestSchema.safeParse(req.body);
     if (!parseResult.success) {
