@@ -255,6 +255,9 @@ interface WorkoutDetailEditFormProps {
   readonly distanceUnit: "km" | "miles";
   readonly onParseText: () => void;
   readonly stopAllVoiceRef?: React.MutableRefObject<(() => void) | null>;
+  readonly editRpe?: number | null;
+  readonly setEditRpe?: (val: number | null) => void;
+  readonly source?: string;
 }
 
 interface WorkoutTextModeProps {
@@ -507,6 +510,9 @@ const WorkoutAccessoryNotes = React.memo(function WorkoutAccessoryNotes({
 });
 
 export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
+  editRpe = null,
+  setEditRpe = () => {},
+  source = "manual",
   editForm,
   setEditForm,
   useTextMode,
@@ -524,9 +530,6 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
   distanceUnit,
   onParseText,
   stopAllVoiceRef,
-  editRpe,
-  setEditRpe,
-  source,
 }: WorkoutDetailEditFormProps) {
   const editFormRef = React.useRef(editForm);
   editFormRef.current = editForm;
