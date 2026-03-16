@@ -29,7 +29,7 @@ export function StravaSection({ stravaStatus, stravaLoading }: StravaSectionProp
       return response.json();
     },
     onSuccess: (data: { authUrl: string }) => {
-      window.location.href = data.authUrl;
+      globalThis.location.href = data.authUrl;
     },
     onError: () => {
       toast({

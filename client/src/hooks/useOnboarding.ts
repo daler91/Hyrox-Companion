@@ -21,7 +21,7 @@ export function useOnboarding(
     if (!showOnboarding && onboardingTriggered && !hasAutoOpenedCoach) {
       setHasAutoOpenedCoach(true);
       setTimeout(() => {
-        const isCurrentlyMobile = window.innerWidth < 768;
+        const isCurrentlyMobile = globalThis.innerWidth < 768;
         if (!isCurrentlyMobile) {
           setCoachOpen(true);
         }
