@@ -1,4 +1,3 @@
-import type { Request, Response, NextFunction } from "express";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import express from "express";
 import request from "supertest";
@@ -19,7 +18,7 @@ vi.mock("../../emailScheduler", () => ({
 
 // Mock clerkAuth
 vi.mock("../../clerkAuth", () => ({
-  isAuthenticated: (req: Request, res: Response, next: NextFunction) => next(),
+  isAuthenticated: (req: any, res: any, next: any) => next(),
 }));
 
 describe("Email Routes", () => {

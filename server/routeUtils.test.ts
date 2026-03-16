@@ -103,15 +103,15 @@ describe("rateLimiter", () => {
     expect(res.status).toHaveBeenCalledWith(429);
   });
 
-  it("calls next() and bypasses rate limiting if neither userId nor ip is present", () => {
+  it("uses unknown-ip fallback and rate limits if neither userId nor ip is present", () => {
     const middleware = rateLimiter("api", 1, DEFAULT_WINDOW_MS);
     const reqEmpty = {};
 
     middleware(reqEmpty, res as Response, next); // 1st request empty (ok)
     middleware(reqEmpty, res as Response, next); // 2nd request empty (ok)
 
-    expect(next).toHaveBeenCalledTimes(2);
-    expect(res.status).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(res.status).toHaveBeenCalledWith(429);
   });
 
   it("distinguishes between different categories for the same user", () => {
