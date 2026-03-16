@@ -29,6 +29,28 @@ export class WorkoutStorage {
     return workoutLog;
   }
 
+  async createWorkoutLogs(logs: (InsertWorkoutLog & { userId: string })[]): Promise<WorkoutLog[]> {
+    if (logs.length === 0) return [];
+
+    const createdLogs = await db
+      .insert(workoutLogs)
+      .values(logs)
+      .returning();
+
+    const planDayIds = logs
+      .map((log) => log.planDayId)
+      .filter((id): id is string => id !== null && id !== undefined);
+
+    if (planDayIds.length > 0) {
+      await db
+        .update(planDays)
+        .set({ status: "completed" })
+        .where(inArray(planDays.id, planDayIds));
+    }
+
+    return createdLogs;
+  }
+
   async listWorkoutLogs(userId: string): Promise<WorkoutLog[]> {
     return await db
       .select()

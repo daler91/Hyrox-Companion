@@ -105,3 +105,71 @@ describe("WorkoutStorage.createWorkoutLog", () => {
     expect(db.insert).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("WorkoutStorage.createWorkoutLogs", () => {
+  let storage: WorkoutStorage;
+
+  beforeEach(() => {
+    storage = new WorkoutStorage();
+    vi.clearAllMocks();
+  });
+
+  it("should create multiple workout logs successfully", async () => {
+    const mockLogs = [
+      { id: "w1", date: "2026-01-01", userId: "u1" },
+      { id: "w2", date: "2026-01-02", userId: "u1" },
+    ];
+
+    const returningMock = vi.fn().mockResolvedValue(mockLogs);
+    const valuesMock = vi.fn().mockReturnValue({ returning: returningMock });
+    (db.insert as any).mockReturnValue({ values: valuesMock });
+
+    const logsToInsert = [
+      { date: "2026-01-01", userId: "u1" },
+      { date: "2026-01-02", userId: "u1" },
+    ];
+
+    const result = await storage.createWorkoutLogs(logsToInsert as any);
+
+    expect(result).toEqual(mockLogs);
+    expect(db.insert).toHaveBeenCalledTimes(1);
+    expect(valuesMock).toHaveBeenCalledWith(logsToInsert);
+    expect(db.update).not.toHaveBeenCalled();
+  });
+
+  it("should create workout logs and update planDays if planDayIds are provided", async () => {
+    const mockLogs = [
+      { id: "w3", date: "2026-01-03", userId: "u1", planDayId: "pd1" },
+      { id: "w4", date: "2026-01-04", userId: "u1", planDayId: "pd2" },
+      { id: "w5", date: "2026-01-05", userId: "u1" }, // No planDayId
+    ];
+
+    const insertReturningMock = vi.fn().mockResolvedValue(mockLogs);
+    const insertValuesMock = vi.fn().mockReturnValue({ returning: insertReturningMock });
+    (db.insert as any).mockReturnValue({ values: insertValuesMock });
+
+    const updateWhereMock = vi.fn().mockResolvedValue([]);
+    const updateSetMock = vi.fn().mockReturnValue({ where: updateWhereMock });
+    (db.update as any).mockReturnValue({ set: updateSetMock });
+
+    const logsToInsert = [
+      { date: "2026-01-03", userId: "u1", planDayId: "pd1" },
+      { date: "2026-01-04", userId: "u1", planDayId: "pd2" },
+      { date: "2026-01-05", userId: "u1" },
+    ];
+
+    const result = await storage.createWorkoutLogs(logsToInsert as any);
+
+    expect(result).toEqual(mockLogs);
+    expect(db.insert).toHaveBeenCalledTimes(1);
+    expect(db.update).toHaveBeenCalledTimes(1);
+    expect(updateSetMock).toHaveBeenCalledWith({ status: "completed" });
+    expect(updateWhereMock).toHaveBeenCalled();
+  });
+
+  it("should return empty array if no logs are provided", async () => {
+    const result = await storage.createWorkoutLogs([]);
+    expect(result).toEqual([]);
+    expect(db.insert).not.toHaveBeenCalled();
+  });
+});

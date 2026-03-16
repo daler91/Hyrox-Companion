@@ -320,8 +320,8 @@ export const parseExercisesRequestSchema = z.object({
 
 export const importPlanRequestSchema = z.object({
   csvContent: z.string().min(1, "CSV content is required").max(1000000, "CSV content must be 1,000,000 characters or less"),
-  fileName: z.string().optional(),
-  planName: z.string().optional(),
+  fileName: z.string().max(255, "File name must be 255 characters or less").optional(),
+  planName: z.string().max(255, "Plan name must be 255 characters or less").optional(),
 });
 
 export const schedulePlanRequestSchema = z.object({

@@ -31,6 +31,7 @@ class DatabaseStorage implements IStorage {
   getUsersWithEmailNotifications = this.userStorage.getUsersWithEmailNotifications.bind(this.userStorage);
 
   createWorkoutLog = this.workoutStorage.createWorkoutLog.bind(this.workoutStorage);
+  createWorkoutLogs = this.workoutStorage.createWorkoutLogs.bind(this.workoutStorage);
   listWorkoutLogs = this.workoutStorage.listWorkoutLogs.bind(this.workoutStorage);
   getWorkoutLog = this.workoutStorage.getWorkoutLog.bind(this.workoutStorage);
   updateWorkoutLog = this.workoutStorage.updateWorkoutLog.bind(this.workoutStorage);
