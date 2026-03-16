@@ -12,7 +12,6 @@ import {
 import { WorkoutDetailHeader } from "./WorkoutDetailHeader";
 import { WorkoutDetailView, WorkoutDetailEditForm } from "./WorkoutDetailExercises";
 import { exerciseSetsToStructured } from "@/lib/exerciseUtils";
-import { RpeSelector } from "@/components/RpeSelector";
 import { StatusChangeSection, WorkoutDetailFooter, DeleteConfirmDialog } from "./WorkoutDetailActions";
 
 interface WorkoutDetailDialogProps {
@@ -166,8 +165,7 @@ export default function WorkoutDetailDialog({
         />
 
         {isEditing ? (
-          <>
-            <WorkoutDetailEditForm
+          <WorkoutDetailEditForm
               editForm={editForm}
               setEditForm={setEditForm}
               useTextMode={useTextMode}
@@ -189,8 +187,7 @@ export default function WorkoutDetailDialog({
               setEditRpe={setEditRpe}
               source={entry.source}
             />
-          </>
-        ) : (
+          ) : (
           <WorkoutDetailView
             entry={entry}
             grouped={grouped}
