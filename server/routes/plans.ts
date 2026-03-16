@@ -1,7 +1,7 @@
 import { Router, Response, type Request } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
-import { updatePlanDaySchema, importPlanRequestSchema, schedulePlanRequestSchema } from "@shared/schema";
+import { updatePlanDaySchema, importPlanRequestSchema, schedulePlanRequestSchema, type UpdatePlanDay, type PlanDay } from "@shared/schema";
 import { getUserId } from "../types";
 import { importPlanFromCSV, createSamplePlan, updatePlanDayWithCleanup } from "../services/planService";
 import { rateLimiter } from "../routeUtils";
@@ -11,7 +11,7 @@ const router = Router();
 async function handlePlanDayUpdate(
   req: Request,
   res: Response,
-  updateFn: (dayId: string, data: any, userId: string) => Promise<any>
+  updateFn: (dayId: string, data: UpdatePlanDay, userId: string) => Promise<PlanDay | null | undefined>
 ) {
   try {
     const { dayId } = req.params;
