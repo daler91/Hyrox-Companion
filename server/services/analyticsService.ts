@@ -58,8 +58,7 @@ interface DayAnalytics {
 export function calculateExerciseAnalytics(allSets: ExerciseSet[]): Record<string, DayAnalytics[]> {
   const analytics: Record<string, Record<string, DayAnalytics>> = {};
 
-  for (let i = 0; i < allSets.length; i++) {
-    const s = allSets[i];
+  allSets.forEach((s) => {
     const exerciseKey = getExerciseKey(s);
 
     if (!analytics[exerciseKey]) {
@@ -93,12 +92,12 @@ export function calculateExerciseAnalytics(allSets: ExerciseSet[]): Record<strin
     if (s.distance) {
       day.totalDistance += s.distance;
     }
-  }
+  });
 
   const finalAnalytics: Record<string, DayAnalytics[]> = {};
-  for (const [exercise, data] of Object.entries(analytics)) {
+  Object.entries(analytics).forEach(([exercise, data]) => {
     finalAnalytics[exercise] = Object.values(data).sort((a, b) => a.date.localeCompare(b.date));
-  }
+  });
 
   return finalAnalytics;
 }
