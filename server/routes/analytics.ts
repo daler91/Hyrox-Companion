@@ -3,7 +3,7 @@ import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
 import { calculatePersonalRecords, calculateExerciseAnalytics, type ExerciseSetWithDate } from "../services/analyticsService";
 import { getUserId } from "../types";
-import { dateStringSchema, ExerciseSet } from "@shared/schema";
+import { dateStringSchema } from "@shared/schema";
 
 const router = Router();
 
