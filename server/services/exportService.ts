@@ -122,10 +122,12 @@ export async function generateCSV(userId: string, storage: IStorage): Promise<st
 
   if (allExerciseSets.length > 0) {
     const workoutLogTitles = buildWorkoutLogTitles(timeline);
-    csvRows.push("");
-    csvRows.push("--- EXERCISE SETS (Per-Set Data) ---");
-    csvRows.push("Date,Workout,Exercise,Category,Set #,Reps,Weight,Distance (m),Time (min),Notes");
-    csvRows.push(...generateExerciseSetsCsvRows(allExerciseSets, workoutLogTitles));
+    csvRows.push(
+      "",
+      "--- EXERCISE SETS (Per-Set Data) ---",
+      "Date,Workout,Exercise,Category,Set #,Reps,Weight,Distance (m),Time (min),Notes",
+      ...generateExerciseSetsCsvRows(allExerciseSets, workoutLogTitles)
+    );
   }
 
   return csvRows.join("\n");
