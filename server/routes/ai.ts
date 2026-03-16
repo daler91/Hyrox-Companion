@@ -16,7 +16,7 @@ router.post("/api/parse-exercises", isAuthenticated, rateLimiter("parse", 5), as
       return res.status(400).json({ error: "Text is required" });
     }
     const { text } = parseResult.data;
-    const userId = getUserId(req) as string;
+    const userId = getUserId(req) ;
     const user = await storage.getUser(userId);
     const weightUnit = user?.weightUnit || "kg";
     const userCustomExercises = await storage.getCustomExercises(userId);
@@ -32,14 +32,14 @@ router.post("/api/parse-exercises", isAuthenticated, rateLimiter("parse", 5), as
 async function prepareChatContext(req: AuthenticatedRequest) {
   const parseResult = chatRequestSchema.safeParse(req.body);
   if (!parseResult.success) {
-    return { success: false, error: parseResult.error.errors[0].message };
+    return { success: false as const, error: parseResult.error.errors[0].message };
   }
   const { message, history } = parseResult.data;
 
-  const userId = getUserId(req) as string;
-  const trainingContext = await buildTrainingContext(userId as string);
+  const userId = getUserId(req) ;
+  const trainingContext = await buildTrainingContext(userId );
 
-  return { success: true, message, history, trainingContext };
+  return { success: true as const, message, history, trainingContext };
 }
 
 router.post("/api/chat", isAuthenticated, rateLimiter("chat", 10), async (req: AuthenticatedRequest, res) => {
@@ -50,7 +50,7 @@ router.post("/api/chat", isAuthenticated, rateLimiter("chat", 10), async (req: A
     }
     const { message, history, trainingContext } = context;
 
-    const response = await chatWithCoach(message!, history!, trainingContext!);
+    const response = await chatWithCoach(message, history, trainingContext);
     res.json({ response });
   } catch (error) {
     console.error("Chat error:", error);
@@ -72,7 +72,7 @@ router.post("/api/chat/stream", isAuthenticated, rateLimiter("chat", 10), async 
     res.flushHeaders();
 
     try {
-      const stream = streamChatWithCoach(message!, history!, trainingContext!);
+      const stream = streamChatWithCoach(message, history, trainingContext);
 
       for await (const chunk of stream) {
         res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
@@ -93,7 +93,7 @@ router.post("/api/chat/stream", isAuthenticated, rateLimiter("chat", 10), async 
 
 router.get("/api/chat/history", isAuthenticated, async (req: AuthenticatedRequest, res) => {
   try {
-    const userId = getUserId(req) as string;
+    const userId = getUserId(req) ;
     const messages = await storage.getChatMessages(userId);
     res.json(messages);
   } catch (error) {
@@ -109,7 +109,7 @@ router.post("/api/chat/message", isAuthenticated, async (req: AuthenticatedReque
       return res.status(400).json({ error: "Role and content are required", details: parseResult.error });
     }
 
-    const userId = getUserId(req) as string;
+    const userId = getUserId(req) ;
     const { role, content } = parseResult.data;
 
     const message = await storage.saveChatMessage({ userId, role, content });
@@ -122,7 +122,7 @@ router.post("/api/chat/message", isAuthenticated, async (req: AuthenticatedReque
 
 router.delete("/api/chat/history", isAuthenticated, async (req: AuthenticatedRequest, res) => {
   try {
-    const userId = getUserId(req) as string;
+    const userId = getUserId(req) ;
     await storage.clearChatHistory(userId);
     res.json({ success: true });
   } catch (error) {
@@ -133,9 +133,9 @@ router.delete("/api/chat/history", isAuthenticated, async (req: AuthenticatedReq
 
 router.post("/api/timeline/ai-suggestions", isAuthenticated, rateLimiter("suggestions", 3), async (req: AuthenticatedRequest, res) => {
   try {
-    const userId = getUserId(req) as string;
+    const userId = getUserId(req) ;
 
-    const trainingContext = await buildTrainingContext(userId as string);
+    const trainingContext = await buildTrainingContext(userId );
 
     const timeline = await storage.getTimeline(userId);
     const today = toDateStr();
@@ -150,7 +150,7 @@ router.post("/api/timeline/ai-suggestions", isAuthenticated, rateLimiter("sugges
       .sort((a, b) => a.date!.localeCompare(b.date!))
       .slice(0, 5)
       .map(entry => ({
-        id: entry.planDayId!,
+        id: entry.planDayId as string,
         date: entry.date!,
         focus: entry.focus || "",
         mainWorkout: entry.mainWorkout || "",
