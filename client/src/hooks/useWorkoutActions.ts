@@ -1,8 +1,8 @@
-import { type ParsedExercise, type TimelineEntry, type PlanDay, type WorkoutStatus } from "@shared/schema";
 import { useState, useCallback } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import type { TimelineEntry, PlanDay, WorkoutStatus } from "@shared/schema";
 
 export function useWorkoutActions(selectedPlanId: string | null) {
   const { toast } = useToast();
@@ -39,7 +39,7 @@ export function useWorkoutActions(selectedPlanId: string | null) {
   });
 
   const logWorkoutMutation = useMutation({
-    mutationFn: async (data: { planDayId: string; date: string; focus: string; mainWorkout: string; accessory?: string; notes?: string; rpe?: number; exercises?: ParsedExercise[] }) => {
+    mutationFn: async (data: { planDayId: string; date: string; focus: string; mainWorkout: string; accessory?: string; notes?: string; rpe?: number; exercises?: any[] }) => {
       const response = await apiRequest("POST", "/api/workouts", data);
       return response.json();
     },
@@ -105,7 +105,7 @@ export function useWorkoutActions(selectedPlanId: string | null) {
     setDetailEntry(entry);
   }, []);
 
-  const handleSaveFromDetail = useCallback((updates: { focus: string; mainWorkout: string; accessory: string | null; notes: string | null; rpe?: number | null; exercises?: ParsedExercise[] }) => {
+  const handleSaveFromDetail = useCallback((updates: { focus: string; mainWorkout: string; accessory: string | null; notes: string | null; rpe?: number | null; exercises?: any[] }) => {
     if (!detailEntry) return;
 
     if (detailEntry.workoutLogId) {

@@ -1,4 +1,4 @@
-import { Router, type Response } from "express";
+import { Router } from "express";
 import crypto from "node:crypto";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
@@ -7,7 +7,7 @@ import { getUserId, AuthenticatedRequest } from "../types";
 
 const router = Router();
 
-router.post("/api/emails/check", isAuthenticated, async (req: AuthenticatedRequest, res: Response) => {
+router.post("/api/emails/check", isAuthenticated, async (req: AuthenticatedRequest, res) => {
   try {
     const userId = getUserId(req);
     const user = await storage.getUser(userId);

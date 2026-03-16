@@ -107,7 +107,7 @@ describe('useWorkoutActions', () => {
           result.current.openDetailDialog(mockEntry as unknown as TimelineEntry);
         });
 
-        const updates = { focus: 'cardio', mainWorkout: 'run', accessory: null, notes: null, exercises: [{ exerciseName: 'run', category: 'conditioning', sets: [] }] };
+        const updates = { focus: 'cardio', mainWorkout: 'run', accessory: null, notes: null, exercises: [{ name: 'run' }] };
         act(() => {
           result.current.handleSaveFromDetail(updates);
         });
@@ -120,7 +120,7 @@ describe('useWorkoutActions', () => {
             mainWorkout: 'run',
             accessory: undefined,
             notes: undefined,
-            exercises: [{ exerciseName: 'run', category: 'conditioning', sets: [] }]
+            exercises: [{ name: 'run' }]
           });
           expect(result.current.detailEntry).toBeNull();
         });

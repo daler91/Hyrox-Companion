@@ -42,7 +42,7 @@ router.post("/api/workouts/:id/reparse", isAuthenticated, async (req: Authentica
 });
 
 async function processBatchChunk(
-  chunk: { id: string; mainWorkout?: string | null; accessory?: string | null }[],
+  chunk: any[],
   weightUnit: string
 ): Promise<{ parsed: number; failed: number }> {
   let parsed = 0;

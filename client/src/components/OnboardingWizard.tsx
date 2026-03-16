@@ -79,28 +79,6 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
   const idx = STEPS.indexOf(step);
   const total = step === "schedule" ? 5 : 4;
 
-  const renderNextButton = () => {
-    if (step === "schedule") {
-      return (
-        <Button onClick={() => createdPlanId && scheduleMutation.mutate({ planId: createdPlanId, date: format(startDate, "yyyy-MM-dd") })} disabled={scheduleMutation.isPending} data-testid="button-onboarding-start-plan">
-          {scheduleMutation.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-          Start Training <ChevronRight className="h-4 w-4 ml-1" />
-        </Button>
-      );
-    }
-
-    if (step !== "plan") {
-      return (
-        <Button onClick={handleNext} disabled={prefsMutation.isPending}>
-          {prefsMutation.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-          {step === "welcome" ? "Get Started" : "Continue"} <ChevronRight className="h-4 w-4 ml-1" />
-        </Button>
-      );
-    }
-
-    return null;
-  };
-
   return (
     <Dialog open={open} onOpenChange={() => {}}>
       <DialogContent className="sm:max-w-lg" onPointerDownOutside={(e) => e.preventDefault()}>
@@ -129,7 +107,17 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
               <ChevronLeft className="h-4 w-4 mr-1" /> Back
             </Button>
           ) : <div />}
-          {renderNextButton()}
+          {step === "schedule" ? (
+            <Button onClick={() => createdPlanId && scheduleMutation.mutate({ planId: createdPlanId, date: format(startDate, "yyyy-MM-dd") })} disabled={scheduleMutation.isPending} data-testid="button-onboarding-start-plan">
+              {scheduleMutation.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+              Start Training <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          ) : step !== "plan" ? (
+            <Button onClick={handleNext} disabled={prefsMutation.isPending}>
+              {prefsMutation.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+              {step === "welcome" ? "Get Started" : "Continue"} <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          ) : null}
         </div>
       </DialogContent>
     </Dialog>

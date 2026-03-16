@@ -302,7 +302,7 @@ function FieldSelector({
   onCustomChange,
   isTextArea = false,
 }: FieldSelectorProps) {
-  const labelId = label.toLowerCase().replaceAll(/\s+/g, "-");
+  const labelId = label.toLowerCase().replace(/\s+/g, "-");
 
   return (
     <div className="rounded-md border p-3 space-y-2">

@@ -62,7 +62,7 @@ describe('useChatSession', () => {
 
     // Reset crypto mock
     Object.defineProperty(window, 'crypto', {
-      value: { randomUUID: (() => { let i = 0; return () => `test-uuid-${++i}` })() },
+      value: { randomUUID: () => `test-uuid-${Math.random()}` },
       configurable: true
     });
   });

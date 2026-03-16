@@ -59,7 +59,7 @@ export function AppSidebar() {
                   <SidebarMenuButton
                     asChild
                     isActive={location === item.url}
-                    data-testid={`nav-${item.title.toLowerCase().replaceAll(/\s/g, "-")}`}
+                    data-testid={`nav-${item.title.toLowerCase().replace(/\s/g, "-")}`}
                   >
                     <Link href={item.url}>
                       <item.icon className="h-4 w-4" />

@@ -85,7 +85,7 @@ export function usePlanImport({ onPlanScheduled }: UsePlanImportOptions = {}) {
     const lines = csvContent.trim().split('\n');
     if (lines.length < 2) return [];
 
-    const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replaceAll(/['"]/g, ""));
+    const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/['"]/g, ''));
     const weekIdx = headers.findIndex(h => h.includes('week'));
     const dayIdx = headers.findIndex(h => h.includes('day'));
     const focusIdx = headers.findIndex(h => h.includes('focus') || h.includes('type'));
@@ -94,7 +94,7 @@ export function usePlanImport({ onPlanScheduled }: UsePlanImportOptions = {}) {
     const rows: Array<{ weekNumber: number; dayName: string; focus: string; mainWorkout: string }> = [];
 
     for (let i = 1; i < Math.min(lines.length, 11); i++) {
-      const cols = lines[i].split(',').map(c => c.trim().replaceAll(/['"]/g, ""));
+      const cols = lines[i].split(',').map(c => c.trim().replace(/['"]/g, ''));
       if (cols.length >= 4) {
         rows.push({
           weekNumber: Number.parseInt(cols[weekIdx] || '1', 10) || 1,

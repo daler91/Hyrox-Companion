@@ -1,4 +1,3 @@
-import { type ParsedExercise } from "@shared/schema";
 import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
 import {
@@ -78,6 +77,27 @@ export interface WorkoutSuggestion {
   priority: "high" | "medium" | "low";
 }
 
+export interface ParsedExercise {
+  exerciseName: string;
+  category: string;
+  customLabel?: string;
+  confidence?: number;
+  missingFields?: string[];
+  numSets?: number;
+  reps?: number;
+  weight?: number;
+  distance?: number;
+  time?: number;
+  notes?: string;
+  sets: Array<{
+    setNumber: number;
+    reps?: number;
+    weight?: number;
+    distance?: number;
+    time?: number;
+    notes?: string;
+  }>;
+}
 
 export const workoutSuggestionSchema = z.object({
   workoutId: z.string(),

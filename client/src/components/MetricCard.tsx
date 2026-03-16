@@ -25,7 +25,7 @@ export function MetricCard({ title, value, unit, trend, trendValue, icon: Icon }
   };
 
   return (
-    <Card data-testid={`card-metric-${title.toLowerCase().replaceAll(/\s/g, "-")}`}>
+    <Card data-testid={`card-metric-${title.toLowerCase().replace(/\s/g, "-")}`}>
       <CardContent className="p-6">
         <div className="flex items-center justify-between gap-4">
           <div className="flex-1 min-w-0">
