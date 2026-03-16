@@ -1,22 +1,14 @@
+import { EXERCISE_DEFINITIONS, type ParsedExercise, type ExerciseName } from "@shared/schema";
 import type { MutableRefObject } from "react";
 import { useState, useRef, useCallback } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useSensor, useSensors, PointerSensor, KeyboardSensor, type DragEndEvent } from "@dnd-kit/core";
 import { sortableKeyboardCoordinates, arrayMove } from "@dnd-kit/sortable";
 import { type StructuredExercise, createDefaultSet } from "@/components/ExerciseInput";
-import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { getExerciseLabel } from "@/lib/exerciseUtils";
 
-export interface ParsedExercise {
-  exerciseName: string;
-  category: string;
-  customLabel?: string;
-  confidence?: number;
-  missingFields?: string[];
-  sets: Array<{ setNumber: number; reps?: number; weight?: number; distance?: number; time?: number }>;
-}
 
 interface UseWorkoutEditorOptions {
   initialBlockCounter?: number;
