@@ -561,24 +561,18 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
   const { toast } = useToast();
 
   const { blockCounts, blockIndices } = React.useMemo(() => {
+    // ⚡ Bolt Performance Optimization:
+    // Combine two O(N) array traversals into a single O(N) traversal
+    // and remove the need for a secondary runningCounts object allocation.
     const counts: Record<string, number> = {};
     const indices: Record<string, number> = {};
-    const runningCounts: Record<string, number> = {};
 
     for (const blockId of editExercises) {
       const exData = editExerciseData[blockId];
       if (exData?.exerciseName) {
         const name = exData.exerciseName;
         counts[name] = (counts[name] || 0) + 1;
-      }
-    }
-
-    for (const blockId of editExercises) {
-      const exData = editExerciseData[blockId];
-      if (exData?.exerciseName) {
-        const name = exData.exerciseName;
-        runningCounts[name] = (runningCounts[name] || 0) + 1;
-        indices[blockId] = runningCounts[name];
+        indices[blockId] = counts[name];
       }
     }
 
