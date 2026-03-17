@@ -1,6 +1,6 @@
 import { useClerk } from "@clerk/clerk-react";
 
-const isCypressTest = typeof window !== "undefined" && "Cypress" in window;
+const isCypressTest = typeof globalThis.window !== "undefined" && "Cypress" in globalThis.window;
 
 function useClerkSignOut() {
   const { signOut } = useClerk();

@@ -2,7 +2,7 @@ import { useUser, useAuth as useClerkAuth } from "@clerk/clerk-react";
 import { useQuery } from "@tanstack/react-query";
 import type { User } from "@shared/schema";
 
-const isCypressTest = typeof window !== "undefined" && "Cypress" in window;
+const isCypressTest = typeof globalThis.window !== "undefined" && "Cypress" in globalThis.window;
 
 function useClerkAuthImpl() {
   const { isSignedIn, isLoaded } = useClerkAuth();
