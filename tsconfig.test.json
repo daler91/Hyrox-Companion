@@ -1,0 +1,24 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "client/src/**/*.ts",
+    "client/src/**/*.tsx",
+    "shared/**/*.ts",
+    "server/**/*.ts",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "vitest.config.ts",
+    "vitest.setup.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "build",
+    "dist"
+  ],
+  "compilerOptions": {
+    "strict": false,
+    "noImplicitAny": false,
+    "strictNullChecks": false,
+    "types": ["node", "vite/client", "vitest/globals", "vitest/importMeta", "@testing-library/jest-dom"]
+  }
+}
