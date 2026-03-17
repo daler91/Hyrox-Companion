@@ -63,7 +63,7 @@ export function decryptToken(encryptedData: string): string {
     const iv = Buffer.from(ivHex, "hex");
     const authTag = Buffer.from(authTagHex, "hex");
 
-    const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
+    const decipher = crypto.createDecipheriv(ALGORITHM, key, iv, { authTagLength: 16 });
     decipher.setAuthTag(authTag);
 
     let decrypted = decipher.update(encryptedText, "hex", "utf8");
