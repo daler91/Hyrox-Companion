@@ -74,6 +74,12 @@ export function buildWeeklySummaryEmail(user: User, data: WeeklySummaryData): { 
 
   const subject = `Your Week in Review: ${data.completedCount} workout${data.completedCount !== 1 ? 's' : ''} completed`;
 
+  const prsSection = data.prsThisWeek > 0 ? `
+      <div class="stat-card">
+        <div class="stat-value highlight">🏆 ${data.prsThisWeek}</div>
+        <div class="stat-label">New PRs</div>
+      </div>` : '';
+
   const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${baseStyles()}</style></head>
 <body style="background:#f4f4f5;padding:16px;">
@@ -114,11 +120,7 @@ export function buildWeeklySummaryEmail(user: User, data: WeeklySummaryData): { 
         <div class="stat-value highlight">🔥 ${data.currentStreak}</div>
         <div class="stat-label">Day Streak</div>
       </div>
-      ${data.prsThisWeek > 0 ? `
-      <div class="stat-card">
-        <div class="stat-value highlight">🏆 ${data.prsThisWeek}</div>
-        <div class="stat-label">New PRs</div>
-      </div>` : ''}
+      ${prsSection}
     </div>` : ''}
 
     ${data.missedCount > 0 ? `
