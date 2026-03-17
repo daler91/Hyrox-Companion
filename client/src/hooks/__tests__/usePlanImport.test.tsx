@@ -54,19 +54,15 @@ describe('usePlanImport', () => {
       const file = new File([isValid ? content : 'err'], isValid ? 'plan.csv' : 'x.txt', { type: isValid ? 'text/csv' : 'text/plain' });
       const ev = { target: { files: [file], value: file.name } } as unknown as React.ChangeEvent<HTMLInputElement>;
 
-      const mockReader = {
-        readAsText: vi.fn(function(this: { onload: (e: any) => void }) {
-          if (this.onload) this.onload({ target: { result: content } });
-        }),
-        onload: null
-      };
+      const mockFileText = vi.fn().mockResolvedValue(content);
+      const fileToUse = new File([isValid ? content : 'err'], isValid ? 'plan.csv' : 'x.txt', { type: isValid ? 'text/csv' : 'text/plain' });
+      fileToUse.text = mockFileText;
+      const evToUse = { target: { files: [fileToUse], value: fileToUse.name } } as unknown as React.ChangeEvent<HTMLInputElement>;
 
-      vi.stubGlobal('FileReader', vi.fn(() => mockReader));
-      act(() => { result.current.handleFileUpload(ev); });
-      vi.unstubAllGlobals();
+      await act(async () => { await result.current.handleFileUpload(evToUse); });
 
       if (expectedToast) expect(mockToast).toHaveBeenCalledWith(expectedToast);
-      else expect(mockReader.readAsText).toHaveBeenCalledWith(file);
+      else expect(mockFileText).toHaveBeenCalled();
 
       if (expectPreviewNull) expect(result.current.csvPreview).toBeNull();
       else expect(result.current.csvPreview).toEqual({ fileName: 'plan.csv', content, rows: [{ weekNumber: 1, dayName: 'Monday', focus: 'Strength', mainWorkout: 'Squats' }] });

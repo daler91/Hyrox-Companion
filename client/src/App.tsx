@@ -24,7 +24,7 @@ function isCypressTest(): boolean {
 }
 
 function isDevPreview(): boolean {
-  return import.meta.env.DEV && (!clerkPubKey || window.self !== window.top);
+  return import.meta.env.DEV && (!clerkPubKey || globalThis.window.self !== globalThis.window.top);
 }
 
 function shouldBypassAuth(): boolean {
