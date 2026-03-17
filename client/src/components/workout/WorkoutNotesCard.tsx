@@ -12,14 +12,16 @@ interface WorkoutNotesCardProps {
   notesInterim: string;
 }
 
-export function WorkoutNotesCard({
-  notes,
-  setNotes,
-  isNotesListening,
-  isNotesSupported,
-  toggleNotesListening,
-  notesInterim,
-}: WorkoutNotesCardProps) {
+export function WorkoutNotesCard(props: WorkoutNotesCardProps) {
+  const {
+    notes,
+    setNotes,
+    isNotesListening,
+    isNotesSupported,
+    toggleNotesListening,
+    notesInterim,
+  } = props;
+
   return (
     <Card>
       <CardHeader>

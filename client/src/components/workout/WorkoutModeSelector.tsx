@@ -11,14 +11,16 @@ interface WorkoutModeSelectorProps {
   stopListening: () => void;
 }
 
-export function WorkoutModeSelector({
-  useTextMode,
-  setUseTextMode,
-  isListening,
-  isSupported,
-  startListening,
-  stopListening,
-}: WorkoutModeSelectorProps) {
+export function WorkoutModeSelector(props: WorkoutModeSelectorProps) {
+  const {
+    useTextMode,
+    setUseTextMode,
+    isListening,
+    isSupported,
+    startListening,
+    stopListening,
+  } = props;
+
   return (
     <div className="flex items-center gap-2">
       <Button
