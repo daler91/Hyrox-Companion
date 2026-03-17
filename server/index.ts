@@ -3,13 +3,13 @@ import express, { type Request, Response, NextFunction } from "express";
 import compression from "compression";
 import helmet from "helmet";
 import { logger } from "./logger";
-import { getUserId } from "./types";
 import pinoHttp from "pino-http";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "node:http";
 import { storage } from "./storage";
 import { pool } from "./db";
+import { getAuth } from "@clerk/express";
 import { runStartupMaintenance } from "./maintenance";
 
 if (process.env.SENTRY_DSN) {
@@ -111,12 +111,16 @@ app.use(pinoHttp({
   customProps: (req, res) => {
     let userId = 'anonymous';
     try {
-      userId = getUserId(req as Request);
-    } catch (err) {
-      // Intentionally empty: many routes are unauthenticated (e.g., static assets, health checks).
-      // We don't want to spam the logs with "User not authenticated" errors for every public request.
+      const auth = getAuth(req as Request);
+      if (auth?.userId) {
+        userId = auth.userId;
+      }
+    } catch {
+      // Ignored: getAuth throws if the request is not processed by Clerk middleware yet,
+      // which is expected for public routes. We safely fall back to 'anonymous'.
       userId = 'anonymous';
     }
+
     return {
       context: 'http',
       userId
