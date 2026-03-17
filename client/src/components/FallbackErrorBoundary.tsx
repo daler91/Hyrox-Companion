@@ -3,8 +3,8 @@ import { Button } from "@/components/ui/button";
 import { AlertTriangle } from "lucide-react";
 
 export interface FallbackErrorBoundaryProps {
-  error: unknown;
-  resetError: () => void;
+  readonly error: unknown;
+  readonly resetError: () => void;
 }
 
 export function FallbackErrorBoundary({ error, resetError }: FallbackErrorBoundaryProps) {
