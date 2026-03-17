@@ -80,7 +80,10 @@ export function buildWeeklySummaryEmail(
       ? `${durationHours}h ${durationMins}m`
       : `${durationMins}m`;
 
-  const completedSuffix = data.completedCount !== 1 ? "s" : "";
+  let completedSuffix = "s";
+  if (data.completedCount === 1) {
+    completedSuffix = "";
+  }
   const subject = `Your Week in Review: ${data.completedCount} workout${completedSuffix} completed`;
 
   const prsSection =
@@ -95,7 +98,10 @@ export function buildWeeklySummaryEmail(
   let missedSessionsMessage =
     '<p style="font-size:14px;color:#16a34a;margin-top:16px;font-weight:600;">Perfect week — no missed sessions! Keep it up! 💪</p>';
   if (data.missedCount > 0) {
-    const missedSuffix = data.missedCount !== 1 ? "s" : "";
+    let missedSuffix = "s";
+    if (data.missedCount === 1) {
+      missedSuffix = "";
+    }
     missedSessionsMessage = `<p style="font-size:14px;color:#64748b;margin-top:16px;">You missed ${data.missedCount} session${missedSuffix} this week. Don't worry — consistency over perfection!</p>`;
   }
 

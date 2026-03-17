@@ -82,27 +82,37 @@ describe("useVoiceInput dedup", () => {
     });
   }
 
-  it("emits a final transcript once", async () => {
+  it.each([
+    {
+      name: "emits a final transcript once",
+      actions: [{ text: "house" }],
+      expectedTimes: 1,
+      expectedArgs: ["house"],
+    },
+    {
+      name: "skips duplicate final transcript within dedup window",
+      actions: [{ text: "house" }, { text: "house" }, { text: "house" }],
+      expectedTimes: 1,
+      expectedArgs: ["house"],
+    },
+    {
+      name: "dedup is case-insensitive",
+      actions: [{ text: "House" }, { text: "house" }],
+      expectedTimes: 1,
+      expectedArgs: ["House"],
+    },
+  ])("$name", async ({ actions, expectedTimes, expectedArgs }) => {
     const onResult = vi.fn();
     const { recognition } = await startHook(onResult);
 
-    triggerResult(recognition, "house", true);
+    for (const action of actions) {
+      triggerResult(recognition, action.text, true);
+    }
 
-    expect(onResult).toHaveBeenCalledTimes(1);
-    expect(onResult).toHaveBeenCalledWith("house");
-  });
-
-  it("skips duplicate final transcript within dedup window", async () => {
-    const onResult = vi.fn();
-    const { recognition } = await startHook(onResult);
-
-    triggerResult(recognition, "house", true);
-
-    triggerResult(recognition, "house", true);
-
-    triggerResult(recognition, "house", true);
-
-    expect(onResult).toHaveBeenCalledTimes(1);
+    expect(onResult).toHaveBeenCalledTimes(expectedTimes);
+    if (expectedArgs) {
+      expect(onResult).toHaveBeenCalledWith(...expectedArgs);
+    }
   });
 
   it("allows same text after dedup window expires", async () => {
@@ -118,17 +128,6 @@ describe("useVoiceInput dedup", () => {
     triggerResult(recognition, "house", true);
 
     expect(onResult).toHaveBeenCalledTimes(2);
-  });
-
-  it("dedup is case-insensitive", async () => {
-    const onResult = vi.fn();
-    const { recognition } = await startHook(onResult);
-
-    triggerResult(recognition, "House", true);
-
-    triggerResult(recognition, "house", true);
-
-    expect(onResult).toHaveBeenCalledTimes(1);
   });
 
   it("resets dedup state on new startListening call", async () => {
