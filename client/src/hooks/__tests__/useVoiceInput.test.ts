@@ -53,6 +53,18 @@ async function startHook(onResult: ReturnType<typeof vi.fn>) {
   return { hook, recognition };
 }
 
+async function setupVoiceInput() {
+  const onResult = vi.fn();
+  const { hook, recognition } = await startHook(onResult);
+  return { onResult, hook, recognition };
+}
+
+function triggerResult(recognition: any, transcript: string, isFinal = true) {
+  act(() => {
+    recognition.onresult(makeResultEvent([{ transcript, isFinal }]));
+  });
+}
+
 describe("useVoiceInput dedup", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -75,18 +87,6 @@ describe("useVoiceInput dedup", () => {
     vi.useRealTimers();
     vi.restoreAllMocks();
   });
-
-  async function setupVoiceInput() {
-    const onResult = vi.fn();
-    const { hook, recognition } = await startHook(onResult);
-    return { onResult, hook, recognition };
-  }
-
-  function triggerResult(recognition: any, transcript: string, isFinal = true) {
-    act(() => {
-      recognition.onresult(makeResultEvent([{ transcript, isFinal }]));
-    });
-  }
 
   it.each([
     {
