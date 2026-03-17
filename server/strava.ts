@@ -325,7 +325,12 @@ export function registerStravaRoutes(app: Express): void {
     stravaAuthLimiter,
     getStravaAuth,
   );
-  app.get("/api/strava/callback", stravaAuthLimiter, handleStravaCallback);
+  app.get(
+    "/api/strava/callback",
+    isAuthenticated,
+    stravaAuthLimiter,
+    handleStravaCallback,
+  );
   const stravaDisconnectLimiter = rateLimiter(
     "stravaDisconnect",
     10,
