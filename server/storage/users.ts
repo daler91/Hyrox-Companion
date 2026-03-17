@@ -13,6 +13,7 @@ import {
   type CustomExercise,
   type InsertCustomExercise,
 } from "@shared/schema";
+import { encryptToken, decryptToken } from "../crypto";
 import { db } from "../db";
 import { eq, and, isNotNull } from "drizzle-orm";
 
@@ -37,7 +38,10 @@ export class UserStorage {
     return user;
   }
 
-  async updateUserPreferences(userId: string, preferences: UpdateUserPreferences): Promise<User | undefined> {
+  async updateUserPreferences(
+    userId: string,
+    preferences: UpdateUserPreferences,
+  ): Promise<User | undefined> {
     const [user] = await db
       .update(users)
       .set({
@@ -66,36 +70,57 @@ export class UserStorage {
   }
 
   async clearChatHistory(userId: string): Promise<boolean> {
-    await db
-      .delete(chatMessages)
-      .where(eq(chatMessages.userId, userId));
+    await db.delete(chatMessages).where(eq(chatMessages.userId, userId));
     return true;
   }
 
-  async getStravaConnection(userId: string): Promise<StravaConnection | undefined> {
+  async getStravaConnection(
+    userId: string,
+  ): Promise<StravaConnection | undefined> {
     const [connection] = await db
       .select()
       .from(stravaConnections)
       .where(eq(stravaConnections.userId, userId));
+
+    if (connection) {
+      return {
+        ...connection,
+        accessToken: decryptToken(connection.accessToken),
+        refreshToken: decryptToken(connection.refreshToken),
+      };
+    }
     return connection;
   }
 
-  async upsertStravaConnection(data: InsertStravaConnection): Promise<StravaConnection> {
+  async upsertStravaConnection(
+    data: InsertStravaConnection,
+  ): Promise<StravaConnection> {
+    const encryptedData = {
+      ...data,
+      accessToken: encryptToken(data.accessToken),
+      refreshToken: encryptToken(data.refreshToken),
+    };
+
     const [connection] = await db
       .insert(stravaConnections)
-      .values(data)
+      .values(encryptedData)
       .onConflictDoUpdate({
         target: stravaConnections.userId,
         set: {
-          stravaAthleteId: data.stravaAthleteId,
-          accessToken: data.accessToken,
-          refreshToken: data.refreshToken,
-          expiresAt: data.expiresAt,
-          scope: data.scope,
+          stravaAthleteId: encryptedData.stravaAthleteId,
+          accessToken: encryptedData.accessToken,
+          refreshToken: encryptedData.refreshToken,
+          expiresAt: encryptedData.expiresAt,
+          scope: encryptedData.scope,
         },
       })
       .returning();
-    return connection;
+
+    return {
+      ...connection,
+      accessToken: decryptToken(connection.accessToken),
+      refreshToken: decryptToken(connection.refreshToken),
+    };
   }
 
   async deleteStravaConnection(userId: string): Promise<boolean> {
@@ -119,7 +144,9 @@ export class UserStorage {
       .where(eq(customExercises.userId, userId));
   }
 
-  async upsertCustomExercise(data: InsertCustomExercise): Promise<CustomExercise> {
+  async upsertCustomExercise(
+    data: InsertCustomExercise,
+  ): Promise<CustomExercise> {
     const [result] = await db
       .insert(customExercises)
       .values(data)
@@ -132,19 +159,23 @@ export class UserStorage {
   }
 
   async updateLastWeeklySummaryAt(userId: string): Promise<void> {
-    await db.update(users).set({ lastWeeklySummaryAt: new Date() }).where(eq(users.id, userId));
+    await db
+      .update(users)
+      .set({ lastWeeklySummaryAt: new Date() })
+      .where(eq(users.id, userId));
   }
 
   async updateLastMissedReminderAt(userId: string): Promise<void> {
-    await db.update(users).set({ lastMissedReminderAt: new Date() }).where(eq(users.id, userId));
+    await db
+      .update(users)
+      .set({ lastMissedReminderAt: new Date() })
+      .where(eq(users.id, userId));
   }
 
   async getUsersWithEmailNotifications(): Promise<User[]> {
-    return await db.select().from(users).where(
-      and(
-        eq(users.emailNotifications, 1),
-        isNotNull(users.email)
-      )
-    );
+    return await db
+      .select()
+      .from(users)
+      .where(and(eq(users.emailNotifications, 1), isNotNull(users.email)));
   }
 }
