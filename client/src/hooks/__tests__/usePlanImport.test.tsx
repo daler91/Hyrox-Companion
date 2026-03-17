@@ -120,12 +120,13 @@ describe('usePlanImport', () => {
     });
   });
 
+
   describe('Mutations', () => {
     // Shared helper for testing common mutation error states to reduce code duplication
     const testErrorState = async (trigger: (res: any) => void, expectedErrorTitle: string) => {
       vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(new Error('API Failure'));
       const { result } = renderHook(() => usePlanImport(), { wrapper });
-      act(() => trigger(result));
+      act(() => { trigger(result); });
       await waitFor(() => {
         expect(mockToast).toHaveBeenCalledWith({ title: expectedErrorTitle, variant: "destructive" });
       });
@@ -133,9 +134,7 @@ describe('usePlanImport', () => {
 
     it('confirmImport handles import mutation and cleans up preview', async () => {
       const { result } = renderHook(() => usePlanImport(), { wrapper });
-      act(() => {
-        result.current.setCsvPreview({ fileName: 'plan.csv', content: 'csv data', rows: [] });
-      });
+      act(() => { result.current.setCsvPreview({ fileName: 'plan.csv', content: 'csv data', rows: [] }); });
       act(() => { result.current.confirmImport(); });
 
       await waitFor(() => {
@@ -147,52 +146,14 @@ describe('usePlanImport', () => {
       });
     });
 
-
     it('handles import error', async () => {
       vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(new Error('Import failed'));
       const { result } = renderHook(() => usePlanImport(), { wrapper });
-      act(() => {
-        result.current.setCsvPreview({ fileName: 'plan.csv', content: 'csv data', rows: [] });
-      });
-      act(() => {
-        result.current.confirmImport();
-      });
+      act(() => { result.current.setCsvPreview({ fileName: 'plan.csv', content: 'csv data', rows: [] }); });
+      act(() => { result.current.confirmImport(); });
       await waitFor(() => {
         expect(mockToast).toHaveBeenCalledWith({ title: "Failed to import plan", variant: "destructive" });
       });
-    });
-
-
-    it('samplePlanMutation creates a sample plan', async () => {
-      const { result } = renderHook(() => usePlanImport(), { wrapper });
-      act(() => { result.current.samplePlanMutation.mutate(); });
-
-      await waitFor(() => {
-        expect(queryClientLib.apiRequest).toHaveBeenCalledWith('POST', '/api/plans/sample', {});
-        expect(queryClientLib.queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/plans"] });
-        expect(result.current.schedulingPlanId).toBe('test-plan-id');
-        expect(mockToast).toHaveBeenCalledWith({ title: "Sample plan created! Now set a start date." });
-      });
-    });
-
-    it('handles sample plan creation error', async () => {
-      await testErrorState((res) => res.current.samplePlanMutation.mutate(), "Failed to create sample plan");
-    });
-
-    it('renamePlanMutation renames a plan', async () => {
-      const { result } = renderHook(() => usePlanImport(), { wrapper });
-      act(() => { result.current.renamePlanMutation.mutate({ planId: 'p1', name: 'New Name' }); });
-
-      await waitFor(() => {
-        expect(queryClientLib.apiRequest).toHaveBeenCalledWith('PATCH', '/api/plans/p1', { name: 'New Name' });
-        expect(queryClientLib.queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/plans"] });
-        expect(queryClientLib.queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/timeline"] });
-        expect(mockToast).toHaveBeenCalledWith({ title: "Plan renamed" });
-      });
-    });
-
-    it('handles plan rename error', async () => {
-      await testErrorState((res) => res.current.renamePlanMutation.mutate({ planId: 'p1', name: 'New Name' }), "Failed to rename plan");
     });
 
     it('schedulePlanMutation schedules a plan', async () => {
@@ -211,8 +172,52 @@ describe('usePlanImport', () => {
       });
     });
 
-    it('handles plan schedule error', async () => {
-      await testErrorState((res) => res.current.schedulePlanMutation.mutate({ planId: 'p1', startDate: '2023-10-01' }), "Failed to schedule plan");
+    const standardMutations = [
+      {
+        name: 'samplePlanMutation',
+        trigger: (res: any) => res.current.samplePlanMutation.mutate(),
+        endpoint: '/api/plans/sample',
+        method: 'POST',
+        payload: {},
+        successToast: "Sample plan created! Now set a start date.",
+        errorToast: "Failed to create sample plan"
+      },
+      {
+        name: 'renamePlanMutation',
+        trigger: (res: any) => res.current.renamePlanMutation.mutate({ planId: 'p1', name: 'New Name' }),
+        endpoint: '/api/plans/p1',
+        method: 'PATCH',
+        payload: { name: 'New Name' },
+        successToast: "Plan renamed",
+        errorToast: "Failed to rename plan",
+        extraInvalidates: [["/api/timeline"]]
+      }
+    ];
+
+    it.each(standardMutations)('$name executes correctly on success', async ({ trigger, endpoint, method, payload, successToast, extraInvalidates }) => {
+      const { result } = renderHook(() => usePlanImport(), { wrapper });
+      act(() => { trigger(result); });
+
+      await waitFor(() => {
+        expect(queryClientLib.apiRequest).toHaveBeenCalledWith(method, endpoint, payload);
+        expect(queryClientLib.queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/plans"] });
+        if (extraInvalidates) {
+          extraInvalidates.forEach(key => {
+            expect(queryClientLib.queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: key });
+          });
+        }
+        expect(mockToast).toHaveBeenCalledWith({ title: successToast });
+      });
     });
+
+    it.each([
+      ['samplePlanMutation', (res: any) => res.current.samplePlanMutation.mutate(), "Failed to create sample plan"],
+      ['renamePlanMutation', (res: any) => res.current.renamePlanMutation.mutate({ planId: 'p1', name: 'New Name' }), "Failed to rename plan"],
+      ['schedulePlanMutation', (res: any) => res.current.schedulePlanMutation.mutate({ planId: 'p1', startDate: '2023-10-01' }), "Failed to schedule plan"]
+    ])('%s handles error', async (_, trigger, errorToast) => {
+      await testErrorState(trigger as any, errorToast as string);
+    });
+
   });
+
 });
