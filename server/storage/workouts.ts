@@ -1,6 +1,7 @@
 import {
   workoutLogs,
   planDays,
+  trainingPlans,
   exerciseSets,
   type WorkoutLog,
   type InsertWorkoutLog,
@@ -23,7 +24,17 @@ export class WorkoutStorage {
       await db
         .update(planDays)
         .set({ status: "completed" })
-        .where(eq(planDays.id, log.planDayId));
+        .where(
+          and(
+            eq(planDays.id, log.planDayId),
+            inArray(
+              planDays.planId,
+              db.select({ id: trainingPlans.id })
+                .from(trainingPlans)
+                .where(eq(trainingPlans.userId, log.userId))
+            )
+          )
+        );
     }
 
     return workoutLog;
@@ -37,15 +48,34 @@ export class WorkoutStorage {
       .values(logs)
       .returning();
 
-    const planDayIds = logs
-      .map((log) => log.planDayId)
-      .filter((id): id is string => id !== null && id !== undefined);
+    // Group planDayIds by userId to ensure proper authorization per user
+    // Since logs could potentially come from different users in a batch
+    const updatesByUser = new Map<string, string[]>();
+    for (const log of logs) {
+      if (log.planDayId) {
+        const ids = updatesByUser.get(log.userId) || [];
+        ids.push(log.planDayId);
+        updatesByUser.set(log.userId, ids);
+      }
+    }
 
-    if (planDayIds.length > 0) {
-      await db
-        .update(planDays)
-        .set({ status: "completed" })
-        .where(inArray(planDays.id, planDayIds));
+    for (const [userId, planDayIds] of updatesByUser) {
+      if (planDayIds.length > 0) {
+        await db
+          .update(planDays)
+          .set({ status: "completed" })
+          .where(
+            and(
+              inArray(planDays.id, planDayIds),
+              inArray(
+                planDays.planId,
+                db.select({ id: trainingPlans.id })
+                  .from(trainingPlans)
+                  .where(eq(trainingPlans.userId, userId))
+              )
+            )
+          );
+      }
     }
 
     return createdLogs;
