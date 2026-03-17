@@ -7,12 +7,7 @@ import {
   type MissedWorkoutData,
 } from "./emailTemplates";
 
-export {
-  buildWeeklySummaryEmail,
-  buildMissedWorkoutEmail,
-  type WeeklySummaryData,
-  type MissedWorkoutData,
-};
+export * from "./emailTemplates";
 
 function getResendClient() {
   const apiKey = process.env.RESEND_API_KEY;
