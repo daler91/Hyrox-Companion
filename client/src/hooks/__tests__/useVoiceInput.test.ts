@@ -76,6 +76,12 @@ describe("useVoiceInput dedup", () => {
     vi.restoreAllMocks();
   });
 
+  async function setupVoiceInput() {
+    const onResult = vi.fn();
+    const { hook, recognition } = await startHook(onResult);
+    return { onResult, hook, recognition };
+  }
+
   function triggerResult(recognition: any, transcript: string, isFinal = true) {
     act(() => {
       recognition.onresult(makeResultEvent([{ transcript, isFinal }]));
@@ -102,8 +108,7 @@ describe("useVoiceInput dedup", () => {
       expectedArgs: ["House"],
     },
   ])("$name", async ({ actions, expectedTimes, expectedArgs }) => {
-    const onResult = vi.fn();
-    const { recognition } = await startHook(onResult);
+    const { onResult, recognition } = await setupVoiceInput();
 
     for (const action of actions) {
       triggerResult(recognition, action.text, true);
@@ -116,49 +121,37 @@ describe("useVoiceInput dedup", () => {
   });
 
   it("allows same text after dedup window expires", async () => {
-    const onResult = vi.fn();
-    const { recognition } = await startHook(onResult);
+    const { onResult, recognition } = await setupVoiceInput();
 
     triggerResult(recognition, "house", true);
-
     expect(onResult).toHaveBeenCalledTimes(1);
 
     vi.advanceTimersByTime(3100);
 
     triggerResult(recognition, "house", true);
-
     expect(onResult).toHaveBeenCalledTimes(2);
   });
 
   it("resets dedup state on new startListening call", async () => {
-    const onResult = vi.fn();
-    const { hook } = await startHook(onResult);
+    const { onResult, hook } = await setupVoiceInput();
+    let currentRec = mockRecognitionInstances.at(-1);
 
-    let recognition = mockRecognitionInstances.at(-1);
-
-    triggerResult(recognition, "house", true);
-
+    triggerResult(currentRec, "house", true);
     expect(onResult).toHaveBeenCalledTimes(1);
 
-    act(() => {
-      hook.result.current.stopListening();
-    });
-
+    act(() => hook.result.current.stopListening());
     await act(async () => {
       hook.result.current.startListening();
       await vi.advanceTimersByTimeAsync(10);
     });
 
-    recognition = mockRecognitionInstances.at(-1);
-
-    triggerResult(recognition, "house", true);
-
+    currentRec = mockRecognitionInstances.at(-1);
+    triggerResult(currentRec, "house", true);
     expect(onResult).toHaveBeenCalledTimes(2);
   });
 
   it("allows different texts within the same window", async () => {
-    const onResult = vi.fn();
-    const { recognition } = await startHook(onResult);
+    const { onResult, recognition } = await setupVoiceInput();
 
     triggerResult(recognition, "house", true);
 
