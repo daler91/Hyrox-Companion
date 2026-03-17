@@ -7,7 +7,6 @@ import { isAuthenticated } from "./clerkAuth";
 import { type DistanceUnit } from "@shared/unitConversion";
 import { mapStravaActivityToWorkout, type StravaActivity } from "./services/stravaMapper";
 import { getUserId } from "./types";
-import { rateLimiter } from "./routeUtils";
 import rateLimit from "express-rate-limit";
 
 const STRAVA_CLIENT_ID = env.STRAVA_CLIENT_ID;
