@@ -112,8 +112,10 @@ app.use(pinoHttp({
     let userId = 'anonymous';
     try {
       userId = getUserId(req as Request);
-    } catch (e) {
-      // Ignored: request is not authenticated
+    } catch (err) {
+      // Intentionally empty: many routes are unauthenticated (e.g., static assets, health checks).
+      // We don't want to spam the logs with "User not authenticated" errors for every public request.
+      userId = 'anonymous';
     }
     return {
       context: 'http',
