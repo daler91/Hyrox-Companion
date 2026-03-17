@@ -5,7 +5,7 @@ describe("Log Workout Submission", () => {
     setupAuthIntercepts();
 
     // Intercept the POST request to save the workout
-    cy.intercept("POST", "/api/workouts", {
+    cy.intercept("POST", "/api/v1/workouts", {
       statusCode: 200,
       body: { id: "new-workout-1", title: "My New Workout", date: new Date().toISOString() }
     }).as("saveWorkout");
@@ -67,7 +67,7 @@ describe("Log Workout Submission", () => {
 describe("Log Workout Exercise Mode Submission", () => {
   beforeEach(() => {
     setupAuthIntercepts();
-    cy.intercept("POST", "/api/workouts", {
+    cy.intercept("POST", "/api/v1/workouts", {
       statusCode: 200,
       body: { id: "new-workout-2", title: "Exercise Mode Workout", date: new Date().toISOString() }
     }).as("saveWorkout");

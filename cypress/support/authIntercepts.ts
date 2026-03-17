@@ -7,7 +7,7 @@ export function setupAuthIntercepts(overrides?: {
   stravaStatus?: { connected: boolean; athleteId?: string; lastSyncedAt?: string | null };
   preferences?: { weightUnit: string; distanceUnit: string; weeklyGoal: number; emailNotifications: number };
 }) {
-  cy.intercept("GET", "/api/auth/user", {
+  cy.intercept("GET", "/api/v1/auth/user", {
     statusCode: 200,
     body: {
       id: "test-user-123",
@@ -19,7 +19,7 @@ export function setupAuthIntercepts(overrides?: {
     },
   }).as("authUser");
 
-  cy.intercept("GET", "/api/preferences", {
+  cy.intercept("GET", "/api/v1/preferences", {
     statusCode: 200,
     body: overrides?.preferences ?? {
       weightUnit: "kg",
@@ -29,47 +29,47 @@ export function setupAuthIntercepts(overrides?: {
     },
   }).as("preferences");
 
-  cy.intercept("GET", "/api/timeline*", {
+  cy.intercept("GET", "/api/v1/timeline*", {
     statusCode: 200,
     body: overrides?.timeline ?? [],
   }).as("timeline");
 
-  cy.intercept("GET", "/api/plans", {
+  cy.intercept("GET", "/api/v1/plans", {
     statusCode: 200,
     body: overrides?.plans ?? [],
   }).as("plans");
 
-  cy.intercept("GET", "/api/workouts*", {
+  cy.intercept("GET", "/api/v1/workouts*", {
     statusCode: 200,
     body: overrides?.workouts ?? [],
   }).as("workouts");
 
-  cy.intercept("GET", "/api/personal-records*", {
+  cy.intercept("GET", "/api/v1/personal-records*", {
     statusCode: 200,
     body: overrides?.personalRecords ?? {},
   }).as("records");
 
-  cy.intercept("GET", "/api/exercise-analytics*", {
+  cy.intercept("GET", "/api/v1/exercise-analytics*", {
     statusCode: 200,
     body: overrides?.exerciseAnalytics ?? {},
   }).as("exerciseAnalytics");
 
-  cy.intercept("GET", "/api/strava/status", {
+  cy.intercept("GET", "/api/v1/strava/status", {
     statusCode: 200,
     body: overrides?.stravaStatus ?? { connected: false },
   }).as("stravaStatus");
 
-  cy.intercept("GET", "/api/exercise-history*", {
+  cy.intercept("GET", "/api/v1/exercise-history*", {
     statusCode: 200,
     body: [],
   }).as("exerciseHistory");
 
-  cy.intercept("GET", "/api/custom-exercises*", {
+  cy.intercept("GET", "/api/v1/custom-exercises*", {
     statusCode: 200,
     body: [],
   }).as("customExercises");
 
-  cy.intercept("GET", "/api/chat/history", {
+  cy.intercept("GET", "/api/v1/chat/history", {
     statusCode: 200,
     body: [],
   }).as("chatHistory");
