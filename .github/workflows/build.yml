@@ -24,7 +24,7 @@ jobs:
         continue-on-error: true
         with:
           args: >
-            -Dsonar.exclusions=migrations/**
+            -Dsonar.exclusions=migrations/**,migrations/**/*,migrations/*.sql
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
