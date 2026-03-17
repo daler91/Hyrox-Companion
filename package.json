@@ -79,9 +79,6 @@
     "undici": "^7.24.3"
   },
   "devDependencies": {
-    "@replit/vite-plugin-cartographer": "^0.4.11",
-    "@replit/vite-plugin-dev-banner": "^0.1.2",
-    "@replit/vite-plugin-runtime-error-modal": "^0.0.3",
     "@tailwindcss/typography": "^0.5.19",
     "@tailwindcss/vite": "^4.2.1",
     "@testing-library/jest-dom": "^6.9.1",
