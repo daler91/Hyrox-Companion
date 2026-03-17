@@ -28,68 +28,65 @@ describe('useUnitPreferences', () => {
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   );
 
-  it('returns default values when no data is available', async () => {
-    const { result } = renderHook(() => useUnitPreferences(), { wrapper });
+  type TestCase = {
+    description: string;
+    mockData?: any;
+    expectedWeight: 'kg' | 'lbs';
+    expectedDistance: 'km' | 'miles';
+    expectedLoading: boolean | undefined;
+  };
 
-    expect(result.current.weightUnit).toBe('kg');
-    expect(result.current.distanceUnit).toBe('km');
-    expect(result.current.weightLabel).toBe('kg');
-    expect(result.current.distanceLabel).toBe('km');
-  });
+  const testCases: TestCase[] = [
+    {
+      description: 'returns default values when no data is available',
+      mockData: undefined,
+      expectedWeight: 'kg',
+      expectedDistance: 'km',
+      expectedLoading: undefined,
+    },
+    {
+      description: 'returns user preferences when data is available (metric)',
+      mockData: { weightUnit: 'kg', distanceUnit: 'km', weeklyGoal: 3 },
+      expectedWeight: 'kg',
+      expectedDistance: 'km',
+      expectedLoading: false,
+    },
+    {
+      description: 'returns user preferences when data is available (imperial)',
+      mockData: { weightUnit: 'lbs', distanceUnit: 'miles', weeklyGoal: 3 },
+      expectedWeight: 'lbs',
+      expectedDistance: 'miles',
+      expectedLoading: false,
+    },
+    {
+      description: 'falls back to defaults if partial data is missing',
+      mockData: { weeklyGoal: 3 }, // Missing weightUnit and distanceUnit
+      expectedWeight: 'kg',
+      expectedDistance: 'km',
+      expectedLoading: false,
+    },
+  ];
 
-  it('returns user preferences when data is available (metric)', async () => {
-    queryClient.setQueryData(['/api/preferences'], {
-      weightUnit: 'kg',
-      distanceUnit: 'km',
-      weeklyGoal: 3
-    });
-
-    const { result } = renderHook(() => useUnitPreferences(), { wrapper });
-
-    await waitFor(() => {
-      expect(result.current.weightUnit).toBe('kg');
-    });
-
-    expect(result.current.distanceUnit).toBe('km');
-    expect(result.current.weightLabel).toBe('kg');
-    expect(result.current.distanceLabel).toBe('km');
-    expect(result.current.isLoading).toBe(false);
-  });
-
-  it('returns user preferences when data is available (imperial)', async () => {
-    queryClient.setQueryData(['/api/preferences'], {
-      weightUnit: 'lbs',
-      distanceUnit: 'miles',
-      weeklyGoal: 3
-    });
-
-    const { result } = renderHook(() => useUnitPreferences(), { wrapper });
-
-    await waitFor(() => {
-      expect(result.current.weightUnit).toBe('lbs');
-    });
-
-    expect(result.current.distanceUnit).toBe('miles');
-    expect(result.current.weightLabel).toBe('lbs');
-    expect(result.current.distanceLabel).toBe('miles');
-    expect(result.current.isLoading).toBe(false);
-  });
-
-  it('falls back to defaults if partial data is missing', async () => {
-    queryClient.setQueryData(['/api/preferences'], {
-      // Missing weightUnit and distanceUnit
-      weeklyGoal: 3
-    });
+  it.each(testCases)('$description', async ({ mockData, expectedWeight, expectedDistance, expectedLoading }) => {
+    if (mockData !== undefined) {
+      queryClient.setQueryData(['/api/preferences'], mockData);
+    }
 
     const { result } = renderHook(() => useUnitPreferences(), { wrapper });
 
-    await waitFor(() => {
-      expect(result.current.weightUnit).toBe('kg');
-    });
+    if (mockData !== undefined) {
+      await waitFor(() => {
+        expect(result.current.weightUnit).toBe(expectedWeight);
+      });
+    }
 
-    expect(result.current.distanceUnit).toBe('km');
-    expect(result.current.weightLabel).toBe('kg');
-    expect(result.current.distanceLabel).toBe('km');
-    expect(result.current.isLoading).toBe(false);
+    expect(result.current.weightUnit).toBe(expectedWeight);
+    expect(result.current.distanceUnit).toBe(expectedDistance);
+    expect(result.current.weightLabel).toBe(expectedWeight);
+    expect(result.current.distanceLabel).toBe(expectedDistance);
+
+    if (expectedLoading !== undefined) {
+      expect(result.current.isLoading).toBe(expectedLoading);
+    }
   });
 });
