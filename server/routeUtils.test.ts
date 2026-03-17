@@ -10,6 +10,22 @@ import {
 import { expandExercisesToSetRows } from "./services/workoutService";
 
 describe("rateLimiter", () => {
+  const runRateLimitedRequest = (
+    middleware: any,
+    request: any,
+    expectedNextCalls: number,
+    expectedStatus?: number,
+  ) => {
+    res.status.mockClear();
+    middleware(request, res as Response, next);
+    expect(next).toHaveBeenCalledTimes(expectedNextCalls);
+    if (expectedStatus) {
+      expect(res.status).toHaveBeenCalledWith(expectedStatus);
+    } else {
+      expect(res.status).not.toHaveBeenCalled();
+    }
+  };
+
   let req: any;
   let res: any;
   let next: NextFunction;
@@ -77,44 +93,31 @@ describe("rateLimiter", () => {
   ])("$name", ({ action }) => {
     const middleware = rateLimiter("api", 1, DEFAULT_WINDOW_MS);
 
-    middleware(req, res as Response, next); // 1st request (ok)
-    expect(next).toHaveBeenCalledTimes(1);
-
-    middleware(req, res as Response, next); // 2nd request (blocked)
-    expect(res.status).toHaveBeenCalledWith(429);
+    runRateLimitedRequest(middleware, req, 1); // 1st request (ok)
+    runRateLimitedRequest(middleware, req, 1, 429); // 2nd request (blocked)
 
     action();
 
-    middleware(req, res as Response, next); // 3rd request (ok again)
-    expect(next).toHaveBeenCalledTimes(2);
+    runRateLimitedRequest(middleware, req, 2); // 3rd request (ok again)
   });
 
   it("distinguishes between different users", () => {
     const middleware = rateLimiter("api", 1, DEFAULT_WINDOW_MS);
 
-    // User 1 requests
-    middleware(req, res as Response, next); // 1st request user1 (ok)
-    expect(next).toHaveBeenCalledTimes(1);
+    runRateLimitedRequest(middleware, req, 1); // 1st request user1 (ok)
 
-    // User 2 requests
     const req2 = { ...req, auth: { userId: "user456" } };
-    middleware(req2, res as Response, next); // 1st request user2 (ok)
-    expect(next).toHaveBeenCalledTimes(2);
+    runRateLimitedRequest(middleware, req2, 2); // 1st request user2 (ok)
 
-    // User 1 requests again (blocked)
-    middleware(req, res as Response, next); // 2nd request user1 (blocked)
-    expect(res.status).toHaveBeenCalledWith(429);
+    runRateLimitedRequest(middleware, req, 2, 429); // 2nd request user1 (blocked)
   });
 
   it("uses ip address if userId is missing", () => {
     const middleware = rateLimiter("api", 1, DEFAULT_WINDOW_MS);
     const reqIp = { ip: "user-cleanup-1" };
 
-    middleware(reqIp, res as Response, next); // 1st request ip (ok)
-    expect(next).toHaveBeenCalledTimes(1);
-
-    middleware(reqIp, res as Response, next); // 2nd request ip (blocked)
-    expect(res.status).toHaveBeenCalledWith(429);
+    runRateLimitedRequest(middleware, reqIp, 1); // 1st request ip (ok)
+    runRateLimitedRequest(middleware, reqIp, 1, 429); // 2nd request ip (blocked)
   });
 
   it("calls next() and bypasses rate limiting if neither userId nor ip is present", () => {
