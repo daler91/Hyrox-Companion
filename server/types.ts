@@ -1,14 +1,20 @@
 import type { Request } from "express";
 import { getAuth } from "@clerk/express";
-
-
+import { DEV_USER_ID } from "./clerkAuth";
 
 export function getUserId(req: Request): string {
-  const auth = getAuth(req);
-  if (!auth?.userId) {
-    throw new Error("User not authenticated");
+  try {
+    const auth = getAuth(req);
+    if (auth?.userId) {
+      return auth.userId;
+    }
+  } catch {}
+
+  if (process.env.NODE_ENV === "development") {
+    return DEV_USER_ID;
   }
-  return auth.userId;
+
+  throw new Error("User not authenticated");
 }
 
 export function toDateStr(date?: Date): string {

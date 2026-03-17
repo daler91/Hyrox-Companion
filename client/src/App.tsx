@@ -23,6 +23,25 @@ function isCypressTest(): boolean {
   return typeof globalThis !== "undefined" && "Cypress" in globalThis;
 }
 
+function isDevPreview(): boolean {
+  return import.meta.env.DEV && (!clerkPubKey || window.self !== window.top);
+}
+
+function shouldBypassAuth(): boolean {
+  return isCypressTest() || isDevPreview();
+}
+
+function DevModeBanner() {
+  return (
+    <div
+      data-testid="banner-dev-mode"
+      className="bg-yellow-500 text-black text-center text-xs py-1 font-semibold z-50 relative"
+    >
+      DEV MODE — Auth bypass active (Clerk skipped)
+    </div>
+  );
+}
+
 function LazyFallback() {
   return (
     <div className="flex items-center justify-center h-full">
@@ -70,7 +89,7 @@ function AuthenticatedLayout() {
 }
 
 function AppContent() {
-  if (isCypressTest()) {
+  if (shouldBypassAuth()) {
     return <AuthenticatedLayout />;
   }
 
@@ -89,11 +108,12 @@ function AppContent() {
 }
 
 function App() {
-  if (isCypressTest()) {
+  if (shouldBypassAuth()) {
     return (
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
           <TooltipProvider>
+            {isDevPreview() && <DevModeBanner />}
             <AppContent />
             <Toaster />
           </TooltipProvider>

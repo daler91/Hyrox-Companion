@@ -5,33 +5,73 @@ import { db } from "./db";
 import { users, trainingPlans, workoutLogs, customExercises, chatMessages, stravaConnections } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
+export const DEV_USER_ID = "dev-user";
+
+function isDev(): boolean {
+  return process.env.NODE_ENV === "development";
+}
+
+function hasClerkKeys(): boolean {
+  return !!(process.env.CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY);
+}
+
+async function ensureDevUserExists(): Promise<void> {
+  const existing = await storage.getUser(DEV_USER_ID);
+  if (existing) return;
+  await storage.upsertUser({
+    id: DEV_USER_ID,
+    email: "dev@localhost",
+    firstName: "Dev",
+    lastName: "User",
+    profileImageUrl: null,
+  });
+}
+
 export async function setupAuth(app: Express) {
-  // 🛡️ Sentinel: Ensure Clerk keys are provided via environment variables
-  if (!process.env.CLERK_PUBLISHABLE_KEY || !process.env.CLERK_SECRET_KEY) {
+  app.set("trust proxy", 1);
+
+  if (hasClerkKeys()) {
+    app.use(clerkMiddleware());
+  } else if (isDev()) {
+    console.log("[DEV] No Clerk keys found — using dev auth bypass");
+    await ensureDevUserExists();
+  } else {
     throw new Error(
       "Missing Clerk environment variables. Please set CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY.",
     );
   }
 
-  app.set("trust proxy", 1);
-  app.use(clerkMiddleware());
+  if (isDev()) {
+    await ensureDevUserExists();
+    console.log("[DEV] Dev auth fallback enabled for iframe/preview contexts");
+  }
 }
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
-  const auth = getAuth(req);
-
-  if (!auth?.userId) {
-    return res.status(401).json({ message: "Unauthorized" });
+  if (hasClerkKeys()) {
+    const auth = getAuth(req);
+    if (auth?.userId) {
+      try {
+        await ensureUserExists(auth.userId);
+      } catch (error) {
+        console.error("Error syncing user:", error);
+        return res.status(500).json({ message: "Failed to initialize user session" });
+      }
+      return next();
+    }
   }
 
-  try {
-    await ensureUserExists(auth.userId);
-  } catch (error) {
-    console.error("Error syncing user:", error);
-    return res.status(500).json({ message: "Failed to initialize user session" });
+  if (isDev()) {
+    try {
+      await ensureDevUserExists();
+    } catch (error) {
+      console.error("Error creating dev user:", error);
+      return res.status(500).json({ message: "Failed to initialize dev user session" });
+    }
+    return next();
   }
 
-  return next();
+  return res.status(401).json({ message: "Unauthorized" });
 };
 
 async function ensureUserExists(clerkUserId: string): Promise<void> {
