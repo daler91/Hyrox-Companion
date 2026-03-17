@@ -36,7 +36,7 @@ describe("toDateStr", () => {
 
   it("returns today's date string when undefined is provided", () => {
     vi.setSystemTime(new Date("2024-05-20T12:00:00Z"));
-    expect(toDateStr(undefined)).toBe("2024-05-20");
+    expect(toDateStr()).toBe("2024-05-20");
   });
 });
 
