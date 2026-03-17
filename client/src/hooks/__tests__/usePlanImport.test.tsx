@@ -215,7 +215,7 @@ describe('usePlanImport', () => {
       ['renamePlanMutation', (res: any) => res.current.renamePlanMutation.mutate({ planId: 'p1', name: 'New Name' }), "Failed to rename plan"],
       ['schedulePlanMutation', (res: any) => res.current.schedulePlanMutation.mutate({ planId: 'p1', startDate: '2023-10-01' }), "Failed to schedule plan"]
     ])('%s handles error', async (_, trigger, errorToast) => {
-      await testErrorState(trigger as any, errorToast as string);
+      await testErrorState(trigger, errorToast);
     });
 
   });
