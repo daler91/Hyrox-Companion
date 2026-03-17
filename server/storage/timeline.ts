@@ -124,9 +124,12 @@ export class TimelineStorage {
     const entries: TimelineEntry[] = [];
     const today = toDateStr();
 
-    const planDayConditions = planId 
-      ? and(eq(trainingPlans.userId, userId), eq(planDays.planId, planId))
-      : eq(trainingPlans.userId, userId);
+    let planDayConditions;
+    if (planId) {
+      planDayConditions = and(eq(trainingPlans.userId, userId), eq(planDays.planId, planId));
+    } else {
+      planDayConditions = eq(trainingPlans.userId, userId);
+    }
 
     const scheduledDaysResult = await db
       .select({ planDay: planDays, planName: trainingPlans.name, planId: trainingPlans.id })
