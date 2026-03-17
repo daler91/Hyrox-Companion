@@ -183,14 +183,13 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
           <DialogDescription>{DESCS[step]}</DialogDescription>
         </DialogHeader>
 
-        <div
-          className="flex gap-1 my-2"
-          role="progressbar"
-          aria-valuenow={idx + 1}
-          aria-valuemin={1}
-          aria-valuemax={total}
+        <progress
+          value={idx + 1}
+          max={total}
+          className="sr-only"
           aria-label={`Step ${idx + 1} of ${total}`}
-        >
+        />
+        <div className="flex gap-1 my-2" aria-hidden="true">
           {Array.from({ length: total }).map((_, i) => (
             <div
               key={STEPS[i]}
