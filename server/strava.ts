@@ -321,5 +321,6 @@ export function registerStravaRoutes(app: Express): void {
   );
   app.get("/api/strava/callback", stravaAuthLimiter, handleStravaCallback);
   app.delete("/api/strava/disconnect", isAuthenticated, disconnectStrava);
-  app.post("/api/strava/sync", isAuthenticated, syncStrava);
+  const stravaSyncLimiter = rateLimiter("stravaSync", 10, 15 * 60 * 1000);
+  app.post("/api/strava/sync", isAuthenticated, stravaSyncLimiter, syncStrava);
 }
