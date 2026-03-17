@@ -1,15 +1,16 @@
 import crypto from "node:crypto";
 
 const ALGORITHM = "aes-256-gcm";
-if (!process.env.ENCRYPTION_KEY) {
-  throw new Error(
-    "ENCRYPTION_KEY environment variable is required for encrypting tokens at rest",
-  );
-}
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
 
 // Ensure the key is exactly 32 bytes for AES-256
 const getValidatedKey = () => {
+  if (!process.env.ENCRYPTION_KEY) {
+    throw new Error(
+      "ENCRYPTION_KEY environment variable is required for encrypting tokens at rest",
+    );
+  }
+  const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
+
   let keyBuffer = Buffer.from(ENCRYPTION_KEY, "hex");
   if (keyBuffer.length !== 32) {
     // If not hex or wrong length, try to create a 32-byte hash from the string
@@ -18,11 +19,20 @@ const getValidatedKey = () => {
   return keyBuffer;
 };
 
-const key = getValidatedKey();
+// We lazy-load the key so the server can boot in CI environments without the key
+// provided it doesn't need to perform cryptographic operations immediately
+let cachedKey: Buffer | null = null;
+const getKey = () => {
+  if (!cachedKey) {
+    cachedKey = getValidatedKey();
+  }
+  return cachedKey;
+};
 
 export function encryptToken(text: string): string {
   if (!text) return text;
 
+  const key = getKey();
   const iv = crypto.randomBytes(12); // 12 bytes is recommended for GCM
   const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
 
@@ -46,6 +56,7 @@ export function decryptToken(encryptedData: string): string {
   }
 
   try {
+    const key = getKey();
     const [ivHex, authTagHex, encryptedText] = parts;
     const iv = Buffer.from(ivHex, "hex");
     const authTag = Buffer.from(authTagHex, "hex");
