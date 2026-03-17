@@ -65,7 +65,16 @@ describe("rateLimiter", () => {
     expect(res.setHeader).toHaveBeenCalledWith("Retry-After", "60");
   });
 
-  it("resets limit after windowMs passes", () => {
+  it.each([
+    {
+      name: "resets limit after windowMs passes",
+      action: () => vi.advanceTimersByTime(DEFAULT_WINDOW_MS),
+    },
+    {
+      name: "clears all rate limit data",
+      action: () => clearRateLimitBuckets(),
+    },
+  ])("$name", ({ action }) => {
     const middleware = rateLimiter("api", 1, DEFAULT_WINDOW_MS);
 
     middleware(req, res as Response, next); // 1st request (ok)
@@ -74,8 +83,7 @@ describe("rateLimiter", () => {
     middleware(req, res as Response, next); // 2nd request (blocked)
     expect(res.status).toHaveBeenCalledWith(429);
 
-    // Advance time by 60 seconds
-    vi.advanceTimersByTime(DEFAULT_WINDOW_MS);
+    action();
 
     middleware(req, res as Response, next); // 3rd request (ok again)
     expect(next).toHaveBeenCalledTimes(2);
@@ -198,24 +206,6 @@ describe("rateLimiter", () => {
     middleware(mockReq1, res as Response, next);
     expect(next).toHaveBeenCalledTimes(MAX_RATE_LIMIT_BUCKETS + 2);
     expect(res.status).not.toHaveBeenCalled();
-  });
-  it("clears all rate limit data", () => {
-    const middleware = rateLimiter("api", 1, DEFAULT_WINDOW_MS);
-
-    // 1st request (ok)
-    middleware(req, res as Response, next);
-    expect(next).toHaveBeenCalledTimes(1);
-
-    // 2nd request (blocked)
-    middleware(req, res as Response, next);
-    expect(res.status).toHaveBeenCalledWith(429);
-
-    // Clear buckets
-    clearRateLimitBuckets();
-
-    // 3rd request (ok again)
-    middleware(req, res as Response, next);
-    expect(next).toHaveBeenCalledTimes(2);
   });
 });
 
