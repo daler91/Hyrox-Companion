@@ -1,3 +1,4 @@
+import { env } from "./env";
 import * as Sentry from "@sentry/node";
 import express, { type Request, Response, NextFunction } from "express";
 import compression from "compression";
@@ -12,10 +13,10 @@ import { pool } from "./db";
 import { getAuth } from "@clerk/express";
 import { runStartupMaintenance } from "./maintenance";
 
-if (process.env.SENTRY_DSN) {
+if (env.SENTRY_DSN) {
   Sentry.init({
-    dsn: process.env.SENTRY_DSN,
-    environment: process.env.NODE_ENV || "development",
+    dsn: env.SENTRY_DSN,
+    environment: env.NODE_ENV || "development",
     sendDefaultPii: true,
   });
 }
@@ -36,7 +37,7 @@ declare module "http" {
 
 app.use(compression());
 
-const isDev = process.env.NODE_ENV !== "production";
+const isDev = env.NODE_ENV !== "production";
 const clerkDomains =
   "https://*.clerk.accounts.dev https://*.hyroxcompanion.life https://clerk.hyroxcompanion.life";
 const connectSrc = isDev
@@ -149,7 +150,7 @@ app.use((err: AppError, _req: Request, res: Response, _next: NextFunction) => {
 // importantly only setup vite in development and after
 // setting up all the other routes so the catch-all route
 // doesn't interfere with the other routes
-if (process.env.NODE_ENV === "production") {
+if (env.NODE_ENV === "production") {
   serveStatic(app);
 } else {
   const { setupVite } = await import("./vite");
@@ -160,7 +161,7 @@ if (process.env.NODE_ENV === "production") {
 // Other ports are firewalled. Default to 5000 if not specified.
 // this serves both the API and the client.
 // It is the only port that is not firewalled.
-const port = Number.parseInt(process.env.PORT || "5000", 10);
+const port = Number.parseInt(env.PORT || "5000", 10);
 
 httpServer.listen(
   {

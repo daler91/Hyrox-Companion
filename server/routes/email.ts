@@ -1,3 +1,4 @@
+import { env } from "../env";
 import { logger } from "../logger";
 import { Router, type Request, type Response } from "express";
 import crypto from "node:crypto";
@@ -25,7 +26,7 @@ router.post("/api/emails/check", isAuthenticated, async (req: Request, res: Resp
 
 router.get("/api/cron/emails", async (req, res) => {
   const secret = req.headers["x-cron-secret"] as string;
-  const cronSecret = process.env.CRON_SECRET;
+  const cronSecret = env.CRON_SECRET;
 
   if (!cronSecret || !secret) {
     return res.status(401).json({ error: "Unauthorized" });

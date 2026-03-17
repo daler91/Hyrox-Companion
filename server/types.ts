@@ -1,3 +1,4 @@
+import { env } from "./env";
 import type { Request } from "express";
 import { getAuth } from "@clerk/express";
 import { DEV_USER_ID } from "./clerkAuth";
@@ -10,7 +11,7 @@ export function getUserId(req: Request): string {
     }
   } catch {}
 
-  if (process.env.NODE_ENV === "development") {
+  if (env.NODE_ENV === "development") {
     return DEV_USER_ID;
   }
 

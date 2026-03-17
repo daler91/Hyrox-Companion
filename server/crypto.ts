@@ -1,16 +1,16 @@
-import { logger } from "./logger";
+import { env } from "./env";
 import crypto from "node:crypto";
 
 const ALGORITHM = "aes-256-gcm";
 
 // Ensure the key is exactly 32 bytes for AES-256
 const getValidatedKey = () => {
-  if (!process.env.ENCRYPTION_KEY) {
+  if (!env.ENCRYPTION_KEY) {
     throw new Error(
       "ENCRYPTION_KEY environment variable is required for encrypting tokens at rest",
     );
   }
-  const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
+  const ENCRYPTION_KEY = env.ENCRYPTION_KEY;
 
   let keyBuffer = Buffer.from(ENCRYPTION_KEY, "hex");
   if (keyBuffer.length !== 32) {
@@ -70,7 +70,7 @@ export function decryptToken(encryptedData: string): string {
 
     return decrypted;
   } catch (error) {
-    logger.error({ err: error }, "Failed to decrypt token:");
+    console.error("Failed to decrypt token:", error);
     // If decryption fails, it might be corrupted or we lost the key
     // For safety, return empty string or throw depending on requirements
     // Returning the original string might be dangerous if it's partially matched
