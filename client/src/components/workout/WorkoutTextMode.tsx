@@ -18,19 +18,17 @@ interface WorkoutTextModeProps {
   toast: any;
 }
 
-export function WorkoutTextMode(props: WorkoutTextModeProps) {
-  const {
-    freeText,
-    setFreeText,
-    isListening,
-    isSupported,
-    toggleListening,
-    stopListening,
-    interimTranscript,
-    parseMutation,
-    toast,
-  } = props;
-
+export const WorkoutTextMode = ({
+  freeText,
+  setFreeText,
+  isListening,
+  isSupported,
+  toggleListening,
+  stopListening,
+  interimTranscript,
+  parseMutation,
+  toast,
+}: WorkoutTextModeProps) => {
   return (
     <Card>
       <CardHeader>
@@ -106,4 +104,4 @@ export function WorkoutTextMode(props: WorkoutTextModeProps) {
       </CardContent>
     </Card>
   );
-}
+};

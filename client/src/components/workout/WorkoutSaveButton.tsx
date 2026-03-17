@@ -7,8 +7,7 @@ interface WorkoutSaveButtonProps {
   isPending: boolean;
 }
 
-export function WorkoutSaveButton(props: WorkoutSaveButtonProps) {
-  const { handleSave, isPending } = props;
+export const WorkoutSaveButton = ({ handleSave, isPending }: WorkoutSaveButtonProps) => {
   return (
     <div className="pt-2 pb-6 md:pb-0">
       <Button
@@ -27,4 +26,4 @@ export function WorkoutSaveButton(props: WorkoutSaveButtonProps) {
       </Button>
     </div>
   );
-}
+};

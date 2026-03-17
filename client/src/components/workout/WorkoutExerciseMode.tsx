@@ -24,23 +24,21 @@ interface WorkoutExerciseModeProps {
   distanceUnit: "km" | "miles";
 }
 
-export function WorkoutExerciseMode(props: WorkoutExerciseModeProps) {
-  const {
-    exerciseBlocks,
-    exerciseData,
-    getSelectedExerciseNames,
-    addExercise,
-    updateBlock,
-    removeBlock,
-    sensors,
-    handleDragEnd,
-    blockCounts,
-    blockIndices,
-    getBlockExerciseName,
-    weightUnit,
-    distanceUnit,
-  } = props;
-
+export const WorkoutExerciseMode = ({
+  exerciseBlocks,
+  exerciseData,
+  getSelectedExerciseNames,
+  addExercise,
+  updateBlock,
+  removeBlock,
+  sensors,
+  handleDragEnd,
+  blockCounts,
+  blockIndices,
+  getBlockExerciseName,
+  weightUnit,
+  distanceUnit,
+}: WorkoutExerciseModeProps) => {
   return (
     <>
       <Card>
@@ -104,4 +102,4 @@ export function WorkoutExerciseMode(props: WorkoutExerciseModeProps) {
       )}
     </>
   );
-}
+};

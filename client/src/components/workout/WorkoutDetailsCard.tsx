@@ -13,8 +13,14 @@ interface WorkoutDetailsCardProps {
   setRpe: (value: number | null) => void;
 }
 
-export function WorkoutDetailsCard(props: WorkoutDetailsCardProps) {
-  const { title, setTitle, date, setDate, rpe, setRpe } = props;
+export const WorkoutDetailsCard = ({
+  title,
+  setTitle,
+  date,
+  setDate,
+  rpe,
+  setRpe,
+}: WorkoutDetailsCardProps) => {
   return (
     <Card>
       <CardHeader>
@@ -47,4 +53,4 @@ export function WorkoutDetailsCard(props: WorkoutDetailsCardProps) {
       </CardContent>
     </Card>
   );
-}
+};
