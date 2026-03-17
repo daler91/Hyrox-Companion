@@ -270,12 +270,12 @@ export const customExercises = pgTable("custom_exercises", {
   uniqueIndex("idx_custom_exercises_user_name").on(table.userId, table.name),
 ]);
 
-export const insertCustomExerciseSchema = createInsertSchema(customExercises, {
-  name: z.string().trim().min(1, "Name is required").max(100, "Name must be 100 characters or less"),
-  category: z.string().trim().max(50, "Category must be 50 characters or less").optional(),
-}).omit({
+export const insertCustomExerciseSchema = createInsertSchema(customExercises).omit({
   id: true,
   createdAt: true,
+}).extend({
+  name: z.string().trim().min(1, "Name is required").max(100, "Name must be 100 characters or less"),
+  category: z.string().trim().max(50, "Category must be 50 characters or less").optional(),
 });
 
 export type InsertCustomExercise = z.infer<typeof insertCustomExerciseSchema>;
