@@ -199,30 +199,6 @@ describe("rateLimiter", () => {
     expect(next).toHaveBeenCalledTimes(MAX_RATE_LIMIT_BUCKETS + 2);
     expect(res.status).not.toHaveBeenCalled();
   });
-});
-
-describe("clearRateLimitBuckets", () => {
-  let req: any;
-  let res: any;
-  let next: NextFunction;
-
-  beforeEach(() => {
-    clearRateLimitBuckets();
-
-    req = {
-      auth: { userId: "user-clear-test" },
-      ip: "192.168.1.1",
-    };
-
-    res = {
-      setHeader: vi.fn(),
-      status: vi.fn().mockReturnThis(),
-      json: vi.fn(),
-    };
-
-    next = vi.fn();
-  });
-
   it("clears all rate limit data", () => {
     const middleware = rateLimiter("api", 1, DEFAULT_WINDOW_MS);
 
