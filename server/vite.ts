@@ -5,6 +5,7 @@ import viteConfig from "../vite.config";
 import fs from "node:fs";
 import path from "node:path";
 import { nanoid } from "nanoid";
+import rateLimit from "express-rate-limit";
 
 const viteLogger = createLogger();
 
@@ -31,7 +32,12 @@ export async function setupVite(server: Server, app: Express) {
 
   app.use(vite.middlewares);
 
-  app.use("*", async (req, res, next) => {
+  const fallbackLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // max 100 requests per windowMs
+  });
+
+  app.use("*", fallbackLimiter, async (req, res, next) => {
     const url = req.originalUrl;
 
     try {
