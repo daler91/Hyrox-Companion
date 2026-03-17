@@ -1,5 +1,5 @@
 {
-  "id": "d14d6975-4df2-4507-ace2-f97609991868",
+  "id": "1e31b1ac-78a8-42d4-bc08-2db2d29512d6",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -10,14 +10,14 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "varchar",
+          "type": "varchar(255)",
           "primaryKey": true,
           "notNull": true,
           "default": "gen_random_uuid()"
         },
         "user_id": {
           "name": "user_id",
-          "type": "varchar",
+          "type": "varchar(255)",
           "primaryKey": false,
           "notNull": true
         },
@@ -106,14 +106,14 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "varchar",
+          "type": "varchar(255)",
           "primaryKey": true,
           "notNull": true,
           "default": "gen_random_uuid()"
         },
         "user_id": {
           "name": "user_id",
-          "type": "varchar",
+          "type": "varchar(255)",
           "primaryKey": false,
           "notNull": true
         },
@@ -125,7 +125,7 @@
         },
         "category": {
           "name": "category",
-          "type": "varchar",
+          "type": "varchar(255)",
           "primaryKey": false,
           "notNull": true,
           "default": "'conditioning'"
@@ -203,20 +203,20 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "varchar",
+          "type": "varchar(255)",
           "primaryKey": true,
           "notNull": true,
           "default": "gen_random_uuid()"
         },
         "workout_log_id": {
           "name": "workout_log_id",
-          "type": "varchar",
+          "type": "varchar(255)",
           "primaryKey": false,
           "notNull": true
         },
         "exercise_name": {
           "name": "exercise_name",
-          "type": "varchar",
+          "type": "varchar(255)",
           "primaryKey": false,
           "notNull": true
         },
@@ -228,7 +228,7 @@
         },
         "category": {
           "name": "category",
-          "type": "varchar",
+          "type": "varchar(255)",
           "primaryKey": false,
           "notNull": true
         },
@@ -384,14 +384,14 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "varchar",
+          "type": "varchar(255)",
           "primaryKey": true,
           "notNull": true,
           "default": "gen_random_uuid()"
         },
         "plan_id": {
           "name": "plan_id",
-          "type": "varchar",
+          "type": "varchar(255)",
           "primaryKey": false,
           "notNull": true
         },
@@ -561,7 +561,7 @@
       "columns": {
         "sid": {
           "name": "sid",
-          "type": "varchar",
+          "type": "varchar(255)",
           "primaryKey": true,
           "notNull": true
         },
@@ -608,20 +608,20 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "varchar",
+          "type": "varchar(255)",
           "primaryKey": true,
           "notNull": true,
           "default": "gen_random_uuid()"
         },
         "user_id": {
           "name": "user_id",
-          "type": "varchar",
+          "type": "varchar(255)",
           "primaryKey": false,
           "notNull": true
         },
         "strava_athlete_id": {
           "name": "strava_athlete_id",
-          "type": "varchar",
+          "type": "varchar(255)",
           "primaryKey": false,
           "notNull": true
         },
@@ -699,14 +699,14 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "varchar",
+          "type": "varchar(255)",
           "primaryKey": true,
           "notNull": true,
           "default": "gen_random_uuid()"
         },
         "user_id": {
           "name": "user_id",
-          "type": "varchar",
+          "type": "varchar(255)",
           "primaryKey": false,
           "notNull": true
         },
@@ -759,45 +759,45 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "varchar",
+          "type": "varchar(255)",
           "primaryKey": true,
           "notNull": true,
           "default": "gen_random_uuid()"
         },
         "email": {
           "name": "email",
-          "type": "varchar",
+          "type": "varchar(255)",
           "primaryKey": false,
           "notNull": false
         },
         "first_name": {
           "name": "first_name",
-          "type": "varchar",
+          "type": "varchar(255)",
           "primaryKey": false,
           "notNull": false
         },
         "last_name": {
           "name": "last_name",
-          "type": "varchar",
+          "type": "varchar(255)",
           "primaryKey": false,
           "notNull": false
         },
         "profile_image_url": {
           "name": "profile_image_url",
-          "type": "varchar",
+          "type": "varchar(255)",
           "primaryKey": false,
           "notNull": false
         },
         "weight_unit": {
           "name": "weight_unit",
-          "type": "varchar",
+          "type": "varchar(255)",
           "primaryKey": false,
           "notNull": false,
           "default": "'kg'"
         },
         "distance_unit": {
           "name": "distance_unit",
-          "type": "varchar",
+          "type": "varchar(255)",
           "primaryKey": false,
           "notNull": false,
           "default": "'km'"
@@ -865,14 +865,14 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "varchar",
+          "type": "varchar(255)",
           "primaryKey": true,
           "notNull": true,
           "default": "gen_random_uuid()"
         },
         "user_id": {
           "name": "user_id",
-          "type": "varchar",
+          "type": "varchar(255)",
           "primaryKey": false,
           "notNull": true
         },
@@ -920,20 +920,20 @@
         },
         "plan_day_id": {
           "name": "plan_day_id",
-          "type": "varchar",
+          "type": "varchar(255)",
           "primaryKey": false,
           "notNull": false
         },
         "source": {
           "name": "source",
-          "type": "varchar",
+          "type": "varchar(255)",
           "primaryKey": false,
           "notNull": false,
           "default": "'manual'"
         },
         "strava_activity_id": {
           "name": "strava_activity_id",
-          "type": "varchar",
+          "type": "varchar(255)",
           "primaryKey": false,
           "notNull": false
         },

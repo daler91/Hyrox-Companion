@@ -1,25 +1,25 @@
 CREATE TABLE "chat_messages" (
-	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"user_id" varchar NOT NULL,
+	"id" varchar(255) PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"user_id" varchar(255) NOT NULL,
 	"role" varchar(20) NOT NULL,
 	"content" text NOT NULL,
 	"timestamp" timestamp DEFAULT now()
 );
 --> statement-breakpoint
 CREATE TABLE "custom_exercises" (
-	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"user_id" varchar NOT NULL,
+	"id" varchar(255) PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"user_id" varchar(255) NOT NULL,
 	"name" text NOT NULL,
-	"category" varchar DEFAULT 'conditioning' NOT NULL,
+	"category" varchar(255) DEFAULT 'conditioning' NOT NULL,
 	"created_at" timestamp DEFAULT now()
 );
 --> statement-breakpoint
 CREATE TABLE "exercise_sets" (
-	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"workout_log_id" varchar NOT NULL,
-	"exercise_name" varchar NOT NULL,
+	"id" varchar(255) PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"workout_log_id" varchar(255) NOT NULL,
+	"exercise_name" varchar(255) NOT NULL,
 	"custom_label" text,
-	"category" varchar NOT NULL,
+	"category" varchar(255) NOT NULL,
 	"set_number" integer DEFAULT 1 NOT NULL,
 	"reps" integer,
 	"weight" real,
@@ -31,8 +31,8 @@ CREATE TABLE "exercise_sets" (
 );
 --> statement-breakpoint
 CREATE TABLE "plan_days" (
-	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"plan_id" varchar NOT NULL,
+	"id" varchar(255) PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"plan_id" varchar(255) NOT NULL,
 	"week_number" integer NOT NULL,
 	"day_name" text NOT NULL,
 	"focus" text NOT NULL,
@@ -44,15 +44,15 @@ CREATE TABLE "plan_days" (
 );
 --> statement-breakpoint
 CREATE TABLE "sessions" (
-	"sid" varchar PRIMARY KEY NOT NULL,
+	"sid" varchar(255) PRIMARY KEY NOT NULL,
 	"sess" jsonb NOT NULL,
 	"expire" timestamp NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "strava_connections" (
-	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"user_id" varchar NOT NULL,
-	"strava_athlete_id" varchar NOT NULL,
+	"id" varchar(255) PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"user_id" varchar(255) NOT NULL,
+	"strava_athlete_id" varchar(255) NOT NULL,
 	"access_token" text NOT NULL,
 	"refresh_token" text NOT NULL,
 	"expires_at" timestamp NOT NULL,
@@ -63,21 +63,21 @@ CREATE TABLE "strava_connections" (
 );
 --> statement-breakpoint
 CREATE TABLE "training_plans" (
-	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"user_id" varchar NOT NULL,
+	"id" varchar(255) PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"user_id" varchar(255) NOT NULL,
 	"name" text NOT NULL,
 	"source_file_name" text,
 	"total_weeks" integer NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "users" (
-	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"email" varchar,
-	"first_name" varchar,
-	"last_name" varchar,
-	"profile_image_url" varchar,
-	"weight_unit" varchar DEFAULT 'kg',
-	"distance_unit" varchar DEFAULT 'km',
+	"id" varchar(255) PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"email" varchar(255),
+	"first_name" varchar(255),
+	"last_name" varchar(255),
+	"profile_image_url" varchar(255),
+	"weight_unit" varchar(255) DEFAULT 'kg',
+	"distance_unit" varchar(255) DEFAULT 'km',
 	"weekly_goal" integer DEFAULT 5,
 	"email_notifications" integer DEFAULT 1,
 	"last_weekly_summary_at" timestamp,
@@ -88,8 +88,8 @@ CREATE TABLE "users" (
 );
 --> statement-breakpoint
 CREATE TABLE "workout_logs" (
-	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"user_id" varchar NOT NULL,
+	"id" varchar(255) PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"user_id" varchar(255) NOT NULL,
 	"date" date NOT NULL,
 	"focus" text NOT NULL,
 	"main_workout" text NOT NULL,
@@ -97,9 +97,9 @@ CREATE TABLE "workout_logs" (
 	"notes" text,
 	"duration" integer,
 	"rpe" integer,
-	"plan_day_id" varchar,
-	"source" varchar DEFAULT 'manual',
-	"strava_activity_id" varchar,
+	"plan_day_id" varchar(255),
+	"source" varchar(255) DEFAULT 'manual',
+	"strava_activity_id" varchar(255),
 	"calories" integer,
 	"distance_meters" real,
 	"elevation_gain" real,
