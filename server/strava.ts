@@ -312,7 +312,13 @@ export async function syncStrava(req: any, res: Response) {
 }
 
 export function registerStravaRoutes(app: Express): void {
-  app.get("/api/strava/status", isAuthenticated, getStravaStatus);
+  const stravaStatusLimiter = rateLimiter("stravaStatus", 100, 15 * 60 * 1000);
+  app.get(
+    "/api/strava/status",
+    isAuthenticated,
+    stravaStatusLimiter,
+    getStravaStatus,
+  );
   app.get(
     "/api/strava/auth",
     isAuthenticated,
@@ -320,7 +326,17 @@ export function registerStravaRoutes(app: Express): void {
     getStravaAuth,
   );
   app.get("/api/strava/callback", stravaAuthLimiter, handleStravaCallback);
-  app.delete("/api/strava/disconnect", isAuthenticated, disconnectStrava);
+  const stravaDisconnectLimiter = rateLimiter(
+    "stravaDisconnect",
+    10,
+    15 * 60 * 1000,
+  );
+  app.delete(
+    "/api/strava/disconnect",
+    isAuthenticated,
+    stravaDisconnectLimiter,
+    disconnectStrava,
+  );
   const stravaSyncLimiter = rateLimiter("stravaSync", 10, 15 * 60 * 1000);
   app.post("/api/strava/sync", isAuthenticated, stravaSyncLimiter, syncStrava);
 }
