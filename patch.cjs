@@ -1,122 +1,7 @@
-import { env } from "./env";
-import { logger } from "./logger";
-import type { Express, Response } from "express";
-import crypto from "node:crypto";
-import { storage } from "./storage";
-import { isAuthenticated } from "./clerkAuth";
-import { type DistanceUnit } from "@shared/unitConversion";
-import { mapStravaActivityToWorkout, type StravaActivity } from "./services/stravaMapper";
-import { getUserId } from "./types";
-import { rateLimiter } from "./routeUtils";
+const fs = require('fs');
+const content = fs.readFileSync('server/strava.ts', 'utf-8');
 
-const STRAVA_CLIENT_ID = env.STRAVA_CLIENT_ID;
-const STRAVA_CLIENT_SECRET = env.STRAVA_CLIENT_SECRET;
-const STRAVA_REDIRECT_URI = env.APP_URL
-  ? `${env.APP_URL}/api/strava/callback`
-  : "http://localhost:5000/api/strava/callback";
-
-const STATE_SECRET = env.CLERK_SECRET_KEY || crypto.randomBytes(32).toString("hex");
-
-const stravaAuthLimiter = rateLimiter("stravaAuth", 20, 15 * 60 * 1000); // 20 requests per 15 minutes
-const STATE_MAX_AGE_MS = 10 * 60 * 1000;
-
-
-export function createSignedState(userId: string): string {
-  const timestamp = Date.now().toString(36);
-  const nonce = crypto.randomBytes(8).toString("hex");
-  const payload = `${userId}:${timestamp}:${nonce}`;
-  const signature = crypto.createHmac("sha256", STATE_SECRET).update(payload).digest("hex").slice(0, 16);
-  return `${payload}:${signature}`;
-}
-
-export function verifySignedState(state: string): { userId: string } | null {
-  const parts = state.split(":");
-  if (parts.length !== 4) return null;
-  const [userId, timestamp, nonce, signature] = parts;
-  const payload = `${userId}:${timestamp}:${nonce}`;
-  const expected = crypto.createHmac("sha256", STATE_SECRET).update(payload).digest("hex").slice(0, 16);
-
-  // Use timingSafeEqual with hashed values to prevent timing attacks
-  // and safely handle different string lengths.
-  const signatureHash = crypto.createHash("sha256").update(signature).digest();
-  const expectedHash = crypto.createHash("sha256").update(expected).digest();
-
-  if (!crypto.timingSafeEqual(signatureHash, expectedHash)) return null;
-  const ts = Number.parseInt(timestamp, 36);
-  if (Date.now() - ts > STATE_MAX_AGE_MS) return null;
-  return { userId };
-}
-
-interface StravaTokenResponse {
-  token_type: string;
-  expires_at: number;
-  expires_in: number;
-  refresh_token: string;
-  access_token: string;
-  athlete: {
-    id: number;
-    username: string;
-    firstname: string;
-    lastname: string;
-  };
-}
-
-async function refreshStravaToken(refreshToken: string): Promise<StravaTokenResponse | null> {
-  if (!STRAVA_CLIENT_ID || !STRAVA_CLIENT_SECRET) {
-    logger.error("Strava credentials not configured");
-    return null;
-  }
-
-  try {
-    const response = await fetch("https://www.strava.com/oauth/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        client_id: STRAVA_CLIENT_ID,
-        client_secret: STRAVA_CLIENT_SECRET,
-        refresh_token: refreshToken,
-        grant_type: "refresh_token",
-      }),
-    });
-
-    if (!response.ok) {
-      logger.error({ err: await response.text() }, "Failed to refresh Strava token:");
-      return null;
-    }
-
-    return await response.json();
-  } catch (error) {
-    logger.error({ err: error }, "Error refreshing Strava token:");
-    return null;
-  }
-}
-
-async function getValidAccessToken(userId: string): Promise<string | null> {
-  const connection = await storage.getStravaConnection(userId);
-  if (!connection) return null;
-
-  const now = new Date();
-  if (connection.expiresAt > now) {
-    return connection.accessToken;
-  }
-
-  const refreshed = await refreshStravaToken(connection.refreshToken);
-  if (!refreshed) return null;
-
-  await storage.upsertStravaConnection({
-    userId,
-    stravaAthleteId: connection.stravaAthleteId,
-    accessToken: refreshed.access_token,
-    refreshToken: refreshed.refresh_token,
-    expiresAt: new Date(refreshed.expires_at * 1000),
-    scope: connection.scope,
-    lastSyncedAt: connection.lastSyncedAt,
-  });
-
-  return refreshed.access_token;
-}
-
-
+const newContent = content.replace(/export function registerStravaRoutes\(app: Express\): void \{[\s\S]*\}\s*$/, `
 async function handleStravaStatus(req: any, res: Response) {
   try {
     const userId = getUserId(req);
@@ -239,7 +124,7 @@ async function handleStravaSync(req: any, res: Response) {
     const activitiesResponse = await fetch(
       "https://www.strava.com/api/v3/athlete/activities?per_page=30",
       {
-        headers: { Authorization: `Bearer ${accessToken}` },
+        headers: { Authorization: \`Bearer \${accessToken}\` },
       }
     );
 
@@ -292,3 +177,5 @@ export function registerStravaRoutes(app: Express): void {
   app.delete("/api/strava/disconnect", isAuthenticated, handleStravaDisconnect);
   app.post("/api/strava/sync", isAuthenticated, handleStravaSync);
 }
+`);
+fs.writeFileSync('server/strava.ts', newContent);
