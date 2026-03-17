@@ -191,18 +191,12 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
           aria-valuemax={total}
           aria-label={`Step ${idx + 1} of ${total}`}
         >
-          {STEPS.slice(0, total).map((stepName, i) => {
-            let bgColor = "bg-muted";
-            if (i <= idx) {
-              bgColor = "bg-primary";
-            }
-            return (
-              <div
-                key={stepName}
-                className={`h-1 flex-1 rounded-full transition-colors ${bgColor}`}
-              />
-            );
-          })}
+          {Array.from({ length: total }).map((_, i) => (
+            <div
+              key={STEPS[i]}
+              className={`h-1 flex-1 rounded-full transition-colors ${i <= idx ? "bg-primary" : "bg-muted"}`}
+            />
+          ))}
         </div>
 
         <div className="py-4">
