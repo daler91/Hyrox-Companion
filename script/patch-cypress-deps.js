@@ -18,12 +18,14 @@ try {
   const appPath = path.join(cachePath, version, 'Cypress', 'resources', 'app');
   const simpleGitPath = path.join(appPath, 'node_modules', 'simple-git');
   const serializeJsPath = path.join(appPath, 'node_modules', 'serialize-javascript');
+  const esbuildPath = path.join(appPath, 'node_modules', 'esbuild');
+  const atEsbuildPath = path.join(appPath, 'node_modules', '@esbuild');
   const engineIoPath = path.join(appPath, 'node_modules', '@packages', 'socket', 'node_modules', 'socket.io', 'node_modules', 'engine.io');
   const flattedPath = path.join(appPath, 'node_modules', 'flatted');
   const wsPath = path.join(appPath, 'node_modules', 'ws');
   const axiosPath = path.join(appPath, 'node_modules', '@packages', 'server', 'node_modules', 'axios');
 
-  if (fs.existsSync(appPath) && (fs.existsSync(simpleGitPath) || fs.existsSync(serializeJsPath) || fs.existsSync(engineIoPath) || fs.existsSync(flattedPath) || fs.existsSync(wsPath) || fs.existsSync(axiosPath))) {
+  if (fs.existsSync(appPath) && (fs.existsSync(simpleGitPath) || fs.existsSync(serializeJsPath) || fs.existsSync(engineIoPath) || fs.existsSync(flattedPath) || fs.existsSync(wsPath) || fs.existsSync(esbuildPath) || fs.existsSync(atEsbuildPath) || fs.existsSync(axiosPath))) {
     console.log(`Patching Cypress dependencies in ${appPath}`);
 
     const tempDir = path.join(appPath, '.temp-patch-deps');
@@ -37,13 +39,14 @@ try {
     if (fs.existsSync(flattedPath)) depsToInstall.push('flatted@^3.4.0');
     if (fs.existsSync(wsPath)) depsToInstall.push('ws@^8.17.1');
     if (fs.existsSync(axiosPath)) depsToInstall.push('axios@^1.7.4');
+    if (fs.existsSync(esbuildPath)) depsToInstall.push('esbuild@^0.25.12');
 
     if (depsToInstall.length > 0) {
       execFileSync(npmCmd, ['install', ...depsToInstall], { cwd: tempDir, stdio: 'inherit' });
 
       const sourceDir = path.join(tempDir, 'node_modules');
       if (fs.existsSync(sourceDir)) {
-        if (fs.existsSync(simpleGitPath) || fs.existsSync(serializeJsPath) || fs.existsSync(flattedPath) || fs.existsSync(wsPath)) {
+        if (fs.existsSync(simpleGitPath) || fs.existsSync(serializeJsPath) || fs.existsSync(flattedPath) || fs.existsSync(wsPath) || fs.existsSync(esbuildPath) || fs.existsSync(atEsbuildPath)) {
           fs.cpSync(sourceDir, path.join(appPath, 'node_modules'), { recursive: true });
         }
 
