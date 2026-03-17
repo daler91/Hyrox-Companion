@@ -55,7 +55,7 @@ export default function Analytics() {
 
   const { data: rawPRs, isLoading: prsLoading } = useQuery<Record<string, RawPREntry & { category: string; customLabel?: string | null }>>({
     queryKey: ["/api/personal-records", dateRange],
-    queryFn: () => fetch(`/api/personal-records${dateParams}`).then(r => r.json()),
+    queryFn: ({ signal }) => fetch(`/api/personal-records${dateParams}`, { signal }).then(r => r.json()),
   });
 
   const personalRecords = useMemo(() => {
@@ -75,7 +75,7 @@ export default function Analytics() {
 
   const { data: allAnalytics, isLoading: analyticsLoading } = useQuery<Record<string, ExerciseAnalyticDay[]>>({
     queryKey: ["/api/exercise-analytics", dateRange],
-    queryFn: () => fetch(`/api/exercise-analytics${dateParams}`).then(r => r.json()),
+    queryFn: ({ signal }) => fetch(`/api/exercise-analytics${dateParams}`, { signal }).then(r => r.json()),
   });
 
   const filteredPRs = useMemo(() => {
