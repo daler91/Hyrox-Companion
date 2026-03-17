@@ -122,8 +122,8 @@ describe("TimelineFilters", () => {
 
     const mockCreateObjectURL = vi.fn().mockReturnValue("blob:mock-url");
     const mockRevokeObjectURL = vi.fn();
-    Object.defineProperty(window.URL, 'createObjectURL', { writable: true, value: mockCreateObjectURL });
-    Object.defineProperty(window.URL, 'revokeObjectURL', { writable: true, value: mockRevokeObjectURL });
+    Object.defineProperty(globalThis.URL, 'createObjectURL', { writable: true, value: mockCreateObjectURL });
+    Object.defineProperty(globalThis.URL, 'revokeObjectURL', { writable: true, value: mockRevokeObjectURL });
 
     const originalCreateElement = document.createElement.bind(document);
     const mockClick = vi.fn();
