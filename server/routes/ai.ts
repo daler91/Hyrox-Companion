@@ -2,7 +2,7 @@ import { logger } from "../logger";
 import { Router, type Request } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
-import { chatWithCoach, streamChatWithCoach, generateWorkoutSuggestions, parseExercisesFromText, type ChatMessage, type UpcomingWorkout } from "../gemini";
+import { chatWithCoach, streamChatWithCoach, generateWorkoutSuggestions, parseExercisesFromText, type UpcomingWorkout } from "../gemini";
 import { rateLimiter } from "../routeUtils";
 import { buildTrainingContext } from "../services/aiService";
 import { toDateStr, getUserId } from "../types";
@@ -30,7 +30,7 @@ router.post("/api/parse-exercises", isAuthenticated, rateLimiter("parse", 5), as
   }
 });
 
-async function prepareChatContext(req: Request): Promise<{ success: false; error: string } | { success: true; message: string; history: ChatMessage[]; trainingContext: import("../gemini").TrainingContext }> {
+async function prepareChatContext(req: Request): Promise<{ success: false; error: string } | { success: true; message: string; history: Pick<import("@shared/schema").ChatMessage, "role" | "content">[]; trainingContext: import("../gemini").TrainingContext }> {
   const parseResult = chatRequestSchema.safeParse(req.body);
   if (!parseResult.success) {
     return { success: false as const, error: parseResult.error.errors[0].message };

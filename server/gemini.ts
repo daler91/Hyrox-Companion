@@ -1,5 +1,7 @@
 import { logger } from "./logger";
 import { type ParsedExercise, exerciseSetSchema } from "@shared/schema";
+import { type ChatMessage } from "@shared/schema";
+export type { ChatMessage };
 import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
 import {
@@ -18,11 +20,6 @@ function getAiClient(): GoogleGenAI {
     _ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
   }
   return _ai;
-}
-
-export interface ChatMessage {
-  role: "user" | "assistant";
-  content: string;
 }
 
 export interface TrainingContext {
@@ -249,7 +246,7 @@ export async function generateWorkoutSuggestions(
 
 export async function chatWithCoach(
   userMessage: string,
-  conversationHistory: ChatMessage[] = [],
+  conversationHistory: Pick<ChatMessage, "role" | "content">[] = [],
   trainingContext?: TrainingContext,
 ): Promise<string> {
   try {
@@ -396,7 +393,7 @@ and use the matching name as customLabel: ${customExerciseNames.join(", ")}`;
 
 export async function* streamChatWithCoach(
   userMessage: string,
-  conversationHistory: ChatMessage[] = [],
+  conversationHistory: Pick<ChatMessage, "role" | "content">[] = [],
   trainingContext?: TrainingContext,
 ): AsyncGenerator<string> {
   try {
