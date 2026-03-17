@@ -7,7 +7,7 @@ import { getUserId } from "../types";
 
 const router = Router();
 
-router.get('/api/preferences', isAuthenticated, async (req: Request, res) => {
+router.get('/api/v1/preferences', isAuthenticated, async (req: Request, res) => {
   try {
     const userId = getUserId(req);
     const user = await storage.getUser(userId);
@@ -26,7 +26,7 @@ router.get('/api/preferences', isAuthenticated, async (req: Request, res) => {
   }
 });
 
-router.patch('/api/preferences', isAuthenticated, async (req: Request, res) => {
+router.patch('/api/v1/preferences', isAuthenticated, async (req: Request, res) => {
   try {
     const userId = getUserId(req);
     const parseResult = updateUserPreferencesSchema.safeParse(req.body);

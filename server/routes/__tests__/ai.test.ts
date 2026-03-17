@@ -7,8 +7,8 @@ import { parseExercisesFromText, chatWithCoach, streamChatWithCoach, generateWor
 import { buildTrainingContext } from "../../services/aiService";
 
 const MOCK_TRAINING_CONTEXT = "Training context";
-const CHAT_STREAM_ENDPOINT = "/api/chat/stream";
-const CHAT_ENDPOINT = "/api/chat";
+const CHAT_STREAM_ENDPOINT = "/api/v1/chat/stream";
+const CHAT_ENDPOINT = "/api/v1/chat";
 
 function parseStreamResponse(responseText: string) {
   return responseText.split("\n\n").filter(Boolean);
@@ -84,7 +84,7 @@ describe("POST /api/parse-exercises", () => {
     (parseExercisesFromText as any).mockResolvedValue(mockParsedExercises);
 
     const response = await request(app)
-      .post("/api/parse-exercises")
+      .post("/api/v1/parse-exercises")
       .send({ text: "Bench press 135x10" });
 
     expect(response.status).toBe(200);
@@ -96,7 +96,7 @@ describe("POST /api/parse-exercises", () => {
 
   it("should return 400 if text is missing", async () => {
     const response = await request(app)
-      .post("/api/parse-exercises")
+      .post("/api/v1/parse-exercises")
       .send({});
 
     expect(response.status).toBe(400);
@@ -107,7 +107,7 @@ describe("POST /api/parse-exercises", () => {
     (storage.getUser as any).mockRejectedValue(new Error("Database error"));
 
     const response = await request(app)
-      .post("/api/parse-exercises")
+      .post("/api/v1/parse-exercises")
       .send({ text: "Bench press 135x10" });
 
     expect(response.status).toBe(500);
@@ -124,12 +124,12 @@ describe("POST /api/parse-exercises", () => {
 
     // First 5 requests should succeed
     for (let i = 0; i < 5; i++) {
-      const response = await request(app).post("/api/parse-exercises").send(payload);
+      const response = await request(app).post("/api/v1/parse-exercises").send(payload);
       expect(response.status).toBe(200);
     }
 
     // 6th request should fail
-    const rateLimitedResponse = await request(app).post("/api/parse-exercises").send(payload);
+    const rateLimitedResponse = await request(app).post("/api/v1/parse-exercises").send(payload);
     expect(rateLimitedResponse.status).toBe(429);
     expect(rateLimitedResponse.body.error).toContain("Too many requests");
 
@@ -137,7 +137,7 @@ describe("POST /api/parse-exercises", () => {
     vi.advanceTimersByTime(61000);
 
     // Next request should succeed again
-    const successfulResponse = await request(app).post("/api/parse-exercises").send(payload);
+    const successfulResponse = await request(app).post("/api/v1/parse-exercises").send(payload);
     expect(successfulResponse.status).toBe(200);
   });
 });
@@ -259,8 +259,8 @@ describe("POST /api/chat/stream", () => {
 });
 
 
-const CHAT_HISTORY_ENDPOINT = "/api/chat/history";
-const CHAT_MESSAGE_ENDPOINT = "/api/chat/message";
+const CHAT_HISTORY_ENDPOINT = "/api/v1/chat/history";
+const CHAT_MESSAGE_ENDPOINT = "/api/v1/chat/message";
 describe("Chat History and Messages Routes", () => {
   let app: express.Express;
 
@@ -344,7 +344,7 @@ describe("Chat History and Messages Routes", () => {
   });
 });
 
-const TIMELINE_SUGGESTIONS_ENDPOINT = "/api/timeline/ai-suggestions";
+const TIMELINE_SUGGESTIONS_ENDPOINT = "/api/v1/timeline/ai-suggestions";
 describe("POST /api/timeline/ai-suggestions", () => {
   let app: express.Express;
 

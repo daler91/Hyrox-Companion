@@ -7,24 +7,24 @@ describe("Timeline Workout Details Interactions", () => {
 
   beforeEach(() => {
     // Intercept PATCH for plan days marking complete
-    cy.intercept("PATCH", `/api/plans/days/${planDayId}/status`, {
+    cy.intercept("PATCH", `/api/v1/plans/days/${planDayId}/status`, {
       statusCode: 200,
       body: { id: planDayId, status: "completed" },
     }).as("updatePlanDay");
 
-    cy.intercept("PATCH", `/api/plans/*/days/${planDayId}`, {
+    cy.intercept("PATCH", `/api/v1/plans/*/days/${planDayId}`, {
       statusCode: 200,
       body: { id: planDayId, focus: "Updated Upper Body Focus" },
     }).as("updateDayDetails");
 
     // Intercept POST for saving updated details
-    cy.intercept("POST", "/api/workouts", {
+    cy.intercept("POST", "/api/v1/workouts", {
       statusCode: 200,
       body: { id: "logged-workout-from-plan", title: "Upper Body Strength" },
     }).as("logWorkoutFromPlan");
 
     // Intercept DELETE for deleting a workout
-    cy.intercept("DELETE", `/api/plans/days/${planDayId}`, {
+    cy.intercept("DELETE", `/api/v1/plans/days/${planDayId}`, {
       statusCode: 200,
       body: { success: true },
     }).as("deleteWorkout");

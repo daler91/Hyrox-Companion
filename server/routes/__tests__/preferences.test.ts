@@ -39,7 +39,7 @@ describe("GET /api/preferences", () => {
     const errorMessage = "Database connection failed";
     vi.mocked(storage.getUser).mockRejectedValueOnce(new Error(errorMessage));
 
-    const response = await request(app).get("/api/preferences");
+    const response = await request(app).get("/api/v1/preferences");
 
     expect(response.status).toBe(500);
     expect(response.body).toEqual({ error: "Failed to fetch preferences" });

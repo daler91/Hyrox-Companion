@@ -79,27 +79,27 @@ describe('usePlanImport', () => {
         name: 'confirmImport',
         setup: (res: any) => res.current.setCsvPreview({ fileName: 'plan.csv', content: 'c', rows: [] }),
         trigger: (res: any) => res.current.confirmImport(),
-        method: 'POST', endpoint: '/api/plans/import', payload: { csvContent: 'c', fileName: 'plan.csv' },
-        sToast: "Plan imported! Now set a start date.", eToast: "Failed to import plan", inv: [["/api/plans"]],
+        method: 'POST', endpoint: '/api/v1/plans/import', payload: { csvContent: 'c', fileName: 'plan.csv' },
+        sToast: "Plan imported! Now set a start date.", eToast: "Failed to import plan", inv: [["/api/v1/plans"]],
         postAssert: (res: any) => { expect(res.current.schedulingPlanId).toBe('test-plan-id'); expect(res.current.csvPreview).toBeNull(); }
       },
       {
         name: 'schedulePlanMutation',
         setup: (res: any) => res.current.setSchedulingPlanId('test-plan-id'),
         trigger: (res: any) => res.current.schedulePlanMutation.mutate({ planId: 'test-plan-id', startDate: '2023-10-01' }),
-        method: 'POST', endpoint: '/api/plans/test-plan-id/schedule', payload: { startDate: '2023-10-01' },
-        sToast: "Training plan scheduled!", eToast: "Failed to schedule plan", inv: [["/api/timeline", 'test-plan-id'], ["/api/plans"]],
+        method: 'POST', endpoint: '/api/v1/plans/test-plan-id/schedule', payload: { startDate: '2023-10-01' },
+        sToast: "Training plan scheduled!", eToast: "Failed to schedule plan", inv: [["/api/v1/timeline", 'test-plan-id'], ["/api/v1/plans"]],
         postAssert: (res: any, mockFn: any) => { expect(mockFn).toHaveBeenCalledWith('test-plan-id'); expect(res.current.schedulingPlanId).toBeNull(); }
       },
       {
         name: 'samplePlanMutation', setup: () => {}, trigger: (res: any) => res.current.samplePlanMutation.mutate(),
-        method: 'POST', endpoint: '/api/plans/sample', payload: {},
-        sToast: "Sample plan created! Now set a start date.", eToast: "Failed to create sample plan", inv: [["/api/plans"]], postAssert: () => {}
+        method: 'POST', endpoint: '/api/v1/plans/sample', payload: {},
+        sToast: "Sample plan created! Now set a start date.", eToast: "Failed to create sample plan", inv: [["/api/v1/plans"]], postAssert: () => {}
       },
       {
         name: 'renamePlanMutation', setup: () => {}, trigger: (res: any) => res.current.renamePlanMutation.mutate({ planId: 'p1', name: 'New Name' }),
-        method: 'PATCH', endpoint: '/api/plans/p1', payload: { name: 'New Name' },
-        sToast: "Plan renamed", eToast: "Failed to rename plan", inv: [["/api/plans"], ["/api/timeline"]], postAssert: () => {}
+        method: 'PATCH', endpoint: '/api/v1/plans/p1', payload: { name: 'New Name' },
+        sToast: "Plan renamed", eToast: "Failed to rename plan", inv: [["/api/v1/plans"], ["/api/v1/timeline"]], postAssert: () => {}
       }
     ];
 

@@ -32,12 +32,13 @@ export async function setupVite(server: Server, app: Express) {
 
   app.use(vite.middlewares);
 
-  const fallbackLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // max 100 requests per windowMs
+
+  const viteFallbackLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 100,
   });
 
-  app.use("*", fallbackLimiter, async (req, res, next) => {
+  app.use("*", viteFallbackLimiter, async (req, res, next) => {
     const url = req.originalUrl;
 
     try {

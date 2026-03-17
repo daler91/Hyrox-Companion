@@ -69,7 +69,7 @@ describe('useUnitPreferences', () => {
 
   it.each(testCases)('$description', async ({ mockData, expectedWeight, expectedDistance, expectedLoading }) => {
     if (mockData !== undefined) {
-      queryClient.setQueryData(['/api/preferences'], mockData);
+      queryClient.setQueryData(['/api/v1/preferences'], mockData);
     }
 
     const { result } = renderHook(() => useUnitPreferences(), { wrapper });

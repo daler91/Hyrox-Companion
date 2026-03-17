@@ -11,11 +11,11 @@ export function useWorkoutActions(selectedPlanId: string | null) {
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ dayId, status }: { dayId: string; status: string }) => {
-      const response = await apiRequest("PATCH", `/api/plans/days/${dayId}/status`, { status });
+      const response = await apiRequest("PATCH", `/api/v1/plans/days/${dayId}/status`, { status });
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/timeline"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] });
       toast({ title: "Status updated" });
     },
     onError: () => {
@@ -25,11 +25,11 @@ export function useWorkoutActions(selectedPlanId: string | null) {
 
   const updateDayMutation = useMutation({
     mutationFn: async ({ dayId, updates }: { dayId: string; updates: Partial<PlanDay> }) => {
-      const response = await apiRequest("PATCH", `/api/plans/${selectedPlanId}/days/${dayId}`, updates);
+      const response = await apiRequest("PATCH", `/api/v1/plans/${selectedPlanId}/days/${dayId}`, updates);
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/timeline"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] });
       setDetailEntry(null);
       toast({ title: "Entry updated" });
     },
@@ -40,11 +40,11 @@ export function useWorkoutActions(selectedPlanId: string | null) {
 
   const logWorkoutMutation = useMutation({
     mutationFn: async (data: { planDayId: string; date: string; focus: string; mainWorkout: string; accessory?: string; notes?: string; rpe?: number; exercises?: ParsedExercise[] }) => {
-      const response = await apiRequest("POST", "/api/workouts", data);
+      const response = await apiRequest("POST", "/api/v1/workouts", data);
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/timeline"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] });
       setDetailEntry(null);
       toast({ title: "Workout logged!" });
     },
@@ -55,12 +55,12 @@ export function useWorkoutActions(selectedPlanId: string | null) {
 
   const updateWorkoutMutation = useMutation({
     mutationFn: async ({ workoutId, updates }: { workoutId: string; updates: UpdateWorkoutLog & { exercises?: ParsedExercise[] } }) => {
-      const response = await apiRequest("PATCH", `/api/workouts/${workoutId}`, updates);
+      const response = await apiRequest("PATCH", `/api/v1/workouts/${workoutId}`, updates);
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/timeline"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/workouts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/workouts"] });
       setDetailEntry(null);
       toast({ title: "Workout updated" });
     },
@@ -71,12 +71,12 @@ export function useWorkoutActions(selectedPlanId: string | null) {
 
   const deleteWorkoutMutation = useMutation({
     mutationFn: async (workoutId: string) => {
-      const response = await apiRequest("DELETE", `/api/workouts/${workoutId}`);
+      const response = await apiRequest("DELETE", `/api/v1/workouts/${workoutId}`);
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/timeline"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/workouts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/workouts"] });
       setDetailEntry(null);
       toast({ title: "Workout deleted" });
     },
@@ -87,12 +87,12 @@ export function useWorkoutActions(selectedPlanId: string | null) {
 
   const deletePlanDayMutation = useMutation({
     mutationFn: async (dayId: string) => {
-      const response = await apiRequest("DELETE", `/api/plans/days/${dayId}`);
+      const response = await apiRequest("DELETE", `/api/v1/plans/days/${dayId}`);
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/timeline"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/plans"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/plans"] });
       setDetailEntry(null);
       toast({ title: "Workout removed from plan" });
     },

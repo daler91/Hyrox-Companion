@@ -68,12 +68,12 @@ export function useWorkoutForm({
 
   const saveMutation = useMutation({
     mutationFn: async (workoutData: Omit<InsertWorkoutLog, "userId"> & { title?: string, exercises?: ParsedExercise[] }) => {
-      const response = await apiRequest("POST", "/api/workouts", workoutData);
+      const response = await apiRequest("POST", "/api/v1/workouts", workoutData);
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/workouts"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/timeline"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/workouts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] });
       toast({
         title: "Workout logged",
         description: "Your workout has been saved successfully.",

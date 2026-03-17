@@ -303,7 +303,7 @@ describe('useWorkoutForm', () => {
       });
 
       await waitFor(() => {
-        expect(queryClientLib.apiRequest).toHaveBeenCalledWith('POST', '/api/workouts', {
+        expect(queryClientLib.apiRequest).toHaveBeenCalledWith('POST', '/api/v1/workouts', {
           title: 'My Run',
           date: '2024-05-01',
           focus: 'My Run',
@@ -350,7 +350,7 @@ describe('useWorkoutForm', () => {
         expect(workoutEditorHook.generateSummary).toHaveBeenCalledWith([mockExercise], 'kg', 'km');
         expect(workoutEditorHook.exerciseToPayload).toHaveBeenCalledWith(mockExercise, 0, [mockExercise]);
 
-        expect(queryClientLib.apiRequest).toHaveBeenCalledWith('POST', '/api/workouts', {
+        expect(queryClientLib.apiRequest).toHaveBeenCalledWith('POST', '/api/v1/workouts', {
           title: 'Leg Day',
           date: '2024-05-02',
           focus: 'Leg Day',
@@ -379,7 +379,7 @@ describe('useWorkoutForm', () => {
       });
 
       await waitFor(() => {
-        expect(queryClientLib.apiRequest).toHaveBeenCalledWith('POST', '/api/workouts', expect.objectContaining({
+        expect(queryClientLib.apiRequest).toHaveBeenCalledWith('POST', '/api/v1/workouts', expect.objectContaining({
           notes: null, // Should be normalized to null
         }));
       });
@@ -400,8 +400,8 @@ describe('useWorkoutForm', () => {
       });
 
       await waitFor(() => {
-        expect(queryClientLib.queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/workouts"] });
-        expect(queryClientLib.queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/timeline"] });
+        expect(queryClientLib.queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/v1/workouts"] });
+        expect(queryClientLib.queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/v1/timeline"] });
         expect(mockToast).toHaveBeenCalledWith({
           title: "Workout logged",
           description: "Your workout has been saved successfully.",

@@ -5,7 +5,7 @@ import authRouter from "../auth";
 import { storage } from "../../storage";
 
 const TEST_USER_ID = "test_user_id";
-const ENDPOINT_URL = "/api/auth/user";
+const ENDPOINT_URL = "/api/v1/auth/user";
 
 // Mock the clerkAuth middleware to simulate authentication
 vi.mock("../../clerkAuth", () => ({

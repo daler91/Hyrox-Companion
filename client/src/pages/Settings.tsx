@@ -55,12 +55,12 @@ export default function Settings() {
   }, [search, toast, setLocation]);
 
   const { data: preferences, isLoading } = useQuery<Preferences>({
-    queryKey: ["/api/preferences"],
+    queryKey: ["/api/v1/preferences"],
   });
 
   const { data: stravaStatus, isLoading: stravaLoading } =
     useQuery<StravaStatus>({
-      queryKey: ["/api/strava/status"],
+      queryKey: ["/api/v1/strava/status"],
     });
 
   useEffect(() => {
@@ -79,11 +79,11 @@ export default function Settings() {
       weeklyGoal: number;
       emailNotifications: number;
     }) => {
-      const response = await apiRequest("PATCH", "/api/preferences", data);
+      const response = await apiRequest("PATCH", "/api/v1/preferences", data);
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/preferences"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/preferences"] });
       setHasChanges(false);
       toast({
         title: "Settings saved",

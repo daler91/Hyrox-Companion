@@ -12,16 +12,16 @@ export function useCombineWorkouts() {
 
   const combineWorkoutsMutation = useMutation({
     mutationFn: async ({ newWorkout, entriesToDelete }: { newWorkout: { date: string; focus: string; mainWorkout: string; duration?: number; calories?: number; notes?: string }; entriesToDelete: TimelineEntry[] }): Promise<any> => {
-      const response = await apiRequest("POST", "/api/workouts", newWorkout);
+      const response = await apiRequest("POST", "/api/v1/workouts", newWorkout);
       const created = await response.json();
 
       const deletePromises = [];
       for (const entry of entriesToDelete) {
         if (entry.workoutLogId) {
-          deletePromises.push(apiRequest("DELETE", `/api/workouts/${entry.workoutLogId}`));
+          deletePromises.push(apiRequest("DELETE", `/api/v1/workouts/${entry.workoutLogId}`));
         }
         if (entry.planDayId) {
-          deletePromises.push(apiRequest("PATCH", `/api/plans/days/${entry.planDayId}/status`, { status: "skipped" }));
+          deletePromises.push(apiRequest("PATCH", `/api/v1/plans/days/${entry.planDayId}/status`, { status: "skipped" }));
         }
       }
       await Promise.all(deletePromises);
@@ -29,8 +29,8 @@ export function useCombineWorkouts() {
       return created;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/timeline"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/workouts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/workouts"] });
       setCombiningEntry(null);
       setCombineSecondEntry(null);
       setShowCombineDialog(false);

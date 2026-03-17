@@ -174,7 +174,7 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
 
   const parseMutation = useMutation({
     mutationFn: async (text: string) => {
-      const response = await apiRequest("POST", "/api/parse-exercises", { text });
+      const response = await apiRequest("POST", "/api/v1/parse-exercises", { text });
       return response.json();
     },
     onSuccess: (parsed: ParsedExercise[]) => {

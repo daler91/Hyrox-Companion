@@ -13,7 +13,7 @@ export function DataToolsSection() {
 
   const findUnstructuredMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("GET", "/api/workouts/unstructured");
+      const response = await apiRequest("GET", "/api/v1/workouts/unstructured");
       return response.json();
     },
     onSuccess: (data: any[]) => {
@@ -34,13 +34,13 @@ export function DataToolsSection() {
 
   const batchReparseMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/workouts/batch-reparse");
+      const response = await apiRequest("POST", "/api/v1/workouts/batch-reparse");
       return response.json();
     },
     onSuccess: (data: { total: number; parsed: number; failed: number }) => {
       setParseResults({ success: data.parsed, failed: data.failed });
-      queryClient.invalidateQueries({ queryKey: ["/api/timeline"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/workouts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/workouts"] });
       toast({
         title: "Parsing Complete",
         description: `Parsed ${data.parsed} workouts successfully. ${data.failed} could not be parsed.`,
@@ -150,7 +150,7 @@ export function DataToolsSection() {
             <Button
               variant="outline"
               onClick={() => {
-                globalThis.location.href = "/api/export?format=csv";
+                globalThis.location.href = "/api/v1/export?format=csv";
               }}
               data-testid="button-export-csv"
             >
@@ -160,7 +160,7 @@ export function DataToolsSection() {
             <Button
               variant="outline"
               onClick={() => {
-                globalThis.location.href = "/api/export?format=json";
+                globalThis.location.href = "/api/v1/export?format=json";
               }}
               data-testid="button-export-json"
             >

@@ -54,8 +54,11 @@ export function baseStyles(): string {
 }
 
 export function getAppUrl(): string {
-  if (env.APP_URL) return env.APP_URL;
-  return "http://localhost:5000";
+  if (env.REPLIT_DEPLOYMENT_URL)
+    return `https://${env.REPLIT_DEPLOYMENT_URL}`;
+  if (env.REPLIT_DEV_DOMAIN)
+    return `https://${env.REPLIT_DEV_DOMAIN}`;
+  return "https://hyroxtracker.replit.app";
 }
 
 export function buildWeeklySummaryEmail(

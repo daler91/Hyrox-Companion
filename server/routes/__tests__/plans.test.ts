@@ -63,12 +63,12 @@ describe("POST /api/plans/import Rate Limiting", () => {
 
     // First 5 requests should succeed (200 OK)
     for (let i = 0; i < 5; i++) {
-      const response = await request(app).post("/api/plans/import").send(payload);
+      const response = await request(app).post("/api/v1/plans/import").send(payload);
       expect(response.status).toBe(200);
     }
 
     // 6th request should fail with 429 Too Many Requests
-    const rateLimitedResponse = await request(app).post("/api/plans/import").send(payload);
+    const rateLimitedResponse = await request(app).post("/api/v1/plans/import").send(payload);
     expect(rateLimitedResponse.status).toBe(429);
     expect(rateLimitedResponse.body.error).toContain("Too many requests");
     expect(rateLimitedResponse.headers["retry-after"]).toBeDefined();
@@ -77,7 +77,7 @@ describe("POST /api/plans/import Rate Limiting", () => {
     vi.advanceTimersByTime(61000);
 
     // Next request should succeed again
-    const successfulResponse = await request(app).post("/api/plans/import").send(payload);
+    const successfulResponse = await request(app).post("/api/v1/plans/import").send(payload);
     expect(successfulResponse.status).toBe(200);
   });
 });

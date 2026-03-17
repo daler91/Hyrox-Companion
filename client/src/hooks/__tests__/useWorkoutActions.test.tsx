@@ -91,7 +91,7 @@ describe('useWorkoutActions', () => {
         });
 
         await waitFor(() => {
-          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('PATCH', '/api/workouts/w-1', {
+          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('PATCH', '/api/v1/workouts/w-1', {
             ...updates,
             exercises: undefined,
           });
@@ -113,7 +113,7 @@ describe('useWorkoutActions', () => {
         });
 
         await waitFor(() => {
-          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('POST', '/api/workouts', {
+          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('POST', '/api/v1/workouts', {
             planDayId: 'pd-1',
             date: '2024-01-01',
             focus: 'cardio',
@@ -140,7 +140,7 @@ describe('useWorkoutActions', () => {
         });
 
         await waitFor(() => {
-          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('PATCH', '/api/plans/test-plan-id/days/pd-1', updates);
+          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('PATCH', '/api/v1/plans/test-plan-id/days/pd-1', updates);
           expect(result.current.detailEntry).toBeNull();
         });
       });
@@ -156,7 +156,7 @@ describe('useWorkoutActions', () => {
         });
 
         await waitFor(() => {
-          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('POST', '/api/workouts', {
+          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('POST', '/api/v1/workouts', {
             planDayId: 'pd-1',
             date: '2024-01-01',
             focus: 'strength',
@@ -182,7 +182,7 @@ describe('useWorkoutActions', () => {
         });
 
         await waitFor(() => {
-          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('PATCH', '/api/plans/days/pd-1/status', { status: 'skipped' });
+          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('PATCH', '/api/v1/plans/days/pd-1/status', { status: 'skipped' });
           expect(result.current.skipConfirmEntry).toBeNull();
         });
       });
@@ -198,7 +198,7 @@ describe('useWorkoutActions', () => {
         });
 
         await waitFor(() => {
-          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('PATCH', '/api/plans/days/pd-1/status', { status: 'completed' });
+          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('PATCH', '/api/v1/plans/days/pd-1/status', { status: 'completed' });
         });
       });
     });
@@ -213,7 +213,7 @@ describe('useWorkoutActions', () => {
         });
 
         await waitFor(() => {
-          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('DELETE', '/api/workouts/w-1');
+          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('DELETE', '/api/v1/workouts/w-1');
         });
       });
 
@@ -226,7 +226,7 @@ describe('useWorkoutActions', () => {
         });
 
         await waitFor(() => {
-          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('DELETE', '/api/plans/days/pd-1');
+          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('DELETE', '/api/v1/plans/days/pd-1');
         });
       });
 
@@ -239,7 +239,7 @@ describe('useWorkoutActions', () => {
         });
 
         await waitFor(() => {
-          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('DELETE', '/api/plans/days/pd-1');
+          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('DELETE', '/api/v1/plans/days/pd-1');
         });
       });
     });
@@ -298,7 +298,7 @@ describe('useWorkoutActions', () => {
       });
 
       await waitFor(() => {
-        expect(queryClientLib.queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/timeline"] });
+        expect(queryClientLib.queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/v1/timeline"] });
         expect(mockToast).toHaveBeenCalledWith({ title: "Status updated" });
       });
     });

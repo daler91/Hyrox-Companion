@@ -11,7 +11,7 @@ function useClerkAuthImpl() {
   const { user: clerkUser } = useUser();
 
   const { data: dbUser, isLoading: isDbLoading } = useQuery<User>({
-    queryKey: ["/api/auth/user"],
+    queryKey: ["/api/v1/auth/user"],
     enabled: !!isSignedIn,
     retry: false,
   });
@@ -31,7 +31,7 @@ function useClerkAuthImpl() {
 
 function useTestAuthImpl() {
   const { data: dbUser, isLoading } = useQuery<User>({
-    queryKey: ["/api/auth/user"],
+    queryKey: ["/api/v1/auth/user"],
     retry: false,
   });
 
