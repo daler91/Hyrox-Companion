@@ -73,22 +73,17 @@ export default function LogWorkout() {
   } = notesVoiceInput;
 
   const { blockCounts, blockIndices } = React.useMemo(() => {
+    // ⚡ Bolt Performance Optimization:
+    // Combine two O(N) array traversals into a single O(N) traversal
+    // and remove the need for a secondary runningCounts object allocation.
     const counts: Record<string, number> = {};
     const indices: Record<string, number> = {};
-    const runningCounts: Record<string, number> = {};
 
     for (const blockId of exerciseBlocks) {
       const name = getBlockExerciseName(blockId);
       if (name) {
         counts[name] = (counts[name] || 0) + 1;
-      }
-    }
-
-    for (const blockId of exerciseBlocks) {
-      const name = getBlockExerciseName(blockId);
-      if (name) {
-        runningCounts[name] = (runningCounts[name] || 0) + 1;
-        indices[blockId] = runningCounts[name];
+        indices[blockId] = counts[name];
       }
     }
 
