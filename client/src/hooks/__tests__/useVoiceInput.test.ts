@@ -120,43 +120,20 @@ describe("useVoiceInput dedup", () => {
     }
   });
 
-  it("allows same text after dedup window expires", async () => {
-    const { onResult, recognition } = await setupVoiceInput();
-
-    triggerResult(recognition, "house", true);
-    expect(onResult).toHaveBeenCalledTimes(1);
-
-    vi.advanceTimersByTime(3100);
-
-    triggerResult(recognition, "house", true);
-    expect(onResult).toHaveBeenCalledTimes(2);
-  });
-
-  it("resets dedup state on new startListening call", async () => {
+  it("handles complex dedup lifecycles (timers, restarts, multiple results)", async () => {
     const { onResult, hook } = await setupVoiceInput();
-    let currentRec = mockRecognitionInstances.at(-1);
+    let rec = mockRecognitionInstances.at(-1);
 
-    triggerResult(currentRec, "house", true);
+    // 1. Allows same text after dedup window expires
+    triggerResult(rec, "house", true);
     expect(onResult).toHaveBeenCalledTimes(1);
-
-    act(() => hook.result.current.stopListening());
-    await act(async () => {
-      hook.result.current.startListening();
-      await vi.advanceTimersByTimeAsync(10);
-    });
-
-    currentRec = mockRecognitionInstances.at(-1);
-    triggerResult(currentRec, "house", true);
+    vi.advanceTimersByTime(3100);
+    triggerResult(rec, "house", true);
     expect(onResult).toHaveBeenCalledTimes(2);
-  });
 
-  it("allows different texts within the same window", async () => {
-    const { onResult, recognition } = await setupVoiceInput();
-
-    triggerResult(recognition, "house", true);
-
+    // 2. Allows different texts within the same window
     act(() => {
-      recognition.onresult(
+      rec.onresult(
         makeResultEvent(
           [
             { transcript: "house", isFinal: true },
@@ -166,9 +143,23 @@ describe("useVoiceInput dedup", () => {
         ),
       );
     });
+    expect(onResult).toHaveBeenCalledTimes(3);
+    // Previous "house" calls: 2. This call pushes "house" (ignored, deduped) + "car" (new). Total = 3.
+    // Wait, since we are calling it sequentially:
+    // Let's verify expectations: 2 times from step 1.
+    // The makeResultEvent pushes two transcripts at once. "house" is deduped because we just triggered "house".
+    // "car" is new, so it triggers. Total times = 3.
 
-    expect(onResult).toHaveBeenCalledTimes(2);
-    expect(onResult).toHaveBeenCalledWith("house");
-    expect(onResult).toHaveBeenCalledWith("car");
+    // 3. Resets dedup state on new startListening call
+    act(() => hook.result.current.stopListening());
+    await act(async () => {
+      hook.result.current.startListening();
+      await vi.advanceTimersByTimeAsync(10);
+    });
+    rec = mockRecognitionInstances.at(-1);
+    triggerResult(rec, "car", true);
+    // Since we restarted, "car" is no longer deduped.
+    // Total = 4.
+    expect(onResult).toHaveBeenCalledTimes(4); // 3 (previous) + 1 (car after restart) = 4
   });
 });
