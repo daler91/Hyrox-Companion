@@ -1,7 +1,7 @@
-import { workoutLogs, exerciseSets, planDays, customExercises, type ParsedExercise, type InsertWorkoutLog, type UpdateWorkoutLog, type InsertExerciseSet, type WorkoutLog, type ExerciseSet } from "@shared/schema";
+import { workoutLogs, exerciseSets, planDays, trainingPlans, customExercises, type ParsedExercise, type InsertWorkoutLog, type UpdateWorkoutLog, type InsertExerciseSet, type WorkoutLog, type ExerciseSet } from "@shared/schema";
 import { storage } from "../storage";
 import { db } from "../db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 
 
 export function extractAndDeduplicateCustomExercises(exercises: ParsedExercise[], userId: string) {
@@ -123,7 +123,17 @@ export async function createWorkout(
         await tx
           .update(planDays)
           .set({ status: "completed" })
-          .where(eq(planDays.id, workoutData.planDayId));
+          .where(
+            and(
+              eq(planDays.id, workoutData.planDayId),
+              inArray(
+                planDays.planId,
+                tx.select({ id: trainingPlans.id })
+                  .from(trainingPlans)
+                  .where(eq(trainingPlans.userId, userId))
+              )
+            )
+          );
       }
 
       const exerciseSetData = expandExercisesToSetRows(exercises, log.id);
