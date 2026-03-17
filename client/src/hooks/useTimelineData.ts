@@ -19,11 +19,11 @@ export function useTimelineData(selectedPlanId: string | null) {
 
   const { data: timelineData = [], isLoading: timelineLoading } = useQuery<TimelineEntry[]>({
     queryKey: ["/api/timeline", selectedPlanId],
-    queryFn: async ({ signal }) => {
+    queryFn: async () => {
       const url = selectedPlanId
         ? `/api/timeline?planId=${selectedPlanId}`
         : `/api/timeline`;
-      const res = await fetch(url, { signal });
+      const res = await fetch(url);
       if (!res.ok) throw new Error("Failed to fetch timeline");
       return res.json();
     },

@@ -2,9 +2,9 @@ import { z } from "zod";
 
 const envSchema = z.object({
   DATABASE_URL: z.string().url(),
-  CLERK_PUBLISHABLE_KEY: z.string().min(1),
-  CLERK_SECRET_KEY: z.string().min(1),
-  ENCRYPTION_KEY: z.string().min(32, "Encryption key must be at least 32 characters long"),
+  CLERK_PUBLISHABLE_KEY: z.string().min(1).optional(),
+  CLERK_SECRET_KEY: z.string().min(1).optional(),
+  ENCRYPTION_KEY: z.string().min(32, "Encryption key must be at least 32 characters long").optional(),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   PORT: z.string().default("5000"),
   SENTRY_DSN: z.string().optional(),
