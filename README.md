@@ -171,7 +171,7 @@ This project is developed on Replit but most of the codebase is fully portable. 
 
 | Component | File(s) | What it does | Portable alternative |
 |-----------|---------|--------------|---------------------|
-| **Email URL helper** | `server/email.ts` | Uses `REPLIT_DEPLOYMENT_URL` / `REPLIT_DEV_DOMAIN` to build app links | Replace `getAppUrl()` with your domain |
+| **Email URL helper** | `server/emailTemplates.ts` | Uses `APP_URL` env var to build app links (falls back to `hyroxtracker.replit.app`) | Set `APP_URL` to your domain |
 | **Run config** | `.replit` | Replit-specific run/deploy configuration | Replace with platform-specific config (Dockerfile, Procfile, etc.) |
 
 ### Fully Portable (works anywhere)

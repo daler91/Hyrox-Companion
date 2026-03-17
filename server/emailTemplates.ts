@@ -54,11 +54,7 @@ export function baseStyles(): string {
 }
 
 export function getAppUrl(): string {
-  if (env.REPLIT_DEPLOYMENT_URL)
-    return `https://${env.REPLIT_DEPLOYMENT_URL}`;
-  if (env.REPLIT_DEV_DOMAIN)
-    return `https://${env.REPLIT_DEV_DOMAIN}`;
-  return "https://hyroxtracker.replit.app";
+  return env.APP_URL || "https://hyroxtracker.replit.app";
 }
 
 export function buildWeeklySummaryEmail(
@@ -223,7 +219,7 @@ export function buildMissedWorkoutEmail(
     <p style="font-size:14px;color:#64748b;margin-top:16px;">Missing a session happens to everyone. The important thing is to get back on track. You can mark these as skipped or reschedule them in the app.</p>
 
     <div style="margin-top: 24px; text-align: center;">
-      <a href="${env.APP_URL || "https://hyrox-tracker.com"}/timeline" style="display: inline-block; background-color: #0f172a; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500;">View Timeline</a>
+      <a href="${getAppUrl()}/timeline" style="display: inline-block; background-color: #0f172a; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500;">View Timeline</a>
     </div>
   </div>
   <div class="footer">
