@@ -184,7 +184,7 @@ function buildSuggestionsPrompt(trainingContext: TrainingContext, upcomingWorkou
 
   prompt += `\n--- UPCOMING WORKOUTS ---\n`;
   for (const workout of upcomingWorkouts) {
-    prompt += `ID: ${workout.id}, Date: ${workout.date}, Focus: ${workout.focus}, Main: ${workout.mainWorkout}${workout.accessory ? `, Accessory: ${workout.accessory}` : ""}\n`;
+    prompt += `ID: ${workout.id}, Date: ${workout.date}, Focus: ${workout.focus}, Main: ${workout.mainWorkout}${workout.accessory ? ", Accessory: " + workout.accessory : ""}\n`;
   }
 
   prompt += `\nAnalyze the data and provide suggestions for the upcoming workouts.`;
