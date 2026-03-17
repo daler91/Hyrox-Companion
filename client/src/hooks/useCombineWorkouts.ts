@@ -11,7 +11,7 @@ export function useCombineWorkouts() {
   const [showCombineDialog, setShowCombineDialog] = useState(false);
 
   const combineWorkoutsMutation = useMutation({
-    mutationFn: async ({ newWorkout, entriesToDelete }: { newWorkout: { date: string; focus: string; mainWorkout: string; duration?: number; calories?: number; notes?: string }; entriesToDelete: TimelineEntry[] }) => {
+    mutationFn: async ({ newWorkout, entriesToDelete }: { newWorkout: { date: string; focus: string; mainWorkout: string; duration?: number; calories?: number; notes?: string }; entriesToDelete: TimelineEntry[] }): Promise<any> => {
       const response = await apiRequest("POST", "/api/workouts", newWorkout);
       const created = await response.json();
 
