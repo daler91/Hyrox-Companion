@@ -7,35 +7,31 @@ import { AnalyticsStorage } from "./analytics";
 
 export type { IStorage } from "./IStorage";
 
-class DatabaseStorage {
-  private storages: any[];
+function createDatabaseStorage(): IStorage {
+  const workoutStorage = new WorkoutStorage();
+  const storages = [
+    new UserStorage(),
+    workoutStorage,
+    new PlanStorage(),
+    new TimelineStorage(workoutStorage),
+    new AnalyticsStorage()
+  ];
 
-  constructor() {
-    const workoutStorage = new WorkoutStorage();
-    this.storages = [
-      new UserStorage(),
-      workoutStorage,
-      new PlanStorage(),
-      new TimelineStorage(workoutStorage),
-      new AnalyticsStorage()
-    ];
-
-    return new Proxy(this, {
-      get(target: DatabaseStorage, prop: string | symbol, receiver: any) {
-        if (prop in target) {
-          return Reflect.get(target, prop, receiver);
-        }
-
-        for (const storage of target.storages) {
-          if (prop in storage && typeof storage[prop] === 'function') {
-            return storage[prop].bind(storage);
-          }
-        }
-
-        return undefined;
+  return new Proxy({} as IStorage, {
+    get(target: IStorage, prop: string | symbol, receiver: unknown) {
+      if (prop in target) {
+        return Reflect.get(target, prop, receiver);
       }
-    });
-  }
+
+      for (const storageInstance of storages) {
+        if (prop in storageInstance && typeof (storageInstance as any)[prop] === "function") {
+          return (storageInstance as any)[prop].bind(storageInstance);
+        }
+      }
+
+      return undefined;
+    }
+  });
 }
 
-export const storage = new DatabaseStorage() as unknown as IStorage;
+export const storage = createDatabaseStorage();
