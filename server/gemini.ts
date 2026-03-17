@@ -155,10 +155,7 @@ function parseAndValidateSuggestions(text: string): WorkoutSuggestion[] {
   try {
     raw = JSON.parse(text);
   } catch (parseErr) {
-    console.error(
-      "[gemini] suggestions JSON.parse failed. Raw response:",
-      truncate(text),
-    );
+    logger.error({ rawResponse: truncate(text) }, "[gemini] suggestions JSON.parse failed. Raw response:");
     return [];
   }
 
@@ -328,10 +325,7 @@ and use the matching name as customLabel: ${customExerciseNames.join(", ")}`;
     try {
       raw = JSON.parse(responseText);
     } catch (parseErr) {
-      console.error(
-        "[gemini] exercise-parse JSON.parse failed. Raw response:",
-        truncate(responseText),
-      );
+      logger.error({ rawResponse: truncate(responseText) }, "[gemini] exercise-parse JSON.parse failed. Raw response:");
       throw new Error("AI returned invalid JSON for exercise parsing");
     }
 
@@ -339,14 +333,8 @@ and use the matching name as customLabel: ${customExerciseNames.join(", ")}`;
     const zodResult = z.array(parsedExerciseSchema).safeParse(rawArray);
 
     if (!zodResult.success) {
-      console.error(
-        "[gemini] exercise-parse Zod validation failed:",
-        zodResult.error.issues,
-      );
-      console.error(
-        "[gemini] Raw parsed data:",
-        truncate(JSON.stringify(rawArray)),
-      );
+      logger.error({ issues: zodResult.error.issues }, "[gemini] exercise-parse Zod validation failed:");
+      logger.error({ rawData: truncate(JSON.stringify(rawArray)) }, "[gemini] Raw parsed data:");
       throw new Error("AI returned malformed exercise data");
     }
 
