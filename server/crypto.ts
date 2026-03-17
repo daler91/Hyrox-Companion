@@ -1,15 +1,16 @@
+import { env } from "./env";
 import crypto from "node:crypto";
 
 const ALGORITHM = "aes-256-gcm";
 
 // Ensure the key is exactly 32 bytes for AES-256
 const getValidatedKey = () => {
-  if (!process.env.ENCRYPTION_KEY) {
+  if (!env.ENCRYPTION_KEY) {
     throw new Error(
       "ENCRYPTION_KEY environment variable is required for encrypting tokens at rest",
     );
   }
-  const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
+  const ENCRYPTION_KEY = env.ENCRYPTION_KEY;
 
   let keyBuffer = Buffer.from(ENCRYPTION_KEY, "hex");
   if (keyBuffer.length !== 32) {

@@ -1,3 +1,4 @@
+import { env } from "./env";
 import { logger } from "./logger";
 import { type ParsedExercise, exerciseSetSchema } from "@shared/schema";
 import { GoogleGenAI } from "@google/genai";
@@ -15,7 +16,7 @@ const GEMINI_MODEL = "gemini-3-flash-preview";
 let _ai: GoogleGenAI | null = null;
 function getAiClient(): GoogleGenAI {
   if (!_ai) {
-    _ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+    _ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY || "" });
   }
   return _ai;
 }

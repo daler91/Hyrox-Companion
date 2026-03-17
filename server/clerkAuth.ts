@@ -1,3 +1,4 @@
+import { env } from "./env";
 import { logger } from "./logger";
 import { clerkMiddleware, getAuth, clerkClient } from "@clerk/express";
 import type { Express, RequestHandler } from "express";
@@ -9,11 +10,11 @@ import { eq } from "drizzle-orm";
 export const DEV_USER_ID = "dev-user";
 
 function isDev(): boolean {
-  return process.env.NODE_ENV === "development";
+  return env.NODE_ENV === "development";
 }
 
 function hasClerkKeys(): boolean {
-  return !!(process.env.CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY);
+  return !!(env.CLERK_PUBLISHABLE_KEY && env.CLERK_SECRET_KEY);
 }
 
 async function ensureDevUserExists(): Promise<void> {

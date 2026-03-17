@@ -1,3 +1,4 @@
+import { env } from "../../env";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import express from "express";
 import request from "supertest";
@@ -26,7 +27,7 @@ describe("Email Routes", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.CRON_SECRET = "super-secret";
+    env.CRON_SECRET = "super-secret";
     app = express();
     app.use(express.json());
     app.use(emailRouter);
@@ -34,7 +35,7 @@ describe("Email Routes", () => {
 
   describe("GET /api/cron/emails", () => {
     it("should return 401 if CRON_SECRET is not set", async () => {
-      delete process.env.CRON_SECRET;
+      env.CRON_SECRET = undefined;
       const response = await request(app)
         .get("/api/cron/emails")
         .set("x-cron-secret", "any-secret");

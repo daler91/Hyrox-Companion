@@ -1,3 +1,4 @@
+import { env } from "./env";
 import { logger } from "./logger";
 import type { Express, Response } from "express";
 import crypto from "node:crypto";
@@ -8,13 +9,13 @@ import { mapStravaActivityToWorkout, type StravaActivity } from "./services/stra
 import { getUserId } from "./types";
 import { rateLimiter } from "./routeUtils";
 
-const STRAVA_CLIENT_ID = process.env.STRAVA_CLIENT_ID;
-const STRAVA_CLIENT_SECRET = process.env.STRAVA_CLIENT_SECRET;
-const STRAVA_REDIRECT_URI = process.env.REPLIT_DOMAINS
-  ? `https://${process.env.REPLIT_DOMAINS.split(",")[0]}/api/strava/callback`
+const STRAVA_CLIENT_ID = env.STRAVA_CLIENT_ID;
+const STRAVA_CLIENT_SECRET = env.STRAVA_CLIENT_SECRET;
+const STRAVA_REDIRECT_URI = env.REPLIT_DOMAINS
+  ? `https://${env.REPLIT_DOMAINS.split(",")[0]}/api/strava/callback`
   : "http://localhost:5000/api/strava/callback";
 
-const STATE_SECRET = process.env.CLERK_SECRET_KEY || crypto.randomBytes(32).toString("hex");
+const STATE_SECRET = env.CLERK_SECRET_KEY || crypto.randomBytes(32).toString("hex");
 
 const stravaAuthLimiter = rateLimiter("stravaAuth", 20, 15 * 60 * 1000); // 20 requests per 15 minutes
 const STATE_MAX_AGE_MS = 10 * 60 * 1000;

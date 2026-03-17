@@ -1,3 +1,4 @@
+import { env } from "./env";
 import { logger } from "./logger";
 import { Resend } from "resend";
 import type { User } from "@shared/schema";
@@ -11,12 +12,12 @@ import {
 export * from "./emailTemplates";
 
 function getResendClient() {
-  const apiKey = process.env.RESEND_API_KEY;
+  const apiKey = env.RESEND_API_KEY;
   if (!apiKey) {
     throw new Error("RESEND_API_KEY environment variable is not set");
   }
   const fromEmail =
-    process.env.RESEND_FROM_EMAIL || "HyroxTracker <noreply@resend.dev>";
+    env.RESEND_FROM_EMAIL || "HyroxTracker <noreply@resend.dev>";
   return {
     client: new Resend(apiKey),
     fromEmail,
