@@ -1,7 +1,6 @@
 import { logger } from "./logger";
-import { type ParsedExercise, exerciseSetSchema } from "@shared/schema";
-import { type ChatMessage } from "@shared/schema";
-export type { ChatMessage };
+import { type ParsedExercise, exerciseSetSchema, type ChatMessage } from "@shared/schema";
+export type { ChatMessage } from "@shared/schema";
 import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
 import {
