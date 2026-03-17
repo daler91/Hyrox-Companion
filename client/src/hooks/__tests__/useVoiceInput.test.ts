@@ -49,8 +49,7 @@ async function startHook(onResult: ReturnType<typeof vi.fn>) {
     await vi.advanceTimersByTimeAsync(10);
   });
 
-  const recognition =
-    mockRecognitionInstances[mockRecognitionInstances.length - 1];
+  const recognition = mockRecognitionInstances.at(-1);
   return { hook, recognition };
 }
 
@@ -77,15 +76,17 @@ describe("useVoiceInput dedup", () => {
     vi.restoreAllMocks();
   });
 
+  function triggerResult(recognition: any, transcript: string, isFinal = true) {
+    act(() => {
+      recognition.onresult(makeResultEvent([{ transcript, isFinal }]));
+    });
+  }
+
   it("emits a final transcript once", async () => {
     const onResult = vi.fn();
     const { recognition } = await startHook(onResult);
 
-    act(() => {
-      recognition.onresult(
-        makeResultEvent([{ transcript: "house", isFinal: true }]),
-      );
-    });
+    triggerResult(recognition, "house", true);
 
     expect(onResult).toHaveBeenCalledTimes(1);
     expect(onResult).toHaveBeenCalledWith("house");
@@ -95,23 +96,11 @@ describe("useVoiceInput dedup", () => {
     const onResult = vi.fn();
     const { recognition } = await startHook(onResult);
 
-    act(() => {
-      recognition.onresult(
-        makeResultEvent([{ transcript: "house", isFinal: true }]),
-      );
-    });
+    triggerResult(recognition, "house", true);
 
-    act(() => {
-      recognition.onresult(
-        makeResultEvent([{ transcript: "house", isFinal: true }]),
-      );
-    });
+    triggerResult(recognition, "house", true);
 
-    act(() => {
-      recognition.onresult(
-        makeResultEvent([{ transcript: "house", isFinal: true }]),
-      );
-    });
+    triggerResult(recognition, "house", true);
 
     expect(onResult).toHaveBeenCalledTimes(1);
   });
@@ -120,21 +109,13 @@ describe("useVoiceInput dedup", () => {
     const onResult = vi.fn();
     const { recognition } = await startHook(onResult);
 
-    act(() => {
-      recognition.onresult(
-        makeResultEvent([{ transcript: "house", isFinal: true }]),
-      );
-    });
+    triggerResult(recognition, "house", true);
 
     expect(onResult).toHaveBeenCalledTimes(1);
 
     vi.advanceTimersByTime(3100);
 
-    act(() => {
-      recognition.onresult(
-        makeResultEvent([{ transcript: "house", isFinal: true }]),
-      );
-    });
+    triggerResult(recognition, "house", true);
 
     expect(onResult).toHaveBeenCalledTimes(2);
   });
@@ -143,17 +124,9 @@ describe("useVoiceInput dedup", () => {
     const onResult = vi.fn();
     const { recognition } = await startHook(onResult);
 
-    act(() => {
-      recognition.onresult(
-        makeResultEvent([{ transcript: "House", isFinal: true }]),
-      );
-    });
+    triggerResult(recognition, "House", true);
 
-    act(() => {
-      recognition.onresult(
-        makeResultEvent([{ transcript: "house", isFinal: true }]),
-      );
-    });
+    triggerResult(recognition, "house", true);
 
     expect(onResult).toHaveBeenCalledTimes(1);
   });
@@ -162,14 +135,9 @@ describe("useVoiceInput dedup", () => {
     const onResult = vi.fn();
     const { hook } = await startHook(onResult);
 
-    let recognition =
-      mockRecognitionInstances[mockRecognitionInstances.length - 1];
+    let recognition = mockRecognitionInstances.at(-1);
 
-    act(() => {
-      recognition.onresult(
-        makeResultEvent([{ transcript: "house", isFinal: true }]),
-      );
-    });
+    triggerResult(recognition, "house", true);
 
     expect(onResult).toHaveBeenCalledTimes(1);
 
@@ -182,13 +150,9 @@ describe("useVoiceInput dedup", () => {
       await vi.advanceTimersByTimeAsync(10);
     });
 
-    recognition = mockRecognitionInstances[mockRecognitionInstances.length - 1];
+    recognition = mockRecognitionInstances.at(-1);
 
-    act(() => {
-      recognition.onresult(
-        makeResultEvent([{ transcript: "house", isFinal: true }]),
-      );
-    });
+    triggerResult(recognition, "house", true);
 
     expect(onResult).toHaveBeenCalledTimes(2);
   });
@@ -197,11 +161,7 @@ describe("useVoiceInput dedup", () => {
     const onResult = vi.fn();
     const { recognition } = await startHook(onResult);
 
-    act(() => {
-      recognition.onresult(
-        makeResultEvent([{ transcript: "house", isFinal: true }]),
-      );
-    });
+    triggerResult(recognition, "house", true);
 
     act(() => {
       recognition.onresult(
