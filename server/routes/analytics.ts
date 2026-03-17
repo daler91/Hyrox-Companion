@@ -35,7 +35,7 @@ export function validDate(val: unknown): string | undefined {
   return parsed.success ? parsed.data : undefined;
 }
 
-router.get("/api/personal-records", isAuthenticated, async (req: Request, res) => {
+router.get("/api/v1/personal-records", isAuthenticated, async (req: Request, res) => {
   try {
     const userId = getUserId(req);
     const from = validDate(req.query.from);
@@ -51,7 +51,7 @@ router.get("/api/personal-records", isAuthenticated, async (req: Request, res) =
   }
 });
 
-router.get("/api/exercise-analytics", isAuthenticated, async (req: Request, res) => {
+router.get("/api/v1/exercise-analytics", isAuthenticated, async (req: Request, res) => {
   try {
     const userId = getUserId(req);
     const from = validDate(req.query.from);

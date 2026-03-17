@@ -61,18 +61,18 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
 
   const prefsMutation = useMutation({
     mutationFn: async (prefs: { weightUnit: string; distanceUnit: string }) =>
-      (await apiRequest("PATCH", "/api/preferences", prefs)).json(),
+      (await apiRequest("PATCH", "/api/v1/preferences", prefs)).json(),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/preferences"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/preferences"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/auth/user"] });
     },
   });
 
   const sampleMutation = useMutation({
     mutationFn: async () =>
-      (await apiRequest("POST", "/api/plans/sample", {})).json(),
+      (await apiRequest("POST", "/api/v1/plans/sample", {})).json(),
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/plans"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/plans"] });
       setCreatedPlanId(data.id);
       setStep("schedule");
     },
@@ -83,13 +83,13 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
   const scheduleMutation = useMutation({
     mutationFn: async ({ planId, date }: { planId: string; date: string }) =>
       (
-        await apiRequest("POST", `/api/plans/${planId}/schedule`, {
+        await apiRequest("POST", `/api/v1/plans/${planId}/schedule`, {
           startDate: date,
         })
       ).json(),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/plans"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/timeline"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/plans"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] });
       toast({
         title: "Your training plan is ready!",
         description: "Workouts have been scheduled on your timeline.",

@@ -34,7 +34,7 @@ export function StravaSection({
 
   const connectStravaMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("GET", "/api/strava/auth");
+      const response = await apiRequest("GET", "/api/v1/strava/auth");
       return response.json();
     },
     onSuccess: (data: { authUrl: string }) => {
@@ -51,10 +51,10 @@ export function StravaSection({
 
   const disconnectStravaMutation = useMutation({
     mutationFn: async () => {
-      await apiRequest("DELETE", "/api/strava/disconnect");
+      await apiRequest("DELETE", "/api/v1/strava/disconnect");
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/strava/status"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/strava/status"] });
       toast({
         title: "Strava Disconnected",
         description: "Your Strava account has been disconnected.",
@@ -71,13 +71,13 @@ export function StravaSection({
 
   const syncStravaMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/strava/sync");
+      const response = await apiRequest("POST", "/api/v1/strava/sync");
       return response.json();
     },
     onSuccess: (data: { imported: number; skipped: number; total: number }) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/strava/status"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/timeline"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/workouts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/strava/status"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/workouts"] });
       toast({
         title: "Sync Complete",
         description: `Imported ${data.imported} new activities. ${data.skipped} already existed.`,

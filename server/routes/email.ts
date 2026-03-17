@@ -9,7 +9,7 @@ import { getUserId } from "../types";
 
 const router = Router();
 
-router.post("/api/emails/check", isAuthenticated, async (req: Request, res: Response) => {
+router.post("/api/v1/emails/check", isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
     const user = await storage.getUser(userId);
@@ -24,7 +24,7 @@ router.post("/api/emails/check", isAuthenticated, async (req: Request, res: Resp
   }
 });
 
-router.get("/api/cron/emails", async (req, res) => {
+router.get("/api/v1/cron/emails", async (req, res) => {
   const secret = req.headers["x-cron-secret"] as string;
   const cronSecret = env.CRON_SECRET;
 

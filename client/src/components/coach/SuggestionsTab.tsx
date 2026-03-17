@@ -18,7 +18,7 @@ export function useSuggestions({ timeline, addLocalMessage, saveMessage }: UseSu
 
   const suggestionsMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/timeline/ai-suggestions", {});
+      const res = await apiRequest("POST", "/api/v1/timeline/ai-suggestions", {});
       return res.json();
     },
     onSuccess: (data: { suggestions: Suggestion[] }) => {
@@ -85,14 +85,14 @@ export function useSuggestions({ timeline, addLocalMessage, saveMessage }: UseSu
         newValue = suggestion.recommendation;
       }
 
-      await apiRequest("PATCH", `/api/plans/days/${suggestion.workoutId}`, {
+      await apiRequest("PATCH", `/api/v1/plans/days/${suggestion.workoutId}`, {
         [suggestion.targetField]: newValue,
       });
 
-      queryClient.invalidateQueries({ queryKey: ["/api/timeline"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] });
       if (suggestion.action === "replace" && suggestion.targetField === "mainWorkout") {
-        queryClient.invalidateQueries({ queryKey: ["/api/exercise-analytics"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/personal-records"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/v1/exercise-analytics"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/v1/personal-records"] });
       }
       setPendingSuggestions(prev => prev.filter(s => s.workoutId !== suggestion.workoutId));
       

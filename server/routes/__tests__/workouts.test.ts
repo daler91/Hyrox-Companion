@@ -58,7 +58,7 @@ describe("Workouts Routes", () => {
 
 
       const response = await request(app)
-        .post("/api/workouts")
+        .post("/api/v1/workouts")
         .send({
           date: "2024-03-10",
           notes: "Test notes",
@@ -86,7 +86,7 @@ describe("Workouts Routes", () => {
       ];
       storage.listWorkoutLogs.mockResolvedValue(mockLogs);
 
-      const response = await request(app).get("/api/workouts");
+      const response = await request(app).get("/api/v1/workouts");
 
       expect(response.status).toBe(200);
       expect(storage.listWorkoutLogs).toHaveBeenCalledWith("test_user_id");
@@ -99,7 +99,7 @@ describe("Workouts Routes", () => {
       const { storage } = mockStorage as any;
       storage.listWorkoutLogs.mockRejectedValue(new Error("Database error"));
 
-      const response = await request(app).get("/api/workouts");
+      const response = await request(app).get("/api/v1/workouts");
 
       expect(response.status).toBe(500);
       expect(response.body).toEqual({ error: "Failed to list workouts" });

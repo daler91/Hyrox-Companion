@@ -110,7 +110,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   }, [messages]);
 
   const { data: chatHistory = [], isLoading: historyLoading } = useQuery<DBChatMessage[]>({
-    queryKey: ["/api/chat/history"],
+    queryKey: ["/api/v1/chat/history"],
   });
 
   useEffect(() => {
@@ -181,7 +181,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         };
         setMessages((prev) => [...prev, placeholderMessage]);
 
-        const response = await apiRequest("POST", "/api/chat/stream", {
+        const response = await apiRequest("POST", "/api/v1/chat/stream", {
           message: content,
           history
         });
@@ -199,7 +199,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
           saveMessageMutation.mutate({ role: "assistant", content: fullResponse });
         }
       } else {
-        const response = await apiRequest("POST", "/api/chat", { 
+        const response = await apiRequest("POST", "/api/v1/chat", {
           message: content, 
           history 
         });

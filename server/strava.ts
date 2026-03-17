@@ -117,7 +117,7 @@ async function getValidAccessToken(userId: string): Promise<string | null> {
 }
 
 export function registerStravaRoutes(app: Express): void {
-  app.get("/api/strava/status", isAuthenticated, async (req: any, res: Response) => {
+  app.get("/api/v1/strava/status", isAuthenticated, async (req: any, res: Response) => {
     try {
       const userId = getUserId(req);
       const connection = await storage.getStravaConnection(userId);
@@ -137,7 +137,7 @@ export function registerStravaRoutes(app: Express): void {
     }
   });
 
-  app.get("/api/strava/auth", isAuthenticated, stravaAuthLimiter, async (req: any, res: Response) => {
+  app.get("/api/v1/strava/auth", isAuthenticated, stravaAuthLimiter, async (req: any, res: Response) => {
     if (!STRAVA_CLIENT_ID) {
       return res.status(500).json({ error: "Strava integration not configured" });
     }
@@ -157,7 +157,7 @@ export function registerStravaRoutes(app: Express): void {
     res.json({ authUrl: authUrl.toString() });
   });
 
-  app.get("/api/strava/callback", stravaAuthLimiter, async (req: any, res: Response) => {
+  app.get("/api/v1/strava/callback", stravaAuthLimiter, async (req: any, res: Response) => {
     const { code, state, error: stravaError } = req.query;
 
     if (stravaError) {
@@ -213,7 +213,7 @@ export function registerStravaRoutes(app: Express): void {
     }
   });
 
-  app.delete("/api/strava/disconnect", isAuthenticated, async (req: any, res: Response) => {
+  app.delete("/api/v1/strava/disconnect", isAuthenticated, async (req: any, res: Response) => {
     try {
       const userId = getUserId(req);
       await storage.deleteStravaConnection(userId);
@@ -224,7 +224,7 @@ export function registerStravaRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/strava/sync", isAuthenticated, async (req: any, res: Response) => {
+  app.post("/api/v1/strava/sync", isAuthenticated, async (req: any, res: Response) => {
     try {
       const userId = getUserId(req);
       const accessToken = await getValidAccessToken(userId);

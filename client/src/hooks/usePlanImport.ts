@@ -20,11 +20,11 @@ export function usePlanImport({ onPlanScheduled }: UsePlanImportOptions = {}) {
 
   const importMutation = useMutation({
     mutationFn: async (data: { csvContent: string; fileName: string }) => {
-      const response = await apiRequest("POST", "/api/plans/import", data);
+      const response = await apiRequest("POST", "/api/v1/plans/import", data);
       return response.json();
     },
     onSuccess: (plan) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/plans"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/plans"] });
       setSchedulingPlanId(plan.id);
       toast({ title: "Plan imported! Now set a start date." });
     },
@@ -35,11 +35,11 @@ export function usePlanImport({ onPlanScheduled }: UsePlanImportOptions = {}) {
 
   const samplePlanMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/plans/sample", {});
+      const response = await apiRequest("POST", "/api/v1/plans/sample", {});
       return response.json();
     },
     onSuccess: (plan) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/plans"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/plans"] });
       setSchedulingPlanId(plan.id);
       toast({ title: "Sample plan created! Now set a start date." });
     },
@@ -50,11 +50,11 @@ export function usePlanImport({ onPlanScheduled }: UsePlanImportOptions = {}) {
 
   const renamePlanMutation = useMutation({
     mutationFn: async ({ planId, name }: { planId: string; name: string }) => {
-      await apiRequest("PATCH", `/api/plans/${planId}`, { name });
+      await apiRequest("PATCH", `/api/v1/plans/${planId}`, { name });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/plans"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/timeline"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/plans"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] });
       toast({ title: "Plan renamed" });
     },
     onError: () => {
@@ -64,12 +64,12 @@ export function usePlanImport({ onPlanScheduled }: UsePlanImportOptions = {}) {
 
   const schedulePlanMutation = useMutation({
     mutationFn: async ({ planId, startDate: sd }: { planId: string; startDate: string }) => {
-      await apiRequest("POST", `/api/plans/${planId}/schedule`, { startDate: sd });
+      await apiRequest("POST", `/api/v1/plans/${planId}/schedule`, { startDate: sd });
     },
     onSuccess: () => {
       const planIdToSelect = schedulingPlanId;
-      queryClient.invalidateQueries({ queryKey: ["/api/timeline", planIdToSelect] });
-      queryClient.invalidateQueries({ queryKey: ["/api/plans"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline", planIdToSelect] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/plans"] });
       if (planIdToSelect) {
         onPlanScheduled?.(planIdToSelect);
       }

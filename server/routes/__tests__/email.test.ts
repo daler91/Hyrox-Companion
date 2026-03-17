@@ -37,7 +37,7 @@ describe("Email Routes", () => {
     it("should return 401 if CRON_SECRET is not set", async () => {
       env.CRON_SECRET = undefined;
       const response = await request(app)
-        .get("/api/cron/emails")
+        .get("/api/v1/cron/emails")
         .set("x-cron-secret", "any-secret");
 
       expect(response.status).toBe(401);
@@ -46,7 +46,7 @@ describe("Email Routes", () => {
 
     it("should return 401 if secret header is missing", async () => {
       const response = await request(app)
-        .get("/api/cron/emails");
+        .get("/api/v1/cron/emails");
 
       expect(response.status).toBe(401);
       expect(response.body).toEqual({ error: "Unauthorized" });
@@ -54,7 +54,7 @@ describe("Email Routes", () => {
 
     it("should return 401 if secret is incorrect", async () => {
       const response = await request(app)
-        .get("/api/cron/emails")
+        .get("/api/v1/cron/emails")
         .set("x-cron-secret", "wrong-secret");
 
       expect(response.status).toBe(401);
@@ -67,7 +67,7 @@ describe("Email Routes", () => {
       vi.mocked(runEmailCronJob).mockResolvedValue(mockResult);
 
       const response = await request(app)
-        .get("/api/cron/emails")
+        .get("/api/v1/cron/emails")
         .set("x-cron-secret", "super-secret");
 
       expect(response.status).toBe(200);
@@ -80,7 +80,7 @@ describe("Email Routes", () => {
       vi.mocked(runEmailCronJob).mockRejectedValue(new Error("Cron failed"));
 
       const response = await request(app)
-        .get("/api/cron/emails")
+        .get("/api/v1/cron/emails")
         .set("x-cron-secret", "super-secret");
 
       expect(response.status).toBe(500);

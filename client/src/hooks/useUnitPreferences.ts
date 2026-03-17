@@ -16,7 +16,7 @@ interface UnitPreferences {
 
 export function useUnitPreferences(): UnitPreferences {
   const { data: preferences, isLoading } = useQuery<Preferences>({
-    queryKey: ["/api/preferences"],
+    queryKey: ["/api/v1/preferences"],
   });
 
   const weightUnit = (preferences?.weightUnit || "kg") as "kg" | "lbs";

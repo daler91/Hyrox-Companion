@@ -115,11 +115,11 @@ describe("Analytics Routes", () => {
     });
   };
 
-  testEndpoint("/api/personal-records", calculatePersonalRecords, { Squat: { weight: "100", reps: 10, estimated1RM: 133 } });
-  testEndpoint("/api/exercise-analytics", calculateExerciseAnalytics, { "Bench Press": { totalVolume: 1000, setsCount: 1, history: [] } });
+  testEndpoint("/api/v1/personal-records", calculatePersonalRecords, { Squat: { weight: "100", reps: 10, estimated1RM: 133 } });
+  testEndpoint("/api/v1/exercise-analytics", calculateExerciseAnalytics, { "Bench Press": { totalVolume: 1000, setsCount: 1, history: [] } });
 
   describe("getExerciseSetsCoalesced caching logic", () => {
-    const makeRequest = () => request(app).get("/api/personal-records");
+    const makeRequest = () => request(app).get("/api/v1/personal-records");
 
     it("should coalesce concurrent requests to the database", async () => {
       let resolvePromise: (value: any) => void;

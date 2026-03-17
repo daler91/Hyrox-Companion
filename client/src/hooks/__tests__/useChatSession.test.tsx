@@ -172,7 +172,7 @@ describe('useChatSession', () => {
       result.current.clearHistory();
     });
 
-    expect(queryClient.queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/chat/history"] });
+    expect(queryClient.queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/v1/chat/history"] });
     expect(result.current.messages).toHaveLength(1);
     expect(result.current.messages[0].id).toBe('welcome');
   });

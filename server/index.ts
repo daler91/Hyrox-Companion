@@ -101,7 +101,7 @@ app.use(
 
 app.use(express.urlencoded({ extended: false }));
 
-app.get("/api/health", (_req, res) => {
+app.get("/api/v1/health", (_req, res) => {
   res.json({ status: "ok", timestamp: Date.now() });
 });
 
@@ -128,7 +128,7 @@ app.use(pinoHttp({
     };
   },
   autoLogging: {
-    ignore: (req) => !req.url?.startsWith('/api')
+    ignore: (req) => !req.url?.startsWith('/api/v1')
   }
 }));
 
