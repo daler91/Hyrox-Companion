@@ -8,7 +8,7 @@ import {
   type WorkoutStatus,
 } from "@shared/schema";
 import { db } from "../db";
-import { eq, and, isNull, inArray, sql, desc } from "drizzle-orm";
+import { eq, and, or, isNull, inArray, sql, desc } from "drizzle-orm";
 import type { WorkoutStorage } from "./workouts";
 import { toDateStr } from "../types";
 
@@ -139,16 +139,25 @@ export class TimelineStorage {
 
     const planDayIds = scheduledDays.map(r => r.planDay.id);
 
-    const [linkedWorkouts, standaloneWorkouts] = await Promise.all([
-      planDayIds.length > 0
-        ? db.select().from(workoutLogs).where(
-            and(eq(workoutLogs.userId, userId), inArray(workoutLogs.planDayId, planDayIds))
-          )
-        : Promise.resolve([]),
-      db.select().from(workoutLogs).where(
-        and(eq(workoutLogs.userId, userId), isNull(workoutLogs.planDayId))
-      ),
-    ]);
+    const queryCondition = planDayIds.length > 0
+      ? or(isNull(workoutLogs.planDayId), inArray(workoutLogs.planDayId, planDayIds))
+      : isNull(workoutLogs.planDayId);
+
+    const allWorkouts = await db
+      .select()
+      .from(workoutLogs)
+      .where(and(eq(workoutLogs.userId, userId), queryCondition));
+
+    const linkedWorkouts: WorkoutLog[] = [];
+    const standaloneWorkouts: WorkoutLog[] = [];
+
+    for (const log of allWorkouts) {
+      if (log.planDayId) {
+        linkedWorkouts.push(log);
+      } else {
+        standaloneWorkouts.push(log);
+      }
+    }
 
     const workoutsByPlanDayId = new Map<string, WorkoutLog>();
     for (const log of linkedWorkouts) {
