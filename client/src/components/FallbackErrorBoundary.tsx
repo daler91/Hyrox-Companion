@@ -1,9 +1,15 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle } from "lucide-react";
-import type { FallbackRender } from "@sentry/react";
 
-export function FallbackErrorBoundary({ error, resetError }: { error: unknown; resetError: () => void }) {
+export interface FallbackErrorBoundaryProps {
+  error: unknown;
+  resetError: () => void;
+}
+
+export function FallbackErrorBoundary({ error, resetError }: FallbackErrorBoundaryProps) {
+  const errorMessage = error instanceof Error ? error.toString() : String(error);
+
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-gray-50 p-4">
       <Card className="w-full max-w-md">
@@ -17,13 +23,13 @@ export function FallbackErrorBoundary({ error, resetError }: { error: unknown; r
             <Button onClick={resetError} variant="default">
               Try again
             </Button>
-            <Button onClick={() => window.location.reload()} variant="outline">
+            <Button onClick={() => globalThis.window.location.reload()} variant="outline">
               Refresh Page
             </Button>
           </div>
           {process.env.NODE_ENV !== "production" && error !== undefined && error !== null && (
             <div className="mt-6 w-full text-left bg-gray-100 p-4 rounded-md overflow-auto max-h-40">
-              <p className="text-xs font-mono text-gray-800 break-all">{error instanceof Error ? error.toString() : String(error)}</p>
+              <p className="text-xs font-mono text-gray-800 break-all">{errorMessage}</p>
             </div>
           )}
         </CardContent>
