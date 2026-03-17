@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { format, addDays } from "date-fns";
 import {
@@ -58,10 +58,6 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
   const [selectedGoal, setSelectedGoal] = useState("first");
   const [createdPlanId, setCreatedPlanId] = useState<string | null>(null);
   const [startDate, setStartDate] = useState<Date>(addDays(new Date(), 1));
-  const stepIds = useMemo(
-    () => Array.from({ length: 5 }, () => crypto.randomUUID()),
-    [],
-  );
 
   const prefsMutation = useMutation({
     mutationFn: async (prefs: { weightUnit: string; distanceUnit: string }) =>
@@ -195,14 +191,14 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
           aria-valuemax={total}
           aria-label={`Step ${idx + 1} of ${total}`}
         >
-          {stepIds.slice(0, total).map((id, i) => {
+          {STEPS.slice(0, total).map((stepName, i) => {
             let bgColor = "bg-muted";
             if (i <= idx) {
               bgColor = "bg-primary";
             }
             return (
               <div
-                key={id}
+                key={stepName}
                 className={`h-1 flex-1 rounded-full transition-colors ${bgColor}`}
               />
             );
