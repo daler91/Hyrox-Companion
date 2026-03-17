@@ -4,11 +4,15 @@ import {
   buildWeeklySummaryEmail,
   buildMissedWorkoutEmail,
   type WeeklySummaryData,
-  type MissedWorkoutData
+  type MissedWorkoutData,
 } from "./emailTemplates";
 
-export { buildWeeklySummaryEmail, buildMissedWorkoutEmail };
-export type { WeeklySummaryData, MissedWorkoutData };
+export {
+  buildWeeklySummaryEmail,
+  buildMissedWorkoutEmail,
+  type WeeklySummaryData,
+  type MissedWorkoutData,
+};
 
 function getResendClient() {
   const apiKey = process.env.RESEND_API_KEY;
