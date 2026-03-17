@@ -218,9 +218,6 @@ importers:
       '@types/pg':
         specifier: ^8.18.0
         version: 8.18.0
-      '@types/pino-http':
-        specifier: ^6.1.0
-        version: 6.1.0
       '@types/react':
         specifier: ^18.3.28
         version: 18.3.28
@@ -2024,10 +2021,6 @@ packages:
 
   '@types/pg@8.18.0':
     resolution: {integrity: sha512-gT+oueVQkqnj6ajGJXblFR4iavIXWsGAFCk3dP4Kki5+a9R4NMt0JARdk6s8cUKcfUoqP5dAtDSLU8xYUTFV+Q==}
-
-  '@types/pino-http@6.1.0':
-    resolution: {integrity: sha512-rjPOSk2yI0714Pi8LdjIhDynXWqOvswmjRiTHj/1TOh1+0R26aKJ8vAVZRc4Ky5dQ5M5Bly1vrV/Klew6lThkA==}
-    deprecated: This is a stub types definition. pino-http provides its own type definitions, so you do not need this installed.
 
   '@types/prop-types@15.7.15':
     resolution: {integrity: sha512-F6bEyamV9jKGAFBEmlQnesRPGOQqS2+Uwi0Em15xenOxHaf2hv6L8YCVn3rPdPJOiJfPiCnLIRyvwVaqMY3MIw==}
@@ -6323,10 +6316,6 @@ snapshots:
       '@types/node': 20.16.11
       pg-protocol: 1.13.0
       pg-types: 2.2.0
-
-  '@types/pino-http@6.1.0':
-    dependencies:
-      pino-http: 11.0.0
 
   '@types/prop-types@15.7.15': {}
 

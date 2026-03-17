@@ -3,6 +3,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import compression from "compression";
 import helmet from "helmet";
 import { logger } from "./logger";
+import { getUserId } from "./types";
 import pinoHttp from "pino-http";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
@@ -108,11 +109,15 @@ app.get("/api/health", (_req, res) => {
 app.use(pinoHttp({
   logger,
   customProps: (req, res) => {
-    // Attempt to extract Clerk's auth object if it exists
-    const auth = (req as any).auth;
+    let userId = 'anonymous';
+    try {
+      userId = getUserId(req as Request);
+    } catch (e) {
+      // Ignored: request is not authenticated
+    }
     return {
       context: 'http',
-      userId: auth?.userId || 'anonymous'
+      userId
     };
   },
   autoLogging: {
