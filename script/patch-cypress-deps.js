@@ -35,7 +35,7 @@ try {
     if (fs.existsSync(serializeJsPath)) depsToInstall.push('serialize-javascript@^7.0.3');
     if (fs.existsSync(engineIoPath)) depsToInstall.push('engine.io@^5.2.1');
     if (fs.existsSync(flattedPath)) depsToInstall.push('flatted@^3.4.0');
-    if (fs.existsSync(wsPath)) depsToInstall.push('ws@^7.5.10');
+    if (fs.existsSync(wsPath)) depsToInstall.push('ws@^8.17.1');
     if (fs.existsSync(axiosPath)) depsToInstall.push('axios@^1.7.4');
 
     if (depsToInstall.length > 0) {
@@ -53,8 +53,25 @@ try {
           if (fs.existsSync(sourceEngineIo)) {
              fs.cpSync(sourceEngineIo, engineIoPath, { recursive: true });
           }
+          const sourceWs = path.join(sourceDir, 'ws');
+          if (fs.existsSync(sourceWs)) {
+             const engineIoWsPath = path.join(engineIoPath, 'node_modules', 'ws');
+             fs.cpSync(sourceWs, engineIoWsPath, { recursive: true });
+          }
         }
 
+
+        // Check for an additional engine.io location directly in appPath/node_modules/engine.io
+        const altEngineIoPath = path.join(appPath, 'node_modules', 'engine.io');
+        if (fs.existsSync(altEngineIoPath)) {
+          const sourceWs = path.join(sourceDir, 'ws');
+          if (fs.existsSync(sourceWs)) {
+             const altEngineIoWsPath = path.join(altEngineIoPath, 'node_modules', 'ws');
+             if (fs.existsSync(path.join(altEngineIoPath, 'node_modules'))) {
+               fs.cpSync(sourceWs, altEngineIoWsPath, { recursive: true });
+             }
+          }
+        }
         // Copy axios specifically to its nested location
         if (fs.existsSync(axiosPath)) {
           const sourceAxios = path.join(sourceDir, 'axios');
