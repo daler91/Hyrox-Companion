@@ -285,10 +285,13 @@ async function handleStravaSync(req: any, res: Response) {
   }
 }
 
+const stravaStatusLimiter = rateLimiter("stravaStatus", 50, 15 * 60 * 1000);
+const stravaActionLimiter = rateLimiter("stravaAction", 20, 15 * 60 * 1000);
+
 export function registerStravaRoutes(app: Express): void {
-  app.get("/api/strava/status", isAuthenticated, handleStravaStatus);
+  app.get("/api/strava/status", isAuthenticated, stravaStatusLimiter, handleStravaStatus);
   app.get("/api/strava/auth", isAuthenticated, stravaAuthLimiter, handleStravaAuth);
   app.get("/api/strava/callback", stravaAuthLimiter, handleStravaCallback);
-  app.delete("/api/strava/disconnect", isAuthenticated, handleStravaDisconnect);
-  app.post("/api/strava/sync", isAuthenticated, handleStravaSync);
+  app.delete("/api/strava/disconnect", isAuthenticated, stravaActionLimiter, handleStravaDisconnect);
+  app.post("/api/strava/sync", isAuthenticated, stravaActionLimiter, handleStravaSync);
 }
