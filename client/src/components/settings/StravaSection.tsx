@@ -1,4 +1,10 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -20,7 +26,10 @@ interface StravaSectionProps {
   readonly stravaLoading: boolean;
 }
 
-export function StravaSection({ stravaStatus, stravaLoading }: StravaSectionProps) {
+export function StravaSection({
+  stravaStatus,
+  stravaLoading,
+}: StravaSectionProps) {
   const { toast } = useToast();
 
   const connectStravaMutation = useMutation({
@@ -83,6 +92,15 @@ export function StravaSection({ stravaStatus, stravaLoading }: StravaSectionProp
     },
   });
 
+  let statusText = "Import activities from Strava";
+  if (stravaStatus?.connected) {
+    if (stravaStatus.lastSyncedAt) {
+      statusText = `Last synced ${formatDistanceToNow(new Date(stravaStatus.lastSyncedAt), { addSuffix: true })}`;
+    } else {
+      statusText = "Not yet synced";
+    }
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -90,7 +108,9 @@ export function StravaSection({ stravaStatus, stravaLoading }: StravaSectionProp
           <Link2 className="h-5 w-5" />
           Integrations
         </CardTitle>
-        <CardDescription>Connect external services to sync your workouts</CardDescription>
+        <CardDescription>
+          Connect external services to sync your workouts
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex items-center justify-between gap-4">
@@ -102,16 +122,12 @@ export function StravaSection({ stravaStatus, stravaLoading }: StravaSectionProp
               <div className="flex items-center gap-2">
                 <Label>Strava</Label>
                 {stravaStatus?.connected && (
-                  <Badge variant="outline" className="text-xs">Connected</Badge>
+                  <Badge variant="outline" className="text-xs">
+                    Connected
+                  </Badge>
                 )}
               </div>
-              <p className="text-sm text-muted-foreground">
-                {stravaStatus?.connected 
-                  ? stravaStatus.lastSyncedAt 
-                    ? `Last synced ${formatDistanceToNow(new Date(stravaStatus.lastSyncedAt), { addSuffix: true })}`
-                    : "Not yet synced"
-                  : "Import activities from Strava"}
-              </p>
+              <p className="text-sm text-muted-foreground">{statusText}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">

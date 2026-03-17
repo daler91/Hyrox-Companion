@@ -30,7 +30,7 @@ class MockSpeechRecognition {
 
 function makeResultEvent(
   texts: Array<{ transcript: string; isFinal: boolean }>,
-  resultIndex = 0
+  resultIndex = 0,
 ) {
   const results: any = texts.map((t) => {
     const r: any = [{ transcript: t.transcript }];
@@ -39,6 +39,19 @@ function makeResultEvent(
   });
   results.length = texts.length;
   return { results, resultIndex };
+}
+
+async function startHook(onResult: ReturnType<typeof vi.fn>) {
+  const hook = renderHook(() => useVoiceInput({ onResult }));
+
+  await act(async () => {
+    hook.result.current.startListening();
+    await vi.advanceTimersByTimeAsync(10);
+  });
+
+  const recognition =
+    mockRecognitionInstances[mockRecognitionInstances.length - 1];
+  return { hook, recognition };
 }
 
 describe("useVoiceInput dedup", () => {
@@ -64,25 +77,13 @@ describe("useVoiceInput dedup", () => {
     vi.restoreAllMocks();
   });
 
-  async function startHook(onResult: ReturnType<typeof vi.fn>) {
-    const hook = renderHook(() => useVoiceInput({ onResult }));
-
-    await act(async () => {
-      hook.result.current.startListening();
-      await vi.advanceTimersByTimeAsync(10);
-    });
-
-    const recognition = mockRecognitionInstances[mockRecognitionInstances.length - 1];
-    return { hook, recognition };
-  }
-
   it("emits a final transcript once", async () => {
     const onResult = vi.fn();
     const { recognition } = await startHook(onResult);
 
     act(() => {
       recognition.onresult(
-        makeResultEvent([{ transcript: "house", isFinal: true }])
+        makeResultEvent([{ transcript: "house", isFinal: true }]),
       );
     });
 
@@ -96,19 +97,19 @@ describe("useVoiceInput dedup", () => {
 
     act(() => {
       recognition.onresult(
-        makeResultEvent([{ transcript: "house", isFinal: true }])
+        makeResultEvent([{ transcript: "house", isFinal: true }]),
       );
     });
 
     act(() => {
       recognition.onresult(
-        makeResultEvent([{ transcript: "house", isFinal: true }])
+        makeResultEvent([{ transcript: "house", isFinal: true }]),
       );
     });
 
     act(() => {
       recognition.onresult(
-        makeResultEvent([{ transcript: "house", isFinal: true }])
+        makeResultEvent([{ transcript: "house", isFinal: true }]),
       );
     });
 
@@ -121,7 +122,7 @@ describe("useVoiceInput dedup", () => {
 
     act(() => {
       recognition.onresult(
-        makeResultEvent([{ transcript: "house", isFinal: true }])
+        makeResultEvent([{ transcript: "house", isFinal: true }]),
       );
     });
 
@@ -131,7 +132,7 @@ describe("useVoiceInput dedup", () => {
 
     act(() => {
       recognition.onresult(
-        makeResultEvent([{ transcript: "house", isFinal: true }])
+        makeResultEvent([{ transcript: "house", isFinal: true }]),
       );
     });
 
@@ -144,13 +145,13 @@ describe("useVoiceInput dedup", () => {
 
     act(() => {
       recognition.onresult(
-        makeResultEvent([{ transcript: "House", isFinal: true }])
+        makeResultEvent([{ transcript: "House", isFinal: true }]),
       );
     });
 
     act(() => {
       recognition.onresult(
-        makeResultEvent([{ transcript: "house", isFinal: true }])
+        makeResultEvent([{ transcript: "house", isFinal: true }]),
       );
     });
 
@@ -161,11 +162,12 @@ describe("useVoiceInput dedup", () => {
     const onResult = vi.fn();
     const { hook } = await startHook(onResult);
 
-    let recognition = mockRecognitionInstances[mockRecognitionInstances.length - 1];
+    let recognition =
+      mockRecognitionInstances[mockRecognitionInstances.length - 1];
 
     act(() => {
       recognition.onresult(
-        makeResultEvent([{ transcript: "house", isFinal: true }])
+        makeResultEvent([{ transcript: "house", isFinal: true }]),
       );
     });
 
@@ -184,7 +186,7 @@ describe("useVoiceInput dedup", () => {
 
     act(() => {
       recognition.onresult(
-        makeResultEvent([{ transcript: "house", isFinal: true }])
+        makeResultEvent([{ transcript: "house", isFinal: true }]),
       );
     });
 
@@ -197,7 +199,7 @@ describe("useVoiceInput dedup", () => {
 
     act(() => {
       recognition.onresult(
-        makeResultEvent([{ transcript: "house", isFinal: true }])
+        makeResultEvent([{ transcript: "house", isFinal: true }]),
       );
     });
 
@@ -208,8 +210,8 @@ describe("useVoiceInput dedup", () => {
             { transcript: "house", isFinal: true },
             { transcript: "car", isFinal: true },
           ],
-          1
-        )
+          1,
+        ),
       );
     });
 

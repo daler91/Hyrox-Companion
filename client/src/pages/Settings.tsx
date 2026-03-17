@@ -58,9 +58,10 @@ export default function Settings() {
     queryKey: ["/api/preferences"],
   });
 
-  const { data: stravaStatus, isLoading: stravaLoading } = useQuery<StravaStatus>({
-    queryKey: ["/api/strava/status"],
-  });
+  const { data: stravaStatus, isLoading: stravaLoading } =
+    useQuery<StravaStatus>({
+      queryKey: ["/api/strava/status"],
+    });
 
   useEffect(() => {
     if (preferences) {
@@ -72,7 +73,12 @@ export default function Settings() {
   }, [preferences]);
 
   const saveMutation = useMutation({
-    mutationFn: async (data: { weightUnit: string; distanceUnit: string; weeklyGoal: number; emailNotifications: number }) => {
+    mutationFn: async (data: {
+      weightUnit: string;
+      distanceUnit: string;
+      weeklyGoal: number;
+      emailNotifications: number;
+    }) => {
       const response = await apiRequest("PATCH", "/api/preferences", data);
       return response.json();
     },
@@ -104,11 +110,14 @@ export default function Settings() {
 
   const markChanged = () => setHasChanges(true);
 
-  const userName = user
-    ? user.firstName && user.lastName
-      ? `${user.firstName} ${user.lastName}`
-      : user.email || "User"
-    : "User";
+  let userName = "User";
+  if (user) {
+    if (user.firstName && user.lastName) {
+      userName = `${user.firstName} ${user.lastName}`;
+    } else if (user.email) {
+      userName = user.email;
+    }
+  }
 
   if (isLoading) {
     return (
@@ -129,24 +138,39 @@ export default function Settings() {
 
       <ProfileSection userName={userName} />
 
-      <StravaSection stravaStatus={stravaStatus} stravaLoading={stravaLoading} />
+      <StravaSection
+        stravaStatus={stravaStatus}
+        stravaLoading={stravaLoading}
+      />
 
       <PreferencesSection
         weightUnit={weightUnit}
         distanceUnit={distanceUnit}
         weeklyGoal={weeklyGoal}
         emailNotifications={emailNotifications}
-        onWeightUnitChange={(v) => { setWeightUnit(v); markChanged(); }}
-        onDistanceUnitChange={(v) => { setDistanceUnit(v); markChanged(); }}
-        onWeeklyGoalChange={(v) => { setWeeklyGoal(v); markChanged(); }}
-        onEmailNotificationsChange={(v) => { setEmailNotifications(v); markChanged(); }}
+        onWeightUnitChange={(v) => {
+          setWeightUnit(v);
+          markChanged();
+        }}
+        onDistanceUnitChange={(v) => {
+          setDistanceUnit(v);
+          markChanged();
+        }}
+        onWeeklyGoalChange={(v) => {
+          setWeeklyGoal(v);
+          markChanged();
+        }}
+        onEmailNotificationsChange={(v) => {
+          setEmailNotifications(v);
+          markChanged();
+        }}
       />
 
       <DataToolsSection />
 
-      <Button 
-        onClick={handleSave} 
-        className="w-full" 
+      <Button
+        onClick={handleSave}
+        className="w-full"
         data-testid="button-save-settings"
         disabled={!hasChanges || saveMutation.isPending}
       >

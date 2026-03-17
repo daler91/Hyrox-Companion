@@ -1,12 +1,13 @@
-import { Resend } from 'resend';
-import type { User } from '@shared/schema';
+import { Resend } from "resend";
+import type { User } from "@shared/schema";
 
 function getResendClient() {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
-    throw new Error('RESEND_API_KEY environment variable is not set');
+    throw new Error("RESEND_API_KEY environment variable is not set");
   }
-  const fromEmail = process.env.RESEND_FROM_EMAIL || 'HyroxTracker <noreply@resend.dev>';
+  const fromEmail =
+    process.env.RESEND_FROM_EMAIL || "HyroxTracker <noreply@resend.dev>";
   return {
     client: new Resend(apiKey),
     fromEmail,
@@ -35,8 +36,8 @@ export interface MissedWorkoutData {
 
 function getUserName(user: User): string {
   if (user.firstName) return user.firstName;
-  if (user.email) return user.email.split('@')[0];
-  return 'Athlete';
+  if (user.email) return user.email.split("@")[0];
+  return "Athlete";
 }
 
 function baseStyles(): string {
@@ -65,20 +66,37 @@ function baseStyles(): string {
   `;
 }
 
-export function buildWeeklySummaryEmail(user: User, data: WeeklySummaryData): { subject: string; html: string } {
+export function buildWeeklySummaryEmail(
+  user: User,
+  data: WeeklySummaryData,
+): { subject: string; html: string } {
   const name = getUserName(user);
-  const totalWorkouts = data.completedCount + data.missedCount + data.skippedCount;
+  const totalWorkouts =
+    data.completedCount + data.missedCount + data.skippedCount;
   const durationHours = Math.floor(data.totalDuration / 60);
   const durationMins = data.totalDuration % 60;
-  const durationStr = durationHours > 0 ? `${durationHours}h ${durationMins}m` : `${durationMins}m`;
+  const durationStr =
+    durationHours > 0
+      ? `${durationHours}h ${durationMins}m`
+      : `${durationMins}m`;
 
-  const subject = `Your Week in Review: ${data.completedCount} workout${data.completedCount !== 1 ? 's' : ''} completed`;
+  const subject = `Your Week in Review: ${data.completedCount} workout${data.completedCount !== 1 ? "s" : ""} completed`;
 
-  const prsSection = data.prsThisWeek > 0 ? `
+  const prsSection =
+    data.prsThisWeek > 0
+      ? `
       <div class="stat-card">
         <div class="stat-value highlight">🏆 ${data.prsThisWeek}</div>
         <div class="stat-label">New PRs</div>
-      </div>` : '';
+      </div>`
+      : "";
+
+  let missedSessionsMessage =
+    '<p style="font-size:14px;color:#16a34a;margin-top:16px;font-weight:600;">Perfect week — no missed sessions! Keep it up! 💪</p>';
+  if (data.missedCount > 0) {
+    const s = data.missedCount !== 1 ? "s" : "";
+    missedSessionsMessage = `<p style="font-size:14px;color:#64748b;margin-top:16px;">You missed ${data.missedCount} session${s} this week. Don't worry — consistency over perfection!</p>`;
+  }
 
   const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${baseStyles()}</style></head>
@@ -106,28 +124,32 @@ export function buildWeeklySummaryEmail(user: User, data: WeeklySummaryData): { 
       </div>
     </div>
 
-    ${data.completionRate > 0 ? `
+    ${
+      data.completionRate > 0
+        ? `
     <div class="section-title">Completion</div>
     <div class="progress-bar">
       <div class="progress-fill" style="width:${Math.min(data.completionRate, 100)}%"></div>
     </div>
     <p style="font-size:13px;color:#64748b;">${data.completedCount} of ${totalWorkouts} planned sessions</p>
-    ` : ''}
+    `
+        : ""
+    }
 
-    ${data.currentStreak > 0 ? `
+    ${
+      data.currentStreak > 0
+        ? `
     <div class="stat-grid">
       <div class="stat-card">
         <div class="stat-value highlight">🔥 ${data.currentStreak}</div>
         <div class="stat-label">Day Streak</div>
       </div>
       ${prsSection}
-    </div>` : ''}
+    </div>`
+        : ""
+    }
 
-    ${data.missedCount > 0 ? `
-    <p style="font-size:14px;color:#64748b;margin-top:16px;">You missed ${data.missedCount} session${data.missedCount !== 1 ? 's' : ''} this week. Don't worry — consistency over perfection!</p>
-    ` : `
-    <p style="font-size:14px;color:#16a34a;margin-top:16px;font-weight:600;">Perfect week — no missed sessions! Keep it up! 💪</p>
-    `}
+    ${missedSessionsMessage}
 
     <div style="text-align:center;margin-top:24px;">
       <a href="${getAppUrl()}" class="cta">View Your Timeline</a>
@@ -143,24 +165,31 @@ export function buildWeeklySummaryEmail(user: User, data: WeeklySummaryData): { 
   return { subject, html };
 }
 
-export function buildMissedWorkoutEmail(user: User, missed: MissedWorkoutData[]): { subject: string; html: string } {
+export function buildMissedWorkoutEmail(
+  user: User,
+  missed: MissedWorkoutData[],
+): { subject: string; html: string } {
   const name = getUserName(user);
   const count = missed.length;
-  let pluralSuffix = '';
-  let wasWere = 'was';
+  let pluralSuffix = "";
+  let wasWere = "was";
   if (count !== 1) {
-    pluralSuffix = 's';
-    wasWere = 'were';
+    pluralSuffix = "s";
+    wasWere = "were";
   }
   const subject = `${count} missed workout${pluralSuffix} — get back on track`;
 
-  const workoutItems = missed.map(w => `
+  const workoutItems = missed
+    .map(
+      (w) => `
     <div class="workout-item">
       <div class="workout-focus">${w.focus}</div>
-      <div class="workout-detail">${w.mainWorkout.substring(0, 120)}${w.mainWorkout.length > 120 ? '...' : ''}</div>
+      <div class="workout-detail">${w.mainWorkout.substring(0, 120)}${w.mainWorkout.length > 120 ? "..." : ""}</div>
       <div class="workout-date">${w.date}${w.planName ? ` • ${w.planName}` : ""}</div>
     </div>
-  `).join('');
+  `,
+    )
+    .join("");
 
   const html = `
 <!DOCTYPE html>
@@ -192,7 +221,7 @@ export function buildMissedWorkoutEmail(user: User, missed: MissedWorkoutData[])
     <p style="font-size:14px;color:#64748b;margin-top:16px;">Missing a session happens to everyone. The important thing is to get back on track. You can mark these as skipped or reschedule them in the app.</p>
 
     <div style="margin-top: 24px; text-align: center;">
-      <a href="${process.env.APP_URL || 'https://hyrox-tracker.com'}/timeline" style="display: inline-block; background-color: #0f172a; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500;">View Timeline</a>
+      <a href="${process.env.APP_URL || "https://hyrox-tracker.com"}/timeline" style="display: inline-block; background-color: #0f172a; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500;">View Timeline</a>
     </div>
   </div>
   <div class="footer">
@@ -206,12 +235,18 @@ export function buildMissedWorkoutEmail(user: User, missed: MissedWorkoutData[])
 }
 
 function getAppUrl(): string {
-  if (process.env.REPLIT_DEPLOYMENT_URL) return `https://${process.env.REPLIT_DEPLOYMENT_URL}`;
-  if (process.env.REPLIT_DEV_DOMAIN) return `https://${process.env.REPLIT_DEV_DOMAIN}`;
-  return 'https://hyroxtracker.replit.app';
+  if (process.env.REPLIT_DEPLOYMENT_URL)
+    return `https://${process.env.REPLIT_DEPLOYMENT_URL}`;
+  if (process.env.REPLIT_DEV_DOMAIN)
+    return `https://${process.env.REPLIT_DEV_DOMAIN}`;
+  return "https://hyroxtracker.replit.app";
 }
 
-export async function sendEmail(to: string, subject: string, html: string): Promise<boolean> {
+export async function sendEmail(
+  to: string,
+  subject: string,
+  html: string,
+): Promise<boolean> {
   try {
     const { client, fromEmail } = getResendClient();
     const result = await client.emails.send({
@@ -221,23 +256,29 @@ export async function sendEmail(to: string, subject: string, html: string): Prom
       html,
     });
     if (result.error) {
-      console.error('Resend error:', result.error);
+      console.error("Resend error:", result.error);
       return false;
     }
     return true;
   } catch (error) {
-    console.error('Failed to send email:', error);
+    console.error("Failed to send email:", error);
     return false;
   }
 }
 
-export async function sendWeeklySummary(user: User, data: WeeklySummaryData): Promise<boolean> {
+export async function sendWeeklySummary(
+  user: User,
+  data: WeeklySummaryData,
+): Promise<boolean> {
   if (!user.email) return false;
   const { subject, html } = buildWeeklySummaryEmail(user, data);
   return sendEmail(user.email, subject, html);
 }
 
-export async function sendMissedWorkoutReminder(user: User, missed: MissedWorkoutData[]): Promise<boolean> {
+export async function sendMissedWorkoutReminder(
+  user: User,
+  missed: MissedWorkoutData[],
+): Promise<boolean> {
   if (!user.email || missed.length === 0) return false;
   const { subject, html } = buildMissedWorkoutEmail(user, missed);
   return sendEmail(user.email, subject, html);

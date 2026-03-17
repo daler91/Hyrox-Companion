@@ -1,14 +1,23 @@
 import { describe, it, expect } from "vitest";
-import { formatExerciseSummary, getExerciseLabel, type GroupedExercise, exerciseSetsToStructured } from "./exerciseUtils";
+import {
+  formatExerciseSummary,
+  getExerciseLabel,
+  type GroupedExercise,
+  exerciseSetsToStructured,
+} from "./exerciseUtils";
 import { type ExerciseSet } from "@shared/schema";
 
 describe("getExerciseLabel", () => {
   it("returns label for known exercise name", () => {
-    expect(getExerciseLabel("unknown_exercise_123")).toBe("unknown_exercise_123");
+    expect(getExerciseLabel("unknown_exercise_123")).toBe(
+      "unknown_exercise_123",
+    );
   });
 
   it("handles custom prefix", () => {
-    expect(getExerciseLabel("custom:My Custom Exercise")).toBe("My Custom Exercise");
+    expect(getExerciseLabel("custom:My Custom Exercise")).toBe(
+      "My Custom Exercise",
+    );
   });
 
   it("handles custom exercise with customLabel", () => {
@@ -22,7 +31,7 @@ describe("formatExerciseSummary", () => {
       exerciseName: "custom",
       customLabel: "Test",
       category: "strength",
-      sets: []
+      sets: [],
     };
     expect(formatExerciseSummary(group, "kg", "km")).toBe("Test");
   });
@@ -32,7 +41,21 @@ describe("formatExerciseSummary", () => {
       exerciseName: "custom",
       customLabel: "Test",
       category: "strength",
-      sets: [{ id: 1, workoutId: 1, exerciseName: "custom", category: "strength", reps: 10, weight: null, distance: null, time: null, order: 1, createdAt: new Date(), notes: null }] as any
+      sets: [
+        {
+          id: 1,
+          workoutId: 1,
+          exerciseName: "custom",
+          category: "strength",
+          reps: 10,
+          weight: null,
+          distance: null,
+          time: null,
+          order: 1,
+          createdAt: new Date(),
+          notes: null,
+        },
+      ] as any,
     };
     expect(formatExerciseSummary(group, "kg", "km")).toBe("Test 10r");
   });
@@ -43,10 +66,46 @@ describe("formatExerciseSummary", () => {
       customLabel: "Test",
       category: "strength",
       sets: [
-        { id: 1, workoutId: 1, exerciseName: "custom", category: "strength", reps: 10, weight: null, distance: null, time: null, order: 1, createdAt: new Date(), notes: null },
-        { id: 2, workoutId: 1, exerciseName: "custom", category: "strength", reps: 10, weight: null, distance: null, time: null, order: 2, createdAt: new Date(), notes: null },
-        { id: 3, workoutId: 1, exerciseName: "custom", category: "strength", reps: 10, weight: null, distance: null, time: null, order: 3, createdAt: new Date(), notes: null }
-      ] as any
+        {
+          id: 1,
+          workoutId: 1,
+          exerciseName: "custom",
+          category: "strength",
+          reps: 10,
+          weight: null,
+          distance: null,
+          time: null,
+          order: 1,
+          createdAt: new Date(),
+          notes: null,
+        },
+        {
+          id: 2,
+          workoutId: 1,
+          exerciseName: "custom",
+          category: "strength",
+          reps: 10,
+          weight: null,
+          distance: null,
+          time: null,
+          order: 2,
+          createdAt: new Date(),
+          notes: null,
+        },
+        {
+          id: 3,
+          workoutId: 1,
+          exerciseName: "custom",
+          category: "strength",
+          reps: 10,
+          weight: null,
+          distance: null,
+          time: null,
+          order: 3,
+          createdAt: new Date(),
+          notes: null,
+        },
+      ] as any,
     };
     expect(formatExerciseSummary(group, "kg", "km")).toBe("Test 3x10");
   });
@@ -57,10 +116,46 @@ describe("formatExerciseSummary", () => {
       customLabel: "Test",
       category: "strength",
       sets: [
-        { id: 1, workoutId: 1, exerciseName: "custom", category: "strength", reps: 12, weight: null, distance: null, time: null, order: 1, createdAt: new Date(), notes: null },
-        { id: 2, workoutId: 1, exerciseName: "custom", category: "strength", reps: 10, weight: null, distance: null, time: null, order: 2, createdAt: new Date(), notes: null },
-        { id: 3, workoutId: 1, exerciseName: "custom", category: "strength", reps: 8, weight: null, distance: null, time: null, order: 3, createdAt: new Date(), notes: null }
-      ] as any
+        {
+          id: 1,
+          workoutId: 1,
+          exerciseName: "custom",
+          category: "strength",
+          reps: 12,
+          weight: null,
+          distance: null,
+          time: null,
+          order: 1,
+          createdAt: new Date(),
+          notes: null,
+        },
+        {
+          id: 2,
+          workoutId: 1,
+          exerciseName: "custom",
+          category: "strength",
+          reps: 10,
+          weight: null,
+          distance: null,
+          time: null,
+          order: 2,
+          createdAt: new Date(),
+          notes: null,
+        },
+        {
+          id: 3,
+          workoutId: 1,
+          exerciseName: "custom",
+          category: "strength",
+          reps: 8,
+          weight: null,
+          distance: null,
+          time: null,
+          order: 3,
+          createdAt: new Date(),
+          notes: null,
+        },
+      ] as any,
     };
     expect(formatExerciseSummary(group, "kg", "km")).toBe("Test 3s");
   });
@@ -71,9 +166,33 @@ describe("formatExerciseSummary", () => {
       customLabel: "Test",
       category: "strength",
       sets: [
-        { id: 1, workoutId: 1, exerciseName: "custom", category: "strength", reps: 10, weight: 50, distance: null, time: null, order: 1, createdAt: new Date(), notes: null },
-        { id: 2, workoutId: 1, exerciseName: "custom", category: "strength", reps: 10, weight: 50, distance: null, time: null, order: 2, createdAt: new Date(), notes: null }
-      ] as any
+        {
+          id: 1,
+          workoutId: 1,
+          exerciseName: "custom",
+          category: "strength",
+          reps: 10,
+          weight: 50,
+          distance: null,
+          time: null,
+          order: 1,
+          createdAt: new Date(),
+          notes: null,
+        },
+        {
+          id: 2,
+          workoutId: 1,
+          exerciseName: "custom",
+          category: "strength",
+          reps: 10,
+          weight: 50,
+          distance: null,
+          time: null,
+          order: 2,
+          createdAt: new Date(),
+          notes: null,
+        },
+      ] as any,
     };
     expect(formatExerciseSummary(group, "kg", "km")).toBe("Test 2x10 50kg");
   });
@@ -84,12 +203,50 @@ describe("formatExerciseSummary", () => {
       customLabel: "Test",
       category: "strength",
       sets: [
-        { id: 1, workoutId: 1, exerciseName: "custom", category: "strength", reps: 10, weight: 40, distance: null, time: null, order: 1, createdAt: new Date(), notes: null },
-        { id: 2, workoutId: 1, exerciseName: "custom", category: "strength", reps: 10, weight: 50, distance: null, time: null, order: 2, createdAt: new Date(), notes: null },
-        { id: 3, workoutId: 1, exerciseName: "custom", category: "strength", reps: 10, weight: 60, distance: null, time: null, order: 3, createdAt: new Date(), notes: null }
-      ] as any
+        {
+          id: 1,
+          workoutId: 1,
+          exerciseName: "custom",
+          category: "strength",
+          reps: 10,
+          weight: 40,
+          distance: null,
+          time: null,
+          order: 1,
+          createdAt: new Date(),
+          notes: null,
+        },
+        {
+          id: 2,
+          workoutId: 1,
+          exerciseName: "custom",
+          category: "strength",
+          reps: 10,
+          weight: 50,
+          distance: null,
+          time: null,
+          order: 2,
+          createdAt: new Date(),
+          notes: null,
+        },
+        {
+          id: 3,
+          workoutId: 1,
+          exerciseName: "custom",
+          category: "strength",
+          reps: 10,
+          weight: 60,
+          distance: null,
+          time: null,
+          order: 3,
+          createdAt: new Date(),
+          notes: null,
+        },
+      ] as any,
     };
-    expect(formatExerciseSummary(group, "lbs", "km")).toBe("Test 3x10 40/50/60lbs");
+    expect(formatExerciseSummary(group, "lbs", "km")).toBe(
+      "Test 3x10 40/50/60lbs",
+    );
   });
 
   it("formats distance and time for km unit", () => {
@@ -97,10 +254,24 @@ describe("formatExerciseSummary", () => {
       exerciseName: "running",
       category: "cardio",
       sets: [
-        { id: 1, workoutId: 1, exerciseName: "running", category: "cardio", reps: null, weight: null, distance: 5000, time: 25, order: 1, createdAt: new Date(), notes: null }
-      ] as any
+        {
+          id: 1,
+          workoutId: 1,
+          exerciseName: "running",
+          category: "cardio",
+          reps: null,
+          weight: null,
+          distance: 5000,
+          time: 25,
+          order: 1,
+          createdAt: new Date(),
+          notes: null,
+        },
+      ] as any,
     };
-    expect(formatExerciseSummary(group, "kg", "km")).toBe("running 5000m 25min");
+    expect(formatExerciseSummary(group, "kg", "km")).toBe(
+      "running 5000m 25min",
+    );
   });
 
   it("formats distance and time for miles unit", () => {
@@ -108,10 +279,24 @@ describe("formatExerciseSummary", () => {
       exerciseName: "running",
       category: "cardio",
       sets: [
-        { id: 1, workoutId: 1, exerciseName: "running", category: "cardio", reps: null, weight: null, distance: 16404, time: 25, order: 1, createdAt: new Date(), notes: null }
-      ] as any
+        {
+          id: 1,
+          workoutId: 1,
+          exerciseName: "running",
+          category: "cardio",
+          reps: null,
+          weight: null,
+          distance: 16404,
+          time: 25,
+          order: 1,
+          createdAt: new Date(),
+          notes: null,
+        },
+      ] as any,
     };
-    expect(formatExerciseSummary(group, "lbs", "miles")).toBe("running 16404ft 25min");
+    expect(formatExerciseSummary(group, "lbs", "miles")).toBe(
+      "running 16404ft 25min",
+    );
   });
 });
 
@@ -124,8 +309,32 @@ describe("exerciseSetsToStructured", () => {
 
   it("structures a single exercise with multiple sets", () => {
     const sets = [
-      { id: 1, workoutId: 1, exerciseName: "bench_press", category: "strength", sortOrder: 1, setNumber: 1, reps: 10, weight: 60, distance: null, time: null, notes: "warmup" },
-      { id: 2, workoutId: 1, exerciseName: "bench_press", category: "strength", sortOrder: 2, setNumber: 2, reps: 8, weight: 70, distance: null, time: null, notes: null }
+      {
+        id: 1,
+        workoutId: 1,
+        exerciseName: "bench_press",
+        category: "strength",
+        sortOrder: 1,
+        setNumber: 1,
+        reps: 10,
+        weight: 60,
+        distance: null,
+        time: null,
+        notes: "warmup",
+      },
+      {
+        id: 2,
+        workoutId: 1,
+        exerciseName: "bench_press",
+        category: "strength",
+        sortOrder: 2,
+        setNumber: 2,
+        reps: 8,
+        weight: 70,
+        distance: null,
+        time: null,
+        notes: null,
+      },
     ] as ExerciseSet[];
 
     const { names, data } = exerciseSetsToStructured(sets);
@@ -141,7 +350,7 @@ describe("exerciseSetsToStructured", () => {
       weight: 60,
       distance: undefined,
       time: undefined,
-      notes: "warmup"
+      notes: "warmup",
     });
     expect(data["bench_press__1"].sets[1]).toEqual({
       setNumber: 2,
@@ -149,14 +358,30 @@ describe("exerciseSetsToStructured", () => {
       weight: 70,
       distance: undefined,
       time: undefined,
-      notes: undefined
+      notes: undefined,
     });
   });
 
   it("handles multiple different exercises", () => {
     const sets = [
-      { id: 1, workoutId: 1, exerciseName: "squat", category: "strength", sortOrder: 1, setNumber: 1, reps: 5 },
-      { id: 2, workoutId: 1, exerciseName: "deadlift", category: "strength", sortOrder: 2, setNumber: 1, reps: 3 }
+      {
+        id: 1,
+        workoutId: 1,
+        exerciseName: "squat",
+        category: "strength",
+        sortOrder: 1,
+        setNumber: 1,
+        reps: 5,
+      },
+      {
+        id: 2,
+        workoutId: 1,
+        exerciseName: "deadlift",
+        category: "strength",
+        sortOrder: 2,
+        setNumber: 1,
+        reps: 3,
+      },
     ] as ExerciseSet[];
 
     const { names, data } = exerciseSetsToStructured(sets);
@@ -170,8 +395,26 @@ describe("exerciseSetsToStructured", () => {
 
   it("handles custom exercises with customLabel properly", () => {
     const sets = [
-      { id: 1, workoutId: 1, exerciseName: "custom", customLabel: "Bicep Curls", category: "strength", sortOrder: 1, setNumber: 1, reps: 12 },
-      { id: 2, workoutId: 1, exerciseName: "custom", customLabel: "Bicep Curls", category: "strength", sortOrder: 2, setNumber: 2, reps: 10 }
+      {
+        id: 1,
+        workoutId: 1,
+        exerciseName: "custom",
+        customLabel: "Bicep Curls",
+        category: "strength",
+        sortOrder: 1,
+        setNumber: 1,
+        reps: 12,
+      },
+      {
+        id: 2,
+        workoutId: 1,
+        exerciseName: "custom",
+        customLabel: "Bicep Curls",
+        category: "strength",
+        sortOrder: 2,
+        setNumber: 2,
+        reps: 10,
+      },
     ] as ExerciseSet[];
 
     const { names, data } = exerciseSetsToStructured(sets);
@@ -184,9 +427,33 @@ describe("exerciseSetsToStructured", () => {
 
   it("properly increments counter for separated but identically named exercises", () => {
     const sets = [
-      { id: 1, workoutId: 1, exerciseName: "pull_up", category: "strength", sortOrder: 1, setNumber: 1, reps: 10 },
-      { id: 2, workoutId: 1, exerciseName: "push_up", category: "strength", sortOrder: 2, setNumber: 1, reps: 20 },
-      { id: 3, workoutId: 1, exerciseName: "pull_up", category: "strength", sortOrder: 3, setNumber: 1, reps: 8 }
+      {
+        id: 1,
+        workoutId: 1,
+        exerciseName: "pull_up",
+        category: "strength",
+        sortOrder: 1,
+        setNumber: 1,
+        reps: 10,
+      },
+      {
+        id: 2,
+        workoutId: 1,
+        exerciseName: "push_up",
+        category: "strength",
+        sortOrder: 2,
+        setNumber: 1,
+        reps: 20,
+      },
+      {
+        id: 3,
+        workoutId: 1,
+        exerciseName: "pull_up",
+        category: "strength",
+        sortOrder: 3,
+        setNumber: 1,
+        reps: 8,
+      },
     ] as ExerciseSet[];
 
     const { names, data } = exerciseSetsToStructured(sets);
@@ -198,10 +465,19 @@ describe("exerciseSetsToStructured", () => {
 
   it("maps confidence score correctly", () => {
     const sets = [
-      { id: 1, workoutId: 1, exerciseName: "running", category: "cardio", sortOrder: 1, setNumber: 1, distance: 5000, confidence: 0.95 }
+      {
+        id: 1,
+        workoutId: 1,
+        exerciseName: "running",
+        category: "cardio",
+        sortOrder: 1,
+        setNumber: 1,
+        distance: 5000,
+        confidence: 0.95,
+      },
     ] as ExerciseSet[];
 
-    const { names, data } = exerciseSetsToStructured(sets);
+    const { data } = exerciseSetsToStructured(sets);
 
     expect(data["running__1"].confidence).toBe(0.95);
   });

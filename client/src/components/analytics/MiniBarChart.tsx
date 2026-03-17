@@ -6,8 +6,8 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Cell
-} from 'recharts';
+  Cell,
+} from "recharts";
 
 interface ExerciseAnalyticDay {
   date: string;
@@ -23,28 +23,28 @@ function formatDate(d: string): string {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+// Convert Tailwind classes like "bg-primary/60" to hex colors for Recharts
+// Fallback to basic colors if specific classes aren't matched
+const getFillColor = (colorStr: string) => {
+  if (colorStr.includes("primary")) return "#ea580c"; // Matches our orange primary
+  if (colorStr.includes("purple")) return "#a855f7";
+  if (colorStr.includes("blue")) return "#3b82f6";
+  if (colorStr.includes("green")) return "#22c55e";
+  return "#64748b"; // muted fallback
+};
+
 export function MiniBarChart({
   data,
   valueKey,
   color,
-  label
+  label,
 }: {
   data: ExerciseAnalyticDay[];
   valueKey: keyof ExerciseAnalyticDay;
   color: string;
-  label: string
+  label: string;
 }) {
   if (data.length === 0) return null;
-
-  // Convert Tailwind classes like "bg-primary/60" to hex colors for Recharts
-  // Fallback to basic colors if specific classes aren't matched
-  const getFillColor = (colorStr: string) => {
-    if (colorStr.includes('primary')) return '#ea580c'; // Matches our orange primary
-    if (colorStr.includes('purple')) return '#a855f7';
-    if (colorStr.includes('blue')) return '#3b82f6';
-    if (colorStr.includes('green')) return '#22c55e';
-    return '#64748b'; // muted fallback
-  };
 
   const fillColor = getFillColor(color);
 
@@ -59,32 +59,40 @@ export function MiniBarChart({
             data={data}
             margin={{ top: 5, right: 5, left: -20, bottom: 5 }}
           >
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+            <CartesianGrid
+              strokeDasharray="3 3"
+              vertical={false}
+              stroke="hsl(var(--border))"
+            />
             <XAxis
               dataKey="date"
               tickFormatter={formatDate}
               fontSize={12}
               tickLine={false}
               axisLine={false}
-              tick={{ fill: 'hsl(var(--muted-foreground))' }}
+              tick={{ fill: "hsl(var(--muted-foreground))" }}
             />
             <YAxis
               fontSize={12}
               tickLine={false}
               axisLine={false}
-              tick={{ fill: 'hsl(var(--muted-foreground))' }}
+              tick={{ fill: "hsl(var(--muted-foreground))" }}
             />
             <Tooltip
-              cursor={{ fill: 'hsl(var(--muted)/0.5)' }}
+              cursor={{ fill: "hsl(var(--muted)/0.5)" }}
               content={({ active, payload }) => {
-                if (!active || !payload || !payload.length) return null;
+                if (!active || !payload?.length) return null;
 
                 return (
                   <div className="bg-popover text-popover-foreground border px-3 py-2 rounded shadow-md text-sm">
-                    <p className="font-semibold mb-1">{formatDate(payload[0].payload.date)}</p>
+                    <p className="font-semibold mb-1">
+                      {formatDate(payload[0]?.payload?.date)}
+                    </p>
                     <p>
-                      <span className="text-muted-foreground mr-2">{label}:</span>
-                      <span className="font-medium">{payload[0].value}</span>
+                      <span className="text-muted-foreground mr-2">
+                        {label}:
+                      </span>
+                      <span className="font-medium">{payload[0]?.value}</span>
                     </p>
                   </div>
                 );
@@ -96,7 +104,11 @@ export function MiniBarChart({
               maxBarSize={40}
             >
               {data.map((entry) => (
-                <Cell key={`cell-${entry.date}`} fill={fillColor} fillOpacity={0.8} />
+                <Cell
+                  key={`cell-${entry.date}`}
+                  fill={fillColor}
+                  fillOpacity={0.8}
+                />
               ))}
             </Bar>
           </BarChart>
