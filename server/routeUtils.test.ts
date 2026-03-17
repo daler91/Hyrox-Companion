@@ -1,6 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { Response, NextFunction } from "express";
-import { calculateStreak, rateLimiter, clearRateLimitBuckets, MAX_RATE_LIMIT_BUCKETS, DEFAULT_WINDOW_MS } from "./routeUtils";
+import {
+  calculateStreak,
+  rateLimiter,
+  clearRateLimitBuckets,
+  MAX_RATE_LIMIT_BUCKETS,
+  DEFAULT_WINDOW_MS,
+} from "./routeUtils";
 import { expandExercisesToSetRows } from "./services/workoutService";
 
 describe("rateLimiter", () => {
@@ -195,6 +201,48 @@ describe("rateLimiter", () => {
   });
 });
 
+describe("clearRateLimitBuckets", () => {
+  let req: any;
+  let res: any;
+  let next: NextFunction;
+
+  beforeEach(() => {
+    clearRateLimitBuckets();
+
+    req = {
+      auth: { userId: "user-clear-test" },
+      ip: "192.168.1.1",
+    };
+
+    res = {
+      setHeader: vi.fn(),
+      status: vi.fn().mockReturnThis(),
+      json: vi.fn(),
+    };
+
+    next = vi.fn();
+  });
+
+  it("clears all rate limit data", () => {
+    const middleware = rateLimiter("api", 1, DEFAULT_WINDOW_MS);
+
+    // 1st request (ok)
+    middleware(req, res as Response, next);
+    expect(next).toHaveBeenCalledTimes(1);
+
+    // 2nd request (blocked)
+    middleware(req, res as Response, next);
+    expect(res.status).toHaveBeenCalledWith(429);
+
+    // Clear buckets
+    clearRateLimitBuckets();
+
+    // 3rd request (ok again)
+    middleware(req, res as Response, next);
+    expect(next).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe("calculateStreak", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -254,19 +302,34 @@ describe("calculateStreak", () => {
 
   it("counts across leap year boundary (Feb 29 to Mar 1)", () => {
     vi.setSystemTime(new Date("2024-03-02T12:00:00Z"));
-    const dates = new Set(["2024-03-02", "2024-03-01", "2024-02-29", "2024-02-28"]);
+    const dates = new Set([
+      "2024-03-02",
+      "2024-03-01",
+      "2024-02-29",
+      "2024-02-28",
+    ]);
     expect(calculateStreak(dates)).toBe(4);
   });
 
   it("counts across non-leap year boundary (Feb 28 to Mar 1)", () => {
     vi.setSystemTime(new Date("2025-03-02T12:00:00Z"));
-    const dates = new Set(["2025-03-02", "2025-03-01", "2025-02-28", "2025-02-27"]);
+    const dates = new Set([
+      "2025-03-02",
+      "2025-03-01",
+      "2025-02-28",
+      "2025-02-27",
+    ]);
     expect(calculateStreak(dates)).toBe(4);
   });
 
   it("counts across year boundary (Dec 31 to Jan 1)", () => {
     vi.setSystemTime(new Date("2026-01-02T12:00:00Z"));
-    const dates = new Set(["2026-01-02", "2026-01-01", "2025-12-31", "2025-12-30"]);
+    const dates = new Set([
+      "2026-01-02",
+      "2026-01-01",
+      "2025-12-31",
+      "2025-12-30",
+    ]);
     expect(calculateStreak(dates)).toBe(4);
   });
 
