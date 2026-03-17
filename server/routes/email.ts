@@ -1,3 +1,4 @@
+import { logger } from "../logger";
 import { Router, type Request, type Response } from "express";
 import crypto from "node:crypto";
 import { isAuthenticated } from "../clerkAuth";
@@ -17,7 +18,7 @@ router.post("/api/emails/check", isAuthenticated, async (req: Request, res: Resp
     const sent = await checkAndSendEmailsForUser(storage, user);
     res.json({ sent });
   } catch (error) {
-    console.error("Error checking emails:", error);
+    logger.error({ err: error }, "Error checking emails:");
     res.json({ sent: [], error: "Email check failed" });
   }
 });
@@ -43,7 +44,7 @@ router.get("/api/cron/emails", async (req, res) => {
     const result = await runEmailCronJob(storage);
     res.json(result);
   } catch (error) {
-    console.error("Cron email error:", error);
+    logger.error({ err: error }, "Cron email error:");
     res.status(500).json({ error: "Cron job failed" });
   }
 });

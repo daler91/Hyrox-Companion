@@ -1,3 +1,4 @@
+import { logger } from "../logger";
 import { storage } from "../storage";
 import { db } from "../db";
 import { parse } from "csv-parse/sync";
@@ -30,7 +31,7 @@ function parseCSVContent(csvText: string): unknown[] {
   try {
     return parse(csvText, getCSVParseOptions());
   } catch (error) {
-    console.error("CSV parse error:", error);
+    logger.error({ err: error }, "CSV parse error:");
     return [];
   }
 }

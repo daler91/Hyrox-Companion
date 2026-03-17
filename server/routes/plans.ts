@@ -1,3 +1,4 @@
+import { logger } from "../logger";
 import { Router, Response, type Request } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
@@ -29,7 +30,7 @@ async function handlePlanDayUpdate(
 
     res.json(updatedDay);
   } catch (error) {
-    console.error("Update day error:", error);
+    logger.error({ err: error }, "Update day error:");
     res.status(500).json({ error: "Failed to update day" });
   }
 }
@@ -49,7 +50,7 @@ async function handleGetOrDeletePlan(
     }
     res.json(successMsg ? { success: true } : result);
   } catch (error) {
-    console.error(`${errorPrefix} plan error:`, error);
+    logger.error({ err: error }, `${errorPrefix} plan error:`);
     res.status(500).json({ error: `Failed to ${errorPrefix.toLowerCase()} training plan` });
   }
 }
@@ -60,7 +61,7 @@ router.get("/api/plans", isAuthenticated, async (req: Request, res) => {
     const plans = await storage.listTrainingPlans(userId);
     res.json(plans);
   } catch (error) {
-    console.error("List plans error:", error);
+    logger.error({ err: error }, "List plans error:");
     res.status(500).json({ error: "Failed to list training plans" });
   }
 });
@@ -84,7 +85,7 @@ router.post("/api/plans/import", isAuthenticated, rateLimiter("planImport", 5), 
     if (error instanceof Error && (error.message === "No valid rows found in CSV" || error.message === "No valid week numbers found in CSV")) {
       return res.status(400).json({ error: error.message });
     }
-    console.error("Import plan error:", error);
+    logger.error({ err: error }, "Import plan error:");
     res.status(500).json({ error: "Failed to import training plan" });
   }
 });
@@ -95,7 +96,7 @@ router.post("/api/plans/sample", isAuthenticated, rateLimiter("planSample", 5), 
     const fullPlan = await createSamplePlan(userId);
     res.json(fullPlan);
   } catch (error) {
-    console.error("Create sample plan error:", error);
+    logger.error({ err: error }, "Create sample plan error:");
     res.status(500).json({ error: "Failed to create sample plan" });
   }
 });
@@ -121,7 +122,7 @@ router.patch("/api/plans/:id", isAuthenticated, async (req: Request, res) => {
     }
     res.json(updated);
   } catch (error) {
-    console.error("Rename plan error:", error);
+    logger.error({ err: error }, "Rename plan error:");
     res.status(500).json({ error: "Failed to rename training plan" });
   }
 });
@@ -148,7 +149,7 @@ router.post("/api/plans/:planId/schedule", isAuthenticated, rateLimiter("planSch
 
     res.json({ success: true });
   } catch (error) {
-    console.error("Schedule plan error:", error);
+    logger.error({ err: error }, "Schedule plan error:");
     res.status(500).json({ error: "Failed to schedule training plan" });
   }
 });
@@ -174,7 +175,7 @@ router.patch("/api/plans/days/:dayId/status", isAuthenticated, async (req: Reque
 
     res.json(updatedDay);
   } catch (error) {
-    console.error("Update day status error:", error);
+    logger.error({ err: error }, "Update day status error:");
     res.status(500).json({ error: "Failed to update day status" });
   }
 });
@@ -189,7 +190,7 @@ router.delete("/api/plans/days/:dayId", isAuthenticated, async (req: Request, re
     }
     res.json({ success: true });
   } catch (error) {
-    console.error("Delete plan day error:", error);
+    logger.error({ err: error }, "Delete plan day error:");
     res.status(500).json({ error: "Failed to delete plan day" });
   }
 });

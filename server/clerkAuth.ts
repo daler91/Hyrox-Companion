@@ -1,3 +1,4 @@
+import { logger } from "./logger";
 import { clerkMiddleware, getAuth, clerkClient } from "@clerk/express";
 import type { Express, RequestHandler } from "express";
 import { storage } from "./storage";
@@ -33,7 +34,7 @@ export async function setupAuth(app: Express) {
   if (hasClerkKeys()) {
     app.use(clerkMiddleware());
   } else if (isDev()) {
-    console.log("[DEV] No Clerk keys found — using dev auth bypass");
+    logger.info("[DEV] No Clerk keys found — using dev auth bypass");
     await ensureDevUserExists();
   } else {
     throw new Error(
@@ -43,7 +44,7 @@ export async function setupAuth(app: Express) {
 
   if (isDev()) {
     await ensureDevUserExists();
-    console.log("[DEV] Dev auth fallback enabled for iframe/preview contexts");
+    logger.info("[DEV] Dev auth fallback enabled for iframe/preview contexts");
   }
 }
 
@@ -54,7 +55,7 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
       try {
         await ensureUserExists(auth.userId);
       } catch (error) {
-        console.error("Error syncing user:", error);
+        logger.error({ err: error }, "Error syncing user:");
         return res.status(500).json({ message: "Failed to initialize user session" });
       }
       return next();
@@ -65,7 +66,7 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     try {
       await ensureDevUserExists();
     } catch (error) {
-      console.error("Error creating dev user:", error);
+      logger.error({ err: error }, "Error creating dev user:");
       return res.status(500).json({ message: "Failed to initialize dev user session" });
     }
     return next();

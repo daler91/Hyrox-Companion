@@ -1,3 +1,4 @@
+import { logger } from "./logger";
 import { type ParsedExercise, exerciseSetSchema } from "@shared/schema";
 import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
@@ -138,10 +139,7 @@ export async function retryWithBackoff<T>(
       lastError = error;
       if (attempt < maxRetries && isRetryableError(error)) {
         const delay = baseDelayMs * Math.pow(2, attempt);
-        console.warn(
-          `[gemini] ${label} attempt ${attempt + 1} failed (retrying in ${delay}ms):`,
-          error instanceof Error ? error.message : error,
-        );
+        logger.warn({ err: error instanceof Error ? error.message : error }, `[gemini] ${label} attempt ${attempt + 1} failed (retrying in ${delay}ms):`);
         await new Promise((resolve) => setTimeout(resolve, delay));
       } else {
         break;
@@ -174,12 +172,7 @@ function parseAndValidateSuggestions(text: string): WorkoutSuggestion[] {
     if (result.success) {
       validated.push(result.data);
     } else {
-      console.warn(
-        "[gemini] Dropping invalid suggestion:",
-        result.error.issues,
-        "Raw item:",
-        JSON.stringify(item).slice(0, 200),
-      );
+      logger.warn({ issues: result.error.issues, item: JSON.stringify(item).slice(0, 200) }, "[gemini] Dropping invalid suggestion:");
     }
   }
   return validated;
@@ -249,7 +242,7 @@ export async function generateWorkoutSuggestions(
 
     return parseAndValidateSuggestions(text);
   } catch (error) {
-    console.error("[gemini] suggestions error:", error);
+    logger.error({ err: error }, "[gemini] suggestions error:");
     return [];
   }
 }
@@ -285,7 +278,7 @@ export async function chatWithCoach(
       "I apologize, but I couldn't generate a response. Please try again."
     );
   } catch (error) {
-    console.error("Gemini API error:", error);
+    logger.error({ err: error }, "Gemini API error:");
     throw new Error("Failed to get response from AI coach");
   }
 }
@@ -396,7 +389,7 @@ and use the matching name as customLabel: ${customExerciseNames.join(", ")}`;
     ) {
       throw error;
     }
-    console.error("[gemini] exercise-parse error:", error);
+    logger.error({ err: error }, "[gemini] exercise-parse error:");
     throw new Error("Failed to parse exercises from text");
   }
 }
@@ -434,7 +427,7 @@ export async function* streamChatWithCoach(
       }
     }
   } catch (error) {
-    console.error("Gemini streaming API error:", error);
+    logger.error({ err: error }, "Gemini streaming API error:");
     throw new Error("Failed to get streaming response from AI coach");
   }
 }

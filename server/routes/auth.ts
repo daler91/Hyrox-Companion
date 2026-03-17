@@ -1,3 +1,4 @@
+import { logger } from "../logger";
 import { Router, type Request, type Response } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
@@ -11,7 +12,7 @@ router.get('/api/auth/user', isAuthenticated, async (req: Request, res: Response
     const user = await storage.getUser(userId);
     res.json(user);
   } catch (error) {
-    console.error("Error fetching user:", error);
+    logger.error({ err: error }, "Error fetching user:");
     res.status(500).json({ error: "Failed to fetch user" });
   }
 });
