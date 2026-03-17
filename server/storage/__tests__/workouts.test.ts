@@ -7,6 +7,7 @@ vi.mock("../../db", () => ({
   db: {
     insert: vi.fn(),
     update: vi.fn(),
+    select: vi.fn().mockReturnValue({ from: vi.fn().mockReturnValue({ where: vi.fn() }) }),
   },
 }));
 
