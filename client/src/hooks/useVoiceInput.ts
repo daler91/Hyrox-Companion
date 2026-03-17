@@ -35,7 +35,10 @@ const RETRY_DELAY_MS = 500;
 const RETRYABLE_ERRORS = new Set(["network", "no-speech"]);
 const DEDUP_WINDOW_MS = 3000;
 
-function getVoiceErrorMessage(errorCode: string, micGranted: boolean): string | null {
+function getVoiceErrorMessage(
+  errorCode: string,
+  micGranted: boolean,
+): string | null {
   switch (errorCode) {
     case "not-allowed":
       if (micGranted) {
@@ -83,7 +86,13 @@ interface UseVoiceInputOptions {
 }
 
 export function useVoiceInput(options: UseVoiceInputOptions = {}) {
-  const { onResult, onInterim, onError, continuous = true, lang = "en-US" } = options;
+  const {
+    onResult,
+    onInterim,
+    onError,
+    continuous = true,
+    lang = "en-US",
+  } = options;
   const [isListening, setIsListening] = useState(false);
   const [interimTranscript, setInterimTranscript] = useState("");
   const [isSupported, setIsSupported] = useState(false);
@@ -102,7 +111,9 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
   onErrorRef.current = onError;
 
   useEffect(() => {
-    const SpeechRecognition = (globalThis as any).SpeechRecognition || (globalThis as any).webkitSpeechRecognition;
+    const SpeechRecognition =
+      (globalThis as any).SpeechRecognition ||
+      (globalThis as any).webkitSpeechRecognition;
     setIsSupported(!!SpeechRecognition);
   }, []);
 
@@ -113,8 +124,56 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
     }
   }, []);
 
+  const processFinalTranscript = useCallback((finalTranscript: string) => {
+    setInterimTranscript("");
+    const now = Date.now();
+    const normalized = finalTranscript.trim().toLowerCase();
+    recentEmissionsRef.current = recentEmissionsRef.current.filter(
+      (e) => now - e.time < DEDUP_WINDOW_MS,
+    );
+    // Android Chrome in continuous mode can emit overlapping/progressive
+    // finals: "House" then "House is very small". We handle 3 cases:
+    // 1. Exact duplicate -> skip
+    // 2. New is a subset of previous -> skip (partial re-fire)
+    // 3. New is a superset of previous -> emit only the delta (new words)
+    // NOTE: We use startsWith (not includes) because Android progressive
+    // finals always extend from the beginning of the utterance. Using
+    // includes would cause false matches on common words like "I am"
+    // appearing in the middle of unrelated sentences.
+    const exactOrSubset = recentEmissionsRef.current.some(
+      (e) => e.text === normalized || e.text.startsWith(normalized),
+    );
+    if (exactOrSubset) {
+      // Case 1 & 2: skip entirely
+    } else {
+      // Check if the new result is a superset of a previous emission
+      const supersetOf = recentEmissionsRef.current.findIndex((e) =>
+        normalized.startsWith(e.text),
+      );
+      if (supersetOf !== -1) {
+        // Case 3: new is a superset - emit only the new portion
+        const previousText = recentEmissionsRef.current[supersetOf].text;
+        const delta = normalized.slice(previousText.length).trim();
+        // Update the tracker to the full (longer) text
+        recentEmissionsRef.current[supersetOf] = {
+          text: normalized,
+          time: now,
+        };
+        if (delta) {
+          onResultRef.current?.(delta);
+        }
+      } else {
+        // Completely new text - emit as-is
+        recentEmissionsRef.current.push({ text: normalized, time: now });
+        onResultRef.current?.(finalTranscript);
+      }
+    }
+  }, []);
+
   const startRecognition = useCallback(() => {
-    const SpeechRecognition = (globalThis as any).SpeechRecognition || (globalThis as any).webkitSpeechRecognition;
+    const SpeechRecognition =
+      (globalThis as any).SpeechRecognition ||
+      (globalThis as any).webkitSpeechRecognition;
     if (!SpeechRecognition) return;
 
     if (recognitionRef.current) {
@@ -151,53 +210,17 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
       }
 
       if (finalTranscript) {
-        setInterimTranscript("");
-        const now = Date.now();
-        const normalized = finalTranscript.trim().toLowerCase();
-        recentEmissionsRef.current = recentEmissionsRef.current.filter(
-          (e) => now - e.time < DEDUP_WINDOW_MS
-        );
-        // Android Chrome in continuous mode can emit overlapping/progressive
-        // finals: "House" then "House is very small". We handle 3 cases:
-        // 1. Exact duplicate → skip
-        // 2. New is a subset of previous → skip (partial re-fire)
-        // 3. New is a superset of previous → emit only the delta (new words)
-        // NOTE: We use startsWith (not includes) because Android progressive
-        // finals always extend from the beginning of the utterance. Using
-        // includes would cause false matches on common words like "I am"
-        // appearing in the middle of unrelated sentences.
-        const exactOrSubset = recentEmissionsRef.current.some(
-          (e) => e.text === normalized || e.text.startsWith(normalized)
-        );
-        if (exactOrSubset) {
-          // Case 1 & 2: skip entirely
-        } else {
-          // Check if the new result is a superset of a previous emission
-          const supersetOf = recentEmissionsRef.current.findIndex(
-            (e) => normalized.startsWith(e.text)
-          );
-          if (supersetOf !== -1) {
-            // Case 3: new is a superset — emit only the new portion
-            const previousText = recentEmissionsRef.current[supersetOf].text;
-            const delta = normalized.slice(previousText.length).trim();
-            // Update the tracker to the full (longer) text
-            recentEmissionsRef.current[supersetOf] = { text: normalized, time: now };
-            if (delta) {
-              onResultRef.current?.(delta);
-            }
-          } else {
-            // Completely new text — emit as-is
-            recentEmissionsRef.current.push({ text: normalized, time: now });
-            onResultRef.current?.(finalTranscript);
-          }
-        }
+        processFinalTranscript(finalTranscript);
       }
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       if (stoppedByUserRef.current) return;
 
-      if (RETRYABLE_ERRORS.has(event.error) && retryCountRef.current < MAX_RETRIES) {
+      if (
+        RETRYABLE_ERRORS.has(event.error) &&
+        retryCountRef.current < MAX_RETRIES
+      ) {
         retryCountRef.current++;
         retryTimeoutRef.current = setTimeout(() => {
           retryTimeoutRef.current = null;
@@ -231,13 +254,18 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
       retryCountRef.current = 0;
       setIsListening(false);
       setInterimTranscript("");
-      const msg = err instanceof Error ? err.message : "Failed to start voice input";
-      onErrorRef.current?.(`Microphone error: ${msg}. Please check your browser permissions and try again.`);
+      const msg =
+        err instanceof Error ? err.message : "Failed to start voice input";
+      onErrorRef.current?.(
+        `Microphone error: ${msg}. Please check your browser permissions and try again.`,
+      );
     }
-  }, [continuous, lang]);
+  }, [continuous, lang, processFinalTranscript]);
 
   const startListening = useCallback(async () => {
-    const SpeechRecognition = (globalThis as any).SpeechRecognition || (globalThis as any).webkitSpeechRecognition;
+    const SpeechRecognition =
+      (globalThis as any).SpeechRecognition ||
+      (globalThis as any).webkitSpeechRecognition;
     if (!SpeechRecognition) return;
 
     stoppedByUserRef.current = false;
@@ -247,7 +275,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach(track => track.stop());
+      stream.getTracks().forEach((track) => track.stop());
       micGrantedRef.current = true;
     } catch (err) {
       micGrantedRef.current = false;
