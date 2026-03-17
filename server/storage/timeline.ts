@@ -8,7 +8,7 @@ import {
   type WorkoutStatus,
 } from "@shared/schema";
 import { db } from "../db";
-import { eq, and, or, isNull, inArray, sql, desc } from "drizzle-orm";
+import { eq, and, isNull, inArray, sql, desc } from "drizzle-orm";
 import type { WorkoutStorage } from "./workouts";
 import { toDateStr } from "../types";
 
@@ -124,9 +124,12 @@ export class TimelineStorage {
     const entries: TimelineEntry[] = [];
     const today = toDateStr();
 
-    const planDayConditions = planId 
-      ? and(eq(trainingPlans.userId, userId), eq(planDays.planId, planId))
-      : eq(trainingPlans.userId, userId);
+    let planDayConditions;
+    if (planId) {
+      planDayConditions = and(eq(trainingPlans.userId, userId), eq(planDays.planId, planId));
+    } else {
+      planDayConditions = eq(trainingPlans.userId, userId);
+    }
 
     const scheduledDaysResult = await db
       .select({ planDay: planDays, planName: trainingPlans.name, planId: trainingPlans.id })
@@ -139,25 +142,16 @@ export class TimelineStorage {
 
     const planDayIds = scheduledDays.map(r => r.planDay.id);
 
-    const queryCondition = planDayIds.length > 0
-      ? or(isNull(workoutLogs.planDayId), inArray(workoutLogs.planDayId, planDayIds))
-      : isNull(workoutLogs.planDayId);
-
-    const allWorkouts = await db
-      .select()
-      .from(workoutLogs)
-      .where(and(eq(workoutLogs.userId, userId), queryCondition));
-
-    const linkedWorkouts: WorkoutLog[] = [];
-    const standaloneWorkouts: WorkoutLog[] = [];
-
-    for (const log of allWorkouts) {
-      if (log.planDayId) {
-        linkedWorkouts.push(log);
-      } else {
-        standaloneWorkouts.push(log);
-      }
-    }
+    const [linkedWorkouts, standaloneWorkouts] = await Promise.all([
+      planDayIds.length > 0
+        ? db.select().from(workoutLogs).where(
+            and(eq(workoutLogs.userId, userId), inArray(workoutLogs.planDayId, planDayIds))
+          )
+        : Promise.resolve([]),
+      db.select().from(workoutLogs).where(
+        and(eq(workoutLogs.userId, userId), isNull(workoutLogs.planDayId))
+      ),
+    ]);
 
     const workoutsByPlanDayId = new Map<string, WorkoutLog>();
     for (const log of linkedWorkouts) {
