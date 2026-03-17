@@ -1,3 +1,4 @@
+import { logger } from "../logger";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { importPlanFromCSV, validateAndMapCSVRows, createSamplePlan, updatePlanDayWithCleanup } from "./planService";
 import { db } from "../db";
@@ -35,12 +36,12 @@ vi.mock("../storage", () => {
 
 describe("planService", () => {
   describe("importPlanFromCSV", () => {
-    let consoleErrorSpy: any;
+    let loggerErrorSpy: any;
 
     beforeEach(() => {
       vi.clearAllMocks();
-      // Suppress console.error in tests but keep track of calls
-      consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      // Suppress logger.error in tests but keep track of calls
+      loggerErrorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
     });
 
     it("should catch and log CSV parse errors, resulting in an empty rows error", async () => {
@@ -55,7 +56,7 @@ describe("planService", () => {
       await expect(importPlanFromCSV(invalidCSV, userId)).rejects.toThrow("No valid rows found in CSV");
 
       expect(csvParse.parse).toHaveBeenCalledWith(invalidCSV, expect.any(Object));
-      expect(consoleErrorSpy).toHaveBeenCalledWith("CSV parse error:", mockError);
+      expect(loggerErrorSpy).toHaveBeenCalledWith({ err: mockError }, "CSV parse error:");
     });
   });
 

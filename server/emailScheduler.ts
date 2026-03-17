@@ -1,7 +1,7 @@
 import type { IStorage } from "./storage";
 import type { User } from "@shared/schema";
 import { sendWeeklySummary, sendMissedWorkoutReminder, type WeeklySummaryData, type MissedWorkoutData } from "./email";
-import { log } from "./index";
+import { logger } from "./logger";
 import { toDateStr } from "./types";
 import { calculateStreak } from "./routeUtils";
 
@@ -100,7 +100,7 @@ export async function runEmailCronJob(storage: IStorage): Promise<{ usersChecked
   try {
     const markedMissed = await storage.markMissedPlanDays();
     if (markedMissed > 0) {
-      log(`Marked ${markedMissed} past planned day(s) as missed`, "email");
+      logger.info({ context: "email" }, `Marked ${markedMissed} past planned day(s) as missed`);
     }
 
     const usersToCheck = await storage.getUsersWithEmailNotifications();
@@ -108,7 +108,7 @@ export async function runEmailCronJob(storage: IStorage): Promise<{ usersChecked
       return { usersChecked: 0, emailsSent: 0, details: ["No users with email notifications enabled"] };
     }
 
-    log(`Cron: Checking emails for ${usersToCheck.length} user(s)`, "email");
+    logger.info({ context: "email" }, `Cron: Checking emails for ${usersToCheck.length} user(s)`);
 
     for (const user of usersToCheck) {
       try {
@@ -117,19 +117,19 @@ export async function runEmailCronJob(storage: IStorage): Promise<{ usersChecked
         if (sent.length > 0) {
           const detail = `Sent ${sent.join(", ")} to ${user.email}`;
           details.push(detail);
-          log(detail, "email");
+          logger.info({ context: "email" }, detail);
         }
       } catch (err) {
         const detail = `Failed for user ${user.id}: ${err}`;
         details.push(detail);
-        log(detail, "email");
+        logger.info({ context: "email" }, detail);
       }
     }
 
-    log(`Cron complete: ${emailsSent} email(s) sent to ${usersToCheck.length} user(s)`, "email");
+    logger.info({ context: "email" }, `Cron complete: ${emailsSent} email(s) sent to ${usersToCheck.length} user(s)`);
     return { usersChecked: usersToCheck.length, emailsSent, details };
   } catch (err) {
-    log(`Cron error: ${err}`, "email");
+    logger.info({ context: "email" }, `Cron error: ${err}`);
     throw err;
   }
 }

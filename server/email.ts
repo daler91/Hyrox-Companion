@@ -1,3 +1,4 @@
+import { logger } from "./logger";
 import { Resend } from "resend";
 import type { User } from "@shared/schema";
 import {
@@ -36,12 +37,12 @@ export async function sendEmail(
       html,
     });
     if (result.error) {
-      console.error("Resend error:", result.error);
+      logger.error({ err: result.error }, "Resend error:");
       return false;
     }
     return true;
   } catch (error) {
-    console.error("Failed to send email:", error);
+    logger.error({ err: error }, "Failed to send email:");
     return false;
   }
 }

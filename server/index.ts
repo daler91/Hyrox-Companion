@@ -2,11 +2,14 @@ import * as Sentry from "@sentry/node";
 import express, { type Request, Response, NextFunction } from "express";
 import compression from "compression";
 import helmet from "helmet";
+import { logger } from "./logger";
+import pinoHttp from "pino-http";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "node:http";
 import { storage } from "./storage";
 import { pool } from "./db";
+import { getAuth } from "@clerk/express";
 import { runStartupMaintenance } from "./maintenance";
 
 if (process.env.SENTRY_DSN) {
@@ -101,30 +104,32 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", timestamp: Date.now() });
 });
 
-export function log(message: string, source = "express") {
-  const formattedTime = new Date().toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true,
-  });
 
-  console.log(`${formattedTime} [${source}] ${message}`);
-}
 
-app.use((req, res, next) => {
-  const start = Date.now();
-  const path = req.path;
-
-  res.on("finish", () => {
-    const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
-      log(`${req.method} ${path} ${res.statusCode} in ${duration}ms`);
+app.use(pinoHttp({
+  logger,
+  customProps: (req, res) => {
+    let userId = 'anonymous';
+    try {
+      const auth = getAuth(req as Request);
+      if (auth?.userId) {
+        userId = auth.userId;
+      }
+    } catch {
+      // Ignored: getAuth throws if the request is not processed by Clerk middleware yet,
+      // which is expected for public routes. We safely fall back to 'anonymous'.
+      userId = 'anonymous';
     }
-  });
 
-  next();
-});
+    return {
+      context: 'http',
+      userId
+    };
+  },
+  autoLogging: {
+    ignore: (req) => !req.url?.startsWith('/api')
+  }
+}));
 
 await runStartupMaintenance(storage);
 await registerRoutes(httpServer, app);
@@ -164,17 +169,17 @@ httpServer.listen(
     reusePort: true,
   },
   () => {
-    log(`serving on port ${port}`);
+    logger.info({ port }, `serving on port ${port}`);
   },
 );
 
 // Graceful shutdown
 const shutdown = () => {
-  log("Received shutdown signal. Closing HTTP server...");
+  logger.info("Received shutdown signal. Closing HTTP server...");
   httpServer.close(() => {
-    log("HTTP server closed. Draining database pool...");
+    logger.info("HTTP server closed. Draining database pool...");
     pool.end().then(() => {
-      log("Database pool drained. Exiting process.");
+      logger.info("Database pool drained. Exiting process.");
       process.exit(0);
     });
   });

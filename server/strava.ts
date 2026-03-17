@@ -1,3 +1,4 @@
+import { logger } from "./logger";
 import type { Express, Response } from "express";
 import crypto from "node:crypto";
 import { storage } from "./storage";
@@ -61,7 +62,7 @@ interface StravaTokenResponse {
 
 async function refreshStravaToken(refreshToken: string): Promise<StravaTokenResponse | null> {
   if (!STRAVA_CLIENT_ID || !STRAVA_CLIENT_SECRET) {
-    console.error("Strava credentials not configured");
+    logger.error("Strava credentials not configured");
     return null;
   }
 
@@ -78,13 +79,13 @@ async function refreshStravaToken(refreshToken: string): Promise<StravaTokenResp
     });
 
     if (!response.ok) {
-      console.error("Failed to refresh Strava token:", await response.text());
+      logger.error({ err: await response.text() }, "Failed to refresh Strava token:");
       return null;
     }
 
     return await response.json();
   } catch (error) {
-    console.error("Error refreshing Strava token:", error);
+    logger.error({ err: error }, "Error refreshing Strava token:");
     return null;
   }
 }
@@ -130,7 +131,7 @@ export function registerStravaRoutes(app: Express): void {
         lastSyncedAt: connection.lastSyncedAt,
       });
     } catch (error) {
-      console.error("Strava status error:", error);
+      logger.error({ err: error }, "Strava status error:");
       res.status(500).json({ error: "Failed to get Strava status" });
     }
   });
@@ -159,13 +160,13 @@ export function registerStravaRoutes(app: Express): void {
     const { code, state, error: stravaError } = req.query;
 
     if (stravaError) {
-      console.error("Strava auth error received from provider");
+      logger.error("Strava auth error received from provider");
       return res.redirect("/settings?strava=error");
     }
 
     const verified = verifySignedState(state as string);
     if (!verified) {
-      console.error("Strava OAuth state invalid or expired - possible CSRF attack");
+      logger.error("Strava OAuth state invalid or expired - possible CSRF attack");
       return res.redirect("/settings?strava=error");
     }
 
@@ -188,7 +189,7 @@ export function registerStravaRoutes(app: Express): void {
       });
 
       if (!tokenResponse.ok) {
-        console.error("Token exchange failed:", await tokenResponse.text());
+        logger.error({ err: await tokenResponse.text() }, "Token exchange failed:");
         return res.redirect("/settings?strava=error");
       }
 
@@ -206,7 +207,7 @@ export function registerStravaRoutes(app: Express): void {
 
       res.redirect("/settings?strava=connected");
     } catch (error) {
-      console.error("Strava callback error:", error);
+      logger.error({ err: error }, "Strava callback error:");
       res.redirect("/settings?strava=error");
     }
   });
@@ -217,7 +218,7 @@ export function registerStravaRoutes(app: Express): void {
       await storage.deleteStravaConnection(userId);
       res.json({ success: true });
     } catch (error) {
-      console.error("Strava disconnect error:", error);
+      logger.error({ err: error }, "Strava disconnect error:");
       res.status(500).json({ error: "Failed to disconnect Strava" });
     }
   });
@@ -242,7 +243,7 @@ export function registerStravaRoutes(app: Express): void {
       );
 
       if (!activitiesResponse.ok) {
-        console.error("Failed to fetch Strava activities:", await activitiesResponse.text());
+        logger.error({ err: await activitiesResponse.text() }, "Failed to fetch Strava activities:");
         return res.status(500).json({ error: "Failed to fetch activities from Strava" });
       }
 
@@ -278,7 +279,7 @@ export function registerStravaRoutes(app: Express): void {
         total: activities.length,
       });
     } catch (error) {
-      console.error("Strava sync error:", error);
+      logger.error({ err: error }, "Strava sync error:");
       res.status(500).json({ error: "Failed to sync Strava activities" });
     }
   });

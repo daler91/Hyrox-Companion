@@ -1,3 +1,4 @@
+import { logger } from "../logger";
 import { Router, type Request } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
@@ -45,7 +46,7 @@ router.get("/api/personal-records", isAuthenticated, async (req: Request, res) =
     const allSets = await getExerciseSetsCoalesced(userId, from, to);
     res.json(calculatePersonalRecords(allSets));
   } catch (error) {
-    console.error("Error fetching PRs:", error);
+    logger.error({ err: error }, "Error fetching PRs:");
     res.status(500).json({ error: "Failed to fetch personal records" });
   }
 });
@@ -62,7 +63,7 @@ router.get("/api/exercise-analytics", isAuthenticated, async (req: Request, res)
     const allSets = await getExerciseSetsCoalesced(userId, from, to);
     res.json(calculateExerciseAnalytics(allSets));
   } catch (error) {
-    console.error("Error fetching exercise analytics:", error);
+    logger.error({ err: error }, "Error fetching exercise analytics:");
     res.status(500).json({ error: "Failed to fetch exercise analytics" });
   }
 });

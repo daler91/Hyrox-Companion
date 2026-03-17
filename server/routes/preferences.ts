@@ -1,3 +1,4 @@
+import { logger } from "../logger";
 import { Router, type Request } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
@@ -20,7 +21,7 @@ router.get('/api/preferences', isAuthenticated, async (req: Request, res) => {
       emailNotifications: user.emailNotifications ?? 1,
     });
   } catch (error) {
-    console.error("Error fetching preferences:", error);
+    logger.error({ err: error }, "Error fetching preferences:");
     res.status(500).json({ error: "Failed to fetch preferences" });
   }
 });
@@ -44,7 +45,7 @@ router.patch('/api/preferences', isAuthenticated, async (req: Request, res) => {
       emailNotifications: user.emailNotifications ?? 1,
     });
   } catch (error) {
-    console.error("Error updating preferences:", error);
+    logger.error({ err: error }, "Error updating preferences:");
     res.status(500).json({ error: "Failed to update preferences" });
   }
 });
