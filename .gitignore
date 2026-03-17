@@ -7,3 +7,12 @@ vite.config.ts.*
 cypress/videos
 cypress/screenshots
 cypress/downloads
+# Environment variables
+.env
+.env.*
+
+# Testing coverage
+coverage/
+
+# Original files (e.g. from git merge or formatting tools)
+*.orig
