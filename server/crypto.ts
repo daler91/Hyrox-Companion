@@ -1,3 +1,4 @@
+import { logger } from "./logger";
 import crypto from "node:crypto";
 
 const ALGORITHM = "aes-256-gcm";
@@ -69,7 +70,7 @@ export function decryptToken(encryptedData: string): string {
 
     return decrypted;
   } catch (error) {
-    console.error("Failed to decrypt token:", error);
+    logger.error({ err: error }, "Failed to decrypt token:");
     // If decryption fails, it might be corrupted or we lost the key
     // For safety, return empty string or throw depending on requirements
     // Returning the original string might be dangerous if it's partially matched
