@@ -8,16 +8,21 @@ import { type DistanceUnit } from "@shared/unitConversion";
 import { mapStravaActivityToWorkout, type StravaActivity } from "./services/stravaMapper";
 import { getUserId } from "./types";
 import { rateLimiter } from "./routeUtils";
+import rateLimit from "express-rate-limit";
 
 const STRAVA_CLIENT_ID = env.STRAVA_CLIENT_ID;
 const STRAVA_CLIENT_SECRET = env.STRAVA_CLIENT_SECRET;
 const STRAVA_REDIRECT_URI = env.REPLIT_DOMAINS
-  ? `https://${env.REPLIT_DOMAINS.split(",")[0]}/api/strava/callback`
-  : "http://localhost:5000/api/strava/callback";
+  ? `https://${env.REPLIT_DOMAINS.split(",")[0]}/api/v1/strava/callback`
+  : "http://localhost:5000/api/v1/strava/callback";
 
 const STATE_SECRET = env.CLERK_SECRET_KEY || crypto.randomBytes(32).toString("hex");
 
-const stravaAuthLimiter = rateLimiter("stravaAuth", 20, 15 * 60 * 1000); // 20 requests per 15 minutes
+const stravaAuthLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20,
+  message: "Too many requests from this IP, please try again after 15 minutes",
+});
 const STATE_MAX_AGE_MS = 10 * 60 * 1000;
 
 
