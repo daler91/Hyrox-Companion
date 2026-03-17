@@ -6,6 +6,7 @@ import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "node:http";
 import { storage } from "./storage";
+import { pool } from "./db";
 import { runStartupMaintenance } from "./maintenance";
 
 if (process.env.SENTRY_DSN) {
@@ -155,6 +156,7 @@ if (process.env.NODE_ENV === "production") {
 // this serves both the API and the client.
 // It is the only port that is not firewalled.
 const port = Number.parseInt(process.env.PORT || "5000", 10);
+
 httpServer.listen(
   {
     port,
@@ -165,3 +167,18 @@ httpServer.listen(
     log(`serving on port ${port}`);
   },
 );
+
+// Graceful shutdown
+const shutdown = () => {
+  log("Received shutdown signal. Closing HTTP server...");
+  httpServer.close(() => {
+    log("HTTP server closed. Draining database pool...");
+    pool.end().then(() => {
+      log("Database pool drained. Exiting process.");
+      process.exit(0);
+    });
+  });
+};
+
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);
