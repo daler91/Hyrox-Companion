@@ -45,9 +45,6 @@ export function RpeSelector({ value, onChange, showLabel = true, compact = false
                 : "bg-muted hover:bg-muted/80 text-muted-foreground"
             }`}
             data-testid={`button-rpe-${rpeValue}`}
-            aria-label={`RPE ${rpeValue}: ${getRpeLabel(rpeValue)}`}
-            title={getRpeLabel(rpeValue)}
-            aria-pressed={value === rpeValue}
           >
             {rpeValue}
           </button>

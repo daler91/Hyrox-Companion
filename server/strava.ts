@@ -11,8 +11,8 @@ import rateLimit from "express-rate-limit";
 
 const STRAVA_CLIENT_ID = env.STRAVA_CLIENT_ID;
 const STRAVA_CLIENT_SECRET = env.STRAVA_CLIENT_SECRET;
-const STRAVA_REDIRECT_URI = env.APP_URL
-  ? `${env.APP_URL}/api/strava/callback`
+const STRAVA_REDIRECT_URI = env.REPLIT_DOMAINS
+  ? `https://${env.REPLIT_DOMAINS.split(",")[0]}/api/v1/strava/callback`
   : "http://localhost:5000/api/v1/strava/callback";
 
 const STATE_SECRET = env.CLERK_SECRET_KEY || crypto.randomBytes(32).toString("hex");

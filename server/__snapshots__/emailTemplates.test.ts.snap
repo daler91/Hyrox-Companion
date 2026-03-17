@@ -119,12 +119,12 @@ exports[`email generation > buildWeeklySummaryEmail > generates HTML snapshot co
     <p style="font-size:14px;color:#64748b;margin-top:16px;">You missed 1 session this week. Don't worry — consistency over perfection!</p>
 
     <div style="text-align:center;margin-top:24px;">
-      <a href="http://localhost:5000" class="cta">View Your Timeline</a>
+      <a href="https://hyroxtracker.replit.app" class="cta">View Your Timeline</a>
     </div>
   </div>
   <div class="footer">
     <p>HyroxTracker — Train Smarter for Hyrox</p>
-    <p><a href="http://localhost:5000/settings">Manage email preferences</a></p>
+    <p><a href="https://hyroxtracker.replit.app/settings">Manage email preferences</a></p>
   </div>
 </div>
 </body></html>"
