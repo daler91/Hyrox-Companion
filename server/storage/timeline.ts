@@ -95,7 +95,7 @@ function createStandaloneWorkoutEntry(log: WorkoutLog): TimelineEntry {
 }
 
 export class TimelineStorage {
-  constructor(private workoutStorage: WorkoutStorage) {}
+  constructor(private readonly workoutStorage: WorkoutStorage) {}
 
   private async attachExerciseSets(entries: TimelineEntry[]): Promise<void> {
     const workoutLogIds = entries
