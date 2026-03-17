@@ -52,75 +52,45 @@ describe('usePlanImport', () => {
     });
   });
 
+
+
   describe('handleFileUpload', () => {
-    it('rejects non-CSV files', () => {
+    const runFileUploadTest = (isValid: boolean) => {
       const { result } = renderHook(() => usePlanImport(), { wrapper });
-
-      const mockEvent = {
-        target: {
-          files: [new File(['test content'], 'test.txt', { type: 'text/plain' })],
-          value: 'test.txt'
-        }
-      } as unknown as React.ChangeEvent<HTMLInputElement>;
-
-      act(() => {
-        result.current.handleFileUpload(mockEvent);
-      });
-
-      expect(mockToast).toHaveBeenCalledWith({
-        title: "Please upload a CSV file",
-        variant: "destructive",
-      });
-      expect(result.current.csvPreview).toBeNull();
-    });
-
-    it('processes valid CSV files', async () => {
-      const { result } = renderHook(() => usePlanImport(), { wrapper });
-
       const csvContent = "Week,Day,Focus,Workout\n1,Monday,Strength,Squats\n";
-      const file = new File([csvContent], 'plan.csv', { type: 'text/csv' });
+      const file = new File([isValid ? csvContent : 'test content'], isValid ? 'plan.csv' : 'test.txt', { type: isValid ? 'text/csv' : 'text/plain' });
+      const mockEvent = { target: { files: [file], value: isValid ? 'plan.csv' : 'test.txt' } } as unknown as React.ChangeEvent<HTMLInputElement>;
 
-      const mockEvent = {
-        target: {
-          files: [file],
-          value: 'plan.csv'
-        }
-      } as unknown as React.ChangeEvent<HTMLInputElement>;
-
-      // Mock FileReader
       const mockFileReader = {
         readAsText: vi.fn(function(this: { onload: (event: unknown) => void }) {
-          if (this.onload) {
-            this.onload({ target: { result: csvContent } });
-          }
+          if (this.onload) this.onload({ target: { result: csvContent } });
         }),
         onload: null
       };
 
       vi.stubGlobal('FileReader', vi.fn(() => mockFileReader));
+      act(() => { result.current.handleFileUpload(mockEvent); });
+      vi.unstubAllGlobals();
 
-      act(() => {
-        result.current.handleFileUpload(mockEvent);
-      });
+      return { result, mockFileReader, file, csvContent };
+    };
 
+    it('rejects non-CSV files', () => {
+      const { result } = runFileUploadTest(false);
+      expect(mockToast).toHaveBeenCalledWith({ title: "Please upload a CSV file", variant: "destructive" });
+      expect(result.current.csvPreview).toBeNull();
+    });
+
+    it('processes valid CSV files', async () => {
+      const { result, mockFileReader, file, csvContent } = runFileUploadTest(true);
       expect(mockFileReader.readAsText).toHaveBeenCalledWith(file);
-
       expect(result.current.csvPreview).toEqual({
         fileName: 'plan.csv',
         content: csvContent,
-        rows: [{
-          weekNumber: 1,
-          dayName: 'Monday',
-          focus: 'Strength',
-          mainWorkout: 'Squats'
-        }]
+        rows: [{ weekNumber: 1, dayName: 'Monday', focus: 'Strength', mainWorkout: 'Squats' }]
       });
-
-      vi.unstubAllGlobals();
     });
   });
-
-
   describe('Mutations', () => {
     // Shared helper for testing common mutation error states to reduce code duplication
     const testErrorState = async (trigger: (res: any) => void, expectedErrorTitle: string) => {
