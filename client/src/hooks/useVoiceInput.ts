@@ -157,8 +157,14 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
         recentEmissionsRef.current = recentEmissionsRef.current.filter(
           (e) => now - e.time < DEDUP_WINDOW_MS
         );
+        // Check for exact duplicates AND substring overlaps.
+        // Android Chrome in continuous mode can emit overlapping finals
+        // like "I need" then "I need to get to" then "I need to get to the house",
+        // causing duplicated words when all are appended to the field.
         const isDuplicate = recentEmissionsRef.current.some(
-          (e) => e.text === normalized
+          (e) => e.text === normalized ||
+                 e.text.includes(normalized) ||
+                 normalized.includes(e.text)
         );
         if (!isDuplicate) {
           recentEmissionsRef.current.push({ text: normalized, time: now });
