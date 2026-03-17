@@ -157,18 +157,39 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
         recentEmissionsRef.current = recentEmissionsRef.current.filter(
           (e) => now - e.time < DEDUP_WINDOW_MS
         );
-        // Check for exact duplicates AND substring overlaps.
-        // Android Chrome in continuous mode can emit overlapping finals
-        // like "I need" then "I need to get to" then "I need to get to the house",
-        // causing duplicated words when all are appended to the field.
-        const isDuplicate = recentEmissionsRef.current.some(
-          (e) => e.text === normalized ||
-                 e.text.includes(normalized) ||
-                 normalized.includes(e.text)
+        // Android Chrome in continuous mode can emit overlapping/progressive
+        // finals: "House" then "House is very small". We handle 3 cases:
+        // 1. Exact duplicate → skip
+        // 2. New is a subset of previous → skip (partial re-fire)
+        // 3. New is a superset of previous → emit only the delta (new words)
+        // NOTE: We use startsWith (not includes) because Android progressive
+        // finals always extend from the beginning of the utterance. Using
+        // includes would cause false matches on common words like "I am"
+        // appearing in the middle of unrelated sentences.
+        const exactOrSubset = recentEmissionsRef.current.some(
+          (e) => e.text === normalized || e.text.startsWith(normalized)
         );
-        if (!isDuplicate) {
-          recentEmissionsRef.current.push({ text: normalized, time: now });
-          onResultRef.current?.(finalTranscript);
+        if (exactOrSubset) {
+          // Case 1 & 2: skip entirely
+        } else {
+          // Check if the new result is a superset of a previous emission
+          const supersetOf = recentEmissionsRef.current.findIndex(
+            (e) => normalized.startsWith(e.text)
+          );
+          if (supersetOf !== -1) {
+            // Case 3: new is a superset — emit only the new portion
+            const previousText = recentEmissionsRef.current[supersetOf].text;
+            const delta = normalized.slice(previousText.length).trim();
+            // Update the tracker to the full (longer) text
+            recentEmissionsRef.current[supersetOf] = { text: normalized, time: now };
+            if (delta) {
+              onResultRef.current?.(delta);
+            }
+          } else {
+            // Completely new text — emit as-is
+            recentEmissionsRef.current.push({ text: normalized, time: now });
+            onResultRef.current?.(finalTranscript);
+          }
         }
       }
     };
