@@ -111,8 +111,7 @@ export default function Analytics() {
     let totalReps = 0;
     let totalVolume = 0;
 
-    for (let i = 0; i < data.length; i++) {
-      const d = data[i];
+    for (const d of data) {
       if (d.totalVolume > 0) hasVolume = true;
       if (d.maxWeight > 0) hasMaxWeight = true;
       if (d.totalReps > 0) hasTotalReps = true;
