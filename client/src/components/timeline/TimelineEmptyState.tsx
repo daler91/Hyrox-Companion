@@ -202,26 +202,36 @@ export default function TimelineEmptyState({
   setSchedulingPlanId,
   setFilterStatus,
 }: Readonly<TimelineEmptyStateProps>) {
+  let emptyStateContent = null;
+
+  if (filterStatus === "all" && !selectedPlanId && plans.length === 0) {
+    emptyStateContent = (
+      <WelcomeEmptyState
+        samplePlanMutation={samplePlanMutation}
+        importMutation={importMutation}
+        handleFileUpload={handleFileUpload}
+      />
+    );
+  } else if (filterStatus === "all" && selectedPlanId) {
+    emptyStateContent = (
+      <ReadyEmptyState
+        selectedPlanId={selectedPlanId}
+        setSchedulingPlanId={setSchedulingPlanId}
+      />
+    );
+  } else {
+    emptyStateContent = (
+      <NoWorkoutsEmptyState
+        filterStatus={filterStatus}
+        setFilterStatus={setFilterStatus}
+      />
+    );
+  }
+
   return (
     <Card className="overflow-visible">
       <CardContent className="p-8 md:p-12">
-        {filterStatus === "all" && !selectedPlanId && plans.length === 0 ? (
-          <WelcomeEmptyState
-            samplePlanMutation={samplePlanMutation}
-            importMutation={importMutation}
-            handleFileUpload={handleFileUpload}
-          />
-        ) : filterStatus === "all" && selectedPlanId ? (
-          <ReadyEmptyState
-            selectedPlanId={selectedPlanId}
-            setSchedulingPlanId={setSchedulingPlanId}
-          />
-        ) : (
-          <NoWorkoutsEmptyState
-            filterStatus={filterStatus}
-            setFilterStatus={setFilterStatus}
-          />
-        )}
+        {emptyStateContent}
       </CardContent>
     </Card>
   );
