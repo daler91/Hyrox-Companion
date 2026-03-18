@@ -181,8 +181,8 @@ describe("formatPace", () => {
   });
 
   it("handles NaN inputs", () => {
-    expect(formatPace(NaN, "km")).toBe("-");
-    expect(formatPace(NaN, "miles")).toBe("-");
+    expect(formatPace(Number.NaN, "km")).toBe("-");
+    expect(formatPace(Number.NaN, "miles")).toBe("-");
   });
 
   it("pads single digit seconds with a leading zero", () => {
