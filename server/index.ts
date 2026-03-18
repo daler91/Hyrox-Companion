@@ -143,7 +143,7 @@ app.use(
   "/api/docs",
   swaggerUi.serve,
   swaggerUi.setup(generateOpenApiDocument(), {
-    customCss: ".swagger-ui .topbar { display: none }",
+    customCss: ".swagger-ui .topbar { display: none } .swagger-ui .info { margin: 20px 0; }",
     customSiteTitle: "Workout API Documentation"
   })
 );
