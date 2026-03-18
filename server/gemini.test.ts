@@ -5,7 +5,7 @@ import {
   retryWithBackoff,
   workoutSuggestionSchema,
   parsedExerciseSchema,
-} from "./gemini";
+} from "./gemini/index";
 
 describe("isRetryableError", () => {
   it("returns true for 429 rate limit", () => {

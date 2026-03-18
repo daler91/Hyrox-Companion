@@ -1,5 +1,5 @@
 import { storage } from "../storage";
-import type { TrainingContext } from "../gemini";
+import type { TrainingContext } from "../gemini/index";
 import { calculateStreak } from "../routeUtils";
 import { HYROX_EXERCISES } from "../prompts";
 
