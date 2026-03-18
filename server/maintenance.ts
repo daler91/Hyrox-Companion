@@ -7,10 +7,10 @@ import { logger } from "./logger";
 async function ensureSchemaUpToDate() {
   const client = await pool.connect();
   try {
-    const result = await client.query(
+    const userCols = await client.query(
       `SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'users' AND column_name IN ('ai_coach_enabled', 'email_notifications')`,
     );
-    const columns = new Map(result.rows.map((r: { column_name: string; data_type: string }) => [r.column_name, r.data_type]));
+    const columns = new Map(userCols.rows.map((r: { column_name: string; data_type: string }) => [r.column_name, r.data_type]));
 
     if (!columns.has("ai_coach_enabled")) {
       await client.query(`ALTER TABLE users ADD COLUMN ai_coach_enabled boolean DEFAULT true NOT NULL`);
@@ -22,6 +22,14 @@ async function ensureSchemaUpToDate() {
       await client.query(`ALTER TABLE users ALTER COLUMN email_notifications TYPE boolean USING email_notifications::boolean`);
       await client.query(`ALTER TABLE users ALTER COLUMN email_notifications SET DEFAULT true`);
       logger.info({ context: "db" }, "Converted email_notifications column from integer to boolean");
+    }
+
+    const tpGoal = await client.query(
+      `SELECT 1 FROM information_schema.columns WHERE table_name = 'training_plans' AND column_name = 'goal'`,
+    );
+    if (tpGoal.rowCount === 0) {
+      await client.query(`ALTER TABLE training_plans ADD COLUMN goal text`);
+      logger.info({ context: "db" }, "Added missing goal column to training_plans table");
     }
   } catch (error) {
     logger.error({ context: "db", err: error }, "Schema migration check failed");
