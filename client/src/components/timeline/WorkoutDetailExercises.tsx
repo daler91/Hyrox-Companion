@@ -22,7 +22,7 @@ import {
   ExerciseInput,
   type StructuredExercise,
 } from "@/components/ExerciseInput";
-import React, { useCallback } from "react";
+import React from "react";
 import {
   categoryChipColors,
   formatExerciseSummary,
@@ -48,7 +48,6 @@ import { VoiceFieldButton } from "@/components/VoiceFieldButton";
 import { RpeSelector } from "@/components/RpeSelector";
 import { useWorkoutVoiceForm, type EditFormState } from "@/hooks/useWorkoutVoiceForm";
 import { useBlockCounts } from "@/hooks/useBlockCounts";
-import { useToast } from "@/hooks/use-toast";
 
 interface SortableDialogBlockProps {
   readonly blockId: string;
