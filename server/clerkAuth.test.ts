@@ -20,16 +20,6 @@ vi.mock("./storage", () => ({
   },
 }));
 
-vi.mock("./db", () => ({
-  db: {
-    select: vi.fn(() => ({
-      from: vi.fn(() => ({
-        where: vi.fn(() => []),
-      })),
-    })),
-  },
-}));
-
 describe("isAuthenticated middleware", () => {
   let req: any;
   let res: any;

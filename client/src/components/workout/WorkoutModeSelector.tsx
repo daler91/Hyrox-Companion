@@ -18,7 +18,7 @@ export const WorkoutModeSelector = ({
   isSupported,
   startListening,
   stopListening,
-}: WorkoutModeSelectorProps) => {
+}: Readonly<WorkoutModeSelectorProps>) => {
   return (
     <div className="flex items-center gap-2">
       <Button

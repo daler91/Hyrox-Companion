@@ -26,7 +26,7 @@ export default function SchedulePlanDialog({
   onStartDateChange,
   onSchedule,
   isPending,
-}: SchedulePlanDialogProps) {
+}: Readonly<SchedulePlanDialogProps>) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>

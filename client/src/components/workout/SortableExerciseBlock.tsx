@@ -13,7 +13,7 @@ export interface SortableExerciseBlockProps {
   readonly onRemove: (blockId: string) => void;
 }
 
-export function SortableExerciseBlock({ blockId, exData, blockLabel, weightUnit, distanceUnit, onChange, onRemove }: SortableExerciseBlockProps) {
+export function SortableExerciseBlock({ blockId, exData, blockLabel, weightUnit, distanceUnit, onChange, onRemove }: Readonly<SortableExerciseBlockProps>) {
   const {
     attributes,
     listeners,

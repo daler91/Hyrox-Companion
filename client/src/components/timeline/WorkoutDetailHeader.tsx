@@ -46,7 +46,7 @@ function getStatusBadge(status: string) {
   }
 }
 
-export function WorkoutDetailHeader({ status, source, dayName, focus, isEditing }: WorkoutDetailHeaderProps) {
+export function WorkoutDetailHeader({ status, source, dayName, focus, isEditing }: Readonly<WorkoutDetailHeaderProps>) {
   return (
     <DialogHeader>
       <div className="flex items-center gap-2 flex-wrap">

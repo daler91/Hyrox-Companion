@@ -141,7 +141,7 @@ interface SuggestionsListProps {
   readonly onDismiss: (workoutId: string) => void;
 }
 
-export function SuggestionsList({ suggestions, applyingId, onApply, onDismiss }: SuggestionsListProps) {
+export function SuggestionsList({ suggestions, applyingId, onApply, onDismiss }: Readonly<SuggestionsListProps>) {
   if (suggestions.length === 0) return null;
 
   return (

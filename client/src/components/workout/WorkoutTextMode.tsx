@@ -28,7 +28,7 @@ export const WorkoutTextMode = ({
   interimTranscript,
   parseMutation,
   toast,
-}: WorkoutTextModeProps) => {
+}: Readonly<WorkoutTextModeProps>) => {
   return (
     <Card>
       <CardHeader>

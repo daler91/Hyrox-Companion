@@ -79,7 +79,7 @@ function getConfidenceClasses(confidence: number): string {
   return "bg-red-500/10 text-red-600 dark:text-red-400";
 }
 
-export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg", distanceUnit = "km", blockLabel }: ExerciseInputProps) {
+export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg", distanceUnit = "km", blockLabel }: Readonly<ExerciseInputProps>) {
   const idPrefix = useId();
   const def = EXERCISE_DEFINITIONS[exercise.exerciseName];
   const fields = getFields(exercise.exerciseName);

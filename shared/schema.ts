@@ -6,17 +6,6 @@ import { z } from "zod";
 export const workoutStatusEnum = ["planned", "completed", "missed", "skipped"] as const;
 export type WorkoutStatus = (typeof workoutStatusEnum)[number];
 
-// Session storage table (legacy, kept for schema compatibility)
-export const sessions = pgTable(
-  "sessions",
-  {
-    sid: varchar("sid", { length: 255 }).primaryKey(),
-    sess: jsonb("sess").notNull(),
-    expire: timestamp("expire").notNull(),
-  },
-  (table) => [index("IDX_session_expire").on(table.expire)],
-);
-
 // User table
 export const users = pgTable("users", {
   id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),

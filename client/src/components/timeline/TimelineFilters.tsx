@@ -124,7 +124,7 @@ export default function TimelineFilters({
   isImporting,
   onRenamePlan,
   isRenaming,
-}: TimelineFiltersProps) {
+}: Readonly<TimelineFiltersProps>) {
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [renameName, setRenameName] = useState("");
 

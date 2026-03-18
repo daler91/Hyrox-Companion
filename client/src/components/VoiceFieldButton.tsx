@@ -11,7 +11,7 @@ interface VoiceFieldButtonProps {
   "data-testid"?: string;
 }
 
-export function VoiceFieldButton({ onTranscript, onStopRef, size = "icon", className, "data-testid": dataTestId }: VoiceFieldButtonProps) {
+export function VoiceFieldButton({ onTranscript, onStopRef, size = "icon", className, "data-testid": dataTestId }: Readonly<VoiceFieldButtonProps>) {
   const { toast } = useToast();
 
   const handleResult = useCallback((transcript: string) => {
