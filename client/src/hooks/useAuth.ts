@@ -2,8 +2,8 @@ import { useUser, useAuth as useClerkAuth } from "@clerk/clerk-react";
 import { useQuery } from "@tanstack/react-query";
 import type { User } from "@shared/schema";
 
-const isCypressTest = globalThis.window !== undefined && "Cypress" in globalThis.window;
-const isDevPreview = import.meta.env.DEV && globalThis.window !== undefined && (!import.meta.env.VITE_CLERK_PUBLISHABLE_KEY || globalThis.window.self !== globalThis.window.top);
+const isCypressTest = typeof window !== "undefined" && "Cypress" in window;
+const isDevPreview = import.meta.env.DEV && typeof window !== "undefined" && (!import.meta.env.VITE_CLERK_PUBLISHABLE_KEY || window.self !== window.top);
 const shouldBypassAuth = isCypressTest || isDevPreview;
 
 function useClerkAuthImpl() {

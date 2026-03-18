@@ -31,7 +31,8 @@ export function calculateStats(timeline: TimelineEntry[]): TrainingStats {
   
   const completedDatesSet = new Set<string>();
 
-  for (const entry of timeline) {
+  for (let i = 0; i < timeline.length; i++) {
+    const entry = timeline[i];
 
     // Check if in current week
     if (isDateInRange(entry.date, startOfWeekStr, endOfWeekStr)) {

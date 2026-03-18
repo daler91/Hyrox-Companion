@@ -69,7 +69,7 @@ describe("useVoiceInput dedup", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     mockRecognitionInstances.length = 0;
-    (globalThis.window as any).SpeechRecognition = MockSpeechRecognition;
+    (window as any).SpeechRecognition = MockSpeechRecognition;
 
     Object.defineProperty(navigator, "mediaDevices", {
       value: {
@@ -83,7 +83,7 @@ describe("useVoiceInput dedup", () => {
   });
 
   afterEach(() => {
-    delete (globalThis.window as any).SpeechRecognition;
+    delete (window as any).SpeechRecognition;
     vi.useRealTimers();
     vi.restoreAllMocks();
   });

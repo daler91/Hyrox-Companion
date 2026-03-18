@@ -1,7 +1,4 @@
 import type { Express } from "express";
-import swaggerUi from "swagger-ui-express";
-import { generateOpenApiDocument } from "../shared/openapi";
-
 import type { Server } from "node:http";
 import { setupAuth } from "./clerkAuth";
 import { registerStravaRoutes } from "./strava";
@@ -20,14 +17,6 @@ export async function registerRoutes(
 ): Promise<Server> {
   await setupAuth(app);
   registerStravaRoutes(app);
-
-  // Expose raw OpenAPI JSON
-  const openApiDocument = generateOpenApiDocument();
-  app.get("/api-docs/openapi.json", (req, res) => res.json(openApiDocument));
-
-  // Serve Swagger UI
-  app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(openApiDocument));
-
 
   app.use(authRoutes);
   app.use(preferencesRoutes);
