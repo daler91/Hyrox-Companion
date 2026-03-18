@@ -8,11 +8,11 @@ import type { TimelineEntry } from '@shared/schema';
 import React from 'react';
 
 // Setup test QueryClient
-const testQueryClient = new QueryClient({
+const createTestQueryClient = () => new QueryClient({
   defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
 });
 const wrapper = ({ children }: { children: React.ReactNode }) => (
-  <QueryClientProvider client={testQueryClient}>{children}</QueryClientProvider>
+  <QueryClientProvider client={createTestQueryClient()}>{children}</QueryClientProvider>
 );
 
 vi.mock('@/lib/queryClient', () => ({
@@ -41,7 +41,6 @@ describe('useWorkoutActions', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
-    testQueryClient.clear();
   });
 
   describe('State management', () => {
