@@ -17,7 +17,14 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Upload, Loader2, Filter, Download, Pencil } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Upload, Loader2, Filter, Download, Pencil, Target } from "lucide-react";
 import type { TrainingPlan } from "@shared/schema";
 import type { FilterStatus } from "./types";
 
@@ -54,6 +61,8 @@ interface TimelineFiltersProps {
   readonly isImporting: boolean;
   readonly onRenamePlan?: (planId: string, newName: string) => void;
   readonly isRenaming?: boolean;
+  readonly onGoalSave?: (planId: string, goal: string | null) => void;
+  readonly isUpdatingGoal?: boolean;
 }
 
 
@@ -93,14 +102,19 @@ function renderPlanSelector(
           </SelectContent>
         </Select>
         {selectedPlanId && (
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={openRenameDialog}
-            data-testid="button-rename-plan" aria-label="Rename plan"
-          >
-            <Pencil className="h-4 w-4" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={openRenameDialog}
+                data-testid="button-rename-plan" aria-label="Rename plan"
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Rename plan</TooltipContent>
+          </Tooltip>
         )}
       </div>
     );
@@ -124,9 +138,13 @@ export default function TimelineFilters({
   isImporting,
   onRenamePlan,
   isRenaming,
+  onGoalSave,
+  isUpdatingGoal,
 }: Readonly<TimelineFiltersProps>) {
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [renameName, setRenameName] = useState("");
+  const [goalDialogOpen, setGoalDialogOpen] = useState(false);
+  const [goalText, setGoalText] = useState("");
 
   const selectedPlan = plans.find((p) => p.id === selectedPlanId);
 
@@ -137,6 +155,13 @@ export default function TimelineFilters({
     }
   };
 
+  const openGoalDialog = () => {
+    if (selectedPlan) {
+      setGoalText(selectedPlan.goal ?? "");
+      setGoalDialogOpen(true);
+    }
+  };
+
   const handleRenameSubmit = () => {
     if (selectedPlanId && renameName.trim()) {
       onRenamePlan?.(selectedPlanId, renameName.trim());
@@ -144,10 +169,18 @@ export default function TimelineFilters({
     }
   };
 
+  const handleGoalSubmit = () => {
+    if (selectedPlanId) {
+      onGoalSave?.(selectedPlanId, goalText.trim() || null);
+      setGoalDialogOpen(false);
+    }
+  };
+
   return (
     <>
     <Card>
       <CardContent className="p-4">
+        <TooltipProvider delayDuration={300}>
         <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
           {renderPlanSelector(plansLoading, plans, selectedPlanId, onPlanChange, openRenameDialog)}
 
@@ -201,6 +234,38 @@ export default function TimelineFilters({
             />
           </div>
         </div>
+
+        {/* Plan goal strip — shown when a specific plan is selected */}
+        {selectedPlan && (
+          <div className="flex items-center gap-2 pt-1 border-t mt-1">
+            <Target className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            <button
+              type="button"
+              className="flex-1 text-left text-sm text-muted-foreground hover:text-foreground truncate transition-colors"
+              onClick={openGoalDialog}
+              data-testid="button-plan-goal"
+              title="Set plan goal"
+            >
+              {selectedPlan.goal ? selectedPlan.goal : <span className="italic">Add a goal, e.g. Complete Hyrox in under 90 min…</span>}
+            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-6 w-6 shrink-0"
+                  onClick={openGoalDialog}
+                  aria-label="Edit plan goal"
+                  data-testid="button-edit-goal"
+                >
+                  <Pencil className="h-3 w-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Edit plan goal</TooltipContent>
+            </Tooltip>
+          </div>
+        )}
+              </TooltipProvider>
       </CardContent>
     </Card>
 
@@ -226,6 +291,42 @@ export default function TimelineFilters({
             data-testid="button-rename-submit"
           >
             {isRenaming ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog open={goalDialogOpen} onOpenChange={setGoalDialogOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Target className="h-4 w-4" />
+            Plan Goal
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-2">
+          <Label htmlFor="plan-goal-input">What are you training towards?</Label>
+          <Textarea
+            id="plan-goal-input"
+            value={goalText}
+            onChange={(e) => setGoalText(e.target.value.slice(0, 500))}
+            placeholder="e.g. Complete Hyrox in under 90 minutes, finish my first marathon sub-4h…"
+            className="resize-none"
+            rows={3}
+            data-testid="input-plan-goal"
+          />
+          <p className="text-xs text-muted-foreground text-right">{goalText.length}/500</p>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setGoalDialogOpen(false)}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleGoalSubmit}
+            disabled={isUpdatingGoal}
+            data-testid="button-goal-submit"
+          >
+            {isUpdatingGoal ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save Goal"}
           </Button>
         </DialogFooter>
       </DialogContent>

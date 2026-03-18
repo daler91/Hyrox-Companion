@@ -58,3 +58,7 @@ VITE_CLERK_PUBLISHABLE_KEY = "pk_test_Y2xlcmsuaHlyb3hjb21wYW5pb24ubGlmZSQ"
 
 [userenv.production]
 VITE_CLERK_PUBLISHABLE_KEY = "pk_live_Y2xlcmsuaHlyb3hjb21wYW5pb24ubGlmZSQ"
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 120000

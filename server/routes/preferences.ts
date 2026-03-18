@@ -19,6 +19,7 @@ router.get('/api/v1/preferences', isAuthenticated, async (req: Request, res) => 
       distanceUnit: user.distanceUnit || "km",
       weeklyGoal: user.weeklyGoal || 5,
       emailNotifications: user.emailNotifications ?? true,
+      aiCoachEnabled: user.aiCoachEnabled ?? true,
     });
   } catch (error) {
     logger.error({ err: error }, "Error fetching preferences:");
@@ -43,6 +44,7 @@ router.patch('/api/v1/preferences', isAuthenticated, async (req: Request, res) =
       distanceUnit: user.distanceUnit,
       weeklyGoal: user.weeklyGoal,
       emailNotifications: user.emailNotifications ?? true,
+      aiCoachEnabled: user.aiCoachEnabled ?? true,
     });
   } catch (error) {
     logger.error({ err: error }, "Error updating preferences:");

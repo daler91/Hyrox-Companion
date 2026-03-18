@@ -15,7 +15,9 @@ import {
   BookOpen,
   HelpCircle,
   Trophy,
+  Loader2,
 } from "lucide-react";
+import { format } from "date-fns";
 import { SiStrava } from "react-icons/si";
 import { type TimelineEntry, type PersonalRecord } from "@shared/schema";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
@@ -31,6 +33,7 @@ interface TimelineWorkoutCardProps {
   readonly combiningEntryId?: string | null;
   readonly combiningEntryDate?: string | null;
   readonly personalRecords?: Record<string, PersonalRecord>;
+  readonly isAutoCoaching?: boolean;
 }
 
 
@@ -211,6 +214,7 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
   combiningEntryId,
   combiningEntryDate,
   personalRecords,
+  isAutoCoaching,
 }: Readonly<TimelineWorkoutCardProps>) {
   const { distanceUnit, weightLabel } = useUnitPreferences();
   
@@ -218,6 +222,9 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
   const isSameDate = combiningEntryDate === entry.date;
   const canBeCombinedWith = isCombining && !isBeingCombined && isSameDate;
   const isPlanned = entry.status === "planned" && entry.planDayId;
+
+  const todayStr = format(new Date(), "yyyy-MM-dd");
+  const isTargetedByCoach = isAutoCoaching && isPlanned && entry.date >= todayStr;
 
   const handleCardClick = (e: React.MouseEvent) => {
     if (canBeCombinedWith) {
@@ -241,13 +248,28 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
     return groupExerciseSets(entry.exerciseSets);
   }, [entry.exerciseSets]);
 
+  const baseCardClasses = getCardClasses(isBeingCombined, canBeCombinedWith, entry.status);
+  const aiCoachClasses = isTargetedByCoach 
+    ? "border-primary/60 bg-primary/5 shadow-md shadow-primary/20 transition-all duration-700 relative" 
+    : "";
+
   return (
     <Card
-      className={`cursor-pointer transition-colors hover-elevate ${getCardClasses(isBeingCombined, canBeCombinedWith, entry.status)}`}
+      className={`cursor-pointer transition-colors hover-elevate ${baseCardClasses} ${aiCoachClasses}`}
       onClick={handleCardClick}
       data-testid={`card-timeline-entry-${entry.id}`}
     >
-      <CardContent className="p-4">
+      {isTargetedByCoach && (
+        <Badge 
+          variant="outline" 
+          className="absolute -top-3 -right-3 z-30 border-primary border-2 text-primary bg-background shadow-lg shadow-primary/30 animate-pulse px-3 py-1 text-xs font-bold" 
+          data-testid={`badge-ai-coach-${entry.id}`}
+        >
+          <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+          AI Modifying
+        </Badge>
+      )}
+      <CardContent className="p-4 relative">
         <div className="flex items-start gap-3">
           {isPlanned && (
             <Button
@@ -272,6 +294,12 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2 flex-wrap">
               {getStatusBadge(entry.status)}
+              {isTargetedByCoach && (
+                <Badge variant="outline" className="border-primary text-primary bg-primary/5 animate-pulse" data-testid={`badge-ai-coach-${entry.id}`}>
+                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                  AI Modifying
+                </Badge>
+              )}
               {entry.source === "strava" && (
                 <Badge className="bg-[#FC4C02]/10 text-[#FC4C02]">
                   <SiStrava className="h-3 w-3 mr-1" />

@@ -60,8 +60,12 @@ function parseAndValidateSuggestions(text: string): WorkoutSuggestion[] {
 function buildSuggestionsPrompt(
   trainingContext: TrainingContext,
   upcomingWorkouts: UpcomingWorkout[],
+  planGoal?: string,
 ): string {
   let prompt = `--- ATHLETE'S TRAINING DATA ---\n`;
+  if (planGoal) {
+    prompt += `Athlete's goal: ${planGoal}\n`;
+  }
   prompt += `Completion rate: ${trainingContext.completionRate}%\n`;
   prompt += `Current streak: ${trainingContext.currentStreak} days\n`;
   prompt += `Completed workouts: ${trainingContext.completedWorkouts}\n`;
@@ -96,13 +100,14 @@ function buildSuggestionsPrompt(
 export async function generateWorkoutSuggestions(
   trainingContext: TrainingContext,
   upcomingWorkouts: UpcomingWorkout[],
+  planGoal?: string,
 ): Promise<WorkoutSuggestion[]> {
   try {
     if (upcomingWorkouts.length === 0) {
       return [];
     }
 
-    const prompt = buildSuggestionsPrompt(trainingContext, upcomingWorkouts);
+    const prompt = buildSuggestionsPrompt(trainingContext, upcomingWorkouts, planGoal);
 
     const response = await retryWithBackoff(
       () =>
