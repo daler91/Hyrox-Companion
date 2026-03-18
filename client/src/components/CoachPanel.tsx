@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { useMutation } from "@tanstack/react-query";
+
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { ChatMessage } from "@/components/ChatMessage";
@@ -8,7 +8,7 @@ import { QuickActions } from "@/components/QuickActions";
 import { StatBadge } from "@/components/coach/StatBadge";
 import { SuggestionsList, useSuggestions } from "@/components/coach/SuggestionsTab";
 import { Activity, TrendingUp, Target, Calendar, Flame, Trash2, Loader2, X, MessageSquare } from "lucide-react";
-import { apiRequest } from "@/lib/queryClient";
+
 import { calculateStats } from "@/lib/statsUtils";
 import { useChatSession, type Message } from "@/hooks/useChatSession";
 import { useSaveMessageMutation } from "@/hooks/useChatMutations";

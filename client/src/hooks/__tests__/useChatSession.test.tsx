@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useChatSession } from '../useChatSession';
 import * as queryClient from '@/lib/queryClient';
-import * as dateUtils from '@/lib/dateUtils';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 

@@ -7,7 +7,6 @@ import { sortableKeyboardCoordinates, arrayMove } from "@dnd-kit/sortable";
 import { type StructuredExercise, createDefaultSet } from "@/components/ExerciseInput";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { getExerciseLabel } from "@/lib/exerciseUtils";
 
 
 interface UseWorkoutEditorOptions {

@@ -1,17 +1,16 @@
 import { type ParsedExercise, type TimelineEntry, type WorkoutStatus } from "@shared/schema";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
-import { getExerciseLabel, groupExerciseSets } from "@/lib/exerciseUtils";
+import { getExerciseLabel, groupExerciseSets, exerciseSetsToStructured } from "@/lib/exerciseUtils";
 import {
   useWorkoutEditor,
   exerciseToPayload,
 } from "@/hooks/useWorkoutEditor";
 import { WorkoutDetailHeader } from "./WorkoutDetailHeader";
 import { WorkoutDetailView, WorkoutDetailEditForm } from "./WorkoutDetailExercises";
-import { exerciseSetsToStructured } from "@/lib/exerciseUtils";
 import { StatusChangeSection, WorkoutDetailFooter, DeleteConfirmDialog } from "./WorkoutDetailActions";
 
 interface WorkoutDetailDialogProps {
