@@ -29,7 +29,7 @@ function formatDate(d: string): string {
 }
 
 interface PersonalRecordsTabProps {
-  dateParams: string;
+  readonly dateParams: string;
 }
 
 export function PersonalRecordsTab({ dateParams }: PersonalRecordsTabProps) {

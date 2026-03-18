@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -13,7 +13,7 @@ interface RawPREntry {
 }
 
 interface ExerciseProgressionTabProps {
-  dateParams: string;
+  readonly dateParams: string;
 }
 
 export function ExerciseProgressionTab({ dateParams }: ExerciseProgressionTabProps) {
