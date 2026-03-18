@@ -124,7 +124,7 @@ export function usePlanImport({ onPlanScheduled }: UsePlanImportOptions = {}) {
         content: csvContent,
         rows: previewRows,
       });
-    } catch (error) {
+    } catch {
       toast({ title: "Failed to read file", variant: "destructive" });
     } finally {
       event.target.value = "";

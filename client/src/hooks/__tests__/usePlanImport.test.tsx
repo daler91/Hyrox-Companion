@@ -51,8 +51,6 @@ describe('usePlanImport', () => {
     ])('%s', async (isValid, _, expectedToast, expectPreviewNull) => {
       const { result } = runHook();
       const content = "Week,Day,Focus,Workout\n1,Monday,Strength,Squats\n";
-      const file = new File([isValid ? content : 'err'], isValid ? 'plan.csv' : 'x.txt', { type: isValid ? 'text/csv' : 'text/plain' });
-      const ev = { target: { files: [file], value: file.name } } as unknown as React.ChangeEvent<HTMLInputElement>;
 
       const mockFileText = vi.fn().mockResolvedValue(content);
       const fileToUse = new File([isValid ? content : 'err'], isValid ? 'plan.csv' : 'x.txt', { type: isValid ? 'text/csv' : 'text/plain' });
