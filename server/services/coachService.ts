@@ -66,12 +66,14 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
 
         let updateValue: string;
         if (suggestion.action === "append") {
-          const existingValue =
-            suggestion.targetField === "mainWorkout"
-              ? entry.mainWorkout
-              : suggestion.targetField === "accessory"
-                ? entry.accessory || ""
-                : "";
+          let existingValue: string;
+          if (suggestion.targetField === "mainWorkout") {
+            existingValue = entry.mainWorkout;
+          } else if (suggestion.targetField === "accessory") {
+            existingValue = entry.accessory || "";
+          } else {
+            existingValue = "";
+          }
           updateValue = existingValue
             ? `${existingValue}\n[AI Coach] ${suggestion.recommendation}`
             : `[AI Coach] ${suggestion.recommendation}`;
