@@ -248,13 +248,28 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
     return groupExerciseSets(entry.exerciseSets);
   }, [entry.exerciseSets]);
 
+  const baseCardClasses = getCardClasses(isBeingCombined, canBeCombinedWith, entry.status);
+  const aiCoachClasses = isTargetedByCoach 
+    ? "border-primary/60 bg-primary/5 shadow-md shadow-primary/20 transition-all duration-700 relative" 
+    : "";
+
   return (
     <Card
-      className={`cursor-pointer transition-colors hover-elevate ${getCardClasses(isBeingCombined, canBeCombinedWith, entry.status)}`}
+      className={`cursor-pointer transition-colors hover-elevate ${baseCardClasses} ${aiCoachClasses}`}
       onClick={handleCardClick}
       data-testid={`card-timeline-entry-${entry.id}`}
     >
-      <CardContent className="p-4">
+      {isTargetedByCoach && (
+        <Badge 
+          variant="outline" 
+          className="absolute -top-3 -right-3 z-30 border-primary border-2 text-primary bg-background shadow-lg shadow-primary/30 animate-pulse px-3 py-1 text-xs font-bold" 
+          data-testid={`badge-ai-coach-${entry.id}`}
+        >
+          <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+          AI Modifying
+        </Badge>
+      )}
+      <CardContent className="p-4 relative">
         <div className="flex items-start gap-3">
           {isPlanned && (
             <Button
