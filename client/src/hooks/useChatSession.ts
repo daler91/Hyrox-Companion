@@ -19,6 +19,7 @@ function processStreamLines(
     try {
       data = JSON.parse(line.slice(6));
     } catch (parseError) {
+      console.warn("Failed to parse chat segment", { parseError, segment: line });
       continue;
     }
     if (data.text) {
@@ -215,7 +216,8 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         setMessages((prev) => [...prev, assistantMessage]);
         saveMessageMutation.mutate({ role: "assistant", content: data.response });
       }
-    } catch {
+    } catch (err) {
+      console.warn("Stream interrupted or failed", { err });
       if (fullResponse) {
         setMessages((prev) =>
           prev.map((m) =>

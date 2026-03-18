@@ -32,9 +32,9 @@ export function formatStravaDistance(meters: number, distanceUnit: DistanceUnit)
   const km = meters / 1000;
   if (distanceUnit === "miles") {
     const miles = km * 0.621371;
-    return `${miles.toFixed(2)} mi`;
+    return `${Number(miles.toFixed(2))} mi`;
   }
-  return `${km.toFixed(2)} km`;
+  return `${Number(km.toFixed(2))} km`;
 }
 
 function formatDuration(seconds: number): string {
