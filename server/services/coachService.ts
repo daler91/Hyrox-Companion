@@ -1,8 +1,62 @@
 import { logger } from "../logger";
 import { storage } from "../storage";
 import { buildTrainingContext } from "./aiService";
-import { generateWorkoutSuggestions, type UpcomingWorkout } from "../gemini/index";
+import { generateWorkoutSuggestions, type UpcomingWorkout, type WorkoutSuggestion } from "../gemini/index";
 import { toDateStr } from "../types";
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function getExistingFieldValue(
+  suggestion: WorkoutSuggestion,
+  entry: UpcomingWorkout,
+): string {
+  if (suggestion.targetField === "mainWorkout") return entry.mainWorkout;
+  if (suggestion.targetField === "accessory") return entry.accessory || "";
+  return "";
+}
+
+function buildUpdateValue(
+  suggestion: WorkoutSuggestion,
+  entry: UpcomingWorkout,
+): string {
+  if (suggestion.action !== "append") return suggestion.recommendation;
+  const existing = getExistingFieldValue(suggestion, entry);
+  return existing
+    ? `${existing}\n[AI Coach] ${suggestion.recommendation}`
+    : `[AI Coach] ${suggestion.recommendation}`;
+}
+
+async function applySuggestion(
+  suggestion: WorkoutSuggestion,
+  upcomingWorkouts: UpcomingWorkout[],
+  userId: string,
+): Promise<boolean> {
+  if (!suggestion.workoutId || !suggestion.recommendation) return false;
+  const entry = upcomingWorkouts.find((w) => w.id === suggestion.workoutId);
+  if (!entry) return false;
+
+  try {
+    const updateValue = buildUpdateValue(suggestion, entry);
+    await storage.updatePlanDay(
+      suggestion.workoutId,
+      { [suggestion.targetField]: updateValue },
+      userId,
+    );
+    return true;
+  } catch (applyErr) {
+    logger.warn(
+      { err: applyErr, workoutId: suggestion.workoutId },
+      "[coach] Failed to apply suggestion to plan day:",
+    );
+    return false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
 
 /**
  * Auto-coach: fires after a workout is completed.
@@ -12,26 +66,21 @@ import { toDateStr } from "../types";
 export async function triggerAutoCoach(userId: string): Promise<{ adjusted: number }> {
   try {
     const user = await storage.getUser(userId);
-    if (!user?.aiCoachEnabled) {
-      return { adjusted: 0 };
-    }
+    if (!user?.aiCoachEnabled) return { adjusted: 0 };
 
     const [trainingContext, plans] = await Promise.all([
       buildTrainingContext(userId),
       storage.listTrainingPlans(userId),
     ]);
 
-    // Extract the goal from the active plan (first plan)
-    const activePlanGoal = plans.length > 0 ? (plans[0].goal ?? undefined) : undefined;
-
-    const timeline = await storage.getTimeline(userId);
+    const activePlanGoal = plans[0]?.goal ?? undefined;
     const today = toDateStr();
+    const timeline = await storage.getTimeline(userId);
 
     const upcomingWorkouts: UpcomingWorkout[] = timeline
       .filter(
         (entry) =>
           entry.status === "planned" &&
-          entry.date &&
           entry.date >= today &&
           entry.planDayId !== null,
       )
@@ -45,9 +94,7 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
         accessory: entry.accessory || undefined,
       }));
 
-    if (upcomingWorkouts.length === 0) {
-      return { adjusted: 0 };
-    }
+    if (upcomingWorkouts.length === 0) return { adjusted: 0 };
 
     const suggestions = await generateWorkoutSuggestions(
       trainingContext,
@@ -55,50 +102,14 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
       activePlanGoal,
     );
 
-    let adjusted = 0;
-    for (const suggestion of suggestions) {
-      if (!suggestion.workoutId || !suggestion.recommendation) continue;
-
-      try {
-        // Find the current plan day to build the merged update
-        const entry = upcomingWorkouts.find((w) => w.id === suggestion.workoutId);
-        if (!entry) continue;
-
-        let updateValue: string;
-        if (suggestion.action === "append") {
-          let existingValue: string;
-          if (suggestion.targetField === "mainWorkout") {
-            existingValue = entry.mainWorkout;
-          } else if (suggestion.targetField === "accessory") {
-            existingValue = entry.accessory || "";
-          } else {
-            existingValue = "";
-          }
-          updateValue = existingValue
-            ? `${existingValue}\n[AI Coach] ${suggestion.recommendation}`
-            : `[AI Coach] ${suggestion.recommendation}`;
-        } else {
-          updateValue = suggestion.recommendation;
-        }
-
-        await storage.updatePlanDay(
-          suggestion.workoutId,
-          { [suggestion.targetField]: updateValue },
-          userId,
-        );
-        adjusted++;
-      } catch (applyErr) {
-        logger.warn(
-          { err: applyErr, workoutId: suggestion.workoutId },
-          "[coach] Failed to apply suggestion to plan day:",
-        );
-      }
-    }
+    const results = await Promise.all(
+      suggestions.map((s) => applySuggestion(s, upcomingWorkouts, userId)),
+    );
+    const adjusted = results.filter(Boolean).length;
 
     if (adjusted > 0) {
       logger.info({ userId, adjusted }, "[coach] Auto-coach applied adjustments");
     }
-
     return { adjusted };
   } catch (error) {
     // Never throw — this is a background, non-critical operation
