@@ -167,14 +167,21 @@ export class PlanStorage {
     if (dateUpdates.length === 0) return true;
 
     return await db.transaction(async (tx) => {
-      // Secure batch update using individual parameterized queries within the transaction
-      await Promise.all(
-        dateUpdates.map(u =>
-          tx.update(planDays)
-            .set({ scheduledDate: u.scheduledDate })
-            .where(eq(planDays.id, u.id))
-        )
-      );
+      // Secure batch update using idiomatic Drizzle query builder and a CASE statement
+      const caseChunks = [];
+      caseChunks.push(sql`CASE "${sql.raw(planDays.id.name)}" `);
+      for (const u of dateUpdates) {
+        caseChunks.push(sql`WHEN ${u.id} THEN ${u.scheduledDate}::date `);
+      }
+      caseChunks.push(sql`END`);
+
+      const caseSql = sql.join(caseChunks, sql``);
+      const updateIds = dateUpdates.map(u => u.id);
+
+      // Perform a single batch update
+      await tx.update(planDays)
+        .set({ scheduledDate: caseSql as any })
+        .where(inArray(planDays.id, updateIds));
 
       const resetUpdateIds = dateUpdates.filter(u => u.resetStatus).map(u => u.id);
       if (resetUpdateIds.length > 0) {
