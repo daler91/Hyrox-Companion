@@ -120,7 +120,7 @@ export class TimelineStorage {
     }
   }
 
-  async getTimeline(userId: string, planId?: string): Promise<TimelineEntry[]> {
+  async getTimeline(userId: string, planId?: string, limit?: number, offset?: number): Promise<TimelineEntry[]> {
     const entries: TimelineEntry[] = [];
     const today = toDateStr();
 
@@ -178,6 +178,12 @@ export class TimelineStorage {
 
     await this.attachExerciseSets(entries);
 
-    return entries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const sorted = entries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    if (limit !== undefined || offset !== undefined) {
+      const start = offset || 0;
+      const end = limit !== undefined ? start + limit : undefined;
+      return sorted.slice(start, end);
+    }
+    return sorted;
   }
 }

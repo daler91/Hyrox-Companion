@@ -41,14 +41,14 @@ export interface IStorage {
 
   createWorkoutLog(log: InsertWorkoutLog & { userId: string }): Promise<WorkoutLog>;
   createWorkoutLogs(logs: (InsertWorkoutLog & { userId: string })[]): Promise<WorkoutLog[]>;
-  listWorkoutLogs(userId: string): Promise<WorkoutLog[]>;
+  listWorkoutLogs(userId: string, limit?: number, offset?: number): Promise<WorkoutLog[]>;
   getWorkoutLog(logId: string, userId: string): Promise<WorkoutLog | undefined>;
   updateWorkoutLog(logId: string, updates: UpdateWorkoutLog, userId: string): Promise<WorkoutLog | undefined>;
   deleteWorkoutLog(logId: string, userId: string): Promise<boolean>;
   deleteWorkoutLogByPlanDayId(planDayId: string, userId: string): Promise<boolean>;
   getWorkoutLogByPlanDayId(planDayId: string, userId: string): Promise<WorkoutLog | undefined>;
 
-  getTimeline(userId: string, planId?: string): Promise<TimelineEntry[]>;
+  getTimeline(userId: string, planId?: string, limit?: number, offset?: number): Promise<TimelineEntry[]>;
 
   getChatMessages(userId: string): Promise<ChatMessage[]>;
   saveChatMessage(message: InsertChatMessage): Promise<ChatMessage>;
