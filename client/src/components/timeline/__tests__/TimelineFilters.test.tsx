@@ -34,6 +34,7 @@ describe("TimelineFilters", () => {
         userId: "user-1",
         updatedAt: null,
         sourceFileName: null,
+        goal: null,
       },
       {
         id: "plan-2",
@@ -43,6 +44,7 @@ describe("TimelineFilters", () => {
         userId: "user-1",
         updatedAt: null,
         sourceFileName: null,
+        goal: null,
       },
     ],
     plansLoading: false,
