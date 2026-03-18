@@ -1,10 +1,7 @@
-import "@fontsource/open-sans/300.css";
 import "@fontsource/open-sans/400.css";
 import "@fontsource/open-sans/500.css";
 import "@fontsource/open-sans/600.css";
 import "@fontsource/open-sans/700.css";
-import "@fontsource/open-sans/800.css";
-import "@fontsource/space-grotesk/300.css";
 import "@fontsource/space-grotesk/400.css";
 import "@fontsource/space-grotesk/500.css";
 import "@fontsource/space-grotesk/600.css";
