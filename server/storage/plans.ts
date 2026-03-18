@@ -73,7 +73,7 @@ export class PlanStorage {
     if (!plan) return false;
 
     return await db.transaction(async (tx) => {
-      await tx.delete(planDays).where(eq(planDays.planId, planId));
+      await tx.delete(planDays).where(and(eq(planDays.planId, planId), eq(planDays.userId, userId)));
       const result = await tx.delete(trainingPlans).where(eq(trainingPlans.id, planId));
       return result.rowCount !== null && result.rowCount > 0;
     });
@@ -85,32 +85,27 @@ export class PlanStorage {
   }
 
   async updatePlanDay(dayId: string, updates: UpdatePlanDay, userId: string): Promise<PlanDay | undefined> {
-    const day = await this.getPlanDay(dayId, userId);
-    if (!day) return undefined;
-    
     const [updatedDay] = await db
       .update(planDays)
       .set(updates)
-      .where(eq(planDays.id, dayId))
+      .where(and(eq(planDays.id, dayId), eq(planDays.userId, userId)))
       .returning();
     return updatedDay;
   }
 
   async getPlanDay(dayId: string, userId: string): Promise<PlanDay | undefined> {
-    const result = await db
-      .select({ planDay: planDays })
+    const [result] = await db
+      .select()
       .from(planDays)
-      .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
-      .where(and(eq(planDays.id, dayId), eq(trainingPlans.userId, userId)));
+      .where(and(eq(planDays.id, dayId), eq(planDays.userId, userId)));
     
-    return result[0]?.planDay;
+    return result;
   }
 
   async deletePlanDay(dayId: string, userId: string): Promise<boolean> {
-    const existingDay = await this.getPlanDay(dayId, userId);
-    if (!existingDay) return false;
-    
-    const result = await db.delete(planDays).where(eq(planDays.id, dayId));
+    const result = await db
+      .delete(planDays)
+      .where(and(eq(planDays.id, dayId), eq(planDays.userId, userId)));
     return result.rowCount !== null && result.rowCount > 0;
   }
 
@@ -163,13 +158,13 @@ export class PlanStorage {
         dateUpdates.map(u =>
           tx.update(planDays)
             .set({ scheduledDate: u.scheduledDate })
-            .where(eq(planDays.id, u.id))
+            .where(and(eq(planDays.id, u.id), eq(planDays.userId, userId)))
         )
       );
 
       const resetUpdateIds = dateUpdates.filter(u => u.resetStatus).map(u => u.id);
       if (resetUpdateIds.length > 0) {
-        await tx.update(planDays).set({ status: 'planned' }).where(inArray(planDays.id, resetUpdateIds));
+        await tx.update(planDays).set({ status: 'planned' }).where(and(inArray(planDays.id, resetUpdateIds), eq(planDays.userId, userId)));
       }
 
       return true;

@@ -27,12 +27,7 @@ export class WorkoutStorage {
         .where(
           and(
             eq(planDays.id, log.planDayId),
-            inArray(
-              planDays.planId,
-              db.select({ id: trainingPlans.id })
-                .from(trainingPlans)
-                .where(eq(trainingPlans.userId, log.userId))
-            )
+            eq(planDays.userId, log.userId)
           )
         );
     }
@@ -67,12 +62,7 @@ export class WorkoutStorage {
           .where(
             and(
               inArray(planDays.id, planDayIds),
-              inArray(
-                planDays.planId,
-                db.select({ id: trainingPlans.id })
-                  .from(trainingPlans)
-                  .where(eq(trainingPlans.userId, userId))
-              )
+              eq(planDays.userId, userId)
             )
           );
       }

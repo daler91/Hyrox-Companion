@@ -26,7 +26,7 @@ export class AnalyticsStorage {
       .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
       .where(
         and(
-          eq(trainingPlans.userId, userId),
+          eq(planDays.userId, userId),
           eq(planDays.scheduledDate, date),
           eq(planDays.status, 'missed')
         )
@@ -54,10 +54,9 @@ export class AnalyticsStorage {
     const days = await db
       .select({ status: planDays.status })
       .from(planDays)
-      .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
       .where(
         and(
-          eq(trainingPlans.userId, userId),
+          eq(planDays.userId, userId),
           sql`${planDays.scheduledDate} >= ${weekStart}`,
           sql`${planDays.scheduledDate} <= ${weekEnd}`
         )

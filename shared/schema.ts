@@ -54,6 +54,7 @@ export type TrainingPlan = typeof trainingPlans.$inferSelect;
 
 export const planDays = pgTable("plan_days", {
   id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 255 }).notNull().references(() => users.id, { onDelete: "cascade" }),
   planId: varchar("plan_id", { length: 255 }).notNull().references(() => trainingPlans.id, { onDelete: "cascade" }),
   weekNumber: integer("week_number").notNull(),
   dayName: text("day_name").notNull(),
@@ -65,6 +66,7 @@ export const planDays = pgTable("plan_days", {
   status: text("status").default("planned"),
 }, (table) => [
   check("status_check", sql`status IN ('planned', 'completed', 'missed', 'skipped')`),
+  index("idx_plan_days_user_id").on(table.userId),
   index("idx_plan_days_plan_id").on(table.planId),
   index("idx_plan_days_scheduled_date").on(table.scheduledDate),
   index("idx_plan_days_status").on(table.status),

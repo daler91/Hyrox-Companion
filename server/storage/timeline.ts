@@ -123,9 +123,9 @@ export class TimelineStorage {
   private async fetchScheduledDays(userId: string, planId?: string) {
     let planDayConditions;
     if (planId) {
-      planDayConditions = and(eq(trainingPlans.userId, userId), eq(planDays.planId, planId));
+      planDayConditions = and(eq(planDays.userId, userId), eq(planDays.planId, planId));
     } else {
-      planDayConditions = eq(trainingPlans.userId, userId);
+      planDayConditions = eq(planDays.userId, userId);
     }
 
     const scheduledDaysResult = await db

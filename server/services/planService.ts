@@ -87,6 +87,7 @@ export async function importPlanFromCSV(
     .map((row) => {
       const accessory = row.Accessory || row["Accessory/Engine Work"] || null;
       return {
+        userId: userId,
         planId: plan.id,
         weekNumber: Number.parseInt(row.Week, 10) || 1,
         dayName: row.Day,
@@ -113,6 +114,7 @@ export async function createSamplePlan(userId: string): Promise<TrainingPlanWith
   });
 
   const days: InsertPlanDay[] = samplePlanDays.map((d) => ({
+    userId: userId,
     planId: plan.id,
     weekNumber: d.week,
     dayName: d.day,
@@ -149,15 +151,14 @@ export async function updatePlanDayWithCleanup(
       const day = await tx
         .select({ planDay: planDays })
         .from(planDays)
-        .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
-        .where(and(eq(planDays.id, dayId), eq(trainingPlans.userId, userId)));
+        .where(and(eq(planDays.id, dayId), eq(planDays.userId, userId)));
 
       if (day.length === 0) return undefined;
 
       const [updatedDay] = await tx
         .update(planDays)
         .set(updates)
-        .where(eq(planDays.id, dayId))
+        .where(and(eq(planDays.id, dayId), eq(planDays.userId, userId)))
         .returning();
 
       return updatedDay;

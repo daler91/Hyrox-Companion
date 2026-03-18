@@ -126,12 +126,7 @@ export async function createWorkout(
           .where(
             and(
               eq(planDays.id, workoutData.planDayId),
-              inArray(
-                planDays.planId,
-                tx.select({ id: trainingPlans.id })
-                  .from(trainingPlans)
-                  .where(eq(trainingPlans.userId, userId))
-              )
+              eq(planDays.userId, userId)
             )
           );
       }
