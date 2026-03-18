@@ -18,6 +18,7 @@ export const users = pgTable("users", {
   weeklyGoal: integer("weekly_goal").default(5),
   emailNotifications: boolean("email_notifications").default(true),
   aiCoachEnabled: boolean("ai_coach_enabled").default(true),
+  isAutoCoaching: boolean("is_auto_coaching").default(false),
   lastWeeklySummaryAt: timestamp("last_weekly_summary_at"),
   lastMissedReminderAt: timestamp("last_missed_reminder_at"),
   createdAt: timestamp("created_at").defaultNow(),

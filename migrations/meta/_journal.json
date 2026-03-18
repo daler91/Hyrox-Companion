@@ -43,6 +43,13 @@
       "when": 1773858884572,
       "tag": "0005_quiet_frightful_four",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1773866315317,
+      "tag": "0006_solid_vin_gonzales",
+      "breakpoints": true
     }
   ]
 }

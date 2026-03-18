@@ -32,6 +32,14 @@ async function ensureSchemaUpToDate() {
       await client.query(`ALTER TABLE training_plans ADD COLUMN goal text`);
       logger.info({ context: "db" }, "Added missing goal column to training_plans table");
     }
+
+    const isAutoCoaching = await client.query(
+      `SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'is_auto_coaching'`,
+    );
+    if (isAutoCoaching.rowCount === 0) {
+      await client.query(`ALTER TABLE users ADD COLUMN is_auto_coaching boolean DEFAULT false`);
+      logger.info({ context: "db" }, "Added missing is_auto_coaching column to users table");
+    }
   } catch (error) {
     logger.error({ context: "db", err: error }, "Schema migration check failed");
   } finally {

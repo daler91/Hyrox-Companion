@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "is_auto_coaching" boolean DEFAULT false;

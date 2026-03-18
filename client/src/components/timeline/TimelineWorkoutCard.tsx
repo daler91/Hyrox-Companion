@@ -15,7 +15,9 @@ import {
   BookOpen,
   HelpCircle,
   Trophy,
+  Loader2,
 } from "lucide-react";
+import { format } from "date-fns";
 import { SiStrava } from "react-icons/si";
 import { type TimelineEntry, type PersonalRecord } from "@shared/schema";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
@@ -31,6 +33,7 @@ interface TimelineWorkoutCardProps {
   readonly combiningEntryId?: string | null;
   readonly combiningEntryDate?: string | null;
   readonly personalRecords?: Record<string, PersonalRecord>;
+  readonly isAutoCoaching?: boolean;
 }
 
 
@@ -211,6 +214,7 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
   combiningEntryId,
   combiningEntryDate,
   personalRecords,
+  isAutoCoaching,
 }: Readonly<TimelineWorkoutCardProps>) {
   const { distanceUnit, weightLabel } = useUnitPreferences();
   
@@ -218,6 +222,9 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
   const isSameDate = combiningEntryDate === entry.date;
   const canBeCombinedWith = isCombining && !isBeingCombined && isSameDate;
   const isPlanned = entry.status === "planned" && entry.planDayId;
+
+  const todayStr = format(new Date(), "yyyy-MM-dd");
+  const isTargetedByCoach = isAutoCoaching && isPlanned && entry.date >= todayStr;
 
   const handleCardClick = (e: React.MouseEvent) => {
     if (canBeCombinedWith) {
@@ -272,6 +279,12 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2 flex-wrap">
               {getStatusBadge(entry.status)}
+              {isTargetedByCoach && (
+                <Badge variant="outline" className="border-primary text-primary bg-primary/5 animate-pulse" data-testid={`badge-ai-coach-${entry.id}`}>
+                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                  AI Modifying
+                </Badge>
+              )}
               {entry.source === "strava" && (
                 <Badge className="bg-[#FC4C02]/10 text-[#FC4C02]">
                   <SiStrava className="h-3 w-3 mr-1" />

@@ -14,6 +14,7 @@ interface TimelineDateGroupProps {
   combiningEntryId?: string | null;
   combiningEntryDate?: string | null;
   personalRecords?: Record<string, PersonalRecord>;
+  isAutoCoaching?: boolean;
 }
 
 function getDateLabel(dateObj: Date) {
@@ -31,7 +32,7 @@ function getDotColor(isTodayDate: boolean, isPast: boolean) {
 }
 
 const TimelineDateGroupComponent = forwardRef<HTMLDivElement, TimelineDateGroupProps>(
-  ({ date, entries, onMarkComplete, onClick, onCombineSelect, isCombining, combiningEntryId, combiningEntryDate, personalRecords }, ref) => {
+  ({ date, entries, onMarkComplete, onClick, onCombineSelect, isCombining, combiningEntryId, combiningEntryDate, personalRecords, isAutoCoaching }, ref) => {
     const dateObj = parseISO(date);
     const isTodayDate = isToday(dateObj);
     const isPast = isBefore(dateObj, new Date()) && !isTodayDate;
@@ -71,6 +72,7 @@ const TimelineDateGroupComponent = forwardRef<HTMLDivElement, TimelineDateGroupP
               combiningEntryId={combiningEntryId}
               combiningEntryDate={combiningEntryDate}
               personalRecords={personalRecords}
+              isAutoCoaching={isAutoCoaching}
             />
           ))}
         </div>
