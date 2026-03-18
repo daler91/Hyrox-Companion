@@ -20,10 +20,6 @@ vi.mock('@/lib/queryClient', () => ({
   },
 }));
 
-vi.mock('@/lib/dateUtils', () => ({
-  getCurrentTimeString: vi.fn(() => '10:00 AM'),
-  formatTime: vi.fn(() => '10:00 AM'),
-}));
 
 vi.mock('@tanstack/react-query', async (importOriginal) => {
   const mod = await importOriginal<typeof import('@tanstack/react-query')>();
@@ -38,7 +34,7 @@ vi.mock('@tanstack/react-query', async (importOriginal) => {
         if (mutationFn) {
           try {
             await mutationFn(...args);
-          } catch {
+          } catch(e) {
             // ignore
           }
         }

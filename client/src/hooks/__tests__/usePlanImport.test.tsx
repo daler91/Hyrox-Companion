@@ -52,13 +52,21 @@ describe('usePlanImport', () => {
       const { result } = runHook();
       const content = "Week,Day,Focus,Workout\n1,Monday,Strength,Squats\n";
       const file = new File([isValid ? content : 'err'], isValid ? 'plan.csv' : 'x.txt', { type: isValid ? 'text/csv' : 'text/plain' });
-      file.text = vi.fn().mockResolvedValue(content);
       const ev = { target: { files: [file], value: file.name } } as unknown as React.ChangeEvent<HTMLInputElement>;
 
-      await act(async () => { await result.current.handleFileUpload(ev); });
+      const mockReader = {
+        readAsText: vi.fn(function(this: { onload: (e: any) => void }) {
+          if (this.onload) this.onload({ target: { result: content } });
+        }),
+        onload: null
+      };
+
+      vi.stubGlobal('FileReader', vi.fn(() => mockReader));
+      act(() => { result.current.handleFileUpload(ev); });
+      vi.unstubAllGlobals();
 
       if (expectedToast) expect(mockToast).toHaveBeenCalledWith(expectedToast);
-      else expect(file.text).toHaveBeenCalled();
+      else expect(mockReader.readAsText).toHaveBeenCalledWith(file);
 
       if (expectPreviewNull) expect(result.current.csvPreview).toBeNull();
       else expect(result.current.csvPreview).toEqual({ fileName: 'plan.csv', content, rows: [{ weekNumber: 1, dayName: 'Monday', focus: 'Strength', mainWorkout: 'Squats' }] });

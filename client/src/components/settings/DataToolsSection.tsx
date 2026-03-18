@@ -117,7 +117,7 @@ export function DataToolsSection() {
             </div>
           ) : null}
 
-          {parseResults ? (
+          {parseResults !== null ? (
             <div>
               <p className="text-sm text-muted-foreground mb-4" data-testid="text-parse-results">
                 Parsed {parseResults.success} workouts successfully. {parseResults.failed} could not be parsed.
