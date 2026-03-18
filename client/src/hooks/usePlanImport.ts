@@ -107,7 +107,7 @@ export function usePlanImport({ onPlanScheduled }: UsePlanImportOptions = {}) {
     return rows;
   }, []);
 
-  const handleFileUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -116,14 +116,17 @@ export function usePlanImport({ onPlanScheduled }: UsePlanImportOptions = {}) {
       return;
     }
 
-    const text = await file.text();
-    const previewRows = parseCSVForPreview(text);
-    setCsvPreview({
-      fileName: file.name,
-      content: text,
-      rows: previewRows,
+    file.text().then((csvContent) => {
+      const previewRows = parseCSVForPreview(csvContent);
+      setCsvPreview({
+        fileName: file.name,
+        content: csvContent,
+        rows: previewRows,
+      });
+      event.target.value = "";
+    }).catch(() => {
+      toast({ title: "Failed to read file", variant: "destructive" });
     });
-    event.target.value = "";
   }, [parseCSVForPreview, toast]);
 
   const confirmImport = useCallback(() => {

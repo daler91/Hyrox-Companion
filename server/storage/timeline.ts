@@ -8,7 +8,7 @@ import {
   type WorkoutStatus,
 } from "@shared/schema";
 import { db } from "../db";
-import { eq, and, isNull, inArray, sql, desc } from "drizzle-orm";
+import { eq, and, isNull, inArray } from "drizzle-orm";
 import type { WorkoutStorage } from "./workouts";
 import { toDateStr } from "../types";
 

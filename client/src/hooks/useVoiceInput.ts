@@ -65,27 +65,28 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
       (e) => e.text === normalized || e.text.startsWith(normalized),
     );
     if (exactOrSubset) {
-      // Case 1 & 2: skip entirely
+      return; // Case 1 & 2: skip entirely
+    }
+
+    // Check if the new result is a superset of a previous emission
+    const supersetOf = recentEmissionsRef.current.findIndex((e) =>
+      normalized.startsWith(e.text),
+    );
+    if (supersetOf === -1) {
+      // Completely new text - emit as-is
+      recentEmissionsRef.current.push({ text: normalized, time: now });
+      onResultRef.current?.(finalTranscript);
     } else {
-      const supersetOf = recentEmissionsRef.current.findIndex((e) =>
-        normalized.startsWith(e.text),
-      );
-      if (supersetOf === -1) {
-        // Completely new text - emit as-is
-        recentEmissionsRef.current.push({ text: normalized, time: now });
-        onResultRef.current?.(finalTranscript);
-      } else {
-        // Case 3: new is a superset - emit only the new portion
-        const previousText = recentEmissionsRef.current[supersetOf].text;
-        const delta = normalized.slice(previousText.length).trim();
-        // Update the tracker to the full (longer) text
-        recentEmissionsRef.current[supersetOf] = {
-          text: normalized,
-          time: now,
-        };
-        if (delta) {
-          onResultRef.current?.(delta);
-        }
+      // Case 3: new is a superset - emit only the new portion
+      const previousText = recentEmissionsRef.current[supersetOf].text;
+      const delta = normalized.slice(previousText.length).trim();
+      // Update the tracker to the full (longer) text
+      recentEmissionsRef.current[supersetOf] = {
+        text: normalized,
+        time: now,
+      };
+      if (delta) {
+        onResultRef.current?.(delta);
       }
     }
   }, []);

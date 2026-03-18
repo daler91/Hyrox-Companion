@@ -89,7 +89,7 @@ export function DataToolsSection() {
             </div>
           ) : null}
 
-          {unstructuredCount !== null && parseResults === null ? (
+          {unstructuredCount !== null && !parseResults ? (
             <div>
               <p className="text-sm text-muted-foreground mb-4" data-testid="text-unstructured-count">
                 Found {unstructuredCount} workouts without structured exercise data

@@ -52,8 +52,9 @@ describe('usePlanImport', () => {
       const { result } = runHook();
       const content = "Week,Day,Focus,Workout\n1,Monday,Strength,Squats\n";
       const file = new File([isValid ? content : 'err'], isValid ? 'plan.csv' : 'x.txt', { type: isValid ? 'text/csv' : 'text/plain' });
-      file.text = vi.fn().mockResolvedValue(content);
       const ev = { target: { files: [file], value: file.name } } as unknown as React.ChangeEvent<HTMLInputElement>;
+
+      file.text = vi.fn().mockResolvedValue(content);
 
       await act(async () => { await result.current.handleFileUpload(ev); });
 

@@ -1,5 +1,4 @@
 import { describe, it, expect, vi } from "vitest";
-import { z } from "zod";
 import { exerciseSetSchema } from "@shared/schema";
 import {
   isRetryableError,

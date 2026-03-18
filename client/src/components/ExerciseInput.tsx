@@ -1,9 +1,9 @@
-import { useState, useId, useMemo } from "react";
+import { useId, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { X, Timer, Ruler, Hash, Weight, Pencil, Plus, Minus, Copy, AlertTriangle, TriangleAlert } from "lucide-react";
+import { X, Timer, Ruler, Hash, Weight, Pencil, Plus, Minus, AlertTriangle, TriangleAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
 import { categoryBorderColors } from "@/lib/exerciseUtils";

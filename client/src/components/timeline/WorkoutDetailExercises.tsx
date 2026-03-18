@@ -22,7 +22,7 @@ import {
   ExerciseInput,
   type StructuredExercise,
 } from "@/components/ExerciseInput";
-import React, { useCallback, useState, useEffect } from "react";
+import React, { useCallback } from "react";
 import {
   categoryChipColors,
   formatExerciseSummary,
@@ -33,6 +33,7 @@ import {
   closestCenter,
   type SensorDescriptor,
   type SensorOptions,
+  type DragEndEvent,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -40,7 +41,6 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type { DragEndEvent } from "@dnd-kit/core";
 import type { UseMutationResult } from "@tanstack/react-query";
 
 import { useVoiceInput } from "@/hooks/useVoiceInput";
