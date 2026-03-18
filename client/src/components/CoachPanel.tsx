@@ -1,19 +1,16 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Button } from "@/components/ui/button";
-import { ChatMessage } from "@/components/ChatMessage";
-import { ChatInput } from "@/components/ChatInput";
-import { QuickActions } from "@/components/QuickActions";
-import { StatBadge } from "@/components/coach/StatBadge";
-import { SuggestionsList, useSuggestions } from "@/components/coach/SuggestionsTab";
-import { Activity, TrendingUp, Target, Calendar, Flame, Trash2, Loader2, X, MessageSquare } from "lucide-react";
-
 import { calculateStats } from "@/lib/statsUtils";
 import { useChatSession, type Message } from "@/hooks/useChatSession";
 import { useSaveMessageMutation } from "@/hooks/useChatMutations";
 import { getCurrentTimeString } from "@/lib/dateUtils";
 import type { TimelineEntry } from "@shared/schema";
+
+import { useSuggestions } from "@/components/coach/SuggestionsTab";
+import { CoachPanelHeader } from "@/components/coach/CoachPanelHeader";
+import { CoachPanelStats } from "@/components/coach/CoachPanelStats";
+import { CoachPanelChatArea } from "@/components/coach/CoachPanelChatArea";
+import { CoachPanelFooter } from "@/components/coach/CoachPanelFooter";
 
 const WELCOME_TEXT = "Welcome to HyroxTracker! I'm your AI training coach, here to help you prepare for Hyrox.\n\nTo get started, you can:\n- **Use our 8-week training plan** - a structured program covering running, strength, and all Hyrox stations\n- **Import your own plan** - if you have a CSV training plan\n- **Log individual workouts** - track sessions as you complete them\n\nOnce you have some training data, I can analyze your progress, suggest improvements, and help with pacing strategies. What would you like to know about Hyrox training?";
 
@@ -112,83 +109,28 @@ export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }
 
   return (
     <div className="flex flex-col h-full border-l bg-background">
-      <div className="flex items-center justify-between gap-2 p-3 border-b flex-shrink-0">
-        <div className="flex items-center gap-2">
-          <MessageSquare className="h-4 w-4 text-primary" />
-          <span className="font-semibold text-sm">AI Coach</span>
-        </div>
-        <div className="flex items-center gap-1">
-          {messages.length > 1 && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleClearHistory}
-              disabled={isClearingHistory}
-              title="Clear chat"
-              aria-label="Clear chat history"
-              data-testid="button-clear-chat"
-            >
-              {isClearingHistory ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Trash2 className="h-4 w-4" />
-              )}
-            </Button>
-          )}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onClose}
-            title="Close coach"
-            aria-label="Close coach panel"
-            data-testid="button-close-coach"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-5 gap-1.5 p-2 border-b flex-shrink-0" data-testid="stats-bar">
-        <StatBadge icon={Activity} value={stats.workoutsThisWeek} label="Week" color="text-primary" />
-        <StatBadge icon={Target} value={stats.completedThisWeek} label="Done" color="text-green-500" />
-        <StatBadge icon={Calendar} value={stats.plannedUpcoming} label="Next" color="text-blue-500" />
-        <StatBadge icon={TrendingUp} value={`${stats.completionRate}%`} label="Rate" color="text-orange-500" />
-        <StatBadge icon={Flame} value={stats.currentStreak} label="Streak" color="text-red-500" />
-      </div>
-
-      <ScrollArea className="flex-1 p-3" ref={scrollRef}>
-        <div className="space-y-3">
-          {messages.map((message) => (
-            <ChatMessage
-              key={message.id}
-              role={message.role}
-              content={message.content}
-              timestamp={message.timestamp}
-            />
-          ))}
-          <SuggestionsList
-            suggestions={pendingSuggestions}
-            applyingId={applyingId}
-            onApply={handleApplySuggestion}
-            onDismiss={handleDismissSuggestion}
-          />
-          {isProcessing && (
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <div className="flex gap-1">
-                <span className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                <span className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                <span className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
-              </div>
-              <span className="text-xs">Thinking...</span>
-            </div>
-          )}
-        </div>
-      </ScrollArea>
-      
-      <div className="flex-shrink-0 p-2 border-t space-y-2">
-        <QuickActions actions={QUICK_ACTIONS} onSelect={handleQuickAction} disabled={isProcessing} />
-        <ChatInput onSend={sendMessage} isLoading={isProcessing} />
-      </div>
+      <CoachPanelHeader
+        onClearHistory={handleClearHistory}
+        onClose={onClose}
+        isClearingHistory={isClearingHistory}
+        canClearHistory={messages.length > 1}
+      />
+      <CoachPanelStats stats={stats} />
+      <CoachPanelChatArea
+        ref={scrollRef}
+        messages={messages}
+        pendingSuggestions={pendingSuggestions}
+        applyingId={applyingId}
+        isProcessing={isProcessing}
+        onApplySuggestion={handleApplySuggestion}
+        onDismissSuggestion={handleDismissSuggestion}
+      />
+      <CoachPanelFooter
+        quickActions={QUICK_ACTIONS}
+        onQuickAction={handleQuickAction}
+        onSendMessage={sendMessage}
+        isProcessing={isProcessing}
+      />
     </div>
   );
 }
