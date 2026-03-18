@@ -43,12 +43,16 @@ export function CombineWorkoutsDialog({
   onConfirm,
   isPending,
 }: Readonly<CombineWorkoutsDialogProps>) {
-  const [focusSource, setFocusSource] = useState<FieldSource>("both");
-  const [workoutSource, setWorkoutSource] = useState<FieldSource>("both");
-  const [notesSource, setNotesSource] = useState<FieldSource>("both");
-  const [customFocus, setCustomFocus] = useState("");
-  const [customWorkout, setCustomWorkout] = useState("");
-  const [customNotes, setCustomNotes] = useState("");
+  const initialFieldState = { source: "both" as FieldSource, customValue: "" };
+  const [fields, setFields] = useState({
+    focus: { ...initialFieldState },
+    mainWorkout: { ...initialFieldState },
+    notes: { ...initialFieldState },
+  });
+
+  const updateField = (key: keyof typeof fields, changes: Partial<typeof initialFieldState>) => {
+    setFields((prev) => ({ ...prev, [key]: { ...prev[key], ...changes } }));
+  };
 
   if (!entry1 || !entry2) return null;
 
@@ -79,23 +83,22 @@ export function CombineWorkoutsDialog({
 
     const combinedWorkout = {
       date: entry1.date,
-      focus: getFieldValue(focusSource, entry1.focus, entry2.focus, customFocus),
-      mainWorkout: getFieldValue(workoutSource, entry1.mainWorkout, entry2.mainWorkout, customWorkout, "\n---\n"),
+      focus: getFieldValue(fields.focus.source, entry1.focus, entry2.focus, fields.focus.customValue),
+      mainWorkout: getFieldValue(fields.mainWorkout.source, entry1.mainWorkout, entry2.mainWorkout, fields.mainWorkout.customValue, "\n---\n"),
       duration: combinedDuration || undefined,
       calories: combinedCalories || undefined,
-      notes: getFieldValue(notesSource, entry1.notes, entry2.notes, customNotes, "\n\n") || undefined,
+      notes: getFieldValue(fields.notes.source, entry1.notes, entry2.notes, fields.notes.customValue, "\n\n") || undefined,
     };
 
     onConfirm(combinedWorkout);
   };
 
   const resetState = () => {
-    setFocusSource("both");
-    setWorkoutSource("both");
-    setNotesSource("both");
-    setCustomFocus("");
-    setCustomWorkout("");
-    setCustomNotes("");
+    setFields({
+      focus: { ...initialFieldState },
+      mainWorkout: { ...initialFieldState },
+      notes: { ...initialFieldState },
+    });
   };
 
   const handleOpenChange = (newOpen: boolean) => {
@@ -134,60 +137,28 @@ export function CombineWorkoutsDialog({
               />
             </div>
 
-            {/* Combined result summary */}
-            <div className="rounded-md border p-4 bg-muted/30">
-              <Label className="text-sm font-medium">Combined Result (auto-summed)</Label>
-              <div className="mt-2 flex flex-wrap gap-4 text-sm">
-                {combinedDuration > 0 && (
-                  <div className="flex items-center gap-1.5 text-muted-foreground">
-                    <Clock className="h-4 w-4" />
-                    <span>{combinedDuration} min total</span>
-                  </div>
-                )}
-                {combinedCalories > 0 && (
-                  <div className="flex items-center gap-1.5 text-muted-foreground">
-                    <Flame className="h-4 w-4" />
-                    <span>{combinedCalories} cal total</span>
-                  </div>
-                )}
-              </div>
-            </div>
+            <CombinedResultSummary duration={combinedDuration} calories={combinedCalories} />
 
             {/* Field selection */}
             <div className="space-y-4">
               <Label className="text-base font-semibold">Choose what to keep for each field</Label>
-              
-              <FieldSelector
-                label="Focus"
-                entry1Value={entry1.focus}
-                entry2Value={entry2.focus}
-                source={focusSource}
-                onSourceChange={setFocusSource}
-                customValue={customFocus}
-                onCustomChange={setCustomFocus}
-              />
-
-              <FieldSelector
-                label="Main Workout"
-                entry1Value={entry1.mainWorkout}
-                entry2Value={entry2.mainWorkout}
-                source={workoutSource}
-                onSourceChange={setWorkoutSource}
-                customValue={customWorkout}
-                onCustomChange={setCustomWorkout}
-                isTextArea
-              />
-
-              <FieldSelector
-                label="Notes"
-                entry1Value={entry1.notes}
-                entry2Value={entry2.notes}
-                source={notesSource}
-                onSourceChange={setNotesSource}
-                customValue={customNotes}
-                onCustomChange={setCustomNotes}
-                isTextArea
-              />
+              {[
+                { key: "focus" as const, label: "Focus", val1: entry1.focus, val2: entry2.focus },
+                { key: "mainWorkout" as const, label: "Main Workout", val1: entry1.mainWorkout, val2: entry2.mainWorkout, isTextArea: true },
+                { key: "notes" as const, label: "Notes", val1: entry1.notes, val2: entry2.notes, isTextArea: true }
+              ].map(f => (
+                <FieldSelector
+                  key={f.key}
+                  label={f.label}
+                  entry1Value={f.val1}
+                  entry2Value={f.val2}
+                  source={fields[f.key].source}
+                  onSourceChange={(source) => updateField(f.key, { source })}
+                  customValue={fields[f.key].customValue}
+                  onCustomChange={(customValue) => updateField(f.key, { customValue })}
+                  isTextArea={f.isTextArea}
+                />
+              ))}
             </div>
           </div>
         </ScrollArea>
@@ -352,6 +323,30 @@ function FieldSelector({
           data-testid={`input-custom-${labelId}`}
         />
       )}
+    </div>
+  );
+}
+
+
+function CombinedResultSummary({ duration, calories }: { readonly duration: number; readonly calories: number }) {
+  if (duration <= 0 && calories <= 0) return null;
+  return (
+    <div className="rounded-md border p-4 bg-muted/30">
+      <Label className="text-sm font-medium">Combined Result (auto-summed)</Label>
+      <div className="mt-2 flex flex-wrap gap-4 text-sm">
+        {duration > 0 && (
+          <div className="flex items-center gap-1.5 text-muted-foreground">
+            <Clock className="h-4 w-4" />
+            <span>{duration} min total</span>
+          </div>
+        )}
+        {calories > 0 && (
+          <div className="flex items-center gap-1.5 text-muted-foreground">
+            <Flame className="h-4 w-4" />
+            <span>{calories} cal total</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
