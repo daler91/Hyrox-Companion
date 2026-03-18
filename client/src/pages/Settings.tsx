@@ -15,7 +15,7 @@ interface Preferences {
   weightUnit: string;
   distanceUnit: string;
   weeklyGoal: number;
-  emailNotifications: number;
+  emailNotifications: boolean;
 }
 
 interface StravaStatus {
@@ -68,7 +68,7 @@ export default function Settings() {
       setWeightUnit(preferences.weightUnit || "kg");
       setDistanceUnit(preferences.distanceUnit || "km");
       setWeeklyGoal(String(preferences.weeklyGoal || 5));
-      setEmailNotifications(preferences.emailNotifications === 1);
+      setEmailNotifications(preferences.emailNotifications);
     }
   }, [preferences]);
 
@@ -77,7 +77,7 @@ export default function Settings() {
       weightUnit: string;
       distanceUnit: string;
       weeklyGoal: number;
-      emailNotifications: number;
+      emailNotifications: boolean;
     }) => {
       const response = await apiRequest("PATCH", "/api/v1/preferences", data);
       return response.json();
@@ -104,7 +104,7 @@ export default function Settings() {
       weightUnit,
       distanceUnit,
       weeklyGoal: Number.parseInt(weeklyGoal, 10),
-      emailNotifications: emailNotifications ? 1 : 0,
+      emailNotifications,
     });
   };
 
