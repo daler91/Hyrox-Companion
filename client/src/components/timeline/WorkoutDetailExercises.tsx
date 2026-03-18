@@ -43,10 +43,11 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import type { UseMutationResult } from "@tanstack/react-query";
 
-import { useVoiceInput } from "@/hooks/useVoiceInput";
 import { VoiceButton } from "@/components/VoiceButton";
 import { VoiceFieldButton } from "@/components/VoiceFieldButton";
 import { RpeSelector } from "@/components/RpeSelector";
+import { useWorkoutVoiceForm, type EditFormState } from "@/hooks/useWorkoutVoiceForm";
+import { useBlockCounts } from "@/hooks/useBlockCounts";
 import { useToast } from "@/hooks/use-toast";
 
 interface SortableDialogBlockProps {
@@ -230,12 +231,7 @@ export const WorkoutDetailView = React.memo(function WorkoutDetailView({
   );
 });
 
-interface EditFormState {
-  focus: string;
-  mainWorkout: string;
-  accessory: string;
-  notes: string;
-}
+
 
 interface WorkoutDetailEditFormProps {
   readonly editForm: EditFormState;
@@ -531,82 +527,20 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
   onParseText,
   stopAllVoiceRef,
 }: WorkoutDetailEditFormProps) {
-  const editFormRef = React.useRef(editForm);
-  editFormRef.current = editForm;
-
-  const stopAccessoryRef = React.useRef<(() => void) | null>(null);
-  const stopNotesRef = React.useRef<(() => void) | null>(null);
-
-  const appendToField = useCallback(
-    (field: keyof EditFormState, text: string) => {
-      const current = editFormRef.current;
-      const val = current[field];
-      const separator =
-        val && !val.endsWith(" ") && !val.endsWith("\n") ? " " : "";
-      setEditForm({
-        ...current,
-        [field]: val + separator + text,
-      });
-    },
-    [setEditForm],
-  );
-
-  const handleMainVoiceResult = useCallback(
-    (transcript: string) => {
-      appendToField("mainWorkout", transcript);
-    },
-    [appendToField],
-  );
-
-  const { toast } = useToast();
-
-  const { blockCounts, blockIndices } = React.useMemo(() => {
-    // ⚡ Bolt Performance Optimization:
-    // Combine two O(N) array traversals into a single O(N) traversal
-    // and remove the need for a secondary runningCounts object allocation.
-    const counts: Record<string, number> = {};
-    const indices: Record<string, number> = {};
-
-    for (const blockId of editExercises) {
-      const exData = editExerciseData[blockId];
-      if (exData?.exerciseName) {
-        const name = exData.exerciseName;
-        counts[name] = (counts[name] || 0) + 1;
-        indices[blockId] = counts[name];
-      }
-    }
-
-    return { blockCounts: counts, blockIndices: indices };
-  }, [editExercises, editExerciseData]);
-
-  const handleVoiceError = useCallback(
-    (msg: string) => {
-      toast({ title: "Voice Input", description: msg, variant: "destructive" });
-    },
-    [toast],
-  );
+  const { blockCounts, blockIndices } = useBlockCounts(editExercises, editExerciseData);
 
   const {
-    isListening: isMainListening,
+    appendToField,
+    stopAccessoryRef,
+    stopNotesRef,
+    isMainListening,
     isSupported,
-    interimTranscript: mainInterim,
-    startListening: startMainListening,
-    stopListening: stopMainListening,
-    toggleListening: toggleMainListening,
-  } = useVoiceInput({
-    onResult: handleMainVoiceResult,
-    onError: handleVoiceError,
-  });
-
-  const stopAllVoice = useCallback(() => {
-    stopMainListening();
-    stopAccessoryRef.current?.();
-    stopNotesRef.current?.();
-  }, [stopMainListening]);
-
-  if (stopAllVoiceRef) {
-    stopAllVoiceRef.current = stopAllVoice;
-  }
+    mainInterim,
+    startMainListening,
+    stopMainListening,
+    toggleMainListening,
+    stopAllVoice,
+  } = useWorkoutVoiceForm(editForm, setEditForm, stopAllVoiceRef);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
