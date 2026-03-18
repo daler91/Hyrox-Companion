@@ -5,8 +5,9 @@ import type { IStorage } from "./storage";
 import { logger } from "./logger";
 
 async function ensureSchemaUpToDate() {
-  const client = await pool.connect();
+  let client;
   try {
+    client = await pool.connect();
     const userCols = await client.query(
       `SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'users' AND column_name IN ('ai_coach_enabled', 'email_notifications')`,
     );
@@ -34,7 +35,7 @@ async function ensureSchemaUpToDate() {
   } catch (error) {
     logger.error({ context: "db", err: error }, "Schema migration check failed");
   } finally {
-    client.release();
+    if (client) client.release();
   }
 }
 
