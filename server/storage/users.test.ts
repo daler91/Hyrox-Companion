@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { UserStorage } from './users';
 import { db } from '../db';
-import { users, stravaConnections } from '@shared/schema';
+import { users } from '@shared/schema';
 import * as crypto from '../crypto';
 
 vi.mock('../crypto', () => ({
