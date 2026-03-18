@@ -59,6 +59,44 @@ describe('strava service state signing', () => {
     });
   });
 
+
+  describe('state secret isolation', () => {
+    it('uses a dedicated secret instead of reusing CLERK_SECRET_KEY', async () => {
+      // Isolate module imports
+      vi.resetModules();
+
+      // Mock the env with specific values to ensure they are distinct
+      vi.doMock('./env', () => ({
+        env: {
+          STRAVA_STATE_SECRET: 'dedicated-strava-secret-12345678',
+          CLERK_SECRET_KEY: 'shared-clerk-secret-87654321',
+          DATABASE_URL: 'postgres://dummy',
+          APP_URL: 'http://localhost'
+        }
+      }));
+
+      const { createSignedState, verifySignedState } = await import('./strava');
+      const crypto = await import('node:crypto');
+
+      const userId = 'user_isolate_test';
+      const state = createSignedState(userId);
+      const parts = state.split(':');
+      expect(parts.length).toBe(4);
+
+      const [id, timestamp, nonce, signature] = parts;
+      const payload = `${id}:${timestamp}:${nonce}`;
+
+      // Verify the signature is generated using STRAVA_STATE_SECRET, not CLERK_SECRET_KEY
+      const expectedWithStrava = crypto.createHmac('sha256', 'dedicated-strava-secret-12345678').update(payload).digest('hex').slice(0, 16);
+      const expectedWithClerk = crypto.createHmac('sha256', 'shared-clerk-secret-87654321').update(payload).digest('hex').slice(0, 16);
+
+      expect(signature).toBe(expectedWithStrava);
+      expect(signature).not.toBe(expectedWithClerk);
+
+      expect(verifySignedState(state)).toStrictEqual({ userId: 'user_isolate_test' });
+    });
+  });
+
   describe('verifySignedState', () => {
     it('returns user ID for a valid state', () => {
       const state = createSignedState('user_123');
