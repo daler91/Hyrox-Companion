@@ -1,89 +1,18 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-
-interface SpeechRecognitionEvent {
-  results: SpeechRecognitionResultList;
-  resultIndex: number;
-}
-
-interface SpeechRecognitionErrorEvent {
-  error: string;
-  message?: string;
-}
-
-interface SpeechRecognitionInstance extends EventTarget {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  start(): void;
-  stop(): void;
-  abort(): void;
-  onresult: ((event: SpeechRecognitionEvent) => void) | null;
-  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
-  onend: (() => void) | null;
-  onstart: (() => void) | null;
-}
-
-declare global {
-  interface Window {
-    SpeechRecognition: new () => SpeechRecognitionInstance;
-    webkitSpeechRecognition: new () => SpeechRecognitionInstance;
-  }
-}
-
-const MAX_RETRIES = 2;
-const RETRY_DELAY_MS = 500;
-const RETRYABLE_ERRORS = new Set(["network", "no-speech"]);
-const DEDUP_WINDOW_MS = 3000;
-
-function getVoiceErrorMessage(
-  errorCode: string,
-  micGranted: boolean,
-): string | null {
-  switch (errorCode) {
-    case "not-allowed":
-      if (micGranted) {
-        return "Speech recognition service is unavailable. Your microphone is working, but the browser's speech service could not start. Try restarting your browser or using Chrome.";
-      }
-      return "Microphone access denied. Please click the lock icon in the address bar, set Microphone to Allow, and reload the page.";
-    case "service-not-allowed":
-      return "Speech recognition is not available in this browser or context. Try opening the app directly (not in an embedded frame).";
-    case "network":
-      return "Network error during speech recognition. Please check your internet connection and try again.";
-    case "no-speech":
-      return "No speech was detected. Please try again and speak clearly into your microphone.";
-    case "audio-capture":
-      return "No microphone was found. Please connect a microphone and try again.";
-    case "aborted":
-      return null;
-    default:
-      return `Voice input error: ${errorCode}. Please try again.`;
-  }
-}
-
-function getUserMediaErrorMessage(err: unknown): string {
-  if (err instanceof DOMException) {
-    switch (err.name) {
-      case "NotAllowedError":
-        return "Microphone access denied. Please click the lock icon in the address bar, set Microphone to Allow, and reload the page.";
-      case "NotFoundError":
-        return "No microphone found. Please connect a microphone and try again.";
-      case "NotReadableError":
-        return "Microphone is in use by another application. Please close other apps using the mic and try again.";
-      default:
-        return `Could not access microphone: ${err.message}`;
-    }
-  }
-  const msg = err instanceof Error ? err.message : String(err);
-  return `Could not access microphone: ${msg}`;
-}
-
-interface UseVoiceInputOptions {
-  onResult?: (transcript: string) => void;
-  onInterim?: (transcript: string) => void;
-  onError?: (message: string) => void;
-  continuous?: boolean;
-  lang?: string;
-}
+import type {
+  SpeechRecognitionEvent,
+  SpeechRecognitionErrorEvent,
+  SpeechRecognitionInstance,
+  UseVoiceInputOptions,
+} from "./voice/types";
+import {
+  MAX_RETRIES,
+  RETRY_DELAY_MS,
+  RETRYABLE_ERRORS,
+  DEDUP_WINDOW_MS,
+  getVoiceErrorMessage,
+  getUserMediaErrorMessage,
+} from "./voice/utils";
 
 export function useVoiceInput(options: UseVoiceInputOptions = {}) {
   const {
@@ -131,22 +60,13 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
     recentEmissionsRef.current = recentEmissionsRef.current.filter(
       (e) => now - e.time < DEDUP_WINDOW_MS,
     );
-    // Android Chrome in continuous mode can emit overlapping/progressive
-    // finals: "House" then "House is very small". We handle 3 cases:
-    // 1. Exact duplicate -> skip
-    // 2. New is a subset of previous -> skip (partial re-fire)
-    // 3. New is a superset of previous -> emit only the delta (new words)
-    // NOTE: We use startsWith (not includes) because Android progressive
-    // finals always extend from the beginning of the utterance. Using
-    // includes would cause false matches on common words like "I am"
-    // appearing in the middle of unrelated sentences.
+
     const exactOrSubset = recentEmissionsRef.current.some(
       (e) => e.text === normalized || e.text.startsWith(normalized),
     );
     if (exactOrSubset) {
       // Case 1 & 2: skip entirely
     } else {
-      // Check if the new result is a superset of a previous emission
       const supersetOf = recentEmissionsRef.current.findIndex((e) =>
         normalized.startsWith(e.text),
       );
