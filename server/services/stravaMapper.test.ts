@@ -120,7 +120,7 @@ describe("mapStravaActivityToWorkout", () => {
         average_heartrate: 150,
         max_heartrate: 175,
         average_speed: 3.5,
-        max_speed: 5.0,
+        max_speed: 5,
         average_cadence: 85,
         average_watts: 200,
         suffer_score: 75,
@@ -131,7 +131,7 @@ describe("mapStravaActivityToWorkout", () => {
     expect(result.avgHeartrate).toBe(150);
     expect(result.maxHeartrate).toBe(175);
     expect(result.avgSpeed).toBe(3.5);
-    expect(result.maxSpeed).toBe(5.0);
+    expect(result.maxSpeed).toBe(5);
     expect(result.avgCadence).toBe(85);
     expect(result.avgWatts).toBe(200);
     expect(result.sufferScore).toBe(75);
