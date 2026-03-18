@@ -21,7 +21,7 @@ Larger components are split into focused sub-components in domain directories:
 - `components/workout/` — `SortableExerciseBlock` extracted from LogWorkout page
 
 ### Backend Architecture
-The backend is a Node.js Express application written in TypeScript with ESM modules. It provides RESTful endpoints under the `/api` prefix, secured with authentication middleware. Replit Auth (OIDC) is used for authentication, with PostgreSQL storing session data. Routes are organized into domain-based modules (e.g., `ai`, `analytics`, `workouts`, `plans`, `auth`, `preferences`, `email`). Route handlers are thin wrappers that validate input and delegate to service modules.
+The backend is a Node.js Express application written in TypeScript with ESM modules. It provides RESTful endpoints under the `/api` prefix, secured with Clerk authentication middleware. Routes are organized into domain-based modules (e.g., `ai`, `analytics`, `workouts`, `plans`, `auth`, `preferences`, `email`). Route handlers are thin wrappers that validate input and delegate to service modules.
 
 #### Service Layer (`server/services/`)
 - `workoutService.ts` — Workout create/update orchestration with `db.transaction()`, exercise-to-set-row expansion, custom exercise upsert, AI reparse
@@ -40,10 +40,10 @@ Contains only cross-cutting concerns: `rateLimiter` middleware and `calculateStr
 - `workouts.ts`, `analytics.ts`, `users.ts`, `timeline.ts` — Domain-specific storage classes
 
 ### Data Storage
-Drizzle ORM with PostgreSQL is used for data persistence. The schema, shared between client and server, includes tables for Users, Sessions, TrainingPlans, PlanDays, WorkoutLogs, ExerciseSets, and CustomExercises. Foreign key constraints ensure data integrity, and user-scoped indexes optimize query performance. An `IStorage` interface pattern enforces data isolation per user.
+Drizzle ORM with PostgreSQL is used for data persistence. The schema, shared between client and server, includes tables for Users, TrainingPlans, PlanDays, WorkoutLogs, ExerciseSets, and CustomExercises. Foreign key constraints ensure data integrity, and user-scoped indexes optimize query performance. An `IStorage` interface pattern enforces data isolation per user.
 
 ### Authentication
-Clerk handles user authentication via JWT-based sessions. The `@clerk/express` middleware on the backend validates session tokens, and `@clerk/clerk-react` provides frontend components (SignInButton, SignOutButton, useUser). On first authenticated request, the user is upserted into the local `users` table. Existing users are matched by email and their IDs are migrated in a single transaction across all related tables. Production instance configured for `hyroxcompanion.life` with `pk_live_`/`sk_live_` keys; development uses `pk_test_`/`sk_test_` keys.
+Clerk handles user authentication via JWT-based sessions. The `@clerk/express` middleware on the backend validates session tokens, and `@clerk/clerk-react` provides frontend components (SignInButton, SignOutButton, useUser). On first authenticated request, the user is upserted into the local `users` table from Clerk profile data. Production instance configured for `hyroxcompanion.life` with `pk_live_`/`sk_live_` keys; development uses `pk_test_`/`sk_test_` keys.
 
 #### Cypress Test Bypass
 When Cypress runs, `window.Cypress` is detected at module load time. This causes:

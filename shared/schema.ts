@@ -3,21 +3,10 @@ import { z } from "zod";
 import { createInsertSchema } from "drizzle-zod";
 
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, date, timestamp, index, jsonb, real, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, date, timestamp, index, real, uniqueIndex } from "drizzle-orm/pg-core";
 
 export const workoutStatusEnum = ["planned", "completed", "missed", "skipped"] as const;
 export type WorkoutStatus = (typeof workoutStatusEnum)[number];
-
-// Session storage table (legacy, kept for schema compatibility)
-export const sessions = pgTable(
-  "sessions",
-  {
-    sid: varchar("sid", { length: 255 }).primaryKey(),
-    sess: jsonb("sess").notNull(),
-    expire: timestamp("expire").notNull(),
-  },
-  (table) => [index("IDX_session_expire").on(table.expire)],
-);
 
 // User table
 export const users = pgTable("users", {
