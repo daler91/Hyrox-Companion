@@ -6,7 +6,7 @@ import {
   type ExerciseSet,
 } from "@shared/schema";
 import { db } from "../db";
-import { eq, and, desc, sql, gte, lte } from "drizzle-orm";
+import { eq, and, sql, gte } from "drizzle-orm";
 import { queryExerciseSetsWithDates } from "./shared";
 
 export class AnalyticsStorage {

@@ -1,19 +1,13 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+
+
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+
 import {
-  FileText,
-  Calendar,
-  Loader2,
   ChevronDown,
   ChevronUp,
-  Dumbbell,
-  Target,
-  Zap,
-  Sparkles,
 } from "lucide-react";
-import { Link } from "wouter";
+
 import { CoachPanel } from "@/components/CoachPanel";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { isToday, parseISO } from "date-fns";

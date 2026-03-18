@@ -25,7 +25,7 @@ async function processWeeklySummary(storage: IStorage, user: User, now: Date): P
   const completedDates = new Set(
     timeline
       .filter(e => e.status === "completed" && e.date)
-      .map(e => e.date!)
+      .map(e => e.date)
   );
   const streak = calculateStreak(completedDates);
 

@@ -33,7 +33,7 @@ router.post("/api/v1/parse-exercises", isAuthenticated, rateLimiter("parse", 5),
 async function prepareChatContext(req: Request): Promise<{ success: false; error: string } | { success: true; message: string; history: Pick<import("@shared/schema").ChatMessage, "role" | "content">[]; trainingContext: import("../gemini").TrainingContext }> {
   const parseResult = chatRequestSchema.safeParse(req.body);
   if (!parseResult.success) {
-    return { success: false as const, error: parseResult.error.errors[0].message };
+    return { success: false, error: parseResult.error.errors[0].message };
   }
   const { message, history } = parseResult.data;
 
@@ -41,11 +41,11 @@ async function prepareChatContext(req: Request): Promise<{ success: false; error
   const trainingContext = await buildTrainingContext(userId);
 
   if (!trainingContext) {
-    return { success: false as const, error: "Training context could not be loaded" };
+    return { success: false, error: "Training context could not be loaded" };
   }
 
   return {
-    success: true as const,
+    success: true,
     message,
     history: history || [],
     trainingContext
@@ -157,11 +157,11 @@ router.post("/api/v1/timeline/ai-suggestions", isAuthenticated, rateLimiter("sug
         entry.date >= today &&
         entry.planDayId !== null
       )
-      .sort((a, b) => a.date!.localeCompare(b.date!))
+      .sort((a, b) => a.date.localeCompare(b.date))
       .slice(0, 5)
       .map(entry => ({
-        id: entry.planDayId!,
-        date: entry.date!,
+        id: entry.planDayId || "",
+        date: entry.date,
         focus: entry.focus || "",
         mainWorkout: entry.mainWorkout || "",
         accessory: entry.accessory || undefined,

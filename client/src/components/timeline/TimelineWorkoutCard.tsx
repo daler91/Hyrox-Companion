@@ -17,7 +17,7 @@ import {
   Trophy,
 } from "lucide-react";
 import { SiStrava } from "react-icons/si";
-import { type TimelineEntry, type ExerciseSet, EXERCISE_DEFINITIONS, type ExerciseName, type PersonalRecord } from "@shared/schema";
+import { type TimelineEntry, type PersonalRecord } from "@shared/schema";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { formatSpeed } from "@shared/unitConversion";
 import { categoryChipColors, groupExerciseSets, formatExerciseSummary, type GroupedExercise } from "@/lib/exerciseUtils";
