@@ -81,12 +81,22 @@ export class WorkoutStorage {
     return createdLogs;
   }
 
-  async listWorkoutLogs(userId: string): Promise<WorkoutLog[]> {
-    return await db
+  async listWorkoutLogs(userId: string, limit?: number, offset?: number): Promise<WorkoutLog[]> {
+    let query = db
       .select()
       .from(workoutLogs)
       .where(eq(workoutLogs.userId, userId))
-      .orderBy(desc(workoutLogs.date));
+      .orderBy(desc(workoutLogs.date))
+      .$dynamic();
+
+    if (limit !== undefined) {
+      query = query.limit(limit);
+    }
+    if (offset !== undefined) {
+      query = query.offset(offset);
+    }
+
+    return await query;
   }
 
   async getWorkoutLog(logId: string, userId: string): Promise<WorkoutLog | undefined> {

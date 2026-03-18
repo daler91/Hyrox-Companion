@@ -89,7 +89,7 @@ describe("Workouts Routes", () => {
       const response = await request(app).get("/api/v1/workouts");
 
       expect(response.status).toBe(200);
-      expect(storage.listWorkoutLogs).toHaveBeenCalledWith("test_user_id");
+      expect(storage.listWorkoutLogs).toHaveBeenCalledWith("test_user_id", undefined, undefined);
       expect(response.body).toEqual(mockLogs);
     });
 
