@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import express from "express";
 import request from "supertest";
-import aiRouter from "../ai";
 import { storage } from "../../storage";
 import { parseExercisesFromText, chatWithCoach, streamChatWithCoach, generateWorkoutSuggestions } from "../../gemini";
 import { buildTrainingContext } from "../../services/aiService";
@@ -58,16 +57,18 @@ vi.mock("../../services/aiService", () => ({
 describe("POST /api/parse-exercises", () => {
   let app: express.Express;
 
+
   beforeEach(async () => {
     vi.clearAllMocks();
-    const routeUtils = await import("../../routeUtils");
-    routeUtils.clearRateLimitBuckets();
+    vi.resetModules();
+    const { default: dynamicAiRouter } = await import("../ai");
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2025, 0, 1));
     app = express();
     app.use(express.json());
-    app.use(aiRouter);
+    app.use(dynamicAiRouter);
   });
+
 
   afterEach(() => {
     vi.useRealTimers();
@@ -120,16 +121,18 @@ describe("POST /api/parse-exercises", () => {
     (storage.getCustomExercises as any).mockResolvedValue([]);
     (parseExercisesFromText as any).mockResolvedValue([]);
 
+
+
     const payload = { text: "Squat 100x5" };
 
     // First 5 requests should succeed
     for (let i = 0; i < 5; i++) {
-      const response = await request(app).post("/api/v1/parse-exercises").send(payload);
+      const response = await request(app).post("/api/v1/parse-exercises").set("x-forwarded-for", "1.2.3.4").send(payload);
       expect(response.status).toBe(200);
     }
 
     // 6th request should fail
-    const rateLimitedResponse = await request(app).post("/api/v1/parse-exercises").send(payload);
+    const rateLimitedResponse = await request(app).post("/api/v1/parse-exercises").set("x-forwarded-for", "1.2.3.4").send(payload);
     expect(rateLimitedResponse.status).toBe(429);
     expect(rateLimitedResponse.body.error).toContain("Too many requests");
 
@@ -137,7 +140,7 @@ describe("POST /api/parse-exercises", () => {
     vi.advanceTimersByTime(61000);
 
     // Next request should succeed again
-    const successfulResponse = await request(app).post("/api/v1/parse-exercises").send(payload);
+    const successfulResponse = await request(app).post("/api/v1/parse-exercises").set("x-forwarded-for", "1.2.3.4").send(payload);
     expect(successfulResponse.status).toBe(200);
   });
 });
@@ -148,14 +151,15 @@ describe("POST /api/chat", () => {
 
 
 
+
   beforeEach(async () => {
     vi.clearAllMocks();
-    const routeUtils = await import("../../routeUtils");
-    routeUtils.clearRateLimitBuckets();
+    const { default: dynamicAiRouter } = await import("../ai");
     app = express();
     app.use(express.json());
-    app.use(aiRouter);
+    app.use(dynamicAiRouter);
   });
+
 
   it("should successfully chat with coach and return response", async () => {
 
@@ -199,14 +203,15 @@ describe("POST /api/chat/stream", () => {
 
 
 
+
   beforeEach(async () => {
     vi.clearAllMocks();
-    const routeUtils = await import("../../routeUtils");
-    routeUtils.clearRateLimitBuckets();
+    const { default: dynamicAiRouter } = await import("../ai");
     app = express();
     app.use(express.json());
-    app.use(aiRouter);
+    app.use(dynamicAiRouter);
   });
+
 
   it("should successfully stream chat response", async () => {
 
@@ -264,14 +269,15 @@ const CHAT_MESSAGE_ENDPOINT = "/api/v1/chat/message";
 describe("Chat History and Messages Routes", () => {
   let app: express.Express;
 
+
   beforeEach(async () => {
     vi.clearAllMocks();
-    const routeUtils = await import("../../routeUtils");
-    routeUtils.clearRateLimitBuckets();
+    const { default: dynamicAiRouter } = await import("../ai");
     app = express();
     app.use(express.json());
-    app.use(aiRouter);
+    app.use(dynamicAiRouter);
   });
+
 
   it("should get chat history", async () => {
 
@@ -348,14 +354,15 @@ const TIMELINE_SUGGESTIONS_ENDPOINT = "/api/v1/timeline/ai-suggestions";
 describe("POST /api/timeline/ai-suggestions", () => {
   let app: express.Express;
 
+
   beforeEach(async () => {
     vi.clearAllMocks();
-    const routeUtils = await import("../../routeUtils");
-    routeUtils.clearRateLimitBuckets();
+    const { default: dynamicAiRouter } = await import("../ai");
     app = express();
     app.use(express.json());
-    app.use(aiRouter);
+    app.use(dynamicAiRouter);
   });
+
 
   it("should successfully generate suggestions", async () => {
 

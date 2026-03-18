@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { Response, NextFunction } from "express";
-import { calculateStreak, rateLimiter, clearRateLimitBuckets, MAX_RATE_LIMIT_BUCKETS, DEFAULT_WINDOW_MS } from "./routeUtils";
+import { calculateStreak, rateLimiter, DEFAULT_WINDOW_MS } from "./routeUtils";
 import { expandExercisesToSetRows } from "./services/workoutService";
 
 describe("rateLimiter", () => {
@@ -11,7 +11,6 @@ describe("rateLimiter", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-01-15T12:00:00Z"));
-    clearRateLimitBuckets();
 
     req = {
       auth: { userId: "user123" },
@@ -22,6 +21,7 @@ describe("rateLimiter", () => {
       setHeader: vi.fn(),
       status: vi.fn().mockReturnThis(),
       json: vi.fn(),
+      send: vi.fn(),
     };
 
     next = vi.fn();
@@ -32,166 +32,89 @@ describe("rateLimiter", () => {
     vi.restoreAllMocks();
   });
 
-  it("calls next() for requests under the limit", () => {
+  it("calls next() for requests under the limit", async () => {
     const middleware = rateLimiter("api", 2, DEFAULT_WINDOW_MS);
 
-    middleware(req, res as Response, next);
+    await middleware(req, res as Response, next);
     expect(next).toHaveBeenCalledTimes(1);
     expect(res.status).not.toHaveBeenCalled();
 
-    middleware(req, res as Response, next);
+    await middleware(req, res as Response, next);
     expect(next).toHaveBeenCalledTimes(2);
     expect(res.status).not.toHaveBeenCalled();
   });
 
-  it("returns 429 when maxRequests is exceeded", () => {
+  it("returns 429 when maxRequests is exceeded", async () => {
     const middleware = rateLimiter("api", 2, DEFAULT_WINDOW_MS);
 
-    middleware(req, res as Response, next); // 1st request (ok)
-    middleware(req, res as Response, next); // 2nd request (ok)
-    middleware(req, res as Response, next); // 3rd request (blocked)
+    await middleware(req, res as Response, next); // 1st request (ok)
+    await middleware(req, res as Response, next); // 2nd request (ok)
+    await middleware(req, res as Response, next); // 3rd request (blocked)
 
     expect(next).toHaveBeenCalledTimes(2);
     expect(res.status).toHaveBeenCalledWith(429);
-    expect(res.json).toHaveBeenCalledWith({
-      error: "Too many requests. Please wait 60 seconds before trying again.",
+    expect(res.send).toHaveBeenCalledWith({
+      error: "Too many requests. Please try again later.",
     });
     expect(res.setHeader).toHaveBeenCalledWith("Retry-After", "60");
   });
 
-  it("resets limit after windowMs passes", () => {
+  it("resets limit after windowMs passes", async () => {
     const middleware = rateLimiter("api", 1, DEFAULT_WINDOW_MS);
 
-    middleware(req, res as Response, next); // 1st request (ok)
+    await middleware(req, res as Response, next); // 1st request (ok)
     expect(next).toHaveBeenCalledTimes(1);
 
-    middleware(req, res as Response, next); // 2nd request (blocked)
+    await middleware(req, res as Response, next); // 2nd request (blocked)
     expect(res.status).toHaveBeenCalledWith(429);
 
     // Advance time by 60 seconds
     vi.advanceTimersByTime(DEFAULT_WINDOW_MS);
 
-    middleware(req, res as Response, next); // 3rd request (ok again)
+    await middleware(req, res as Response, next); // 3rd request (ok again)
     expect(next).toHaveBeenCalledTimes(2);
   });
 
-  it("distinguishes between different users", () => {
+  it("distinguishes between different users", async () => {
     const middleware = rateLimiter("api", 1, DEFAULT_WINDOW_MS);
 
     // User 1 requests
-    middleware(req, res as Response, next); // 1st request user1 (ok)
+    await middleware(req, res as Response, next); // 1st request user1 (ok)
     expect(next).toHaveBeenCalledTimes(1);
 
     // User 2 requests
     const req2 = { ...req, auth: { userId: "user456" } };
-    middleware(req2, res as Response, next); // 1st request user2 (ok)
+    await middleware(req2, res as Response, next); // 1st request user2 (ok)
     expect(next).toHaveBeenCalledTimes(2);
 
     // User 1 requests again (blocked)
-    middleware(req, res as Response, next); // 2nd request user1 (blocked)
+    await middleware(req, res as Response, next); // 2nd request user1 (blocked)
     expect(res.status).toHaveBeenCalledWith(429);
   });
 
-  it("uses ip address if userId is missing", () => {
+  it("uses ip address if userId is missing", async () => {
     const middleware = rateLimiter("api", 1, DEFAULT_WINDOW_MS);
-    const reqIp = { ip: "user-cleanup-1" };
+    const reqIp = { ip: "192.168.1.2" };
 
-    middleware(reqIp, res as Response, next); // 1st request ip (ok)
+    await middleware(reqIp, res as Response, next); // 1st request ip (ok)
     expect(next).toHaveBeenCalledTimes(1);
 
-    middleware(reqIp, res as Response, next); // 2nd request ip (blocked)
+    await middleware(reqIp, res as Response, next); // 2nd request ip (blocked)
     expect(res.status).toHaveBeenCalledWith(429);
   });
 
-  it("calls next() and bypasses rate limiting if neither userId nor ip is present", () => {
-    const middleware = rateLimiter("api", 1, DEFAULT_WINDOW_MS);
-    const reqEmpty = {};
-
-    middleware(reqEmpty, res as Response, next); // 1st request empty (ok)
-    middleware(reqEmpty, res as Response, next); // 2nd request empty (ok)
-
-    expect(next).toHaveBeenCalledTimes(2);
-    expect(res.status).not.toHaveBeenCalled();
-  });
-
-  it("distinguishes between different categories for the same user", () => {
+  it("distinguishes between different categories for the same user", async () => {
     const apiLimiter = rateLimiter("api", 1, DEFAULT_WINDOW_MS);
     const authLimiter = rateLimiter("auth", 1, DEFAULT_WINDOW_MS);
 
-    apiLimiter(req, res as Response, next); // 1st api request (ok)
+    await apiLimiter(req, res as Response, next); // 1st api request (ok)
     expect(next).toHaveBeenCalledTimes(1);
 
-    authLimiter(req, res as Response, next); // 1st auth request (ok)
+    await authLimiter(req, res as Response, next); // 1st auth request (ok)
     expect(next).toHaveBeenCalledTimes(2);
 
-    apiLimiter(req, res as Response, next); // 2nd api request (blocked)
+    await apiLimiter(req, res as Response, next); // 2nd api request (blocked)
     expect(res.status).toHaveBeenCalledWith(429);
-  });
-
-  it("evicts oldest entry when MAX_RATE_LIMIT_BUCKETS is reached", () => {
-    const middleware = rateLimiter("api", 1, DEFAULT_WINDOW_MS);
-
-    // Fill the map to its maximum capacity
-    for (let i = 0; i < MAX_RATE_LIMIT_BUCKETS; i++) {
-      const mockReq = { ...req, auth: { userId: `user-${i}` } };
-      middleware(mockReq, res as Response, next);
-    }
-
-    expect(next).toHaveBeenCalledTimes(MAX_RATE_LIMIT_BUCKETS);
-
-    // Now the map should be exactly at capacity
-    // The very first IP was user-0
-    // Requesting it again now would normally be a 429 Too Many Requests if it was still in the map
-    // However, we are about to add a new IP which will evict user-0
-
-    const overflowingReq = { ...req, auth: { userId: "user-overflow" } };
-    middleware(overflowingReq, res as Response, next); // This should evict user-0 and succeed
-
-    expect(next).toHaveBeenCalledTimes(MAX_RATE_LIMIT_BUCKETS + 1);
-
-    // To prove user-0 was evicted, sending a request for it should NOT return 429
-    // It should succeed because it acts like a completely new request
-    const firstReq = { ...req, auth: { userId: "user-0" } };
-    middleware(firstReq, res as Response, next);
-
-    expect(next).toHaveBeenCalledTimes(MAX_RATE_LIMIT_BUCKETS + 2);
-    expect(res.status).not.toHaveBeenCalled();
-
-    // But if we immediately request it AGAIN, it should be 429 (proving it's now tracked again)
-    middleware(firstReq, res as Response, next);
-    expect(res.status).toHaveBeenCalledWith(429);
-  });
-
-  it("performs inline cleanup when limit is reached", () => {
-    const middleware = rateLimiter("api", 1, DEFAULT_WINDOW_MS);
-
-    // Add one entry
-    const mockReq1 = { ...req, auth: { userId: "user-cleanup-1" } };
-    middleware(mockReq1, res as Response, next);
-
-    // Fast forward time so it expires
-    vi.advanceTimersByTime(DEFAULT_WINDOW_MS);
-
-    // Fill the map up to the limit MINUS 1 (because the expired one is still there taking up space)
-    for (let i = 2; i <= MAX_RATE_LIMIT_BUCKETS; i++) {
-      const mockReq = { ...req, auth: { userId: `user-cleanup-${i}` } };
-      middleware(mockReq, res as Response, next);
-    }
-
-    expect(next).toHaveBeenCalledTimes(MAX_RATE_LIMIT_BUCKETS);
-
-    // Now the size is exactly MAX_RATE_LIMIT_BUCKETS
-    // The next insertion should trigger an inline cleanup and remove the first entry (user-cleanup-1)
-    // because it expired. Thus it shouldn't need to evict anything actively, just clean up.
-
-    const newReq = { ...req, auth: { userId: "user-cleanup-new" } };
-    middleware(newReq, res as Response, next);
-    expect(next).toHaveBeenCalledTimes(MAX_RATE_LIMIT_BUCKETS + 1);
-
-    // Now if we request the very first one that expired (user-cleanup-1), it should succeed
-    middleware(mockReq1, res as Response, next);
-    expect(next).toHaveBeenCalledTimes(MAX_RATE_LIMIT_BUCKETS + 2);
-    expect(res.status).not.toHaveBeenCalled();
   });
 });
 
