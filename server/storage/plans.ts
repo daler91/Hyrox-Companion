@@ -167,18 +167,21 @@ export class PlanStorage {
     if (dateUpdates.length === 0) return true;
 
     return await db.transaction(async (tx) => {
-      // Secure batch update using a single CASE statement
-      const sqlChunks = [];
-      sqlChunks.push(sql`UPDATE ${planDays} SET "${sql.raw(planDays.scheduledDate.name)}" = CASE "${sql.raw(planDays.id.name)}" `);
+      // Secure batch update using idiomatic Drizzle query builder and a CASE statement
+      const caseChunks = [];
+      caseChunks.push(sql`CASE "${sql.raw(planDays.id.name)}" `);
       for (const u of dateUpdates) {
-        sqlChunks.push(sql`WHEN ${u.id} THEN ${u.scheduledDate}::date `);
+        caseChunks.push(sql`WHEN ${u.id} THEN ${u.scheduledDate}::date `);
       }
-      sqlChunks.push(sql`END WHERE "${sql.raw(planDays.id.name)}" IN (`);
-      sqlChunks.push(sql.join(dateUpdates.map(u => sql`${u.id}`), sql`, `));
-      sqlChunks.push(sql`)`);
+      caseChunks.push(sql`END`);
 
-      const finalQuery = sql.join(sqlChunks, sql``);
-      await tx.execute(finalQuery);
+      const caseSql = sql.join(caseChunks, sql``);
+      const updateIds = dateUpdates.map(u => u.id);
+
+      // Perform a single batch update
+      await tx.update(planDays)
+        .set({ scheduledDate: caseSql as any })
+        .where(inArray(planDays.id, updateIds));
 
       const resetUpdateIds = dateUpdates.filter(u => u.resetStatus).map(u => u.id);
       if (resetUpdateIds.length > 0) {
