@@ -1,10 +1,23 @@
+import { z } from "zod";
+
+import { createInsertSchema } from "drizzle-zod";
+
 import { sql } from "drizzle-orm";
 import { pgTable, text, varchar, integer, date, timestamp, index, jsonb, real, uniqueIndex } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod";
 
 export const workoutStatusEnum = ["planned", "completed", "missed", "skipped"] as const;
 export type WorkoutStatus = (typeof workoutStatusEnum)[number];
+
+// Session storage table (legacy, kept for schema compatibility)
+export const sessions = pgTable(
+  "sessions",
+  {
+    sid: varchar("sid", { length: 255 }).primaryKey(),
+    sess: jsonb("sess").notNull(),
+    expire: timestamp("expire").notNull(),
+  },
+  (table) => [index("IDX_session_expire").on(table.expire)],
+);
 
 // User table
 export const users = pgTable("users", {
@@ -46,7 +59,7 @@ export const trainingPlans = pgTable("training_plans", {
 ]);
 
 export const insertTrainingPlanSchema = createInsertSchema(trainingPlans).omit({
-  id: true,
+  id: true as never,
 });
 
 export type InsertTrainingPlan = z.infer<typeof insertTrainingPlanSchema>;
@@ -72,11 +85,11 @@ export const planDays = pgTable("plan_days", {
 ]);
 
 export const insertPlanDaySchema = createInsertSchema(planDays).omit({
-  id: true,
+  id: true as never,
 });
 
 export const updatePlanDaySchema = insertPlanDaySchema.partial().omit({
-  planId: true,
+  planId: true as never,
 });
 
 export type InsertPlanDay = z.infer<typeof insertPlanDaySchema>;
@@ -133,16 +146,16 @@ export const stravaConnections = pgTable("strava_connections", {
 });
 
 export const insertStravaConnectionSchema = createInsertSchema(stravaConnections).omit({
-  id: true,
-  createdAt: true,
+  id: true as never,
+  createdAt: true as never,
 });
 
 export type InsertStravaConnection = z.infer<typeof insertStravaConnectionSchema>;
 export type StravaConnection = typeof stravaConnections.$inferSelect;
 
 export const insertWorkoutLogSchema = createInsertSchema(workoutLogs).omit({
-  id: true,
-  userId: true,
+  id: true as never,
+  userId: true as never,
 });
 
 export const updateWorkoutLogSchema = insertWorkoutLogSchema.partial();
@@ -210,7 +223,7 @@ export const exerciseSets = pgTable("exercise_sets", {
 ]);
 
 export const insertExerciseSetSchema = createInsertSchema(exerciseSets).omit({
-  id: true,
+  id: true as never,
 });
 
 export type InsertExerciseSet = z.infer<typeof insertExerciseSetSchema>;
@@ -260,8 +273,8 @@ export const customExercises = pgTable("custom_exercises", {
 ]);
 
 export const insertCustomExerciseSchema = createInsertSchema(customExercises).omit({
-  id: true,
-  createdAt: true,
+  id: true as never,
+  createdAt: true as never,
 }).extend({
   name: z.string().trim().min(1, "Name is required").max(100, "Name must be 100 characters or less"),
   category: z.string().trim().max(50, "Category must be 50 characters or less").optional(),
@@ -283,8 +296,8 @@ export const chatMessages = pgTable("chat_messages", {
 ]);
 
 export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({
-  id: true,
-  timestamp: true,
+  id: true as never,
+  timestamp: true as never,
 });
 
 export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
