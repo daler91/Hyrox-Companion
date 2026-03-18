@@ -151,7 +151,11 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
     const supersetOf = recentEmissionsRef.current.findIndex((e) =>
       normalized.startsWith(e.text),
     );
-    if (supersetOf !== -1) {
+    if (supersetOf === -1) {
+      // Completely new text - emit as-is
+      recentEmissionsRef.current.push({ text: normalized, time: now });
+      onResultRef.current?.(finalTranscript);
+    } else {
       // Case 3: new is a superset - emit only the new portion
       const previousText = recentEmissionsRef.current[supersetOf].text;
       const delta = normalized.slice(previousText.length).trim();
@@ -163,10 +167,6 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
       if (delta) {
         onResultRef.current?.(delta);
       }
-    } else {
-      // Completely new text - emit as-is
-      recentEmissionsRef.current.push({ text: normalized, time: now });
-      onResultRef.current?.(finalTranscript);
     }
   }, []);
 
