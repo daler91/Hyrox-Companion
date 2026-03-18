@@ -2,7 +2,7 @@ import { logger } from "../logger";
 import { buildSystemPrompt } from "../prompts";
 import { getAiClient, GEMINI_MODEL } from "./client";
 import type { ChatMessage } from "@shared/schema";
-import type { TrainingContext } from "./suggestionService";
+import type { TrainingContext } from "./types";
 
 export async function chatWithCoach(
   userMessage: string,
@@ -20,7 +20,7 @@ export async function chatWithCoach(
       parts: [{ text: userMessage }],
     });
 
-    const systemPrompt = buildSystemPrompt(trainingContext as any);
+    const systemPrompt = buildSystemPrompt(trainingContext);
 
     const response = await getAiClient().models.generateContent({
       model: GEMINI_MODEL,
@@ -56,7 +56,7 @@ export async function* streamChatWithCoach(
       parts: [{ text: userMessage }],
     });
 
-    const systemPrompt = buildSystemPrompt(trainingContext as any);
+    const systemPrompt = buildSystemPrompt(trainingContext);
 
     const response = await getAiClient().models.generateContentStream({
       model: GEMINI_MODEL,
