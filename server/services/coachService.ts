@@ -67,53 +67,64 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
   try {
     const user = await storage.getUser(userId);
     if (!user?.aiCoachEnabled) return { adjusted: 0 };
+    if (user.isAutoCoaching) return { adjusted: 0 }; // Prevent overlapping runs
 
-    const [trainingContext, plans] = await Promise.all([
-      buildTrainingContext(userId),
-      storage.listTrainingPlans(userId),
-    ]);
+    await storage.updateIsAutoCoaching(userId, true);
 
-    const activePlanGoal = plans[0]?.goal ?? undefined;
-    const today = toDateStr();
-    const timeline = await storage.getTimeline(userId);
+    try {
+      const [trainingContext, plans] = await Promise.all([
+        buildTrainingContext(userId),
+        storage.listTrainingPlans(userId),
+      ]);
 
-    const upcomingWorkouts: UpcomingWorkout[] = timeline
-      .filter(
-        (entry) =>
-          entry.status === "planned" &&
-          entry.date >= today &&
-          entry.planDayId !== null,
-      )
-      .sort((a, b) => a.date.localeCompare(b.date))
-      .slice(0, 7)
-      .map((entry) => ({
-        id: entry.planDayId || "",
-        date: entry.date,
-        focus: entry.focus || "",
-        mainWorkout: entry.mainWorkout || "",
-        accessory: entry.accessory || undefined,
-      }));
+      const activePlanGoal = plans[0]?.goal ?? undefined;
+      const today = toDateStr();
+      const timeline = await storage.getTimeline(userId);
 
-    if (upcomingWorkouts.length === 0) return { adjusted: 0 };
+      const upcomingWorkouts: UpcomingWorkout[] = timeline
+        .filter(
+          (entry) =>
+            entry.status === "planned" &&
+            entry.date >= today &&
+            entry.planDayId !== null,
+        )
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .slice(0, 7)
+        .map((entry) => ({
+          id: entry.planDayId || "",
+          date: entry.date,
+          focus: entry.focus || "",
+          mainWorkout: entry.mainWorkout || "",
+          accessory: entry.accessory || undefined,
+        }));
 
-    const suggestions = await generateWorkoutSuggestions(
-      trainingContext,
-      upcomingWorkouts,
-      activePlanGoal,
-    );
+      if (upcomingWorkouts.length === 0) return { adjusted: 0 };
 
-    const results = await Promise.all(
-      suggestions.map((s) => applySuggestion(s, upcomingWorkouts, userId)),
-    );
-    const adjusted = results.filter(Boolean).length;
+      const suggestions = await generateWorkoutSuggestions(
+        trainingContext,
+        upcomingWorkouts,
+        activePlanGoal,
+      );
 
-    if (adjusted > 0) {
-      logger.info({ userId, adjusted }, "[coach] Auto-coach applied adjustments");
+      const results = await Promise.all(
+        suggestions.map((s) => applySuggestion(s, upcomingWorkouts, userId)),
+      );
+      const adjusted = results.filter(Boolean).length;
+
+      if (adjusted > 0) {
+        logger.info({ userId, adjusted }, "[coach] Auto-coach applied adjustments");
+      }
+      return { adjusted };
+    } finally {
+      await storage.updateIsAutoCoaching(userId, false);
     }
-    return { adjusted };
   } catch (error) {
     // Never throw — this is a background, non-critical operation
     logger.error({ err: error, userId }, "[coach] Auto-coach error:");
+    // Attempt to reset the flag in case of outer try failure (though finally covers the inner one)
+    try {
+      await storage.updateIsAutoCoaching(userId, false);
+    } catch (e) {}
     return { adjusted: 0 };
   }
 }

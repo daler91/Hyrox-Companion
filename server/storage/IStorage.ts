@@ -26,6 +26,7 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
   updateUserPreferences(userId: string, preferences: UpdateUserPreferences): Promise<User | undefined>;
+  updateIsAutoCoaching(userId: string, isAutoCoaching: boolean): Promise<void>;
 
   createTrainingPlan(plan: InsertTrainingPlan): Promise<TrainingPlan>;
   listTrainingPlans(userId: string): Promise<TrainingPlan[]>;

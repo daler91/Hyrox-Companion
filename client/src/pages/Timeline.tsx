@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import {
   ChevronDown,
   ChevronUp,
+  Loader2,
 } from "lucide-react";
 
 import { CoachPanel } from "@/components/CoachPanel";
@@ -25,9 +26,11 @@ import {
   CombineWorkoutsDialog,
 } from "@/components/timeline";
 import { useTimelineState } from "@/hooks/useTimelineState";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function Timeline() {
   const state = useTimelineState();
+  const { user } = useAuth();
 
   const {
     plans,
@@ -132,6 +135,13 @@ export default function Timeline() {
         onGoalSave={(planId, goal) => updatePlanGoalMutation.mutate({ planId, goal })}
         isUpdatingGoal={updatePlanGoalMutation.isPending}
       />
+
+      {user?.isAutoCoaching && (
+        <div className="flex items-center gap-3 p-4 bg-primary/10 text-primary border border-primary/20 rounded-lg text-sm font-medium animate-in fade-in slide-in-from-top-2">
+          <Loader2 className="h-5 w-5 animate-spin data-testid='icon-ai-coach-loading'" />
+          AI Coach is analyzing your progress and adapting your upcoming workouts...
+        </div>
+      )}
 
       {(() => {
         if (timelineLoading) {
