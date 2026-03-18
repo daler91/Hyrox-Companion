@@ -18,7 +18,8 @@ function processStreamLines(
     let data;
     try {
       data = JSON.parse(line.slice(6));
-    } catch (parseError) {
+    } catch {
+      // Ignore parse errors for incomplete stream chunks
       continue;
     }
     if (data.text) {
@@ -215,7 +216,8 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         setMessages((prev) => [...prev, assistantMessage]);
         saveMessageMutation.mutate({ role: "assistant", content: data.response });
       }
-    } catch (err) {
+    } catch {
+      // Ignore detailed errors in the UI, just show interruption message
       if (fullResponse) {
         setMessages((prev) =>
           prev.map((m) =>
