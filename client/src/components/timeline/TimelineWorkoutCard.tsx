@@ -294,6 +294,12 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2 flex-wrap">
               {getStatusBadge(entry.status)}
+              {isTargetedByCoach && (
+                <Badge variant="outline" className="border-primary text-primary bg-primary/5 animate-pulse" data-testid={`badge-ai-coach-${entry.id}`}>
+                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                  AI Modifying
+                </Badge>
+              )}
               {entry.source === "strava" && (
                 <Badge className="bg-[#FC4C02]/10 text-[#FC4C02]">
                   <SiStrava className="h-3 w-3 mr-1" />
