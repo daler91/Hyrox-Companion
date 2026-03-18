@@ -101,7 +101,7 @@ export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg",
   };
 
   const addSet = () => {
-    const lastSet = sets[sets.length - 1];
+    const lastSet = sets.at(-1);
     const newSet: SetData = {
       setNumber: sets.length + 1,
       reps: lastSet?.reps,
