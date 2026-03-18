@@ -7,6 +7,9 @@ import { logger } from "./logger";
 import pinoHttp from "pino-http";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
+import swaggerUi from "swagger-ui-express";
+import { generateOpenApiDocument } from "../shared/openapi";
+
 import { createServer } from "node:http";
 import { storage } from "./storage";
 import { pool } from "./db";
@@ -134,6 +137,17 @@ app.use(pinoHttp({
 
 await runStartupMaintenance(storage);
 await registerRoutes(httpServer, app);
+
+// Serve OpenAPI docs
+app.use(
+  "/api/docs",
+  swaggerUi.serve,
+  swaggerUi.setup(generateOpenApiDocument(), {
+    customCss: ".swagger-ui .topbar { display: none }",
+    customSiteTitle: "Workout API Documentation"
+  })
+);
+
 
 app.use((err: AppError, _req: Request, res: Response, _next: NextFunction) => {
   const status = err.status || err.statusCode || 500;
