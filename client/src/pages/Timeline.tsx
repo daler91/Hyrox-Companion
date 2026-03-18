@@ -136,13 +136,6 @@ export default function Timeline() {
         isUpdatingGoal={updatePlanGoalMutation.isPending}
       />
 
-      {user?.isAutoCoaching && (
-        <div className="flex items-center gap-3 p-4 bg-primary/10 text-primary border border-primary/20 rounded-lg text-sm font-medium animate-in fade-in slide-in-from-top-2">
-          <Loader2 className="h-5 w-5 animate-spin data-testid='icon-ai-coach-loading'" />
-          AI Coach is analyzing your progress and adapting your upcoming workouts...
-        </div>
-      )}
-
       {(() => {
         if (timelineLoading) {
           return <TimelineSkeleton />;
@@ -202,6 +195,7 @@ export default function Timeline() {
                 combiningEntryId={combiningEntry?.id || null}
                 combiningEntryDate={combiningEntry?.date || null}
                 personalRecords={personalRecords}
+                isAutoCoaching={!!user?.isAutoCoaching}
               />
             ))}
 
