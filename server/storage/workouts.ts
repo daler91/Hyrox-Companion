@@ -1,7 +1,6 @@
 import {
   workoutLogs,
   planDays,
-  trainingPlans,
   exerciseSets,
   type WorkoutLog,
   type InsertWorkoutLog,

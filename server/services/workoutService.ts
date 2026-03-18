@@ -1,7 +1,7 @@
-import { workoutLogs, exerciseSets, planDays, trainingPlans, customExercises, type ParsedExercise, type InsertWorkoutLog, type UpdateWorkoutLog, type InsertExerciseSet, type WorkoutLog, type ExerciseSet } from "@shared/schema";
+import { workoutLogs, exerciseSets, planDays, customExercises, type ParsedExercise, type InsertWorkoutLog, type UpdateWorkoutLog, type InsertExerciseSet, type WorkoutLog, type ExerciseSet } from "@shared/schema";
 import { storage } from "../storage";
 import { db } from "../db";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 
 export function extractAndDeduplicateCustomExercises(exercises: ParsedExercise[], userId: string) {

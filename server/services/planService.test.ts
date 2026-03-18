@@ -44,6 +44,49 @@ describe("planService", () => {
       loggerErrorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
     });
 
+    it("should create a plan and its days correctly", async () => {
+      const userId = "test-user-id";
+      const mockCSV = "Week,Day,Focus,Main Workout,Accessory,Notes\n1,Monday,Running,5km,3x20 lunges,None";
+      const mockPlan = { id: "mock-plan-id", userId, name: "Imported Plan", totalWeeks: 1 };
+      const mockFullPlan = { ...mockPlan, days: [] };
+
+      vi.mocked(csvParse.parse).mockReturnValue([{
+        Week: "1",
+        Day: "Monday",
+        Focus: "Running",
+        "Main Workout": "5km",
+        Accessory: "3x20 lunges",
+        Notes: "None"
+      }]);
+
+      vi.mocked(storage.createTrainingPlan).mockResolvedValue(mockPlan as any);
+      vi.mocked(storage.createPlanDays).mockResolvedValue([] as any);
+      vi.mocked(storage.getTrainingPlan).mockResolvedValue(mockFullPlan as any);
+
+      const result = await importPlanFromCSV(mockCSV, userId);
+
+      expect(storage.createTrainingPlan).toHaveBeenCalledWith(expect.objectContaining({
+        userId,
+        name: "Imported Plan",
+        totalWeeks: 1
+      }));
+
+      const expectedDays = [{
+        userId,
+        planId: mockPlan.id,
+        weekNumber: 1,
+        dayName: "Monday",
+        focus: "Running",
+        mainWorkout: "5km",
+        accessory: "3x20 lunges",
+        notes: "None",
+        status: "planned"
+      }];
+
+      expect(storage.createPlanDays).toHaveBeenCalledWith(expectedDays);
+      expect(result).toEqual(mockFullPlan);
+    });
+
     it("should catch and log CSV parse errors, resulting in an empty rows error", async () => {
       const mockError = new Error("Mock CSV Parse Error");
       vi.mocked(csvParse.parse).mockImplementation(() => {
@@ -99,6 +142,7 @@ describe("planService", () => {
       expect(storage.createPlanDays).toHaveBeenCalledTimes(1);
 
       const expectedDays = samplePlanDays.map((d) => ({
+        userId: userId,
         planId: mockPlanId,
         weekNumber: d.week,
         dayName: d.day,
@@ -246,9 +290,7 @@ describe("planService", () => {
         })
         .mockReturnValueOnce({
           from: vi.fn().mockReturnValueOnce({
-            innerJoin: vi.fn().mockReturnValueOnce({
-              where: vi.fn().mockResolvedValue(dayExistenceResult)
-            })
+            where: vi.fn().mockResolvedValue(dayExistenceResult)
           })
         });
 

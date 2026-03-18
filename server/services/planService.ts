@@ -2,7 +2,7 @@ import { logger } from "../logger";
 import { storage } from "../storage";
 import { db } from "../db";
 import { parse } from "csv-parse/sync";
-import { exerciseSets, planDays, trainingPlans, workoutLogs } from "@shared/schema";
+import { exerciseSets, planDays, workoutLogs } from "@shared/schema";
 import type { InsertPlanDay, TrainingPlanWithDays, UpdatePlanDay } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import { samplePlanDays } from "../samplePlan";
