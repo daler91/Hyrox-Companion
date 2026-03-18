@@ -36,6 +36,11 @@ function createDatabaseStorage(): IStorage {
           return value.bind(delegate);
         }
       }
+
+      if (typeof prop === "string" && prop !== "then") {
+        throw new Error(`Method '${String(prop)}' not implemented in any storage delegate.`);
+      }
+
       return Reflect.get(_target, prop, receiver);
     },
   });
