@@ -48,7 +48,7 @@ jobs:
           PORT: 5000
 
       - name: Wait for server
-        run: npx wait-on http-get://localhost:5000/api/health --timeout 120000
+        run: npx wait-on http-get://localhost:5000/api/v1/health --timeout 120000
 
       - name: Cypress run
         uses: cypress-io/github-action@82482149c343a5dee155d22104111b9319f9dd45 # v7
