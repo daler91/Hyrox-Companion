@@ -124,7 +124,9 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
     // Attempt to reset the flag in case of outer try failure (though finally covers the inner one)
     try {
       await storage.updateIsAutoCoaching(userId, false);
-    } catch (e) {}
+    } catch {
+      // Ignored: best-effort attempt to reset the flag after an error
+    }
     return { adjusted: 0 };
   }
 }
