@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import express from "express";
 import request from "supertest";
 import workoutsRouter from "../workouts";
+import { clearRateLimitBuckets } from "../../routeUtils";
 
 // Mock the clerkAuth middleware to simulate authentication
 vi.mock("../../clerkAuth", () => ({
@@ -41,6 +42,7 @@ describe("Workouts Routes", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    clearRateLimitBuckets();
     app = express();
     app.use(express.json());
     app.use(workoutsRouter);
