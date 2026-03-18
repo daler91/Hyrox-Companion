@@ -1,17 +1,10 @@
 import { type ParsedExercise, type TimelineEntry, type WorkoutStatus } from "@shared/schema";
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { useToast } from "@/hooks/use-toast";
-import { useUnitPreferences } from "@/hooks/useUnitPreferences";
-import { getExerciseLabel, groupExerciseSets, exerciseSetsToStructured } from "@/lib/exerciseUtils";
-import {
-  useWorkoutEditor,
-  exerciseToPayload,
-} from "@/hooks/useWorkoutEditor";
-import { WorkoutDetailHeader } from "./WorkoutDetailHeader";
-import { WorkoutDetailView, WorkoutDetailEditForm } from "./WorkoutDetailExercises";
-import { StatusChangeSection, WorkoutDetailFooter, DeleteConfirmDialog } from "./WorkoutDetailActions";
+import { DeleteConfirmDialog } from "./WorkoutDetailActions";
+import { WorkoutDetailEditMode } from "./WorkoutDetailEditMode";
+import { WorkoutDetailViewMode } from "./WorkoutDetailViewMode";
 
 interface WorkoutDetailDialogProps {
   readonly entry: TimelineEntry | null;
@@ -36,54 +29,8 @@ export default function WorkoutDetailDialog({
   isSaving,
   isDeleting,
 }: Readonly<WorkoutDetailDialogProps>) {
-  const { toast } = useToast();
-  const { distanceUnit, weightUnit, weightLabel } = useUnitPreferences();
   const [isEditing, setIsEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [editRpe, setEditRpe] = useState<number | null>(null);
-  const [editForm, setEditForm] = useState({
-    focus: "",
-    mainWorkout: "",
-    accessory: "",
-    notes: "",
-  });
-  const hasStructuredData = entry?.exerciseSets && entry.exerciseSets.length > 0;
-
-  const {
-    exerciseBlocks: editExercises,
-    exerciseData: editExerciseData,
-    useTextMode,
-    setUseTextMode,
-    sensors: dialogSensors,
-    handleDragEnd: handleEditDragEnd,
-    addExercise: handleAddExercise,
-    removeBlock: handleRemoveBlock,
-    updateBlock,
-    getSelectedExerciseNames,
-    parseMutation,
-    resetEditor,
-  } = useWorkoutEditor({ initialBlockCounter: 100 });
-
-  useEffect(() => {
-    if (entry) {
-      setEditForm({
-        focus: entry.focus,
-        mainWorkout: entry.mainWorkout,
-        accessory: entry.accessory || "",
-        notes: entry.notes || "",
-      });
-      setEditRpe(entry.rpe ?? null);
-      if (entry.exerciseSets && entry.exerciseSets.length > 0) {
-        const { names, data } = exerciseSetsToStructured(entry.exerciseSets);
-        resetEditor(names, data, false);
-      } else {
-        resetEditor([], {}, true);
-      }
-      setIsEditing(false);
-    }
-  }, [entry, resetEditor]);
-
-  const stopAllVoiceRef = useRef<(() => void) | null>(null);
 
   if (!entry) return null;
 
@@ -92,131 +39,40 @@ export default function WorkoutDetailDialog({
   const canEdit = hasPlanDayId || hasWorkoutLogId;
   const canDelete = hasPlanDayId || hasWorkoutLogId;
 
-  const canChangeStatus = hasPlanDayId;
-  const grouped = hasStructuredData ? groupExerciseSets(entry.exerciseSets!) : [];
-
-  const handleSave = () => {
-    stopAllVoiceRef.current?.();
-    if (useTextMode) {
-      onSave({
-        focus: editForm.focus,
-        mainWorkout: editForm.mainWorkout,
-        accessory: editForm.accessory || null,
-        notes: editForm.notes || null,
-        rpe: editRpe,
-        exercises: [],
-      });
-    } else {
-      const exercises = editExercises.map((name) => editExerciseData[name]).filter(Boolean);
-      const distLabel = distanceUnit === "km" ? "m" : "ft";
-      const mainWorkout = exercises.length > 0
-        ? exercises.map((ex) => {
-            const name = getExerciseLabel(ex.exerciseName, ex.customLabel);
-            const sets = ex.sets || [];
-            if (sets.length === 0) return `${name}: completed`;
-            const firstSet = sets[0];
-            const allSame = sets.every(s => s.reps === firstSet.reps && s.weight === firstSet.weight);
-            const parts: string[] = [];
-            if (allSame && sets.length > 1 && firstSet.reps) parts.push(`${sets.length}x${firstSet.reps}`);
-            else if (firstSet.reps) parts.push(`${firstSet.reps} reps`);
-            if (allSame && firstSet.weight) parts.push(`${firstSet.weight}${weightLabel}`);
-            if (firstSet.distance) parts.push(`${firstSet.distance}${distLabel}`);
-            if (firstSet.time) parts.push(`${firstSet.time}min`);
-            return `${name}: ${parts.join(", ") || "completed"}`;
-          }).join("; ")
-        : editForm.mainWorkout;
-
-      onSave({
-        focus: editForm.focus,
-        mainWorkout,
-        accessory: editForm.accessory || null,
-        notes: editForm.notes || null,
-        rpe: editRpe,
-        exercises: exercises.length > 0 ? exercises.map(exerciseToPayload) : undefined,
-      });
-    }
-  };
-
   const handleClose = () => {
-    stopAllVoiceRef.current?.();
     setIsEditing(false);
     setConfirmingDelete(false);
     onClose();
   };
 
-  const handleParseText = () => {
-    if (!editForm.mainWorkout.trim()) {
-      toast({ title: "No text", description: "Please describe your workout first.", variant: "destructive" });
-      return;
-    }
-    parseMutation.mutate(editForm.mainWorkout);
+  const handleSave = (updates: Parameters<typeof onSave>[0]) => {
+    onSave(updates);
   };
 
   return (
     <Dialog open={!!entry} onOpenChange={(open) => !open && handleClose()}>
       <DialogContent className={cn("max-h-[85vh] overflow-y-auto", isEditing ? "max-w-4xl" : "max-w-lg")}>
-        <WorkoutDetailHeader
-          status={entry.status}
-          source={entry.source}
-          dayName={entry.dayName}
-          focus={entry.focus}
-          isEditing={isEditing}
-        />
-
         {isEditing ? (
-          <WorkoutDetailEditForm
-              editForm={editForm}
-              setEditForm={setEditForm}
-              useTextMode={useTextMode}
-              setUseTextMode={setUseTextMode}
-              editExercises={editExercises}
-              editExerciseData={editExerciseData}
-              dialogSensors={dialogSensors}
-              handleEditDragEnd={handleEditDragEnd}
-              handleAddExercise={handleAddExercise}
-              handleRemoveBlock={handleRemoveBlock}
-              updateBlock={updateBlock}
-              getSelectedExerciseNames={getSelectedExerciseNames}
-              parseMutation={parseMutation}
-              weightUnit={weightUnit}
-              distanceUnit={distanceUnit}
-              onParseText={handleParseText}
-              stopAllVoiceRef={stopAllVoiceRef}
-              editRpe={editRpe}
-              setEditRpe={setEditRpe}
-              source={entry.source}
-            />
-          ) : (
-          <WorkoutDetailView
+          <WorkoutDetailEditMode
             entry={entry}
-            grouped={grouped}
-            hasStructuredData={!!hasStructuredData}
-            weightLabel={weightLabel}
-            distanceUnit={distanceUnit}
+            onSave={handleSave}
+            onCancel={() => setIsEditing(false)}
+            isSaving={isSaving}
           />
-        )}
-
-        {canChangeStatus && !isEditing && (
-          <StatusChangeSection
+        ) : (
+          <WorkoutDetailViewMode
             entry={entry}
+            canEdit={canEdit}
+            canDelete={canDelete}
+            isDeleting={isDeleting}
+            onEdit={() => setIsEditing(true)}
+            onClose={handleClose}
+            onDelete={() => setConfirmingDelete(true)}
+            onCombine={onCombine ? () => onCombine(entry) : undefined}
             onMarkComplete={onMarkComplete}
             onChangeStatus={onChangeStatus}
           />
         )}
-
-        <WorkoutDetailFooter
-          isEditing={isEditing}
-          canEdit={canEdit}
-          canDelete={canDelete}
-          isSaving={isSaving}
-          isDeleting={isDeleting}
-          onEdit={() => setIsEditing(true)}
-          onCancelEdit={() => { stopAllVoiceRef.current?.(); setIsEditing(false); }}
-          onSave={handleSave}
-          onDelete={() => setConfirmingDelete(true)}
-          onClose={handleClose}
-          onCombine={onCombine ? () => onCombine(entry) : undefined}
-        />
       </DialogContent>
 
       <DeleteConfirmDialog
