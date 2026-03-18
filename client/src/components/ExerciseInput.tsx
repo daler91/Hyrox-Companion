@@ -95,9 +95,9 @@ export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg",
   }, [exercise]);
 
   const handleSetChange = (idx: number, field: string, value: string) => {
-    const newSets = [...sets];
-    newSets[idx] = { ...newSets[idx], [field]: value ? Number(value) : undefined };
-    onChange({ ...exercise, sets: newSets });
+    const updatedSets = [...sets];
+    updatedSets[idx] = { ...updatedSets[idx], [field]: value ? Number(value) : undefined };
+    onChange({ ...exercise, sets: updatedSets });
   };
 
   const addSet = () => {

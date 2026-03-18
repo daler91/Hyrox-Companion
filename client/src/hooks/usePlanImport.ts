@@ -118,7 +118,7 @@ export function usePlanImport({ onPlanScheduled }: UsePlanImportOptions = {}) {
 
     const reader = new FileReader();
     reader.onload = (e) => {
-      const csvContent = e.target?.result as string;
+      const csvContent = typeof e.target?.result === "string" ? e.target.result : "";
       const previewRows = parseCSVForPreview(csvContent);
       setCsvPreview({
         fileName: file.name,
