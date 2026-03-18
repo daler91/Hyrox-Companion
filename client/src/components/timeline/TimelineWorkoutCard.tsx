@@ -248,9 +248,14 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
     return groupExerciseSets(entry.exerciseSets);
   }, [entry.exerciseSets]);
 
+  const baseCardClasses = getCardClasses(isBeingCombined, canBeCombinedWith, entry.status);
+  const aiCoachClasses = isTargetedByCoach 
+    ? "border-primary ring-2 ring-primary/40 bg-primary/5 shadow-lg shadow-primary/30 animate-pulse transition-all duration-500 transform scale-[1.02] z-10 relative" 
+    : "";
+
   return (
     <Card
-      className={`cursor-pointer transition-colors hover-elevate ${getCardClasses(isBeingCombined, canBeCombinedWith, entry.status)}`}
+      className={`cursor-pointer transition-colors hover-elevate ${baseCardClasses} ${aiCoachClasses}`}
       onClick={handleCardClick}
       data-testid={`card-timeline-entry-${entry.id}`}
     >

@@ -1,4 +1,4 @@
-import { type ParsedExercise, type TimelineEntry, type PlanDay, type WorkoutStatus, type UpdateWorkoutLog } from "@shared/schema";
+import { type ParsedExercise, type TimelineEntry, type PlanDay, type WorkoutStatus, type UpdateWorkoutLog, type User } from "@shared/schema";
 import { useState, useCallback } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -14,7 +14,13 @@ export function useWorkoutActions(selectedPlanId: string | null) {
       const response = await apiRequest("PATCH", `/api/v1/plans/days/${dayId}/status`, { status });
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data, variables) => {
+      if (variables.status === "completed") {
+        queryClient.setQueryData<User | null>(["/api/v1/auth/user"], (old) => {
+          if (!old) return old;
+          return { ...old, isAutoCoaching: true };
+        });
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] });
       toast({ title: "Status updated" });
     },
@@ -44,6 +50,10 @@ export function useWorkoutActions(selectedPlanId: string | null) {
       return response.json();
     },
     onSuccess: () => {
+      queryClient.setQueryData<User | null>(["/api/v1/auth/user"], (old) => {
+        if (!old) return old;
+        return { ...old, isAutoCoaching: true };
+      });
       queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] });
       setDetailEntry(null);
       toast({ title: "Workout logged!" });
