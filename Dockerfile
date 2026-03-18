@@ -19,7 +19,7 @@ RUN pnpm install --frozen-lockfile
 COPY client/ ./client/
 COPY server/ ./server/
 COPY shared/ ./shared/
-COPY tsconfig.json vite.config.ts components.json tailwind.config.ts postcss.config.js drizzle.config.ts ./
+COPY tsconfig.json vite.config.ts components.json tailwind.config.ts drizzle.config.ts ./
 
 # Build the frontend and backend
 RUN pnpm run build
