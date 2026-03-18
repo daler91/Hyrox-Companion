@@ -18,6 +18,12 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Upload, Loader2, Filter, Download, Pencil, Target } from "lucide-react";
 import type { TrainingPlan } from "@shared/schema";
 import type { FilterStatus } from "./types";
@@ -96,14 +102,19 @@ function renderPlanSelector(
           </SelectContent>
         </Select>
         {selectedPlanId && (
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={openRenameDialog}
-            data-testid="button-rename-plan" aria-label="Rename plan"
-          >
-            <Pencil className="h-4 w-4" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={openRenameDialog}
+                data-testid="button-rename-plan" aria-label="Rename plan"
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Rename plan</TooltipContent>
+          </Tooltip>
         )}
       </div>
     );
@@ -169,6 +180,7 @@ export default function TimelineFilters({
     <>
     <Card>
       <CardContent className="p-4">
+        <TooltipProvider delayDuration={300}>
         <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
           {renderPlanSelector(plansLoading, plans, selectedPlanId, onPlanChange, openRenameDialog)}
 
@@ -236,18 +248,24 @@ export default function TimelineFilters({
             >
               {selectedPlan.goal ? selectedPlan.goal : <span className="italic">Add a goal, e.g. Complete Hyrox in under 90 min…</span>}
             </button>
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-6 w-6 shrink-0"
-              onClick={openGoalDialog}
-              aria-label="Edit plan goal"
-              data-testid="button-edit-goal"
-            >
-              <Pencil className="h-3 w-3" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-6 w-6 shrink-0"
+                  onClick={openGoalDialog}
+                  aria-label="Edit plan goal"
+                  data-testid="button-edit-goal"
+                >
+                  <Pencil className="h-3 w-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Edit plan goal</TooltipContent>
+            </Tooltip>
           </div>
         )}
+              </TooltipProvider>
       </CardContent>
     </Card>
 
