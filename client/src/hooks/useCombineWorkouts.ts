@@ -49,12 +49,12 @@ export function useCombineWorkouts() {
       if (combiningEntry.id === entry.id) {
         setCombiningEntry(null);
         toast({ title: "Combine cancelled" });
-      } else if (combiningEntry.date !== entry.date) {
-        toast({ title: "Can only combine workouts on the same day", variant: "destructive" });
-        setCombiningEntry(null);
-      } else {
+      } else if (combiningEntry.date === entry.date) {
         setCombineSecondEntry(entry);
         setShowCombineDialog(true);
+      } else {
+        toast({ title: "Can only combine workouts on the same day", variant: "destructive" });
+        setCombiningEntry(null);
       }
     } else {
       setCombiningEntry(entry);
