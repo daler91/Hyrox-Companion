@@ -1,5 +1,4 @@
-import { db } from "./db";
-import { pool } from "./db";
+import { db, pool } from "./db";
 import { sql } from "drizzle-orm";
 import type { IStorage } from "./storage";
 import { logger } from "./logger";
