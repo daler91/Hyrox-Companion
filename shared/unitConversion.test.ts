@@ -179,6 +179,50 @@ describe("formatPace", () => {
     expect(formatPace(-1, "km")).toBe("-");
     expect(formatPace(-1, "miles")).toBe("-");
   });
+
+  it("handles NaN inputs", () => {
+    expect(formatPace(NaN, "km")).toBe("-");
+    expect(formatPace(NaN, "miles")).toBe("-");
+  });
+
+  it("pads single digit seconds with a leading zero", () => {
+    // 1000 / 309 = ~3.236 m/s => 309 seconds/km => 5:09 / km
+    expect(formatPace(1000 / 309, "km")).toBe("5:09/km");
+    // 1000 / 301 = ~3.322 m/s => 301 seconds/km => 5:01 / km
+    expect(formatPace(1000 / 301, "km")).toBe("5:01/km");
+  });
+
+  it("formats exactly 0 seconds with correct padding", () => {
+    // 1000 / 300 = 3.333... m/s => 300 seconds/km => 5:00 / km
+    expect(formatPace(1000 / 300, "km")).toBe("5:00/km");
+  });
+
+  it("rounds up seconds safely when rounding produces exactly 60 seconds", () => {
+    // 1000 / 59.6 = 16.7785 m/s => 59.6 seconds/km.
+    // Math.floor(59.6 / 60) = 0.
+    // Math.round(59.6 % 60) = Math.round(59.6) = 60.
+    // Should be rolled over to 1:00, not 0:60.
+    expect(formatPace(1000 / 59.6, "km")).toBe("1:00/km");
+
+    // 1000 / 119.5 = 8.368 m/s => 119.5 seconds/km.
+    // Math.floor(119.5 / 60) = 1.
+    // Math.round(119.5 % 60) = 60.
+    // Should be rolled over to 2:00, not 1:60.
+    expect(formatPace(1000 / 119.5, "km")).toBe("2:00/km");
+  });
+
+  it("handles very slow speeds (large pace values)", () => {
+    // 1000 / 3600 = 0.2778 m/s => 3600 seconds/km => 60:00 / km
+    expect(formatPace(1000 / 3600, "km")).toBe("60:00/km");
+
+    // 1000 / 5400 = 0.185 m/s => 5400 seconds/km => 90:00 / km
+    expect(formatPace(1000 / 5400, "km")).toBe("90:00/km");
+  });
+
+  it("handles very fast speeds (small pace values)", () => {
+    // 1000 / 1 = 1000 m/s => 1 second/km => 0:01 / km
+    expect(formatPace(1000, "km")).toBe("0:01/km");
+  });
 });
 
 describe("formatSpeed", () => {
