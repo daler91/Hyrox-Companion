@@ -67,7 +67,7 @@ const SortableDialogBlock = React.memo(function SortableDialogBlock({
   distanceUnit,
   onChange,
   onRemove,
-}: SortableDialogBlockProps) {
+}: Readonly<SortableDialogBlockProps>) {
   const {
     attributes,
     listeners,
@@ -125,7 +125,7 @@ const WorkoutDetailStravaMetrics = React.memo(
   function WorkoutDetailStravaMetrics({
     entry,
     distanceUnit,
-  }: WorkoutDetailStravaMetricsProps) {
+  }: Readonly<WorkoutDetailStravaMetricsProps>) {
     if (
       entry.source !== "strava" ||
       (!entry.calories &&
@@ -180,7 +180,7 @@ export const WorkoutDetailView = React.memo(function WorkoutDetailView({
   hasStructuredData,
   weightLabel,
   distanceUnit,
-}: WorkoutDetailViewProps) {
+}: Readonly<WorkoutDetailViewProps>) {
   return (
     <div className="space-y-3">
       {hasStructuredData ? (
@@ -284,7 +284,7 @@ const WorkoutTextMode = React.memo(function WorkoutTextMode({
   toggleMainListening,
   onParseText,
   parseMutation,
-}: WorkoutTextModeProps) {
+}: Readonly<WorkoutTextModeProps>) {
   return (
     <div className="space-y-3">
       {isMainListening && (
@@ -380,7 +380,7 @@ const WorkoutBlockMode = React.memo(function WorkoutBlockMode({
   distanceUnit,
   blockCounts,
   blockIndices,
-}: WorkoutBlockModeProps) {
+}: Readonly<WorkoutBlockModeProps>) {
   const renderedBlocks = React.useMemo(() => {
     return editExercises.map((blockId) => {
       const exData = editExerciseData[blockId];
@@ -466,7 +466,7 @@ const WorkoutAccessoryNotes = React.memo(function WorkoutAccessoryNotes({
   appendToField,
   stopAccessoryRef,
   stopNotesRef,
-}: WorkoutAccessoryNotesProps) {
+}: Readonly<WorkoutAccessoryNotesProps>) {
   return (
     <>
       <div>

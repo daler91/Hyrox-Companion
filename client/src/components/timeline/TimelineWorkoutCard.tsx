@@ -91,7 +91,7 @@ interface WorkoutStravaStatsProps {
   readonly distanceUnit: string;
 }
 
-function WorkoutStravaStats({ entry, distanceUnit }: WorkoutStravaStatsProps) {
+function WorkoutStravaStats({ entry, distanceUnit }: Readonly<WorkoutStravaStatsProps>) {
   if (entry.source !== "strava") return null;
 
   const hasStravaStats =
@@ -146,14 +146,14 @@ function ExerciseChips({
   personalRecords,
   weightLabel,
   distanceUnit,
-}: {
+}: Readonly<{
   readonly entryId: string;
   readonly groupedExercises: GroupedExercise[];
   readonly workoutLogId: string | undefined;
   readonly personalRecords?: Record<string, PersonalRecord>;
   readonly weightLabel: string;
   readonly distanceUnit: string;
-}) {
+}>) {
   return (
     <div className="flex flex-wrap gap-1.5 mb-1" data-testid={`exercise-chips-${entryId}`}>
       {groupedExercises.map((group, idx) => {
@@ -211,7 +211,7 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
   combiningEntryId,
   combiningEntryDate,
   personalRecords,
-}: TimelineWorkoutCardProps) {
+}: Readonly<TimelineWorkoutCardProps>) {
   const { distanceUnit, weightLabel } = useUnitPreferences();
   
   const isBeingCombined = combiningEntryId === entry.id;

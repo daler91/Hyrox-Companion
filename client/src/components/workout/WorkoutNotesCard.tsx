@@ -19,7 +19,7 @@ export const WorkoutNotesCard = ({
   isNotesSupported,
   toggleNotesListening,
   notesInterim,
-}: WorkoutNotesCardProps) => {
+}: Readonly<WorkoutNotesCardProps>) => {
   return (
     <Card>
       <CardHeader>

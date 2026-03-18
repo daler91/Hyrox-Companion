@@ -24,7 +24,7 @@ export function PreferencesSection({
   onDistanceUnitChange,
   onWeeklyGoalChange,
   onEmailNotificationsChange,
-}: PreferencesSectionProps) {
+}: Readonly<PreferencesSectionProps>) {
   return (
     <>
       <Card>

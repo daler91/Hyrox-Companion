@@ -7,7 +7,7 @@ interface TimelineHeaderProps {
 
 export default function TimelineHeader({
   onScrollToToday,
-}: TimelineHeaderProps) {
+}: Readonly<TimelineHeaderProps>) {
   return (
     <div className="flex items-center justify-between gap-4 flex-wrap">
       <div>

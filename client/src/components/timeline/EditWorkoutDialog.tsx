@@ -39,7 +39,7 @@ export default function EditWorkoutDialog({
   onEditFormChange,
   onSave,
   isPending,
-}: EditWorkoutDialogProps) {
+}: Readonly<EditWorkoutDialogProps>) {
   const editFormRef = useRef(editForm);
   editFormRef.current = editForm;
 

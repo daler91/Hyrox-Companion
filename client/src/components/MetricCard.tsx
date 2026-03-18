@@ -11,7 +11,7 @@ interface MetricCardProps {
   icon: LucideIcon;
 }
 
-export function MetricCard({ title, value, unit, trend, trendValue, icon: Icon }: MetricCardProps) {
+export function MetricCard({ title, value, unit, trend, trendValue, icon: Icon }: Readonly<MetricCardProps>) {
   const getTrendIcon = () => {
     if (trend === "up") return <TrendingUp className="h-4 w-4 text-green-500" />;
     if (trend === "down") return <TrendingDown className="h-4 w-4 text-red-500" />;

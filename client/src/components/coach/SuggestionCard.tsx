@@ -33,7 +33,7 @@ const PRIORITY_COLORS: Record<Suggestion["priority"], string> = {
   low: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
 };
 
-export function SuggestionCard({ suggestion, onApply, onDismiss, isApplying }: SuggestionCardProps) {
+export function SuggestionCard({ suggestion, onApply, onDismiss, isApplying }: Readonly<SuggestionCardProps>) {
   const fieldLabel = FIELD_LABELS[suggestion.targetField] || "Notes";
   
   const actionLabel = suggestion.action === "append" ? "Add to" : "Replace";
