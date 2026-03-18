@@ -15,6 +15,13 @@
       "when": 1773793743371,
       "tag": "0001_flippant_shriek",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1773803166352,
+      "tag": "0002_handy_living_lightning",
+      "breakpoints": true
     }
   ]
 }

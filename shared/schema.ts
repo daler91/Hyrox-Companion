@@ -37,7 +37,7 @@ export type UpdateUserPreferences = z.infer<typeof updateUserPreferencesSchema>;
 
 export const trainingPlans = pgTable("training_plans", {
   id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id", { length: 255 }).notNull(),
+  userId: varchar("user_id", { length: 255 }).notNull().references(() => users.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   sourceFileName: text("source_file_name"),
   totalWeeks: integer("total_weeks").notNull(),
@@ -89,7 +89,7 @@ export type TrainingPlanWithDays = TrainingPlan & {
 
 export const workoutLogs = pgTable("workout_logs", {
   id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id", { length: 255 }).notNull(),
+  userId: varchar("user_id", { length: 255 }).notNull().references(() => users.id, { onDelete: "cascade" }),
   date: date("date").notNull(),
   focus: text("focus").notNull(),
   mainWorkout: text("main_workout").notNull(),
