@@ -53,13 +53,6 @@ export class UserStorage {
     return user;
   }
 
-  async updateIsAutoCoaching(userId: string, isAutoCoaching: boolean): Promise<void> {
-    await db
-      .update(users)
-      .set({ isAutoCoaching, updatedAt: new Date() })
-      .where(eq(users.id, userId));
-  }
-
   async getChatMessages(userId: string): Promise<ChatMessage[]> {
     return await db
       .select()

@@ -64,15 +64,6 @@ export class PlanStorage {
     return updated;
   }
 
-  async updateTrainingPlanGoal(planId: string, goal: string | null, userId: string): Promise<TrainingPlan | undefined> {
-    const [updated] = await db
-      .update(trainingPlans)
-      .set({ goal })
-      .where(and(eq(trainingPlans.id, planId), eq(trainingPlans.userId, userId)))
-      .returning();
-    return updated;
-  }
-
   async deleteTrainingPlan(planId: string, userId: string): Promise<boolean> {
     const [plan] = await db
       .select()

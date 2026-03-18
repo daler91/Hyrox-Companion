@@ -18,8 +18,8 @@ function processStreamLines(
     let data;
     try {
       data = JSON.parse(line.slice(6));
-    } catch {
-      // Ignore parse errors for incomplete stream chunks
+    } catch (parseError) {
+      console.warn("Failed to parse chat segment", { parseError, segment: line });
       continue;
     }
     if (data.text) {
@@ -216,8 +216,8 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         setMessages((prev) => [...prev, assistantMessage]);
         saveMessageMutation.mutate({ role: "assistant", content: data.response });
       }
-    } catch {
-      // Ignore detailed errors in the UI, just show interruption message
+    } catch (err) {
+      console.warn("Stream interrupted or failed", { err });
       if (fullResponse) {
         setMessages((prev) =>
           prev.map((m) =>

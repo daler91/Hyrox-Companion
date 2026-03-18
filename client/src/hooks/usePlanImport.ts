@@ -62,20 +62,6 @@ export function usePlanImport({ onPlanScheduled }: UsePlanImportOptions = {}) {
     },
   });
 
-  const updatePlanGoalMutation = useMutation({
-    mutationFn: async ({ planId, goal }: { planId: string; goal: string | null }) => {
-      const response = await apiRequest("PATCH", `/api/v1/plans/${planId}/goal`, { goal });
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/plans"] });
-      toast({ title: "Goal saved" });
-    },
-    onError: () => {
-      toast({ title: "Failed to save goal", variant: "destructive" });
-    },
-  });
-
   const schedulePlanMutation = useMutation({
     mutationFn: async ({ planId, startDate: sd }: { planId: string; startDate: string }) => {
       await apiRequest("POST", `/api/v1/plans/${planId}/schedule`, { startDate: sd });
@@ -163,6 +149,5 @@ export function usePlanImport({ onPlanScheduled }: UsePlanImportOptions = {}) {
     samplePlanMutation,
     renamePlanMutation,
     schedulePlanMutation,
-    updatePlanGoalMutation,
   };
 }

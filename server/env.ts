@@ -14,16 +14,15 @@ const envSchema = z.object({
   CRON_SECRET: z.string().optional(),
   STRAVA_CLIENT_ID: z.string().optional(),
   STRAVA_CLIENT_SECRET: z.string().optional(),
-  STRAVA_STATE_SECRET: z.string().optional(),
   APP_URL: z.string().url().optional(),
-  ALLOW_DEV_AUTH_BYPASS: z.string().optional(),
   LOG_LEVEL: z.string().default("info"),
 });
 
 const parsed = envSchema.safeParse(process.env);
 
 if (!parsed.success) {
-  throw new Error(`❌ Invalid environment variables: ${JSON.stringify(parsed.error.format(), null, 2)}`);
+  console.error("❌ Invalid environment variables:", JSON.stringify(parsed.error.format(), null, 2));
+  process.exit(1);
 }
 
 export const env = parsed.data;

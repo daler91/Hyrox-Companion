@@ -17,8 +17,6 @@ export const users = pgTable("users", {
   distanceUnit: varchar("distance_unit", { length: 255 }).default("km"),
   weeklyGoal: integer("weekly_goal").default(5),
   emailNotifications: boolean("email_notifications").default(true),
-  aiCoachEnabled: boolean("ai_coach_enabled").default(true),
-  isAutoCoaching: boolean("is_auto_coaching").default(false),
   lastWeeklySummaryAt: timestamp("last_weekly_summary_at"),
   lastMissedReminderAt: timestamp("last_missed_reminder_at"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -33,7 +31,6 @@ export const updateUserPreferencesSchema = z.object({
   distanceUnit: z.enum(["km", "miles"]).optional(),
   weeklyGoal: z.number().min(1).max(14).optional(),
   emailNotifications: z.boolean().optional(),
-  aiCoachEnabled: z.boolean().optional(),
 });
 
 export type UpdateUserPreferences = z.infer<typeof updateUserPreferencesSchema>;
@@ -44,22 +41,14 @@ export const trainingPlans = pgTable("training_plans", {
   name: text("name").notNull(),
   sourceFileName: text("source_file_name"),
   totalWeeks: integer("total_weeks").notNull(),
-  goal: text("goal"),
 }, (table) => [
   index("idx_training_plans_user_id").on(table.userId),
 ]);
 
 export const insertTrainingPlanSchema = createInsertSchema(trainingPlans).omit({
   id: true,
-}).extend({
-  goal: z.string().max(500).nullable().optional(),
 });
 
-export const updateTrainingPlanGoalSchema = z.object({
-  goal: z.string().max(500).nullable(),
-});
-
-export type UpdateTrainingPlanGoal = z.infer<typeof updateTrainingPlanGoalSchema>;
 export type InsertTrainingPlan = z.infer<typeof insertTrainingPlanSchema>;
 export type TrainingPlan = typeof trainingPlans.$inferSelect;
 

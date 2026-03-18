@@ -15,7 +15,7 @@ const STRAVA_REDIRECT_URI = env.APP_URL
   ? `${env.APP_URL}/api/v1/strava/callback`
   : "http://localhost:5000/api/v1/strava/callback";
 
-const STATE_SECRET = env.STRAVA_STATE_SECRET || crypto.randomBytes(32).toString("hex");
+const STATE_SECRET = env.CLERK_SECRET_KEY || crypto.randomBytes(32).toString("hex");
 
 const stravaAuthLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes

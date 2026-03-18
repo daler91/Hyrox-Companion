@@ -42,31 +42,26 @@ export function PersonalRecordsTab({ dateParams }: PersonalRecordsTabProps) {
     queryFn: () => fetch(`/api/v1/personal-records${dateParams}`).then(r => r.json()),
   });
 
-  const filteredPRs = useMemo(() => {
+  const personalRecords = useMemo(() => {
     if (!rawPRs) return [];
+    return Object.entries(rawPRs).map(([exerciseName, pr]) => ({
+      exerciseName,
+      customLabel: pr.customLabel,
+      category: pr.category,
+      maxWeight: pr.maxWeight?.value ?? null,
+      maxWeightDate: pr.maxWeight?.date ?? null,
+      maxDistance: pr.maxDistance?.value ?? null,
+      maxDistanceDate: pr.maxDistance?.date ?? null,
+      bestTime: pr.bestTime?.value ?? null,
+      bestTimeDate: pr.bestTime?.date ?? null,
+    }));
+  }, [rawPRs]);
 
-    // ⚡ Bolt Performance Optimization:
-    // Combine mapping and filtering into a single O(N) array traversal
-    // instead of creating an intermediate array and filtering it again.
-    const results = [];
-    for (const [exerciseName, pr] of Object.entries(rawPRs)) {
-      if (categoryFilter !== "all" && pr.category !== categoryFilter) {
-        continue;
-      }
-      results.push({
-        exerciseName,
-        customLabel: pr.customLabel,
-        category: pr.category,
-        maxWeight: pr.maxWeight?.value ?? null,
-        maxWeightDate: pr.maxWeight?.date ?? null,
-        maxDistance: pr.maxDistance?.value ?? null,
-        maxDistanceDate: pr.maxDistance?.date ?? null,
-        bestTime: pr.bestTime?.value ?? null,
-        bestTimeDate: pr.bestTime?.date ?? null,
-      });
-    }
-    return results;
-  }, [rawPRs, categoryFilter]);
+  const filteredPRs = useMemo(() => {
+    if (!personalRecords) return [];
+    if (categoryFilter === "all") return personalRecords;
+    return personalRecords.filter(pr => pr.category === categoryFilter);
+  }, [personalRecords, categoryFilter]);
 
   return (
     <Card>

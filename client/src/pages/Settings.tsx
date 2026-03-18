@@ -16,7 +16,6 @@ interface Preferences {
   distanceUnit: string;
   weeklyGoal: number;
   emailNotifications: boolean;
-  aiCoachEnabled: boolean;
 }
 
 interface StravaStatus {
@@ -34,7 +33,6 @@ export default function Settings() {
   const [distanceUnit, setDistanceUnit] = useState("km");
   const [weeklyGoal, setWeeklyGoal] = useState("5");
   const [emailNotifications, setEmailNotifications] = useState(true);
-  const [aiCoachEnabled, setAiCoachEnabled] = useState(true);
   const [hasChanges, setHasChanges] = useState(false);
 
   useEffect(() => {
@@ -71,7 +69,6 @@ export default function Settings() {
       setDistanceUnit(preferences.distanceUnit || "km");
       setWeeklyGoal(String(preferences.weeklyGoal || 5));
       setEmailNotifications(preferences.emailNotifications);
-      setAiCoachEnabled(preferences.aiCoachEnabled ?? true);
     }
   }, [preferences]);
 
@@ -81,7 +78,6 @@ export default function Settings() {
       distanceUnit: string;
       weeklyGoal: number;
       emailNotifications: boolean;
-      aiCoachEnabled: boolean;
     }) => {
       const response = await apiRequest("PATCH", "/api/v1/preferences", data);
       return response.json();
@@ -109,7 +105,6 @@ export default function Settings() {
       distanceUnit,
       weeklyGoal: Number.parseInt(weeklyGoal, 10),
       emailNotifications,
-      aiCoachEnabled,
     });
   };
 
@@ -153,7 +148,6 @@ export default function Settings() {
         distanceUnit={distanceUnit}
         weeklyGoal={weeklyGoal}
         emailNotifications={emailNotifications}
-        aiCoachEnabled={aiCoachEnabled}
         onWeightUnitChange={(v) => {
           setWeightUnit(v);
           markChanged();
@@ -168,10 +162,6 @@ export default function Settings() {
         }}
         onEmailNotificationsChange={(v) => {
           setEmailNotifications(v);
-          markChanged();
-        }}
-        onAiCoachEnabledChange={(v) => {
-          setAiCoachEnabled(v);
           markChanged();
         }}
       />

@@ -172,6 +172,19 @@ describe('generateSummary', () => {
         ]
        }
     ];
+    // The current generateSummary logic:
+    // If allSame is false or (allSame && !firstSet.reps):
+    // if (!firstSet.reps && sets.length > 1), pushes `${sets.length} sets`
+    // However allSame relies on `reps` and `weight` being strictly equal, which they are (undefined === undefined).
+    // Let's test what the function actually outputs.
+    // firstSet = { setNumber: 1, distance: 5000 }
+    // allSame = true (reps undefined === undefined, weight undefined === undefined)
+    // if (allSame && sets.length > 1 && firstSet.reps) -> false
+    // else if (firstSet.reps) -> false
+    // else if (sets.length > 1) -> parts.push(`2 sets`)
+    // if (allSame && firstSet.weight) -> false
+    // if (firstSet.distance) -> parts.push(`5000m`) (since distanceUnit is km)
+    // so we expect 'Easy Run: 2 sets, 5000m'
     expect(generateSummary(exercises, 'kg', 'km')).toBe('Easy Run: 2 sets, 5000m');
   });
 });

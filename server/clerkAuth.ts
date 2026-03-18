@@ -10,10 +10,6 @@ function isDev(): boolean {
   return env.NODE_ENV === "development";
 }
 
-function isDevBypassEnabled(): boolean {
-  return isDev() && env.ALLOW_DEV_AUTH_BYPASS === "true";
-}
-
 function hasClerkKeys(): boolean {
   return !!(env.CLERK_PUBLISHABLE_KEY && env.CLERK_SECRET_KEY);
 }
@@ -35,7 +31,7 @@ export async function setupAuth(app: Express) {
 
   if (hasClerkKeys()) {
     app.use(clerkMiddleware());
-  } else if (isDevBypassEnabled()) {
+  } else if (isDev()) {
     logger.info("[DEV] No Clerk keys found — using dev auth bypass");
     await ensureDevUserExists();
   } else {
@@ -44,7 +40,7 @@ export async function setupAuth(app: Express) {
     );
   }
 
-  if (isDevBypassEnabled()) {
+  if (isDev()) {
     await ensureDevUserExists();
     logger.info("[DEV] Dev auth fallback enabled for iframe/preview contexts");
   }
@@ -64,7 +60,7 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     }
   }
 
-  if (isDevBypassEnabled()) {
+  if (isDev()) {
     try {
       await ensureDevUserExists();
     } catch (error) {

@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input";
 import {
   ChevronDown,
   ChevronUp,
-  Loader2,
 } from "lucide-react";
 
 import { CoachPanel } from "@/components/CoachPanel";
@@ -26,11 +25,9 @@ import {
   CombineWorkoutsDialog,
 } from "@/components/timeline";
 import { useTimelineState } from "@/hooks/useTimelineState";
-import { useAuth } from "@/hooks/useAuth";
 
 export default function Timeline() {
   const state = useTimelineState();
-  const { user } = useAuth();
 
   const {
     plans,
@@ -97,7 +94,6 @@ export default function Timeline() {
     visibleFutureGroups,
     hiddenPastCount,
     hiddenFutureCount,
-    updatePlanGoalMutation,
   } = state;
 
   return (
@@ -132,8 +128,6 @@ export default function Timeline() {
         isImporting={importMutation.isPending}
         onRenamePlan={(planId, name) => renamePlanMutation.mutate({ planId, name })}
         isRenaming={renamePlanMutation.isPending}
-        onGoalSave={(planId, goal) => updatePlanGoalMutation.mutate({ planId, goal })}
-        isUpdatingGoal={updatePlanGoalMutation.isPending}
       />
 
       {(() => {
@@ -195,7 +189,6 @@ export default function Timeline() {
                 combiningEntryId={combiningEntry?.id || null}
                 combiningEntryDate={combiningEntry?.date || null}
                 personalRecords={personalRecords}
-                isAutoCoaching={!!user?.isAutoCoaching}
               />
             ))}
 
