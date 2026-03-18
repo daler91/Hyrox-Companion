@@ -1,4 +1,4 @@
-import type { TrainingContext } from "./gemini";
+import type { TrainingContext } from "./gemini/types";
 
 export const BASE_SYSTEM_PROMPT = `You are an expert Hyrox training coach and AI assistant. You help athletes analyze their training data, provide insights, and suggest improvements for Hyrox competitions.
 
