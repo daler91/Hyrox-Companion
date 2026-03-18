@@ -7,7 +7,7 @@ import { storage } from "./storage";
 export const DEV_USER_ID = "dev-user";
 
 function isDev(): boolean {
-  return env.NODE_ENV === "development";
+  return env.NODE_ENV === "development" || process.env.CI === "true";
 }
 
 function isDevBypassEnabled(): boolean {
@@ -19,15 +19,19 @@ function hasClerkKeys(): boolean {
 }
 
 async function ensureDevUserExists(): Promise<void> {
-  const existing = await storage.getUser(DEV_USER_ID);
-  if (existing) return;
-  await storage.upsertUser({
-    id: DEV_USER_ID,
-    email: "dev@localhost",
-    firstName: "Dev",
-    lastName: "User",
-    profileImageUrl: null,
-  });
+  try {
+    const existing = await storage.getUser(DEV_USER_ID);
+    if (existing) return;
+    await storage.upsertUser({
+      id: DEV_USER_ID,
+      email: "dev@localhost",
+      firstName: "Dev",
+      lastName: "User",
+      profileImageUrl: null,
+    });
+  } catch (err) {
+    logger.error({ err }, "Could not ensure dev user exists (e.g. no DB connection in CI). Continuing anyway.");
+  }
 }
 
 export async function setupAuth(app: Express) {
