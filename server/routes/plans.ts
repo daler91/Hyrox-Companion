@@ -2,10 +2,11 @@ import { logger } from "../logger";
 import { Router, Response, type Request } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
-import { updatePlanDaySchema, importPlanRequestSchema, schedulePlanRequestSchema, type UpdatePlanDay, type PlanDay } from "@shared/schema";
+import { updatePlanDaySchema, importPlanRequestSchema, schedulePlanRequestSchema, updateTrainingPlanGoalSchema, type UpdatePlanDay, type PlanDay } from "@shared/schema";
 import { getUserId } from "../types";
 import { importPlanFromCSV, createSamplePlan, updatePlanDayWithCleanup } from "../services/planService";
 import { rateLimiter } from "../routeUtils";
+import { triggerAutoCoach } from "../services/coachService";
 
 const router = Router();
 
@@ -127,6 +128,24 @@ router.patch("/api/v1/plans/:id", isAuthenticated, async (req: Request, res) => 
   }
 });
 
+router.patch("/api/v1/plans/:id/goal", isAuthenticated, async (req: Request, res) => {
+  try {
+    const userId = getUserId(req);
+    const parseResult = updateTrainingPlanGoalSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({ error: "Invalid goal data", details: parseResult.error });
+    }
+    const updated = await storage.updateTrainingPlanGoal(req.params.id, parseResult.data.goal, userId);
+    if (!updated) {
+      return res.status(404).json({ error: "Training plan not found" });
+    }
+    res.json(updated);
+  } catch (error) {
+    logger.error({ err: error }, "Update plan goal error:");
+    res.status(500).json({ error: "Failed to update plan goal" });
+  }
+});
+
 router.delete("/api/v1/plans/:id", isAuthenticated, async (req: Request, res) => {
   return handleGetOrDeletePlan(req, res, storage.deleteTrainingPlan.bind(storage), "true", "Delete");
 });
@@ -174,6 +193,11 @@ router.patch("/api/v1/plans/days/:dayId/status", isAuthenticated, async (req: Re
     }
 
     res.json(updatedDay);
+
+    // Fire-and-forget: auto-coach adjusts upcoming plan days after a session is completed
+    if (status === "completed") {
+      triggerAutoCoach(userId).catch(() => {});
+    }
   } catch (error) {
     logger.error({ err: error }, "Update day status error:");
     res.status(500).json({ error: "Failed to update day status" });

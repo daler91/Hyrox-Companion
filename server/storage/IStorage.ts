@@ -31,6 +31,7 @@ export interface IStorage {
   listTrainingPlans(userId: string): Promise<TrainingPlan[]>;
   getTrainingPlan(planId: string, userId: string): Promise<TrainingPlanWithDays | undefined>;
   renameTrainingPlan(planId: string, name: string, userId: string): Promise<TrainingPlan | undefined>;
+  updateTrainingPlanGoal(planId: string, goal: string | null, userId: string): Promise<TrainingPlan | undefined>;
   deleteTrainingPlan(planId: string, userId: string): Promise<boolean>;
 
   createPlanDays(days: InsertPlanDay[]): Promise<PlanDay[]>;

@@ -2,17 +2,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Mail } from "lucide-react";
+import { Mail, BrainCircuit } from "lucide-react";
 
 interface PreferencesSectionProps {
   readonly weightUnit: string;
   readonly distanceUnit: string;
   readonly weeklyGoal: string;
   readonly emailNotifications: boolean;
+  readonly aiCoachEnabled: boolean;
   readonly onWeightUnitChange: (value: string) => void;
   readonly onDistanceUnitChange: (value: string) => void;
   readonly onWeeklyGoalChange: (value: string) => void;
   readonly onEmailNotificationsChange: (checked: boolean) => void;
+  readonly onAiCoachEnabledChange: (checked: boolean) => void;
 }
 
 export function PreferencesSection({
@@ -20,10 +22,12 @@ export function PreferencesSection({
   distanceUnit,
   weeklyGoal,
   emailNotifications,
+  aiCoachEnabled,
   onWeightUnitChange,
   onDistanceUnitChange,
   onWeeklyGoalChange,
   onEmailNotificationsChange,
+  onAiCoachEnabledChange,
 }: Readonly<PreferencesSectionProps>) {
   return (
     <>
@@ -103,6 +107,34 @@ export function PreferencesSection({
               checked={emailNotifications}
               onCheckedChange={onEmailNotificationsChange}
               data-testid="switch-email-notifications"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BrainCircuit className="h-5 w-5 text-primary" />
+            AI Coach
+          </CardTitle>
+          <CardDescription>Intelligent workout adjustments powered by Gemini</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-1">
+              <Label className="flex items-center gap-2">
+                Auto-Adjust Workouts
+              </Label>
+              <p className="text-sm text-muted-foreground">
+                After each completed workout, the AI coach analyses your performance and
+                automatically adjusts upcoming sessions to keep you on track for your plan goal.
+              </p>
+            </div>
+            <Switch
+              checked={aiCoachEnabled}
+              onCheckedChange={onAiCoachEnabledChange}
+              data-testid="switch-ai-coach-enabled"
             />
           </div>
         </CardContent>

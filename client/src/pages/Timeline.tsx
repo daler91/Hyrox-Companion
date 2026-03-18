@@ -94,6 +94,7 @@ export default function Timeline() {
     visibleFutureGroups,
     hiddenPastCount,
     hiddenFutureCount,
+    updatePlanGoalMutation,
   } = state;
 
   return (
@@ -128,6 +129,8 @@ export default function Timeline() {
         isImporting={importMutation.isPending}
         onRenamePlan={(planId, name) => renamePlanMutation.mutate({ planId, name })}
         isRenaming={renamePlanMutation.isPending}
+        onGoalSave={(planId, goal) => updatePlanGoalMutation.mutate({ planId, goal })}
+        isUpdatingGoal={updatePlanGoalMutation.isPending}
       />
 
       {(() => {
