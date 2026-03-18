@@ -43,8 +43,6 @@ jobs:
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           STRAVA_CLIENT_ID: ${{ secrets.STRAVA_CLIENT_ID }}
           STRAVA_CLIENT_SECRET: ${{ secrets.STRAVA_CLIENT_SECRET }}
-          CLERK_PUBLISHABLE_KEY: dummy
-          CLERK_SECRET_KEY: dummy
           PORT: 5000
           ALLOW_DEV_AUTH_BYPASS: "true"
           CI: "true"

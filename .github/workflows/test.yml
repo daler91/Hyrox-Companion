@@ -36,7 +36,5 @@ jobs:
       - name: Run tests
         run: pnpm test
         env:
-          CLERK_PUBLISHABLE_KEY: dummy
-          CLERK_SECRET_KEY: dummy
           DATABASE_URL: postgres://dummy:dummy@localhost:5432/dummy
           ENCRYPTION_KEY: "01234567890123456789012345678901"
