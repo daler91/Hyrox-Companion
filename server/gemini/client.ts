@@ -18,8 +18,13 @@ export function isRetryableError(error: unknown): boolean {
     if (msg.includes("429") || msg.includes("rate limit")) return true;
     if (
       msg.includes("500") ||
+      msg.includes("502") ||
       msg.includes("503") ||
-      msg.includes("internal server error")
+      msg.includes("504") ||
+      msg.includes("internal server error") ||
+      msg.includes("bad gateway") ||
+      msg.includes("gateway timeout") ||
+      msg.includes("service unavailable")
     )
       return true;
     if (
@@ -30,6 +35,16 @@ export function isRetryableError(error: unknown): boolean {
     )
       return true;
   }
+
+  // Handle structured error objects (sometimes returned by SDKs)
+  if (error && typeof error === "object") {
+    const errObj = error as Record<string, unknown>;
+    const status = Number(errObj.status || errObj.code);
+    if (status === 429 || status === 500 || status === 502 || status === 503 || status === 504) {
+      return true;
+    }
+  }
+
   return false;
 }
 
