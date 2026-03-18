@@ -10,7 +10,4 @@ declare global {
   }
 }
 
-// Ensure the file is treated as an ES module by TypeScript
-// to support global augmentation above without triggering the
-// 'typescript:S1186' SonarCloud rule for empty exports.
-export const _ = undefined;
+export {};

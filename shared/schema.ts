@@ -1,9 +1,7 @@
-import { z } from "zod";
-
-import { createInsertSchema } from "drizzle-zod";
-
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, date, timestamp, index, real, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, date, timestamp, index, jsonb, real, uniqueIndex } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod";
 
 export const workoutStatusEnum = ["planned", "completed", "missed", "skipped"] as const;
 export type WorkoutStatus = (typeof workoutStatusEnum)[number];
@@ -48,7 +46,7 @@ export const trainingPlans = pgTable("training_plans", {
 ]);
 
 export const insertTrainingPlanSchema = createInsertSchema(trainingPlans).omit({
-  id: true as never,
+  id: true,
 });
 
 export type InsertTrainingPlan = z.infer<typeof insertTrainingPlanSchema>;
@@ -74,11 +72,11 @@ export const planDays = pgTable("plan_days", {
 ]);
 
 export const insertPlanDaySchema = createInsertSchema(planDays).omit({
-  id: true as never,
+  id: true,
 });
 
 export const updatePlanDaySchema = insertPlanDaySchema.partial().omit({
-  planId: true as never,
+  planId: true,
 });
 
 export type InsertPlanDay = z.infer<typeof insertPlanDaySchema>;
@@ -135,16 +133,16 @@ export const stravaConnections = pgTable("strava_connections", {
 });
 
 export const insertStravaConnectionSchema = createInsertSchema(stravaConnections).omit({
-  id: true as never,
-  createdAt: true as never,
+  id: true,
+  createdAt: true,
 });
 
 export type InsertStravaConnection = z.infer<typeof insertStravaConnectionSchema>;
 export type StravaConnection = typeof stravaConnections.$inferSelect;
 
 export const insertWorkoutLogSchema = createInsertSchema(workoutLogs).omit({
-  id: true as never,
-  userId: true as never,
+  id: true,
+  userId: true,
 });
 
 export const updateWorkoutLogSchema = insertWorkoutLogSchema.partial();
@@ -212,7 +210,7 @@ export const exerciseSets = pgTable("exercise_sets", {
 ]);
 
 export const insertExerciseSetSchema = createInsertSchema(exerciseSets).omit({
-  id: true as never,
+  id: true,
 });
 
 export type InsertExerciseSet = z.infer<typeof insertExerciseSetSchema>;
@@ -262,8 +260,8 @@ export const customExercises = pgTable("custom_exercises", {
 ]);
 
 export const insertCustomExerciseSchema = createInsertSchema(customExercises).omit({
-  id: true as never,
-  createdAt: true as never,
+  id: true,
+  createdAt: true,
 }).extend({
   name: z.string().trim().min(1, "Name is required").max(100, "Name must be 100 characters or less"),
   category: z.string().trim().max(50, "Category must be 50 characters or less").optional(),
@@ -285,8 +283,8 @@ export const chatMessages = pgTable("chat_messages", {
 ]);
 
 export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({
-  id: true as never,
-  timestamp: true as never,
+  id: true,
+  timestamp: true,
 });
 
 export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;

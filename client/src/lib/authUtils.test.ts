@@ -26,8 +26,8 @@ describe('authUtils', () => {
       expect(isUnauthorizedError(error)).toBe(false);
     });
 
-    it('should return false for an empty string message', () => {
-      const error = new Error('');
+    it('should return false for a generic non-unauthorized error message', () => {
+      const error = new Error('Unexpected authentication failure');
       expect(isUnauthorizedError(error)).toBe(false);
     });
 

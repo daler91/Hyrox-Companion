@@ -19,12 +19,16 @@ export function convertDistance(value: number, from: DistanceUnit, to: DistanceU
   return value;
 }
 
+export function formatNumberWithUnit(value: number, unit: string, decimals: number): string {
+  return `${Number(value.toFixed(decimals))} ${unit}`;
+}
+
 export function formatWeight(value: number, unit: WeightUnit, decimals: number = 1): string {
-  return `${value.toFixed(decimals)} ${unit}`;
+  return formatNumberWithUnit(value, unit, decimals);
 }
 
 export function formatDistance(value: number, unit: DistanceUnit, decimals: number = 2): string {
-  return `${value.toFixed(decimals)} ${unit}`;
+  return formatNumberWithUnit(value, unit, decimals);
 }
 
 export function formatElevation(meters: number, distanceUnit: DistanceUnit): string {
@@ -56,14 +60,12 @@ export function formatPace(metersPerSecond: number, distanceUnit: DistanceUnit):
 
 export function formatSpeed(metersPerSecond: number, distanceUnit: DistanceUnit): string {
   if (metersPerSecond <= 0) return "N/A";
-  
   const kmPerHour = metersPerSecond * 3.6;
-  
   if (distanceUnit === "miles") {
     const milesPerHour = kmPerHour * KM_TO_MILES;
-    return `${milesPerHour.toFixed(1)} mph`;
+    return formatNumberWithUnit(milesPerHour, "mph", 1);
   }
-  return `${kmPerHour.toFixed(1)} km/h`;
+  return formatNumberWithUnit(kmPerHour, "km/h", 1);
 }
 
 export function metersToUserDistance(meters: number, distanceUnit: DistanceUnit): number {

@@ -1,6 +1,8 @@
 import {
   formatPace as formatPaceShared,
   formatElevation,
+  metersToUserDistance,
+  formatNumberWithUnit,
   type DistanceUnit,
 } from "@shared/unitConversion";
 
@@ -29,12 +31,9 @@ interface StravaActivity {
 }
 
 export function formatStravaDistance(meters: number, distanceUnit: DistanceUnit): string {
-  const km = meters / 1000;
-  if (distanceUnit === "miles") {
-    const miles = km * 0.621371;
-    return `${miles.toFixed(2)} mi`;
-  }
-  return `${km.toFixed(2)} km`;
+  const converted = metersToUserDistance(meters, distanceUnit);
+  const unitStr = distanceUnit === "miles" ? "mi" : "km";
+  return formatNumberWithUnit(converted, unitStr, 2);
 }
 
 function formatDuration(seconds: number): string {

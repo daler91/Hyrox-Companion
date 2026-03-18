@@ -136,7 +136,7 @@ export async function retryWithBackoff<T>(
       lastError = error;
       if (attempt < maxRetries && isRetryableError(error)) {
         const delay = baseDelayMs * Math.pow(2, attempt);
-        logger.warn({ err: error instanceof Error ? error.message : error }, `[gemini] ${label} attempt ${attempt + 1} failed (retrying in ${delay}ms):`);
+        logger.warn({ err: error }, `[gemini] ${label} attempt ${attempt + 1} failed (retrying in ${delay}ms)`);
         await new Promise((resolve) => setTimeout(resolve, delay));
       } else {
         break;
@@ -155,7 +155,7 @@ function parseAndValidateSuggestions(text: string): WorkoutSuggestion[] {
   try {
     raw = JSON.parse(text);
   } catch (parseErr) {
-    logger.error({ rawResponse: truncate(text) }, "[gemini] suggestions JSON.parse failed. Raw response:");
+    logger.error({ err: parseErr, rawResponse: truncate(text) }, "[gemini] suggestions JSON.parse failed.");
     return [];
   }
 
@@ -325,7 +325,7 @@ and use the matching name as customLabel: ${customExerciseNames.join(", ")}`;
     try {
       raw = JSON.parse(responseText);
     } catch (parseErr) {
-      logger.error({ rawResponse: truncate(responseText) }, "[gemini] exercise-parse JSON.parse failed. Raw response:");
+      logger.error({ err: parseErr, rawResponse: truncate(responseText) }, "[gemini] exercise-parse JSON.parse failed.");
       throw new Error("AI returned invalid JSON for exercise parsing");
     }
 
@@ -333,8 +333,14 @@ and use the matching name as customLabel: ${customExerciseNames.join(", ")}`;
     const zodResult = z.array(parsedExerciseSchema).safeParse(rawArray);
 
     if (!zodResult.success) {
-      logger.error({ issues: zodResult.error.issues }, "[gemini] exercise-parse Zod validation failed:");
-      logger.error({ rawData: truncate(JSON.stringify(rawArray)) }, "[gemini] Raw parsed data:");
+      logger.error(
+        { err: zodResult.error },
+        "[gemini] exercise-parse Zod validation failed"
+      );
+      logger.error(
+        { rawData: truncate(JSON.stringify(rawArray)) },
+        "[gemini] Raw parsed data"
+      );
       throw new Error("AI returned malformed exercise data");
     }
 

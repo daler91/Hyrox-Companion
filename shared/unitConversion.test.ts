@@ -210,7 +210,7 @@ describe("formatElevation", () => {
 
 describe("formatWeight", () => {
   it("formats with unit", () => {
-    expect(formatWeight(100, "kg")).toBe("100.0 kg");
+    expect(formatWeight(100, "kg")).toBe("100 kg");
     expect(formatWeight(220, "lbs", 0)).toBe("220 lbs");
   });
 });
