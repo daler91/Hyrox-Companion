@@ -1,0 +1,2 @@
+ALTER TABLE "users" ALTER COLUMN "email_notifications" SET DATA TYPE boolean USING CASE WHEN email_notifications = 1 THEN true ELSE false END;--> statement-breakpoint
+ALTER TABLE "users" ALTER COLUMN "email_notifications" SET DEFAULT true;

@@ -176,6 +176,6 @@ export class UserStorage {
     return await db
       .select()
       .from(users)
-      .where(and(eq(users.emailNotifications, 1), isNotNull(users.email)));
+      .where(and(eq(users.emailNotifications, true), isNotNull(users.email)));
   }
 }

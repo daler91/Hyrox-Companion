@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, date, timestamp, index, real, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, date, timestamp, index, real, uniqueIndex, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -16,7 +16,7 @@ export const users = pgTable("users", {
   weightUnit: varchar("weight_unit", { length: 255 }).default("kg"),
   distanceUnit: varchar("distance_unit", { length: 255 }).default("km"),
   weeklyGoal: integer("weekly_goal").default(5),
-  emailNotifications: integer("email_notifications").default(1),
+  emailNotifications: boolean("email_notifications").default(true),
   lastWeeklySummaryAt: timestamp("last_weekly_summary_at"),
   lastMissedReminderAt: timestamp("last_missed_reminder_at"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -30,7 +30,7 @@ export const updateUserPreferencesSchema = z.object({
   weightUnit: z.enum(["kg", "lbs"]).optional(),
   distanceUnit: z.enum(["km", "miles"]).optional(),
   weeklyGoal: z.number().min(1).max(14).optional(),
-  emailNotifications: z.number().min(0).max(1).optional(),
+  emailNotifications: z.boolean().optional(),
 });
 
 export type UpdateUserPreferences = z.infer<typeof updateUserPreferencesSchema>;

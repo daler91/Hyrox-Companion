@@ -18,7 +18,7 @@ router.get('/api/v1/preferences', isAuthenticated, async (req: Request, res) => 
       weightUnit: user.weightUnit || "kg",
       distanceUnit: user.distanceUnit || "km",
       weeklyGoal: user.weeklyGoal || 5,
-      emailNotifications: user.emailNotifications ?? 1,
+      emailNotifications: user.emailNotifications ?? true,
     });
   } catch (error) {
     logger.error({ err: error }, "Error fetching preferences:");
@@ -42,7 +42,7 @@ router.patch('/api/v1/preferences', isAuthenticated, async (req: Request, res) =
       weightUnit: user.weightUnit,
       distanceUnit: user.distanceUnit,
       weeklyGoal: user.weeklyGoal,
-      emailNotifications: user.emailNotifications ?? 1,
+      emailNotifications: user.emailNotifications ?? true,
     });
   } catch (error) {
     logger.error({ err: error }, "Error updating preferences:");
