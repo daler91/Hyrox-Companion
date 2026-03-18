@@ -144,7 +144,7 @@ app.use((err: AppError, _req: Request, res: Response, _next: NextFunction) => {
       : err.message || "An error occurred";
 
   Sentry.captureException(err);
-  res.status(status).json({ message });
+  res.status(status).json({ error: message });
 });
 
 // importantly only setup vite in development and after
