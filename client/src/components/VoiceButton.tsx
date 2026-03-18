@@ -11,7 +11,7 @@ interface VoiceButtonProps {
   "data-testid"?: string;
 }
 
-export function VoiceButton({ isListening, isSupported, onClick, size = "icon", className, "data-testid": dataTestId }: VoiceButtonProps) {
+export function VoiceButton({ isListening, isSupported, onClick, size = "icon", className, "data-testid": dataTestId }: Readonly<VoiceButtonProps>) {
   if (!isSupported) return null;
 
   return (

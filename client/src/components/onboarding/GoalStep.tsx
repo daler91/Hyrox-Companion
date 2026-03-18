@@ -14,7 +14,7 @@ interface GoalStepProps {
   readonly onGoalChange: (goal: string) => void;
 }
 
-export function GoalStep({ selectedGoal, onGoalChange }: GoalStepProps) {
+export function GoalStep({ selectedGoal, onGoalChange }: Readonly<GoalStepProps>) {
   return (
     <RadioGroup
       value={selectedGoal}

@@ -42,7 +42,7 @@ export function CombineWorkoutsDialog({
   entry2,
   onConfirm,
   isPending,
-}: CombineWorkoutsDialogProps) {
+}: Readonly<CombineWorkoutsDialogProps>) {
   const [focusSource, setFocusSource] = useState<FieldSource>("both");
   const [workoutSource, setWorkoutSource] = useState<FieldSource>("both");
   const [notesSource, setNotesSource] = useState<FieldSource>("both");
@@ -230,7 +230,7 @@ interface WorkoutCardProps {
   readonly variant: "primary" | "secondary";
 }
 
-function WorkoutCard({ label, entry, variant }: WorkoutCardProps) {
+function WorkoutCard({ label, entry, variant }: Readonly<WorkoutCardProps>) {
   const truncate = (text: string | null | undefined, maxLen: number = 150) => {
     if (!text) return null;
     if (text.length <= maxLen) return text;
@@ -301,7 +301,7 @@ function FieldSelector({
   customValue,
   onCustomChange,
   isTextArea = false,
-}: FieldSelectorProps) {
+}: Readonly<FieldSelectorProps>) {
   const labelId = label.toLowerCase().replaceAll(/\s+/g, "-");
 
   return (

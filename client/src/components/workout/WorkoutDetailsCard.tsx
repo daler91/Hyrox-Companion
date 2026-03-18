@@ -20,7 +20,7 @@ export const WorkoutDetailsCard = ({
   setDate,
   rpe,
   setRpe,
-}: WorkoutDetailsCardProps) => {
+}: Readonly<WorkoutDetailsCardProps>) => {
   return (
     <Card>
       <CardHeader>

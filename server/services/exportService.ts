@@ -85,8 +85,8 @@ function generateTimelineCsvRows(timeline: TimelineEntry[]): string[] {
       escapeCsv(entry.mainWorkout),
       escapeCsv(entry.accessory),
       escapeCsv(entry.notes),
-      entry.duration != null ? String(entry.duration) : "",
-      entry.rpe != null ? String(entry.rpe) : "",
+      entry.duration == null ? "" : String(entry.duration),
+      entry.rpe == null ? "" : String(entry.rpe),
     ].join(","));
   }
   return rows;
@@ -101,10 +101,10 @@ function generateExerciseSetsCsvRows(allExerciseSets: ExerciseSetRow[], workoutL
       escapeCsv(s.customLabel || s.exerciseName),
       escapeCsv(s.category),
       String(s.setNumber),
-      s.reps != null ? String(s.reps) : "",
-      s.weight != null ? String(s.weight) : "",
-      s.distance != null ? String(s.distance) : "",
-      s.time != null ? String(s.time) : "",
+      s.reps == null ? "" : String(s.reps),
+      s.weight == null ? "" : String(s.weight),
+      s.distance == null ? "" : String(s.distance),
+      s.time == null ? "" : String(s.time),
       escapeCsv(s.notes),
     ].join(","));
   }

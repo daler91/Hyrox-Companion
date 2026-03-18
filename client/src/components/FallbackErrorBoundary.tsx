@@ -7,7 +7,7 @@ export interface FallbackErrorBoundaryProps {
   readonly resetError: () => void;
 }
 
-export function FallbackErrorBoundary({ error, resetError }: FallbackErrorBoundaryProps) {
+export function FallbackErrorBoundary({ error, resetError }: Readonly<FallbackErrorBoundaryProps>) {
   const errorMessage = error instanceof Error ? error.toString() : String(error);
 
   return (

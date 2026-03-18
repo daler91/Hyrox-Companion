@@ -102,7 +102,7 @@ function getParseSuccessDescription(parsed: ParsedExercise[]): string {
   const lowConfCount = parsed.filter(e => e.confidence != null && e.confidence < 80).length;
   const missingCount = parsed.filter(e => e.missingFields && e.missingFields.length > 0).length;
 
-  let description = `Found ${parsed.length} exercise${parsed.length !== 1 ? "s" : ""}.`;
+  let description = `Found ${parsed.length} exercise${parsed.length === 1 ? "" : "s"}.`;
   if (lowConfCount > 0) {
     description += ` ${lowConfCount} may need review (low confidence).`;
   }

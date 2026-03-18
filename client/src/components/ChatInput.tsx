@@ -12,7 +12,7 @@ interface ChatInputProps {
   readonly placeholder?: string;
 }
 
-export function ChatInput({ onSend, isLoading, placeholder = "Ask about your training..." }: ChatInputProps) {
+export function ChatInput({ onSend, isLoading, placeholder = "Ask about your training..." }: Readonly<ChatInputProps>) {
   const [message, setMessage] = useState("");
   const { toast } = useToast();
 
@@ -75,10 +75,10 @@ export function ChatInput({ onSend, isLoading, placeholder = "Ask about your tra
         <Button
           type="submit"
           size="icon"
-          disabled={!message.trim() || isLoading}
+          disabled={message.trim() === "" || isLoading}
           data-testid="button-send-message"
           aria-label="Send message"
-          title={!message.trim() ? "Type a message to send" : "Send message"}
+          title={message.trim() ? "Send message" : "Type a message to send"}
         >
           {isLoading ? (
             <Loader2 className="h-4 w-4 animate-spin" aria-label="Sending message..." />

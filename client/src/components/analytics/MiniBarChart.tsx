@@ -54,12 +54,12 @@ export function MiniBarChart({
   valueKey,
   color,
   label,
-}: {
+}: Readonly<{
   data: ExerciseAnalyticDay[];
   valueKey: keyof ExerciseAnalyticDay;
   color: string;
   label: string;
-}) {
+}>) {
   if (data.length === 0) return null;
 
   const fillColor = getFillColor(color);

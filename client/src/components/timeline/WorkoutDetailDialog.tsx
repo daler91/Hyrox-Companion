@@ -36,7 +36,7 @@ export default function WorkoutDetailDialog({
   onCombine,
   isSaving,
   isDeleting,
-}: WorkoutDetailDialogProps) {
+}: Readonly<WorkoutDetailDialogProps>) {
   const { toast } = useToast();
   const { distanceUnit, weightUnit, weightLabel } = useUnitPreferences();
   const [isEditing, setIsEditing] = useState(false);

@@ -38,7 +38,7 @@ export const WorkoutExerciseMode = ({
   getBlockExerciseName,
   weightUnit,
   distanceUnit,
-}: WorkoutExerciseModeProps) => {
+}: Readonly<WorkoutExerciseModeProps>) => {
   return (
     <>
       <Card>

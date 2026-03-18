@@ -31,7 +31,7 @@ export default function SuggestionsPanel({
   onOpenChange,
   onDismiss,
   onApply,
-}: SuggestionsPanelProps) {
+}: Readonly<SuggestionsPanelProps>) {
   if (suggestions.length === 0) {
     return null;
   }

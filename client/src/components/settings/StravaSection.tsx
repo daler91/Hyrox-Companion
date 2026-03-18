@@ -29,7 +29,7 @@ interface StravaSectionProps {
 export function StravaSection({
   stravaStatus,
   stravaLoading,
-}: StravaSectionProps) {
+}: Readonly<StravaSectionProps>) {
   const { toast } = useToast();
 
   const connectStravaMutation = useMutation({
