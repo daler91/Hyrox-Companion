@@ -46,7 +46,7 @@ describe("isAuthenticated middleware", () => {
 
     expect(getAuth).toHaveBeenCalledWith(req);
     expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith({ message: "Unauthorized" });
+    expect(res.json).toHaveBeenCalledWith({ error: "Unauthorized" });
     expect(next).not.toHaveBeenCalled();
   });
 
@@ -57,7 +57,7 @@ describe("isAuthenticated middleware", () => {
 
     expect(getAuth).toHaveBeenCalledWith(req);
     expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith({ message: "Unauthorized" });
+    expect(res.json).toHaveBeenCalledWith({ error: "Unauthorized" });
     expect(next).not.toHaveBeenCalled();
   });
 
@@ -84,7 +84,7 @@ describe("isAuthenticated middleware", () => {
     expect(getAuth).toHaveBeenCalledWith(req);
     expect(storage.getUser).toHaveBeenCalledWith("test-user-id");
     expect(res.status).toHaveBeenCalledWith(500);
-    expect(res.json).toHaveBeenCalledWith({ message: "Failed to initialize user session" });
+    expect(res.json).toHaveBeenCalledWith({ error: "Failed to initialize user session" });
     expect(next).not.toHaveBeenCalled();
 
     consoleErrorSpy.mockRestore();
