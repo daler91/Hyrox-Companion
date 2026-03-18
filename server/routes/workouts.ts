@@ -211,7 +211,7 @@ router.post("/api/v1/workouts", isAuthenticated, rateLimiter("workout", 40), asy
   }
 });
 
-router.patch("/api/v1/workouts/:id", isAuthenticated, async (req: Request, res) => {
+router.patch("/api/v1/workouts/:id", isAuthenticated, rateLimiter("workout", 40), async (req: Request, res) => {
   try {
     const { exercises, ...updateData } = req.body;
     const parseResult = updateWorkoutLogSchema.safeParse(updateData);
@@ -238,7 +238,7 @@ router.patch("/api/v1/workouts/:id", isAuthenticated, async (req: Request, res) 
   }
 });
 
-router.delete("/api/v1/workouts/:id", isAuthenticated, async (req: Request, res) => {
+router.delete("/api/v1/workouts/:id", isAuthenticated, rateLimiter("workout", 40), async (req: Request, res) => {
   try {
     const userId = getUserId(req);
     await storage.deleteExerciseSetsByWorkoutLog(req.params.id, userId);
