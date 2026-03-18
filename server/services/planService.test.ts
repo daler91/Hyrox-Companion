@@ -106,6 +106,7 @@ describe("planService", () => {
         mainWorkout: d.main,
         accessory: d.accessory,
         notes: d.notes,
+        status: "planned",
       }));
 
       expect(storage.createPlanDays).toHaveBeenCalledWith(expectedDays);

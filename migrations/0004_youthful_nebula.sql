@@ -1,0 +1,1 @@
+ALTER TABLE "plan_days" ADD CONSTRAINT "status_check" CHECK (status IN ('planned', 'completed', 'missed', 'skipped'));

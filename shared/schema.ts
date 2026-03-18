@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, date, timestamp, index, real, uniqueIndex, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, date, timestamp, index, real, uniqueIndex, boolean, check } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -64,6 +64,7 @@ export const planDays = pgTable("plan_days", {
   scheduledDate: date("scheduled_date"),
   status: text("status").default("planned"),
 }, (table) => [
+  check("status_check", sql`status IN ('planned', 'completed', 'missed', 'skipped')`),
   index("idx_plan_days_plan_id").on(table.planId),
   index("idx_plan_days_scheduled_date").on(table.scheduledDate),
   index("idx_plan_days_status").on(table.status),
@@ -73,6 +74,8 @@ export const planDays = pgTable("plan_days", {
 
 export const insertPlanDaySchema = createInsertSchema(planDays).omit({
   id: true,
+}).extend({
+  status: z.enum(["planned", "completed", "missed", "skipped"]).default("planned"),
 });
 
 export const updatePlanDaySchema = insertPlanDaySchema.partial().omit({

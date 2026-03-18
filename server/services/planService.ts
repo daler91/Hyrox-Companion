@@ -94,6 +94,7 @@ export async function importPlanFromCSV(
         mainWorkout: row["Main Workout"] || "",
         accessory,
         notes: row.Notes || null,
+        status: "planned",
       };
     });
 
@@ -119,6 +120,7 @@ export async function createSamplePlan(userId: string): Promise<TrainingPlanWith
     mainWorkout: d.main,
     accessory: d.accessory,
     notes: d.notes,
+    status: "planned",
   }));
 
   await storage.createPlanDays(days);
