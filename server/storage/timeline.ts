@@ -120,10 +120,7 @@ export class TimelineStorage {
     }
   }
 
-  async getTimeline(userId: string, planId?: string): Promise<TimelineEntry[]> {
-    const entries: TimelineEntry[] = [];
-    const today = toDateStr();
-
+  private async fetchScheduledDays(userId: string, planId?: string) {
     let planDayConditions;
     if (planId) {
       planDayConditions = and(eq(trainingPlans.userId, userId), eq(planDays.planId, planId));
@@ -137,8 +134,14 @@ export class TimelineStorage {
       .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
       .where(planDayConditions);
 
-    const scheduledDays = scheduledDaysResult
-      .filter(r => r.planDay.scheduledDate);
+    return scheduledDaysResult.filter(r => r.planDay.scheduledDate);
+  }
+
+  async getTimeline(userId: string, planId?: string, limit?: number, offset?: number): Promise<TimelineEntry[]> {
+    const entries: TimelineEntry[] = [];
+    const today = toDateStr();
+
+    const scheduledDays = await this.fetchScheduledDays(userId, planId);
 
     const planDayIds = scheduledDays.map(r => r.planDay.id);
 
@@ -178,6 +181,12 @@ export class TimelineStorage {
 
     await this.attachExerciseSets(entries);
 
-    return entries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    entries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    if (limit !== undefined || offset !== undefined) {
+      const start = offset || 0;
+      const end = limit === undefined ? undefined : start + limit;
+      return entries.slice(start, end);
+    }
+    return entries;
   }
 }

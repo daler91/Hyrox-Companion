@@ -157,7 +157,13 @@ router.post("/api/v1/custom-exercises", isAuthenticated, rateLimiter("customExer
 router.get("/api/v1/workouts", isAuthenticated, async (req: Request, res) => {
   try {
     const userId = getUserId(req);
-    const logs = await storage.listWorkoutLogs(userId);
+    const limit = req.query.limit ? Number.parseInt(req.query.limit as string) : undefined;
+    const offset = req.query.offset ? Number.parseInt(req.query.offset as string) : undefined;
+
+    if (limit !== undefined && Number.isNaN(limit)) return res.status(400).json({ error: "Invalid limit" });
+    if (offset !== undefined && Number.isNaN(offset)) return res.status(400).json({ error: "Invalid offset" });
+
+    const logs = await storage.listWorkoutLogs(userId, limit, offset);
     res.json(logs);
   } catch (error) {
     logger.error({ err: error }, "List workouts error:");
@@ -259,7 +265,13 @@ router.get("/api/v1/timeline", isAuthenticated, async (req: Request, res) => {
   try {
     const userId = getUserId(req);
     const planId = req.query.planId as string | undefined;
-    const entries = await storage.getTimeline(userId, planId);
+    const limit = req.query.limit ? Number.parseInt(req.query.limit as string) : undefined;
+    const offset = req.query.offset ? Number.parseInt(req.query.offset as string) : undefined;
+
+    if (limit !== undefined && Number.isNaN(limit)) return res.status(400).json({ error: "Invalid limit" });
+    if (offset !== undefined && Number.isNaN(offset)) return res.status(400).json({ error: "Invalid offset" });
+
+    const entries = await storage.getTimeline(userId, planId, limit, offset);
     res.json(entries);
   } catch (error) {
     logger.error({ err: error }, "Timeline error:");

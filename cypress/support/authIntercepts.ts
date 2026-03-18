@@ -5,7 +5,7 @@ export function setupAuthIntercepts(overrides?: {
   personalRecords?: any[];
   exerciseAnalytics?: any[];
   stravaStatus?: { connected: boolean; athleteId?: string; lastSyncedAt?: string | null };
-  preferences?: { weightUnit: string; distanceUnit: string; weeklyGoal: number; emailNotifications: number };
+  preferences?: { weightUnit: string; distanceUnit: string; weeklyGoal: number; emailNotifications: boolean };
 }) {
   cy.intercept("GET", "/api/v1/auth/user", {
     statusCode: 200,
@@ -25,7 +25,7 @@ export function setupAuthIntercepts(overrides?: {
       weightUnit: "kg",
       distanceUnit: "km",
       weeklyGoal: 5,
-      emailNotifications: 1,
+      emailNotifications: true,
     },
   }).as("preferences");
 
