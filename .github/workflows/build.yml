@@ -25,7 +25,6 @@ jobs:
           fetch-depth: 0
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@a31c9398be7ace6bbfaf30c0bd5d415f843d45e9 # v7.0.0
-        continue-on-error: true
         with:
           projectBaseDir: .
           args: >
