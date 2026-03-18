@@ -23,12 +23,16 @@ jobs:
           FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
         with:
           fetch-depth: 0
-      - name: SonarQube Scan
-        uses: SonarSource/sonarqube-scan-action@a31c9398be7ace6bbfaf30c0bd5d415f843d45e9 # v7.0.0
-        with:
-          projectBaseDir: .
-          args: >
-            -Dproject.settings=sonar-project.properties
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      # Disabled SonarQube manual scan because SonarQube Automatic Analysis is enabled
+      # for the project, causing "You are running CI analysis while Automatic Analysis is enabled"
+      # errors. If you prefer manual CI scans, disable Automatic Analysis in SonarQube Cloud
+      # and uncomment this step.
+      # - name: SonarQube Scan
+      #   uses: SonarSource/sonarqube-scan-action@a31c9398be7ace6bbfaf30c0bd5d415f843d45e9 # v7.0.0
+      #   with:
+      #     projectBaseDir: .
+      #     args: >
+      #       -Dproject.settings=sonar-project.properties
+      #   env:
+      #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      #     FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
