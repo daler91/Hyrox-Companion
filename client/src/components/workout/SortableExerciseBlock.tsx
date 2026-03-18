@@ -1,15 +1,16 @@
-import { ExerciseInput, type StructuredExercise } from "@/components/ExerciseInput";
+import React from "react";
+import { ExerciseInput } from "@/components/ExerciseInput";
 import { GripVertical } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
 export interface SortableExerciseBlockProps {
   readonly blockId: string;
-  readonly exData: StructuredExercise;
+  readonly exData: React.ComponentProps<typeof ExerciseInput>["exercise"];
   readonly blockLabel?: string;
   readonly weightUnit: "kg" | "lbs";
   readonly distanceUnit: "km" | "miles";
-  readonly onChange: (blockId: string, ex: StructuredExercise) => void;
+  readonly onChange: (blockId: string, ex: React.ComponentProps<typeof ExerciseInput>["exercise"]) => void;
   readonly onRemove: (blockId: string) => void;
 }
 
