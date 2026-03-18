@@ -1,6 +1,3 @@
-import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
-import { format, addDays } from "date-fns";
 import {
   Dialog,
   DialogContent,
@@ -9,14 +6,13 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
 import { Loader2, ChevronRight, ChevronLeft } from "lucide-react";
 import { WelcomeStep } from "@/components/onboarding/WelcomeStep";
 import { UnitsStep } from "@/components/onboarding/UnitsStep";
 import { GoalStep } from "@/components/onboarding/GoalStep";
 import { PlanStep } from "@/components/onboarding/PlanStep";
 import { ScheduleStep } from "@/components/onboarding/ScheduleStep";
+import { useOnboardingWizard } from "@/hooks/useOnboardingWizard";
 
 interface OnboardingWizardProps {
   readonly open: boolean;
@@ -40,116 +36,40 @@ const DESCS: Record<Step, string> = {
   schedule: "Pick the first day of your 8-week program.",
 };
 const STEPS: Step[] = ["welcome", "units", "goal", "plan", "schedule"];
-const PREV: Partial<Record<Step, Step>> = {
-  units: "welcome",
-  goal: "units",
-  plan: "goal",
-  schedule: "plan",
-};
-
-const markComplete = () =>
-  localStorage.setItem("hyrox-onboarding-complete", "true");
 
 export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizardProps>) {
-  const { toast } = useToast();
-  const [step, setStep] = useState<Step>("welcome");
-  const [weightUnit, setWeightUnit] = useState<"kg" | "lbs">("kg");
-  const [distanceUnit, setDistanceUnit] = useState<"km" | "miles">("km");
-  const [selectedGoal, setSelectedGoal] = useState("first");
-  const [createdPlanId, setCreatedPlanId] = useState<string | null>(null);
-  const [startDate, setStartDate] = useState<Date>(addDays(new Date(), 1));
-
-  const prefsMutation = useMutation({
-    mutationFn: async (prefs: { weightUnit: string; distanceUnit: string }) =>
-      (await apiRequest("PATCH", "/api/v1/preferences", prefs)).json(),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/preferences"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/auth/user"] });
-    },
-  });
-
-  const sampleMutation = useMutation({
-    mutationFn: async () =>
-      (await apiRequest("POST", "/api/v1/plans/sample", {})).json(),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/plans"] });
-      setCreatedPlanId(data.id);
-      setStep("schedule");
-    },
-    onError: () =>
-      toast({ title: "Failed to create plan", variant: "destructive" }),
-  });
-
-  const scheduleMutation = useMutation({
-    mutationFn: async ({ planId, date }: { planId: string; date: string }) =>
-      (
-        await apiRequest("POST", `/api/v1/plans/${planId}/schedule`, {
-          startDate: date,
-        })
-      ).json(),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/plans"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] });
-      toast({
-        title: "Your training plan is ready!",
-        description: "Workouts have been scheduled on your timeline.",
-      });
-      markComplete();
-      onComplete("sample");
-    },
-    onError: () =>
-      toast({ title: "Failed to schedule plan", variant: "destructive" }),
-  });
-
-  const handleNext = async () => {
-    if (step === "welcome") {
-      setStep("units");
-      return;
-    }
-    if (step === "units") {
-      try {
-        await prefsMutation.mutateAsync({ weightUnit, distanceUnit });
-      } catch {
-        toast({
-          title: "Could not save preferences",
-          description: "You can update them later in settings.",
-          variant: "destructive",
-        });
-      }
-      setStep("goal");
-      return;
-    }
-    if (step === "goal") setStep("plan");
-  };
-
-  const handleSkip = () => {
-    markComplete();
-    onComplete("skip");
-  };
-
-  const handleImportPlan = () => {
-    markComplete();
-    onComplete("import");
-  };
-
-  const idx = STEPS.indexOf(step);
-  const total = step === "schedule" ? 5 : 4;
+  const {
+    step,
+    idx,
+    total,
+    weightUnit,
+    setWeightUnit,
+    distanceUnit,
+    setDistanceUnit,
+    selectedGoal,
+    setSelectedGoal,
+    startDate,
+    setStartDate,
+    handleNext,
+    handleSkip,
+    handleImportPlan,
+    handleBack,
+    handleStartTraining,
+    handleUseSamplePlan,
+    isPrefsPending,
+    isSamplePending,
+    isSchedulePending,
+  } = useOnboardingWizard(onComplete);
 
   const renderNextButton = () => {
     if (step === "schedule") {
       return (
         <Button
-          onClick={() =>
-            createdPlanId &&
-            scheduleMutation.mutate({
-              planId: createdPlanId,
-              date: format(startDate, "yyyy-MM-dd"),
-            })
-          }
-          disabled={scheduleMutation.isPending}
+          onClick={handleStartTraining}
+          disabled={isSchedulePending}
           data-testid="button-onboarding-start-plan"
         >
-          {scheduleMutation.isPending && (
+          {isSchedulePending && (
             <Loader2 className="h-4 w-4 mr-1 animate-spin" />
           )}
           Start Training <ChevronRight className="h-4 w-4 ml-1" />
@@ -159,8 +79,8 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
 
     if (step !== "plan") {
       return (
-        <Button onClick={handleNext} disabled={prefsMutation.isPending}>
-          {prefsMutation.isPending && (
+        <Button onClick={handleNext} disabled={isPrefsPending}>
+          {isPrefsPending && (
             <Loader2 className="h-4 w-4 mr-1 animate-spin" />
           )}
           {step === "welcome" ? "Get Started" : "Continue"}{" "}
@@ -216,8 +136,8 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
           )}
           {step === "plan" && (
             <PlanStep
-              isPending={sampleMutation.isPending}
-              onUseSamplePlan={() => sampleMutation.mutate()}
+              isPending={isSamplePending}
+              onUseSamplePlan={handleUseSamplePlan}
               onImportPlan={handleImportPlan}
               onSkip={handleSkip}
             />
@@ -234,8 +154,8 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
           {step !== "welcome" && step !== "plan" ? (
             <Button
               variant="ghost"
-              onClick={() => PREV[step] && setStep(PREV[step])}
-              disabled={scheduleMutation.isPending}
+              onClick={handleBack}
+              disabled={isSchedulePending}
             >
               <ChevronLeft className="h-4 w-4 mr-1" /> Back
             </Button>
