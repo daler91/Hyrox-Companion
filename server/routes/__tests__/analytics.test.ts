@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import express from "express";
 import request from "supertest";
-import analyticsRouter, { validDate } from "../analytics";
+import analyticsRouter, { validDate, _cacheForTesting } from "../analytics";
 import { storage } from "../../storage";
 import { calculatePersonalRecords, calculateExerciseAnalytics } from "../../services/analyticsService";
 
@@ -54,6 +54,7 @@ describe("Analytics Routes", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    _cacheForTesting.clear();
     app = express();
     app.use(express.json());
     app.use(analyticsRouter);
@@ -133,11 +134,14 @@ describe("Analytics Routes", () => {
       const p2 = makeRequest();
       const p3 = makeRequest();
 
-      setTimeout(() => {
-        resolvePromise([
-          { id: "set1", exerciseName: "Squat", weight: "100", reps: 10 }
-        ]);
-      }, 50);
+      // Advance timers to trigger the timeout resolution if needed,
+      // but here we just manually resolve the promise right away since we are coalescing
+      resolvePromise([
+        { id: "set1", exerciseName: "Squat", weight: "100", reps: 10 }
+      ]);
+
+      // Allow the event loop to tick so the promises can resolve
+      vi.advanceTimersByTime(50);
 
       const [res1, res2, res3] = await Promise.all([p1, p2, p3]);
 
@@ -148,16 +152,37 @@ describe("Analytics Routes", () => {
       expect(storage.getAllExerciseSetsWithDates).toHaveBeenCalledTimes(1);
     });
 
-    it("should not coalesce sequential requests after the first resolves", async () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("should coalesce sequential requests within the 5-minute TTL", async () => {
       vi.mocked(storage.getAllExerciseSetsWithDates).mockResolvedValue([]);
 
       await makeRequest();
       await makeRequest();
 
+      expect(storage.getAllExerciseSetsWithDates).toHaveBeenCalledTimes(1);
+    });
+
+    it("should refetch from DB after the 5-minute TTL expires", async () => {
+      vi.mocked(storage.getAllExerciseSetsWithDates).mockResolvedValue([]);
+
+      await makeRequest();
+
+      // Advance time by 5 minutes + 1 second
+      vi.advanceTimersByTime((5 * 60 * 1000) + 1000);
+
+      await makeRequest();
+
       expect(storage.getAllExerciseSetsWithDates).toHaveBeenCalledTimes(2);
     });
 
-    it("should clear cache if the promise rejects so subsequent requests retry", async () => {
+    it("should clear cache if the promise rejects so subsequent requests retry immediately", async () => {
       vi.mocked(storage.getAllExerciseSetsWithDates)
         .mockRejectedValueOnce(new Error("Database error"))
         .mockResolvedValueOnce([]);
@@ -168,6 +193,7 @@ describe("Analytics Routes", () => {
       expect(res1.status).toBe(500);
       expect(res2.status).toBe(200);
 
+      // Even without advancing time, the cache should clear on failure
       expect(storage.getAllExerciseSetsWithDates).toHaveBeenCalledTimes(2);
     });
   });

@@ -8,24 +8,37 @@ import { dateStringSchema } from "@shared/schema";
 
 const router = Router();
 
-// Store pending promises to prevent redundant DB queries for concurrent requests
-const pendingRequests = new Map<string, Promise<ExerciseSetWithDate[]>>();
+// Cache TTL in milliseconds (5 minutes)
+const CACHE_TTL_MS = 5 * 60 * 1000;
+
+interface CacheEntry {
+  promise: Promise<ExerciseSetWithDate[]>;
+  timestamp: number;
+}
+
+// Store pending promises and cached results to prevent redundant DB queries
+// for both concurrent and sequential requests within the TTL window.
+export const _cacheForTesting = new Map<string, CacheEntry>();
+const cache = _cacheForTesting;
 
 function getExerciseSetsCoalesced(userId: string, from?: string, to?: string): Promise<ExerciseSetWithDate[]> {
   const cacheKey = `${userId}-${from || 'none'}-${to || 'none'}`;
+  const now = Date.now();
 
-  if (pendingRequests.has(cacheKey)) {
-    return pendingRequests.get(cacheKey)!;
+  const entry = cache.get(cacheKey);
+  if (entry && (now - entry.timestamp < CACHE_TTL_MS)) {
+    return entry.promise;
   }
 
+  // If expired or missing, fetch from storage
   const promise = storage.getAllExerciseSetsWithDates(userId, from, to)
-    .finally(() => {
-      // Remove from map once the query finishes (success or failure)
-      // to allow future requests to fetch fresh data
-      pendingRequests.delete(cacheKey);
+    .catch((error) => {
+      // Remove from cache on failure so subsequent requests retry immediately
+      cache.delete(cacheKey);
+      throw error;
     });
 
-  pendingRequests.set(cacheKey, promise);
+  cache.set(cacheKey, { promise, timestamp: now });
   return promise;
 }
 
