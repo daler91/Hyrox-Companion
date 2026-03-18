@@ -20,11 +20,11 @@ const Landing = lazy(() => import("@/pages/Landing"));
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
 function isCypressTest(): boolean {
-  return typeof globalThis.window !== "undefined" && "Cypress" in globalThis.window;
+  return globalThis.window !== undefined && "Cypress" in globalThis.window;
 }
 
 function isDevPreview(): boolean {
-  return import.meta.env.DEV && (!clerkPubKey || (typeof globalThis.window !== "undefined" && globalThis.window.self !== globalThis.window.top));
+  return import.meta.env.DEV && (!clerkPubKey || (globalThis.window !== undefined && globalThis.window.self !== globalThis.window.top));
 }
 
 function shouldBypassAuth(): boolean {

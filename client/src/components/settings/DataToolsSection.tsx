@@ -89,7 +89,7 @@ export function DataToolsSection() {
             </div>
           ) : null}
 
-          {unstructuredCount !== null && parseResults === null ? (
+          {unstructuredCount !== null && !parseResults ? (
             <div>
               <p className="text-sm text-muted-foreground mb-4" data-testid="text-unstructured-count">
                 Found {unstructuredCount} workouts without structured exercise data
@@ -117,7 +117,7 @@ export function DataToolsSection() {
             </div>
           ) : null}
 
-          {parseResults !== null ? (
+          {parseResults ? (
             <div>
               <p className="text-sm text-muted-foreground mb-4" data-testid="text-parse-results">
                 Parsed {parseResults.success} workouts successfully. {parseResults.failed} could not be parsed.

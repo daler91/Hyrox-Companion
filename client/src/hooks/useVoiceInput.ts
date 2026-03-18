@@ -143,9 +143,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
     const exactOrSubset = recentEmissionsRef.current.some(
       (e) => e.text === normalized || e.text.startsWith(normalized),
     );
-    if (exactOrSubset) {
-      // Case 1 & 2: skip entirely
-    } else {
+    if (!exactOrSubset) {
       // Check if the new result is a superset of a previous emission
       const supersetOf = recentEmissionsRef.current.findIndex((e) =>
         normalized.startsWith(e.text),

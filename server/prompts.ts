@@ -157,7 +157,7 @@ function buildOverallStats(trainingContext: TrainingContext): string {
 - Missed: ${trainingContext.missedWorkouts}
 - Skipped: ${trainingContext.skippedWorkouts}
 - Completion rate: ${trainingContext.completionRate}%
-- Current streak: ${trainingContext.currentStreak} day${trainingContext.currentStreak !== 1 ? "s" : ""}`;
+- Current streak: ${trainingContext.currentStreak} day${trainingContext.currentStreak === 1 ? "" : "s"}`;
 
   if (trainingContext.activePlan) {
     section += `\n\nActive Training Plan: "${trainingContext.activePlan.name}" (${trainingContext.activePlan.totalWeeks} weeks)`;

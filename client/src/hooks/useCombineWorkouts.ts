@@ -45,18 +45,20 @@ export function useCombineWorkouts() {
   });
 
   const handleCombine = useCallback((entry: TimelineEntry) => {
-    if (!combiningEntry) {
+    if (combiningEntry) {
+      if (combiningEntry.id === entry.id) {
+        setCombiningEntry(null);
+        toast({ title: "Combine cancelled" });
+      } else if (combiningEntry.date !== entry.date) {
+        toast({ title: "Can only combine workouts on the same day", variant: "destructive" });
+        setCombiningEntry(null);
+      } else {
+        setCombineSecondEntry(entry);
+        setShowCombineDialog(true);
+      }
+    } else {
       setCombiningEntry(entry);
       toast({ title: "Select another workout to combine with", description: "Click on another workout on the same day" });
-    } else if (combiningEntry.id === entry.id) {
-      setCombiningEntry(null);
-      toast({ title: "Combine cancelled" });
-    } else if (combiningEntry.date !== entry.date) {
-      toast({ title: "Can only combine workouts on the same day", variant: "destructive" });
-      setCombiningEntry(null);
-    } else {
-      setCombineSecondEntry(entry);
-      setShowCombineDialog(true);
     }
   }, [combiningEntry, toast]);
 
@@ -68,11 +70,12 @@ export function useCombineWorkouts() {
     calories?: number;
     notes?: string;
   }) => {
-    if (!combiningEntry || !combineSecondEntry) return;
-    combineWorkoutsMutation.mutate({
-      newWorkout: combinedWorkout,
-      entriesToDelete: [combiningEntry, combineSecondEntry],
-    });
+    if (combiningEntry && combineSecondEntry) {
+      combineWorkoutsMutation.mutate({
+        newWorkout: combinedWorkout,
+        entriesToDelete: [combiningEntry, combineSecondEntry],
+      });
+    }
   }, [combiningEntry, combineSecondEntry, combineWorkoutsMutation]);
 
   return {

@@ -116,18 +116,17 @@ export function usePlanImport({ onPlanScheduled }: UsePlanImportOptions = {}) {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const csvContent = typeof e.target?.result === "string" ? e.target.result : "";
+    file.text().then((csvContent) => {
       const previewRows = parseCSVForPreview(csvContent);
       setCsvPreview({
         fileName: file.name,
         content: csvContent,
         rows: previewRows,
       });
-    };
-    reader.readAsText(file);
-    event.target.value = "";
+      event.target.value = "";
+    }).catch(() => {
+      toast({ title: "Failed to read file", variant: "destructive" });
+    });
   }, [parseCSVForPreview, toast]);
 
   const confirmImport = useCallback(() => {
