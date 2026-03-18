@@ -121,31 +121,19 @@ export function buildWeeklySummaryEmail(
         <div class="stat-label">Total Time</div>
       </div>
     </div>
-
-    ${
-      data.completionRate > 0
-        ? `
+${data.completionRate > 0 ? `
     <div class="section-title">Completion</div>
     <div class="progress-bar">
       <div class="progress-fill" style="width:${Math.min(data.completionRate, 100)}%"></div>
     </div>
-    <p style="font-size:13px;color:#64748b;">${data.completedCount} of ${totalWorkouts} planned sessions</p>
-    `
-        : ""
-    }
-
-    ${
-      data.currentStreak > 0
-        ? `
+    <p style="font-size:13px;color:#64748b;">${data.completedCount} of ${totalWorkouts} planned sessions</p>` : ""}
+${data.currentStreak > 0 ? `
     <div class="stat-grid">
       <div class="stat-card">
         <div class="stat-value highlight">🔥 ${data.currentStreak}</div>
         <div class="stat-label">Day Streak</div>
-      </div>
-      ${prsSection}
-    </div>`
-        : ""
-    }
+      </div>${prsSection}
+    </div>` : ""}
 
     ${missedSessionsMessage}
 
@@ -184,13 +172,11 @@ export function buildMissedWorkoutEmail(
       <div class="workout-focus">${w.focus}</div>
       <div class="workout-detail">${w.mainWorkout.substring(0, 120)}${w.mainWorkout.length > 120 ? "..." : ""}</div>
       <div class="workout-date">${w.date}${w.planName ? ` • ${w.planName}` : ""}</div>
-    </div>
-  `,
+    </div>`,
     )
     .join("");
 
-  const html = `
-<!DOCTYPE html>
+  const html = `<!DOCTYPE html>
 <html>
 <head>
 <style>
@@ -213,9 +199,7 @@ export function buildMissedWorkoutEmail(
   </div>
   <div class="content">
     <p style="font-size:16px;color:#334155;">Hey ${name}, you had ${count} planned session${pluralSuffix} that ${wasWere} missed:</p>
-
-    ${workoutItems}
-
+${workoutItems}
     <p style="font-size:14px;color:#64748b;margin-top:16px;">Missing a session happens to everyone. The important thing is to get back on track. You can mark these as skipped or reschedule them in the app.</p>
 
     <div style="margin-top: 24px; text-align: center;">
@@ -226,8 +210,7 @@ export function buildMissedWorkoutEmail(
     <p>You're receiving this because you enabled email reminders in your HyroxTracker preferences.</p>
   </div>
 </body>
-</html>
-  `.trim();
+</html>`;
 
   return { subject, html };
 }
