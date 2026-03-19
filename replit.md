@@ -13,6 +13,9 @@ Preferred communication style: Simple, everyday language.
 ### Frontend Architecture
 The frontend is built with React and TypeScript, utilizing Wouter for client-side routing and TanStack React Query for server state management. Styling is handled by Tailwind CSS with CSS variables for theming, and UI components are derived from shadcn/ui, based on Radix UI primitives. Vite serves as the build tool. The application features a streamlined, page-based architecture including a public Landing page, a unified Timeline for training management and AI coaching, a Log Workout form, Analytics for performance tracking, and Settings for user preferences. The Timeline is the core experience, integrating AI coaching, plan management, and workout actions.
 
+#### Landing Page
+The public landing page (`client/src/pages/Landing.tsx`) is a full SaaS-style marketing page with: sticky header with Clerk sign-in, hero section with animated timeline mockup, trust strip, 4 feature cards (AI Coach, Timeline, Strava, Analytics), 3-step How It Works flow, Hyrox station grid, capability highlights, final CTA, and footer. Uses IntersectionObserver for scroll-triggered fade-up animations and CSS float animation on the hero mockup. All auth CTAs use `SignInButton` from `@clerk/clerk-react`.
+
 #### Component Organization
 Larger components are split into focused sub-components in domain directories:
 - `components/onboarding/` — Wizard step components (`WelcomeStep`, `UnitsStep`, `GoalStep`, `PlanStep`, `ScheduleStep`); parent `OnboardingWizard.tsx` manages navigation and state
