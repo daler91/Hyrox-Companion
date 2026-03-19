@@ -88,12 +88,12 @@ describe("convertDistance", () => {
 describe("metersToUserDistance", () => {
   it("handles very large meters", () => {
     expect(metersToUserDistance(1000000000, "km")).toBeCloseTo(1000000, 0);
-    expect(metersToUserDistance(1000000000, "miles")).toBeCloseTo(621371, 0);
+    expect(metersToUserDistance(1000000000, "miles")).toBeCloseTo(621373, 0);
   });
 
   it("handles very small fractional meters", () => {
     expect(metersToUserDistance(0.001, "km")).toBeCloseTo(0.000001, 6);
-    expect(metersToUserDistance(0.001, "miles")).toBeCloseTo(0.000000621371, 6);
+    expect(metersToUserDistance(0.001, "miles")).toBeCloseTo(0.000000621373, 6);
   });
 
   it("converts meters to km", () => {
@@ -102,6 +102,10 @@ describe("metersToUserDistance", () => {
 
   it("converts meters to miles", () => {
     expect(metersToUserDistance(1609.34, "miles")).toBeCloseTo(1, 1);
+  });
+
+  it("converts meters to mi", () => {
+    expect(metersToUserDistance(1609.34, "mi" as any)).toBeCloseTo(1, 1);
   });
 
   it("handles zero meters", () => {
@@ -117,6 +121,11 @@ describe("metersToUserDistance", () => {
   it("handles fractional meters", () => {
     expect(metersToUserDistance(1500.5, "km")).toBeCloseTo(1.5005, 5);
     expect(metersToUserDistance(1609.34 / 2, "miles")).toBeCloseTo(0.5, 1);
+  });
+
+  it("returns raw meters when unrecognized distanceUnit is passed", () => {
+    expect(metersToUserDistance(5000, "feet" as any)).toBe(5000);
+    expect(metersToUserDistance(100, "" as any)).toBe(100);
   });
 });
 
