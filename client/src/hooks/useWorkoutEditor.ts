@@ -114,13 +114,56 @@ function getParseSuccessDescription(parsed: ParsedExercise[]): string {
   return description;
 }
 
-export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
-  const { toast } = useToast();
-  const blockCounterRef = useRef(options.initialBlockCounter ?? 0);
-  const [exerciseBlocks, setExerciseBlocks] = useState<string[]>([]);
-  const [exerciseData, setExerciseData] = useState<Record<string, StructuredExercise>>({});
-  const [useTextMode, setUseTextMode] = useState(false);
+export async function parseWorkoutText(text: string): Promise<ParsedExercise[]> {
+  const response = await apiRequest("POST", "/api/v1/parse-exercises", { text });
+  return response.json();
+}
 
+
+interface UseParseWorkoutMutationOptions {
+  onSuccess: (newBlocks: string[], newData: Record<string, StructuredExercise>) => void;
+  onError: () => void;
+}
+
+export function useParseWorkoutMutation(
+  blockCounterRef: MutableRefObject<number>,
+  options: UseParseWorkoutMutationOptions
+) {
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: parseWorkoutText,
+    onSuccess: (parsed: ParsedExercise[]) => {
+      if (parsed.length === 0) {
+        toast({
+          title: "No exercises found",
+          description: "AI couldn't identify any exercises in your text. Try being more specific, e.g. '4x8 back squat at 70kg'.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const { newBlocks, newData } = processParsedExercises(parsed, blockCounterRef);
+      options.onSuccess(newBlocks, newData);
+
+      toast({
+        title: "Exercises parsed",
+        description: getParseSuccessDescription(parsed),
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Parsing failed",
+        description: "AI couldn't parse your workout text. Please try again or enter exercises manually.",
+        variant: "destructive",
+      });
+      options.onError();
+    },
+  });
+}
+
+
+export function useWorkoutSensors(setExerciseBlocks: React.Dispatch<React.SetStateAction<string[]>>) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -135,7 +178,18 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
         return arrayMove(prev, oldIndex, newIndex);
       });
     }
-  }, []);
+  }, [setExerciseBlocks]);
+
+  return { sensors, handleDragEnd };
+}
+
+export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
+  const blockCounterRef = useRef(options.initialBlockCounter ?? 0);
+  const [exerciseBlocks, setExerciseBlocks] = useState<string[]>([]);
+  const [exerciseData, setExerciseData] = useState<Record<string, StructuredExercise>>({});
+  const [useTextMode, setUseTextMode] = useState(false);
+
+  const { sensors, handleDragEnd } = useWorkoutSensors(setExerciseBlocks);
 
   const addExercise = useCallback((name: ExerciseName) => {
     const blockId = makeBlockId(name, blockCounterRef);
@@ -171,38 +225,13 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
     return exerciseBlocks.map(blockId => getBlockExerciseName(blockId) as ExerciseName);
   }, [exerciseBlocks]);
 
-  const parseMutation = useMutation({
-    mutationFn: async (text: string) => {
-      const response = await apiRequest("POST", "/api/v1/parse-exercises", { text });
-      return response.json();
-    },
-    onSuccess: (parsed: ParsedExercise[]) => {
-      if (parsed.length === 0) {
-        toast({
-          title: "No exercises found",
-          description: "AI couldn't identify any exercises in your text. Try being more specific, e.g. '4x8 back squat at 70kg'.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      const { newBlocks, newData } = processParsedExercises(parsed, blockCounterRef);
+  const parseMutation = useParseWorkoutMutation(blockCounterRef, {
+    onSuccess: (newBlocks, newData) => {
       setExerciseBlocks(newBlocks);
       setExerciseData(newData);
       setUseTextMode(false);
-
-      toast({
-        title: "Exercises parsed",
-        description: getParseSuccessDescription(parsed),
-      });
     },
-    onError: () => {
-      toast({
-        title: "Parsing failed",
-        description: "AI couldn't parse your workout text. Please try again or enter exercises manually.",
-        variant: "destructive",
-      });
-    },
+    onError: () => {},
   });
 
   const resetEditor = useCallback((blocks: string[], data: Record<string, StructuredExercise>, textMode: boolean) => {
