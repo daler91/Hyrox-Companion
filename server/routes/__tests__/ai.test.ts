@@ -103,6 +103,33 @@ describe("POST /api/parse-exercises", () => {
     expect(response.body).toHaveProperty("error", "Text is required");
   });
 
+
+  it("should return 500 when AI parsing fails", async () => {
+    (storage.getUser as any).mockResolvedValue({ weightUnit: "lbs" });
+    (storage.getCustomExercises as any).mockResolvedValue([]);
+    (parseExercisesFromText as any).mockRejectedValue(new Error("AI error"));
+
+    const response = await request(app)
+      .post("/api/v1/parse-exercises")
+      .send({ text: "Bench press 135x10" });
+
+    expect(response.status).toBe(500);
+    expect(response.body).toHaveProperty("error", "Failed to parse exercises");
+  });
+
+
+  it("should return 500 when AI coach response fails", async () => {
+    (buildTrainingContext as any).mockResolvedValue(MOCK_TRAINING_CONTEXT);
+    (chatWithCoach as any).mockRejectedValue(new Error("AI error"));
+
+    const response = await request(app)
+      .post(CHAT_ENDPOINT)
+      .send({ message: "Hello", history: [] });
+
+    expect(response.status).toBe(500);
+    expect(response.body).toHaveProperty("error", "Failed to get response from AI coach");
+  });
+
   it("should return 500 on internal error", async () => {
     (storage.getUser as any).mockRejectedValue(new Error("Database error"));
 
@@ -450,6 +477,26 @@ describe("POST /api/timeline/ai-suggestions", () => {
       suggestions: [],
       message: "No upcoming planned workouts found",
     });
+  });
+
+
+  it("should return 500 when AI suggestions generation fails", async () => {
+    (buildTrainingContext as any).mockResolvedValue(MOCK_TRAINING_CONTEXT);
+    (storage.getTimeline as any).mockResolvedValue([
+      {
+        status: "planned",
+        date: "2024-03-12",
+        planDayId: 1,
+        focus: "Legs",
+        mainWorkout: "Squats",
+      }
+    ]);
+    (generateWorkoutSuggestions as any).mockRejectedValue(new Error("AI Workout generation error"));
+
+    const response = await request(app).post(TIMELINE_SUGGESTIONS_ENDPOINT);
+
+    expect(response.status).toBe(500);
+    expect(response.body).toHaveProperty("error", "Failed to generate AI suggestions");
   });
 
   it("should return 500 on error", async () => {
