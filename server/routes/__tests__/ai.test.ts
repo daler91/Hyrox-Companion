@@ -62,6 +62,10 @@ describe("POST /api/parse-exercises", () => {
     vi.clearAllMocks();
     const routeUtils = await import("../../routeUtils");
     routeUtils.clearRateLimitBuckets();
+    const rateLimit = (await import("express-rate-limit")).default;
+    if ((rateLimit as any).__resetStore) {
+      (rateLimit as any).__resetStore();
+    }
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2025, 0, 1));
     app = express();
@@ -179,6 +183,10 @@ describe("POST /api/chat", () => {
     vi.clearAllMocks();
     const routeUtils = await import("../../routeUtils");
     routeUtils.clearRateLimitBuckets();
+    const rateLimit = (await import("express-rate-limit")).default;
+    if ((rateLimit as any).__resetStore) {
+      (rateLimit as any).__resetStore();
+    }
     app = express();
     app.use(express.json());
     app.use(aiRouter);
@@ -230,6 +238,10 @@ describe("POST /api/chat/stream", () => {
     vi.clearAllMocks();
     const routeUtils = await import("../../routeUtils");
     routeUtils.clearRateLimitBuckets();
+    const rateLimit = (await import("express-rate-limit")).default;
+    if ((rateLimit as any).__resetStore) {
+      (rateLimit as any).__resetStore();
+    }
     app = express();
     app.use(express.json());
     app.use(aiRouter);
@@ -295,6 +307,10 @@ describe("Chat History and Messages Routes", () => {
     vi.clearAllMocks();
     const routeUtils = await import("../../routeUtils");
     routeUtils.clearRateLimitBuckets();
+    const rateLimit = (await import("express-rate-limit")).default;
+    if ((rateLimit as any).__resetStore) {
+      (rateLimit as any).__resetStore();
+    }
     app = express();
     app.use(express.json());
     app.use(aiRouter);
@@ -379,6 +395,10 @@ describe("POST /api/timeline/ai-suggestions", () => {
     vi.clearAllMocks();
     const routeUtils = await import("../../routeUtils");
     routeUtils.clearRateLimitBuckets();
+    const rateLimit = (await import("express-rate-limit")).default;
+    if ((rateLimit as any).__resetStore) {
+      (rateLimit as any).__resetStore();
+    }
     app = express();
     app.use(express.json());
     app.use(aiRouter);

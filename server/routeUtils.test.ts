@@ -20,7 +20,7 @@ vi.mock("express-rate-limit", () => {
     const handler = opts.handler;
 
     return (req: any, res: any, next: NextFunction) => {
-      if (skip && skip(req)) return next();
+      if (skip?.(req)) return next();
 
       const key = keyGen ? keyGen(req) : req.ip ?? "";
       if (!key) return next();
