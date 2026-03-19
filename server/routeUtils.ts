@@ -1,6 +1,6 @@
 import { toDateStr } from "./types";
 import rateLimit, { MemoryStore } from "express-rate-limit";
-import type { NextFunction, Response, Request } from "express";
+import type { NextFunction } from "express";
 
 export const DEFAULT_WINDOW_MS = 60000;
 
