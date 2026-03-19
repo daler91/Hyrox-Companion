@@ -130,7 +130,7 @@ router.post("/api/v1/chat/message", isAuthenticated, async (req: Request, res) =
   }
 });
 
-router.delete("/api/v1/chat/history", isAuthenticated, async (req: Request, res) => {
+router.delete("/api/v1/chat/history", isAuthenticated, rateLimiter("chatHistoryDelete", 5), async (req: Request, res) => {
   try {
     const userId = getUserId(req);
     await storage.clearChatHistory(userId);

@@ -103,11 +103,11 @@ router.post("/api/v1/plans/sample", isAuthenticated, rateLimiter("planSample", 5
   }
 });
 
-router.patch("/api/v1/plans/:planId/days/:dayId", isAuthenticated, async (req: Request, res) => {
+router.patch("/api/v1/plans/:planId/days/:dayId", isAuthenticated, rateLimiter("planDayUpdate", 20), async (req: Request, res) => {
   return handlePlanDayUpdate(req, res, (dayId, data, userId) => storage.updatePlanDay(dayId, data, userId));
 });
 
-router.patch("/api/v1/plans/days/:dayId", isAuthenticated, async (req: Request, res) => {
+router.patch("/api/v1/plans/days/:dayId", isAuthenticated, rateLimiter("planDayUpdate", 20), async (req: Request, res) => {
   return handlePlanDayUpdate(req, res, updatePlanDayWithCleanup);
 });
 
@@ -115,7 +115,7 @@ const renameTrainingPlanSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(255, "Name must be 255 characters or less"),
 });
 
-router.patch("/api/v1/plans/:id", isAuthenticated, async (req: Request, res) => {
+router.patch("/api/v1/plans/:id", isAuthenticated, rateLimiter("planUpdate", 20), async (req: Request, res) => {
   try {
     const userId = getUserId(req);
     const parseResult = renameTrainingPlanSchema.safeParse(req.body);
@@ -133,7 +133,7 @@ router.patch("/api/v1/plans/:id", isAuthenticated, async (req: Request, res) => 
   }
 });
 
-router.patch("/api/v1/plans/:id/goal", isAuthenticated, async (req: Request, res) => {
+router.patch("/api/v1/plans/:id/goal", isAuthenticated, rateLimiter("planUpdate", 20), async (req: Request, res) => {
   try {
     const userId = getUserId(req);
     const parseResult = updateTrainingPlanGoalSchema.safeParse(req.body);
@@ -151,7 +151,7 @@ router.patch("/api/v1/plans/:id/goal", isAuthenticated, async (req: Request, res
   }
 });
 
-router.delete("/api/v1/plans/:id", isAuthenticated, async (req: Request, res) => {
+router.delete("/api/v1/plans/:id", isAuthenticated, rateLimiter("planDelete", 10), async (req: Request, res) => {
   return handleGetOrDeletePlan(req, res, storage.deleteTrainingPlan.bind(storage), "true", "Delete");
 });
 
@@ -183,7 +183,7 @@ const patchDayStatusSchema = z.object({
   scheduledDate: dateStringSchema.nullable().optional(),
 });
 
-router.patch("/api/v1/plans/days/:dayId/status", isAuthenticated, async (req: Request, res) => {
+router.patch("/api/v1/plans/days/:dayId/status", isAuthenticated, rateLimiter("planDayStatus", 20), async (req: Request, res) => {
   try {
     const { dayId } = req.params;
     const userId = getUserId(req);
@@ -219,7 +219,7 @@ router.patch("/api/v1/plans/days/:dayId/status", isAuthenticated, async (req: Re
   }
 });
 
-router.delete("/api/v1/plans/days/:dayId", isAuthenticated, async (req: Request, res) => {
+router.delete("/api/v1/plans/days/:dayId", isAuthenticated, rateLimiter("planDayDelete", 10), async (req: Request, res) => {
   try {
     const { dayId } = req.params;
     const userId = getUserId(req);

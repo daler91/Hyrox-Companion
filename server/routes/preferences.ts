@@ -1,6 +1,7 @@
 import { logger } from "../logger";
 import { Router, type Request } from "express";
 import { isAuthenticated } from "../clerkAuth";
+import { rateLimiter } from "../routeUtils";
 import { storage } from "../storage";
 import { updateUserPreferencesSchema } from "@shared/schema";
 import { getUserId } from "../types";
@@ -27,7 +28,7 @@ router.get('/api/v1/preferences', isAuthenticated, async (req: Request, res) => 
   }
 });
 
-router.patch('/api/v1/preferences', isAuthenticated, async (req: Request, res) => {
+router.patch('/api/v1/preferences', isAuthenticated, rateLimiter("preferences", 20), async (req: Request, res) => {
   try {
     const userId = getUserId(req);
     const parseResult = updateUserPreferencesSchema.safeParse(req.body);
