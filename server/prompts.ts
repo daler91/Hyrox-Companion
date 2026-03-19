@@ -161,6 +161,9 @@ function buildOverallStats(trainingContext: TrainingContext): string {
 
   if (trainingContext.activePlan) {
     section += `\n\nActive Training Plan: "${trainingContext.activePlan.name}" (${trainingContext.activePlan.totalWeeks} weeks)`;
+    if (trainingContext.activePlan.goal) {
+      section += `\nPlan Goal: ${trainingContext.activePlan.goal}`;
+    }
   }
   return section;
 }
