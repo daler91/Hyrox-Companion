@@ -281,6 +281,40 @@ describe("calculateStreak", () => {
     expect(calculateStreak(new Set(["2025-01-01"]))).toBe(0);
   });
 
+
+  it("maintains streak when run at 11:59 PM", () => {
+    vi.setSystemTime(new Date("2026-01-15T23:59:59.999Z"));
+    expect(calculateStreak(new Set(["2026-01-15", "2026-01-14"]))).toBe(2);
+  });
+
+  it("calculates correctly when run at 00:00 AM (midnight)", () => {
+    vi.setSystemTime(new Date("2026-01-16T00:00:00.000Z"));
+    // If it's the 16th midnight, the 15th was yesterday. Streak should continue.
+    expect(calculateStreak(new Set(["2026-01-15", "2026-01-14"]))).toBe(2);
+  });
+
+  it("handles a single gap of 1 day correctly (streak broken)", () => {
+    vi.setSystemTime(new Date("2026-01-15T12:00:00Z"));
+    // Today is 15th, completed 15th and 13th. 14th is missing.
+    // So streak should be 1.
+    expect(calculateStreak(new Set(["2026-01-15", "2026-01-13", "2026-01-12"]))).toBe(1);
+  });
+
+  it("streak from yesterday ignores earlier gaps", () => {
+    vi.setSystemTime(new Date("2026-01-15T12:00:00Z"));
+    // Today is 15th. Completed 14th, 13th, 11th. Missing 12th.
+    // Streak from yesterday is 2.
+    expect(calculateStreak(new Set(["2026-01-14", "2026-01-13", "2026-01-11"]))).toBe(2);
+  });
+
+  it("ignores completely unrelated string formats or invalid dates safely", () => {
+    vi.setSystemTime(new Date("2026-01-15T12:00:00Z"));
+    const dates = new Set(["2026-01-15", "hello", "2026/01/14", "2026-01-13"]);
+    // Since "2026-01-14" is not correctly formatted as "YYYY-MM-DD" in the set, it breaks the streak.
+    // "2026-01-15" is found, so streak is 1. The next expected is "2026-01-14", which is missing (only "2026/01/14" is there).
+    expect(calculateStreak(dates)).toBe(1);
+  });
+
   it("returns 0 if today is completed but it is the only one and not today or yesterday", () => {
     vi.setSystemTime(new Date("2026-01-15T12:00:00Z"));
     expect(calculateStreak(new Set(["2026-01-10", "2026-01-09"]))).toBe(0);
