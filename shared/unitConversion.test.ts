@@ -68,6 +68,33 @@ describe("convertDistance", () => {
     expect(convertDistance(5, "km", "km")).toBe(5);
     expect(convertDistance(3, "miles", "miles")).toBe(3);
   });
+
+  it("round-trips accurately", () => {
+    const original = 42;
+    const miles = convertDistance(original, "km", "miles");
+    const back = convertDistance(miles, "miles", "km");
+    expect(back).toBeCloseTo(original, 5);
+  });
+
+  it("handles zero distance correctly", () => {
+    expect(convertDistance(0, "km", "miles")).toBe(0);
+    expect(convertDistance(0, "miles", "km")).toBe(0);
+  });
+
+  it("handles negative distances correctly", () => {
+    expect(convertDistance(-10, "km", "miles")).toBeCloseTo(-6.21371, 2);
+    expect(convertDistance(-6.21371, "miles", "km")).toBeCloseTo(-10, 2);
+  });
+
+  it("handles very small fractional distances", () => {
+    expect(convertDistance(0.001, "km", "miles")).toBeCloseTo(0.000621371, 6);
+    expect(convertDistance(0.000621371, "miles", "km")).toBeCloseTo(0.001, 6);
+  });
+
+  it("handles very large distances", () => {
+    expect(convertDistance(1000000, "km", "miles")).toBeCloseTo(621371, 0);
+    expect(convertDistance(621371, "miles", "km")).toBeCloseTo(1000000, 0);
+  });
 });
 
 describe("metersToUserDistance", () => {
