@@ -34,4 +34,20 @@ describe("cn", () => {
       )
     ).toBe("text-red-500 p-8 hover:bg-gray-200 bg-white");
   });
+
+  it("should handle empty inputs gracefully", () => {
+    expect(cn()).toBe("");
+    expect(cn([])).toBe("");
+    expect(cn({})).toBe("");
+  });
+
+  it("should merge tailwind arbitrary values correctly", () => {
+    expect(cn("w-[10px]", "w-[20px]")).toBe("w-[20px]");
+    expect(cn("bg-[#f00]", "bg-[#0f0]")).toBe("bg-[#0f0]");
+  });
+
+  it("should handle undefined and null property values in objects", () => {
+    expect(cn({ "bg-red-500": true, "text-blue-500": undefined })).toBe("bg-red-500");
+    expect(cn({ "bg-red-500": true, "text-blue-500": null })).toBe("bg-red-500");
+  });
 });
