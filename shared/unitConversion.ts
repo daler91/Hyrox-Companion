@@ -39,7 +39,7 @@ export function formatElevation(meters: number, distanceUnit: DistanceUnit): str
 }
 
 export function formatPace(metersPerSecond: number, distanceUnit: DistanceUnit): string {
-  if (!metersPerSecond || metersPerSecond <= 0) return "-";
+  if (!metersPerSecond || Number.isNaN(metersPerSecond) || metersPerSecond <= 0) return "-";
   
   const secondsPerKm = 1000 / metersPerSecond;
   let secondsPerUnit: number;
@@ -53,8 +53,14 @@ export function formatPace(metersPerSecond: number, distanceUnit: DistanceUnit):
     unitLabel = "/km";
   }
 
-  const minutes = Math.floor(secondsPerUnit / 60);
-  const seconds = Math.round(secondsPerUnit % 60);
+  let minutes = Math.floor(secondsPerUnit / 60);
+  let seconds = Math.round(secondsPerUnit % 60);
+
+  if (seconds === 60) {
+    minutes += 1;
+    seconds = 0;
+  }
+
   return `${minutes}:${seconds.toString().padStart(2, "0")}${unitLabel}`;
 }
 
