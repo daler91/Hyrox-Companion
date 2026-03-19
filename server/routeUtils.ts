@@ -1,5 +1,5 @@
 import { toDateStr } from "./types";
-import rateLimit from "express-rate-limit";
+import rateLimit, { MemoryStore } from "express-rate-limit";
 import type { NextFunction, Response, Request } from "express";
 
 export const DEFAULT_WINDOW_MS = 60000;
@@ -27,6 +27,7 @@ export function rateLimiter(
         rateLimit({
           windowMs,
           max: maxRequests,
+          store: new MemoryStore(), // Explicitly give each limiter its own store so caching clears reset state
           validate: { default: false }, // Suppress dynamic creation warning since we use it intentionally for tests
           // Per-user key, namespaced by category so limits are independent per route group.
           keyGenerator: (req: any) => {
