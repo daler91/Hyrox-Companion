@@ -1,3 +1,4 @@
+process.env.TZ = 'UTC';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   toISODateString,
@@ -18,41 +19,41 @@ import {
 describe('dateUtils', () => {
   describe('toISODateString', () => {
     it('should format a date as YYYY-MM-DD', () => {
-      const date = new Date('2023-10-15T10:30:00Z');
+      const date = new Date(Date.UTC(2023, 9, 15, 10, 30, 0));
       expect(toISODateString(date)).toBe('2023-10-15');
     });
 
     it('should handle leap years', () => {
-      const date = new Date('2024-02-29T12:00:00Z');
+      const date = new Date(Date.UTC(2024, 1, 29, 12, 0, 0));
       expect(toISODateString(date)).toBe('2024-02-29');
     });
 
     it('should correctly pad single digit months and days', () => {
-      const date = new Date('2023-05-05T12:00:00Z');
+      const date = new Date(Date.UTC(2023, 4, 5, 12, 0, 0));
       expect(toISODateString(date)).toBe('2023-05-05');
     });
 
     it('should correctly handle end of year boundaries', () => {
-      const date = new Date('2023-12-31T23:59:59Z');
+      const date = new Date(Date.UTC(2023, 11, 31, 23, 59, 59));
       expect(toISODateString(date)).toBe('2023-12-31');
     });
 
     it('should correctly handle start of year boundaries', () => {
-      const date = new Date('2024-01-01T00:00:00Z');
+      const date = new Date(Date.UTC(2024, 0, 1, 0, 0, 0));
       expect(toISODateString(date)).toBe('2024-01-01');
     });
 
     it('should strip time components regardless of time of day', () => {
-      const morningDate = new Date('2023-08-15T00:00:01Z');
+      const morningDate = new Date(Date.UTC(2023, 7, 15, 0, 0, 1));
       expect(toISODateString(morningDate)).toBe('2023-08-15');
 
-      const eveningDate = new Date('2023-08-15T23:59:59Z');
+      const eveningDate = new Date(Date.UTC(2023, 7, 15, 23, 59, 59));
       expect(toISODateString(eveningDate)).toBe('2023-08-15');
     });
   });
 
   describe('Functions relying on current time', () => {
-    const mockNow = new Date('2023-10-18T12:00:00Z'); // A Wednesday
+    const mockNow = new Date(Date.UTC(2023, 9, 18, 12, 0, 0)); // A Wednesday
 
     beforeEach(() => {
       vi.useFakeTimers();
@@ -87,7 +88,7 @@ describe('dateUtils', () => {
       });
 
       it('should correctly calculate start of week for a specific date', () => {
-        const specificDate = new Date('2023-10-21T15:00:00Z'); // Saturday
+        const specificDate = new Date(Date.UTC(2023, 9, 21, 15, 0, 0)); // Saturday
         const start = getStartOfWeek(specificDate);
         expect(toISODateString(start)).toBe('2023-10-15');
       });
@@ -181,7 +182,7 @@ describe('dateUtils', () => {
 
     describe('formatTime', () => {
       it('should format time correctly using toLocaleTimeString with proper options', () => {
-        const mockTime = new Date('2023-10-18T14:30:00');
+        const mockTime = new Date(Date.UTC(2023, 9, 18, 14, 30, 0));
         const spy = vi.spyOn(mockTime, 'toLocaleTimeString').mockReturnValue('14:30');
 
         const formatted = formatTime(mockTime);
@@ -193,7 +194,7 @@ describe('dateUtils', () => {
       });
 
       it('should handle different time correctly', () => {
-        const mockTime = new Date('2023-10-18T05:05:00');
+        const mockTime = new Date(Date.UTC(2023, 9, 18, 5, 5, 0));
         const spy = vi.spyOn(mockTime, 'toLocaleTimeString').mockReturnValue('05:05 AM');
 
         const formatted = formatTime(mockTime);
