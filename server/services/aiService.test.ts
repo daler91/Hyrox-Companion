@@ -124,7 +124,7 @@ describe("buildTrainingContext", () => {
     vi.mocked(storage.getExerciseSetsByWorkoutLogs).mockResolvedValue([]);
 
     vi.mocked(storage.listTrainingPlans).mockResolvedValue([
-      { id: "plan-1", name: "Hyrox Base", totalWeeks: 12 } as any,
+      { id: "plan-1", name: "Hyrox Base", totalWeeks: 12, goal: "Complete a sub-1:30 race" } as any,
     ]);
 
     const result = await buildTrainingContext("user-1");
@@ -132,6 +132,7 @@ describe("buildTrainingContext", () => {
     expect(result.activePlan).toEqual({
       name: "Hyrox Base",
       totalWeeks: 12,
+      goal: "Complete a sub-1:30 race",
     });
   });
 

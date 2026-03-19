@@ -111,17 +111,18 @@ router.patch("/api/v1/plans/days/:dayId", isAuthenticated, async (req: Request, 
   return handlePlanDayUpdate(req, res, updatePlanDayWithCleanup);
 });
 
+const renameTrainingPlanSchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(255, "Name must be 255 characters or less"),
+});
+
 router.patch("/api/v1/plans/:id", isAuthenticated, async (req: Request, res) => {
   try {
     const userId = getUserId(req);
-    const { name } = req.body;
-    if (!name || typeof name !== "string" || name.trim().length === 0) {
-      return res.status(400).json({ error: "Name is required" });
+    const parseResult = renameTrainingPlanSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({ error: parseResult.error.errors[0].message });
     }
-    if (name.trim().length > 255) {
-      return res.status(400).json({ error: "Name must be 255 characters or less" });
-    }
-    const updated = await storage.renameTrainingPlan(req.params.id, name.trim(), userId);
+    const updated = await storage.renameTrainingPlan(req.params.id, parseResult.data.name, userId);
     if (!updated) {
       return res.status(404).json({ error: "Training plan not found" });
     }
