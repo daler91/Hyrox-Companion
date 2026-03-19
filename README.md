@@ -1,204 +1,158 @@
-# HyroxTracker
+<div align="center">
+  <img src="/client/public/favicon.svg" width="120" height="120" alt="HyroxTracker Logo">
+  <h1>🏃‍♂️ HyroxTracker (Companion App)</h1>
+  <p><strong>A fully responsive, AI-powered specialized training planner and analytics suite built exclusively for <a href="https://hyrox.com/" target="_blank">Hyrox</a> athletes.</strong></p>
+  
+  <p>
+    <a href="#features">Features</a> •
+    <a href="#architecture--tech-stack">Tech Stack</a> •
+    <a href="#getting-started">Getting Started</a> •
+    <a href="#testing--code-quality">Testing</a> •
+    <a href="#license">License</a>
+  </p>
 
-A full-stack training planning and logging application for [Hyrox](https://hyrox.com/) athletes. Plan structured training programs, log workouts with detailed exercise tracking, get AI-powered coaching advice, and analyze your performance over time.
+  <p>
+    <img src="https://img.shields.io/badge/TypeScript-007ACC?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript">
+    <img src="https://img.shields.io/badge/React-20232A?style=flat-square&logo=react&logoColor=61DAFB" alt="React">
+    <img src="https://img.shields.io/badge/Node.js-43853D?style=flat-square&logo=node.js&logoColor=white" alt="Node.js">
+    <img src="https://img.shields.io/badge/PostgreSQL-316192?style=flat-square&logo=postgresql&logoColor=white" alt="PostgreSQL">
+    <img src="https://img.shields.io/badge/Vitest-500%2B_Tests-729B1B?style=flat-square&logo=vitest&logoColor=white" alt="Vitest">
+    <img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License">
+  </p>
+</div>
 
-## Features
+---
 
-- **Training Plans** — Import CSV training plans or use the built-in 8-week Hyrox program. Schedule plans to your calendar and track completion.
-- **Workout Logging** — Log workouts with structured exercise data (sets, reps, weight, distance, time) or free-text descriptions that AI parses into structured data.
-- **Unified Timeline** — A single view combining planned workouts, completed sessions, and missed days. Drag-and-drop reordering for exercises.
-- **AI Coach** — Chat with an AI training coach powered by Google Gemini. Get Hyrox-specific advice, workout analysis, pacing strategies, and personalized suggestions based on your training history.
-- **Analytics** — Personal records tracking, exercise progression charts, and performance breakdowns filtered by category and date range.
-- **Strava Integration** — Connect your Strava account to automatically import activities as workouts.
-- **Secure Authentication** — Seamless and secure user login flow powered by Clerk.
-- **Email Notifications** — Automated background scheduled jobs for missed workout reminders and weekly training summaries via Resend.
-- **Dark Mode** — Full light/dark theme support.
-- **Unit Preferences** — Toggle between kg/lbs and km/miles throughout the app.
-- **Voice Input** — Hands-free workout logging and AI coach chat via browser-native speech recognition (Web Speech API). Used in Log Workout (free text + notes), Edit Workout dialog, and AI Coach chat. Includes microphone warmup, automatic retry on network errors, and time-windowed deduplication for Android Chrome compatibility.
-- **Data Export** — Export your training data as CSV or JSON.
+<br />
 
-## Tech Stack
+Plan structured training programs, log complex workouts with voice or free-text using Gemini LLMs to parse sets & reps, automatically sync activities from Strava, and get real-time prescriptive AI coaching to adjust your volume based on your completed results.
+
+## 🌟 Capabilities Deep-Dive
+
+### 📅 Unified Training Experience
+- **Interactive Timeline**: A drag-and-drop integrated view spanning past performance, today's focus, and future planned workouts. Visually distinguish between completed, planned, and missed workouts.
+- **Hyrox Plans**: Automatically import customized CSV training blocks or utilize the built-in 8-week rigorous Hyrox program out-of-the-box.
+- **Custom Exercises**: Log non-standard movements (e.g., custom sled pushes or sandbag lunges) natively alongside your core lifts.
+
+### 🤖 Google Gemini AI Engine
+- **Intelligent Workout Parsing**: No more tapping dropdowns. Simply say or type: *"Did 3 sets of bench pressing at 225lbs for 8 reps, then ran 3 miles in 24 minutes"*. The Gemini Vision & Language API parses the raw text into structured database elements instantly using enforced Zod JSON schemas.
+- **Real-time Auto-Coach**: The AI continuously reads your active plan's goal and your recent timeline. It evaluates fatigue, volume, and pacing, and provides actionable adjustments to your upcoming schedule automatically.
+- **Streaming Live Chat**: Interact directly with your Coach over a fast Server-Sent Events (SSE) stream for contextual questions like *"What pace should I aim for on my next 1km run based on yesterday's track session?"*
+
+### 🚴 Strava Integration
+- **Zero-Friction Sync**: Link your primary Strava account using secure OAuth 2.0 flows. `HyroxTracker` listens to activity updates and automatically mounts them onto your timeline as completed workouts, decrypting access tokens locally on the fly.
+
+### 📊 Meaningful Analytics
+- **Personal Records**: Automatically detects and graphs 1RM estimation progressions and lifetime PRs natively.
+- **Advanced Filtering**: Drill down into performance by exercise categories, dates, or particular micro-cycles.
+- **Notification Loops**: Fully backgrounded cron jobs leverage Resend to email you weekly training summaries or gentle reminders for missed days.
+
+---
+
+## 🏗 Architecture & Tech Stack
+
+This repository is a fully functional monorepo containing both the React frontend and the Express REST API backend written entirely in strictly typed **TypeScript**.
 
 ### Frontend
-- **React 18** with TypeScript
-- **Vite** for development and builds
-- **Tailwind CSS** with shadcn/ui components (Radix UI primitives)
-- **Clerk React** for user authentication
-- **Sentry React** for client-side error tracking
-- **TanStack React Query** for server state management
-- **Wouter** for client-side routing
-- **dnd-kit** for drag-and-drop exercise reordering
-- **Framer Motion** for animations
+- **Libraries**: React 18, Vite, TypeScript, Framer Motion (for fluid micro-animations).
+- **Styling**: Tailwind CSS layered perfectly over `shadcn/ui` (accessible Radix primitives).
+- **State Management**: Highly optimized caching via TanStack Query (React Query).
+- **Client Routing**: `wouter` for ultra-lightweight and fast navigation.
 
-### Backend
-- **Node.js** with Express and TypeScript
-- **Drizzle ORM** with PostgreSQL
-- **Clerk Express** for secure route protection
-- **Google Gemini API** for AI coaching and exercise parsing
-- **Resend** for transactional emails
-- **Sentry** for error monitoring
+### Backend Network Layer
+- **API Runtime**: Node.js & Express API, utilizing thin Controller wrappers and thick Service abstractions.
+- **Database**: PostgreSQL bridged by the incredibly type-safe **Drizzle ORM**.
+- **Security Protocols**:
+  - Secure Clerk Middleware protecting protected endpoints via JWT.
+  - Granular API route rate-limiting via isolated `express-rate-limit` dynamic caches to eliminate abuse.
+  - Strava OAuth CSRF State Verification tokens.
 
-## Code Health & Security
+---
 
-- **SonarCloud Integration** — Continuous code quality analysis via GitHub Actions (`build.yml`), configured in `sonar-project.properties`.
-- **Security Hardened** — Protected against vulnerabilities like CSV Injection.
-- **Performance Optimized** — Async operations parallelized using `Promise.allSettled()` for heavy batch jobs.
+## 🚀 Getting Started
 
-## Testing
-- **Vitest** for unit tests (369 tests across 34 files)
-- **Cypress** for end-to-end tests (10 test files)
-
-## Project Structure
-
-```
-├── client/src/
-│   ├── components/
-│   │   ├── onboarding/      # Onboarding wizard step components
-│   │   ├── coach/           # AI coach panel sub-components
-│   │   ├── analytics/       # Analytics chart components
-│   │   ├── workout/         # Workout logging components
-│   │   └── ui/              # shadcn/ui primitives
-│   ├── hooks/               # Custom React hooks
-│   ├── lib/                 # Utility functions
-│   └── pages/               # Route pages (Timeline, LogWorkout, Analytics, Settings)
-├── server/
-│   ├── routes/              # Express route handlers (thin wrappers)
-│   ├── services/            # Business logic layer
-│   │   ├── workoutService   # Workout create/update orchestration
-│   │   ├── planService      # CSV import, plan lifecycle
-│   │   ├── aiService        # Training context for AI prompts
-│   │   ├── analyticsService # PR calculation, exercise analytics
-│   │   ├── exportService    # CSV/JSON export generation
-│   │   └── stravaMapper     # Strava activity mapping
-│   ├── storage/             # Database access layer (Drizzle ORM)
-│   ├── gemini.ts            # Google Gemini AI client with retry logic
-│   ├── email.ts             # Email templates and sending
-│   └── emailScheduler.ts    # Cron-style missed workout/summary emails
-├── shared/
-│   └── schema.ts            # Drizzle schema + Zod types (shared frontend/backend)
-├── cypress/e2e/             # End-to-end test suites
-├── .github/workflows/       # CI: Cypress tests, SonarCloud, Trivy, dependency review
-└── sonar-project.properties # SonarCloud configuration
-```
-
-## Getting Started
+Follow these instructions to run the full application ecosystem locally on your machine.
 
 ### Prerequisites
+- [Node.js](https://nodejs.org/) (v22 or higher)
+- [PostgreSQL](https://www.postgresql.org/download/) Database (Running locally on port 5432, or a hosted cloud instance)
+- A [Clerk.dev](https://clerk.dev/) account for Auth
+- A [Google AI Studio](https://aistudio.google.com/) account for the Gemini API key
 
-- Node.js 22+
-- PostgreSQL database
+### 1. Environment Variables
+Create a `.env` file at the root of your project and populate the following required secrets.
 
-### Environment Variables
+```env
+# Database
+DATABASE_URL="postgresql://user:password@localhost:5432/hyroxtracker"
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `DATABASE_URL` | Yes | PostgreSQL connection string |
-| `CLERK_PUBLISHABLE_KEY` | Yes | Clerk public API key for authentication |
-| `CLERK_SECRET_KEY` | Yes | Clerk secret API key for backend verification |
-| `VITE_CLERK_PUBLISHABLE_KEY` | Yes | Vite public key for Clerk frontend |
-| `GEMINI_API_KEY` | Yes | Google Gemini API key for AI features |
-| `RESEND_API_KEY` | No | Resend API key for email notifications |
-| `SENTRY_DSN` | No | Sentry DSN for error monitoring |
-| `STRAVA_CLIENT_ID` | No | Strava OAuth client ID |
-| `STRAVA_CLIENT_SECRET` | No | Strava OAuth client secret |
+# Clerk Auth (Create a free project at dashboard.clerk.com)
+VITE_CLERK_PUBLISHABLE_KEY="pk_test_..."
+CLERK_PUBLISHABLE_KEY="pk_test_..."
+CLERK_SECRET_KEY="sk_test_..."
 
-### Setup
+# Google Gemini (Create a free key at aistudio.google.com)
+GEMINI_API_KEY="AIzaSy..."
+
+# (Optional) Strava Sync
+STRAVA_CLIENT_ID="12345"
+STRAVA_CLIENT_SECRET="your_strava_secret"
+
+# (Optional) Security Key for Encrypting Remote Tokens (32 byte hex)
+ENCRYPTION_KEY="0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+# (Optional) Resend Emails
+RESEND_API_KEY="re_..."
+```
+
+### 2. Installation & Database Setup
+Install the necessary package dependencies and execute the Drizzle ORM schema migrations to structure your Postgres database.
 
 ```bash
-# Install dependencies
+# Install node dependencies
 npm install
 
-# Push database schema
+# Push the Drizzle schema constraints directly to the database
 npm run db:push
+```
 
-# Start development server (frontend + backend on port 5000)
+### 3. Start the Application
+Boot up the concurrent development server. This fires up the Vite frontend on HMR (Hot-Module-Reloading) and the backend Express server proxying internally onto port `5000`.
+
+```bash
 npm run dev
 ```
 
-### Available Scripts
+Visit `http://localhost:5000` in your browser.
 
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Start dev server (Express + Vite HMR) |
-| `npm run build` | Build for production |
-| `npm start` | Run production build |
-| `npm run check` | TypeScript type checking |
-| `npm test` | Run unit tests (Vitest) |
-| `npm run test:watch` | Run unit tests in watch mode |
-| `npm run db:push` | Push schema changes to database |
+---
 
-## Testing
+## 🧪 Testing & Code Quality
 
-### Unit Tests
+The repository guarantees extreme stability by prioritizing testing layers at all mutation points.
 
-```bash
-# Run all tests
-npm test
+- **Fast Unit Tests (`vitest`)**: Over 500 strict assertions test the AI retry boundaries, functional calculations (streak aggregators, workout spreaders), decoupled Rate-Limiting mock state clearing, and schema validations.
+  - Run via: `npm test` or `npm run test:watch`
+- **End-to-End Visual Tests (`cypress`)**: Cypress tests run headless browser sessions mimicking real user flows from Authentication redirects through to drag-and-drop timeline alterations. 
+  - Run via: `npx cypress open`
+- **TypeScript Compiler**: Static safety enforced globally. 
+  - Run via: `npm run check`
+- **CI/CD (`.github/workflows`)**: Every branch triggers intensive GitHub Actions evaluating Trivy security configurations, SonarCloud cognitive complexity drops, and raw build outputs.
 
-# Watch mode
-npm run test:watch
-```
+---
 
-Test coverage includes:
-- **Analytics** — Personal records calculation, exercise analytics aggregation
-- **AI** — Retry logic, Zod schema validation, error classification
-- **Voice Input** — Time-windowed deduplication, case-insensitive matching, session reset
-- **Utilities** — Streak calculation, exercise row expansion, date/stats/unit helpers
-- **Auth** — Clerk middleware, user ID extraction, auth utilities
-- **Strava** — Activity-to-workout mapping
+## 🤝 Contributing
 
-### End-to-End Tests
+Contributions make the open-source community an amazing place to learn, inspire, and create. Any contributions to `HyroxTracker` are **greatly appreciated**.
 
-```bash
-npx cypress open    # Interactive mode
-npx cypress run     # Headless mode
-```
+1. Fork the Project.
+2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
+4. Verify your tests strictly (`npm run check` & `npm test`).
+5. Push to the Branch (`git push origin feature/AmazingFeature`)
+6. Open a Pull Request.
 
-Cypress suites cover: authentication, landing page, timeline, log workout, analytics, settings, navigation, and API validation.
+---
 
-## Architecture Notes
-
-- **Route handlers are thin** — validation and response formatting only. Business logic lives in the service layer.
-- **Database operations use transactions** — Workout creation/updates, plan scheduling, and plan deletion are wrapped in `db.transaction()` for atomicity.
-- **AI responses are validated** — Gemini responses use JSON mode and are validated with Zod schemas. Malformed items are logged and dropped. Transient errors retry with exponential backoff.
-- **Storage layer is user-scoped** — All queries filter by `userId` to enforce data isolation.
-
-## Platform Dependencies
-
-This project is developed on Replit but most of the codebase is fully portable. Here's the breakdown:
-
-### Replit-Specific (would need replacement to deploy elsewhere)
-
-| Component | File(s) | What it does | Portable alternative |
-|-----------|---------|--------------|---------------------|
-| **Email URL helper** | `server/emailTemplates.ts` | Uses `APP_URL` env var to build app links (falls back to `hyroxtracker.replit.app`) | Set `APP_URL` to your domain |
-| **Run config** | `.replit` | Replit-specific run/deploy configuration | Replace with platform-specific config (Dockerfile, Procfile, etc.) |
-
-### Fully Portable (works anywhere)
-
-Everything else — which is the vast majority of the app:
-
-- **Clerk authentication** (`server/clerkAuth.ts`, `@clerk/express`, `@clerk/clerk-react`)
-- **Express API server** and all route handlers
-- **Drizzle ORM + PostgreSQL** schema and storage layer
-- **React/Vite frontend** with all components and hooks
-- **Google Gemini AI** integration (just needs an API key)
-- **Resend email** sending (just needs an API key)
-- **Strava OAuth** integration
-- **Sentry** error monitoring
-- **All business logic** in the service layer
-- **All tests** (Vitest unit tests and Cypress e2e)
-
-### Migrating Off Replit
-
-If you want to deploy this elsewhere (Vercel, Railway, Fly.io, etc.):
-
-1. **Set `getAppUrl()`** — Update the function in `server/email.ts` to return your production domain.
-2. **Provide environment variables** — Same ones listed in the setup section above, including Clerk keys (`CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `VITE_CLERK_PUBLISHABLE_KEY`).
-3. **Remove `.replit`** — Replace with your platform's config (e.g., `Dockerfile`, `fly.toml`, `railway.json`).
-
-Auth is already portable via Clerk — no swaps needed.
-
-## License
-
-MIT
+## 📄 License
+Distributed under the MIT License. See `LICENSE` for more information.
