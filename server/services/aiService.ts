@@ -144,7 +144,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
 
   let activePlan: TrainingContext["activePlan"];
   if (plans.length > 0) {
-    activePlan = { name: plans[0].name, totalWeeks: plans[0].totalWeeks };
+    activePlan = { name: plans[0].name, totalWeeks: plans[0].totalWeeks, goal: plans[0].goal ?? undefined };
   }
 
   return {

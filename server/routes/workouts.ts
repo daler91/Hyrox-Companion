@@ -92,7 +92,7 @@ function validateExercisesPayload(exercises: any) {
   return { success: true, data: parseResult.data };
 }
 
-router.post("/api/v1/workouts/batch-reparse", isAuthenticated, async (req: Request, res) => {
+router.post("/api/v1/workouts/batch-reparse", isAuthenticated, rateLimiter("batchReparse", 2), async (req: Request, res) => {
   try {
     const userId = getUserId(req);
     const workouts = await storage.getWorkoutsWithoutExerciseSets(userId);

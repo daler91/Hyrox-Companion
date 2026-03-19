@@ -35,5 +35,6 @@ export interface TrainingContext {
     name: string;
     totalWeeks: number;
     currentWeek?: number;
+    goal?: string | null;
   };
 }

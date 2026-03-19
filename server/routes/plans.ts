@@ -1,8 +1,9 @@
 import { logger } from "../logger";
+import { z } from "zod";
 import { Router, Response, type Request } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
-import { updatePlanDaySchema, importPlanRequestSchema, schedulePlanRequestSchema, updateTrainingPlanGoalSchema, type UpdatePlanDay, type PlanDay } from "@shared/schema";
+import { updatePlanDaySchema, importPlanRequestSchema, schedulePlanRequestSchema, updateTrainingPlanGoalSchema, workoutStatusEnum, dateStringSchema, type UpdatePlanDay, type PlanDay } from "@shared/schema";
 import { getUserId } from "../types";
 import { importPlanFromCSV, createSamplePlan, updatePlanDayWithCleanup } from "../services/planService";
 import { rateLimiter } from "../routeUtils";
@@ -117,6 +118,9 @@ router.patch("/api/v1/plans/:id", isAuthenticated, async (req: Request, res) => 
     if (!name || typeof name !== "string" || name.trim().length === 0) {
       return res.status(400).json({ error: "Name is required" });
     }
+    if (name.trim().length > 255) {
+      return res.status(400).json({ error: "Name must be 255 characters or less" });
+    }
     const updated = await storage.renameTrainingPlan(req.params.id, name.trim(), userId);
     if (!updated) {
       return res.status(404).json({ error: "Training plan not found" });
@@ -173,15 +177,25 @@ router.post("/api/v1/plans/:planId/schedule", isAuthenticated, rateLimiter("plan
   }
 });
 
+const patchDayStatusSchema = z.object({
+  status: z.enum(workoutStatusEnum).optional(),
+  scheduledDate: dateStringSchema.nullable().optional(),
+});
+
 router.patch("/api/v1/plans/days/:dayId/status", isAuthenticated, async (req: Request, res) => {
   try {
     const { dayId } = req.params;
     const userId = getUserId(req);
-    const { status, scheduledDate } = req.body as { status?: string; scheduledDate?: string };
+
+    const parseResult = patchDayStatusSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({ error: "Invalid status or date", details: parseResult.error });
+    }
+    const { status, scheduledDate } = parseResult.data;
 
     const updates: Record<string, string | null> = {};
     if (status) updates.status = status;
-    if (scheduledDate !== undefined) updates.scheduledDate = scheduledDate;
+    if (scheduledDate !== undefined) updates.scheduledDate = scheduledDate ?? null;
 
     if (status && status !== "completed") {
       await storage.deleteWorkoutLogByPlanDayId(dayId, userId);
