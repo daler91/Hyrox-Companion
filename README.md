@@ -1,5 +1,4 @@
 <div align="center">
-  <img src="/client/public/favicon.svg" width="120" height="120" alt="HyroxTracker Logo">
   <h1>🏃‍♂️ HyroxTracker (Companion App)</h1>
   <p><strong>A fully responsive, AI-powered specialized training planner and analytics suite built exclusively for <a href="https://hyrox.com/" target="_blank">Hyrox</a> athletes.</strong></p>
   
