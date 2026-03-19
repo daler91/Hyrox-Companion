@@ -54,7 +54,7 @@ export function baseStyles(): string {
 }
 
 export function getAppUrl(): string {
-  return env.APP_URL || "https://hyroxtracker.replit.app";
+  return process.env.APP_URL || "https://hyrox-companion.com";
 }
 
 export function buildWeeklySummaryEmail(

@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { vi, describe, it, expect, afterEach } from "vitest";
 import {
+  getAppUrl,
   buildWeeklySummaryEmail,
   buildMissedWorkoutEmail,
   WeeklySummaryData,
@@ -35,6 +36,31 @@ describe("email generation", () => {
     weekStartDate: "Oct 1",
     weekEndDate: "Oct 7",
   };
+
+  describe("getAppUrl", () => {
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it("returns process.env.APP_URL when present", () => {
+      vi.stubEnv("APP_URL", "https://custom-url.com");
+      expect(getAppUrl()).toBe("https://custom-url.com");
+    });
+
+    it("returns default URL when process.env.APP_URL is undefined", () => {
+      // Vitest's stubEnv handles undefined/empty strings when unstubAllEnvs is called
+      // Since it's not set, it should fall back to the default
+      vi.unstubAllEnvs();
+      // explicitly delete it just in case the real env has it
+      delete process.env.APP_URL;
+      expect(getAppUrl()).toBe("https://hyrox-companion.com");
+    });
+
+    it("returns default URL when process.env.APP_URL is an empty string", () => {
+      vi.stubEnv("APP_URL", "");
+      expect(getAppUrl()).toBe("https://hyrox-companion.com");
+    });
+  });
 
   describe("buildWeeklySummaryEmail", () => {
     it("generates HTML snapshot correctly", () => {
