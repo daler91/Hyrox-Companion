@@ -182,7 +182,12 @@ export class TimelineStorage {
     await this.attachExerciseSets(entries);
 
     // Fast string comparison for YYYY-MM-DD dates instead of Date object instantiation
-    entries.sort((a, b) => (b.date < a.date ? -1 : b.date > a.date ? 1 : 0));
+    entries.sort((a, b) => {
+      if (b.date < a.date) return -1;
+      if (b.date > a.date) return 1;
+      return 0;
+    });
+
     if (limit !== undefined || offset !== undefined) {
       const start = offset || 0;
       const end = limit === undefined ? undefined : start + limit;
