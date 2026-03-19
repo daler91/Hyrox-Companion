@@ -1,7 +1,7 @@
 import { workoutLogs, exerciseSets, planDays, trainingPlans, customExercises, type ParsedExercise, type InsertWorkoutLog, type UpdateWorkoutLog, type InsertExerciseSet, type WorkoutLog, type ExerciseSet } from "@shared/schema";
 import { storage } from "../storage";
 import { db } from "../db";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 
 export function extractAndDeduplicateCustomExercises(exercises: ParsedExercise[], userId: string) {
@@ -123,15 +123,12 @@ export async function createWorkout(
         await tx
           .update(planDays)
           .set({ status: "completed" })
+          .from(trainingPlans)
           .where(
             and(
               eq(planDays.id, workoutData.planDayId),
-              inArray(
-                planDays.planId,
-                tx.select({ id: trainingPlans.id })
-                  .from(trainingPlans)
-                  .where(eq(trainingPlans.userId, userId))
-              )
+              eq(planDays.planId, trainingPlans.id),
+              eq(trainingPlans.userId, userId)
             )
           );
       }
