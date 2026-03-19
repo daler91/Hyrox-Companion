@@ -1,5 +1,6 @@
 import { toDateStr } from "./types";
 import rateLimit from "express-rate-limit";
+import type { NextFunction, Response, Request } from "express";
 
 export const DEFAULT_WINDOW_MS = 60000;
 
@@ -14,31 +15,41 @@ export function rateLimiter(
 ) {
   const retryAfterSec = Math.ceil(windowMs / 1000);
   const cacheKey = `${category}:${maxRequests}:${windowMs}`;
-  if (!limiterCache.has(cacheKey)) {
-    limiterCache.set(
-      cacheKey,
-      rateLimit({
-        windowMs,
-        max: maxRequests,
-        // Per-user key, namespaced by category so limits are independent per route group.
-        keyGenerator: (req: any) => {
-          const id = req.auth?.userId ?? req.ip;
-          return id ? `${category}:${id}` : "";
-        },
-        // Skip rate-limiting entirely when there is no identifier (same as previous behaviour).
-        skip: (req: any) => !req.auth?.userId && !req.ip,
-        standardHeaders: true,   // RateLimit-* headers (RFC 6585)
-        legacyHeaders: false,     // Disable X-RateLimit-* headers
-        handler: (_req: any, res: any) => {
-          res.setHeader("Retry-After", String(retryAfterSec));
-          res.status(429).json({
-            error: `Too many requests. Please wait ${retryAfterSec} seconds before trying again.`,
-          });
-        },
-      }),
-    );
-  }
-  return limiterCache.get(cacheKey)!;
+
+  // Return a wrapper closure so that the actual limiter is evaluated at request time.
+  // This is crucial for test environments where `clearRateLimitBuckets` is called:
+  // routers capture this wrapper at module load, but the inner rateLimit instance 
+  // can be destroyed and recreated cleanly.
+  return (req: any, res: any, next: NextFunction) => {
+    if (!limiterCache.has(cacheKey)) {
+      limiterCache.set(
+        cacheKey,
+        rateLimit({
+          windowMs,
+          max: maxRequests,
+          validate: { default: false }, // Suppress dynamic creation warning since we use it intentionally for tests
+          // Per-user key, namespaced by category so limits are independent per route group.
+          keyGenerator: (req: any) => {
+            const id = req.auth?.userId ?? req.ip;
+            return id ? `${category}:${id}` : "";
+          },
+          // Skip rate-limiting entirely when there is no identifier.
+          skip: (req: any) => !req.auth?.userId && !req.ip,
+          standardHeaders: true,   // RateLimit-* headers (RFC 6585)
+          legacyHeaders: false,     // Disable X-RateLimit-* headers
+          handler: (_req: any, res: any) => {
+            res.setHeader("Retry-After", String(retryAfterSec));
+            res.status(429).json({
+              error: `Too many requests. Please wait ${retryAfterSec} seconds before trying again.`,
+            });
+          },
+        }),
+      );
+    }
+    
+    const limiter = limiterCache.get(cacheKey)!;
+    return limiter(req, res, next);
+  };
 }
 
 
