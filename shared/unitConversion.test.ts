@@ -54,9 +54,9 @@ describe("convertWeight", () => {
     expect(convertWeight(2204620, "lbs", "kg")).toBeCloseTo(1000000, 0);
   });
 
-  it("handles NaN correctly", () => {
-    expect(convertWeight(NaN, "kg", "lbs")).toBeNaN();
-    expect(convertWeight(NaN, "lbs", "kg")).toBeNaN();
+  it("handles Number.NaN correctly", () => {
+    expect(convertWeight(Number.NaN, "kg", "lbs")).toBeNaN();
+    expect(convertWeight(Number.NaN, "lbs", "kg")).toBeNaN();
   });
 
   it("handles Infinity correctly", () => {
