@@ -1,3 +1,4 @@
+import { clearRateLimitBuckets } from "../../routeUtils";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import express from "express";
 import request from "supertest";
@@ -60,6 +61,7 @@ describe("POST /api/parse-exercises", () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    clearRateLimitBuckets();
     vi.resetModules();
     const { default: dynamicAiRouter } = await import("../ai");
     vi.useFakeTimers();
@@ -154,6 +156,7 @@ describe("POST /api/chat", () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    clearRateLimitBuckets();
     const { default: dynamicAiRouter } = await import("../ai");
     app = express();
     app.use(express.json());
@@ -206,6 +209,7 @@ describe("POST /api/chat/stream", () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    clearRateLimitBuckets();
     const { default: dynamicAiRouter } = await import("../ai");
     app = express();
     app.use(express.json());
@@ -272,6 +276,7 @@ describe("Chat History and Messages Routes", () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    clearRateLimitBuckets();
     const { default: dynamicAiRouter } = await import("../ai");
     app = express();
     app.use(express.json());
@@ -357,6 +362,7 @@ describe("POST /api/timeline/ai-suggestions", () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    clearRateLimitBuckets();
     const { default: dynamicAiRouter } = await import("../ai");
     app = express();
     app.use(express.json());

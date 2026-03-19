@@ -2,17 +2,36 @@ import rateLimit from "express-rate-limit";
 import type { Response, NextFunction } from "express";
 import { toDateStr } from "./types";
 
+
+import { MemoryStore } from "express-rate-limit";
+
 export const DEFAULT_WINDOW_MS = 60000;
+
+const categoryStores = new Map<string, MemoryStore>();
+
+function getStoreForCategory(category: string): MemoryStore {
+  if (!categoryStores.has(category)) {
+    categoryStores.set(category, new MemoryStore());
+  }
+  return categoryStores.get(category)!;
+}
+
+
+export function clearRateLimitBuckets() {
+  categoryStores.clear();
+}
 
 export function rateLimiter(category: string, maxRequests: number, windowMs: number = DEFAULT_WINDOW_MS) {
   return rateLimit({
     windowMs,
     max: maxRequests,
     standardHeaders: true,
-    validate: { keyGeneratorIpFallback: false },
+    validate: { keyGeneratorIpFallback: false, unsharedStore: false },
     legacyHeaders: false,
     message: { error: "Too many requests. Please try again later." },
-    keyGenerator: (req: any) => `${category}:${req.auth?.userId || req.ip || 'unknown'}`,
+    store: getStoreForCategory(category),
+    skip: (req: any) => !req.auth?.userId && !req.ip,
+    keyGenerator: (req: any) => `${category}:${req.auth?.userId || req.ip}`,
   });
 }
 

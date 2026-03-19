@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { Response, NextFunction } from "express";
-import { calculateStreak, rateLimiter, DEFAULT_WINDOW_MS } from "./routeUtils";
+import { calculateStreak, rateLimiter, clearRateLimitBuckets, DEFAULT_WINDOW_MS } from "./routeUtils";
 import { expandExercisesToSetRows } from "./services/workoutService";
 
 describe("rateLimiter", () => {
@@ -11,10 +11,11 @@ describe("rateLimiter", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-01-15T12:00:00Z"));
+    clearRateLimitBuckets();
 
     req = {
       auth: { userId: "user123" },
-      ip: "192.168.1.1",
+      ip: "user-ip-1",
     };
 
     res = {
@@ -75,6 +76,18 @@ describe("rateLimiter", () => {
     expect(next).toHaveBeenCalledTimes(2);
   });
 
+
+  it("calls next() and bypasses rate limiting if neither userId nor ip is present", async () => {
+    const middleware = rateLimiter("api", 1, DEFAULT_WINDOW_MS);
+    const reqEmpty = {};
+
+    await middleware(reqEmpty, res as Response, next); // 1st request empty (ok)
+    await middleware(reqEmpty, res as Response, next); // 2nd request empty (ok)
+
+    expect(next).toHaveBeenCalledTimes(2);
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
   it("distinguishes between different users", async () => {
     const middleware = rateLimiter("api", 1, DEFAULT_WINDOW_MS);
 
@@ -94,7 +107,7 @@ describe("rateLimiter", () => {
 
   it("uses ip address if userId is missing", async () => {
     const middleware = rateLimiter("api", 1, DEFAULT_WINDOW_MS);
-    const reqIp = { ip: "192.168.1.2" };
+    const reqIp = { ip: "user-ip-2" };
 
     await middleware(reqIp, res as Response, next); // 1st request ip (ok)
     expect(next).toHaveBeenCalledTimes(1);
