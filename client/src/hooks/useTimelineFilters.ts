@@ -24,7 +24,8 @@ export function useTimelineFilters(timelineData: TimelineEntry[]) {
       }
       groups[entry.date].push(entry);
     });
-    const allGroups = Object.entries(groups).sort(([a], [b]) => b.localeCompare(a));
+    // Fast string comparison for YYYY-MM-DD dates instead of localeCompare
+    const allGroups = Object.entries(groups).sort(([a], [b]) => (b < a ? -1 : b > a ? 1 : 0));
 
     const today = format(new Date(), "yyyy-MM-dd");
     const past = allGroups.filter(([date]) => date < today);

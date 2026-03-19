@@ -181,7 +181,8 @@ export class TimelineStorage {
 
     await this.attachExerciseSets(entries);
 
-    entries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    // Fast string comparison for YYYY-MM-DD dates instead of Date object instantiation
+    entries.sort((a, b) => (b.date < a.date ? -1 : b.date > a.date ? 1 : 0));
     if (limit !== undefined || offset !== undefined) {
       const start = offset || 0;
       const end = limit === undefined ? undefined : start + limit;

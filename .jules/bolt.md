@@ -9,3 +9,7 @@
 ## 2025-03-17 - Optimize duplicate O(N) loops in useMemo hooks
 **Learning:** In complex form components with `useMemo` hooks calculating state (like block counts and indices), maintaining separate loops for counting and index-tracking causes unnecessary O(2N) array traversals and redundant object allocations (like `runningCounts`).
 **Action:** Consolidate multiple sequential `for` loops inside `useMemo` into a single loop when tracking dependent state. This changes the traversal complexity to strict O(N) and removes unneeded memory allocations.
+
+## 2026-03-19 - Fast Date Sorting Optimization
+**Learning:** Native JS `Date` instantiations (`new Date(str).getTime()`) and `localeCompare` are shockingly slow when used inside `Array.prototype.sort()` for large arrays. For ISO 8601 formatted date strings (like `YYYY-MM-DD`), standard string comparison (`<`, `>`) is computationally much cheaper, avoids memory allocation for new objects, and correctly preserves chronological sort order.
+**Action:** Always prefer native string comparison `(a, b) => (b < a ? -1 : b > a ? 1 : 0)` over `localeCompare` or `Date` parsing when sorting arrays of YYYY-MM-DD string dates.
