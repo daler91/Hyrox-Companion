@@ -54,7 +54,7 @@ vi.mock("express-rate-limit", () => {
 
   return { 
     default: mockRateLimit,
-    MemoryStore: class { /* mock */ }
+    MemoryStore: class { public isMock = true; }
   };
 });
 
