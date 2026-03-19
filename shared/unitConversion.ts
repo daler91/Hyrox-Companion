@@ -69,11 +69,10 @@ export function formatSpeed(metersPerSecond: number, distanceUnit: DistanceUnit)
 }
 
 export function metersToUserDistance(meters: number, distanceUnit: DistanceUnit): number {
-  const km = meters / 1000;
-  if (distanceUnit === "miles") {
-    return km * KM_TO_MILES;
-  }
-  return km;
+  if (distanceUnit === 'km') return meters / 1000;
+  if ((distanceUnit as string) === 'mi') return meters / 1609.34;
+  if (distanceUnit === 'miles') return meters / 1609.34;
+  return meters;
 }
 
 export function userDistanceToMeters(value: number, distanceUnit: DistanceUnit): number {
