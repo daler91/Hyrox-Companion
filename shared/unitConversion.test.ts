@@ -260,8 +260,35 @@ describe("formatWeight", () => {
 });
 
 describe("formatDistance", () => {
-  it("formats with unit", () => {
+  it("formats with default decimals (2)", () => {
     expect(formatDistance(5.123, "km")).toBe("5.12 km");
-    expect(formatDistance(3.1, "miles", 1)).toBe("3.1 miles");
+    expect(formatDistance(3.1, "miles")).toBe("3.1 miles");
+    expect(formatDistance(4.5678, "km")).toBe("4.57 km");
+  });
+
+  it("formats with custom decimals", () => {
+    expect(formatDistance(3.14159, "miles", 1)).toBe("3.1 miles");
+    expect(formatDistance(3.14159, "km", 3)).toBe("3.142 km");
+    expect(formatDistance(5.5, "miles", 0)).toBe("6 miles");
+    expect(formatDistance(5.4, "km", 0)).toBe("5 km");
+  });
+
+  it("handles zero distance", () => {
+    expect(formatDistance(0, "km")).toBe("0 km");
+    expect(formatDistance(0, "miles", 1)).toBe("0 miles");
+  });
+
+  it("handles negative distances", () => {
+    expect(formatDistance(-5.123, "km")).toBe("-5.12 km");
+    expect(formatDistance(-3.1, "miles", 1)).toBe("-3.1 miles");
+  });
+
+  it("handles large numbers", () => {
+    expect(formatDistance(1000000.123, "km")).toBe("1000000.12 km");
+  });
+
+  it("handles integers accurately", () => {
+    expect(formatDistance(42, "km")).toBe("42 km");
+    expect(formatDistance(42, "miles", 3)).toBe("42 miles");
   });
 });
