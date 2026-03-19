@@ -16,7 +16,7 @@ export function rateLimiter(
   const retryAfterSec = Math.ceil(windowMs / 1000);
   const cacheKey = `${category}:${maxRequests}:${windowMs}`;
 
-  // Return a wrapper closure so that the actual limiter is evaluated at request time.
+  // Return a wrapper closure so that the limiter is evaluated at request time.
   // This is crucial for test environments where `clearRateLimitBuckets` is called:
   // routers capture this wrapper at module load, but the inner rateLimit instance 
   // can be destroyed and recreated cleanly.
@@ -47,7 +47,7 @@ export function rateLimiter(
         }),
       );
     }
-    
+
     const limiter = limiterCache.get(cacheKey)!;
     return limiter(req, res, next);
   };
