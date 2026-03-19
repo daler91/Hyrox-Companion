@@ -52,7 +52,10 @@ vi.mock("express-rate-limit", () => {
   // Expose store reset for beforeEach hooks
   (mockRateLimit as any).__resetStore = () => store.clear();
 
-  return { default: mockRateLimit };
+  return { 
+    default: mockRateLimit,
+    MemoryStore: class {}
+  };
 });
 
 import { calculateStreak, rateLimiter, clearRateLimitBuckets, DEFAULT_WINDOW_MS } from "./routeUtils";
