@@ -1,5 +1,6 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dumbbell, Type, Mic } from "lucide-react";
 
 interface WorkoutModeSelectorProps {
@@ -46,19 +47,23 @@ export const WorkoutModeSelector = ({
         Free Text
       </Button>
       {isSupported && (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            if (!useTextMode) setUseTextMode(true);
-            if (!isListening) startListening();
-          }}
-          data-testid="button-mode-voice"
-          title="Use voice input"
-        >
-          <Mic className="h-4 w-4 mr-1" />
-          Voice
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (!useTextMode) setUseTextMode(true);
+                if (!isListening) startListening();
+              }}
+              data-testid="button-mode-voice"
+            >
+              <Mic className="h-4 w-4 mr-1" />
+              Voice
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Use voice input</TooltipContent>
+        </Tooltip>
       )}
     </div>
   );
