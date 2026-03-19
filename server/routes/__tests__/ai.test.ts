@@ -14,6 +14,20 @@ function parseStreamResponse(responseText: string) {
   return responseText.split("\n\n").filter(Boolean);
 }
 
+async function setupApp() {
+  vi.clearAllMocks();
+  const routeUtils = await import("../../routeUtils");
+  routeUtils.clearRateLimitBuckets();
+  const rateLimit = (await import("express-rate-limit")).default;
+  if ((rateLimit as any).__resetStore) {
+    (rateLimit as any).__resetStore();
+  }
+  const app = express();
+  app.use(express.json());
+  app.use(aiRouter);
+  return app;
+}
+
 
 // Mock the clerkAuth middleware to simulate authentication
 vi.mock("../../clerkAuth", () => ({
@@ -59,18 +73,9 @@ describe("POST /api/parse-exercises", () => {
   let app: express.Express;
 
   beforeEach(async () => {
-    vi.clearAllMocks();
-    const routeUtils = await import("../../routeUtils");
-    routeUtils.clearRateLimitBuckets();
-    const rateLimit = (await import("express-rate-limit")).default;
-    if ((rateLimit as any).__resetStore) {
-      (rateLimit as any).__resetStore();
-    }
+    app = await setupApp();
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2025, 0, 1));
-    app = express();
-    app.use(express.json());
-    app.use(aiRouter);
   });
 
   afterEach(() => {
@@ -180,16 +185,7 @@ describe("POST /api/chat", () => {
 
 
   beforeEach(async () => {
-    vi.clearAllMocks();
-    const routeUtils = await import("../../routeUtils");
-    routeUtils.clearRateLimitBuckets();
-    const rateLimit = (await import("express-rate-limit")).default;
-    if ((rateLimit as any).__resetStore) {
-      (rateLimit as any).__resetStore();
-    }
-    app = express();
-    app.use(express.json());
-    app.use(aiRouter);
+    app = await setupApp();
   });
 
   it("should successfully chat with coach and return response", async () => {
@@ -235,16 +231,7 @@ describe("POST /api/chat/stream", () => {
 
 
   beforeEach(async () => {
-    vi.clearAllMocks();
-    const routeUtils = await import("../../routeUtils");
-    routeUtils.clearRateLimitBuckets();
-    const rateLimit = (await import("express-rate-limit")).default;
-    if ((rateLimit as any).__resetStore) {
-      (rateLimit as any).__resetStore();
-    }
-    app = express();
-    app.use(express.json());
-    app.use(aiRouter);
+    app = await setupApp();
   });
 
   it("should successfully stream chat response", async () => {
@@ -304,16 +291,7 @@ describe("Chat History and Messages Routes", () => {
   let app: express.Express;
 
   beforeEach(async () => {
-    vi.clearAllMocks();
-    const routeUtils = await import("../../routeUtils");
-    routeUtils.clearRateLimitBuckets();
-    const rateLimit = (await import("express-rate-limit")).default;
-    if ((rateLimit as any).__resetStore) {
-      (rateLimit as any).__resetStore();
-    }
-    app = express();
-    app.use(express.json());
-    app.use(aiRouter);
+    app = await setupApp();
   });
 
   it("should get chat history", async () => {
@@ -392,16 +370,7 @@ describe("POST /api/timeline/ai-suggestions", () => {
   let app: express.Express;
 
   beforeEach(async () => {
-    vi.clearAllMocks();
-    const routeUtils = await import("../../routeUtils");
-    routeUtils.clearRateLimitBuckets();
-    const rateLimit = (await import("express-rate-limit")).default;
-    if ((rateLimit as any).__resetStore) {
-      (rateLimit as any).__resetStore();
-    }
-    app = express();
-    app.use(express.json());
-    app.use(aiRouter);
+    app = await setupApp();
   });
 
   it("should successfully generate suggestions", async () => {
