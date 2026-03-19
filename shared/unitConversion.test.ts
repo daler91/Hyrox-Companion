@@ -53,6 +53,21 @@ describe("convertWeight", () => {
     expect(convertWeight(1000000, "kg", "lbs")).toBeCloseTo(2204620, 0);
     expect(convertWeight(2204620, "lbs", "kg")).toBeCloseTo(1000000, 0);
   });
+
+  it("handles Number.NaN correctly", () => {
+    expect(convertWeight(Number.NaN, "kg", "lbs")).toBeNaN();
+    expect(convertWeight(Number.NaN, "lbs", "kg")).toBeNaN();
+  });
+
+  it("handles Infinity correctly", () => {
+    expect(convertWeight(Infinity, "kg", "lbs")).toBe(Infinity);
+    expect(convertWeight(Infinity, "lbs", "kg")).toBe(Infinity);
+  });
+
+  it("handles -Infinity correctly", () => {
+    expect(convertWeight(-Infinity, "kg", "lbs")).toBe(-Infinity);
+    expect(convertWeight(-Infinity, "lbs", "kg")).toBe(-Infinity);
+  });
 });
 
 describe("convertDistance", () => {
