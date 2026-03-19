@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input";
 import {
   ChevronDown,
   ChevronUp,
-  Loader2,
 } from "lucide-react";
 
 import { CoachPanel } from "@/components/CoachPanel";
