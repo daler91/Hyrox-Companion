@@ -19,9 +19,7 @@ async function setupApp() {
   const routeUtils = await import("../../routeUtils");
   routeUtils.clearRateLimitBuckets();
   const rateLimit = (await import("express-rate-limit")).default;
-  if ((rateLimit as any).__resetStore) {
-    (rateLimit as any).__resetStore();
-  }
+  (rateLimit as any).__resetStore?.();
   const app = express();
   app.use(express.json());
   app.use(aiRouter);
