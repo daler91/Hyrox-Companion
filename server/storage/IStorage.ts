@@ -61,7 +61,7 @@ export interface IStorage {
   deleteStravaConnection(userId: string): Promise<boolean>;
   updateStravaLastSync(userId: string): Promise<void>;
   getWorkoutByStravaActivityId(userId: string, stravaActivityId: string): Promise<WorkoutLog | undefined>;
-  getWorkoutsByStravaActivityIds(userId: string, stravaActivityIds: string[]): Promise<WorkoutLog[]>;
+  getExistingStravaActivityIds(userId: string, stravaActivityIds: string[]): Promise<string[]>;
 
   createExerciseSets(sets: InsertExerciseSet[]): Promise<ExerciseSet[]>;
   getExerciseSetsByWorkoutLog(workoutLogId: string): Promise<ExerciseSet[]>;

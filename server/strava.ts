@@ -254,8 +254,8 @@ async function handleStravaSync(req: any, res: Response) {
     const activities: StravaActivity[] = await activitiesResponse.json();
 
     const activityIds = activities.map(a => String(a.id));
-    const existingWorkouts = await storage.getWorkoutsByStravaActivityIds(userId, activityIds);
-    const existingStravaIds = new Set(existingWorkouts.map(w => w.stravaActivityId));
+    const existingIds = await storage.getExistingStravaActivityIds(userId, activityIds);
+    const existingStravaIds = new Set(existingIds);
 
     let skipped = 0;
     const workoutsToImport = [];
