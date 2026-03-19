@@ -22,7 +22,7 @@ router.get("/api/v1/workouts/unstructured", isAuthenticated, async (req: Request
   }
 });
 
-router.post("/api/v1/workouts/:id/reparse", isAuthenticated, async (req: Request, res) => {
+router.post("/api/v1/workouts/:id/reparse", isAuthenticated, rateLimiter("reparse", 5), async (req: Request, res) => {
   try {
     const userId = getUserId(req);
     const workoutId = req.params.id;
