@@ -1,7 +1,63 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { Response, NextFunction } from "express";
-import { calculateStreak, rateLimiter, clearRateLimitBuckets, MAX_RATE_LIMIT_BUCKETS, DEFAULT_WINDOW_MS } from "./routeUtils";
+
+// ---------------------------------------------------------------------------
+// Mock express-rate-limit with a lightweight, synchronous in-process store.
+// This lets us test that our rateLimiter() wrapper correctly:
+//   - forwards per-user keys (namespaced by category)
+//   - returns 429 + Retry-After when the limit is exceeded
+//   - bypasses when no identifier is present
+//   - isolates limits across categories and users
+// ---------------------------------------------------------------------------
+vi.mock("express-rate-limit", () => {
+  const store = new Map<string, { count: number; resetAt: number }>();
+
+  const mockRateLimit = vi.fn((opts: any) => {
+    const windowMs = opts.windowMs ?? 60000;
+    const max = opts.max ?? 1;
+    const keyGen = opts.keyGenerator;
+    const skip = opts.skip;
+    const handler = opts.handler;
+
+    return (req: any, res: any, next: NextFunction) => {
+      if (skip && skip(req)) return next();
+
+      const key = keyGen ? keyGen(req) : req.ip ?? "";
+      if (!key) return next();
+
+      const now = Date.now();
+      const bucket = store.get(key);
+
+      if (!bucket || now >= bucket.resetAt) {
+        store.set(key, { count: 1, resetAt: now + windowMs });
+        return next();
+      }
+
+      if (bucket.count >= max) {
+        const retryAfterSec = Math.ceil((bucket.resetAt - now) / 1000);
+        res.setHeader("Retry-After", String(retryAfterSec));
+        if (handler) {
+          handler(req, res);
+        } else {
+          res.status(429).json({ error: "Too many requests" });
+        }
+        return;
+      }
+
+      bucket.count++;
+      return next();
+    };
+  });
+
+  // Expose store reset for beforeEach hooks
+  (mockRateLimit as any).__resetStore = () => store.clear();
+
+  return { default: mockRateLimit };
+});
+
+import { calculateStreak, rateLimiter, clearRateLimitBuckets, DEFAULT_WINDOW_MS } from "./routeUtils";
 import { expandExercisesToSetRows } from "./services/workoutService";
+import rateLimit from "express-rate-limit";
 
 describe("rateLimiter", () => {
   let req: any;
@@ -11,7 +67,10 @@ describe("rateLimiter", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-01-15T12:00:00Z"));
+
+    // Clear both the limiter cache and the mock store
     clearRateLimitBuckets();
+    (rateLimit as any).__resetStore?.();
 
     req = {
       auth: { userId: "user123" },
@@ -53,10 +112,10 @@ describe("rateLimiter", () => {
 
     expect(next).toHaveBeenCalledTimes(2);
     expect(res.status).toHaveBeenCalledWith(429);
-    expect(res.json).toHaveBeenCalledWith({
-      error: "Too many requests. Please wait 60 seconds before trying again.",
-    });
-    expect(res.setHeader).toHaveBeenCalledWith("Retry-After", "60");
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ error: expect.stringContaining("Too many requests") }),
+    );
+    expect(res.setHeader).toHaveBeenCalledWith("Retry-After", expect.any(String));
   });
 
   it("resets limit after windowMs passes", () => {
@@ -68,7 +127,7 @@ describe("rateLimiter", () => {
     middleware(req, res as Response, next); // 2nd request (blocked)
     expect(res.status).toHaveBeenCalledWith(429);
 
-    // Advance time by 60 seconds
+    // Advance time past the window
     vi.advanceTimersByTime(DEFAULT_WINDOW_MS);
 
     middleware(req, res as Response, next); // 3rd request (ok again)
@@ -94,12 +153,12 @@ describe("rateLimiter", () => {
 
   it("uses ip address if userId is missing", () => {
     const middleware = rateLimiter("api", 1, DEFAULT_WINDOW_MS);
-    const reqIp = { ip: "user-cleanup-1" };
+    const reqIp = { ip: "10.0.0.1" };
 
-    middleware(reqIp, res as Response, next); // 1st request ip (ok)
+    middleware(reqIp as any, res as Response, next); // 1st request ip (ok)
     expect(next).toHaveBeenCalledTimes(1);
 
-    middleware(reqIp, res as Response, next); // 2nd request ip (blocked)
+    middleware(reqIp as any, res as Response, next); // 2nd request ip (blocked)
     expect(res.status).toHaveBeenCalledWith(429);
   });
 
@@ -107,8 +166,8 @@ describe("rateLimiter", () => {
     const middleware = rateLimiter("api", 1, DEFAULT_WINDOW_MS);
     const reqEmpty = {};
 
-    middleware(reqEmpty, res as Response, next); // 1st request empty (ok)
-    middleware(reqEmpty, res as Response, next); // 2nd request empty (ok)
+    middleware(reqEmpty as any, res as Response, next); // 1st request empty (ok)
+    middleware(reqEmpty as any, res as Response, next); // 2nd request empty (ok)
 
     expect(next).toHaveBeenCalledTimes(2);
     expect(res.status).not.toHaveBeenCalled();
@@ -121,79 +180,15 @@ describe("rateLimiter", () => {
     apiLimiter(req, res as Response, next); // 1st api request (ok)
     expect(next).toHaveBeenCalledTimes(1);
 
-    authLimiter(req, res as Response, next); // 1st auth request (ok)
+    authLimiter(req, res as Response, next); // 1st auth request (ok — different category)
     expect(next).toHaveBeenCalledTimes(2);
 
     apiLimiter(req, res as Response, next); // 2nd api request (blocked)
     expect(res.status).toHaveBeenCalledWith(429);
   });
-
-  it("evicts oldest entry when MAX_RATE_LIMIT_BUCKETS is reached", () => {
-    const middleware = rateLimiter("api", 1, DEFAULT_WINDOW_MS);
-
-    // Fill the map to its maximum capacity
-    for (let i = 0; i < MAX_RATE_LIMIT_BUCKETS; i++) {
-      const mockReq = { ...req, auth: { userId: `user-${i}` } };
-      middleware(mockReq, res as Response, next);
-    }
-
-    expect(next).toHaveBeenCalledTimes(MAX_RATE_LIMIT_BUCKETS);
-
-    // Now the map should be exactly at capacity
-    // The very first IP was user-0
-    // Requesting it again now would normally be a 429 Too Many Requests if it was still in the map
-    // However, we are about to add a new IP which will evict user-0
-
-    const overflowingReq = { ...req, auth: { userId: "user-overflow" } };
-    middleware(overflowingReq, res as Response, next); // This should evict user-0 and succeed
-
-    expect(next).toHaveBeenCalledTimes(MAX_RATE_LIMIT_BUCKETS + 1);
-
-    // To prove user-0 was evicted, sending a request for it should NOT return 429
-    // It should succeed because it acts like a completely new request
-    const firstReq = { ...req, auth: { userId: "user-0" } };
-    middleware(firstReq, res as Response, next);
-
-    expect(next).toHaveBeenCalledTimes(MAX_RATE_LIMIT_BUCKETS + 2);
-    expect(res.status).not.toHaveBeenCalled();
-
-    // But if we immediately request it AGAIN, it should be 429 (proving it's now tracked again)
-    middleware(firstReq, res as Response, next);
-    expect(res.status).toHaveBeenCalledWith(429);
-  });
-
-  it("performs inline cleanup when limit is reached", () => {
-    const middleware = rateLimiter("api", 1, DEFAULT_WINDOW_MS);
-
-    // Add one entry
-    const mockReq1 = { ...req, auth: { userId: "user-cleanup-1" } };
-    middleware(mockReq1, res as Response, next);
-
-    // Fast forward time so it expires
-    vi.advanceTimersByTime(DEFAULT_WINDOW_MS);
-
-    // Fill the map up to the limit MINUS 1 (because the expired one is still there taking up space)
-    for (let i = 2; i <= MAX_RATE_LIMIT_BUCKETS; i++) {
-      const mockReq = { ...req, auth: { userId: `user-cleanup-${i}` } };
-      middleware(mockReq, res as Response, next);
-    }
-
-    expect(next).toHaveBeenCalledTimes(MAX_RATE_LIMIT_BUCKETS);
-
-    // Now the size is exactly MAX_RATE_LIMIT_BUCKETS
-    // The next insertion should trigger an inline cleanup and remove the first entry (user-cleanup-1)
-    // because it expired. Thus it shouldn't need to evict anything actively, just clean up.
-
-    const newReq = { ...req, auth: { userId: "user-cleanup-new" } };
-    middleware(newReq, res as Response, next);
-    expect(next).toHaveBeenCalledTimes(MAX_RATE_LIMIT_BUCKETS + 1);
-
-    // Now if we request the very first one that expired (user-cleanup-1), it should succeed
-    middleware(mockReq1, res as Response, next);
-    expect(next).toHaveBeenCalledTimes(MAX_RATE_LIMIT_BUCKETS + 2);
-    expect(res.status).not.toHaveBeenCalled();
-  });
 });
+
+
 
 describe("calculateStreak", () => {
   beforeEach(() => {

@@ -1,70 +1,51 @@
-import type { Response, NextFunction } from "express";
 import { toDateStr } from "./types";
+import rateLimit from "express-rate-limit";
 
-const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
-export const MAX_RATE_LIMIT_BUCKETS = 10000;
 export const DEFAULT_WINDOW_MS = 60000;
-export const CLEANUP_INTERVAL_MS = 120000;
 
-// Exported for testing only
+// One limiter instance per unique (category, maxRequests, windowMs) combination.
+// This preserves the per-category isolation of the previous Map-based design.
+const limiterCache = new Map<string, ReturnType<typeof rateLimit>>();
+
+export function rateLimiter(
+  category: string,
+  maxRequests: number,
+  windowMs: number = DEFAULT_WINDOW_MS,
+) {
+  const retryAfterSec = Math.ceil(windowMs / 1000);
+  const cacheKey = `${category}:${maxRequests}:${windowMs}`;
+  if (!limiterCache.has(cacheKey)) {
+    limiterCache.set(
+      cacheKey,
+      rateLimit({
+        windowMs,
+        max: maxRequests,
+        // Per-user key, namespaced by category so limits are independent per route group.
+        keyGenerator: (req: any) => {
+          const id = req.auth?.userId ?? req.ip;
+          return id ? `${category}:${id}` : "";
+        },
+        // Skip rate-limiting entirely when there is no identifier (same as previous behaviour).
+        skip: (req: any) => !req.auth?.userId && !req.ip,
+        standardHeaders: true,   // RateLimit-* headers (RFC 6585)
+        legacyHeaders: false,     // Disable X-RateLimit-* headers
+        handler: (_req: any, res: any) => {
+          res.setHeader("Retry-After", String(retryAfterSec));
+          res.status(429).json({
+            error: `Too many requests. Please wait ${retryAfterSec} seconds before trying again.`,
+          });
+        },
+      }),
+    );
+  }
+  return limiterCache.get(cacheKey)!;
+}
+
+
+// Exported for testing only — clears the limiter cache so each test starts fresh.
 export function clearRateLimitBuckets() {
-  rateLimitBuckets.clear();
+  limiterCache.clear();
 }
-
-export function rateLimiter(category: string, maxRequests: number, windowMs: number = DEFAULT_WINDOW_MS) {
-  return (req: any, res: Response, next: NextFunction) => {
-    const identifier = req.auth?.userId || req.ip;
-    if (!identifier) {
-      return next();
-    }
-    const key = `${category}:${identifier}`;
-    const now = Date.now();
-    const bucket = rateLimitBuckets.get(key);
-
-    if (!bucket || now >= bucket.resetAt) {
-      if (rateLimitBuckets.size >= MAX_RATE_LIMIT_BUCKETS) {
-        // Immediate cleanup of expired entries
-        rateLimitBuckets.forEach((b, k) => {
-          if (now >= b.resetAt) {
-            rateLimitBuckets.delete(k);
-          }
-        });
-
-        // If still at the limit, evict the oldest entry (FIFO) to protect memory
-        if (rateLimitBuckets.size >= MAX_RATE_LIMIT_BUCKETS) {
-          const oldestKey = rateLimitBuckets.keys().next().value;
-          if (oldestKey) {
-             rateLimitBuckets.delete(oldestKey);
-          }
-        }
-      }
-
-      rateLimitBuckets.set(key, { count: 1, resetAt: now + windowMs });
-      return next();
-    }
-
-    if (bucket.count >= maxRequests) {
-      const retryAfterSec = Math.ceil((bucket.resetAt - now) / 1000);
-      res.setHeader("Retry-After", String(retryAfterSec));
-      return res.status(429).json({
-        error: `Too many requests. Please wait ${retryAfterSec} seconds before trying again.`,
-      });
-    }
-
-    bucket.count++;
-    return next();
-  };
-}
-
-const cleanupInterval = setInterval(() => {
-  const now = Date.now();
-  rateLimitBuckets.forEach((bucket, key) => {
-    if (now >= bucket.resetAt) {
-      rateLimitBuckets.delete(key);
-    }
-  });
-}, CLEANUP_INTERVAL_MS);
-cleanupInterval.unref();
 
 export function calculateStreak(completedDates: Set<string>): number {
   if (completedDates.size === 0) return 0;
@@ -93,3 +74,4 @@ export function calculateStreak(completedDates: Set<string>): number {
 
   return streak;
 }
+
