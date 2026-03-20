@@ -1,12 +1,14 @@
 import { logger } from "../logger";
 import { Router, type Request as ExpressRequest, type Response } from "express";
 import { isAuthenticated } from "../clerkAuth";
+import { rateLimiter } from "../routeUtils";
 import { storage } from "../storage";
 import { getUserId } from "../types";
 
 const router = Router();
 
-router.get('/api/v1/auth/user', isAuthenticated, async (req: ExpressRequest, res: Response) => {
+// 🛡️ Sentinel: Added rate limit to auth endpoint to prevent abuse
+router.get('/api/v1/auth/user', isAuthenticated, rateLimiter("auth", 20), async (req: ExpressRequest, res: Response) => {
   try {
     const userId = getUserId(req);
     const user = await storage.getUser(userId);
