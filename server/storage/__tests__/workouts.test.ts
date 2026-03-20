@@ -43,8 +43,9 @@ describe("WorkoutStorage.createWorkoutLog", () => {
     vi.mocked(db.insert).mockReturnValue({ values: insertValuesMock });
 
     const updateWhereMock = vi.fn().mockResolvedValue([]);
-    const updateSetMock = vi.fn().mockReturnValue({ where: updateWhereMock });
-    vi.mocked(db.update).mockReturnValue({ set: updateSetMock });
+    const updateFromMock = vi.fn().mockReturnValue({ where: updateWhereMock });
+    const updateSetMock = vi.fn().mockReturnValue({ from: updateFromMock });
+    vi.mocked(db.update).mockReturnValue({ set: updateSetMock } as any);
 
     const result = await storage.createWorkoutLog({ date: "2026-01-02", userId: "u1", planDayId: "pd1" } as unknown as InsertWorkoutLog & { userId: string });
 
@@ -83,8 +84,9 @@ describe("WorkoutStorage.createWorkoutLog", () => {
     // Update fails
     const updateError = new Error("Database connection dropped during update");
     const updateWhereMock = vi.fn().mockRejectedValue(updateError);
-    const updateSetMock = vi.fn().mockReturnValue({ where: updateWhereMock });
-    vi.mocked(db.update).mockReturnValue({ set: updateSetMock });
+    const updateFromMock = vi.fn().mockReturnValue({ where: updateWhereMock });
+    const updateSetMock = vi.fn().mockReturnValue({ from: updateFromMock });
+    vi.mocked(db.update).mockReturnValue({ set: updateSetMock } as any);
 
     await expect(
       storage.createWorkoutLog({ date: "2026-01-04", userId: "u1", planDayId: "pd2" } as unknown as InsertWorkoutLog & { userId: string })
@@ -151,8 +153,9 @@ describe("WorkoutStorage.createWorkoutLogs", () => {
     vi.mocked(db.insert).mockReturnValue({ values: insertValuesMock });
 
     const updateWhereMock = vi.fn().mockResolvedValue([]);
-    const updateSetMock = vi.fn().mockReturnValue({ where: updateWhereMock });
-    vi.mocked(db.update).mockReturnValue({ set: updateSetMock });
+    const updateFromMock = vi.fn().mockReturnValue({ where: updateWhereMock });
+    const updateSetMock = vi.fn().mockReturnValue({ from: updateFromMock });
+    vi.mocked(db.update).mockReturnValue({ set: updateSetMock } as any);
 
     const logsToInsert = [
       { date: "2026-01-03", userId: "u1", planDayId: "pd1" },
