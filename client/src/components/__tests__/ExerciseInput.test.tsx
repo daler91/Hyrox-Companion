@@ -223,7 +223,6 @@ describe("ExerciseInput", () => {
 
     it("displays missing fields warning when returned by getExerciseMissingFields", async () => {
       // Mock getExerciseMissingFields specifically for this test
-      // @ts-expect-error mock override
       const getExerciseMissingFieldsMock = vi.mocked(
         getExerciseMissingFields
       ).mockReturnValueOnce(["Time", "Distance"]);

@@ -204,7 +204,7 @@ router.post("/api/v1/workouts", isAuthenticated, rateLimiter("workout", 40), asy
     const result = await createWorkout(parseResult.data, validatedExercises, userId);
     res.json(result);
     // Fire-and-forget: auto-coach adjusts upcoming plan days based on this completed workout
-    triggerAutoCoach(userId).catch(() => {});
+    triggerAutoCoach(userId).catch((err) => logger.warn(err, "Auto-coach trigger failed"));
   } catch (error) {
     logger.error({ err: error }, "Create workout error:");
     res.status(500).json({ error: "Failed to create workout" });
