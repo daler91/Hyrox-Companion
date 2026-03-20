@@ -31,6 +31,8 @@ vi.mock("../../services/analyticsService", () => ({
   calculateExerciseAnalytics: vi.fn(),
 }));
 
+import { clearRateLimitBuckets } from "../../routeUtils";
+
 describe("Analytics Routes", () => {
   describe("validDate", () => {
     it("should return undefined for falsy values", () => {
@@ -53,6 +55,7 @@ describe("Analytics Routes", () => {
   let app: express.Express;
 
   beforeEach(() => {
+    clearRateLimitBuckets();
     vi.clearAllMocks();
     _cacheForTesting.clear();
     app = express();

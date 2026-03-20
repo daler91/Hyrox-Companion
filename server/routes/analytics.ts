@@ -4,6 +4,7 @@ import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
 import { calculatePersonalRecords, calculateExerciseAnalytics, type ExerciseSetWithDate } from "../services/analyticsService";
 import { getUserId } from "../types";
+import { rateLimiter } from "../routeUtils";
 import { dateStringSchema } from "@shared/schema";
 
 const router = Router();
@@ -48,7 +49,7 @@ export function validDate(val: unknown): string | undefined {
   return parsed.success ? parsed.data : undefined;
 }
 
-router.get("/api/v1/personal-records", isAuthenticated, async (req: ExpressRequest<{}, any, any, { from?: string; to?: string }>, res: Response) => {
+router.get("/api/v1/personal-records", isAuthenticated, rateLimiter("analytics", 20), async (req: ExpressRequest<{}, any, any, { from?: string; to?: string }>, res: Response) => {
   try {
     const userId = getUserId(req);
     const from = validDate(req.query.from);
@@ -64,7 +65,7 @@ router.get("/api/v1/personal-records", isAuthenticated, async (req: ExpressReque
   }
 });
 
-router.get("/api/v1/exercise-analytics", isAuthenticated, async (req: ExpressRequest<{}, any, any, { from?: string; to?: string }>, res: Response) => {
+router.get("/api/v1/exercise-analytics", isAuthenticated, rateLimiter("analytics", 20), async (req: ExpressRequest<{}, any, any, { from?: string; to?: string }>, res: Response) => {
   try {
     const userId = getUserId(req);
     const from = validDate(req.query.from);

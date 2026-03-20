@@ -12,3 +12,7 @@
  **Vulnerability:** Math.random() is flagged by SAST tools for insecure randomness, even when used innocuously for UI rendering.
  **Learning:** While functionally fine for determining skeleton loader widths, using predictable PRNGs like Math.random() creates noise in security scans and theoretically reduces the resilience of client-side operations against tampering.
  **Prevention:** In client-side React code, default to the Web Crypto API `window.crypto.getRandomValues()` when generating random numbers or percentages, even for low-risk visual calculations.
+## 2026-03-20 - [Add Rate Limiting to Analytics Endpoints]
+**Vulnerability:** Found that the `/api/v1/personal-records` and `/api/v1/exercise-analytics` endpoints lacked rate limiting.
+**Learning:** Data-intensive endpoints that aggregate historical logs across wide date ranges can become slow if heavily abused or polled sequentially, creating application-level denial-of-service vectors despite short-lived caches.
+**Prevention:** Ensure expensive analytics endpoints define rate limits explicitly on the route handler using the global `rateLimiter` function.
