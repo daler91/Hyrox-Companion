@@ -11,6 +11,7 @@ import swaggerUi from "swagger-ui-express";
 import { generateOpenApiDocument } from "../shared/openapi";
 
 import { createServer } from "node:http";
+import { randomUUID } from "node:crypto";
 import { storage } from "./storage";
 import { pool } from "./db";
 import { getAuth } from "@clerk/express";
@@ -112,6 +113,7 @@ app.get("/api/v1/health", (_req, res) => {
 
 app.use(pinoHttp({
   logger,
+  genReqId: (req) => req.headers['x-request-id'] || randomUUID(),
   customProps: (req, _res) => {
     let userId = 'anonymous';
     try {
@@ -120,14 +122,14 @@ app.use(pinoHttp({
         userId = auth.userId;
       }
     } catch {
-      // Ignored: getAuth throws if the request is not processed by Clerk middleware yet,
-      // which is expected for public routes. We safely fall back to 'anonymous'.
       userId = 'anonymous';
     }
 
     return {
       context: 'http',
-      userId
+      userId,
+      requestId: req.id,
+      route: req.url || req.originalUrl,
     };
   },
   autoLogging: {

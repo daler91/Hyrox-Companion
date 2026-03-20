@@ -2,7 +2,7 @@ import { type TimelineEntry, type WorkoutStatus } from "@shared/schema";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { groupExerciseSets } from "@/lib/exerciseUtils";
 import { WorkoutDetailHeader } from "./WorkoutDetailHeader";
-import { WorkoutDetailView } from "./WorkoutDetailExercises";
+import { WorkoutDetailView } from "./workout-detail-exercises";
 import { StatusChangeSection, WorkoutDetailFooter } from "./WorkoutDetailActions";
 
 interface WorkoutDetailViewModeProps {

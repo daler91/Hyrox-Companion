@@ -36,19 +36,25 @@ function parseCSVContent(csvText: string): unknown[] {
   }
 }
 
+function toStr(val: unknown): string {
+  if (typeof val === 'string') return val;
+  if (typeof val === 'number') return String(val);
+  return '';
+}
+
 export function validateAndMapCSVRows(records: unknown[]): CSVRow[] {
   if (!Array.isArray(records)) return [];
 
   return records.map(record => {
-    const row = record as Record<string, any>;
+    const row = record as Record<string, unknown>;
     return {
-      Week: String(row.Week || ''),
-      Day: String(row.Day || ''),
-      Focus: String(row.Focus || ''),
-      "Main Workout": String(row["Main Workout"] || ''),
-      "Accessory/Engine Work": String(row["Accessory/Engine Work"] || ''),
-      Accessory: String(row["Accessory"] || ''),
-      Notes: String(row.Notes || ''),
+      Week: toStr(row.Week),
+      Day: toStr(row.Day),
+      Focus: toStr(row.Focus),
+      "Main Workout": toStr(row["Main Workout"]),
+      "Accessory/Engine Work": toStr(row["Accessory/Engine Work"]),
+      Accessory: toStr(row["Accessory"]),
+      Notes: toStr(row.Notes),
     } as CSVRow;
   });
 }

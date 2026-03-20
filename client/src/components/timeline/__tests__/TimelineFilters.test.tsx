@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from "vitest";
-import TimelineFilters from "../TimelineFilters";
+import TimelineFilters from "../timeline-filters";
 
 // Mock pointer capture and scrollIntoView for Radix UI components in JSDOM
 const originalHasPointerCapture = HTMLElement.prototype.hasPointerCapture;

@@ -26,7 +26,7 @@ router.post("/api/v1/parse-exercises", isAuthenticated, rateLimiter("parse", 5),
     const exercises = await parseExercisesFromText(text.trim(), weightUnit, customNames);
     res.json(exercises);
   } catch (error) {
-    logger.error({ err: error }, "Error parsing exercises:");
+    (req.log || logger).error({ err: error }, "Error parsing exercises:");
     res.status(500).json({ error: "Failed to parse exercises" });
   }
 });
@@ -64,7 +64,7 @@ router.post("/api/v1/chat", isAuthenticated, rateLimiter("chat", 10), async (req
     const response = await chatWithCoach(message, history, trainingContext);
     res.json({ response });
   } catch (error) {
-    logger.error({ err: error }, "Chat error:");
+    (req.log || logger).error({ err: error }, "Chat error:");
     res.status(500).json({ error: "Failed to get response from AI coach" });
   }
 });
@@ -92,12 +92,12 @@ router.post("/api/v1/chat/stream", isAuthenticated, rateLimiter("chat", 10), asy
       res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
       res.end();
     } catch (streamError) {
-      logger.error({ err: streamError }, "Stream error:");
+      (req.log || logger).error({ err: streamError }, "Stream error:");
       res.write(`data: ${JSON.stringify({ error: "Stream error" })}\n\n`);
       res.end();
     }
   } catch (error) {
-    logger.error({ err: error }, "Chat stream error:");
+    (req.log || logger).error({ err: error }, "Chat stream error:");
     res.status(500).json({ error: "Failed to get response from AI coach" });
   }
 });
@@ -108,7 +108,7 @@ router.get("/api/v1/chat/history", isAuthenticated, async (req: ExpressRequest, 
     const messages = await storage.getChatMessages(userId);
     res.json(messages);
   } catch (error) {
-    logger.error({ err: error }, "Get chat history error:");
+    (req.log || logger).error({ err: error }, "Get chat history error:");
     res.status(500).json({ error: "Failed to get chat history" });
   }
 });
@@ -126,7 +126,7 @@ router.post("/api/v1/chat/message", isAuthenticated, async (req: ExpressRequest<
     const message = await storage.saveChatMessage({ userId, role, content });
     res.json(message);
   } catch (error) {
-    logger.error({ err: error }, "Save chat message error:");
+    (req.log || logger).error({ err: error }, "Save chat message error:");
     res.status(500).json({ error: "Failed to save message" });
   }
 });
@@ -137,7 +137,7 @@ router.delete("/api/v1/chat/history", isAuthenticated, rateLimiter("chatHistoryD
     await storage.clearChatHistory(userId);
     res.json({ success: true });
   } catch (error) {
-    logger.error({ err: error }, "Clear chat history error:");
+    (req.log || logger).error({ err: error }, "Clear chat history error:");
     res.status(500).json({ error: "Failed to clear chat history" });
   }
 });
@@ -193,7 +193,7 @@ router.post("/api/v1/timeline/ai-suggestions", isAuthenticated, rateLimiter("sug
 
     res.json({ suggestions });
   } catch (error) {
-    logger.error({ err: error }, "AI suggestions error:");
+    (req.log || logger).error({ err: error }, "AI suggestions error:");
     res.status(500).json({ error: "Failed to generate AI suggestions" });
   }
 });

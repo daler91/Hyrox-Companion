@@ -11,6 +11,7 @@ import {
   formatElevation,
   formatWeight,
   formatDistance,
+  type DistanceUnit,
 } from "./unitConversion";
 
 describe("convertWeight", () => {
@@ -132,7 +133,7 @@ describe("metersToUserDistance", () => {
   });
 
   it("converts meters to mi", () => {
-    expect(metersToUserDistance(1609.34, "mi" as any)).toBeCloseTo(1, 1);
+    expect(metersToUserDistance(1609.34, "mi" as unknown as DistanceUnit)).toBeCloseTo(1, 1);
   });
 
   it("handles zero meters", () => {
@@ -151,8 +152,8 @@ describe("metersToUserDistance", () => {
   });
 
   it("returns raw meters when unrecognized distanceUnit is passed", () => {
-    expect(metersToUserDistance(5000, "feet" as any)).toBe(5000);
-    expect(metersToUserDistance(100, "" as any)).toBe(100);
+    expect(metersToUserDistance(5000, "feet" as unknown as DistanceUnit)).toBe(5000);
+    expect(metersToUserDistance(100, "" as unknown as DistanceUnit)).toBe(100);
   });
 });
 
