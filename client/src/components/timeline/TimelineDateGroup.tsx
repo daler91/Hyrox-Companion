@@ -2,7 +2,7 @@ import React, { forwardRef } from "react";
 import { Badge } from "@/components/ui/badge";
 import { format, isToday, isTomorrow, isYesterday, parseISO, isBefore } from "date-fns";
 import type { TimelineEntry, PersonalRecord } from "@shared/schema";
-import TimelineWorkoutCard from "./TimelineWorkoutCard";
+import TimelineWorkoutCard from "./timeline-workout-card";
 
 interface TimelineDateGroupProps {
   date: string;
