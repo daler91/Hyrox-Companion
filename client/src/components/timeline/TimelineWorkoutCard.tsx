@@ -226,7 +226,7 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
   const todayStr = format(new Date(), "yyyy-MM-dd");
   const isTargetedByCoach = isAutoCoaching && isPlanned && entry.date >= todayStr;
 
-  const handleCardClick = (e: React.MouseEvent) => {
+  const handleCardClick = (_e: React.MouseEvent) => {
     if (canBeCombinedWith) {
       onCombineSelect?.(entry);
     } else {

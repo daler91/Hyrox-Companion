@@ -1,0 +1,9 @@
+dist
+node_modules
+pnpm-lock.yaml
+migrations
+attached_assets
+*.log
+*.json
+*.txt
+*.png

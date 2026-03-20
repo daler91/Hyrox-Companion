@@ -35,7 +35,7 @@ vi.mock('@tanstack/react-query', async (importOriginal) => {
           try {
             await mutationFn(...args);
           } catch {
-
+            // intentionally empty
           }
         }
         if (onSuccess) onSuccess();

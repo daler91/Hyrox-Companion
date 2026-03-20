@@ -69,7 +69,7 @@ describe('useWorkoutForm', () => {
 
     // Mock useVoiceInput returns
     let callCount = 0;
-    vi.mocked(voiceInputHook.useVoiceInput).mockImplementation((params) => {
+    vi.mocked(voiceInputHook.useVoiceInput).mockImplementation((_params) => {
       callCount++;
       const isFirst = callCount % 2 !== 0;
       if (isFirst) {

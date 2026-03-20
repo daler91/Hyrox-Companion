@@ -96,7 +96,7 @@ describe("workoutSuggestionSchema", () => {
   });
 
   it("rejects missing required fields", () => {
-    const { workoutId, ...missing } = validSuggestion;
+    const { workoutId: _workoutId, ...missing } = validSuggestion;
     expect(() => workoutSuggestionSchema.parse(missing)).toThrow();
   });
 

@@ -81,7 +81,7 @@ export function calculateStreak(completedDates: Set<string>): number {
   if (!completedDates.has(todayStr) && !completedDates.has(yesterdayStr)) return 0;
 
   let streak = 0;
-  let checkDate = completedDates.has(todayStr) ? new Date(today) : new Date(yesterday);
+  const checkDate = completedDates.has(todayStr) ? new Date(today) : new Date(yesterday);
 
   while (true) {
     const dateStr = checkDate.toISOString().split("T")[0];

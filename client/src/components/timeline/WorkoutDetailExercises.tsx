@@ -274,7 +274,7 @@ const WorkoutTextMode = React.memo(function WorkoutTextMode({
   isMainListening,
   isSupported,
   mainInterim,
-  startMainListening,
+  startMainListening: _startMainListening,
   stopMainListening,
   toggleMainListening,
   onParseText,

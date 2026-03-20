@@ -112,7 +112,7 @@ app.get("/api/v1/health", (_req, res) => {
 
 app.use(pinoHttp({
   logger,
-  customProps: (req, res) => {
+  customProps: (req, _res) => {
     let userId = 'anonymous';
     try {
       const auth = getAuth(req as Request);

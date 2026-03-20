@@ -13,7 +13,7 @@ const getValidatedKey = () => {
   }
   const ENCRYPTION_KEY = env.ENCRYPTION_KEY;
 
-  let keyBuffer = Buffer.from(ENCRYPTION_KEY, "hex");
+  const keyBuffer = Buffer.from(ENCRYPTION_KEY, "hex");
   if (keyBuffer.length !== 32) {
     // If not hex or wrong length, try to create a 32-byte hash from the string
     return crypto.createHash("sha256").update(String(ENCRYPTION_KEY)).digest();
