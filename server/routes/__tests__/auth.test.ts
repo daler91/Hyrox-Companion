@@ -3,8 +3,10 @@ import express from "express";
 import request from "supertest";
 import authRouter from "../auth";
 import { storage } from "../../storage";
+import { logger } from "../../logger";
+import { getUserId } from "../../types";
 
-const TEST_USER_ID = "test_user_id";
+const { TEST_USER_ID } = vi.hoisted(() => ({ TEST_USER_ID: "test_user_id" }));
 const ENDPOINT_URL = "/api/v1/auth/user";
 
 // Mock the clerkAuth middleware to simulate authentication
@@ -17,10 +19,16 @@ vi.mock("../../clerkAuth", () => ({
 
 // Mock the getUserId function to return our test user
 vi.mock("../../types", () => ({
-  getUserId: () => TEST_USER_ID,
+  getUserId: vi.fn().mockReturnValue(TEST_USER_ID),
 }));
 
 // Mock the storage functions
+vi.mock("../../logger", () => ({
+  logger: {
+    error: vi.fn(),
+  },
+}));
+
 vi.mock("../../storage", () => ({
   storage: {
     getUser: vi.fn(),
@@ -61,6 +69,20 @@ describe("Auth Routes", () => {
 
       expect(response.status).toBe(500);
       expect(response.body).toEqual({ error: "Failed to fetch user" });
+      expect(logger.error).toHaveBeenCalledWith({ err: expect.any(Error) }, "Error fetching user:");
     });
+
+    it("should return 500 when getUserId throws an error", async () => {
+      vi.mocked(getUserId).mockImplementation(() => {
+        throw new Error("User not authenticated");
+      });
+
+      const response = await request(app).get(ENDPOINT_URL);
+
+      expect(response.status).toBe(500);
+      expect(response.body).toEqual({ error: "Failed to fetch user" });
+      expect(logger.error).toHaveBeenCalledWith({ err: expect.any(Error) }, "Error fetching user:");
+    });
+
   });
 });
