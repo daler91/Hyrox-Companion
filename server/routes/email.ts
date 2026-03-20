@@ -19,7 +19,7 @@ router.post("/api/v1/emails/check", isAuthenticated, async (req: Request, res: R
     const sent = await checkAndSendEmailsForUser(storage, user);
     res.json({ sent });
   } catch (error) {
-    logger.error({ err: error }, "Error checking emails:");
+    (req.log || logger).error({ err: error }, "Error checking emails:");
     res.json({ sent: [], error: "Email check failed" });
   }
 });
@@ -45,7 +45,7 @@ router.get("/api/v1/cron/emails", async (req, res) => {
     const result = await runEmailCronJob(storage);
     res.json(result);
   } catch (error) {
-    logger.error({ err: error }, "Cron email error:");
+    (req.log || logger).error({ err: error }, "Cron email error:");
     res.status(500).json({ error: "Cron job failed" });
   }
 });

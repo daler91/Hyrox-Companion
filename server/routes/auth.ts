@@ -12,7 +12,7 @@ router.get('/api/v1/auth/user', isAuthenticated, async (req: Request, res: Respo
     const user = await storage.getUser(userId);
     res.json(user);
   } catch (error) {
-    logger.error({ err: error }, "Error fetching user:");
+    (req.log || logger).error({ err: error }, "Error fetching user:");
     res.status(500).json({ error: "Failed to fetch user" });
   }
 });

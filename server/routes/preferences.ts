@@ -23,7 +23,7 @@ router.get('/api/v1/preferences', isAuthenticated, async (req: Request, res) => 
       aiCoachEnabled: user.aiCoachEnabled ?? true,
     });
   } catch (error) {
-    logger.error({ err: error }, "Error fetching preferences:");
+    (req.log || logger).error({ err: error }, "Error fetching preferences:");
     res.status(500).json({ error: "Failed to fetch preferences" });
   }
 });
@@ -48,7 +48,7 @@ router.patch('/api/v1/preferences', isAuthenticated, rateLimiter("preferences", 
       aiCoachEnabled: user.aiCoachEnabled ?? true,
     });
   } catch (error) {
-    logger.error({ err: error }, "Error updating preferences:");
+    (req.log || logger).error({ err: error }, "Error updating preferences:");
     res.status(500).json({ error: "Failed to update preferences" });
   }
 });

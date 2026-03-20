@@ -59,7 +59,7 @@ router.get("/api/v1/personal-records", isAuthenticated, async (req: Request, res
     const allSets = await getExerciseSetsCoalesced(userId, from, to);
     res.json(calculatePersonalRecords(allSets));
   } catch (error) {
-    logger.error({ err: error }, "Error fetching PRs:");
+    (req.log || logger).error({ err: error }, "Error fetching PRs:");
     res.status(500).json({ error: "Failed to fetch personal records" });
   }
 });
@@ -76,7 +76,7 @@ router.get("/api/v1/exercise-analytics", isAuthenticated, async (req: Request, r
     const allSets = await getExerciseSetsCoalesced(userId, from, to);
     res.json(calculateExerciseAnalytics(allSets));
   } catch (error) {
-    logger.error({ err: error }, "Error fetching exercise analytics:");
+    (req.log || logger).error({ err: error }, "Error fetching exercise analytics:");
     res.status(500).json({ error: "Failed to fetch exercise analytics" });
   }
 });
