@@ -8,6 +8,7 @@ import {
   ChevronUp,
 } from "lucide-react";
 
+import { FeatureErrorBoundaryWrapper } from "@/components/FeatureErrorBoundaryWrapper";
 import { CoachPanel } from "@/components/CoachPanel";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { isToday, parseISO } from "date-fns";
@@ -292,12 +293,14 @@ export default function Timeline() {
       
       {coachOpen && (
         <div className="w-80 lg:w-96 flex-shrink-0 hidden md:block">
-          <CoachPanel 
-            isOpen={coachOpen} 
-            onClose={() => setCoachOpen(false)} 
-            timeline={timelineData}
-            isNewUser={isNewUser}
-          />
+          <FeatureErrorBoundaryWrapper featureName="Coach">
+            <CoachPanel
+              isOpen={coachOpen}
+              onClose={() => setCoachOpen(false)}
+              timeline={timelineData}
+              isNewUser={isNewUser}
+            />
+          </FeatureErrorBoundaryWrapper>
         </div>
       )}
       
@@ -310,12 +313,14 @@ export default function Timeline() {
             aria-label="Close coach panel"
           />
           <div className="absolute right-0 top-0 bottom-0 w-full max-w-sm bg-background shadow-lg">
+            <FeatureErrorBoundaryWrapper featureName="Coach">
             <CoachPanel 
               isOpen={coachOpen} 
               onClose={() => setCoachOpen(false)} 
               timeline={timelineData}
               isNewUser={isNewUser}
             />
+          </FeatureErrorBoundaryWrapper>
           </div>
         </div>
       )}

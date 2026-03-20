@@ -8,6 +8,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { FeatureErrorBoundaryWrapper } from "@/components/FeatureErrorBoundaryWrapper";
 import NotFound from "@/pages/not-found";
 import Timeline from "@/pages/Timeline";
 import { Loader2 } from "lucide-react";
@@ -54,10 +55,10 @@ function AuthenticatedRouter() {
   return (
     <Suspense fallback={<LazyFallback />}>
       <Switch>
-        <Route path="/" component={Timeline} />
-        <Route path="/log" component={LogWorkout} />
-        <Route path="/analytics" component={Analytics} />
-        <Route path="/settings" component={Settings} />
+        <Route path="/"><FeatureErrorBoundaryWrapper featureName="Timeline"><Timeline /></FeatureErrorBoundaryWrapper></Route>
+        <Route path="/log"><FeatureErrorBoundaryWrapper featureName="Log Workout"><LogWorkout /></FeatureErrorBoundaryWrapper></Route>
+        <Route path="/analytics"><FeatureErrorBoundaryWrapper featureName="Analytics"><Analytics /></FeatureErrorBoundaryWrapper></Route>
+        <Route path="/settings"><FeatureErrorBoundaryWrapper featureName="Settings"><Settings /></FeatureErrorBoundaryWrapper></Route>
         <Route component={NotFound} />
       </Switch>
     </Suspense>
