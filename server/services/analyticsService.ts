@@ -79,7 +79,12 @@ export function calculateExerciseAnalytics(allSets: ExerciseSetWithDate[]): Reco
 
   const finalAnalytics: Record<string, DayAnalytics[]> = {};
   Object.entries(analytics).forEach(([exercise, data]) => {
-    finalAnalytics[exercise] = Object.values(data).sort((a, b) => a.date.localeCompare(b.date));
+    // Fast string comparison for YYYY-MM-DD dates instead of localeCompare
+    finalAnalytics[exercise] = Object.values(data).sort((a, b) => {
+      if (b.date < a.date) return 1;
+      if (b.date > a.date) return -1;
+      return 0;
+    });
   });
 
   return finalAnalytics;

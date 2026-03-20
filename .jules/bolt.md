@@ -13,3 +13,7 @@
 ## 2026-03-19 - Fast Date Sorting Optimization
 **Learning:** Native JS `Date` instantiations (`new Date(str).getTime()`) and `localeCompare` are shockingly slow when used inside `Array.prototype.sort()` for large arrays. For ISO 8601 formatted date strings (like `YYYY-MM-DD`), standard string comparison (`<`, `>`) is computationally much cheaper, avoids memory allocation for new objects, and correctly preserves chronological sort order.
 **Action:** Always prefer native string comparison `(a, b) => (b < a ? -1 : b > a ? 1 : 0)` over `localeCompare` or `Date` parsing when sorting arrays of YYYY-MM-DD string dates.
+
+## 2024-05-27 - Fast String Date Comparison Optimization
+**Learning:** Using `localeCompare()` for sorting ISO 8601 or YYYY-MM-DD formatted date strings introduces unnecessary overhead. For strings strictly formatted as YYYY-MM-DD, a direct structural string comparison (using operators `<` and `>`) produces the exact same result significantly faster, especially within `Array.prototype.sort()` over large arrays.
+**Action:** When sorting dates represented as zero-padded standard formats (like YYYY-MM-DD), use standard string comparison operators (`<`, `>`) instead of `localeCompare` to avoid the performance penalty of localizing strings unnecessarily. To satisfy SonarCloud typescript:S3358, write out `if (b < a) return -1; if (b > a) return 1; return 0;` explicitly rather than nesting ternaries.

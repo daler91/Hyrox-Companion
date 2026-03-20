@@ -89,7 +89,12 @@ function collectRecentWorkouts(timeline: TimelineEntry[]): TrainingContext["rece
       });
     }
   }
-  recent.sort((a, b) => b.date.localeCompare(a.date));
+  // Fast string comparison for YYYY-MM-DD dates instead of localeCompare
+  recent.sort((a, b) => {
+    if (b.date < a.date) return -1;
+    if (b.date > a.date) return 1;
+    return 0;
+  });
   return recent;
 }
 
