@@ -61,7 +61,7 @@ describe('useWorkoutForm', () => {
     vi.clearAllMocks();
     testQueryClient.clear();
 
-    vi.mocked(toastHook.useToast).mockReturnValue({ toast: mockToast } as any);
+    vi.mocked(toastHook.useToast).mockReturnValue({ toast: mockToast } as unknown as ReturnType<typeof toastHook.useToast>);
     vi.mocked(wouter.useLocation).mockReturnValue(['/current', mockNavigate]);
     vi.mocked(queryClientLib.apiRequest).mockResolvedValue({
       json: () => Promise.resolve({ success: true }),
@@ -73,9 +73,9 @@ describe('useWorkoutForm', () => {
       callCount++;
       const isFirst = callCount % 2 !== 0;
       if (isFirst) {
-        return mockVoiceInput as any;
+        return mockVoiceInput as unknown as ReturnType<typeof voiceInputHook.useVoiceInput>;
       }
-      return mockNotesVoiceInput as any;
+      return mockNotesVoiceInput as unknown as ReturnType<typeof voiceInputHook.useVoiceInput>;
     });
   });
 
@@ -93,8 +93,8 @@ describe('useWorkoutForm', () => {
   };
 
   const setupVoiceMocks = () => {
-    let mainVoiceHandler: any;
-    let notesVoiceHandler: any;
+    let mainVoiceHandler: Parameters<typeof voiceInputHook.useVoiceInput>[0] | undefined;
+    let notesVoiceHandler: Parameters<typeof voiceInputHook.useVoiceInput>[0] | undefined;
     let renderCallCount = 0;
 
     vi.mocked(voiceInputHook.useVoiceInput).mockImplementation((params) => {
@@ -104,10 +104,10 @@ describe('useWorkoutForm', () => {
 
       if (isFirst) {
         mainVoiceHandler = params;
-        return mockVoiceInput as any;
+        return mockVoiceInput as unknown as ReturnType<typeof voiceInputHook.useVoiceInput>;
       } else {
         notesVoiceHandler = params;
-        return mockNotesVoiceInput as any;
+        return mockNotesVoiceInput as unknown as ReturnType<typeof voiceInputHook.useVoiceInput>;
       }
     });
 
@@ -219,7 +219,7 @@ describe('useWorkoutForm', () => {
       vi.mocked(voiceInputHook.useVoiceInput).mockImplementation(() => {
         callCount++;
         const isFirst = callCount % 2 !== 0;
-        return isFirst ? activeVoiceInput as any : activeNotesVoiceInput as any;
+        return isFirst ? activeVoiceInput as unknown as ReturnType<typeof voiceInputHook.useVoiceInput> : activeNotesVoiceInput as unknown as ReturnType<typeof voiceInputHook.useVoiceInput>;
       });
 
       const { result } = renderFormHook(defaultProps);
@@ -324,13 +324,13 @@ describe('useWorkoutForm', () => {
       vi.mocked(workoutEditorHook.exerciseToPayload).mockReturnValue({
         exerciseName: 'squat',
         sets: [{ reps: 10, weight: 100 }],
-      } as any);
+      } as unknown as ReturnType<typeof workoutEditorHook.exerciseToPayload>);
 
-      const props: any = {
+      const props = {
         ...defaultProps,
         useTextMode: false,
         exerciseBlocks: ['block-1', 'invalid-block'], // 'invalid-block' is missing from data
-        exerciseData: mockExerciseData as any,
+        exerciseData: mockExerciseData as unknown as typeof defaultProps.exerciseData,
       };
 
       const { result } = renderFormHook(props);

@@ -17,7 +17,7 @@ function parseStreamResponse(responseText: string) {
 
 // Mock the clerkAuth middleware to simulate authentication
 vi.mock("../../clerkAuth", () => ({
-  isAuthenticated: (req: any, res: any, next: any) => {
+  isAuthenticated: (req: Record<string, unknown>, _res: unknown, next: () => void) => {
     req.auth = { userId: "test_user_id" };
     next();
   },
@@ -75,13 +75,13 @@ describe("POST /api/parse-exercises", () => {
 
   it("should successfully parse exercises and return them", async () => {
 
-    (storage.getUser as any).mockResolvedValue({ weightUnit: "lbs" });
-    (storage.getCustomExercises as any).mockResolvedValue([{ name: "Custom Squat" }]);
+    vi.mocked(storage.getUser).mockResolvedValue({ weightUnit: "lbs" });
+    vi.mocked(storage.getCustomExercises).mockResolvedValue([{ name: "Custom Squat" }]);
 
     const mockParsedExercises = [
       { name: "Bench Press", sets: [{ weight: 135, reps: 10 }] }
     ];
-    (parseExercisesFromText as any).mockResolvedValue(mockParsedExercises);
+    vi.mocked(parseExercisesFromText).mockResolvedValue(mockParsedExercises);
 
     const response = await request(app)
       .post("/api/v1/parse-exercises")
@@ -105,9 +105,9 @@ describe("POST /api/parse-exercises", () => {
 
 
   it("should return 500 when AI parsing fails", async () => {
-    (storage.getUser as any).mockResolvedValue({ weightUnit: "lbs" });
-    (storage.getCustomExercises as any).mockResolvedValue([]);
-    (parseExercisesFromText as any).mockRejectedValue(new Error("AI error"));
+    vi.mocked(storage.getUser).mockResolvedValue({ weightUnit: "lbs" });
+    vi.mocked(storage.getCustomExercises).mockResolvedValue([]);
+    vi.mocked(parseExercisesFromText).mockRejectedValue(new Error("AI error"));
 
     const response = await request(app)
       .post("/api/v1/parse-exercises")
@@ -119,8 +119,8 @@ describe("POST /api/parse-exercises", () => {
 
 
   it("should return 500 when AI coach response fails", async () => {
-    (buildTrainingContext as any).mockResolvedValue(MOCK_TRAINING_CONTEXT);
-    (chatWithCoach as any).mockRejectedValue(new Error("AI error"));
+    vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
+    vi.mocked(chatWithCoach).mockRejectedValue(new Error("AI error"));
 
     const response = await request(app)
       .post(CHAT_ENDPOINT)
@@ -131,7 +131,7 @@ describe("POST /api/parse-exercises", () => {
   });
 
   it("should return 500 on internal error", async () => {
-    (storage.getUser as any).mockRejectedValue(new Error("Database error"));
+    vi.mocked(storage.getUser).mockRejectedValue(new Error("Database error"));
 
     const response = await request(app)
       .post("/api/v1/parse-exercises")
@@ -143,9 +143,9 @@ describe("POST /api/parse-exercises", () => {
 
   it("should rate limit requests after 5 attempts", async () => {
 
-    (storage.getUser as any).mockResolvedValue({ weightUnit: "kg" });
-    (storage.getCustomExercises as any).mockResolvedValue([]);
-    (parseExercisesFromText as any).mockResolvedValue([]);
+    vi.mocked(storage.getUser).mockResolvedValue({ weightUnit: "kg" });
+    vi.mocked(storage.getCustomExercises).mockResolvedValue([]);
+    vi.mocked(parseExercisesFromText).mockResolvedValue([]);
 
     const payload = { text: "Squat 100x5" };
 
@@ -186,8 +186,8 @@ describe("POST /api/chat", () => {
 
   it("should successfully chat with coach and return response", async () => {
 
-    (buildTrainingContext as any).mockResolvedValue(MOCK_TRAINING_CONTEXT);
-    (chatWithCoach as any).mockResolvedValue("Coach response");
+    vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
+    vi.mocked(chatWithCoach).mockResolvedValue("Coach response");
 
     const response = await request(app)
       .post(CHAT_ENDPOINT)
@@ -208,7 +208,7 @@ describe("POST /api/chat", () => {
   });
 
   it("should return 500 on internal error", async () => {
-    (buildTrainingContext as any).mockRejectedValue(new Error("Database error"));
+    vi.mocked(buildTrainingContext).mockRejectedValue(new Error("Database error"));
 
     const response = await request(app)
       .post(CHAT_ENDPOINT)
@@ -237,9 +237,9 @@ describe("POST /api/chat/stream", () => {
 
   it("should successfully stream chat response", async () => {
 
-    (buildTrainingContext as any).mockResolvedValue(MOCK_TRAINING_CONTEXT);
+    vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
 
-    (streamChatWithCoach as any).mockImplementation(async function* () {
+    vi.mocked(streamChatWithCoach).mockImplementation(async function* () {
       yield "Hello";
       yield " World";
     });
@@ -263,9 +263,9 @@ describe("POST /api/chat/stream", () => {
 
   it("should handle stream errors gracefully", async () => {
 
-    (buildTrainingContext as any).mockResolvedValue(MOCK_TRAINING_CONTEXT);
+    vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
 
-    (streamChatWithCoach as any).mockImplementation(() => ({
+    vi.mocked(streamChatWithCoach).mockImplementation(() => ({
       [Symbol.asyncIterator]() {
         return {
           next() {
@@ -303,7 +303,7 @@ describe("Chat History and Messages Routes", () => {
   it("should get chat history", async () => {
 
     const mockMessages = [{ id: 1, role: "user", content: "Hi" }];
-    (storage.getChatMessages as any).mockResolvedValue(mockMessages);
+    vi.mocked(storage.getChatMessages).mockResolvedValue(mockMessages);
 
     const response = await request(app).get(CHAT_HISTORY_ENDPOINT);
 
@@ -314,7 +314,7 @@ describe("Chat History and Messages Routes", () => {
 
   it("should return 500 when getting history fails", async () => {
 
-    (storage.getChatMessages as any).mockRejectedValue(new Error("Database Error"));
+    vi.mocked(storage.getChatMessages).mockRejectedValue(new Error("Database Error"));
 
     const response = await request(app).get(CHAT_HISTORY_ENDPOINT);
 
@@ -325,7 +325,7 @@ describe("Chat History and Messages Routes", () => {
   it("should save chat message", async () => {
 
     const savedMessage = { id: 1, userId: "test_user_id", role: "user", content: "Hello" };
-    (storage.saveChatMessage as any).mockResolvedValue(savedMessage);
+    vi.mocked(storage.saveChatMessage).mockResolvedValue(savedMessage);
 
     const response = await request(app)
       .post(CHAT_MESSAGE_ENDPOINT)
@@ -351,7 +351,7 @@ describe("Chat History and Messages Routes", () => {
 
   it("should clear chat history", async () => {
 
-    (storage.clearChatHistory as any).mockResolvedValue(undefined);
+    vi.mocked(storage.clearChatHistory).mockResolvedValue(undefined);
 
     const response = await request(app).delete(CHAT_HISTORY_ENDPOINT);
 
@@ -362,7 +362,7 @@ describe("Chat History and Messages Routes", () => {
 
   it("should return 500 when clearing history fails", async () => {
 
-    (storage.clearChatHistory as any).mockRejectedValue(new Error("Delete failed"));
+    vi.mocked(storage.clearChatHistory).mockRejectedValue(new Error("Delete failed"));
 
     const response = await request(app).delete(CHAT_HISTORY_ENDPOINT);
 
@@ -386,7 +386,7 @@ describe("POST /api/timeline/ai-suggestions", () => {
 
   it("should successfully generate suggestions", async () => {
 
-    (buildTrainingContext as any).mockResolvedValue(MOCK_TRAINING_CONTEXT);
+    vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
 
     const mockTimeline = [
       {
@@ -412,7 +412,7 @@ describe("POST /api/timeline/ai-suggestions", () => {
         mainWorkout: "Pullups",
       },
     ];
-    (storage.getTimeline as any).mockResolvedValue(mockTimeline);
+    vi.mocked(storage.getTimeline).mockResolvedValue(mockTimeline);
 
     const rawSuggestions = [
       {
@@ -424,7 +424,7 @@ describe("POST /api/timeline/ai-suggestions", () => {
         priority: "high",
       },
     ];
-    (generateWorkoutSuggestions as any).mockResolvedValue(rawSuggestions);
+    vi.mocked(generateWorkoutSuggestions).mockResolvedValue(rawSuggestions);
 
     const response = await request(app).post(TIMELINE_SUGGESTIONS_ENDPOINT);
 
@@ -459,9 +459,9 @@ describe("POST /api/timeline/ai-suggestions", () => {
 
   it("should handle no upcoming planned workouts gracefully", async () => {
 
-    (buildTrainingContext as any).mockResolvedValue(MOCK_TRAINING_CONTEXT);
+    vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
     // No planned, future workouts
-    (storage.getTimeline as any).mockResolvedValue([
+    vi.mocked(storage.getTimeline).mockResolvedValue([
       {
         status: "completed",
         date: "2024-03-12",
@@ -481,8 +481,8 @@ describe("POST /api/timeline/ai-suggestions", () => {
 
 
   it("should return 500 when AI suggestions generation fails", async () => {
-    (buildTrainingContext as any).mockResolvedValue(MOCK_TRAINING_CONTEXT);
-    (storage.getTimeline as any).mockResolvedValue([
+    vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
+    vi.mocked(storage.getTimeline).mockResolvedValue([
       {
         status: "planned",
         date: "2024-03-12",
@@ -491,7 +491,7 @@ describe("POST /api/timeline/ai-suggestions", () => {
         mainWorkout: "Squats",
       }
     ]);
-    (generateWorkoutSuggestions as any).mockRejectedValue(new Error("AI Workout generation error"));
+    vi.mocked(generateWorkoutSuggestions).mockRejectedValue(new Error("AI Workout generation error"));
 
     const response = await request(app).post(TIMELINE_SUGGESTIONS_ENDPOINT);
 
@@ -501,7 +501,7 @@ describe("POST /api/timeline/ai-suggestions", () => {
 
   it("should return 500 on error", async () => {
 
-    (storage.getTimeline as any).mockRejectedValue(new Error("DB Error"));
+    vi.mocked(storage.getTimeline).mockRejectedValue(new Error("DB Error"));
 
     const response = await request(app).post(TIMELINE_SUGGESTIONS_ENDPOINT);
 

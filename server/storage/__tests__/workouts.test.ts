@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { WorkoutStorage } from "../workouts";
 import { db } from "../../db";
+import type { InsertWorkoutLog } from "@shared/schema";
 
 
 vi.mock("../../db", () => ({
@@ -24,9 +25,9 @@ describe("WorkoutStorage.createWorkoutLog", () => {
 
     const returningMock = vi.fn().mockResolvedValue([mockLog]);
     const valuesMock = vi.fn().mockReturnValue({ returning: returningMock });
-    (db.insert as any).mockReturnValue({ values: valuesMock });
+    vi.mocked(db.insert).mockReturnValue({ values: valuesMock });
 
-    const result = await storage.createWorkoutLog({ date: "2026-01-01", userId: "u1" } as any);
+    const result = await storage.createWorkoutLog({ date: "2026-01-01", userId: "u1" } as unknown as InsertWorkoutLog & { userId: string });
 
     expect(result).toEqual(mockLog);
     expect(db.insert).toHaveBeenCalledTimes(1);
@@ -39,13 +40,13 @@ describe("WorkoutStorage.createWorkoutLog", () => {
 
     const insertReturningMock = vi.fn().mockResolvedValue([mockLog]);
     const insertValuesMock = vi.fn().mockReturnValue({ returning: insertReturningMock });
-    (db.insert as any).mockReturnValue({ values: insertValuesMock });
+    vi.mocked(db.insert).mockReturnValue({ values: insertValuesMock });
 
     const updateWhereMock = vi.fn().mockResolvedValue([]);
     const updateSetMock = vi.fn().mockReturnValue({ where: updateWhereMock });
-    (db.update as any).mockReturnValue({ set: updateSetMock });
+    vi.mocked(db.update).mockReturnValue({ set: updateSetMock });
 
-    const result = await storage.createWorkoutLog({ date: "2026-01-02", userId: "u1", planDayId: "pd1" } as any);
+    const result = await storage.createWorkoutLog({ date: "2026-01-02", userId: "u1", planDayId: "pd1" } as unknown as InsertWorkoutLog & { userId: string });
 
     expect(result).toEqual(mockLog);
     expect(db.insert).toHaveBeenCalledTimes(1);
@@ -61,10 +62,10 @@ describe("WorkoutStorage.createWorkoutLog", () => {
 
     const returningMock = vi.fn().mockRejectedValue(dbError);
     const valuesMock = vi.fn().mockReturnValue({ returning: returningMock });
-    (db.insert as any).mockReturnValue({ values: valuesMock });
+    vi.mocked(db.insert).mockReturnValue({ values: valuesMock });
 
     await expect(
-      storage.createWorkoutLog({ date: "2026-01-03", userId: "u1" } as any)
+      storage.createWorkoutLog({ date: "2026-01-03", userId: "u1" } as unknown as InsertWorkoutLog & { userId: string })
     ).rejects.toThrow("Unique constraint violation");
 
     expect(db.insert).toHaveBeenCalledTimes(1);
@@ -77,16 +78,16 @@ describe("WorkoutStorage.createWorkoutLog", () => {
     // Insert succeeds
     const insertReturningMock = vi.fn().mockResolvedValue([mockLog]);
     const insertValuesMock = vi.fn().mockReturnValue({ returning: insertReturningMock });
-    (db.insert as any).mockReturnValue({ values: insertValuesMock });
+    vi.mocked(db.insert).mockReturnValue({ values: insertValuesMock });
 
     // Update fails
     const updateError = new Error("Database connection dropped during update");
     const updateWhereMock = vi.fn().mockRejectedValue(updateError);
     const updateSetMock = vi.fn().mockReturnValue({ where: updateWhereMock });
-    (db.update as any).mockReturnValue({ set: updateSetMock });
+    vi.mocked(db.update).mockReturnValue({ set: updateSetMock });
 
     await expect(
-      storage.createWorkoutLog({ date: "2026-01-04", userId: "u1", planDayId: "pd2" } as any)
+      storage.createWorkoutLog({ date: "2026-01-04", userId: "u1", planDayId: "pd2" } as unknown as InsertWorkoutLog & { userId: string })
     ).rejects.toThrow("Database connection dropped during update");
 
     expect(db.insert).toHaveBeenCalledTimes(1);
@@ -97,9 +98,9 @@ describe("WorkoutStorage.createWorkoutLog", () => {
     // This tests the `const [workoutLog] = ...` destructuring error path or simply undefined return.
     const returningMock = vi.fn().mockResolvedValue([]);
     const valuesMock = vi.fn().mockReturnValue({ returning: returningMock });
-    (db.insert as any).mockReturnValue({ values: valuesMock });
+    vi.mocked(db.insert).mockReturnValue({ values: valuesMock });
 
-    const result = await storage.createWorkoutLog({ date: "2026-01-05", userId: "u1" } as any);
+    const result = await storage.createWorkoutLog({ date: "2026-01-05", userId: "u1" } as unknown as InsertWorkoutLog & { userId: string });
 
     // Drizzle typing for `returning()` returns an array. If it's empty, `[workoutLog]` assigns `undefined`.
     expect(result).toBeUndefined();
@@ -123,14 +124,14 @@ describe("WorkoutStorage.createWorkoutLogs", () => {
 
     const returningMock = vi.fn().mockResolvedValue(mockLogs);
     const valuesMock = vi.fn().mockReturnValue({ returning: returningMock });
-    (db.insert as any).mockReturnValue({ values: valuesMock });
+    vi.mocked(db.insert).mockReturnValue({ values: valuesMock });
 
     const logsToInsert = [
       { date: "2026-01-01", userId: "u1" },
       { date: "2026-01-02", userId: "u1" },
     ];
 
-    const result = await storage.createWorkoutLogs(logsToInsert as any);
+    const result = await storage.createWorkoutLogs(logsToInsert as unknown as (InsertWorkoutLog & { userId: string })[]);
 
     expect(result).toEqual(mockLogs);
     expect(db.insert).toHaveBeenCalledTimes(1);
@@ -147,11 +148,11 @@ describe("WorkoutStorage.createWorkoutLogs", () => {
 
     const insertReturningMock = vi.fn().mockResolvedValue(mockLogs);
     const insertValuesMock = vi.fn().mockReturnValue({ returning: insertReturningMock });
-    (db.insert as any).mockReturnValue({ values: insertValuesMock });
+    vi.mocked(db.insert).mockReturnValue({ values: insertValuesMock });
 
     const updateWhereMock = vi.fn().mockResolvedValue([]);
     const updateSetMock = vi.fn().mockReturnValue({ where: updateWhereMock });
-    (db.update as any).mockReturnValue({ set: updateSetMock });
+    vi.mocked(db.update).mockReturnValue({ set: updateSetMock });
 
     const logsToInsert = [
       { date: "2026-01-03", userId: "u1", planDayId: "pd1" },
@@ -159,7 +160,7 @@ describe("WorkoutStorage.createWorkoutLogs", () => {
       { date: "2026-01-05", userId: "u1" },
     ];
 
-    const result = await storage.createWorkoutLogs(logsToInsert as any);
+    const result = await storage.createWorkoutLogs(logsToInsert as unknown as (InsertWorkoutLog & { userId: string })[]);
 
     expect(result).toEqual(mockLogs);
     expect(db.insert).toHaveBeenCalledTimes(1);

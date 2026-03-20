@@ -213,7 +213,7 @@ describe("expandExercisesToSetRows", () => {
       {
         exerciseName: "running",
         category: "running",
-        sets: "invalid" as any,
+        sets: "invalid" as unknown as undefined,
         numSets: 1,
         reps: null,
         weight: null,

@@ -40,7 +40,7 @@ export function validateAndMapCSVRows(records: unknown[]): CSVRow[] {
   if (!Array.isArray(records)) return [];
 
   return records.map(record => {
-    const row = record as Record<string, any>;
+    const row = record as Record<string, unknown>;
     return {
       Week: String(row.Week || ''),
       Day: String(row.Day || ''),

@@ -9,7 +9,7 @@ const ENDPOINT_URL = "/api/v1/auth/user";
 
 // Mock the clerkAuth middleware to simulate authentication
 vi.mock("../../clerkAuth", () => ({
-  isAuthenticated: (req: any, res: any, next: any) => {
+  isAuthenticated: (req: Record<string, unknown>, _res: unknown, next: () => void) => {
     req.auth = { userId: TEST_USER_ID };
     next();
   },

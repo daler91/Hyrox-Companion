@@ -28,14 +28,14 @@ describe("useCombineWorkouts", () => {
   beforeEach(() => {
     queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     vi.mocked(queryClientLib.queryClient.invalidateQueries).mockClear();
-    vi.mocked(toastHook.useToast).mockReturnValue({ toast: mockToast } as any);
-    vi.mocked(queryClientLib.apiRequest).mockResolvedValue({ json: vi.fn().mockResolvedValue({ id: "new" }) } as any);
+    vi.mocked(toastHook.useToast).mockReturnValue({ toast: mockToast } as unknown as ReturnType<typeof toastHook.useToast>);
+    vi.mocked(queryClientLib.apiRequest).mockResolvedValue({ json: vi.fn().mockResolvedValue({ id: "new" }) } as unknown as Response);
   });
   afterEach(() => { vi.clearAllMocks(); });
 
   const wrapper = ({ children }: { children: React.ReactNode }) => (<QueryClientProvider client={queryClient}>{children}</QueryClientProvider>);
 
-  const expectState = (res: any, entry1: any, entry2: any, dialog: boolean) => {
+  const expectState = (res: Record<string, unknown>, entry1: unknown, entry2: unknown, dialog: boolean) => {
     expect(res.combiningEntry).toEqual(entry1);
     expect(res.combineSecondEntry).toEqual(entry2);
     expect(res.showCombineDialog).toBe(dialog);

@@ -30,7 +30,7 @@ describe("formatExerciseSummary", () => {
     exerciseName: string,
     category: string,
     customLabel: string | undefined,
-    setsData: any[],
+    setsData: Record<string, unknown>[],
   ): GroupedExercise => ({
     exerciseName,
     customLabel,
@@ -44,7 +44,7 @@ describe("formatExerciseSummary", () => {
       createdAt: new Date(),
       notes: null,
       ...s,
-    })) as any,
+    })) as unknown as GroupedExercise["sets"],
   });
 
   it.each([

@@ -101,7 +101,7 @@ describe("buildTrainingContext", () => {
       { workoutLogId: "log-1", exerciseName: "back_squat", weight: 100, reps: 5, setNumber: 1, sortOrder: 0 },
       { workoutLogId: "log-1", exerciseName: "back_squat", weight: 120, reps: 3, setNumber: 2, sortOrder: 1 },
       { workoutLogId: "log-2", exerciseName: "running", distance: 5000, time: 1500, setNumber: 1, sortOrder: 0 },
-    ] as any);
+    ] as unknown as Awaited<ReturnType<typeof storage.getExerciseSetsByWorkoutLogs>>);
 
     const result = await buildTrainingContext("user-1");
 
@@ -124,7 +124,7 @@ describe("buildTrainingContext", () => {
     vi.mocked(storage.getExerciseSetsByWorkoutLogs).mockResolvedValue([]);
 
     vi.mocked(storage.listTrainingPlans).mockResolvedValue([
-      { id: "plan-1", name: "Hyrox Base", totalWeeks: 12, goal: "Complete a sub-1:30 race" } as any,
+      { id: "plan-1", name: "Hyrox Base", totalWeeks: 12, goal: "Complete a sub-1:30 race" } as unknown as Awaited<ReturnType<typeof storage.listTrainingPlans>>[number],
     ]);
 
     const result = await buildTrainingContext("user-1");

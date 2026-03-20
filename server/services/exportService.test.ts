@@ -6,8 +6,8 @@ describe('exportService - generateCSV', () => {
   const mockUserId = 'user-1';
 
   const createMockStorage = (
-    timeline: any[] = [],
-    exerciseSets: any[] = []
+    timeline: unknown[] = [],
+    exerciseSets: unknown[] = []
   ): IStorage => {
     return {
       getTimeline: vi.fn().mockResolvedValue(timeline),

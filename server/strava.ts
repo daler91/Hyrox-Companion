@@ -1,6 +1,6 @@
 import { env } from "./env";
 import { logger } from "./logger";
-import type { Express, Response } from "express";
+import type { Express, Request, Response } from "express";
 import crypto from "node:crypto";
 import { storage } from "./storage";
 import { isAuthenticated } from "./clerkAuth";
@@ -120,7 +120,7 @@ async function getValidAccessToken(userId: string): Promise<string | null> {
   return refreshed.access_token;
 }
 
-async function handleStravaStatus(req: any, res: Response) {
+async function handleStravaStatus(req: Request, res: Response) {
   try {
     const userId = getUserId(req);
     const connection = await storage.getStravaConnection(userId);
@@ -140,7 +140,7 @@ async function handleStravaStatus(req: any, res: Response) {
   }
 }
 
-async function handleStravaAuth(req: any, res: Response) {
+async function handleStravaAuth(req: Request, res: Response) {
   if (!STRAVA_CLIENT_ID) {
     return res.status(500).json({ error: "Strava integration not configured" });
   }
@@ -160,7 +160,7 @@ async function handleStravaAuth(req: any, res: Response) {
   res.json({ authUrl: authUrl.toString() });
 }
 
-async function handleStravaCallback(req: any, res: Response) {
+async function handleStravaCallback(req: Request, res: Response) {
   const { code, state, error: stravaError } = req.query;
 
   if (stravaError) {
@@ -216,7 +216,7 @@ async function handleStravaCallback(req: any, res: Response) {
   }
 }
 
-async function handleStravaDisconnect(req: any, res: Response) {
+async function handleStravaDisconnect(req: Request, res: Response) {
   try {
     const userId = getUserId(req);
     await storage.deleteStravaConnection(userId);
@@ -227,7 +227,7 @@ async function handleStravaDisconnect(req: any, res: Response) {
   }
 }
 
-async function handleStravaSync(req: any, res: Response) {
+async function handleStravaSync(req: Request, res: Response) {
   try {
     const userId = getUserId(req);
     const accessToken = await getValidAccessToken(userId);

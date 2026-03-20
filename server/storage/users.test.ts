@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { UserStorage } from './users';
 import { db } from '../db';
-import { users } from '@shared/schema';
+import { users, type InsertStravaConnection } from '@shared/schema';
 import * as crypto from '../crypto';
 
 vi.mock('../crypto', () => ({
@@ -42,7 +42,7 @@ describe('UserStorage', () => {
 
       const whereMock = vi.fn().mockResolvedValue([mockUser]);
       const fromMock = vi.fn().mockReturnValue({ where: whereMock });
-      (db.select as any).mockReturnValue({ from: fromMock });
+      vi.mocked(db.select).mockReturnValue({ from: fromMock });
 
       const result = await userStorage.getUser('user-1');
 
@@ -54,7 +54,7 @@ describe('UserStorage', () => {
     it('should return undefined when user is not found', async () => {
       const whereMock = vi.fn().mockResolvedValue([]);
       const fromMock = vi.fn().mockReturnValue({ where: whereMock });
-      (db.select as any).mockReturnValue({ from: fromMock });
+      vi.mocked(db.select).mockReturnValue({ from: fromMock });
 
       const result = await userStorage.getUser('nonexistent-user');
 
@@ -67,7 +67,7 @@ describe('UserStorage', () => {
       const dbError = new Error('Database connection failed');
       const whereMock = vi.fn().mockRejectedValue(dbError);
       const fromMock = vi.fn().mockReturnValue({ where: whereMock });
-      (db.select as any).mockReturnValue({ from: fromMock });
+      vi.mocked(db.select).mockReturnValue({ from: fromMock });
 
       await expect(userStorage.getUser('user-1')).rejects.toThrow('Database connection failed');
       expect(db.select).toHaveBeenCalled();
@@ -86,7 +86,7 @@ describe('UserStorage', () => {
 
         const whereMock = vi.fn().mockResolvedValue([mockConnection]);
         const fromMock = vi.fn().mockReturnValue({ where: whereMock });
-        (db.select as any).mockReturnValue({ from: fromMock });
+        vi.mocked(db.select).mockReturnValue({ from: fromMock });
 
         const result = await userStorage.getStravaConnection('user-1');
 
@@ -100,7 +100,7 @@ describe('UserStorage', () => {
       it('should return undefined when connection not found', async () => {
         const whereMock = vi.fn().mockResolvedValue([]);
         const fromMock = vi.fn().mockReturnValue({ where: whereMock });
-        (db.select as any).mockReturnValue({ from: fromMock });
+        vi.mocked(db.select).mockReturnValue({ from: fromMock });
 
         const result = await userStorage.getStravaConnection('nonexistent');
         expect(result).toBeUndefined();
@@ -125,9 +125,9 @@ describe('UserStorage', () => {
         }]);
         const onConflictDoUpdateMock = vi.fn().mockReturnValue({ returning: returningMock });
         const valuesMock = vi.fn().mockReturnValue({ onConflictDoUpdate: onConflictDoUpdateMock });
-        (db.insert as any).mockReturnValue({ values: valuesMock });
+        vi.mocked(db.insert).mockReturnValue({ values: valuesMock });
 
-        const result = await userStorage.upsertStravaConnection(inputData as any);
+        const result = await userStorage.upsertStravaConnection(inputData as unknown as InsertStravaConnection);
 
         expect(crypto.encryptToken).toHaveBeenCalledWith('raw-access');
         expect(crypto.encryptToken).toHaveBeenCalledWith('raw-refresh');

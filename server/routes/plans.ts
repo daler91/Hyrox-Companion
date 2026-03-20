@@ -40,7 +40,7 @@ async function handlePlanDayUpdate(
 async function handleGetOrDeletePlan(
   req: Request,
   res: Response,
-  actionFn: (id: string, userId: string) => Promise<any>,
+  actionFn: (id: string, userId: string) => Promise<Record<string, unknown> | null | undefined>,
   successMsg?: string,
   errorPrefix = "Get"
 ) {
