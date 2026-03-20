@@ -13,6 +13,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Settings, CalendarRange, LogOut, BarChart3 } from "lucide-react";
 import { useLocation, Link } from "wouter";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ThemeToggle } from "./ThemeToggle";
 import { useAuth } from "@/hooks/useAuth";
 import { useSignOut } from "@/hooks/useSignOut";
@@ -82,15 +83,25 @@ export function AppSidebar() {
             <span className="text-sm font-medium truncate" data-testid="text-user-name">{userName}</span>
           </div>
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" asChild data-testid="nav-settings" aria-label="Settings">
-              <Link href="/settings" title="Settings">
-                <Settings className="h-4 w-4" />
-              </Link>
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" asChild data-testid="nav-settings" aria-label="Settings">
+                  <Link href="/settings">
+                    <Settings className="h-4 w-4" />
+                  </Link>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Settings</TooltipContent>
+            </Tooltip>
             <ThemeToggle />
-            <Button variant="ghost" size="icon" data-testid="button-logout" aria-label="Log out" onClick={() => signOut()} title="Log out">
-              <LogOut className="h-4 w-4" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" data-testid="button-logout" aria-label="Log out" onClick={() => signOut()}>
+                  <LogOut className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Log out</TooltipContent>
+            </Tooltip>
           </div>
         </div>
       </SidebarFooter>
