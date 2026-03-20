@@ -105,24 +105,26 @@ function buildSuggestionsPrompt(
   planGoal?: string,
   coachingMaterials?: string,
 ): string {
-  const sections: string[] = [`--- ATHLETE'S TRAINING DATA ---`];
+  const header = [
+    `--- ATHLETE'S TRAINING DATA ---`,
+    ...(planGoal ? [`Athlete's goal: ${planGoal}`] : []),
+    `Completion rate: ${trainingContext.completionRate}%`,
+    `Current streak: ${trainingContext.currentStreak} days`,
+    `Completed workouts: ${trainingContext.completedWorkouts}`,
+    ...(trainingContext.weeklyGoal ? [`Weekly goal: ${trainingContext.weeklyGoal} workouts/week`] : []),
+  ];
 
-  if (planGoal) sections.push(`Athlete's goal: ${planGoal}`);
-  sections.push(`Completion rate: ${trainingContext.completionRate}%`);
-  sections.push(`Current streak: ${trainingContext.currentStreak} days`);
-  sections.push(`Completed workouts: ${trainingContext.completedWorkouts}`);
-  if (trainingContext.weeklyGoal) sections.push(`Weekly goal: ${trainingContext.weeklyGoal} workouts/week`);
+  const sections = [
+    ...header,
+    formatExerciseFrequency(trainingContext.exerciseBreakdown),
+    formatPerformanceStats(trainingContext.structuredExerciseStats),
+    formatRecentWorkouts(trainingContext.recentWorkouts),
+    `--- UPCOMING WORKOUTS ---`,
+    upcomingWorkouts.map(formatUpcomingWorkout).join("\n"),
+    ...(coachingMaterials ? [coachingMaterials] : []),
+    `Analyze the data and decide whether modifications are needed. Return [] if the plan is already well-structured.`,
+  ];
 
-  sections.push(formatExerciseFrequency(trainingContext.exerciseBreakdown));
-  sections.push(formatPerformanceStats(trainingContext.structuredExerciseStats));
-  sections.push(formatRecentWorkouts(trainingContext.recentWorkouts));
-
-  sections.push(`--- UPCOMING WORKOUTS ---`);
-  sections.push(upcomingWorkouts.map(formatUpcomingWorkout).join("\n"));
-
-  if (coachingMaterials) sections.push(coachingMaterials);
-
-  sections.push(`Analyze the data and decide whether modifications are needed. Return [] if the plan is already well-structured.`);
   return sections.filter(Boolean).join("\n");
 }
 
