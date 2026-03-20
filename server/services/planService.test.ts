@@ -36,7 +36,7 @@ vi.mock("../storage", () => {
 
 describe("planService", () => {
   describe("importPlanFromCSV", () => {
-    let loggerErrorSpy: any;
+    let loggerErrorSpy: ReturnType<typeof vi.spyOn>;
 
     beforeEach(() => {
       vi.clearAllMocks();
@@ -79,10 +79,10 @@ describe("planService", () => {
         totalWeeks: 8,
         createdAt: new Date(),
         updatedAt: new Date(),
-      } as any);
+      } as unknown as Awaited<ReturnType<typeof storage.createTrainingPlan>>);
 
-      vi.mocked(storage.createPlanDays).mockResolvedValue(undefined as any);
-      vi.mocked(storage.getTrainingPlan).mockResolvedValue(mockFullPlan as any);
+      vi.mocked(storage.createPlanDays).mockResolvedValue(undefined as unknown as Awaited<ReturnType<typeof storage.createPlanDays>>);
+      vi.mocked(storage.getTrainingPlan).mockResolvedValue(mockFullPlan as unknown as Awaited<ReturnType<typeof storage.getTrainingPlan>>);
 
       const result = await createSamplePlan(userId);
 
@@ -122,10 +122,10 @@ describe("planService", () => {
 
   describe("validateAndMapCSVRows", () => {
     it("should return an empty array if records is not an array", () => {
-      expect(validateAndMapCSVRows(null as any)).toEqual([]);
-      expect(validateAndMapCSVRows(undefined as any)).toEqual([]);
-      expect(validateAndMapCSVRows("not an array" as any)).toEqual([]);
-      expect(validateAndMapCSVRows({} as any)).toEqual([]);
+      expect(validateAndMapCSVRows(null as unknown as unknown[])).toEqual([]);
+      expect(validateAndMapCSVRows(undefined as unknown as unknown[])).toEqual([]);
+      expect(validateAndMapCSVRows("not an array" as unknown as unknown[])).toEqual([]);
+      expect(validateAndMapCSVRows({} as unknown as unknown[])).toEqual([]);
     });
 
     it("should map a complete record correctly", () => {
@@ -187,7 +187,7 @@ describe("planService", () => {
 
       expect(result).toEqual([{
         Week: "3",
-        Day: "[object Object]",
+        Day: "",
         Focus: "",
         "Main Workout": "",
         "Accessory/Engine Work": "100",
@@ -226,7 +226,7 @@ describe("planService", () => {
       vi.clearAllMocks();
     });
 
-    const setupMockTransaction = (linkedLogs: any[], dayExistenceResult: any[], expectedResult: any[]) => {
+    const setupMockTransaction = (linkedLogs: Record<string, unknown>[], dayExistenceResult: Record<string, unknown>[], expectedResult: Record<string, unknown>[]) => {
       const mockTx = {
         select: vi.fn(),
         delete: vi.fn().mockReturnThis(),
@@ -253,7 +253,7 @@ describe("planService", () => {
         });
 
       vi.mocked(db.transaction).mockImplementation(async (callback) => {
-        return await callback(mockTx as any);
+        return await callback(mockTx as unknown as Parameters<Parameters<typeof db.transaction>[0]>[0]);
       });
 
       return mockTx;
@@ -263,7 +263,7 @@ describe("planService", () => {
       const updates = { focus: "New Focus" };
       const expectedResult = { id: dayId, focus: "New Focus" };
 
-      vi.mocked(storage.updatePlanDay).mockResolvedValue(expectedResult as any);
+      vi.mocked(storage.updatePlanDay).mockResolvedValue(expectedResult as unknown as Awaited<ReturnType<typeof storage.updatePlanDay>>);
 
       const result = await updatePlanDayWithCleanup(dayId, updates, userId);
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import type { Response, NextFunction } from "express";
+import type { Request, Response, NextFunction } from "express";
 
 // ---------------------------------------------------------------------------
 // Mock express-rate-limit with a lightweight, synchronous in-process store.
@@ -12,14 +12,22 @@ import type { Response, NextFunction } from "express";
 vi.mock("express-rate-limit", () => {
   const store = new Map<string, { count: number; resetAt: number }>();
 
-  const mockRateLimit = vi.fn((opts: any) => {
+  interface RateLimitOptions {
+    windowMs?: number;
+    max?: number;
+    keyGenerator?: (req: Record<string, unknown>) => string;
+    skip?: (req: Record<string, unknown>) => boolean;
+    handler?: (req: Record<string, unknown>, res: Record<string, unknown>) => void;
+  }
+
+  const mockRateLimit = vi.fn((opts: RateLimitOptions) => {
     const windowMs = opts.windowMs ?? 60000;
     const max = opts.max ?? 1;
     const keyGen = opts.keyGenerator;
     const skip = opts.skip;
     const handler = opts.handler;
 
-    return (req: any, res: any, next: NextFunction) => {
+    return (req: Record<string, unknown>, res: Record<string, unknown>, next: NextFunction) => {
       if (skip?.(req)) return next();
 
       const key = keyGen ? keyGen(req) : req.ip ?? "";
@@ -50,7 +58,7 @@ vi.mock("express-rate-limit", () => {
   });
 
   // Expose store reset for beforeEach hooks
-  (mockRateLimit as any).__resetStore = () => store.clear();
+  (mockRateLimit as unknown as { __resetStore: () => void }).__resetStore = () => store.clear();
 
   return { 
     default: mockRateLimit,
@@ -63,8 +71,12 @@ import { expandExercisesToSetRows } from "./services/workoutService";
 import rateLimit from "express-rate-limit";
 
 describe("rateLimiter", () => {
-  let req: any;
-  let res: any;
+  let req: { auth: { userId: string }; ip: string };
+  let res: {
+    setHeader: ReturnType<typeof vi.fn>;
+    status: ReturnType<typeof vi.fn>;
+    json: ReturnType<typeof vi.fn>;
+  };
   let next: NextFunction;
 
   beforeEach(() => {
@@ -73,7 +85,7 @@ describe("rateLimiter", () => {
 
     // Clear both the limiter cache and the mock store
     clearRateLimitBuckets();
-    (rateLimit as any).__resetStore?.();
+    (rateLimit as unknown as { __resetStore?: () => void }).__resetStore?.();
 
     req = {
       auth: { userId: "user123" },
@@ -158,10 +170,10 @@ describe("rateLimiter", () => {
     const middleware = rateLimiter("api", 1, DEFAULT_WINDOW_MS);
     const reqIp = { ip: "10.0.0.1" };
 
-    middleware(reqIp as any, res as Response, next); // 1st request ip (ok)
+    middleware(reqIp as Request, res as Response, next); // 1st request ip (ok)
     expect(next).toHaveBeenCalledTimes(1);
 
-    middleware(reqIp as any, res as Response, next); // 2nd request ip (blocked)
+    middleware(reqIp as Request, res as Response, next); // 2nd request ip (blocked)
     expect(res.status).toHaveBeenCalledWith(429);
   });
 
@@ -169,8 +181,8 @@ describe("rateLimiter", () => {
     const middleware = rateLimiter("api", 1, DEFAULT_WINDOW_MS);
     const reqEmpty = {};
 
-    middleware(reqEmpty as any, res as Response, next); // 1st request empty (ok)
-    middleware(reqEmpty as any, res as Response, next); // 2nd request empty (ok)
+    middleware(reqEmpty as Request, res as Response, next); // 1st request empty (ok)
+    middleware(reqEmpty as Request, res as Response, next); // 2nd request empty (ok)
 
     expect(next).toHaveBeenCalledTimes(2);
     expect(res.status).not.toHaveBeenCalled();

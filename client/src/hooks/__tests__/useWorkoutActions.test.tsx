@@ -34,7 +34,7 @@ describe('useWorkoutActions', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(toastHook.useToast).mockReturnValue({ toast: mockToast } as any);
+    vi.mocked(toastHook.useToast).mockReturnValue({ toast: mockToast } as unknown as ReturnType<typeof toastHook.useToast>);
     vi.mocked(queryClientLib.apiRequest).mockResolvedValue({
       json: () => Promise.resolve({ success: true }),
     } as Response);

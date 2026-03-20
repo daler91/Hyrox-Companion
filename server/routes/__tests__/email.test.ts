@@ -19,7 +19,7 @@ vi.mock("../../emailScheduler", () => ({
 
 // Mock clerkAuth
 vi.mock("../../clerkAuth", () => ({
-  isAuthenticated: (req: any, res: any, next: any) => next(),
+  isAuthenticated: (_req: unknown, _res: unknown, next: () => void) => next(),
 }));
 
 describe("Email Routes", () => {

@@ -9,7 +9,7 @@ vi.mock('@/components/onboarding/WelcomeStep', () => ({
   WelcomeStep: () => <div data-testid="welcome-step">WelcomeStep</div>,
 }));
 vi.mock('@/components/onboarding/UnitsStep', () => ({
-  UnitsStep: ({ onWeightUnitChange, onDistanceUnitChange }: any) => (
+  UnitsStep: ({ onWeightUnitChange, onDistanceUnitChange }: { onWeightUnitChange: (v: string) => void; onDistanceUnitChange: (v: string) => void }) => (
     <div data-testid="units-step">
       <button onClick={() => onWeightUnitChange('lbs')}>Set Weight</button>
       <button onClick={() => onDistanceUnitChange('miles')}>Set Distance</button>
@@ -39,7 +39,7 @@ describe('OnboardingWizard Error Handling', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    (useToast as any).mockReturnValue({ toast: mockToast });
+    vi.mocked(useToast).mockReturnValue({ toast: mockToast } as unknown as ReturnType<typeof useToast>);
     queryClient = new QueryClient({
       defaultOptions: {
         queries: { retry: false },
@@ -69,7 +69,7 @@ describe('OnboardingWizard Error Handling', () => {
     // In the units step, clicking "Continue" calls handleNext(), which triggers prefsMutation.
     // We mock the API request to fail for the /api/preferences endpoint.
     const { apiRequest } = await import('@/lib/queryClient');
-    (apiRequest as any).mockRejectedValueOnce(new Error('Failed to save preferences'));
+    vi.mocked(apiRequest).mockRejectedValueOnce(new Error('Failed to save preferences'));
 
     fireEvent.click(screen.getByText('Continue'));
 

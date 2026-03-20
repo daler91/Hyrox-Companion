@@ -83,7 +83,7 @@ async function processBatchChunk(
   return { parsed, failed };
 }
 
-function validateExercisesPayload(exercises: any) {
+function validateExercisesPayload(exercises: unknown) {
   if (!exercises) return { success: true, data: exercises };
   const parseResult = exercisesPayloadSchema.safeParse(exercises);
   if (!parseResult.success) {

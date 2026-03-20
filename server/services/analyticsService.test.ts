@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { calculatePersonalRecords, calculateExerciseAnalytics } from "./analyticsService";
 
-function makeSet(overrides: Record<string, any> = {}) {
+function makeSet(overrides: Record<string, unknown> = {}) {
   return {
     exerciseName: "back_squat",
     category: "strength",

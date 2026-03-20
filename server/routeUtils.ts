@@ -1,8 +1,12 @@
 import { toDateStr } from "./types";
 import rateLimit, { MemoryStore } from "express-rate-limit";
-import type { NextFunction } from "express";
+import type { Request, Response, NextFunction } from "express";
 
 export const DEFAULT_WINDOW_MS = 60000;
+
+interface AuthenticatedRequest extends Request {
+  auth?: { userId?: string };
+}
 
 // One limiter instance per unique (category, maxRequests, windowMs) combination.
 // This preserves the per-category isolation of the previous Map-based design.
@@ -18,9 +22,9 @@ export function rateLimiter(
 
   // Return a wrapper closure so that the limiter is evaluated at request time.
   // This is crucial for test environments where `clearRateLimitBuckets` is called:
-  // routers capture this wrapper at module load, but the inner rateLimit instance 
+  // routers capture this wrapper at module load, but the inner rateLimit instance
   // can be destroyed and recreated cleanly.
-  return (req: any, res: any, next: NextFunction) => {
+  return (req: Request, res: Response, next: NextFunction) => {
     if (!limiterCache.has(cacheKey)) {
       limiterCache.set(
         cacheKey,
@@ -30,15 +34,19 @@ export function rateLimiter(
           store: new MemoryStore(), // Explicitly give each limiter its own store so caching clears reset state
           validate: { default: false }, // Suppress dynamic creation warning since we use it intentionally for tests
           // Per-user key, namespaced by category so limits are independent per route group.
-          keyGenerator: (req: any) => {
-            const id = req.auth?.userId ?? req.ip;
+          keyGenerator: (req: Request) => {
+            const authReq = req as AuthenticatedRequest;
+            const id = authReq.auth?.userId ?? req.ip;
             return id ? `${category}:${id}` : "";
           },
           // Skip rate-limiting entirely when there is no identifier.
-          skip: (req: any) => !req.auth?.userId && !req.ip,
+          skip: (req: Request) => {
+            const authReq = req as AuthenticatedRequest;
+            return !authReq.auth?.userId && !req.ip;
+          },
           standardHeaders: true,   // RateLimit-* headers (RFC 6585)
           legacyHeaders: false,     // Disable X-RateLimit-* headers
-          handler: (_req: any, res: any) => {
+          handler: (_req: Request, res: Response) => {
             res.setHeader("Retry-After", String(retryAfterSec));
             res.status(429).json({
               error: `Too many requests. Please wait ${retryAfterSec} seconds before trying again.`,

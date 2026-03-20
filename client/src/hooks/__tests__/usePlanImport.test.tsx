@@ -23,7 +23,7 @@ describe('usePlanImport', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(toastHook.useToast).mockReturnValue({ toast: mockToast } as any);
+    vi.mocked(toastHook.useToast).mockReturnValue({ toast: mockToast } as unknown as ReturnType<typeof toastHook.useToast>);
     vi.mocked(queryClientLib.apiRequest).mockResolvedValue({ json: () => Promise.resolve({ success: true, id: 'test-plan-id' }) } as Response);
     const w = createWrapper();
     qc = w.qc;

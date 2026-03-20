@@ -7,7 +7,7 @@ import { calculatePersonalRecords, calculateExerciseAnalytics } from "../../serv
 
 // Mock the clerkAuth middleware to simulate authentication
 vi.mock("../../clerkAuth", () => ({
-  isAuthenticated: (req: any, res: any, next: any) => {
+  isAuthenticated: (req: Record<string, unknown>, _res: unknown, next: () => void) => {
     req.auth = { userId: "test_user_id" };
     next();
   },
@@ -74,11 +74,11 @@ describe("Analytics Routes", () => {
     });
   };
 
-  const testEndpoint = (endpoint: string, mockMethod: any, expectedBody: any) => {
+  const testEndpoint = (endpoint: string, mockMethod: ReturnType<typeof vi.fn>, expectedBody: Record<string, unknown>) => {
     describe(`GET ${endpoint}`, () => {
       it("should return analytics for a user", async () => {
         vi.mocked(storage.getAllExerciseSetsWithDates).mockResolvedValue([
-          { id: "set1", exerciseName: "Test", weight: "100", reps: 10 } as any
+          { id: "set1", exerciseName: "Test", weight: "100", reps: 10 } as unknown as Awaited<ReturnType<typeof storage.getAllExerciseSetsWithDates>>[number]
         ]);
 
         vi.mocked(mockMethod).mockReturnValue(expectedBody);
@@ -123,12 +123,13 @@ describe("Analytics Routes", () => {
     const makeRequest = () => request(app).get("/api/v1/personal-records");
 
     it("should coalesce concurrent requests to the database", async () => {
-      let resolvePromise: (value: any) => void;
-      const delayedPromise = new Promise<any[]>((resolve) => {
+      type ExerciseSetWithDate = Awaited<ReturnType<typeof storage.getAllExerciseSetsWithDates>>;
+      let resolvePromise: (value: ExerciseSetWithDate) => void;
+      const delayedPromise = new Promise<ExerciseSetWithDate>((resolve) => {
         resolvePromise = resolve;
       });
 
-      vi.mocked(storage.getAllExerciseSetsWithDates).mockImplementation(() => delayedPromise as any);
+      vi.mocked(storage.getAllExerciseSetsWithDates).mockImplementation(() => delayedPromise);
 
       const p1 = makeRequest();
       const p2 = makeRequest();

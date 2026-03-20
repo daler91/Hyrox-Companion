@@ -6,7 +6,7 @@ import { clearRateLimitBuckets } from "../../routeUtils";
 
 // Mock the clerkAuth middleware to simulate authentication
 vi.mock("../../clerkAuth", () => ({
-  isAuthenticated: (req: any, res: any, next: any) => {
+  isAuthenticated: (req: Record<string, unknown>, _res: unknown, next: () => void) => {
     req.auth = { userId: "test_user_id" };
     next();
   },
@@ -53,9 +53,8 @@ describe("Workouts Routes", () => {
   describe("POST /api/workouts", () => {
     it("should return 500 when createWorkout throws an error", async () => {
       // Mock the createWorkout to throw an error
-      const mockWorkoutService = await import("../../services/workoutService");
-      const { createWorkout } = mockWorkoutService as any;
-      createWorkout.mockRejectedValue(new Error("Service error"));
+      const { createWorkout } = await import("../../services/workoutService");
+      vi.mocked(createWorkout).mockRejectedValue(new Error("Service error"));
 
 
 
@@ -79,14 +78,13 @@ describe("Workouts Routes", () => {
   describe("GET /api/workouts", () => {
     it("should return a list of workout logs for a user", async () => {
       // Mock the storage response
-      const mockStorage = await import("../../storage");
-      const { storage } = mockStorage as any;
+      const { storage } = await import("../../storage");
 
       const mockLogs = [
         { id: "1", userId: "test_user_id", date: "2024-03-10", notes: "Great workout" },
         { id: "2", userId: "test_user_id", date: "2024-03-12", notes: "Felt tired" }
       ];
-      storage.listWorkoutLogs.mockResolvedValue(mockLogs);
+      vi.mocked(storage.listWorkoutLogs).mockResolvedValue(mockLogs);
 
       const response = await request(app).get("/api/v1/workouts");
 
@@ -97,9 +95,8 @@ describe("Workouts Routes", () => {
 
     it("should return 500 when storage throws an error", async () => {
       // Mock the storage to throw an error
-      const mockStorage = await import("../../storage");
-      const { storage } = mockStorage as any;
-      storage.listWorkoutLogs.mockRejectedValue(new Error("Database error"));
+      const { storage } = await import("../../storage");
+      vi.mocked(storage.listWorkoutLogs).mockRejectedValue(new Error("Database error"));
 
       const response = await request(app).get("/api/v1/workouts");
 
