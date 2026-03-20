@@ -7,6 +7,7 @@ vi.mock("../storage", () => ({
     getTimeline: vi.fn(),
     listTrainingPlans: vi.fn(),
     getExerciseSetsByWorkoutLogs: vi.fn(),
+    getUser: vi.fn(),
   },
 }));
 
@@ -14,6 +15,7 @@ describe("buildTrainingContext", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers();
+    vi.mocked(storage.getUser).mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -35,6 +37,7 @@ describe("buildTrainingContext", () => {
       skippedWorkouts: 0,
       completionRate: 0,
       currentStreak: 0,
+      weeklyGoal: undefined,
       recentWorkouts: [],
       exerciseBreakdown: {},
       structuredExerciseStats: undefined,
