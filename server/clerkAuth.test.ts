@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { Request, Response, NextFunction } from "express";
 import { isAuthenticated } from "./clerkAuth";
 import { getAuth } from "@clerk/express";
@@ -21,23 +21,15 @@ vi.mock("./storage", () => ({
   },
 }));
 
-interface MockResponse {
-  status: Mock;
-  json: Mock;
-}
-
 describe("isAuthenticated middleware", () => {
-  let req: Partial<Request>;
-  let res: MockResponse;
-  let next: Mock;
+  let req: Request;
+  let res: Response;
+  let next: NextFunction;
 
   beforeEach(() => {
-    req = {};
-    res = {
-      status: vi.fn().mockReturnThis(),
-      json: vi.fn(),
-    };
-    next = vi.fn();
+    req = {} as Request;
+    res = { status: vi.fn().mockReturnThis(), json: vi.fn() } as unknown as Response;
+    next = vi.fn() as unknown as NextFunction;
     vi.clearAllMocks();
   });
 
@@ -48,7 +40,7 @@ describe("isAuthenticated middleware", () => {
   it("returns 401 when no auth object is returned from getAuth", async () => {
     vi.mocked(getAuth).mockReturnValue(null);
 
-    await isAuthenticated(req as Request, res as unknown as Response, next as NextFunction);
+    await isAuthenticated(req, res, next);
 
     expect(getAuth).toHaveBeenCalledWith(req);
     expect(res.status).toHaveBeenCalledWith(401);
@@ -59,7 +51,7 @@ describe("isAuthenticated middleware", () => {
   it("returns 401 when auth object does not have a userId", async () => {
     vi.mocked(getAuth).mockReturnValue({ userId: null });
 
-    await isAuthenticated(req as Request, res as unknown as Response, next as NextFunction);
+    await isAuthenticated(req, res, next);
 
     expect(getAuth).toHaveBeenCalledWith(req);
     expect(res.status).toHaveBeenCalledWith(401);
@@ -71,7 +63,7 @@ describe("isAuthenticated middleware", () => {
     vi.mocked(getAuth).mockReturnValue({ userId: "test-user-id" });
     vi.mocked(storage.getUser).mockResolvedValue({ id: "test-user-id" });
 
-    await isAuthenticated(req as Request, res as unknown as Response, next as NextFunction);
+    await isAuthenticated(req, res, next);
 
     expect(getAuth).toHaveBeenCalledWith(req);
     expect(storage.getUser).toHaveBeenCalledWith("test-user-id");
@@ -85,7 +77,7 @@ describe("isAuthenticated middleware", () => {
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     vi.mocked(storage.getUser).mockRejectedValue(new Error("Database error"));
 
-    await isAuthenticated(req as Request, res as unknown as Response, next as NextFunction);
+    await isAuthenticated(req, res, next);
 
     expect(getAuth).toHaveBeenCalledWith(req);
     expect(storage.getUser).toHaveBeenCalledWith("test-user-id");

@@ -187,7 +187,7 @@ describe("planService", () => {
 
       expect(result).toEqual([{
         Week: "3",
-        Day: "[object Object]",
+        Day: "",
         Focus: "",
         "Main Workout": "",
         "Accessory/Engine Work": "100",
