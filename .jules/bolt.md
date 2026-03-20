@@ -17,3 +17,7 @@
 ## 2024-05-27 - Fast String Date Comparison Optimization
 **Learning:** Using `localeCompare()` for sorting ISO 8601 or YYYY-MM-DD formatted date strings introduces unnecessary overhead. For strings strictly formatted as YYYY-MM-DD, a direct structural string comparison (using operators `<` and `>`) produces the exact same result significantly faster, especially within `Array.prototype.sort()` over large arrays.
 **Action:** When sorting dates represented as zero-padded standard formats (like YYYY-MM-DD), use standard string comparison operators (`<`, `>`) instead of `localeCompare` to avoid the performance penalty of localizing strings unnecessarily. To satisfy SonarCloud typescript:S3358, write out `if (b < a) return -1; if (b > a) return 1; return 0;` explicitly rather than nesting ternaries.
+
+## 2026-03-20 - Fast Drizzle ORM Multi-Table Updates
+**Learning:** In Drizzle ORM (PostgreSQL), running `.update(table).where(inArray(table.foreign_id, db.select({ id: other_table.id }).from(other_table)))` causes the database to execute a slower nested subquery (N+1 bottleneck) during `UPDATE` operations, significantly slowing down backend performance.
+**Action:** Replace `inArray` subqueries with direct relational joins using Drizzle's `.from(other_table)` method in `.update()` queries. Format: `db.update(table).set(...).from(other_table).where(and(eq(table.id, ...), eq(table.foreign_id, other_table.id)))`. Remember to update test mocks to include `from` in the method chain when writing unit tests.

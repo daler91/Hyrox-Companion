@@ -21,18 +21,16 @@ export class WorkoutStorage {
       .returning();
 
     if (log.planDayId) {
+      // Bolt Optimization: Use direct JOIN via .from() instead of inArray() subquery to prevent N+1 execution
       await db
         .update(planDays)
         .set({ status: "completed" })
+        .from(trainingPlans)
         .where(
           and(
             eq(planDays.id, log.planDayId),
-            inArray(
-              planDays.planId,
-              db.select({ id: trainingPlans.id })
-                .from(trainingPlans)
-                .where(eq(trainingPlans.userId, log.userId))
-            )
+            eq(planDays.planId, trainingPlans.id),
+            eq(trainingPlans.userId, log.userId)
           )
         );
     }
@@ -61,18 +59,16 @@ export class WorkoutStorage {
 
     for (const [userId, planDayIds] of updatesByUser) {
       if (planDayIds.length > 0) {
+        // Bolt Optimization: Use direct JOIN via .from() instead of inArray() subquery to prevent N+1 execution
         await db
           .update(planDays)
           .set({ status: "completed" })
+          .from(trainingPlans)
           .where(
             and(
               inArray(planDays.id, planDayIds),
-              inArray(
-                planDays.planId,
-                db.select({ id: trainingPlans.id })
-                  .from(trainingPlans)
-                  .where(eq(trainingPlans.userId, userId))
-              )
+              eq(planDays.planId, trainingPlans.id),
+              eq(trainingPlans.userId, userId)
             )
           );
       }
