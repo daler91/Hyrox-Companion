@@ -16,3 +16,8 @@
 **Vulnerability:** Found that the `/api/v1/personal-records` and `/api/v1/exercise-analytics` endpoints lacked rate limiting.
 **Learning:** Data-intensive endpoints that aggregate historical logs across wide date ranges can become slow if heavily abused or polled sequentially, creating application-level denial-of-service vectors despite short-lived caches.
 **Prevention:** Ensure expensive analytics endpoints define rate limits explicitly on the route handler using the global `rateLimiter` function.
+
+## 2026-03-20 - Missing Rate Limiting on User Endpoint
+**Vulnerability:** The `/api/v1/auth/user` endpoint, which is responsible for returning authenticated user details, was missing rate limiting. This could potentially allow abuse via credential stuffing or denial-of-service (DoS) attacks on the authentication subsystem.
+**Learning:** All endpoints that interact with authentication, user data retrieval, or authorization should have appropriate rate limiting applied to prevent abuse, even if they are just reading data.
+**Prevention:** Ensure that `rateLimiter` middleware from `server/routeUtils.ts` is applied to all sensitive or high-value endpoints, especially those dealing with authentication or user profiles.
