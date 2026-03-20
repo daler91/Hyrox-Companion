@@ -198,10 +198,10 @@ router.post("/api/v1/workouts", isAuthenticated, rateLimiter("workout", 40), asy
     if (!exerciseValidation.success) {
       return res.status(400).json({ error: "Invalid exercises data", details: exerciseValidation.error });
     }
-    const validatedExercises = exerciseValidation.data;
+    const validatedExercises = exerciseValidation.data as any;
 
     const userId = getUserId(req);
-    const result = await createWorkout(parseResult.data, validatedExercises, userId);
+    const result = await createWorkout(parseResult.data, validatedExercises as any, userId);
     res.json(result);
     // Fire-and-forget: auto-coach adjusts upcoming plan days based on this completed workout
     triggerAutoCoach(userId).catch((err) => logger.warn(err, "Auto-coach trigger failed"));
@@ -223,7 +223,7 @@ router.patch("/api/v1/workouts/:id", isAuthenticated, rateLimiter("workout", 40)
     if (!exerciseValidation.success) {
       return res.status(400).json({ error: "Invalid exercises data", details: exerciseValidation.error });
     }
-    const validatedExercises = exerciseValidation.data;
+    const validatedExercises = exerciseValidation.data as any;
 
     const userId = getUserId(req);
     const result = await updateWorkout(req.params.id, parseResult.data, validatedExercises, userId);
