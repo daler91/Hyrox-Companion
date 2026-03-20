@@ -26,7 +26,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
 /** Strip null bytes and non-printable control characters that PostgreSQL text columns reject. */
 function sanitizeText(text: string): string {
-  return text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "");
+  return text.replaceAll(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "");
 }
 
 async function extractPdfText(file: File): Promise<string> {
