@@ -2,6 +2,7 @@ import { z } from "zod";
 import { logger } from "../logger";
 import { PARSE_EXERCISES_PROMPT, VALID_EXERCISE_NAMES, VALID_CATEGORIES } from "../prompts";
 import { getAiClient, GEMINI_MODEL, retryWithBackoff, truncate } from "./client";
+import { sanitizeHtml } from "../utils/sanitize";
 import { exerciseSetSchema, type ParsedExercise } from "@shared/schema";
 
 export const parsedExerciseSchema = z.object({
@@ -88,16 +89,16 @@ and use the matching name as customLabel: ${customExerciseNames.join(", ")}`;
         confidence = Math.min(100, Math.max(0, Math.round(ex.confidence)));
       }
       return {
-        exerciseName: isKnown ? ex.exerciseName : "custom",
-        category: validCategory ? ex.category : "conditioning",
+        exerciseName: isKnown ? sanitizeHtml(ex.exerciseName) : "custom",
+        category: validCategory ? sanitizeHtml(ex.category) : "conditioning",
         customLabel: isKnown
-          ? ex.customLabel || undefined
-          : ex.customLabel || ex.exerciseName,
+          ? (ex.customLabel ? sanitizeHtml(ex.customLabel) : undefined)
+          : sanitizeHtml(ex.customLabel || ex.exerciseName),
         confidence,
         missingFields: Array.isArray(ex.missingFields)
           ? ex.missingFields.filter(
               (f) => typeof f === "string" && f.length > 0,
-            )
+            ).map(f => sanitizeHtml(f))
           : undefined,
         sets: ex.sets.map((s, i) => ({
           setNumber: s.setNumber || i + 1,

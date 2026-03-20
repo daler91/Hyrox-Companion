@@ -2,6 +2,7 @@ import { z } from "zod";
 import { logger } from "../logger";
 import { SUGGESTIONS_PROMPT } from "../prompts";
 import { getAiClient, GEMINI_MODEL, retryWithBackoff, truncate } from "./client";
+import { sanitizeHtml } from "../utils/sanitize";
 import type { TrainingContext } from "./types";
 
 
@@ -50,7 +51,13 @@ function parseAndValidateSuggestions(text: string): WorkoutSuggestion[] {
   for (const item of rawArray) {
     const result = workoutSuggestionSchema.safeParse(item);
     if (result.success) {
-      validated.push(result.data);
+      const item = result.data;
+      validated.push({
+        ...item,
+        recommendation: sanitizeHtml(item.recommendation),
+        rationale: sanitizeHtml(item.rationale),
+        workoutFocus: sanitizeHtml(item.workoutFocus)
+      });
     } else {
       logger.warn({ issues: result.error.issues, item: JSON.stringify(item).slice(0, 200) }, "[gemini] Dropping invalid suggestion:");
     }
