@@ -12,5 +12,5 @@ const htmlEntityMap: Record<string, string> = {
 
 export function sanitizeHtml(str: string): string {
   if (typeof str !== "string") return str;
-  return str.replace(/[&<>"']/g, (match) => htmlEntityMap[match] || match);
+  return str.replace(/[&<>"']/g, (match) => htmlEntityMap[match as keyof typeof htmlEntityMap]);
 }
