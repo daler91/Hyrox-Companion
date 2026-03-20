@@ -37,8 +37,9 @@ function parseCSVContent(csvText: string): unknown[] {
 }
 
 function toStr(val: unknown): string {
-  if (val == null || val === false || typeof val === 'object') return '';
-  return String(val);
+  if (typeof val === 'string') return val;
+  if (typeof val === 'number') return String(val);
+  return '';
 }
 
 export function validateAndMapCSVRows(records: unknown[]): CSVRow[] {
