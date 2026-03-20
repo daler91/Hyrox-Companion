@@ -98,8 +98,16 @@ function processParsedExercises(parsed: ParsedExercise[], counterRef: MutableRef
 }
 
 function getParseSuccessDescription(parsed: ParsedExercise[]): string {
-  const lowConfCount = parsed.filter(e => e.confidence != null && e.confidence < 80).length;
-  const missingCount = parsed.filter(e => e.missingFields && e.missingFields.length > 0).length;
+  // ⚡ Bolt Performance Optimization:
+  // Combine multiple O(N) array filters into a single O(N) traversal
+  // to avoid redundant object allocations.
+  let lowConfCount = 0;
+  let missingCount = 0;
+
+  for (const e of parsed) {
+    if (e.confidence != null && e.confidence < 80) lowConfCount++;
+    if (e.missingFields && e.missingFields.length > 0) missingCount++;
+  }
 
   let description = `Found ${parsed.length} exercise${parsed.length === 1 ? "" : "s"}.`;
   if (lowConfCount > 0) {
