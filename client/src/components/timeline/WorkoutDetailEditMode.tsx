@@ -8,7 +8,7 @@ import {
   exerciseToPayload,
 } from "@/hooks/useWorkoutEditor";
 import { WorkoutDetailHeader } from "./WorkoutDetailHeader";
-import { WorkoutDetailEditForm } from "./WorkoutDetailExercises";
+import { WorkoutDetailEditForm } from "./workout-detail-exercises";
 import { WorkoutDetailFooter } from "./WorkoutDetailActions";
 
 interface WorkoutDetailEditModeProps {
