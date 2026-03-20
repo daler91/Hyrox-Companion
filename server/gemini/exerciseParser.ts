@@ -91,9 +91,12 @@ and use the matching name as customLabel: ${customExerciseNames.join(", ")}`;
       return {
         exerciseName: isKnown ? sanitizeHtml(ex.exerciseName) : "custom",
         category: validCategory ? sanitizeHtml(ex.category) : "conditioning",
-        customLabel: isKnown
-          ? (ex.customLabel ? sanitizeHtml(ex.customLabel) : undefined)
-          : sanitizeHtml(ex.customLabel || ex.exerciseName),
+        customLabel: (() => {
+          if (isKnown) {
+            return ex.customLabel ? sanitizeHtml(ex.customLabel) : undefined;
+          }
+          return sanitizeHtml(ex.customLabel || ex.exerciseName);
+        })(),
         confidence,
         missingFields: Array.isArray(ex.missingFields)
           ? ex.missingFields.filter(
