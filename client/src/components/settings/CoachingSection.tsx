@@ -50,8 +50,7 @@ async function extractFileText(file: File): Promise<string> {
 }
 
 function getFileSizeLimit(file: File): number {
-  const ext = file.name.split(".").pop()?.toLowerCase();
-  return ext === "pdf" || ext === "docx" ? 1000000 : 500000;
+  return 100000;
 }
 
 export function CoachingSection() {
@@ -76,14 +75,14 @@ export function CoachingSection() {
   const processSingleFile = async (file: File) => {
     const sizeLimit = getFileSizeLimit(file);
     if (file.size > sizeLimit) {
-      toast({ title: "File too large", description: `Maximum file size is ${sizeLimit === 1000000 ? "1MB" : "500KB"}.`, variant: "destructive" });
+      toast({ title: "File too large", description: `Maximum file size is 100KB.`, variant: "destructive" });
       return;
     }
     try {
       const text = await extractFileText(file);
       setDialogType("document");
       setTitle(file.name.replace(/\.[^/.]+$/, ""));
-      setContent(text.slice(0, 50000));
+      setContent(text.slice(0, 10000));
       setDialogOpen(true);
     } catch {
       toast({ title: "Failed to read file", variant: "destructive" });
@@ -104,7 +103,7 @@ export function CoachingSection() {
         const text = await extractFileText(file);
         await createMutation.mutateAsync({
           title: file.name.replace(/\.[^/.]+$/, ""),
-          content: text.slice(0, 50000),
+          content: text.slice(0, 10000),
           type: "document",
         });
         uploaded++;

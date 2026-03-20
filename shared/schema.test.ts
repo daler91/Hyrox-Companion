@@ -3,7 +3,7 @@ import { importPlanRequestSchema } from "./schema";
 
 describe("importPlanRequestSchema validation", () => {
   it("rejects a very large csvContent", () => {
-    const largeCsvContent = "a".repeat(1000001); // Over 1,000,000 characters
+    const largeCsvContent = "a".repeat(100001); // Over 1,000,000 characters
     const payload = {
       csvContent: largeCsvContent,
       fileName: "test.csv",
@@ -13,7 +13,7 @@ describe("importPlanRequestSchema validation", () => {
     const result = importPlanRequestSchema.safeParse(payload);
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.errors[0].message).toBe("CSV content must be 1,000,000 characters or less");
+      expect(result.error.errors[0].message).toBe("CSV content must be 100,000 characters or less");
     }
   });
 
