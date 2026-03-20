@@ -3,7 +3,7 @@ import { Router, type Request, type Response } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { rateLimiter } from "../routeUtils";
 import { storage } from "../storage";
-import { insertWorkoutLogSchema, updateWorkoutLogSchema, insertCustomExerciseSchema, exercisesPayloadSchema, type InsertWorkoutLog, type UpdateWorkoutLog, type InsertCustomExercise } from "@shared/schema";
+import { insertWorkoutLogSchema, updateWorkoutLogSchema, insertCustomExerciseSchema, exercisesPayloadSchema, type InsertWorkoutLog, type UpdateWorkoutLog, type InsertCustomExercise , type ParsedExercise} from "@shared/schema";
 import { generateCSV, generateJSON } from "../services/exportService";
 import { createWorkout, updateWorkout, reparseWorkout, prepareParsedWorkout, saveParsedWorkout } from "../services/workoutService";
 import { getUserId } from "../types";
@@ -198,7 +198,7 @@ router.post("/api/v1/workouts", isAuthenticated, rateLimiter("workout", 40), asy
     if (!exerciseValidation.success) {
       return res.status(400).json({ error: "Invalid exercises data", details: exerciseValidation.error });
     }
-    const validatedExercises = exerciseValidation.data;
+    const validatedExercises = exerciseValidation.data as ParsedExercise[] | undefined;
 
     const userId = getUserId(req);
     const result = await createWorkout(parseResult.data, validatedExercises, userId);
@@ -223,7 +223,7 @@ router.patch("/api/v1/workouts/:id", isAuthenticated, rateLimiter("workout", 40)
     if (!exerciseValidation.success) {
       return res.status(400).json({ error: "Invalid exercises data", details: exerciseValidation.error });
     }
-    const validatedExercises = exerciseValidation.data;
+    const validatedExercises = exerciseValidation.data as ParsedExercise[] | undefined;
 
     const userId = getUserId(req);
     const result = await updateWorkout(req.params.id, parseResult.data, validatedExercises, userId);

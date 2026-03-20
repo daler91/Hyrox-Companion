@@ -159,8 +159,8 @@ describe('useWorkoutForm', () => {
       });
 
       act(() => {
-        handlers.getMainHandler().onResult('is fun');
-        handlers.getNotesHandler().onResult('and fun');
+        (handlers.getMainHandler() as any).onResult("is fun");
+        (handlers.getNotesHandler() as any).onResult("and fun");
       });
 
       expect(result.current.freeText).toBe('Running is fun');
@@ -177,7 +177,7 @@ describe('useWorkoutForm', () => {
       });
 
       act(() => {
-        handlers.getMainHandler().onResult('is fun');
+        (handlers.getMainHandler() as any).onResult("is fun");
       });
 
       expect(result.current.freeText).toBe('Running is fun');
@@ -187,7 +187,7 @@ describe('useWorkoutForm', () => {
       });
 
       act(() => {
-        handlers.getMainHandler().onResult('is fun');
+        (handlers.getMainHandler() as any).onResult("is fun");
       });
 
       expect(result.current.freeText).toBe('Running\nis fun');
@@ -199,7 +199,7 @@ describe('useWorkoutForm', () => {
       renderFormHook(defaultProps);
 
       act(() => {
-        handlers.getMainHandler().onError('Microphone not found');
+        (handlers.getMainHandler() as any).onError("Microphone not found");
       });
 
       expect(mockToast).toHaveBeenCalledWith({
@@ -329,9 +329,9 @@ describe('useWorkoutForm', () => {
       const props = {
         ...defaultProps,
         useTextMode: false,
-        exerciseBlocks: ['block-1', 'invalid-block'], // 'invalid-block' is missing from data
+        exerciseBlocks: ['block-1', 'invalid-block'] as any, // 'invalid-block' is missing from data
         exerciseData: mockExerciseData as unknown as typeof defaultProps.exerciseData,
-      };
+      } as any;
 
       const { result } = renderFormHook(props);
 
