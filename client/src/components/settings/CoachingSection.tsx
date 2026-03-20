@@ -24,6 +24,11 @@ import mammoth from "mammoth";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
+/** Strip null bytes and non-printable control characters that PostgreSQL text columns reject. */
+function sanitizeText(text: string): string {
+  return text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "");
+}
+
 async function extractPdfText(file: File): Promise<string> {
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
@@ -33,20 +38,20 @@ async function extractPdfText(file: File): Promise<string> {
     const textContent = await page.getTextContent();
     pages.push(textContent.items.map((item) => ("str" in item ? item.str : "")).join(" "));
   }
-  return pages.join("\n\n");
+  return sanitizeText(pages.join("\n\n"));
 }
 
 async function extractDocxText(file: File): Promise<string> {
   const arrayBuffer = await file.arrayBuffer();
   const result = await mammoth.extractRawText({ arrayBuffer });
-  return result.value;
+  return sanitizeText(result.value);
 }
 
 async function extractFileText(file: File): Promise<string> {
   const ext = file.name.split(".").pop()?.toLowerCase();
   if (ext === "pdf") return extractPdfText(file);
   if (ext === "docx") return extractDocxText(file);
-  return file.text();
+  return sanitizeText(await file.text());
 }
 
 function getFileSizeLimit(file: File): number {
