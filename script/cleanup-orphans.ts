@@ -7,7 +7,12 @@ if (!process.env.DATABASE_URL) {
   process.exit(0);
 }
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000,
+});
 
 const client = await pool.connect();
 try {
