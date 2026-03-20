@@ -2,6 +2,7 @@ import { logger } from "../logger";
 import { storage } from "../storage";
 import { buildTrainingContext } from "./aiService";
 import { generateWorkoutSuggestions, type UpcomingWorkout, type WorkoutSuggestion } from "../gemini/index";
+import { buildCoachingMaterialsSection } from "../prompts";
 import { toDateStr } from "../types";
 
 // ---------------------------------------------------------------------------
@@ -72,12 +73,14 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
     await storage.updateIsAutoCoaching(userId, true);
 
     try {
-      const [trainingContext, plans] = await Promise.all([
+      const [trainingContext, plans, coachingMaterialsList] = await Promise.all([
         buildTrainingContext(userId),
         storage.listTrainingPlans(userId),
+        storage.listCoachingMaterials(userId),
       ]);
 
       const activePlanGoal = plans[0]?.goal ?? undefined;
+      const coachingMaterials = buildCoachingMaterialsSection(coachingMaterialsList);
       const today = toDateStr();
       const timeline = await storage.getTimeline(userId);
 
@@ -96,6 +99,7 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
           focus: entry.focus || "",
           mainWorkout: entry.mainWorkout || "",
           accessory: entry.accessory || undefined,
+          notes: entry.notes || undefined,
         }));
 
       if (upcomingWorkouts.length === 0) return { adjusted: 0 };
@@ -104,6 +108,7 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
         trainingContext,
         upcomingWorkouts,
         activePlanGoal,
+        coachingMaterials || undefined,
       );
 
       const results = await Promise.all(

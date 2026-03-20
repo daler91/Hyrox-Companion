@@ -2,7 +2,7 @@ import { env } from "../env";
 import { logger } from "../logger";
 import { GoogleGenAI } from "@google/genai";
 
-export const GEMINI_MODEL = "gemini-3-flash-preview";
+export const GEMINI_MODEL = "gemini-3.1-flash-lite-preview";
 
 let _ai: GoogleGenAI | null = null;
 export function getAiClient(): GoogleGenAI {

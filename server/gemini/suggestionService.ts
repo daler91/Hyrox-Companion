@@ -11,6 +11,7 @@ export interface UpcomingWorkout {
   focus: string;
   mainWorkout: string;
   accessory?: string;
+  notes?: string;
 }
 
 export interface WorkoutSuggestion {
@@ -57,57 +58,88 @@ function parseAndValidateSuggestions(text: string): WorkoutSuggestion[] {
   return validated;
 }
 
+function formatExerciseFrequency(breakdown: Record<string, number>): string {
+  const entries = Object.entries(breakdown);
+  if (entries.length === 0) return "";
+  return "\nExercise frequency:\n" + entries.map(([exercise, count]) => `- ${exercise}: ${count}x`).join("\n") + "\n";
+}
+
+function formatExerciseStatLine(exercise: string, stats: { count: number; maxWeight?: number; maxDistance?: number; bestTime?: number; avgReps?: number }): string {
+  const parts = [`- ${exercise}: trained ${stats.count}x`];
+  if (stats.maxWeight) parts.push(`max weight: ${stats.maxWeight}`);
+  if (stats.maxDistance) parts.push(`max distance: ${stats.maxDistance}m`);
+  if (stats.bestTime) parts.push(`best time: ${stats.bestTime}min`);
+  if (stats.avgReps) parts.push(`avg reps: ${stats.avgReps}`);
+  return parts.join(", ");
+}
+
+function formatPerformanceStats(stats: TrainingContext["structuredExerciseStats"]): string {
+  if (!stats || Object.keys(stats).length === 0) return "";
+  return "\nExercise performance stats:\n" + Object.entries(stats).map(([ex, s]) => formatExerciseStatLine(ex, s)).join("\n") + "\n";
+}
+
+function formatRecentWorkout(workout: TrainingContext["recentWorkouts"][0]): string {
+  let line = `- ${workout.date}: ${workout.focus} - ${workout.mainWorkout}`;
+  const meta: string[] = [];
+  if (workout.rpe != null) meta.push(`RPE: ${workout.rpe}`);
+  if (workout.duration != null) meta.push(`Duration: ${workout.duration}min`);
+  if (meta.length > 0) line += ` (${meta.join(", ")})`;
+  return line;
+}
+
+function formatRecentWorkouts(workouts: TrainingContext["recentWorkouts"]): string {
+  if (workouts.length === 0) return "";
+  return "\nRecent completed workouts:\n" + workouts.slice(0, 10).map(formatRecentWorkout).join("\n") + "\n";
+}
+
+function formatUpcomingWorkout(workout: UpcomingWorkout): string {
+  let line = `ID: ${workout.id}, Date: ${workout.date}, Focus: ${workout.focus}, Main: ${workout.mainWorkout}`;
+  if (workout.accessory) line += `, Accessory: ${workout.accessory}`;
+  if (workout.notes) line += `, Notes: ${workout.notes}`;
+  return line;
+}
+
 function buildSuggestionsPrompt(
   trainingContext: TrainingContext,
   upcomingWorkouts: UpcomingWorkout[],
   planGoal?: string,
+  coachingMaterials?: string,
 ): string {
-  let prompt = `--- ATHLETE'S TRAINING DATA ---\n`;
-  if (planGoal) {
-    prompt += `Athlete's goal: ${planGoal}\n`;
-  }
-  prompt += `Completion rate: ${trainingContext.completionRate}%\n`;
-  prompt += `Current streak: ${trainingContext.currentStreak} days\n`;
-  prompt += `Completed workouts: ${trainingContext.completedWorkouts}\n`;
+  const header = [
+    `--- ATHLETE'S TRAINING DATA ---`,
+    ...(planGoal ? [`Athlete's goal: ${planGoal}`] : []),
+    `Completion rate: ${trainingContext.completionRate}%`,
+    `Current streak: ${trainingContext.currentStreak} days`,
+    `Completed workouts: ${trainingContext.completedWorkouts}`,
+    ...(trainingContext.weeklyGoal ? [`Weekly goal: ${trainingContext.weeklyGoal} workouts/week`] : []),
+  ];
 
-  if (Object.keys(trainingContext.exerciseBreakdown).length > 0) {
-    prompt += `\nExercise frequency:\n`;
-    for (const [exercise, count] of Object.entries(
-      trainingContext.exerciseBreakdown,
-    )) {
-      prompt += `- ${exercise}: ${count}x\n`;
-    }
-  }
+  const sections = [
+    ...header,
+    formatExerciseFrequency(trainingContext.exerciseBreakdown),
+    formatPerformanceStats(trainingContext.structuredExerciseStats),
+    formatRecentWorkouts(trainingContext.recentWorkouts),
+    `--- UPCOMING WORKOUTS ---`,
+    upcomingWorkouts.map(formatUpcomingWorkout).join("\n"),
+    ...(coachingMaterials ? [coachingMaterials] : []),
+    `Analyze the data and decide whether modifications are needed. Return [] if the plan is already well-structured.`,
+  ];
 
-  if (trainingContext.recentWorkouts.length > 0) {
-    prompt += `\nRecent completed workouts:\n`;
-    for (const workout of trainingContext.recentWorkouts.slice(0, 10)) {
-      prompt += `- ${workout.date}: ${workout.focus} - ${workout.mainWorkout}\n`;
-    }
-  }
-
-  prompt += `\n--- UPCOMING WORKOUTS ---\n`;
-  for (const workout of upcomingWorkouts) {
-    prompt += `ID: ${workout.id}, Date: ${workout.date}, Focus: ${workout.focus}, Main: ${workout.mainWorkout}`;
-    if (workout.accessory) prompt += `, Accessory: ${workout.accessory}`;
-    prompt += "\n";
-  }
-
-  prompt += `\nAnalyze the data and provide suggestions for the upcoming workouts.`;
-  return prompt;
+  return sections.filter(Boolean).join("\n");
 }
 
 export async function generateWorkoutSuggestions(
   trainingContext: TrainingContext,
   upcomingWorkouts: UpcomingWorkout[],
   planGoal?: string,
+  coachingMaterials?: string,
 ): Promise<WorkoutSuggestion[]> {
   try {
     if (upcomingWorkouts.length === 0) {
       return [];
     }
 
-    const prompt = buildSuggestionsPrompt(trainingContext, upcomingWorkouts, planGoal);
+    const prompt = buildSuggestionsPrompt(trainingContext, upcomingWorkouts, planGoal, coachingMaterials);
 
     const response = await retryWithBackoff(
       () =>

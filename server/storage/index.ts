@@ -4,12 +4,13 @@ import { WorkoutStorage } from "./workouts";
 import { PlanStorage } from "./plans";
 import { TimelineStorage } from "./timeline";
 import { AnalyticsStorage } from "./analytics";
+import { CoachingStorage } from "./coaching";
 
 export type { IStorage } from "./IStorage";
 
 type AssertAllKeys<T, U extends Record<keyof T, unknown>> = U;
 
-type DelegateUnion = UserStorage & WorkoutStorage & PlanStorage & TimelineStorage & AnalyticsStorage;
+type DelegateUnion = UserStorage & WorkoutStorage & PlanStorage & TimelineStorage & AnalyticsStorage & CoachingStorage;
 
 type _CheckCoverage = AssertAllKeys<IStorage, DelegateUnion>;
 
@@ -19,6 +20,7 @@ function createDatabaseStorage(): IStorage {
   const planStorage = new PlanStorage();
   const timelineStorage = new TimelineStorage(workoutStorage);
   const analyticsStorage = new AnalyticsStorage();
+  const coachingStorage = new CoachingStorage();
 
   const delegates = [
     userStorage,
@@ -26,6 +28,7 @@ function createDatabaseStorage(): IStorage {
     planStorage,
     timelineStorage,
     analyticsStorage,
+    coachingStorage,
   ];
 
   return new Proxy({} as IStorage, {

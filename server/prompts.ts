@@ -24,35 +24,45 @@ When users ask about their training:
 
 Keep responses concise but informative. Use bullet points for lists.`;
 
-export const SUGGESTIONS_PROMPT = `You are an expert Hyrox training coach analyzing an athlete's training plan. Based on their past workout history and upcoming scheduled workouts, provide specific, actionable suggestions to optimize their training for Hyrox performance.
+export const SUGGESTIONS_PROMPT = `You are an expert Hyrox training coach analyzing an athlete's training plan. Based on their past workout history, performance data, and upcoming scheduled workouts, decide whether any modifications would meaningfully improve their Hyrox preparation.
 
-Hyrox stations: SkiErg (1000m), Sled Push (50m), Sled Pull (50m), Burpee Broad Jumps (80m), Rowing (1000m), Farmers Carry (200m), Sandbag Lunges (100m), Wall Balls (75-100 reps), plus 8x 1km runs betwen each station.
+Hyrox stations: SkiErg (1000m), Sled Push (50m), Sled Pull (50m), Burpee Broad Jumps (80m), Rowing (1000m), Farmers Carry (200m), Sandbag Lunges (100m), Wall Balls (75-100 reps), plus 8x 1km runs between each station.
 
-When making suggestions:
-- Identify training gaps (stations not practiced recently)
-- Consider recovery and training load balance
-- Suggest intensity adjustments based on recent performance
-- Recommend exercise substitutions or additions
-- Focus on race-specific preparation
+DECISION FRAMEWORK (in priority order):
+1. NO CHANGE — If the upcoming workouts already cover the athlete's needs well, return an empty array []. Do NOT suggest changes just for the sake of it.
+2. MODIFY EXISTING — Use "replace" on mainWorkout or accessory to adjust existing exercises: change sets, reps, weight, intensity, volume, or rest periods based on performance trends and fatigue signals.
+3. SWAP EXERCISES — Use "replace" to substitute an exercise when there's a clear training gap (e.g., a Hyrox station not practiced in 2+ weeks).
+4. ADD EXERCISES — Use "append" on accessory ONLY when there's a genuine gap that can't be addressed by modifying existing work.
+
+PERFORMANCE-BASED COACHING:
+- If recent RPE values are consistently high (8+), suggest reducing intensity or volume to manage fatigue
+- If RPE is consistently low (<5), consider progressive overload (more weight, reps, or intensity)
+- Use exercise performance stats (max weights, best times, progression trends) when suggesting load adjustments
+- Consider workout duration patterns — if workouts are getting excessively long, consolidate rather than add
+- Factor in the athlete's weekly goal vs actual completion rate when planning volume
+
+If coaching reference materials are provided, use them to guide your programming decisions (periodization, exercise selection, intensity prescription).
+
+Do NOT contradict existing workout notes or special instructions from the plan designer.
 
 Return ONLY valid JSON array with no markdown formatting. Each suggestion should have:
 - workoutId: the ID of the upcoming workout
 - workoutDate: the scheduled date
 - workoutFocus: the original focus of the workout
 - targetField: which part to modify - "mainWorkout", "accessory", or "notes"
-- action: "replace" to replace the field entirely, or "append" to add to existing content
-- recommendation: the specific text to add or replace (just the workout content, not explanation)
+- action: "replace" to modify/swap existing content, or "append" to add new content
+- recommendation: the specific workout text (just the content, not explanations)
 - rationale: why this change helps Hyrox performance (1 sentence)
 - priority: "high", "medium", or "low"
 
-IMPORTANT RULES:
-1. Use "append" for notes to preserve existing workout instructions
-2. Use "replace" for mainWorkout only when suggesting a completely different exercise
-3. Use "append" for accessory to add extra work without removing existing accessory
-4. The recommendation field should contain ONLY the workout text to insert, not explanations
+RULES:
+1. Return [] if no meaningful improvements can be made — this is the PREFERRED outcome for a well-structured plan
+2. Use "replace" to adjust existing exercises (reps, weight, intensity) or swap exercises entirely
+3. Use "append" ONLY for accessory when adding genuinely missing work, or for notes to add coaching cues
+4. The recommendation field should contain ONLY the workout text, not explanations
 5. Prioritize suggestions for workouts happening soonest (today, tomorrow, this week)
 
-Limit to 1 suggestion per workout, max 5 suggestions total. Only suggest changes where meaningful improvements can be made.`;
+Limit to 1 suggestion per workout, max 5 suggestions total.`;
 
 export const PARSE_EXERCISES_PROMPT = `You are an expert fitness data parser. Your job is to take free-text workout descriptions and convert them into structured exercise data.
 
@@ -207,9 +217,43 @@ function buildRecentWorkouts(trainingContext: TrainingContext): string {
   return section;
 }
 
-export function buildSystemPrompt(trainingContext?: TrainingContext): string {
+export interface CoachingMaterialInput {
+  title: string;
+  content: string;
+  type: string;
+}
+
+const MAX_COACHING_MATERIALS_CHARS = 8000;
+
+export function buildCoachingMaterialsSection(materials: CoachingMaterialInput[]): string {
+  if (!materials || materials.length === 0) return "";
+
+  let section = `\n--- COACHING REFERENCE MATERIALS ---\n`;
+  section += `Use these materials to guide your coaching decisions, exercise selection, and programming.\n\n`;
+
+  let totalChars = 0;
+  for (const material of materials) {
+    const remaining = MAX_COACHING_MATERIALS_CHARS - totalChars;
+    if (remaining <= 0) break;
+
+    const content = material.content.length > remaining
+      ? material.content.slice(0, remaining) + "... [truncated]"
+      : material.content;
+
+    section += `### ${material.title} (${material.type})\n${content}\n\n`;
+    totalChars += content.length;
+  }
+
+  section += `--- END COACHING MATERIALS ---\n`;
+  return section;
+}
+
+export function buildSystemPrompt(trainingContext?: TrainingContext, coachingMaterials?: CoachingMaterialInput[]): string {
   if (!trainingContext || trainingContext.totalWorkouts === 0) {
-    return BASE_SYSTEM_PROMPT + `\n\nNote: This athlete hasn't logged any training data yet. Encourage them to start tracking their workouts to receive personalized insights.`;
+    let prompt = BASE_SYSTEM_PROMPT + `\n\nNote: This athlete hasn't logged any training data yet. Encourage them to start tracking their workouts to receive personalized insights.`;
+    const materialsSection = buildCoachingMaterialsSection(coachingMaterials || []);
+    if (materialsSection) prompt += `\n${materialsSection}`;
+    return prompt;
   }
 
   let contextSection = `\n\n--- ATHLETE'S TRAINING DATA ---\n`;
@@ -220,6 +264,9 @@ export function buildSystemPrompt(trainingContext?: TrainingContext): string {
   contextSection += buildRecentWorkouts(trainingContext);
 
   contextSection += `\n\n--- END TRAINING DATA ---\n\nUse this data to provide personalized coaching. Reference specific workouts and patterns when relevant.`;
+
+  const materialsSection = buildCoachingMaterialsSection(coachingMaterials || []);
+  if (materialsSection) contextSection += `\n${materialsSection}`;
 
   return BASE_SYSTEM_PROMPT + contextSection;
 }

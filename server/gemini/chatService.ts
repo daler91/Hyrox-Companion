@@ -1,5 +1,5 @@
 import { logger } from "../logger";
-import { buildSystemPrompt } from "../prompts";
+import { buildSystemPrompt, type CoachingMaterialInput } from "../prompts";
 import { getAiClient, GEMINI_MODEL } from "./client";
 import type { ChatMessage } from "@shared/schema";
 import type { TrainingContext } from "./types";
@@ -8,6 +8,7 @@ export async function chatWithCoach(
   userMessage: string,
   conversationHistory: Pick<ChatMessage, "role" | "content">[] = [],
   trainingContext?: TrainingContext,
+  coachingMaterials?: CoachingMaterialInput[],
 ): Promise<string> {
   try {
     const messages = conversationHistory.map((msg) => ({
@@ -20,7 +21,7 @@ export async function chatWithCoach(
       parts: [{ text: userMessage }],
     });
 
-    const systemPrompt = buildSystemPrompt(trainingContext);
+    const systemPrompt = buildSystemPrompt(trainingContext, coachingMaterials);
 
     const response = await getAiClient().models.generateContent({
       model: GEMINI_MODEL,
@@ -44,6 +45,7 @@ export async function* streamChatWithCoach(
   userMessage: string,
   conversationHistory: Pick<ChatMessage, "role" | "content">[] = [],
   trainingContext?: TrainingContext,
+  coachingMaterials?: CoachingMaterialInput[],
 ): AsyncGenerator<string> {
   try {
     const messages = conversationHistory.map((msg) => ({
@@ -56,7 +58,7 @@ export async function* streamChatWithCoach(
       parts: [{ text: userMessage }],
     });
 
-    const systemPrompt = buildSystemPrompt(trainingContext);
+    const systemPrompt = buildSystemPrompt(trainingContext, coachingMaterials);
 
     const response = await getAiClient().models.generateContentStream({
       model: GEMINI_MODEL,

@@ -10,6 +10,7 @@ import { ProfileSection } from "@/components/settings/ProfileSection";
 import { StravaSection } from "@/components/settings/StravaSection";
 import { PreferencesSection } from "@/components/settings/PreferencesSection";
 import { DataToolsSection } from "@/components/settings/DataToolsSection";
+import { CoachingSection } from "@/components/settings/CoachingSection";
 
 interface Preferences {
   weightUnit: string;
@@ -175,6 +176,8 @@ export default function Settings() {
           markChanged();
         }}
       />
+
+      <CoachingSection />
 
       <DataToolsSection />
 
