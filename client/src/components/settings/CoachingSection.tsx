@@ -38,37 +38,28 @@ export function CoachingSection() {
     setDialogOpen(true);
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    // Single file: open dialog for review
-    if (files.length === 1) {
-      const file = files[0];
-      if (file.size > 500000) {
-        toast({ title: "File too large", description: "Maximum file size is 500KB.", variant: "destructive" });
-        if (fileInputRef.current) fileInputRef.current.value = "";
-        return;
-      }
-      try {
-        const text = await file.text();
-        setDialogType("document");
-        setTitle(file.name.replace(/\.[^/.]+$/, ""));
-        setContent(text.slice(0, 50000));
-        setDialogOpen(true);
-      } catch {
-        toast({ title: "Failed to read file", variant: "destructive" });
-      }
-      if (fileInputRef.current) fileInputRef.current.value = "";
+  const processSingleFile = async (file: File) => {
+    if (file.size > 500000) {
+      toast({ title: "File too large", description: "Maximum file size is 500KB.", variant: "destructive" });
       return;
     }
+    try {
+      const text = await file.text();
+      setDialogType("document");
+      setTitle(file.name.replace(/\.[^/.]+$/, ""));
+      setContent(text.slice(0, 50000));
+      setDialogOpen(true);
+    } catch {
+      toast({ title: "Failed to read file", variant: "destructive" });
+    }
+  };
 
-    // Multiple files: batch upload directly
+  const processBatchFiles = async (files: File[]) => {
     const tooLarge: string[] = [];
     const failed: string[] = [];
     let uploaded = 0;
 
-    for (const file of Array.from(files)) {
+    for (const file of files) {
       if (file.size > 500000) {
         tooLarge.push(file.name);
         continue;
@@ -103,8 +94,21 @@ export function CoachingSection() {
         variant: "destructive",
       });
     }
+  };
 
-    if (fileInputRef.current) fileInputRef.current.value = "";
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    if (files.length === 1) {
+      await processSingleFile(files[0]);
+    } else {
+      await processBatchFiles(Array.from(files));
+    }
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
 
   const handleSave = () => {
