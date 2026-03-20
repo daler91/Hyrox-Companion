@@ -18,6 +18,41 @@ import {
   useDeleteCoachingMaterial,
 } from "@/hooks/useCoachingMaterials";
 import { useToast } from "@/hooks/use-toast";
+import * as pdfjsLib from "pdfjs-dist";
+import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+import mammoth from "mammoth";
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
+
+async function extractPdfText(file: File): Promise<string> {
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const pages: string[] = [];
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const textContent = await page.getTextContent();
+    pages.push(textContent.items.map((item) => ("str" in item ? item.str : "")).join(" "));
+  }
+  return pages.join("\n\n");
+}
+
+async function extractDocxText(file: File): Promise<string> {
+  const arrayBuffer = await file.arrayBuffer();
+  const result = await mammoth.extractRawText({ arrayBuffer });
+  return result.value;
+}
+
+async function extractFileText(file: File): Promise<string> {
+  const ext = file.name.split(".").pop()?.toLowerCase();
+  if (ext === "pdf") return extractPdfText(file);
+  if (ext === "docx") return extractDocxText(file);
+  return file.text();
+}
+
+function getFileSizeLimit(file: File): number {
+  const ext = file.name.split(".").pop()?.toLowerCase();
+  return ext === "pdf" || ext === "docx" ? 1000000 : 500000;
+}
 
 export function CoachingSection() {
   const { toast } = useToast();
@@ -39,12 +74,13 @@ export function CoachingSection() {
   };
 
   const processSingleFile = async (file: File) => {
-    if (file.size > 500000) {
-      toast({ title: "File too large", description: "Maximum file size is 500KB.", variant: "destructive" });
+    const sizeLimit = getFileSizeLimit(file);
+    if (file.size > sizeLimit) {
+      toast({ title: "File too large", description: `Maximum file size is ${sizeLimit === 1000000 ? "1MB" : "500KB"}.`, variant: "destructive" });
       return;
     }
     try {
-      const text = await file.text();
+      const text = await extractFileText(file);
       setDialogType("document");
       setTitle(file.name.replace(/\.[^/.]+$/, ""));
       setContent(text.slice(0, 50000));
@@ -60,12 +96,12 @@ export function CoachingSection() {
     let uploaded = 0;
 
     for (const file of files) {
-      if (file.size > 500000) {
+      if (file.size > getFileSizeLimit(file)) {
         tooLarge.push(file.name);
         continue;
       }
       try {
-        const text = await file.text();
+        const text = await extractFileText(file);
         await createMutation.mutateAsync({
           title: file.name.replace(/\.[^/.]+$/, ""),
           content: text.slice(0, 50000),
@@ -187,7 +223,7 @@ export function CoachingSection() {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".txt,.md,.csv"
+                  accept=".txt,.md,.csv,.pdf,.docx"
                   multiple
                   className="hidden"
                   onChange={handleFileUpload}
