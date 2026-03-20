@@ -20,6 +20,8 @@ import type {
   InsertExerciseSet,
   CustomExercise,
   InsertCustomExercise,
+  CoachingMaterial,
+  InsertCoachingMaterial,
 } from "@shared/schema";
 
 export interface IUserStorage {
@@ -95,4 +97,12 @@ export interface INotificationStorage {
   getMissedWorkoutsForDate(userId: string, date: string): Promise<{ date: string; focus: string; mainWorkout: string; planName?: string }[]>;
 }
 
-export interface IStorage extends IUserStorage, IPlanStorage, IWorkoutStorage, IAnalyticsStorage, IChatStorage, IIntegrationStorage, INotificationStorage {}
+export interface ICoachingStorage {
+  listCoachingMaterials(userId: string): Promise<CoachingMaterial[]>;
+  getCoachingMaterial(id: string, userId: string): Promise<CoachingMaterial | undefined>;
+  createCoachingMaterial(data: InsertCoachingMaterial): Promise<CoachingMaterial>;
+  updateCoachingMaterial(id: string, updates: Partial<Pick<CoachingMaterial, "title" | "content" | "type">>, userId: string): Promise<CoachingMaterial | undefined>;
+  deleteCoachingMaterial(id: string, userId: string): Promise<boolean>;
+}
+
+export interface IStorage extends IUserStorage, IPlanStorage, IWorkoutStorage, IAnalyticsStorage, IChatStorage, IIntegrationStorage, INotificationStorage, ICoachingStorage {}

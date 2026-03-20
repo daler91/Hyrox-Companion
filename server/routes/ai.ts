@@ -5,6 +5,7 @@ import { storage } from "../storage";
 import { chatWithCoach, streamChatWithCoach, generateWorkoutSuggestions, parseExercisesFromText, type UpcomingWorkout } from "../gemini/index";
 import { rateLimiter } from "../routeUtils";
 import { buildTrainingContext } from "../services/aiService";
+import { buildCoachingMaterialsSection } from "../prompts";
 import { toDateStr, getUserId } from "../types";
 import { chatRequestSchema, parseExercisesRequestSchema, insertChatMessageSchema, type InsertChatMessage } from "@shared/schema";
 import { z } from "zod";
@@ -31,7 +32,7 @@ router.post("/api/v1/parse-exercises", isAuthenticated, rateLimiter("parse", 5),
   }
 });
 
-async function prepareChatContext(req: ExpressRequest): Promise<{ success: false; error: string } | { success: true; message: string; history: Pick<import("@shared/schema").ChatMessage, "role" | "content">[]; trainingContext: import("../gemini/index").TrainingContext }> {
+async function prepareChatContext(req: ExpressRequest): Promise<{ success: false; error: string } | { success: true; message: string; history: Pick<import("@shared/schema").ChatMessage, "role" | "content">[]; trainingContext: import("../gemini/index").TrainingContext; coachingMaterials: import("../prompts").CoachingMaterialInput[] }> {
   const parseResult = chatRequestSchema.safeParse(req.body);
   if (!parseResult.success) {
     return { success: false, error: parseResult.error.errors[0].message };
@@ -39,7 +40,10 @@ async function prepareChatContext(req: ExpressRequest): Promise<{ success: false
   const { message, history } = parseResult.data;
 
   const userId = getUserId(req);
-  const trainingContext = await buildTrainingContext(userId);
+  const [trainingContext, coachingMaterials] = await Promise.all([
+    buildTrainingContext(userId),
+    storage.listCoachingMaterials(userId),
+  ]);
 
   if (!trainingContext) {
     return { success: false, error: "Training context could not be loaded" };
@@ -49,7 +53,8 @@ async function prepareChatContext(req: ExpressRequest): Promise<{ success: false
     success: true,
     message,
     history: history || [],
-    trainingContext
+    trainingContext,
+    coachingMaterials,
   };
 }
 
@@ -59,9 +64,9 @@ router.post("/api/v1/chat", isAuthenticated, rateLimiter("chat", 10), async (req
     if (!context.success) {
       return res.status(400).json({ error: context.error });
     }
-    const { message, history, trainingContext } = context;
+    const { message, history, trainingContext, coachingMaterials } = context;
 
-    const response = await chatWithCoach(message, history, trainingContext);
+    const response = await chatWithCoach(message, history, trainingContext, coachingMaterials);
     res.json({ response });
   } catch (error) {
     (req.log || logger).error({ err: error }, "Chat error:");
@@ -75,7 +80,7 @@ router.post("/api/v1/chat/stream", isAuthenticated, rateLimiter("chat", 10), asy
     if (!context.success) {
       return res.status(400).json({ error: context.error });
     }
-    const { message, history, trainingContext } = context;
+    const { message, history, trainingContext, coachingMaterials } = context;
 
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
@@ -83,7 +88,7 @@ router.post("/api/v1/chat/stream", isAuthenticated, rateLimiter("chat", 10), asy
     res.flushHeaders();
 
     try {
-      const stream = streamChatWithCoach(message, history, trainingContext);
+      const stream = streamChatWithCoach(message, history, trainingContext, coachingMaterials);
 
       for await (const chunk of stream) {
         res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
@@ -146,8 +151,12 @@ router.post("/api/v1/timeline/ai-suggestions", isAuthenticated, rateLimiter("sug
   try {
     const userId = getUserId(req);
 
-    const trainingContext = await buildTrainingContext(userId);
+    const [trainingContext, coachingMaterialsList] = await Promise.all([
+      buildTrainingContext(userId),
+      storage.listCoachingMaterials(userId),
+    ]);
 
+    const coachingMaterials = buildCoachingMaterialsSection(coachingMaterialsList) || undefined;
     const timeline = await storage.getTimeline(userId);
     const today = toDateStr();
 
@@ -166,13 +175,14 @@ router.post("/api/v1/timeline/ai-suggestions", isAuthenticated, rateLimiter("sug
         focus: entry.focus || "",
         mainWorkout: entry.mainWorkout || "",
         accessory: entry.accessory || undefined,
+        notes: entry.notes || undefined,
       }));
 
     if (upcomingWorkouts.length === 0) {
       return res.json({ suggestions: [], message: "No upcoming planned workouts found" });
     }
 
-    const rawSuggestions = await generateWorkoutSuggestions(trainingContext, upcomingWorkouts);
+    const rawSuggestions = await generateWorkoutSuggestions(trainingContext, upcomingWorkouts, undefined, coachingMaterials);
 
     const workoutMap = new Map(upcomingWorkouts.map(w => [w.id, w]));
     const suggestions = rawSuggestions

@@ -10,6 +10,7 @@ import planRoutes from "./routes/plans";
 import authRoutes from "./routes/auth";
 import preferencesRoutes from "./routes/preferences";
 import emailRoutes from "./routes/email";
+import coachingRoutes from "./routes/coaching";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -25,6 +26,7 @@ export async function registerRoutes(
   app.use(analyticsRoutes);
   app.use(workoutRoutes);
   app.use(planRoutes);
+  app.use(coachingRoutes);
 
   return httpServer;
 }

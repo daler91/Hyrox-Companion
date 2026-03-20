@@ -391,3 +391,29 @@ export interface PersonalRecord {
   maxDistance?: PersonalRecordValue;
   bestTime?: PersonalRecordValue;
 }
+
+// Coaching reference materials for AI coach knowledge pipeline
+export const coachingMaterials = pgTable("coaching_materials", {
+  id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 255 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  type: varchar("type", { length: 50 }).notNull().default("principles"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_coaching_materials_user_id").on(table.userId),
+]);
+
+export const insertCoachingMaterialSchema = createInsertSchema(coachingMaterials).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  title: z.string().trim().min(1, "Title is required").max(255, "Title must be 255 characters or less"),
+  content: z.string().trim().min(1, "Content is required").max(50000, "Content must be 50,000 characters or less"),
+  type: z.enum(["principles", "document"]),
+});
+
+export type InsertCoachingMaterial = z.infer<typeof insertCoachingMaterialSchema>;
+export type CoachingMaterial = typeof coachingMaterials.$inferSelect;

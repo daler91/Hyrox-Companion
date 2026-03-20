@@ -6,11 +6,14 @@ export interface TrainingContext {
   skippedWorkouts: number;
   completionRate: number;
   currentStreak: number;
+  weeklyGoal?: number;
   recentWorkouts: Array<{
     date: string;
     focus: string;
     mainWorkout: string;
     status: string;
+    rpe?: number | null;
+    duration?: number | null;
     exerciseDetails?: Array<{
       name: string;
       setNumber?: number | null;

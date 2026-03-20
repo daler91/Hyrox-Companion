@@ -11,6 +11,7 @@ export interface UpcomingWorkout {
   focus: string;
   mainWorkout: string;
   accessory?: string;
+  notes?: string;
 }
 
 export interface WorkoutSuggestion {
@@ -61,6 +62,7 @@ function buildSuggestionsPrompt(
   trainingContext: TrainingContext,
   upcomingWorkouts: UpcomingWorkout[],
   planGoal?: string,
+  coachingMaterials?: string,
 ): string {
   let prompt = `--- ATHLETE'S TRAINING DATA ---\n`;
   if (planGoal) {
@@ -69,6 +71,9 @@ function buildSuggestionsPrompt(
   prompt += `Completion rate: ${trainingContext.completionRate}%\n`;
   prompt += `Current streak: ${trainingContext.currentStreak} days\n`;
   prompt += `Completed workouts: ${trainingContext.completedWorkouts}\n`;
+  if (trainingContext.weeklyGoal) {
+    prompt += `Weekly goal: ${trainingContext.weeklyGoal} workouts/week\n`;
+  }
 
   if (Object.keys(trainingContext.exerciseBreakdown).length > 0) {
     prompt += `\nExercise frequency:\n`;
@@ -79,10 +84,27 @@ function buildSuggestionsPrompt(
     }
   }
 
+  if (trainingContext.structuredExerciseStats && Object.keys(trainingContext.structuredExerciseStats).length > 0) {
+    prompt += `\nExercise performance stats:\n`;
+    for (const [exercise, stats] of Object.entries(trainingContext.structuredExerciseStats)) {
+      let line = `- ${exercise}: trained ${stats.count}x`;
+      if (stats.maxWeight) line += `, max weight: ${stats.maxWeight}`;
+      if (stats.maxDistance) line += `, max distance: ${stats.maxDistance}m`;
+      if (stats.bestTime) line += `, best time: ${stats.bestTime}min`;
+      if (stats.avgReps) line += `, avg reps: ${stats.avgReps}`;
+      prompt += line + "\n";
+    }
+  }
+
   if (trainingContext.recentWorkouts.length > 0) {
     prompt += `\nRecent completed workouts:\n`;
     for (const workout of trainingContext.recentWorkouts.slice(0, 10)) {
-      prompt += `- ${workout.date}: ${workout.focus} - ${workout.mainWorkout}\n`;
+      let line = `- ${workout.date}: ${workout.focus} - ${workout.mainWorkout}`;
+      const meta: string[] = [];
+      if (workout.rpe != null) meta.push(`RPE: ${workout.rpe}`);
+      if (workout.duration != null) meta.push(`Duration: ${workout.duration}min`);
+      if (meta.length > 0) line += ` (${meta.join(", ")})`;
+      prompt += line + "\n";
     }
   }
 
@@ -90,10 +112,15 @@ function buildSuggestionsPrompt(
   for (const workout of upcomingWorkouts) {
     prompt += `ID: ${workout.id}, Date: ${workout.date}, Focus: ${workout.focus}, Main: ${workout.mainWorkout}`;
     if (workout.accessory) prompt += `, Accessory: ${workout.accessory}`;
+    if (workout.notes) prompt += `, Notes: ${workout.notes}`;
     prompt += "\n";
   }
 
-  prompt += `\nAnalyze the data and provide suggestions for the upcoming workouts.`;
+  if (coachingMaterials) {
+    prompt += `\n${coachingMaterials}`;
+  }
+
+  prompt += `\nAnalyze the data and decide whether modifications are needed. Return [] if the plan is already well-structured.`;
   return prompt;
 }
 
@@ -101,13 +128,14 @@ export async function generateWorkoutSuggestions(
   trainingContext: TrainingContext,
   upcomingWorkouts: UpcomingWorkout[],
   planGoal?: string,
+  coachingMaterials?: string,
 ): Promise<WorkoutSuggestion[]> {
   try {
     if (upcomingWorkouts.length === 0) {
       return [];
     }
 
-    const prompt = buildSuggestionsPrompt(trainingContext, upcomingWorkouts, planGoal);
+    const prompt = buildSuggestionsPrompt(trainingContext, upcomingWorkouts, planGoal, coachingMaterials);
 
     const response = await retryWithBackoff(
       () =>

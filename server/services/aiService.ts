@@ -7,7 +7,7 @@ import type { TimelineEntry as SharedTimelineEntry } from "@shared/schema";
 
 type TimelineEntry = Pick<
   SharedTimelineEntry,
-  "status" | "date" | "focus" | "mainWorkout" | "workoutLogId" | "exerciseSets"
+  "status" | "date" | "focus" | "mainWorkout" | "workoutLogId" | "exerciseSets" | "rpe" | "duration"
 >;
 
 function calculateTrainingStats(timeline: TimelineEntry[]) {
@@ -76,6 +76,8 @@ function collectRecentWorkouts(timeline: TimelineEntry[]): TrainingContext["rece
         focus: entry.focus || "",
         mainWorkout: entry.mainWorkout || "",
         status: entry.status,
+        rpe: entry.rpe,
+        duration: entry.duration,
         exerciseDetails: entry.exerciseSets?.map(es => ({
           name: es.exerciseName,
           setNumber: es.setNumber,
@@ -131,9 +133,10 @@ async function getStructuredExerciseStats(timeline: TimelineEntry[]) {
 }
 
 export async function buildTrainingContext(userId: string): Promise<TrainingContext> {
-  const [timeline, plans] = await Promise.all([
+  const [timeline, plans, user] = await Promise.all([
     storage.getTimeline(userId),
     storage.listTrainingPlans(userId),
+    storage.getUser(userId),
   ]);
 
   const { completedWorkouts, plannedWorkouts, missedWorkouts, skippedWorkouts, totalWorkouts, completionRate, completedDates } = calculateTrainingStats(timeline);
@@ -155,6 +158,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     skippedWorkouts,
     completionRate,
     currentStreak,
+    weeklyGoal: user?.weeklyGoal ?? undefined,
     recentWorkouts: recentWorkouts.slice(0, 10),
     exerciseBreakdown,
     structuredExerciseStats,
