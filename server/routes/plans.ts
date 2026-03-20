@@ -211,7 +211,7 @@ router.patch("/api/v1/plans/days/:dayId/status", isAuthenticated, rateLimiter("p
 
     // Fire-and-forget: auto-coach adjusts upcoming plan days after a session is completed
     if (status === "completed") {
-      triggerAutoCoach(userId).catch(() => {});
+      triggerAutoCoach(userId).catch((err) => logger.warn(err, "Auto-coach trigger failed"));
     }
   } catch (error) {
     logger.error({ err: error }, "Update day status error:");
