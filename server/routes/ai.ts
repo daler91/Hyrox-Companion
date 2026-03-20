@@ -167,7 +167,12 @@ router.post("/api/v1/timeline/ai-suggestions", isAuthenticated, rateLimiter("sug
         entry.date >= today &&
         entry.planDayId !== null
       )
-      .sort((a, b) => a.date.localeCompare(b.date))
+      // Fast string comparison for YYYY-MM-DD dates instead of localeCompare
+      .sort((a, b) => {
+        if (b.date < a.date) return 1;
+        if (b.date > a.date) return -1;
+        return 0;
+      })
       .slice(0, 5)
       .map(entry => ({
         id: entry.planDayId || "",
