@@ -1,9 +1,9 @@
 import { logger } from "../logger";
-import { Router, type Request } from "express";
+import { Router, type Request, type Response } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { rateLimiter } from "../routeUtils";
 import { storage } from "../storage";
-import { insertWorkoutLogSchema, updateWorkoutLogSchema, insertCustomExerciseSchema, exercisesPayloadSchema } from "@shared/schema";
+import { insertWorkoutLogSchema, updateWorkoutLogSchema, insertCustomExerciseSchema, exercisesPayloadSchema, type InsertWorkoutLog, type UpdateWorkoutLog, type InsertCustomExercise } from "@shared/schema";
 import { generateCSV, generateJSON } from "../services/exportService";
 import { createWorkout, updateWorkout, reparseWorkout, prepareParsedWorkout, saveParsedWorkout } from "../services/workoutService";
 import { getUserId } from "../types";
@@ -22,7 +22,7 @@ router.get("/api/v1/workouts/unstructured", isAuthenticated, async (req: Request
   }
 });
 
-router.post("/api/v1/workouts/:id/reparse", isAuthenticated, rateLimiter("reparse", 5), async (req: Request, res) => {
+router.post("/api/v1/workouts/:id/reparse", isAuthenticated, rateLimiter("reparse", 5), async (req: Request<{ id: string }>, res: Response) => {
   try {
     const userId = getUserId(req);
     const workoutId = req.params.id;
@@ -92,7 +92,7 @@ function validateExercisesPayload(exercises: unknown) {
   return { success: true, data: parseResult.data };
 }
 
-router.post("/api/v1/workouts/batch-reparse", isAuthenticated, rateLimiter("batchReparse", 2), async (req: Request, res) => {
+router.post("/api/v1/workouts/batch-reparse", isAuthenticated, rateLimiter("batchReparse", 2), async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
     const workouts = await storage.getWorkoutsWithoutExerciseSets(userId);
@@ -118,7 +118,7 @@ router.post("/api/v1/workouts/batch-reparse", isAuthenticated, rateLimiter("batc
   }
 });
 
-router.get("/api/v1/custom-exercises", isAuthenticated, async (req: Request, res) => {
+router.get("/api/v1/custom-exercises", isAuthenticated, async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
     const exercises = await storage.getCustomExercises(userId);
@@ -129,7 +129,7 @@ router.get("/api/v1/custom-exercises", isAuthenticated, async (req: Request, res
   }
 });
 
-router.post("/api/v1/custom-exercises", isAuthenticated, rateLimiter("customExercise", 20), async (req: Request, res) => {
+router.post("/api/v1/custom-exercises", isAuthenticated, rateLimiter("customExercise", 20), async (req: Request<{}, {}, InsertCustomExercise & { userId?: string }>, res: Response) => {
   try {
     const userId = getUserId(req);
 
@@ -155,7 +155,7 @@ router.post("/api/v1/custom-exercises", isAuthenticated, rateLimiter("customExer
   }
 });
 
-router.get("/api/v1/workouts", isAuthenticated, async (req: Request, res) => {
+router.get("/api/v1/workouts", isAuthenticated, async (req: Request<{}, {}, {}, { limit?: string; offset?: string }>, res: Response) => {
   try {
     const userId = getUserId(req);
     const limit = req.query.limit ? Number.parseInt(req.query.limit as string) : undefined;
@@ -172,7 +172,7 @@ router.get("/api/v1/workouts", isAuthenticated, async (req: Request, res) => {
   }
 });
 
-router.get("/api/v1/workouts/:id", isAuthenticated, async (req: Request, res) => {
+router.get("/api/v1/workouts/:id", isAuthenticated, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const userId = getUserId(req);
     const log = await storage.getWorkoutLog(req.params.id, userId);
@@ -186,7 +186,7 @@ router.get("/api/v1/workouts/:id", isAuthenticated, async (req: Request, res) =>
   }
 });
 
-router.post("/api/v1/workouts", isAuthenticated, rateLimiter("workout", 40), async (req: Request, res) => {
+router.post("/api/v1/workouts", isAuthenticated, rateLimiter("workout", 40), async (req: Request<{}, {}, InsertWorkoutLog & { exercises?: any }>, res: Response) => {
   try {
     const { exercises, ...workoutData } = req.body;
     const parseResult = insertWorkoutLogSchema.safeParse(workoutData);
@@ -211,7 +211,7 @@ router.post("/api/v1/workouts", isAuthenticated, rateLimiter("workout", 40), asy
   }
 });
 
-router.patch("/api/v1/workouts/:id", isAuthenticated, rateLimiter("workout", 40), async (req: Request, res) => {
+router.patch("/api/v1/workouts/:id", isAuthenticated, rateLimiter("workout", 40), async (req: Request<{ id: string }, {}, UpdateWorkoutLog & { exercises?: any }>, res: Response) => {
   try {
     const { exercises, ...updateData } = req.body;
     const parseResult = updateWorkoutLogSchema.safeParse(updateData);
@@ -238,7 +238,7 @@ router.patch("/api/v1/workouts/:id", isAuthenticated, rateLimiter("workout", 40)
   }
 });
 
-router.delete("/api/v1/workouts/:id", isAuthenticated, rateLimiter("workout", 40), async (req: Request, res) => {
+router.delete("/api/v1/workouts/:id", isAuthenticated, rateLimiter("workout", 40), async (req: Request<{ id: string }>, res: Response) => {
   try {
     const userId = getUserId(req);
     await storage.deleteExerciseSetsByWorkoutLog(req.params.id, userId);
@@ -253,7 +253,7 @@ router.delete("/api/v1/workouts/:id", isAuthenticated, rateLimiter("workout", 40
   }
 });
 
-router.get("/api/v1/exercises/:exerciseName/history", isAuthenticated, async (req: Request, res) => {
+router.get("/api/v1/exercises/:exerciseName/history", isAuthenticated, async (req: Request<{ exerciseName: string }>, res: Response) => {
   try {
     const userId = getUserId(req);
     const history = await storage.getExerciseHistory(userId, req.params.exerciseName);
@@ -264,7 +264,7 @@ router.get("/api/v1/exercises/:exerciseName/history", isAuthenticated, async (re
   }
 });
 
-router.get("/api/v1/timeline", isAuthenticated, async (req: Request, res) => {
+router.get("/api/v1/timeline", isAuthenticated, async (req: Request<{}, {}, {}, { planId?: string; limit?: string; offset?: string }>, res: Response) => {
   try {
     const userId = getUserId(req);
     const planId = req.query.planId as string | undefined;
@@ -282,7 +282,7 @@ router.get("/api/v1/timeline", isAuthenticated, async (req: Request, res) => {
   }
 });
 
-router.get("/api/v1/export", isAuthenticated, rateLimiter("export", 5, 60000), async (req: Request, res) => {
+router.get("/api/v1/export", isAuthenticated, rateLimiter("export", 5, 60000), async (req: Request<{}, {}, {}, { format?: string }>, res: Response) => {
   try {
     const userId = getUserId(req);
     const format = (req.query.format as string) || "csv";
