@@ -1,5 +1,5 @@
 import { logger } from "../logger";
-import { Router, type Request } from "express";
+import { Router, type Request as ExpressRequest, type Response } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
 import { calculatePersonalRecords, calculateExerciseAnalytics, type ExerciseSetWithDate } from "../services/analyticsService";
@@ -48,7 +48,7 @@ export function validDate(val: unknown): string | undefined {
   return parsed.success ? parsed.data : undefined;
 }
 
-router.get("/api/v1/personal-records", isAuthenticated, async (req: Request, res) => {
+router.get("/api/v1/personal-records", isAuthenticated, async (req: ExpressRequest<{}, any, any, { from?: string; to?: string }>, res: Response) => {
   try {
     const userId = getUserId(req);
     const from = validDate(req.query.from);
@@ -64,7 +64,7 @@ router.get("/api/v1/personal-records", isAuthenticated, async (req: Request, res
   }
 });
 
-router.get("/api/v1/exercise-analytics", isAuthenticated, async (req: Request, res) => {
+router.get("/api/v1/exercise-analytics", isAuthenticated, async (req: ExpressRequest<{}, any, any, { from?: string; to?: string }>, res: Response) => {
   try {
     const userId = getUserId(req);
     const from = validDate(req.query.from);

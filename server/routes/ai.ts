@@ -1,16 +1,17 @@
 import { logger } from "../logger";
-import { Router, type Request } from "express";
+import { Router, type Request as ExpressRequest, type Response } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
 import { chatWithCoach, streamChatWithCoach, generateWorkoutSuggestions, parseExercisesFromText, type UpcomingWorkout } from "../gemini/index";
 import { rateLimiter } from "../routeUtils";
 import { buildTrainingContext } from "../services/aiService";
 import { toDateStr, getUserId } from "../types";
-import { chatRequestSchema, parseExercisesRequestSchema, insertChatMessageSchema } from "@shared/schema";
+import { chatRequestSchema, parseExercisesRequestSchema, insertChatMessageSchema, type InsertChatMessage } from "@shared/schema";
+import { z } from "zod";
 
 const router = Router();
 
-router.post("/api/v1/parse-exercises", isAuthenticated, rateLimiter("parse", 5), async (req: Request, res) => {
+router.post("/api/v1/parse-exercises", isAuthenticated, rateLimiter("parse", 5), async (req: ExpressRequest<{}, any, z.infer<typeof parseExercisesRequestSchema>>, res: Response) => {
   try {
     const parseResult = parseExercisesRequestSchema.safeParse(req.body);
     if (!parseResult.success) {
@@ -30,7 +31,7 @@ router.post("/api/v1/parse-exercises", isAuthenticated, rateLimiter("parse", 5),
   }
 });
 
-async function prepareChatContext(req: Request): Promise<{ success: false; error: string } | { success: true; message: string; history: Pick<import("@shared/schema").ChatMessage, "role" | "content">[]; trainingContext: import("../gemini/index").TrainingContext }> {
+async function prepareChatContext(req: ExpressRequest): Promise<{ success: false; error: string } | { success: true; message: string; history: Pick<import("@shared/schema").ChatMessage, "role" | "content">[]; trainingContext: import("../gemini/index").TrainingContext }> {
   const parseResult = chatRequestSchema.safeParse(req.body);
   if (!parseResult.success) {
     return { success: false, error: parseResult.error.errors[0].message };
@@ -52,7 +53,7 @@ async function prepareChatContext(req: Request): Promise<{ success: false; error
   };
 }
 
-router.post("/api/v1/chat", isAuthenticated, rateLimiter("chat", 10), async (req: Request, res) => {
+router.post("/api/v1/chat", isAuthenticated, rateLimiter("chat", 10), async (req: ExpressRequest<{}, any, z.infer<typeof chatRequestSchema>>, res: Response) => {
   try {
     const context = await prepareChatContext(req);
     if (!context.success) {
@@ -68,7 +69,7 @@ router.post("/api/v1/chat", isAuthenticated, rateLimiter("chat", 10), async (req
   }
 });
 
-router.post("/api/v1/chat/stream", isAuthenticated, rateLimiter("chat", 10), async (req: Request, res) => {
+router.post("/api/v1/chat/stream", isAuthenticated, rateLimiter("chat", 10), async (req: ExpressRequest<{}, any, z.infer<typeof chatRequestSchema>>, res: Response) => {
   try {
     const context = await prepareChatContext(req);
     if (!context.success) {
@@ -101,7 +102,7 @@ router.post("/api/v1/chat/stream", isAuthenticated, rateLimiter("chat", 10), asy
   }
 });
 
-router.get("/api/v1/chat/history", isAuthenticated, async (req: Request, res) => {
+router.get("/api/v1/chat/history", isAuthenticated, async (req: ExpressRequest, res: Response) => {
   try {
     const userId = getUserId(req);
     const messages = await storage.getChatMessages(userId);
@@ -112,7 +113,7 @@ router.get("/api/v1/chat/history", isAuthenticated, async (req: Request, res) =>
   }
 });
 
-router.post("/api/v1/chat/message", isAuthenticated, async (req: Request, res) => {
+router.post("/api/v1/chat/message", isAuthenticated, async (req: ExpressRequest<{}, any, InsertChatMessage>, res: Response) => {
   try {
     const parseResult = insertChatMessageSchema.safeParse(req.body);
     if (!parseResult.success) {
@@ -130,7 +131,7 @@ router.post("/api/v1/chat/message", isAuthenticated, async (req: Request, res) =
   }
 });
 
-router.delete("/api/v1/chat/history", isAuthenticated, rateLimiter("chatHistoryDelete", 5), async (req: Request, res) => {
+router.delete("/api/v1/chat/history", isAuthenticated, rateLimiter("chatHistoryDelete", 5), async (req: ExpressRequest, res: Response) => {
   try {
     const userId = getUserId(req);
     await storage.clearChatHistory(userId);
@@ -141,7 +142,7 @@ router.delete("/api/v1/chat/history", isAuthenticated, rateLimiter("chatHistoryD
   }
 });
 
-router.post("/api/v1/timeline/ai-suggestions", isAuthenticated, rateLimiter("suggestions", 3), async (req: Request, res) => {
+router.post("/api/v1/timeline/ai-suggestions", isAuthenticated, rateLimiter("suggestions", 3), async (req: ExpressRequest, res: Response) => {
   try {
     const userId = getUserId(req);
 

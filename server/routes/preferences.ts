@@ -1,14 +1,14 @@
 import { logger } from "../logger";
-import { Router, type Request } from "express";
+import { Router, type Request as ExpressRequest, type Response } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { rateLimiter } from "../routeUtils";
 import { storage } from "../storage";
-import { updateUserPreferencesSchema } from "@shared/schema";
+import { updateUserPreferencesSchema, type UpdateUserPreferences } from "@shared/schema";
 import { getUserId } from "../types";
 
 const router = Router();
 
-router.get('/api/v1/preferences', isAuthenticated, async (req: Request, res) => {
+router.get('/api/v1/preferences', isAuthenticated, async (req: ExpressRequest, res: Response) => {
   try {
     const userId = getUserId(req);
     const user = await storage.getUser(userId);
@@ -28,7 +28,7 @@ router.get('/api/v1/preferences', isAuthenticated, async (req: Request, res) => 
   }
 });
 
-router.patch('/api/v1/preferences', isAuthenticated, rateLimiter("preferences", 20), async (req: Request, res) => {
+router.patch('/api/v1/preferences', isAuthenticated, rateLimiter("preferences", 20), async (req: ExpressRequest<{}, any, UpdateUserPreferences>, res: Response) => {
   try {
     const userId = getUserId(req);
     const parseResult = updateUserPreferencesSchema.safeParse(req.body);
