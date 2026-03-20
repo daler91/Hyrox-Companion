@@ -118,7 +118,7 @@ router.get("/api/v1/chat/history", isAuthenticated, async (req: ExpressRequest, 
   }
 });
 
-router.post("/api/v1/chat/message", isAuthenticated, async (req: ExpressRequest<{}, any, InsertChatMessage>, res: Response) => {
+router.post("/api/v1/chat/message", isAuthenticated, rateLimiter("chatMessage", 20), async (req: ExpressRequest<{}, any, InsertChatMessage>, res: Response) => {
   try {
     const parseResult = insertChatMessageSchema.safeParse(req.body);
     if (!parseResult.success) {
