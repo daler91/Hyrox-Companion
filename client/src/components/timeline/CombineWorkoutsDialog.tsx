@@ -265,8 +265,8 @@ interface FieldSelectorProps {
 
 function FieldSelector({
   label,
-  entry1Value,
-  entry2Value,
+  entry1Value: _entry1Value,
+  entry2Value: _entry2Value,
   source,
   onSourceChange,
   customValue,

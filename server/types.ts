@@ -9,7 +9,9 @@ export function getUserId(req: Request): string {
     if (auth?.userId) {
       return auth.userId;
     }
-  } catch {}
+  } catch {
+    // intentionally empty - fall through to dev user
+  }
 
   if (env.NODE_ENV === "development") {
     return DEV_USER_ID;

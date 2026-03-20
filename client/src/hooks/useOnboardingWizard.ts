@@ -101,7 +101,7 @@ export function useOnboardingWizard(onComplete: (choice: "sample" | "import" | "
 
   const handleBack = () => {
     if (PREV[step]) {
-      setStep(PREV[step] as Step);
+      setStep(PREV[step]);
     }
   };
 

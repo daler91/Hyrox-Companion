@@ -21,7 +21,7 @@ export function WeeklySummary({ days, totalWorkouts, totalHours, totalDistance }
       </CardHeader>
       <CardContent className="p-6 pt-2">
         <div className="flex items-end justify-between gap-2 h-24 mb-4">
-          {days.map((day, index) => {
+          {days.map((day) => {
             const heightPercent = day.maxVolume > 0 ? (day.volume / day.maxVolume) * 100 : 0;
             return (
               <div key={day.day} className="flex-1 flex flex-col items-center gap-2">
