@@ -97,7 +97,7 @@ app.use((req, res, next) => {
 
 app.use(
   express.json({
-    limit: "5mb", // 🛡️ Sentinel: Limit request body size to prevent DoS
+    limit: "100kb", // 🛡️ Sentinel: Limit request body size to prevent DoS
     verify: (req, _res, buf) => {
       req.rawBody = buf;
     },
