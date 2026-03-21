@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -41,7 +41,9 @@ export default function EditWorkoutDialog({
   isPending,
 }: Readonly<EditWorkoutDialogProps>) {
   const editFormRef = useRef(editForm);
-  editFormRef.current = editForm;
+  useEffect(() => {
+    editFormRef.current = editForm;
+  }, [editForm]);
 
   const stopMainRef = useRef<(() => void) | null>(null);
   const stopAccessoryRef = useRef<(() => void) | null>(null);

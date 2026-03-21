@@ -1,0 +1,473 @@
+
+> hyrox-companion@1.0.0 lint /app
+> eslint .
+
+
+/app/client/src/components/CoachPanel.tsx
+   87:7  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/app/client/src/components/CoachPanel.tsx:87:7
+  85 |   useEffect(() => {
+  86 |     if (isOpen && isNewUser && !hasShownWelcome && messages.length === 0) {
+> 87 |       setHasShownWelcome(true);
+     |       ^^^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  88 |       setLocalMessages([{ id: "new-user-welcome", role: "assistant", content: WELCOME_TEXT, timestamp: getCurrentTimeString() }]);
+  89 |     }
+  90 |   }, [isOpen, isNewUser, hasShownWelcome, messages.length]);  react-hooks/set-state-in-effect
+  100:7  warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    @typescript-eslint/no-floating-promises
+
+/app/client/src/components/VoiceFieldButton.tsx
+  31:5  error  Error: Cannot access refs during render
+
+React refs are values that are not needed for rendering. Refs should only be accessed outside of render, such as in event handlers or effects. Accessing a ref value (the `current` property) during render can cause your component not to update as expected (https://react.dev/reference/react/useRef).
+
+/app/client/src/components/VoiceFieldButton.tsx:31:5
+  29 |
+  30 |   if (onStopRef) {
+> 31 |     onStopRef.current = stopListening;
+     |     ^^^^^^^^^^^^^^^^^ Cannot update ref during render
+  32 |   }
+  33 |
+  34 |   return (  react-hooks/refs
+
+/app/client/src/components/analytics/MiniBarChart.tsx
+  36:57  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/app/client/src/components/coach/SuggestionsTab.tsx
+  43:22  warning  Unexpected any. Specify a different type                                                                                                                            @typescript-eslint/no-explicit-any
+  92:7   warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+  94:9   warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+  95:9   warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+
+/app/client/src/components/settings/CoachingSection.tsx
+  29:26  error  Unexpected control character(s) in regular expression: \x00, \x08, \x0b, \x0c, \x0e, \x1f  no-control-regex
+  57:27  error  'file' is defined but never used. Allowed unused args must match /^_/u                     @typescript-eslint/no-unused-vars
+
+/app/client/src/components/settings/DataToolsSection.tsx
+  19:23  warning  Unexpected any. Specify a different type                                                                                                                            @typescript-eslint/no-explicit-any
+  42:7   warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+  43:7   warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+
+/app/client/src/components/timeline/EditWorkoutDialog.tsx
+  44:3  error  Error: Cannot access refs during render
+
+React refs are values that are not needed for rendering. Refs should only be accessed outside of render, such as in event handlers or effects. Accessing a ref value (the `current` property) during render can cause your component not to update as expected (https://react.dev/reference/react/useRef).
+
+/app/client/src/components/timeline/EditWorkoutDialog.tsx:44:3
+  42 | }: Readonly<EditWorkoutDialogProps>) {
+  43 |   const editFormRef = useRef(editForm);
+> 44 |   editFormRef.current = editForm;
+     |   ^^^^^^^^^^^^^^^^^^^ Cannot update ref during render
+  45 |
+  46 |   const stopMainRef = useRef<(() => void) | null>(null);
+  47 |   const stopAccessoryRef = useRef<(() => void) | null>(null);  react-hooks/refs
+
+/app/client/src/components/timeline/WorkoutDetailEditMode.tsx
+  54:7  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/app/client/src/components/timeline/WorkoutDetailEditMode.tsx:54:7
+  52 |   useEffect(() => {
+  53 |     if (entry) {
+> 54 |       setEditForm({
+     |       ^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  55 |         focus: entry.focus,
+  56 |         mainWorkout: entry.mainWorkout,
+  57 |         accessory: entry.accessory || "",  react-hooks/set-state-in-effect
+
+/app/client/src/components/timeline/timeline-workout-card/WorkoutStravaStats.tsx
+  40:62  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/app/client/src/components/timeline/workout-detail-exercises/WorkoutDetailEditForm.tsx
+  113:17  warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+
+/app/client/src/components/workout/WorkoutExerciseMode.tsx
+  13:32  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  14:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  15:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  16:42  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  18:12  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  19:26  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/app/client/src/components/workout/WorkoutTextMode.tsx
+  17:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  17:41  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  17:54  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  18:10  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/app/client/src/hooks/useAuth.ts
+  19:9  warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+  23:6  warning  React Hook useEffect has a missing dependency: 'user'. Either include it or remove the dependency array                                                             react-hooks/exhaustive-deps
+
+/app/client/src/hooks/useChatMutations.ts
+  22:7  warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+
+/app/client/src/hooks/useChatSession.ts
+  132:6  warning  React Hook useEffect has a missing dependency: 'welcomeMessageObj'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/app/client/src/hooks/useCoachingMaterials.ts
+  36:7  warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+  54:7  warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+  72:7  warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+
+/app/client/src/hooks/useCombineWorkouts.ts
+  14:224  warning  Unexpected any. Specify a different type                                                                                                                            @typescript-eslint/no-explicit-any
+  32:7    warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+  33:7    warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+
+/app/client/src/hooks/useOnboarding.ts
+  15:7  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/app/client/src/hooks/useOnboarding.ts:15:7
+  13 |   useEffect(() => {
+  14 |     if (isNewUser && !onboardingTriggered && !localStorage.getItem("hyrox-onboarding-complete")) {
+> 15 |       setOnboardingTriggered(true);
+     |       ^^^^^^^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  16 |       setShowOnboarding(true);
+  17 |     }
+  18 |   }, [isNewUser, onboardingTriggered]);                   react-hooks/set-state-in-effect
+  22:7  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/app/client/src/hooks/useOnboarding.ts:22:7
+  20 |   useEffect(() => {
+  21 |     if (!showOnboarding && onboardingTriggered && !hasAutoOpenedCoach) {
+> 22 |       setHasAutoOpenedCoach(true);
+     |       ^^^^^^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  23 |       setTimeout(() => {
+  24 |         const isCurrentlyMobile = globalThis.innerWidth < 768;
+  25 |         if (!isCurrentlyMobile) {  react-hooks/set-state-in-effect
+  39:7  warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        @typescript-eslint/no-floating-promises
+  40:7  warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        @typescript-eslint/no-floating-promises
+
+/app/client/src/hooks/useOnboardingWizard.ts
+  33:7  warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+  34:7  warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+  42:7  warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+  58:7  warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+  59:7  warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+
+/app/client/src/hooks/usePlanImport.ts
+  27:7  warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+  42:7  warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+  56:7  warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+  57:7  warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+  71:7  warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+  85:7  warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+  86:7  warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+
+/app/client/src/hooks/useStravaMutations.ts
+  30:7  warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+  51:7  warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+  52:7  warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+  53:7  warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+
+/app/client/src/hooks/useVoiceInput.ts
+   44:22  warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      @typescript-eslint/no-explicit-any
+   45:22  warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      @typescript-eslint/no-explicit-any
+   96:22  warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      @typescript-eslint/no-explicit-any
+   97:22  warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      @typescript-eslint/no-explicit-any
+  149:13  error    Error: Cannot access variable before it is declared
+
+`startRecognition` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/app/client/src/hooks/useVoiceInput.ts:149:13
+  147 |           retryTimeoutRef.current = null;
+  148 |           if (!stoppedByUserRef.current) {
+> 149 |             startRecognition();
+      |             ^^^^^^^^^^^^^^^^ `startRecognition` accessed before it is declared
+  150 |           }
+  151 |         }, RETRY_DELAY_MS);
+  152 |         return;
+
+/app/client/src/hooks/useVoiceInput.ts:94:3
+   92 |   }, []);
+   93 |
+>  94 |   const startRecognition = useCallback(() => {
+      |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+>  95 |     const SpeechRecognition =
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+>  96 |       (globalThis as any).SpeechRecognition ||
+      …
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 183 |     }
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 184 |   }, [continuous, lang, processFinalTranscript]);
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `startRecognition` is declared here
+  185 |
+  186 |   const startListening = useCallback(async () => {
+  187 |     const SpeechRecognition =  react-hooks/immutability
+  188:22  warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      @typescript-eslint/no-explicit-any
+  189:22  warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      @typescript-eslint/no-explicit-any
+  226:7   warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            @typescript-eslint/no-floating-promises
+
+/app/client/src/hooks/useWorkoutActions.ts
+   24:7  warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+   38:7  warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+   57:7  warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+   72:7  warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+   73:7  warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+   88:7  warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+   89:7  warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+  104:7  warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+  105:7  warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+
+/app/client/src/hooks/useWorkoutForm.ts
+  75:7  warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+  76:7  warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+
+/app/client/src/hooks/useWorkoutVoiceForm.ts
+  20:3  error  Error: Cannot access refs during render
+
+React refs are values that are not needed for rendering. Refs should only be accessed outside of render, such as in event handlers or effects. Accessing a ref value (the `current` property) during render can cause your component not to update as expected (https://react.dev/reference/react/useRef).
+
+/app/client/src/hooks/useWorkoutVoiceForm.ts:20:3
+  18 |
+  19 |   const editFormRef = useRef(editForm);
+> 20 |   editFormRef.current = editForm;
+     |   ^^^^^^^^^^^^^^^^^^^ Cannot update ref during render
+  21 |
+  22 |   const stopAccessoryRef = useRef<(() => void) | null>(null);
+  23 |   const stopNotesRef = useRef<(() => void) | null>(null);  react-hooks/refs
+  72:5  error  Error: Cannot access refs during render
+
+React refs are values that are not needed for rendering. Refs should only be accessed outside of render, such as in event handlers or effects. Accessing a ref value (the `current` property) during render can cause your component not to update as expected (https://react.dev/reference/react/useRef).
+
+/app/client/src/hooks/useWorkoutVoiceForm.ts:72:5
+  70 |
+  71 |   if (stopAllVoiceRef) {
+> 72 |     stopAllVoiceRef.current = stopAllVoice;
+     |     ^^^^^^^^^^^^^^^^^^^^^^^ Cannot update ref during render
+  73 |   }
+  74 |
+  75 |   return {                                                                                                          react-hooks/refs
+
+/app/client/src/pages/Settings.tsx
+  71:7  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/app/client/src/pages/Settings.tsx:71:7
+  69 |   useEffect(() => {
+  70 |     if (preferences) {
+> 71 |       setWeightUnit(preferences.weightUnit || "kg");
+     |       ^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  72 |       setDistanceUnit(preferences.distanceUnit || "km");
+  73 |       setWeeklyGoal(String(preferences.weeklyGoal || 5));
+  74 |       setEmailNotifications(preferences.emailNotifications);  react-hooks/set-state-in-effect
+  91:7  warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  @typescript-eslint/no-floating-promises
+
+/app/server/clerkAuth.ts
+  53:48  warning  Promise-returning function provided to variable where a void return was expected  @typescript-eslint/no-misused-promises
+
+/app/server/index.ts
+  199:5  warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+
+/app/server/routes/ai.ts
+   15:82   warning  Promise returned in function argument where a void return was expected                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-misused-promises
+   15:109  error    The `{}` ("empty object") type allows any non-nullish value, including literals like `0` and `""`.
+- If that's what you want, disable this lint rule with an inline comment or configure the 'allowObjectTypes' rule option.
+- If you want a type meaning "any object", you probably want `object` instead.
+- If you want a type meaning "any value", you probably want `unknown` instead  @typescript-eslint/no-empty-object-type
+   15:113  warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                   @typescript-eslint/no-explicit-any
+   61:71   warning  Promise returned in function argument where a void return was expected                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-misused-promises
+   61:98   error    The `{}` ("empty object") type allows any non-nullish value, including literals like `0` and `""`.
+- If that's what you want, disable this lint rule with an inline comment or configure the 'allowObjectTypes' rule option.
+- If you want a type meaning "any object", you probably want `object` instead.
+- If you want a type meaning "any value", you probably want `unknown` instead  @typescript-eslint/no-empty-object-type
+   61:102  warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                   @typescript-eslint/no-explicit-any
+   77:78   warning  Promise returned in function argument where a void return was expected                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-misused-promises
+   77:105  error    The `{}` ("empty object") type allows any non-nullish value, including literals like `0` and `""`.
+- If that's what you want, disable this lint rule with an inline comment or configure the 'allowObjectTypes' rule option.
+- If you want a type meaning "any object", you probably want `object` instead.
+- If you want a type meaning "any value", you probably want `unknown` instead  @typescript-eslint/no-empty-object-type
+   77:109  warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                   @typescript-eslint/no-explicit-any
+  110:53   warning  Promise returned in function argument where a void return was expected                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-misused-promises
+  121:86   warning  Promise returned in function argument where a void return was expected                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-misused-promises
+  121:113  error    The `{}` ("empty object") type allows any non-nullish value, including literals like `0` and `""`.
+- If that's what you want, disable this lint rule with an inline comment or configure the 'allowObjectTypes' rule option.
+- If you want a type meaning "any object", you probably want `object` instead.
+- If you want a type meaning "any value", you probably want `unknown` instead  @typescript-eslint/no-empty-object-type
+  121:117  warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                   @typescript-eslint/no-explicit-any
+  139:93   warning  Promise returned in function argument where a void return was expected                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-misused-promises
+  150:96   warning  Promise returned in function argument where a void return was expected                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-misused-promises
+
+/app/server/routes/analytics.ts
+  52:87   warning  Promise returned in function argument where a void return was expected                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-misused-promises
+  52:114  error    The `{}` ("empty object") type allows any non-nullish value, including literals like `0` and `""`.
+- If that's what you want, disable this lint rule with an inline comment or configure the 'allowObjectTypes' rule option.
+- If you want a type meaning "any object", you probably want `object` instead.
+- If you want a type meaning "any value", you probably want `unknown` instead  @typescript-eslint/no-empty-object-type
+  52:118  warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                   @typescript-eslint/no-explicit-any
+  52:123  warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                   @typescript-eslint/no-explicit-any
+  68:89   warning  Promise returned in function argument where a void return was expected                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-misused-promises
+  68:116  error    The `{}` ("empty object") type allows any non-nullish value, including literals like `0` and `""`.
+- If that's what you want, disable this lint rule with an inline comment or configure the 'allowObjectTypes' rule option.
+- If you want a type meaning "any object", you probably want `object` instead.
+- If you want a type meaning "any value", you probably want `unknown` instead  @typescript-eslint/no-empty-object-type
+  68:120  warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                   @typescript-eslint/no-explicit-any
+  68:125  warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                   @typescript-eslint/no-explicit-any
+
+/app/server/routes/auth.ts
+  11:75  warning  Promise returned in function argument where a void return was expected  @typescript-eslint/no-misused-promises
+
+/app/server/routes/coaching.ts
+  18:59  warning  Promise returned in function argument where a void return was expected  @typescript-eslint/no-misused-promises
+  29:89  warning  Promise returned in function argument where a void return was expected  @typescript-eslint/no-misused-promises
+  44:94  warning  Promise returned in function argument where a void return was expected  @typescript-eslint/no-misused-promises
+  62:95  warning  Promise returned in function argument where a void return was expected  @typescript-eslint/no-misused-promises
+
+/app/server/routes/email.ts
+  12:54  warning  Promise returned in function argument where a void return was expected  @typescript-eslint/no-misused-promises
+  27:35  warning  Promise returned in function argument where a void return was expected  @typescript-eslint/no-misused-promises
+
+/app/server/routes/plans.ts
+   15:26   warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+   20:37   warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+   60:46   warning  Promise returned in function argument where a void return was expected  @typescript-eslint/no-misused-promises
+   71:50   warning  Promise returned in function argument where a void return was expected  @typescript-eslint/no-misused-promises
+   75:84   warning  Promise returned in function argument where a void return was expected  @typescript-eslint/no-misused-promises
+   75:134  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+   95:84   warning  Promise returned in function argument where a void return was expected  @typescript-eslint/no-misused-promises
+  106:102  warning  Promise returned in function argument where a void return was expected  @typescript-eslint/no-misused-promises
+  106:164  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  110:94   warning  Promise returned in function argument where a void return was expected  @typescript-eslint/no-misused-promises
+  110:140  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  118:83   warning  Promise returned in function argument where a void return was expected  @typescript-eslint/no-misused-promises
+  118:126  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  136:88   warning  Promise returned in function argument where a void return was expected  @typescript-eslint/no-misused-promises
+  136:131  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  154:84   warning  Promise returned in function argument where a void return was expected  @typescript-eslint/no-misused-promises
+  158:97   warning  Promise returned in function argument where a void return was expected  @typescript-eslint/no-misused-promises
+  158:144  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  186:101  warning  Promise returned in function argument where a void return was expected  @typescript-eslint/no-misused-promises
+  186:147  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  222:95   warning  Promise returned in function argument where a void return was expected  @typescript-eslint/no-misused-promises
+
+/app/server/routes/preferences.ts
+  11:52   warning  Promise returned in function argument where a void return was expected                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-misused-promises
+  31:86   warning  Promise returned in function argument where a void return was expected                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-misused-promises
+  31:113  error    The `{}` ("empty object") type allows any non-nullish value, including literals like `0` and `""`.
+- If that's what you want, disable this lint rule with an inline comment or configure the 'allowObjectTypes' rule option.
+- If you want a type meaning "any object", you probably want `object` instead.
+- If you want a type meaning "any value", you probably want `unknown` instead  @typescript-eslint/no-empty-object-type
+  31:117  warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                   @typescript-eslint/no-explicit-any
+
+/app/server/routes/workouts.ts
+   14:62   warning  Promise returned in function argument where a void return was expected                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-misused-promises
+   25:89   warning  Promise returned in function argument where a void return was expected                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-misused-promises
+   95:96   warning  Promise returned in function argument where a void return was expected                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-misused-promises
+  121:57   warning  Promise returned in function argument where a void return was expected                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-misused-promises
+  132:93   warning  Promise returned in function argument where a void return was expected                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-misused-promises
+  132:113  error    The `{}` ("empty object") type allows any non-nullish value, including literals like `0` and `""`.
+- If that's what you want, disable this lint rule with an inline comment or configure the 'allowObjectTypes' rule option.
+- If you want a type meaning "any object", you probably want `object` instead.
+- If you want a type meaning "any value", you probably want `unknown` instead  @typescript-eslint/no-empty-object-type
+  132:117  error    The `{}` ("empty object") type allows any non-nullish value, including literals like `0` and `""`.
+- If that's what you want, disable this lint rule with an inline comment or configure the 'allowObjectTypes' rule option.
+- If you want a type meaning "any object", you probably want `object` instead.
+- If you want a type meaning "any value", you probably want `unknown` instead  @typescript-eslint/no-empty-object-type
+  158:49   warning  Promise returned in function argument where a void return was expected                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-misused-promises
+  158:69   error    The `{}` ("empty object") type allows any non-nullish value, including literals like `0` and `""`.
+- If that's what you want, disable this lint rule with an inline comment or configure the 'allowObjectTypes' rule option.
+- If you want a type meaning "any object", you probably want `object` instead.
+- If you want a type meaning "any value", you probably want `unknown` instead  @typescript-eslint/no-empty-object-type
+  158:73   error    The `{}` ("empty object") type allows any non-nullish value, including literals like `0` and `""`.
+- If that's what you want, disable this lint rule with an inline comment or configure the 'allowObjectTypes' rule option.
+- If you want a type meaning "any object", you probably want `object` instead.
+- If you want a type meaning "any value", you probably want `unknown` instead  @typescript-eslint/no-empty-object-type
+  158:77   error    The `{}` ("empty object") type allows any non-nullish value, including literals like `0` and `""`.
+- If that's what you want, disable this lint rule with an inline comment or configure the 'allowObjectTypes' rule option.
+- If you want a type meaning "any object", you probably want `object` instead.
+- If you want a type meaning "any value", you probably want `unknown` instead  @typescript-eslint/no-empty-object-type
+  161:53   error    This assertion is unnecessary since it does not change the type of the expression                                                                                                                                                                                                                                                                                                          @typescript-eslint/no-unnecessary-type-assertion
+  162:55   error    This assertion is unnecessary since it does not change the type of the expression                                                                                                                                                                                                                                                                                                          @typescript-eslint/no-unnecessary-type-assertion
+  175:53   warning  Promise returned in function argument where a void return was expected                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-misused-promises
+  189:78   warning  Promise returned in function argument where a void return was expected                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-misused-promises
+  189:98   error    The `{}` ("empty object") type allows any non-nullish value, including literals like `0` and `""`.
+- If that's what you want, disable this lint rule with an inline comment or configure the 'allowObjectTypes' rule option.
+- If you want a type meaning "any object", you probably want `object` instead.
+- If you want a type meaning "any value", you probably want `unknown` instead  @typescript-eslint/no-empty-object-type
+  189:102  error    The `{}` ("empty object") type allows any non-nullish value, including literals like `0` and `""`.
+- If that's what you want, disable this lint rule with an inline comment or configure the 'allowObjectTypes' rule option.
+- If you want a type meaning "any object", you probably want `object` instead.
+- If you want a type meaning "any value", you probably want `unknown` instead  @typescript-eslint/no-empty-object-type
+  189:139  warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                   @typescript-eslint/no-explicit-any
+  214:83   warning  Promise returned in function argument where a void return was expected                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-misused-promises
+  214:119  error    The `{}` ("empty object") type allows any non-nullish value, including literals like `0` and `""`.
+- If that's what you want, disable this lint rule with an inline comment or configure the 'allowObjectTypes' rule option.
+- If you want a type meaning "any object", you probably want `object` instead.
+- If you want a type meaning "any value", you probably want `unknown` instead  @typescript-eslint/no-empty-object-type
+  214:156  warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                   @typescript-eslint/no-explicit-any
+  241:84   warning  Promise returned in function argument where a void return was expected                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-misused-promises
+  256:72   warning  Promise returned in function argument where a void return was expected                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-misused-promises
+  267:49   warning  Promise returned in function argument where a void return was expected                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-misused-promises
+  267:69   error    The `{}` ("empty object") type allows any non-nullish value, including literals like `0` and `""`.
+- If that's what you want, disable this lint rule with an inline comment or configure the 'allowObjectTypes' rule option.
+- If you want a type meaning "any object", you probably want `object` instead.
+- If you want a type meaning "any value", you probably want `unknown` instead  @typescript-eslint/no-empty-object-type
+  267:73   error    The `{}` ("empty object") type allows any non-nullish value, including literals like `0` and `""`.
+- If that's what you want, disable this lint rule with an inline comment or configure the 'allowObjectTypes' rule option.
+- If you want a type meaning "any object", you probably want `object` instead.
+- If you want a type meaning "any value", you probably want `unknown` instead  @typescript-eslint/no-empty-object-type
+  267:77   error    The `{}` ("empty object") type allows any non-nullish value, including literals like `0` and `""`.
+- If that's what you want, disable this lint rule with an inline comment or configure the 'allowObjectTypes' rule option.
+- If you want a type meaning "any object", you probably want `object` instead.
+- If you want a type meaning "any value", you probably want `unknown` instead  @typescript-eslint/no-empty-object-type
+  270:20   error    This assertion is unnecessary since it does not change the type of the expression                                                                                                                                                                                                                                                                                                          @typescript-eslint/no-unnecessary-type-assertion
+  271:53   error    This assertion is unnecessary since it does not change the type of the expression                                                                                                                                                                                                                                                                                                          @typescript-eslint/no-unnecessary-type-assertion
+  272:55   error    This assertion is unnecessary since it does not change the type of the expression                                                                                                                                                                                                                                                                                                          @typescript-eslint/no-unnecessary-type-assertion
+  285:80   warning  Promise returned in function argument where a void return was expected                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-misused-promises
+  285:100  error    The `{}` ("empty object") type allows any non-nullish value, including literals like `0` and `""`.
+- If that's what you want, disable this lint rule with an inline comment or configure the 'allowObjectTypes' rule option.
+- If you want a type meaning "any object", you probably want `object` instead.
+- If you want a type meaning "any value", you probably want `unknown` instead  @typescript-eslint/no-empty-object-type
+  285:104  error    The `{}` ("empty object") type allows any non-nullish value, including literals like `0` and `""`.
+- If that's what you want, disable this lint rule with an inline comment or configure the 'allowObjectTypes' rule option.
+- If you want a type meaning "any object", you probably want `object` instead.
+- If you want a type meaning "any value", you probably want `unknown` instead  @typescript-eslint/no-empty-object-type
+  285:108  error    The `{}` ("empty object") type allows any non-nullish value, including literals like `0` and `""`.
+- If that's what you want, disable this lint rule with an inline comment or configure the 'allowObjectTypes' rule option.
+- If you want a type meaning "any object", you probably want `object` instead.
+- If you want a type meaning "any value", you probably want `unknown` instead  @typescript-eslint/no-empty-object-type
+
+/app/server/strava.ts
+  292:53  warning  Promise returned in function argument where a void return was expected  @typescript-eslint/no-misused-promises
+  293:70  warning  Promise returned in function argument where a void return was expected  @typescript-eslint/no-misused-promises
+  294:57  warning  Promise returned in function argument where a void return was expected  @typescript-eslint/no-misused-promises
+  295:60  warning  Promise returned in function argument where a void return was expected  @typescript-eslint/no-misused-promises
+  296:52  warning  Promise returned in function argument where a void return was expected  @typescript-eslint/no-misused-promises
+
+/app/server/vite.ts
+  41:37  warning  Promise returned in function argument where a void return was expected  @typescript-eslint/no-misused-promises
+
+✖ 177 problems (38 errors, 139 warnings)
+  5 errors and 0 warnings potentially fixable with the `--fix` option.
+
+ ELIFECYCLE  Command failed with exit code 1.

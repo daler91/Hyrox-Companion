@@ -84,6 +84,7 @@ export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }
 
   useEffect(() => {
     if (isOpen && isNewUser && !hasShownWelcome && messages.length === 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setHasShownWelcome(true);
       setLocalMessages([{ id: "new-user-welcome", role: "assistant", content: WELCOME_TEXT, timestamp: getCurrentTimeString() }]);
     }

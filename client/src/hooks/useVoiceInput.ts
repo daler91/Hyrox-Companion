@@ -34,15 +34,19 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
   const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stoppedByUserRef = useRef(false);
   const recentEmissionsRef = useRef<Array<{ text: string; time: number }>>([]);
+  const startRecognitionRef = useRef<() => void>(() => {});
 
-  onResultRef.current = onResult;
-  onInterimRef.current = onInterim;
-  onErrorRef.current = onError;
+  useEffect(() => {
+    onResultRef.current = onResult;
+    onInterimRef.current = onInterim;
+    onErrorRef.current = onError;
+  }, [onResult, onInterim, onError]);
 
   useEffect(() => {
     const SpeechRecognition =
       (globalThis as any).SpeechRecognition ||
       (globalThis as any).webkitSpeechRecognition;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsSupported(!!SpeechRecognition);
   }, []);
 
@@ -146,7 +150,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
         retryTimeoutRef.current = setTimeout(() => {
           retryTimeoutRef.current = null;
           if (!stoppedByUserRef.current) {
-            startRecognition();
+            startRecognitionRef.current();
           }
         }, RETRY_DELAY_MS);
         return;
@@ -182,6 +186,10 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
       );
     }
   }, [continuous, lang, processFinalTranscript]);
+
+  useEffect(() => {
+    startRecognitionRef.current = startRecognition;
+  }, [startRecognition]);
 
   const startListening = useCallback(async () => {
     const SpeechRecognition =

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useSaveMessageMutation, useClearHistoryMutation } from "./useChatMutations";
@@ -92,12 +92,14 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     useStreaming = true,
   } = options;
 
-  const welcomeMessageObj: Message = {
+  const welcomeMessageObj: Message = useMemo(() => ({
     id: "welcome",
     role: "assistant",
     content: welcomeMessage,
     timestamp: getCurrentTimeString(),
-  };
+  }), [welcomeMessage]);
+
+
 
   const [messages, setMessages] = useState<Message[]>([welcomeMessageObj]);
   const [isLoading, setIsLoading] = useState(false);
@@ -129,7 +131,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     } else if (!historyLoading && chatHistory.length === 0 && !historyLoaded) {
       setHistoryLoaded(true);
     }
-  }, [chatHistory, historyLoading, historyLoaded]);
+  }, [chatHistory, historyLoading, historyLoaded, welcomeMessageObj]);
 
   const saveMessageMutation = useSaveMessageMutation();
 
