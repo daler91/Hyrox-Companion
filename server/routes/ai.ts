@@ -255,21 +255,26 @@ router.post("/api/v1/timeline/ai-suggestions", isAuthenticated, rateLimiter("sug
     const rawSuggestions = await generateWorkoutSuggestions(trainingContext, upcomingWorkouts, undefined, coachingMaterials);
 
     const workoutMap = new Map(upcomingWorkouts.map(w => [w.id, w]));
-    const suggestions = rawSuggestions
-      .map(s => {
-        const workout = workoutMap.get(s.workoutId);
-        return {
-          workoutId: s.workoutId,
-          date: workout?.date || s.workoutDate || "",
-          focus: workout?.focus || s.workoutFocus || "",
-          targetField: s.targetField || "notes",
-          action: s.action || "append",
-          recommendation: s.recommendation,
-          rationale: s.rationale,
-          priority: s.priority,
-        };
-      })
-      .filter(s => s.date && s.focus && s.recommendation);
+    // ⚡ Bolt Performance Optimization:
+    // Combine map and filter into a single O(N) reduction to prevent
+    // intermediate array allocations.
+    const suggestions = rawSuggestions.reduce<{ workoutId: string; date: string; focus: string; targetField: "notes" | "mainWorkout" | "accessory"; action: "replace" | "append"; recommendation: string; rationale: string; priority: "low" | "medium" | "high" }[]>((acc, s) => {
+      const workout = workoutMap.get(s.workoutId);
+      const mapped = {
+        workoutId: s.workoutId,
+        date: workout?.date || s.workoutDate || "",
+        focus: workout?.focus || s.workoutFocus || "",
+        targetField: s.targetField || "notes",
+        action: s.action || "append",
+        recommendation: s.recommendation,
+        rationale: s.rationale,
+        priority: s.priority,
+      };
+      if (mapped.date && mapped.focus && mapped.recommendation) {
+        acc.push(mapped);
+      }
+      return acc;
+    }, []);
 
     res.json({ suggestions, ragInfo: coachingContext.ragInfo });
   } catch (error) {
