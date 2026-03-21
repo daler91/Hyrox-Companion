@@ -59,11 +59,11 @@ async function extractFileText(file: File): Promise<string> {
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
-function RagStatusContent({ ragLoading, ragStatus, reEmbedMutation }: {
+function RagStatusContent({ ragLoading, ragStatus, reEmbedMutation }: Readonly<{
   ragLoading: boolean;
   ragStatus: import("@/hooks/useCoachingMaterials").RagStatus | undefined;
   reEmbedMutation: { mutate: () => void; isPending: boolean };
-}) {
+}>) {
   if (ragLoading) {
     return (
       <div className="flex items-center justify-center py-2">
