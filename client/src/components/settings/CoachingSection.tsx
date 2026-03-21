@@ -54,10 +54,7 @@ async function extractFileText(file: File): Promise<string> {
   return sanitizeText(await file.text());
 }
 
-function getFileSizeLimit(file: File): number {
-  const ext = file.name.split(".").pop()?.toLowerCase();
-  return ext === "pdf" || ext === "docx" ? 1000000 : 500000;
-}
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 
 export function CoachingSection() {
   const { toast } = useToast();
@@ -79,9 +76,8 @@ export function CoachingSection() {
   };
 
   const processSingleFile = async (file: File) => {
-    const sizeLimit = getFileSizeLimit(file);
-    if (file.size > sizeLimit) {
-      toast({ title: "File too large", description: `Maximum file size is ${sizeLimit === 1000000 ? "1MB" : "500KB"}.`, variant: "destructive" });
+    if (file.size > MAX_FILE_SIZE) {
+      toast({ title: "File too large", description: "Maximum file size is 5MB.", variant: "destructive" });
       return;
     }
     try {
@@ -101,7 +97,7 @@ export function CoachingSection() {
     let uploaded = 0;
 
     for (const file of files) {
-      if (file.size > getFileSizeLimit(file)) {
+      if (file.size > MAX_FILE_SIZE) {
         tooLarge.push(file.name);
         continue;
       }
@@ -124,7 +120,7 @@ export function CoachingSection() {
     if (tooLarge.length > 0) {
       toast({
         title: "Files too large",
-        description: `Skipped (>500KB): ${tooLarge.join(", ")}`,
+        description: `Skipped (>5MB): ${tooLarge.join(", ")}`,
         variant: "destructive",
       });
     }
