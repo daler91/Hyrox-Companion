@@ -72,6 +72,37 @@ async function ensureSchemaUpToDate() {
       `);
       logger.info({ context: "db" }, "Created missing coaching_materials table");
     }
+    const chunksTable = await client.query(
+      `SELECT 1 FROM information_schema.tables WHERE table_name = 'document_chunks'`,
+    );
+    if (chunksTable.rowCount === 0) {
+      await client.query(`
+        CREATE TABLE "document_chunks" (
+          "id" varchar(255) PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+          "material_id" varchar(255) NOT NULL,
+          "user_id" varchar(255) NOT NULL,
+          "content" text NOT NULL,
+          "chunk_index" integer NOT NULL,
+          "embedding" text,
+          "created_at" timestamp DEFAULT now()
+        )
+      `);
+      await client.query(`
+        ALTER TABLE "document_chunks" ADD CONSTRAINT "document_chunks_material_id_coaching_materials_id_fk"
+          FOREIGN KEY ("material_id") REFERENCES "public"."coaching_materials"("id") ON DELETE cascade ON UPDATE no action
+      `);
+      await client.query(`
+        ALTER TABLE "document_chunks" ADD CONSTRAINT "document_chunks_user_id_users_id_fk"
+          FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action
+      `);
+      await client.query(`
+        CREATE INDEX "idx_document_chunks_material_id" ON "document_chunks" USING btree ("material_id")
+      `);
+      await client.query(`
+        CREATE INDEX "idx_document_chunks_user_id" ON "document_chunks" USING btree ("user_id")
+      `);
+      logger.info({ context: "db" }, "Created missing document_chunks table");
+    }
   } catch (error) {
     logger.error({ context: "db", err: error }, "Schema migration check failed");
   } finally {
