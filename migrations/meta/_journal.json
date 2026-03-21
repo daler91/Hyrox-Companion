@@ -57,6 +57,13 @@
       "when": 1773973916380,
       "tag": "0007_brown_nova",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1774310400000,
+      "tag": "0008_add_document_chunks",
+      "breakpoints": true
     }
   ]
 }

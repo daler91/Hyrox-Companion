@@ -419,9 +419,26 @@ export const insertCoachingMaterialSchema = createInsertSchema(coachingMaterials
   updatedAt: true,
 }).extend({
   title: z.string().trim().min(1, "Title is required").max(255, "Title must be 255 characters or less"),
-  content: z.string().trim().min(1, "Content is required").max(50000, "Content must be 50,000 characters or less"),
+  content: z.string().trim().min(1, "Content is required").max(200000, "Content must be 200,000 characters or less"),
   type: z.enum(["principles", "document"]),
 });
 
 export type InsertCoachingMaterial = z.infer<typeof insertCoachingMaterialSchema>;
 export type CoachingMaterial = typeof coachingMaterials.$inferSelect;
+
+// Document chunks for RAG pipeline - stores embedded chunks of coaching materials
+export const documentChunks = pgTable("document_chunks", {
+  id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+  materialId: varchar("material_id", { length: 255 }).notNull().references(() => coachingMaterials.id, { onDelete: "cascade" }),
+  userId: varchar("user_id", { length: 255 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  content: text("content").notNull(),
+  chunkIndex: integer("chunk_index").notNull(),
+  embedding: text("embedding"), // Stored as JSON string of float array; cast to vector for queries
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_document_chunks_material_id").on(table.materialId),
+  index("idx_document_chunks_user_id").on(table.userId),
+]);
+
+export type DocumentChunk = typeof documentChunks.$inferSelect;
+export type InsertDocumentChunk = typeof documentChunks.$inferInsert;

@@ -234,6 +234,10 @@ export interface CoachingMaterialInput {
 
 const MAX_COACHING_MATERIALS_CHARS = 8000;
 
+/**
+ * Legacy fallback: build coaching materials by simple truncation.
+ * Used when RAG pipeline is not available (no embedded chunks yet).
+ */
 export function buildCoachingMaterialsSection(materials: CoachingMaterialInput[]): string {
   if (!materials || materials.length === 0) return "";
 
@@ -257,10 +261,37 @@ export function buildCoachingMaterialsSection(materials: CoachingMaterialInput[]
   return section;
 }
 
-export function buildSystemPrompt(trainingContext?: TrainingContext, coachingMaterials?: CoachingMaterialInput[]): string {
+/**
+ * Build coaching materials section from RAG-retrieved chunks.
+ */
+export function buildRetrievedChunksSection(chunks: string[]): string {
+  if (chunks.length === 0) return "";
+
+  let section = `\n--- COACHING REFERENCE MATERIALS ---\n`;
+  section += `Use these relevant excerpts from the athlete's coaching materials to guide your coaching decisions.\n\n`;
+
+  for (let i = 0; i < chunks.length; i++) {
+    section += `[Excerpt ${i + 1}]\n${chunks[i]}\n\n`;
+  }
+
+  section += `--- END COACHING MATERIALS ---\n`;
+  return section;
+}
+
+/**
+ * Build system prompt with optional RAG-retrieved chunks or legacy coaching materials.
+ * When retrievedChunks is provided, it takes priority over coachingMaterials.
+ */
+export function buildSystemPrompt(
+  trainingContext?: TrainingContext,
+  coachingMaterials?: CoachingMaterialInput[],
+  retrievedChunks?: string[],
+): string {
   if (!trainingContext || trainingContext.totalWorkouts === 0) {
     let prompt = BASE_SYSTEM_PROMPT + `\n\nNote: This athlete hasn't logged any training data yet. Encourage them to start tracking their workouts to receive personalized insights.`;
-    const materialsSection = buildCoachingMaterialsSection(coachingMaterials || []);
+    const materialsSection = retrievedChunks && retrievedChunks.length > 0
+      ? buildRetrievedChunksSection(retrievedChunks)
+      : buildCoachingMaterialsSection(coachingMaterials || []);
     if (materialsSection) prompt += `\n${materialsSection}`;
     return prompt;
   }
@@ -274,7 +305,9 @@ export function buildSystemPrompt(trainingContext?: TrainingContext, coachingMat
 
   contextSection += `\n\n--- END TRAINING DATA ---\n\nUse this data to provide personalized coaching. Reference specific workouts and patterns when relevant.`;
 
-  const materialsSection = buildCoachingMaterialsSection(coachingMaterials || []);
+  const materialsSection = retrievedChunks && retrievedChunks.length > 0
+    ? buildRetrievedChunksSection(retrievedChunks)
+    : buildCoachingMaterialsSection(coachingMaterials || []);
   if (materialsSection) contextSection += `\n${materialsSection}`;
 
   return BASE_SYSTEM_PROMPT + contextSection;

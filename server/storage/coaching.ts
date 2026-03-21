@@ -1,9 +1,13 @@
 import {
   coachingMaterials,
+  documentChunks,
   type CoachingMaterial,
   type InsertCoachingMaterial,
+  type DocumentChunk,
+  type InsertDocumentChunk,
 } from "@shared/schema";
 import { db } from "../db";
+import { pool } from "../db";
 import { eq, and } from "drizzle-orm";
 
 export class CoachingStorage {
@@ -49,6 +53,44 @@ export class CoachingStorage {
       .delete(coachingMaterials)
       .where(and(eq(coachingMaterials.id, id), eq(coachingMaterials.userId, userId)))
       .returning({ id: coachingMaterials.id });
+    return result.length > 0;
+  }
+
+  // RAG chunk methods
+
+  async insertChunks(chunks: InsertDocumentChunk[]): Promise<DocumentChunk[]> {
+    if (chunks.length === 0) return [];
+    return await db.insert(documentChunks).values(chunks).returning();
+  }
+
+  async deleteChunksByMaterialId(materialId: string): Promise<void> {
+    await db.delete(documentChunks).where(eq(documentChunks.materialId, materialId));
+  }
+
+  async searchChunksByEmbedding(
+    userId: string,
+    queryEmbedding: number[],
+    topK: number,
+  ): Promise<DocumentChunk[]> {
+    // Use raw SQL for pgvector cosine similarity search
+    const embeddingStr = `[${queryEmbedding.join(",")}]`;
+    const result = await pool.query(
+      `SELECT id, material_id AS "materialId", user_id AS "userId", content, chunk_index AS "chunkIndex", created_at AS "createdAt"
+       FROM document_chunks
+       WHERE user_id = $1 AND embedding IS NOT NULL
+       ORDER BY embedding::vector <=> $2::vector
+       LIMIT $3`,
+      [userId, embeddingStr, topK],
+    );
+    return result.rows;
+  }
+
+  async hasChunksForUser(userId: string): Promise<boolean> {
+    const result = await db
+      .select({ id: documentChunks.id })
+      .from(documentChunks)
+      .where(eq(documentChunks.userId, userId))
+      .limit(1);
     return result.length > 0;
   }
 }

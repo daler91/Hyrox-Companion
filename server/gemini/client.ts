@@ -60,3 +60,40 @@ export async function retryWithBackoff<T>(
 export function truncate(text: string, maxLen: number = 500): string {
   return text.length > maxLen ? text.slice(0, maxLen) + "..." : text;
 }
+
+const EMBEDDING_MODEL = "text-embedding-004";
+
+/**
+ * Generate an embedding vector for a text string using Gemini's embedding model.
+ * Returns a 768-dimensional float array.
+ */
+export async function generateEmbedding(text: string): Promise<number[]> {
+  const response = await retryWithBackoff(
+    () =>
+      getAiClient().models.embedContent({
+        model: EMBEDDING_MODEL,
+        contents: text,
+      }),
+    "embedding",
+  );
+  const values = response.embedding?.values;
+  if (!values || values.length === 0) {
+    throw new Error("Empty embedding returned from Gemini");
+  }
+  return values;
+}
+
+/**
+ * Generate embeddings for multiple texts in batch.
+ */
+export async function generateEmbeddings(texts: string[]): Promise<number[][]> {
+  // Process in parallel batches of 10 to avoid rate limits
+  const batchSize = 10;
+  const results: number[][] = [];
+  for (let i = 0; i < texts.length; i += batchSize) {
+    const batch = texts.slice(i, i + batchSize);
+    const embeddings = await Promise.all(batch.map(generateEmbedding));
+    results.push(...embeddings);
+  }
+  return results;
+}
