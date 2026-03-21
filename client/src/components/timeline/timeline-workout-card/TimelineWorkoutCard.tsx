@@ -2,6 +2,7 @@ import React, { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Circle, BookOpen, Loader2, CheckCircle2, Database, FileText } from "lucide-react";
 import { format } from "date-fns";
 import { SiStrava } from "react-icons/si";
@@ -79,17 +80,25 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
       <CardContent className="p-4 relative">
         <div className="flex items-start gap-3">
           {isPlanned && (
-            <Button
-              size="icon"
-              variant="ghost"
-              className="shrink-0 mt-0.5 text-muted-foreground hover:text-success"
-              onClick={handleCompleteClick}
-              data-testid={`button-complete-${entry.id}`}
-              aria-label={`Mark ${entry.focus} as complete`}
-              title={`Mark ${entry.focus} as complete`}
-            >
-              <Circle className="h-5 w-5" />
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="shrink-0 mt-0.5 text-muted-foreground hover:text-success"
+                    onClick={handleCompleteClick}
+                    data-testid={`button-complete-${entry.id}`}
+                    aria-label={`Mark ${entry.focus} as complete`}
+                  >
+                    <Circle className="h-5 w-5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Mark {entry.focus} as complete</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           )}
 
           {entry.status === "completed" && (
