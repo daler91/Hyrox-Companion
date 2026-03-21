@@ -14,7 +14,7 @@ describe("isRetryableError", () => {
     ["400 Bad Request", false],
     ["Invalid JSON", false],
     ["Missing required field", false],
-  ])("returns %p for message %p", (msg, expected) => {
+  ])("returns %2$p when error message is %1$p", (msg, expected) => {
     expect(isRetryableError(new Error(msg))).toBe(expected);
   });
 

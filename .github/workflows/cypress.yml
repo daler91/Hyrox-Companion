@@ -25,7 +25,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U postgres"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -42,14 +42,24 @@ jobs:
           node-version: 22
           cache: 'pnpm'
 
+      - name: Cache Cypress binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/Cypress
+          key: cypress-binary-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            cypress-binary-${{ runner.os }}-
+
       - name: Install dependencies
-        run: pnpm i
+        run: |
+          pnpm i
+          npx cypress install
 
       - name: Build application
         run: pnpm run build
 
       - name: Database Migrations
-        run: npx drizzle-kit push
+        run: pnpm exec drizzle-kit push
         env:
           DATABASE_URL: postgresql://user:password@localhost:5432/db
 
@@ -74,8 +84,7 @@ jobs:
         with:
           record: true
           parallel: true
-          install: true
-          install-command: pnpm i
+          install: false
         env:
           CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
