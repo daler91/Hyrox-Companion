@@ -16,6 +16,3 @@ coverage/
 
 # Original files (e.g. from git merge or formatting tools)
 *.orig
-
-# Node compile cache
-node-compile-cache/

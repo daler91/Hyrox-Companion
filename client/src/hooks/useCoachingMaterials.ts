@@ -36,8 +36,8 @@ export function useCreateCoachingMaterial() {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY });
       toast({ title: "Coaching material added" });
     },
-    onError: (error: Error) => {
-      toast({ title: "Failed to add coaching material", description: error.message, variant: "destructive" });
+    onError: () => {
+      toast({ title: "Failed to add coaching material", variant: "destructive" });
     },
   });
 }
