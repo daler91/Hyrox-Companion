@@ -33,9 +33,11 @@ async function ensureDevUserExists(): Promise<void> {
 export async function setupAuth(app: Express) {
   app.set("trust proxy", 1);
 
+  const bypass = isDevBypassEnabled();
+
   if (hasClerkKeys()) {
     app.use(clerkMiddleware());
-  } else if (isDevBypassEnabled()) {
+  } else if (bypass) {
     logger.info("[DEV] No Clerk keys found — using dev auth bypass");
     await ensureDevUserExists();
   } else {
@@ -44,7 +46,7 @@ export async function setupAuth(app: Express) {
     );
   }
 
-  if (isDevBypassEnabled()) {
+  if (bypass) {
     await ensureDevUserExists();
     logger.info("[DEV] Dev auth fallback enabled for iframe/preview contexts");
   }
@@ -52,7 +54,7 @@ export async function setupAuth(app: Express) {
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
   // Allow explicitly disabling bypass for testing 401 scenarios in CI
-  const forceNoBypass = req.headers["x-test-no-bypass"] === "true";
+  const forceNoBypass = req.headers?.["x-test-no-bypass"] === "true";
 
   if (hasClerkKeys()) {
     const auth = getAuth(req);

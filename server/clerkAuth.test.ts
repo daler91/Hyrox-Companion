@@ -27,7 +27,7 @@ describe("isAuthenticated middleware", () => {
   let next: NextFunction;
 
   beforeEach(() => {
-    req = {} as Request;
+    req = { headers: {} } as Request;
     res = { status: vi.fn().mockReturnThis(), json: vi.fn() } as unknown as Response;
     next = vi.fn() as unknown as NextFunction;
     vi.clearAllMocks();
@@ -37,19 +37,11 @@ describe("isAuthenticated middleware", () => {
     vi.resetAllMocks();
   });
 
-  it("returns 401 when no auth object is returned from getAuth", async () => {
-    vi.mocked(getAuth).mockReturnValue(null);
-
-    await isAuthenticated(req, res, next);
-
-    expect(getAuth).toHaveBeenCalledWith(req);
-    expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith({ error: "Unauthorized" });
-    expect(next).not.toHaveBeenCalled();
-  });
-
-  it("returns 401 when auth object does not have a userId", async () => {
-    vi.mocked(getAuth).mockReturnValue({ userId: null });
+  it.each([
+    ["no auth object", null],
+    ["no userId", { userId: null }],
+  ])("returns 401 when %s is returned from getAuth", async (_, authValue) => {
+    vi.mocked(getAuth).mockReturnValue(authValue as any);
 
     await isAuthenticated(req, res, next);
 
@@ -60,8 +52,8 @@ describe("isAuthenticated middleware", () => {
   });
 
   it("calls next when auth.userId exists and ensureUserExists succeeds", async () => {
-    vi.mocked(getAuth).mockReturnValue({ userId: "test-user-id" });
-    vi.mocked(storage.getUser).mockResolvedValue({ id: "test-user-id" });
+    vi.mocked(getAuth).mockReturnValue({ userId: "test-user-id" } as any);
+    vi.mocked(storage.getUser).mockResolvedValue({ id: "test-user-id" } as any);
 
     await isAuthenticated(req, res, next);
 
@@ -73,8 +65,7 @@ describe("isAuthenticated middleware", () => {
   });
 
   it("returns 500 when ensureUserExists throws an error", async () => {
-    vi.mocked(getAuth).mockReturnValue({ userId: "test-user-id" });
-    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(getAuth).mockReturnValue({ userId: "test-user-id" } as any);
     vi.mocked(storage.getUser).mockRejectedValue(new Error("Database error"));
 
     await isAuthenticated(req, res, next);
@@ -84,7 +75,5 @@ describe("isAuthenticated middleware", () => {
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith({ error: "Failed to initialize user session" });
     expect(next).not.toHaveBeenCalled();
-
-    consoleErrorSpy.mockRestore();
   });
 });
