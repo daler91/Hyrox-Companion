@@ -35,6 +35,7 @@ export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaP
               role={message.role}
               content={message.content}
               timestamp={message.timestamp}
+              ragInfo={message.ragInfo}
             />
           ))}
           <SuggestionsList

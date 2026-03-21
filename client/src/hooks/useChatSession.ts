@@ -22,6 +22,16 @@ function processStreamLines(
       // Ignore parse errors for incomplete stream chunks
       continue;
     }
+    if (data.ragInfo) {
+      const info = data.ragInfo as RagInfo;
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantMessageId
+            ? { ...m, ragInfo: info }
+            : m
+        )
+      );
+    }
     if (data.text) {
       updatedResponse += data.text;
       const newResponse = updatedResponse; // capture in closure
@@ -71,11 +81,19 @@ async function handleStreamResponse(
   return fullResponse;
 }
 
+export interface RagInfo {
+  source: "rag" | "legacy" | "none";
+  chunkCount: number;
+  chunks?: string[];
+  materialCount?: number;
+}
+
 export interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
   timestamp: string;
+  ragInfo?: RagInfo;
 }
 
 interface UseChatSessionOptions {
@@ -213,6 +231,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
           role: "assistant",
           content: data.response,
           timestamp: getCurrentTimeString(),
+          ragInfo: data.ragInfo,
         };
 
         setMessages((prev) => [...prev, assistantMessage]);
