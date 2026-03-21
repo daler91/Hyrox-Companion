@@ -188,11 +188,10 @@ describe("embedCoachingMaterial", () => {
     });
   });
 
-  it("should not throw when embedding fails (logs error instead)", async () => {
+  it("should throw when embedding fails (callers handle errors)", async () => {
     vi.mocked(generateEmbeddings).mockRejectedValue(new Error("API error"));
 
-    // Should not throw
-    await expect(embedCoachingMaterial(mockMaterial)).resolves.toBeUndefined();
+    await expect(embedCoachingMaterial(mockMaterial)).rejects.toThrow("API error");
   });
 });
 
