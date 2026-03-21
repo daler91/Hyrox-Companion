@@ -13,6 +13,22 @@ export interface CoachingMaterial {
 }
 
 const QUERY_KEY = ["/api/v1/coaching-materials"];
+const RAG_STATUS_KEY = ["/api/v1/coaching-materials/rag-status"];
+
+export interface RagStatus {
+  hasApiKey: boolean;
+  totalMaterials: number;
+  totalChunks: number;
+  allEmbedded: boolean;
+  materials: {
+    id: string;
+    title: string;
+    type: string;
+    contentLength: number;
+    chunkCount: number;
+    hasEmbeddings: boolean;
+  }[];
+}
 
 export function useCoachingMaterials() {
   return useQuery<CoachingMaterial[]>({
@@ -56,6 +72,42 @@ export function useUpdateCoachingMaterial() {
     },
     onError: () => {
       toast({ title: "Failed to update coaching material", variant: "destructive" });
+    },
+  });
+}
+
+export function useRagStatus() {
+  return useQuery<RagStatus>({
+    queryKey: RAG_STATUS_KEY,
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/v1/coaching-materials/rag-status");
+      return response.json();
+    },
+  });
+}
+
+export function useReEmbed() {
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/v1/coaching-materials/re-embed");
+      return response.json();
+    },
+    onSuccess: (data: { success: boolean; materialsProcessed: number; errors: string[] }) => {
+      queryClient.invalidateQueries({ queryKey: RAG_STATUS_KEY });
+      if (data.errors?.length > 0) {
+        toast({
+          title: `Embedded ${data.materialsProcessed} materials with ${data.errors.length} error(s)`,
+          description: data.errors[0],
+          variant: "destructive",
+        });
+      } else {
+        toast({ title: `Successfully embedded ${data.materialsProcessed} material(s)` });
+      }
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to re-embed", description: error.message, variant: "destructive" });
     },
   });
 }

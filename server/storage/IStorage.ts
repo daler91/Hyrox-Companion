@@ -110,6 +110,7 @@ export interface ICoachingStorage {
   insertChunks(chunks: InsertDocumentChunk[]): Promise<DocumentChunk[]>;
   deleteChunksByMaterialId(materialId: string): Promise<void>;
   searchChunksByEmbedding(userId: string, queryEmbedding: number[], topK: number): Promise<DocumentChunk[]>;
+  getChunkCountsByMaterial(userId: string): Promise<{ materialId: string; chunkCount: number; hasEmbeddings: boolean }[]>;
   hasChunksForUser(userId: string): Promise<boolean>;
 }
 

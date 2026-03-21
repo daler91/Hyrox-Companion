@@ -84,6 +84,23 @@ export class CoachingStorage {
     return result.rows;
   }
 
+  async getChunkCountsByMaterial(userId: string): Promise<{ materialId: string; chunkCount: number; hasEmbeddings: boolean }[]> {
+    const result = await pool.query(
+      `SELECT material_id AS "materialId",
+              COUNT(*)::int AS "chunkCount",
+              COUNT(embedding)::int AS "embeddedCount"
+       FROM document_chunks
+       WHERE user_id = $1
+       GROUP BY material_id`,
+      [userId],
+    );
+    return result.rows.map((r: { materialId: string; chunkCount: number; embeddedCount: number }) => ({
+      materialId: r.materialId,
+      chunkCount: r.chunkCount,
+      hasEmbeddings: r.embeddedCount > 0,
+    }));
+  }
+
   async hasChunksForUser(userId: string): Promise<boolean> {
     const result = await db
       .select({ id: documentChunks.id })

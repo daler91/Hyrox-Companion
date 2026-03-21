@@ -74,6 +74,43 @@ router.patch("/api/v1/coaching-materials/:id", isAuthenticated, rateLimiter("coa
   }
 });
 
+router.get("/api/v1/coaching-materials/rag-status", isAuthenticated, async (req: ExpressRequest, res: Response) => {
+  try {
+    const userId = getUserId(req);
+    const materials = await storage.listCoachingMaterials(userId);
+    const chunkCounts = await storage.getChunkCountsByMaterial(userId);
+    const chunkMap = new Map(chunkCounts.map((c) => [c.materialId, c]));
+
+    const hasApiKey = Boolean(process.env.GEMINI_API_KEY);
+
+    const materialStatus = materials.map((m) => {
+      const chunks = chunkMap.get(m.id);
+      return {
+        id: m.id,
+        title: m.title,
+        type: m.type,
+        contentLength: m.content.length,
+        chunkCount: chunks?.chunkCount ?? 0,
+        hasEmbeddings: chunks?.hasEmbeddings ?? false,
+      };
+    });
+
+    const totalChunks = chunkCounts.reduce((sum, c) => sum + c.chunkCount, 0);
+    const allEmbedded = materials.length > 0 && materials.every((m) => chunkMap.get(m.id)?.hasEmbeddings);
+
+    res.json({
+      hasApiKey,
+      totalMaterials: materials.length,
+      totalChunks,
+      allEmbedded,
+      materials: materialStatus,
+    });
+  } catch (error) {
+    (req.log || logger).error({ err: error }, "Error fetching RAG status:");
+    res.status(500).json({ error: "Failed to fetch RAG status" });
+  }
+});
+
 router.post("/api/v1/coaching-materials/re-embed", isAuthenticated, rateLimiter("coaching", 5), async (req: ExpressRequest, res: Response) => {
   try {
     const userId = getUserId(req);
