@@ -153,7 +153,7 @@ export async function generateWorkoutSuggestions(
         getAiClient().models.generateContent({
           model: GEMINI_MODEL,
           config: {
-            systemInstruction: { text: SUGGESTIONS_PROMPT },
+            systemInstruction: { parts: [{ text: SUGGESTIONS_PROMPT }] },
             responseMimeType: "application/json",
           },
           contents: [{ role: "user", parts: [{ text: prompt }] }],
