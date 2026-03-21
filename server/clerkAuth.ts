@@ -11,7 +11,7 @@ function isDev(): boolean {
 }
 
 function isDevBypassEnabled(): boolean {
-  return isDev() && env.ALLOW_DEV_AUTH_BYPASS === "true";
+  return env.ALLOW_DEV_AUTH_BYPASS === "true";
 }
 
 function hasClerkKeys(): boolean {
