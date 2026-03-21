@@ -46,6 +46,17 @@ jobs:
       - name: Install dependencies
         run: pnpm i
 
+      - name: Cache Cypress binary
+        id: cypress-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/Cypress
+          key: cypress-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install Cypress binary
+        if: steps.cypress-cache.outputs.cache-hit != 'true'
+        run: npx cypress install && node script/patch-cypress-deps.js
+
       - name: Build application
         run: pnpm run build
 
@@ -72,8 +83,7 @@ jobs:
         with:
           record: true
           parallel: true
-          install: true
-          install-command: pnpm i
+          install: false
         env:
           CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
