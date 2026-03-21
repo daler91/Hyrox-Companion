@@ -51,6 +51,9 @@ export async function setupAuth(app: Express) {
 }
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
+  // Allow explicitly disabling bypass for testing 401 scenarios in CI
+  const forceNoBypass = req.headers["x-test-no-bypass"] === "true";
+
   if (hasClerkKeys()) {
     const auth = getAuth(req);
     if (auth?.userId) {
@@ -64,7 +67,7 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     }
   }
 
-  if (isDevBypassEnabled()) {
+  if (isDevBypassEnabled() && !forceNoBypass) {
     try {
       await ensureDevUserExists();
     } catch (error) {
