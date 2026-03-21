@@ -68,6 +68,7 @@ async function getCoachingContext(
             ragInfo: { source: "rag", chunkCount: chunks.length, chunks },
           };
         }
+        logger.warn({ userId }, "[rag] Retrieval returned 0 chunks despite embeddings existing");
       }
     }
   } catch (error) {

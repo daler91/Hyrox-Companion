@@ -228,12 +228,10 @@ describe("retrieveRelevantChunks", () => {
     expect(storage.searchChunksByEmbedding).toHaveBeenCalledWith("u1", [0.1], 3);
   });
 
-  it("should return empty array on error", async () => {
+  it("should propagate errors to caller", async () => {
     vi.mocked(generateEmbedding).mockRejectedValue(new Error("API down"));
 
-    const result = await retrieveRelevantChunks("u1", "query");
-
-    expect(result).toEqual([]);
+    await expect(retrieveRelevantChunks("u1", "query")).rejects.toThrow("API down");
   });
 });
 
