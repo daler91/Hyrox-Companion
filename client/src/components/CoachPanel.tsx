@@ -72,6 +72,7 @@ export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }
   const {
     pendingSuggestions,
     applyingId,
+    suggestionsRagInfo,
     suggestionsMutation,
     handleApplySuggestion,
     handleDismissSuggestion,
@@ -122,6 +123,7 @@ export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }
         messages={messages}
         pendingSuggestions={pendingSuggestions}
         applyingId={applyingId}
+        suggestionsRagInfo={suggestionsRagInfo}
         isProcessing={isProcessing}
         onApplySuggestion={handleApplySuggestion}
         onDismissSuggestion={handleDismissSuggestion}

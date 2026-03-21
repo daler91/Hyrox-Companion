@@ -6,7 +6,7 @@ import { chatWithCoach, streamChatWithCoach, generateWorkoutSuggestions, parseEx
 import { rateLimiter } from "../routeUtils";
 import { buildTrainingContext } from "../services/aiService";
 import { buildCoachingMaterialsSection, buildRetrievedChunksSection } from "../prompts";
-import { retrieveRelevantChunks } from "../services/ragService";
+import { retrieveRelevantChunks, embedCoachingMaterial } from "../services/ragService";
 import { toDateStr, getUserId } from "../types";
 import { chatRequestSchema, parseExercisesRequestSchema, insertChatMessageSchema, type InsertChatMessage } from "@shared/schema";
 import { z } from "zod";
@@ -48,7 +48,18 @@ async function getCoachingContext(
   query: string,
 ): Promise<{ retrievedChunks?: string[]; coachingMaterials?: import("../prompts").CoachingMaterialInput[]; ragInfo: RagInfo }> {
   try {
-    const hasChunks = await storage.hasChunksForUser(userId);
+    let hasChunks = await storage.hasChunksForUser(userId);
+
+    // Self-healing: if no chunks exist but materials do, attempt to embed them
+    if (!hasChunks) {
+      const materials = await storage.listCoachingMaterials(userId);
+      if (materials.length > 0) {
+        logger.info({ userId, materialCount: materials.length }, "[rag] No chunks found but materials exist — attempting re-embed");
+        await Promise.all(materials.map(embedCoachingMaterial));
+        hasChunks = await storage.hasChunksForUser(userId);
+      }
+    }
+
     if (hasChunks) {
       const chunks = await retrieveRelevantChunks(userId, query);
       if (chunks.length > 0) {
@@ -260,7 +271,7 @@ router.post("/api/v1/timeline/ai-suggestions", isAuthenticated, rateLimiter("sug
       })
       .filter(s => s.date && s.focus && s.recommendation);
 
-    res.json({ suggestions });
+    res.json({ suggestions, ragInfo: coachingContext.ragInfo });
   } catch (error) {
     (req.log || logger).error({ err: error }, "AI suggestions error:");
     res.status(500).json({ error: "Failed to generate AI suggestions" });

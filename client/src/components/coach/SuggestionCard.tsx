@@ -2,6 +2,8 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Zap, Loader2, Check, XIcon } from "lucide-react";
+import { RagDebugBadge } from "@/components/RagDebugBadge";
+import type { RagInfo } from "@/hooks/useChatSession";
 
 export interface Suggestion {
   workoutId: string;
@@ -16,6 +18,7 @@ export interface Suggestion {
 
 interface SuggestionCardProps {
   readonly suggestion: Suggestion;
+  readonly ragInfo?: RagInfo;
   readonly onApply: () => void;
   readonly onDismiss: () => void;
   readonly isApplying: boolean;
@@ -33,7 +36,7 @@ const PRIORITY_COLORS: Record<Suggestion["priority"], string> = {
   low: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
 };
 
-export function SuggestionCard({ suggestion, onApply, onDismiss, isApplying }: Readonly<SuggestionCardProps>) {
+export function SuggestionCard({ suggestion, ragInfo, onApply, onDismiss, isApplying }: Readonly<SuggestionCardProps>) {
   const fieldLabel = FIELD_LABELS[suggestion.targetField] || "Notes";
   
   const actionLabel = suggestion.action === "append" ? "Add to" : "Replace";
@@ -64,6 +67,7 @@ export function SuggestionCard({ suggestion, onApply, onDismiss, isApplying }: R
       
       <p className="text-sm">{suggestion.recommendation}</p>
       <p className="text-xs text-muted-foreground italic">{suggestion.rationale}</p>
+      {ragInfo && <RagDebugBadge ragInfo={ragInfo} />}
       
       <div className="flex items-center gap-2 pt-1">
         <Button

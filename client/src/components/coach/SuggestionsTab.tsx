@@ -3,7 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { SuggestionCard, type Suggestion } from "./SuggestionCard";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { getCurrentTimeString } from "@/lib/dateUtils";
-import type { Message } from "@/hooks/useChatSession";
+import type { Message, RagInfo } from "@/hooks/useChatSession";
 import type { TimelineEntry } from "@shared/schema";
 
 interface UseSuggestionsOptions {
@@ -15,13 +15,15 @@ interface UseSuggestionsOptions {
 export function useSuggestions({ timeline, addLocalMessage, saveMessage }: UseSuggestionsOptions) {
   const [pendingSuggestions, setPendingSuggestions] = useState<Suggestion[]>([]);
   const [applyingId, setApplyingId] = useState<string | null>(null);
+  const [suggestionsRagInfo, setSuggestionsRagInfo] = useState<RagInfo | undefined>();
 
   const suggestionsMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/v1/timeline/ai-suggestions", {});
       return res.json();
     },
-    onSuccess: (data: { suggestions: Suggestion[] }) => {
+    onSuccess: (data: { suggestions: Suggestion[]; ragInfo?: RagInfo }) => {
+      setSuggestionsRagInfo(data.ragInfo);
       let responseContent: string;
       if (!data.suggestions || data.suggestions.length === 0) {
         responseContent = "Your upcoming workouts look well-balanced! I don't have any specific improvements to suggest right now.";
@@ -87,6 +89,7 @@ export function useSuggestions({ timeline, addLocalMessage, saveMessage }: UseSu
 
       await apiRequest("PATCH", `/api/v1/plans/days/${suggestion.workoutId}`, {
         [suggestion.targetField]: newValue,
+        aiSource: suggestionsRagInfo?.source ?? null,
       });
 
       queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] });
@@ -127,6 +130,7 @@ export function useSuggestions({ timeline, addLocalMessage, saveMessage }: UseSu
   return {
     pendingSuggestions,
     applyingId,
+    suggestionsRagInfo,
     suggestionsMutation,
     handleApplySuggestion,
     handleDismissSuggestion,
@@ -137,11 +141,12 @@ export function useSuggestions({ timeline, addLocalMessage, saveMessage }: UseSu
 interface SuggestionsListProps {
   readonly suggestions: Suggestion[];
   readonly applyingId: string | null;
+  readonly ragInfo?: RagInfo;
   readonly onApply: (suggestion: Suggestion) => void;
   readonly onDismiss: (workoutId: string) => void;
 }
 
-export function SuggestionsList({ suggestions, applyingId, onApply, onDismiss }: Readonly<SuggestionsListProps>) {
+export function SuggestionsList({ suggestions, applyingId, ragInfo, onApply, onDismiss }: Readonly<SuggestionsListProps>) {
   if (suggestions.length === 0) return null;
 
   return (
@@ -150,6 +155,7 @@ export function SuggestionsList({ suggestions, applyingId, onApply, onDismiss }:
         <SuggestionCard
           key={suggestion.workoutId}
           suggestion={suggestion}
+          ragInfo={ragInfo}
           onApply={() => onApply(suggestion)}
           onDismiss={() => onDismiss(suggestion.workoutId)}
           isApplying={applyingId === suggestion.workoutId}
