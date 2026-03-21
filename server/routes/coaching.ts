@@ -74,6 +74,27 @@ router.patch("/api/v1/coaching-materials/:id", isAuthenticated, rateLimiter("coa
   }
 });
 
+router.post("/api/v1/coaching-materials/re-embed", isAuthenticated, rateLimiter("coaching", 5), async (req: ExpressRequest, res: Response) => {
+  try {
+    const userId = getUserId(req);
+    const materials = await storage.listCoachingMaterials(userId);
+    const errors: string[] = [];
+    let count = 0;
+    for (const material of materials) {
+      try {
+        await embedCoachingMaterial(material);
+        count++;
+      } catch (err) {
+        errors.push(`${material.id}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+    res.json({ success: true, materialsProcessed: count, errors });
+  } catch (error) {
+    (req.log || logger).error({ err: error }, "Error re-embedding coaching materials:");
+    res.status(500).json({ error: "Failed to re-embed coaching materials", details: error instanceof Error ? error.message : String(error) });
+  }
+});
+
 router.delete("/api/v1/coaching-materials/:id", isAuthenticated, rateLimiter("coaching", 10), async (req: ExpressRequest, res: Response) => {
   try {
     const userId = getUserId(req);

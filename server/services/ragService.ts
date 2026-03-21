@@ -104,6 +104,7 @@ export async function embedCoachingMaterial(material: CoachingMaterial): Promise
       { err: error, materialId: material.id },
       "[rag] Failed to embed coaching material",
     );
+    throw error;
   }
 }
 
