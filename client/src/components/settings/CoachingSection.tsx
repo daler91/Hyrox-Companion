@@ -84,7 +84,7 @@ export function CoachingSection() {
       const text = await extractFileText(file);
       setDialogType("document");
       setTitle(file.name.replace(/\.[^/.]+$/, ""));
-      setContent(text.slice(0, 200000));
+      setContent(text.slice(0, 1500000));
       setDialogOpen(true);
     } catch {
       toast({ title: "Failed to read file", variant: "destructive" });
@@ -105,7 +105,7 @@ export function CoachingSection() {
         const text = await extractFileText(file);
         await createMutation.mutateAsync({
           title: file.name.replace(/\.[^/.]+$/, ""),
-          content: text.slice(0, 200000),
+          content: text.slice(0, 1500000),
           type: "document",
         });
         uploaded++;
@@ -259,7 +259,7 @@ export function CoachingSection() {
               <Textarea
                 id="material-content"
                 value={content}
-                onChange={(e) => setContent(e.target.value.slice(0, 200000))}
+                onChange={(e) => setContent(e.target.value.slice(0, 1500000))}
                 placeholder={
                   dialogType === "principles"
                     ? "Paste your training principles, programming rules, or key excerpts here..."
@@ -269,7 +269,7 @@ export function CoachingSection() {
                 rows={10}
               />
               <p className="text-xs text-muted-foreground text-right">
-                {content.length.toLocaleString()}/200,000
+                {content.length.toLocaleString()}/1,500,000
               </p>
             </div>
           </div>
