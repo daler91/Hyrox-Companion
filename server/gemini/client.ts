@@ -61,11 +61,11 @@ export function truncate(text: string, maxLen: number = 500): string {
   return text.length > maxLen ? text.slice(0, maxLen) + "..." : text;
 }
 
-const EMBEDDING_MODEL = "text-embedding-004";
+const EMBEDDING_MODEL = "gemini-embedding-001";
 
 /**
  * Generate an embedding vector for a text string using Gemini's embedding model.
- * Returns a 768-dimensional float array.
+ * Returns a 3072-dimensional float array.
  */
 export async function generateEmbedding(text: string): Promise<number[]> {
   const response = await retryWithBackoff(
