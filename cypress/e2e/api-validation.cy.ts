@@ -13,6 +13,7 @@ describe("API Validation", () => {
     { method: "GET", url: "/api/v1/custom-exercises" },
     { method: "POST", url: "/api/v1/parse-exercises" },
     { method: "GET", url: "/api/v1/timeline" },
+    { method: "GET", url: "/api/v1/auth/user" },
   ];
 
   protectedEndpoints.forEach(({ method, url }) => {
@@ -26,7 +27,14 @@ describe("API Validation", () => {
         },
         body: method === "POST" || method === "PATCH" ? {} : undefined,
       }).then((response) => {
-        expect(response.status).to.eq(401);
+        if (url === "/api/v1/auth/user" && method === "GET") {
+          expect(response.status).to.be.oneOf([200, 401]);
+          if (response.status === 200) {
+            expect(response.body).to.be.null;
+          }
+        } else {
+          expect(response.status).to.eq(401);
+        }
       });
     });
   });

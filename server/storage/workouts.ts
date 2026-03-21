@@ -14,6 +14,15 @@ import { eq, and, or, desc, asc, isNull, isNotNull, sql, inArray } from "drizzle
 import { queryExerciseSetsWithDates } from "./shared";
 
 export class WorkoutStorage {
+  private getPlanDayCompletionCondition(planDayIds: string | string[], userId: string) {
+    const ids = Array.isArray(planDayIds) ? planDayIds : [planDayIds];
+    return and(
+      inArray(planDays.id, ids),
+      eq(planDays.planId, trainingPlans.id),
+      eq(trainingPlans.userId, userId)
+    );
+  }
+
   async createWorkoutLog(log: InsertWorkoutLog & { userId: string }): Promise<WorkoutLog> {
     const [workoutLog] = await db
       .insert(workoutLogs)
@@ -26,13 +35,7 @@ export class WorkoutStorage {
         .update(planDays)
         .set({ status: "completed" })
         .from(trainingPlans)
-        .where(
-          and(
-            eq(planDays.id, log.planDayId),
-            eq(planDays.planId, trainingPlans.id),
-            eq(trainingPlans.userId, log.userId)
-          )
-        );
+        .where(this.getPlanDayCompletionCondition(log.planDayId, log.userId));
     }
 
     return workoutLog;
@@ -61,13 +64,7 @@ export class WorkoutStorage {
 
     for (const [userId, planDayIds] of updatesByUser) {
       if (planDayIds.length > 0) {
-        updateConditions.push(
-          and(
-            inArray(planDays.id, planDayIds),
-            eq(planDays.planId, trainingPlans.id),
-            eq(trainingPlans.userId, userId)
-          )
-        );
+        updateConditions.push(this.getPlanDayCompletionCondition(planDayIds, userId));
       }
     }
 
