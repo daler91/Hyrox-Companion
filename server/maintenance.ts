@@ -40,6 +40,14 @@ async function ensureSchemaUpToDate() {
       logger.info({ context: "db" }, "Added missing is_auto_coaching column to users table");
     }
 
+    const aiSource = await client.query(
+      `SELECT 1 FROM information_schema.columns WHERE table_name = 'plan_days' AND column_name = 'ai_source'`,
+    );
+    if (aiSource.rowCount === 0) {
+      await client.query(`ALTER TABLE plan_days ADD COLUMN ai_source text`);
+      logger.info({ context: "db" }, "Added missing ai_source column to plan_days table");
+    }
+
     const coachingTable = await client.query(
       `SELECT 1 FROM information_schema.tables WHERE table_name = 'coaching_materials'`,
     );
