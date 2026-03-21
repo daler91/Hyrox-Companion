@@ -48,6 +48,11 @@ jobs:
       - name: Build application
         run: pnpm run build
 
+      - name: Run migrations
+        run: npx drizzle-kit push
+        env:
+          DATABASE_URL: postgres://user:password@localhost:5432/hyrox_test
+
       - name: Start server
         run: pnpm start &
         env:
