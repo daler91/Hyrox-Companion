@@ -419,7 +419,7 @@ export const insertCoachingMaterialSchema = createInsertSchema(coachingMaterials
   updatedAt: true,
 }).extend({
   title: z.string().trim().min(1, "Title is required").max(255, "Title must be 255 characters or less"),
-  content: z.string().trim().min(1, "Content is required").max(150000, "Content must be 150,000 characters or less"),
+  content: z.string().trim().min(1, "Content is required").max(200000, "Content must be 200,000 characters or less"),
   type: z.enum(["principles", "document"]),
 });
 
