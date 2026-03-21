@@ -50,6 +50,11 @@ jobs:
       - name: Build application
         run: pnpm run build
 
+      - name: Run migrations
+        run: pnpm run db:migrate
+        env:
+          DATABASE_URL: postgres://user:password@localhost:5432/hyrox_test
+
       - name: Start server
         run: NODE_ENV=development node dist/index.js &
         env:
