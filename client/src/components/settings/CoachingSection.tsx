@@ -59,6 +59,82 @@ async function extractFileText(file: File): Promise<string> {
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
+function RagStatusContent({ ragLoading, ragStatus, reEmbedMutation }: {
+  ragLoading: boolean;
+  ragStatus: { hasApiKey: boolean; totalMaterials: number; totalChunks: number; allEmbedded: boolean; materials: { id: string; title: string; chunkCount: number; hasEmbeddings: boolean }[] } | undefined;
+  reEmbedMutation: { mutate: () => void; isPending: boolean };
+}) {
+  if (ragLoading) {
+    return (
+      <div className="flex items-center justify-center py-2">
+        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!ragStatus) return null;
+
+  return (
+    <>
+      {!ragStatus.hasApiKey && (
+        <div className="flex items-center gap-2 p-2 rounded-md bg-destructive/10 text-destructive text-sm">
+          <XCircle className="h-4 w-4 shrink-0" />
+          GEMINI_API_KEY is not configured. Embeddings cannot be generated.
+        </div>
+      )}
+
+      <div className="grid grid-cols-3 gap-3 text-center">
+        <div className="p-2 rounded-md bg-muted">
+          <p className="text-lg font-semibold">{ragStatus.totalMaterials}</p>
+          <p className="text-xs text-muted-foreground">Materials</p>
+        </div>
+        <div className="p-2 rounded-md bg-muted">
+          <p className="text-lg font-semibold">{ragStatus.totalChunks}</p>
+          <p className="text-xs text-muted-foreground">Chunks</p>
+        </div>
+        <div className="p-2 rounded-md bg-muted">
+          <p className="text-lg font-semibold">
+            {ragStatus.materials.filter((m) => m.hasEmbeddings).length}/{ragStatus.totalMaterials}
+          </p>
+          <p className="text-xs text-muted-foreground">Embedded</p>
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        {ragStatus.materials.map((m) => (
+          <div key={m.id} className="flex items-center justify-between text-sm px-2 py-1.5 rounded border">
+            <span className="truncate mr-2">{m.title}</span>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-xs text-muted-foreground">
+                {m.chunkCount} chunks
+              </span>
+              {m.hasEmbeddings ? (
+                <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+              ) : (
+                <XCircle className="h-3.5 w-3.5 text-red-500" />
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => reEmbedMutation.mutate()}
+        disabled={reEmbedMutation.isPending}
+      >
+        {reEmbedMutation.isPending ? (
+          <Loader2 className="h-4 w-4 animate-spin mr-1" />
+        ) : (
+          <RefreshCw className="h-4 w-4 mr-1" />
+        )}
+        Re-embed All
+      </Button>
+    </>
+  );
+}
+
 export function CoachingSection() {
   const { toast } = useToast();
   const { data: materials, isLoading } = useCoachingMaterials();
@@ -264,69 +340,7 @@ export function CoachingSection() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {ragLoading ? (
-              <div className="flex items-center justify-center py-2">
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-              </div>
-            ) : ragStatus ? (
-              <>
-                {!ragStatus.hasApiKey && (
-                  <div className="flex items-center gap-2 p-2 rounded-md bg-destructive/10 text-destructive text-sm">
-                    <XCircle className="h-4 w-4 shrink-0" />
-                    GEMINI_API_KEY is not configured. Embeddings cannot be generated.
-                  </div>
-                )}
-
-                <div className="grid grid-cols-3 gap-3 text-center">
-                  <div className="p-2 rounded-md bg-muted">
-                    <p className="text-lg font-semibold">{ragStatus.totalMaterials}</p>
-                    <p className="text-xs text-muted-foreground">Materials</p>
-                  </div>
-                  <div className="p-2 rounded-md bg-muted">
-                    <p className="text-lg font-semibold">{ragStatus.totalChunks}</p>
-                    <p className="text-xs text-muted-foreground">Chunks</p>
-                  </div>
-                  <div className="p-2 rounded-md bg-muted">
-                    <p className="text-lg font-semibold">
-                      {ragStatus.materials.filter((m) => m.hasEmbeddings).length}/{ragStatus.totalMaterials}
-                    </p>
-                    <p className="text-xs text-muted-foreground">Embedded</p>
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  {ragStatus.materials.map((m) => (
-                    <div key={m.id} className="flex items-center justify-between text-sm px-2 py-1.5 rounded border">
-                      <span className="truncate mr-2">{m.title}</span>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-xs text-muted-foreground">
-                          {m.chunkCount} chunks
-                        </span>
-                        {m.hasEmbeddings ? (
-                          <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
-                        ) : (
-                          <XCircle className="h-3.5 w-3.5 text-red-500" />
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => reEmbedMutation.mutate()}
-                  disabled={reEmbedMutation.isPending}
-                >
-                  {reEmbedMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                  ) : (
-                    <RefreshCw className="h-4 w-4 mr-1" />
-                  )}
-                  Re-embed All
-                </Button>
-              </>
-            ) : null}
+            <RagStatusContent ragLoading={ragLoading} ragStatus={ragStatus} reEmbedMutation={reEmbedMutation} />
           </CardContent>
         </Card>
       )}
