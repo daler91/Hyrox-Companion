@@ -11,6 +11,26 @@ const CHUNK_SIZE = 600; // characters per chunk
 const CHUNK_OVERLAP = 100; // overlap between chunks
 
 /**
+ * Find the best end position for a chunk, preferring paragraph or sentence boundaries.
+ */
+function findChunkEnd(text: string, start: number): number {
+  const rawEnd = start + CHUNK_SIZE;
+  if (rawEnd >= text.length) return text.length;
+
+  const minEnd = start + CHUNK_SIZE / 2;
+
+  // Try to break at paragraph boundary
+  const paragraphBreak = text.lastIndexOf("\n\n", rawEnd);
+  if (paragraphBreak > minEnd) return paragraphBreak;
+
+  // Try sentence boundary
+  const sentenceBreak = text.lastIndexOf(". ", rawEnd);
+  if (sentenceBreak > minEnd) return sentenceBreak + 1;
+
+  return rawEnd;
+}
+
+/**
  * Split text into overlapping chunks at paragraph/sentence boundaries.
  */
 export function chunkText(text: string): string[] {
@@ -18,35 +38,16 @@ export function chunkText(text: string): string[] {
   let start = 0;
 
   while (start < text.length) {
-    let end = start + CHUNK_SIZE;
-
-    if (end < text.length) {
-      // Try to break at paragraph boundary
-      const paragraphBreak = text.lastIndexOf("\n\n", end);
-      if (paragraphBreak > start + CHUNK_SIZE / 2) {
-        end = paragraphBreak;
-      } else {
-        // Try sentence boundary
-        const sentenceBreak = text.lastIndexOf(". ", end);
-        if (sentenceBreak > start + CHUNK_SIZE / 2) {
-          end = sentenceBreak + 1; // include the period
-        }
-      }
-    } else {
-      end = text.length;
-    }
-
+    const end = findChunkEnd(text, start);
     const chunk = text.slice(start, end).trim();
+
     if (chunk.length > 0) {
       chunks.push(chunk);
     }
 
-    start = end - CHUNK_OVERLAP;
-    if (start < 0) start = 0;
-    // Prevent infinite loop if we can't advance
-    if (end <= start + CHUNK_OVERLAP && end < text.length) {
-      start = end;
-    }
+    const nextStart = end - CHUNK_OVERLAP;
+    // Ensure forward progress
+    start = nextStart > start ? nextStart : end;
   }
 
   return chunks;

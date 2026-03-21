@@ -5,7 +5,7 @@ CREATE TABLE "document_chunks" (
 	"user_id" varchar(255) NOT NULL,
 	"content" text NOT NULL,
 	"chunk_index" integer NOT NULL,
-	"embedding" vector(768),
+	"embedding" text,
 	"created_at" timestamp DEFAULT now()
 );
 --> statement-breakpoint

@@ -6,8 +6,7 @@ import {
   type DocumentChunk,
   type InsertDocumentChunk,
 } from "@shared/schema";
-import { db } from "../db";
-import { pool } from "../db";
+import { db, pool } from "../db";
 import { eq, and } from "drizzle-orm";
 
 export class CoachingStorage {
