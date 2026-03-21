@@ -44,8 +44,8 @@ importers:
         specifier: ^5.2.10
         version: 5.2.10
       '@google/genai':
-        specifier: ^1.45.0
-        version: 1.45.0(bufferutil@4.1.0)
+        specifier: ^1.46.0
+        version: 1.46.0(bufferutil@4.1.0)
       '@radix-ui/react-accordion':
         specifier: ^1.2.12
         version: 1.2.12(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -783,8 +783,8 @@ packages:
   '@fontsource/space-grotesk@5.2.10':
     resolution: {integrity: sha512-XNXEbT74OIITPqw2H6HXwPDp85fy43uxfBwFR5PU+9sLnjuLj12KlhVM9nZVN6q6dlKjkuN8JisW/OBxwxgUew==}
 
-  '@google/genai@1.45.0':
-    resolution: {integrity: sha512-+sNRWhKiRibVgc4OKi7aBJJ0A7RcoVD8tGG+eFkqxAWRjASDW+ktS9lLwTDnAxZICzCVoeAdu8dYLJVTX60N9w==}
+  '@google/genai@1.46.0':
+    resolution: {integrity: sha512-ewPMN5JkKfgU5/kdco9ZhXBHDPhVqZpMQqIFQhwsHLf8kyZfx1cNpw1pHo1eV6PGEW7EhIBFi3aYZraFndAXqg==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       '@modelcontextprotocol/sdk': ^1.25.2
@@ -5306,7 +5306,7 @@ snapshots:
 
   '@fontsource/space-grotesk@5.2.10': {}
 
-  '@google/genai@1.45.0(bufferutil@4.1.0)':
+  '@google/genai@1.46.0(bufferutil@4.1.0)':
     dependencies:
       google-auth-library: 10.6.1
       p-retry: 4.6.2

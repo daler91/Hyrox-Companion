@@ -39,7 +39,7 @@ and use the matching name as customLabel: ${customExerciseNames.join(", ")}`;
         getAiClient().models.generateContent({
           model: GEMINI_MODEL,
           config: {
-            systemInstruction: PARSE_EXERCISES_PROMPT + unitNote + customNote,
+            systemInstruction: { text: PARSE_EXERCISES_PROMPT + unitNote + customNote },
             responseMimeType: "application/json",
           },
           contents: [

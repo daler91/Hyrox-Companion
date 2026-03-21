@@ -26,7 +26,7 @@ export async function chatWithCoach(
     const response = await getAiClient().models.generateContent({
       model: GEMINI_MODEL,
       config: {
-        systemInstruction: systemPrompt,
+        systemInstruction: { text: systemPrompt },
       },
       contents: messages,
     });
@@ -63,7 +63,7 @@ export async function* streamChatWithCoach(
     const response = await getAiClient().models.generateContentStream({
       model: GEMINI_MODEL,
       config: {
-        systemInstruction: systemPrompt,
+        systemInstruction: { text: systemPrompt },
       },
       contents: messages,
     });
