@@ -54,7 +54,7 @@ async function extractFileText(file: File): Promise<string> {
   return sanitizeText(await file.text());
 }
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
 export function CoachingSection() {
   const { toast } = useToast();
@@ -77,14 +77,14 @@ export function CoachingSection() {
 
   const processSingleFile = async (file: File) => {
     if (file.size > MAX_FILE_SIZE) {
-      toast({ title: "File too large", description: "Maximum file size is 5MB.", variant: "destructive" });
+      toast({ title: "File too large", description: "Maximum file size is 10MB.", variant: "destructive" });
       return;
     }
     try {
       const text = await extractFileText(file);
       setDialogType("document");
       setTitle(file.name.replace(/\.[^/.]+$/, ""));
-      setContent(text.slice(0, 50000));
+      setContent(text.slice(0, 200000));
       setDialogOpen(true);
     } catch {
       toast({ title: "Failed to read file", variant: "destructive" });
@@ -105,7 +105,7 @@ export function CoachingSection() {
         const text = await extractFileText(file);
         await createMutation.mutateAsync({
           title: file.name.replace(/\.[^/.]+$/, ""),
-          content: text.slice(0, 50000),
+          content: text.slice(0, 200000),
           type: "document",
         });
         uploaded++;
@@ -120,7 +120,7 @@ export function CoachingSection() {
     if (tooLarge.length > 0) {
       toast({
         title: "Files too large",
-        description: `Skipped (>5MB): ${tooLarge.join(", ")}`,
+        description: `Skipped (>10MB): ${tooLarge.join(", ")}`,
         variant: "destructive",
       });
     }
@@ -259,7 +259,7 @@ export function CoachingSection() {
               <Textarea
                 id="material-content"
                 value={content}
-                onChange={(e) => setContent(e.target.value.slice(0, 50000))}
+                onChange={(e) => setContent(e.target.value.slice(0, 200000))}
                 placeholder={
                   dialogType === "principles"
                     ? "Paste your training principles, programming rules, or key excerpts here..."
@@ -269,7 +269,7 @@ export function CoachingSection() {
                 rows={10}
               />
               <p className="text-xs text-muted-foreground text-right">
-                {content.length.toLocaleString()}/50,000
+                {content.length.toLocaleString()}/200,000
               </p>
             </div>
           </div>

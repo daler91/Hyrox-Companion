@@ -5,13 +5,14 @@ import { rateLimiter } from "../routeUtils";
 import { getUserId } from "../types";
 import { insertCoachingMaterialSchema } from "@shared/schema";
 import { logger } from "../logger";
+import { embedCoachingMaterial } from "../services/ragService";
 import { z } from "zod";
 
 const router = Router();
 
 const updateCoachingMaterialSchema = z.object({
   title: z.string().trim().min(1).max(255).optional(),
-  content: z.string().trim().min(1).max(50000).optional(),
+  content: z.string().trim().min(1).max(200000).optional(),
   type: z.enum(["principles", "document"]).optional(),
 });
 
@@ -34,6 +35,12 @@ router.post("/api/v1/coaching-materials", isAuthenticated, rateLimiter("coaching
       return res.status(400).json({ error: "Invalid data", details: parseResult.error.issues });
     }
     const material = await storage.createCoachingMaterial(parseResult.data);
+
+    // Fire-and-forget: chunk and embed in background
+    embedCoachingMaterial(material).catch((err) =>
+      logger.error({ err, materialId: material.id }, "[rag] Background embedding failed"),
+    );
+
     res.status(201).json(material);
   } catch (error) {
     (req.log || logger).error({ err: error }, "Error creating coaching material:");
@@ -52,6 +59,14 @@ router.patch("/api/v1/coaching-materials/:id", isAuthenticated, rateLimiter("coa
     if (!material) {
       return res.status(404).json({ error: "Coaching material not found" });
     }
+
+    // Re-embed if content or title changed
+    if (parseResult.data.content || parseResult.data.title) {
+      embedCoachingMaterial(material).catch((err) =>
+        logger.error({ err, materialId: material.id }, "[rag] Background re-embedding failed"),
+      );
+    }
+
     res.json(material);
   } catch (error) {
     (req.log || logger).error({ err: error }, "Error updating coaching material:");
@@ -62,6 +77,7 @@ router.patch("/api/v1/coaching-materials/:id", isAuthenticated, rateLimiter("coa
 router.delete("/api/v1/coaching-materials/:id", isAuthenticated, rateLimiter("coaching", 10), async (req: ExpressRequest, res: Response) => {
   try {
     const userId = getUserId(req);
+    // Chunks are cascade-deleted via FK, no manual cleanup needed
     const deleted = await storage.deleteCoachingMaterial(req.params.id, userId);
     if (!deleted) {
       return res.status(404).json({ error: "Coaching material not found" });

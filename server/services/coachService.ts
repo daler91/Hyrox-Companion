@@ -2,7 +2,8 @@ import { logger } from "../logger";
 import { storage } from "../storage";
 import { buildTrainingContext } from "./aiService";
 import { generateWorkoutSuggestions, type UpcomingWorkout, type WorkoutSuggestion } from "../gemini/index";
-import { buildCoachingMaterialsSection } from "../prompts";
+import { buildCoachingMaterialsSection, buildRetrievedChunksSection } from "../prompts";
+import { retrieveRelevantChunks } from "./ragService";
 import { toDateStr } from "../types";
 
 // ---------------------------------------------------------------------------
@@ -55,6 +56,30 @@ async function applySuggestion(
   }
 }
 
+/**
+ * Get coaching materials string — try RAG first, fall back to legacy truncation.
+ */
+async function getCoachingMaterialsString(
+  userId: string,
+  upcomingWorkouts: UpcomingWorkout[],
+): Promise<string | undefined> {
+  try {
+    const hasChunks = await storage.hasChunksForUser(userId);
+    if (hasChunks) {
+      const query = upcomingWorkouts.map(w => `${w.focus} ${w.mainWorkout}`).join("; ");
+      const chunks = await retrieveRelevantChunks(userId, query);
+      if (chunks.length > 0) {
+        return buildRetrievedChunksSection(chunks);
+      }
+    }
+  } catch (error) {
+    logger.warn({ err: error, userId }, "[coach] RAG retrieval failed, falling back to legacy");
+  }
+
+  const materials = await storage.listCoachingMaterials(userId);
+  return buildCoachingMaterialsSection(materials) || undefined;
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -73,14 +98,12 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
     await storage.updateIsAutoCoaching(userId, true);
 
     try {
-      const [trainingContext, plans, coachingMaterialsList] = await Promise.all([
+      const [trainingContext, plans] = await Promise.all([
         buildTrainingContext(userId),
         storage.listTrainingPlans(userId),
-        storage.listCoachingMaterials(userId),
       ]);
 
       const activePlanGoal = plans[0]?.goal ?? undefined;
-      const coachingMaterials = buildCoachingMaterialsSection(coachingMaterialsList);
       const today = toDateStr();
       const timeline = await storage.getTimeline(userId);
 
@@ -109,11 +132,13 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
 
       if (upcomingWorkouts.length === 0) return { adjusted: 0 };
 
+      const coachingMaterials = await getCoachingMaterialsString(userId, upcomingWorkouts);
+
       const suggestions = await generateWorkoutSuggestions(
         trainingContext,
         upcomingWorkouts,
         activePlanGoal,
-        coachingMaterials || undefined,
+        coachingMaterials,
       );
 
       const results = await Promise.all(

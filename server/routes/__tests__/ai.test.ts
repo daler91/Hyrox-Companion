@@ -39,6 +39,7 @@ vi.mock("../../storage", () => ({
     clearChatHistory: vi.fn(),
     getTimeline: vi.fn(),
     listCoachingMaterials: vi.fn(),
+    hasChunksForUser: vi.fn().mockResolvedValue(false),
   },
 }));
 
@@ -206,7 +207,7 @@ describe("POST /api/chat", () => {
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ response: "Coach response" });
     expect(buildTrainingContext).toHaveBeenCalledWith("test_user_id");
-    expect(chatWithCoach).toHaveBeenCalledWith("Hello", [], MOCK_TRAINING_CONTEXT, []);
+    expect(chatWithCoach).toHaveBeenCalledWith("Hello", [], MOCK_TRAINING_CONTEXT, [], undefined);
   });
 
   it("should return 400 if message is missing", async () => {
@@ -269,7 +270,7 @@ describe("POST /api/chat/stream", () => {
     expect(chunks[2]).toContain('{"done":true}');
 
     expect(buildTrainingContext).toHaveBeenCalledWith("test_user_id");
-    expect(streamChatWithCoach).toHaveBeenCalledWith("Hello stream", [], MOCK_TRAINING_CONTEXT, []);
+    expect(streamChatWithCoach).toHaveBeenCalledWith("Hello stream", [], MOCK_TRAINING_CONTEXT, [], undefined);
   });
 
   it("should handle stream errors gracefully", async () => {

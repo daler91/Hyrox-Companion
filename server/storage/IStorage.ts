@@ -22,6 +22,8 @@ import type {
   InsertCustomExercise,
   CoachingMaterial,
   InsertCoachingMaterial,
+  DocumentChunk,
+  InsertDocumentChunk,
 } from "@shared/schema";
 
 export interface IUserStorage {
@@ -103,6 +105,12 @@ export interface ICoachingStorage {
   createCoachingMaterial(data: InsertCoachingMaterial): Promise<CoachingMaterial>;
   updateCoachingMaterial(id: string, updates: Partial<Pick<CoachingMaterial, "title" | "content" | "type">>, userId: string): Promise<CoachingMaterial | undefined>;
   deleteCoachingMaterial(id: string, userId: string): Promise<boolean>;
+
+  // RAG chunk methods
+  insertChunks(chunks: InsertDocumentChunk[]): Promise<DocumentChunk[]>;
+  deleteChunksByMaterialId(materialId: string): Promise<void>;
+  searchChunksByEmbedding(userId: string, queryEmbedding: number[], topK: number): Promise<DocumentChunk[]>;
+  hasChunksForUser(userId: string): Promise<boolean>;
 }
 
 export interface IStorage extends IUserStorage, IPlanStorage, IWorkoutStorage, IAnalyticsStorage, IChatStorage, IIntegrationStorage, INotificationStorage, ICoachingStorage {}
