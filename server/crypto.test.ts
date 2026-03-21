@@ -22,10 +22,6 @@ describe("crypto functions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     originalEnvKey = env.ENCRYPTION_KEY;
-
-    // Reset cachedKey in crypto.ts.
-    // Since it's module scoped, we need to reset module cache to re-evaluate it
-    // But a simpler approach without module re-evaluation is testing it naturally.
   });
 
   afterEach(() => {
@@ -38,8 +34,8 @@ describe("crypto functions", () => {
       // Need dynamic import to get a fresh module state since vi.resetModules is used
       const { decryptToken } = await import("./crypto");
       expect(decryptToken("")).toBe("");
-      expect(decryptToken(undefined as any)).toBeUndefined();
-      expect(decryptToken(null as any)).toBeNull();
+      expect(decryptToken(undefined as unknown as string)).toBeUndefined();
+      expect(decryptToken(null as unknown as string)).toBeNull();
     });
 
     it("returns the original string if it doesn't match the encrypted format (missing parts)", async () => {
@@ -133,13 +129,13 @@ describe("crypto functions", () => {
       expect(logger.error).toHaveBeenCalled();
     });
   });
-});
 
   describe("encryptToken edge cases & invalid inputs", () => {
     it("returns falsy values as is", async () => {
       const { encryptToken } = await import("./crypto");
       expect(encryptToken("")).toBe("");
-      expect(encryptToken(undefined as any)).toBeUndefined();
-      expect(encryptToken(null as any)).toBeNull();
+      expect(encryptToken(undefined as unknown as string)).toBeUndefined();
+      expect(encryptToken(null as unknown as string)).toBeNull();
     });
   });
+});
