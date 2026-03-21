@@ -21,3 +21,7 @@
 ## 2026-03-20 - Fast Drizzle ORM Multi-Table Updates
 **Learning:** In Drizzle ORM (PostgreSQL), running `.update(table).where(inArray(table.foreign_id, db.select({ id: other_table.id }).from(other_table)))` causes the database to execute a slower nested subquery (N+1 bottleneck) during `UPDATE` operations, significantly slowing down backend performance.
 **Action:** Replace `inArray` subqueries with direct relational joins using Drizzle's `.from(other_table)` method in `.update()` queries. Format: `db.update(table).set(...).from(other_table).where(and(eq(table.id, ...), eq(table.foreign_id, other_table.id)))`. Remember to update test mocks to include `from` in the method chain when writing unit tests.
+
+## 2026-03-21 - Consolidate Batch Conditional Updates in Drizzle
+**Learning:** Executing sequential database updates in a loop (N+1 pattern) when processing batch logs for different users introduces significant network latency and transaction overhead. Even when using optimized joins, multiple roundtrips to the database are measurably slower than a single bulk operation.
+**Action:** To optimize batch conditional updates, collect user-specific authorization and selection criteria into an array of `and()` expressions and execute a single `UPDATE` query using `or(...conditions)` in the `.where()` clause. This reduces the operation to a single database roundtrip while maintaining strict row-level authorization.

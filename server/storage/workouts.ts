@@ -10,10 +10,19 @@ import {
   type InsertExerciseSet,
 } from "@shared/schema";
 import { db } from "../db";
-import { eq, and, desc, asc, isNull, isNotNull, sql, inArray } from "drizzle-orm";
+import { eq, and, or, desc, asc, isNull, isNotNull, sql, inArray } from "drizzle-orm";
 import { queryExerciseSetsWithDates } from "./shared";
 
 export class WorkoutStorage {
+  private getPlanDayCompletionCondition(planDayIds: string | string[], userId: string) {
+    const ids = Array.isArray(planDayIds) ? planDayIds : [planDayIds];
+    return and(
+      inArray(planDays.id, ids),
+      eq(planDays.planId, trainingPlans.id),
+      eq(trainingPlans.userId, userId)
+    );
+  }
+
   async createWorkoutLog(log: InsertWorkoutLog & { userId: string }): Promise<WorkoutLog> {
     const [workoutLog] = await db
       .insert(workoutLogs)
@@ -26,13 +35,7 @@ export class WorkoutStorage {
         .update(planDays)
         .set({ status: "completed" })
         .from(trainingPlans)
-        .where(
-          and(
-            eq(planDays.id, log.planDayId),
-            eq(planDays.planId, trainingPlans.id),
-            eq(trainingPlans.userId, log.userId)
-          )
-        );
+        .where(this.getPlanDayCompletionCondition(log.planDayId, log.userId));
     }
 
     return workoutLog;
@@ -48,7 +51,9 @@ export class WorkoutStorage {
 
     // Group planDayIds by userId to ensure proper authorization per user
     // Since logs could potentially come from different users in a batch
+    const updateConditions = [];
     const updatesByUser = new Map<string, string[]>();
+
     for (const log of logs) {
       if (log.planDayId) {
         const ids = updatesByUser.get(log.userId) || [];
@@ -59,19 +64,18 @@ export class WorkoutStorage {
 
     for (const [userId, planDayIds] of updatesByUser) {
       if (planDayIds.length > 0) {
-        // Bolt Optimization: Use direct JOIN via .from() instead of inArray() subquery to prevent N+1 execution
-        await db
-          .update(planDays)
-          .set({ status: "completed" })
-          .from(trainingPlans)
-          .where(
-            and(
-              inArray(planDays.id, planDayIds),
-              eq(planDays.planId, trainingPlans.id),
-              eq(trainingPlans.userId, userId)
-            )
-          );
+        updateConditions.push(this.getPlanDayCompletionCondition(planDayIds, userId));
       }
+    }
+
+    if (updateConditions.length > 0) {
+      // Bolt Optimization: Consolidate multiple user-specific updates into a single bulk query
+      // and use direct JOIN via .from() instead of inArray() subquery to prevent N+1 execution
+      await db
+        .update(planDays)
+        .set({ status: "completed" })
+        .from(trainingPlans)
+        .where(or(...updateConditions));
     }
 
     return createdLogs;

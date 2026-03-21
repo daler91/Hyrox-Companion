@@ -7,10 +7,25 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
 
 jobs:
   cypress-run:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     strategy:
       fail-fast: false
       matrix:
@@ -34,10 +49,12 @@ jobs:
       - name: Build application
         run: pnpm run build
 
+      - name: Push database schema
+        run: npx drizzle-kit push
+
       - name: Start server
         run: NODE_ENV=test node dist/index.js &
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
