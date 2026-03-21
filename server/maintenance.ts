@@ -39,6 +39,31 @@ async function ensureSchemaUpToDate() {
       await client.query(`ALTER TABLE users ADD COLUMN is_auto_coaching boolean DEFAULT false`);
       logger.info({ context: "db" }, "Added missing is_auto_coaching column to users table");
     }
+
+    const coachingTable = await client.query(
+      `SELECT 1 FROM information_schema.tables WHERE table_name = 'coaching_materials'`,
+    );
+    if (coachingTable.rowCount === 0) {
+      await client.query(`
+        CREATE TABLE "coaching_materials" (
+          "id" varchar(255) PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+          "user_id" varchar(255) NOT NULL,
+          "title" text NOT NULL,
+          "content" text NOT NULL,
+          "type" varchar(50) DEFAULT 'principles' NOT NULL,
+          "created_at" timestamp DEFAULT now(),
+          "updated_at" timestamp DEFAULT now()
+        )
+      `);
+      await client.query(`
+        ALTER TABLE "coaching_materials" ADD CONSTRAINT "coaching_materials_user_id_users_id_fk"
+          FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action
+      `);
+      await client.query(`
+        CREATE INDEX "idx_coaching_materials_user_id" ON "coaching_materials" USING btree ("user_id")
+      `);
+      logger.info({ context: "db" }, "Created missing coaching_materials table");
+    }
   } catch (error) {
     logger.error({ context: "db", err: error }, "Schema migration check failed");
   } finally {

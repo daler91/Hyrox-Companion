@@ -7,7 +7,7 @@ import { storage } from "./storage";
 export const DEV_USER_ID = "dev-user";
 
 function isDev(): boolean {
-  return env.NODE_ENV === "development";
+  return env.NODE_ENV === "development" || env.NODE_ENV === "test";
 }
 
 function isDevBypassEnabled(): boolean {

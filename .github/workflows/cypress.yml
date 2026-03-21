@@ -35,7 +35,7 @@ jobs:
         run: pnpm run build
 
       - name: Start server
-        run: pnpm start &
+        run: NODE_ENV=test node dist/index.js &
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
