@@ -63,9 +63,6 @@ export function chunkText(text: string): string[] {
  */
 export async function embedCoachingMaterial(material: CoachingMaterial): Promise<void> {
   try {
-    // Delete existing chunks for this material
-    await storage.deleteChunksByMaterialId(material.id);
-
     const chunks = chunkText(material.content);
     if (chunks.length === 0) return;
 
@@ -83,6 +80,10 @@ export async function embedCoachingMaterial(material: CoachingMaterial): Promise
     );
 
     const embeddings = await generateEmbeddings(textsToEmbed);
+
+    // Only delete old chunks after new embeddings succeed, so a failure
+    // doesn't leave the material with zero chunks.
+    await storage.deleteChunksByMaterialId(material.id);
 
     // Store chunks with embeddings
     await storage.insertChunks(
