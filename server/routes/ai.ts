@@ -6,7 +6,7 @@ import { chatWithCoach, streamChatWithCoach, generateWorkoutSuggestions, parseEx
 import { rateLimiter } from "../routeUtils";
 import { buildTrainingContext } from "../services/aiService";
 import { buildCoachingMaterialsSection, buildRetrievedChunksSection } from "../prompts";
-import { retrieveRelevantChunks, embedCoachingMaterial } from "../services/ragService";
+import { retrieveRelevantChunks } from "../services/ragService";
 import { toDateStr, getUserId } from "../types";
 import { chatRequestSchema, parseExercisesRequestSchema, insertChatMessageSchema, type InsertChatMessage } from "@shared/schema";
 import { z } from "zod";
@@ -48,35 +48,26 @@ async function getCoachingContext(
   query: string,
 ): Promise<{ retrievedChunks?: string[]; coachingMaterials?: import("../prompts").CoachingMaterialInput[]; ragInfo: RagInfo }> {
   try {
-    let hasChunks = await storage.hasChunksForUser(userId);
-    let needsReEmbed = false;
+    const hasChunks = await storage.hasChunksForUser(userId);
 
     if (hasChunks) {
       // Check if stored embeddings match the current model's dimensions
       const storedDim = await storage.getStoredEmbeddingDimension(userId);
       if (storedDim !== null && storedDim !== EMBEDDING_DIMENSIONS) {
-        logger.info({ userId, storedDim, expectedDim: EMBEDDING_DIMENSIONS }, "[rag] Embedding dimension mismatch — triggering re-embed");
-        needsReEmbed = true;
-      }
-    }
-
-    // Self-healing: re-embed when chunks are missing or have stale dimensions
-    if (!hasChunks || needsReEmbed) {
-      const materials = await storage.listCoachingMaterials(userId);
-      if (materials.length > 0) {
-        logger.info({ userId, materialCount: materials.length }, "[rag] Attempting re-embed");
-        await Promise.all(materials.map(embedCoachingMaterial));
-        hasChunks = await storage.hasChunksForUser(userId);
-      }
-    }
-
-    if (hasChunks) {
-      const chunks = await retrieveRelevantChunks(userId, query);
-      if (chunks.length > 0) {
-        return {
-          retrievedChunks: chunks,
-          ragInfo: { source: "rag", chunkCount: chunks.length, chunks },
-        };
+        logger.warn(
+          { userId, storedDim, expectedDim: EMBEDDING_DIMENSIONS },
+          "[rag] Embedding dimension mismatch — skipping RAG (re-embed via settings to fix)",
+        );
+        // Fall through to legacy instead of trying to re-embed inline,
+        // which would burn API quota and slow down the chat request.
+      } else {
+        const chunks = await retrieveRelevantChunks(userId, query);
+        if (chunks.length > 0) {
+          return {
+            retrievedChunks: chunks,
+            ragInfo: { source: "rag", chunkCount: chunks.length, chunks },
+          };
+        }
       }
     }
   } catch (error) {
