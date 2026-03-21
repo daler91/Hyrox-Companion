@@ -42,6 +42,14 @@ jobs:
           node-version: 22
           cache: 'pnpm'
 
+      - name: Cache Cypress binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/Cypress
+          key: cypress-cache-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            cypress-cache-${{ runner.os }}-
+
       - name: Install dependencies
         run: pnpm i
 
@@ -69,13 +77,15 @@ jobs:
       - name: Wait for server
         run: npx wait-on http-get://localhost:5000/api/v1/health --timeout 120000
 
+      - name: Install Cypress binary
+        run: npx cypress install
+
       - name: Cypress run
         uses: cypress-io/github-action@82482149c343a5dee155d22104111b9319f9dd45 # v7
         with:
           record: true
           parallel: true
-          install: true
-          install-command: pnpm i
+          install: false
         env:
           CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
