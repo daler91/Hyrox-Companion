@@ -36,16 +36,26 @@ router.post("/api/v1/parse-exercises", isAuthenticated, rateLimiter("parse", 5),
 /**
  * Try RAG retrieval for the user's query. Falls back to legacy if no chunks exist.
  */
+export interface RagInfo {
+  source: "rag" | "legacy" | "none";
+  chunkCount: number;
+  chunks?: string[];
+  materialCount?: number;
+}
+
 async function getCoachingContext(
   userId: string,
   query: string,
-): Promise<{ retrievedChunks?: string[]; coachingMaterials?: import("../prompts").CoachingMaterialInput[] }> {
+): Promise<{ retrievedChunks?: string[]; coachingMaterials?: import("../prompts").CoachingMaterialInput[]; ragInfo: RagInfo }> {
   try {
     const hasChunks = await storage.hasChunksForUser(userId);
     if (hasChunks) {
       const chunks = await retrieveRelevantChunks(userId, query);
       if (chunks.length > 0) {
-        return { retrievedChunks: chunks };
+        return {
+          retrievedChunks: chunks,
+          ragInfo: { source: "rag", chunkCount: chunks.length, chunks },
+        };
       }
     }
   } catch (error) {
@@ -54,10 +64,17 @@ async function getCoachingContext(
 
   // Fallback to legacy truncation
   const coachingMaterials = await storage.listCoachingMaterials(userId);
-  return { coachingMaterials };
+  return {
+    coachingMaterials,
+    ragInfo: {
+      source: coachingMaterials.length > 0 ? "legacy" : "none",
+      chunkCount: 0,
+      materialCount: coachingMaterials.length,
+    },
+  };
 }
 
-async function prepareChatContext(req: ExpressRequest): Promise<{ success: false; error: string } | { success: true; message: string; history: Pick<import("@shared/schema").ChatMessage, "role" | "content">[]; trainingContext: import("../gemini/index").TrainingContext; coachingMaterials?: import("../prompts").CoachingMaterialInput[]; retrievedChunks?: string[] }> {
+async function prepareChatContext(req: ExpressRequest): Promise<{ success: false; error: string } | { success: true; message: string; history: Pick<import("@shared/schema").ChatMessage, "role" | "content">[]; trainingContext: import("../gemini/index").TrainingContext; coachingMaterials?: import("../prompts").CoachingMaterialInput[]; retrievedChunks?: string[]; ragInfo: RagInfo }> {
   const parseResult = chatRequestSchema.safeParse(req.body);
   if (!parseResult.success) {
     return { success: false, error: parseResult.error.errors[0].message };
@@ -89,10 +106,10 @@ router.post("/api/v1/chat", isAuthenticated, rateLimiter("chat", 10), async (req
     if (!context.success) {
       return res.status(400).json({ error: context.error });
     }
-    const { message, history, trainingContext, coachingMaterials, retrievedChunks } = context;
+    const { message, history, trainingContext, coachingMaterials, retrievedChunks, ragInfo } = context;
 
     const response = await chatWithCoach(message, history, trainingContext, coachingMaterials, retrievedChunks);
-    res.json({ response });
+    res.json({ response, ragInfo });
   } catch (error) {
     (req.log || logger).error({ err: error }, "Chat error:");
     res.status(500).json({ error: "Failed to get response from AI coach" });
@@ -105,7 +122,7 @@ router.post("/api/v1/chat/stream", isAuthenticated, rateLimiter("chat", 10), asy
     if (!context.success) {
       return res.status(400).json({ error: context.error });
     }
-    const { message, history, trainingContext, coachingMaterials, retrievedChunks } = context;
+    const { message, history, trainingContext, coachingMaterials, retrievedChunks, ragInfo } = context;
 
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
@@ -113,6 +130,9 @@ router.post("/api/v1/chat/stream", isAuthenticated, rateLimiter("chat", 10), asy
     res.flushHeaders();
 
     try {
+      // Emit RAG diagnostics before streaming text
+      res.write(`data: ${JSON.stringify({ ragInfo })}\n\n`);
+
       const stream = streamChatWithCoach(message, history, trainingContext, coachingMaterials, retrievedChunks);
 
       for await (const chunk of stream) {

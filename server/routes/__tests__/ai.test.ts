@@ -210,7 +210,8 @@ describe("POST /api/chat", () => {
       .send({ message: "Hello", history: [] });
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ response: "Coach response" });
+    expect(response.body.response).toBe("Coach response");
+    expect(response.body.ragInfo).toBeDefined();
     expect(buildTrainingContext).toHaveBeenCalledWith("test_user_id");
     expect(chatWithCoach).toHaveBeenCalledWith("Hello", [], MOCK_TRAINING_CONTEXT, [], undefined);
   });
@@ -268,11 +269,12 @@ describe("POST /api/chat/stream", () => {
     expect(response.status).toBe(200);
     expect(response.headers["content-type"]).toBe("text/event-stream");
 
-    // Test the event stream format
+    // Test the event stream format (first chunk is ragInfo meta event)
     const chunks = parseStreamResponse(response.text);
-    expect(chunks[0]).toContain('{"text":"Hello"}');
-    expect(chunks[1]).toContain('{"text":" World"}');
-    expect(chunks[2]).toContain('{"done":true}');
+    expect(chunks[0]).toContain('"ragInfo"');
+    expect(chunks[1]).toContain('{"text":"Hello"}');
+    expect(chunks[2]).toContain('{"text":" World"}');
+    expect(chunks[3]).toContain('{"done":true}');
 
     expect(buildTrainingContext).toHaveBeenCalledWith("test_user_id");
     expect(streamChatWithCoach).toHaveBeenCalledWith("Hello stream", [], MOCK_TRAINING_CONTEXT, [], undefined);
@@ -298,7 +300,8 @@ describe("POST /api/chat/stream", () => {
 
     expect(response.status).toBe(200);
     const chunks = parseStreamResponse(response.text);
-    expect(chunks[0]).toContain('{"error":"Stream error"}');
+    expect(chunks[0]).toContain('"ragInfo"');
+    expect(chunks[1]).toContain('{"error":"Stream error"}');
   });
 });
 
