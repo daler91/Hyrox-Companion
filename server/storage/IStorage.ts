@@ -112,6 +112,7 @@ export interface ICoachingStorage {
   searchChunksByEmbedding(userId: string, queryEmbedding: number[], topK: number): Promise<DocumentChunk[]>;
   getChunkCountsByMaterial(userId: string): Promise<{ materialId: string; chunkCount: number; hasEmbeddings: boolean }[]>;
   hasChunksForUser(userId: string): Promise<boolean>;
+  getStoredEmbeddingDimension(userId: string): Promise<number | null>;
 }
 
 export interface IStorage extends IUserStorage, IPlanStorage, IWorkoutStorage, IAnalyticsStorage, IChatStorage, IIntegrationStorage, INotificationStorage, ICoachingStorage {}

@@ -6,6 +6,7 @@ import { getUserId } from "../types";
 import { insertCoachingMaterialSchema } from "@shared/schema";
 import { logger } from "../logger";
 import { embedCoachingMaterial } from "../services/ragService";
+import { generateEmbedding, EMBEDDING_DIMENSIONS } from "../gemini/client";
 import { z } from "zod";
 
 const router = Router();
@@ -82,6 +83,7 @@ router.get("/api/v1/coaching-materials/rag-status", isAuthenticated, async (req:
     const chunkMap = new Map(chunkCounts.map((c) => [c.materialId, c]));
 
     const hasApiKey = Boolean(process.env.GEMINI_API_KEY);
+    const storedDimension = await storage.getStoredEmbeddingDimension(userId);
 
     const materialStatus = materials.map((m) => {
       const chunks = chunkMap.get(m.id);
@@ -98,12 +100,27 @@ router.get("/api/v1/coaching-materials/rag-status", isAuthenticated, async (req:
     const totalChunks = chunkCounts.reduce((sum, c) => sum + c.chunkCount, 0);
     const allEmbedded = materials.length > 0 && materials.every((m) => chunkMap.get(m.id)?.hasEmbeddings);
 
+    // Test embedding API with a short probe if we have an API key
+    let embeddingApiStatus: { ok: boolean; dimension?: number; error?: string } = { ok: false };
+    if (hasApiKey) {
+      try {
+        const probe = await generateEmbedding("test");
+        embeddingApiStatus = { ok: true, dimension: probe.length };
+      } catch (err) {
+        embeddingApiStatus = { ok: false, error: err instanceof Error ? err.message : String(err) };
+      }
+    }
+
     res.json({
       hasApiKey,
       totalMaterials: materials.length,
       totalChunks,
       allEmbedded,
       materials: materialStatus,
+      storedDimension,
+      expectedDimension: EMBEDDING_DIMENSIONS,
+      dimensionMismatch: storedDimension !== null && storedDimension !== EMBEDDING_DIMENSIONS,
+      embeddingApi: embeddingApiStatus,
     });
   } catch (error) {
     (req.log || logger).error({ err: error }, "Error fetching RAG status:");
