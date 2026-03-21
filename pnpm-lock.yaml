@@ -199,8 +199,8 @@ importers:
         version: 4.1.0
     devDependencies:
       '@replit/vite-plugin-cartographer':
-        specifier: ^0.4.11
-        version: 0.4.11
+        specifier: ^0.5.1
+        version: 0.5.1
       '@replit/vite-plugin-dev-banner':
         specifier: ^0.1.2
         version: 0.1.2
@@ -1705,8 +1705,8 @@ packages:
       react-redux:
         optional: true
 
-  '@replit/vite-plugin-cartographer@0.4.11':
-    resolution: {integrity: sha512-8yBf1Lsn8VM6OFThpWNanqRzhMvTm7JzPd7ALc9y1eeLHFGfP61xIXXOfGx9lMgZXSUIBAwEBCUJVOibAI6vGA==}
+  '@replit/vite-plugin-cartographer@0.5.1':
+    resolution: {integrity: sha512-KiaQMx4ssTM8hSjMFscyIV1PN1bRVCWCFqN3fXOfXa39uFFCKUaeL3VvH/sxuy7S7ET+MCFOt+J7lLtL56bRrA==}
 
   '@replit/vite-plugin-dev-banner@0.1.2':
     resolution: {integrity: sha512-YfW3U1xKnLrqvSiTzXeEX8AG+Vpz7XwBsJHNvGbp841AE1mLvishMQi2Zw7ApyHp+9EMGthXuCjP+mLbl3IuGA==}
@@ -6279,7 +6279,7 @@ snapshots:
       react: 18.3.1
       react-redux: 9.2.0(@types/react@18.3.28)(react@18.3.1)(redux@5.0.1)
 
-  '@replit/vite-plugin-cartographer@0.4.11':
+  '@replit/vite-plugin-cartographer@0.5.1':
     dependencies:
       '@babel/parser': 7.29.0
       '@babel/traverse': 7.29.0
