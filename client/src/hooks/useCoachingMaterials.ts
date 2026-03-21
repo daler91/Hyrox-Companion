@@ -14,6 +14,24 @@ export interface CoachingMaterial {
 
 const QUERY_KEY = ["/api/v1/coaching-materials"];
 
+function useCoachingMutationOptions(successMessage: string, errorMessage: string) {
+  const { toast } = useToast();
+
+  return {
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+      toast({ title: successMessage });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: errorMessage,
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  };
+}
+
 export function useCoachingMaterials() {
   return useQuery<CoachingMaterial[]>({
     queryKey: QUERY_KEY,
@@ -25,55 +43,46 @@ export function useCoachingMaterials() {
 }
 
 export function useCreateCoachingMaterial() {
-  const { toast } = useToast();
+  const mutationOptions = useCoachingMutationOptions(
+    "Coaching material added",
+    "Failed to add coaching material"
+  );
 
   return useMutation({
     mutationFn: async (data: { title: string; content: string; type: "principles" | "document" }) => {
       const response = await apiRequest("POST", "/api/v1/coaching-materials", data);
       return response.json();
     },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: QUERY_KEY });
-      toast({ title: "Coaching material added" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Failed to add coaching material", description: error.message, variant: "destructive" });
-    },
+    ...mutationOptions,
   });
 }
 
 export function useUpdateCoachingMaterial() {
-  const { toast } = useToast();
+  const mutationOptions = useCoachingMutationOptions(
+    "Coaching material updated",
+    "Failed to update coaching material"
+  );
 
   return useMutation({
     mutationFn: async ({ id, ...data }: { id: string; title?: string; content?: string; type?: "principles" | "document" }) => {
       const response = await apiRequest("PATCH", `/api/v1/coaching-materials/${id}`, data);
       return response.json();
     },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: QUERY_KEY });
-      toast({ title: "Coaching material updated" });
-    },
-    onError: () => {
-      toast({ title: "Failed to update coaching material", variant: "destructive" });
-    },
+    ...mutationOptions,
   });
 }
 
 export function useDeleteCoachingMaterial() {
-  const { toast } = useToast();
+  const mutationOptions = useCoachingMutationOptions(
+    "Coaching material removed",
+    "Failed to remove coaching material"
+  );
 
   return useMutation({
     mutationFn: async (id: string) => {
       const response = await apiRequest("DELETE", `/api/v1/coaching-materials/${id}`);
       return response.json();
     },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: QUERY_KEY });
-      toast({ title: "Coaching material removed" });
-    },
-    onError: () => {
-      toast({ title: "Failed to remove coaching material", variant: "destructive" });
-    },
+    ...mutationOptions,
   });
 }
