@@ -12,7 +12,7 @@ const router = Router();
 
 const updateCoachingMaterialSchema = z.object({
   title: z.string().trim().min(1).max(255).optional(),
-  content: z.string().trim().min(1).max(150000).optional(),
+  content: z.string().trim().min(1).max(200000).optional(),
   type: z.enum(["principles", "document"]).optional(),
 });
 
