@@ -309,11 +309,11 @@ export const dateStringSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Must be
 
 export const chatMessageSchema = z.object({
   role: z.enum(["user", "assistant"]),
-  content: z.string().min(1, "Message content cannot be empty").max(5000, "Message must be 5000 characters or less"),
+  content: z.string().min(1, "Message content cannot be empty").max(1000, "Message must be 1000 characters or less"),
 });
 
 export const chatRequestSchema = z.object({
-  message: z.string().min(1, "Message is required").max(5000, "Message must be 5000 characters or less")
+  message: z.string().min(1, "Message is required").max(1000, "Message must be 1000 characters or less")
     .refine((val) => !/(ignore\s+all\s+previous\s+instructions|system\s*prompt|system:|instruction:|forget\s+all|bypass|you\s+are\s+now)/i.test(val), {
       message: "Input contains invalid commands or restricted keywords",
     }),
@@ -323,14 +323,14 @@ export const chatRequestSchema = z.object({
 export const parseExercisesRequestSchema = z.object({
   text: z.string().trim()
     .min(1, "Text is required")
-    .max(100000, "Text must be 100,000 characters or less")
+    .max(2000, "Text must be 2000 characters or less")
     .refine((val) => !/(ignore\s+all\s+previous\s+instructions|system\s*prompt|system:|instruction:|forget\s+all|bypass|you\s+are\s+now)/i.test(val), {
       message: "Input contains invalid commands or restricted keywords",
     }),
 });
 
 export const importPlanRequestSchema = z.object({
-  csvContent: z.string().min(1, "CSV content is required").max(1000000, "CSV content must be 1,000,000 characters or less"),
+  csvContent: z.string().min(1, "CSV content is required").max(100000, "CSV content must be 100,000 characters or less"),
   fileName: z.string().max(255, "File name must be 255 characters or less").optional(),
   planName: z.string().max(255, "Plan name must be 255 characters or less").optional(),
 });
@@ -419,7 +419,7 @@ export const insertCoachingMaterialSchema = createInsertSchema(coachingMaterials
   updatedAt: true,
 }).extend({
   title: z.string().trim().min(1, "Title is required").max(255, "Title must be 255 characters or less"),
-  content: z.string().trim().min(1, "Content is required").max(50000, "Content must be 50,000 characters or less"),
+  content: z.string().trim().min(1, "Content is required").max(10000, "Content must be 10,000 characters or less"),
   type: z.enum(["principles", "document"]),
 });
 

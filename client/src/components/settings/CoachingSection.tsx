@@ -84,7 +84,7 @@ export function CoachingSection() {
       const text = await extractFileText(file);
       setDialogType("document");
       setTitle(file.name.replace(/\.[^/.]+$/, ""));
-      setContent(text.slice(0, 50000));
+      setContent(text.slice(0, 10000));
       setDialogOpen(true);
     } catch {
       toast({ title: "Failed to read file", variant: "destructive" });
@@ -105,7 +105,7 @@ export function CoachingSection() {
         const text = await extractFileText(file);
         await createMutation.mutateAsync({
           title: file.name.replace(/\.[^/.]+$/, ""),
-          content: text.slice(0, 50000),
+          content: text.slice(0, 10000),
           type: "document",
         });
         uploaded++;
