@@ -71,6 +71,13 @@
       "when": 1774119488847,
       "tag": "0009_lovely_ser_duncan",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1774310400001,
+      "tag": "0010_migrate_embedding_to_vector",
+      "breakpoints": true
     }
   ]
 }
