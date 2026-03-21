@@ -41,6 +41,7 @@ vi.mock("../../storage", () => ({
     getTimeline: vi.fn(),
     listCoachingMaterials: vi.fn(),
     hasChunksForUser: vi.fn().mockResolvedValue(false),
+    getStoredEmbeddingDimension: vi.fn().mockResolvedValue(3072),
   },
 }));
 
@@ -50,6 +51,7 @@ vi.mock("../../gemini", () => ({
   chatWithCoach: vi.fn(),
   streamChatWithCoach: vi.fn(),
   generateWorkoutSuggestions: vi.fn(),
+  EMBEDDING_DIMENSIONS: 3072,
 }));
 
 // Mock aiService

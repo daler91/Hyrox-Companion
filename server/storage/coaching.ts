@@ -109,4 +109,21 @@ export class CoachingStorage {
       .limit(1);
     return result.length > 0;
   }
+
+  /** Return the dimension of the first stored embedding for a user, or null if none. */
+  async getStoredEmbeddingDimension(userId: string): Promise<number | null> {
+    const result = await pool.query(
+      `SELECT embedding FROM document_chunks
+       WHERE user_id = $1 AND embedding IS NOT NULL
+       LIMIT 1`,
+      [userId],
+    );
+    if (result.rows.length === 0 || !result.rows[0].embedding) return null;
+    try {
+      const arr = JSON.parse(result.rows[0].embedding);
+      return Array.isArray(arr) ? arr.length : null;
+    } catch {
+      return null;
+    }
+  }
 }

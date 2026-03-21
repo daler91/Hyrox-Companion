@@ -2,7 +2,7 @@ import { logger } from "../logger";
 import { Router, type Request as ExpressRequest, type Response } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
-import { chatWithCoach, streamChatWithCoach, generateWorkoutSuggestions, parseExercisesFromText, type UpcomingWorkout } from "../gemini/index";
+import { chatWithCoach, streamChatWithCoach, generateWorkoutSuggestions, parseExercisesFromText, EMBEDDING_DIMENSIONS, type UpcomingWorkout } from "../gemini/index";
 import { rateLimiter } from "../routeUtils";
 import { buildTrainingContext } from "../services/aiService";
 import { buildCoachingMaterialsSection, buildRetrievedChunksSection } from "../prompts";
@@ -49,12 +49,22 @@ async function getCoachingContext(
 ): Promise<{ retrievedChunks?: string[]; coachingMaterials?: import("../prompts").CoachingMaterialInput[]; ragInfo: RagInfo }> {
   try {
     let hasChunks = await storage.hasChunksForUser(userId);
+    let needsReEmbed = false;
 
-    // Self-healing: if no chunks exist but materials do, attempt to embed them
-    if (!hasChunks) {
+    if (hasChunks) {
+      // Check if stored embeddings match the current model's dimensions
+      const storedDim = await storage.getStoredEmbeddingDimension(userId);
+      if (storedDim !== null && storedDim !== EMBEDDING_DIMENSIONS) {
+        logger.info({ userId, storedDim, expectedDim: EMBEDDING_DIMENSIONS }, "[rag] Embedding dimension mismatch — triggering re-embed");
+        needsReEmbed = true;
+      }
+    }
+
+    // Self-healing: re-embed when chunks are missing or have stale dimensions
+    if (!hasChunks || needsReEmbed) {
       const materials = await storage.listCoachingMaterials(userId);
       if (materials.length > 0) {
-        logger.info({ userId, materialCount: materials.length }, "[rag] No chunks found but materials exist — attempting re-embed");
+        logger.info({ userId, materialCount: materials.length }, "[rag] Attempting re-embed");
         await Promise.all(materials.map(embedCoachingMaterial));
         hasChunks = await storage.hasChunksForUser(userId);
       }
