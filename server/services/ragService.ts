@@ -124,14 +124,11 @@ export async function retrieveRelevantChunks(
   query: string,
   topK: number = TOP_K,
 ): Promise<string[]> {
-  try {
-    const queryEmbedding = await generateEmbedding(query);
-    const chunks = await storage.searchChunksByEmbedding(userId, queryEmbedding, topK);
-    return chunks.map((c) => c.content);
-  } catch (error) {
-    logger.error({ err: error, userId }, "[rag] Failed to retrieve chunks, falling back to empty");
-    return [];
-  }
+  const queryEmbedding = await generateEmbedding(query);
+  logger.info({ userId, queryDim: queryEmbedding.length, topK }, "[rag] Searching chunks by embedding");
+  const chunks = await storage.searchChunksByEmbedding(userId, queryEmbedding, topK);
+  logger.info({ userId, found: chunks.length }, "[rag] Search returned chunks");
+  return chunks.map((c) => c.content);
 }
 
 /**
