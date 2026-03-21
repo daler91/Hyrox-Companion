@@ -61,7 +61,7 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
 function RagStatusContent({ ragLoading, ragStatus, reEmbedMutation }: {
   ragLoading: boolean;
-  ragStatus: { hasApiKey: boolean; totalMaterials: number; totalChunks: number; allEmbedded: boolean; materials: { id: string; title: string; chunkCount: number; hasEmbeddings: boolean }[] } | undefined;
+  ragStatus: import("@/hooks/useCoachingMaterials").RagStatus | undefined;
   reEmbedMutation: { mutate: () => void; isPending: boolean };
 }) {
   if (ragLoading) {
@@ -83,6 +83,29 @@ function RagStatusContent({ ragLoading, ragStatus, reEmbedMutation }: {
         </div>
       )}
 
+      {ragStatus.embeddingApi && !ragStatus.embeddingApi.ok && ragStatus.hasApiKey && (
+        <div className="flex items-start gap-2 p-2 rounded-md bg-destructive/10 text-destructive text-sm">
+          <XCircle className="h-4 w-4 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-medium">Embedding API error</p>
+            <p className="text-xs mt-0.5 break-all">{ragStatus.embeddingApi.error}</p>
+          </div>
+        </div>
+      )}
+
+      {ragStatus.dimensionMismatch && (
+        <div className="flex items-start gap-2 p-2 rounded-md bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 text-sm">
+          <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-medium">Embedding dimension mismatch</p>
+            <p className="text-xs mt-0.5">
+              Stored: {ragStatus.storedDimension}-dim, expected: {ragStatus.expectedDimension}-dim.
+              Click Re-embed All to fix.
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-3 gap-3 text-center">
         <div className="p-2 rounded-md bg-muted">
           <p className="text-lg font-semibold">{ragStatus.totalMaterials}</p>
@@ -99,6 +122,13 @@ function RagStatusContent({ ragLoading, ragStatus, reEmbedMutation }: {
           <p className="text-xs text-muted-foreground">Embedded</p>
         </div>
       </div>
+
+      {ragStatus.embeddingApi?.ok && (
+        <div className="flex items-center gap-2 p-2 rounded-md bg-green-500/10 text-green-700 dark:text-green-400 text-sm">
+          <CheckCircle2 className="h-4 w-4 shrink-0" />
+          Embedding API working ({ragStatus.embeddingApi.dimension}-dim)
+        </div>
+      )}
 
       <div className="space-y-1.5">
         {ragStatus.materials.map((m) => (

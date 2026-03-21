@@ -28,6 +28,10 @@ export interface RagStatus {
     chunkCount: number;
     hasEmbeddings: boolean;
   }[];
+  storedDimension: number | null;
+  expectedDimension: number;
+  dimensionMismatch: boolean;
+  embeddingApi: { ok: boolean; dimension?: number; error?: string };
 }
 
 export function useCoachingMaterials() {
