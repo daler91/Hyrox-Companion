@@ -307,7 +307,7 @@ export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
 export type ChatMessage = typeof chatMessages.$inferSelect;
 
 // Request Validation Schemas
-export const dateStringSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Must be a valid date in YYYY-MM-DD format");
+export const dateStringSchema = z.string().max(10).regex(/^\d{4}-\d{2}-\d{2}$/, "Must be a valid date in YYYY-MM-DD format");
 
 export const chatMessageSchema = z.object({
   role: z.enum(["user", "assistant"]),
@@ -347,7 +347,7 @@ export const exerciseSetSchema = z.object({
   weight: z.number().optional().nullable(),
   distance: z.number().optional().nullable(),
   time: z.number().optional().nullable(),
-  notes: z.string().optional().nullable(),
+  notes: z.string().max(1000).optional().nullable(),
 }).passthrough();
 
 export const incomingExerciseSchema = z.object({
@@ -360,7 +360,7 @@ export const incomingExerciseSchema = z.object({
   distance: z.number().optional().nullable(),
   time: z.number().optional().nullable(),
   confidence: z.number().min(0).max(100).optional().nullable(),
-  notes: z.string().optional().nullable(),
+  notes: z.string().max(1000).optional().nullable(),
   sets: z.array(exerciseSetSchema).max(50).optional().nullable(),
 }).passthrough();
 
