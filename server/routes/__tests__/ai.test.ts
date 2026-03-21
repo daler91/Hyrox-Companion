@@ -5,6 +5,7 @@ import aiRouter from "../ai";
 import { storage } from "../../storage";
 import { parseExercisesFromText, chatWithCoach, streamChatWithCoach, generateWorkoutSuggestions } from "../../gemini";
 import { buildTrainingContext } from "../../services/aiService";
+import { retrieveRelevantChunks } from "../../services/ragService";
 
 const MOCK_TRAINING_CONTEXT = "Training context";
 const CHAT_STREAM_ENDPOINT = "/api/v1/chat/stream";
@@ -54,6 +55,10 @@ vi.mock("../../gemini", () => ({
 // Mock aiService
 vi.mock("../../services/aiService", () => ({
   buildTrainingContext: vi.fn(),
+}));
+
+vi.mock("../../services/ragService", () => ({
+  retrieveRelevantChunks: vi.fn(),
 }));
 
 // Mock prompts
@@ -523,5 +528,116 @@ describe("POST /api/timeline/ai-suggestions", () => {
 
     expect(response.status).toBe(500);
     expect(response.body).toHaveProperty("error", "Failed to generate AI suggestions");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// RAG pipeline integration tests
+// ---------------------------------------------------------------------------
+
+describe("RAG pipeline in chat endpoints", () => {
+  let app: express.Express;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const routeUtils = await import("../../routeUtils");
+    routeUtils.clearRateLimitBuckets();
+    app = express();
+    app.use(express.json());
+    app.use(aiRouter);
+  });
+
+  it("should use RAG retrieval when user has embedded chunks", async () => {
+    vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
+    vi.mocked(chatWithCoach).mockResolvedValue("RAG response");
+    vi.mocked(storage.hasChunksForUser).mockResolvedValue(true);
+    vi.mocked(retrieveRelevantChunks).mockResolvedValue(["chunk about squats", "chunk about programming"]);
+
+    const response = await request(app)
+      .post(CHAT_ENDPOINT)
+      .send({ message: "How should I train squats?", history: [] });
+
+    expect(response.status).toBe(200);
+    expect(storage.hasChunksForUser).toHaveBeenCalledWith("test_user_id");
+    expect(retrieveRelevantChunks).toHaveBeenCalledWith("test_user_id", "How should I train squats?");
+    // Should pass retrievedChunks instead of coachingMaterials
+    expect(chatWithCoach).toHaveBeenCalledWith(
+      "How should I train squats?",
+      [],
+      MOCK_TRAINING_CONTEXT,
+      undefined,
+      ["chunk about squats", "chunk about programming"],
+    );
+    // Should NOT fall back to legacy materials
+    expect(storage.listCoachingMaterials).not.toHaveBeenCalled();
+  });
+
+  it("should fall back to legacy materials when no chunks exist", async () => {
+    vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
+    vi.mocked(chatWithCoach).mockResolvedValue("Legacy response");
+    vi.mocked(storage.hasChunksForUser).mockResolvedValue(false);
+    vi.mocked(storage.listCoachingMaterials).mockResolvedValue([]);
+
+    const response = await request(app)
+      .post(CHAT_ENDPOINT)
+      .send({ message: "Hello", history: [] });
+
+    expect(response.status).toBe(200);
+    expect(storage.hasChunksForUser).toHaveBeenCalledWith("test_user_id");
+    expect(retrieveRelevantChunks).not.toHaveBeenCalled();
+    expect(storage.listCoachingMaterials).toHaveBeenCalledWith("test_user_id");
+  });
+
+  it("should fall back to legacy materials when RAG retrieval returns empty", async () => {
+    vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
+    vi.mocked(chatWithCoach).mockResolvedValue("Fallback response");
+    vi.mocked(storage.hasChunksForUser).mockResolvedValue(true);
+    vi.mocked(retrieveRelevantChunks).mockResolvedValue([]);
+    vi.mocked(storage.listCoachingMaterials).mockResolvedValue([]);
+
+    const response = await request(app)
+      .post(CHAT_ENDPOINT)
+      .send({ message: "Hello", history: [] });
+
+    expect(response.status).toBe(200);
+    // Empty retrieval should trigger fallback
+    expect(storage.listCoachingMaterials).toHaveBeenCalledWith("test_user_id");
+  });
+
+  it("should fall back to legacy materials when RAG retrieval throws", async () => {
+    vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
+    vi.mocked(chatWithCoach).mockResolvedValue("Error fallback");
+    vi.mocked(storage.hasChunksForUser).mockRejectedValue(new Error("DB error"));
+    vi.mocked(storage.listCoachingMaterials).mockResolvedValue([]);
+
+    const response = await request(app)
+      .post(CHAT_ENDPOINT)
+      .send({ message: "Hello", history: [] });
+
+    expect(response.status).toBe(200);
+    // Should gracefully fall back
+    expect(storage.listCoachingMaterials).toHaveBeenCalledWith("test_user_id");
+  });
+
+  it("should use RAG retrieval for streaming endpoint", async () => {
+    vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
+    vi.mocked(storage.hasChunksForUser).mockResolvedValue(true);
+    vi.mocked(retrieveRelevantChunks).mockResolvedValue(["relevant chunk"]);
+    vi.mocked(streamChatWithCoach).mockImplementation(async function* () {
+      yield "Streamed";
+    });
+
+    const response = await request(app)
+      .post(CHAT_STREAM_ENDPOINT)
+      .send({ message: "Train me", history: [] });
+
+    expect(response.status).toBe(200);
+    expect(streamChatWithCoach).toHaveBeenCalledWith(
+      "Train me",
+      [],
+      MOCK_TRAINING_CONTEXT,
+      undefined,
+      ["relevant chunk"],
+    );
   });
 });
