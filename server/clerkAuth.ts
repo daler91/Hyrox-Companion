@@ -64,7 +64,7 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     }
   }
 
-  if (isDevBypassEnabled() && req.headers["x-test-no-bypass"] !== "true") {
+  if (isDevBypassEnabled()) {
     try {
       await ensureDevUserExists();
     } catch (error) {

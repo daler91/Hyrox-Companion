@@ -13,7 +13,7 @@ export function getUserId(req: Request): string {
     // intentionally empty - fall through to dev user
   }
 
-  if (env.NODE_ENV === "development" || (env.NODE_ENV === "test" && env.ALLOW_DEV_AUTH_BYPASS === "true")) {
+  if (env.NODE_ENV === "development") {
     return DEV_USER_ID;
   }
 
