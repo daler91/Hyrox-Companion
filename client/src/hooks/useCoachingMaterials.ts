@@ -32,8 +32,8 @@ export function useCreateCoachingMaterial() {
       const response = await apiRequest("POST", "/api/v1/coaching-materials", data);
       return response.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEY });
       toast({ title: "Coaching material added" });
     },
     onError: (error: Error) => {
@@ -50,8 +50,8 @@ export function useUpdateCoachingMaterial() {
       const response = await apiRequest("PATCH", `/api/v1/coaching-materials/${id}`, data);
       return response.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEY });
       toast({ title: "Coaching material updated" });
     },
     onError: () => {
@@ -68,8 +68,8 @@ export function useDeleteCoachingMaterial() {
       const response = await apiRequest("DELETE", `/api/v1/coaching-materials/${id}`);
       return response.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEY });
       toast({ title: "Coaching material removed" });
     },
     onError: () => {
