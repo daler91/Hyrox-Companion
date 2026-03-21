@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { encryptToken, decryptToken } from './crypto';
 
 // We need to mock env since it requires ENCRYPTION_KEY
