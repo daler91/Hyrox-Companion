@@ -22,7 +22,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U postgres"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -50,7 +50,7 @@ jobs:
         run: pnpm run build
 
       - name: Push database schema
-        run: pnpx drizzle-kit push
+        run: npx drizzle-kit push
 
       - name: Start server
         run: NODE_ENV=test node dist/index.js &
