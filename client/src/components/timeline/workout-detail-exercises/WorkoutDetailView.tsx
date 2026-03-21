@@ -49,10 +49,12 @@ export const WorkoutDetailView = React.memo(function WorkoutDetailView({
           <p className="text-sm text-muted-foreground italic">{entry.notes}</p>
         </div>
       )}
-      {entry.duration && entry.source !== "strava" && (
+      {(entry.duration || entry.rpe) && entry.source !== "strava" && (
         <p className="text-xs text-muted-foreground">
-          Duration: {entry.duration} min
-          {entry.rpe && ` | RPE: ${entry.rpe}`}
+          {[
+            entry.duration ? `Duration: ${entry.duration} min` : null,
+            entry.rpe ? `RPE: ${entry.rpe}` : null
+          ].filter(Boolean).join(" | ")}
         </p>
       )}
       <WorkoutDetailStravaMetrics entry={entry} distanceUnit={distanceUnit} />
