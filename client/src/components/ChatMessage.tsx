@@ -10,23 +10,25 @@ interface ChatMessageProps {
   readonly ragInfo?: RagInfo;
 }
 
-function RagDebugBadge({ ragInfo }: { ragInfo: RagInfo }) {
+const BADGE_COLORS: Record<RagInfo["source"], string> = {
+  rag: "text-emerald-600 bg-emerald-50 border-emerald-200 dark:text-emerald-400 dark:bg-emerald-950 dark:border-emerald-800",
+  legacy: "text-amber-600 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-950 dark:border-amber-800",
+  none: "text-muted-foreground bg-muted border-border",
+};
+
+function getBadgeLabel(ragInfo: RagInfo): string {
+  if (ragInfo.source === "rag") return `RAG: ${ragInfo.chunkCount} chunks`;
+  if (ragInfo.source === "legacy") return `Legacy: ${ragInfo.materialCount ?? 0} materials`;
+  return "No coaching data";
+}
+
+function RagDebugBadge({ ragInfo }: Readonly<{ ragInfo: RagInfo }>) {
   const [expanded, setExpanded] = useState(false);
 
-  const badgeColor =
-    ragInfo.source === "rag"
-      ? "text-emerald-600 bg-emerald-50 border-emerald-200 dark:text-emerald-400 dark:bg-emerald-950 dark:border-emerald-800"
-      : ragInfo.source === "legacy"
-        ? "text-amber-600 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-950 dark:border-amber-800"
-        : "text-muted-foreground bg-muted border-border";
-
+  const badgeColor = BADGE_COLORS[ragInfo.source];
   const Icon = ragInfo.source === "rag" ? Database : FileText;
-  const label =
-    ragInfo.source === "rag"
-      ? `RAG: ${ragInfo.chunkCount} chunks`
-      : ragInfo.source === "legacy"
-        ? `Legacy: ${ragInfo.materialCount ?? 0} materials`
-        : "No coaching data";
+  const label = getBadgeLabel(ragInfo);
+  const hasExpandableChunks = ragInfo.source === "rag" && ragInfo.chunks && ragInfo.chunks.length > 0;
 
   return (
     <div className="mt-1">
@@ -37,18 +39,17 @@ function RagDebugBadge({ ragInfo }: { ragInfo: RagInfo }) {
       >
         <Icon className="h-2.5 w-2.5" />
         {label}
-        {ragInfo.source === "rag" && ragInfo.chunks && ragInfo.chunks.length > 0 && (
+        {hasExpandableChunks && (
           expanded ? <ChevronDown className="h-2.5 w-2.5" /> : <ChevronRight className="h-2.5 w-2.5" />
         )}
       </button>
-      {expanded && ragInfo.source === "rag" && ragInfo.chunks && ragInfo.chunks.length > 0 && (
+      {expanded && hasExpandableChunks && (
         <div className="mt-1 space-y-1 max-h-48 overflow-y-auto">
-          {ragInfo.chunks.map((chunk, i) => (
+          {ragInfo.chunks!.map((chunk) => (
             <div
-              key={i}
+              key={`chunk-${chunk.slice(0, 40)}`}
               className="text-[10px] text-muted-foreground bg-muted/50 rounded px-2 py-1 border border-border/50"
             >
-              <span className="font-semibold text-foreground/60">#{i + 1}</span>{" "}
               {chunk.length > 200 ? chunk.slice(0, 200) + "..." : chunk}
             </div>
           ))}
