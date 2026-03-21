@@ -2,13 +2,14 @@ import { forwardRef } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChatMessage } from "@/components/ChatMessage";
 import { SuggestionsList } from "@/components/coach/SuggestionsTab";
-import type { Message } from "@/hooks/useChatSession";
+import type { Message, RagInfo } from "@/hooks/useChatSession";
 import type { Suggestion } from "@/components/coach/SuggestionCard";
 
 interface CoachPanelChatAreaProps {
   readonly messages: Message[];
   readonly pendingSuggestions: Suggestion[];
   readonly applyingId: string | null;
+  readonly suggestionsRagInfo?: RagInfo;
   readonly isProcessing: boolean;
   readonly onApplySuggestion: (suggestion: Suggestion) => void;
   readonly onDismissSuggestion: (id: string) => void;
@@ -20,6 +21,7 @@ export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaP
       messages,
       pendingSuggestions,
       applyingId,
+      suggestionsRagInfo,
       isProcessing,
       onApplySuggestion,
       onDismissSuggestion,
@@ -41,6 +43,7 @@ export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaP
           <SuggestionsList
             suggestions={pendingSuggestions}
             applyingId={applyingId}
+            ragInfo={suggestionsRagInfo}
             onApply={onApplySuggestion}
             onDismiss={onDismissSuggestion}
           />

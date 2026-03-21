@@ -34,6 +34,7 @@ async function applySuggestion(
   suggestion: WorkoutSuggestion,
   upcomingWorkouts: UpcomingWorkout[],
   userId: string,
+  aiSource?: "rag" | "legacy" | null,
 ): Promise<boolean> {
   if (!suggestion.workoutId || !suggestion.recommendation) return false;
   const entry = upcomingWorkouts.find((w) => w.id === suggestion.workoutId);
@@ -43,7 +44,7 @@ async function applySuggestion(
     const updateValue = buildUpdateValue(suggestion, entry);
     await storage.updatePlanDay(
       suggestion.workoutId,
-      { [suggestion.targetField]: updateValue },
+      { [suggestion.targetField]: updateValue, aiSource: aiSource ?? null },
       userId,
     );
     return true;
@@ -62,14 +63,14 @@ async function applySuggestion(
 async function getCoachingMaterialsString(
   userId: string,
   upcomingWorkouts: UpcomingWorkout[],
-): Promise<string | undefined> {
+): Promise<{ text: string | undefined; source: "rag" | "legacy" | null }> {
   try {
     const hasChunks = await storage.hasChunksForUser(userId);
     if (hasChunks) {
       const query = upcomingWorkouts.map(w => `${w.focus} ${w.mainWorkout}`).join("; ");
       const chunks = await retrieveRelevantChunks(userId, query);
       if (chunks.length > 0) {
-        return buildRetrievedChunksSection(chunks);
+        return { text: buildRetrievedChunksSection(chunks), source: "rag" };
       }
     }
   } catch (error) {
@@ -77,7 +78,8 @@ async function getCoachingMaterialsString(
   }
 
   const materials = await storage.listCoachingMaterials(userId);
-  return buildCoachingMaterialsSection(materials) || undefined;
+  const text = buildCoachingMaterialsSection(materials) || undefined;
+  return { text, source: text ? "legacy" : null };
 }
 
 // ---------------------------------------------------------------------------
@@ -132,17 +134,17 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
 
       if (upcomingWorkouts.length === 0) return { adjusted: 0 };
 
-      const coachingMaterials = await getCoachingMaterialsString(userId, upcomingWorkouts);
+      const coachingContext = await getCoachingMaterialsString(userId, upcomingWorkouts);
 
       const suggestions = await generateWorkoutSuggestions(
         trainingContext,
         upcomingWorkouts,
         activePlanGoal,
-        coachingMaterials,
+        coachingContext.text,
       );
 
       const results = await Promise.all(
-        suggestions.map((s) => applySuggestion(s, upcomingWorkouts, userId)),
+        suggestions.map((s) => applySuggestion(s, upcomingWorkouts, userId, coachingContext.source)),
       );
       const adjusted = results.filter(Boolean).length;
 

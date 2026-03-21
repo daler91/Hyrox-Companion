@@ -2,7 +2,7 @@ import React, { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Circle, BookOpen, Loader2, CheckCircle2 } from "lucide-react";
+import { Circle, BookOpen, Loader2, CheckCircle2, Database, FileText } from "lucide-react";
 import { format } from "date-fns";
 import { SiStrava } from "react-icons/si";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
@@ -121,6 +121,18 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
               )}
               {entry.dayName && (
                 <Badge variant="secondary">{entry.dayName}</Badge>
+              )}
+              {entry.aiSource === "rag" && (
+                <Badge variant="outline" className="text-emerald-600 border-emerald-200 bg-emerald-50 dark:text-emerald-400 dark:border-emerald-800 dark:bg-emerald-950 text-[10px]">
+                  <Database className="h-2.5 w-2.5 mr-1" />
+                  RAG
+                </Badge>
+              )}
+              {entry.aiSource === "legacy" && (
+                <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50 dark:text-amber-400 dark:border-amber-800 dark:bg-amber-950 text-[10px]">
+                  <FileText className="h-2.5 w-2.5 mr-1" />
+                  Legacy
+                </Badge>
               )}
               <span className="font-medium">{entry.focus}</span>
             </div>

@@ -74,6 +74,7 @@ export const planDays = pgTable("plan_days", {
   notes: text("notes"),
   scheduledDate: date("scheduled_date"),
   status: text("status").default("planned"),
+  aiSource: text("ai_source"),
 }, (table) => [
   check("status_check", sql`status IN ('planned', 'completed', 'missed', 'skipped')`),
   index("idx_plan_days_plan_id").on(table.planId),
@@ -248,6 +249,7 @@ export type TimelineEntry = {
   planName?: string | null;
   planId?: string | null;
   source?: "manual" | "strava";
+  aiSource?: "rag" | "legacy" | null;
   exerciseSets?: ExerciseSet[];
   calories?: number | null;
   distanceMeters?: number | null;
