@@ -51,6 +51,7 @@ export function WorkoutDetailEditMode({
 
   useEffect(() => {
     if (entry) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setEditForm({
         focus: entry.focus,
         mainWorkout: entry.mainWorkout,

@@ -68,6 +68,7 @@ export default function Settings() {
 
   useEffect(() => {
     if (preferences) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setWeightUnit(preferences.weightUnit || "kg");
       setDistanceUnit(preferences.distanceUnit || "km");
       setWeeklyGoal(String(preferences.weeklyGoal || 5));

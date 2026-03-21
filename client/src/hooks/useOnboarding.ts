@@ -12,6 +12,7 @@ export function useOnboarding(
 
   useEffect(() => {
     if (isNewUser && !onboardingTriggered && !localStorage.getItem("hyrox-onboarding-complete")) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setOnboardingTriggered(true);
       setShowOnboarding(true);
     }
@@ -19,6 +20,7 @@ export function useOnboarding(
 
   useEffect(() => {
     if (!showOnboarding && onboardingTriggered && !hasAutoOpenedCoach) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setHasAutoOpenedCoach(true);
       setTimeout(() => {
         const isCurrentlyMobile = globalThis.innerWidth < 768;

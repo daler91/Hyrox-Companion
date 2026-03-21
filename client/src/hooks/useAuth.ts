@@ -20,7 +20,7 @@ function useAutoCoachWatcher(user?: User) {
       }
       wasCoachingRef.current = isCoaching;
     }
-  }, [user?.isAutoCoaching, queryClient]);
+  }, [user?.isAutoCoaching, queryClient, user]);
 }
 
 function useClerkAuthImpl() {

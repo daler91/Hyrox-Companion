@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
 import { VoiceButton } from "@/components/VoiceButton";
 import { useToast } from "@/hooks/use-toast";
@@ -27,9 +27,11 @@ export function VoiceFieldButton({ onTranscript, onStopRef, size = "icon", class
     onError: handleError,
   });
 
-  if (onStopRef) {
-    onStopRef.current = stopListening;
-  }
+  useEffect(() => {
+    if (onStopRef) {
+      onStopRef.current = stopListening;
+    }
+  }, [onStopRef, stopListening]);
 
   return (
     <VoiceButton

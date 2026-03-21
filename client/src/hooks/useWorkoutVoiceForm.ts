@@ -1,4 +1,4 @@
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
 
@@ -17,7 +17,9 @@ export function useWorkoutVoiceForm(
   const { toast } = useToast();
 
   const editFormRef = useRef(editForm);
-  editFormRef.current = editForm;
+  useEffect(() => {
+    editFormRef.current = editForm;
+  }, [editForm]);
 
   const stopAccessoryRef = useRef<(() => void) | null>(null);
   const stopNotesRef = useRef<(() => void) | null>(null);
@@ -68,9 +70,11 @@ export function useWorkoutVoiceForm(
     stopNotesRef.current?.();
   }, [stopMainListening]);
 
-  if (stopAllVoiceRef) {
-    stopAllVoiceRef.current = stopAllVoice;
-  }
+  useEffect(() => {
+    if (stopAllVoiceRef) {
+      stopAllVoiceRef.current = stopAllVoice;
+    }
+  }, [stopAllVoiceRef, stopAllVoice]);
 
   return {
     appendToField,
