@@ -22,6 +22,9 @@ describe("API Validation", () => {
         url,
         failOnStatusCode: false,
         body: method === "POST" || method === "PATCH" ? {} : undefined,
+        headers: {
+          "x-test-no-bypass": "true",
+        },
       }).then((response) => {
         expect(response.status).to.eq(401);
       });
