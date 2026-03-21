@@ -2,31 +2,20 @@ import { describe, it, expect, vi } from "vitest";
 import { isRetryableError, retryWithBackoff, truncate } from "./client";
 
 describe("isRetryableError", () => {
-  it("returns true for 429 rate limit", () => {
-    expect(isRetryableError(new Error("Request failed with status 429"))).toBe(true);
-  });
-
-  it("returns true for 'rate limit' message", () => {
-    expect(isRetryableError(new Error("rate limit exceeded"))).toBe(true);
-  });
-
-  it("returns true for 500 server error", () => {
-    expect(isRetryableError(new Error("500 Internal Server Error"))).toBe(true);
-  });
-
-  it("returns true for 503 service unavailable", () => {
-    expect(isRetryableError(new Error("503 Service Unavailable"))).toBe(true);
-  });
-
-  it("returns true for network errors", () => {
-    expect(isRetryableError(new Error("network error"))).toBe(true);
-    expect(isRetryableError(new Error("ECONNRESET"))).toBe(true);
-    expect(isRetryableError(new Error("request timeout"))).toBe(true);
-    expect(isRetryableError(new Error("fetch failed"))).toBe(true);
-  });
-
-  it("returns false for 400 bad request", () => {
-    expect(isRetryableError(new Error("400 Bad Request"))).toBe(false);
+  it.each([
+    ["Request failed with status 429", true],
+    ["rate limit exceeded", true],
+    ["500 Internal Server Error", true],
+    ["503 Service Unavailable", true],
+    ["network error", true],
+    ["ECONNRESET", true],
+    ["request timeout", true],
+    ["fetch failed", true],
+    ["400 Bad Request", false],
+    ["Invalid JSON", false],
+    ["Missing required field", false],
+  ])("returns %p for message %p", (msg, expected) => {
+    expect(isRetryableError(new Error(msg))).toBe(expected);
   });
 
   it("returns false for non-Error values", () => {
@@ -34,11 +23,6 @@ describe("isRetryableError", () => {
     expect(isRetryableError(42)).toBe(false);
     expect(isRetryableError(null)).toBe(false);
     expect(isRetryableError(undefined)).toBe(false);
-  });
-
-  it("returns false for unrelated error messages", () => {
-    expect(isRetryableError(new Error("Invalid JSON"))).toBe(false);
-    expect(isRetryableError(new Error("Missing required field"))).toBe(false);
   });
 });
 

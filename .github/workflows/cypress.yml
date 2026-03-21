@@ -15,6 +15,20 @@ jobs:
       fail-fast: false
       matrix:
         containers: [1, 2]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -34,10 +48,15 @@ jobs:
       - name: Build application
         run: pnpm run build
 
+      - name: Database Migrations
+        run: npx drizzle-kit push
+        env:
+          DATABASE_URL: postgresql://user:password@localhost:5432/db
+
       - name: Start server
         run: NODE_ENV=test node dist/index.js &
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL: postgresql://user:password@localhost:5432/db
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
