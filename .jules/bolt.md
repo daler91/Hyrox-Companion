@@ -25,3 +25,7 @@
 ## 2026-03-21 - Consolidate Batch Conditional Updates in Drizzle
 **Learning:** Executing sequential database updates in a loop (N+1 pattern) when processing batch logs for different users introduces significant network latency and transaction overhead. Even when using optimized joins, multiple roundtrips to the database are measurably slower than a single bulk operation.
 **Action:** To optimize batch conditional updates, collect user-specific authorization and selection criteria into an array of `and()` expressions and execute a single `UPDATE` query using `or(...conditions)` in the `.where()` clause. This reduces the operation to a single database roundtrip while maintaining strict row-level authorization.
+
+## 2024-05-28 - Combine sequential array mapping and filtering
+**Learning:** Performing `Array.prototype.map()` followed by `Array.prototype.filter()` results in two O(N) traversals of the array and allocates an intermediate array object that is immediately garbage collected. This is an inefficient pattern, especially when executed frequently (e.g. during render cycles or in high-traffic backend endpoints).
+**Action:** Combine sequential mapping and filtering operations into a single O(N) `Array.prototype.reduce()` traversal or a `for...of` loop. This avoids redundant memory allocations and improves runtime performance.
