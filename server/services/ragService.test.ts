@@ -156,12 +156,12 @@ describe("embedCoachingMaterial", () => {
     expect(call[0]).toBe("Training Guide: Short content for testing.");
   });
 
-  it("should skip insertion when content is empty", async () => {
+  it("should skip everything when content is empty", async () => {
     const emptyMaterial = { ...mockMaterial, content: "" };
 
     await embedCoachingMaterial(emptyMaterial);
 
-    expect(storage.deleteChunksByMaterialId).toHaveBeenCalledWith("mat_1");
+    expect(storage.deleteChunksByMaterialId).not.toHaveBeenCalled();
     expect(generateEmbeddings).not.toHaveBeenCalled();
     expect(storage.insertChunks).not.toHaveBeenCalled();
   });
