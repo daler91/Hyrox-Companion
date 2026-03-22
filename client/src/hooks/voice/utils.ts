@@ -1,7 +1,4 @@
-export const MAX_RETRIES = 2;
-export const RETRY_DELAY_MS = 500;
 export const RETRYABLE_ERRORS = new Set(["network", "no-speech"]);
-export const DEDUP_WINDOW_MS = 3000;
 
 export function getVoiceErrorMessage(
   errorCode: string,
