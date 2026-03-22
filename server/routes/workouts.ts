@@ -186,7 +186,7 @@ router.get("/api/v1/workouts/:id", isAuthenticated, async (req: Request<{ id: st
   }
 });
 
-router.post("/api/v1/workouts", isAuthenticated, rateLimiter("workout", 40), async (req: Request<Record<string, never>, Record<string, never>, InsertWorkoutLog & { exercises?: any }>, res: Response) => {
+router.post("/api/v1/workouts", isAuthenticated, rateLimiter("workout", 40), async (req: Request<Record<string, never>, Record<string, never>, InsertWorkoutLog & { exercises?: ParsedExercise[] }>, res: Response) => {
   try {
     const { exercises, ...workoutData } = req.body;
     const parseResult = insertWorkoutLogSchema.safeParse(workoutData);
@@ -211,7 +211,7 @@ router.post("/api/v1/workouts", isAuthenticated, rateLimiter("workout", 40), asy
   }
 });
 
-router.patch("/api/v1/workouts/:id", isAuthenticated, rateLimiter("workout", 40), async (req: Request<{ id: string }, Record<string, never>, UpdateWorkoutLog & { exercises?: any }>, res: Response) => {
+router.patch("/api/v1/workouts/:id", isAuthenticated, rateLimiter("workout", 40), async (req: Request<{ id: string }, Record<string, never>, UpdateWorkoutLog & { exercises?: ParsedExercise[] }>, res: Response) => {
   try {
     const { exercises, ...updateData } = req.body;
     const parseResult = updateWorkoutLogSchema.safeParse(updateData);

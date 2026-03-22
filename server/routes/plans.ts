@@ -11,13 +11,13 @@ import { queue } from "../queue";
 
 const router = Router();
 
-async function handlePlanDayUpdate<P extends Record<string, string>>(
-  req: ExpressRequest<P, any, UpdatePlanDay>,
+async function handlePlanDayUpdate<P extends Record<string, string> & { dayId: string }>(
+  req: ExpressRequest<P, unknown, UpdatePlanDay>,
   res: Response,
   updateFn: (dayId: string, data: UpdatePlanDay, userId: string) => Promise<PlanDay | null | undefined>
 ) {
   try {
-    const { dayId } = req.params as any;
+    const { dayId } = req.params;
     const userId = getUserId(req);
 
     const parseResult = updatePlanDaySchema.safeParse(req.body);
@@ -72,7 +72,7 @@ router.get("/api/v1/plans/:id", isAuthenticated, async (req: ExpressRequest<{ id
   return handleGetOrDeletePlan(req, res, storage.getTrainingPlan.bind(storage), undefined, "Get");
 });
 
-router.post("/api/v1/plans/import", isAuthenticated, rateLimiter("planImport", 5), async (req: ExpressRequest<Record<string, never>, any, z.infer<typeof importPlanRequestSchema>>, res: Response) => {
+router.post("/api/v1/plans/import", isAuthenticated, rateLimiter("planImport", 5), async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof importPlanRequestSchema>>, res: Response) => {
   try {
     const parseResult = importPlanRequestSchema.safeParse(req.body);
     if (!parseResult.success) {
@@ -103,11 +103,11 @@ router.post("/api/v1/plans/sample", isAuthenticated, rateLimiter("planSample", 5
   }
 });
 
-router.patch("/api/v1/plans/:planId/days/:dayId", isAuthenticated, rateLimiter("planDayUpdate", 20), async (req: ExpressRequest<{ planId: string; dayId: string }, any, UpdatePlanDay>, res: Response) => {
+router.patch("/api/v1/plans/:planId/days/:dayId", isAuthenticated, rateLimiter("planDayUpdate", 20), async (req: ExpressRequest<{ planId: string; dayId: string }, unknown, UpdatePlanDay>, res: Response) => {
   return handlePlanDayUpdate(req, res, (dayId, data, userId) => storage.updatePlanDay(dayId, data, userId));
 });
 
-router.patch("/api/v1/plans/days/:dayId", isAuthenticated, rateLimiter("planDayUpdate", 20), async (req: ExpressRequest<{ dayId: string }, any, UpdatePlanDay>, res: Response) => {
+router.patch("/api/v1/plans/days/:dayId", isAuthenticated, rateLimiter("planDayUpdate", 20), async (req: ExpressRequest<{ dayId: string }, unknown, UpdatePlanDay>, res: Response) => {
   return handlePlanDayUpdate(req, res, updatePlanDayWithCleanup);
 });
 
@@ -115,7 +115,7 @@ const renameTrainingPlanSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(255, "Name must be 255 characters or less"),
 });
 
-router.patch("/api/v1/plans/:id", isAuthenticated, rateLimiter("planUpdate", 20), async (req: ExpressRequest<{ id: string }, any, { name: string }>, res: Response) => {
+router.patch("/api/v1/plans/:id", isAuthenticated, rateLimiter("planUpdate", 20), async (req: ExpressRequest<{ id: string }, unknown, { name: string }>, res: Response) => {
   try {
     const userId = getUserId(req);
     const parseResult = renameTrainingPlanSchema.safeParse(req.body);
@@ -133,7 +133,7 @@ router.patch("/api/v1/plans/:id", isAuthenticated, rateLimiter("planUpdate", 20)
   }
 });
 
-router.patch("/api/v1/plans/:id/goal", isAuthenticated, rateLimiter("planUpdate", 20), async (req: ExpressRequest<{ id: string }, any, UpdateTrainingPlanGoal>, res: Response) => {
+router.patch("/api/v1/plans/:id/goal", isAuthenticated, rateLimiter("planUpdate", 20), async (req: ExpressRequest<{ id: string }, unknown, UpdateTrainingPlanGoal>, res: Response) => {
   try {
     const userId = getUserId(req);
     const parseResult = updateTrainingPlanGoalSchema.safeParse(req.body);
@@ -155,7 +155,7 @@ router.delete("/api/v1/plans/:id", isAuthenticated, rateLimiter("planDelete", 10
   return handleGetOrDeletePlan(req, res, async (id, userId) => { await storage.deleteTrainingPlan(id, userId); return { success: true }; }, "true", "Delete");
 });
 
-router.post("/api/v1/plans/:planId/schedule", isAuthenticated, rateLimiter("planSchedule", 10), async (req: ExpressRequest<{ planId: string }, any, z.infer<typeof schedulePlanRequestSchema>>, res: Response) => {
+router.post("/api/v1/plans/:planId/schedule", isAuthenticated, rateLimiter("planSchedule", 10), async (req: ExpressRequest<{ planId: string }, unknown, z.infer<typeof schedulePlanRequestSchema>>, res: Response) => {
   try {
     const parseResult = schedulePlanRequestSchema.safeParse(req.body);
     if (!parseResult.success) {
@@ -183,7 +183,7 @@ const patchDayStatusSchema = z.object({
   scheduledDate: dateStringSchema.nullable().optional(),
 });
 
-router.patch("/api/v1/plans/days/:dayId/status", isAuthenticated, rateLimiter("planDayStatus", 20), async (req: ExpressRequest<{ dayId: string }, any, { status?: "planned" | "completed" | "skipped"; scheduledDate?: string | null }>, res: Response) => {
+router.patch("/api/v1/plans/days/:dayId/status", isAuthenticated, rateLimiter("planDayStatus", 20), async (req: ExpressRequest<{ dayId: string }, unknown, { status?: "planned" | "completed" | "skipped"; scheduledDate?: string | null }>, res: Response) => {
   try {
     const { dayId } = req.params;
     const userId = getUserId(req);

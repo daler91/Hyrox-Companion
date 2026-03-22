@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Loader2, Sparkles, Mic } from "lucide-react";
 import { VoiceButton } from "@/components/VoiceButton";
 import { UseMutationResult } from "@tanstack/react-query";
+import type { ParsedExercise } from "@shared/schema";
+import type { toast as toastFn } from "@/hooks/use-toast";
 
 interface WorkoutTextModeProps {
   freeText: string;
@@ -14,8 +16,8 @@ interface WorkoutTextModeProps {
   toggleListening: () => void;
   stopListening: () => void;
   interimTranscript: string;
-  parseMutation: UseMutationResult<any, any, string, any>;
-  toast: any;
+  parseMutation: UseMutationResult<ParsedExercise[], Error, string, unknown>;
+  toast: typeof toastFn;
 }
 
 export const WorkoutTextMode = ({

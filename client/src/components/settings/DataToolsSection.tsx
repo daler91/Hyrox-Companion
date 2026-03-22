@@ -16,7 +16,7 @@ export function DataToolsSection() {
       const response = await apiRequest("GET", "/api/v1/workouts/unstructured");
       return response.json();
     },
-    onSuccess: (data: any[]) => {
+    onSuccess: (data: Array<{ id: string }>) => {
       setUnstructuredCount(data.length);
       toast({
         title: "Search Complete",

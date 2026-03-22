@@ -42,11 +42,11 @@ export function useSuggestions({ timeline, addLocalMessage, saveMessage }: UseSu
       addLocalMessage(suggestionsMessage);
       saveMessage({ role: "assistant", content: responseContent });
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       let errorContent = "Sorry, I couldn't analyze your workouts right now. Please try again.";
-      if (error?.message?.includes("429") || error?.status === 429) {
+      if (error.message?.includes("429") || (error as Error & { status?: number }).status === 429) {
         errorContent = "You're sending requests too quickly. Please wait a moment and try again.";
-      } else if (error?.message?.includes("network") || error?.message?.includes("fetch")) {
+      } else if (error.message?.includes("network") || error.message?.includes("fetch")) {
         errorContent = "Network error — please check your connection and try again.";
       }
       const errorMessage: Message = {

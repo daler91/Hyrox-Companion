@@ -37,7 +37,7 @@ export function WorkoutStravaStats({ entry, distanceUnit }: Readonly<WorkoutStra
       {entry.avgSpeed && entry.avgSpeed > 0 && (
         <div className="flex items-center gap-1 text-xs text-muted-foreground" data-testid={`text-speed-${entry.id}`}>
           <TrendingUp className="h-3 w-3 text-green-500" />
-          <span>{formatSpeed(entry.avgSpeed, distanceUnit as any)}</span>
+          <span>{formatSpeed(entry.avgSpeed, distanceUnit)}</span>
         </div>
       )}
       {entry.sufferScore && (
