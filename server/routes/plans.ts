@@ -194,7 +194,7 @@ router.patch("/api/v1/plans/days/:dayId/status", isAuthenticated, rateLimiter("p
     }
     const { status, scheduledDate } = parseResult.data;
 
-    const updates: Record<string, string | null> = Record<string, never>;
+    const updates: Record<string, string | null> = {};
     if (status) updates.status = status;
     if (scheduledDate !== undefined) updates.scheduledDate = scheduledDate ?? null;
 

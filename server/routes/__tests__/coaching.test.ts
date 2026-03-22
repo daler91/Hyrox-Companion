@@ -4,7 +4,6 @@ import request from "supertest";
 import coachingRouter from "../coaching";
 import { storage } from "../../storage";
 import { queue } from "../../queue";
-import { embedCoachingMaterial } from "../../services/ragService";
 
 // Mock auth
 vi.mock("../../clerkAuth", () => ({
@@ -25,10 +24,6 @@ vi.mock("../../storage", () => ({
     updateCoachingMaterial: vi.fn(),
     deleteCoachingMaterial: vi.fn(),
   },
-}));
-
-vi.mock("../../services/ragService", () => ({
-  embedCoachingMaterial: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("../../queue", () => ({

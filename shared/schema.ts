@@ -10,7 +10,7 @@ const vector = customType<{
   config: { dimensions: number };
 }>({
   dataType(config) {
-    return `vector(${config.dimensions})`;
+    return `vector(${config?.dimensions ?? 1536})`;
   },
   fromDriver(value: string): number[] {
     return value.slice(1, -1).split(",").map(Number);
