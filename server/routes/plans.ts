@@ -194,7 +194,7 @@ router.patch("/api/v1/plans/days/:dayId/status", isAuthenticated, rateLimiter("p
     }
     const { status, scheduledDate } = parseResult.data;
 
-    const updates: Record<string, string | null> = {};
+    const updates: Record<string, string | null> = Record<string, never>;
     if (status) updates.status = status;
     if (scheduledDate !== undefined) updates.scheduledDate = scheduledDate ?? null;
 
@@ -211,7 +211,7 @@ router.patch("/api/v1/plans/days/:dayId/status", isAuthenticated, rateLimiter("p
 
     // Queue job: auto-coach adjusts upcoming plan days after a session is completed
     if (status === "completed") {
-      queue.send("auto-coach", { userId }).catch((err) => logger.warn(err, "Auto-coach enqueue failed"));
+      await queue.send("auto-coach", { userId });
     }
   } catch (error) {
     (req.log || logger).error({ err: error }, "Update day status error:");
