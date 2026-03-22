@@ -129,7 +129,7 @@ router.get("/api/v1/custom-exercises", isAuthenticated, async (req: Request, res
   }
 });
 
-router.post("/api/v1/custom-exercises", isAuthenticated, rateLimiter("customExercise", 20), async (req: Request<{}, {}, InsertCustomExercise & { userId?: string }>, res: Response) => {
+router.post("/api/v1/custom-exercises", isAuthenticated, rateLimiter("customExercise", 20), async (req: Request<Record<string, never>, Record<string, never>, InsertCustomExercise & { userId?: string }>, res: Response) => {
   try {
     const userId = getUserId(req);
 
@@ -155,11 +155,11 @@ router.post("/api/v1/custom-exercises", isAuthenticated, rateLimiter("customExer
   }
 });
 
-router.get("/api/v1/workouts", isAuthenticated, async (req: Request<{}, {}, {}, { limit?: string; offset?: string }>, res: Response) => {
+router.get("/api/v1/workouts", isAuthenticated, async (req: Request<Record<string, never>, Record<string, never>, Record<string, never>, { limit?: string; offset?: string }>, res: Response) => {
   try {
     const userId = getUserId(req);
-    const limit = req.query.limit ? Number.parseInt(req.query.limit as string) : undefined;
-    const offset = req.query.offset ? Number.parseInt(req.query.offset as string) : undefined;
+    const limit = req.query.limit ? Number.parseInt(req.query.limit) : undefined;
+    const offset = req.query.offset ? Number.parseInt(req.query.offset) : undefined;
 
     if (limit !== undefined && Number.isNaN(limit)) return res.status(400).json({ error: "Invalid limit" });
     if (offset !== undefined && Number.isNaN(offset)) return res.status(400).json({ error: "Invalid offset" });
@@ -186,7 +186,7 @@ router.get("/api/v1/workouts/:id", isAuthenticated, async (req: Request<{ id: st
   }
 });
 
-router.post("/api/v1/workouts", isAuthenticated, rateLimiter("workout", 40), async (req: Request<{}, {}, InsertWorkoutLog & { exercises?: any }>, res: Response) => {
+router.post("/api/v1/workouts", isAuthenticated, rateLimiter("workout", 40), async (req: Request<Record<string, never>, Record<string, never>, InsertWorkoutLog & { exercises?: any }>, res: Response) => {
   try {
     const { exercises, ...workoutData } = req.body;
     const parseResult = insertWorkoutLogSchema.safeParse(workoutData);
@@ -204,14 +204,14 @@ router.post("/api/v1/workouts", isAuthenticated, rateLimiter("workout", 40), asy
     const result = await createWorkout(parseResult.data, validatedExercises, userId);
     res.json(result);
     // Queue job: auto-coach adjusts upcoming plan days based on this completed workout
-    queue.send("auto-coach", { userId }).catch((err) => logger.warn(err, "Auto-coach enqueue failed"));
+    await queue.send("auto-coach", { userId });
   } catch (error) {
     (req.log || logger).error({ err: error }, "Create workout error:");
     res.status(500).json({ error: "Failed to create workout" });
   }
 });
 
-router.patch("/api/v1/workouts/:id", isAuthenticated, rateLimiter("workout", 40), async (req: Request<{ id: string }, {}, UpdateWorkoutLog & { exercises?: any }>, res: Response) => {
+router.patch("/api/v1/workouts/:id", isAuthenticated, rateLimiter("workout", 40), async (req: Request<{ id: string }, Record<string, never>, UpdateWorkoutLog & { exercises?: any }>, res: Response) => {
   try {
     const { exercises, ...updateData } = req.body;
     const parseResult = updateWorkoutLogSchema.safeParse(updateData);
@@ -264,12 +264,12 @@ router.get("/api/v1/exercises/:exerciseName/history", isAuthenticated, async (re
   }
 });
 
-router.get("/api/v1/timeline", isAuthenticated, async (req: Request<{}, {}, {}, { planId?: string; limit?: string; offset?: string }>, res: Response) => {
+router.get("/api/v1/timeline", isAuthenticated, async (req: Request<Record<string, never>, Record<string, never>, Record<string, never>, { planId?: string; limit?: string; offset?: string }>, res: Response) => {
   try {
     const userId = getUserId(req);
-    const planId = req.query.planId as string | undefined;
-    const limit = req.query.limit ? Number.parseInt(req.query.limit as string) : undefined;
-    const offset = req.query.offset ? Number.parseInt(req.query.offset as string) : undefined;
+    const planId = req.query.planId;
+    const limit = req.query.limit ? Number.parseInt(req.query.limit) : undefined;
+    const offset = req.query.offset ? Number.parseInt(req.query.offset) : undefined;
 
     if (limit !== undefined && Number.isNaN(limit)) return res.status(400).json({ error: "Invalid limit" });
     if (offset !== undefined && Number.isNaN(offset)) return res.status(400).json({ error: "Invalid offset" });
@@ -282,7 +282,7 @@ router.get("/api/v1/timeline", isAuthenticated, async (req: Request<{}, {}, {}, 
   }
 });
 
-router.get("/api/v1/export", isAuthenticated, rateLimiter("export", 5, 60000), async (req: Request<{}, {}, {}, { format?: string }>, res: Response) => {
+router.get("/api/v1/export", isAuthenticated, rateLimiter("export", 5, 60000), async (req: Request<Record<string, never>, Record<string, never>, Record<string, never>, { format?: string }>, res: Response) => {
   try {
     const userId = getUserId(req);
     const format = (req.query.format as string) || "csv";

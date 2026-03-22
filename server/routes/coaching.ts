@@ -6,6 +6,7 @@ import { getUserId } from "../types";
 import { insertCoachingMaterialSchema } from "@shared/schema";
 import { logger } from "../logger";
 import { embedCoachingMaterial } from "../services/ragService";
+import { queue } from "../queue";
 import { generateEmbedding, EMBEDDING_DIMENSIONS } from "../gemini/client";
 import { z } from "zod";
 
@@ -38,9 +39,7 @@ router.post("/api/v1/coaching-materials", isAuthenticated, rateLimiter("coaching
     const material = await storage.createCoachingMaterial(parseResult.data);
 
     // Fire-and-forget: chunk and embed in background
-    embedCoachingMaterial(material).catch((err) =>
-      logger.error({ err, materialId: material.id }, "[rag] Background embedding failed"),
-    );
+    await queue.send("embed-coaching-material", { material });
 
     res.status(201).json(material);
   } catch (error) {
@@ -63,9 +62,7 @@ router.patch("/api/v1/coaching-materials/:id", isAuthenticated, rateLimiter("coa
 
     // Re-embed if content or title changed
     if (parseResult.data.content || parseResult.data.title) {
-      embedCoachingMaterial(material).catch((err) =>
-        logger.error({ err, materialId: material.id }, "[rag] Background re-embedding failed"),
-      );
+      await queue.send("embed-coaching-material", { material });
     }
 
     res.json(material);

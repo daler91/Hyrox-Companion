@@ -31,6 +31,7 @@ vi.mock("../../storage", () => ({
 }));
 
 // Mock the planService functions
+vi.mock("../../queue", () => ({ queue: { send: vi.fn().mockResolvedValue(undefined) } }));
 vi.mock("../../services/planService", () => ({
   importPlanFromCSV: vi.fn().mockResolvedValue({ id: "mock_plan_id", name: "Mock Plan" }),
   createSamplePlan: vi.fn(),

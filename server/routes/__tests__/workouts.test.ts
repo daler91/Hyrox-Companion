@@ -25,6 +25,7 @@ vi.mock("../../storage", () => ({
 }));
 
 // Mock the workoutService functions
+vi.mock("../../queue", () => ({ queue: { send: vi.fn().mockResolvedValue(undefined) } }));
 vi.mock("../../services/workoutService", () => ({
   createWorkout: vi.fn(),
   updateWorkout: vi.fn(),

@@ -3,7 +3,7 @@ import express from "express";
 import request from "supertest";
 import coachingRouter from "../coaching";
 import { storage } from "../../storage";
-import { embedCoachingMaterial } from "../../services/ragService";
+import { queue } from "../../queue";
 
 // Mock auth
 vi.mock("../../clerkAuth", () => ({
@@ -26,8 +26,10 @@ vi.mock("../../storage", () => ({
   },
 }));
 
-vi.mock("../../services/ragService", () => ({
-  embedCoachingMaterial: vi.fn().mockResolvedValue(undefined),
+vi.mock("../../queue", () => ({
+  queue: {
+    send: vi.fn().mockResolvedValue(undefined),
+  },
 }));
 
 describe("Coaching materials routes", () => {
@@ -68,7 +70,7 @@ describe("Coaching materials routes", () => {
 
       expect(response.status).toBe(201);
       expect(storage.createCoachingMaterial).toHaveBeenCalled();
-      expect(embedCoachingMaterial).toHaveBeenCalledWith(createdMaterial);
+      expect(queue.send).toHaveBeenCalledWith("embed-coaching-material", { material: createdMaterial });
     });
 
     it("should return 400 for invalid data", async () => {
@@ -77,7 +79,7 @@ describe("Coaching materials routes", () => {
         .send({ title: "" });
 
       expect(response.status).toBe(400);
-      expect(embedCoachingMaterial).not.toHaveBeenCalled();
+      expect(queue.send).not.toHaveBeenCalled();
     });
   });
 
@@ -91,7 +93,7 @@ describe("Coaching materials routes", () => {
         .send({ content: "New content" });
 
       expect(response.status).toBe(200);
-      expect(embedCoachingMaterial).toHaveBeenCalledWith(updatedMaterial);
+      expect(queue.send).toHaveBeenCalledWith("embed-coaching-material", { material: updatedMaterial });
     });
 
     it("should re-embed when title is updated", async () => {
@@ -103,7 +105,7 @@ describe("Coaching materials routes", () => {
         .send({ title: "New Title" });
 
       expect(response.status).toBe(200);
-      expect(embedCoachingMaterial).toHaveBeenCalledWith(updatedMaterial);
+      expect(queue.send).toHaveBeenCalledWith("embed-coaching-material", { material: updatedMaterial });
     });
 
     it("should NOT re-embed when only type is updated", async () => {
@@ -115,7 +117,7 @@ describe("Coaching materials routes", () => {
         .send({ type: "principles" });
 
       expect(response.status).toBe(200);
-      expect(embedCoachingMaterial).not.toHaveBeenCalled();
+      expect(queue.send).not.toHaveBeenCalled();
     });
 
     it("should return 404 when material not found", async () => {
@@ -126,7 +128,7 @@ describe("Coaching materials routes", () => {
         .send({ title: "Updated" });
 
       expect(response.status).toBe(404);
-      expect(embedCoachingMaterial).not.toHaveBeenCalled();
+      expect(queue.send).not.toHaveBeenCalled();
     });
   });
 
