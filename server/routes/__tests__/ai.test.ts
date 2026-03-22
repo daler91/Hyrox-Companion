@@ -83,6 +83,7 @@ describe("POST /api/parse-exercises", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2025, 0, 1));
     app = createTestApp(aiRouter);
+
   });
 
   afterEach(() => {
@@ -197,6 +198,7 @@ describe("POST /api/chat", () => {
     const routeUtils = await import("../../routeUtils");
     routeUtils.clearRateLimitBuckets();
     app = createTestApp(aiRouter);
+
   });
 
   it("should successfully chat with coach and return response", async () => {
@@ -248,6 +250,7 @@ describe("POST /api/chat/stream", () => {
     const routeUtils = await import("../../routeUtils");
     routeUtils.clearRateLimitBuckets();
     app = createTestApp(aiRouter);
+
   });
 
   it("should successfully stream chat response", async () => {
@@ -313,6 +316,7 @@ describe("Chat History and Messages Routes", () => {
     const routeUtils = await import("../../routeUtils");
     routeUtils.clearRateLimitBuckets();
     app = createTestApp(aiRouter);
+
   });
 
   it("should get chat history", async () => {
@@ -396,6 +400,7 @@ describe("POST /api/timeline/ai-suggestions", () => {
     const routeUtils = await import("../../routeUtils");
     routeUtils.clearRateLimitBuckets();
     app = createTestApp(aiRouter);
+
   });
 
   it("should successfully generate suggestions", async () => {
@@ -539,6 +544,7 @@ describe("RAG pipeline in chat endpoints", () => {
     const routeUtils = await import("../../routeUtils");
     routeUtils.clearRateLimitBuckets();
     app = createTestApp(aiRouter);
+
   });
 
   it("should use RAG retrieval when user has embedded chunks", async () => {

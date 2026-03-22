@@ -41,6 +41,7 @@ describe("Auth Routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     app = createTestApp(authRouter);
+
   });
 
   describe(`GET ${ENDPOINT_URL}`, () => {
