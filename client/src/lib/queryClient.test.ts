@@ -1,14 +1,12 @@
-import { describe, it, expect, vi, beforeEach, afterEach, MockInstance } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { apiRequest, getQueryFn } from "./queryClient";
 import { QueryFunctionContext } from "@tanstack/react-query";
 
 describe("queryClient", () => {
-  let originalFetch: typeof global.fetch;
-  let fetchMock: ReturnType<typeof vi.fn>;
+  const originalFetch = global.fetch;
+  const fetchMock = vi.fn();
 
   beforeEach(() => {
-    originalFetch = global.fetch;
-    fetchMock = vi.fn();
     global.fetch = fetchMock;
   });
 
