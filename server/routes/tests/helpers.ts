@@ -57,6 +57,7 @@ export function setupIntegrationTest() {
   });
 
   afterAll(async () => {
+    await clearDatabase();
     if (context.server) {
       context.server.close();
     }
