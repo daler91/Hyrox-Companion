@@ -20,12 +20,16 @@ vi.mock("@/lib/api", () => ({
   sendChatMessage: vi.fn(),
   clearChatHistory: vi.fn(),
 }));
-vi.mock('@/lib/queryClient', () => ({
-  apiRequest: vi.fn(),
-  queryClient: {
-    invalidateQueries: vi.fn(),
-  },
-}));
+vi.mock('@/lib/queryClient', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    apiRequest: vi.fn(),
+    queryClient: {
+      invalidateQueries: vi.fn(),
+    },
+  };
+});
 
 
 vi.mock('@tanstack/react-query', async (importOriginal) => {

@@ -20,10 +20,14 @@ vi.mock("@/lib/api", () => ({
   updatePlanGoal: vi.fn(),
   schedulePlan: vi.fn(),
 }));
-vi.mock('@/lib/queryClient', () => ({
-  apiRequest: vi.fn(),
-  queryClient: { invalidateQueries: vi.fn() }
-}));
+vi.mock('@/lib/queryClient', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    apiRequest: vi.fn(),
+    queryClient: { invalidateQueries: vi.fn() },
+  };
+});
 vi.mock('@/hooks/use-toast', () => ({ useToast: vi.fn() }));
 
 describe('usePlanImport', () => {
