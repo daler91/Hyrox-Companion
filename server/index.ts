@@ -37,6 +37,7 @@ if (env.SENTRY_DSN) {
 }
 
 const app = express();
+app.disable("x-powered-by");
 const httpServer = createServer(app);
 
 export interface AppError extends Error {
