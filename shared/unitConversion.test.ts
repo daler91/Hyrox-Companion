@@ -11,8 +11,66 @@ import {
   formatElevation,
   formatWeight,
   formatDistance,
+  standardizeWeightUnit,
+  standardizeDistanceUnit,
   type DistanceUnit,
 } from "./unitConversion";
+
+
+describe("standardizeWeightUnit", () => {
+  it("returns kg for standard variations", () => {
+    expect(standardizeWeightUnit("kg")).toBe("kg");
+    expect(standardizeWeightUnit("kgs")).toBe("kg");
+    expect(standardizeWeightUnit("kilo")).toBe("kg");
+    expect(standardizeWeightUnit("kilograms")).toBe("kg");
+  });
+
+  it("returns lbs for standard variations", () => {
+    expect(standardizeWeightUnit("lbs")).toBe("lbs");
+    expect(standardizeWeightUnit("lb")).toBe("lbs");
+    expect(standardizeWeightUnit("pound")).toBe("lbs");
+    expect(standardizeWeightUnit("pounds")).toBe("lbs");
+  });
+
+  it("returns kg for undefined, null, or unknown inputs", () => {
+    expect(standardizeWeightUnit(undefined)).toBe("kg");
+    expect(standardizeWeightUnit(null)).toBe("kg");
+    expect(standardizeWeightUnit("")).toBe("kg");
+    expect(standardizeWeightUnit("stones")).toBe("kg");
+  });
+
+  it("is case-insensitive and trims whitespace", () => {
+    expect(standardizeWeightUnit(" LBS ")).toBe("lbs");
+    expect(standardizeWeightUnit("  kGs ")).toBe("kg");
+  });
+});
+
+describe("standardizeDistanceUnit", () => {
+  it("returns km for standard variations", () => {
+    expect(standardizeDistanceUnit("km")).toBe("km");
+    expect(standardizeDistanceUnit("kms")).toBe("km");
+    expect(standardizeDistanceUnit("kilometer")).toBe("km");
+    expect(standardizeDistanceUnit("kilometers")).toBe("km");
+  });
+
+  it("returns miles for standard variations", () => {
+    expect(standardizeDistanceUnit("miles")).toBe("miles");
+    expect(standardizeDistanceUnit("mile")).toBe("miles");
+    expect(standardizeDistanceUnit("mi")).toBe("miles");
+  });
+
+  it("returns km for undefined, null, or unknown inputs", () => {
+    expect(standardizeDistanceUnit(undefined)).toBe("km");
+    expect(standardizeDistanceUnit(null)).toBe("km");
+    expect(standardizeDistanceUnit("")).toBe("km");
+    expect(standardizeDistanceUnit("feet")).toBe("km");
+  });
+
+  it("is case-insensitive and trims whitespace", () => {
+    expect(standardizeDistanceUnit(" MILES ")).toBe("miles");
+    expect(standardizeDistanceUnit("  kM ")).toBe("km");
+  });
+});
 
 describe("convertWeight", () => {
   it("converts kg to lbs", () => {
