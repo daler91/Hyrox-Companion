@@ -13,7 +13,7 @@ const createWrapper = () => {
 };
 
 vi.mock('@/lib/queryClient', () => ({
-  apiRequest: vi.fn(), queryClient: { invalidateQueries: vi.fn() }
+  queryClient: { invalidateQueries: vi.fn() }
 }));
 vi.mock('@/hooks/use-toast', () => ({ useToast: vi.fn() }));
 
@@ -24,7 +24,11 @@ describe('usePlanImport', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(toastHook.useToast).mockReturnValue({ toast: mockToast } as unknown as ReturnType<typeof toastHook.useToast>);
-    vi.mocked(queryClientLib.apiRequest).mockResolvedValue({ json: () => Promise.resolve({ success: true, id: 'test-plan-id' }) } as Response);
+    vi.mocked(apiLib.importPlan).mockResolvedValue({ success: true, id: 'test-plan-id' });
+    vi.mocked(apiLib.samplePlan).mockResolvedValue({ success: true, id: 'test-plan-id' });
+    vi.mocked(apiLib.renamePlan).mockResolvedValue({ success: true, id: 'test-plan-id' });
+    vi.mocked(apiLib.updatePlanGoal).mockResolvedValue({ success: true, id: 'test-plan-id' });
+    vi.mocked(apiLib.schedulePlan).mockResolvedValue({ success: true, id: 'test-plan-id' });
     const w = createWrapper();
     qc = w.qc;
     wrapper = w.wrapper;
@@ -102,7 +106,11 @@ describe('usePlanImport', () => {
       act(() => { setup(result); }); act(() => { trigger(result); });
 
       await waitFor(() => {
-        expect(queryClientLib.apiRequest).toHaveBeenCalledWith(method, endpoint, payload);
+        if (method === 'POST' && endpoint === '/api/v1/plans/sample') expect(apiLib.samplePlan).toHaveBeenCalled();
+        if (method === 'POST' && endpoint === '/api/v1/plans/import') expect(apiLib.importPlan).toHaveBeenCalledWith(payload);
+        if (method === 'PATCH' && endpoint.endsWith('/goal')) expect(apiLib.updatePlanGoal).toHaveBeenCalledWith('plan-1', payload.goal);
+        if (method === 'PATCH' && !endpoint.endsWith('/goal')) expect(apiLib.renamePlan).toHaveBeenCalledWith('p1', payload.name);
+        if (method === 'POST' && endpoint.endsWith('/schedule')) expect(apiLib.schedulePlan).toHaveBeenCalledWith('test-plan-id', payload.startDate);
         inv.forEach(k => expect(queryClientLib.queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: k }));
         expect(mockToast).toHaveBeenCalledWith({ title: sToast });
       });
@@ -110,7 +118,7 @@ describe('usePlanImport', () => {
     });
 
     it.each(cases)('$name error', async ({ setup, trigger, eToast }) => {
-      vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(new Error('API Failure'));
+      vi.mocked(apiLib.importPlan).mockRejectedValueOnce(new Error('API Failure'));
       const { result } = runHook();
       act(() => { setup(result); }); act(() => { trigger(result); });
       await waitFor(() => { expect(mockToast).toHaveBeenCalledWith({ title: eToast, variant: "destructive" }); });

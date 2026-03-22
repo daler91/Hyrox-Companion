@@ -1,5 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
+import { getCoachingMaterials, createCoachingMaterial, updateCoachingMaterial, getRagStatus, reEmbedCoachingMaterials, deleteCoachingMaterial } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 export interface CoachingMaterial {
@@ -38,8 +39,7 @@ export function useCoachingMaterials() {
   return useQuery<CoachingMaterial[]>({
     queryKey: QUERY_KEY,
     queryFn: async () => {
-      const response = await apiRequest("GET", "/api/v1/coaching-materials");
-      return response.json();
+      return await getCoachingMaterials();
     },
   });
 }
@@ -49,8 +49,7 @@ export function useCreateCoachingMaterial() {
 
   return useMutation({
     mutationFn: async (data: { title: string; content: string; type: "principles" | "document" }) => {
-      const response = await apiRequest("POST", "/api/v1/coaching-materials", data);
-      return response.json();
+      return await createCoachingMaterial(data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY });
@@ -67,8 +66,7 @@ export function useUpdateCoachingMaterial() {
 
   return useMutation({
     mutationFn: async ({ id, ...data }: { id: string; title?: string; content?: string; type?: "principles" | "document" }) => {
-      const response = await apiRequest("PATCH", `/api/v1/coaching-materials/${id}`, data);
-      return response.json();
+      return await updateCoachingMaterial(id, data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY });
@@ -84,8 +82,7 @@ export function useRagStatus() {
   return useQuery<RagStatus>({
     queryKey: RAG_STATUS_KEY,
     queryFn: async () => {
-      const response = await apiRequest("GET", "/api/v1/coaching-materials/rag-status");
-      return response.json();
+      return await getRagStatus();
     },
   });
 }
@@ -95,8 +92,7 @@ export function useReEmbed() {
 
   return useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/v1/coaching-materials/re-embed");
-      return response.json();
+      return await reEmbedCoachingMaterials();
     },
     onSuccess: (data: { success: boolean; materialsProcessed: number; errors: string[] }) => {
       queryClient.invalidateQueries({ queryKey: RAG_STATUS_KEY });
@@ -121,8 +117,7 @@ export function useDeleteCoachingMaterial() {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      const response = await apiRequest("DELETE", `/api/v1/coaching-materials/${id}`);
-      return response.json();
+      return await deleteCoachingMaterial(id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY });

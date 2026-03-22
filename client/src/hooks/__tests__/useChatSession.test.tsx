@@ -14,7 +14,7 @@ const wrapper = ({ children }: { children: React.ReactNode }) => (
 );
 
 vi.mock('@/lib/queryClient', () => ({
-  apiRequest: vi.fn(),
+
   queryClient: {
     invalidateQueries: vi.fn(),
   },
@@ -96,8 +96,8 @@ describe('useChatSession', () => {
   });
 
   it('should handle chat session error recovery (stream request failed)', async () => {
-    // Mock apiRequest to simulate a stream request failure (e.g. 500 error)
-    vi.mocked(queryClient.apiRequest).mockRejectedValue(new Error('500: Internal Server Error'));
+    // Mock streamChat to simulate a stream request failure (e.g. 500 error)
+    vi.mocked(apiLib.streamChat).mockRejectedValue(new Error('500: Internal Server Error'));
 
     const { result } = renderHook(() => useChatSession({ useStreaming: true }), { wrapper });
 
@@ -116,8 +116,8 @@ describe('useChatSession', () => {
   });
 
   it('should handle chat session error recovery (fetch throws network error)', async () => {
-    // Mock apiRequest to simulate a network error
-    vi.mocked(queryClient.apiRequest).mockRejectedValue(new Error('Network Error'));
+    // Mock streamChat to simulate a network error
+    vi.mocked(apiLib.streamChat).mockRejectedValue(new Error('Network Error'));
 
     const { result } = renderHook(() => useChatSession({ useStreaming: true }), { wrapper });
 

@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
+import { importPlan, samplePlan, renamePlan, updatePlanGoal, schedulePlan } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { format, startOfWeek } from "date-fns";
 import type { CsvPreviewData } from "@/components/timeline";
@@ -20,8 +21,7 @@ export function usePlanImport({ onPlanScheduled }: UsePlanImportOptions = {}) {
 
   const importMutation = useMutation({
     mutationFn: async (data: { csvContent: string; fileName: string }) => {
-      const response = await apiRequest("POST", "/api/v1/plans/import", data);
-      return response.json();
+      return await importPlan(data);
     },
     onSuccess: (plan) => {
       queryClient.invalidateQueries({ queryKey: ["/api/v1/plans"] });
@@ -35,8 +35,7 @@ export function usePlanImport({ onPlanScheduled }: UsePlanImportOptions = {}) {
 
   const samplePlanMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/v1/plans/sample", {});
-      return response.json();
+      return await samplePlan();
     },
     onSuccess: (plan) => {
       queryClient.invalidateQueries({ queryKey: ["/api/v1/plans"] });
@@ -50,7 +49,7 @@ export function usePlanImport({ onPlanScheduled }: UsePlanImportOptions = {}) {
 
   const renamePlanMutation = useMutation({
     mutationFn: async ({ planId, name }: { planId: string; name: string }) => {
-      await apiRequest("PATCH", `/api/v1/plans/${planId}`, { name });
+      await renamePlan(planId, name);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/v1/plans"] });
@@ -64,8 +63,7 @@ export function usePlanImport({ onPlanScheduled }: UsePlanImportOptions = {}) {
 
   const updatePlanGoalMutation = useMutation({
     mutationFn: async ({ planId, goal }: { planId: string; goal: string | null }) => {
-      const response = await apiRequest("PATCH", `/api/v1/plans/${planId}/goal`, { goal });
-      return response.json();
+      return await updatePlanGoal(planId, goal);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/v1/plans"] });
@@ -78,7 +76,7 @@ export function usePlanImport({ onPlanScheduled }: UsePlanImportOptions = {}) {
 
   const schedulePlanMutation = useMutation({
     mutationFn: async ({ planId, startDate: sd }: { planId: string; startDate: string }) => {
-      await apiRequest("POST", `/api/v1/plans/${planId}/schedule`, { startDate: sd });
+      await schedulePlan(planId, sd);
     },
     onSuccess: () => {
       const planIdToSelect = schedulingPlanId;

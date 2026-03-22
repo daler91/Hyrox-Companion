@@ -1,7 +1,8 @@
 import { type ParsedExercise, type TimelineEntry, type PlanDay, type WorkoutStatus, type UpdateWorkoutLog, type User } from "@shared/schema";
 import { useState, useCallback } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
+import { createWorkout, updateWorkout, deleteWorkout, updateDayStatus, updateDayDetails, deleteDay } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 export function useWorkoutActions(selectedPlanId: string | null) {
@@ -11,8 +12,7 @@ export function useWorkoutActions(selectedPlanId: string | null) {
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ dayId, status }: { dayId: string; status: string }) => {
-      const response = await apiRequest("PATCH", `/api/v1/plans/days/${dayId}/status`, { status });
-      return response.json();
+      return await updateDayStatus(dayId, status);
     },
     onSuccess: (data, variables) => {
       if (variables.status === "completed") {
@@ -31,8 +31,7 @@ export function useWorkoutActions(selectedPlanId: string | null) {
 
   const updateDayMutation = useMutation({
     mutationFn: async ({ dayId, updates }: { dayId: string; updates: Partial<PlanDay> }) => {
-      const response = await apiRequest("PATCH", `/api/v1/plans/${selectedPlanId}/days/${dayId}`, updates);
-      return response.json();
+      return await updateDayDetails(selectedPlanId, dayId, updates);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] });
@@ -46,8 +45,7 @@ export function useWorkoutActions(selectedPlanId: string | null) {
 
   const logWorkoutMutation = useMutation({
     mutationFn: async (data: { planDayId: string; date: string; focus: string; mainWorkout: string; accessory?: string; notes?: string; rpe?: number; exercises?: ParsedExercise[] }) => {
-      const response = await apiRequest("POST", "/api/v1/workouts", data);
-      return response.json();
+      return await createWorkout(data);
     },
     onSuccess: () => {
       queryClient.setQueryData<User | null>(["/api/v1/auth/user"], (old) => {
@@ -65,8 +63,7 @@ export function useWorkoutActions(selectedPlanId: string | null) {
 
   const updateWorkoutMutation = useMutation({
     mutationFn: async ({ workoutId, updates }: { workoutId: string; updates: UpdateWorkoutLog & { exercises?: ParsedExercise[] } }) => {
-      const response = await apiRequest("PATCH", `/api/v1/workouts/${workoutId}`, updates);
-      return response.json();
+      return await updateWorkout(workoutId, updates);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] });
@@ -81,8 +78,7 @@ export function useWorkoutActions(selectedPlanId: string | null) {
 
   const deleteWorkoutMutation = useMutation({
     mutationFn: async (workoutId: string) => {
-      const response = await apiRequest("DELETE", `/api/v1/workouts/${workoutId}`);
-      return response.json();
+      return await deleteWorkout(workoutId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] });
@@ -97,8 +93,7 @@ export function useWorkoutActions(selectedPlanId: string | null) {
 
   const deletePlanDayMutation = useMutation({
     mutationFn: async (dayId: string) => {
-      const response = await apiRequest("DELETE", `/api/v1/plans/days/${dayId}`);
-      return response.json();
+      return await deleteDay(dayId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] });

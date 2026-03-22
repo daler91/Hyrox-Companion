@@ -16,7 +16,7 @@ const wrapper = ({ children }: { children: React.ReactNode }) => (
 );
 
 vi.mock('@/lib/queryClient', () => ({
-  apiRequest: vi.fn(),
+
   queryClient: {
     invalidateQueries: vi.fn(),
     setQueryData: vi.fn(),
@@ -140,7 +140,7 @@ describe('useWorkoutActions', () => {
         });
 
         await waitFor(() => {
-          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('PATCH', '/api/v1/plans/test-plan-id/days/pd-1', updates);
+          expect(apiLib.updateDayDetails).toHaveBeenCalledWith('test-plan-id', 'pd-1', updates);
           expect(result.current.detailEntry).toBeNull();
         });
       });
@@ -182,7 +182,7 @@ describe('useWorkoutActions', () => {
         });
 
         await waitFor(() => {
-          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('PATCH', '/api/v1/plans/days/pd-1/status', { status: 'skipped' });
+          expect(apiLib.updateDayStatus).toHaveBeenCalledWith('pd-1', 'skipped');
           expect(result.current.skipConfirmEntry).toBeNull();
         });
       });
@@ -198,7 +198,7 @@ describe('useWorkoutActions', () => {
         });
 
         await waitFor(() => {
-          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('PATCH', '/api/v1/plans/days/pd-1/status', { status: 'completed' });
+          expect(apiLib.updateDayStatus).toHaveBeenCalledWith('pd-1', 'completed');
         });
       });
     });
@@ -213,7 +213,7 @@ describe('useWorkoutActions', () => {
         });
 
         await waitFor(() => {
-          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('DELETE', '/api/v1/workouts/w-1');
+          expect(apiLib.deleteWorkout).toHaveBeenCalledWith('w-1');
         });
       });
 
@@ -226,7 +226,7 @@ describe('useWorkoutActions', () => {
         });
 
         await waitFor(() => {
-          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('DELETE', '/api/v1/plans/days/pd-1');
+          expect(apiLib.deleteDay).toHaveBeenCalledWith('pd-1');
         });
       });
 
@@ -239,7 +239,7 @@ describe('useWorkoutActions', () => {
         });
 
         await waitFor(() => {
-          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('DELETE', '/api/v1/plans/days/pd-1');
+          expect(apiLib.deleteDay).toHaveBeenCalledWith('pd-1');
         });
       });
     });
@@ -266,7 +266,7 @@ describe('useWorkoutActions', () => {
     ];
 
     it.each(mutationTestCases)('triggers error toast on failed %s', async (_, mockEntry, actionName, args, needsDialog, expectedTitle) => {
-      vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(new Error('API Failure'));
+      vi.mocked(apiLib.updateDayStatus).mockRejectedValueOnce(new Error('API Failure'));
       const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
 
       if (needsDialog) {
@@ -305,7 +305,7 @@ describe('useWorkoutActions', () => {
 
     it('triggers error toast on failed status update', async () => {
       // Setup mutation mock to simulate failure
-      vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(new Error('Network Error'));
+      vi.mocked(apiLib.updateWorkout).mockRejectedValueOnce(new Error('Network Error'));
 
       const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
       const mockEntry = { planDayId: 'pd-1', date: '2024-01-01', focus: 'cardio' };

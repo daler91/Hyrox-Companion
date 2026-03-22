@@ -1,11 +1,10 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { sendChatMessage, clearChatHistory } from "@/lib/api";
 
 export function useSaveMessageMutation() {
   return useMutation({
     mutationFn: async (msg: { role: string; content: string }) => {
-      const res = await apiRequest("POST", "/api/v1/chat/message", msg);
-      return res.json();
+      return await sendChatMessage(msg);
     },
   });
 }
@@ -15,8 +14,7 @@ export function useClearHistoryMutation(onSuccessCallback?: () => void) {
 
   return useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("DELETE", "/api/v1/chat/history");
-      return res.json();
+      return await clearChatHistory();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/history"] });

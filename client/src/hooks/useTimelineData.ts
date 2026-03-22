@@ -1,5 +1,6 @@
 import { useRef, useEffect, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { getTimeline } from "@/lib/api";
 import type { TrainingPlan, TimelineEntry, PersonalRecord } from "@shared/schema";
 
 export function useTimelineData(selectedPlanId: string | null) {
@@ -19,14 +20,7 @@ export function useTimelineData(selectedPlanId: string | null) {
 
   const { data: timelineData = [], isLoading: timelineLoading } = useQuery<TimelineEntry[]>({
     queryKey: ["/api/v1/timeline", selectedPlanId],
-    queryFn: async () => {
-      const url = selectedPlanId
-        ? `/api/v1/timeline?planId=${selectedPlanId}`
-        : `/api/v1/timeline`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error("Failed to fetch timeline");
-      return res.json();
-    },
+    queryFn: () => getTimeline(selectedPlanId),
   });
 
   useEffect(() => {

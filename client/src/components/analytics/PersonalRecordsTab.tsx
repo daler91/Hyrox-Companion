@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { getPersonalRecords } from "@/lib/api";
 import { Link } from "wouter";
 import { Trophy, Dumbbell, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -33,7 +34,7 @@ export function PersonalRecordsTab({ dateParams }: PersonalRecordsTabProps) {
 
   const { data: rawPRs, isLoading } = useQuery<Record<string, RawPREntry>>({
     queryKey: ["/api/v1/personal-records", dateParams],
-    queryFn: () => fetch(`/api/v1/personal-records${dateParams}`).then(r => r.json()),
+    queryFn: () => getPersonalRecords(dateParams),
   });
 
   const filteredPRs = useMemo(() => {

@@ -24,7 +24,7 @@ vi.mock('@/hooks/useVoiceInput', () => ({
 }));
 
 vi.mock('@/lib/queryClient', () => ({
-  apiRequest: vi.fn(),
+
   queryClient: {
     invalidateQueries: vi.fn(),
   },
@@ -244,7 +244,7 @@ describe('useWorkoutForm', () => {
         description: 'Please enter a workout title.',
         variant: 'destructive',
       });
-      expect(queryClientLib.apiRequest).not.toHaveBeenCalled();
+      expect(apiLib.createWorkout).not.toHaveBeenCalled();
     });
 
     it('requires freeText when useTextMode is true', () => {
@@ -264,7 +264,7 @@ describe('useWorkoutForm', () => {
         description: 'Please describe your workout.',
         variant: 'destructive',
       });
-      expect(queryClientLib.apiRequest).not.toHaveBeenCalled();
+      expect(apiLib.createWorkout).not.toHaveBeenCalled();
     });
 
     it('requires at least one exercise block when useTextMode is false', () => {
@@ -283,7 +283,7 @@ describe('useWorkoutForm', () => {
         description: 'Please add at least one exercise.',
         variant: 'destructive',
       });
-      expect(queryClientLib.apiRequest).not.toHaveBeenCalled();
+      expect(apiLib.createWorkout).not.toHaveBeenCalled();
     });
   });
 
@@ -303,7 +303,7 @@ describe('useWorkoutForm', () => {
       });
 
       await waitFor(() => {
-        expect(queryClientLib.apiRequest).toHaveBeenCalledWith('POST', '/api/v1/workouts', {
+        expect(apiLib.createWorkout).toHaveBeenCalledWith({
           title: 'My Run',
           date: '2024-05-01',
           focus: 'My Run',
@@ -350,7 +350,7 @@ describe('useWorkoutForm', () => {
         expect(workoutEditorHook.generateSummary).toHaveBeenCalledWith([mockExercise], 'kg', 'km');
         expect(workoutEditorHook.exerciseToPayload).toHaveBeenCalledWith(mockExercise, 0, [mockExercise]);
 
-        expect(queryClientLib.apiRequest).toHaveBeenCalledWith('POST', '/api/v1/workouts', {
+        expect(apiLib.createWorkout).toHaveBeenCalledWith({
           title: 'Leg Day',
           date: '2024-05-02',
           focus: 'Leg Day',
@@ -379,7 +379,7 @@ describe('useWorkoutForm', () => {
       });
 
       await waitFor(() => {
-        expect(queryClientLib.apiRequest).toHaveBeenCalledWith('POST', '/api/v1/workouts', expect.objectContaining({
+        expect(apiLib.createWorkout).toHaveBeenCalledWith(expect.objectContaining({
           notes: null, // Should be normalized to null
         }));
       });
@@ -411,7 +411,7 @@ describe('useWorkoutForm', () => {
     });
 
     it('triggers error toast on failed save', async () => {
-      vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(new Error('Network Error'));
+      vi.mocked(apiLib.createWorkout).mockRejectedValueOnce(new Error('Network Error'));
 
       const { result } = renderFormHook({ ...defaultProps, useTextMode: true });
 

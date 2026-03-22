@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { streamChat, sendChat } from "@/lib/api";
 import { useSaveMessageMutation, useClearHistoryMutation } from "./useChatMutations";
 import { getCurrentTimeString, formatTime } from "@/lib/dateUtils";
 import type { ChatMessage as DBChatMessage } from "@shared/schema";
@@ -202,7 +202,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         };
         setMessages((prev) => [...prev, placeholderMessage]);
 
-        const response = await apiRequest("POST", "/api/v1/chat/stream", {
+        const response = await streamChat({
           message: content,
           history
         });
@@ -220,11 +220,11 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
           saveMessageMutation.mutate({ role: "assistant", content: fullResponse });
         }
       } else {
-        const response = await apiRequest("POST", "/api/v1/chat", {
-          message: content, 
-          history 
+        const data = await sendChat({
+          message: content,
+          history
         });
-        const data = await response.json();
+
 
         const assistantMessage: Message = {
           id: assistantMessageId,

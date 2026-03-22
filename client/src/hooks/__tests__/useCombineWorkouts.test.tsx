@@ -4,12 +4,18 @@ import { useCombineWorkouts } from "../useCombineWorkouts";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 import * as queryClientLib from "@/lib/queryClient";
+import * as apiLib from "@/lib/api";
 import * as toastHook from "@/hooks/use-toast";
 import type { TimelineEntry } from "@shared/schema";
 
+vi.mock("@/lib/api", () => ({
+  createWorkout: vi.fn(),
+  deleteWorkout: vi.fn(),
+  updateDayStatus: vi.fn(),
+}));
 vi.mock("@/lib/queryClient", () => ({
   queryClient: { invalidateQueries: vi.fn() },
-  apiRequest: vi.fn(),
+
 }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: vi.fn() }));
 
@@ -29,7 +35,7 @@ describe("useCombineWorkouts", () => {
     queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     vi.mocked(queryClientLib.queryClient.invalidateQueries).mockClear();
     vi.mocked(toastHook.useToast).mockReturnValue({ toast: mockToast } as unknown as ReturnType<typeof toastHook.useToast>);
-    vi.mocked(queryClientLib.apiRequest).mockResolvedValue({ json: vi.fn().mockResolvedValue({ id: "new" }) } as unknown as Response);
+    vi.mocked(apiLib.createWorkout).mockResolvedValue({ id: "new" });
   });
   afterEach(() => { vi.clearAllMocks(); });
 
@@ -82,14 +88,16 @@ describe("useCombineWorkouts", () => {
     it("does nothing if combining entries are not set", () => {
       const { result } = renderHook(() => useCombineWorkouts(), { wrapper });
       act(() => { result.current.handleConfirmCombine(combinedWorkout); });
-      expect(queryClientLib.apiRequest).not.toHaveBeenCalled();
+      expect(apiLib.createWorkout).not.toHaveBeenCalled();
+      expect(apiLib.deleteWorkout).not.toHaveBeenCalled();
+      expect(apiLib.updateDayStatus).not.toHaveBeenCalled();
     });
 
     it.each([
       [true, "Workouts combined!"],
       [false, "Failed to combine workouts"]
     ])("executes mutation (success: %s)", async (isSuccess, expectedToast) => {
-      if (!isSuccess) vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(new Error("API Error"));
+      if (!isSuccess) vi.mocked(apiLib.createWorkout).mockRejectedValueOnce(new Error("API Error"));
 
       const { result } = renderHook(() => useCombineWorkouts(), { wrapper });
       act(() => {
@@ -106,9 +114,9 @@ describe("useCombineWorkouts", () => {
       });
 
       if (isSuccess) {
-        expect(queryClientLib.apiRequest).toHaveBeenCalledWith("POST", "/api/v1/workouts", combinedWorkout);
-        expect(queryClientLib.apiRequest).toHaveBeenCalledWith("DELETE", "/api/v1/workouts/log-1");
-        expect(queryClientLib.apiRequest).toHaveBeenCalledWith("PATCH", "/api/v1/plans/days/plan-1/status", { status: "skipped" });
+        expect(apiLib.createWorkout).toHaveBeenCalledWith(combinedWorkout);
+        expect(apiLib.deleteWorkout).toHaveBeenCalledWith("log-1");
+        expect(apiLib.updateDayStatus).toHaveBeenCalledWith("plan-1", "skipped");
         expect(queryClientLib.queryClient.invalidateQueries).toHaveBeenCalledTimes(2);
       }
     });

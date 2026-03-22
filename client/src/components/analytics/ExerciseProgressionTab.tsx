@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { getPersonalRecords, getExerciseAnalytics } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TrendingUp } from "lucide-react";
@@ -24,7 +25,7 @@ export function ExerciseProgressionTab({ dateParams }: ExerciseProgressionTabPro
 
   const { data: rawPRs } = useQuery<Record<string, RawPREntry>>({
     queryKey: ["/api/v1/personal-records", dateParams],
-    queryFn: () => fetch(`/api/v1/personal-records${dateParams}`).then(r => r.json()),
+    queryFn: () => getPersonalRecords(dateParams),
   });
 
   const availableExercises = useMemo(() => {
@@ -38,7 +39,7 @@ export function ExerciseProgressionTab({ dateParams }: ExerciseProgressionTabPro
 
   const { data: allAnalytics, isLoading: analyticsLoading } = useQuery<Record<string, ExerciseAnalyticDay[]>>({
     queryKey: ["/api/v1/exercise-analytics", dateParams],
-    queryFn: () => fetch(`/api/v1/exercise-analytics${dateParams}`).then(r => r.json()),
+    queryFn: () => getExerciseAnalytics(dateParams),
   });
 
   return (

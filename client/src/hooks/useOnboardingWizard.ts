@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { format, addDays } from "date-fns";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
+import { updatePreferences, samplePlan, schedulePlan } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 type Step = "welcome" | "units" | "goal" | "plan" | "schedule";
@@ -28,7 +29,7 @@ export function useOnboardingWizard(onComplete: (choice: "sample" | "import" | "
 
   const prefsMutation = useMutation({
     mutationFn: async (prefs: { weightUnit: string; distanceUnit: string }) =>
-      (await apiRequest("PATCH", "/api/v1/preferences", prefs)).json(),
+      updatePreferences(prefs),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/v1/preferences"] });
       queryClient.invalidateQueries({ queryKey: ["/api/v1/auth/user"] });
@@ -37,7 +38,7 @@ export function useOnboardingWizard(onComplete: (choice: "sample" | "import" | "
 
   const sampleMutation = useMutation({
     mutationFn: async () =>
-      (await apiRequest("POST", "/api/v1/plans/sample", {})).json(),
+      samplePlan(),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/v1/plans"] });
       setCreatedPlanId(data.id);
@@ -49,11 +50,7 @@ export function useOnboardingWizard(onComplete: (choice: "sample" | "import" | "
 
   const scheduleMutation = useMutation({
     mutationFn: async ({ planId, date }: { planId: string; date: string }) =>
-      (
-        await apiRequest("POST", `/api/v1/plans/${planId}/schedule`, {
-          startDate: date,
-        })
-      ).json(),
+      schedulePlan(planId, date),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/v1/plans"] });
       queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] });

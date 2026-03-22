@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
+import { createWorkout, deleteWorkout, updateDayStatus } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import type { TimelineEntry } from "@shared/schema";
 
@@ -12,16 +13,15 @@ export function useCombineWorkouts() {
 
   const combineWorkoutsMutation = useMutation({
     mutationFn: async ({ newWorkout, entriesToDelete }: { newWorkout: { date: string; focus: string; mainWorkout: string; duration?: number; calories?: number; notes?: string }; entriesToDelete: TimelineEntry[] }): Promise<any> => {
-      const response = await apiRequest("POST", "/api/v1/workouts", newWorkout);
-      const created = await response.json();
+      const created = await createWorkout(newWorkout);
 
       const deletePromises = [];
       for (const entry of entriesToDelete) {
         if (entry.workoutLogId) {
-          deletePromises.push(apiRequest("DELETE", `/api/v1/workouts/${entry.workoutLogId}`));
+          deletePromises.push(deleteWorkout(entry.workoutLogId));
         }
         if (entry.planDayId) {
-          deletePromises.push(apiRequest("PATCH", `/api/v1/plans/days/${entry.planDayId}/status`, { status: "skipped" }));
+          deletePromises.push(updateDayStatus(entry.planDayId, "skipped"));
         }
       }
       await Promise.all(deletePromises);

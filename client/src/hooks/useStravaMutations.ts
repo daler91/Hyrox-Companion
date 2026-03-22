@@ -1,14 +1,14 @@
 import { useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
+import { connectStrava, disconnectStrava, syncStrava } from "@/lib/api";
 
 export function useStravaMutations() {
   const { toast } = useToast();
 
   const connectStravaMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("GET", "/api/v1/strava/auth");
-      return response.json();
+      return await connectStrava();
     },
     onSuccess: (data: { authUrl: string }) => {
       globalThis.location.href = data.authUrl;
@@ -24,7 +24,7 @@ export function useStravaMutations() {
 
   const disconnectStravaMutation = useMutation({
     mutationFn: async () => {
-      await apiRequest("DELETE", "/api/v1/strava/disconnect");
+      await disconnectStrava();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/v1/strava/status"] });
@@ -44,8 +44,7 @@ export function useStravaMutations() {
 
   const syncStravaMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/v1/strava/sync");
-      return response.json();
+      return await syncStrava();
     },
     onSuccess: (data: { imported: number; skipped: number; total: number }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/v1/strava/status"] });
