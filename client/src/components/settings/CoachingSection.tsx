@@ -1,275 +1,25 @@
-import { useState, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
-import { BookOpen, Plus, Upload, Trash2, Loader2, FileText, RefreshCw, CheckCircle2, AlertCircle, XCircle } from "lucide-react";
-import {
-  useCoachingMaterials,
-  useCreateCoachingMaterial,
-  useDeleteCoachingMaterial,
-  useRagStatus,
-  useReEmbed,
-} from "@/hooks/useCoachingMaterials";
-import { useToast } from "@/hooks/use-toast";
-import * as pdfjsLib from "pdfjs-dist";
-import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import mammoth from "mammoth";
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
-
-/** Strip null bytes and non-printable control characters that PostgreSQL text columns reject. */
-function sanitizeText(text: string): string {
-  return text.replaceAll(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "");
-}
-
-async function extractPdfText(file: File): Promise<string> {
-  const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-  const pages: string[] = [];
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const textContent = await page.getTextContent();
-    pages.push(textContent.items.map((item) => ("str" in item ? item.str : "")).join(" "));
-  }
-  return sanitizeText(pages.join("\n\n"));
-}
-
-async function extractDocxText(file: File): Promise<string> {
-  const arrayBuffer = await file.arrayBuffer();
-  const result = await mammoth.extractRawText({ arrayBuffer });
-  return sanitizeText(result.value);
-}
-
-async function extractFileText(file: File): Promise<string> {
-  const ext = file.name.split(".").pop()?.toLowerCase();
-  if (ext === "pdf") return extractPdfText(file);
-  if (ext === "docx") return extractDocxText(file);
-  return sanitizeText(await file.text());
-}
-
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
-
-function RagStatusContent({ ragLoading, ragStatus, reEmbedMutation }: Readonly<{
-  ragLoading: boolean;
-  ragStatus: import("@/hooks/useCoachingMaterials").RagStatus | undefined;
-  reEmbedMutation: { mutate: () => void; isPending: boolean };
-}>) {
-  if (ragLoading) {
-    return (
-      <div className="flex items-center justify-center py-2">
-        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
-  if (!ragStatus) return null;
-
-  return (
-    <>
-      {!ragStatus.hasApiKey && (
-        <div className="flex items-center gap-2 p-2 rounded-md bg-destructive/10 text-destructive text-sm">
-          <XCircle className="h-4 w-4 shrink-0" />
-          GEMINI_API_KEY is not configured. Embeddings cannot be generated.
-        </div>
-      )}
-
-      {ragStatus.embeddingApi && !ragStatus.embeddingApi.ok && ragStatus.hasApiKey && (
-        <div className="flex items-start gap-2 p-2 rounded-md bg-destructive/10 text-destructive text-sm">
-          <XCircle className="h-4 w-4 shrink-0 mt-0.5" />
-          <div>
-            <p className="font-medium">Embedding API error</p>
-            <p className="text-xs mt-0.5 break-all">{ragStatus.embeddingApi.error}</p>
-          </div>
-        </div>
-      )}
-
-      {ragStatus.dimensionMismatch && (
-        <div className="flex items-start gap-2 p-2 rounded-md bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 text-sm">
-          <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-          <div>
-            <p className="font-medium">Embedding dimension mismatch</p>
-            <p className="text-xs mt-0.5">
-              Stored: {ragStatus.storedDimension}-dim, expected: {ragStatus.expectedDimension}-dim.
-              Click Re-embed All to fix.
-            </p>
-          </div>
-        </div>
-      )}
-
-      <div className="grid grid-cols-3 gap-3 text-center">
-        <div className="p-2 rounded-md bg-muted">
-          <p className="text-lg font-semibold">{ragStatus.totalMaterials}</p>
-          <p className="text-xs text-muted-foreground">Materials</p>
-        </div>
-        <div className="p-2 rounded-md bg-muted">
-          <p className="text-lg font-semibold">{ragStatus.totalChunks}</p>
-          <p className="text-xs text-muted-foreground">Chunks</p>
-        </div>
-        <div className="p-2 rounded-md bg-muted">
-          <p className="text-lg font-semibold">
-            {ragStatus.materials.filter((m) => m.hasEmbeddings).length}/{ragStatus.totalMaterials}
-          </p>
-          <p className="text-xs text-muted-foreground">Embedded</p>
-        </div>
-      </div>
-
-      {ragStatus.embeddingApi?.ok && (
-        <div className="flex items-center gap-2 p-2 rounded-md bg-green-500/10 text-green-700 dark:text-green-400 text-sm">
-          <CheckCircle2 className="h-4 w-4 shrink-0" />
-          Embedding API working ({ragStatus.embeddingApi.dimension}-dim)
-        </div>
-      )}
-
-      <div className="space-y-1.5">
-        {ragStatus.materials.map((m) => (
-          <div key={m.id} className="flex items-center justify-between text-sm px-2 py-1.5 rounded border">
-            <span className="truncate mr-2">{m.title}</span>
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="text-xs text-muted-foreground">
-                {m.chunkCount} chunks
-              </span>
-              {m.hasEmbeddings ? (
-                <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
-              ) : (
-                <XCircle className="h-3.5 w-3.5 text-red-500" />
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => reEmbedMutation.mutate()}
-        disabled={reEmbedMutation.isPending}
-      >
-        {reEmbedMutation.isPending ? (
-          <Loader2 className="h-4 w-4 animate-spin mr-1" />
-        ) : (
-          <RefreshCw className="h-4 w-4 mr-1" />
-        )}
-        Re-embed All
-      </Button>
-    </>
-  );
-}
+import { BookOpen } from "lucide-react";
+import { useCoachingUpload } from "./coaching/useCoachingUpload";
+import { CoachingMaterialList } from "./coaching/CoachingMaterialList";
+import { RagStatusCard } from "./coaching/RagStatusCard";
+import { CoachingUploadDialog } from "./coaching/CoachingUploadDialog";
 
 export function CoachingSection() {
-  const { toast } = useToast();
-  const { data: materials, isLoading } = useCoachingMaterials();
-  const createMutation = useCreateCoachingMaterial();
-  const deleteMutation = useDeleteCoachingMaterial();
-  const { data: ragStatus, isLoading: ragLoading } = useRagStatus();
-  const reEmbedMutation = useReEmbed();
-
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogType, setDialogType] = useState<"principles" | "document">("principles");
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const openPrinciplesDialog = () => {
-    setDialogType("principles");
-    setTitle("");
-    setContent("");
-    setDialogOpen(true);
-  };
-
-  const processSingleFile = async (file: File) => {
-    if (file.size > MAX_FILE_SIZE) {
-      toast({ title: "File too large", description: "Maximum file size is 10MB.", variant: "destructive" });
-      return;
-    }
-    try {
-      const text = await extractFileText(file);
-      setDialogType("document");
-      setTitle(file.name.replace(/\.[^/.]+$/, ""));
-      setContent(text.slice(0, 1500000));
-      setDialogOpen(true);
-    } catch {
-      toast({ title: "Failed to read file", variant: "destructive" });
-    }
-  };
-
-  const processBatchFiles = async (files: File[]) => {
-    const tooLarge: string[] = [];
-    const failed: string[] = [];
-    let uploaded = 0;
-
-    for (const file of files) {
-      if (file.size > MAX_FILE_SIZE) {
-        tooLarge.push(file.name);
-        continue;
-      }
-      try {
-        const text = await extractFileText(file);
-        await createMutation.mutateAsync({
-          title: file.name.replace(/\.[^/.]+$/, ""),
-          content: text.slice(0, 1500000),
-          type: "document",
-        });
-        uploaded++;
-      } catch {
-        failed.push(file.name);
-      }
-    }
-
-    if (uploaded > 0) {
-      toast({ title: `Uploaded ${uploaded} document${uploaded > 1 ? "s" : ""}` });
-    }
-    if (tooLarge.length > 0) {
-      toast({
-        title: "Files too large",
-        description: `Skipped (>10MB): ${tooLarge.join(", ")}`,
-        variant: "destructive",
-      });
-    }
-    if (failed.length > 0) {
-      toast({
-        title: "Upload failed",
-        description: `Failed to read: ${failed.join(", ")}`,
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    if (files.length === 1) {
-      await processSingleFile(files[0]);
-    } else {
-      await processBatchFiles(Array.from(files));
-    }
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-  };
-
-  const handleSave = () => {
-    if (!title.trim() || !content.trim()) return;
-    createMutation.mutate(
-      { title: title.trim(), content: content.trim(), type: dialogType },
-      { onSuccess: () => setDialogOpen(false) },
-    );
-  };
-
-  const handleDelete = (id: string) => {
-    deleteMutation.mutate(id);
-  };
+  const {
+    dialogOpen,
+    setDialogOpen,
+    dialogType,
+    title,
+    setTitle,
+    content,
+    setContent,
+    fileInputRef,
+    openPrinciplesDialog,
+    handleFileUpload,
+    handleSave,
+    isSaving,
+  } = useCoachingUpload();
 
   return (
     <>
@@ -284,155 +34,27 @@ export function CoachingSection() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-4">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-            </div>
-          ) : (
-            <>
-              {materials && materials.length > 0 ? (
-                <div className="space-y-2">
-                  {materials.map((material) => (
-                    <div
-                      key={material.id}
-                      className="flex items-center justify-between p-3 rounded-lg border bg-card"
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium truncate">{material.title}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {material.type === "principles" ? "Principles" : "Document"} &middot; {Math.round(material.content.length / 1000)}k chars
-                          </p>
-                        </div>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDelete(material.id)}
-                        disabled={deleteMutation.isPending}
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  No coaching materials added yet. Add training principles or upload reference documents to help the AI coach make better decisions.
-                </p>
-              )}
-
-              <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" onClick={openPrinciplesDialog}>
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add Principles
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
-                  <Upload className="h-4 w-4 mr-1" />
-                  Upload Document
-                </Button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".txt,.md,.csv,.pdf,.docx"
-                  multiple
-                  className="hidden"
-                  onChange={handleFileUpload}
-                />
-              </div>
-            </>
-          )}
+          <CoachingMaterialList
+            openPrinciplesDialog={openPrinciplesDialog}
+            fileInputRef={fileInputRef}
+            handleFileUpload={handleFileUpload}
+          />
         </CardContent>
       </Card>
 
-      {materials && materials.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              RAG Status
-              {ragStatus && (
-                ragStatus.allEmbedded ? (
-                  <Badge variant="outline" className="text-green-600 border-green-600">
-                    <CheckCircle2 className="h-3 w-3 mr-1" />
-                    Active
-                  </Badge>
-                ) : (
-                  <Badge variant="outline" className="text-yellow-600 border-yellow-600">
-                    <AlertCircle className="h-3 w-3 mr-1" />
-                    Incomplete
-                  </Badge>
-                )
-              )}
-            </CardTitle>
-            <CardDescription>
-              Embedding status for AI-powered document retrieval
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <RagStatusContent ragLoading={ragLoading} ragStatus={ragStatus} reEmbedMutation={reEmbedMutation} />
-          </CardContent>
-        </Card>
-      )}
+      <RagStatusCard />
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>
-              {dialogType === "principles" ? "Add Training Principles" : "Upload Document"}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="material-title">Title</Label>
-              <Input
-                id="material-title"
-                value={title}
-                onChange={(e) => setTitle(e.target.value.slice(0, 255))}
-                placeholder="e.g., Periodization Guidelines"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="material-content">
-                {dialogType === "principles" ? "Training Principles" : "Document Content"}
-              </Label>
-              <Textarea
-                id="material-content"
-                value={content}
-                onChange={(e) => setContent(e.target.value.slice(0, 1500000))}
-                placeholder={
-                  dialogType === "principles"
-                    ? "Paste your training principles, programming rules, or key excerpts here..."
-                    : "Document content will appear here after upload..."
-                }
-                className="min-h-[200px]"
-                rows={10}
-              />
-              <p className="text-xs text-muted-foreground text-right">
-                {content.length.toLocaleString()}/1,500,000
-              </p>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSave}
-              disabled={!title.trim() || !content.trim() || createMutation.isPending}
-            >
-              {createMutation.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  Saving...
-                </>
-              ) : (
-                "Save"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <CoachingUploadDialog
+        dialogOpen={dialogOpen}
+        setDialogOpen={setDialogOpen}
+        dialogType={dialogType}
+        title={title}
+        setTitle={setTitle}
+        content={content}
+        setContent={setContent}
+        handleSave={handleSave}
+        isSaving={isSaving}
+      />
     </>
   );
 }
