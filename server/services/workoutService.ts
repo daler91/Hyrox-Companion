@@ -1,4 +1,4 @@
-import { workoutLogs, exerciseSets, planDays, trainingPlans, customExercises, type ParsedExercise, type InsertWorkoutLog, type UpdateWorkoutLog, type InsertExerciseSet, type WorkoutLog, type ExerciseSet } from "@shared/schema";
+import { workoutLogs, exerciseSets, planDays, trainingPlans, customExercises, type ParsedExercise, type InsertWorkoutLog, type UpdateWorkoutLog, type InsertExerciseSet, type WorkoutLog, type ExerciseSet, exercisesPayloadSchema } from "@shared/schema";
 import { storage } from "../storage";
 import { db } from "../db";
 import { eq, and } from "drizzle-orm";
@@ -197,4 +197,76 @@ export async function updateWorkout(
   const log = await storage.updateWorkoutLog(workoutId, updateData, userId);
   if (!log) return null;
   return log;
+}
+
+export async function processBatchChunk(
+  chunk: { id: string; mainWorkout?: string | null; accessory?: string | null }[],
+  weightUnit: string
+): Promise<{ parsed: number; failed: number }> {
+  let parsed = 0;
+  let failed = 0;
+
+  // Parse workouts concurrently in chunks to optimize AI service usage
+  const chunkResults = await Promise.allSettled(
+    chunk.map(workout => prepareParsedWorkout(workout, weightUnit))
+  );
+
+  // Save each successfully parsed workout sequentially to prevent DB connection strain
+  for (let j = 0; j < chunkResults.length; j++) {
+    const result = chunkResults[j];
+    const workout = chunk[j];
+
+    if (result.status === 'rejected') {
+      const { logger } = await import("../logger");
+      logger.error({ err: result.reason }, `Batch reparse failed for workout ${workout.id}:`);
+      failed++;
+      continue;
+    }
+
+    if (!result.value) {
+      failed++;
+      continue;
+    }
+
+    try {
+      await saveParsedWorkout(workout.id, result.value.setRows);
+      parsed++;
+    } catch (dbError) {
+      const { logger } = await import("../logger");
+      logger.error({ err: dbError }, `Failed to save re-parsed workout ${workout.id}:`);
+      failed++;
+    }
+  }
+
+  return { parsed, failed };
+}
+
+export async function batchReparseWorkouts(userId: string): Promise<{ total: number; parsed: number; failed: number }> {
+  const workouts = await storage.getWorkoutsWithoutExerciseSets(userId);
+  const user = await storage.getUser(userId);
+  const weightUnit = user?.weightUnit || "kg";
+
+  let totalParsed = 0;
+  let totalFailed = 0;
+
+  // Process workouts concurrently in chunks to improve performance
+  // while preventing overload of the Gemini AI service and database
+  const CONCURRENCY_LIMIT = 5;
+  for (let i = 0; i < workouts.length; i += CONCURRENCY_LIMIT) {
+    const chunk = workouts.slice(i, i + CONCURRENCY_LIMIT);
+    const { parsed, failed } = await processBatchChunk(chunk, weightUnit);
+    totalParsed += parsed;
+    totalFailed += failed;
+  }
+
+  return { total: workouts.length, parsed: totalParsed, failed: totalFailed };
+}
+
+export function validateExercisesPayload(exercises: unknown) {
+  if (!exercises) return { success: true, data: exercises };
+  const parseResult = exercisesPayloadSchema.safeParse(exercises);
+  if (!parseResult.success) {
+    return { success: false, error: parseResult.error };
+  }
+  return { success: true, data: parseResult.data };
 }

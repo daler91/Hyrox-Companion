@@ -28,7 +28,7 @@ router.get('/api/v1/preferences', isAuthenticated, async (req: ExpressRequest, r
   }
 });
 
-router.patch('/api/v1/preferences', isAuthenticated, rateLimiter("preferences", 20), async (req: ExpressRequest<{}, any, UpdateUserPreferences>, res: Response) => {
+router.patch('/api/v1/preferences', isAuthenticated, rateLimiter("preferences", 20), async (req: ExpressRequest<Record<string, never>, any, UpdateUserPreferences>, res: Response) => {
   try {
     const userId = getUserId(req);
     const parseResult = updateUserPreferencesSchema.safeParse(req.body);
