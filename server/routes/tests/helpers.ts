@@ -9,13 +9,16 @@ import {
   workoutLogs,
   exerciseSets
 } from "@shared/schema";
-import { beforeAll, afterAll, beforeEach } from "vitest";
+import { beforeAll, afterAll, beforeEach, vi } from "vitest";
+import { queue } from "../../queue";
 
 // Common test user ID matching DEV_USER_ID if ALLOW_DEV_AUTH_BYPASS is true
 export const testUserId = "dev-user";
 
 // Create a test app instance
 export async function createTestApp() {
+  queue.send = vi.fn().mockResolvedValue(null);
+  queue.work = vi.fn().mockResolvedValue(null);
   const app = express();
   app.use(express.json());
   app.use(express.urlencoded({ extended: false }));

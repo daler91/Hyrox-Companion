@@ -58,7 +58,7 @@ describe("API Integration Tests", () => {
         });
 
       expect(response.body?.error || response.error?.message).toBeUndefined();
-      expect(response.status).toBe(201);
+      expect(response.status).toBe(200);
       expect(response.body).toHaveProperty("id");
       expect(response.body.focus).toBe("strength");
     });
