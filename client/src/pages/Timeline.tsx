@@ -124,8 +124,10 @@ export default function Timeline() {
   });
 
   const handleScrollToToday = useCallback(() => {
-    const todayIndex = allVisibleGroups.findIndex(([date]) => date === format(new Date(), "yyyy-MM-dd"));
-    if (todayIndex !== -1) {
+    const todayStr = format(new Date(), "yyyy-MM-dd");
+    const todayIndex = allVisibleGroups.findIndex(([dateGroupStr]) => dateGroupStr === todayStr);
+
+    if (todayIndex >= 0) {
       rowVirtualizer.scrollToIndex(todayIndex, { align: 'start', behavior: 'smooth' });
     } else {
       scrollToToday();
