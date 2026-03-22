@@ -10,6 +10,19 @@ import { storage } from "../storage";
 // and should be triggered explicitly (e.g., via RUN_AI_EVAL=true).
 const runEval = process.env.RUN_AI_EVAL === "true";
 
+function calculateCosineSimilarity(embedding1: number[], embedding2: number[]): number {
+  let dotProduct = 0;
+  let norm1 = 0;
+  let norm2 = 0;
+  for (let i = 0; i < embedding1.length; i++) {
+    dotProduct += embedding1[i] * embedding2[i];
+    norm1 += embedding1[i] * embedding1[i];
+    norm2 += embedding2[i] * embedding2[i];
+  }
+  return dotProduct / (Math.sqrt(norm1) * Math.sqrt(norm2));
+}
+
+
 describe.runIf(runEval)("AI Services Evaluation Harness", () => {
   beforeAll(() => {
     if (!env.GEMINI_API_KEY) {
@@ -102,16 +115,7 @@ describe.runIf(runEval)("AI Services Evaluation Harness", () => {
       const embedding1 = await generateEmbedding("Hyrox wall balls technique and standards");
       const embedding2 = await generateEmbedding("How to perform wall balls efficiently in a race");
 
-      // Calculate cosine similarity
-      let dotProduct = 0;
-      let norm1 = 0;
-      let norm2 = 0;
-      for (let i = 0; i < embedding1.length; i++) {
-        dotProduct += embedding1[i] * embedding2[i];
-        norm1 += embedding1[i] * embedding1[i];
-        norm2 += embedding2[i] * embedding2[i];
-      }
-      const similarity = dotProduct / (Math.sqrt(norm1) * Math.sqrt(norm2));
+      const similarity = calculateCosineSimilarity(embedding1, embedding2);
 
       // These should be highly semantically similar (e.g., > 0.7)
       // If a new model version drops this significantly, it's a regression
@@ -122,16 +126,7 @@ describe.runIf(runEval)("AI Services Evaluation Harness", () => {
       const embedding1 = await generateEmbedding("Hyrox wall balls technique");
       const embedding2 = await generateEmbedding("How to bake a chocolate cake");
 
-      // Calculate cosine similarity
-      let dotProduct = 0;
-      let norm1 = 0;
-      let norm2 = 0;
-      for (let i = 0; i < embedding1.length; i++) {
-        dotProduct += embedding1[i] * embedding2[i];
-        norm1 += embedding1[i] * embedding1[i];
-        norm2 += embedding2[i] * embedding2[i];
-      }
-      const similarity = dotProduct / (Math.sqrt(norm1) * Math.sqrt(norm2));
+      const similarity = calculateCosineSimilarity(embedding1, embedding2);
 
       // These should have low semantic similarity
       expect(similarity).toBeLessThan(0.4);
