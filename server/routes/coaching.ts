@@ -5,9 +5,8 @@ import { rateLimiter } from "../routeUtils";
 import { getUserId } from "../types";
 import { insertCoachingMaterialSchema } from "@shared/schema";
 import { logger } from "../logger";
-import { embedCoachingMaterial } from "../services/ragService";
+import { getRagStatus, reembedAllMaterials } from "../services/ragService";
 import { queue } from "../queue";
-import { generateEmbedding, EMBEDDING_DIMENSIONS } from "../gemini/client";
 import { z } from "zod";
 
 const router = Router();
@@ -75,50 +74,8 @@ router.patch("/api/v1/coaching-materials/:id", isAuthenticated, rateLimiter("coa
 router.get("/api/v1/coaching-materials/rag-status", isAuthenticated, async (req: ExpressRequest, res: Response) => {
   try {
     const userId = getUserId(req);
-    const materials = await storage.listCoachingMaterials(userId);
-    const chunkCounts = await storage.getChunkCountsByMaterial(userId);
-    const chunkMap = new Map(chunkCounts.map((c) => [c.materialId, c]));
-
-    const hasApiKey = Boolean(process.env.GEMINI_API_KEY);
-    const storedDimension = await storage.getStoredEmbeddingDimension(userId);
-
-    const materialStatus = materials.map((m) => {
-      const chunks = chunkMap.get(m.id);
-      return {
-        id: m.id,
-        title: m.title,
-        type: m.type,
-        contentLength: m.content.length,
-        chunkCount: chunks?.chunkCount ?? 0,
-        hasEmbeddings: chunks?.hasEmbeddings ?? false,
-      };
-    });
-
-    const totalChunks = chunkCounts.reduce((sum, c) => sum + c.chunkCount, 0);
-    const allEmbedded = materials.length > 0 && materials.every((m) => chunkMap.get(m.id)?.hasEmbeddings);
-
-    // Test embedding API with a short probe if we have an API key
-    let embeddingApiStatus: { ok: boolean; dimension?: number; error?: string } = { ok: false };
-    if (hasApiKey) {
-      try {
-        const probe = await generateEmbedding("test");
-        embeddingApiStatus = { ok: true, dimension: probe.length };
-      } catch (err) {
-        embeddingApiStatus = { ok: false, error: err instanceof Error ? err.message : String(err) };
-      }
-    }
-
-    res.json({
-      hasApiKey,
-      totalMaterials: materials.length,
-      totalChunks,
-      allEmbedded,
-      materials: materialStatus,
-      storedDimension,
-      expectedDimension: EMBEDDING_DIMENSIONS,
-      dimensionMismatch: storedDimension !== null && storedDimension !== EMBEDDING_DIMENSIONS,
-      embeddingApi: embeddingApiStatus,
-    });
+    const result = await getRagStatus(userId);
+    res.json(result);
   } catch (error) {
     (req.log || logger).error({ err: error }, "Error fetching RAG status:");
     res.status(500).json({ error: "Failed to fetch RAG status" });
@@ -128,18 +85,8 @@ router.get("/api/v1/coaching-materials/rag-status", isAuthenticated, async (req:
 router.post("/api/v1/coaching-materials/re-embed", isAuthenticated, rateLimiter("coaching", 5), async (req: ExpressRequest, res: Response) => {
   try {
     const userId = getUserId(req);
-    const materials = await storage.listCoachingMaterials(userId);
-    const errors: string[] = [];
-    let count = 0;
-    for (const material of materials) {
-      try {
-        await embedCoachingMaterial(material);
-        count++;
-      } catch (err) {
-        errors.push(`${material.id}: ${err instanceof Error ? err.message : String(err)}`);
-      }
-    }
-    res.json({ success: true, materialsProcessed: count, errors });
+    const result = await reembedAllMaterials(userId);
+    res.json(result);
   } catch (error) {
     (req.log || logger).error({ err: error }, "Error re-embedding coaching materials:");
     res.status(500).json({ error: "Failed to re-embed coaching materials", details: error instanceof Error ? error.message : String(error) });

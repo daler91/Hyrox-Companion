@@ -3,18 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Zap, Loader2, Check, XIcon } from "lucide-react";
 import { RagDebugBadge } from "@/components/RagDebugBadge";
-import type { RagInfo } from "@/hooks/useChatSession";
-
-export interface Suggestion {
-  workoutId: string;
-  date: string;
-  focus: string;
-  targetField: "mainWorkout" | "accessory" | "notes";
-  action: "replace" | "append";
-  recommendation: string;
-  rationale: string;
-  priority: "high" | "medium" | "low";
-}
+import type { RagInfo, Suggestion } from "@/lib/api";
 
 interface SuggestionCardProps {
   readonly suggestion: Suggestion;

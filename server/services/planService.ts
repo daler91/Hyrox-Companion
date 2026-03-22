@@ -1,3 +1,4 @@
+import { queue } from "../queue";
 import { logger } from "../logger";
 import { storage } from "../storage";
 import { db } from "../db";
@@ -171,4 +172,28 @@ export async function updatePlanDayWithCleanup(
   }
 
   return await storage.updatePlanDay(dayId, updates, userId);
+}
+
+
+
+export async function updatePlanDayStatus(
+  dayId: string,
+  { status, scheduledDate }: { status?: "planned" | "completed" | "skipped" | "missed"; scheduledDate?: string | null },
+  userId: string
+) {
+  const updates: Record<string, string | null> = {};
+  if (status) updates.status = status;
+  if (scheduledDate !== undefined) updates.scheduledDate = scheduledDate ?? null;
+
+  if (status && status !== "completed") {
+    await storage.deleteWorkoutLogByPlanDayId(dayId, userId);
+  }
+
+  const updatedDay = await storage.updatePlanDay(dayId, updates, userId);
+
+  if (updatedDay && status === "completed") {
+    await queue.send("auto-coach", { userId });
+  }
+
+  return updatedDay;
 }

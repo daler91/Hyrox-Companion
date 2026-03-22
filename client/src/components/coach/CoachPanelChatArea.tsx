@@ -2,8 +2,8 @@ import { forwardRef } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChatMessage } from "@/components/ChatMessage";
 import { SuggestionsList } from "@/components/coach/SuggestionsTab";
-import type { Message, RagInfo } from "@/hooks/useChatSession";
-import type { Suggestion } from "@/components/coach/SuggestionCard";
+import type { Message } from "@/hooks/useChatSession";
+import type { Suggestion, RagInfo } from "@/lib/api";
 
 interface CoachPanelChatAreaProps {
   readonly messages: Message[];
@@ -30,7 +30,7 @@ export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaP
   ) => {
     return (
       <ScrollArea className="flex-1 p-3" ref={ref}>
-        <div className="space-y-3">
+        <div className="space-y-3" role="log" aria-live="polite" aria-label="Coach conversation">
           {messages.map((message) => (
             <ChatMessage
               key={message.id}
@@ -48,8 +48,8 @@ export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaP
             onDismiss={onDismissSuggestion}
           />
           {isProcessing && (
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <div className="flex gap-1">
+            <div className="flex items-center gap-2 text-muted-foreground" aria-live="polite">
+              <div className="flex gap-1" aria-hidden="true">
                 <span
                   className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce"
                   style={{ animationDelay: "0ms" }}

@@ -11,6 +11,8 @@ function isDev(): boolean {
 }
 
 function isDevBypassEnabled(): boolean {
+  // 🛡️ Sentinel: Double guard to prevent bypass in production
+  if (env.NODE_ENV === "production") return false;
   return isDev() && env.ALLOW_DEV_AUTH_BYPASS === "true";
 }
 

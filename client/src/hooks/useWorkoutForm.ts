@@ -4,7 +4,8 @@ import { useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
+import { api, QUERY_KEYS } from "@/lib/api";
 import { generateSummary, exerciseToPayload } from "@/hooks/useWorkoutEditor";
 import type { StructuredExercise } from "@/components/ExerciseInput";
 import { getMissingFieldWarnings } from "@/lib/exerciseWarnings";
@@ -67,13 +68,11 @@ export function useWorkoutForm({
   });
 
   const saveMutation = useMutation({
-    mutationFn: async (workoutData: Omit<InsertWorkoutLog, "userId"> & { title?: string, exercises?: ParsedExercise[] }) => {
-      const response = await apiRequest("POST", "/api/v1/workouts", workoutData);
-      return response.json();
-    },
+    mutationFn: (workoutData: Omit<InsertWorkoutLog, "userId"> & { title?: string, exercises?: ParsedExercise[] }) =>
+      api.workouts.create(workoutData),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/workouts"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workouts });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
       toast({
         title: "Workout logged",
         description: "Your workout has been saved successfully.",

@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
+import { api, QUERY_KEYS } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { format, startOfWeek } from "date-fns";
 import type { CsvPreviewData } from "@/components/timeline";
@@ -19,12 +20,10 @@ export function usePlanImport({ onPlanScheduled }: UsePlanImportOptions = {}) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const importMutation = useMutation({
-    mutationFn: async (data: { csvContent: string; fileName: string }) => {
-      const response = await apiRequest("POST", "/api/v1/plans/import", data);
-      return response.json();
-    },
+    mutationFn: (data: { csvContent: string; fileName: string }) =>
+      api.plans.import(data),
     onSuccess: (plan) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/plans"] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans });
       setSchedulingPlanId(plan.id);
       toast({ title: "Plan imported! Now set a start date." });
     },
@@ -34,12 +33,9 @@ export function usePlanImport({ onPlanScheduled }: UsePlanImportOptions = {}) {
   });
 
   const samplePlanMutation = useMutation({
-    mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/v1/plans/sample", {});
-      return response.json();
-    },
+    mutationFn: () => api.plans.createSample(),
     onSuccess: (plan) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/plans"] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans });
       setSchedulingPlanId(plan.id);
       toast({ title: "Sample plan created! Now set a start date." });
     },
@@ -49,12 +45,11 @@ export function usePlanImport({ onPlanScheduled }: UsePlanImportOptions = {}) {
   });
 
   const renamePlanMutation = useMutation({
-    mutationFn: async ({ planId, name }: { planId: string; name: string }) => {
-      await apiRequest("PATCH", `/api/v1/plans/${planId}`, { name });
-    },
+    mutationFn: ({ planId, name }: { planId: string; name: string }) =>
+      api.plans.rename(planId, name),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/plans"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
       toast({ title: "Plan renamed" });
     },
     onError: () => {
@@ -63,12 +58,10 @@ export function usePlanImport({ onPlanScheduled }: UsePlanImportOptions = {}) {
   });
 
   const updatePlanGoalMutation = useMutation({
-    mutationFn: async ({ planId, goal }: { planId: string; goal: string | null }) => {
-      const response = await apiRequest("PATCH", `/api/v1/plans/${planId}/goal`, { goal });
-      return response.json();
-    },
+    mutationFn: ({ planId, goal }: { planId: string; goal: string | null }) =>
+      api.plans.updateGoal(planId, goal),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/plans"] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans });
       toast({ title: "Goal saved" });
     },
     onError: () => {
@@ -77,13 +70,12 @@ export function usePlanImport({ onPlanScheduled }: UsePlanImportOptions = {}) {
   });
 
   const schedulePlanMutation = useMutation({
-    mutationFn: async ({ planId, startDate: sd }: { planId: string; startDate: string }) => {
-      await apiRequest("POST", `/api/v1/plans/${planId}/schedule`, { startDate: sd });
-    },
+    mutationFn: ({ planId, startDate: sd }: { planId: string; startDate: string }) =>
+      api.plans.schedule(planId, sd),
     onSuccess: () => {
       const planIdToSelect = schedulingPlanId;
       queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline", planIdToSelect] });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/plans"] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans });
       if (planIdToSelect) {
         onPlanScheduled?.(planIdToSelect);
       }

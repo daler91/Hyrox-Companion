@@ -5,9 +5,8 @@ import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
 import { updatePlanDaySchema, importPlanRequestSchema, schedulePlanRequestSchema, updateTrainingPlanGoalSchema, workoutStatusEnum, dateStringSchema, type UpdatePlanDay, type PlanDay, type UpdateTrainingPlanGoal } from "@shared/schema";
 import { getUserId } from "../types";
-import { importPlanFromCSV, createSamplePlan, updatePlanDayWithCleanup } from "../services/planService";
+import { importPlanFromCSV, createSamplePlan, updatePlanDayWithCleanup, updatePlanDayStatus } from "../services/planService";
 import { rateLimiter } from "../routeUtils";
-import { queue } from "../queue";
 
 const router = Router();
 
@@ -194,25 +193,12 @@ router.patch("/api/v1/plans/days/:dayId/status", isAuthenticated, rateLimiter("p
     }
     const { status, scheduledDate } = parseResult.data;
 
-    const updates: Record<string, string | null> = {};
-    if (status) updates.status = status;
-    if (scheduledDate !== undefined) updates.scheduledDate = scheduledDate ?? null;
-
-    if (status && status !== "completed") {
-      await storage.deleteWorkoutLogByPlanDayId(dayId, userId);
-    }
-
-    const updatedDay = await storage.updatePlanDay(dayId, updates, userId);
+    const updatedDay = await updatePlanDayStatus(dayId, { status, scheduledDate }, userId);
     if (!updatedDay) {
       return res.status(404).json({ error: "Day not found" });
     }
 
     res.json(updatedDay);
-
-    // Queue job: auto-coach adjusts upcoming plan days after a session is completed
-    if (status === "completed") {
-      await queue.send("auto-coach", { userId });
-    }
   } catch (error) {
     (req.log || logger).error({ err: error }, "Update day status error:");
     res.status(500).json({ error: "Failed to update day status" });

@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Loader2, Download, FileSpreadsheet, FileJson, Sparkles } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
+import { api, QUERY_KEYS } from "@/lib/api";
 
 export function DataToolsSection() {
   const { toast } = useToast();
@@ -33,14 +34,11 @@ export function DataToolsSection() {
   });
 
   const batchReparseMutation = useMutation({
-    mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/v1/workouts/batch-reparse");
-      return response.json();
-    },
-    onSuccess: (data: { total: number; parsed: number; failed: number }) => {
+    mutationFn: () => api.workouts.batchReparse(),
+    onSuccess: (data) => {
       setParseResults({ success: data.parsed, failed: data.failed });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/workouts"] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workouts });
       toast({
         title: "Parsing Complete",
         description: `Parsed ${data.parsed} workouts successfully. ${data.failed} could not be parsed.`,

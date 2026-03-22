@@ -18,6 +18,16 @@ import { getAuth } from "@clerk/express";
 import { runStartupMaintenance } from "./maintenance";
 import { startQueue, queue } from "./queue";
 
+// 🛡️ Sentinel: Dev Auth Bypass double-guard
+if (env.ALLOW_DEV_AUTH_BYPASS === "true") {
+  if (env.NODE_ENV === "production") {
+    logger.fatal("🚨 FATAL: ALLOW_DEV_AUTH_BYPASS is set to true in production. This is a catastrophic security risk. Shutting down.");
+    process.exit(1);
+  } else {
+    logger.warn("⚠️ WARNING: Dev auth bypass is ENABLED. All requests will run as dev-user. Do not use this outside of local development.");
+  }
+}
+
 if (env.SENTRY_DSN) {
   Sentry.init({
     dsn: env.SENTRY_DSN,

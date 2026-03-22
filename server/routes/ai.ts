@@ -13,7 +13,7 @@ import { z } from "zod";
 
 const router = Router();
 
-router.post("/api/v1/parse-exercises", isAuthenticated, rateLimiter("parse", 5), async (req: ExpressRequest<{}, any, z.infer<typeof parseExercisesRequestSchema>>, res: Response) => {
+router.post("/api/v1/parse-exercises", isAuthenticated, rateLimiter("parse", 5), async (req: ExpressRequest<Record<string, never>, any, z.infer<typeof parseExercisesRequestSchema>>, res: Response) => {
   try {
     const parseResult = parseExercisesRequestSchema.safeParse(req.body);
     if (!parseResult.success) {
@@ -113,7 +113,7 @@ async function prepareChatContext(req: ExpressRequest): Promise<{ success: false
   };
 }
 
-router.post("/api/v1/chat", isAuthenticated, rateLimiter("chat", 10), async (req: ExpressRequest<{}, any, z.infer<typeof chatRequestSchema>>, res: Response) => {
+router.post("/api/v1/chat", isAuthenticated, rateLimiter("chat", 10), async (req: ExpressRequest<Record<string, never>, any, z.infer<typeof chatRequestSchema>>, res: Response) => {
   try {
     const context = await prepareChatContext(req);
     if (!context.success) {
@@ -129,7 +129,7 @@ router.post("/api/v1/chat", isAuthenticated, rateLimiter("chat", 10), async (req
   }
 });
 
-router.post("/api/v1/chat/stream", isAuthenticated, rateLimiter("chat", 10), async (req: ExpressRequest<{}, any, z.infer<typeof chatRequestSchema>>, res: Response) => {
+router.post("/api/v1/chat/stream", isAuthenticated, rateLimiter("chat", 10), async (req: ExpressRequest<Record<string, never>, any, z.infer<typeof chatRequestSchema>>, res: Response) => {
   try {
     const context = await prepareChatContext(req);
     if (!context.success) {
@@ -176,7 +176,7 @@ router.get("/api/v1/chat/history", isAuthenticated, async (req: ExpressRequest, 
   }
 });
 
-router.post("/api/v1/chat/message", isAuthenticated, rateLimiter("chatMessage", 20), async (req: ExpressRequest<{}, any, InsertChatMessage>, res: Response) => {
+router.post("/api/v1/chat/message", isAuthenticated, rateLimiter("chatMessage", 20), async (req: ExpressRequest<Record<string, never>, any, InsertChatMessage>, res: Response) => {
   try {
     const parseResult = insertChatMessageSchema.safeParse(req.body);
     if (!parseResult.success) {

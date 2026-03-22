@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { api, QUERY_KEYS, type RagInfo } from "@/lib/api";
 import { useSaveMessageMutation, useClearHistoryMutation } from "./useChatMutations";
 import { getCurrentTimeString, formatTime } from "@/lib/dateUtils";
 import type { ChatMessage as DBChatMessage } from "@shared/schema";
 
+export type { RagInfo } from "@/lib/api";
 
 function processStreamLines(
   lines: string[],
@@ -81,13 +82,6 @@ async function handleStreamResponse(
   return fullResponse;
 }
 
-export interface RagInfo {
-  source: "rag" | "legacy" | "none";
-  chunkCount: number;
-  chunks?: string[];
-  materialCount?: number;
-}
-
 export interface Message {
   id: string;
   role: "user" | "assistant";
@@ -105,7 +99,7 @@ const DEFAULT_WELCOME = "Hey! I'm your AI training coach. Ask me about pacing, t
 const MAX_HISTORY_MESSAGES = 20;
 
 export function useChatSession(options: UseChatSessionOptions = {}) {
-  const { 
+  const {
     welcomeMessage = DEFAULT_WELCOME,
     useStreaming = true,
   } = options;
@@ -131,7 +125,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   }, [messages]);
 
   const { data: chatHistory = [], isLoading: historyLoading } = useQuery<DBChatMessage[]>({
-    queryKey: ["/api/v1/chat/history"],
+    queryKey: QUERY_KEYS.chatHistory,
   });
 
   useEffect(() => {
@@ -140,7 +134,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         id: msg.id,
         role: msg.role as "user" | "assistant",
         content: msg.content,
-        timestamp: msg.timestamp 
+        timestamp: msg.timestamp
           ? formatTime(new Date(msg.timestamp))
           : "",
       }));
@@ -202,7 +196,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         };
         setMessages((prev) => [...prev, placeholderMessage]);
 
-        const response = await apiRequest("POST", "/api/v1/chat/stream", {
+        const response = await api.chat.sendStream({
           message: content,
           history
         });
@@ -220,11 +214,10 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
           saveMessageMutation.mutate({ role: "assistant", content: fullResponse });
         }
       } else {
-        const response = await apiRequest("POST", "/api/v1/chat", {
-          message: content, 
-          history 
+        const data = await api.chat.send({
+          message: content,
+          history
         });
-        const data = await response.json();
 
         const assistantMessage: Message = {
           id: assistantMessageId,

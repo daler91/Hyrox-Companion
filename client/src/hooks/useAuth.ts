@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { useUser, useAuth as useClerkAuth } from "@clerk/clerk-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { User } from "@shared/schema";
+import { QUERY_KEYS } from "@/lib/api";
 
 const isCypressTest = globalThis.window !== undefined && "Cypress" in globalThis.window;
 const isDevPreview = import.meta.env.DEV && globalThis.window !== undefined && (!import.meta.env.VITE_CLERK_PUBLISHABLE_KEY || globalThis.window.self !== globalThis.window.top);
@@ -16,7 +17,7 @@ function useAutoCoachWatcher(user?: User) {
       const isCoaching = !!user.isAutoCoaching;
       // If transitioned from true to false, invalidate timeline
       if (wasCoachingRef.current && !isCoaching) {
-        queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] });
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
       }
       wasCoachingRef.current = isCoaching;
     }
@@ -28,7 +29,7 @@ function useClerkAuthImpl() {
   const { user: clerkUser } = useUser();
 
   const { data: dbUser, isLoading: isDbLoading } = useQuery<User>({
-    queryKey: ["/api/v1/auth/user"],
+    queryKey: QUERY_KEYS.authUser,
     enabled: !!isSignedIn,
     retry: false,
     refetchInterval: (query) => query.state.data?.isAutoCoaching ? 2000 : false,
@@ -51,7 +52,7 @@ function useClerkAuthImpl() {
 
 function useTestAuthImpl() {
   const { data: dbUser, isLoading } = useQuery<User>({
-    queryKey: ["/api/v1/auth/user"],
+    queryKey: QUERY_KEYS.authUser,
     retry: false,
     refetchInterval: (query) => query.state.data?.isAutoCoaching ? 2000 : false,
   });

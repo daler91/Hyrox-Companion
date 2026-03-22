@@ -20,6 +20,9 @@ const envSchema = z.object({
   LOG_LEVEL: z.string().default("info"),
   RAG_CHUNK_SIZE: z.coerce.number().default(600),
   RAG_CHUNK_OVERLAP: z.coerce.number().default(100),
+}).refine((data) => !(data.NODE_ENV === "production" && data.ALLOW_DEV_AUTH_BYPASS === "true"), {
+  message: "❌ FATAL: ALLOW_DEV_AUTH_BYPASS cannot be enabled in production environment",
+  path: ["ALLOW_DEV_AUTH_BYPASS"],
 });
 
 const parsed = envSchema.safeParse(process.env);

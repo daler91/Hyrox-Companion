@@ -1,16 +1,14 @@
 import { useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
+import { api, QUERY_KEYS } from "@/lib/api";
 
 export function useStravaMutations() {
   const { toast } = useToast();
 
   const connectStravaMutation = useMutation({
-    mutationFn: async () => {
-      const response = await apiRequest("GET", "/api/v1/strava/auth");
-      return response.json();
-    },
-    onSuccess: (data: { authUrl: string }) => {
+    mutationFn: () => api.strava.auth(),
+    onSuccess: (data) => {
       globalThis.location.href = data.authUrl;
     },
     onError: () => {
@@ -23,11 +21,9 @@ export function useStravaMutations() {
   });
 
   const disconnectStravaMutation = useMutation({
-    mutationFn: async () => {
-      await apiRequest("DELETE", "/api/v1/strava/disconnect");
-    },
+    mutationFn: () => api.strava.disconnect(),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/strava/status"] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.stravaStatus });
       toast({
         title: "Strava Disconnected",
         description: "Your Strava account has been disconnected.",
@@ -43,14 +39,11 @@ export function useStravaMutations() {
   });
 
   const syncStravaMutation = useMutation({
-    mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/v1/strava/sync");
-      return response.json();
-    },
-    onSuccess: (data: { imported: number; skipped: number; total: number }) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/strava/status"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/workouts"] });
+    mutationFn: () => api.strava.sync(),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.stravaStatus });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workouts });
       toast({
         title: "Sync Complete",
         description: `Imported ${data.imported} new activities. ${data.skipped} already existed.`,

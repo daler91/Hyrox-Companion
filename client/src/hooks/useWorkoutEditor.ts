@@ -5,7 +5,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useSensor, useSensors, PointerSensor, KeyboardSensor, type DragEndEvent } from "@dnd-kit/core";
 import { sortableKeyboardCoordinates, arrayMove } from "@dnd-kit/sortable";
 import { type StructuredExercise, createDefaultSet } from "@/components/ExerciseInput";
-import { apiRequest } from "@/lib/queryClient";
+import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 
@@ -123,8 +123,7 @@ function getParseSuccessDescription(parsed: ParsedExercise[]): string {
 }
 
 export async function parseWorkoutText(text: string): Promise<ParsedExercise[]> {
-  const response = await apiRequest("POST", "/api/v1/parse-exercises", { text });
-  return response.json();
+  return api.exercises.parse(text);
 }
 
 
