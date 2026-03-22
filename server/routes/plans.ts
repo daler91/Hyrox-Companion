@@ -1,4 +1,3 @@
-import { logger } from "../logger";
 import { z } from "zod";
 import { Router, type Response, type Request as ExpressRequest } from "express";
 import { isAuthenticated } from "../clerkAuth";
