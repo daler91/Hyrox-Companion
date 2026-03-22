@@ -12,7 +12,7 @@ import {
 import { beforeAll, afterAll, beforeEach } from "vitest";
 
 // Common test user ID matching DEV_USER_ID if ALLOW_DEV_AUTH_BYPASS is true
-export const testUserId = "user_12345_dev";
+export const testUserId = "dev-user";
 
 // Create a test app instance
 export async function createTestApp() {
