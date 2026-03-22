@@ -1,3 +1,4 @@
+import { logger } from "./logger";
 import { toDateStr } from "./types";
 import rateLimit, { MemoryStore } from "express-rate-limit";
 import type { Request, Response, NextFunction } from "express";
@@ -98,7 +99,8 @@ export function calculateStreak(completedDates: Set<string>): number {
 
 export const asyncHandler = (fn: (req: any, res: Response, next: NextFunction) => Promise<any>) => (req: Request, res: Response, next: NextFunction) => {
   return Promise.resolve(fn(req, res, next)).catch((err) => {
+    const log = (req as any).log || logger;
+    log.error({ err }, `Route error in ${req.method} ${req.originalUrl}`);
     next(err);
-
   });
 };
