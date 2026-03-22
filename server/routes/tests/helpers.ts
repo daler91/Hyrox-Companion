@@ -9,6 +9,10 @@ import {
   workoutLogs,
   exerciseSets
 } from "@shared/schema";
+import { beforeAll, afterAll, beforeEach } from "vitest";
+
+// Common test user ID matching DEV_USER_ID if ALLOW_DEV_AUTH_BYPASS is true
+export const testUserId = "user_12345_dev";
 
 // Create a test app instance
 export async function createTestApp() {
@@ -37,4 +41,45 @@ export async function clearDatabase() {
 // Close DB connection after tests
 export async function closeDatabase() {
   await pool.end();
+}
+
+/**
+ * Standard integration test setup hook.
+ * Wires up Vitest lifecycle methods (beforeAll, afterAll, beforeEach) to
+ * initialize the express app, clear the database, and insert a mock user.
+ * Returns an object with the express app reference.
+ */
+export function setupIntegrationTest() {
+  const context = {
+    app: null as any,
+    server: null as any,
+  };
+
+  beforeAll(async () => {
+    const setup = await createTestApp();
+    context.app = setup.app;
+    context.server = setup.httpServer;
+  });
+
+  afterAll(async () => {
+    await closeDatabase();
+    if (context.server) {
+      context.server.close();
+    }
+  });
+
+  beforeEach(async () => {
+    await clearDatabase();
+
+    // Ensure test user exists in the db to avoid foreign key errors
+    await db.insert(users).values({
+      id: testUserId,
+      email: "test@example.com",
+      username: "testuser",
+      weightUnit: "kg",
+      distanceUnit: "km",
+    });
+  });
+
+  return context;
 }
