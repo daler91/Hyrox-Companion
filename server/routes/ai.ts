@@ -132,16 +132,26 @@ router.post("/api/v1/chat/stream", isAuthenticated, rateLimiter("chat", 10), asy
     res.flushHeaders();
 
     // Emit RAG diagnostics before streaming text
-    res.write(`data: ${JSON.stringify({ ragInfo })}\n\n`);
+    try {
+      // Emit RAG diagnostics before streaming text
+      res.write(`data: ${JSON.stringify({ ragInfo })}\n\n`);
 
-    const stream = streamChatWithCoach(message, history, trainingContext, coachingMaterials, retrievedChunks);
+      const stream = streamChatWithCoach(message, history, trainingContext, coachingMaterials, retrievedChunks);
 
-    for await (const chunk of stream) {
-      res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+      for await (const chunk of stream) {
+        res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+      }
+
+      res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+      res.end();
+    } catch (streamError) {
+      const log = (req as any).log || import("../logger").then(m => m.logger);
+      if (log.error) {
+        log.error({ err: streamError }, "Stream error:");
+      }
+      res.write(`data: ${JSON.stringify({ error: "Stream error" })}\n\n`);
+      res.end();
     }
-
-    res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
-    res.end();
   }));
 
 router.get("/api/v1/chat/history", isAuthenticated, asyncHandler(async (req: ExpressRequest, res: Response) => {
