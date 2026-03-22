@@ -6,7 +6,7 @@ import { storage } from "../storage";
 import { updatePlanDaySchema, importPlanRequestSchema, schedulePlanRequestSchema, updateTrainingPlanGoalSchema, workoutStatusEnum, dateStringSchema, type UpdatePlanDay, type PlanDay, type UpdateTrainingPlanGoal } from "@shared/schema";
 import { getUserId } from "../types";
 import { importPlanFromCSV, createSamplePlan, updatePlanDayWithCleanup, updatePlanDayStatus } from "../services/planService";
-import { rateLimiter } from "../routeUtils";
+import { rateLimiter, asyncHandler } from "../routeUtils";
 
 const router = Router();
 
@@ -56,23 +56,17 @@ async function handleGetOrDeletePlan<P extends Record<string, string>>(
   }
 }
 
-router.get("/api/v1/plans", isAuthenticated, async (req: ExpressRequest, res: Response) => {
-  try {
+router.get("/api/v1/plans", isAuthenticated, asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const plans = await storage.listTrainingPlans(userId);
     res.json(plans);
-  } catch (error) {
-    (req.log || logger).error({ err: error }, "List plans error:");
-    res.status(500).json({ error: "Failed to list training plans" });
-  }
-});
+  }));
 
 router.get("/api/v1/plans/:id", isAuthenticated, async (req: ExpressRequest<{ id: string }>, res: Response) => {
   return handleGetOrDeletePlan(req, res, storage.getTrainingPlan.bind(storage), undefined, "Get");
 });
 
-router.post("/api/v1/plans/import", isAuthenticated, rateLimiter("planImport", 5), async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof importPlanRequestSchema>>, res: Response) => {
-  try {
+router.post("/api/v1/plans/import", isAuthenticated, rateLimiter("planImport", 5), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof importPlanRequestSchema>>, res: Response) => {
     const parseResult = importPlanRequestSchema.safeParse(req.body);
     if (!parseResult.success) {
       return res.status(400).json({ error: "CSV content is required" });
@@ -82,25 +76,13 @@ router.post("/api/v1/plans/import", isAuthenticated, rateLimiter("planImport", 5
     const userId = getUserId(req);
     const fullPlan = await importPlanFromCSV(csvContent, userId, { fileName, planName });
     res.json(fullPlan);
-  } catch (error: unknown) {
-    if (error instanceof Error && (error.message === "No valid rows found in CSV" || error.message === "No valid week numbers found in CSV")) {
-      return res.status(400).json({ error: error.message });
-    }
-    (req.log || logger).error({ err: error }, "Import plan error:");
-    res.status(500).json({ error: "Failed to import training plan" });
-  }
-});
+  }));
 
-router.post("/api/v1/plans/sample", isAuthenticated, rateLimiter("planSample", 5), async (req: ExpressRequest, res: Response) => {
-  try {
+router.post("/api/v1/plans/sample", isAuthenticated, rateLimiter("planSample", 5), asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const fullPlan = await createSamplePlan(userId);
     res.json(fullPlan);
-  } catch (error) {
-    (req.log || logger).error({ err: error }, "Create sample plan error:");
-    res.status(500).json({ error: "Failed to create sample plan" });
-  }
-});
+  }));
 
 router.patch("/api/v1/plans/:planId/days/:dayId", isAuthenticated, rateLimiter("planDayUpdate", 20), async (req: ExpressRequest<{ planId: string; dayId: string }, unknown, UpdatePlanDay>, res: Response) => {
   return handlePlanDayUpdate(req, res, (dayId, data, userId) => storage.updatePlanDay(dayId, data, userId));
@@ -114,8 +96,7 @@ const renameTrainingPlanSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(255, "Name must be 255 characters or less"),
 });
 
-router.patch("/api/v1/plans/:id", isAuthenticated, rateLimiter("planUpdate", 20), async (req: ExpressRequest<{ id: string }, unknown, { name: string }>, res: Response) => {
-  try {
+router.patch("/api/v1/plans/:id", isAuthenticated, rateLimiter("planUpdate", 20), asyncHandler(async (req: ExpressRequest<{ id: string }, unknown, { name: string }>, res: Response) => {
     const userId = getUserId(req);
     const parseResult = renameTrainingPlanSchema.safeParse(req.body);
     if (!parseResult.success) {
@@ -126,14 +107,9 @@ router.patch("/api/v1/plans/:id", isAuthenticated, rateLimiter("planUpdate", 20)
       return res.status(404).json({ error: "Training plan not found" });
     }
     res.json(updated);
-  } catch (error) {
-    (req.log || logger).error({ err: error }, "Rename plan error:");
-    res.status(500).json({ error: "Failed to rename training plan" });
-  }
-});
+  }));
 
-router.patch("/api/v1/plans/:id/goal", isAuthenticated, rateLimiter("planUpdate", 20), async (req: ExpressRequest<{ id: string }, unknown, UpdateTrainingPlanGoal>, res: Response) => {
-  try {
+router.patch("/api/v1/plans/:id/goal", isAuthenticated, rateLimiter("planUpdate", 20), asyncHandler(async (req: ExpressRequest<{ id: string }, unknown, UpdateTrainingPlanGoal>, res: Response) => {
     const userId = getUserId(req);
     const parseResult = updateTrainingPlanGoalSchema.safeParse(req.body);
     if (!parseResult.success) {
@@ -144,18 +120,13 @@ router.patch("/api/v1/plans/:id/goal", isAuthenticated, rateLimiter("planUpdate"
       return res.status(404).json({ error: "Training plan not found" });
     }
     res.json(updated);
-  } catch (error) {
-    (req.log || logger).error({ err: error }, "Update plan goal error:");
-    res.status(500).json({ error: "Failed to update plan goal" });
-  }
-});
+  }));
 
 router.delete("/api/v1/plans/:id", isAuthenticated, rateLimiter("planDelete", 10), async (req: ExpressRequest<{ id: string }>, res: Response) => {
   return handleGetOrDeletePlan(req, res, async (id, userId) => { await storage.deleteTrainingPlan(id, userId); return { success: true }; }, "true", "Delete");
 });
 
-router.post("/api/v1/plans/:planId/schedule", isAuthenticated, rateLimiter("planSchedule", 10), async (req: ExpressRequest<{ planId: string }, unknown, z.infer<typeof schedulePlanRequestSchema>>, res: Response) => {
-  try {
+router.post("/api/v1/plans/:planId/schedule", isAuthenticated, rateLimiter("planSchedule", 10), asyncHandler(async (req: ExpressRequest<{ planId: string }, unknown, z.infer<typeof schedulePlanRequestSchema>>, res: Response) => {
     const parseResult = schedulePlanRequestSchema.safeParse(req.body);
     if (!parseResult.success) {
       return res.status(400).json({ error: "Invalid start date format. Must be YYYY-MM-DD" });
@@ -171,19 +142,14 @@ router.post("/api/v1/plans/:planId/schedule", isAuthenticated, rateLimiter("plan
     }
 
     res.json({ success: true });
-  } catch (error) {
-    (req.log || logger).error({ err: error }, "Schedule plan error:");
-    res.status(500).json({ error: "Failed to schedule training plan" });
-  }
-});
+  }));
 
 const patchDayStatusSchema = z.object({
   status: z.enum(workoutStatusEnum).optional(),
   scheduledDate: dateStringSchema.nullable().optional(),
 });
 
-router.patch("/api/v1/plans/days/:dayId/status", isAuthenticated, rateLimiter("planDayStatus", 20), async (req: ExpressRequest<{ dayId: string }, unknown, { status?: "planned" | "completed" | "skipped"; scheduledDate?: string | null }>, res: Response) => {
-  try {
+router.patch("/api/v1/plans/days/:dayId/status", isAuthenticated, rateLimiter("planDayStatus", 20), asyncHandler(async (req: ExpressRequest<{ dayId: string }, unknown, { status?: "planned" | "completed" | "skipped"; scheduledDate?: string | null }>, res: Response) => {
     const { dayId } = req.params;
     const userId = getUserId(req);
 
@@ -199,14 +165,9 @@ router.patch("/api/v1/plans/days/:dayId/status", isAuthenticated, rateLimiter("p
     }
 
     res.json(updatedDay);
-  } catch (error) {
-    (req.log || logger).error({ err: error }, "Update day status error:");
-    res.status(500).json({ error: "Failed to update day status" });
-  }
-});
+  }));
 
-router.delete("/api/v1/plans/days/:dayId", isAuthenticated, rateLimiter("planDayDelete", 10), async (req: ExpressRequest<{ dayId: string }>, res: Response) => {
-  try {
+router.delete("/api/v1/plans/days/:dayId", isAuthenticated, rateLimiter("planDayDelete", 10), asyncHandler(async (req: ExpressRequest<{ dayId: string }>, res: Response) => {
     const { dayId } = req.params;
     const userId = getUserId(req);
     const deleted = await storage.deletePlanDay(dayId, userId);
@@ -214,10 +175,6 @@ router.delete("/api/v1/plans/days/:dayId", isAuthenticated, rateLimiter("planDay
       return res.status(404).json({ error: "Plan day not found" });
     }
     res.json({ success: true });
-  } catch (error) {
-    (req.log || logger).error({ err: error }, "Delete plan day error:");
-    res.status(500).json({ error: "Failed to delete plan day" });
-  }
-});
+  }));
 
 export default router;

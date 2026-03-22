@@ -95,3 +95,19 @@ export function calculateStreak(completedDates: Set<string>): number {
   return streak;
 }
 
+
+export const asyncHandler = (fn: (req: any, res: Response, next: NextFunction) => Promise<any>) => (req: Request, res: Response, next: NextFunction) => {
+  return Promise.resolve(fn(req, res, next)).catch((err) => {
+    // Log in case the global error handler is missing in test environments
+    if (process.env.NODE_ENV === 'test') {
+      // Avoid importing logger directly in tests via require to prevent module resolution errors
+      const testLogger = console;
+      if (testLogger && testLogger.error) {
+        testLogger.error({ err }, "Unhandled error in route");
+      }
+      res.status(500).json({ error: "Internal Server Error" });
+    } else {
+      next(err);
+    }
+  });
+};

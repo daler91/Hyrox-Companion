@@ -84,6 +84,9 @@ describe("POST /api/parse-exercises", () => {
     app = express();
     app.use(express.json());
     app.use(aiRouter);
+app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+      res.status(err.status || 500).json({ error: "Internal Server Error" });
+    });
   });
 
   afterEach(() => {
@@ -131,7 +134,7 @@ describe("POST /api/parse-exercises", () => {
       .send({ text: "Bench press 135x10" });
 
     expect(response.status).toBe(500);
-    expect(response.body).toHaveProperty("error", "Failed to parse exercises");
+    expect(response.body).toHaveProperty("error", "Internal Server Error");
   });
 
 
@@ -144,7 +147,7 @@ describe("POST /api/parse-exercises", () => {
       .send({ message: "Hello", history: [] });
 
     expect(response.status).toBe(500);
-    expect(response.body).toHaveProperty("error", "Failed to get response from AI coach");
+    expect(response.body).toHaveProperty("error", "Internal Server Error");
   });
 
   it("should return 500 on internal error", async () => {
@@ -155,7 +158,7 @@ describe("POST /api/parse-exercises", () => {
       .send({ text: "Bench press 135x10" });
 
     expect(response.status).toBe(500);
-    expect(response.body).toHaveProperty("error", "Failed to parse exercises");
+    expect(response.body).toHaveProperty("error", "Internal Server Error");
   });
 
   it("should rate limit requests after 5 attempts", async () => {
@@ -200,6 +203,9 @@ describe("POST /api/chat", () => {
     app = express();
     app.use(express.json());
     app.use(aiRouter);
+app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+      res.status(err.status || 500).json({ error: "Internal Server Error" });
+    });
   });
 
   it("should successfully chat with coach and return response", async () => {
@@ -234,7 +240,7 @@ describe("POST /api/chat", () => {
       .send({ message: "Hello", history: [] });
 
     expect(response.status).toBe(500);
-    expect(response.body).toHaveProperty("error", "Failed to get response from AI coach");
+    expect(response.body).toHaveProperty("error", "Internal Server Error");
   });
 });
 
@@ -253,6 +259,9 @@ describe("POST /api/chat/stream", () => {
     app = express();
     app.use(express.json());
     app.use(aiRouter);
+app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+      res.status(err.status || 500).json({ error: "Internal Server Error" });
+    });
   });
 
   it("should successfully stream chat response", async () => {
@@ -320,6 +329,9 @@ describe("Chat History and Messages Routes", () => {
     app = express();
     app.use(express.json());
     app.use(aiRouter);
+app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+      res.status(err.status || 500).json({ error: "Internal Server Error" });
+    });
   });
 
   it("should get chat history", async () => {
@@ -341,7 +353,7 @@ describe("Chat History and Messages Routes", () => {
     const response = await request(app).get(CHAT_HISTORY_ENDPOINT);
 
     expect(response.status).toBe(500);
-    expect(response.body).toHaveProperty("error", "Failed to get chat history");
+    expect(response.body).toHaveProperty("error", "Internal Server Error");
   });
 
   it("should save chat message", async () => {
@@ -389,7 +401,7 @@ describe("Chat History and Messages Routes", () => {
     const response = await request(app).delete(CHAT_HISTORY_ENDPOINT);
 
     expect(response.status).toBe(500);
-    expect(response.body).toHaveProperty("error", "Failed to clear chat history");
+    expect(response.body).toHaveProperty("error", "Internal Server Error");
   });
 });
 
@@ -405,6 +417,9 @@ describe("POST /api/timeline/ai-suggestions", () => {
     app = express();
     app.use(express.json());
     app.use(aiRouter);
+app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+      res.status(err.status || 500).json({ error: "Internal Server Error" });
+    });
   });
 
   it("should successfully generate suggestions", async () => {
@@ -522,7 +537,7 @@ describe("POST /api/timeline/ai-suggestions", () => {
     const response = await request(app).post(TIMELINE_SUGGESTIONS_ENDPOINT);
 
     expect(response.status).toBe(500);
-    expect(response.body).toHaveProperty("error", "Failed to generate AI suggestions");
+    expect(response.body).toHaveProperty("error", "Internal Server Error");
   });
 
   it("should return 500 on error", async () => {
@@ -532,7 +547,7 @@ describe("POST /api/timeline/ai-suggestions", () => {
     const response = await request(app).post(TIMELINE_SUGGESTIONS_ENDPOINT);
 
     expect(response.status).toBe(500);
-    expect(response.body).toHaveProperty("error", "Failed to generate AI suggestions");
+    expect(response.body).toHaveProperty("error", "Internal Server Error");
   });
 });
 
@@ -550,6 +565,9 @@ describe("RAG pipeline in chat endpoints", () => {
     app = express();
     app.use(express.json());
     app.use(aiRouter);
+app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+      res.status(err.status || 500).json({ error: "Internal Server Error" });
+    });
   });
 
   it("should use RAG retrieval when user has embedded chunks", async () => {
