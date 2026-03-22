@@ -32,8 +32,19 @@ export function useTimelineFilters(timelineData: TimelineEntry[]) {
     });
 
     const today = format(new Date(), "yyyy-MM-dd");
-    const past = allGroups.filter(([date]) => date < today);
-    const future = allGroups.filter(([date]) => date >= today).reverse();
+
+    // ⚡ Bolt Performance Optimization:
+    // Instead of using `.filter()` twice on the entire `allGroups` array (O(N) * 2),
+    // we take advantage of the fact that the array is already sorted by date descending.
+    // We can just find the split point and slice the array directly.
+    // This halves the number of iterations and reduces array allocations.
+    let splitIndex = allGroups.findIndex(([date]) => date < today);
+    if (splitIndex === -1) {
+      splitIndex = allGroups.length;
+    }
+
+    const future = allGroups.slice(0, splitIndex).reverse();
+    const past = allGroups.slice(splitIndex);
 
     const visPast = showAllPast ? past : past.slice(0, 7);
     const visFuture = showAllFuture ? future : future.slice(0, 7);
