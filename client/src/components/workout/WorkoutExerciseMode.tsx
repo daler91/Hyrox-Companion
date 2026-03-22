@@ -2,21 +2,24 @@ import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ExerciseSelector } from "@/components/ExerciseSelector";
 import { SortableExerciseBlock } from "@/components/workout/SortableExerciseBlock";
-import { DndContext, closestCenter } from "@dnd-kit/core";
+import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
+import type { SensorDescriptor, SensorOptions } from "@dnd-kit/core";
 import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
+import type { StructuredExercise } from "@/components/ExerciseInput";
+import type { ExerciseName } from "@shared/schema";
 
 interface WorkoutExerciseModeProps {
   exerciseBlocks: string[];
-  exerciseData: Record<string, any>;
-  getSelectedExerciseNames: () => any[];
-  addExercise: (exercise: any) => void;
-  updateBlock: (blockId: string, exData: any) => void;
+  exerciseData: Record<string, StructuredExercise>;
+  getSelectedExerciseNames: () => ExerciseName[];
+  addExercise: (exercise: ExerciseName) => void;
+  updateBlock: (blockId: string, exData: StructuredExercise) => void;
   removeBlock: (blockId: string) => void;
-  sensors: any;
-  handleDragEnd: (event: any) => void;
+  sensors: SensorDescriptor<SensorOptions>[];
+  handleDragEnd: (event: DragEndEvent) => void;
   blockCounts: Record<string, number>;
   blockIndices: Record<string, number>;
   getBlockExerciseName: (blockId: string) => string | undefined;

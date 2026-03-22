@@ -13,8 +13,11 @@ export function DataToolsSection() {
   const [parseResults, setParseResults] = useState<{ success: number; failed: number } | null>(null);
 
   const findUnstructuredMutation = useMutation({
-    mutationFn: () => api.workouts.getUnstructured(),
-    onSuccess: (data) => {
+    mutationFn: async () => {
+      const response = await apiRequest("GET", "/api/v1/workouts/unstructured");
+      return response.json();
+    },
+    onSuccess: (data: Array<{ id: string }>) => {
       setUnstructuredCount(data.length);
       toast({
         title: "Search Complete",

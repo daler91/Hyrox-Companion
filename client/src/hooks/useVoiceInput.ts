@@ -44,8 +44,8 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
 
   useEffect(() => {
     const SpeechRecognition =
-      (globalThis as any).SpeechRecognition ||
-      (globalThis as any).webkitSpeechRecognition;
+      window.SpeechRecognition ||
+      window.webkitSpeechRecognition;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsSupported(!!SpeechRecognition);
   }, []);
@@ -97,8 +97,8 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
 
   const startRecognition = useCallback(() => {
     const SpeechRecognition =
-      (globalThis as any).SpeechRecognition ||
-      (globalThis as any).webkitSpeechRecognition;
+      window.SpeechRecognition ||
+      window.webkitSpeechRecognition;
     if (!SpeechRecognition) return;
 
     if (recognitionRef.current) {
@@ -193,8 +193,8 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
 
   const startListening = useCallback(async () => {
     const SpeechRecognition =
-      (globalThis as any).SpeechRecognition ||
-      (globalThis as any).webkitSpeechRecognition;
+      window.SpeechRecognition ||
+      window.webkitSpeechRecognition;
     if (!SpeechRecognition) return;
 
     stoppedByUserRef.current = false;

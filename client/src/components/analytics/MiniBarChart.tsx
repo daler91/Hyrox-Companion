@@ -33,13 +33,13 @@ const getFillColor = (colorStr: string) => {
   return "#64748b"; // muted fallback
 };
 
-const CustomTooltip = ({ active, payload, chartLabel }: any) => {
+const CustomTooltip = ({ active, payload, chartLabel }: { active?: boolean; payload?: Array<{ value: number; payload?: ExerciseAnalyticDay }>; chartLabel?: string }) => {
   if (!active || !payload?.length) return null;
 
   return (
     <div className="bg-popover text-popover-foreground border px-3 py-2 rounded shadow-md text-sm">
       <p className="font-semibold mb-1">
-        {formatDate(payload[0]?.payload?.date)}
+        {payload[0]?.payload?.date ? formatDate(payload[0].payload.date) : ""}
       </p>
       <p>
         <span className="text-muted-foreground mr-2">{chartLabel}:</span>

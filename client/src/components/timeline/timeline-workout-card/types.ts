@@ -1,5 +1,6 @@
 import type { TimelineEntry, PersonalRecord } from "@shared/schema";
 import type { GroupedExercise } from "@/lib/exerciseUtils";
+import type { DistanceUnit } from "@shared/unitConversion";
 
 export interface TimelineWorkoutCardProps {
   readonly entry: TimelineEntry;
@@ -15,7 +16,7 @@ export interface TimelineWorkoutCardProps {
 
 export interface WorkoutStravaStatsProps {
   readonly entry: TimelineEntry;
-  readonly distanceUnit: string;
+  readonly distanceUnit: DistanceUnit;
 }
 
 export interface ExerciseChipsProps {
