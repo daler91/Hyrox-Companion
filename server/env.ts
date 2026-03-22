@@ -18,6 +18,8 @@ const envSchema = z.object({
   APP_URL: z.string().url().optional(),
   ALLOW_DEV_AUTH_BYPASS: z.string().optional(),
   LOG_LEVEL: z.string().default("info"),
+  RAG_CHUNK_SIZE: z.coerce.number().default(600),
+  RAG_CHUNK_OVERLAP: z.coerce.number().default(100),
 });
 
 const parsed = envSchema.safeParse(process.env);

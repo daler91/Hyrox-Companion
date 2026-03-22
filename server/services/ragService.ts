@@ -2,13 +2,14 @@ import { logger } from "../logger";
 import { generateEmbedding, generateEmbeddings } from "../gemini/client";
 import { storage } from "../storage";
 import type { CoachingMaterial } from "@shared/schema";
+import { env } from "../env";
 
 // ---------------------------------------------------------------------------
 // Chunking
 // ---------------------------------------------------------------------------
 
-const CHUNK_SIZE = 600; // characters per chunk
-const CHUNK_OVERLAP = 100; // overlap between chunks
+const CHUNK_SIZE = env.RAG_CHUNK_SIZE; // characters per chunk
+const CHUNK_OVERLAP = env.RAG_CHUNK_OVERLAP; // overlap between chunks
 
 /**
  * Find the best end position for a chunk, preferring paragraph or sentence boundaries.
