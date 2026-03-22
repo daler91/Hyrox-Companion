@@ -209,9 +209,9 @@ describe("metersToUserDistance", () => {
     expect(metersToUserDistance(1609.34 / 2, "miles")).toBeCloseTo(0.5, 1);
   });
 
-  it("returns raw meters when unrecognized distanceUnit is passed", () => {
-    expect(metersToUserDistance(5000, "feet" as unknown as DistanceUnit)).toBe(5000);
-    expect(metersToUserDistance(100, "" as unknown as DistanceUnit)).toBe(100);
+  it("falls back to km when unrecognized distanceUnit is passed", () => {
+    expect(metersToUserDistance(5000, "feet")).toBe(5);
+    expect(metersToUserDistance(100, "")).toBe(0.1);
   });
 });
 
