@@ -92,7 +92,7 @@ export async function embedCoachingMaterial(material: CoachingMaterial): Promise
         userId: material.userId,
         content,
         chunkIndex: i,
-        embedding: JSON.stringify(embeddings[i]),
+        embedding: embeddings[i],
       })),
     );
 

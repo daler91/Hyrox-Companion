@@ -140,7 +140,7 @@ describe("embedCoachingMaterial", () => {
         userId: "user_1",
         content: "Short content for testing.",
         chunkIndex: 0,
-        embedding: JSON.stringify([0.1, 0.2]),
+        embedding: [0.1, 0.2],
       },
     ]);
   });

@@ -77,7 +77,7 @@ export class CoachingStorage {
       `SELECT id, material_id AS "materialId", user_id AS "userId", content, chunk_index AS "chunkIndex", created_at AS "createdAt"
        FROM document_chunks
        WHERE user_id = $1 AND embedding IS NOT NULL
-       ORDER BY embedding::vector <=> $2::vector
+       ORDER BY embedding <=> $2::vector
        LIMIT $3`,
       [userId, embeddingStr, topK],
     );
@@ -113,17 +113,12 @@ export class CoachingStorage {
   /** Return the dimension of the first stored embedding for a user, or null if none. */
   async getStoredEmbeddingDimension(userId: string): Promise<number | null> {
     const result = await pool.query(
-      `SELECT embedding FROM document_chunks
+      `SELECT vector_dims(embedding) AS dims FROM document_chunks
        WHERE user_id = $1 AND embedding IS NOT NULL
        LIMIT 1`,
       [userId],
     );
-    if (result.rows.length === 0 || !result.rows[0].embedding) return null;
-    try {
-      const arr = JSON.parse(result.rows[0].embedding);
-      return Array.isArray(arr) ? arr.length : null;
-    } catch {
-      return null;
-    }
+    if (result.rows.length === 0) return null;
+    return result.rows[0].dims ?? null;
   }
 }
