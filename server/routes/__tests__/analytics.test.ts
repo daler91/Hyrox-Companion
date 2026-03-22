@@ -60,6 +60,7 @@ describe("Analytics Routes", () => {
     vi.clearAllMocks();
     _cacheForTesting.clear();
     app = createTestApp(analyticsRouter);
+
   });
 
   const testInvalidDates = (endpoint: string) => {

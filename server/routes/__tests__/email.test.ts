@@ -30,6 +30,7 @@ describe("Email Routes", () => {
     vi.clearAllMocks();
     env.CRON_SECRET = "super-secret";
     app = createTestApp(emailRouter);
+
   });
 
   describe("GET /api/cron/emails", () => {

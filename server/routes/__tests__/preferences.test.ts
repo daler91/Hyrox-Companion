@@ -31,6 +31,7 @@ describe("GET /api/preferences", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     app = createTestApp(preferencesRouter);
+
   });
 
   it("should return 500 when storage.getUser throws an error", async () => {
