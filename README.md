@@ -79,30 +79,17 @@ Follow these instructions to run the full application ecosystem locally on your 
 - A [Google AI Studio](https://aistudio.google.com/) account for the Gemini API key
 
 ### 1. Environment Variables
-Create a `.env` file at the root of your project and populate the following required secrets.
+Copy the example environment file and fill in your values:
 
-```env
-# Database
-DATABASE_URL="postgresql://user:password@localhost:5432/hyroxtracker"
-
-# Clerk Auth (Create a free project at dashboard.clerk.com)
-VITE_CLERK_PUBLISHABLE_KEY="pk_test_..."
-CLERK_PUBLISHABLE_KEY="pk_test_..."
-CLERK_SECRET_KEY="sk_test_..."
-
-# Google Gemini (Create a free key at aistudio.google.com)
-GEMINI_API_KEY="AIzaSy..."
-
-# (Optional) Strava Sync
-STRAVA_CLIENT_ID="12345"
-STRAVA_CLIENT_SECRET="your_strava_secret"
-
-# (Optional) Security Key for Encrypting Remote Tokens (32 byte hex)
-ENCRYPTION_KEY="0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-
-# (Optional) Resend Emails
-RESEND_API_KEY="re_..."
+```bash
+cp .env.example .env
 ```
+
+At minimum, set the two **required** variables:
+- `DATABASE_URL` – PostgreSQL connection string
+- `ENCRYPTION_KEY` – 32+ char hex key (generate with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`)
+
+See `.env.example` for all available configuration options including Clerk auth, Gemini AI, Strava sync, and more.
 
 ### 2. Installation & Database Setup
 Install the necessary package dependencies and execute the Drizzle ORM schema migrations to structure your Postgres database.

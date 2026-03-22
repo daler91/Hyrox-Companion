@@ -10,6 +10,7 @@ cypress/downloads
 # Environment variables
 .env
 .env.*
+!.env.example
 
 # Testing coverage
 coverage/
