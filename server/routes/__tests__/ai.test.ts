@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import express from "express";
-import { setupTestErrorHandler } from "./testUtils";
+import { createTestApp } from "./testUtils";
 import request from "supertest";
 import aiRouter from "../ai";
 import { storage } from "../../storage";
@@ -82,10 +82,7 @@ describe("POST /api/parse-exercises", () => {
     routeUtils.clearRateLimitBuckets();
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2025, 0, 1));
-    app = express();
-    app.use(express.json());
-    app.use(aiRouter);
-setupTestErrorHandler(app);
+    app = createTestApp(aiRouter);
   });
 
   afterEach(() => {
@@ -199,10 +196,7 @@ describe("POST /api/chat", () => {
     vi.mocked(storage.listCoachingMaterials).mockResolvedValue([]);
     const routeUtils = await import("../../routeUtils");
     routeUtils.clearRateLimitBuckets();
-    app = express();
-    app.use(express.json());
-    app.use(aiRouter);
-setupTestErrorHandler(app);
+    app = createTestApp(aiRouter);
   });
 
   it("should successfully chat with coach and return response", async () => {
@@ -253,10 +247,7 @@ describe("POST /api/chat/stream", () => {
     vi.mocked(storage.listCoachingMaterials).mockResolvedValue([]);
     const routeUtils = await import("../../routeUtils");
     routeUtils.clearRateLimitBuckets();
-    app = express();
-    app.use(express.json());
-    app.use(aiRouter);
-setupTestErrorHandler(app);
+    app = createTestApp(aiRouter);
   });
 
   it("should successfully stream chat response", async () => {
@@ -321,10 +312,7 @@ describe("Chat History and Messages Routes", () => {
     vi.clearAllMocks();
     const routeUtils = await import("../../routeUtils");
     routeUtils.clearRateLimitBuckets();
-    app = express();
-    app.use(express.json());
-    app.use(aiRouter);
-setupTestErrorHandler(app);
+    app = createTestApp(aiRouter);
   });
 
   it("should get chat history", async () => {
@@ -407,10 +395,7 @@ describe("POST /api/timeline/ai-suggestions", () => {
     vi.mocked(storage.listCoachingMaterials).mockResolvedValue([]);
     const routeUtils = await import("../../routeUtils");
     routeUtils.clearRateLimitBuckets();
-    app = express();
-    app.use(express.json());
-    app.use(aiRouter);
-setupTestErrorHandler(app);
+    app = createTestApp(aiRouter);
   });
 
   it("should successfully generate suggestions", async () => {
@@ -553,10 +538,7 @@ describe("RAG pipeline in chat endpoints", () => {
     vi.clearAllMocks();
     const routeUtils = await import("../../routeUtils");
     routeUtils.clearRateLimitBuckets();
-    app = express();
-    app.use(express.json());
-    app.use(aiRouter);
-setupTestErrorHandler(app);
+    app = createTestApp(aiRouter);
   });
 
   it("should use RAG retrieval when user has embedded chunks", async () => {

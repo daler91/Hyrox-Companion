@@ -1,4 +1,4 @@
-import { setupTestErrorHandler } from "./testUtils";
+import { createTestApp } from "./testUtils";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import express from "express";
 import request from "supertest";
@@ -59,22 +59,7 @@ describe("Analytics Routes", () => {
     clearRateLimitBuckets();
     vi.clearAllMocks();
     _cacheForTesting.clear();
-    app = express();
-    app.use(express.json());
-    app.use(analyticsRouter);
-    // Mock global error handler
-    app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-      if (err.status >= 500 || !err.status) {
-        if (req.log) {
-          req.log.error({ err }, "Unhandled error in route");
-        } else {
-          // If logger mock exists, call it so tests pass
-
-        }
-      }
-      console.log("Global error handler caught error:", err.message);
-      res.status(err.status || 500).json({ error: "Internal Server Error" });
-    });
+    app = createTestApp(analyticsRouter);
   });
 
   const testInvalidDates = (endpoint: string) => {

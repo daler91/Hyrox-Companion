@@ -11,6 +11,7 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
 /** Strip null bytes and non-printable control characters that PostgreSQL text columns reject. */
 function sanitizeText(text: string): string {
+  // eslint-disable-next-line no-control-regex
   return text.replaceAll(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "");
 }
 

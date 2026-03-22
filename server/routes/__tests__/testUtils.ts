@@ -10,3 +10,14 @@ export function setupTestErrorHandler(app: express.Express) {
     res.status(err.status || 500).json({ error: "Internal Server Error" });
   });
 }
+
+/**
+ * Common setup for test Express apps to reduce boilerplate and SonarCloud code duplication
+ */
+export function createTestApp(router: express.Router) {
+  const app = express();
+  app.use(express.json());
+  app.use(router);
+  setupTestErrorHandler(app);
+  return app;
+}

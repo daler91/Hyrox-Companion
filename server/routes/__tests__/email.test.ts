@@ -1,4 +1,4 @@
-import { setupTestErrorHandler } from "./testUtils";
+import { createTestApp } from "./testUtils";
 import { env } from "../../env";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import express from "express";
@@ -29,22 +29,7 @@ describe("Email Routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     env.CRON_SECRET = "super-secret";
-    app = express();
-    app.use(express.json());
-    app.use(emailRouter);
-    // Mock global error handler
-    app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-      if (err.status >= 500 || !err.status) {
-        if (req.log) {
-          req.log.error({ err }, "Unhandled error in route");
-        } else {
-          // If logger mock exists, call it so tests pass
-
-        }
-      }
-      console.log("Global error handler caught error:", err.message);
-      res.status(err.status || 500).json({ error: "Internal Server Error" });
-    });
+    app = createTestApp(emailRouter);
   });
 
   describe("GET /api/cron/emails", () => {
