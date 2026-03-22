@@ -74,13 +74,16 @@ function AuthenticatedLayout() {
   return (
     <SidebarProvider style={style as React.CSSProperties}>
       <div className="flex h-screen w-full">
+        <a href="#main-content" className="skip-to-content">
+          Skip to main content
+        </a>
         <AppSidebar />
         <div className="flex flex-col flex-1 min-w-0">
           <header className="flex items-center gap-2 p-2 border-b h-14 flex-shrink-0 md:hidden">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
             <span className="font-semibold">HyroxTracker</span>
           </header>
-          <main className="flex-1 overflow-auto">
+          <main id="main-content" className="flex-1 overflow-auto">
             <AuthenticatedRouter />
           </main>
         </div>

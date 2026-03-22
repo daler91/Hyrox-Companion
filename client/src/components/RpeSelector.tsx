@@ -33,12 +33,14 @@ export function RpeSelector({ value, onChange, showLabel = true, compact = false
           RPE (Rate of Perceived Exertion)
         </Label>
       )}
-      <div className="flex items-center gap-1.5" data-testid="input-rpe-selector">
+      <div className="flex items-center gap-1.5" role="group" aria-label="RPE selector" data-testid="input-rpe-selector">
         {Array.from({ length: 10 }, (_, i) => i + 1).map((rpeValue) => (
           <button
             key={rpeValue}
             type="button"
             onClick={() => onChange(value === rpeValue ? null : rpeValue)}
+            aria-label={`RPE ${rpeValue}, ${getRpeLabel(rpeValue)}`}
+            aria-pressed={value === rpeValue}
             className={`${buttonSize} rounded-md font-medium transition-colors ${
               value === rpeValue
                 ? getRpeColor(rpeValue)

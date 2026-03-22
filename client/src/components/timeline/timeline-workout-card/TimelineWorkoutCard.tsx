@@ -42,6 +42,17 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
     }
   };
 
+  const handleCardKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      if (canBeCombinedWith) {
+        onCombineSelect?.(entry);
+      } else {
+        onClick(entry);
+      }
+    }
+  };
+
   const handleCompleteClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     onMarkComplete(entry);
@@ -65,6 +76,10 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
     <Card
       className={`cursor-pointer transition-colors hover-elevate ${baseCardClasses} ${aiCoachClasses}`}
       onClick={handleCardClick}
+      onKeyDown={handleCardKeyDown}
+      role="button"
+      tabIndex={0}
+      aria-label={`${entry.focus || "Workout"} on ${entry.date}, ${entry.status}`}
       data-testid={`card-timeline-entry-${entry.id}`}
     >
       {isTargetedByCoach && (
