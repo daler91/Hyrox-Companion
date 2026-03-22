@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { format, addDays } from "date-fns";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
+import { api, QUERY_KEYS } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 type Step = "welcome" | "units" | "goal" | "plan" | "schedule";
@@ -27,19 +28,18 @@ export function useOnboardingWizard(onComplete: (choice: "sample" | "import" | "
   const [startDate, setStartDate] = useState<Date>(addDays(new Date(), 1));
 
   const prefsMutation = useMutation({
-    mutationFn: async (prefs: { weightUnit: string; distanceUnit: string }) =>
-      (await apiRequest("PATCH", "/api/v1/preferences", prefs)).json(),
+    mutationFn: (prefs: { weightUnit: string; distanceUnit: string }) =>
+      api.preferences.update(prefs),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/preferences"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/auth/user"] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.preferences });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.authUser });
     },
   });
 
   const sampleMutation = useMutation({
-    mutationFn: async () =>
-      (await apiRequest("POST", "/api/v1/plans/sample", {})).json(),
+    mutationFn: () => api.plans.createSample(),
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/plans"] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans });
       setCreatedPlanId(data.id);
       setStep("schedule");
     },
@@ -48,15 +48,11 @@ export function useOnboardingWizard(onComplete: (choice: "sample" | "import" | "
   });
 
   const scheduleMutation = useMutation({
-    mutationFn: async ({ planId, date }: { planId: string; date: string }) =>
-      (
-        await apiRequest("POST", `/api/v1/plans/${planId}/schedule`, {
-          startDate: date,
-        })
-      ).json(),
+    mutationFn: ({ planId, date }: { planId: string; date: string }) =>
+      api.plans.schedule(planId, date),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/plans"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
       toast({
         title: "Your training plan is ready!",
         description: "Workouts have been scheduled on your timeline.",

@@ -1,7 +1,8 @@
 import { type ParsedExercise, type TimelineEntry, type PlanDay, type WorkoutStatus, type UpdateWorkoutLog, type User } from "@shared/schema";
 import { useState, useCallback } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
+import { api, QUERY_KEYS } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 export function useWorkoutActions(selectedPlanId: string | null) {
@@ -10,18 +11,16 @@ export function useWorkoutActions(selectedPlanId: string | null) {
   const [skipConfirmEntry, setSkipConfirmEntry] = useState<TimelineEntry | null>(null);
 
   const updateStatusMutation = useMutation({
-    mutationFn: async ({ dayId, status }: { dayId: string; status: string }) => {
-      const response = await apiRequest("PATCH", `/api/v1/plans/days/${dayId}/status`, { status });
-      return response.json();
-    },
+    mutationFn: ({ dayId, status }: { dayId: string; status: string }) =>
+      api.plans.updateDayStatus(dayId, status),
     onSuccess: (data, variables) => {
       if (variables.status === "completed") {
-        queryClient.setQueryData<User | null>(["/api/v1/auth/user"], (old) => {
+        queryClient.setQueryData<User | null>([...QUERY_KEYS.authUser], (old) => {
           if (!old) return old;
           return { ...old, isAutoCoaching: true };
         });
       }
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
       toast({ title: "Status updated" });
     },
     onError: () => {
@@ -30,12 +29,10 @@ export function useWorkoutActions(selectedPlanId: string | null) {
   });
 
   const updateDayMutation = useMutation({
-    mutationFn: async ({ dayId, updates }: { dayId: string; updates: Partial<PlanDay> }) => {
-      const response = await apiRequest("PATCH", `/api/v1/plans/${selectedPlanId}/days/${dayId}`, updates);
-      return response.json();
-    },
+    mutationFn: ({ dayId, updates }: { dayId: string; updates: Partial<PlanDay> }) =>
+      api.plans.updateDay(selectedPlanId!, dayId, updates),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
       setDetailEntry(null);
       toast({ title: "Entry updated" });
     },
@@ -45,16 +42,14 @@ export function useWorkoutActions(selectedPlanId: string | null) {
   });
 
   const logWorkoutMutation = useMutation({
-    mutationFn: async (data: { planDayId: string; date: string; focus: string; mainWorkout: string; accessory?: string; notes?: string; rpe?: number; exercises?: ParsedExercise[] }) => {
-      const response = await apiRequest("POST", "/api/v1/workouts", data);
-      return response.json();
-    },
+    mutationFn: (data: { planDayId: string; date: string; focus: string; mainWorkout: string; accessory?: string; notes?: string; rpe?: number; exercises?: ParsedExercise[] }) =>
+      api.workouts.create(data),
     onSuccess: () => {
-      queryClient.setQueryData<User | null>(["/api/v1/auth/user"], (old) => {
+      queryClient.setQueryData<User | null>([...QUERY_KEYS.authUser], (old) => {
         if (!old) return old;
         return { ...old, isAutoCoaching: true };
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
       setDetailEntry(null);
       toast({ title: "Workout logged!" });
     },
@@ -64,13 +59,11 @@ export function useWorkoutActions(selectedPlanId: string | null) {
   });
 
   const updateWorkoutMutation = useMutation({
-    mutationFn: async ({ workoutId, updates }: { workoutId: string; updates: UpdateWorkoutLog & { exercises?: ParsedExercise[] } }) => {
-      const response = await apiRequest("PATCH", `/api/v1/workouts/${workoutId}`, updates);
-      return response.json();
-    },
+    mutationFn: ({ workoutId, updates }: { workoutId: string; updates: UpdateWorkoutLog & { exercises?: ParsedExercise[] } }) =>
+      api.workouts.update(workoutId, updates),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/workouts"] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workouts });
       setDetailEntry(null);
       toast({ title: "Workout updated" });
     },
@@ -80,13 +73,10 @@ export function useWorkoutActions(selectedPlanId: string | null) {
   });
 
   const deleteWorkoutMutation = useMutation({
-    mutationFn: async (workoutId: string) => {
-      const response = await apiRequest("DELETE", `/api/v1/workouts/${workoutId}`);
-      return response.json();
-    },
+    mutationFn: (workoutId: string) => api.workouts.delete(workoutId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/workouts"] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workouts });
       setDetailEntry(null);
       toast({ title: "Workout deleted" });
     },
@@ -96,13 +86,10 @@ export function useWorkoutActions(selectedPlanId: string | null) {
   });
 
   const deletePlanDayMutation = useMutation({
-    mutationFn: async (dayId: string) => {
-      const response = await apiRequest("DELETE", `/api/v1/plans/days/${dayId}`);
-      return response.json();
-    },
+    mutationFn: (dayId: string) => api.plans.deleteDay(dayId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/plans"] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans });
       setDetailEntry(null);
       toast({ title: "Workout removed from plan" });
     },

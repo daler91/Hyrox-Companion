@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
+import { api, QUERY_KEYS } from "@/lib/api";
 import { Loader2 } from "lucide-react";
 import { useLocation, useSearch } from "wouter";
 import { ProfileSection } from "@/components/settings/ProfileSection";
@@ -58,12 +59,12 @@ export default function Settings() {
   }, [search, toast, setLocation]);
 
   const { data: preferences, isLoading } = useQuery<Preferences>({
-    queryKey: ["/api/v1/preferences"],
+    queryKey: QUERY_KEYS.preferences,
   });
 
   const { data: stravaStatus, isLoading: stravaLoading } =
     useQuery<StravaStatus>({
-      queryKey: ["/api/v1/strava/status"],
+      queryKey: QUERY_KEYS.stravaStatus,
     });
 
   useEffect(() => {
@@ -78,18 +79,15 @@ export default function Settings() {
   }, [preferences]);
 
   const saveMutation = useMutation({
-    mutationFn: async (data: {
+    mutationFn: (data: {
       weightUnit: string;
       distanceUnit: string;
       weeklyGoal: number;
       emailNotifications: boolean;
       aiCoachEnabled: boolean;
-    }) => {
-      const response = await apiRequest("PATCH", "/api/v1/preferences", data);
-      return response.json();
-    },
+    }) => api.preferences.update(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/preferences"] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.preferences });
       setHasChanges(false);
       toast({
         title: "Settings saved",
