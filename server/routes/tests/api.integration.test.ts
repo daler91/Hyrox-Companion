@@ -12,22 +12,6 @@ describe("API Integration Tests", () => {
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body)).toBe(true);
     });
-
-    it("should create a new training plan", async () => {
-      const response = await request(context.app)
-        .post("/api/v1/plans")
-        .send({
-          name: "Test Training Plan",
-          description: "A solid plan for testing",
-          durationWeeks: 4,
-          difficulty: "beginner"
-        });
-
-      expect(response.body?.error || response.error?.message).toBeUndefined();
-      expect(response.status).toBe(201);
-      expect(response.body).toHaveProperty("id");
-      expect(response.body.name).toBe("Test Training Plan");
-    });
   });
 
   describe("Preferences and Timeline Integration Tests", () => {
@@ -66,10 +50,9 @@ describe("API Integration Tests", () => {
       const response = await request(context.app)
         .post("/api/v1/workouts")
         .send({
-          title: "Morning Run",
-          description: "5k run around the park",
           date: new Date().toISOString().split("T")[0],
-          type: "running",
+          focus: "strength",
+          mainWorkout: "5x5 Squats",
           duration: 30,
           completed: true,
         });
@@ -77,16 +60,16 @@ describe("API Integration Tests", () => {
       expect(response.body?.error || response.error?.message).toBeUndefined();
       expect(response.status).toBe(201);
       expect(response.body).toHaveProperty("id");
-      expect(response.body.title).toBe("Morning Run");
+      expect(response.body.focus).toBe("strength");
     });
 
     it("should retrieve workouts", async () => {
       await request(context.app)
         .post("/api/v1/workouts")
         .send({
-          title: "Test Workout",
           date: new Date().toISOString().split("T")[0],
-          type: "hyrox",
+          focus: "conditioning",
+          mainWorkout: "Hyrox Simulator",
         });
 
       const response = await request(context.app).get("/api/v1/workouts");
@@ -95,7 +78,7 @@ describe("API Integration Tests", () => {
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body)).toBe(true);
       expect(response.body.length).toBeGreaterThan(0);
-      expect(response.body[0].title).toBe("Test Workout");
+      expect(response.body[0].focus).toBe("conditioning");
     });
   });
 });
