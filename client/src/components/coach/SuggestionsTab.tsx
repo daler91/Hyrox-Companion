@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { SuggestionCard, type Suggestion } from "./SuggestionCard";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { SuggestionCard } from "./SuggestionCard";
+import { queryClient } from "@/lib/queryClient";
+import { api, QUERY_KEYS, type Suggestion, type RagInfo } from "@/lib/api";
 import { getCurrentTimeString } from "@/lib/dateUtils";
-import type { Message, RagInfo } from "@/hooks/useChatSession";
+import type { Message } from "@/hooks/useChatSession";
 import type { TimelineEntry } from "@shared/schema";
 
 interface UseSuggestionsOptions {
@@ -18,11 +19,8 @@ export function useSuggestions({ timeline, addLocalMessage, saveMessage }: UseSu
   const [suggestionsRagInfo, setSuggestionsRagInfo] = useState<RagInfo | undefined>();
 
   const suggestionsMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/v1/timeline/ai-suggestions", {});
-      return res.json();
-    },
-    onSuccess: (data: { suggestions: Suggestion[]; ragInfo?: RagInfo }) => {
+    mutationFn: () => api.timeline.getSuggestions(),
+    onSuccess: (data) => {
       setSuggestionsRagInfo(data.ragInfo);
       let responseContent: string;
       if (!data.suggestions || data.suggestions.length === 0) {
@@ -87,15 +85,15 @@ export function useSuggestions({ timeline, addLocalMessage, saveMessage }: UseSu
         newValue = suggestion.recommendation;
       }
 
-      await apiRequest("PATCH", `/api/v1/plans/days/${suggestion.workoutId}`, {
+      await api.plans.updateDayWithoutPlan(suggestion.workoutId, {
         [suggestion.targetField]: newValue,
         aiSource: suggestionsRagInfo?.source ?? null,
       });
 
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
       if (suggestion.action === "replace" && suggestion.targetField === "mainWorkout") {
-        queryClient.invalidateQueries({ queryKey: ["/api/v1/exercise-analytics"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/v1/personal-records"] });
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.exerciseAnalytics });
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.personalRecords });
       }
       setPendingSuggestions(prev => prev.filter(s => s.workoutId !== suggestion.workoutId));
       

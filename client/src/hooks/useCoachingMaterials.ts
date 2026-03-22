@@ -1,46 +1,15 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
+import { api, QUERY_KEYS, type RagStatus } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import type { CoachingMaterial } from "@shared/schema";
 
-export interface CoachingMaterial {
-  id: string;
-  userId: string;
-  title: string;
-  content: string;
-  type: "principles" | "document";
-  createdAt: string;
-  updatedAt: string;
-}
-
-const QUERY_KEY = ["/api/v1/coaching-materials"];
-const RAG_STATUS_KEY = ["/api/v1/coaching-materials/rag-status"];
-
-export interface RagStatus {
-  hasApiKey: boolean;
-  totalMaterials: number;
-  totalChunks: number;
-  allEmbedded: boolean;
-  materials: {
-    id: string;
-    title: string;
-    type: string;
-    contentLength: number;
-    chunkCount: number;
-    hasEmbeddings: boolean;
-  }[];
-  storedDimension: number | null;
-  expectedDimension: number;
-  dimensionMismatch: boolean;
-  embeddingApi: { ok: boolean; dimension?: number; error?: string };
-}
+export type { RagStatus } from "@/lib/api";
 
 export function useCoachingMaterials() {
   return useQuery<CoachingMaterial[]>({
-    queryKey: QUERY_KEY,
-    queryFn: async () => {
-      const response = await apiRequest("GET", "/api/v1/coaching-materials");
-      return response.json();
-    },
+    queryKey: QUERY_KEYS.coachingMaterials,
+    queryFn: () => api.coaching.list(),
   });
 }
 
@@ -48,12 +17,10 @@ export function useCreateCoachingMaterial() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async (data: { title: string; content: string; type: "principles" | "document" }) => {
-      const response = await apiRequest("POST", "/api/v1/coaching-materials", data);
-      return response.json();
-    },
+    mutationFn: (data: { title: string; content: string; type: "principles" | "document" }) =>
+      api.coaching.create(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.coachingMaterials });
       toast({ title: "Coaching material added" });
     },
     onError: (error: Error) => {
@@ -66,12 +33,10 @@ export function useUpdateCoachingMaterial() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async ({ id, ...data }: { id: string; title?: string; content?: string; type?: "principles" | "document" }) => {
-      const response = await apiRequest("PATCH", `/api/v1/coaching-materials/${id}`, data);
-      return response.json();
-    },
+    mutationFn: ({ id, ...data }: { id: string; title?: string; content?: string; type?: "principles" | "document" }) =>
+      api.coaching.update(id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.coachingMaterials });
       toast({ title: "Coaching material updated" });
     },
     onError: () => {
@@ -82,11 +47,8 @@ export function useUpdateCoachingMaterial() {
 
 export function useRagStatus() {
   return useQuery<RagStatus>({
-    queryKey: RAG_STATUS_KEY,
-    queryFn: async () => {
-      const response = await apiRequest("GET", "/api/v1/coaching-materials/rag-status");
-      return response.json();
-    },
+    queryKey: QUERY_KEYS.ragStatus,
+    queryFn: () => api.coaching.getRagStatus(),
   });
 }
 
@@ -94,12 +56,9 @@ export function useReEmbed() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/v1/coaching-materials/re-embed");
-      return response.json();
-    },
-    onSuccess: (data: { success: boolean; materialsProcessed: number; errors: string[] }) => {
-      queryClient.invalidateQueries({ queryKey: RAG_STATUS_KEY });
+    mutationFn: () => api.coaching.reEmbed(),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ragStatus });
       if (data.errors?.length > 0) {
         toast({
           title: `Embedded ${data.materialsProcessed} materials with ${data.errors.length} error(s)`,
@@ -120,12 +79,9 @@ export function useDeleteCoachingMaterial() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async (id: string) => {
-      const response = await apiRequest("DELETE", `/api/v1/coaching-materials/${id}`);
-      return response.json();
-    },
+    mutationFn: (id: string) => api.coaching.delete(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.coachingMaterials });
       toast({ title: "Coaching material removed" });
     },
     onError: () => {
