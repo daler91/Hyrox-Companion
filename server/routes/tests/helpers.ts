@@ -1,7 +1,7 @@
 import express from "express";
 import { registerRoutes } from "../../routes";
 import { createServer } from "node:http";
-import { pool, db } from "../../db";
+import { db } from "../../db";
 import {
   users,
   trainingPlans,
@@ -38,11 +38,6 @@ export async function clearDatabase() {
   await db.delete(users);
 }
 
-// Close DB connection after tests
-export async function closeDatabase() {
-  // await pool.end();
-}
-
 /**
  * Standard integration test setup hook.
  * Wires up Vitest lifecycle methods (beforeAll, afterAll, beforeEach) to
@@ -62,7 +57,6 @@ export function setupIntegrationTest() {
   });
 
   afterAll(async () => {
-    await closeDatabase();
     if (context.server) {
       context.server.close();
     }

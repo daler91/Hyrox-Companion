@@ -17,7 +17,7 @@ describe("Workouts Integration Tests", () => {
         completed: true,
       });
 
-    if (response.status !== 201) console.error("TEST FAILED:", response.body); expect(response.status).toBe(201);
+    expect(response.status).toBe(201);
     expect(response.body).toHaveProperty("id");
     expect(response.body.title).toBe("Morning Run");
   });
@@ -34,7 +34,7 @@ describe("Workouts Integration Tests", () => {
 
     const response = await request(context.app).get("/api/v1/workouts");
 
-    if (response.status !== 200) console.error("TEST FAILED:", response.body); expect(response.status).toBe(200);
+    expect(response.status).toBe(200);
     expect(Array.isArray(response.body)).toBe(true);
     expect(response.body.length).toBeGreaterThan(0);
     expect(response.body[0].title).toBe("Test Workout");
