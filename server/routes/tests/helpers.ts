@@ -75,7 +75,7 @@ export function setupIntegrationTest() {
     await db.insert(users).values({
       id: testUserId,
       email: "test@example.com",
-      username: "testuser",
+
       weightUnit: "kg",
       distanceUnit: "km",
     });
