@@ -75,10 +75,9 @@ export function setupIntegrationTest() {
     await db.insert(users).values({
       id: testUserId,
       email: "test@example.com",
-
       weightUnit: "kg",
       distanceUnit: "km",
-    });
+    }).onConflictDoNothing();
   });
 
   return context;

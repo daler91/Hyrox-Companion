@@ -14,5 +14,6 @@ export default defineConfig({
     environment: 'node',
     globals: true,
     setupFiles: ['./vitest.integration.setup.ts'],
+    fileParallelism: false, // Prevents tests from sharing and dropping the same DB concurrently
   },
 });
