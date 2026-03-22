@@ -1,5 +1,4 @@
 import { Gauge } from "lucide-react";
-import { Label } from "@/components/ui/label";
 
 function getRpeLabel(rpe: number): string {
   if (rpe <= 3) return "Easy";
@@ -26,19 +25,22 @@ export function RpeSelector({ value, onChange, showLabel = true, compact = false
   const buttonSize = compact ? "h-7 w-7 text-xs" : "h-8 w-8 text-sm";
 
   return (
-    <div className="space-y-2">
+    <fieldset className="space-y-2 border-0 m-0 p-0">
       {showLabel && (
-        <Label className="flex items-center gap-1">
+        <legend className="flex items-center gap-1 text-sm font-medium">
           <Gauge className="h-3.5 w-3.5" />
           RPE (Rate of Perceived Exertion)
-        </Label>
+        </legend>
       )}
+      {!showLabel && <legend className="sr-only">RPE selector</legend>}
       <div className="flex items-center gap-1.5" data-testid="input-rpe-selector">
         {Array.from({ length: 10 }, (_, i) => i + 1).map((rpeValue) => (
           <button
             key={rpeValue}
             type="button"
             onClick={() => onChange(value === rpeValue ? null : rpeValue)}
+            aria-label={`RPE ${rpeValue}, ${getRpeLabel(rpeValue)}`}
+            aria-pressed={value === rpeValue}
             className={`${buttonSize} rounded-md font-medium transition-colors ${
               value === rpeValue
                 ? getRpeColor(rpeValue)
@@ -55,6 +57,6 @@ export function RpeSelector({ value, onChange, showLabel = true, compact = false
           </span>
         )}
       </div>
-    </div>
+    </fieldset>
   );
 }
