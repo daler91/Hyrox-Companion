@@ -3,15 +3,15 @@ import { apiRequest, getQueryFn } from "./queryClient";
 import { QueryFunctionContext } from "@tanstack/react-query";
 
 describe("queryClient", () => {
-  const originalFetch = global.fetch;
+  const originalFetch = globalThis.fetch;
   const fetchMock = vi.fn();
 
   beforeEach(() => {
-    global.fetch = fetchMock;
+    globalThis.fetch = fetchMock;
   });
 
   afterEach(() => {
-    global.fetch = originalFetch;
+    globalThis.fetch = originalFetch;
     vi.restoreAllMocks();
   });
 
