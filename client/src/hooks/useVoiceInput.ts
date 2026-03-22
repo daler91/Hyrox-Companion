@@ -5,14 +5,12 @@ import type {
   SpeechRecognitionInstance,
   UseVoiceInputOptions,
 } from "./voice/types";
+import { RETRYABLE_ERRORS, getVoiceErrorMessage, getUserMediaErrorMessage } from "./voice/utils";
 import {
-  MAX_RETRIES,
-  RETRY_DELAY_MS,
-  RETRYABLE_ERRORS,
-  DEDUP_WINDOW_MS,
-  getVoiceErrorMessage,
-  getUserMediaErrorMessage,
-} from "./voice/utils";
+  VOICE_MAX_RETRIES,
+  VOICE_RETRY_DELAY_MS,
+  VOICE_DEDUP_WINDOW_MS,
+} from "./constants";
 
 export function useVoiceInput(options: UseVoiceInputOptions = {}) {
   const {
@@ -62,7 +60,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
     const now = Date.now();
     const normalized = finalTranscript.trim().toLowerCase();
     recentEmissionsRef.current = recentEmissionsRef.current.filter(
-      (e) => now - e.time < DEDUP_WINDOW_MS,
+      (e) => now - e.time < VOICE_DEDUP_WINDOW_MS,
     );
 
     const exactOrSubset = recentEmissionsRef.current.some(
@@ -144,7 +142,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
 
       if (
         RETRYABLE_ERRORS.has(event.error) &&
-        retryCountRef.current < MAX_RETRIES
+        retryCountRef.current < VOICE_MAX_RETRIES
       ) {
         retryCountRef.current++;
         retryTimeoutRef.current = setTimeout(() => {
@@ -152,7 +150,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
           if (!stoppedByUserRef.current) {
             startRecognitionRef.current();
           }
-        }, RETRY_DELAY_MS);
+        }, VOICE_RETRY_DELAY_MS);
         return;
       }
 

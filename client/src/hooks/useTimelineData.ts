@@ -2,6 +2,7 @@ import { useRef, useEffect, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { TrainingPlan, TimelineEntry, PersonalRecord } from "@shared/schema";
 import { api, QUERY_KEYS } from "@/lib/api";
+import { SCROLL_TO_TODAY_DELAY_MS } from "./constants";
 
 export function useTimelineData(selectedPlanId: string | null) {
   const todayRef = useRef<HTMLDivElement>(null);
@@ -27,7 +28,7 @@ export function useTimelineData(selectedPlanId: string | null) {
     if (!timelineLoading && todayRef.current) {
       setTimeout(() => {
         todayRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-      }, 100);
+      }, SCROLL_TO_TODAY_DELAY_MS);
     }
   }, [timelineLoading]);
 
