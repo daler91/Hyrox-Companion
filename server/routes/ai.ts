@@ -131,6 +131,7 @@ router.post("/api/v1/chat/stream", isAuthenticated, rateLimiter("chat", 10), asy
     res.setHeader("Connection", "keep-alive");
     res.flushHeaders();
 
+    // Emit RAG diagnostics before streaming text
     try {
       // Emit RAG diagnostics before streaming text
       res.write(`data: ${JSON.stringify({ ragInfo })}\n\n`);
@@ -144,7 +145,10 @@ router.post("/api/v1/chat/stream", isAuthenticated, rateLimiter("chat", 10), asy
       res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
       res.end();
     } catch (streamError) {
-      (req.log || logger).error({ err: streamError }, "Stream error:");
+      const log = (req as any).log || import("../logger").then(m => m.logger);
+      if (log.error) {
+        log.error({ err: streamError }, "Stream error:");
+      }
       res.write(`data: ${JSON.stringify({ error: "Stream error" })}\n\n`);
       res.end();
     }
