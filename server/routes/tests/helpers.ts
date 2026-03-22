@@ -40,7 +40,7 @@ export async function clearDatabase() {
 
 // Close DB connection after tests
 export async function closeDatabase() {
-  await pool.end();
+  // await pool.end();
 }
 
 /**

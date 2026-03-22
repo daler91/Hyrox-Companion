@@ -7,7 +7,7 @@ describe("Preferences and Timeline Integration Tests", () => {
 
   it("should get user preferences", async () => {
     const response = await request(context.app).get("/api/v1/preferences");
-    expect(response.status).toBe(200);
+    if (response.status !== 200) console.error("TEST FAILED:", response.body); expect(response.status).toBe(200);
     expect(response.body.weightUnit).toBe("kg");
     expect(response.body.distanceUnit).toBe("km");
   });
@@ -20,7 +20,7 @@ describe("Preferences and Timeline Integration Tests", () => {
         distanceUnit: "miles"
       });
 
-    expect(response.status).toBe(200);
+    if (response.status !== 200) console.error("TEST FAILED:", response.body); expect(response.status).toBe(200);
     expect(response.body.weightUnit).toBe("lbs");
     expect(response.body.distanceUnit).toBe("miles");
   });
@@ -28,7 +28,7 @@ describe("Preferences and Timeline Integration Tests", () => {
   it("should fetch timeline correctly", async () => {
     // Basic timeline fetching (could include no data to start)
     const response = await request(context.app).get("/api/v1/timeline?days=7");
-    expect(response.status).toBe(200);
+    if (response.status !== 200) console.error("TEST FAILED:", response.body); expect(response.status).toBe(200);
     expect(Array.isArray(response.body)).toBe(true);
   });
 });
