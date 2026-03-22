@@ -5,7 +5,7 @@ import { useSaveMessageMutation, useClearHistoryMutation } from "./useChatMutati
 import { getCurrentTimeString, formatTime } from "@/lib/dateUtils";
 import type { ChatMessage as DBChatMessage } from "@shared/schema";
 
-export type { RagInfo };
+export type { RagInfo } from "@/lib/api";
 
 function processStreamLines(
   lines: string[],

@@ -4,7 +4,7 @@ import { api, QUERY_KEYS, type RagStatus } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import type { CoachingMaterial } from "@shared/schema";
 
-export type { RagStatus };
+export type { RagStatus } from "@/lib/api";
 
 export function useCoachingMaterials() {
   return useQuery<CoachingMaterial[]>({
