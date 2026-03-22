@@ -3,13 +3,17 @@ import { apiRequest, getQueryFn } from "./queryClient";
 import { QueryFunctionContext } from "@tanstack/react-query";
 
 describe("queryClient", () => {
-  let fetchSpy: MockInstance;
+  let originalFetch: typeof global.fetch;
+  let fetchMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    fetchSpy = vi.spyOn(global, "fetch");
+    originalFetch = global.fetch;
+    fetchMock = vi.fn();
+    global.fetch = fetchMock;
   });
 
   afterEach(() => {
+    global.fetch = originalFetch;
     vi.restoreAllMocks();
   });
 
@@ -27,7 +31,7 @@ describe("queryClient", () => {
       ...(options.text !== undefined && { text: vi.fn().mockResolvedValue(options.text) }),
       ...(options.json !== undefined && { json: vi.fn().mockResolvedValue(options.json) }),
     };
-    fetchSpy.mockResolvedValue(mockResponse as unknown as Response);
+    fetchMock.mockResolvedValue(mockResponse as unknown as Response);
     return mockResponse;
   }
 
@@ -51,7 +55,7 @@ describe("queryClient", () => {
       const url = "/api/test";
       const res = await apiRequest(method, url, data);
 
-      expect(fetchSpy).toHaveBeenCalledWith(url, {
+      expect(fetchMock).toHaveBeenCalledWith(url, {
         method,
         headers: expectedHeaders,
         body: expectedBody,
@@ -80,7 +84,7 @@ describe("queryClient", () => {
 
       const result = await queryFn({ queryKey } as unknown as QueryFunctionContext<string[], unknown>);
 
-      expect(fetchSpy).toHaveBeenCalledWith("api/data", {
+      expect(fetchMock).toHaveBeenCalledWith("api/data", {
         credentials: "include",
         signal: undefined,
       });
