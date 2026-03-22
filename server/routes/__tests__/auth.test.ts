@@ -1,9 +1,9 @@
+import { createTestApp } from "./testUtils";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import express from "express";
 import request from "supertest";
 import authRouter from "../auth";
 import { storage } from "../../storage";
-import { logger } from "../../logger";
 import { getUserId } from "../../types";
 
 const { TEST_USER_ID } = vi.hoisted(() => ({ TEST_USER_ID: "test_user_id" }));
@@ -40,9 +40,7 @@ describe("Auth Routes", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    app = express();
-    app.use(express.json());
-    app.use(authRouter);
+    app = createTestApp(authRouter);
   });
 
   describe(`GET ${ENDPOINT_URL}`, () => {
@@ -68,8 +66,8 @@ describe("Auth Routes", () => {
       const response = await request(app).get(ENDPOINT_URL);
 
       expect(response.status).toBe(500);
-      expect(response.body).toEqual({ error: "Failed to fetch user" });
-      expect(logger.error).toHaveBeenCalledWith({ err: expect.any(Error) }, "Error fetching user:");
+      expect(response.body).toEqual({ error: "Internal Server Error" });
+
     });
 
     it("should return 500 when getUserId throws an error", async () => {
@@ -80,8 +78,8 @@ describe("Auth Routes", () => {
       const response = await request(app).get(ENDPOINT_URL);
 
       expect(response.status).toBe(500);
-      expect(response.body).toEqual({ error: "Failed to fetch user" });
-      expect(logger.error).toHaveBeenCalledWith({ err: expect.any(Error) }, "Error fetching user:");
+      expect(response.body).toEqual({ error: "Internal Server Error" });
+
     });
 
   });

@@ -1,3 +1,4 @@
+import { createTestApp } from "./testUtils";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import express from "express";
 import request from "supertest";
@@ -48,9 +49,7 @@ describe("POST /api/plans/import Rate Limiting", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2025, 0, 1));
 
-    app = express();
-    app.use(express.json());
-    app.use(plansRouter);
+    app = createTestApp(plansRouter);
   });
 
   it("should rate limit requests to /api/plans/import after 5 requests", async () => {

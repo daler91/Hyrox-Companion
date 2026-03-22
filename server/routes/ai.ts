@@ -3,7 +3,7 @@ import { Router, type Request as ExpressRequest, type Response } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
 import { chatWithCoach, streamChatWithCoach, generateWorkoutSuggestions, parseExercisesFromText, EMBEDDING_DIMENSIONS, type UpcomingWorkout } from "../gemini/index";
-import { rateLimiter } from "../routeUtils";
+import { rateLimiter, asyncHandler } from "../routeUtils";
 import { buildTrainingContext } from "../services/aiService";
 import { buildCoachingMaterialsSection, buildRetrievedChunksSection } from "../prompts";
 import { retrieveRelevantChunks } from "../services/ragService";
@@ -13,8 +13,7 @@ import { z } from "zod";
 
 const router = Router();
 
-router.post("/api/v1/parse-exercises", isAuthenticated, rateLimiter("parse", 5), async (req: ExpressRequest<Record<string, never>, any, z.infer<typeof parseExercisesRequestSchema>>, res: Response) => {
-  try {
+router.post("/api/v1/parse-exercises", isAuthenticated, rateLimiter("parse", 5), asyncHandler(async (req: ExpressRequest<Record<string, never>, any, z.infer<typeof parseExercisesRequestSchema>>, res: Response) => {
     const parseResult = parseExercisesRequestSchema.safeParse(req.body);
     if (!parseResult.success) {
       return res.status(400).json({ error: "Text is required" });
@@ -27,11 +26,7 @@ router.post("/api/v1/parse-exercises", isAuthenticated, rateLimiter("parse", 5),
     const customNames = userCustomExercises.map(e => e.name);
     const exercises = await parseExercisesFromText(text.trim(), weightUnit, customNames);
     res.json(exercises);
-  } catch (error) {
-    (req.log || logger).error({ err: error }, "Error parsing exercises:");
-    res.status(500).json({ error: "Failed to parse exercises" });
-  }
-});
+  }));
 
 /**
  * Try RAG retrieval for the user's query. Falls back to legacy if no chunks exist.
@@ -113,8 +108,7 @@ async function prepareChatContext(req: ExpressRequest): Promise<{ success: false
   };
 }
 
-router.post("/api/v1/chat", isAuthenticated, rateLimiter("chat", 10), async (req: ExpressRequest<Record<string, never>, any, z.infer<typeof chatRequestSchema>>, res: Response) => {
-  try {
+router.post("/api/v1/chat", isAuthenticated, rateLimiter("chat", 10), asyncHandler(async (req: ExpressRequest<Record<string, never>, any, z.infer<typeof chatRequestSchema>>, res: Response) => {
     const context = await prepareChatContext(req);
     if (!context.success) {
       return res.status(400).json({ error: context.error });
@@ -123,14 +117,9 @@ router.post("/api/v1/chat", isAuthenticated, rateLimiter("chat", 10), async (req
 
     const response = await chatWithCoach(message, history, trainingContext, coachingMaterials, retrievedChunks);
     res.json({ response, ragInfo });
-  } catch (error) {
-    (req.log || logger).error({ err: error }, "Chat error:");
-    res.status(500).json({ error: "Failed to get response from AI coach" });
-  }
-});
+  }));
 
-router.post("/api/v1/chat/stream", isAuthenticated, rateLimiter("chat", 10), async (req: ExpressRequest<Record<string, never>, any, z.infer<typeof chatRequestSchema>>, res: Response) => {
-  try {
+router.post("/api/v1/chat/stream", isAuthenticated, rateLimiter("chat", 10), asyncHandler(async (req: ExpressRequest<Record<string, never>, any, z.infer<typeof chatRequestSchema>>, res: Response) => {
     const context = await prepareChatContext(req);
     if (!context.success) {
       return res.status(400).json({ error: context.error });
@@ -159,25 +148,15 @@ router.post("/api/v1/chat/stream", isAuthenticated, rateLimiter("chat", 10), asy
       res.write(`data: ${JSON.stringify({ error: "Stream error" })}\n\n`);
       res.end();
     }
-  } catch (error) {
-    (req.log || logger).error({ err: error }, "Chat stream error:");
-    res.status(500).json({ error: "Failed to get response from AI coach" });
-  }
-});
+  }));
 
-router.get("/api/v1/chat/history", isAuthenticated, async (req: ExpressRequest, res: Response) => {
-  try {
+router.get("/api/v1/chat/history", isAuthenticated, asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const messages = await storage.getChatMessages(userId);
     res.json(messages);
-  } catch (error) {
-    (req.log || logger).error({ err: error }, "Get chat history error:");
-    res.status(500).json({ error: "Failed to get chat history" });
-  }
-});
+  }));
 
-router.post("/api/v1/chat/message", isAuthenticated, rateLimiter("chatMessage", 20), async (req: ExpressRequest<Record<string, never>, any, InsertChatMessage>, res: Response) => {
-  try {
+router.post("/api/v1/chat/message", isAuthenticated, rateLimiter("chatMessage", 20), asyncHandler(async (req: ExpressRequest<Record<string, never>, any, InsertChatMessage>, res: Response) => {
     const parseResult = insertChatMessageSchema.safeParse(req.body);
     if (!parseResult.success) {
       return res.status(400).json({ error: "Role and content are required", details: parseResult.error });
@@ -188,25 +167,15 @@ router.post("/api/v1/chat/message", isAuthenticated, rateLimiter("chatMessage", 
 
     const message = await storage.saveChatMessage({ userId, role, content });
     res.json(message);
-  } catch (error) {
-    (req.log || logger).error({ err: error }, "Save chat message error:");
-    res.status(500).json({ error: "Failed to save message" });
-  }
-});
+  }));
 
-router.delete("/api/v1/chat/history", isAuthenticated, rateLimiter("chatHistoryDelete", 5), async (req: ExpressRequest, res: Response) => {
-  try {
+router.delete("/api/v1/chat/history", isAuthenticated, rateLimiter("chatHistoryDelete", 5), asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     await storage.clearChatHistory(userId);
     res.json({ success: true });
-  } catch (error) {
-    (req.log || logger).error({ err: error }, "Clear chat history error:");
-    res.status(500).json({ error: "Failed to clear chat history" });
-  }
-});
+  }));
 
-router.post("/api/v1/timeline/ai-suggestions", isAuthenticated, rateLimiter("suggestions", 3), async (req: ExpressRequest, res: Response) => {
-  try {
+router.post("/api/v1/timeline/ai-suggestions", isAuthenticated, rateLimiter("suggestions", 3), asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
 
     const timeline = await storage.getTimeline(userId);
@@ -279,10 +248,6 @@ router.post("/api/v1/timeline/ai-suggestions", isAuthenticated, rateLimiter("sug
     }, []);
 
     res.json({ suggestions, ragInfo: coachingContext.ragInfo });
-  } catch (error) {
-    (req.log || logger).error({ err: error }, "AI suggestions error:");
-    res.status(500).json({ error: "Failed to generate AI suggestions" });
-  }
-});
+  }));
 
 export default router;

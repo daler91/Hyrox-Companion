@@ -1,3 +1,4 @@
+import { createTestApp } from "./testUtils";
 import { env } from "../../env";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import express from "express";
@@ -28,9 +29,7 @@ describe("Email Routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     env.CRON_SECRET = "super-secret";
-    app = express();
-    app.use(express.json());
-    app.use(emailRouter);
+    app = createTestApp(emailRouter);
   });
 
   describe("GET /api/cron/emails", () => {
@@ -84,7 +83,7 @@ describe("Email Routes", () => {
         .set("x-cron-secret", "super-secret");
 
       expect(response.status).toBe(500);
-      expect(response.body).toEqual({ error: "Cron job failed" });
+      expect(response.body).toEqual({ error: "Internal Server Error" });
     });
   });
 });

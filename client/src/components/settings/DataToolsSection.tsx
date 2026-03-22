@@ -4,8 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Loader2, Download, FileSpreadsheet, FileJson, Sparkles } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { queryClient } from "@/lib/queryClient";
 import { api, QUERY_KEYS } from "@/lib/api";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 export function DataToolsSection() {
   const { toast } = useToast();

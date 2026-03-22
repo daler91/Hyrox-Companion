@@ -1,3 +1,4 @@
+import { createTestApp } from "./testUtils";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import express from "express";
 import request from "supertest";
@@ -28,10 +29,8 @@ describe("GET /api/preferences", () => {
   let app: express.Express;
 
   beforeEach(() => {
-    app = express();
-    app.use(express.json());
-    app.use(preferencesRouter);
     vi.clearAllMocks();
+    app = createTestApp(preferencesRouter);
   });
 
   it("should return 500 when storage.getUser throws an error", async () => {
@@ -42,7 +41,7 @@ describe("GET /api/preferences", () => {
     const response = await request(app).get("/api/v1/preferences");
 
     expect(response.status).toBe(500);
-    expect(response.body).toEqual({ error: "Failed to fetch preferences" });
+    expect(response.body).toEqual({ error: "Internal Server Error" });
     expect(storage.getUser).toHaveBeenCalledWith("test_user_id");
   });
 });

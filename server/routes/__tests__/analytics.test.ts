@@ -1,3 +1,4 @@
+import { createTestApp } from "./testUtils";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import express from "express";
 import request from "supertest";
@@ -58,9 +59,7 @@ describe("Analytics Routes", () => {
     clearRateLimitBuckets();
     vi.clearAllMocks();
     _cacheForTesting.clear();
-    app = express();
-    app.use(express.json());
-    app.use(analyticsRouter);
+    app = createTestApp(analyticsRouter);
   });
 
   const testInvalidDates = (endpoint: string) => {

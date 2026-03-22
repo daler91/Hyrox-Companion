@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import express from "express";
+import { createTestApp } from "./testUtils";
 import request from "supertest";
 import aiRouter from "../ai";
 import { storage } from "../../storage";
@@ -81,9 +82,7 @@ describe("POST /api/parse-exercises", () => {
     routeUtils.clearRateLimitBuckets();
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2025, 0, 1));
-    app = express();
-    app.use(express.json());
-    app.use(aiRouter);
+    app = createTestApp(aiRouter);
   });
 
   afterEach(() => {
@@ -131,7 +130,7 @@ describe("POST /api/parse-exercises", () => {
       .send({ text: "Bench press 135x10" });
 
     expect(response.status).toBe(500);
-    expect(response.body).toHaveProperty("error", "Failed to parse exercises");
+    expect(response.body).toHaveProperty("error", "Internal Server Error");
   });
 
 
@@ -144,7 +143,7 @@ describe("POST /api/parse-exercises", () => {
       .send({ message: "Hello", history: [] });
 
     expect(response.status).toBe(500);
-    expect(response.body).toHaveProperty("error", "Failed to get response from AI coach");
+    expect(response.body).toHaveProperty("error", "Internal Server Error");
   });
 
   it("should return 500 on internal error", async () => {
@@ -155,7 +154,7 @@ describe("POST /api/parse-exercises", () => {
       .send({ text: "Bench press 135x10" });
 
     expect(response.status).toBe(500);
-    expect(response.body).toHaveProperty("error", "Failed to parse exercises");
+    expect(response.body).toHaveProperty("error", "Internal Server Error");
   });
 
   it("should rate limit requests after 5 attempts", async () => {
@@ -197,9 +196,7 @@ describe("POST /api/chat", () => {
     vi.mocked(storage.listCoachingMaterials).mockResolvedValue([]);
     const routeUtils = await import("../../routeUtils");
     routeUtils.clearRateLimitBuckets();
-    app = express();
-    app.use(express.json());
-    app.use(aiRouter);
+    app = createTestApp(aiRouter);
   });
 
   it("should successfully chat with coach and return response", async () => {
@@ -234,7 +231,7 @@ describe("POST /api/chat", () => {
       .send({ message: "Hello", history: [] });
 
     expect(response.status).toBe(500);
-    expect(response.body).toHaveProperty("error", "Failed to get response from AI coach");
+    expect(response.body).toHaveProperty("error", "Internal Server Error");
   });
 });
 
@@ -250,9 +247,7 @@ describe("POST /api/chat/stream", () => {
     vi.mocked(storage.listCoachingMaterials).mockResolvedValue([]);
     const routeUtils = await import("../../routeUtils");
     routeUtils.clearRateLimitBuckets();
-    app = express();
-    app.use(express.json());
-    app.use(aiRouter);
+    app = createTestApp(aiRouter);
   });
 
   it("should successfully stream chat response", async () => {
@@ -317,9 +312,7 @@ describe("Chat History and Messages Routes", () => {
     vi.clearAllMocks();
     const routeUtils = await import("../../routeUtils");
     routeUtils.clearRateLimitBuckets();
-    app = express();
-    app.use(express.json());
-    app.use(aiRouter);
+    app = createTestApp(aiRouter);
   });
 
   it("should get chat history", async () => {
@@ -341,7 +334,7 @@ describe("Chat History and Messages Routes", () => {
     const response = await request(app).get(CHAT_HISTORY_ENDPOINT);
 
     expect(response.status).toBe(500);
-    expect(response.body).toHaveProperty("error", "Failed to get chat history");
+    expect(response.body).toHaveProperty("error", "Internal Server Error");
   });
 
   it("should save chat message", async () => {
@@ -389,7 +382,7 @@ describe("Chat History and Messages Routes", () => {
     const response = await request(app).delete(CHAT_HISTORY_ENDPOINT);
 
     expect(response.status).toBe(500);
-    expect(response.body).toHaveProperty("error", "Failed to clear chat history");
+    expect(response.body).toHaveProperty("error", "Internal Server Error");
   });
 });
 
@@ -402,9 +395,7 @@ describe("POST /api/timeline/ai-suggestions", () => {
     vi.mocked(storage.listCoachingMaterials).mockResolvedValue([]);
     const routeUtils = await import("../../routeUtils");
     routeUtils.clearRateLimitBuckets();
-    app = express();
-    app.use(express.json());
-    app.use(aiRouter);
+    app = createTestApp(aiRouter);
   });
 
   it("should successfully generate suggestions", async () => {
@@ -522,7 +513,7 @@ describe("POST /api/timeline/ai-suggestions", () => {
     const response = await request(app).post(TIMELINE_SUGGESTIONS_ENDPOINT);
 
     expect(response.status).toBe(500);
-    expect(response.body).toHaveProperty("error", "Failed to generate AI suggestions");
+    expect(response.body).toHaveProperty("error", "Internal Server Error");
   });
 
   it("should return 500 on error", async () => {
@@ -532,7 +523,7 @@ describe("POST /api/timeline/ai-suggestions", () => {
     const response = await request(app).post(TIMELINE_SUGGESTIONS_ENDPOINT);
 
     expect(response.status).toBe(500);
-    expect(response.body).toHaveProperty("error", "Failed to generate AI suggestions");
+    expect(response.body).toHaveProperty("error", "Internal Server Error");
   });
 });
 
@@ -547,9 +538,7 @@ describe("RAG pipeline in chat endpoints", () => {
     vi.clearAllMocks();
     const routeUtils = await import("../../routeUtils");
     routeUtils.clearRateLimitBuckets();
-    app = express();
-    app.use(express.json());
-    app.use(aiRouter);
+    app = createTestApp(aiRouter);
   });
 
   it("should use RAG retrieval when user has embedded chunks", async () => {

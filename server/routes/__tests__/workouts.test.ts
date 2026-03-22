@@ -1,3 +1,4 @@
+import { createTestApp } from "./testUtils";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import express from "express";
 import request from "supertest";
@@ -44,9 +45,7 @@ describe("Workouts Routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     clearRateLimitBuckets();
-    app = express();
-    app.use(express.json());
-    app.use(workoutsRouter);
+    app = createTestApp(workoutsRouter);
   });
 
 
@@ -72,7 +71,7 @@ describe("Workouts Routes", () => {
 
 
       expect(response.status).toBe(500);
-      expect(response.body).toEqual({ error: "Failed to create workout" });
+      expect(response.body).toEqual({ error: "Internal Server Error" });
     });
   });
 
@@ -102,7 +101,7 @@ describe("Workouts Routes", () => {
       const response = await request(app).get("/api/v1/workouts");
 
       expect(response.status).toBe(500);
-      expect(response.body).toEqual({ error: "Failed to list workouts" });
+      expect(response.body).toEqual({ error: "Internal Server Error" });
     });
   });
 });

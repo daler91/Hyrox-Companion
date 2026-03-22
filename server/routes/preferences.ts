@@ -1,15 +1,13 @@
-import { logger } from "../logger";
 import { Router, type Request as ExpressRequest, type Response } from "express";
 import { isAuthenticated } from "../clerkAuth";
-import { rateLimiter } from "../routeUtils";
+import { rateLimiter, asyncHandler } from "../routeUtils";
 import { storage } from "../storage";
 import { updateUserPreferencesSchema, type UpdateUserPreferences } from "@shared/schema";
 import { getUserId } from "../types";
 
 const router = Router();
 
-router.get('/api/v1/preferences', isAuthenticated, async (req: ExpressRequest, res: Response) => {
-  try {
+router.get('/api/v1/preferences', isAuthenticated, asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const user = await storage.getUser(userId);
     if (!user) {
@@ -22,14 +20,9 @@ router.get('/api/v1/preferences', isAuthenticated, async (req: ExpressRequest, r
       emailNotifications: user.emailNotifications ?? true,
       aiCoachEnabled: user.aiCoachEnabled ?? true,
     });
-  } catch (error) {
-    (req.log || logger).error({ err: error }, "Error fetching preferences:");
-    res.status(500).json({ error: "Failed to fetch preferences" });
-  }
-});
+  }));
 
-router.patch('/api/v1/preferences', isAuthenticated, rateLimiter("preferences", 20), async (req: ExpressRequest<Record<string, never>, any, UpdateUserPreferences>, res: Response) => {
-  try {
+router.patch('/api/v1/preferences', isAuthenticated, rateLimiter("preferences", 20), asyncHandler(async (req: ExpressRequest<Record<string, never>, any, UpdateUserPreferences>, res: Response) => {
     const userId = getUserId(req);
     const parseResult = updateUserPreferencesSchema.safeParse(req.body);
     if (!parseResult.success) {
@@ -47,10 +40,6 @@ router.patch('/api/v1/preferences', isAuthenticated, rateLimiter("preferences", 
       emailNotifications: user.emailNotifications ?? true,
       aiCoachEnabled: user.aiCoachEnabled ?? true,
     });
-  } catch (error) {
-    (req.log || logger).error({ err: error }, "Error updating preferences:");
-    res.status(500).json({ error: "Failed to update preferences" });
-  }
-});
+  }));
 
 export default router;

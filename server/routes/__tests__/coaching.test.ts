@@ -1,3 +1,4 @@
+import { createTestApp } from "./testUtils";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import express from "express";
 import request from "supertest";
@@ -39,9 +40,7 @@ describe("Coaching materials routes", () => {
     vi.clearAllMocks();
     const routeUtils = await import("../../routeUtils");
     routeUtils.clearRateLimitBuckets();
-    app = express();
-    app.use(express.json());
-    app.use(coachingRouter);
+    app = createTestApp(coachingRouter);
   });
 
   describe("GET /api/v1/coaching-materials", () => {
