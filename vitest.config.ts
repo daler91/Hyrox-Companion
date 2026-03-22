@@ -13,6 +13,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./vitest.setup.ts'],
+    exclude: ['**/*.integration.test.ts', '**/node_modules/**', '**/dist/**'],
     globals: true,
     coverage: {
       thresholds: {

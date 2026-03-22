@@ -4,6 +4,7 @@
     "client/src/**/*",
     "shared/**/*",
     "server/**/*"
+    ,"vitest.integration.setup.ts", "vitest.config.ts"
   ],
   "exclude": ["node_modules", "build", "dist"]
 }
