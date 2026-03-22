@@ -1,147 +1,108 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach, MockInstance } from "vitest";
 import { apiRequest, getQueryFn } from "./queryClient";
+import { QueryFunctionContext } from "@tanstack/react-query";
 
 describe("queryClient", () => {
-  const originalFetch = global.fetch;
+  let fetchSpy: MockInstance;
 
   beforeEach(() => {
-    global.fetch = vi.fn();
+    fetchSpy = vi.spyOn(global, "fetch");
   });
 
   afterEach(() => {
-    global.fetch = originalFetch;
-    vi.clearAllMocks();
+    vi.restoreAllMocks();
   });
 
+  function mockFetchResponse(options: {
+    ok?: boolean;
+    status?: number;
+    statusText?: string;
+    text?: string;
+    json?: unknown;
+  }) {
+    const mockResponse = {
+      ok: options.ok ?? true,
+      status: options.status ?? 200,
+      statusText: options.statusText ?? "OK",
+      ...(options.text !== undefined && { text: vi.fn().mockResolvedValue(options.text) }),
+      ...(options.json !== undefined && { json: vi.fn().mockResolvedValue(options.json) }),
+    };
+    fetchSpy.mockResolvedValue(mockResponse as unknown as Response);
+    return mockResponse;
+  }
+
   describe("apiRequest", () => {
-    it("should make a request with correct URL, method, headers, and body when data is provided", async () => {
-      const mockResponse = { ok: true };
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(mockResponse);
+    it.each([
+      [
+        "POST",
+        { foo: "bar" },
+        { "Content-Type": "application/json" },
+        JSON.stringify({ foo: "bar" })
+      ],
+      [
+        "GET",
+        undefined,
+        {},
+        undefined
+      ],
+    ])("should make a request with correct method %s and body provided: %s", async (method, data, expectedHeaders, expectedBody) => {
+      const mockResponse = mockFetchResponse({});
 
       const url = "/api/test";
-      const method = "POST";
-      const data = { foo: "bar" };
-
       const res = await apiRequest(method, url, data);
 
-      expect(global.fetch).toHaveBeenCalledWith(url, {
+      expect(fetchSpy).toHaveBeenCalledWith(url, {
         method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        headers: expectedHeaders,
+        body: expectedBody,
         credentials: "include",
         signal: undefined,
       });
       expect(res).toBe(mockResponse);
     });
 
-    it("should not include Content-Type or body when data is not provided", async () => {
-      const mockResponse = { ok: true };
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(mockResponse);
-
-      const url = "/api/test";
-      const method = "GET";
-
-      const res = await apiRequest(method, url);
-
-      expect(global.fetch).toHaveBeenCalledWith(url, {
-        method,
-        headers: {},
-        body: undefined,
-        credentials: "include",
-        signal: undefined,
-      });
-      expect(res).toBe(mockResponse);
-    });
-
-    it("should throw an error with response text when response is not ok", async () => {
-      const mockResponse = {
-        ok: false,
-        status: 400,
-        statusText: "Bad Request",
-        text: vi.fn().mockResolvedValue("Validation failed"),
-      };
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(mockResponse);
-
-      await expect(apiRequest("GET", "/api/test")).rejects.toThrow("400: Validation failed");
-    });
-
-    it("should throw an error with statusText when response is not ok and text is empty", async () => {
-      const mockResponse = {
-        ok: false,
-        status: 404,
-        statusText: "Not Found",
-        text: vi.fn().mockResolvedValue(""),
-      };
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(mockResponse);
-
-      await expect(apiRequest("GET", "/api/test")).rejects.toThrow("404: Not Found");
+    it.each([
+      [400, "Bad Request", "Validation failed", "400: Validation failed"],
+      [404, "Not Found", "", "404: Not Found"],
+    ])("should throw an error %s when response is not ok", async (status, statusText, text, expectedError) => {
+      mockFetchResponse({ ok: false, status, statusText, text });
+      await expect(apiRequest("GET", "/api/test")).rejects.toThrow(expectedError);
     });
   });
 
   describe("getQueryFn", () => {
     it("should return a function that calls fetch with URL joined by '/' and returns parsed JSON", async () => {
       const mockJson = { message: "success" };
-      const mockResponse = {
-        ok: true,
-        json: vi.fn().mockResolvedValue(mockJson),
-      };
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(mockResponse);
+      mockFetchResponse({ json: mockJson });
 
       const queryFn = getQueryFn({ on401: "throw" });
       const queryKey = ["api", "data"];
 
-      const result = await queryFn({ queryKey, meta: {} });
+      const result = await queryFn({ queryKey } as unknown as QueryFunctionContext<string[], unknown>);
 
-      expect(global.fetch).toHaveBeenCalledWith("api/data", {
+      expect(fetchSpy).toHaveBeenCalledWith("api/data", {
         credentials: "include",
         signal: undefined,
       });
-      expect(result).toBe(mockJson);
+      expect(result).toEqual(mockJson);
     });
 
-    it("should return null on 401 when on401 is 'returnNull'", async () => {
-      const mockResponse = {
-        ok: false,
-        status: 401,
-      };
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(mockResponse);
+    it.each([
+      ["returnNull" as const, 401, "Unauthorized", "Missing token", null, false],
+      ["throw" as const, 401, "Unauthorized", "Missing token", "401: Missing token", true],
+      ["returnNull" as const, 500, "Internal Server Error", "Crash", "500: Crash", true],
+    ])("should handle error status %s with on401=%s correctly", async (on401, status, statusText, text, expected, shouldThrow) => {
+      mockFetchResponse({ ok: false, status, statusText, text });
 
-      const queryFn = getQueryFn({ on401: "returnNull" });
-      const queryKey = ["api", "protected"];
+      const queryFn = getQueryFn({ on401 });
+      const queryKey = ["api", "test"];
+      const queryArgs = { queryKey } as unknown as QueryFunctionContext<string[], unknown>;
 
-      const result = await queryFn({ queryKey, meta: {} });
-
-      expect(result).toBeNull();
-    });
-
-    it("should throw an error on 401 when on401 is 'throw'", async () => {
-      const mockResponse = {
-        ok: false,
-        status: 401,
-        statusText: "Unauthorized",
-        text: vi.fn().mockResolvedValue("Missing token"),
-      };
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(mockResponse);
-
-      const queryFn = getQueryFn({ on401: "throw" });
-      const queryKey = ["api", "protected"];
-
-      await expect(queryFn({ queryKey, meta: {} })).rejects.toThrow("401: Missing token");
-    });
-
-    it("should throw an error for non-ok status codes other than 401, even with 'returnNull'", async () => {
-      const mockResponse = {
-        ok: false,
-        status: 500,
-        statusText: "Internal Server Error",
-        text: vi.fn().mockResolvedValue("Crash"),
-      };
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(mockResponse);
-
-      const queryFn = getQueryFn({ on401: "returnNull" });
-      const queryKey = ["api", "error"];
-
-      await expect(queryFn({ queryKey, meta: {} })).rejects.toThrow("500: Crash");
+      if (shouldThrow) {
+        await expect(queryFn(queryArgs)).rejects.toThrow(expected as string);
+      } else {
+        expect(await queryFn(queryArgs)).toBe(expected);
+      }
     });
   });
 });
