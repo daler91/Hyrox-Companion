@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { PersonalRecordItem } from "./PersonalRecordItem";
+import { api } from "@/lib/api";
 
 interface PRValue {
   value: number;
@@ -33,7 +34,7 @@ export function PersonalRecordsTab({ dateParams }: PersonalRecordsTabProps) {
 
   const { data: rawPRs, isLoading } = useQuery<Record<string, RawPREntry>>({
     queryKey: ["/api/v1/personal-records", dateParams],
-    queryFn: () => fetch(`/api/v1/personal-records${dateParams}`).then(r => r.json()),
+    queryFn: () => api.analytics.getPersonalRecords(dateParams),
   });
 
   const filteredPRs = useMemo(() => {
