@@ -1,3 +1,4 @@
+import { setupTestErrorHandler } from "./testUtils";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import express from "express";
 import request from "supertest";
@@ -51,6 +52,19 @@ describe("POST /api/plans/import Rate Limiting", () => {
     app = express();
     app.use(express.json());
     app.use(plansRouter);
+    // Mock global error handler
+    app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+      if (err.status >= 500 || !err.status) {
+        if (req.log) {
+          req.log.error({ err }, "Unhandled error in route");
+        } else {
+          // If logger mock exists, call it so tests pass
+
+        }
+      }
+      console.log("Global error handler caught error:", err.message);
+      res.status(err.status || 500).json({ error: "Internal Server Error" });
+    });
   });
 
   it("should rate limit requests to /api/plans/import after 5 requests", async () => {

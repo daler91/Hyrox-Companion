@@ -95,3 +95,9 @@ export function calculateStreak(completedDates: Set<string>): number {
   return streak;
 }
 
+
+export const asyncHandler = (fn: (req: any, res: Response, next: NextFunction) => Promise<any>) => (req: Request, res: Response, next: NextFunction) => {
+  return Promise.resolve(fn(req, res, next)).catch((err) => {
+    next(err);
+  });
+};

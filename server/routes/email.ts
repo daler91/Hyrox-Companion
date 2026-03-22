@@ -1,5 +1,5 @@
+import { asyncHandler } from "../routeUtils";
 import { env } from "../env";
-import { logger } from "../logger";
 import { Router, type Request as ExpressRequest, type Response } from "express";
 import crypto from "node:crypto";
 import { isAuthenticated } from "../clerkAuth";
@@ -9,8 +9,7 @@ import { getUserId } from "../types";
 
 const router = Router();
 
-router.post("/api/v1/emails/check", isAuthenticated, async (req: ExpressRequest, res: Response) => {
-  try {
+router.post("/api/v1/emails/check", isAuthenticated, asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const user = await storage.getUser(userId);
     if (!user) {
@@ -18,13 +17,9 @@ router.post("/api/v1/emails/check", isAuthenticated, async (req: ExpressRequest,
     }
     const sent = await checkAndSendEmailsForUser(storage, user);
     res.json({ sent });
-  } catch (error) {
-    (req.log || logger).error({ err: error }, "Error checking emails:");
-    res.json({ sent: [], error: "Email check failed" });
-  }
-});
+  }));
 
-router.get("/api/v1/cron/emails", async (req: ExpressRequest, res: Response) => {
+router.get("/api/v1/cron/emails", asyncHandler(async (req: ExpressRequest, res: Response) => {
   const secret = req.headers["x-cron-secret"] as string;
   const cronSecret = env.CRON_SECRET;
 
@@ -40,14 +35,8 @@ router.get("/api/v1/cron/emails", async (req: ExpressRequest, res: Response) => 
   if (!crypto.timingSafeEqual(secretHash, cronSecretHash)) {
     return res.status(401).json({ error: "Unauthorized" });
   }
-
-  try {
     const result = await runEmailCronJob(storage);
     res.json(result);
-  } catch (error) {
-    (req.log || logger).error({ err: error }, "Cron email error:");
-    res.status(500).json({ error: "Cron job failed" });
-  }
-});
+  }));
 
 export default router;

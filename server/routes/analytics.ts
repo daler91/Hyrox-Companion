@@ -1,10 +1,9 @@
-import { logger } from "../logger";
 import { Router, type Request as ExpressRequest, type Response } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
 import { calculatePersonalRecords, calculateExerciseAnalytics, type ExerciseSetWithDate } from "../services/analyticsService";
 import { getUserId } from "../types";
-import { rateLimiter } from "../routeUtils";
+import { rateLimiter, asyncHandler } from "../routeUtils";
 import { dateStringSchema } from "@shared/schema";
 
 const router = Router();
@@ -49,8 +48,7 @@ export function validDate(val: unknown): string | undefined {
   return parsed.success ? parsed.data : undefined;
 }
 
-router.get("/api/v1/personal-records", isAuthenticated, rateLimiter("analytics", 20), async (req: ExpressRequest<Record<string, never>, any, any, { from?: string; to?: string }>, res: Response) => {
-  try {
+router.get("/api/v1/personal-records", isAuthenticated, rateLimiter("analytics", 20), asyncHandler(async (req: ExpressRequest<Record<string, never>, any, any, { from?: string; to?: string }>, res: Response) => {
     const userId = getUserId(req);
     const from = validDate(req.query.from);
     const to = validDate(req.query.to);
@@ -59,14 +57,9 @@ router.get("/api/v1/personal-records", isAuthenticated, rateLimiter("analytics",
     if (req.query.to && !to) return res.status(400).json({ error: "Invalid 'to' date format" });
     const allSets = await getExerciseSetsCoalesced(userId, from, to);
     res.json(calculatePersonalRecords(allSets));
-  } catch (error) {
-    (req.log || logger).error({ err: error }, "Error fetching PRs:");
-    res.status(500).json({ error: "Failed to fetch personal records" });
-  }
-});
+  }));
 
-router.get("/api/v1/exercise-analytics", isAuthenticated, rateLimiter("analytics", 20), async (req: ExpressRequest<Record<string, never>, any, any, { from?: string; to?: string }>, res: Response) => {
-  try {
+router.get("/api/v1/exercise-analytics", isAuthenticated, rateLimiter("analytics", 20), asyncHandler(async (req: ExpressRequest<Record<string, never>, any, any, { from?: string; to?: string }>, res: Response) => {
     const userId = getUserId(req);
     const from = validDate(req.query.from);
     const to = validDate(req.query.to);
@@ -76,10 +69,6 @@ router.get("/api/v1/exercise-analytics", isAuthenticated, rateLimiter("analytics
 
     const allSets = await getExerciseSetsCoalesced(userId, from, to);
     res.json(calculateExerciseAnalytics(allSets));
-  } catch (error) {
-    (req.log || logger).error({ err: error }, "Error fetching exercise analytics:");
-    res.status(500).json({ error: "Failed to fetch exercise analytics" });
-  }
-});
+  }));
 
 export default router;
