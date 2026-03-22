@@ -8,6 +8,7 @@ describe("API Integration Tests", () => {
   describe("Plans Integration Tests", () => {
     it("should list training plans", async () => {
       const response = await request(context.app).get("/api/v1/plans");
+      expect(response.body?.error || response.error?.message).toBeUndefined();
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body)).toBe(true);
     });
@@ -22,6 +23,7 @@ describe("API Integration Tests", () => {
           difficulty: "beginner"
         });
 
+      expect(response.body?.error || response.error?.message).toBeUndefined();
       expect(response.status).toBe(201);
       expect(response.body).toHaveProperty("id");
       expect(response.body.name).toBe("Test Training Plan");
@@ -31,6 +33,7 @@ describe("API Integration Tests", () => {
   describe("Preferences and Timeline Integration Tests", () => {
     it("should get user preferences", async () => {
       const response = await request(context.app).get("/api/v1/preferences");
+      expect(response.body?.error || response.error?.message).toBeUndefined();
       expect(response.status).toBe(200);
       expect(response.body.weightUnit).toBe("kg");
       expect(response.body.distanceUnit).toBe("km");
@@ -44,6 +47,7 @@ describe("API Integration Tests", () => {
           distanceUnit: "miles"
         });
 
+      expect(response.body?.error || response.error?.message).toBeUndefined();
       expect(response.status).toBe(200);
       expect(response.body.weightUnit).toBe("lbs");
       expect(response.body.distanceUnit).toBe("miles");
@@ -51,6 +55,7 @@ describe("API Integration Tests", () => {
 
     it("should fetch timeline correctly", async () => {
       const response = await request(context.app).get("/api/v1/timeline?days=7");
+      expect(response.body?.error || response.error?.message).toBeUndefined();
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body)).toBe(true);
     });
@@ -69,6 +74,7 @@ describe("API Integration Tests", () => {
           completed: true,
         });
 
+      expect(response.body?.error || response.error?.message).toBeUndefined();
       expect(response.status).toBe(201);
       expect(response.body).toHaveProperty("id");
       expect(response.body.title).toBe("Morning Run");
@@ -85,6 +91,7 @@ describe("API Integration Tests", () => {
 
       const response = await request(context.app).get("/api/v1/workouts");
 
+      expect(response.body?.error || response.error?.message).toBeUndefined();
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body)).toBe(true);
       expect(response.body.length).toBeGreaterThan(0);
