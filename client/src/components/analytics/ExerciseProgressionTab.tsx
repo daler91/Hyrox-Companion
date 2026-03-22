@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { TrendingUp } from "lucide-react";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { getExerciseLabel } from "@/lib/exerciseUtils";
+import { api } from "@/lib/api";
 import { type ExerciseAnalyticDay } from "@/components/analytics/MiniBarChart";
 import { ExerciseProgressionCharts } from "@/components/analytics/ExerciseProgressionCharts";
 
@@ -24,7 +25,7 @@ export function ExerciseProgressionTab({ dateParams }: ExerciseProgressionTabPro
 
   const { data: rawPRs } = useQuery<Record<string, RawPREntry>>({
     queryKey: ["/api/v1/personal-records", dateParams],
-    queryFn: () => fetch(`/api/v1/personal-records${dateParams}`).then(r => r.json()),
+    queryFn: () => api.analytics.getPersonalRecords(dateParams),
   });
 
   const availableExercises = useMemo(() => {
@@ -38,7 +39,7 @@ export function ExerciseProgressionTab({ dateParams }: ExerciseProgressionTabPro
 
   const { data: allAnalytics, isLoading: analyticsLoading } = useQuery<Record<string, ExerciseAnalyticDay[]>>({
     queryKey: ["/api/v1/exercise-analytics", dateParams],
-    queryFn: () => fetch(`/api/v1/exercise-analytics${dateParams}`).then(r => r.json()),
+    queryFn: () => api.analytics.getExerciseAnalytics(dateParams) as Promise<Record<string, ExerciseAnalyticDay[]>>,
   });
 
   return (
