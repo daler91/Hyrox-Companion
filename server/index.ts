@@ -16,6 +16,7 @@ import { storage } from "./storage";
 import { pool } from "./db";
 import { getAuth } from "@clerk/express";
 import { runStartupMaintenance } from "./maintenance";
+import { startQueue, queue } from "./queue";
 
 if (env.SENTRY_DSN) {
   Sentry.init({
@@ -139,6 +140,7 @@ app.use(pinoHttp({
 }));
 
 await runStartupMaintenance(storage);
+await startQueue();
 await registerRoutes(httpServer, app);
 
 // Serve OpenAPI docs
@@ -194,8 +196,16 @@ httpServer.listen(
 // Graceful shutdown
 const shutdown = () => {
   logger.info("Received shutdown signal. Closing HTTP server...");
-  httpServer.close(() => {
-    logger.info("HTTP server closed. Draining database pool...");
+  httpServer.close(async () => {
+    logger.info("HTTP server closed. Stopping queue...");
+    try {
+      await queue.stop();
+      logger.info("Queue stopped.");
+    } catch (err) {
+      logger.error(err, "Error stopping queue");
+    }
+
+    logger.info("Draining database pool...");
     pool.end().then(() => {
       logger.info("Database pool drained. Exiting process.");
       process.exit(0);

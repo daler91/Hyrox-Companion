@@ -1,7 +1,24 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, date, timestamp, index, real, uniqueIndex, boolean, check } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, date, timestamp, index, real, uniqueIndex, boolean, check, customType } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+
+// pgvector custom type: maps PostgreSQL vector(N) ↔ TypeScript number[]
+const vector = customType<{
+  data: number[];
+  driverData: string;
+  config: { dimensions: number };
+}>({
+  dataType(config) {
+    return `vector(${config.dimensions})`;
+  },
+  fromDriver(value: string): number[] {
+    return value.slice(1, -1).split(",").map(Number);
+  },
+  toDriver(value: number[]): string {
+    return `[${value.join(",")}]`;
+  },
+});
 
 export const workoutStatusEnum = ["planned", "completed", "missed", "skipped"] as const;
 export type WorkoutStatus = (typeof workoutStatusEnum)[number];
@@ -435,7 +452,7 @@ export const documentChunks = pgTable("document_chunks", {
   userId: varchar("user_id", { length: 255 }).notNull().references(() => users.id, { onDelete: "cascade" }),
   content: text("content").notNull(),
   chunkIndex: integer("chunk_index").notNull(),
-  embedding: text("embedding"), // Stored as JSON string of float array; cast to vector for queries
+  embedding: vector("embedding", { dimensions: 3072 }),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_document_chunks_material_id").on(table.materialId),
