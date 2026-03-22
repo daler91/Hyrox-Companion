@@ -141,7 +141,7 @@ router.post("/api/v1/workouts", isAuthenticated, rateLimiter("workout", 40), asy
     const result = await createWorkout(parseResult.data, validatedExercises, userId);
     res.json(result);
     // Queue job: auto-coach adjusts upcoming plan days based on this completed workout
-    await queue.send("auto-coach", { userId });
+    queue.send("auto-coach", { userId }).catch(err => (req.log || logger).error({ err }, "Failed to queue auto-coach job"));
   } catch (error) {
     (req.log || logger).error({ err: error }, "Create workout error:");
     res.status(500).json({ error: "Failed to create workout" });

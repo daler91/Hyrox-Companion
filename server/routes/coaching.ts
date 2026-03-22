@@ -38,7 +38,7 @@ router.post("/api/v1/coaching-materials", isAuthenticated, rateLimiter("coaching
     const material = await storage.createCoachingMaterial(parseResult.data);
 
     // Fire-and-forget: chunk and embed in background
-    await queue.send("embed-coaching-material", { material });
+    queue.send("embed-coaching-material", { material }).catch(err => (req.log || logger).error({ err }, "Failed to queue coaching material embedding"));
 
     res.status(201).json(material);
   } catch (error) {
@@ -61,7 +61,7 @@ router.patch("/api/v1/coaching-materials/:id", isAuthenticated, rateLimiter("coa
 
     // Re-embed if content or title changed
     if (parseResult.data.content || parseResult.data.title) {
-      await queue.send("embed-coaching-material", { material });
+      queue.send("embed-coaching-material", { material }).catch(err => (req.log || logger).error({ err }, "Failed to queue coaching material embedding"));
     }
 
     res.json(material);
