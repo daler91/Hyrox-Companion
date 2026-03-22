@@ -1,7 +1,7 @@
 import { apiRequest } from "@/lib/queryClient";
-import type { UpdateUserPreferences } from "@shared/schema";
 
-export async function updatePreferences(prefs: UpdateUserPreferences): Promise<any> {
+
+export async function updatePreferences(prefs: { weightUnit: string; distanceUnit: string }): Promise<any> {
   const response = await apiRequest("PATCH", "/api/v1/preferences", prefs);
   return response.json();
 }
@@ -11,9 +11,8 @@ export async function connectStrava(): Promise<{ authUrl: string }> {
   return response.json();
 }
 
-export async function disconnectStrava(): Promise<any> {
-  const response = await apiRequest("DELETE", "/api/v1/strava/disconnect");
-  return response.json();
+export async function disconnectStrava(): Promise<void> {
+  await apiRequest("DELETE", "/api/v1/strava/disconnect");
 }
 
 export async function syncStrava(): Promise<{ imported: number; skipped: number; total: number }> {

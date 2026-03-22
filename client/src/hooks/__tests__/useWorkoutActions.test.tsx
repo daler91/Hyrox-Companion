@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useWorkoutActions } from '../useWorkoutActions';
+import * as apiLib from "@/lib/api";
 import * as queryClientLib from '@/lib/queryClient';
 import * as toastHook from '@/hooks/use-toast';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -15,6 +16,14 @@ const wrapper = ({ children }: { children: React.ReactNode }) => (
   <QueryClientProvider client={createTestQueryClient()}>{children}</QueryClientProvider>
 );
 
+vi.mock("@/lib/api", () => ({
+  updateDayStatus: vi.fn(),
+  updateDayDetails: vi.fn(),
+  createWorkout: vi.fn(),
+  updateWorkout: vi.fn(),
+  deleteWorkout: vi.fn(),
+  deleteDay: vi.fn(),
+}));
 vi.mock('@/lib/queryClient', () => ({
 
   queryClient: {
@@ -267,6 +276,11 @@ describe('useWorkoutActions', () => {
 
     it.each(mutationTestCases)('triggers error toast on failed %s', async (_, mockEntry, actionName, args, needsDialog, expectedTitle) => {
       vi.mocked(apiLib.updateDayStatus).mockRejectedValueOnce(new Error('API Failure'));
+      vi.mocked(apiLib.updateDayDetails).mockRejectedValueOnce(new Error('API Failure'));
+      vi.mocked(apiLib.createWorkout).mockRejectedValueOnce(new Error('API Failure'));
+      vi.mocked(apiLib.updateWorkout).mockRejectedValueOnce(new Error('API Failure'));
+      vi.mocked(apiLib.deleteWorkout).mockRejectedValueOnce(new Error('API Failure'));
+      vi.mocked(apiLib.deleteDay).mockRejectedValueOnce(new Error('API Failure'));
       const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
 
       if (needsDialog) {
@@ -305,7 +319,12 @@ describe('useWorkoutActions', () => {
 
     it('triggers error toast on failed status update', async () => {
       // Setup mutation mock to simulate failure
+      vi.mocked(apiLib.updateDayStatus).mockRejectedValueOnce(new Error('Network Error'));
+      vi.mocked(apiLib.updateDayDetails).mockRejectedValueOnce(new Error('Network Error'));
+      vi.mocked(apiLib.createWorkout).mockRejectedValueOnce(new Error('Network Error'));
       vi.mocked(apiLib.updateWorkout).mockRejectedValueOnce(new Error('Network Error'));
+      vi.mocked(apiLib.deleteWorkout).mockRejectedValueOnce(new Error('Network Error'));
+      vi.mocked(apiLib.deleteDay).mockRejectedValueOnce(new Error('Network Error'));
 
       const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
       const mockEntry = { planDayId: 'pd-1', date: '2024-01-01', focus: 'cardio' };

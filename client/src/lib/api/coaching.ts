@@ -1,5 +1,5 @@
 import { apiRequest } from "@/lib/queryClient";
-import type { ChatMessage, ChatRequest, InsertCoachingMaterial } from "@shared/schema";
+import type { ChatRequest, InsertCoachingMaterial } from "@shared/schema";
 
 export async function sendChatMessage(msg: { role: string; content: string }): Promise<any> {
   const response = await apiRequest("POST", "/api/v1/chat/message", msg);
@@ -16,9 +16,8 @@ export async function sendChat(data: ChatRequest): Promise<any> {
   return response.json();
 }
 
-export async function clearChatHistory(): Promise<any> {
-  const response = await apiRequest("DELETE", "/api/v1/chat/history");
-  return response.json();
+export async function clearChatHistory(): Promise<void> {
+  await apiRequest("DELETE", "/api/v1/chat/history");
 }
 
 export async function getCoachingMaterials(): Promise<any> {
@@ -31,7 +30,7 @@ export async function createCoachingMaterial(data: InsertCoachingMaterial): Prom
   return response.json();
 }
 
-export async function updateCoachingMaterial(id: string, data: Partial<InsertCoachingMaterial>): Promise<any> {
+export async function updateCoachingMaterial(id: string | number, data: Partial<InsertCoachingMaterial>): Promise<any> {
   const response = await apiRequest("PATCH", `/api/v1/coaching-materials/${id}`, data);
   return response.json();
 }
@@ -46,9 +45,8 @@ export async function reEmbedCoachingMaterials(): Promise<any> {
   return response.json();
 }
 
-export async function deleteCoachingMaterial(id: string): Promise<any> {
-  const response = await apiRequest("DELETE", `/api/v1/coaching-materials/${id}`);
-  return response.json();
+export async function deleteCoachingMaterial(id: string | number): Promise<void> {
+  await apiRequest("DELETE", `/api/v1/coaching-materials/${id}`);
 }
 
 export async function getSuggestions(): Promise<any> {

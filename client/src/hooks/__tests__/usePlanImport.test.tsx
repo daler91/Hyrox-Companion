@@ -6,13 +6,22 @@ import * as toastHook from '@/hooks/use-toast';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import { format, startOfWeek } from 'date-fns';
+import * as apiLib from "@/lib/api";
 
 const createWrapper = () => {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   return { qc, wrapper: ({ children }: { children: React.ReactNode }) => <QueryClientProvider client={qc}>{children}</QueryClientProvider> };
 };
 
+vi.mock("@/lib/api", () => ({
+  importPlan: vi.fn(),
+  samplePlan: vi.fn(),
+  renamePlan: vi.fn(),
+  updatePlanGoal: vi.fn(),
+  schedulePlan: vi.fn(),
+}));
 vi.mock('@/lib/queryClient', () => ({
+  apiRequest: vi.fn(),
   queryClient: { invalidateQueries: vi.fn() }
 }));
 vi.mock('@/hooks/use-toast', () => ({ useToast: vi.fn() }));
@@ -34,7 +43,7 @@ describe('usePlanImport', () => {
     wrapper = w.wrapper;
   });
 
-  afterEach(() => { vi.restoreAllMocks(); qc.clear(); });
+  afterEach(() => { vi.restoreAllMocks(); qc.getQueryCache().clear(); qc.getMutationCache().clear(); });
 
   const runHook = (props?: any) => renderHook(() => usePlanImport(props), { wrapper });
 
@@ -119,6 +128,10 @@ describe('usePlanImport', () => {
 
     it.each(cases)('$name error', async ({ setup, trigger, eToast }) => {
       vi.mocked(apiLib.importPlan).mockRejectedValueOnce(new Error('API Failure'));
+      vi.mocked(apiLib.samplePlan).mockRejectedValueOnce(new Error('API Failure'));
+      vi.mocked(apiLib.renamePlan).mockRejectedValueOnce(new Error('API Failure'));
+      vi.mocked(apiLib.updatePlanGoal).mockRejectedValueOnce(new Error('API Failure'));
+      vi.mocked(apiLib.schedulePlan).mockRejectedValueOnce(new Error('API Failure'));
       const { result } = runHook();
       act(() => { setup(result); }); act(() => { trigger(result); });
       await waitFor(() => { expect(mockToast).toHaveBeenCalledWith({ title: eToast, variant: "destructive" }); });

@@ -3,6 +3,7 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { useChatSession } from '../useChatSession';
 import * as queryClient from '@/lib/queryClient';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import * as apiLib from "@/lib/api";
 import React from 'react';
 
 // Setup mock QueryClient
@@ -13,8 +14,14 @@ const wrapper = ({ children }: { children: React.ReactNode }) => (
   <QueryClientProvider client={testQueryClient}>{children}</QueryClientProvider>
 );
 
+vi.mock("@/lib/api", () => ({
+  streamChat: vi.fn(),
+  sendChat: vi.fn(),
+  sendChatMessage: vi.fn(),
+  clearChatHistory: vi.fn(),
+}));
 vi.mock('@/lib/queryClient', () => ({
-
+  apiRequest: vi.fn(),
   queryClient: {
     invalidateQueries: vi.fn(),
   },
@@ -76,9 +83,7 @@ describe('useChatSession', () => {
 
   it('should handle successful non-streaming chat', async () => {
     const mockResponse = { response: 'Hello from assistant' };
-    vi.mocked(queryClient.apiRequest).mockResolvedValue({
-      json: () => Promise.resolve(mockResponse)
-    } as Response);
+    vi.mocked(apiLib.sendChat).mockResolvedValue(mockResponse);
 
     const { result } = renderHook(() => useChatSession({ useStreaming: false }), { wrapper });
 
@@ -141,7 +146,7 @@ describe('useChatSession', () => {
       }
     });
 
-    vi.mocked(queryClient.apiRequest).mockResolvedValue({
+    vi.mocked(apiLib.streamChat).mockResolvedValue({
       ok: true,
       body: mockStream,
     } as unknown as Response);

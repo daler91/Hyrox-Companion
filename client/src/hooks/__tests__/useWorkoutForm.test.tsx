@@ -3,6 +3,7 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import { useWorkoutForm } from '../useWorkoutForm';
+import * as apiLib from "@/lib/api";
 
 // Mocks
 import * as wouter from 'wouter';
@@ -23,6 +24,9 @@ vi.mock('@/hooks/useVoiceInput', () => ({
   useVoiceInput: vi.fn(),
 }));
 
+vi.mock("@/lib/api", () => ({
+  createWorkout: vi.fn(),
+}));
 vi.mock('@/lib/queryClient', () => ({
 
   queryClient: {
