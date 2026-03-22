@@ -204,7 +204,7 @@ const shutdown = () => {
     } catch (err) {
       logger.error(err, "Error stopping queue");
     }
-    
+
     logger.info("Draining database pool...");
     pool.end().then(() => {
       logger.info("Database pool drained. Exiting process.");
