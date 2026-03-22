@@ -192,7 +192,7 @@ export async function updatePlanDayStatus(
   const updatedDay = await storage.updatePlanDay(dayId, updates, userId);
 
   if (updatedDay && status === "completed") {
-    await queue.send("auto-coach", { userId });
+    queue.send("auto-coach", { userId }).catch(err => logger.error({ err }, "Failed to queue auto-coach job"));
   }
 
   return updatedDay;
