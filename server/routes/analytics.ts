@@ -49,7 +49,7 @@ export function validDate(val: unknown): string | undefined {
   return parsed.success ? parsed.data : undefined;
 }
 
-router.get("/api/v1/personal-records", isAuthenticated, rateLimiter("analytics", 20), async (req: ExpressRequest<{}, any, any, { from?: string; to?: string }>, res: Response) => {
+router.get("/api/v1/personal-records", isAuthenticated, rateLimiter("analytics", 20), async (req: ExpressRequest<Record<string, never>, any, any, { from?: string; to?: string }>, res: Response) => {
   try {
     const userId = getUserId(req);
     const from = validDate(req.query.from);
@@ -65,7 +65,7 @@ router.get("/api/v1/personal-records", isAuthenticated, rateLimiter("analytics",
   }
 });
 
-router.get("/api/v1/exercise-analytics", isAuthenticated, rateLimiter("analytics", 20), async (req: ExpressRequest<{}, any, any, { from?: string; to?: string }>, res: Response) => {
+router.get("/api/v1/exercise-analytics", isAuthenticated, rateLimiter("analytics", 20), async (req: ExpressRequest<Record<string, never>, any, any, { from?: string; to?: string }>, res: Response) => {
   try {
     const userId = getUserId(req);
     const from = validDate(req.query.from);

@@ -1,5 +1,5 @@
 import { logger } from "../logger";
-import { generateEmbedding, generateEmbeddings } from "../gemini/client";
+import { generateEmbedding, generateEmbeddings, EMBEDDING_DIMENSIONS } from "../gemini/client";
 import { storage } from "../storage";
 import type { CoachingMaterial } from "@shared/schema";
 import { env } from "../env";
@@ -148,4 +148,65 @@ export function buildRetrievedMaterialsSection(chunks: string[]): string {
 
   section += `--- END COACHING MATERIALS ---\n`;
   return section;
+}
+
+export async function getRagStatus(userId: string) {
+  const materials = await storage.listCoachingMaterials(userId);
+  const chunkCounts = await storage.getChunkCountsByMaterial(userId);
+  const chunkMap = new Map(chunkCounts.map((c) => [c.materialId, c]));
+
+  const hasApiKey = Boolean(process.env.GEMINI_API_KEY);
+  const storedDimension = await storage.getStoredEmbeddingDimension(userId);
+
+  const materialStatus = materials.map((m) => {
+    const chunks = chunkMap.get(m.id);
+    return {
+      id: m.id,
+      title: m.title,
+      type: m.type,
+      contentLength: m.content.length,
+      chunkCount: chunks?.chunkCount ?? 0,
+      hasEmbeddings: chunks?.hasEmbeddings ?? false,
+    };
+  });
+
+  const totalChunks = chunkCounts.reduce((sum, c) => sum + c.chunkCount, 0);
+  const allEmbedded = materials.length > 0 && materials.every((m) => chunkMap.get(m.id)?.hasEmbeddings);
+
+  let embeddingApiStatus: { ok: boolean; dimension?: number; error?: string } = { ok: false };
+  if (hasApiKey) {
+    try {
+      const probe = await generateEmbedding("test");
+      embeddingApiStatus = { ok: true, dimension: probe.length };
+    } catch (err) {
+      embeddingApiStatus = { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
+  return {
+    hasApiKey,
+    totalMaterials: materials.length,
+    totalChunks,
+    allEmbedded,
+    materials: materialStatus,
+    storedDimension,
+    expectedDimension: EMBEDDING_DIMENSIONS,
+    dimensionMismatch: storedDimension !== null && storedDimension !== EMBEDDING_DIMENSIONS,
+    embeddingApi: embeddingApiStatus,
+  };
+}
+
+export async function reembedAllMaterials(userId: string) {
+  const materials = await storage.listCoachingMaterials(userId);
+  const errors: string[] = [];
+  let count = 0;
+  for (const material of materials) {
+    try {
+      await embedCoachingMaterial(material);
+      count++;
+    } catch (err) {
+      errors.push(`${material.id}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  return { success: true, materialsProcessed: count, errors };
 }
