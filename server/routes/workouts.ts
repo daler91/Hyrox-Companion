@@ -7,7 +7,7 @@ import { insertWorkoutLogSchema, updateWorkoutLogSchema, insertCustomExerciseSch
 import { generateCSV, generateJSON } from "../services/exportService";
 import { createWorkout, updateWorkout, reparseWorkout, prepareParsedWorkout, saveParsedWorkout } from "../services/workoutService";
 import { getUserId } from "../types";
-import { triggerAutoCoach } from "../services/coachService";
+import { queue } from "../queue";
 
 const router = Router();
 
@@ -203,8 +203,8 @@ router.post("/api/v1/workouts", isAuthenticated, rateLimiter("workout", 40), asy
     const userId = getUserId(req);
     const result = await createWorkout(parseResult.data, validatedExercises, userId);
     res.json(result);
-    // Fire-and-forget: auto-coach adjusts upcoming plan days based on this completed workout
-    triggerAutoCoach(userId).catch((err) => logger.warn(err, "Auto-coach trigger failed"));
+    // Queue job: auto-coach adjusts upcoming plan days based on this completed workout
+    queue.send("auto-coach", { userId }).catch((err) => logger.warn(err, "Auto-coach enqueue failed"));
   } catch (error) {
     (req.log || logger).error({ err: error }, "Create workout error:");
     res.status(500).json({ error: "Failed to create workout" });

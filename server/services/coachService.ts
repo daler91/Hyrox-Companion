@@ -156,14 +156,7 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
       await storage.updateIsAutoCoaching(userId, false);
     }
   } catch (error) {
-    // Never throw — this is a background, non-critical operation
     logger.error({ err: error, userId }, "[coach] Auto-coach error:");
-    // Attempt to reset the flag in case of outer try failure (though finally covers the inner one)
-    try {
-      await storage.updateIsAutoCoaching(userId, false);
-    } catch {
-      // Ignored: best-effort attempt to reset the flag after an error
-    }
-    return { adjusted: 0 };
+    throw error; // Let the queue handle retries
   }
 }

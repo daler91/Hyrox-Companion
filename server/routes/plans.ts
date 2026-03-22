@@ -7,7 +7,7 @@ import { updatePlanDaySchema, importPlanRequestSchema, schedulePlanRequestSchema
 import { getUserId } from "../types";
 import { importPlanFromCSV, createSamplePlan, updatePlanDayWithCleanup } from "../services/planService";
 import { rateLimiter } from "../routeUtils";
-import { triggerAutoCoach } from "../services/coachService";
+import { queue } from "../queue";
 
 const router = Router();
 
@@ -209,9 +209,9 @@ router.patch("/api/v1/plans/days/:dayId/status", isAuthenticated, rateLimiter("p
 
     res.json(updatedDay);
 
-    // Fire-and-forget: auto-coach adjusts upcoming plan days after a session is completed
+    // Queue job: auto-coach adjusts upcoming plan days after a session is completed
     if (status === "completed") {
-      triggerAutoCoach(userId).catch((err) => logger.warn(err, "Auto-coach trigger failed"));
+      queue.send("auto-coach", { userId }).catch((err) => logger.warn(err, "Auto-coach enqueue failed"));
     }
   } catch (error) {
     (req.log || logger).error({ err: error }, "Update day status error:");
