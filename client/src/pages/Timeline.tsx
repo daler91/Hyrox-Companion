@@ -30,6 +30,16 @@ import { useRef, useMemo, useCallback } from "react";
 import { useTimelineState } from "@/hooks/useTimelineState";
 import { useAuth } from "@/hooks/useAuth";
 
+
+function getTimelineDateLabel(d: Date) {
+  if (isToday(d)) return "Today";
+  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+  if (d.toDateString() === tomorrow.toDateString()) return "Tomorrow";
+  const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+  if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
+  return format(d, "EEEE, MMM d");
+}
+
 export default function Timeline() {
   const state = useTimelineState();
   const {
@@ -218,20 +228,17 @@ export default function Timeline() {
                 const isTodayDate = isToday(dateObj);
                 const isPast = !isTodayDate && dateObj < new Date();
 
-                const getDateLabel = (d: Date) => {
-                  if (isToday(d)) return "Today";
-                  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
-                  if (d.toDateString() === tomorrow.toDateString()) return "Tomorrow";
-                  const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
-                  if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
-                  return format(d, "EEEE, MMM d");
-                };
 
                 return (
                   <div className="sticky top-0 z-20 bg-background/95 backdrop-blur py-2 shadow-sm mb-4 flex items-center gap-3 w-full border-b" style={{ marginTop: '-1rem' }}>
-                    <div className={`h-3 w-3 rounded-full ${isTodayDate ? "bg-primary" : isPast ? "bg-muted-foreground/30" : "bg-muted-foreground/50"}`} />
+                    {(() => {
+                      let dotColor = "bg-muted-foreground/50";
+                      if (isTodayDate) dotColor = "bg-primary";
+                      else if (isPast) dotColor = "bg-muted-foreground/30";
+                      return <div className={`h-3 w-3 rounded-full ${dotColor}`} />;
+                    })()}
                     <span className={isTodayDate ? "text-primary font-semibold" : "text-muted-foreground font-semibold"}>
-                      {getDateLabel(dateObj)}
+                      {getTimelineDateLabel(dateObj)}
                     </span>
                   </div>
                 );
