@@ -332,20 +332,14 @@ export const chatMessageSchema = z.object({
 });
 
 export const chatRequestSchema = z.object({
-  message: z.string().min(1, "Message is required").max(1000, "Message must be 1000 characters or less")
-    .refine((val) => !/(ignore\s+all\s+previous\s+instructions|system\s*prompt|system:|instruction:|forget\s+all|bypass|you\s+are\s+now)/i.test(val), {
-      message: "Input contains invalid commands or restricted keywords",
-    }),
+  message: z.string().min(1, "Message is required").max(1000, "Message must be 1000 characters or less"),
   history: z.array(chatMessageSchema).optional().default([]).transform((h) => h.slice(-20)),
 });
 
 export const parseExercisesRequestSchema = z.object({
   text: z.string().trim()
     .min(1, "Text is required")
-    .max(2000, "Text must be 2000 characters or less")
-    .refine((val) => !/(ignore\s+all\s+previous\s+instructions|system\s*prompt|system:|instruction:|forget\s+all|bypass|you\s+are\s+now)/i.test(val), {
-      message: "Input contains invalid commands or restricted keywords",
-    }),
+    .max(2000, "Text must be 2000 characters or less"),
 });
 
 export const importPlanRequestSchema = z.object({
