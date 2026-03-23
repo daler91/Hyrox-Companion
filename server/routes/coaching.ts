@@ -27,7 +27,7 @@ router.post("/api/v1/coaching-materials", isAuthenticated, rateLimiter("coaching
     const userId = getUserId(req);
     const parseResult = insertCoachingMaterialSchema.safeParse({ ...req.body, userId });
     if (!parseResult.success) {
-      return res.status(400).json({ error: "Invalid data", details: parseResult.error.issues });
+      return res.status(400).json({ error: "Invalid data", code: "VALIDATION_ERROR", details: parseResult.error.issues });
     }
     const material = await storage.createCoachingMaterial(parseResult.data);
 
@@ -41,11 +41,11 @@ router.patch("/api/v1/coaching-materials/:id", isAuthenticated, rateLimiter("coa
     const userId = getUserId(req);
     const parseResult = updateCoachingMaterialSchema.safeParse(req.body);
     if (!parseResult.success) {
-      return res.status(400).json({ error: "Invalid data", details: parseResult.error.issues });
+      return res.status(400).json({ error: "Invalid data", code: "VALIDATION_ERROR", details: parseResult.error.issues });
     }
     const material = await storage.updateCoachingMaterial(req.params.id, parseResult.data, userId);
     if (!material) {
-      return res.status(404).json({ error: "Coaching material not found" });
+      return res.status(404).json({ error: "Coaching material not found", code: "NOT_FOUND" });
     }
 
     // Re-embed if content or title changed
@@ -73,7 +73,7 @@ router.delete("/api/v1/coaching-materials/:id", isAuthenticated, rateLimiter("co
     // Chunks are cascade-deleted via FK, no manual cleanup needed
     const deleted = await storage.deleteCoachingMaterial(req.params.id, userId);
     if (!deleted) {
-      return res.status(404).json({ error: "Coaching material not found" });
+      return res.status(404).json({ error: "Coaching material not found", code: "NOT_FOUND" });
     }
     res.json({ success: true });
   }));

@@ -72,7 +72,7 @@ describe("Workouts Routes", () => {
 
 
       expect(response.status).toBe(500);
-      expect(response.body).toEqual({ error: "Internal Server Error" });
+      expect(response.body).toEqual({ error: "Internal Server Error", code: "INTERNAL_SERVER_ERROR" });
     });
   });
 
@@ -102,7 +102,7 @@ describe("Workouts Routes", () => {
       const response = await request(app).get("/api/v1/workouts");
 
       expect(response.status).toBe(500);
-      expect(response.body).toEqual({ error: "Internal Server Error" });
+      expect(response.body).toEqual({ error: "Internal Server Error", code: "INTERNAL_SERVER_ERROR" });
     });
   });
 });

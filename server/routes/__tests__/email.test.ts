@@ -41,7 +41,7 @@ describe("Email Routes", () => {
         .set("x-cron-secret", "any-secret");
 
       expect(response.status).toBe(401);
-      expect(response.body).toEqual({ error: "Unauthorized" });
+      expect(response.body).toEqual({ error: "Unauthorized", code: "UNAUTHORIZED" });
     });
 
     it("should return 401 if secret header is missing", async () => {
@@ -49,7 +49,7 @@ describe("Email Routes", () => {
         .get("/api/v1/cron/emails");
 
       expect(response.status).toBe(401);
-      expect(response.body).toEqual({ error: "Unauthorized" });
+      expect(response.body).toEqual({ error: "Unauthorized", code: "UNAUTHORIZED" });
     });
 
     it("should return 401 if secret is incorrect", async () => {
@@ -58,7 +58,7 @@ describe("Email Routes", () => {
         .set("x-cron-secret", "wrong-secret");
 
       expect(response.status).toBe(401);
-      expect(response.body).toEqual({ error: "Unauthorized" });
+      expect(response.body).toEqual({ error: "Unauthorized", code: "UNAUTHORIZED" });
     });
 
     it("should return 200 and run cron job if secret is correct", async () => {
@@ -84,7 +84,7 @@ describe("Email Routes", () => {
         .set("x-cron-secret", "super-secret");
 
       expect(response.status).toBe(500);
-      expect(response.body).toEqual({ error: "Internal Server Error" });
+      expect(response.body).toEqual({ error: "Internal Server Error", code: "INTERNAL_SERVER_ERROR" });
     });
   });
 });
