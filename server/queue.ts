@@ -39,7 +39,7 @@ export async function startQueue() {
 
   // Register worker for embed-coaching-material
   await queue.work("embed-coaching-material", async (jobs: Job[]) => {
-    await Promise.all(
+    const results = await Promise.allSettled(
       jobs.map(async (job) => {
         logger.info({ jobId: job.id, data: job.data }, "[pg-boss] Processing embed-coaching-material job");
         try {
@@ -52,6 +52,11 @@ export async function startQueue() {
         }
       })
     );
+
+    const failed = results.filter(r => r.status === "rejected");
+    if (failed.length > 0) {
+      throw new Error(`Batch processing failed for ${failed.length} embed-coaching-material jobs`);
+    }
   });
 
   logger.info("pg-boss queue started and workers registered");
