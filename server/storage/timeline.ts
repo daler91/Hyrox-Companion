@@ -107,7 +107,12 @@ export class TimelineStorage {
     if (workoutLogIds.length === 0) return;
 
     const allSets = await this.workoutStorage.getExerciseSetsByWorkoutLogs(workoutLogIds);
-    const setsByWorkoutId = Map.groupBy(allSets, (s) => s.workoutLogId);
+    const setsByWorkoutId = new Map<string, typeof allSets>();
+    for (const s of allSets) {
+      const existing = setsByWorkoutId.get(s.workoutLogId);
+      if (existing) existing.push(s);
+      else setsByWorkoutId.set(s.workoutLogId, [s]);
+    }
 
     for (const entry of entries) {
       if (entry.workoutLogId) {

@@ -19,7 +19,9 @@ export async function startQueue() {
   logger.info("Starting pg-boss queue...");
   await queue.start();
 
-  // Register worker for auto-coach
+  await queue.createQueue("auto-coach");
+  await queue.createQueue("embed-coaching-material");
+
   await queue.work("auto-coach", async (jobs: Job[]) => {
     await Promise.all(
       jobs.map(async (job) => {
