@@ -27,7 +27,7 @@ export function CoachingUploadDialog({
   setContent,
   handleSave,
   isSaving,
-}: CoachingUploadDialogProps) {
+}: Readonly<CoachingUploadDialogProps>) {
   return (
     <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
       <DialogContent className="max-w-lg">

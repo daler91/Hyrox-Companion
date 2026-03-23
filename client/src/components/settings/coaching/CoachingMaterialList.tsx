@@ -12,7 +12,7 @@ export function CoachingMaterialList({
   openPrinciplesDialog,
   fileInputRef,
   handleFileUpload,
-}: CoachingMaterialListProps) {
+}: Readonly<CoachingMaterialListProps>) {
   const { data: materials, isLoading } = useCoachingMaterials();
   const deleteMutation = useDeleteCoachingMaterial();
 
