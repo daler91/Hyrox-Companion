@@ -1,14 +1,5 @@
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import type { TimelineEntry } from "@shared/schema";
+import { ConfirmDialog } from "./ConfirmDialog";
 
 interface SkipConfirmDialogProps {
   readonly entry: TimelineEntry | null;
@@ -22,24 +13,16 @@ export default function SkipConfirmDialog({
   onConfirm,
 }: Readonly<SkipConfirmDialogProps>) {
   return (
-    <AlertDialog open={!!entry} onOpenChange={(open) => !open && onOpenChange(false)}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Skip this workout?</AlertDialogTitle>
-          <AlertDialogDescription>
-            This will mark "{entry?.focus}" as skipped. You can still go back and complete it later if needed.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel data-testid="button-cancel-skip">Cancel</AlertDialogCancel>
-          <AlertDialogAction 
-            onClick={onConfirm}
-            data-testid="button-confirm-skip"
-          >
-            Skip Workout
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <ConfirmDialog
+      open={!!entry}
+      onOpenChange={(open) => !open && onOpenChange(false)}
+      title="Skip this workout?"
+      description={`This will mark "${entry?.focus}" as skipped. You can still go back and complete it later if needed.`}
+      confirmText="Skip Workout"
+      cancelText="Cancel"
+      onConfirm={onConfirm}
+      cancelTestId="button-cancel-skip"
+      confirmTestId="button-confirm-skip"
+    />
   );
 }
