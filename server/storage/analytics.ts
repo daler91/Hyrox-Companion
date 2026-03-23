@@ -40,8 +40,11 @@ export class AnalyticsStorage {
   }
 
   async getWeeklyStats(userId: string, weekStart: string, weekEnd: string): Promise<{ completedCount: number; plannedCount: number; missedCount: number; skippedCount: number; totalDuration: number }> {
-    const logs = await db
-      .select({ duration: workoutLogs.duration })
+    const [logs] = await db
+      .select({
+        completedCount: sql<number>`cast(count(*) as int)`,
+        totalDuration: sql<number>`cast(sum(${workoutLogs.duration}) as int)`,
+      })
       .from(workoutLogs)
       .where(
         and(
@@ -52,7 +55,10 @@ export class AnalyticsStorage {
       );
 
     const days = await db
-      .select({ status: planDays.status })
+      .select({
+        status: planDays.status,
+        count: sql<number>`cast(count(*) as int)`,
+      })
       .from(planDays)
       .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
       .where(
@@ -61,32 +67,24 @@ export class AnalyticsStorage {
           sql`${planDays.scheduledDate} >= ${weekStart}`,
           sql`${planDays.scheduledDate} <= ${weekEnd}`
         )
-      );
+      )
+      .groupBy(planDays.status);
 
-    const completedCount = logs.length;
+    const completedCount = logs?.completedCount || 0;
+    const totalDuration = logs?.totalDuration || 0;
 
-    // ⚡ Bolt Performance Optimization:
-    // Instead of multiple O(N) array filters and reduces to compute stats, we iterate
-    // over the arrays exactly once. This reduces overhead, especially
-    // for users with long workout histories.
     let plannedCount = 0;
     let missedCount = 0;
     let skippedCount = 0;
 
     for (const day of days) {
-      const status = day.status;
-      if (status === 'planned') {
-        plannedCount++;
-      } else if (status === 'missed') {
-        missedCount++;
-      } else if (status === 'skipped') {
-        skippedCount++;
+      if (day.status === 'planned') {
+        plannedCount = day.count;
+      } else if (day.status === 'missed') {
+        missedCount = day.count;
+      } else if (day.status === 'skipped') {
+        skippedCount = day.count;
       }
-    }
-
-    let totalDuration = 0;
-    for (const log of logs) {
-      totalDuration += log.duration || 0;
     }
 
     return { completedCount, plannedCount, missedCount, skippedCount, totalDuration };
