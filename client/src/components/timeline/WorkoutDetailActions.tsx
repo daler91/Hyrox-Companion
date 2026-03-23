@@ -1,16 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { DialogFooter } from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmDialog } from "./ConfirmDialog";
 import {
   Loader2,
   CheckCircle2,
@@ -202,25 +193,17 @@ interface DeleteConfirmDialogProps {
 
 export function DeleteConfirmDialog({ open, onOpenChange, onConfirm, isDeleting }: Readonly<DeleteConfirmDialogProps>) {
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Delete Workout</AlertDialogTitle>
-          <AlertDialogDescription>
-            Are you sure you want to delete this workout? This action cannot be undone.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
-          <AlertDialogAction
-            onClick={onConfirm}
-            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            data-testid="button-confirm-delete"
-          >
-            {isDeleting ? "Deleting..." : "Confirm"}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <ConfirmDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Delete Workout"
+      description="Are you sure you want to delete this workout? This action cannot be undone."
+      confirmText={isDeleting ? "Deleting..." : "Confirm"}
+      cancelText="Cancel"
+      onConfirm={onConfirm}
+      isDestructive={true}
+      cancelTestId="button-cancel-delete"
+      confirmTestId="button-confirm-delete"
+    />
   );
 }
