@@ -53,8 +53,8 @@ router.get("/api/v1/personal-records", isAuthenticated, rateLimiter("analytics",
     const from = validDate(req.query.from);
     const to = validDate(req.query.to);
 
-    if (req.query.from && !from) return res.status(400).json({ error: "Invalid 'from' date format" });
-    if (req.query.to && !to) return res.status(400).json({ error: "Invalid 'to' date format" });
+    if (req.query.from && !from) return res.status(400).json({ error: "Invalid 'from' date format", code: "BAD_REQUEST" });
+    if (req.query.to && !to) return res.status(400).json({ error: "Invalid 'to' date format", code: "BAD_REQUEST" });
     const allSets = await getExerciseSetsCoalesced(userId, from, to);
     res.json(calculatePersonalRecords(allSets));
   }));
@@ -64,8 +64,8 @@ router.get("/api/v1/exercise-analytics", isAuthenticated, rateLimiter("analytics
     const from = validDate(req.query.from);
     const to = validDate(req.query.to);
 
-    if (req.query.from && !from) return res.status(400).json({ error: "Invalid 'from' date format" });
-    if (req.query.to && !to) return res.status(400).json({ error: "Invalid 'to' date format" });
+    if (req.query.from && !from) return res.status(400).json({ error: "Invalid 'from' date format", code: "BAD_REQUEST" });
+    if (req.query.to && !to) return res.status(400).json({ error: "Invalid 'to' date format", code: "BAD_REQUEST" });
 
     const allSets = await getExerciseSetsCoalesced(userId, from, to);
     res.json(calculateExerciseAnalytics(allSets));

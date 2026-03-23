@@ -16,7 +16,7 @@ const router = Router();
 router.post("/api/v1/parse-exercises", isAuthenticated, rateLimiter("parse", 5), asyncHandler(async (req: ExpressRequest<Record<string, never>, any, z.infer<typeof parseExercisesRequestSchema>>, res: Response) => {
     const parseResult = parseExercisesRequestSchema.safeParse(req.body);
     if (!parseResult.success) {
-      return res.status(400).json({ error: "Text is required" });
+      return res.status(400).json({ error: "Text is required", code: "BAD_REQUEST" });
     }
     const { text } = parseResult.data;
     const userId = getUserId(req);
@@ -111,7 +111,7 @@ async function prepareChatContext(req: ExpressRequest): Promise<{ success: false
 router.post("/api/v1/chat", isAuthenticated, rateLimiter("chat", 10), asyncHandler(async (req: ExpressRequest<Record<string, never>, any, z.infer<typeof chatRequestSchema>>, res: Response) => {
     const context = await prepareChatContext(req);
     if (!context.success) {
-      return res.status(400).json({ error: context.error });
+      return res.status(400).json({ error: context.error, code: "BAD_REQUEST" });
     }
     const { message, history, trainingContext, coachingMaterials, retrievedChunks, ragInfo } = context;
 
@@ -122,7 +122,7 @@ router.post("/api/v1/chat", isAuthenticated, rateLimiter("chat", 10), asyncHandl
 router.post("/api/v1/chat/stream", isAuthenticated, rateLimiter("chat", 10), asyncHandler(async (req: ExpressRequest<Record<string, never>, any, z.infer<typeof chatRequestSchema>>, res: Response) => {
     const context = await prepareChatContext(req);
     if (!context.success) {
-      return res.status(400).json({ error: context.error });
+      return res.status(400).json({ error: context.error, code: "BAD_REQUEST" });
     }
     const { message, history, trainingContext, coachingMaterials, retrievedChunks, ragInfo } = context;
 
@@ -163,7 +163,7 @@ router.get("/api/v1/chat/history", isAuthenticated, asyncHandler(async (req: Exp
 router.post("/api/v1/chat/message", isAuthenticated, rateLimiter("chatMessage", 20), asyncHandler(async (req: ExpressRequest<Record<string, never>, any, InsertChatMessage>, res: Response) => {
     const parseResult = insertChatMessageSchema.safeParse(req.body);
     if (!parseResult.success) {
-      return res.status(400).json({ error: "Role and content are required", details: parseResult.error });
+      return res.status(400).json({ error: "Role and content are required", code: "VALIDATION_ERROR", details: parseResult.error });
     }
 
     const userId = getUserId(req);

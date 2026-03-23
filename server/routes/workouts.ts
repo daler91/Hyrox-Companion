@@ -21,7 +21,7 @@ router.post("/api/v1/workouts/:id/reparse", isAuthenticated, rateLimiter("repars
     const workoutId = req.params.id;
     const workout = await storage.getWorkoutLog(workoutId, userId);
     if (!workout) {
-      return res.status(404).json({ error: "Workout not found" });
+      return res.status(404).json({ error: "Workout not found", code: "NOT_FOUND" });
     }
     const user = await storage.getUser(userId);
     const weightUnit = user?.weightUnit || "kg";
@@ -53,7 +53,7 @@ router.post("/api/v1/custom-exercises", isAuthenticated, rateLimiter("customExer
     const parseResult = insertCustomExerciseSchema.safeParse(payload);
 
     if (!parseResult.success) {
-      return res.status(400).json({ error: parseResult.error.errors[0].message });
+      return res.status(400).json({ error: parseResult.error.errors[0].message, code: "BAD_REQUEST" });
     }
 
     const { name, category } = parseResult.data;
@@ -71,8 +71,8 @@ router.get("/api/v1/workouts", isAuthenticated, asyncHandler(async (req: Request
     const limit = req.query.limit ? Number.parseInt(req.query.limit) : undefined;
     const offset = req.query.offset ? Number.parseInt(req.query.offset) : undefined;
 
-    if (limit !== undefined && Number.isNaN(limit)) return res.status(400).json({ error: "Invalid limit" });
-    if (offset !== undefined && Number.isNaN(offset)) return res.status(400).json({ error: "Invalid offset" });
+    if (limit !== undefined && Number.isNaN(limit)) return res.status(400).json({ error: "Invalid limit", code: "BAD_REQUEST" });
+    if (offset !== undefined && Number.isNaN(offset)) return res.status(400).json({ error: "Invalid offset", code: "BAD_REQUEST" });
 
     const logs = await storage.listWorkoutLogs(userId, limit, offset);
     res.json(logs);
@@ -82,7 +82,7 @@ router.get("/api/v1/workouts/:id", isAuthenticated, asyncHandler(async (req: Req
     const userId = getUserId(req);
     const log = await storage.getWorkoutLog(req.params.id, userId);
     if (!log) {
-      return res.status(404).json({ error: "Workout not found" });
+      return res.status(404).json({ error: "Workout not found", code: "NOT_FOUND" });
     }
     res.json(log);
   }));
@@ -91,12 +91,12 @@ router.post("/api/v1/workouts", isAuthenticated, rateLimiter("workout", 40), asy
     const { exercises, ...workoutData } = req.body;
     const parseResult = insertWorkoutLogSchema.safeParse(workoutData);
     if (!parseResult.success) {
-      return res.status(400).json({ error: "Invalid workout data", details: parseResult.error });
+      return res.status(400).json({ error: "Invalid workout data", code: "VALIDATION_ERROR", details: parseResult.error });
     }
 
     const exerciseValidation = validateExercisesPayload(exercises);
     if (!exerciseValidation.success) {
-      return res.status(400).json({ error: "Invalid exercises data", details: exerciseValidation.error });
+      return res.status(400).json({ error: "Invalid exercises data", code: "VALIDATION_ERROR", details: exerciseValidation.error });
     }
     const validatedExercises = exerciseValidation.data as ParsedExercise[] | undefined;
 
@@ -111,19 +111,19 @@ router.patch("/api/v1/workouts/:id", isAuthenticated, rateLimiter("workout", 40)
     const { exercises, ...updateData } = req.body;
     const parseResult = updateWorkoutLogSchema.safeParse(updateData);
     if (!parseResult.success) {
-      return res.status(400).json({ error: "Invalid update data", details: parseResult.error });
+      return res.status(400).json({ error: "Invalid update data", code: "VALIDATION_ERROR", details: parseResult.error });
     }
 
     const exerciseValidation = validateExercisesPayload(exercises);
     if (!exerciseValidation.success) {
-      return res.status(400).json({ error: "Invalid exercises data", details: exerciseValidation.error });
+      return res.status(400).json({ error: "Invalid exercises data", code: "VALIDATION_ERROR", details: exerciseValidation.error });
     }
     const validatedExercises = exerciseValidation.data as ParsedExercise[] | undefined;
 
     const userId = getUserId(req);
     const result = await updateWorkout(req.params.id, parseResult.data, validatedExercises, userId);
     if (!result) {
-      return res.status(404).json({ error: "Workout not found" });
+      return res.status(404).json({ error: "Workout not found", code: "NOT_FOUND" });
     }
 
     res.json(result);
@@ -134,7 +134,7 @@ router.delete("/api/v1/workouts/:id", isAuthenticated, rateLimiter("workout", 40
     await storage.deleteExerciseSetsByWorkoutLog(req.params.id, userId);
     const deleted = await storage.deleteWorkoutLog(req.params.id, userId);
     if (!deleted) {
-      return res.status(404).json({ error: "Workout not found" });
+      return res.status(404).json({ error: "Workout not found", code: "NOT_FOUND" });
     }
     res.json({ success: true });
   }));
@@ -151,8 +151,8 @@ router.get("/api/v1/timeline", isAuthenticated, asyncHandler(async (req: Request
     const limit = req.query.limit ? Number.parseInt(req.query.limit) : undefined;
     const offset = req.query.offset ? Number.parseInt(req.query.offset) : undefined;
 
-    if (limit !== undefined && Number.isNaN(limit)) return res.status(400).json({ error: "Invalid limit" });
-    if (offset !== undefined && Number.isNaN(offset)) return res.status(400).json({ error: "Invalid offset" });
+    if (limit !== undefined && Number.isNaN(limit)) return res.status(400).json({ error: "Invalid limit", code: "BAD_REQUEST" });
+    if (offset !== undefined && Number.isNaN(offset)) return res.status(400).json({ error: "Invalid offset", code: "BAD_REQUEST" });
 
     const entries = await storage.getTimeline(userId, planId, limit, offset);
     res.json(entries);

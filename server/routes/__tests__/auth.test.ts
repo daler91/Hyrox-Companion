@@ -67,7 +67,7 @@ describe("Auth Routes", () => {
       const response = await request(app).get(ENDPOINT_URL);
 
       expect(response.status).toBe(500);
-      expect(response.body).toEqual({ error: "Internal Server Error" });
+      expect(response.body).toEqual({ error: "Internal Server Error", code: "INTERNAL_SERVER_ERROR" });
 
     });
 
@@ -79,7 +79,7 @@ describe("Auth Routes", () => {
       const response = await request(app).get(ENDPOINT_URL);
 
       expect(response.status).toBe(500);
-      expect(response.body).toEqual({ error: "Internal Server Error" });
+      expect(response.body).toEqual({ error: "Internal Server Error", code: "INTERNAL_SERVER_ERROR" });
 
     });
 

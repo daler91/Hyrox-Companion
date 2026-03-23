@@ -43,6 +43,8 @@ const httpServer = createServer(app);
 export interface AppError extends Error {
   status?: number;
   statusCode?: number;
+  code?: string;
+  details?: unknown;
 }
 
 declare module "http" {
@@ -174,7 +176,7 @@ app.use((err: AppError, _req: Request, res: Response, _next: NextFunction) => {
       : err.message || "An error occurred";
 
   Sentry.captureException(err);
-  res.status(status).json({ error: message });
+  res.status(status).json({ error: message, code: err.code || (status >= 500 ? "INTERNAL_SERVER_ERROR" : "BAD_REQUEST"), details: err.details });
 });
 
 // importantly only setup vite in development and after
