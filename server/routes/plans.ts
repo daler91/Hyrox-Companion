@@ -5,29 +5,26 @@ import { storage } from "../storage";
 import { updatePlanDaySchema, importPlanRequestSchema, schedulePlanRequestSchema, updateTrainingPlanGoalSchema, workoutStatusEnum, dateStringSchema, type UpdatePlanDay, type PlanDay, type UpdateTrainingPlanGoal } from "@shared/schema";
 import { getUserId } from "../types";
 import { importPlanFromCSV, createSamplePlan, updatePlanDayWithCleanup, updatePlanDayStatus } from "../services/planService";
-import { rateLimiter, asyncHandler } from "../routeUtils";
+import { rateLimiter, asyncHandler, validateBody } from "../routeUtils";
 
 const router = Router();
 
-const handlePlanDayUpdate = (updateFn: (dayId: string, data: UpdatePlanDay, userId: string) => Promise<PlanDay | null | undefined>) => asyncHandler(async (
-  req: ExpressRequest<{ dayId: string } | { planId: string; dayId: string }, unknown, UpdatePlanDay>,
-  res: Response
-) => {
-  const { dayId } = req.params;
-  const userId = getUserId(req);
-
-  const parseResult = updatePlanDaySchema.safeParse(req.body);
-  if (!parseResult.success) {
-    return res.status(400).json({ error: "Invalid update data", code: "VALIDATION_ERROR", details: parseResult.error });
-  }
-
-  const updatedDay = await updateFn(dayId, parseResult.data, userId);
+const handlePlanDayUpdate = (updateFn: (dayId: string, data: UpdatePlanDay, userId: string) => Promise<PlanDay | null | undefined>) => [
+  validateBody(updatePlanDaySchema),
+  asyncHandler(async (
+    req: ExpressRequest<{ dayId: string } | { planId: string; dayId: string }, unknown, UpdatePlanDay>,
+    res: Response
+  ) => {
+    const { dayId } = req.params;
+    const userId = getUserId(req);
+    const updatedDay = await updateFn(dayId, req.body, userId);
   if (!updatedDay) {
     return res.status(404).json({ error: "Day not found", code: "NOT_FOUND" });
   }
 
   res.json(updatedDay);
-})
+  })
+]
 
 const handleGetOrDeletePlan = (
   actionFn: (id: string, userId: string) => Promise<Record<string, unknown> | null | undefined>,
@@ -78,13 +75,9 @@ const renameTrainingPlanSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(255, "Name must be 255 characters or less"),
 });
 
-router.patch("/api/v1/plans/:id", isAuthenticated, rateLimiter("planUpdate", 20), asyncHandler(async (req: ExpressRequest<{ id: string }, unknown, { name: string }>, res: Response) => {
+router.patch("/api/v1/plans/:id", isAuthenticated, rateLimiter("planUpdate", 20), validateBody(renameTrainingPlanSchema), asyncHandler(async (req: ExpressRequest<{ id: string }, unknown, { name: string }>, res: Response) => {
     const userId = getUserId(req);
-    const parseResult = renameTrainingPlanSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      return res.status(400).json({ error: parseResult.error.errors[0].message, code: "BAD_REQUEST" });
-    }
-    const updated = await storage.renameTrainingPlan(req.params.id, parseResult.data.name, userId);
+    const updated = await storage.renameTrainingPlan(req.params.id, req.body.name, userId);
     if (!updated) {
       return res.status(404).json({ error: "Training plan not found", code: "NOT_FOUND" });
     }

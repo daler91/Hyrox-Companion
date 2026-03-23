@@ -98,6 +98,21 @@ export function calculateStreak(completedDates: Set<string>): number {
 }
 
 
+import { z } from "zod";
+
+export function validateBody(schema: z.ZodType<any, any, any>) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      const errorMessage = parsed.error.errors[0]?.message || "Invalid request data";
+      res.status(400).json({ error: errorMessage, details: parsed.error });
+      return;
+    }
+    req.body = parsed.data;
+    next();
+  };
+}
+
 export const asyncHandler = (fn: (req: any, res: Response, next: NextFunction) => Promise<any>) => (req: Request, res: Response, next: NextFunction) => {
   return Promise.resolve(fn(req, res, next)).catch((err) => {
     const log = (req as any).log || logger;
