@@ -19,6 +19,8 @@ vi.mock('@/lib/queryClient', () => ({
   apiRequest: vi.fn(),
   queryClient: {
     invalidateQueries: vi.fn(),
+    cancelQueries: vi.fn().mockResolvedValue(undefined),
+    getQueryData: vi.fn().mockReturnValue([]),
     setQueryData: vi.fn(),
   },
 }));
