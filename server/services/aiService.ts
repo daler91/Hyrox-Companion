@@ -34,13 +34,22 @@ function calculateTrainingStats(timeline: TimelineEntry[]) {
   const denominator = completedWorkouts + missedWorkouts + skippedWorkouts;
   const completionRate = denominator > 0 ? Math.round((completedWorkouts / denominator) * 100) : 0;
 
-  return { completedWorkouts, plannedWorkouts, missedWorkouts, skippedWorkouts, totalWorkouts, completionRate, completedDates };
+  return {
+    completedWorkouts,
+    plannedWorkouts,
+    missedWorkouts,
+    skippedWorkouts,
+    totalWorkouts,
+    completionRate,
+    completedDates,
+  };
 }
 
-const hyroxRegex = new RegExp(HYROX_EXERCISES.join('|'), 'gi');
+const hyroxRegex = new RegExp(HYROX_EXERCISES.join("|"), "gi");
 
 function getExerciseBreakdown(timeline: TimelineEntry[]): Record<string, number> {
   const breakdown: Record<string, number> = {};
+  const seenInEntry = new Set<string>();
   for (const entry of timeline) {
     if (entry.status === "completed" && entry.focus) {
       let matched = false;
@@ -49,7 +58,7 @@ function getExerciseBreakdown(timeline: TimelineEntry[]): Record<string, number>
 
       // We only want to count each unique exercise ONCE per workout log entry
       // to match the previous string.includes() behavior.
-      const seenInEntry = new Set<string>();
+      seenInEntry.clear();
 
       while ((match = hyroxRegex.exec(entry.focus)) !== null) {
         const exercise = match[0].toLowerCase();
@@ -78,7 +87,7 @@ function collectRecentWorkouts(timeline: TimelineEntry[]): TrainingContext["rece
         status: entry.status,
         rpe: entry.rpe,
         duration: entry.duration,
-        exerciseDetails: entry.exerciseSets?.map(es => ({
+        exerciseDetails: entry.exerciseSets?.map((es) => ({
           name: es.exerciseName,
           setNumber: es.setNumber,
           reps: es.reps,
@@ -99,8 +108,14 @@ function collectRecentWorkouts(timeline: TimelineEntry[]): TrainingContext["rece
 }
 
 function updateExerciseStat(
-  stat: { count: number; maxWeight?: number; maxDistance?: number; bestTime?: number; avgReps?: number },
-  es: { weight: number | null; distance: number | null; time: number | null; reps: number | null }
+  stat: {
+    count: number;
+    maxWeight?: number;
+    maxDistance?: number;
+    bestTime?: number;
+    avgReps?: number;
+  },
+  es: { weight: number | null; distance: number | null; time: number | null; reps: number | null },
 ) {
   stat.count++;
   if (es.weight) {
@@ -121,10 +136,13 @@ function updateExerciseStat(
 
 async function getStructuredExerciseStats(timeline: TimelineEntry[]) {
   const completedWorkoutLogIds = timeline
-    .filter(e => e.status === "completed" && e.workoutLogId)
-    .map(e => e.workoutLogId!);
+    .filter((e) => e.status === "completed" && e.workoutLogId)
+    .map((e) => e.workoutLogId!);
 
-  const stats: Record<string, { count: number; maxWeight?: number; maxDistance?: number; bestTime?: number; avgReps?: number }> = {};
+  const stats: Record<
+    string,
+    { count: number; maxWeight?: number; maxDistance?: number; bestTime?: number; avgReps?: number }
+  > = {};
 
   if (completedWorkoutLogIds.length === 0) return undefined;
 
@@ -144,7 +162,15 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     storage.getUser(userId),
   ]);
 
-  const { completedWorkouts, plannedWorkouts, missedWorkouts, skippedWorkouts, totalWorkouts, completionRate, completedDates } = calculateTrainingStats(timeline);
+  const {
+    completedWorkouts,
+    plannedWorkouts,
+    missedWorkouts,
+    skippedWorkouts,
+    totalWorkouts,
+    completionRate,
+    completedDates,
+  } = calculateTrainingStats(timeline);
   const exerciseBreakdown = getExerciseBreakdown(timeline);
   const currentStreak = calculateStreak(completedDates);
   const recentWorkouts = collectRecentWorkouts(timeline);
@@ -152,7 +178,11 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
 
   let activePlan: TrainingContext["activePlan"];
   if (plans.length > 0) {
-    activePlan = { name: plans[0].name, totalWeeks: plans[0].totalWeeks, goal: plans[0].goal ?? undefined };
+    activePlan = {
+      name: plans[0].name,
+      totalWeeks: plans[0].totalWeeks,
+      goal: plans[0].goal ?? undefined,
+    };
   }
 
   return {
