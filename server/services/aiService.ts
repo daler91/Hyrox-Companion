@@ -119,22 +119,21 @@ function updateExerciseStat(
   }
 }
 
-async function getStructuredExerciseStats(timeline: TimelineEntry[]) {
-  const completedWorkoutLogIds = timeline
-    .filter(e => e.status === "completed" && e.workoutLogId)
-    .map(e => e.workoutLogId!);
-
+function getStructuredExerciseStats(timeline: TimelineEntry[]) {
   const stats: Record<string, { count: number; maxWeight?: number; maxDistance?: number; bestTime?: number; avgReps?: number }> = {};
+  let hasStats = false;
 
-  if (completedWorkoutLogIds.length === 0) return undefined;
-
-  const allSets = await storage.getExerciseSetsByWorkoutLogs(completedWorkoutLogIds);
-  for (const es of allSets) {
-    if (!stats[es.exerciseName]) stats[es.exerciseName] = { count: 0 };
-    updateExerciseStat(stats[es.exerciseName], es);
+  for (const entry of timeline) {
+    if (entry.status === "completed" && entry.exerciseSets) {
+      for (const es of entry.exerciseSets) {
+        hasStats = true;
+        if (!stats[es.exerciseName]) stats[es.exerciseName] = { count: 0 };
+        updateExerciseStat(stats[es.exerciseName], es);
+      }
+    }
   }
 
-  return Object.keys(stats).length > 0 ? stats : undefined;
+  return hasStats ? stats : undefined;
 }
 
 export async function buildTrainingContext(userId: string): Promise<TrainingContext> {
@@ -148,7 +147,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
   const exerciseBreakdown = getExerciseBreakdown(timeline);
   const currentStreak = calculateStreak(completedDates);
   const recentWorkouts = collectRecentWorkouts(timeline);
-  const structuredExerciseStats = await getStructuredExerciseStats(timeline);
+  const structuredExerciseStats = getStructuredExerciseStats(timeline);
 
   let activePlan: TrainingContext["activePlan"];
   if (plans.length > 0) {
