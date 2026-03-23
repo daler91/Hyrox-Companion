@@ -31,14 +31,6 @@ import { useTimelineState } from "@/hooks/useTimelineState";
 import { useAuth } from "@/hooks/useAuth";
 
 
-function getTimelineDateLabel(d: Date) {
-  if (isToday(d)) return "Today";
-  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
-  if (d.toDateString() === tomorrow.toDateString()) return "Tomorrow";
-  const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
-  if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
-  return format(d, "EEEE, MMM d");
-}
 
 export default function Timeline() {
   const state = useTimelineState();
@@ -221,31 +213,6 @@ export default function Timeline() {
 
 
             <div style={{ position: 'relative' }}>
-              {(() => {
-                const virtualItems = rowVirtualizer.getVirtualItems();
-                if (virtualItems.length === 0) return null;
-                const activeIndex = virtualItems[0].index;
-                const [date] = allVisibleGroups[activeIndex];
-                const dateObj = parseISO(date);
-                const isTodayDate = isToday(dateObj);
-                const isPast = !isTodayDate && dateObj < new Date();
-
-
-                return (
-                  <div className="sticky top-0 z-20 bg-background/95 backdrop-blur py-2 shadow-sm mb-4 flex items-center gap-3 w-full border-b" style={{ marginTop: '-1rem' }}>
-                    {(() => {
-                      let dotColor = "bg-muted-foreground/50";
-                      if (isTodayDate) dotColor = "bg-primary";
-                      else if (isPast) dotColor = "bg-muted-foreground/30";
-                      return <div className={`h-3 w-3 rounded-full ${dotColor}`} />;
-                    })()}
-                    <span className={isTodayDate ? "text-primary font-semibold" : "text-muted-foreground font-semibold"}>
-                      {getTimelineDateLabel(dateObj)}
-                    </span>
-                  </div>
-                );
-              })()}
-
               <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}>
                 {rowVirtualizer.getVirtualItems().map((virtualRow) => {
                   const [date, entries] = allVisibleGroups[virtualRow.index];

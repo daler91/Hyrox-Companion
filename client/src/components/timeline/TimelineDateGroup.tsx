@@ -38,12 +38,12 @@ const TimelineDateGroupComponent = forwardRef<HTMLDivElement, TimelineDateGroupP
     const isPast = isBefore(dateObj, new Date()) && !isTodayDate;
 
     return (
-      <div className="relative" ref={ref}>
+      <div className="relative pb-4" ref={ref}>
         {isTodayDate && (
           <div className="absolute -left-4 top-0 bottom-0 w-1 bg-primary rounded-full" />
         )}
         <div
-          className={`flex items-center gap-3 mb-3 sticky top-0 bg-background/95 backdrop-blur z-10 py-2 ${
+          className={`flex items-center gap-3 mb-3 py-2 ${
             isTodayDate ? "text-primary font-semibold" : ""
           }`}
         >
