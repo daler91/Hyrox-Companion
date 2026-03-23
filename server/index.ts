@@ -222,6 +222,9 @@ const shutdown = () => {
     pool.end().then(() => {
       logger.info("Database pool drained. Exiting process.");
       process.exit(0);
+    }).catch((err) => {
+      logger.error(err, "Error draining database pool. Exiting process.");
+      process.exit(1);
     });
   });
 };
