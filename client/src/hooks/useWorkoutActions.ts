@@ -14,6 +14,28 @@ export function useWorkoutActions(selectedPlanId: string | null) {
     invalidateQueries: [QUERY_KEYS.timeline],
     successToast: "Status updated",
     errorToast: "Failed to update status",
+    onMutate: async ({ dayId, status }) => {
+      await queryClient.cancelQueries({ queryKey: [...QUERY_KEYS.timeline, selectedPlanId] });
+      const previousTimeline = queryClient.getQueryData<TimelineEntry[]>([...QUERY_KEYS.timeline, selectedPlanId]);
+
+      if (previousTimeline) {
+        queryClient.setQueryData<TimelineEntry[]>([...QUERY_KEYS.timeline, selectedPlanId], (old) => {
+          if (!old) return old;
+          return old.map((entry) =>
+            entry.planDayId === dayId
+              ? { ...entry, status: status as WorkoutStatus }
+              : entry
+          );
+        });
+      }
+
+      return { previousTimeline };
+    },
+    onError: (err, variables, context: { previousTimeline?: TimelineEntry[] } | undefined) => {
+      if (context?.previousTimeline) {
+        queryClient.setQueryData([...QUERY_KEYS.timeline, selectedPlanId], context.previousTimeline);
+      }
+    },
     onSuccess: (data, variables) => {
       if (variables.status === "completed") {
         queryClient.setQueryData<User | null>([...QUERY_KEYS.authUser], (old) => {
@@ -41,6 +63,28 @@ export function useWorkoutActions(selectedPlanId: string | null) {
     invalidateQueries: [QUERY_KEYS.timeline],
     successToast: "Workout logged!",
     errorToast: "Failed to log workout",
+    onMutate: async (variables) => {
+      await queryClient.cancelQueries({ queryKey: [...QUERY_KEYS.timeline, selectedPlanId] });
+      const previousTimeline = queryClient.getQueryData<TimelineEntry[]>([...QUERY_KEYS.timeline, selectedPlanId]);
+
+      if (previousTimeline) {
+        queryClient.setQueryData<TimelineEntry[]>([...QUERY_KEYS.timeline, selectedPlanId], (old) => {
+          if (!old) return old;
+          return old.map((entry) =>
+            entry.planDayId === variables.planDayId
+              ? { ...entry, status: "completed" as WorkoutStatus }
+              : entry
+          );
+        });
+      }
+
+      return { previousTimeline };
+    },
+    onError: (err, variables, context: { previousTimeline?: TimelineEntry[] } | undefined) => {
+      if (context?.previousTimeline) {
+        queryClient.setQueryData([...QUERY_KEYS.timeline, selectedPlanId], context.previousTimeline);
+      }
+    },
     onSuccess: () => {
       queryClient.setQueryData<User | null>([...QUERY_KEYS.authUser], (old) => {
         if (!old) return old;
@@ -66,6 +110,24 @@ export function useWorkoutActions(selectedPlanId: string | null) {
     invalidateQueries: [QUERY_KEYS.timeline, QUERY_KEYS.workouts],
     successToast: "Workout deleted",
     errorToast: "Failed to delete workout",
+    onMutate: async (workoutId) => {
+      await queryClient.cancelQueries({ queryKey: [...QUERY_KEYS.timeline, selectedPlanId] });
+      const previousTimeline = queryClient.getQueryData<TimelineEntry[]>([...QUERY_KEYS.timeline, selectedPlanId]);
+
+      if (previousTimeline) {
+        queryClient.setQueryData<TimelineEntry[]>([...QUERY_KEYS.timeline, selectedPlanId], (old) => {
+          if (!old) return old;
+          return old.filter((entry) => entry.workoutLogId !== workoutId);
+        });
+      }
+
+      return { previousTimeline };
+    },
+    onError: (err, variables, context: { previousTimeline?: TimelineEntry[] } | undefined) => {
+      if (context?.previousTimeline) {
+        queryClient.setQueryData([...QUERY_KEYS.timeline, selectedPlanId], context.previousTimeline);
+      }
+    },
     onSuccess: () => {
       setDetailEntry(null);
     },
@@ -76,6 +138,24 @@ export function useWorkoutActions(selectedPlanId: string | null) {
     invalidateQueries: [QUERY_KEYS.timeline, QUERY_KEYS.plans],
     successToast: "Workout removed from plan",
     errorToast: "Failed to delete workout",
+    onMutate: async (dayId) => {
+      await queryClient.cancelQueries({ queryKey: [...QUERY_KEYS.timeline, selectedPlanId] });
+      const previousTimeline = queryClient.getQueryData<TimelineEntry[]>([...QUERY_KEYS.timeline, selectedPlanId]);
+
+      if (previousTimeline) {
+        queryClient.setQueryData<TimelineEntry[]>([...QUERY_KEYS.timeline, selectedPlanId], (old) => {
+          if (!old) return old;
+          return old.filter((entry) => entry.planDayId !== dayId);
+        });
+      }
+
+      return { previousTimeline };
+    },
+    onError: (err, variables, context: { previousTimeline?: TimelineEntry[] } | undefined) => {
+      if (context?.previousTimeline) {
+        queryClient.setQueryData([...QUERY_KEYS.timeline, selectedPlanId], context.previousTimeline);
+      }
+    },
     onSuccess: () => {
       setDetailEntry(null);
     },
