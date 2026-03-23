@@ -82,12 +82,10 @@ export async function embedCoachingMaterial(material: CoachingMaterial): Promise
 
     const embeddings = await generateEmbeddings(textsToEmbed);
 
-    // Only delete old chunks after new embeddings succeed, so a failure
-    // doesn't leave the material with zero chunks.
-    await storage.deleteChunksByMaterialId(material.id);
-
-    // Store chunks with embeddings
-    await storage.insertChunks(
+    // Replace old chunks with new ones transactionally, so a failure
+    // doesn't leave the material with zero chunks or in an inconsistent state.
+    await storage.replaceChunks(
+      material.id,
       chunks.map((content, i) => ({
         materialId: material.id,
         userId: material.userId,

@@ -66,6 +66,14 @@ export class CoachingStorage {
     await db.delete(documentChunks).where(eq(documentChunks.materialId, materialId));
   }
 
+  async replaceChunks(materialId: string, chunks: InsertDocumentChunk[]): Promise<DocumentChunk[]> {
+    return await db.transaction(async (tx) => {
+      await tx.delete(documentChunks).where(eq(documentChunks.materialId, materialId));
+      if (chunks.length === 0) return [];
+      return await tx.insert(documentChunks).values(chunks).returning();
+    });
+  }
+
   async searchChunksByEmbedding(
     userId: string,
     queryEmbedding: number[],
