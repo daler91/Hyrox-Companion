@@ -135,7 +135,7 @@ async function handleStravaStatus(req: Request, res: Response) {
       lastSyncedAt: connection.lastSyncedAt,
     });
   } catch (error) {
-    logger.error({ err: error }, "Strava status error:");
+    (req.log || logger).error({ err: error }, "Strava status error:");
     res.status(500).json({ error: "Failed to get Strava status", code: "INTERNAL_SERVER_ERROR" });
   }
 }
@@ -164,13 +164,13 @@ async function handleStravaCallback(req: Request, res: Response) {
   const { code, state, error: stravaError } = req.query;
 
   if (stravaError) {
-    logger.error("Strava auth error received from provider");
+    (req.log || logger).error("Strava auth error received from provider");
     return res.redirect("/settings?strava=error");
   }
 
   const verified = verifySignedState(state as string);
   if (!verified) {
-    logger.error("Strava OAuth state invalid or expired - possible CSRF attack");
+    (req.log || logger).error("Strava OAuth state invalid or expired - possible CSRF attack");
     return res.redirect("/settings?strava=error");
   }
 
@@ -193,7 +193,7 @@ async function handleStravaCallback(req: Request, res: Response) {
     });
 
     if (!tokenResponse.ok) {
-      logger.error({ err: await tokenResponse.text() }, "Token exchange failed:");
+      (req.log || logger).error({ err: await tokenResponse.text() }, "Token exchange failed:");
       return res.redirect("/settings?strava=error");
     }
 
@@ -211,7 +211,7 @@ async function handleStravaCallback(req: Request, res: Response) {
 
     res.redirect("/settings?strava=connected");
   } catch (error) {
-    logger.error({ err: error }, "Strava callback error:");
+    (req.log || logger).error({ err: error }, "Strava callback error:");
     res.redirect("/settings?strava=error");
   }
 }
@@ -222,7 +222,7 @@ async function handleStravaDisconnect(req: Request, res: Response) {
     await storage.deleteStravaConnection(userId);
     res.json({ success: true });
   } catch (error) {
-    logger.error({ err: error }, "Strava disconnect error:");
+    (req.log || logger).error({ err: error }, "Strava disconnect error:");
     res.status(500).json({ error: "Failed to disconnect Strava", code: "INTERNAL_SERVER_ERROR" });
   }
 }
@@ -247,7 +247,7 @@ async function handleStravaSync(req: Request, res: Response) {
     );
 
     if (!activitiesResponse.ok) {
-      logger.error({ err: await activitiesResponse.text() }, "Failed to fetch Strava activities:");
+      (req.log || logger).error({ err: await activitiesResponse.text() }, "Failed to fetch Strava activities:");
       return res.status(500).json({ error: "Failed to fetch activities from Strava", code: "INTERNAL_SERVER_ERROR" });
     }
 
@@ -283,7 +283,7 @@ async function handleStravaSync(req: Request, res: Response) {
       total: activities.length,
     });
   } catch (error) {
-    logger.error({ err: error }, "Strava sync error:");
+    (req.log || logger).error({ err: error }, "Strava sync error:");
     res.status(500).json({ error: "Failed to sync Strava activities", code: "INTERNAL_SERVER_ERROR" });
   }
 }

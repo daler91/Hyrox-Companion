@@ -122,14 +122,14 @@ export async function runEmailCronJob(storage: IStorage): Promise<{ usersChecked
       } catch (err) {
         const detail = `Failed for user ${user.id}: ${err}`;
         details.push(detail);
-        logger.info({ context: "email" }, detail);
+        logger.error({ context: "email", userId: user.id, err }, "Failed to check and send emails for user");
       }
     }
 
     logger.info({ context: "email" }, `Cron complete: ${emailsSent} email(s) sent to ${usersToCheck.length} user(s)`);
     return { usersChecked: usersToCheck.length, emailsSent, details };
   } catch (err) {
-    logger.info({ context: "email" }, `Cron error: ${err}`);
+    logger.error({ context: "email", err }, "Cron error during email checks");
     throw err;
   }
 }

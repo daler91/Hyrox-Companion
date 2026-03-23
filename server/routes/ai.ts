@@ -37,6 +37,7 @@ export interface RagInfo {
 async function getCoachingContext(
   userId: string,
   query: string,
+  log: any = logger,
 ): Promise<{ retrievedChunks?: string[]; coachingMaterials?: import("../prompts").CoachingMaterialInput[]; ragInfo: RagInfo }> {
   try {
     const hasChunks = await storage.hasChunksForUser(userId);
@@ -45,7 +46,7 @@ async function getCoachingContext(
       // Check if stored embeddings match the current model's dimensions
       const storedDim = await storage.getStoredEmbeddingDimension(userId);
       if (storedDim !== null && storedDim !== EMBEDDING_DIMENSIONS) {
-        logger.warn(
+        log.warn(
           { userId, storedDim, expectedDim: EMBEDDING_DIMENSIONS },
           "[rag] Embedding dimension mismatch — skipping RAG (re-embed via settings to fix)",
         );
@@ -59,11 +60,11 @@ async function getCoachingContext(
             ragInfo: { source: "rag", chunkCount: chunks.length, chunks },
           };
         }
-        logger.warn({ userId }, "[rag] Retrieval returned 0 chunks despite embeddings existing");
+        log.warn({ userId }, "[rag] Retrieval returned 0 chunks despite embeddings existing");
       }
     }
   } catch (error) {
-    logger.warn({ err: error, userId }, "[rag] Retrieval failed, falling back to legacy");
+    log.warn({ err: error, userId }, "[rag] Retrieval failed, falling back to legacy");
   }
 
   // Fallback to legacy truncation
@@ -88,7 +89,7 @@ async function prepareChatContext(req: ExpressRequest): Promise<{ success: false
   const userId = getUserId(req);
   const [trainingContext, coachingContext] = await Promise.all([
     buildTrainingContext(userId),
-    getCoachingContext(userId, message),
+    getCoachingContext(userId, message, (req as any).log || logger),
   ]);
 
   if (!trainingContext) {
@@ -141,10 +142,8 @@ router.post("/api/v1/chat/stream", isAuthenticated, rateLimiter("chat", 10), val
       res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
       res.end();
     } catch (streamError) {
-      const log = (req as any).log || import("../logger").then(m => m.logger);
-      if (log.error) {
-        log.error({ err: streamError }, "Stream error:");
-      }
+      const log = (req as any).log || logger;
+      log.error({ err: streamError }, "Stream error:");
       res.write(`data: ${JSON.stringify({ error: "Stream error" })}\n\n`);
       res.end();
     }
@@ -207,7 +206,7 @@ router.post("/api/v1/timeline/ai-suggestions", isAuthenticated, rateLimiter("sug
 
     const [trainingContext, coachingContext] = await Promise.all([
       buildTrainingContext(userId),
-      getCoachingContext(userId, suggestionQuery),
+      getCoachingContext(userId, suggestionQuery, (req as any).log || logger),
     ]);
 
     // Build coaching materials string for suggestions prompt
