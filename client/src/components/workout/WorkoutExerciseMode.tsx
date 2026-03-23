@@ -2,8 +2,7 @@ import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ExerciseSelector } from "@/components/ExerciseSelector";
 import { SortableExerciseBlock } from "@/components/workout/SortableExerciseBlock";
-import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
-import type { SensorDescriptor, SensorOptions } from "@dnd-kit/core";
+import { DndContext, closestCenter, type DragEndEvent, type SensorDescriptor, type SensorOptions } from "@dnd-kit/core";
 import {
   SortableContext,
   verticalListSortingStrategy,

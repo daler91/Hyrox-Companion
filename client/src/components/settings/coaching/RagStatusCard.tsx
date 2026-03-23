@@ -11,24 +11,30 @@ export function RagStatusCard() {
 
   if (!materials || materials.length === 0) return null;
 
+  const getStatusBadge = () => {
+    if (!ragStatus) return null;
+    if (ragStatus.allEmbedded) {
+      return (
+        <Badge variant="outline" className="text-green-600 border-green-600">
+          <CheckCircle2 className="h-3 w-3 mr-1" />
+          Active
+        </Badge>
+      );
+    }
+    return (
+      <Badge variant="outline" className="text-yellow-600 border-yellow-600">
+        <AlertCircle className="h-3 w-3 mr-1" />
+        Incomplete
+      </Badge>
+    );
+  };
+
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           RAG Status
-          {ragStatus && (
-            ragStatus.allEmbedded ? (
-              <Badge variant="outline" className="text-green-600 border-green-600">
-                <CheckCircle2 className="h-3 w-3 mr-1" />
-                Active
-              </Badge>
-            ) : (
-              <Badge variant="outline" className="text-yellow-600 border-yellow-600">
-                <AlertCircle className="h-3 w-3 mr-1" />
-                Incomplete
-              </Badge>
-            )
-          )}
+          {getStatusBadge()}
         </CardTitle>
         <CardDescription>
           Embedding status for AI-powered document retrieval
