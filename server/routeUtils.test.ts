@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { Request, Response, NextFunction } from "express";
+import { z } from "zod";
 
 // ---------------------------------------------------------------------------
 // Mock express-rate-limit with a lightweight, synchronous in-process store.
@@ -66,7 +67,7 @@ vi.mock("express-rate-limit", () => {
   };
 });
 
-import { calculateStreak, rateLimiter, clearRateLimitBuckets, DEFAULT_WINDOW_MS } from "./routeUtils";
+import { calculateStreak, rateLimiter, clearRateLimitBuckets, validateBody, DEFAULT_WINDOW_MS } from "./routeUtils";
 import { expandExercisesToSetRows } from "./services/workoutService";
 import rateLimit from "express-rate-limit";
 
@@ -448,8 +449,8 @@ describe("expandExercisesToSetRows", () => {
   });
 });
 
-import { validateBody } from "./routeUtils";
-import { z } from "zod";
+
+
 
 describe("validateBody", () => {
   const schema = z.object({
