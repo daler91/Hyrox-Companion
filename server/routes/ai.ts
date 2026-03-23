@@ -3,7 +3,7 @@ import { Router, type Request as ExpressRequest, type Response } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
 import { chatWithCoach, streamChatWithCoach, generateWorkoutSuggestions, parseExercisesFromText, EMBEDDING_DIMENSIONS, type UpcomingWorkout } from "../gemini/index";
-import { rateLimiter, asyncHandler } from "../routeUtils";
+import { rateLimiter, asyncHandler, validateBody } from "../routeUtils";
 import { buildTrainingContext } from "../services/aiService";
 import { buildCoachingMaterialsSection, buildRetrievedChunksSection } from "../prompts";
 import { retrieveRelevantChunks } from "../services/ragService";
@@ -13,12 +13,8 @@ import { z } from "zod";
 
 const router = Router();
 
-router.post("/api/v1/parse-exercises", isAuthenticated, rateLimiter("parse", 5), asyncHandler(async (req: ExpressRequest<Record<string, never>, any, z.infer<typeof parseExercisesRequestSchema>>, res: Response) => {
-    const parseResult = parseExercisesRequestSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      return res.status(400).json({ error: "Text is required" });
-    }
-    const { text } = parseResult.data;
+router.post("/api/v1/parse-exercises", isAuthenticated, rateLimiter("parse", 5), validateBody(parseExercisesRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, any, z.infer<typeof parseExercisesRequestSchema>>, res: Response) => {
+    const { text } = req.body;
     const userId = getUserId(req);
     const user = await storage.getUser(userId);
     const weightUnit = user?.weightUnit || "kg";
@@ -108,7 +104,7 @@ async function prepareChatContext(req: ExpressRequest): Promise<{ success: false
   };
 }
 
-router.post("/api/v1/chat", isAuthenticated, rateLimiter("chat", 10), asyncHandler(async (req: ExpressRequest<Record<string, never>, any, z.infer<typeof chatRequestSchema>>, res: Response) => {
+router.post("/api/v1/chat", isAuthenticated, rateLimiter("chat", 10), validateBody(chatRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, any, z.infer<typeof chatRequestSchema>>, res: Response) => {
     const context = await prepareChatContext(req);
     if (!context.success) {
       return res.status(400).json({ error: context.error });
@@ -119,7 +115,7 @@ router.post("/api/v1/chat", isAuthenticated, rateLimiter("chat", 10), asyncHandl
     res.json({ response, ragInfo });
   }));
 
-router.post("/api/v1/chat/stream", isAuthenticated, rateLimiter("chat", 10), asyncHandler(async (req: ExpressRequest<Record<string, never>, any, z.infer<typeof chatRequestSchema>>, res: Response) => {
+router.post("/api/v1/chat/stream", isAuthenticated, rateLimiter("chat", 10), validateBody(chatRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, any, z.infer<typeof chatRequestSchema>>, res: Response) => {
     const context = await prepareChatContext(req);
     if (!context.success) {
       return res.status(400).json({ error: context.error });
@@ -160,14 +156,9 @@ router.get("/api/v1/chat/history", isAuthenticated, asyncHandler(async (req: Exp
     res.json(messages);
   }));
 
-router.post("/api/v1/chat/message", isAuthenticated, rateLimiter("chatMessage", 20), asyncHandler(async (req: ExpressRequest<Record<string, never>, any, InsertChatMessage>, res: Response) => {
-    const parseResult = insertChatMessageSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      return res.status(400).json({ error: "Role and content are required", details: parseResult.error });
-    }
-
+router.post("/api/v1/chat/message", isAuthenticated, rateLimiter("chatMessage", 20), validateBody(insertChatMessageSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, any, InsertChatMessage>, res: Response) => {
     const userId = getUserId(req);
-    const { role, content } = parseResult.data;
+    const { role, content } = req.body;
 
     const message = await storage.saveChatMessage({ userId, role, content });
     res.json(message);

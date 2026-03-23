@@ -447,3 +447,58 @@ describe("expandExercisesToSetRows", () => {
     expect(rows[0].time).toBe(30);
   });
 });
+
+import { validateBody } from "./routeUtils";
+import { z } from "zod";
+
+describe("validateBody", () => {
+  const schema = z.object({
+    name: z.string(),
+    age: z.number().optional(),
+  });
+
+  it("should call next() and update req.body on valid input", () => {
+    const req = { body: { name: "Test", age: 30 } } as any;
+    const res = {} as any;
+    const next = vi.fn();
+
+    const middleware = validateBody(schema);
+    middleware(req, res, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(req.body).toEqual({ name: "Test", age: 30 });
+  });
+
+  it("should strip unknown properties from req.body on valid input", () => {
+    const req = { body: { name: "Test", unknownProp: true } } as any;
+    const res = {} as any;
+    const next = vi.fn();
+
+    const middleware = validateBody(schema);
+    middleware(req, res, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(req.body).toEqual({ name: "Test" });
+  });
+
+  it("should return 400 on invalid input without calling next()", () => {
+    const req = { body: { age: "not a number" } } as any;
+    const res = {
+      status: vi.fn().mockReturnThis(),
+      json: vi.fn(),
+    } as any;
+    const next = vi.fn();
+
+    const middleware = validateBody(schema);
+    middleware(req, res, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: "Required",
+        details: expect.any(Object),
+      })
+    );
+  });
+});

@@ -2,7 +2,7 @@ import { logger } from "../logger";
 import { Router, type Request as ExpressRequest, type Response } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
-import { rateLimiter, asyncHandler } from "../routeUtils";
+import { rateLimiter, asyncHandler, validateBody } from "../routeUtils";
 import { getUserId } from "../types";
 import { insertCoachingMaterialSchema } from "@shared/schema";
 import { getRagStatus, reembedAllMaterials } from "../services/ragService";
@@ -23,13 +23,10 @@ router.get("/api/v1/coaching-materials", isAuthenticated, asyncHandler(async (re
     res.json(materials);
   }));
 
-router.post("/api/v1/coaching-materials", isAuthenticated, rateLimiter("coaching", 10), asyncHandler(async (req: ExpressRequest, res: Response) => {
+const createMaterialSchema = insertCoachingMaterialSchema.omit({ userId: true });
+router.post("/api/v1/coaching-materials", isAuthenticated, rateLimiter("coaching", 10), validateBody(createMaterialSchema), asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
-    const parseResult = insertCoachingMaterialSchema.safeParse({ ...req.body, userId });
-    if (!parseResult.success) {
-      return res.status(400).json({ error: "Invalid data", details: parseResult.error.issues });
-    }
-    const material = await storage.createCoachingMaterial(parseResult.data);
+    const material = await storage.createCoachingMaterial({ ...req.body, userId });
 
     // Fire-and-forget: chunk and embed in background
     queue.send("embed-coaching-material", { material }).catch(err => (req.log || logger).error({ err }, "Failed to queue coaching material embedding"));
@@ -37,19 +34,15 @@ router.post("/api/v1/coaching-materials", isAuthenticated, rateLimiter("coaching
     res.status(201).json(material);
   }));
 
-router.patch("/api/v1/coaching-materials/:id", isAuthenticated, rateLimiter("coaching", 10), asyncHandler(async (req: ExpressRequest, res: Response) => {
+router.patch("/api/v1/coaching-materials/:id", isAuthenticated, rateLimiter("coaching", 10), validateBody(updateCoachingMaterialSchema), asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
-    const parseResult = updateCoachingMaterialSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      return res.status(400).json({ error: "Invalid data", details: parseResult.error.issues });
-    }
-    const material = await storage.updateCoachingMaterial(req.params.id, parseResult.data, userId);
+    const material = await storage.updateCoachingMaterial(req.params.id, req.body, userId);
     if (!material) {
       return res.status(404).json({ error: "Coaching material not found" });
     }
 
     // Re-embed if content or title changed
-    if (parseResult.data.content || parseResult.data.title) {
+    if (req.body.content || req.body.title) {
       queue.send("embed-coaching-material", { material }).catch(err => (req.log || logger).error({ err }, "Failed to queue coaching material embedding"));
     }
 
