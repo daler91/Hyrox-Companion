@@ -133,6 +133,7 @@ export const exerciseSets = pgTable("exercise_sets", {
   index("idx_exercise_sets_exercise_name").on(table.exerciseName),
   index("idx_exercise_sets_workout_sort").on(table.workoutLogId, table.sortOrder),
   index("idx_exercise_sets_workout_exercise").on(table.workoutLogId, table.exerciseName),
+  check("set_number_check", sql`set_number > 0`),
 ]);
 
 // Custom exercises saved by users for AI recognition
