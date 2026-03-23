@@ -51,7 +51,7 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
   return (
     <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
       {/* Left Column */}
-      <div className="md:col-span-5 lg:col-span-4 space-y-4">
+      <div className="md:col-span-5 lg:col-span-4 space-y-4 min-w-0">
         <div>
           <Label htmlFor="detail-focus">Focus</Label>
           <Input
@@ -77,7 +77,7 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
       </div>
 
       {/* Right Column */}
-      <div className="md:col-span-7 lg:col-span-8 space-y-4">
+      <div className="md:col-span-7 lg:col-span-8 space-y-4 min-w-0">
         <div className="flex items-center gap-2">
           <Button
             variant={useTextMode ? "outline" : "default"}
