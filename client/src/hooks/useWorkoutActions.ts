@@ -1,18 +1,19 @@
 import { type ParsedExercise, type TimelineEntry, type PlanDay, type WorkoutStatus, type UpdateWorkoutLog, type User } from "@shared/schema";
 import { useState, useCallback } from "react";
-import { useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { api, QUERY_KEYS } from "@/lib/api";
-import { useToast } from "@/hooks/use-toast";
+import { useApiMutation } from "./useApiMutation";
 
 export function useWorkoutActions(selectedPlanId: string | null) {
-  const { toast } = useToast();
   const [detailEntry, setDetailEntry] = useState<TimelineEntry | null>(null);
   const [skipConfirmEntry, setSkipConfirmEntry] = useState<TimelineEntry | null>(null);
 
-  const updateStatusMutation = useMutation({
+  const updateStatusMutation = useApiMutation({
     mutationFn: ({ dayId, status }: { dayId: string; status: string }) =>
       api.plans.updateDayStatus(dayId, status),
+    invalidateQueries: [QUERY_KEYS.timeline],
+    successToast: "Status updated",
+    errorToast: "Failed to update status",
     onSuccess: (data, variables) => {
       if (variables.status === "completed") {
         queryClient.setQueryData<User | null>([...QUERY_KEYS.authUser], (old) => {
@@ -20,81 +21,63 @@ export function useWorkoutActions(selectedPlanId: string | null) {
           return { ...old, isAutoCoaching: true };
         });
       }
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
-      toast({ title: "Status updated" });
-    },
-    onError: () => {
-      toast({ title: "Failed to update status", variant: "destructive" });
     },
   });
 
-  const updateDayMutation = useMutation({
+  const updateDayMutation = useApiMutation({
     mutationFn: ({ dayId, updates }: { dayId: string; updates: Partial<PlanDay> }) =>
       api.plans.updateDay(selectedPlanId!, dayId, updates),
+    invalidateQueries: [QUERY_KEYS.timeline],
+    successToast: "Entry updated",
+    errorToast: "Failed to update entry",
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
       setDetailEntry(null);
-      toast({ title: "Entry updated" });
-    },
-    onError: () => {
-      toast({ title: "Failed to update entry", variant: "destructive" });
     },
   });
 
-  const logWorkoutMutation = useMutation({
+  const logWorkoutMutation = useApiMutation({
     mutationFn: (data: { planDayId: string; date: string; focus: string; mainWorkout: string; accessory?: string; notes?: string; rpe?: number; exercises?: ParsedExercise[] }) =>
       api.workouts.create(data),
+    invalidateQueries: [QUERY_KEYS.timeline],
+    successToast: "Workout logged!",
+    errorToast: "Failed to log workout",
     onSuccess: () => {
       queryClient.setQueryData<User | null>([...QUERY_KEYS.authUser], (old) => {
         if (!old) return old;
         return { ...old, isAutoCoaching: true };
       });
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
       setDetailEntry(null);
-      toast({ title: "Workout logged!" });
-    },
-    onError: () => {
-      toast({ title: "Failed to log workout", variant: "destructive" });
     },
   });
 
-  const updateWorkoutMutation = useMutation({
+  const updateWorkoutMutation = useApiMutation({
     mutationFn: ({ workoutId, updates }: { workoutId: string; updates: UpdateWorkoutLog & { exercises?: ParsedExercise[] } }) =>
       api.workouts.update(workoutId, updates),
+    invalidateQueries: [QUERY_KEYS.timeline, QUERY_KEYS.workouts],
+    successToast: "Workout updated",
+    errorToast: "Failed to update workout",
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workouts });
       setDetailEntry(null);
-      toast({ title: "Workout updated" });
-    },
-    onError: () => {
-      toast({ title: "Failed to update workout", variant: "destructive" });
     },
   });
 
-  const deleteWorkoutMutation = useMutation({
+  const deleteWorkoutMutation = useApiMutation({
     mutationFn: (workoutId: string) => api.workouts.delete(workoutId),
+    invalidateQueries: [QUERY_KEYS.timeline, QUERY_KEYS.workouts],
+    successToast: "Workout deleted",
+    errorToast: "Failed to delete workout",
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workouts });
       setDetailEntry(null);
-      toast({ title: "Workout deleted" });
-    },
-    onError: () => {
-      toast({ title: "Failed to delete workout", variant: "destructive" });
     },
   });
 
-  const deletePlanDayMutation = useMutation({
+  const deletePlanDayMutation = useApiMutation({
     mutationFn: (dayId: string) => api.plans.deleteDay(dayId),
+    invalidateQueries: [QUERY_KEYS.timeline, QUERY_KEYS.plans],
+    successToast: "Workout removed from plan",
+    errorToast: "Failed to delete workout",
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans });
       setDetailEntry(null);
-      toast({ title: "Workout removed from plan" });
-    },
-    onError: () => {
-      toast({ title: "Failed to delete workout", variant: "destructive" });
     },
   });
 
