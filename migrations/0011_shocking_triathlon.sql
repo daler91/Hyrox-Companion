@@ -1,0 +1,1 @@
+ALTER TABLE "exercise_sets" ADD CONSTRAINT "set_number_check" CHECK (set_number > 0);
