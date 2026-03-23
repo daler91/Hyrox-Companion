@@ -200,31 +200,18 @@ export async function reembedAllMaterials(userId: string) {
   let count = 0;
 
   const results = await Promise.allSettled(
-    materials.map(async (material) => {
-      try {
-        await embedCoachingMaterial(material);
-        return material.id;
-      } catch (err) {
-        // Return structured error instead of throwing non-Error object
-        return Promise.reject(new Error(JSON.stringify({
-          id: material.id,
-          message: err instanceof Error ? err.message : String(err)
-        })));
-      }
-    })
+    materials.map((material) => embedCoachingMaterial(material).then(() => material))
   );
 
-  for (const result of results) {
+  for (let i = 0; i < results.length; i++) {
+    const result = results[i];
     if (result.status === "fulfilled") {
       count++;
     } else {
-      const reason = result.reason as Error;
-      try {
-        const parsed = JSON.parse(reason.message);
-        errors.push(`${parsed.id}: ${parsed.message}`);
-      } catch {
-        errors.push(`Unknown: ${reason.message}`);
-      }
+      const err = result.reason;
+      // We map directly with index, so we can reliably get the failed material
+      const material = materials[i];
+      errors.push(`${material.id}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
