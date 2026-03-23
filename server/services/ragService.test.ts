@@ -12,6 +12,7 @@ vi.mock("../storage", () => ({
   storage: {
     deleteChunksByMaterialId: vi.fn(),
     insertChunks: vi.fn(),
+    replaceChunks: vi.fn(),
     searchChunksByEmbedding: vi.fn(),
   },
 }));
@@ -127,14 +128,13 @@ describe("embedCoachingMaterial", () => {
     vi.clearAllMocks();
   });
 
-  it("should delete existing chunks then insert new ones", async () => {
+  it("should replace existing chunks with new ones", async () => {
     vi.mocked(generateEmbeddings).mockResolvedValue([[0.1, 0.2]]);
-    vi.mocked(storage.insertChunks).mockResolvedValue([]);
+    vi.mocked(storage.replaceChunks).mockResolvedValue([]);
 
     await embedCoachingMaterial(mockMaterial);
 
-    expect(storage.deleteChunksByMaterialId).toHaveBeenCalledWith("mat_1");
-    expect(storage.insertChunks).toHaveBeenCalledWith([
+    expect(storage.replaceChunks).toHaveBeenCalledWith("mat_1", [
       {
         materialId: "mat_1",
         userId: "user_1",
@@ -147,7 +147,7 @@ describe("embedCoachingMaterial", () => {
 
   it("should prefix first chunk with material title", async () => {
     vi.mocked(generateEmbeddings).mockResolvedValue([[0.1]]);
-    vi.mocked(storage.insertChunks).mockResolvedValue([]);
+    vi.mocked(storage.replaceChunks).mockResolvedValue([]);
 
     await embedCoachingMaterial(mockMaterial);
 
@@ -161,9 +161,8 @@ describe("embedCoachingMaterial", () => {
 
     await embedCoachingMaterial(emptyMaterial);
 
-    expect(storage.deleteChunksByMaterialId).not.toHaveBeenCalled();
+    expect(storage.replaceChunks).not.toHaveBeenCalled();
     expect(generateEmbeddings).not.toHaveBeenCalled();
-    expect(storage.insertChunks).not.toHaveBeenCalled();
   });
 
   it("should handle multiple chunks with correct indices", async () => {
@@ -174,11 +173,11 @@ describe("embedCoachingMaterial", () => {
     vi.mocked(generateEmbeddings).mockImplementation(async (texts) =>
       texts.map(() => [0.5]),
     );
-    vi.mocked(storage.insertChunks).mockResolvedValue([]);
+    vi.mocked(storage.replaceChunks).mockResolvedValue([]);
 
     await embedCoachingMaterial(longMaterial);
 
-    const insertedChunks = vi.mocked(storage.insertChunks).mock.calls[0][0];
+    const insertedChunks = vi.mocked(storage.replaceChunks).mock.calls[0][1];
     expect(insertedChunks.length).toBeGreaterThan(1);
     // Verify indices are sequential
     insertedChunks.forEach((chunk, i) => {

@@ -109,6 +109,7 @@ export interface ICoachingStorage {
   // RAG chunk methods
   insertChunks(chunks: InsertDocumentChunk[]): Promise<DocumentChunk[]>;
   deleteChunksByMaterialId(materialId: string): Promise<void>;
+  replaceChunks(materialId: string, chunks: InsertDocumentChunk[]): Promise<DocumentChunk[]>;
   searchChunksByEmbedding(userId: string, queryEmbedding: number[], topK: number): Promise<DocumentChunk[]>;
   getChunkCountsByMaterial(userId: string): Promise<{ materialId: string; chunkCount: number; hasEmbeddings: boolean }[]>;
   hasChunksForUser(userId: string): Promise<boolean>;
