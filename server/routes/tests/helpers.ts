@@ -30,7 +30,7 @@ export async function createTestApp() {
   await registerRoutes(httpServer, app);
 
   // Add error handling middleware to capture exact 500 errors in tests
-  app.use((err: any, _req: any, res: any, next: any) => {
+  app.use((err: any, _req: any, res: any, _next: any) => {
     console.error("Test App Error Caught:", err);
     res.status(err.status || err.statusCode || 500).json({ error: err.message, code: err.code || "INTERNAL_SERVER_ERROR", details: err.details });
   });

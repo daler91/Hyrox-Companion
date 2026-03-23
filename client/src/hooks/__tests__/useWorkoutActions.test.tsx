@@ -286,7 +286,7 @@ describe('useWorkoutActions', () => {
       });
 
       await waitFor(() => {
-        expect(mockToast).toHaveBeenCalledWith({ title: expectedTitle, variant: "destructive" });
+        expect(mockToast).toHaveBeenCalledWith({ title: expectedTitle, description: "API Failure", variant: "destructive" });
       });
     });
     it('triggers success toast and invalidates timeline on successful status update', async () => {
@@ -315,7 +315,7 @@ describe('useWorkoutActions', () => {
       });
 
       await waitFor(() => {
-        expect(mockToast).toHaveBeenCalledWith({ title: "Failed to update status", variant: "destructive" });
+        expect(mockToast).toHaveBeenCalledWith({ title: "Failed to update status", description: "Network Error", variant: "destructive" });
       });
     });
 });

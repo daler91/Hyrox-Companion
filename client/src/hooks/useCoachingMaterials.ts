@@ -1,8 +1,8 @@
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient } from "@/lib/queryClient";
+import { useQuery } from "@tanstack/react-query";
 import { api, QUERY_KEYS, type RagStatus } from "@/lib/api";
-import { useToast } from "@/hooks/use-toast";
+import { useApiMutation } from "./useApiMutation";
 import type { CoachingMaterial } from "@shared/schema";
+import { useToast } from "@/hooks/use-toast";
 
 export type { RagStatus } from "@/lib/api";
 
@@ -14,34 +14,25 @@ export function useCoachingMaterials() {
 }
 
 export function useCreateCoachingMaterial() {
-  const { toast } = useToast();
-
-  return useMutation({
+  return useApiMutation({
     mutationFn: (data: { title: string; content: string; type: "principles" | "document" }) =>
       api.coaching.create(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.coachingMaterials });
-      toast({ title: "Coaching material added" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Failed to add coaching material", description: error.message, variant: "destructive" });
-    },
+    invalidateQueries: [QUERY_KEYS.coachingMaterials],
+    successToast: "Coaching material added",
+    errorToast: (error: Error) => ({
+      title: "Failed to add coaching material",
+      description: error.message
+    }),
   });
 }
 
 export function useUpdateCoachingMaterial() {
-  const { toast } = useToast();
-
-  return useMutation({
+  return useApiMutation({
     mutationFn: ({ id, ...data }: { id: string; title?: string; content?: string; type?: "principles" | "document" }) =>
       api.coaching.update(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.coachingMaterials });
-      toast({ title: "Coaching material updated" });
-    },
-    onError: () => {
-      toast({ title: "Failed to update coaching material", variant: "destructive" });
-    },
+    invalidateQueries: [QUERY_KEYS.coachingMaterials],
+    successToast: "Coaching material updated",
+    errorToast: "Failed to update coaching material",
   });
 }
 
@@ -55,10 +46,10 @@ export function useRagStatus() {
 export function useReEmbed() {
   const { toast } = useToast();
 
-  return useMutation({
+  return useApiMutation({
     mutationFn: () => api.coaching.reEmbed(),
+    invalidateQueries: [QUERY_KEYS.ragStatus],
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ragStatus });
       if (data.errors?.length > 0) {
         toast({
           title: `Embedded ${data.materialsProcessed} materials with ${data.errors.length} error(s)`,
@@ -69,23 +60,18 @@ export function useReEmbed() {
         toast({ title: `Successfully embedded ${data.materialsProcessed} material(s)` });
       }
     },
-    onError: (error: Error) => {
-      toast({ title: "Failed to re-embed", description: error.message, variant: "destructive" });
-    },
+    errorToast: (error: Error) => ({
+      title: "Failed to re-embed",
+      description: error.message
+    }),
   });
 }
 
 export function useDeleteCoachingMaterial() {
-  const { toast } = useToast();
-
-  return useMutation({
+  return useApiMutation({
     mutationFn: (id: string) => api.coaching.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.coachingMaterials });
-      toast({ title: "Coaching material removed" });
-    },
-    onError: () => {
-      toast({ title: "Failed to remove coaching material", variant: "destructive" });
-    },
+    invalidateQueries: [QUERY_KEYS.coachingMaterials],
+    successToast: "Coaching material removed",
+    errorToast: "Failed to remove coaching material",
   });
 }
