@@ -57,8 +57,14 @@ router.post("/api/v1/plans/import", isAuthenticated, rateLimiter("planImport", 5
     const { csvContent, fileName, planName } = parseResult.data;
 
     const userId = getUserId(req);
-    const fullPlan = await importPlanFromCSV(csvContent, userId, { fileName, planName });
-    res.json(fullPlan);
+    try {
+      const fullPlan = await importPlanFromCSV(csvContent, userId, { fileName, planName });
+      res.json(fullPlan);
+    } catch (error: any) {
+      const log = (req as any).log || console;
+      log.error({ err: error }, "Failed to import plan from CSV");
+      return res.status(400).json({ error: "Failed to parse CSV content. Please ensure it follows the expected template format.", code: "INVALID_CSV" });
+    }
   }));
 
 router.post("/api/v1/plans/sample", isAuthenticated, rateLimiter("planSample", 5), asyncHandler(async (req: ExpressRequest, res: Response) => {
