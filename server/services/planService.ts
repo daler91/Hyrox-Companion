@@ -38,15 +38,15 @@ function parseCSVContent(csvText: string): unknown[] {
 }
 
 function toStr(val: unknown): string {
-  if (typeof val === 'string') return val;
-  if (typeof val === 'number') return String(val);
-  return '';
+  if (typeof val === "string") return val;
+  if (typeof val === "number") return String(val);
+  return "";
 }
 
 export function validateAndMapCSVRows(records: unknown[]): CSVRow[] {
   if (!Array.isArray(records)) return [];
 
-  return records.map(record => {
+  return records.map((record) => {
     const row = record as Record<string, unknown>;
     return {
       Week: toStr(row.Week),
@@ -68,14 +68,19 @@ function parseCSV(csvText: string): CSVRow[] {
 export async function importPlanFromCSV(
   csvContent: string,
   userId: string,
-  options?: { fileName?: string; planName?: string }
+  options?: { fileName?: string; planName?: string },
 ): Promise<TrainingPlanWithDays> {
   const rows = parseCSV(csvContent);
   if (rows.length === 0) {
     throw new Error("No valid rows found in CSV");
   }
 
-  const weekNumbers = rows.map((r) => Number.parseInt(r.Week, 10)).filter((n) => !Number.isNaN(n) && n > 0);
+  // ⚡ Bolt Performance Optimization: Combine map and filter into a single O(N) reduction to prevent intermediate array allocations.
+  const weekNumbers = rows.reduce<number[]>((acc, r) => {
+    const n = Number.parseInt(r.Week, 10);
+    if (!Number.isNaN(n) && n > 0) acc.push(n);
+    return acc;
+  }, []);
   if (weekNumbers.length === 0) {
     throw new Error("No valid week numbers found in CSV");
   }
@@ -89,11 +94,11 @@ export async function importPlanFromCSV(
     totalWeeks,
   });
 
-  const days: InsertPlanDay[] = rows
-    .filter((row) => row.Week && row.Day)
-    .map((row) => {
+  // ⚡ Bolt Performance Optimization: Combine filter and map into a single O(N) reduction to prevent intermediate array allocations.
+  const days: InsertPlanDay[] = rows.reduce<InsertPlanDay[]>((acc, row) => {
+    if (row.Week && row.Day) {
       const accessory = row.Accessory || row["Accessory/Engine Work"] || null;
-      return {
+      acc.push({
         planId: plan.id,
         weekNumber: Number.parseInt(row.Week, 10) || 1,
         dayName: row.Day,
@@ -102,8 +107,10 @@ export async function importPlanFromCSV(
         accessory,
         notes: row.Notes || null,
         status: "planned",
-      };
-    });
+      });
+    }
+    return acc;
+  }, []);
 
   await storage.createPlanDays(days);
 
@@ -139,7 +146,7 @@ export async function createSamplePlan(userId: string): Promise<TrainingPlanWith
 export async function updatePlanDayWithCleanup(
   dayId: string,
   updates: UpdatePlanDay,
-  userId: string
+  userId: string,
 ) {
   if (updates.mainWorkout !== undefined) {
     return await db.transaction(async (tx) => {
@@ -174,12 +181,13 @@ export async function updatePlanDayWithCleanup(
   return await storage.updatePlanDay(dayId, updates, userId);
 }
 
-
-
 export async function updatePlanDayStatus(
   dayId: string,
-  { status, scheduledDate }: { status?: "planned" | "completed" | "skipped" | "missed"; scheduledDate?: string | null },
-  userId: string
+  {
+    status,
+    scheduledDate,
+  }: { status?: "planned" | "completed" | "skipped" | "missed"; scheduledDate?: string | null },
+  userId: string,
 ) {
   const updates: Record<string, string | null> = {};
   if (status) updates.status = status;
@@ -192,7 +200,9 @@ export async function updatePlanDayStatus(
   const updatedDay = await storage.updatePlanDay(dayId, updates, userId);
 
   if (updatedDay && status === "completed") {
-    queue.send("auto-coach", { userId }).catch(err => logger.error({ err }, "Failed to queue auto-coach job"));
+    queue
+      .send("auto-coach", { userId })
+      .catch((err) => logger.error({ err }, "Failed to queue auto-coach job"));
   }
 
   return updatedDay;

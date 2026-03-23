@@ -3,17 +3,21 @@ import { useState, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { getExerciseLabel, exerciseSetsToStructured } from "@/lib/exerciseUtils";
-import {
-  useWorkoutEditor,
-  exerciseToPayload,
-} from "@/hooks/useWorkoutEditor";
+import { useWorkoutEditor, exerciseToPayload } from "@/hooks/useWorkoutEditor";
 import { WorkoutDetailHeader } from "./WorkoutDetailHeader";
 import { WorkoutDetailEditForm } from "./workout-detail-exercises";
 import { WorkoutDetailFooter } from "./WorkoutDetailActions";
 
 interface WorkoutDetailEditModeProps {
   readonly entry: TimelineEntry;
-  readonly onSave: (updates: { focus: string; mainWorkout: string; accessory: string | null; notes: string | null; rpe?: number | null; exercises?: ParsedExercise[] }) => void;
+  readonly onSave: (updates: {
+    focus: string;
+    mainWorkout: string;
+    accessory: string | null;
+    notes: string | null;
+    rpe?: number | null;
+    exercises?: ParsedExercise[];
+  }) => void;
   readonly onCancel: () => void;
   readonly isSaving?: boolean;
 }
@@ -82,24 +86,35 @@ export function WorkoutDetailEditMode({
         exercises: [],
       });
     } else {
-      const exercises = editExercises.map((name) => editExerciseData[name]).filter(Boolean);
+      // ⚡ Bolt Performance Optimization: Combine map and filter into a single O(N) reduction to prevent intermediate array allocations.
+      const exercises = editExercises.reduce<ParsedExercise[]>((acc, name) => {
+        const data = editExerciseData[name];
+        if (data) acc.push(data);
+        return acc;
+      }, []);
       const distLabel = distanceUnit === "km" ? "m" : "ft";
-      const mainWorkout = exercises.length > 0
-        ? exercises.map((ex) => {
-            const name = getExerciseLabel(ex.exerciseName, ex.customLabel);
-            const sets = ex.sets || [];
-            if (sets.length === 0) return `${name}: completed`;
-            const firstSet = sets[0];
-            const allSame = sets.every(s => s.reps === firstSet.reps && s.weight === firstSet.weight);
-            const parts: string[] = [];
-            if (allSame && sets.length > 1 && firstSet.reps) parts.push(`${sets.length}x${firstSet.reps}`);
-            else if (firstSet.reps) parts.push(`${firstSet.reps} reps`);
-            if (allSame && firstSet.weight) parts.push(`${firstSet.weight}${weightLabel}`);
-            if (firstSet.distance) parts.push(`${firstSet.distance}${distLabel}`);
-            if (firstSet.time) parts.push(`${firstSet.time}min`);
-            return `${name}: ${parts.join(", ") || "completed"}`;
-          }).join("; ")
-        : editForm.mainWorkout;
+      const mainWorkout =
+        exercises.length > 0
+          ? exercises
+              .map((ex) => {
+                const name = getExerciseLabel(ex.exerciseName, ex.customLabel);
+                const sets = ex.sets || [];
+                if (sets.length === 0) return `${name}: completed`;
+                const firstSet = sets[0];
+                const allSame = sets.every(
+                  (s) => s.reps === firstSet.reps && s.weight === firstSet.weight,
+                );
+                const parts: string[] = [];
+                if (allSame && sets.length > 1 && firstSet.reps)
+                  parts.push(`${sets.length}x${firstSet.reps}`);
+                else if (firstSet.reps) parts.push(`${firstSet.reps} reps`);
+                if (allSame && firstSet.weight) parts.push(`${firstSet.weight}${weightLabel}`);
+                if (firstSet.distance) parts.push(`${firstSet.distance}${distLabel}`);
+                if (firstSet.time) parts.push(`${firstSet.time}min`);
+                return `${name}: ${parts.join(", ") || "completed"}`;
+              })
+              .join("; ")
+          : editForm.mainWorkout;
 
       onSave({
         focus: editForm.focus,
@@ -114,7 +129,11 @@ export function WorkoutDetailEditMode({
 
   const handleParseText = () => {
     if (!editForm.mainWorkout.trim()) {
-      toast({ title: "No text", description: "Please describe your workout first.", variant: "destructive" });
+      toast({
+        title: "No text",
+        description: "Please describe your workout first.",
+        variant: "destructive",
+      });
       return;
     }
     parseMutation.mutate(editForm.mainWorkout);
