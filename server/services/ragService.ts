@@ -198,13 +198,35 @@ export async function reembedAllMaterials(userId: string) {
   const materials = await storage.listCoachingMaterials(userId);
   const errors: string[] = [];
   let count = 0;
-  for (const material of materials) {
-    try {
-      await embedCoachingMaterial(material);
+
+  const results = await Promise.allSettled(
+    materials.map(async (material) => {
+      try {
+        await embedCoachingMaterial(material);
+        return material.id;
+      } catch (err) {
+        // Return structured error instead of throwing non-Error object
+        return Promise.reject(new Error(JSON.stringify({
+          id: material.id,
+          message: err instanceof Error ? err.message : String(err)
+        })));
+      }
+    })
+  );
+
+  for (const result of results) {
+    if (result.status === "fulfilled") {
       count++;
-    } catch (err) {
-      errors.push(`${material.id}: ${err instanceof Error ? err.message : String(err)}`);
+    } else {
+      const reason = result.reason as Error;
+      try {
+        const parsed = JSON.parse(reason.message);
+        errors.push(`${parsed.id}: ${parsed.message}`);
+      } catch {
+        errors.push(`Unknown: ${reason.message}`);
+      }
     }
   }
+
   return { success: true, materialsProcessed: count, errors };
 }
