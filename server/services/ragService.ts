@@ -198,13 +198,22 @@ export async function reembedAllMaterials(userId: string) {
   const materials = await storage.listCoachingMaterials(userId);
   const errors: string[] = [];
   let count = 0;
-  for (const material of materials) {
-    try {
-      await embedCoachingMaterial(material);
+
+  const results = await Promise.allSettled(
+    materials.map((material) => embedCoachingMaterial(material).then(() => material))
+  );
+
+  for (let i = 0; i < results.length; i++) {
+    const result = results[i];
+    if (result.status === "fulfilled") {
       count++;
-    } catch (err) {
+    } else {
+      const err = result.reason;
+      // We map directly with index, so we can reliably get the failed material
+      const material = materials[i];
       errors.push(`${material.id}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
+
   return { success: true, materialsProcessed: count, errors };
 }
