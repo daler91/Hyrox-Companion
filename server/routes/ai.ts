@@ -107,7 +107,7 @@ async function prepareChatContext(req: ExpressRequest): Promise<{ success: false
 router.post("/api/v1/chat", isAuthenticated, rateLimiter("chat", 10), validateBody(chatRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, any, z.infer<typeof chatRequestSchema>>, res: Response) => {
     const context = await prepareChatContext(req);
     if (!context.success) {
-      return res.status(400).json({ error: context.error });
+      return res.status(400).json({ error: context.error, code: "BAD_REQUEST" });
     }
     const { message, history, trainingContext, coachingMaterials, retrievedChunks, ragInfo } = context;
 
@@ -118,7 +118,7 @@ router.post("/api/v1/chat", isAuthenticated, rateLimiter("chat", 10), validateBo
 router.post("/api/v1/chat/stream", isAuthenticated, rateLimiter("chat", 10), validateBody(chatRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, any, z.infer<typeof chatRequestSchema>>, res: Response) => {
     const context = await prepareChatContext(req);
     if (!context.success) {
-      return res.status(400).json({ error: context.error });
+      return res.status(400).json({ error: context.error, code: "BAD_REQUEST" });
     }
     const { message, history, trainingContext, coachingMaterials, retrievedChunks, ragInfo } = context;
 

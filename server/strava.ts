@@ -136,13 +136,13 @@ async function handleStravaStatus(req: Request, res: Response) {
     });
   } catch (error) {
     logger.error({ err: error }, "Strava status error:");
-    res.status(500).json({ error: "Failed to get Strava status" });
+    res.status(500).json({ error: "Failed to get Strava status", code: "INTERNAL_SERVER_ERROR" });
   }
 }
 
 async function handleStravaAuth(req: Request, res: Response) {
   if (!STRAVA_CLIENT_ID) {
-    return res.status(500).json({ error: "Strava integration not configured" });
+    return res.status(500).json({ error: "Strava integration not configured", code: "INTERNAL_SERVER_ERROR" });
   }
 
   const userId = getUserId(req);
@@ -223,7 +223,7 @@ async function handleStravaDisconnect(req: Request, res: Response) {
     res.json({ success: true });
   } catch (error) {
     logger.error({ err: error }, "Strava disconnect error:");
-    res.status(500).json({ error: "Failed to disconnect Strava" });
+    res.status(500).json({ error: "Failed to disconnect Strava", code: "INTERNAL_SERVER_ERROR" });
   }
 }
 
@@ -233,7 +233,7 @@ async function handleStravaSync(req: Request, res: Response) {
     const accessToken = await getValidAccessToken(userId);
 
     if (!accessToken) {
-      return res.status(401).json({ error: "Strava not connected or token expired" });
+      return res.status(401).json({ error: "Strava not connected or token expired", code: "UNAUTHORIZED" });
     }
 
     const user = await storage.getUser(userId);
@@ -248,7 +248,7 @@ async function handleStravaSync(req: Request, res: Response) {
 
     if (!activitiesResponse.ok) {
       logger.error({ err: await activitiesResponse.text() }, "Failed to fetch Strava activities:");
-      return res.status(500).json({ error: "Failed to fetch activities from Strava" });
+      return res.status(500).json({ error: "Failed to fetch activities from Strava", code: "INTERNAL_SERVER_ERROR" });
     }
 
     const activities: StravaActivity[] = await activitiesResponse.json();
@@ -284,7 +284,7 @@ async function handleStravaSync(req: Request, res: Response) {
     });
   } catch (error) {
     logger.error({ err: error }, "Strava sync error:");
-    res.status(500).json({ error: "Failed to sync Strava activities" });
+    res.status(500).json({ error: "Failed to sync Strava activities", code: "INTERNAL_SERVER_ERROR" });
   }
 }
 

@@ -42,7 +42,7 @@ describe("GET /api/preferences", () => {
     const response = await request(app).get("/api/v1/preferences");
 
     expect(response.status).toBe(500);
-    expect(response.body).toEqual({ error: "Internal Server Error" });
+    expect(response.body).toEqual({ error: "Internal Server Error", code: "INTERNAL_SERVER_ERROR" });
     expect(storage.getUser).toHaveBeenCalledWith("test_user_id");
   });
 });

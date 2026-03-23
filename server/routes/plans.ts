@@ -19,7 +19,7 @@ const handlePlanDayUpdate = (updateFn: (dayId: string, data: UpdatePlanDay, user
     const userId = getUserId(req);
     const updatedDay = await updateFn(dayId, req.body, userId);
   if (!updatedDay) {
-    return res.status(404).json({ error: "Day not found" });
+    return res.status(404).json({ error: "Day not found", code: "NOT_FOUND" });
   }
 
   res.json(updatedDay);
@@ -36,7 +36,7 @@ const handleGetOrDeletePlan = (
   const userId = getUserId(req);
   const result = await actionFn(req.params.id, userId);
   if (!result) {
-    return res.status(404).json({ error: "Training plan not found" });
+    return res.status(404).json({ error: "Training plan not found", code: "NOT_FOUND" });
   }
   res.json(successMsg ? { success: true } : result);
 })
@@ -52,7 +52,7 @@ router.get("/api/v1/plans/:id", isAuthenticated, handleGetOrDeletePlan(storage.g
 router.post("/api/v1/plans/import", isAuthenticated, rateLimiter("planImport", 5), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof importPlanRequestSchema>>, res: Response) => {
     const parseResult = importPlanRequestSchema.safeParse(req.body);
     if (!parseResult.success) {
-      return res.status(400).json({ error: "CSV content is required" });
+      return res.status(400).json({ error: "CSV content is required", code: "BAD_REQUEST" });
     }
     const { csvContent, fileName, planName } = parseResult.data;
 
@@ -79,7 +79,7 @@ router.patch("/api/v1/plans/:id", isAuthenticated, rateLimiter("planUpdate", 20)
     const userId = getUserId(req);
     const updated = await storage.renameTrainingPlan(req.params.id, req.body.name, userId);
     if (!updated) {
-      return res.status(404).json({ error: "Training plan not found" });
+      return res.status(404).json({ error: "Training plan not found", code: "NOT_FOUND" });
     }
     res.json(updated);
   }));
@@ -88,11 +88,11 @@ router.patch("/api/v1/plans/:id/goal", isAuthenticated, rateLimiter("planUpdate"
     const userId = getUserId(req);
     const parseResult = updateTrainingPlanGoalSchema.safeParse(req.body);
     if (!parseResult.success) {
-      return res.status(400).json({ error: "Invalid goal data", details: parseResult.error });
+      return res.status(400).json({ error: "Invalid goal data", code: "VALIDATION_ERROR", details: parseResult.error });
     }
     const updated = await storage.updateTrainingPlanGoal(req.params.id, parseResult.data.goal, userId);
     if (!updated) {
-      return res.status(404).json({ error: "Training plan not found" });
+      return res.status(404).json({ error: "Training plan not found", code: "NOT_FOUND" });
     }
     res.json(updated);
   }));
@@ -102,7 +102,7 @@ router.delete("/api/v1/plans/:id", isAuthenticated, rateLimiter("planDelete", 10
 router.post("/api/v1/plans/:planId/schedule", isAuthenticated, rateLimiter("planSchedule", 10), asyncHandler(async (req: ExpressRequest<{ planId: string }, unknown, z.infer<typeof schedulePlanRequestSchema>>, res: Response) => {
     const parseResult = schedulePlanRequestSchema.safeParse(req.body);
     if (!parseResult.success) {
-      return res.status(400).json({ error: "Invalid start date format. Must be YYYY-MM-DD" });
+      return res.status(400).json({ error: "Invalid start date format. Must be YYYY-MM-DD", code: "BAD_REQUEST" });
     }
     const { startDate } = parseResult.data;
 
@@ -111,7 +111,7 @@ router.post("/api/v1/plans/:planId/schedule", isAuthenticated, rateLimiter("plan
 
     const success = await storage.schedulePlan(planId, startDate, userId);
     if (!success) {
-      return res.status(404).json({ error: "Training plan not found" });
+      return res.status(404).json({ error: "Training plan not found", code: "NOT_FOUND" });
     }
 
     res.json({ success: true });
@@ -128,13 +128,13 @@ router.patch("/api/v1/plans/days/:dayId/status", isAuthenticated, rateLimiter("p
 
     const parseResult = patchDayStatusSchema.safeParse(req.body);
     if (!parseResult.success) {
-      return res.status(400).json({ error: "Invalid status or date", details: parseResult.error });
+      return res.status(400).json({ error: "Invalid status or date", code: "VALIDATION_ERROR", details: parseResult.error });
     }
     const { status, scheduledDate } = parseResult.data;
 
     const updatedDay = await updatePlanDayStatus(dayId, { status, scheduledDate }, userId);
     if (!updatedDay) {
-      return res.status(404).json({ error: "Day not found" });
+      return res.status(404).json({ error: "Day not found", code: "NOT_FOUND" });
     }
 
     res.json(updatedDay);
@@ -145,7 +145,7 @@ router.delete("/api/v1/plans/days/:dayId", isAuthenticated, rateLimiter("planDay
     const userId = getUserId(req);
     const deleted = await storage.deletePlanDay(dayId, userId);
     if (!deleted) {
-      return res.status(404).json({ error: "Plan day not found" });
+      return res.status(404).json({ error: "Plan day not found", code: "NOT_FOUND" });
     }
     res.json({ success: true });
   }));

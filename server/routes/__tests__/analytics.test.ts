@@ -67,13 +67,13 @@ describe("Analytics Routes", () => {
     it("should return 400 for invalid from date", async () => {
       const response = await request(app).get(`${endpoint}?from=invalid-date`);
       expect(response.status).toBe(400);
-      expect(response.body).toEqual({ error: "Invalid 'from' date format" });
+      expect(response.body).toEqual({ error: "Invalid 'from' date format", code: "BAD_REQUEST" });
     });
 
     it("should return 400 for invalid to date", async () => {
       const response = await request(app).get(`${endpoint}?to=invalid-date`);
       expect(response.status).toBe(400);
-      expect(response.body).toEqual({ error: "Invalid 'to' date format" });
+      expect(response.body).toEqual({ error: "Invalid 'to' date format", code: "BAD_REQUEST" });
     });
   };
 

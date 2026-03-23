@@ -7,7 +7,7 @@ import express from "express";
 export function setupTestErrorHandler(app: express.Express) {
   app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     // Intentionally left with only status sending logic to mock error handler behavior
-    res.status(err.status || 500).json({ error: "Internal Server Error" });
+    res.status(err.status || 500).json({ error: "Internal Server Error", code: err.code || "INTERNAL_SERVER_ERROR", details: err.details });
   });
 }
 

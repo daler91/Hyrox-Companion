@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { queryClient } from "@/lib/queryClient";
+import { COACH_AUTO_OPEN_DELAY_MS, IMPORT_INPUT_DELAY_MS, MOBILE_BREAKPOINT_PX } from "./constants";
 
 export function useOnboarding(
   isNewUser: boolean,
@@ -23,11 +24,11 @@ export function useOnboarding(
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setHasAutoOpenedCoach(true);
       setTimeout(() => {
-        const isCurrentlyMobile = globalThis.innerWidth < 768;
+        const isCurrentlyMobile = globalThis.innerWidth < MOBILE_BREAKPOINT_PX;
         if (!isCurrentlyMobile) {
           setCoachOpen(true);
         }
-      }, 500);
+      }, COACH_AUTO_OPEN_DELAY_MS);
     }
   }, [showOnboarding, onboardingTriggered, hasAutoOpenedCoach]);
 
@@ -36,7 +37,7 @@ export function useOnboarding(
     if (choice === "import" && fileInputRef.current) {
       setTimeout(() => {
         fileInputRef.current?.click();
-      }, 100);
+      }, IMPORT_INPUT_DELAY_MS);
     } else if (choice === "sample") {
       queryClient.invalidateQueries({ queryKey: ["/api/v1/plans"] });
       queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] });

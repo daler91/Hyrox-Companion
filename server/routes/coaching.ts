@@ -38,7 +38,7 @@ router.patch("/api/v1/coaching-materials/:id", isAuthenticated, rateLimiter("coa
     const userId = getUserId(req);
     const material = await storage.updateCoachingMaterial(req.params.id, req.body, userId);
     if (!material) {
-      return res.status(404).json({ error: "Coaching material not found" });
+      return res.status(404).json({ error: "Coaching material not found", code: "NOT_FOUND" });
     }
 
     // Re-embed if content or title changed
@@ -66,7 +66,7 @@ router.delete("/api/v1/coaching-materials/:id", isAuthenticated, rateLimiter("co
     // Chunks are cascade-deleted via FK, no manual cleanup needed
     const deleted = await storage.deleteCoachingMaterial(req.params.id, userId);
     if (!deleted) {
-      return res.status(404).json({ error: "Coaching material not found" });
+      return res.status(404).json({ error: "Coaching material not found", code: "NOT_FOUND" });
     }
     res.json({ success: true });
   }));

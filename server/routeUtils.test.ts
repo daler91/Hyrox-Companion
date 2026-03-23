@@ -48,7 +48,7 @@ vi.mock("express-rate-limit", () => {
         if (handler) {
           handler(req, res);
         } else {
-          res.status(429).json({ error: "Too many requests" });
+          res.status(429).json({ error: "Too many requests", code: "RATE_LIMITED" });
         }
         return;
       }

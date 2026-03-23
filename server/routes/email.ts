@@ -24,7 +24,7 @@ router.get("/api/v1/cron/emails", asyncHandler(async (req: ExpressRequest, res: 
   const cronSecret = env.CRON_SECRET;
 
   if (!cronSecret || !secret) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return res.status(401).json({ error: "Unauthorized", code: "UNAUTHORIZED" });
   }
 
   // Use timingSafeEqual with hashed values to prevent timing attacks
@@ -33,7 +33,7 @@ router.get("/api/v1/cron/emails", asyncHandler(async (req: ExpressRequest, res: 
   const cronSecretHash = crypto.createHash("sha256").update(cronSecret).digest();
 
   if (!crypto.timingSafeEqual(secretHash, cronSecretHash)) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return res.status(401).json({ error: "Unauthorized", code: "UNAUTHORIZED" });
   }
     const result = await runEmailCronJob(storage);
     res.json(result);
