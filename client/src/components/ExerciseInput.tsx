@@ -3,7 +3,18 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { X, Timer, Ruler, Hash, Weight, Pencil, Plus, Minus, AlertTriangle, TriangleAlert } from "lucide-react";
+import {
+  X,
+  Timer,
+  Ruler,
+  Hash,
+  Weight,
+  Pencil,
+  Plus,
+  Minus,
+  AlertTriangle,
+  TriangleAlert,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
 import { categoryBorderColors } from "@/lib/exerciseUtils";
@@ -38,10 +49,17 @@ interface ExerciseInputProps {
 
 type FieldKey = "reps" | "weight" | "distance" | "time";
 
-const fieldConfig: Record<FieldKey, { icon: typeof Timer; getLabel: (wu: string, du: string) => string; short: string }> = {
+const fieldConfig: Record<
+  FieldKey,
+  { icon: typeof Timer; getLabel: (wu: string, du: string) => string; short: string }
+> = {
   reps: { icon: Hash, getLabel: () => "Reps", short: "Reps" },
   weight: { icon: Weight, getLabel: (wu) => `Weight (${wu})`, short: "Wt" },
-  distance: { icon: Ruler, getLabel: (_, du) => `Distance (${du === "km" ? "m" : "ft"})`, short: "Dist" },
+  distance: {
+    icon: Ruler,
+    getLabel: (_, du) => `Distance (${du === "km" ? "m" : "ft"})`,
+    short: "Dist",
+  },
   time: { icon: Timer, getLabel: () => "Time (min)", short: "Time" },
 };
 
@@ -56,12 +74,22 @@ export function createDefaultSet(setNumber: number): SetData {
   return { setNumber };
 }
 
-export function createExerciseFromSets(exerciseName: ExerciseName, dbSets: Array<{ setNumber: number; reps?: number | null; weight?: number | null; distance?: number | null; time?: number | null; notes?: string | null }>): StructuredExercise {
+export function createExerciseFromSets(
+  exerciseName: ExerciseName,
+  dbSets: Array<{
+    setNumber: number;
+    reps?: number | null;
+    weight?: number | null;
+    distance?: number | null;
+    time?: number | null;
+    notes?: string | null;
+  }>,
+): StructuredExercise {
   const def = EXERCISE_DEFINITIONS[exerciseName];
   return {
     exerciseName,
     category: def?.category || "conditioning",
-    sets: dbSets.map(s => ({
+    sets: dbSets.map((s) => ({
       setNumber: s.setNumber,
       reps: s.reps ?? undefined,
       weight: s.weight ?? undefined,
@@ -72,21 +100,28 @@ export function createExerciseFromSets(exerciseName: ExerciseName, dbSets: Array
   };
 }
 
-
 function getConfidenceClasses(confidence: number): string {
   if (confidence >= 80) return "bg-green-500/10 text-green-600 dark:text-green-400";
   if (confidence >= 60) return "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400";
   return "bg-red-500/10 text-red-600 dark:text-red-400";
 }
 
-export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg", distanceUnit = "km", blockLabel }: Readonly<ExerciseInputProps>) {
+export function ExerciseInput({
+  exercise,
+  onChange,
+  onRemove,
+  weightUnit = "kg",
+  distanceUnit = "km",
+  blockLabel,
+}: Readonly<ExerciseInputProps>) {
   const idPrefix = useId();
   const def = EXERCISE_DEFINITIONS[exercise.exerciseName];
   const fields = getFields(exercise.exerciseName);
   const borderColor = categoryBorderColors[exercise.category] || "border-l-gray-500";
-  const displayLabel = exercise.exerciseName === "custom" && exercise.customLabel
-    ? exercise.customLabel
-    : def?.label || exercise.exerciseName;
+  const displayLabel =
+    exercise.exerciseName === "custom" && exercise.customLabel
+      ? exercise.customLabel
+      : def?.label || exercise.exerciseName;
 
   const sets = exercise.sets.length > 0 ? exercise.sets : [createDefaultSet(1)];
 
@@ -121,12 +156,20 @@ export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg",
   const showMultiSetView = fields.includes("reps") || fields.includes("weight");
 
   return (
-    <Card className={`border-l-4 ${borderColor} rounded-l-none`} data-testid={`input-exercise-${exercise.exerciseName}`}>
+    <Card
+      className={`border-l-4 ${borderColor} rounded-l-none`}
+      data-testid={`input-exercise-${exercise.exerciseName}`}
+    >
       <CardContent className="p-4">
         <div className="flex items-center justify-between gap-2 mb-4">
           <div className="flex items-center gap-2 flex-wrap">
-            <h4 className="font-semibold">{displayLabel}{blockLabel ? ` ${blockLabel}` : ""}</h4>
-            <span className="text-xs text-muted-foreground">{sets.length} {sets.length === 1 ? "set" : "sets"}</span>
+            <h4 className="font-semibold">
+              {displayLabel}
+              {blockLabel ? ` ${blockLabel}` : ""}
+            </h4>
+            <span className="text-xs text-muted-foreground">
+              {sets.length} {sets.length === 1 ? "set" : "sets"}
+            </span>
             {exercise.confidence != null && exercise.confidence < 90 && (
               <Badge
                 variant="secondary"
@@ -138,13 +181,24 @@ export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg",
               </Badge>
             )}
           </div>
-          <Button size="icon" variant="ghost" onClick={onRemove} data-testid={`button-remove-${exercise.exerciseName}`} aria-label={`Remove ${displayLabel}`}>
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={onRemove}
+            data-testid={`button-remove-${exercise.exerciseName}`}
+            aria-label={`Remove ${displayLabel}`}
+          >
             <X className="h-4 w-4" />
           </Button>
         </div>
 
         {missingFields.length > 0 && (
-          <div className="flex items-start gap-2 mb-3 p-2 rounded-md bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 text-xs" role="alert" aria-live="assertive" data-testid={`warning-missing-${exercise.exerciseName}`}>
+          <div
+            className="flex items-start gap-2 mb-3 p-2 rounded-md bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 text-xs"
+            role="alert"
+            aria-live="assertive"
+            data-testid={`warning-missing-${exercise.exerciseName}`}
+          >
             <TriangleAlert className="h-3.5 w-3.5 mt-0.5 shrink-0" aria-hidden="true" />
             <span>Missing {missingFields.join(", ").toLowerCase()} — add for better tracking</span>
           </div>
@@ -152,7 +206,10 @@ export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg",
 
         {exercise.exerciseName === "custom" && (
           <div className="mb-4">
-            <Label htmlFor={`${idPrefix}-custom-name`} className="flex items-center gap-1 text-xs text-muted-foreground mb-2">
+            <Label
+              htmlFor={`${idPrefix}-custom-name`}
+              className="flex items-center gap-1 text-xs text-muted-foreground mb-2"
+            >
               <Pencil className="h-3 w-3" />
               Exercise Name
             </Label>
@@ -169,12 +226,18 @@ export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg",
 
         {showMultiSetView ? (
           <div className="space-y-2">
-            <div className="grid gap-2" style={{ gridTemplateColumns: `2rem ${fields.map(() => "1fr").join(" ")} 2rem` }}>
+            <div
+              className="grid gap-2"
+              style={{ gridTemplateColumns: `2rem ${fields.map(() => "1fr").join(" ")} 2rem` }}
+            >
               <div className="text-xs text-muted-foreground font-medium flex items-end pb-1">#</div>
               {fields.map((field) => {
                 const config = fieldConfig[field];
                 return (
-                  <div key={field} className="text-xs text-muted-foreground font-medium flex items-end pb-1">
+                  <div
+                    key={field}
+                    className="text-xs text-muted-foreground font-medium flex items-end pb-1"
+                  >
                     {config.getLabel(weightUnit, distanceUnit)}
                   </div>
                 );
@@ -182,7 +245,12 @@ export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg",
               <div />
             </div>
             {sets.map((set, idx) => (
-              <div key={set.setNumber} className="grid gap-2 items-center" style={{ gridTemplateColumns: `2rem ${fields.map(() => "1fr").join(" ")} 2rem` }} data-testid={`set-row-${exercise.exerciseName}-${idx}`}>
+              <div
+                key={set.setNumber}
+                className="grid gap-2 items-center"
+                style={{ gridTemplateColumns: `2rem ${fields.map(() => "1fr").join(" ")} 2rem` }}
+                data-testid={`set-row-${exercise.exerciseName}-${idx}`}
+              >
                 <span className="text-xs text-muted-foreground text-center">{set.setNumber}</span>
                 {fields.map((field) => (
                   <Input
@@ -196,12 +264,26 @@ export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg",
                     aria-label={`${fieldConfig[field].getLabel(weightUnit, distanceUnit)} for set ${set.setNumber}`}
                   />
                 ))}
-                <Button size="icon" variant="ghost" onClick={() => removeSet(idx)} disabled={sets.length <= 1} className="h-6 w-6" data-testid={`button-remove-set-${idx}`} aria-label={`Remove set ${idx + 1}`}>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => removeSet(idx)}
+                  disabled={sets.length <= 1}
+                  className="h-6 w-6"
+                  data-testid={`button-remove-set-${idx}`}
+                  aria-label={`Remove set ${idx + 1}`}
+                >
                   <Minus className="h-3 w-3" />
                 </Button>
               </div>
             ))}
-            <Button variant="outline" size="sm" onClick={addSet} className="w-full mt-2" data-testid={`button-add-set-${exercise.exerciseName}`}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={addSet}
+              className="w-full mt-2"
+              data-testid={`button-add-set-${exercise.exerciseName}`}
+            >
               <Plus className="h-3 w-3 mr-1" /> Add Set
             </Button>
           </div>
@@ -213,7 +295,10 @@ export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg",
               const inputId = `${idPrefix}-${field}`;
               return (
                 <div key={field} className="space-y-2">
-                  <Label htmlFor={inputId} className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Label
+                    htmlFor={inputId}
+                    className="flex items-center gap-1 text-xs text-muted-foreground"
+                  >
                     <Icon className="h-3 w-3" />
                     {config.getLabel(weightUnit, distanceUnit)}
                   </Label>

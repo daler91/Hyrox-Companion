@@ -160,10 +160,7 @@ describe("email generation", () => {
     ];
 
     it("generates HTML snapshot correctly", () => {
-      const { html, subject } = buildMissedWorkoutEmail(
-        baseUser,
-        missedWorkouts,
-      );
+      const { html, subject } = buildMissedWorkoutEmail(baseUser, missedWorkouts);
       expect(subject).toBe("1 missed workout — get back on track");
       expect(html).toMatchSnapshot();
     });
@@ -191,9 +188,7 @@ describe("email generation", () => {
 
     it("truncates long workout details", () => {
       const longWorkout = "A".repeat(150);
-      const missed = [
-        { ...missedWorkouts[0], mainWorkout: longWorkout, planName: undefined },
-      ];
+      const missed = [{ ...missedWorkouts[0], mainWorkout: longWorkout, planName: undefined }];
       const { html } = buildMissedWorkoutEmail(baseUser, missed);
       expect(html).toContain("A".repeat(120) + "...");
     });

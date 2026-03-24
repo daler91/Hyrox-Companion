@@ -42,7 +42,8 @@ export function CoachingMaterialList({
                 <div className="min-w-0">
                   <p className="text-sm font-medium truncate">{material.title}</p>
                   <p className="text-xs text-muted-foreground">
-                    {material.type === "principles" ? "Principles" : "Document"} &middot; {Math.round(material.content.length / 1000)}k chars
+                    {material.type === "principles" ? "Principles" : "Document"} &middot;{" "}
+                    {Math.round(material.content.length / 1000)}k chars
                   </p>
                 </div>
               </div>
@@ -59,7 +60,8 @@ export function CoachingMaterialList({
         </div>
       ) : (
         <p className="text-sm text-muted-foreground">
-          No coaching materials added yet. Add training principles or upload reference documents to help the AI coach make better decisions.
+          No coaching materials added yet. Add training principles or upload reference documents to
+          help the AI coach make better decisions.
         </p>
       )}
 

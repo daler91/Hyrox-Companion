@@ -3,12 +3,13 @@ import { WorkoutStorage } from "../workouts";
 import { db } from "../../db";
 import type { InsertWorkoutLog } from "@shared/schema";
 
-
 vi.mock("../../db", () => ({
   db: {
     insert: vi.fn(),
     update: vi.fn(),
-    select: vi.fn().mockReturnValue({ from: vi.fn().mockReturnValue({ where: vi.fn().mockReturnValue([]) }) }),
+    select: vi
+      .fn()
+      .mockReturnValue({ from: vi.fn().mockReturnValue({ where: vi.fn().mockReturnValue([]) }) }),
   },
 }));
 
@@ -27,7 +28,10 @@ describe("WorkoutStorage.createWorkoutLog", () => {
     const valuesMock = vi.fn().mockReturnValue({ returning: returningMock });
     vi.mocked(db.insert).mockReturnValue({ values: valuesMock });
 
-    const result = await storage.createWorkoutLog({ date: "2026-01-01", userId: "u1" } as unknown as InsertWorkoutLog & { userId: string });
+    const result = await storage.createWorkoutLog({
+      date: "2026-01-01",
+      userId: "u1",
+    } as unknown as InsertWorkoutLog & { userId: string });
 
     expect(result).toEqual(mockLog);
     expect(db.insert).toHaveBeenCalledTimes(1);
@@ -47,7 +51,11 @@ describe("WorkoutStorage.createWorkoutLog", () => {
     const updateSetMock = vi.fn().mockReturnValue({ from: updateFromMock });
     vi.mocked(db.update).mockReturnValue({ set: updateSetMock } as any);
 
-    const result = await storage.createWorkoutLog({ date: "2026-01-02", userId: "u1", planDayId: "pd1" } as unknown as InsertWorkoutLog & { userId: string });
+    const result = await storage.createWorkoutLog({
+      date: "2026-01-02",
+      userId: "u1",
+      planDayId: "pd1",
+    } as unknown as InsertWorkoutLog & { userId: string });
 
     expect(result).toEqual(mockLog);
     expect(db.insert).toHaveBeenCalledTimes(1);
@@ -66,7 +74,10 @@ describe("WorkoutStorage.createWorkoutLog", () => {
     vi.mocked(db.insert).mockReturnValue({ values: valuesMock });
 
     await expect(
-      storage.createWorkoutLog({ date: "2026-01-03", userId: "u1" } as unknown as InsertWorkoutLog & { userId: string })
+      storage.createWorkoutLog({
+        date: "2026-01-03",
+        userId: "u1",
+      } as unknown as InsertWorkoutLog & { userId: string }),
     ).rejects.toThrow("Unique constraint violation");
 
     expect(db.insert).toHaveBeenCalledTimes(1);
@@ -89,7 +100,11 @@ describe("WorkoutStorage.createWorkoutLog", () => {
     vi.mocked(db.update).mockReturnValue({ set: updateSetMock } as any);
 
     await expect(
-      storage.createWorkoutLog({ date: "2026-01-04", userId: "u1", planDayId: "pd2" } as unknown as InsertWorkoutLog & { userId: string })
+      storage.createWorkoutLog({
+        date: "2026-01-04",
+        userId: "u1",
+        planDayId: "pd2",
+      } as unknown as InsertWorkoutLog & { userId: string }),
     ).rejects.toThrow("Database connection dropped during update");
 
     expect(db.insert).toHaveBeenCalledTimes(1);
@@ -102,7 +117,10 @@ describe("WorkoutStorage.createWorkoutLog", () => {
     const valuesMock = vi.fn().mockReturnValue({ returning: returningMock });
     vi.mocked(db.insert).mockReturnValue({ values: valuesMock });
 
-    const result = await storage.createWorkoutLog({ date: "2026-01-05", userId: "u1" } as unknown as InsertWorkoutLog & { userId: string });
+    const result = await storage.createWorkoutLog({
+      date: "2026-01-05",
+      userId: "u1",
+    } as unknown as InsertWorkoutLog & { userId: string });
 
     // Drizzle typing for `returning()` returns an array. If it's empty, `[workoutLog]` assigns `undefined`.
     expect(result).toBeUndefined();
@@ -133,7 +151,9 @@ describe("WorkoutStorage.createWorkoutLogs", () => {
       { date: "2026-01-02", userId: "u1" },
     ];
 
-    const result = await storage.createWorkoutLogs(logsToInsert as unknown as (InsertWorkoutLog & { userId: string })[]);
+    const result = await storage.createWorkoutLogs(
+      logsToInsert as unknown as (InsertWorkoutLog & { userId: string })[],
+    );
 
     expect(result).toEqual(mockLogs);
     expect(db.insert).toHaveBeenCalledTimes(1);
@@ -163,7 +183,9 @@ describe("WorkoutStorage.createWorkoutLogs", () => {
       { date: "2026-01-05", userId: "u1" },
     ];
 
-    const result = await storage.createWorkoutLogs(logsToInsert as unknown as (InsertWorkoutLog & { userId: string })[]);
+    const result = await storage.createWorkoutLogs(
+      logsToInsert as unknown as (InsertWorkoutLog & { userId: string })[],
+    );
 
     expect(result).toEqual(mockLogs);
     expect(db.insert).toHaveBeenCalledTimes(1);

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useOnboardingWizard } from "../useOnboardingWizard";
-import { api, QUERY_KEYS } from "@/lib/api";
+import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import React from "react";
 
@@ -125,7 +125,7 @@ describe("useOnboardingWizard", () => {
       expect.objectContaining({
         title: "Could not save preferences",
         variant: "destructive",
-      })
+      }),
     );
     // Should still proceed to goal step even if prefs fail
     expect(result.current.step).toBe("goal");
@@ -191,7 +191,7 @@ describe("useOnboardingWizard", () => {
         expect.objectContaining({
           title: "Failed to create plan",
           variant: "destructive",
-        })
+        }),
       );
     });
   });
@@ -215,7 +215,7 @@ describe("useOnboardingWizard", () => {
     expect(mockToast).toHaveBeenCalledWith(
       expect.objectContaining({
         title: "Your training plan is ready!",
-      })
+      }),
     );
     expect(localStorage.getItem("hyrox-onboarding-complete")).toBe("true");
     expect(mockOnComplete).toHaveBeenCalledWith("sample");
@@ -236,7 +236,7 @@ describe("useOnboardingWizard", () => {
         expect.objectContaining({
           title: "Failed to schedule plan",
           variant: "destructive",
-        })
+        }),
       );
     });
   });

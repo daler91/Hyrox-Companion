@@ -4,23 +4,34 @@ import { queryClient } from "@/lib/queryClient";
 
 type QueryKeyList = readonly (readonly unknown[])[];
 
-export interface UseApiMutationOptions<TData, TError, TVariables, TContext>
-  extends Omit<UseMutationOptions<TData, TError, TVariables, TContext>, 'onSuccess' | 'onError'> {
+export interface UseApiMutationOptions<TData, TError, TVariables, TContext> extends Omit<
+  UseMutationOptions<TData, TError, TVariables, TContext>,
+  "onSuccess" | "onError"
+> {
   invalidateQueries?: QueryKeyList;
-  successToast?: string | ((data: TData, variables: TVariables) => { title?: string; description?: string });
-  errorToast?: string | ((error: TError, variables: TVariables) => { title?: string; description?: string });
+  successToast?:
+    | string
+    | ((data: TData, variables: TVariables) => { title?: string; description?: string });
+  errorToast?:
+    | string
+    | ((error: TError, variables: TVariables) => { title?: string; description?: string });
   onSuccess?: (data: TData, variables: TVariables, context: TContext) => Promise<unknown> | void;
-  onError?: (error: TError, variables: TVariables, context: TContext | undefined) => Promise<unknown> | void;
+  onError?: (
+    error: TError,
+    variables: TVariables,
+    context: TContext | undefined,
+  ) => Promise<unknown> | void;
 }
 
 export function useApiMutation<
   TData = unknown,
   TError = Error,
   TVariables = void,
-  TContext = unknown
+  TContext = unknown,
 >(options: UseApiMutationOptions<TData, TError, TVariables, TContext>) {
   const { toast } = useToast();
-  const { invalidateQueries, successToast, errorToast, onSuccess, onError, ...mutationOptions } = options;
+  const { invalidateQueries, successToast, errorToast, onSuccess, onError, ...mutationOptions } =
+    options;
 
   return useMutation<TData, TError, TVariables, TContext>({
     ...mutationOptions,
@@ -28,9 +39,7 @@ export function useApiMutation<
       // Invalidate queries if provided
       if (invalidateQueries && invalidateQueries.length > 0) {
         await Promise.all(
-          invalidateQueries.map((queryKey) =>
-            queryClient.invalidateQueries({ queryKey })
-          )
+          invalidateQueries.map((queryKey) => queryClient.invalidateQueries({ queryKey })),
         );
       }
 

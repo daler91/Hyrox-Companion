@@ -1,20 +1,21 @@
-import {
-  trainingPlans,
-  planDays,
-  workoutLogs,
-
-  type ExerciseSet,
-} from "@shared/schema";
+import { trainingPlans, planDays, workoutLogs, type ExerciseSet } from "@shared/schema";
 import { db } from "../db";
 import { eq, and, sql } from "drizzle-orm";
 import { queryExerciseSetsWithDates } from "./shared";
 
 export class AnalyticsStorage {
-  async getAllExerciseSetsWithDates(userId: string, from?: string, to?: string): Promise<(ExerciseSet & { date: string })[]> {
+  async getAllExerciseSetsWithDates(
+    userId: string,
+    from?: string,
+    to?: string,
+  ): Promise<(ExerciseSet & { date: string })[]> {
     return await queryExerciseSetsWithDates(userId, { from, to });
   }
 
-  async getMissedWorkoutsForDate(userId: string, date: string): Promise<{ date: string; focus: string; mainWorkout: string; planName?: string }[]> {
+  async getMissedWorkoutsForDate(
+    userId: string,
+    date: string,
+  ): Promise<{ date: string; focus: string; mainWorkout: string; planName?: string }[]> {
     const results = await db
       .select({
         date: planDays.scheduledDate,
@@ -28,10 +29,10 @@ export class AnalyticsStorage {
         and(
           eq(trainingPlans.userId, userId),
           eq(planDays.scheduledDate, date),
-          eq(planDays.status, 'missed')
-        )
+          eq(planDays.status, "missed"),
+        ),
       );
-    return results.map(r => ({
+    return results.map((r) => ({
       date: r.date || date,
       focus: r.focus,
       mainWorkout: r.mainWorkout,
@@ -39,7 +40,17 @@ export class AnalyticsStorage {
     }));
   }
 
-  async getWeeklyStats(userId: string, weekStart: string, weekEnd: string): Promise<{ completedCount: number; plannedCount: number; missedCount: number; skippedCount: number; totalDuration: number }> {
+  async getWeeklyStats(
+    userId: string,
+    weekStart: string,
+    weekEnd: string,
+  ): Promise<{
+    completedCount: number;
+    plannedCount: number;
+    missedCount: number;
+    skippedCount: number;
+    totalDuration: number;
+  }> {
     const [logs] = await db
       .select({
         completedCount: sql<number>`cast(count(*) as int)`,
@@ -50,8 +61,8 @@ export class AnalyticsStorage {
         and(
           eq(workoutLogs.userId, userId),
           sql`${workoutLogs.date} >= ${weekStart}`,
-          sql`${workoutLogs.date} <= ${weekEnd}`
-        )
+          sql`${workoutLogs.date} <= ${weekEnd}`,
+        ),
       );
 
     const days = await db
@@ -65,8 +76,8 @@ export class AnalyticsStorage {
         and(
           eq(trainingPlans.userId, userId),
           sql`${planDays.scheduledDate} >= ${weekStart}`,
-          sql`${planDays.scheduledDate} <= ${weekEnd}`
-        )
+          sql`${planDays.scheduledDate} <= ${weekEnd}`,
+        ),
       )
       .groupBy(planDays.status);
 
@@ -78,11 +89,11 @@ export class AnalyticsStorage {
     let skippedCount = 0;
 
     for (const day of days) {
-      if (day.status === 'planned') {
+      if (day.status === "planned") {
         plannedCount = day.count;
-      } else if (day.status === 'missed') {
+      } else if (day.status === "missed") {
         missedCount = day.count;
-      } else if (day.status === 'skipped') {
+      } else if (day.status === "skipped") {
         skippedCount = day.count;
       }
     }

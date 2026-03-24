@@ -1,6 +1,11 @@
 import type { IStorage } from "./storage";
 import type { User } from "@shared/schema";
-import { sendWeeklySummary, sendMissedWorkoutReminder, type WeeklySummaryData, type MissedWorkoutData } from "./email";
+import {
+  sendWeeklySummary,
+  sendMissedWorkoutReminder,
+  type WeeklySummaryData,
+  type MissedWorkoutData,
+} from "./email";
 import { logger } from "./logger";
 import { toDateStr } from "./types";
 import { calculateStreak } from "./routeUtils";
@@ -23,9 +28,7 @@ async function processWeeklySummary(storage: IStorage, user: User, now: Date): P
   const stats = await storage.getWeeklyStats(user.id, weekStartStr, weekEndStr);
   const timeline = await storage.getTimeline(user.id);
   const completedDates = new Set(
-    timeline
-      .filter(e => e.status === "completed" && e.date)
-      .map(e => e.date)
+    timeline.filter((e) => e.status === "completed" && e.date).map((e) => e.date),
   );
   const streak = calculateStreak(completedDates);
 
@@ -51,7 +54,11 @@ async function processWeeklySummary(storage: IStorage, user: User, now: Date): P
   return false;
 }
 
-async function processMissedWorkoutReminder(storage: IStorage, user: User, now: Date): Promise<boolean> {
+async function processMissedWorkoutReminder(
+  storage: IStorage,
+  user: User,
+  now: Date,
+): Promise<boolean> {
   const lastMissedSent = user.lastMissedReminderAt;
   const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   if (lastMissedSent && lastMissedSent >= oneDayAgo) return false;
@@ -62,7 +69,7 @@ async function processMissedWorkoutReminder(storage: IStorage, user: User, now: 
   const missed = await storage.getMissedWorkoutsForDate(user.id, yesterdayStr);
   if (missed.length === 0) return false;
 
-  const missedData: MissedWorkoutData[] = missed.map(m => ({
+  const missedData: MissedWorkoutData[] = missed.map((m) => ({
     date: m.date,
     focus: m.focus,
     mainWorkout: m.mainWorkout,
@@ -93,7 +100,9 @@ export async function checkAndSendEmailsForUser(storage: IStorage, user: User): 
   return sent;
 }
 
-export async function runEmailCronJob(storage: IStorage): Promise<{ usersChecked: number; emailsSent: number; details: string[] }> {
+export async function runEmailCronJob(
+  storage: IStorage,
+): Promise<{ usersChecked: number; emailsSent: number; details: string[] }> {
   const details: string[] = [];
   let emailsSent = 0;
 
@@ -105,7 +114,11 @@ export async function runEmailCronJob(storage: IStorage): Promise<{ usersChecked
 
     const usersToCheck = await storage.getUsersWithEmailNotifications();
     if (usersToCheck.length === 0) {
-      return { usersChecked: 0, emailsSent: 0, details: ["No users with email notifications enabled"] };
+      return {
+        usersChecked: 0,
+        emailsSent: 0,
+        details: ["No users with email notifications enabled"],
+      };
     }
 
     logger.info({ context: "email" }, `Cron: Checking emails for ${usersToCheck.length} user(s)`);
@@ -122,11 +135,17 @@ export async function runEmailCronJob(storage: IStorage): Promise<{ usersChecked
       } catch (err) {
         const detail = `Failed for user ${user.id}: ${err}`;
         details.push(detail);
-        logger.error({ context: "email", userId: user.id, err }, "Failed to check and send emails for user");
+        logger.error(
+          { context: "email", userId: user.id, err },
+          "Failed to check and send emails for user",
+        );
       }
     }
 
-    logger.info({ context: "email" }, `Cron complete: ${emailsSent} email(s) sent to ${usersToCheck.length} user(s)`);
+    logger.info(
+      { context: "email" },
+      `Cron complete: ${emailsSent} email(s) sent to ${usersToCheck.length} user(s)`,
+    );
     return { usersChecked: usersToCheck.length, emailsSent, details };
   } catch (err) {
     logger.error({ context: "email", err }, "Cron error during email checks");

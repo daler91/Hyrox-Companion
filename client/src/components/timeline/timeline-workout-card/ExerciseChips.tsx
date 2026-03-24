@@ -41,7 +41,10 @@ export function ExerciseChips({
             {isPR && <Trophy className="h-3 w-3 mr-0.5 text-yellow-500" />}
             {summaryText}
             {showConfidence && (
-              <span className={`ml-1 text-[10px] font-medium ${confColor}`} data-testid={`confidence-score-${entryId}-${idx}`}>
+              <span
+                className={`ml-1 text-[10px] font-medium ${confColor}`}
+                data-testid={`confidence-score-${entryId}-${idx}`}
+              >
                 {conf}%
               </span>
             )}

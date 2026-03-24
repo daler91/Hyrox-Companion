@@ -1,36 +1,36 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import React from 'react';
-import { useWorkoutForm } from '../useWorkoutForm';
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { renderHook, act, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import React from "react";
+import { useWorkoutForm } from "../useWorkoutForm";
 
 // Mocks
-import * as wouter from 'wouter';
-import * as toastHook from '@/hooks/use-toast';
-import * as voiceInputHook from '@/hooks/useVoiceInput';
-import * as queryClientLib from '@/lib/queryClient';
-import * as workoutEditorHook from '@/hooks/useWorkoutEditor';
+import * as wouter from "wouter";
+import * as toastHook from "@/hooks/use-toast";
+import * as voiceInputHook from "@/hooks/useVoiceInput";
+import * as queryClientLib from "@/lib/queryClient";
+import * as workoutEditorHook from "@/hooks/useWorkoutEditor";
 
-vi.mock('wouter', () => ({
+vi.mock("wouter", () => ({
   useLocation: vi.fn(),
 }));
 
-vi.mock('@/hooks/use-toast', () => ({
+vi.mock("@/hooks/use-toast", () => ({
   useToast: vi.fn(),
 }));
 
-vi.mock('@/hooks/useVoiceInput', () => ({
+vi.mock("@/hooks/useVoiceInput", () => ({
   useVoiceInput: vi.fn(),
 }));
 
-vi.mock('@/lib/queryClient', () => ({
+vi.mock("@/lib/queryClient", () => ({
   apiRequest: vi.fn(),
   queryClient: {
     invalidateQueries: vi.fn(),
   },
 }));
 
-vi.mock('@/hooks/useWorkoutEditor', () => ({
+vi.mock("@/hooks/useWorkoutEditor", () => ({
   generateSummary: vi.fn(),
   exerciseToPayload: vi.fn(),
 }));
@@ -43,7 +43,7 @@ const wrapper = ({ children }: { children: React.ReactNode }) => (
   <QueryClientProvider client={testQueryClient}>{children}</QueryClientProvider>
 );
 
-describe('useWorkoutForm', () => {
+describe("useWorkoutForm", () => {
   const mockToast = vi.fn();
   const mockNavigate = vi.fn();
   const mockVoiceInput = {
@@ -61,8 +61,10 @@ describe('useWorkoutForm', () => {
     vi.clearAllMocks();
     testQueryClient.clear();
 
-    vi.mocked(toastHook.useToast).mockReturnValue({ toast: mockToast } as unknown as ReturnType<typeof toastHook.useToast>);
-    vi.mocked(wouter.useLocation).mockReturnValue(['/current', mockNavigate]);
+    vi.mocked(toastHook.useToast).mockReturnValue({ toast: mockToast } as unknown as ReturnType<
+      typeof toastHook.useToast
+    >);
+    vi.mocked(wouter.useLocation).mockReturnValue(["/current", mockNavigate]);
     vi.mocked(queryClientLib.apiRequest).mockResolvedValue({
       json: () => Promise.resolve({ success: true }),
     } as Response);
@@ -83,13 +85,12 @@ describe('useWorkoutForm', () => {
     vi.restoreAllMocks();
   });
 
-
   const defaultProps = {
     useTextMode: true,
     exerciseBlocks: [],
     exerciseData: {},
-    weightLabel: 'kg',
-    distanceUnit: 'km',
+    weightLabel: "kg",
+    distanceUnit: "km",
   };
 
   const setupVoiceMocks = () => {
@@ -113,49 +114,49 @@ describe('useWorkoutForm', () => {
 
     return {
       getMainHandler: () => mainVoiceHandler,
-      getNotesHandler: () => notesVoiceHandler
+      getNotesHandler: () => notesVoiceHandler,
     };
   };
 
-  const renderFormHook = (props = defaultProps) => renderHook(() => useWorkoutForm(props), { wrapper });
+  const renderFormHook = (props = defaultProps) =>
+    renderHook(() => useWorkoutForm(props), { wrapper });
 
-
-  it('initializes with default state', () => {
+  it("initializes with default state", () => {
     const { result } = renderFormHook(defaultProps);
 
-    expect(result.current.title).toBe('');
-    expect(result.current.date).toBe(new Date().toISOString().split('T')[0]);
-    expect(result.current.freeText).toBe('');
-    expect(result.current.notes).toBe('');
+    expect(result.current.title).toBe("");
+    expect(result.current.date).toBe(new Date().toISOString().split("T")[0]);
+    expect(result.current.freeText).toBe("");
+    expect(result.current.notes).toBe("");
   });
 
-  describe('State management', () => {
-    it('updates state fields correctly', () => {
+  describe("State management", () => {
+    it("updates state fields correctly", () => {
       const { result } = renderFormHook(defaultProps);
 
       act(() => {
-        result.current.setTitle('My Workout');
-        result.current.setDate('2024-05-01');
-        result.current.setFreeText('Run 5k');
-        result.current.setNotes('Felt great');
+        result.current.setTitle("My Workout");
+        result.current.setDate("2024-05-01");
+        result.current.setFreeText("Run 5k");
+        result.current.setNotes("Felt great");
       });
 
-      expect(result.current.title).toBe('My Workout');
-      expect(result.current.date).toBe('2024-05-01');
-      expect(result.current.freeText).toBe('Run 5k');
-      expect(result.current.notes).toBe('Felt great');
+      expect(result.current.title).toBe("My Workout");
+      expect(result.current.date).toBe("2024-05-01");
+      expect(result.current.freeText).toBe("Run 5k");
+      expect(result.current.notes).toBe("Felt great");
     });
   });
 
-  describe('Voice Input Handlers', () => {
-    it('appends voice result with a space if needed', () => {
+  describe("Voice Input Handlers", () => {
+    it("appends voice result with a space if needed", () => {
       const handlers = setupVoiceMocks();
 
       const { result } = renderFormHook(defaultProps);
 
       act(() => {
-        result.current.setFreeText('Running');
-        result.current.setNotes('Fast');
+        result.current.setFreeText("Running");
+        result.current.setNotes("Fast");
       });
 
       act(() => {
@@ -163,37 +164,37 @@ describe('useWorkoutForm', () => {
         (handlers.getNotesHandler() as any).onResult("and fun");
       });
 
-      expect(result.current.freeText).toBe('Running is fun');
-      expect(result.current.notes).toBe('Fast and fun');
+      expect(result.current.freeText).toBe("Running is fun");
+      expect(result.current.notes).toBe("Fast and fun");
     });
 
-    it('does not append space if text already ends with a space or newline', () => {
+    it("does not append space if text already ends with a space or newline", () => {
       const handlers = setupVoiceMocks();
 
       const { result } = renderFormHook(defaultProps);
 
       act(() => {
-        result.current.setFreeText('Running ');
+        result.current.setFreeText("Running ");
       });
 
       act(() => {
         (handlers.getMainHandler() as any).onResult("is fun");
       });
 
-      expect(result.current.freeText).toBe('Running is fun');
+      expect(result.current.freeText).toBe("Running is fun");
 
       act(() => {
-        result.current.setFreeText('Running\n');
+        result.current.setFreeText("Running\n");
       });
 
       act(() => {
         (handlers.getMainHandler() as any).onResult("is fun");
       });
 
-      expect(result.current.freeText).toBe('Running\nis fun');
+      expect(result.current.freeText).toBe("Running\nis fun");
     });
 
-    it('triggers destructive toast on voice error', () => {
+    it("triggers destructive toast on voice error", () => {
       const handlers = setupVoiceMocks();
 
       renderFormHook(defaultProps);
@@ -203,15 +204,15 @@ describe('useWorkoutForm', () => {
       });
 
       expect(mockToast).toHaveBeenCalledWith({
-        title: 'Voice Input',
-        description: 'Microphone not found',
-        variant: 'destructive',
+        title: "Voice Input",
+        description: "Microphone not found",
+        variant: "destructive",
       });
     });
   });
 
-  describe('Validation Logic (handleSave)', () => {
-    it('stops active voice listening on save', () => {
+  describe("Validation Logic (handleSave)", () => {
+    it("stops active voice listening on save", () => {
       const activeVoiceInput = { ...mockVoiceInput, isListening: true };
       const activeNotesVoiceInput = { ...mockNotesVoiceInput, isListening: true };
 
@@ -219,7 +220,9 @@ describe('useWorkoutForm', () => {
       vi.mocked(voiceInputHook.useVoiceInput).mockImplementation(() => {
         callCount++;
         const isFirst = callCount % 2 !== 0;
-        return isFirst ? activeVoiceInput as unknown as ReturnType<typeof voiceInputHook.useVoiceInput> : activeNotesVoiceInput as unknown as ReturnType<typeof voiceInputHook.useVoiceInput>;
+        return isFirst
+          ? (activeVoiceInput as unknown as ReturnType<typeof voiceInputHook.useVoiceInput>)
+          : (activeNotesVoiceInput as unknown as ReturnType<typeof voiceInputHook.useVoiceInput>);
       });
 
       const { result } = renderFormHook(defaultProps);
@@ -232,7 +235,7 @@ describe('useWorkoutForm', () => {
       expect(activeNotesVoiceInput.stopListening).toHaveBeenCalled();
     });
 
-    it('requires a title', () => {
+    it("requires a title", () => {
       const { result } = renderFormHook(defaultProps);
 
       act(() => {
@@ -240,19 +243,19 @@ describe('useWorkoutForm', () => {
       });
 
       expect(mockToast).toHaveBeenCalledWith({
-        title: 'Missing title',
-        description: 'Please enter a workout title.',
-        variant: 'destructive',
+        title: "Missing title",
+        description: "Please enter a workout title.",
+        variant: "destructive",
       });
       expect(queryClientLib.apiRequest).not.toHaveBeenCalled();
     });
 
-    it('requires freeText when useTextMode is true', () => {
+    it("requires freeText when useTextMode is true", () => {
       const { result } = renderFormHook({ ...defaultProps, useTextMode: true });
 
       act(() => {
-        result.current.setTitle('My Workout');
-        result.current.setFreeText('   '); // Empty spaces
+        result.current.setTitle("My Workout");
+        result.current.setFreeText("   "); // Empty spaces
       });
 
       act(() => {
@@ -260,18 +263,22 @@ describe('useWorkoutForm', () => {
       });
 
       expect(mockToast).toHaveBeenCalledWith({
-        title: 'Missing workout details',
-        description: 'Please describe your workout.',
-        variant: 'destructive',
+        title: "Missing workout details",
+        description: "Please describe your workout.",
+        variant: "destructive",
       });
       expect(queryClientLib.apiRequest).not.toHaveBeenCalled();
     });
 
-    it('requires at least one exercise block when useTextMode is false', () => {
-      const { result } = renderFormHook({ ...defaultProps, useTextMode: false, exerciseBlocks: [] });
+    it("requires at least one exercise block when useTextMode is false", () => {
+      const { result } = renderFormHook({
+        ...defaultProps,
+        useTextMode: false,
+        exerciseBlocks: [],
+      });
 
       act(() => {
-        result.current.setTitle('My Builder Workout');
+        result.current.setTitle("My Builder Workout");
       });
 
       act(() => {
@@ -279,23 +286,23 @@ describe('useWorkoutForm', () => {
       });
 
       expect(mockToast).toHaveBeenCalledWith({
-        title: 'No exercises',
-        description: 'Please add at least one exercise.',
-        variant: 'destructive',
+        title: "No exercises",
+        description: "Please add at least one exercise.",
+        variant: "destructive",
       });
       expect(queryClientLib.apiRequest).not.toHaveBeenCalled();
     });
   });
 
-  describe('Successful Save (handleSave)', () => {
-    it('saves successfully in Text Mode', async () => {
+  describe("Successful Save (handleSave)", () => {
+    it("saves successfully in Text Mode", async () => {
       const { result } = renderFormHook({ ...defaultProps, useTextMode: true });
 
       act(() => {
-        result.current.setTitle('My Run');
-        result.current.setDate('2024-05-01');
-        result.current.setFreeText('Ran 5k in 25 mins');
-        result.current.setNotes('Felt great');
+        result.current.setTitle("My Run");
+        result.current.setDate("2024-05-01");
+        result.current.setFreeText("Ran 5k in 25 mins");
+        result.current.setNotes("Felt great");
       });
 
       act(() => {
@@ -303,42 +310,42 @@ describe('useWorkoutForm', () => {
       });
 
       await waitFor(() => {
-        expect(queryClientLib.apiRequest).toHaveBeenCalledWith('POST', '/api/v1/workouts', {
-          title: 'My Run',
-          date: '2024-05-01',
-          focus: 'My Run',
-          mainWorkout: 'Ran 5k in 25 mins',
-          notes: 'Felt great',
+        expect(queryClientLib.apiRequest).toHaveBeenCalledWith("POST", "/api/v1/workouts", {
+          title: "My Run",
+          date: "2024-05-01",
+          focus: "My Run",
+          mainWorkout: "Ran 5k in 25 mins",
+          notes: "Felt great",
           rpe: null,
         });
       });
     });
 
-    it('saves successfully in Builder Mode', async () => {
-      const mockExercise = { exerciseName: 'squat', sets: [{ reps: 10, weight: 100 }] };
+    it("saves successfully in Builder Mode", async () => {
+      const mockExercise = { exerciseName: "squat", sets: [{ reps: 10, weight: 100 }] };
       const mockExerciseData = {
-        'block-1': mockExercise,
+        "block-1": mockExercise,
       };
 
-      vi.mocked(workoutEditorHook.generateSummary).mockReturnValue('Squat: 10 reps, 100kg');
+      vi.mocked(workoutEditorHook.generateSummary).mockReturnValue("Squat: 10 reps, 100kg");
       vi.mocked(workoutEditorHook.exerciseToPayload).mockReturnValue({
-        exerciseName: 'squat',
+        exerciseName: "squat",
         sets: [{ reps: 10, weight: 100 }],
       } as unknown as ReturnType<typeof workoutEditorHook.exerciseToPayload>);
 
       const props = {
         ...defaultProps,
         useTextMode: false,
-        exerciseBlocks: ['block-1', 'invalid-block'] as any, // 'invalid-block' is missing from data
+        exerciseBlocks: ["block-1", "invalid-block"] as any, // 'invalid-block' is missing from data
         exerciseData: mockExerciseData as unknown as typeof defaultProps.exerciseData,
       } as any;
 
       const { result } = renderFormHook(props);
 
       act(() => {
-        result.current.setTitle('Leg Day');
-        result.current.setDate('2024-05-02');
-        result.current.setNotes('Heavy lifts');
+        result.current.setTitle("Leg Day");
+        result.current.setDate("2024-05-02");
+        result.current.setNotes("Heavy lifts");
       });
 
       act(() => {
@@ -347,31 +354,31 @@ describe('useWorkoutForm', () => {
 
       await waitFor(() => {
         // Verification that `generateSummary` receives filtered blocks
-        expect(workoutEditorHook.generateSummary).toHaveBeenCalledWith([mockExercise], 'kg', 'km');
-        expect(workoutEditorHook.exerciseToPayload).toHaveBeenCalledWith(mockExercise, 0, [mockExercise]);
+        expect(workoutEditorHook.generateSummary).toHaveBeenCalledWith([mockExercise], "kg", "km");
+        expect(workoutEditorHook.exerciseToPayload).toHaveBeenCalledWith(mockExercise, 0, [
+          mockExercise,
+        ]);
 
-        expect(queryClientLib.apiRequest).toHaveBeenCalledWith('POST', '/api/v1/workouts', {
-          title: 'Leg Day',
-          date: '2024-05-02',
-          focus: 'Leg Day',
-          mainWorkout: 'Squat: 10 reps, 100kg',
-          notes: 'Heavy lifts',
+        expect(queryClientLib.apiRequest).toHaveBeenCalledWith("POST", "/api/v1/workouts", {
+          title: "Leg Day",
+          date: "2024-05-02",
+          focus: "Leg Day",
+          mainWorkout: "Squat: 10 reps, 100kg",
+          notes: "Heavy lifts",
           rpe: null,
-          exercises: [
-            { exerciseName: 'squat', sets: [{ reps: 10, weight: 100 }] }
-          ]
+          exercises: [{ exerciseName: "squat", sets: [{ reps: 10, weight: 100 }] }],
         });
       });
     });
 
-    it('handles saving with null notes if notes are empty', async () => {
+    it("handles saving with null notes if notes are empty", async () => {
       const { result } = renderFormHook({ ...defaultProps, useTextMode: true });
 
       act(() => {
-        result.current.setTitle('My Run');
-        result.current.setDate('2024-05-01');
-        result.current.setFreeText('Ran 5k');
-        result.current.setNotes(''); // Empty notes
+        result.current.setTitle("My Run");
+        result.current.setDate("2024-05-01");
+        result.current.setFreeText("Ran 5k");
+        result.current.setNotes(""); // Empty notes
       });
 
       act(() => {
@@ -379,20 +386,24 @@ describe('useWorkoutForm', () => {
       });
 
       await waitFor(() => {
-        expect(queryClientLib.apiRequest).toHaveBeenCalledWith('POST', '/api/v1/workouts', expect.objectContaining({
-          notes: null, // Should be normalized to null
-        }));
+        expect(queryClientLib.apiRequest).toHaveBeenCalledWith(
+          "POST",
+          "/api/v1/workouts",
+          expect.objectContaining({
+            notes: null, // Should be normalized to null
+          }),
+        );
       });
     });
   });
 
-  describe('Mutation Side Effects', () => {
-    it('triggers success callbacks and navigation on successful save', async () => {
+  describe("Mutation Side Effects", () => {
+    it("triggers success callbacks and navigation on successful save", async () => {
       const { result } = renderFormHook({ ...defaultProps, useTextMode: true });
 
       act(() => {
-        result.current.setTitle('Success Workout');
-        result.current.setFreeText('Did things');
+        result.current.setTitle("Success Workout");
+        result.current.setFreeText("Did things");
       });
 
       act(() => {
@@ -400,8 +411,12 @@ describe('useWorkoutForm', () => {
       });
 
       await waitFor(() => {
-        expect(queryClientLib.queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/v1/workouts"] });
-        expect(queryClientLib.queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/v1/timeline"] });
+        expect(queryClientLib.queryClient.invalidateQueries).toHaveBeenCalledWith({
+          queryKey: ["/api/v1/workouts"],
+        });
+        expect(queryClientLib.queryClient.invalidateQueries).toHaveBeenCalledWith({
+          queryKey: ["/api/v1/timeline"],
+        });
         expect(mockToast).toHaveBeenCalledWith({
           title: "Workout logged",
           description: "Your workout has been saved successfully.",
@@ -410,14 +425,14 @@ describe('useWorkoutForm', () => {
       });
     });
 
-    it('triggers error toast on failed save', async () => {
-      vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(new Error('Network Error'));
+    it("triggers error toast on failed save", async () => {
+      vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(new Error("Network Error"));
 
       const { result } = renderFormHook({ ...defaultProps, useTextMode: true });
 
       act(() => {
-        result.current.setTitle('Failed Workout');
-        result.current.setFreeText('Did things');
+        result.current.setTitle("Failed Workout");
+        result.current.setFreeText("Did things");
       });
 
       act(() => {

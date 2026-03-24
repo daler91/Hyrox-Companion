@@ -62,7 +62,10 @@ and use the matching name as customLabel: ${customExerciseNames.join(", ")}`;
     try {
       raw = JSON.parse(responseText);
     } catch (parseErr) {
-      logger.error({ err: parseErr, rawResponse: truncate(responseText) }, "[gemini] exercise-parse JSON.parse failed.");
+      logger.error(
+        { err: parseErr, rawResponse: truncate(responseText) },
+        "[gemini] exercise-parse JSON.parse failed.",
+      );
       throw new Error("AI returned invalid JSON for exercise parsing");
     }
 
@@ -70,14 +73,8 @@ and use the matching name as customLabel: ${customExerciseNames.join(", ")}`;
     const zodResult = z.array(parsedExerciseSchema).safeParse(rawArray);
 
     if (!zodResult.success) {
-      logger.error(
-        { err: zodResult.error },
-        "[gemini] exercise-parse Zod validation failed"
-      );
-      logger.error(
-        { rawData: truncate(JSON.stringify(rawArray)) },
-        "[gemini] Raw parsed data"
-      );
+      logger.error({ err: zodResult.error }, "[gemini] exercise-parse Zod validation failed");
+      logger.error({ rawData: truncate(JSON.stringify(rawArray)) }, "[gemini] Raw parsed data");
       throw new Error("AI returned malformed exercise data");
     }
 
@@ -99,9 +96,9 @@ and use the matching name as customLabel: ${customExerciseNames.join(", ")}`;
         })(),
         confidence,
         missingFields: Array.isArray(ex.missingFields)
-          ? ex.missingFields.filter(
-              (f) => typeof f === "string" && f.length > 0,
-            ).map(f => sanitizeHtml(f))
+          ? ex.missingFields
+              .filter((f) => typeof f === "string" && f.length > 0)
+              .map((f) => sanitizeHtml(f))
           : undefined,
         sets: ex.sets.map((s, i) => ({
           setNumber: s.setNumber || i + 1,

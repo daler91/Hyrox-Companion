@@ -12,25 +12,33 @@ interface ChatInputProps {
   readonly placeholder?: string;
 }
 
-export function ChatInput({ onSend, isLoading, placeholder = "Ask about your training..." }: Readonly<ChatInputProps>) {
+export function ChatInput({
+  onSend,
+  isLoading,
+  placeholder = "Ask about your training...",
+}: Readonly<ChatInputProps>) {
   const [message, setMessage] = useState("");
   const { toast } = useToast();
 
   const handleVoiceResult = useCallback((transcript: string) => {
-    setMessage(prev => {
+    setMessage((prev) => {
       const separator = prev && !prev.endsWith(" ") ? " " : "";
       return prev + separator + transcript;
     });
   }, []);
 
-  const handleVoiceError = useCallback((msg: string) => {
-    toast({ title: "Voice Input", description: msg, variant: "destructive" });
-  }, [toast]);
+  const handleVoiceError = useCallback(
+    (msg: string) => {
+      toast({ title: "Voice Input", description: msg, variant: "destructive" });
+    },
+    [toast],
+  );
 
-  const { isListening, isSupported, interimTranscript, stopListening, toggleListening } = useVoiceInput({
-    onResult: handleVoiceResult,
-    onError: handleVoiceError,
-  });
+  const { isListening, isSupported, interimTranscript, stopListening, toggleListening } =
+    useVoiceInput({
+      onResult: handleVoiceResult,
+      onError: handleVoiceError,
+    });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,7 +69,10 @@ export function ChatInput({ onSend, isLoading, placeholder = "Ask about your tra
           data-testid="input-chat-message"
         />
         {isListening && interimTranscript && (
-          <div className="px-3 py-1 text-xs text-muted-foreground italic truncate" data-testid="voice-interim-text">
+          <div
+            className="px-3 py-1 text-xs text-muted-foreground italic truncate"
+            data-testid="voice-interim-text"
+          >
             {interimTranscript}
           </div>
         )}

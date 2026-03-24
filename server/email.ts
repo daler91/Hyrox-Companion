@@ -16,19 +16,14 @@ function getResendClient() {
   if (!apiKey) {
     throw new Error("RESEND_API_KEY environment variable is not set");
   }
-  const fromEmail =
-    env.RESEND_FROM_EMAIL || "HyroxTracker <noreply@resend.dev>";
+  const fromEmail = env.RESEND_FROM_EMAIL || "HyroxTracker <noreply@resend.dev>";
   return {
     client: new Resend(apiKey),
     fromEmail,
   };
 }
 
-export async function sendEmail(
-  to: string,
-  subject: string,
-  html: string,
-): Promise<boolean> {
+export async function sendEmail(to: string, subject: string, html: string): Promise<boolean> {
   try {
     const { client, fromEmail } = getResendClient();
     const result = await client.emails.send({
@@ -48,10 +43,7 @@ export async function sendEmail(
   }
 }
 
-export async function sendWeeklySummary(
-  user: User,
-  data: WeeklySummaryData,
-): Promise<boolean> {
+export async function sendWeeklySummary(user: User, data: WeeklySummaryData): Promise<boolean> {
   if (!user.email) return false;
   const { subject, html } = buildWeeklySummaryEmail(user, data);
   return sendEmail(user.email, subject, html);

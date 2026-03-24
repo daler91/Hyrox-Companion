@@ -46,10 +46,7 @@ describe("Workouts Routes", () => {
     vi.clearAllMocks();
     clearRateLimitBuckets();
     app = createTestApp(workoutsRouter);
-
   });
-
-
 
   describe("POST /api/workouts", () => {
     it("should return 500 when createWorkout throws an error", async () => {
@@ -57,22 +54,19 @@ describe("Workouts Routes", () => {
       const { createWorkout } = await import("../../services/workoutService");
       vi.mocked(createWorkout).mockRejectedValue(new Error("Service error"));
 
-
-
-      const response = await request(app)
-        .post("/api/v1/workouts")
-        .send({
-          date: "2024-03-10",
-          notes: "Test notes",
-          focus: "Conditioning",
-          mainWorkout: "Murph",
-          exercises: []
-        });
-
-
+      const response = await request(app).post("/api/v1/workouts").send({
+        date: "2024-03-10",
+        notes: "Test notes",
+        focus: "Conditioning",
+        mainWorkout: "Murph",
+        exercises: [],
+      });
 
       expect(response.status).toBe(500);
-      expect(response.body).toEqual({ error: "Internal Server Error", code: "INTERNAL_SERVER_ERROR" });
+      expect(response.body).toEqual({
+        error: "Internal Server Error",
+        code: "INTERNAL_SERVER_ERROR",
+      });
     });
   });
 
@@ -83,7 +77,7 @@ describe("Workouts Routes", () => {
 
       const mockLogs = [
         { id: "1", userId: "test_user_id", date: "2024-03-10", notes: "Great workout" },
-        { id: "2", userId: "test_user_id", date: "2024-03-12", notes: "Felt tired" }
+        { id: "2", userId: "test_user_id", date: "2024-03-12", notes: "Felt tired" },
       ];
       vi.mocked(storage.listWorkoutLogs).mockResolvedValue(mockLogs);
 
@@ -102,7 +96,10 @@ describe("Workouts Routes", () => {
       const response = await request(app).get("/api/v1/workouts");
 
       expect(response.status).toBe(500);
-      expect(response.body).toEqual({ error: "Internal Server Error", code: "INTERNAL_SERVER_ERROR" });
+      expect(response.body).toEqual({
+        error: "Internal Server Error",
+        code: "INTERNAL_SERVER_ERROR",
+      });
     });
   });
 });

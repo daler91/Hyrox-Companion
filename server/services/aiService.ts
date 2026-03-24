@@ -34,10 +34,18 @@ function calculateTrainingStats(timeline: TimelineEntry[]) {
   const denominator = completedWorkouts + missedWorkouts + skippedWorkouts;
   const completionRate = denominator > 0 ? Math.round((completedWorkouts / denominator) * 100) : 0;
 
-  return { completedWorkouts, plannedWorkouts, missedWorkouts, skippedWorkouts, totalWorkouts, completionRate, completedDates };
+  return {
+    completedWorkouts,
+    plannedWorkouts,
+    missedWorkouts,
+    skippedWorkouts,
+    totalWorkouts,
+    completionRate,
+    completedDates,
+  };
 }
 
-const hyroxRegex = new RegExp(HYROX_EXERCISES.join('|'), 'gi');
+const hyroxRegex = new RegExp(HYROX_EXERCISES.join("|"), "gi");
 
 function getExerciseBreakdown(timeline: TimelineEntry[]): Record<string, number> {
   const breakdown: Record<string, number> = {};
@@ -78,7 +86,7 @@ function collectRecentWorkouts(timeline: TimelineEntry[]): TrainingContext["rece
         status: entry.status,
         rpe: entry.rpe,
         duration: entry.duration,
-        exerciseDetails: entry.exerciseSets?.map(es => ({
+        exerciseDetails: entry.exerciseSets?.map((es) => ({
           name: es.exerciseName,
           setNumber: es.setNumber,
           reps: es.reps,
@@ -99,8 +107,14 @@ function collectRecentWorkouts(timeline: TimelineEntry[]): TrainingContext["rece
 }
 
 function updateExerciseStat(
-  stat: { count: number; maxWeight?: number; maxDistance?: number; bestTime?: number; avgReps?: number },
-  es: { weight: number | null; distance: number | null; time: number | null; reps: number | null }
+  stat: {
+    count: number;
+    maxWeight?: number;
+    maxDistance?: number;
+    bestTime?: number;
+    avgReps?: number;
+  },
+  es: { weight: number | null; distance: number | null; time: number | null; reps: number | null },
 ) {
   stat.count++;
   if (es.weight) {
@@ -120,7 +134,10 @@ function updateExerciseStat(
 }
 
 function getStructuredExerciseStats(timeline: TimelineEntry[]) {
-  const stats: Record<string, { count: number; maxWeight?: number; maxDistance?: number; bestTime?: number; avgReps?: number }> = {};
+  const stats: Record<
+    string,
+    { count: number; maxWeight?: number; maxDistance?: number; bestTime?: number; avgReps?: number }
+  > = {};
   let hasStats = false;
 
   for (const entry of timeline) {
@@ -143,7 +160,15 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     storage.getUser(userId),
   ]);
 
-  const { completedWorkouts, plannedWorkouts, missedWorkouts, skippedWorkouts, totalWorkouts, completionRate, completedDates } = calculateTrainingStats(timeline);
+  const {
+    completedWorkouts,
+    plannedWorkouts,
+    missedWorkouts,
+    skippedWorkouts,
+    totalWorkouts,
+    completionRate,
+    completedDates,
+  } = calculateTrainingStats(timeline);
   const exerciseBreakdown = getExerciseBreakdown(timeline);
   const currentStreak = calculateStreak(completedDates);
   const recentWorkouts = collectRecentWorkouts(timeline);
@@ -151,7 +176,11 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
 
   let activePlan: TrainingContext["activePlan"];
   if (plans.length > 0) {
-    activePlan = { name: plans[0].name, totalWeeks: plans[0].totalWeeks, goal: plans[0].goal ?? undefined };
+    activePlan = {
+      name: plans[0].name,
+      totalWeeks: plans[0].totalWeeks,
+      goal: plans[0].goal ?? undefined,
+    };
   }
 
   return {

@@ -9,15 +9,11 @@ import { type ExerciseSet } from "@shared/schema";
 
 describe("getExerciseLabel", () => {
   it("returns label for known exercise name", () => {
-    expect(getExerciseLabel("unknown_exercise_123")).toBe(
-      "unknown_exercise_123",
-    );
+    expect(getExerciseLabel("unknown_exercise_123")).toBe("unknown_exercise_123");
   });
 
   it("handles custom prefix", () => {
-    expect(getExerciseLabel("custom:My Custom Exercise")).toBe(
-      "My Custom Exercise",
-    );
+    expect(getExerciseLabel("custom:My Custom Exercise")).toBe("My Custom Exercise");
   });
 
   it("handles custom exercise with customLabel", () => {
@@ -126,9 +122,7 @@ describe("formatExerciseSummary", () => {
       expected: "running 16404ft 25min",
     },
   ])("$desc", ({ group, weightUnit, distanceUnit, expected }) => {
-    expect(formatExerciseSummary(group, weightUnit, distanceUnit)).toBe(
-      expected,
-    );
+    expect(formatExerciseSummary(group, weightUnit, distanceUnit)).toBe(expected);
   });
 });
 

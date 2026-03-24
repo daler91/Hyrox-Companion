@@ -101,17 +101,44 @@ describe("buildTrainingContext", () => {
         date: "2026-01-15",
         workoutLogId: "log-1",
         exerciseSets: [
-          { exerciseName: "back_squat", weight: 100, reps: 5, setNumber: 1, sortOrder: 0, distance: null, time: null, workoutLogId: "log-1" },
-          { exerciseName: "back_squat", weight: 120, reps: 3, setNumber: 2, sortOrder: 1, distance: null, time: null, workoutLogId: "log-1" },
-        ]
+          {
+            exerciseName: "back_squat",
+            weight: 100,
+            reps: 5,
+            setNumber: 1,
+            sortOrder: 0,
+            distance: null,
+            time: null,
+            workoutLogId: "log-1",
+          },
+          {
+            exerciseName: "back_squat",
+            weight: 120,
+            reps: 3,
+            setNumber: 2,
+            sortOrder: 1,
+            distance: null,
+            time: null,
+            workoutLogId: "log-1",
+          },
+        ],
       },
       {
         status: "completed",
         date: "2026-01-14",
         workoutLogId: "log-2",
         exerciseSets: [
-          { exerciseName: "running", distance: 5000, time: 1500, setNumber: 1, sortOrder: 0, weight: null, reps: null, workoutLogId: "log-2" },
-        ]
+          {
+            exerciseName: "running",
+            distance: 5000,
+            time: 1500,
+            setNumber: 1,
+            sortOrder: 0,
+            weight: null,
+            reps: null,
+            workoutLogId: "log-2",
+          },
+        ],
       },
     ]);
 
@@ -136,7 +163,12 @@ describe("buildTrainingContext", () => {
     vi.mocked(storage.getExerciseSetsByWorkoutLogs).mockResolvedValue([]);
 
     vi.mocked(storage.listTrainingPlans).mockResolvedValue([
-      { id: "plan-1", name: "Hyrox Base", totalWeeks: 12, goal: "Complete a sub-1:30 race" } as unknown as Awaited<ReturnType<typeof storage.listTrainingPlans>>[number],
+      {
+        id: "plan-1",
+        name: "Hyrox Base",
+        totalWeeks: 12,
+        goal: "Complete a sub-1:30 race",
+      } as unknown as Awaited<ReturnType<typeof storage.listTrainingPlans>>[number],
     ]);
 
     const result = await buildTrainingContext("user-1");

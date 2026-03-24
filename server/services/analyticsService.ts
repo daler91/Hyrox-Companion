@@ -8,7 +8,9 @@ function getExerciseKey(set: ExerciseSetWithDate): string {
     : set.exerciseName;
 }
 
-export function calculatePersonalRecords(allSets: ExerciseSetWithDate[]): Record<string, PersonalRecord> {
+export function calculatePersonalRecords(
+  allSets: ExerciseSetWithDate[],
+): Record<string, PersonalRecord> {
   const prs: Record<string, PersonalRecord> = {};
 
   for (const set of allSets) {
@@ -38,7 +40,9 @@ interface DayAnalytics {
   totalDistance: number;
 }
 
-export function calculateExerciseAnalytics(allSets: ExerciseSetWithDate[]): Record<string, DayAnalytics[]> {
+export function calculateExerciseAnalytics(
+  allSets: ExerciseSetWithDate[],
+): Record<string, DayAnalytics[]> {
   const analytics: Record<string, Record<string, DayAnalytics>> = {};
 
   allSets.forEach((s) => {
@@ -57,7 +61,7 @@ export function calculateExerciseAnalytics(allSets: ExerciseSetWithDate[]): Reco
         maxWeight: 0,
         totalSets: 0,
         totalReps: 0,
-        totalDistance: 0
+        totalDistance: 0,
       };
     }
 

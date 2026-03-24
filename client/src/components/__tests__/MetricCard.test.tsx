@@ -30,13 +30,7 @@ describe("MetricCard", () => {
   });
 
   it("renders 'up' trend correctly", () => {
-    render(
-      <MetricCard
-        {...defaultProps}
-        trend="up"
-        trendValue="+15%"
-      />
-    );
+    render(<MetricCard {...defaultProps} trend="up" trendValue="+15%" />);
     const trendElement = screen.getByText("+15%");
     expect(trendElement).toBeInTheDocument();
     expect(trendElement).toHaveClass("text-green-500");
@@ -48,13 +42,7 @@ describe("MetricCard", () => {
   });
 
   it("renders 'down' trend correctly", () => {
-    render(
-      <MetricCard
-        {...defaultProps}
-        trend="down"
-        trendValue="-5%"
-      />
-    );
+    render(<MetricCard {...defaultProps} trend="down" trendValue="-5%" />);
     const trendElement = screen.getByText("-5%");
     expect(trendElement).toBeInTheDocument();
     expect(trendElement).toHaveClass("text-red-500");
@@ -64,13 +52,7 @@ describe("MetricCard", () => {
   });
 
   it("renders 'neutral' trend correctly", () => {
-    render(
-      <MetricCard
-        {...defaultProps}
-        trend="neutral"
-        trendValue="0%"
-      />
-    );
+    render(<MetricCard {...defaultProps} trend="neutral" trendValue="0%" />);
     const trendElement = screen.getByText("0%");
     expect(trendElement).toBeInTheDocument();
     expect(trendElement).toHaveClass("text-muted-foreground");

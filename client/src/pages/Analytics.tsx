@@ -1,7 +1,13 @@
 import { useState, useMemo } from "react";
 import { format, subDays } from "date-fns";
 import { Activity, Trophy } from "lucide-react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PersonalRecordsTab } from "@/components/analytics/PersonalRecordsTab";
 import { ExerciseProgressionTab } from "@/components/analytics/ExerciseProgressionTab";
@@ -19,7 +25,9 @@ export default function Analytics() {
     <div className="max-w-4xl mx-auto p-4 md:p-6 space-y-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold" data-testid="text-analytics-title">Analytics</h1>
+          <h1 className="text-2xl font-bold" data-testid="text-analytics-title">
+            Analytics
+          </h1>
           <p className="text-muted-foreground">Personal records and exercise progression</p>
         </div>
 

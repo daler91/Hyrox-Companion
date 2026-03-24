@@ -30,7 +30,6 @@ describe("Email Routes", () => {
     vi.clearAllMocks();
     env.CRON_SECRET = "super-secret";
     app = createTestApp(emailRouter);
-
   });
 
   describe("GET /api/cron/emails", () => {
@@ -45,8 +44,7 @@ describe("Email Routes", () => {
     });
 
     it("should return 401 if secret header is missing", async () => {
-      const response = await request(app)
-        .get("/api/v1/cron/emails");
+      const response = await request(app).get("/api/v1/cron/emails");
 
       expect(response.status).toBe(401);
       expect(response.body).toEqual({ error: "Unauthorized", code: "UNAUTHORIZED" });
@@ -84,7 +82,10 @@ describe("Email Routes", () => {
         .set("x-cron-secret", "super-secret");
 
       expect(response.status).toBe(500);
-      expect(response.body).toEqual({ error: "Internal Server Error", code: "INTERNAL_SERVER_ERROR" });
+      expect(response.body).toEqual({
+        error: "Internal Server Error",
+        code: "INTERNAL_SERVER_ERROR",
+      });
     });
   });
 });

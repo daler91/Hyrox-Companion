@@ -8,11 +8,14 @@ interface FloatingActionButtonProps {
   readonly onCoachToggle?: () => void;
 }
 
-export default function FloatingActionButton({ coachPanelOpen, onCoachToggle }: Readonly<FloatingActionButtonProps>) {
+export default function FloatingActionButton({
+  coachPanelOpen,
+  onCoachToggle,
+}: Readonly<FloatingActionButtonProps>) {
   const [, setLocation] = useLocation();
-  
-  const rightPosition = coachPanelOpen 
-    ? "!right-6 md:!right-[calc(20rem+1.5rem)] lg:!right-[calc(24rem+1.5rem)] max-md:hidden" 
+
+  const rightPosition = coachPanelOpen
+    ? "!right-6 md:!right-[calc(20rem+1.5rem)] lg:!right-[calc(24rem+1.5rem)] max-md:hidden"
     : "!right-6";
 
   const handleNewWorkout = () => {
@@ -20,7 +23,7 @@ export default function FloatingActionButton({ coachPanelOpen, onCoachToggle }: 
   };
 
   return createPortal(
-    <div 
+    <div
       className={`!fixed !bottom-6 flex flex-col gap-3 items-end transition-all duration-300 ${rightPosition}`}
       style={{ zIndex: 9999 }}
     >
@@ -41,6 +44,6 @@ export default function FloatingActionButton({ coachPanelOpen, onCoachToggle }: 
         <span>New Workout</span>
       </Button>
     </div>,
-    document.body
+    document.body,
   );
 }

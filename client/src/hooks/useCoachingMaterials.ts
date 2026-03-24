@@ -21,15 +21,22 @@ export function useCreateCoachingMaterial() {
     successToast: "Coaching material added",
     errorToast: (error: Error) => ({
       title: "Failed to add coaching material",
-      description: error.message
+      description: error.message,
     }),
   });
 }
 
 export function useUpdateCoachingMaterial() {
   return useApiMutation({
-    mutationFn: ({ id, ...data }: { id: string; title?: string; content?: string; type?: "principles" | "document" }) =>
-      api.coaching.update(id, data),
+    mutationFn: ({
+      id,
+      ...data
+    }: {
+      id: string;
+      title?: string;
+      content?: string;
+      type?: "principles" | "document";
+    }) => api.coaching.update(id, data),
     invalidateQueries: [QUERY_KEYS.coachingMaterials],
     successToast: "Coaching material updated",
     errorToast: "Failed to update coaching material",
@@ -62,7 +69,7 @@ export function useReEmbed() {
     },
     errorToast: (error: Error) => ({
       title: "Failed to re-embed",
-      description: error.message
+      description: error.message,
     }),
   });
 }

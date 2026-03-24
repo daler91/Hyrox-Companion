@@ -6,11 +6,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Tooltip,
-  TooltipTrigger,
-  TooltipContent,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Loader2, Pencil } from "lucide-react";
 import type { PlanSelectorProps } from "./types";
 
@@ -37,7 +33,12 @@ export function PlanSelector({
           value={selectedPlanId || "__all__"}
           onValueChange={(value) => onPlanChange(value === "__all__" ? null : value)}
         >
-          <SelectTrigger id="plan-select" aria-label="Select training plan" className="flex-1" data-testid="select-plan">
+          <SelectTrigger
+            id="plan-select"
+            aria-label="Select training plan"
+            className="flex-1"
+            data-testid="select-plan"
+          >
             <SelectValue placeholder="All Plans" />
           </SelectTrigger>
           <SelectContent>
@@ -56,7 +57,8 @@ export function PlanSelector({
                 size="icon"
                 variant="ghost"
                 onClick={openRenameDialog}
-                data-testid="button-rename-plan" aria-label="Rename plan"
+                data-testid="button-rename-plan"
+                aria-label="Rename plan"
               >
                 <Pencil className="h-4 w-4" />
               </Button>

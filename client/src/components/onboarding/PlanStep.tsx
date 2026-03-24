@@ -8,7 +8,12 @@ interface PlanStepProps {
   readonly onSkip: () => void;
 }
 
-export function PlanStep({ isPending, onUseSamplePlan, onImportPlan, onSkip }: Readonly<PlanStepProps>) {
+export function PlanStep({
+  isPending,
+  onUseSamplePlan,
+  onImportPlan,
+  onSkip,
+}: Readonly<PlanStepProps>) {
   return (
     <div className="space-y-3">
       <Button

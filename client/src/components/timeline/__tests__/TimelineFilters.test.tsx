@@ -124,21 +124,29 @@ describe("TimelineFilters", () => {
 
     const mockCreateObjectURL = vi.fn().mockReturnValue("blob:mock-url");
     const mockRevokeObjectURL = vi.fn();
-    Object.defineProperty(globalThis.URL, 'createObjectURL', { writable: true, value: mockCreateObjectURL });
-    Object.defineProperty(globalThis.URL, 'revokeObjectURL', { writable: true, value: mockRevokeObjectURL });
+    Object.defineProperty(globalThis.URL, "createObjectURL", {
+      writable: true,
+      value: mockCreateObjectURL,
+    });
+    Object.defineProperty(globalThis.URL, "revokeObjectURL", {
+      writable: true,
+      value: mockRevokeObjectURL,
+    });
 
     const originalCreateElement = document.createElement.bind(document);
     const mockClick = vi.fn();
     const mockRemove = vi.fn();
 
-    const mockCreateElement = vi.spyOn(document, 'createElement').mockImplementation((tagName: string) => {
-      const element = originalCreateElement(tagName);
-      if (tagName === 'a') {
-        element.click = mockClick;
-        element.remove = mockRemove;
-      }
-      return element;
-    });
+    const mockCreateElement = vi
+      .spyOn(document, "createElement")
+      .mockImplementation((tagName: string) => {
+        const element = originalCreateElement(tagName);
+        if (tagName === "a") {
+          element.click = mockClick;
+          element.remove = mockRemove;
+        }
+        return element;
+      });
 
     render(<TimelineFilters {...defaultProps} />);
 
@@ -146,7 +154,7 @@ describe("TimelineFilters", () => {
     await user.click(downloadBtn);
 
     expect(mockCreateObjectURL).toHaveBeenCalled();
-    expect(mockCreateElement).toHaveBeenCalledWith('a');
+    expect(mockCreateElement).toHaveBeenCalledWith("a");
     expect(mockClick).toHaveBeenCalled();
     expect(mockRemove).toHaveBeenCalled();
     expect(mockRevokeObjectURL).toHaveBeenCalledWith("blob:mock-url");
@@ -170,8 +178,9 @@ describe("TimelineFilters", () => {
     render(<TimelineFilters {...defaultProps} isImporting={true} />);
 
     const uploadBtnLabel = screen.getByText((content, element) => {
-      return element?.tagName.toLowerCase() === 'label' &&
-             element?.getAttribute('for') === 'csv-upload';
+      return (
+        element?.tagName.toLowerCase() === "label" && element?.getAttribute("for") === "csv-upload"
+      );
     });
 
     const button = uploadBtnLabel?.querySelector("button");

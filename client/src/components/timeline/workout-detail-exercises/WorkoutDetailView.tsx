@@ -14,10 +14,7 @@ export const WorkoutDetailView = React.memo(function WorkoutDetailView({
   return (
     <div className="space-y-3">
       {hasStructuredData ? (
-        <div
-          className="flex flex-wrap gap-1.5"
-          data-testid="detail-exercise-chips"
-        >
+        <div className="flex flex-wrap gap-1.5" data-testid="detail-exercise-chips">
           {grouped.map((group, idx) => (
             <Badge
               key={`${group.exerciseName}-${idx}`}
@@ -35,17 +32,13 @@ export const WorkoutDetailView = React.memo(function WorkoutDetailView({
       )}
       {entry.accessory && (
         <div>
-          <p className="text-xs font-medium text-muted-foreground/70 mb-1">
-            Accessory
-          </p>
+          <p className="text-xs font-medium text-muted-foreground/70 mb-1">Accessory</p>
           <p className="text-sm text-muted-foreground/70">{entry.accessory}</p>
         </div>
       )}
       {entry.notes && (
         <div>
-          <p className="text-xs font-medium text-muted-foreground/70 mb-1">
-            Notes
-          </p>
+          <p className="text-xs font-medium text-muted-foreground/70 mb-1">Notes</p>
           <p className="text-sm text-muted-foreground italic">{entry.notes}</p>
         </div>
       )}
@@ -53,8 +46,10 @@ export const WorkoutDetailView = React.memo(function WorkoutDetailView({
         <p className="text-xs text-muted-foreground">
           {[
             entry.duration ? `Duration: ${entry.duration} min` : null,
-            entry.rpe ? `RPE: ${entry.rpe}` : null
-          ].filter(Boolean).join(" | ")}
+            entry.rpe ? `RPE: ${entry.rpe}` : null,
+          ]
+            .filter(Boolean)
+            .join(" | ")}
         </p>
       )}
       <WorkoutDetailStravaMetrics entry={entry} distanceUnit={distanceUnit} />

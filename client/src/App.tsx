@@ -25,7 +25,11 @@ function isCypressTest(): boolean {
 }
 
 function isDevPreview(): boolean {
-  return import.meta.env.DEV && (!clerkPubKey || (globalThis.window !== undefined && globalThis.window.self !== globalThis.window.top));
+  return (
+    import.meta.env.DEV &&
+    (!clerkPubKey ||
+      (globalThis.window !== undefined && globalThis.window.self !== globalThis.window.top))
+  );
 }
 
 function shouldBypassAuth(): boolean {
@@ -55,10 +59,26 @@ function AuthenticatedRouter() {
   return (
     <Suspense fallback={<LazyFallback />}>
       <Switch>
-        <Route path="/"><FeatureErrorBoundaryWrapper featureName="Timeline"><Timeline /></FeatureErrorBoundaryWrapper></Route>
-        <Route path="/log"><FeatureErrorBoundaryWrapper featureName="Log Workout"><LogWorkout /></FeatureErrorBoundaryWrapper></Route>
-        <Route path="/analytics"><FeatureErrorBoundaryWrapper featureName="Analytics"><Analytics /></FeatureErrorBoundaryWrapper></Route>
-        <Route path="/settings"><FeatureErrorBoundaryWrapper featureName="Settings"><Settings /></FeatureErrorBoundaryWrapper></Route>
+        <Route path="/">
+          <FeatureErrorBoundaryWrapper featureName="Timeline">
+            <Timeline />
+          </FeatureErrorBoundaryWrapper>
+        </Route>
+        <Route path="/log">
+          <FeatureErrorBoundaryWrapper featureName="Log Workout">
+            <LogWorkout />
+          </FeatureErrorBoundaryWrapper>
+        </Route>
+        <Route path="/analytics">
+          <FeatureErrorBoundaryWrapper featureName="Analytics">
+            <Analytics />
+          </FeatureErrorBoundaryWrapper>
+        </Route>
+        <Route path="/settings">
+          <FeatureErrorBoundaryWrapper featureName="Settings">
+            <Settings />
+          </FeatureErrorBoundaryWrapper>
+        </Route>
         <Route component={NotFound} />
       </Switch>
     </Suspense>

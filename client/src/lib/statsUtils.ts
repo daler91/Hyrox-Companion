@@ -1,9 +1,9 @@
 import type { TimelineEntry } from "@shared/schema";
-import { 
-  getTodayString, 
-  getStartOfWeekString, 
-  getEndOfWeekString, 
-  isDateInRange 
+import {
+  getTodayString,
+  getStartOfWeekString,
+  getEndOfWeekString,
+  isDateInRange,
 } from "./dateUtils";
 
 export interface TrainingStats {
@@ -28,11 +28,10 @@ export function calculateStats(timeline: TimelineEntry[]): TrainingStats {
   let plannedUpcoming = 0;
   let totalPastAndToday = 0;
   let completedPastAndTodayCount = 0;
-  
+
   const completedDatesSet = new Set<string>();
 
   for (const entry of timeline) {
-
     // Check if in current week
     if (isDateInRange(entry.date, startOfWeekStr, endOfWeekStr)) {
       totalThisWeek++;
@@ -62,7 +61,10 @@ export function calculateStats(timeline: TimelineEntry[]): TrainingStats {
     workoutsThisWeek: totalThisWeek,
     completedThisWeek,
     plannedUpcoming,
-    completionRate: totalPastAndToday > 0 ? Math.round((completedPastAndTodayCount / totalPastAndToday) * 100) : 0,
+    completionRate:
+      totalPastAndToday > 0
+        ? Math.round((completedPastAndTodayCount / totalPastAndToday) * 100)
+        : 0,
     currentStreak: streak,
   };
 }

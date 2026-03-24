@@ -62,10 +62,9 @@ export default function Settings() {
     queryKey: QUERY_KEYS.preferences,
   });
 
-  const { data: stravaStatus, isLoading: stravaLoading } =
-    useQuery<StravaStatus>({
-      queryKey: QUERY_KEYS.stravaStatus,
-    });
+  const { data: stravaStatus, isLoading: stravaLoading } = useQuery<StravaStatus>({
+    queryKey: QUERY_KEYS.stravaStatus,
+  });
 
   useEffect(() => {
     if (preferences) {
@@ -136,17 +135,12 @@ export default function Settings() {
     <div className="p-4 md:p-8 max-w-2xl mx-auto space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
-        <p className="text-muted-foreground mt-1">
-          Manage your account and preferences
-        </p>
+        <p className="text-muted-foreground mt-1">Manage your account and preferences</p>
       </div>
 
       <ProfileSection userName={userName} />
 
-      <StravaSection
-        stravaStatus={stravaStatus}
-        stravaLoading={stravaLoading}
-      />
+      <StravaSection stravaStatus={stravaStatus} stravaLoading={stravaLoading} />
 
       <PreferencesSection
         weightUnit={weightUnit}

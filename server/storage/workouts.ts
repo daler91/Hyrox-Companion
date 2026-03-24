@@ -19,15 +19,12 @@ export class WorkoutStorage {
     return and(
       inArray(planDays.id, ids),
       eq(planDays.planId, trainingPlans.id),
-      eq(trainingPlans.userId, userId)
+      eq(trainingPlans.userId, userId),
     );
   }
 
   async createWorkoutLog(log: InsertWorkoutLog & { userId: string }): Promise<WorkoutLog> {
-    const [workoutLog] = await db
-      .insert(workoutLogs)
-      .values(log)
-      .returning();
+    const [workoutLog] = await db.insert(workoutLogs).values(log).returning();
 
     if (log.planDayId) {
       // Bolt Optimization: Use direct JOIN via .from() instead of inArray() subquery to prevent N+1 execution
@@ -44,10 +41,7 @@ export class WorkoutStorage {
   async createWorkoutLogs(logs: (InsertWorkoutLog & { userId: string })[]): Promise<WorkoutLog[]> {
     if (logs.length === 0) return [];
 
-    const createdLogs = await db
-      .insert(workoutLogs)
-      .values(logs)
-      .returning();
+    const createdLogs = await db.insert(workoutLogs).values(logs).returning();
 
     // Group planDayIds by userId to ensure proper authorization per user
     // Since logs could potentially come from different users in a batch
@@ -107,10 +101,14 @@ export class WorkoutStorage {
     return log;
   }
 
-  async updateWorkoutLog(logId: string, updates: UpdateWorkoutLog, userId: string): Promise<WorkoutLog | undefined> {
+  async updateWorkoutLog(
+    logId: string,
+    updates: UpdateWorkoutLog,
+    userId: string,
+  ): Promise<WorkoutLog | undefined> {
     const existingLog = await this.getWorkoutLog(logId, userId);
     if (!existingLog) return undefined;
-    
+
     const [updatedLog] = await db
       .update(workoutLogs)
       .set(updates)
@@ -122,8 +120,10 @@ export class WorkoutStorage {
   async deleteWorkoutLog(logId: string, userId: string): Promise<boolean> {
     const existingLog = await this.getWorkoutLog(logId, userId);
     if (!existingLog) return false;
-    
-    const result = await db.delete(workoutLogs).where(and(eq(workoutLogs.id, logId), eq(workoutLogs.userId, userId)));
+
+    const result = await db
+      .delete(workoutLogs)
+      .where(and(eq(workoutLogs.id, logId), eq(workoutLogs.userId, userId)));
     return result.rowCount !== null && result.rowCount > 0;
   }
 
@@ -134,7 +134,10 @@ export class WorkoutStorage {
     return result.rowCount !== null && result.rowCount > 0;
   }
 
-  async getWorkoutLogByPlanDayId(planDayId: string, userId: string): Promise<WorkoutLog | undefined> {
+  async getWorkoutLogByPlanDayId(
+    planDayId: string,
+    userId: string,
+  ): Promise<WorkoutLog | undefined> {
     const [log] = await db
       .select()
       .from(workoutLogs)
@@ -143,15 +146,23 @@ export class WorkoutStorage {
     return log;
   }
 
-  async getWorkoutByStravaActivityId(userId: string, stravaActivityId: string): Promise<WorkoutLog | undefined> {
+  async getWorkoutByStravaActivityId(
+    userId: string,
+    stravaActivityId: string,
+  ): Promise<WorkoutLog | undefined> {
     const [log] = await db
       .select()
       .from(workoutLogs)
-      .where(and(eq(workoutLogs.userId, userId), eq(workoutLogs.stravaActivityId, stravaActivityId)));
+      .where(
+        and(eq(workoutLogs.userId, userId), eq(workoutLogs.stravaActivityId, stravaActivityId)),
+      );
     return log;
   }
 
-  async getExistingStravaActivityIds(userId: string, stravaActivityIds: string[]): Promise<string[]> {
+  async getExistingStravaActivityIds(
+    userId: string,
+    stravaActivityIds: string[],
+  ): Promise<string[]> {
     if (stravaActivityIds.length === 0) return [];
     const rows = await db
       .select({ stravaActivityId: workoutLogs.stravaActivityId })
@@ -160,8 +171,8 @@ export class WorkoutStorage {
         and(
           eq(workoutLogs.userId, userId),
           inArray(workoutLogs.stravaActivityId, stravaActivityIds),
-          isNotNull(workoutLogs.stravaActivityId)
-        )
+          isNotNull(workoutLogs.stravaActivityId),
+        ),
       );
     return rows.map((r) => r.stravaActivityId as string);
   }
@@ -192,20 +203,22 @@ export class WorkoutStorage {
     const existingLog = await this.getWorkoutLog(workoutLogId, userId);
     if (!existingLog) return false;
 
-    await db
-      .delete(exerciseSets)
-      .where(
-        inArray(
-          exerciseSets.workoutLogId,
-          db.select({ id: workoutLogs.id })
-            .from(workoutLogs)
-            .where(and(eq(workoutLogs.id, workoutLogId), eq(workoutLogs.userId, userId)))
-        )
-      );
+    await db.delete(exerciseSets).where(
+      inArray(
+        exerciseSets.workoutLogId,
+        db
+          .select({ id: workoutLogs.id })
+          .from(workoutLogs)
+          .where(and(eq(workoutLogs.id, workoutLogId), eq(workoutLogs.userId, userId))),
+      ),
+    );
     return true;
   }
 
-  async getExerciseHistory(userId: string, exerciseName: string): Promise<(ExerciseSet & { date: string })[]> {
+  async getExerciseHistory(
+    userId: string,
+    exerciseName: string,
+  ): Promise<(ExerciseSet & { date: string })[]> {
     return await queryExerciseSetsWithDates(userId, { exerciseName });
   }
 
@@ -219,9 +232,9 @@ export class WorkoutStorage {
           eq(workoutLogs.userId, userId),
           isNull(exerciseSets.id),
           isNotNull(workoutLogs.mainWorkout),
-          sql`TRIM(${workoutLogs.mainWorkout}) <> ''`
-        )
+          sql`TRIM(${workoutLogs.mainWorkout}) <> ''`,
+        ),
       );
-    return results.map(r => r.workoutLog);
+    return results.map((r) => r.workoutLog);
   }
 }

@@ -31,7 +31,7 @@ vi.mock("express-rate-limit", () => {
     return (req: Record<string, unknown>, res: Record<string, unknown>, next: NextFunction) => {
       if (skip?.(req)) return next();
 
-      const key = keyGen ? keyGen(req) : req.ip ?? "";
+      const key = keyGen ? keyGen(req) : (req.ip ?? "");
       if (!key) return next();
 
       const now = Date.now();
@@ -61,13 +61,21 @@ vi.mock("express-rate-limit", () => {
   // Expose store reset for beforeEach hooks
   (mockRateLimit as unknown as { __resetStore: () => void }).__resetStore = () => store.clear();
 
-  return { 
+  return {
     default: mockRateLimit,
-    MemoryStore: class { public isMock = true; }
+    MemoryStore: class {
+      public isMock = true;
+    },
   };
 });
 
-import { calculateStreak, rateLimiter, clearRateLimitBuckets, validateBody, DEFAULT_WINDOW_MS } from "./routeUtils";
+import {
+  calculateStreak,
+  rateLimiter,
+  clearRateLimitBuckets,
+  validateBody,
+  DEFAULT_WINDOW_MS,
+} from "./routeUtils";
 import { expandExercisesToSetRows } from "./services/workoutService";
 import rateLimit from "express-rate-limit";
 
@@ -204,8 +212,6 @@ describe("rateLimiter", () => {
   });
 });
 
-
-
 describe("calculateStreak", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -247,13 +253,7 @@ describe("calculateStreak", () => {
 
   it("counts long consecutive streaks", () => {
     vi.setSystemTime(new Date("2026-01-15T12:00:00Z"));
-    const dates = new Set([
-      "2026-01-15",
-      "2026-01-14",
-      "2026-01-13",
-      "2026-01-12",
-      "2026-01-11",
-    ]);
+    const dates = new Set(["2026-01-15", "2026-01-14", "2026-01-13", "2026-01-12", "2026-01-11"]);
     expect(calculateStreak(dates)).toBe(5);
   });
 
@@ -291,7 +291,6 @@ describe("calculateStreak", () => {
     vi.setSystemTime(new Date("2026-01-15T12:00:00Z"));
     expect(calculateStreak(new Set(["2025-01-01"]))).toBe(0);
   });
-
 
   it("maintains streak when run at 11:59 PM", () => {
     vi.setSystemTime(new Date("2026-01-15T23:59:59.999Z"));
@@ -377,9 +376,7 @@ describe("expandExercisesToSetRows", () => {
   });
 
   it("defaults to 1 set when no sets array and no numSets", () => {
-    const exercises = [
-      { exerciseName: "pull_up", category: "strength", reps: 10 },
-    ];
+    const exercises = [{ exerciseName: "pull_up", category: "strength", reps: 10 }];
     const rows = expandExercisesToSetRows(exercises, "workout-1");
     expect(rows).toHaveLength(1);
     expect(rows[0].setNumber).toBe(1);
@@ -449,9 +446,6 @@ describe("expandExercisesToSetRows", () => {
   });
 });
 
-
-
-
 describe("validateBody", () => {
   const schema = z.object({
     name: z.string(),
@@ -499,7 +493,7 @@ describe("validateBody", () => {
       expect.objectContaining({
         error: "Required",
         details: expect.any(Object),
-      })
+      }),
     );
   });
 });

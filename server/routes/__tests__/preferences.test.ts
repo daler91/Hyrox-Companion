@@ -31,7 +31,6 @@ describe("GET /api/preferences", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     app = createTestApp(preferencesRouter);
-
   });
 
   it("should return 500 when storage.getUser throws an error", async () => {
@@ -42,7 +41,10 @@ describe("GET /api/preferences", () => {
     const response = await request(app).get("/api/v1/preferences");
 
     expect(response.status).toBe(500);
-    expect(response.body).toEqual({ error: "Internal Server Error", code: "INTERNAL_SERVER_ERROR" });
+    expect(response.body).toEqual({
+      error: "Internal Server Error",
+      code: "INTERNAL_SERVER_ERROR",
+    });
     expect(storage.getUser).toHaveBeenCalledWith("test_user_id");
   });
 });

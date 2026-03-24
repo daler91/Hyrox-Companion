@@ -26,7 +26,7 @@ export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaP
       onApplySuggestion,
       onDismissSuggestion,
     },
-    ref
+    ref,
   ) => {
     return (
       <ScrollArea className="flex-1 p-3" ref={ref}>
@@ -69,6 +69,6 @@ export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaP
         </div>
       </ScrollArea>
     );
-  }
+  },
 );
 CoachPanelChatArea.displayName = "CoachPanelChatArea";

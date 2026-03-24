@@ -38,7 +38,7 @@ export function validateAiOutput(output: string): string {
     "<system>",
     "</system>",
     "system prompt",
-    "ignore previous instructions"
+    "ignore previous instructions",
   ];
 
   for (const pattern of restrictedPatterns) {

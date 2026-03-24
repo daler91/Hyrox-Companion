@@ -54,7 +54,9 @@ describe("getUserId", () => {
   });
 
   it("returns userId when auth is valid", () => {
-    vi.mocked(getAuth).mockReturnValue({ userId: "user_123" } as unknown as ReturnType<typeof getAuth>);
+    vi.mocked(getAuth).mockReturnValue({ userId: "user_123" } as unknown as ReturnType<
+      typeof getAuth
+    >);
     const req = {} as Request;
     expect(getUserId(req)).toBe("user_123");
   });

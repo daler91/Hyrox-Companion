@@ -35,8 +35,8 @@ describe("calculateStats", () => {
         { date: "2024-05-11", status: "completed" },
         // In week
         { date: "2024-05-12", status: "completed" }, // Sunday, start of week
-        { date: "2024-05-14", status: "planned" },   // Tuesday
-        { date: "2024-05-16", status: "missed" },    // Thursday
+        { date: "2024-05-14", status: "planned" }, // Tuesday
+        { date: "2024-05-16", status: "missed" }, // Thursday
         { date: "2024-05-18", status: "completed" }, // Saturday, end of week
         // Out of week (after)
         { date: "2024-05-19", status: "planned" },
@@ -153,5 +153,4 @@ describe("calculateStats", () => {
       expect(stats.currentStreak).toBe(0);
     });
   });
-
 });

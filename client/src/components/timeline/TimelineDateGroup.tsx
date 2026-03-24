@@ -24,7 +24,6 @@ function getDateLabel(dateObj: Date) {
   return format(dateObj, "EEEE, MMM d");
 }
 
-
 function getDotColor(isTodayDate: boolean, isPast: boolean) {
   if (isTodayDate) return "bg-primary";
   if (isPast) return "bg-muted-foreground/30";
@@ -32,7 +31,21 @@ function getDotColor(isTodayDate: boolean, isPast: boolean) {
 }
 
 const TimelineDateGroupComponent = forwardRef<HTMLDivElement, TimelineDateGroupProps>(
-  ({ date, entries, onMarkComplete, onClick, onCombineSelect, isCombining, combiningEntryId, combiningEntryDate, personalRecords, isAutoCoaching }, ref) => {
+  (
+    {
+      date,
+      entries,
+      onMarkComplete,
+      onClick,
+      onCombineSelect,
+      isCombining,
+      combiningEntryId,
+      combiningEntryDate,
+      personalRecords,
+      isAutoCoaching,
+    },
+    ref,
+  ) => {
     const dateObj = parseISO(date);
     const isTodayDate = isToday(dateObj);
     const isPast = isBefore(dateObj, new Date()) && !isTodayDate;
@@ -47,9 +60,7 @@ const TimelineDateGroupComponent = forwardRef<HTMLDivElement, TimelineDateGroupP
             isTodayDate ? "text-primary font-semibold" : ""
           }`}
         >
-          <div
-            className={`h-3 w-3 rounded-full ${getDotColor(isTodayDate, isPast)}`}
-          />
+          <div className={`h-3 w-3 rounded-full ${getDotColor(isTodayDate, isPast)}`} />
           <span className={isTodayDate ? "" : "text-muted-foreground"}>
             {getDateLabel(dateObj)}
           </span>
@@ -78,7 +89,7 @@ const TimelineDateGroupComponent = forwardRef<HTMLDivElement, TimelineDateGroupP
         </div>
       </div>
     );
-  }
+  },
 );
 
 TimelineDateGroupComponent.displayName = "TimelineDateGroup";

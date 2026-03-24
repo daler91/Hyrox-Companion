@@ -1,5 +1,5 @@
-process.env.TZ = 'UTC';
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+process.env.TZ = "UTC";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   toISODateString,
   getTodayString,
@@ -13,46 +13,46 @@ import {
   isDateFuture,
   isDateToday,
   formatTime,
-  getCurrentTimeString
-} from './dateUtils';
+  getCurrentTimeString,
+} from "./dateUtils";
 
-describe('dateUtils', () => {
-  describe('toISODateString', () => {
-    it('should format a date as YYYY-MM-DD', () => {
+describe("dateUtils", () => {
+  describe("toISODateString", () => {
+    it("should format a date as YYYY-MM-DD", () => {
       const date = new Date(Date.UTC(2023, 9, 15, 10, 30, 0));
-      expect(toISODateString(date)).toBe('2023-10-15');
+      expect(toISODateString(date)).toBe("2023-10-15");
     });
 
-    it('should handle leap years', () => {
+    it("should handle leap years", () => {
       const date = new Date(Date.UTC(2024, 1, 29, 12, 0, 0));
-      expect(toISODateString(date)).toBe('2024-02-29');
+      expect(toISODateString(date)).toBe("2024-02-29");
     });
 
-    it('should correctly pad single digit months and days', () => {
+    it("should correctly pad single digit months and days", () => {
       const date = new Date(Date.UTC(2023, 4, 5, 12, 0, 0));
-      expect(toISODateString(date)).toBe('2023-05-05');
+      expect(toISODateString(date)).toBe("2023-05-05");
     });
 
-    it('should correctly handle end of year boundaries', () => {
+    it("should correctly handle end of year boundaries", () => {
       const date = new Date(Date.UTC(2023, 11, 31, 23, 59, 59));
-      expect(toISODateString(date)).toBe('2023-12-31');
+      expect(toISODateString(date)).toBe("2023-12-31");
     });
 
-    it('should correctly handle start of year boundaries', () => {
+    it("should correctly handle start of year boundaries", () => {
       const date = new Date(Date.UTC(2024, 0, 1, 0, 0, 0));
-      expect(toISODateString(date)).toBe('2024-01-01');
+      expect(toISODateString(date)).toBe("2024-01-01");
     });
 
-    it('should strip time components regardless of time of day', () => {
+    it("should strip time components regardless of time of day", () => {
       const morningDate = new Date(Date.UTC(2023, 7, 15, 0, 0, 1));
-      expect(toISODateString(morningDate)).toBe('2023-08-15');
+      expect(toISODateString(morningDate)).toBe("2023-08-15");
 
       const eveningDate = new Date(Date.UTC(2023, 7, 15, 23, 59, 59));
-      expect(toISODateString(eveningDate)).toBe('2023-08-15');
+      expect(toISODateString(eveningDate)).toBe("2023-08-15");
     });
   });
 
-  describe('Functions relying on current time', () => {
+  describe("Functions relying on current time", () => {
     const mockNow = new Date(Date.UTC(2023, 9, 18, 12, 0, 0)); // A Wednesday
 
     beforeEach(() => {
@@ -64,187 +64,187 @@ describe('dateUtils', () => {
       vi.useRealTimers();
     });
 
-    describe('getTodayString', () => {
-      it('should return the current date in YYYY-MM-DD format', () => {
-        expect(getTodayString()).toBe('2023-10-18');
+    describe("getTodayString", () => {
+      it("should return the current date in YYYY-MM-DD format", () => {
+        expect(getTodayString()).toBe("2023-10-18");
       });
     });
 
-    describe('getStartOfWeek', () => {
-      it('should return Sunday when weekStartsOn is 0 (default)', () => {
+    describe("getStartOfWeek", () => {
+      it("should return Sunday when weekStartsOn is 0 (default)", () => {
         const start = getStartOfWeek();
         expect(start.getDay()).toBe(0);
-        expect(toISODateString(start)).toBe('2023-10-15');
+        expect(toISODateString(start)).toBe("2023-10-15");
         expect(start.getHours()).toBe(0);
         expect(start.getMinutes()).toBe(0);
         expect(start.getSeconds()).toBe(0);
         expect(start.getMilliseconds()).toBe(0);
       });
 
-      it('should return Monday when weekStartsOn is 1', () => {
+      it("should return Monday when weekStartsOn is 1", () => {
         const start = getStartOfWeek(undefined, 1);
         expect(start.getDay()).toBe(1);
-        expect(toISODateString(start)).toBe('2023-10-16');
+        expect(toISODateString(start)).toBe("2023-10-16");
       });
 
-      it('should correctly calculate start of week for a specific date', () => {
+      it("should correctly calculate start of week for a specific date", () => {
         const specificDate = new Date(Date.UTC(2023, 9, 21, 15, 0, 0)); // Saturday
         const start = getStartOfWeek(specificDate);
-        expect(toISODateString(start)).toBe('2023-10-15');
+        expect(toISODateString(start)).toBe("2023-10-15");
       });
     });
 
-    describe('getEndOfWeek', () => {
-      it('should return Saturday when weekStartsOn is 0 (default)', () => {
+    describe("getEndOfWeek", () => {
+      it("should return Saturday when weekStartsOn is 0 (default)", () => {
         const end = getEndOfWeek();
         expect(end.getDay()).toBe(6);
-        expect(toISODateString(end)).toBe('2023-10-21');
+        expect(toISODateString(end)).toBe("2023-10-21");
         expect(end.getHours()).toBe(23);
         expect(end.getMinutes()).toBe(59);
         expect(end.getSeconds()).toBe(59);
         expect(end.getMilliseconds()).toBe(999);
       });
 
-      it('should return Sunday when weekStartsOn is 1', () => {
+      it("should return Sunday when weekStartsOn is 1", () => {
         const end = getEndOfWeek(undefined, 1);
         expect(end.getDay()).toBe(0);
-        expect(toISODateString(end)).toBe('2023-10-22');
+        expect(toISODateString(end)).toBe("2023-10-22");
       });
     });
 
-    describe('getStartOfWeekString', () => {
-      it('should return string representation of start of week', () => {
-        expect(getStartOfWeekString()).toBe('2023-10-15');
-        expect(getStartOfWeekString(undefined, 1)).toBe('2023-10-16');
+    describe("getStartOfWeekString", () => {
+      it("should return string representation of start of week", () => {
+        expect(getStartOfWeekString()).toBe("2023-10-15");
+        expect(getStartOfWeekString(undefined, 1)).toBe("2023-10-16");
       });
     });
 
-    describe('getEndOfWeekString', () => {
-      it('should return string representation of end of week', () => {
-        expect(getEndOfWeekString()).toBe('2023-10-21');
-        expect(getEndOfWeekString(undefined, 1)).toBe('2023-10-22');
+    describe("getEndOfWeekString", () => {
+      it("should return string representation of end of week", () => {
+        expect(getEndOfWeekString()).toBe("2023-10-21");
+        expect(getEndOfWeekString(undefined, 1)).toBe("2023-10-22");
       });
     });
 
-    describe('isDateInCurrentWeek', () => {
-      it('should return true for dates in current week', () => {
-        expect(isDateInCurrentWeek('2023-10-15')).toBe(true);
-        expect(isDateInCurrentWeek('2023-10-18')).toBe(true);
-        expect(isDateInCurrentWeek('2023-10-21')).toBe(true);
+    describe("isDateInCurrentWeek", () => {
+      it("should return true for dates in current week", () => {
+        expect(isDateInCurrentWeek("2023-10-15")).toBe(true);
+        expect(isDateInCurrentWeek("2023-10-18")).toBe(true);
+        expect(isDateInCurrentWeek("2023-10-21")).toBe(true);
       });
 
-      it('should return false for dates outside current week', () => {
-        expect(isDateInCurrentWeek('2023-10-14')).toBe(false);
-        expect(isDateInCurrentWeek('2023-10-22')).toBe(false);
+      it("should return false for dates outside current week", () => {
+        expect(isDateInCurrentWeek("2023-10-14")).toBe(false);
+        expect(isDateInCurrentWeek("2023-10-22")).toBe(false);
       });
 
-      it('should respect weekStartsOn parameter', () => {
+      it("should respect weekStartsOn parameter", () => {
         // Monday week start: Oct 16 to Oct 22
-        expect(isDateInCurrentWeek('2023-10-15', 1)).toBe(false);
-        expect(isDateInCurrentWeek('2023-10-22', 1)).toBe(true);
+        expect(isDateInCurrentWeek("2023-10-15", 1)).toBe(false);
+        expect(isDateInCurrentWeek("2023-10-22", 1)).toBe(true);
       });
     });
 
-    describe('isDatePast', () => {
-      it('should return true for past dates', () => {
-        expect(isDatePast('2023-10-17')).toBe(true);
-        expect(isDatePast('2022-10-18')).toBe(true);
+    describe("isDatePast", () => {
+      it("should return true for past dates", () => {
+        expect(isDatePast("2023-10-17")).toBe(true);
+        expect(isDatePast("2022-10-18")).toBe(true);
       });
 
-      it('should return false for today and future dates', () => {
-        expect(isDatePast('2023-10-18')).toBe(false);
-        expect(isDatePast('2023-10-19')).toBe(false);
-      });
-    });
-
-    describe('isDateFuture', () => {
-      it('should return true for future dates', () => {
-        expect(isDateFuture('2023-10-19')).toBe(true);
-        expect(isDateFuture('2024-10-18')).toBe(true);
-      });
-
-      it('should return false for today and past dates', () => {
-        expect(isDateFuture('2023-10-18')).toBe(false);
-        expect(isDateFuture('2023-10-17')).toBe(false);
+      it("should return false for today and future dates", () => {
+        expect(isDatePast("2023-10-18")).toBe(false);
+        expect(isDatePast("2023-10-19")).toBe(false);
       });
     });
 
-    describe('isDateToday', () => {
-      it('should return true for today', () => {
-        expect(isDateToday('2023-10-18')).toBe(true);
+    describe("isDateFuture", () => {
+      it("should return true for future dates", () => {
+        expect(isDateFuture("2023-10-19")).toBe(true);
+        expect(isDateFuture("2024-10-18")).toBe(true);
       });
 
-      it('should return false for other dates', () => {
-        expect(isDateToday('2023-10-17')).toBe(false);
-        expect(isDateToday('2023-10-19')).toBe(false);
+      it("should return false for today and past dates", () => {
+        expect(isDateFuture("2023-10-18")).toBe(false);
+        expect(isDateFuture("2023-10-17")).toBe(false);
       });
     });
 
-    describe('formatTime', () => {
-      it('should format time correctly using toLocaleTimeString with proper options', () => {
+    describe("isDateToday", () => {
+      it("should return true for today", () => {
+        expect(isDateToday("2023-10-18")).toBe(true);
+      });
+
+      it("should return false for other dates", () => {
+        expect(isDateToday("2023-10-17")).toBe(false);
+        expect(isDateToday("2023-10-19")).toBe(false);
+      });
+    });
+
+    describe("formatTime", () => {
+      it("should format time correctly using toLocaleTimeString with proper options", () => {
         const mockTime = new Date(Date.UTC(2023, 9, 18, 14, 30, 0));
-        const spy = vi.spyOn(mockTime, 'toLocaleTimeString').mockReturnValue('14:30');
+        const spy = vi.spyOn(mockTime, "toLocaleTimeString").mockReturnValue("14:30");
 
         const formatted = formatTime(mockTime);
 
-        expect(formatted).toBe('14:30');
-        expect(spy).toHaveBeenCalledWith([], { hour: '2-digit', minute: '2-digit' });
+        expect(formatted).toBe("14:30");
+        expect(spy).toHaveBeenCalledWith([], { hour: "2-digit", minute: "2-digit" });
 
         spy.mockRestore();
       });
 
-      it('should handle different time correctly', () => {
+      it("should handle different time correctly", () => {
         const mockTime = new Date(Date.UTC(2023, 9, 18, 5, 5, 0));
-        const spy = vi.spyOn(mockTime, 'toLocaleTimeString').mockReturnValue('05:05 AM');
+        const spy = vi.spyOn(mockTime, "toLocaleTimeString").mockReturnValue("05:05 AM");
 
         const formatted = formatTime(mockTime);
 
-        expect(formatted).toBe('05:05 AM');
-        expect(spy).toHaveBeenCalledWith([], { hour: '2-digit', minute: '2-digit' });
+        expect(formatted).toBe("05:05 AM");
+        expect(spy).toHaveBeenCalledWith([], { hour: "2-digit", minute: "2-digit" });
 
         spy.mockRestore();
       });
 
-      it('should handle an invalid date gracefully', () => {
-        const invalidDate = new Date('invalid');
+      it("should handle an invalid date gracefully", () => {
+        const invalidDate = new Date("invalid");
         const formatted = formatTime(invalidDate);
-        expect(formatted).toBe('Invalid Date'); // toLocaleTimeString returns 'Invalid Date'
+        expect(formatted).toBe("Invalid Date"); // toLocaleTimeString returns 'Invalid Date'
       });
     });
 
-    describe('getCurrentTimeString', () => {
-      it('should return formatted current time using toLocaleTimeString', () => {
-        const spy = vi.spyOn(Date.prototype, 'toLocaleTimeString').mockReturnValue('12:00');
+    describe("getCurrentTimeString", () => {
+      it("should return formatted current time using toLocaleTimeString", () => {
+        const spy = vi.spyOn(Date.prototype, "toLocaleTimeString").mockReturnValue("12:00");
 
         const timeStr = getCurrentTimeString();
 
-        expect(timeStr).toBe('12:00');
-        expect(spy).toHaveBeenCalledWith([], { hour: '2-digit', minute: '2-digit' });
+        expect(timeStr).toBe("12:00");
+        expect(spy).toHaveBeenCalledWith([], { hour: "2-digit", minute: "2-digit" });
 
         spy.mockRestore();
       });
     });
   });
 
-  describe('isDateInRange', () => {
-    it('should return true when date is between start and end', () => {
-      expect(isDateInRange('2023-10-15', '2023-10-01', '2023-10-31')).toBe(true);
+  describe("isDateInRange", () => {
+    it("should return true when date is between start and end", () => {
+      expect(isDateInRange("2023-10-15", "2023-10-01", "2023-10-31")).toBe(true);
     });
 
-    it('should return true when date equals start', () => {
-      expect(isDateInRange('2023-10-01', '2023-10-01', '2023-10-31')).toBe(true);
+    it("should return true when date equals start", () => {
+      expect(isDateInRange("2023-10-01", "2023-10-01", "2023-10-31")).toBe(true);
     });
 
-    it('should return true when date equals end', () => {
-      expect(isDateInRange('2023-10-31', '2023-10-01', '2023-10-31')).toBe(true);
+    it("should return true when date equals end", () => {
+      expect(isDateInRange("2023-10-31", "2023-10-01", "2023-10-31")).toBe(true);
     });
 
-    it('should return false when date is before start', () => {
-      expect(isDateInRange('2023-09-30', '2023-10-01', '2023-10-31')).toBe(false);
+    it("should return false when date is before start", () => {
+      expect(isDateInRange("2023-09-30", "2023-10-01", "2023-10-31")).toBe(false);
     });
 
-    it('should return false when date is after end', () => {
-      expect(isDateInRange('2023-11-01', '2023-10-01', '2023-10-31')).toBe(false);
+    it("should return false when date is after end", () => {
+      expect(isDateInRange("2023-11-01", "2023-10-01", "2023-10-31")).toBe(false);
     });
   });
 });

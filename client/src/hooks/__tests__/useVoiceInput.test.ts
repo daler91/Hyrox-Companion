@@ -28,10 +28,7 @@ class MockSpeechRecognition {
   }
 }
 
-function makeResultEvent(
-  texts: Array<{ transcript: string; isFinal: boolean }>,
-  resultIndex = 0,
-) {
+function makeResultEvent(texts: Array<{ transcript: string; isFinal: boolean }>, resultIndex = 0) {
   const results: any = texts.map((t) => {
     const r: any = [{ transcript: t.transcript }];
     r.isFinal = t.isFinal;
@@ -69,7 +66,8 @@ describe("useVoiceInput dedup", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     mockRecognitionInstances.length = 0;
-    (globalThis.window as unknown as Record<string, unknown>).SpeechRecognition = MockSpeechRecognition;
+    (globalThis.window as unknown as Record<string, unknown>).SpeechRecognition =
+      MockSpeechRecognition;
 
     Object.defineProperty(globalThis.navigator, "mediaDevices", {
       value: {

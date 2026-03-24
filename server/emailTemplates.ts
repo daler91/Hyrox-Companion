@@ -61,14 +61,10 @@ export function buildWeeklySummaryEmail(
   data: WeeklySummaryData,
 ): { subject: string; html: string } {
   const name = getUserName(user);
-  const totalWorkouts =
-    data.completedCount + data.missedCount + data.skippedCount;
+  const totalWorkouts = data.completedCount + data.missedCount + data.skippedCount;
   const durationHours = Math.floor(data.totalDuration / 60);
   const durationMins = data.totalDuration % 60;
-  const durationStr =
-    durationHours > 0
-      ? `${durationHours}h ${durationMins}m`
-      : `${durationMins}m`;
+  const durationStr = durationHours > 0 ? `${durationHours}h ${durationMins}m` : `${durationMins}m`;
 
   let completedSuffix = "s";
   if (data.completedCount === 1) {
@@ -120,19 +116,27 @@ export function buildWeeklySummaryEmail(
         <div class="stat-label">Total Time</div>
       </div>
     </div>
-${data.completionRate > 0 ? `
+${
+  data.completionRate > 0
+    ? `
     <div class="section-title">Completion</div>
     <div class="progress-bar">
       <div class="progress-fill" style="width:${Math.min(data.completionRate, 100)}%"></div>
     </div>
-    <p style="font-size:13px;color:#64748b;">${data.completedCount} of ${totalWorkouts} planned sessions</p>` : ""}
-${data.currentStreak > 0 ? `
+    <p style="font-size:13px;color:#64748b;">${data.completedCount} of ${totalWorkouts} planned sessions</p>`
+    : ""
+}
+${
+  data.currentStreak > 0
+    ? `
     <div class="stat-grid">
       <div class="stat-card">
         <div class="stat-value highlight">🔥 ${data.currentStreak}</div>
         <div class="stat-label">Day Streak</div>
       </div>${prsSection}
-    </div>` : ""}
+    </div>`
+    : ""
+}
 
     ${missedSessionsMessage}
 

@@ -69,9 +69,7 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
           disabled={isSchedulePending}
           data-testid="button-onboarding-start-plan"
         >
-          {isSchedulePending && (
-            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-          )}
+          {isSchedulePending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
           Start Training <ChevronRight className="h-4 w-4 ml-1" />
         </Button>
       );
@@ -80,9 +78,7 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
     if (step !== "plan") {
       return (
         <Button onClick={handleNext} disabled={isPrefsPending}>
-          {isPrefsPending && (
-            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-          )}
+          {isPrefsPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
           {step === "welcome" ? "Get Started" : "Continue"}{" "}
           <ChevronRight className="h-4 w-4 ml-1" />
         </Button>
@@ -94,10 +90,7 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
 
   return (
     <Dialog open={open} onOpenChange={() => {}}>
-      <DialogContent
-        className="sm:max-w-lg"
-        onPointerDownOutside={(e) => e.preventDefault()}
-      >
+      <DialogContent className="sm:max-w-lg" onPointerDownOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle className="text-xl">{TITLES[step]}</DialogTitle>
           <DialogDescription>{DESCS[step]}</DialogDescription>
@@ -129,10 +122,7 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
             />
           )}
           {step === "goal" && (
-            <GoalStep
-              selectedGoal={selectedGoal}
-              onGoalChange={setSelectedGoal}
-            />
+            <GoalStep selectedGoal={selectedGoal} onGoalChange={setSelectedGoal} />
           )}
           {step === "plan" && (
             <PlanStep
@@ -143,20 +133,13 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
             />
           )}
           {step === "schedule" && (
-            <ScheduleStep
-              startDate={startDate}
-              onStartDateChange={setStartDate}
-            />
+            <ScheduleStep startDate={startDate} onStartDateChange={setStartDate} />
           )}
         </div>
 
         <div className="flex justify-between pt-2">
           {step !== "welcome" && step !== "plan" ? (
-            <Button
-              variant="ghost"
-              onClick={handleBack}
-              disabled={isSchedulePending}
-            >
+            <Button variant="ghost" onClick={handleBack} disabled={isSchedulePending}>
               <ChevronLeft className="h-4 w-4 mr-1" /> Back
             </Button>
           ) : (

@@ -41,7 +41,7 @@ describe("parseExercisesFromText", () => {
     vi.mocked(retryWithBackoff).mockResolvedValueOnce(mockResponse);
 
     await expect(parseExercisesFromText("Some text")).rejects.toThrow(
-      "AI returned invalid JSON for exercise parsing"
+      "AI returned invalid JSON for exercise parsing",
     );
   });
 
@@ -52,7 +52,7 @@ describe("parseExercisesFromText", () => {
     vi.mocked(retryWithBackoff).mockResolvedValueOnce(mockResponse);
 
     await expect(parseExercisesFromText("Some text")).rejects.toThrow(
-      "AI returned malformed exercise data"
+      "AI returned malformed exercise data",
     );
   });
 
@@ -60,7 +60,7 @@ describe("parseExercisesFromText", () => {
     vi.mocked(retryWithBackoff).mockRejectedValueOnce(new Error("API quota exceeded"));
 
     await expect(parseExercisesFromText("Some text")).rejects.toThrow(
-      "Failed to parse exercises from text"
+      "Failed to parse exercises from text",
     );
   });
 });

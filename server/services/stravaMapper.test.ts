@@ -73,10 +73,7 @@ describe("mapStravaActivityToWorkout", () => {
   });
 
   it("includes activity name in notes", () => {
-    const result = mapStravaActivityToWorkout(
-      makeActivity({ name: "Evening Jog" }),
-      "user-1",
-    );
+    const result = mapStravaActivityToWorkout(makeActivity({ name: "Evening Jog" }), "user-1");
     expect(result.notes).toMatch(/Evening Jog/);
   });
 
@@ -99,18 +96,12 @@ describe("mapStravaActivityToWorkout", () => {
   });
 
   it("treats activity at 101m as distance-based", () => {
-    const result = mapStravaActivityToWorkout(
-      makeActivity({ distance: 101 }),
-      "user-1",
-    );
+    const result = mapStravaActivityToWorkout(makeActivity({ distance: 101 }), "user-1");
     expect(result.mainWorkout).toMatch(/km|mi/);
   });
 
   it("treats activity at exactly 100m as non-distance-based", () => {
-    const result = mapStravaActivityToWorkout(
-      makeActivity({ distance: 100 }),
-      "user-1",
-    );
+    const result = mapStravaActivityToWorkout(makeActivity({ distance: 100 }), "user-1");
     expect(result.mainWorkout).toMatch(/session/);
   });
 

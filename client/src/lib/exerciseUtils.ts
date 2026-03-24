@@ -43,11 +43,16 @@ export function groupExerciseSets(dbSets: ExerciseSet[]): GroupedExercise[] {
   let currentKey: string | null = null;
   let currentGroup: GroupedExercise | null = null;
   for (const s of sorted) {
-    const key = s.exerciseName === "custom" && s.customLabel
-      ? `custom:${s.customLabel}`
-      : s.exerciseName;
+    const key =
+      s.exerciseName === "custom" && s.customLabel ? `custom:${s.customLabel}` : s.exerciseName;
     if (key !== currentKey) {
-      currentGroup = { exerciseName: s.exerciseName, customLabel: s.customLabel, category: s.category, confidence: s.confidence, sets: [] };
+      currentGroup = {
+        exerciseName: s.exerciseName,
+        customLabel: s.customLabel,
+        category: s.category,
+        confidence: s.confidence,
+        sets: [],
+      };
       groups.push(currentGroup);
       currentKey = key;
     }
@@ -65,14 +70,18 @@ function getUniqueWeights(sets: ExerciseSet[]): number[] {
   return weights;
 }
 
-export function formatExerciseSummary(group: GroupedExercise, weightUnit: string, distanceUnit: string): string {
+export function formatExerciseSummary(
+  group: GroupedExercise,
+  weightUnit: string,
+  distanceUnit: string,
+): string {
   const name = getExerciseLabel(group.exerciseName, group.customLabel);
   const sets = group.sets;
   if (sets.length === 0) return name;
 
   const firstSet = sets[0];
-  const allSameReps = sets.every(s => s.reps === firstSet.reps);
-  const allSameWeight = sets.every(s => s.weight === firstSet.weight);
+  const allSameReps = sets.every((s) => s.reps === firstSet.reps);
+  const allSameWeight = sets.every((s) => s.weight === firstSet.weight);
   const parts: string[] = [];
 
   if (allSameReps && firstSet.reps && sets.length > 1) {
@@ -97,16 +106,19 @@ export function formatExerciseSummary(group: GroupedExercise, weightUnit: string
   return parts.length > 0 ? `${name} ${parts.join(" ")}` : name;
 }
 
-
-export function exerciseSetsToStructured(dbSets: ExerciseSet[]): { names: string[]; data: Record<string, StructuredExercise> } {
+export function exerciseSetsToStructured(dbSets: ExerciseSet[]): {
+  names: string[];
+  data: Record<string, StructuredExercise>;
+} {
   const groups = groupExerciseSets(dbSets);
   const names: string[] = [];
   const data: Record<string, StructuredExercise> = {};
   const counter = new Map<string, number>();
   for (const group of groups) {
-    const baseName = group.exerciseName === "custom" && group.customLabel
-      ? `custom:${group.customLabel}`
-      : group.exerciseName;
+    const baseName =
+      group.exerciseName === "custom" && group.customLabel
+        ? `custom:${group.customLabel}`
+        : group.exerciseName;
     const count = (counter.get(baseName) || 0) + 1;
     counter.set(baseName, count);
     const key = `${baseName}__${count}`;
@@ -116,7 +128,7 @@ export function exerciseSetsToStructured(dbSets: ExerciseSet[]): { names: string
       category: group.category,
       customLabel: group.customLabel || undefined,
       confidence: group.confidence ?? undefined,
-      sets: group.sets.map(s => ({
+      sets: group.sets.map((s) => ({
         setNumber: s.setNumber,
         reps: s.reps ?? undefined,
         weight: s.weight ?? undefined,

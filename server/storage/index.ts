@@ -10,7 +10,12 @@ export type { IStorage } from "./IStorage";
 
 type AssertAllKeys<T, U extends Record<keyof T, unknown>> = U;
 
-type DelegateUnion = UserStorage & WorkoutStorage & PlanStorage & TimelineStorage & AnalyticsStorage & CoachingStorage;
+type DelegateUnion = UserStorage &
+  WorkoutStorage &
+  PlanStorage &
+  TimelineStorage &
+  AnalyticsStorage &
+  CoachingStorage;
 
 type _CheckCoverage = AssertAllKeys<IStorage, DelegateUnion>;
 

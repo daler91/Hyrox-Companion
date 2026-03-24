@@ -42,10 +42,7 @@ export const WorkoutNotesCard = ({
           data-testid="input-workout-notes"
         />
         {isNotesListening && notesInterim && (
-          <p
-            className="text-sm text-muted-foreground mt-1 italic"
-            data-testid="text-notes-interim"
-          >
+          <p className="text-sm text-muted-foreground mt-1 italic" data-testid="text-notes-interim">
             {notesInterim}
           </p>
         )}

@@ -1,8 +1,4 @@
-import {
-  exerciseSets,
-  workoutLogs,
-  type ExerciseSet,
-} from "@shared/schema";
+import { exerciseSets, workoutLogs, type ExerciseSet } from "@shared/schema";
 import { db } from "../db";
 import { eq, and, desc, gte, lte, type SQL } from "drizzle-orm";
 
@@ -29,7 +25,7 @@ export async function queryExerciseSetsWithDates(
     exerciseName?: string;
     from?: string;
     to?: string;
-  }
+  },
 ): Promise<(ExerciseSet & { date: string })[]> {
   const conditions: SQL[] = [eq(workoutLogs.userId, userId)];
 

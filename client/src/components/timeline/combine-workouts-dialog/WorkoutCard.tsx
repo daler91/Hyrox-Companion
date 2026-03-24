@@ -14,9 +14,7 @@ export function WorkoutCard({ label, entry, variant }: Readonly<WorkoutCardProps
   return (
     <Card className="p-4 space-y-3" data-testid={`card-workout-${variant}`}>
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <Badge variant={variant === "primary" ? "default" : "secondary"}>
-          {label}
-        </Badge>
+        <Badge variant={variant === "primary" ? "default" : "secondary"}>{label}</Badge>
         <div className="flex items-center gap-3 text-sm text-muted-foreground">
           {entry.duration && (
             <span className="flex items-center gap-1">
@@ -40,14 +38,20 @@ export function WorkoutCard({ label, entry, variant }: Readonly<WorkoutCardProps
         </div>
 
         <div>
-          <Label className="text-xs text-muted-foreground uppercase tracking-wide">Main Workout</Label>
-          <p className="text-sm mt-0.5 whitespace-pre-wrap">{truncate(entry.mainWorkout) || "(none)"}</p>
+          <Label className="text-xs text-muted-foreground uppercase tracking-wide">
+            Main Workout
+          </Label>
+          <p className="text-sm mt-0.5 whitespace-pre-wrap">
+            {truncate(entry.mainWorkout) || "(none)"}
+          </p>
         </div>
 
         {entry.notes && (
           <div>
             <Label className="text-xs text-muted-foreground uppercase tracking-wide">Notes</Label>
-            <p className="text-sm mt-0.5 text-muted-foreground whitespace-pre-wrap">{truncate(entry.notes, 100)}</p>
+            <p className="text-sm mt-0.5 text-muted-foreground whitespace-pre-wrap">
+              {truncate(entry.notes, 100)}
+            </p>
           </div>
         )}
       </div>

@@ -16,7 +16,6 @@ import {
   type DistanceUnit,
 } from "./unitConversion";
 
-
 describe("standardizeWeightUnit", () => {
   it("returns kg for standard variations", () => {
     expect(standardizeWeightUnit("kg")).toBe("kg");

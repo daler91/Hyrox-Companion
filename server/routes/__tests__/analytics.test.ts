@@ -4,7 +4,10 @@ import express from "express";
 import request from "supertest";
 import analyticsRouter, { validDate, _cacheForTesting } from "../analytics";
 import { storage } from "../../storage";
-import { calculatePersonalRecords, calculateExerciseAnalytics } from "../../services/analyticsService";
+import {
+  calculatePersonalRecords,
+  calculateExerciseAnalytics,
+} from "../../services/analyticsService";
 
 // Mock the clerkAuth middleware to simulate authentication
 vi.mock("../../clerkAuth", () => ({
@@ -60,7 +63,6 @@ describe("Analytics Routes", () => {
     vi.clearAllMocks();
     _cacheForTesting.clear();
     app = createTestApp(analyticsRouter);
-
   });
 
   const testInvalidDates = (endpoint: string) => {
@@ -77,11 +79,17 @@ describe("Analytics Routes", () => {
     });
   };
 
-  const testEndpoint = (endpoint: string, mockMethod: ReturnType<typeof vi.fn>, expectedBody: Record<string, unknown>) => {
+  const testEndpoint = (
+    endpoint: string,
+    mockMethod: ReturnType<typeof vi.fn>,
+    expectedBody: Record<string, unknown>,
+  ) => {
     describe(`GET ${endpoint}`, () => {
       it("should return analytics for a user", async () => {
         vi.mocked(storage.getAllExerciseSetsWithDates).mockResolvedValue([
-          { id: "set1", exerciseName: "Test", weight: "100", reps: 10 } as unknown as Awaited<ReturnType<typeof storage.getAllExerciseSetsWithDates>>[number]
+          { id: "set1", exerciseName: "Test", weight: "100", reps: 10 } as unknown as Awaited<
+            ReturnType<typeof storage.getAllExerciseSetsWithDates>
+          >[number],
         ]);
 
         vi.mocked(mockMethod).mockReturnValue(expectedBody);
@@ -89,9 +97,13 @@ describe("Analytics Routes", () => {
         const response = await request(app).get(endpoint);
 
         expect(response.status).toBe(200);
-        expect(storage.getAllExerciseSetsWithDates).toHaveBeenCalledWith("test_user_id", undefined, undefined);
+        expect(storage.getAllExerciseSetsWithDates).toHaveBeenCalledWith(
+          "test_user_id",
+          undefined,
+          undefined,
+        );
         expect(mockMethod).toHaveBeenCalledWith([
-          expect.objectContaining({ id: "set1", exerciseName: "Test", weight: "100", reps: 10 })
+          expect.objectContaining({ id: "set1", exerciseName: "Test", weight: "100", reps: 10 }),
         ]);
         expect(response.body).toEqual(expectedBody);
       });
@@ -103,13 +115,19 @@ describe("Analytics Routes", () => {
         const response = await request(app).get(`${endpoint}?from=2024-01-01&to=2024-12-31`);
 
         expect(response.status).toBe(200);
-        expect(storage.getAllExerciseSetsWithDates).toHaveBeenCalledWith("test_user_id", "2024-01-01", "2024-12-31");
+        expect(storage.getAllExerciseSetsWithDates).toHaveBeenCalledWith(
+          "test_user_id",
+          "2024-01-01",
+          "2024-12-31",
+        );
       });
 
       testInvalidDates(endpoint);
 
       it("should return 500 when storage throws an error", async () => {
-        vi.mocked(storage.getAllExerciseSetsWithDates).mockRejectedValue(new Error("Database error"));
+        vi.mocked(storage.getAllExerciseSetsWithDates).mockRejectedValue(
+          new Error("Database error"),
+        );
 
         const response = await request(app).get(endpoint);
 
@@ -119,8 +137,12 @@ describe("Analytics Routes", () => {
     });
   };
 
-  testEndpoint("/api/v1/personal-records", calculatePersonalRecords, { Squat: { weight: "100", reps: 10, estimated1RM: 133 } });
-  testEndpoint("/api/v1/exercise-analytics", calculateExerciseAnalytics, { "Bench Press": { totalVolume: 1000, setsCount: 1, history: [] } });
+  testEndpoint("/api/v1/personal-records", calculatePersonalRecords, {
+    Squat: { weight: "100", reps: 10, estimated1RM: 133 },
+  });
+  testEndpoint("/api/v1/exercise-analytics", calculateExerciseAnalytics, {
+    "Bench Press": { totalVolume: 1000, setsCount: 1, history: [] },
+  });
 
   describe("getExerciseSetsCoalesced caching logic", () => {
     const makeRequest = () => request(app).get("/api/v1/personal-records");
@@ -140,9 +162,7 @@ describe("Analytics Routes", () => {
 
       // Advance timers to trigger the timeout resolution if needed,
       // but here we just manually resolve the promise right away since we are coalescing
-      resolvePromise([
-        { id: "set1", exerciseName: "Squat", weight: "100", reps: 10 }
-      ]);
+      resolvePromise([{ id: "set1", exerciseName: "Squat", weight: "100", reps: 10 }]);
 
       // Allow the event loop to tick so the promises can resolve
       vi.advanceTimersByTime(50);
@@ -179,7 +199,7 @@ describe("Analytics Routes", () => {
       await makeRequest();
 
       // Advance time by 5 minutes + 1 second
-      vi.advanceTimersByTime((5 * 60 * 1000) + 1000);
+      vi.advanceTimersByTime(5 * 60 * 1000 + 1000);
 
       await makeRequest();
 

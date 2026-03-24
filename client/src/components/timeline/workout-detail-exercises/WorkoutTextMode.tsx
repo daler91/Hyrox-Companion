@@ -32,9 +32,7 @@ export const WorkoutTextMode = React.memo(function WorkoutTextMode({
         <Textarea
           id="detail-main"
           value={editForm.mainWorkout}
-          onChange={(e) =>
-            setEditForm({ ...editForm, mainWorkout: e.target.value })
-          }
+          onChange={(e) => setEditForm({ ...editForm, mainWorkout: e.target.value })}
           rows={3}
           data-testid="input-detail-main"
           placeholder={

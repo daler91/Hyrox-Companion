@@ -1,26 +1,26 @@
-import { describe, it, expect, vi } from 'vitest';
-import { encryptToken, decryptToken } from './crypto';
+import { describe, it, expect, vi } from "vitest";
+import { encryptToken, decryptToken } from "./crypto";
 
 // We need to mock env since it requires ENCRYPTION_KEY
-vi.mock('./env', () => {
+vi.mock("./env", () => {
   return {
     env: {
-      ENCRYPTION_KEY: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' // 64 hex chars = 32 bytes
-    }
+      ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", // 64 hex chars = 32 bytes
+    },
   };
 });
 
-describe('crypto utilities', () => {
-  describe('encryptToken', () => {
-    it('should return empty string if empty string is passed', () => {
-      expect(encryptToken('')).toBe('');
+describe("crypto utilities", () => {
+  describe("encryptToken", () => {
+    it("should return empty string if empty string is passed", () => {
+      expect(encryptToken("")).toBe("");
     });
 
-    it('should correctly format encrypted string as iv:authTag:encryptedText', () => {
-      const text = 'my-secret-token';
+    it("should correctly format encrypted string as iv:authTag:encryptedText", () => {
+      const text = "my-secret-token";
       const encrypted = encryptToken(text);
 
-      const parts = encrypted.split(':');
+      const parts = encrypted.split(":");
       expect(parts.length).toBe(3);
 
       const [iv, authTag, encryptedText] = parts;
@@ -30,46 +30,46 @@ describe('crypto utilities', () => {
     });
   });
 
-  describe('decryptToken', () => {
-    it('should return empty string if empty string is passed', () => {
-      expect(decryptToken('')).toBe('');
+  describe("decryptToken", () => {
+    it("should return empty string if empty string is passed", () => {
+      expect(decryptToken("")).toBe("");
     });
 
-    it('should return legacy plain text as is (graceful migration)', () => {
-      const legacyText = 'some-legacy-token-without-colons';
+    it("should return legacy plain text as is (graceful migration)", () => {
+      const legacyText = "some-legacy-token-without-colons";
       expect(decryptToken(legacyText)).toBe(legacyText);
     });
 
-    it('should successfully decrypt valid encrypted text', () => {
-      const text = 'my-secret-token';
+    it("should successfully decrypt valid encrypted text", () => {
+      const text = "my-secret-token";
       const encrypted = encryptToken(text);
 
       const decrypted = decryptToken(encrypted);
       expect(decrypted).toBe(text);
     });
 
-    it('should throw an error on corrupted data', () => {
-      const text = 'my-secret-token';
+    it("should throw an error on corrupted data", () => {
+      const text = "my-secret-token";
       const encrypted = encryptToken(text);
 
       // Corrupt the encrypted text
-      const parts = encrypted.split(':');
-      parts[2] = '0000000000000000'; // Replace actual encrypted text with invalid data
-      const corrupted = parts.join(':');
+      const parts = encrypted.split(":");
+      parts[2] = "0000000000000000"; // Replace actual encrypted text with invalid data
+      const corrupted = parts.join(":");
 
-      expect(() => decryptToken(corrupted)).toThrow('Failed to decrypt token');
+      expect(() => decryptToken(corrupted)).toThrow("Failed to decrypt token");
     });
 
-    it('should throw an error if auth tag is modified', () => {
-      const text = 'my-secret-token';
+    it("should throw an error if auth tag is modified", () => {
+      const text = "my-secret-token";
       const encrypted = encryptToken(text);
 
       // Corrupt the auth tag
-      const parts = encrypted.split(':');
-      parts[1] = '00000000000000000000000000000000'; // 16 bytes
-      const corrupted = parts.join(':');
+      const parts = encrypted.split(":");
+      parts[1] = "00000000000000000000000000000000"; // 16 bytes
+      const corrupted = parts.join(":");
 
-      expect(() => decryptToken(corrupted)).toThrow('Failed to decrypt token');
+      expect(() => decryptToken(corrupted)).toThrow("Failed to decrypt token");
     });
   });
 });

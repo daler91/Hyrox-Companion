@@ -8,7 +8,11 @@ export interface FeatureErrorBoundaryProps {
   readonly featureName?: string;
 }
 
-export function FeatureErrorBoundary({ error, resetError, featureName = "This feature" }: Readonly<FeatureErrorBoundaryProps>) {
+export function FeatureErrorBoundary({
+  error,
+  resetError,
+  featureName = "This feature",
+}: Readonly<FeatureErrorBoundaryProps>) {
   const errorMessage = error instanceof Error ? error.toString() : String(error);
 
   return (
@@ -16,9 +20,12 @@ export function FeatureErrorBoundary({ error, resetError, featureName = "This fe
       <Card className="w-full max-w-md border-red-100">
         <CardContent className="pt-6 text-center flex flex-col items-center">
           <AlertTriangle className="h-8 w-8 text-red-500 mb-4" />
-          <h2 className="text-xl font-bold text-gray-900 mb-2">{featureName} is currently unavailable</h2>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">
+            {featureName} is currently unavailable
+          </h2>
           <p className="text-sm text-gray-600 mb-4">
-            We encountered an error loading this section. The rest of the app should still work normally.
+            We encountered an error loading this section. The rest of the app should still work
+            normally.
           </p>
           <Button onClick={resetError} variant="outline" size="sm">
             Try again

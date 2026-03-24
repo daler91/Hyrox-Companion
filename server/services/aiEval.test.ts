@@ -22,7 +22,6 @@ function calculateCosineSimilarity(embedding1: number[], embedding2: number[]): 
   return dotProduct / (Math.sqrt(norm1) * Math.sqrt(norm2));
 }
 
-
 describe.runIf(runEval)("AI Services Evaluation Harness", () => {
   beforeAll(() => {
     if (!env.GEMINI_API_KEY) {
@@ -43,7 +42,9 @@ describe.runIf(runEval)("AI Services Evaluation Harness", () => {
 
       // Core concepts that should remain stable across model iterations
       const expectedKeywords = ["pace", "run", "compromised", "heart rate", "zone"];
-      const matchCount = expectedKeywords.filter(keyword => lowerResponse.includes(keyword)).length;
+      const matchCount = expectedKeywords.filter((keyword) =>
+        lowerResponse.includes(keyword),
+      ).length;
 
       // Expect at least some of the core concepts to be present
       expect(matchCount).toBeGreaterThanOrEqual(2);
@@ -58,10 +59,11 @@ describe.runIf(runEval)("AI Services Evaluation Harness", () => {
       const lowerResponse = response.toLowerCase();
 
       // The AI should recognize that it doesn't have the user's data
-      const impliesNoData = lowerResponse.includes("don't have") ||
-                            lowerResponse.includes("cannot see") ||
-                            lowerResponse.includes("no information") ||
-                            lowerResponse.includes("share more");
+      const impliesNoData =
+        lowerResponse.includes("don't have") ||
+        lowerResponse.includes("cannot see") ||
+        lowerResponse.includes("no information") ||
+        lowerResponse.includes("share more");
 
       expect(impliesNoData).toBe(true);
     }, 15000);
@@ -85,18 +87,19 @@ describe.runIf(runEval)("AI Services Evaluation Harness", () => {
             focus: "Hyrox Simulation",
             mainWorkout: "1km run, 100 wall balls, 1km run",
             status: "completed" as const,
-          }
+          },
         ],
-        exerciseBreakdown: { "running": 10, "wall balls": 5 },
+        exerciseBreakdown: { running: 10, "wall balls": 5 },
         structuredExerciseStats: {
-          "wall balls": { count: 5, maxWeight: 6, avgReps: 100 }
+          "wall balls": { count: 5, maxWeight: 6, avgReps: 100 },
         },
-        activePlan: { name: "Hyrox Pro", totalWeeks: 12, goal: "Sub 1:15" }
+        activePlan: { name: "Hyrox Pro", totalWeeks: 12, goal: "Sub 1:15" },
       };
 
       // Since we can't directly inspect the system prompt sent to Gemini from the outside easily,
       // we ask Gemini a question that forces it to use the system prompt context.
-      const userMessage = "What was my max weight for wall balls according to my recent stats? And what is my current streak? Just state the numbers.";
+      const userMessage =
+        "What was my max weight for wall balls according to my recent stats? And what is my current streak? Just state the numbers.";
 
       const response = await chatWithCoach(userMessage, [], mockContext, undefined, []);
 
@@ -136,26 +139,29 @@ describe.runIf(runEval)("AI Services Evaluation Harness", () => {
   describe("RAG Chunk Retrieval", () => {
     it("should correctly identify the most relevant chunks from a mock DB setup", async () => {
       // 1. Generate real embeddings
-      const targetChunk = "When running the 1km intervals in Hyrox, try to maintain zone 3 heart rate.";
+      const targetChunk =
+        "When running the 1km intervals in Hyrox, try to maintain zone 3 heart rate.";
 
       const targetEmbedding = await generateEmbedding(targetChunk);
 
       // 2. Mock storage to return chunks as if it was returning from DB
-      const mockSearchChunks = vi.spyOn(storage, "searchChunksByEmbedding").mockImplementation(async (userId, queryEmbedding, topK) => {
-        // In real execution, pgvector handles the cosine distance sorting. But here we just mock
-        // the returned data to verify that retrieveRelevantChunks returns the right strings.
-        return [
-          {
-            id: "1",
-            materialId: "m1",
-            userId: "u1",
-            content: targetChunk,
-            chunkIndex: 0,
-            embedding: JSON.stringify(targetEmbedding),
-            createdAt: new Date()
-          }
-        ];
-      });
+      const mockSearchChunks = vi
+        .spyOn(storage, "searchChunksByEmbedding")
+        .mockImplementation(async (userId, queryEmbedding, topK) => {
+          // In real execution, pgvector handles the cosine distance sorting. But here we just mock
+          // the returned data to verify that retrieveRelevantChunks returns the right strings.
+          return [
+            {
+              id: "1",
+              materialId: "m1",
+              userId: "u1",
+              content: targetChunk,
+              chunkIndex: 0,
+              embedding: JSON.stringify(targetEmbedding),
+              createdAt: new Date(),
+            },
+          ];
+        });
 
       const results = await retrieveRelevantChunks("u1", "Hyrox 1km run heart rate");
 

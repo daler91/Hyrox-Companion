@@ -21,7 +21,12 @@ interface RpeSelectorProps {
   readonly compact?: boolean;
 }
 
-export function RpeSelector({ value, onChange, showLabel = true, compact = false }: Readonly<RpeSelectorProps>) {
+export function RpeSelector({
+  value,
+  onChange,
+  showLabel = true,
+  compact = false,
+}: Readonly<RpeSelectorProps>) {
   const buttonSize = compact ? "h-7 w-7 text-xs" : "h-8 w-8 text-sm";
 
   return (

@@ -7,7 +7,10 @@ import { getUserId } from "../types";
 
 const router = Router();
 
-router.get('/api/v1/preferences', isAuthenticated, asyncHandler(async (req: ExpressRequest, res: Response) => {
+router.get(
+  "/api/v1/preferences",
+  isAuthenticated,
+  asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const user = await storage.getUser(userId);
     if (!user) {
@@ -20,26 +23,43 @@ router.get('/api/v1/preferences', isAuthenticated, asyncHandler(async (req: Expr
       emailNotifications: user.emailNotifications ?? true,
       aiCoachEnabled: user.aiCoachEnabled ?? true,
     });
-  }));
+  }),
+);
 
-router.patch('/api/v1/preferences', isAuthenticated, rateLimiter("preferences", 20), asyncHandler(async (req: ExpressRequest<Record<string, never>, any, UpdateUserPreferences>, res: Response) => {
-    const userId = getUserId(req);
-    const parseResult = updateUserPreferencesSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      return res.status(400).json({ error: "Invalid preferences data", code: "VALIDATION_ERROR", details: parseResult.error });
-    }
+router.patch(
+  "/api/v1/preferences",
+  isAuthenticated,
+  rateLimiter("preferences", 20),
+  asyncHandler(
+    async (
+      req: ExpressRequest<Record<string, never>, any, UpdateUserPreferences>,
+      res: Response,
+    ) => {
+      const userId = getUserId(req);
+      const parseResult = updateUserPreferencesSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res
+          .status(400)
+          .json({
+            error: "Invalid preferences data",
+            code: "VALIDATION_ERROR",
+            details: parseResult.error,
+          });
+      }
 
-    const user = await storage.updateUserPreferences(userId, parseResult.data);
-    if (!user) {
-      return res.status(404).json({ error: "User not found", code: "NOT_FOUND" });
-    }
-    res.json({
-      weightUnit: user.weightUnit,
-      distanceUnit: user.distanceUnit,
-      weeklyGoal: user.weeklyGoal,
-      emailNotifications: user.emailNotifications ?? true,
-      aiCoachEnabled: user.aiCoachEnabled ?? true,
-    });
-  }));
+      const user = await storage.updateUserPreferences(userId, parseResult.data);
+      if (!user) {
+        return res.status(404).json({ error: "User not found", code: "NOT_FOUND" });
+      }
+      res.json({
+        weightUnit: user.weightUnit,
+        distanceUnit: user.distanceUnit,
+        weeklyGoal: user.weeklyGoal,
+        emailNotifications: user.emailNotifications ?? true,
+        aiCoachEnabled: user.aiCoachEnabled ?? true,
+      });
+    },
+  ),
+);
 
 export default router;

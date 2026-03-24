@@ -10,19 +10,25 @@ export interface SortableExerciseBlockProps {
   readonly blockLabel?: string;
   readonly weightUnit: "kg" | "lbs";
   readonly distanceUnit: "km" | "miles";
-  readonly onChange: (blockId: string, ex: React.ComponentProps<typeof ExerciseInput>["exercise"]) => void;
+  readonly onChange: (
+    blockId: string,
+    ex: React.ComponentProps<typeof ExerciseInput>["exercise"],
+  ) => void;
   readonly onRemove: (blockId: string) => void;
 }
 
-export function SortableExerciseBlock({ blockId, exData, blockLabel, weightUnit, distanceUnit, onChange, onRemove }: Readonly<SortableExerciseBlockProps>) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: blockId });
+export function SortableExerciseBlock({
+  blockId,
+  exData,
+  blockLabel,
+  weightUnit,
+  distanceUnit,
+  onChange,
+  onRemove,
+}: Readonly<SortableExerciseBlockProps>) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: blockId,
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -33,7 +39,12 @@ export function SortableExerciseBlock({ blockId, exData, blockLabel, weightUnit,
 
   return (
     <div ref={setNodeRef} style={style}>
-      <div className="absolute left-0 top-3 z-10 cursor-grab active:cursor-grabbing touch-none p-1" {...attributes} {...listeners} data-testid={`drag-handle-${blockId}`}>
+      <div
+        className="absolute left-0 top-3 z-10 cursor-grab active:cursor-grabbing touch-none p-1"
+        {...attributes}
+        {...listeners}
+        data-testid={`drag-handle-${blockId}`}
+      >
         <GripVertical className="h-4 w-4 text-muted-foreground" />
       </div>
       <div className="pl-6">

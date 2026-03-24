@@ -30,7 +30,8 @@ export function CoachingSection() {
             Coaching Knowledge
           </CardTitle>
           <CardDescription>
-            Add training principles or reference materials for the AI coach to use when making workout decisions
+            Add training principles or reference materials for the AI coach to use when making
+            workout decisions
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

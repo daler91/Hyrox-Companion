@@ -5,7 +5,10 @@ import type { User } from "@shared/schema";
 import { QUERY_KEYS } from "@/lib/api";
 
 const isCypressTest = globalThis.window !== undefined && "Cypress" in globalThis.window;
-const isDevPreview = import.meta.env.DEV && globalThis.window !== undefined && (!import.meta.env.VITE_CLERK_PUBLISHABLE_KEY || globalThis.window.self !== globalThis.window.top);
+const isDevPreview =
+  import.meta.env.DEV &&
+  globalThis.window !== undefined &&
+  (!import.meta.env.VITE_CLERK_PUBLISHABLE_KEY || globalThis.window.self !== globalThis.window.top);
 const shouldBypassAuth = isCypressTest || isDevPreview;
 
 function useAutoCoachWatcher(user?: User) {
@@ -32,19 +35,23 @@ function useClerkAuthImpl() {
     queryKey: QUERY_KEYS.authUser,
     enabled: !!isSignedIn,
     retry: false,
-    refetchInterval: (query) => query.state.data?.isAutoCoaching ? 2000 : false,
+    refetchInterval: (query) => (query.state.data?.isAutoCoaching ? 2000 : false),
   });
 
   useAutoCoachWatcher(dbUser);
 
   return {
-    user: dbUser || (isSignedIn && clerkUser ? {
-      id: clerkUser.id,
-      email: clerkUser.emailAddresses?.[0]?.emailAddress || null,
-      firstName: clerkUser.firstName,
-      lastName: clerkUser.lastName,
-      profileImageUrl: clerkUser.imageUrl,
-    } as User : undefined),
+    user:
+      dbUser ||
+      (isSignedIn && clerkUser
+        ? ({
+            id: clerkUser.id,
+            email: clerkUser.emailAddresses?.[0]?.emailAddress || null,
+            firstName: clerkUser.firstName,
+            lastName: clerkUser.lastName,
+            profileImageUrl: clerkUser.imageUrl,
+          } as User)
+        : undefined),
     isLoading: !isLoaded || (isSignedIn && isDbLoading),
     isAuthenticated: !!isSignedIn,
   };
@@ -54,7 +61,7 @@ function useTestAuthImpl() {
   const { data: dbUser, isLoading } = useQuery<User>({
     queryKey: QUERY_KEYS.authUser,
     retry: false,
-    refetchInterval: (query) => query.state.data?.isAutoCoaching ? 2000 : false,
+    refetchInterval: (query) => (query.state.data?.isAutoCoaching ? 2000 : false),
   });
 
   useAutoCoachWatcher(dbUser);

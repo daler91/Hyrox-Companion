@@ -20,24 +20,45 @@ const updateCoachingMaterialSchema = z.object({
   type: z.enum(["principles", "document"]).optional(),
 });
 
-router.get("/api/v1/coaching-materials", isAuthenticated, asyncHandler(async (req: ExpressRequest, res: Response) => {
+router.get(
+  "/api/v1/coaching-materials",
+  isAuthenticated,
+  asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const materials = await storage.listCoachingMaterials(userId);
     res.json(materials);
-  }));
+  }),
+);
 
 const createMaterialSchema = insertCoachingMaterialSchema.omit({ userId: true });
-router.post("/api/v1/coaching-materials", largeBodyParser, isAuthenticated, rateLimiter("coaching", 10), validateBody(createMaterialSchema), asyncHandler(async (req: ExpressRequest, res: Response) => {
+router.post(
+  "/api/v1/coaching-materials",
+  largeBodyParser,
+  isAuthenticated,
+  rateLimiter("coaching", 10),
+  validateBody(createMaterialSchema),
+  asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const material = await storage.createCoachingMaterial({ ...req.body, userId });
 
     // Fire-and-forget: chunk and embed in background
-    queue.send("embed-coaching-material", { material }).catch(err => (req.log || logger).error({ err }, "Failed to queue coaching material embedding"));
+    queue
+      .send("embed-coaching-material", { material })
+      .catch((err) =>
+        (req.log || logger).error({ err }, "Failed to queue coaching material embedding"),
+      );
 
     res.status(201).json(material);
-  }));
+  }),
+);
 
-router.patch("/api/v1/coaching-materials/:id", largeBodyParser, isAuthenticated, rateLimiter("coaching", 10), validateBody(updateCoachingMaterialSchema), asyncHandler(async (req: ExpressRequest, res: Response) => {
+router.patch(
+  "/api/v1/coaching-materials/:id",
+  largeBodyParser,
+  isAuthenticated,
+  rateLimiter("coaching", 10),
+  validateBody(updateCoachingMaterialSchema),
+  asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const material = await storage.updateCoachingMaterial(req.params.id, req.body, userId);
     if (!material) {
@@ -46,25 +67,43 @@ router.patch("/api/v1/coaching-materials/:id", largeBodyParser, isAuthenticated,
 
     // Re-embed if content or title changed
     if (req.body.content || req.body.title) {
-      queue.send("embed-coaching-material", { material }).catch(err => (req.log || logger).error({ err }, "Failed to queue coaching material embedding"));
+      queue
+        .send("embed-coaching-material", { material })
+        .catch((err) =>
+          (req.log || logger).error({ err }, "Failed to queue coaching material embedding"),
+        );
     }
 
     res.json(material);
-  }));
+  }),
+);
 
-router.get("/api/v1/coaching-materials/rag-status", isAuthenticated, asyncHandler(async (req: ExpressRequest, res: Response) => {
+router.get(
+  "/api/v1/coaching-materials/rag-status",
+  isAuthenticated,
+  asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const result = await getRagStatus(userId);
     res.json(result);
-  }));
+  }),
+);
 
-router.post("/api/v1/coaching-materials/re-embed", isAuthenticated, rateLimiter("coaching", 5), asyncHandler(async (req: ExpressRequest, res: Response) => {
+router.post(
+  "/api/v1/coaching-materials/re-embed",
+  isAuthenticated,
+  rateLimiter("coaching", 5),
+  asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const result = await reembedAllMaterials(userId);
     res.json(result);
-  }));
+  }),
+);
 
-router.delete("/api/v1/coaching-materials/:id", isAuthenticated, rateLimiter("coaching", 10), asyncHandler(async (req: ExpressRequest, res: Response) => {
+router.delete(
+  "/api/v1/coaching-materials/:id",
+  isAuthenticated,
+  rateLimiter("coaching", 10),
+  asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     // Chunks are cascade-deleted via FK, no manual cleanup needed
     const deleted = await storage.deleteCoachingMaterial(req.params.id, userId);
@@ -72,6 +111,7 @@ router.delete("/api/v1/coaching-materials/:id", isAuthenticated, rateLimiter("co
       return res.status(404).json({ error: "Coaching material not found", code: "NOT_FOUND" });
     }
     res.json({ success: true });
-  }));
+  }),
+);
 
 export default router;

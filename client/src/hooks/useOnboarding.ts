@@ -2,10 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { queryClient } from "@/lib/queryClient";
 import { COACH_AUTO_OPEN_DELAY_MS, IMPORT_INPUT_DELAY_MS, MOBILE_BREAKPOINT_PX } from "./constants";
 
-export function useOnboarding(
-  isNewUser: boolean,
-  fileInputRef: React.RefObject<HTMLInputElement>,
-) {
+export function useOnboarding(isNewUser: boolean, fileInputRef: React.RefObject<HTMLInputElement>) {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingTriggered, setOnboardingTriggered] = useState(false);
   const [coachOpen, setCoachOpen] = useState(false);
@@ -32,17 +29,20 @@ export function useOnboarding(
     }
   }, [showOnboarding, onboardingTriggered, hasAutoOpenedCoach]);
 
-  const handleOnboardingComplete = useCallback((choice: "sample" | "import" | "skip") => {
-    setShowOnboarding(false);
-    if (choice === "import" && fileInputRef.current) {
-      setTimeout(() => {
-        fileInputRef.current?.click();
-      }, IMPORT_INPUT_DELAY_MS);
-    } else if (choice === "sample") {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/plans"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] });
-    }
-  }, [fileInputRef]);
+  const handleOnboardingComplete = useCallback(
+    (choice: "sample" | "import" | "skip") => {
+      setShowOnboarding(false);
+      if (choice === "import" && fileInputRef.current) {
+        setTimeout(() => {
+          fileInputRef.current?.click();
+        }, IMPORT_INPUT_DELAY_MS);
+      } else if (choice === "sample") {
+        queryClient.invalidateQueries({ queryKey: ["/api/v1/plans"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] });
+      }
+    },
+    [fileInputRef],
+  );
 
   return {
     showOnboarding,

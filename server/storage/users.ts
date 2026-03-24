@@ -69,10 +69,7 @@ export class UserStorage {
   }
 
   async saveChatMessage(message: InsertChatMessage): Promise<ChatMessage> {
-    const [chatMessage] = await db
-      .insert(chatMessages)
-      .values(message)
-      .returning();
+    const [chatMessage] = await db.insert(chatMessages).values(message).returning();
     return chatMessage;
   }
 
@@ -81,9 +78,7 @@ export class UserStorage {
     return true;
   }
 
-  async getStravaConnection(
-    userId: string,
-  ): Promise<StravaConnection | undefined> {
+  async getStravaConnection(userId: string): Promise<StravaConnection | undefined> {
     const [connection] = await db
       .select()
       .from(stravaConnections)
@@ -99,9 +94,7 @@ export class UserStorage {
     return connection;
   }
 
-  async upsertStravaConnection(
-    data: InsertStravaConnection,
-  ): Promise<StravaConnection> {
+  async upsertStravaConnection(data: InsertStravaConnection): Promise<StravaConnection> {
     const encryptedData = {
       ...data,
       accessToken: encryptToken(data.accessToken),
@@ -131,9 +124,7 @@ export class UserStorage {
   }
 
   async deleteStravaConnection(userId: string): Promise<boolean> {
-    const result = await db
-      .delete(stravaConnections)
-      .where(eq(stravaConnections.userId, userId));
+    const result = await db.delete(stravaConnections).where(eq(stravaConnections.userId, userId));
     return result.rowCount !== null && result.rowCount > 0;
   }
 
@@ -145,15 +136,10 @@ export class UserStorage {
   }
 
   async getCustomExercises(userId: string): Promise<CustomExercise[]> {
-    return await db
-      .select()
-      .from(customExercises)
-      .where(eq(customExercises.userId, userId));
+    return await db.select().from(customExercises).where(eq(customExercises.userId, userId));
   }
 
-  async upsertCustomExercise(
-    data: InsertCustomExercise,
-  ): Promise<CustomExercise> {
+  async upsertCustomExercise(data: InsertCustomExercise): Promise<CustomExercise> {
     const [result] = await db
       .insert(customExercises)
       .values(data)
@@ -166,17 +152,11 @@ export class UserStorage {
   }
 
   async updateLastWeeklySummaryAt(userId: string): Promise<void> {
-    await db
-      .update(users)
-      .set({ lastWeeklySummaryAt: new Date() })
-      .where(eq(users.id, userId));
+    await db.update(users).set({ lastWeeklySummaryAt: new Date() }).where(eq(users.id, userId));
   }
 
   async updateLastMissedReminderAt(userId: string): Promise<void> {
-    await db
-      .update(users)
-      .set({ lastMissedReminderAt: new Date() })
-      .where(eq(users.id, userId));
+    await db.update(users).set({ lastMissedReminderAt: new Date() }).where(eq(users.id, userId));
   }
 
   async getUsersWithEmailNotifications(): Promise<User[]> {

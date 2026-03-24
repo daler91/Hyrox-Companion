@@ -1,6 +1,6 @@
 import "./commands";
 
-Cypress.on('uncaught:exception', (err, runnable) => {
+Cypress.on("uncaught:exception", (err, runnable) => {
   if (/\bclerk\.example\.com\b/.test(err.message)) {
     return false;
   }
@@ -8,8 +8,8 @@ Cypress.on('uncaught:exception', (err, runnable) => {
 });
 
 beforeEach(() => {
-  cy.intercept('https://clerk.example.com/**', {
+  cy.intercept("https://clerk.example.com/**", {
     statusCode: 200,
-    body: {}
+    body: {},
   });
 });

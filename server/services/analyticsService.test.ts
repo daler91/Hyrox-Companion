@@ -27,7 +27,7 @@ describe("calculatePersonalRecords", () => {
     // Verify type is preserved correctly
     expect(result).toStrictEqual({});
     // We expect it to strictly match the shape of Record<string, PRRecord> which is an empty object
-    expect(typeof result).toBe('object');
+    expect(typeof result).toBe("object");
   });
 
   it("tracks maxWeight PR", () => {
@@ -46,9 +46,27 @@ describe("calculatePersonalRecords", () => {
 
   it("tracks bestTime PR (lower is better)", () => {
     const sets = [
-      makeSet({ exerciseName: "easy_run", category: "running", time: 30, date: "2026-01-10", workoutLogId: "w1" }),
-      makeSet({ exerciseName: "easy_run", category: "running", time: 25, date: "2026-01-15", workoutLogId: "w2" }),
-      makeSet({ exerciseName: "easy_run", category: "running", time: 28, date: "2026-01-20", workoutLogId: "w3" }),
+      makeSet({
+        exerciseName: "easy_run",
+        category: "running",
+        time: 30,
+        date: "2026-01-10",
+        workoutLogId: "w1",
+      }),
+      makeSet({
+        exerciseName: "easy_run",
+        category: "running",
+        time: 25,
+        date: "2026-01-15",
+        workoutLogId: "w2",
+      }),
+      makeSet({
+        exerciseName: "easy_run",
+        category: "running",
+        time: 28,
+        date: "2026-01-20",
+        workoutLogId: "w3",
+      }),
     ];
     const prs = calculatePersonalRecords(sets);
     expect(prs["easy_run"].bestTime).toEqual({
@@ -60,8 +78,18 @@ describe("calculatePersonalRecords", () => {
 
   it("tracks maxDistance PR", () => {
     const sets = [
-      makeSet({ exerciseName: "skierg", category: "hyrox_station", distance: 1000, workoutLogId: "w1" }),
-      makeSet({ exerciseName: "skierg", category: "hyrox_station", distance: 2000, workoutLogId: "w2" }),
+      makeSet({
+        exerciseName: "skierg",
+        category: "hyrox_station",
+        distance: 1000,
+        workoutLogId: "w1",
+      }),
+      makeSet({
+        exerciseName: "skierg",
+        category: "hyrox_station",
+        distance: 2000,
+        workoutLogId: "w2",
+      }),
     ];
     const prs = calculatePersonalRecords(sets);
     expect(prs["skierg"].maxDistance?.value).toBe(2000);
@@ -69,7 +97,12 @@ describe("calculatePersonalRecords", () => {
 
   it("uses custom:Label key for custom exercises", () => {
     const sets = [
-      makeSet({ exerciseName: "custom", customLabel: "KB Press", category: "conditioning", weight: 24 }),
+      makeSet({
+        exerciseName: "custom",
+        customLabel: "KB Press",
+        category: "conditioning",
+        weight: 24,
+      }),
     ];
     const prs = calculatePersonalRecords(sets);
     expect(prs["custom:KB Press"]).toBeDefined();
@@ -108,7 +141,7 @@ describe("calculateExerciseAnalytics", () => {
     expect(Object.keys(result).length).toBe(0);
     expect(result).not.toBeNull();
     expect(result).not.toBeUndefined();
-    expect(typeof result).toBe('object');
+    expect(typeof result).toBe("object");
   });
 
   it("calculates single-day analytics correctly", () => {
@@ -147,8 +180,18 @@ describe("calculateExerciseAnalytics", () => {
 
   it("accumulates distance", () => {
     const sets = [
-      makeSet({ exerciseName: "skierg", category: "hyrox_station", distance: 500, date: "2026-01-15" }),
-      makeSet({ exerciseName: "skierg", category: "hyrox_station", distance: 500, date: "2026-01-15" }),
+      makeSet({
+        exerciseName: "skierg",
+        category: "hyrox_station",
+        distance: 500,
+        date: "2026-01-15",
+      }),
+      makeSet({
+        exerciseName: "skierg",
+        category: "hyrox_station",
+        distance: 500,
+        date: "2026-01-15",
+      }),
     ];
     const analytics = calculateExerciseAnalytics(sets);
     expect(analytics["skierg"][0].totalDistance).toBe(1000);
@@ -156,8 +199,20 @@ describe("calculateExerciseAnalytics", () => {
 
   it("separates custom exercises by label", () => {
     const sets = [
-      makeSet({ exerciseName: "custom", customLabel: "A", weight: 10, reps: 5, date: "2026-01-15" }),
-      makeSet({ exerciseName: "custom", customLabel: "B", weight: 20, reps: 5, date: "2026-01-15" }),
+      makeSet({
+        exerciseName: "custom",
+        customLabel: "A",
+        weight: 10,
+        reps: 5,
+        date: "2026-01-15",
+      }),
+      makeSet({
+        exerciseName: "custom",
+        customLabel: "B",
+        weight: 20,
+        reps: 5,
+        date: "2026-01-15",
+      }),
     ];
     const analytics = calculateExerciseAnalytics(sets);
     expect(analytics["custom:A"]).toBeDefined();

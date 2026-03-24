@@ -7,11 +7,12 @@ import { useToast } from "@/hooks/use-toast";
 import { api, QUERY_KEYS } from "@/lib/api";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
-
 export function DataToolsSection() {
   const { toast } = useToast();
   const [unstructuredCount, setUnstructuredCount] = useState<number | null>(null);
-  const [parseResults, setParseResults] = useState<{ success: number; failed: number } | null>(null);
+  const [parseResults, setParseResults] = useState<{ success: number; failed: number } | null>(
+    null,
+  );
 
   const findUnstructuredMutation = useMutation({
     mutationFn: async () => {
@@ -62,7 +63,9 @@ export function DataToolsSection() {
             <Sparkles className="h-5 w-5" />
             Structure Old Workouts
           </CardTitle>
-          <CardDescription>Use AI to convert free-text workout descriptions into structured exercise data</CardDescription>
+          <CardDescription>
+            Use AI to convert free-text workout descriptions into structured exercise data
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {unstructuredCount === null && parseResults === null ? (
@@ -90,7 +93,10 @@ export function DataToolsSection() {
 
           {unstructuredCount !== null && !parseResults ? (
             <div>
-              <p className="text-sm text-muted-foreground mb-4" data-testid="text-unstructured-count">
+              <p
+                className="text-sm text-muted-foreground mb-4"
+                data-testid="text-unstructured-count"
+              >
                 Found {unstructuredCount} workouts without structured exercise data
               </p>
               {unstructuredCount > 0 ? (
@@ -119,7 +125,8 @@ export function DataToolsSection() {
           {parseResults ? (
             <div>
               <p className="text-sm text-muted-foreground mb-4" data-testid="text-parse-results">
-                Parsed {parseResults.success} workouts successfully. {parseResults.failed} could not be parsed.
+                Parsed {parseResults.success} workouts successfully. {parseResults.failed} could not
+                be parsed.
               </p>
               <Button
                 onClick={() => {

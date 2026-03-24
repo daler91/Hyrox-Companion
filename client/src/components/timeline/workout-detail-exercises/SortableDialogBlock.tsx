@@ -14,14 +14,9 @@ export const SortableDialogBlock = React.memo(function SortableDialogBlock({
   onChange,
   onRemove,
 }: Readonly<SortableDialogBlockProps>) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: blockId });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: blockId,
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),

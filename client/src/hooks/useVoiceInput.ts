@@ -6,20 +6,10 @@ import type {
   UseVoiceInputOptions,
 } from "./voice/types";
 import { RETRYABLE_ERRORS, getVoiceErrorMessage, getUserMediaErrorMessage } from "./voice/utils";
-import {
-  VOICE_MAX_RETRIES,
-  VOICE_RETRY_DELAY_MS,
-  VOICE_DEDUP_WINDOW_MS,
-} from "./constants";
+import { VOICE_MAX_RETRIES, VOICE_RETRY_DELAY_MS, VOICE_DEDUP_WINDOW_MS } from "./constants";
 
 export function useVoiceInput(options: UseVoiceInputOptions = {}) {
-  const {
-    onResult,
-    onInterim,
-    onError,
-    continuous = true,
-    lang = "en-US",
-  } = options;
+  const { onResult, onInterim, onError, continuous = true, lang = "en-US" } = options;
   const [isListening, setIsListening] = useState(false);
   const [interimTranscript, setInterimTranscript] = useState("");
   const [isSupported, setIsSupported] = useState(false);
@@ -41,9 +31,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
   }, [onResult, onInterim, onError]);
 
   useEffect(() => {
-    const SpeechRecognition =
-      globalThis.SpeechRecognition ||
-      globalThis.webkitSpeechRecognition;
+    const SpeechRecognition = globalThis.SpeechRecognition || globalThis.webkitSpeechRecognition;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsSupported(!!SpeechRecognition);
   }, []);
@@ -71,9 +59,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
     }
 
     // Check if the new result is a superset of a previous emission
-    const supersetOf = recentEmissionsRef.current.findIndex((e) =>
-      normalized.startsWith(e.text),
-    );
+    const supersetOf = recentEmissionsRef.current.findIndex((e) => normalized.startsWith(e.text));
     if (supersetOf === -1) {
       // Completely new text - emit as-is
       recentEmissionsRef.current.push({ text: normalized, time: now });
@@ -94,9 +80,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
   }, []);
 
   const startRecognition = useCallback(() => {
-    const SpeechRecognition =
-      globalThis.SpeechRecognition ||
-      globalThis.webkitSpeechRecognition;
+    const SpeechRecognition = globalThis.SpeechRecognition || globalThis.webkitSpeechRecognition;
     if (!SpeechRecognition) return;
 
     if (recognitionRef.current) {
@@ -140,10 +124,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       if (stoppedByUserRef.current) return;
 
-      if (
-        RETRYABLE_ERRORS.has(event.error) &&
-        retryCountRef.current < VOICE_MAX_RETRIES
-      ) {
+      if (RETRYABLE_ERRORS.has(event.error) && retryCountRef.current < VOICE_MAX_RETRIES) {
         retryCountRef.current++;
         retryTimeoutRef.current = setTimeout(() => {
           retryTimeoutRef.current = null;
@@ -177,8 +158,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
       retryCountRef.current = 0;
       setIsListening(false);
       setInterimTranscript("");
-      const msg =
-        err instanceof Error ? err.message : "Failed to start voice input";
+      const msg = err instanceof Error ? err.message : "Failed to start voice input";
       onErrorRef.current?.(
         `Microphone error: ${msg}. Please check your browser permissions and try again.`,
       );
@@ -190,9 +170,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
   }, [startRecognition]);
 
   const startListening = useCallback(async () => {
-    const SpeechRecognition =
-      globalThis.SpeechRecognition ||
-      globalThis.webkitSpeechRecognition;
+    const SpeechRecognition = globalThis.SpeechRecognition || globalThis.webkitSpeechRecognition;
     if (!SpeechRecognition) return;
 
     stoppedByUserRef.current = false;

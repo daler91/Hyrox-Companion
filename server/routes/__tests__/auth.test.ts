@@ -41,7 +41,6 @@ describe("Auth Routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     app = createTestApp(authRouter);
-
   });
 
   describe(`GET ${ENDPOINT_URL}`, () => {
@@ -67,8 +66,10 @@ describe("Auth Routes", () => {
       const response = await request(app).get(ENDPOINT_URL);
 
       expect(response.status).toBe(500);
-      expect(response.body).toEqual({ error: "Internal Server Error", code: "INTERNAL_SERVER_ERROR" });
-
+      expect(response.body).toEqual({
+        error: "Internal Server Error",
+        code: "INTERNAL_SERVER_ERROR",
+      });
     });
 
     it("should return 500 when getUserId throws an error", async () => {
@@ -79,9 +80,10 @@ describe("Auth Routes", () => {
       const response = await request(app).get(ENDPOINT_URL);
 
       expect(response.status).toBe(500);
-      expect(response.body).toEqual({ error: "Internal Server Error", code: "INTERNAL_SERVER_ERROR" });
-
+      expect(response.body).toEqual({
+        error: "Internal Server Error",
+        code: "INTERNAL_SERVER_ERROR",
+      });
     });
-
   });
 });

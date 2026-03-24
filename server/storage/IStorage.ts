@@ -29,7 +29,10 @@ import type {
 export interface IUserStorage {
   getUser(id: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
-  updateUserPreferences(userId: string, preferences: UpdateUserPreferences): Promise<User | undefined>;
+  updateUserPreferences(
+    userId: string,
+    preferences: UpdateUserPreferences,
+  ): Promise<User | undefined>;
   updateIsAutoCoaching(userId: string, isAutoCoaching: boolean): Promise<void>;
 }
 
@@ -37,12 +40,24 @@ export interface IPlanStorage {
   createTrainingPlan(plan: InsertTrainingPlan): Promise<TrainingPlan>;
   listTrainingPlans(userId: string): Promise<TrainingPlan[]>;
   getTrainingPlan(planId: string, userId: string): Promise<TrainingPlanWithDays | undefined>;
-  renameTrainingPlan(planId: string, name: string, userId: string): Promise<TrainingPlan | undefined>;
-  updateTrainingPlanGoal(planId: string, goal: string | null, userId: string): Promise<TrainingPlan | undefined>;
+  renameTrainingPlan(
+    planId: string,
+    name: string,
+    userId: string,
+  ): Promise<TrainingPlan | undefined>;
+  updateTrainingPlanGoal(
+    planId: string,
+    goal: string | null,
+    userId: string,
+  ): Promise<TrainingPlan | undefined>;
   deleteTrainingPlan(planId: string, userId: string): Promise<boolean>;
 
   createPlanDays(days: InsertPlanDay[]): Promise<PlanDay[]>;
-  updatePlanDay(dayId: string, updates: UpdatePlanDay, userId: string): Promise<PlanDay | undefined>;
+  updatePlanDay(
+    dayId: string,
+    updates: UpdatePlanDay,
+    userId: string,
+  ): Promise<PlanDay | undefined>;
   getPlanDay(dayId: string, userId: string): Promise<PlanDay | undefined>;
   deletePlanDay(dayId: string, userId: string): Promise<boolean>;
   schedulePlan(planId: string, startDate: string, userId: string): Promise<boolean>;
@@ -53,7 +68,11 @@ export interface IWorkoutStorage {
   createWorkoutLogs(logs: (InsertWorkoutLog & { userId: string })[]): Promise<WorkoutLog[]>;
   listWorkoutLogs(userId: string, limit?: number, offset?: number): Promise<WorkoutLog[]>;
   getWorkoutLog(logId: string, userId: string): Promise<WorkoutLog | undefined>;
-  updateWorkoutLog(logId: string, updates: UpdateWorkoutLog, userId: string): Promise<WorkoutLog | undefined>;
+  updateWorkoutLog(
+    logId: string,
+    updates: UpdateWorkoutLog,
+    userId: string,
+  ): Promise<WorkoutLog | undefined>;
   deleteWorkoutLog(logId: string, userId: string): Promise<boolean>;
   deleteWorkoutLogByPlanDayId(planDayId: string, userId: string): Promise<boolean>;
   getWorkoutLogByPlanDayId(planDayId: string, userId: string): Promise<WorkoutLog | undefined>;
@@ -62,18 +81,40 @@ export interface IWorkoutStorage {
   getExerciseSetsByWorkoutLog(workoutLogId: string): Promise<ExerciseSet[]>;
   getExerciseSetsByWorkoutLogs(workoutLogIds: string[]): Promise<ExerciseSet[]>;
   deleteExerciseSetsByWorkoutLog(workoutLogId: string, userId: string): Promise<boolean>;
-  getExerciseHistory(userId: string, exerciseName: string): Promise<(ExerciseSet & { date: string })[]>;
+  getExerciseHistory(
+    userId: string,
+    exerciseName: string,
+  ): Promise<(ExerciseSet & { date: string })[]>;
 
   getCustomExercises(userId: string): Promise<CustomExercise[]>;
   upsertCustomExercise(data: InsertCustomExercise): Promise<CustomExercise>;
 
   getWorkoutsWithoutExerciseSets(userId: string): Promise<WorkoutLog[]>;
-  getAllExerciseSetsWithDates(userId: string, from?: string, to?: string): Promise<(ExerciseSet & { date: string })[]>;
+  getAllExerciseSetsWithDates(
+    userId: string,
+    from?: string,
+    to?: string,
+  ): Promise<(ExerciseSet & { date: string })[]>;
 }
 
 export interface IAnalyticsStorage {
-  getTimeline(userId: string, planId?: string, limit?: number, offset?: number): Promise<TimelineEntry[]>;
-  getWeeklyStats(userId: string, weekStart: string, weekEnd: string): Promise<{ completedCount: number; plannedCount: number; missedCount: number; skippedCount: number; totalDuration: number }>;
+  getTimeline(
+    userId: string,
+    planId?: string,
+    limit?: number,
+    offset?: number,
+  ): Promise<TimelineEntry[]>;
+  getWeeklyStats(
+    userId: string,
+    weekStart: string,
+    weekEnd: string,
+  ): Promise<{
+    completedCount: number;
+    plannedCount: number;
+    missedCount: number;
+    skippedCount: number;
+    totalDuration: number;
+  }>;
 }
 
 export interface IChatStorage {
@@ -87,7 +128,10 @@ export interface IIntegrationStorage {
   upsertStravaConnection(data: InsertStravaConnection): Promise<StravaConnection>;
   deleteStravaConnection(userId: string): Promise<boolean>;
   updateStravaLastSync(userId: string): Promise<void>;
-  getWorkoutByStravaActivityId(userId: string, stravaActivityId: string): Promise<WorkoutLog | undefined>;
+  getWorkoutByStravaActivityId(
+    userId: string,
+    stravaActivityId: string,
+  ): Promise<WorkoutLog | undefined>;
   getExistingStravaActivityIds(userId: string, stravaActivityIds: string[]): Promise<string[]>;
 }
 
@@ -96,24 +140,46 @@ export interface INotificationStorage {
   updateLastMissedReminderAt(userId: string): Promise<void>;
   getUsersWithEmailNotifications(): Promise<User[]>;
   markMissedPlanDays(): Promise<number>;
-  getMissedWorkoutsForDate(userId: string, date: string): Promise<{ date: string; focus: string; mainWorkout: string; planName?: string }[]>;
+  getMissedWorkoutsForDate(
+    userId: string,
+    date: string,
+  ): Promise<{ date: string; focus: string; mainWorkout: string; planName?: string }[]>;
 }
 
 export interface ICoachingStorage {
   listCoachingMaterials(userId: string): Promise<CoachingMaterial[]>;
   getCoachingMaterial(id: string, userId: string): Promise<CoachingMaterial | undefined>;
   createCoachingMaterial(data: InsertCoachingMaterial): Promise<CoachingMaterial>;
-  updateCoachingMaterial(id: string, updates: Partial<Pick<CoachingMaterial, "title" | "content" | "type">>, userId: string): Promise<CoachingMaterial | undefined>;
+  updateCoachingMaterial(
+    id: string,
+    updates: Partial<Pick<CoachingMaterial, "title" | "content" | "type">>,
+    userId: string,
+  ): Promise<CoachingMaterial | undefined>;
   deleteCoachingMaterial(id: string, userId: string): Promise<boolean>;
 
   // RAG chunk methods
   insertChunks(chunks: InsertDocumentChunk[]): Promise<DocumentChunk[]>;
   deleteChunksByMaterialId(materialId: string): Promise<void>;
   replaceChunks(materialId: string, chunks: InsertDocumentChunk[]): Promise<DocumentChunk[]>;
-  searchChunksByEmbedding(userId: string, queryEmbedding: number[], topK: number): Promise<DocumentChunk[]>;
-  getChunkCountsByMaterial(userId: string): Promise<{ materialId: string; chunkCount: number; hasEmbeddings: boolean }[]>;
+  searchChunksByEmbedding(
+    userId: string,
+    queryEmbedding: number[],
+    topK: number,
+  ): Promise<DocumentChunk[]>;
+  getChunkCountsByMaterial(
+    userId: string,
+  ): Promise<{ materialId: string; chunkCount: number; hasEmbeddings: boolean }[]>;
   hasChunksForUser(userId: string): Promise<boolean>;
   getStoredEmbeddingDimension(userId: string): Promise<number | null>;
 }
 
-export interface IStorage extends IUserStorage, IPlanStorage, IWorkoutStorage, IAnalyticsStorage, IChatStorage, IIntegrationStorage, INotificationStorage, ICoachingStorage {}
+export interface IStorage
+  extends
+    IUserStorage,
+    IPlanStorage,
+    IWorkoutStorage,
+    IAnalyticsStorage,
+    IChatStorage,
+    IIntegrationStorage,
+    INotificationStorage,
+    ICoachingStorage {}

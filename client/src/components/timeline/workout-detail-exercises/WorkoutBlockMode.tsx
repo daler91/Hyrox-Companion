@@ -55,8 +55,7 @@ export const WorkoutBlockMode = React.memo(function WorkoutBlockMode({
     <>
       <div>
         <p className="text-xs text-muted-foreground mb-2">
-          Click an exercise to add it. You can add the same exercise multiple
-          times.
+          Click an exercise to add it. You can add the same exercise multiple times.
         </p>
         <ExerciseSelector
           selectedExercises={getSelectedExerciseNames()}
@@ -72,10 +71,7 @@ export const WorkoutBlockMode = React.memo(function WorkoutBlockMode({
             collisionDetection={closestCenter}
             onDragEnd={handleEditDragEnd}
           >
-            <SortableContext
-              items={editExercises}
-              strategy={verticalListSortingStrategy}
-            >
+            <SortableContext items={editExercises} strategy={verticalListSortingStrategy}>
               {renderedBlocks}
             </SortableContext>
           </DndContext>

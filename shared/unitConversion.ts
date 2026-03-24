@@ -40,7 +40,6 @@ export function standardizeDistanceUnit(unit: string | undefined | null): Distan
   return DISTANCE_UNIT_ALIASES[normalized] || "km";
 }
 
-
 export function convertWeight(value: number, from: string, to: string): number {
   const standardFrom = standardizeWeightUnit(from);
   const standardTo = standardizeWeightUnit(to);
@@ -84,7 +83,7 @@ export function formatElevation(meters: number, distanceUnit: string): string {
 export function formatPace(metersPerSecond: number, distanceUnit: string): string {
   const standardUnit = standardizeDistanceUnit(distanceUnit);
   if (!metersPerSecond || Number.isNaN(metersPerSecond) || metersPerSecond <= 0) return "-";
-  
+
   const secondsPerKm = 1000 / metersPerSecond;
   let secondsPerUnit: number;
   let unitLabel: string;
@@ -121,8 +120,8 @@ export function formatSpeed(metersPerSecond: number, distanceUnit: string): stri
 
 export function metersToUserDistance(meters: number, distanceUnit: string): number {
   const standardUnit = standardizeDistanceUnit(distanceUnit);
-  if (standardUnit === 'km') return meters / 1000;
-  if (standardUnit === 'miles') return meters / 1609.34;
+  if (standardUnit === "km") return meters / 1000;
+  if (standardUnit === "miles") return meters / 1609.34;
   return meters;
 }
 

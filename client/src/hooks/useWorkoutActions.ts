@@ -1,4 +1,11 @@
-import { type ParsedExercise, type TimelineEntry, type PlanDay, type WorkoutStatus, type UpdateWorkoutLog, type User } from "@shared/schema";
+import {
+  type ParsedExercise,
+  type TimelineEntry,
+  type PlanDay,
+  type WorkoutStatus,
+  type UpdateWorkoutLog,
+  type User,
+} from "@shared/schema";
 import { useState, useCallback } from "react";
 import { queryClient } from "@/lib/queryClient";
 import { api, QUERY_KEYS } from "@/lib/api";
@@ -16,24 +23,31 @@ export function useWorkoutActions(selectedPlanId: string | null) {
     errorToast: "Failed to update status",
     onMutate: async ({ dayId, status }) => {
       await queryClient.cancelQueries({ queryKey: [...QUERY_KEYS.timeline, selectedPlanId] });
-      const previousTimeline = queryClient.getQueryData<TimelineEntry[]>([...QUERY_KEYS.timeline, selectedPlanId]);
+      const previousTimeline = queryClient.getQueryData<TimelineEntry[]>([
+        ...QUERY_KEYS.timeline,
+        selectedPlanId,
+      ]);
 
       if (previousTimeline) {
-        queryClient.setQueryData<TimelineEntry[]>([...QUERY_KEYS.timeline, selectedPlanId], (old) => {
-          if (!old) return old;
-          return old.map((entry) =>
-            entry.planDayId === dayId
-              ? { ...entry, status: status as WorkoutStatus }
-              : entry
-          );
-        });
+        queryClient.setQueryData<TimelineEntry[]>(
+          [...QUERY_KEYS.timeline, selectedPlanId],
+          (old) => {
+            if (!old) return old;
+            return old.map((entry) =>
+              entry.planDayId === dayId ? { ...entry, status: status as WorkoutStatus } : entry,
+            );
+          },
+        );
       }
 
       return { previousTimeline };
     },
     onError: (err, variables, context: { previousTimeline?: TimelineEntry[] } | undefined) => {
       if (context?.previousTimeline) {
-        queryClient.setQueryData([...QUERY_KEYS.timeline, selectedPlanId], context.previousTimeline);
+        queryClient.setQueryData(
+          [...QUERY_KEYS.timeline, selectedPlanId],
+          context.previousTimeline,
+        );
       }
     },
     onSuccess: (data, variables) => {
@@ -58,31 +72,48 @@ export function useWorkoutActions(selectedPlanId: string | null) {
   });
 
   const logWorkoutMutation = useApiMutation({
-    mutationFn: (data: { planDayId: string; date: string; focus: string; mainWorkout: string; accessory?: string; notes?: string; rpe?: number; exercises?: ParsedExercise[] }) =>
-      api.workouts.create(data),
+    mutationFn: (data: {
+      planDayId: string;
+      date: string;
+      focus: string;
+      mainWorkout: string;
+      accessory?: string;
+      notes?: string;
+      rpe?: number;
+      exercises?: ParsedExercise[];
+    }) => api.workouts.create(data),
     invalidateQueries: [QUERY_KEYS.timeline],
     successToast: "Workout logged!",
     errorToast: "Failed to log workout",
     onMutate: async (variables) => {
       await queryClient.cancelQueries({ queryKey: [...QUERY_KEYS.timeline, selectedPlanId] });
-      const previousTimeline = queryClient.getQueryData<TimelineEntry[]>([...QUERY_KEYS.timeline, selectedPlanId]);
+      const previousTimeline = queryClient.getQueryData<TimelineEntry[]>([
+        ...QUERY_KEYS.timeline,
+        selectedPlanId,
+      ]);
 
       if (previousTimeline) {
-        queryClient.setQueryData<TimelineEntry[]>([...QUERY_KEYS.timeline, selectedPlanId], (old) => {
-          if (!old) return old;
-          return old.map((entry) =>
-            entry.planDayId === variables.planDayId
-              ? { ...entry, status: "completed" as WorkoutStatus }
-              : entry
-          );
-        });
+        queryClient.setQueryData<TimelineEntry[]>(
+          [...QUERY_KEYS.timeline, selectedPlanId],
+          (old) => {
+            if (!old) return old;
+            return old.map((entry) =>
+              entry.planDayId === variables.planDayId
+                ? { ...entry, status: "completed" as WorkoutStatus }
+                : entry,
+            );
+          },
+        );
       }
 
       return { previousTimeline };
     },
     onError: (err, variables, context: { previousTimeline?: TimelineEntry[] } | undefined) => {
       if (context?.previousTimeline) {
-        queryClient.setQueryData([...QUERY_KEYS.timeline, selectedPlanId], context.previousTimeline);
+        queryClient.setQueryData(
+          [...QUERY_KEYS.timeline, selectedPlanId],
+          context.previousTimeline,
+        );
       }
     },
     onSuccess: () => {
@@ -95,8 +126,13 @@ export function useWorkoutActions(selectedPlanId: string | null) {
   });
 
   const updateWorkoutMutation = useApiMutation({
-    mutationFn: ({ workoutId, updates }: { workoutId: string; updates: UpdateWorkoutLog & { exercises?: ParsedExercise[] } }) =>
-      api.workouts.update(workoutId, updates),
+    mutationFn: ({
+      workoutId,
+      updates,
+    }: {
+      workoutId: string;
+      updates: UpdateWorkoutLog & { exercises?: ParsedExercise[] };
+    }) => api.workouts.update(workoutId, updates),
     invalidateQueries: [QUERY_KEYS.timeline, QUERY_KEYS.workouts],
     successToast: "Workout updated",
     errorToast: "Failed to update workout",
@@ -112,20 +148,29 @@ export function useWorkoutActions(selectedPlanId: string | null) {
     errorToast: "Failed to delete workout",
     onMutate: async (workoutId) => {
       await queryClient.cancelQueries({ queryKey: [...QUERY_KEYS.timeline, selectedPlanId] });
-      const previousTimeline = queryClient.getQueryData<TimelineEntry[]>([...QUERY_KEYS.timeline, selectedPlanId]);
+      const previousTimeline = queryClient.getQueryData<TimelineEntry[]>([
+        ...QUERY_KEYS.timeline,
+        selectedPlanId,
+      ]);
 
       if (previousTimeline) {
-        queryClient.setQueryData<TimelineEntry[]>([...QUERY_KEYS.timeline, selectedPlanId], (old) => {
-          if (!old) return old;
-          return old.filter((entry) => entry.workoutLogId !== workoutId);
-        });
+        queryClient.setQueryData<TimelineEntry[]>(
+          [...QUERY_KEYS.timeline, selectedPlanId],
+          (old) => {
+            if (!old) return old;
+            return old.filter((entry) => entry.workoutLogId !== workoutId);
+          },
+        );
       }
 
       return { previousTimeline };
     },
     onError: (err, variables, context: { previousTimeline?: TimelineEntry[] } | undefined) => {
       if (context?.previousTimeline) {
-        queryClient.setQueryData([...QUERY_KEYS.timeline, selectedPlanId], context.previousTimeline);
+        queryClient.setQueryData(
+          [...QUERY_KEYS.timeline, selectedPlanId],
+          context.previousTimeline,
+        );
       }
     },
     onSuccess: () => {
@@ -140,20 +185,29 @@ export function useWorkoutActions(selectedPlanId: string | null) {
     errorToast: "Failed to delete workout",
     onMutate: async (dayId) => {
       await queryClient.cancelQueries({ queryKey: [...QUERY_KEYS.timeline, selectedPlanId] });
-      const previousTimeline = queryClient.getQueryData<TimelineEntry[]>([...QUERY_KEYS.timeline, selectedPlanId]);
+      const previousTimeline = queryClient.getQueryData<TimelineEntry[]>([
+        ...QUERY_KEYS.timeline,
+        selectedPlanId,
+      ]);
 
       if (previousTimeline) {
-        queryClient.setQueryData<TimelineEntry[]>([...QUERY_KEYS.timeline, selectedPlanId], (old) => {
-          if (!old) return old;
-          return old.filter((entry) => entry.planDayId !== dayId);
-        });
+        queryClient.setQueryData<TimelineEntry[]>(
+          [...QUERY_KEYS.timeline, selectedPlanId],
+          (old) => {
+            if (!old) return old;
+            return old.filter((entry) => entry.planDayId !== dayId);
+          },
+        );
       }
 
       return { previousTimeline };
     },
     onError: (err, variables, context: { previousTimeline?: TimelineEntry[] } | undefined) => {
       if (context?.previousTimeline) {
-        queryClient.setQueryData([...QUERY_KEYS.timeline, selectedPlanId], context.previousTimeline);
+        queryClient.setQueryData(
+          [...QUERY_KEYS.timeline, selectedPlanId],
+          context.previousTimeline,
+        );
       }
     },
     onSuccess: () => {
@@ -165,50 +219,63 @@ export function useWorkoutActions(selectedPlanId: string | null) {
     setDetailEntry(entry);
   }, []);
 
-  const handleSaveFromDetail = useCallback((updates: { focus: string; mainWorkout: string; accessory: string | null; notes: string | null; rpe?: number | null; exercises?: ParsedExercise[] }) => {
-    if (!detailEntry) return;
+  const handleSaveFromDetail = useCallback(
+    (updates: {
+      focus: string;
+      mainWorkout: string;
+      accessory: string | null;
+      notes: string | null;
+      rpe?: number | null;
+      exercises?: ParsedExercise[];
+    }) => {
+      if (!detailEntry) return;
 
-    if (detailEntry.workoutLogId) {
-      updateWorkoutMutation.mutate({
-        workoutId: detailEntry.workoutLogId,
-        updates: { ...updates, exercises: updates.exercises },
+      if (detailEntry.workoutLogId) {
+        updateWorkoutMutation.mutate({
+          workoutId: detailEntry.workoutLogId,
+          updates: { ...updates, exercises: updates.exercises },
+        });
+        return;
+      }
+
+      if (!detailEntry.planDayId) return;
+
+      if (updates.exercises && updates.exercises.length > 0) {
+        logWorkoutMutation.mutate({
+          planDayId: detailEntry.planDayId,
+          date: detailEntry.date,
+          focus: updates.focus,
+          mainWorkout: updates.mainWorkout,
+          accessory: updates.accessory || undefined,
+          notes: updates.notes || undefined,
+          rpe: updates.rpe ?? undefined,
+          exercises: updates.exercises,
+        });
+        return;
+      }
+
+      updateDayMutation.mutate({
+        dayId: detailEntry.planDayId,
+        updates,
       });
-      return;
-    }
+    },
+    [detailEntry, updateWorkoutMutation, logWorkoutMutation, updateDayMutation],
+  );
 
-    if (!detailEntry.planDayId) return;
-
-    if (updates.exercises && updates.exercises.length > 0) {
+  const handleMarkComplete = useCallback(
+    (entry: TimelineEntry) => {
+      if (!entry.planDayId) return;
       logWorkoutMutation.mutate({
-        planDayId: detailEntry.planDayId,
-        date: detailEntry.date,
-        focus: updates.focus,
-        mainWorkout: updates.mainWorkout,
-        accessory: updates.accessory || undefined,
-        notes: updates.notes || undefined,
-        rpe: updates.rpe ?? undefined,
-        exercises: updates.exercises,
+        planDayId: entry.planDayId,
+        date: entry.date,
+        focus: entry.focus,
+        mainWorkout: entry.mainWorkout,
+        accessory: entry.accessory || undefined,
+        notes: entry.notes || undefined,
       });
-      return;
-    }
-
-    updateDayMutation.mutate({
-      dayId: detailEntry.planDayId,
-      updates,
-    });
-  }, [detailEntry, updateWorkoutMutation, logWorkoutMutation, updateDayMutation]);
-
-  const handleMarkComplete = useCallback((entry: TimelineEntry) => {
-    if (!entry.planDayId) return;
-    logWorkoutMutation.mutate({
-      planDayId: entry.planDayId,
-      date: entry.date,
-      focus: entry.focus,
-      mainWorkout: entry.mainWorkout,
-      accessory: entry.accessory || undefined,
-      notes: entry.notes || undefined,
-    });
-  }, [logWorkoutMutation]);
+    },
+    [logWorkoutMutation],
+  );
 
   const handleSkip = useCallback((entry: TimelineEntry) => {
     setSkipConfirmEntry(entry);
@@ -220,18 +287,24 @@ export function useWorkoutActions(selectedPlanId: string | null) {
     setSkipConfirmEntry(null);
   }, [skipConfirmEntry, updateStatusMutation]);
 
-  const handleChangeStatus = useCallback((entry: TimelineEntry, status: WorkoutStatus) => {
-    if (!entry.planDayId) return;
-    updateStatusMutation.mutate({ dayId: entry.planDayId, status });
-  }, [updateStatusMutation]);
+  const handleChangeStatus = useCallback(
+    (entry: TimelineEntry, status: WorkoutStatus) => {
+      if (!entry.planDayId) return;
+      updateStatusMutation.mutate({ dayId: entry.planDayId, status });
+    },
+    [updateStatusMutation],
+  );
 
-  const handleDelete = useCallback((entry: TimelineEntry) => {
-    if (entry.workoutLogId && !entry.planDayId) {
-      deleteWorkoutMutation.mutate(entry.workoutLogId);
-    } else if (entry.planDayId) {
-      deletePlanDayMutation.mutate(entry.planDayId);
-    }
-  }, [deleteWorkoutMutation, deletePlanDayMutation]);
+  const handleDelete = useCallback(
+    (entry: TimelineEntry) => {
+      if (entry.workoutLogId && !entry.planDayId) {
+        deleteWorkoutMutation.mutate(entry.workoutLogId);
+      } else if (entry.planDayId) {
+        deletePlanDayMutation.mutate(entry.planDayId);
+      }
+    },
+    [deleteWorkoutMutation, deletePlanDayMutation],
+  );
 
   return {
     detailEntry,

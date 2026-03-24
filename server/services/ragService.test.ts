@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { chunkText, embedCoachingMaterial, retrieveRelevantChunks, buildRetrievedMaterialsSection } from "./ragService";
+import {
+  chunkText,
+  embedCoachingMaterial,
+  retrieveRelevantChunks,
+  buildRetrievedMaterialsSection,
+} from "./ragService";
 import type { CoachingMaterial } from "@shared/schema";
 
 // Mock dependencies
@@ -170,9 +175,7 @@ describe("embedCoachingMaterial", () => {
     const longMaterial = { ...mockMaterial, content: longContent };
 
     // Mock embeddings for however many chunks are generated
-    vi.mocked(generateEmbeddings).mockImplementation(async (texts) =>
-      texts.map(() => [0.5]),
-    );
+    vi.mocked(generateEmbeddings).mockImplementation(async (texts) => texts.map(() => [0.5]));
     vi.mocked(storage.replaceChunks).mockResolvedValue([]);
 
     await embedCoachingMaterial(longMaterial);
@@ -207,8 +210,24 @@ describe("retrieveRelevantChunks", () => {
     const queryEmbedding = [0.1, 0.2, 0.3];
     vi.mocked(generateEmbedding).mockResolvedValue(queryEmbedding);
     vi.mocked(storage.searchChunksByEmbedding).mockResolvedValue([
-      { id: "c1", materialId: "m1", userId: "u1", content: "chunk 1", chunkIndex: 0, embedding: null, createdAt: new Date() },
-      { id: "c2", materialId: "m1", userId: "u1", content: "chunk 2", chunkIndex: 1, embedding: null, createdAt: new Date() },
+      {
+        id: "c1",
+        materialId: "m1",
+        userId: "u1",
+        content: "chunk 1",
+        chunkIndex: 0,
+        embedding: null,
+        createdAt: new Date(),
+      },
+      {
+        id: "c2",
+        materialId: "m1",
+        userId: "u1",
+        content: "chunk 2",
+        chunkIndex: 1,
+        embedding: null,
+        createdAt: new Date(),
+      },
     ]);
 
     const result = await retrieveRelevantChunks("u1", "how to train");

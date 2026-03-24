@@ -3,7 +3,10 @@ describe("Landing Page", () => {
     cy.request("/").then((response) => {
       expect(response.headers).to.have.property("x-frame-options", "SAMEORIGIN");
       expect(response.headers).to.have.property("x-content-type-options", "nosniff");
-      expect(response.headers).to.have.property("referrer-policy", "strict-origin-when-cross-origin");
+      expect(response.headers).to.have.property(
+        "referrer-policy",
+        "strict-origin-when-cross-origin",
+      );
       expect(response.headers).to.have.property("permissions-policy");
       expect(response.headers).to.have.property("content-security-policy");
     });

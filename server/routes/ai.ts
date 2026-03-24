@@ -2,27 +2,50 @@ import { logger } from "../logger";
 import { Router, type Request as ExpressRequest, type Response } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
-import { chatWithCoach, streamChatWithCoach, generateWorkoutSuggestions, parseExercisesFromText, EMBEDDING_DIMENSIONS, type UpcomingWorkout } from "../gemini/index";
+import {
+  chatWithCoach,
+  streamChatWithCoach,
+  generateWorkoutSuggestions,
+  parseExercisesFromText,
+  EMBEDDING_DIMENSIONS,
+  type UpcomingWorkout,
+} from "../gemini/index";
 import { rateLimiter, asyncHandler, validateBody } from "../routeUtils";
 import { buildTrainingContext } from "../services/aiService";
 import { buildCoachingMaterialsSection, buildRetrievedChunksSection } from "../prompts";
 import { retrieveRelevantChunks } from "../services/ragService";
 import { toDateStr, getUserId } from "../types";
-import { chatRequestSchema, parseExercisesRequestSchema, insertChatMessageSchema, type InsertChatMessage } from "@shared/schema";
+import {
+  chatRequestSchema,
+  parseExercisesRequestSchema,
+  insertChatMessageSchema,
+  type InsertChatMessage,
+} from "@shared/schema";
 import { z } from "zod";
 
 const router = Router();
 
-router.post("/api/v1/parse-exercises", isAuthenticated, rateLimiter("parse", 5), validateBody(parseExercisesRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, any, z.infer<typeof parseExercisesRequestSchema>>, res: Response) => {
-    const { text } = req.body;
-    const userId = getUserId(req);
-    const user = await storage.getUser(userId);
-    const weightUnit = user?.weightUnit || "kg";
-    const userCustomExercises = await storage.getCustomExercises(userId);
-    const customNames = userCustomExercises.map(e => e.name);
-    const exercises = await parseExercisesFromText(text.trim(), weightUnit, customNames);
-    res.json(exercises);
-  }));
+router.post(
+  "/api/v1/parse-exercises",
+  isAuthenticated,
+  rateLimiter("parse", 5),
+  validateBody(parseExercisesRequestSchema),
+  asyncHandler(
+    async (
+      req: ExpressRequest<Record<string, never>, any, z.infer<typeof parseExercisesRequestSchema>>,
+      res: Response,
+    ) => {
+      const { text } = req.body;
+      const userId = getUserId(req);
+      const user = await storage.getUser(userId);
+      const weightUnit = user?.weightUnit || "kg";
+      const userCustomExercises = await storage.getCustomExercises(userId);
+      const customNames = userCustomExercises.map((e) => e.name);
+      const exercises = await parseExercisesFromText(text.trim(), weightUnit, customNames);
+      res.json(exercises);
+    },
+  ),
+);
 
 /**
  * Try RAG retrieval for the user's query. Falls back to legacy if no chunks exist.
@@ -38,7 +61,11 @@ async function getCoachingContext(
   userId: string,
   query: string,
   log: any = logger,
-): Promise<{ retrievedChunks?: string[]; coachingMaterials?: import("../prompts").CoachingMaterialInput[]; ragInfo: RagInfo }> {
+): Promise<{
+  retrievedChunks?: string[];
+  coachingMaterials?: import("../prompts").CoachingMaterialInput[];
+  ragInfo: RagInfo;
+}> {
   try {
     const hasChunks = await storage.hasChunksForUser(userId);
 
@@ -79,7 +106,20 @@ async function getCoachingContext(
   };
 }
 
-async function prepareChatContext(req: ExpressRequest): Promise<{ success: false; error: string } | { success: true; message: string; history: Pick<import("@shared/schema").ChatMessage, "role" | "content">[]; trainingContext: import("../gemini/index").TrainingContext; coachingMaterials?: import("../prompts").CoachingMaterialInput[]; retrievedChunks?: string[]; ragInfo: RagInfo }> {
+async function prepareChatContext(
+  req: ExpressRequest,
+): Promise<
+  | { success: false; error: string }
+  | {
+      success: true;
+      message: string;
+      history: Pick<import("@shared/schema").ChatMessage, "role" | "content">[];
+      trainingContext: import("../gemini/index").TrainingContext;
+      coachingMaterials?: import("../prompts").CoachingMaterialInput[];
+      retrievedChunks?: string[];
+      ragInfo: RagInfo;
+    }
+> {
   const parseResult = chatRequestSchema.safeParse(req.body);
   if (!parseResult.success) {
     return { success: false, error: parseResult.error.errors[0].message };
@@ -105,82 +145,140 @@ async function prepareChatContext(req: ExpressRequest): Promise<{ success: false
   };
 }
 
-router.post("/api/v1/chat", isAuthenticated, rateLimiter("chat", 10), validateBody(chatRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, any, z.infer<typeof chatRequestSchema>>, res: Response) => {
-    const context = await prepareChatContext(req);
-    if (!context.success) {
-      return res.status(400).json({ error: context.error, code: "BAD_REQUEST" });
-    }
-    const { message, history, trainingContext, coachingMaterials, retrievedChunks, ragInfo } = context;
-
-    const response = await chatWithCoach(message, history, trainingContext, coachingMaterials, retrievedChunks);
-    res.json({ response, ragInfo });
-  }));
-
-router.post("/api/v1/chat/stream", isAuthenticated, rateLimiter("chat", 10), validateBody(chatRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, any, z.infer<typeof chatRequestSchema>>, res: Response) => {
-    const context = await prepareChatContext(req);
-    if (!context.success) {
-      return res.status(400).json({ error: context.error, code: "BAD_REQUEST" });
-    }
-    const { message, history, trainingContext, coachingMaterials, retrievedChunks, ragInfo } = context;
-
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("Connection", "keep-alive");
-    res.flushHeaders();
-
-    // Emit RAG diagnostics before streaming text
-    try {
-      // Emit RAG diagnostics before streaming text
-      res.write(`data: ${JSON.stringify({ ragInfo })}\n\n`);
-
-      const stream = streamChatWithCoach(message, history, trainingContext, coachingMaterials, retrievedChunks);
-
-      for await (const chunk of stream) {
-        res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+router.post(
+  "/api/v1/chat",
+  isAuthenticated,
+  rateLimiter("chat", 10),
+  validateBody(chatRequestSchema),
+  asyncHandler(
+    async (
+      req: ExpressRequest<Record<string, never>, any, z.infer<typeof chatRequestSchema>>,
+      res: Response,
+    ) => {
+      const context = await prepareChatContext(req);
+      if (!context.success) {
+        return res.status(400).json({ error: context.error, code: "BAD_REQUEST" });
       }
+      const { message, history, trainingContext, coachingMaterials, retrievedChunks, ragInfo } =
+        context;
 
-      res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
-      res.end();
-    } catch (streamError) {
-      const log = (req as any).log || logger;
-      log.error({ err: streamError }, "Stream error:");
-      res.write(`data: ${JSON.stringify({ error: "Stream error" })}\n\n`);
-      res.end();
-    }
-  }));
+      const response = await chatWithCoach(
+        message,
+        history,
+        trainingContext,
+        coachingMaterials,
+        retrievedChunks,
+      );
+      res.json({ response, ragInfo });
+    },
+  ),
+);
 
-router.get("/api/v1/chat/history", isAuthenticated, asyncHandler(async (req: ExpressRequest, res: Response) => {
+router.post(
+  "/api/v1/chat/stream",
+  isAuthenticated,
+  rateLimiter("chat", 10),
+  validateBody(chatRequestSchema),
+  asyncHandler(
+    async (
+      req: ExpressRequest<Record<string, never>, any, z.infer<typeof chatRequestSchema>>,
+      res: Response,
+    ) => {
+      const context = await prepareChatContext(req);
+      if (!context.success) {
+        return res.status(400).json({ error: context.error, code: "BAD_REQUEST" });
+      }
+      const { message, history, trainingContext, coachingMaterials, retrievedChunks, ragInfo } =
+        context;
+
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+      res.flushHeaders();
+
+      // Emit RAG diagnostics before streaming text
+      try {
+        // Emit RAG diagnostics before streaming text
+        res.write(`data: ${JSON.stringify({ ragInfo })}\n\n`);
+
+        const stream = streamChatWithCoach(
+          message,
+          history,
+          trainingContext,
+          coachingMaterials,
+          retrievedChunks,
+        );
+
+        for await (const chunk of stream) {
+          res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+        }
+
+        res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+        res.end();
+      } catch (streamError) {
+        const log = (req as any).log || logger;
+        log.error({ err: streamError }, "Stream error:");
+        res.write(`data: ${JSON.stringify({ error: "Stream error" })}\n\n`);
+        res.end();
+      }
+    },
+  ),
+);
+
+router.get(
+  "/api/v1/chat/history",
+  isAuthenticated,
+  asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const messages = await storage.getChatMessages(userId);
     res.json(messages);
-  }));
+  }),
+);
 
-router.post("/api/v1/chat/message", isAuthenticated, rateLimiter("chatMessage", 20), validateBody(insertChatMessageSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, any, InsertChatMessage>, res: Response) => {
-    const userId = getUserId(req);
-    const { role, content } = req.body;
+router.post(
+  "/api/v1/chat/message",
+  isAuthenticated,
+  rateLimiter("chatMessage", 20),
+  validateBody(insertChatMessageSchema),
+  asyncHandler(
+    async (req: ExpressRequest<Record<string, never>, any, InsertChatMessage>, res: Response) => {
+      const userId = getUserId(req);
+      const { role, content } = req.body;
 
-    const message = await storage.saveChatMessage({ userId, role, content });
-    res.json(message);
-  }));
+      const message = await storage.saveChatMessage({ userId, role, content });
+      res.json(message);
+    },
+  ),
+);
 
-router.delete("/api/v1/chat/history", isAuthenticated, rateLimiter("chatHistoryDelete", 5), asyncHandler(async (req: ExpressRequest, res: Response) => {
+router.delete(
+  "/api/v1/chat/history",
+  isAuthenticated,
+  rateLimiter("chatHistoryDelete", 5),
+  asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     await storage.clearChatHistory(userId);
     res.json({ success: true });
-  }));
+  }),
+);
 
-router.post("/api/v1/timeline/ai-suggestions", isAuthenticated, rateLimiter("suggestions", 3), asyncHandler(async (req: ExpressRequest, res: Response) => {
+router.post(
+  "/api/v1/timeline/ai-suggestions",
+  isAuthenticated,
+  rateLimiter("suggestions", 3),
+  asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
 
     const timeline = await storage.getTimeline(userId);
     const today = toDateStr();
 
     const upcomingWorkouts: UpcomingWorkout[] = timeline
-      .filter(entry =>
-        entry.status === "planned" &&
-        entry.date &&
-        entry.date >= today &&
-        entry.planDayId !== null
+      .filter(
+        (entry) =>
+          entry.status === "planned" &&
+          entry.date &&
+          entry.date >= today &&
+          entry.planDayId !== null,
       )
       .sort((a, b) => {
         if (b.date < a.date) return 1;
@@ -188,7 +286,7 @@ router.post("/api/v1/timeline/ai-suggestions", isAuthenticated, rateLimiter("sug
         return 0;
       })
       .slice(0, 5)
-      .map(entry => ({
+      .map((entry) => ({
         id: entry.planDayId || "",
         date: entry.date,
         focus: entry.focus || "",
@@ -202,7 +300,7 @@ router.post("/api/v1/timeline/ai-suggestions", isAuthenticated, rateLimiter("sug
     }
 
     // Build a query from upcoming workout context for RAG retrieval
-    const suggestionQuery = upcomingWorkouts.map(w => `${w.focus} ${w.mainWorkout}`).join("; ");
+    const suggestionQuery = upcomingWorkouts.map((w) => `${w.focus} ${w.mainWorkout}`).join("; ");
 
     const [trainingContext, coachingContext] = await Promise.all([
       buildTrainingContext(userId),
@@ -214,16 +312,33 @@ router.post("/api/v1/timeline/ai-suggestions", isAuthenticated, rateLimiter("sug
     if (coachingContext.retrievedChunks && coachingContext.retrievedChunks.length > 0) {
       coachingMaterials = buildRetrievedChunksSection(coachingContext.retrievedChunks);
     } else if (coachingContext.coachingMaterials) {
-      coachingMaterials = buildCoachingMaterialsSection(coachingContext.coachingMaterials) || undefined;
+      coachingMaterials =
+        buildCoachingMaterialsSection(coachingContext.coachingMaterials) || undefined;
     }
 
-    const rawSuggestions = await generateWorkoutSuggestions(trainingContext, upcomingWorkouts, undefined, coachingMaterials);
+    const rawSuggestions = await generateWorkoutSuggestions(
+      trainingContext,
+      upcomingWorkouts,
+      undefined,
+      coachingMaterials,
+    );
 
-    const workoutMap = new Map(upcomingWorkouts.map(w => [w.id, w]));
+    const workoutMap = new Map(upcomingWorkouts.map((w) => [w.id, w]));
     // ⚡ Bolt Performance Optimization:
     // Combine map and filter into a single O(N) reduction to prevent
     // intermediate array allocations.
-    const suggestions = rawSuggestions.reduce<{ workoutId: string; date: string; focus: string; targetField: "notes" | "mainWorkout" | "accessory"; action: "replace" | "append"; recommendation: string; rationale: string; priority: "low" | "medium" | "high" }[]>((acc, s) => {
+    const suggestions = rawSuggestions.reduce<
+      {
+        workoutId: string;
+        date: string;
+        focus: string;
+        targetField: "notes" | "mainWorkout" | "accessory";
+        action: "replace" | "append";
+        recommendation: string;
+        rationale: string;
+        priority: "low" | "medium" | "high";
+      }[]
+    >((acc, s) => {
       const workout = workoutMap.get(s.workoutId);
       const mapped = {
         workoutId: s.workoutId,
@@ -242,6 +357,7 @@ router.post("/api/v1/timeline/ai-suggestions", isAuthenticated, rateLimiter("sug
     }, []);
 
     res.json({ suggestions, ragInfo: coachingContext.ragInfo });
-  }));
+  }),
+);
 
 export default router;

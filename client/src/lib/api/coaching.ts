@@ -60,7 +60,8 @@ export const coaching = {
   update: (id: string, data: Partial<InsertCoachingMaterial>) =>
     typedRequest<CoachingMaterial>("PATCH", `/api/v1/coaching-materials/${id}`, data),
 
-  delete: (id: string) => typedRequest<{ success: boolean }>("DELETE", `/api/v1/coaching-materials/${id}`),
+  delete: (id: string) =>
+    typedRequest<{ success: boolean }>("DELETE", `/api/v1/coaching-materials/${id}`),
 
   getRagStatus: () => typedRequest<RagStatus>("GET", "/api/v1/coaching-materials/rag-status"),
 

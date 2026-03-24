@@ -9,7 +9,10 @@ import { getUserId } from "../types";
 
 const router = Router();
 
-router.post("/api/v1/emails/check", isAuthenticated, asyncHandler(async (req: ExpressRequest, res: Response) => {
+router.post(
+  "/api/v1/emails/check",
+  isAuthenticated,
+  asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const user = await storage.getUser(userId);
     if (!user) {
@@ -17,26 +20,30 @@ router.post("/api/v1/emails/check", isAuthenticated, asyncHandler(async (req: Ex
     }
     const sent = await checkAndSendEmailsForUser(storage, user);
     res.json({ sent });
-  }));
+  }),
+);
 
-router.get("/api/v1/cron/emails", asyncHandler(async (req: ExpressRequest, res: Response) => {
-  const secret = req.headers["x-cron-secret"] as string;
-  const cronSecret = env.CRON_SECRET;
+router.get(
+  "/api/v1/cron/emails",
+  asyncHandler(async (req: ExpressRequest, res: Response) => {
+    const secret = req.headers["x-cron-secret"] as string;
+    const cronSecret = env.CRON_SECRET;
 
-  if (!cronSecret || !secret) {
-    return res.status(401).json({ error: "Unauthorized", code: "UNAUTHORIZED" });
-  }
+    if (!cronSecret || !secret) {
+      return res.status(401).json({ error: "Unauthorized", code: "UNAUTHORIZED" });
+    }
 
-  // Use timingSafeEqual with hashed values to prevent timing attacks
-  // and safely handle different string lengths.
-  const secretHash = crypto.createHash("sha256").update(secret).digest();
-  const cronSecretHash = crypto.createHash("sha256").update(cronSecret).digest();
+    // Use timingSafeEqual with hashed values to prevent timing attacks
+    // and safely handle different string lengths.
+    const secretHash = crypto.createHash("sha256").update(secret).digest();
+    const cronSecretHash = crypto.createHash("sha256").update(cronSecret).digest();
 
-  if (!crypto.timingSafeEqual(secretHash, cronSecretHash)) {
-    return res.status(401).json({ error: "Unauthorized", code: "UNAUTHORIZED" });
-  }
+    if (!crypto.timingSafeEqual(secretHash, cronSecretHash)) {
+      return res.status(401).json({ error: "Unauthorized", code: "UNAUTHORIZED" });
+    }
     const result = await runEmailCronJob(storage);
     res.json(result);
-  }));
+  }),
+);
 
 export default router;

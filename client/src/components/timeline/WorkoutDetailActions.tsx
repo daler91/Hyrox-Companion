@@ -22,7 +22,11 @@ interface StatusChangeSectionProps {
   readonly onChangeStatus: (entry: TimelineEntry, status: WorkoutStatus) => void;
 }
 
-export function StatusChangeSection({ entry, onMarkComplete, onChangeStatus }: Readonly<StatusChangeSectionProps>) {
+export function StatusChangeSection({
+  entry,
+  onMarkComplete,
+  onChangeStatus,
+}: Readonly<StatusChangeSectionProps>) {
   return (
     <>
       <Separator />
@@ -114,19 +118,11 @@ export function WorkoutDetailFooter({
     <DialogFooter className="flex-col sm:flex-row gap-2">
       {isEditing ? (
         <>
-          <Button
-            variant="outline"
-            onClick={onCancelEdit}
-            className="sm:mr-auto"
-          >
+          <Button variant="outline" onClick={onCancelEdit} className="sm:mr-auto">
             <X className="h-4 w-4 mr-1" />
             Cancel
           </Button>
-          <Button
-            onClick={onSave}
-            disabled={isSaving}
-            data-testid="button-detail-save"
-          >
+          <Button onClick={onSave} disabled={isSaving} data-testid="button-detail-save">
             {isSaving ? (
               <Loader2 className="h-4 w-4 mr-1 animate-spin" />
             ) : (
@@ -139,21 +135,13 @@ export function WorkoutDetailFooter({
         <>
           <div className="flex gap-2 sm:mr-auto flex-wrap">
             {canEdit && (
-              <Button
-                variant="outline"
-                onClick={onEdit}
-                data-testid="button-detail-edit"
-              >
+              <Button variant="outline" onClick={onEdit} data-testid="button-detail-edit">
                 <Pencil className="h-4 w-4 mr-1" />
                 Edit
               </Button>
             )}
             {onCombine && (
-              <Button
-                variant="outline"
-                onClick={onCombine}
-                data-testid="button-detail-combine"
-              >
+              <Button variant="outline" onClick={onCombine} data-testid="button-detail-combine">
                 <Combine className="h-4 w-4 mr-1" />
                 Combine
               </Button>
@@ -191,7 +179,12 @@ interface DeleteConfirmDialogProps {
   readonly isDeleting?: boolean;
 }
 
-export function DeleteConfirmDialog({ open, onOpenChange, onConfirm, isDeleting }: Readonly<DeleteConfirmDialogProps>) {
+export function DeleteConfirmDialog({
+  open,
+  onOpenChange,
+  onConfirm,
+  isDeleting,
+}: Readonly<DeleteConfirmDialogProps>) {
   return (
     <ConfirmDialog
       open={open}

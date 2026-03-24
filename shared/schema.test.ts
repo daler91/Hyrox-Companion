@@ -20,7 +20,8 @@ describe("importPlanRequestSchema validation", () => {
   it("rejects a very large fileName and planName", () => {
     const largeString = "a".repeat(256);
     const payload = {
-      csvContent: "Week,Day,Focus,Main Workout,Accessory,Notes\n1,Monday,Focus,Workout,Accessory,Notes",
+      csvContent:
+        "Week,Day,Focus,Main Workout,Accessory,Notes\n1,Monday,Focus,Workout,Accessory,Notes",
       fileName: largeString,
       planName: largeString,
     };
@@ -36,7 +37,8 @@ describe("importPlanRequestSchema validation", () => {
 
   it("accepts valid inputs within limits", () => {
     const payload = {
-      csvContent: "Week,Day,Focus,Main Workout,Accessory,Notes\n1,Monday,Focus,Workout,Accessory,Notes",
+      csvContent:
+        "Week,Day,Focus,Main Workout,Accessory,Notes\n1,Monday,Focus,Workout,Accessory,Notes",
       fileName: "valid.csv",
       planName: "Valid Plan",
     };

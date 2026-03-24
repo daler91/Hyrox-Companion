@@ -24,12 +24,15 @@ const stravaAuthLimiter = rateLimit({
 });
 const STATE_MAX_AGE_MS = 10 * 60 * 1000;
 
-
 export function createSignedState(userId: string): string {
   const timestamp = Date.now().toString(36);
   const nonce = crypto.randomBytes(8).toString("hex");
   const payload = `${userId}:${timestamp}:${nonce}`;
-  const signature = crypto.createHmac("sha256", STATE_SECRET).update(payload).digest("hex").slice(0, 16);
+  const signature = crypto
+    .createHmac("sha256", STATE_SECRET)
+    .update(payload)
+    .digest("hex")
+    .slice(0, 16);
   return `${payload}:${signature}`;
 }
 
@@ -38,7 +41,11 @@ export function verifySignedState(state: string): { userId: string } | null {
   if (parts.length !== 4) return null;
   const [userId, timestamp, nonce, signature] = parts;
   const payload = `${userId}:${timestamp}:${nonce}`;
-  const expected = crypto.createHmac("sha256", STATE_SECRET).update(payload).digest("hex").slice(0, 16);
+  const expected = crypto
+    .createHmac("sha256", STATE_SECRET)
+    .update(payload)
+    .digest("hex")
+    .slice(0, 16);
 
   // Use timingSafeEqual with hashed values to prevent timing attacks
   // and safely handle different string lengths.
@@ -142,7 +149,9 @@ async function handleStravaStatus(req: Request, res: Response) {
 
 async function handleStravaAuth(req: Request, res: Response) {
   if (!STRAVA_CLIENT_ID) {
-    return res.status(500).json({ error: "Strava integration not configured", code: "INTERNAL_SERVER_ERROR" });
+    return res
+      .status(500)
+      .json({ error: "Strava integration not configured", code: "INTERNAL_SERVER_ERROR" });
   }
 
   const userId = getUserId(req);
@@ -233,7 +242,9 @@ async function handleStravaSync(req: Request, res: Response) {
     const accessToken = await getValidAccessToken(userId);
 
     if (!accessToken) {
-      return res.status(401).json({ error: "Strava not connected or token expired", code: "UNAUTHORIZED" });
+      return res
+        .status(401)
+        .json({ error: "Strava not connected or token expired", code: "UNAUTHORIZED" });
     }
 
     const user = await storage.getUser(userId);
@@ -243,17 +254,22 @@ async function handleStravaSync(req: Request, res: Response) {
       "https://www.strava.com/api/v3/athlete/activities?per_page=30",
       {
         headers: { Authorization: `Bearer ${accessToken}` },
-      }
+      },
     );
 
     if (!activitiesResponse.ok) {
-      (req.log || logger).error({ err: await activitiesResponse.text() }, "Failed to fetch Strava activities:");
-      return res.status(500).json({ error: "Failed to fetch activities from Strava", code: "INTERNAL_SERVER_ERROR" });
+      (req.log || logger).error(
+        { err: await activitiesResponse.text() },
+        "Failed to fetch Strava activities:",
+      );
+      return res
+        .status(500)
+        .json({ error: "Failed to fetch activities from Strava", code: "INTERNAL_SERVER_ERROR" });
     }
 
     const activities: StravaActivity[] = await activitiesResponse.json();
 
-    const activityIds = activities.map(a => String(a.id));
+    const activityIds = activities.map((a) => String(a.id));
     const existingIds = await storage.getExistingStravaActivityIds(userId, activityIds);
     const existingStravaIds = new Set(existingIds);
 
@@ -284,7 +300,9 @@ async function handleStravaSync(req: Request, res: Response) {
     });
   } catch (error) {
     (req.log || logger).error({ err: error }, "Strava sync error:");
-    res.status(500).json({ error: "Failed to sync Strava activities", code: "INTERNAL_SERVER_ERROR" });
+    res
+      .status(500)
+      .json({ error: "Failed to sync Strava activities", code: "INTERNAL_SERVER_ERROR" });
   }
 }
 

@@ -2,15 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  FileText,
-  Calendar,
-  Loader2,
-  Dumbbell,
-  Target,
-  Zap,
-  Sparkles,
-} from "lucide-react";
+import { FileText, Calendar, Loader2, Dumbbell, Target, Zap, Sparkles } from "lucide-react";
 import { Link } from "wouter";
 import { FilterStatus } from "./types";
 import { TrainingPlan } from "@shared/schema";
@@ -52,13 +44,10 @@ function WelcomeEmptyState({
       </div>
 
       <div>
-        <h2 className="text-2xl font-bold mb-2">
-          Welcome to HyroxTracker
-        </h2>
+        <h2 className="text-2xl font-bold mb-2">Welcome to HyroxTracker</h2>
         <p className="text-muted-foreground max-w-md mx-auto">
-          Your personal training companion for Hyrox preparation.
-          Track workouts, follow structured plans, and get AI-powered
-          coaching.
+          Your personal training companion for Hyrox preparation. Track workouts, follow structured
+          plans, and get AI-powered coaching.
         </p>
       </div>
 
@@ -77,10 +66,7 @@ function WelcomeEmptyState({
           Use 8-Week Hyrox Plan
         </Button>
         <div>
-          <Label
-            htmlFor="csv-upload-empty"
-            className="cursor-pointer"
-          >
+          <Label htmlFor="csv-upload-empty" className="cursor-pointer">
             <Button
               size="lg"
               variant="outline"
@@ -111,10 +97,7 @@ function WelcomeEmptyState({
 
       <div className="flex justify-center pt-2">
         <Link href="/log">
-          <Button
-            variant="ghost"
-            data-testid="button-log-workout-empty"
-          >
+          <Button variant="ghost" data-testid="button-log-workout-empty">
             <Dumbbell className="h-4 w-4 mr-2" />
             Or just log a workout
           </Button>
@@ -133,20 +116,14 @@ interface ReadyEmptyStateProps {
   readonly setSchedulingPlanId: (id: string) => void;
 }
 
-function ReadyEmptyState({
-  selectedPlanId,
-  setSchedulingPlanId,
-}: Readonly<ReadyEmptyStateProps>) {
+function ReadyEmptyState({ selectedPlanId, setSchedulingPlanId }: Readonly<ReadyEmptyStateProps>) {
   return (
     <div className="text-center space-y-4">
       <Calendar className="h-12 w-12 mx-auto text-muted-foreground opacity-50" />
       <div>
-        <h3 className="font-semibold mb-2">
-          Ready to Start Training
-        </h3>
+        <h3 className="font-semibold mb-2">Ready to Start Training</h3>
         <p className="text-muted-foreground text-sm max-w-md mx-auto">
-          Set a start date for your plan to schedule workouts on your
-          calendar.
+          Set a start date for your plan to schedule workouts on your calendar.
         </p>
       </div>
       <Button
@@ -173,12 +150,9 @@ function NoWorkoutsEmptyState({
     <div className="text-center space-y-4">
       <Calendar className="h-12 w-12 mx-auto text-muted-foreground opacity-50" />
       <div>
-        <h3 className="font-semibold mb-2">
-          No {filterStatus} workouts
-        </h3>
+        <h3 className="font-semibold mb-2">No {filterStatus} workouts</h3>
         <p className="text-muted-foreground text-sm">
-          Try adjusting your filter or complete more workouts to see
-          them here.
+          Try adjusting your filter or complete more workouts to see them here.
         </p>
       </div>
       <Button
@@ -214,25 +188,17 @@ export default function TimelineEmptyState({
     );
   } else if (filterStatus === "all" && selectedPlanId) {
     emptyStateContent = (
-      <ReadyEmptyState
-        selectedPlanId={selectedPlanId}
-        setSchedulingPlanId={setSchedulingPlanId}
-      />
+      <ReadyEmptyState selectedPlanId={selectedPlanId} setSchedulingPlanId={setSchedulingPlanId} />
     );
   } else {
     emptyStateContent = (
-      <NoWorkoutsEmptyState
-        filterStatus={filterStatus}
-        setFilterStatus={setFilterStatus}
-      />
+      <NoWorkoutsEmptyState filterStatus={filterStatus} setFilterStatus={setFilterStatus} />
     );
   }
 
   return (
     <Card className="overflow-visible">
-      <CardContent className="p-8 md:p-12">
-        {emptyStateContent}
-      </CardContent>
+      <CardContent className="p-8 md:p-12">{emptyStateContent}</CardContent>
     </Card>
   );
 }

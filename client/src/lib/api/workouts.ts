@@ -14,17 +14,23 @@ export interface BatchReparseResponse {
 }
 
 export const workouts = {
-  create: (data: Omit<InsertWorkoutLog, "userId"> & { title?: string; exercises?: ParsedExercise[] }) =>
-    typedRequest<{ message: string; workout: WorkoutLog }>("POST", "/api/v1/workouts", data),
+  create: (
+    data: Omit<InsertWorkoutLog, "userId"> & { title?: string; exercises?: ParsedExercise[] },
+  ) => typedRequest<{ message: string; workout: WorkoutLog }>("POST", "/api/v1/workouts", data),
 
   list: (params?: { limit?: number; offset?: number }) => {
     const qs = params
-      ? `?${new URLSearchParams(Object.entries(params).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)])).toString()}`
+      ? `?${new URLSearchParams(
+          Object.entries(params)
+            .filter(([, v]) => v != null)
+            .map(([k, v]) => [k, String(v)]),
+        ).toString()}`
       : "";
     return typedRequest<WorkoutLog[]>("GET", `/api/v1/workouts${qs}`);
   },
 
-  get: (id: string) => typedRequest<WorkoutLog & { exerciseSets?: ExerciseSet[] }>("GET", `/api/v1/workouts/${id}`),
+  get: (id: string) =>
+    typedRequest<WorkoutLog & { exerciseSets?: ExerciseSet[] }>("GET", `/api/v1/workouts/${id}`),
 
   update: (id: string, data: UpdateWorkoutLog & { exercises?: ParsedExercise[] }) =>
     typedRequest<WorkoutLog>("PATCH", `/api/v1/workouts/${id}`, data),

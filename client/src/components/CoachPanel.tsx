@@ -12,7 +12,8 @@ import { CoachPanelStats } from "@/components/coach/CoachPanelStats";
 import { CoachPanelChatArea } from "@/components/coach/CoachPanelChatArea";
 import { CoachPanelFooter } from "@/components/coach/CoachPanelFooter";
 
-const WELCOME_TEXT = "Welcome to HyroxTracker! I'm your AI training coach, here to help you prepare for Hyrox.\n\nTo get started, you can:\n- **Use our 8-week training plan** - a structured program covering running, strength, and all Hyrox stations\n- **Import your own plan** - if you have a CSV training plan\n- **Log individual workouts** - track sessions as you complete them\n\nOnce you have some training data, I can analyze your progress, suggest improvements, and help with pacing strategies. What would you like to know about Hyrox training?";
+const WELCOME_TEXT =
+  "Welcome to HyroxTracker! I'm your AI training coach, here to help you prepare for Hyrox.\n\nTo get started, you can:\n- **Use our 8-week training plan** - a structured program covering running, strength, and all Hyrox stations\n- **Import your own plan** - if you have a CSV training plan\n- **Log individual workouts** - track sessions as you complete them\n\nOnce you have some training data, I can analyze your progress, suggest improvements, and help with pacing strategies. What would you like to know about Hyrox training?";
 
 const QUICK_ACTIONS = [
   { id: "suggestions", label: "Get workout suggestions" },
@@ -28,7 +29,12 @@ interface CoachPanelProps {
   readonly isNewUser?: boolean;
 }
 
-export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }: Readonly<CoachPanelProps>) {
+export function CoachPanel({
+  isOpen,
+  onClose,
+  timeline = [],
+  isNewUser = false,
+}: Readonly<CoachPanelProps>) {
   const [localMessages, setLocalMessages] = useState<Message[]>([]);
   const [hasShownWelcome, setHasShownWelcome] = useState(false);
 
@@ -47,7 +53,7 @@ export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }
   const messages = useMemo(() => {
     const allMessages = [...hookMessages];
     for (const localMsg of localMessages) {
-      if (!allMessages.some(m => m.id === localMsg.id)) {
+      if (!allMessages.some((m) => m.id === localMsg.id)) {
         allMessages.push(localMsg);
       }
     }
@@ -62,12 +68,15 @@ export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }
   const saveMessageMutation = useSaveMessageMutation();
 
   const addLocalMessage = useCallback((message: Message) => {
-    setLocalMessages(prev => [...prev, message]);
+    setLocalMessages((prev) => [...prev, message]);
   }, []);
 
-  const saveMessage = useCallback((msg: { role: string; content: string }) => {
-    saveMessageMutation.mutate(msg);
-  }, [saveMessageMutation]);
+  const saveMessage = useCallback(
+    (msg: { role: string; content: string }) => {
+      saveMessageMutation.mutate(msg);
+    },
+    [saveMessageMutation],
+  );
 
   const {
     pendingSuggestions,
@@ -87,15 +96,29 @@ export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }
     if (isOpen && isNewUser && !hasShownWelcome && messages.length === 0) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setHasShownWelcome(true);
-      setLocalMessages([{ id: "new-user-welcome", role: "assistant", content: WELCOME_TEXT, timestamp: getCurrentTimeString() }]);
+      setLocalMessages([
+        {
+          id: "new-user-welcome",
+          role: "assistant",
+          content: WELCOME_TEXT,
+          timestamp: getCurrentTimeString(),
+        },
+      ]);
     }
   }, [isOpen, isNewUser, hasShownWelcome, messages.length]);
 
-  useEffect(() => { scrollToBottom(); }, [messages, scrollToBottom]);
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, scrollToBottom]);
 
   const handleQuickAction = (action: { id: string; label: string }) => {
     if (action.id === "suggestions") {
-      addLocalMessage({ id: Date.now().toString(), role: "user", content: action.label, timestamp: getCurrentTimeString() });
+      addLocalMessage({
+        id: Date.now().toString(),
+        role: "user",
+        content: action.label,
+        timestamp: getCurrentTimeString(),
+      });
       saveMessage({ role: "user", content: action.label });
       suggestionsMutation.mutate();
     } else {
@@ -103,7 +126,11 @@ export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }
     }
   };
 
-  const handleClearHistory = () => { clearHistory(); setLocalMessages([]); clearSuggestions(); };
+  const handleClearHistory = () => {
+    clearHistory();
+    setLocalMessages([]);
+    clearSuggestions();
+  };
 
   const isProcessing = isLoading || suggestionsMutation.isPending;
 

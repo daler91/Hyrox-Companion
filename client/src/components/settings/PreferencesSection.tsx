@@ -1,6 +1,12 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Mail, BrainCircuit } from "lucide-react";
 
@@ -101,7 +107,9 @@ export function PreferencesSection({
                 <Mail className="h-4 w-4" />
                 Email Notifications
               </Label>
-              <p className="text-sm text-muted-foreground">Receive weekly training summaries and missed workout reminders</p>
+              <p className="text-sm text-muted-foreground">
+                Receive weekly training summaries and missed workout reminders
+              </p>
             </div>
             <Switch
               checked={emailNotifications}
@@ -123,9 +131,7 @@ export function PreferencesSection({
         <CardContent>
           <div className="flex items-center justify-between gap-4">
             <div className="space-y-1">
-              <Label className="flex items-center gap-2">
-                Auto-Adjust Workouts
-              </Label>
+              <Label className="flex items-center gap-2">Auto-Adjust Workouts</Label>
               <p className="text-sm text-muted-foreground">
                 After each completed workout, the AI coach analyses your performance and
                 automatically adjusts upcoming sessions to keep you on track for your plan goal.

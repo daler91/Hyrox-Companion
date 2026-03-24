@@ -29,11 +29,13 @@ export const updateUserPreferencesSchema = z.object({
 export type UpdateUserPreferences = z.infer<typeof updateUserPreferencesSchema>;
 
 // Training plan types and schemas
-export const insertTrainingPlanSchema = createInsertSchema(trainingPlans).omit({
-  id: true,
-}).extend({
-  goal: z.string().max(500).nullable().optional(),
-});
+export const insertTrainingPlanSchema = createInsertSchema(trainingPlans)
+  .omit({
+    id: true,
+  })
+  .extend({
+    goal: z.string().max(500).nullable().optional(),
+  });
 
 export const updateTrainingPlanGoalSchema = z.object({
   goal: z.string().max(500).nullable(),
@@ -44,11 +46,13 @@ export type InsertTrainingPlan = z.infer<typeof insertTrainingPlanSchema>;
 export type TrainingPlan = typeof trainingPlans.$inferSelect;
 
 // Plan day types and schemas
-export const insertPlanDaySchema = createInsertSchema(planDays).omit({
-  id: true,
-}).extend({
-  status: z.enum(["planned", "completed", "missed", "skipped"]).default("planned"),
-});
+export const insertPlanDaySchema = createInsertSchema(planDays)
+  .omit({
+    id: true,
+  })
+  .extend({
+    status: z.enum(["planned", "completed", "missed", "skipped"]).default("planned"),
+  });
 
 export const updatePlanDaySchema = insertPlanDaySchema.partial().omit({
   planId: true,
@@ -124,13 +128,19 @@ export type TimelineEntry = {
 };
 
 // Custom exercise types and schemas
-export const insertCustomExerciseSchema = createInsertSchema(customExercises).omit({
-  id: true,
-  createdAt: true,
-}).extend({
-  name: z.string().trim().min(1, "Name is required").max(100, "Name must be 100 characters or less"),
-  category: z.string().trim().max(50, "Category must be 50 characters or less").optional(),
-});
+export const insertCustomExerciseSchema = createInsertSchema(customExercises)
+  .omit({
+    id: true,
+    createdAt: true,
+  })
+  .extend({
+    name: z
+      .string()
+      .trim()
+      .min(1, "Name is required")
+      .max(100, "Name must be 100 characters or less"),
+    category: z.string().trim().max(50, "Category must be 50 characters or less").optional(),
+  });
 
 export type InsertCustomExercise = z.infer<typeof insertCustomExerciseSchema>;
 export type CustomExercise = typeof customExercises.$inferSelect;
@@ -145,26 +155,44 @@ export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
 export type ChatMessage = typeof chatMessages.$inferSelect;
 
 // Request Validation Schemas
-export const dateStringSchema = z.string().max(10).regex(/^\d{4}-\d{2}-\d{2}$/, "Must be a valid date in YYYY-MM-DD format");
+export const dateStringSchema = z
+  .string()
+  .max(10)
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Must be a valid date in YYYY-MM-DD format");
 
 export const chatMessageSchema = z.object({
   role: z.enum(["user", "assistant"]),
-  content: z.string().min(1, "Message content cannot be empty").max(1000, "Message must be 1000 characters or less"),
+  content: z
+    .string()
+    .min(1, "Message content cannot be empty")
+    .max(1000, "Message must be 1000 characters or less"),
 });
 
 export const chatRequestSchema = z.object({
-  message: z.string().min(1, "Message is required").max(1000, "Message must be 1000 characters or less"),
-  history: z.array(chatMessageSchema).optional().default([]).transform((h) => h.slice(-20)),
+  message: z
+    .string()
+    .min(1, "Message is required")
+    .max(1000, "Message must be 1000 characters or less"),
+  history: z
+    .array(chatMessageSchema)
+    .optional()
+    .default([])
+    .transform((h) => h.slice(-20)),
 });
 
 export const parseExercisesRequestSchema = z.object({
-  text: z.string().trim()
+  text: z
+    .string()
+    .trim()
     .min(1, "Text is required")
     .max(2000, "Text must be 2000 characters or less"),
 });
 
 export const importPlanRequestSchema = z.object({
-  csvContent: z.string().min(1, "CSV content is required").max(100000, "CSV content must be 100,000 characters or less"),
+  csvContent: z
+    .string()
+    .min(1, "CSV content is required")
+    .max(100000, "CSV content must be 100,000 characters or less"),
   fileName: z.string().max(255, "File name must be 255 characters or less").optional(),
   planName: z.string().max(255, "Plan name must be 255 characters or less").optional(),
 });
@@ -173,28 +201,32 @@ export const schedulePlanRequestSchema = z.object({
   startDate: dateStringSchema,
 });
 
-export const exerciseSetSchema = z.object({
-  setNumber: z.number().optional().nullable(),
-  reps: z.number().optional().nullable(),
-  weight: z.number().optional().nullable(),
-  distance: z.number().optional().nullable(),
-  time: z.number().optional().nullable(),
-  notes: z.string().max(1000).optional().nullable(),
-}).passthrough();
+export const exerciseSetSchema = z
+  .object({
+    setNumber: z.number().optional().nullable(),
+    reps: z.number().optional().nullable(),
+    weight: z.number().optional().nullable(),
+    distance: z.number().optional().nullable(),
+    time: z.number().optional().nullable(),
+    notes: z.string().max(1000).optional().nullable(),
+  })
+  .passthrough();
 
-export const incomingExerciseSchema = z.object({
-  exerciseName: z.string().min(1).max(255),
-  customLabel: z.string().max(255).optional().nullable(),
-  category: z.string().max(50).optional().nullable(),
-  numSets: z.number().min(1).max(50).optional().nullable(),
-  reps: z.number().optional().nullable(),
-  weight: z.number().optional().nullable(),
-  distance: z.number().optional().nullable(),
-  time: z.number().optional().nullable(),
-  confidence: z.number().min(0).max(100).optional().nullable(),
-  notes: z.string().max(1000).optional().nullable(),
-  sets: z.array(exerciseSetSchema).max(50).optional().nullable(),
-}).passthrough();
+export const incomingExerciseSchema = z
+  .object({
+    exerciseName: z.string().min(1).max(255),
+    customLabel: z.string().max(255).optional().nullable(),
+    category: z.string().max(50).optional().nullable(),
+    numSets: z.number().min(1).max(50).optional().nullable(),
+    reps: z.number().optional().nullable(),
+    weight: z.number().optional().nullable(),
+    distance: z.number().optional().nullable(),
+    time: z.number().optional().nullable(),
+    confidence: z.number().min(0).max(100).optional().nullable(),
+    notes: z.string().max(1000).optional().nullable(),
+    sets: z.array(exerciseSetSchema).max(50).optional().nullable(),
+  })
+  .passthrough();
 
 export const exercisesPayloadSchema = z.array(incomingExerciseSchema).max(200);
 
@@ -235,15 +267,25 @@ export interface PersonalRecord {
 }
 
 // Coaching material types and schemas
-export const insertCoachingMaterialSchema = createInsertSchema(coachingMaterials).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-}).extend({
-  title: z.string().trim().min(1, "Title is required").max(255, "Title must be 255 characters or less"),
-  content: z.string().trim().min(1, "Content is required").max(1500000, "Content must be 1,500,000 characters or less"),
-  type: z.enum(["principles", "document"]),
-});
+export const insertCoachingMaterialSchema = createInsertSchema(coachingMaterials)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    title: z
+      .string()
+      .trim()
+      .min(1, "Title is required")
+      .max(255, "Title must be 255 characters or less"),
+    content: z
+      .string()
+      .trim()
+      .min(1, "Content is required")
+      .max(1500000, "Content must be 1,500,000 characters or less"),
+    type: z.enum(["principles", "document"]),
+  });
 
 export type InsertCoachingMaterial = z.infer<typeof insertCoachingMaterialSchema>;
 export type CoachingMaterial = typeof coachingMaterials.$inferSelect;

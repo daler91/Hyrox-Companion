@@ -1,10 +1,7 @@
 import React from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
-import {
-  useWorkoutEditor,
-  getBlockExerciseName,
-} from "@/hooks/useWorkoutEditor";
+import { useWorkoutEditor, getBlockExerciseName } from "@/hooks/useWorkoutEditor";
 import { useWorkoutForm } from "@/hooks/useWorkoutForm";
 
 import { WorkoutHeader } from "@/components/workout/WorkoutHeader";
@@ -113,10 +110,7 @@ export default function LogWorkout() {
             toggleNotesListening={toggleNotesListening}
             notesInterim={notesInterim}
           />
-          <WorkoutSaveButton
-            handleSave={handleSave}
-            isPending={saveMutation.isPending}
-          />
+          <WorkoutSaveButton handleSave={handleSave} isPending={saveMutation.isPending} />
         </div>
 
         {/* Right Column: Workout Content */}

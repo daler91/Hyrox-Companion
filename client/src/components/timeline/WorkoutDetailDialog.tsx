@@ -11,7 +11,14 @@ interface WorkoutDetailDialogProps {
   readonly onClose: () => void;
   readonly onMarkComplete: (entry: TimelineEntry) => void;
   readonly onChangeStatus: (entry: TimelineEntry, status: WorkoutStatus) => void;
-  readonly onSave: (updates: { focus: string; mainWorkout: string; accessory: string | null; notes: string | null; rpe?: number | null; exercises?: ParsedExercise[] }) => void;
+  readonly onSave: (updates: {
+    focus: string;
+    mainWorkout: string;
+    accessory: string | null;
+    notes: string | null;
+    rpe?: number | null;
+    exercises?: ParsedExercise[];
+  }) => void;
   onDelete: (entry: TimelineEntry) => void;
   onCombine?: (entry: TimelineEntry) => void;
   isSaving?: boolean;
@@ -51,7 +58,9 @@ export default function WorkoutDetailDialog({
 
   return (
     <Dialog open={!!entry} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className={cn("max-h-[85vh] overflow-y-auto", isEditing ? "max-w-4xl" : "max-w-lg")}>
+      <DialogContent
+        className={cn("max-h-[85vh] overflow-y-auto", isEditing ? "max-w-4xl" : "max-w-lg")}
+      >
         {isEditing ? (
           <WorkoutDetailEditMode
             entry={entry}

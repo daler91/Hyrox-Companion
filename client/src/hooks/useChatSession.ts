@@ -11,7 +11,7 @@ function processStreamLines(
   lines: string[],
   currentResponse: string,
   assistantMessageId: string,
-  setMessages: React.Dispatch<React.SetStateAction<Message[]>>
+  setMessages: React.Dispatch<React.SetStateAction<Message[]>>,
 ): string {
   let updatedResponse = currentResponse;
   for (const line of lines) {
@@ -26,22 +26,14 @@ function processStreamLines(
     if (data.ragInfo) {
       const info = data.ragInfo as RagInfo;
       setMessages((prev) =>
-        prev.map((m) =>
-          m.id === assistantMessageId
-            ? { ...m, ragInfo: info }
-            : m
-        )
+        prev.map((m) => (m.id === assistantMessageId ? { ...m, ragInfo: info } : m)),
       );
     }
     if (data.text) {
       updatedResponse += data.text;
       const newResponse = updatedResponse; // capture in closure
       setMessages((prev) =>
-        prev.map((m) =>
-          m.id === assistantMessageId
-            ? { ...m, content: newResponse }
-            : m
-        )
+        prev.map((m) => (m.id === assistantMessageId ? { ...m, content: newResponse } : m)),
       );
     }
     if (data.error) {
@@ -55,7 +47,7 @@ async function handleStreamResponse(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   decoder: TextDecoder,
   assistantMessageId: string,
-  setMessages: React.Dispatch<React.SetStateAction<Message[]>>
+  setMessages: React.Dispatch<React.SetStateAction<Message[]>>,
 ): Promise<string> {
   let fullResponse = "";
   let buffer = "";
@@ -95,23 +87,22 @@ interface UseChatSessionOptions {
   useStreaming?: boolean;
 }
 
-const DEFAULT_WELCOME = "Hey! I'm your AI training coach. Ask me about pacing, training tips, or anything Hyrox-related!";
+const DEFAULT_WELCOME =
+  "Hey! I'm your AI training coach. Ask me about pacing, training tips, or anything Hyrox-related!";
 const MAX_HISTORY_MESSAGES = 20;
 
 export function useChatSession(options: UseChatSessionOptions = {}) {
-  const {
-    welcomeMessage = DEFAULT_WELCOME,
-    useStreaming = true,
-  } = options;
+  const { welcomeMessage = DEFAULT_WELCOME, useStreaming = true } = options;
 
-  const welcomeMessageObj: Message = useMemo(() => ({
-    id: "welcome",
-    role: "assistant",
-    content: welcomeMessage,
-    timestamp: getCurrentTimeString(),
-  }), [welcomeMessage]);
-
-
+  const welcomeMessageObj: Message = useMemo(
+    () => ({
+      id: "welcome",
+      role: "assistant",
+      content: welcomeMessage,
+      timestamp: getCurrentTimeString(),
+    }),
+    [welcomeMessage],
+  );
 
   const [messages, setMessages] = useState<Message[]>([welcomeMessageObj]);
   const [isLoading, setIsLoading] = useState(false);
@@ -134,9 +125,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         id: msg.id,
         role: msg.role as "user" | "assistant",
         content: msg.content,
-        timestamp: msg.timestamp
-          ? formatTime(new Date(msg.timestamp))
-          : "",
+        timestamp: msg.timestamp ? formatTime(new Date(msg.timestamp)) : "",
       }));
       setMessages([welcomeMessageObj, ...loadedMessages]);
       setHistoryLoaded(true);
@@ -162,101 +151,109 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
-  const sendMessage = useCallback(async (content: string) => {
-    if (isSubmittingRef.current) return;
-    isSubmittingRef.current = true;
+  const sendMessage = useCallback(
+    async (content: string) => {
+      if (isSubmittingRef.current) return;
+      isSubmittingRef.current = true;
 
-    const userMessage: Message = {
-      id: crypto.randomUUID(),
-      role: "user",
-      content,
-      timestamp: getCurrentTimeString(),
-    };
+      const userMessage: Message = {
+        id: crypto.randomUUID(),
+        role: "user",
+        content,
+        timestamp: getCurrentTimeString(),
+      };
 
-    setMessages((prev) => [...prev, userMessage]);
-    setIsLoading(true);
+      setMessages((prev) => [...prev, userMessage]);
+      setIsLoading(true);
 
-    saveMessageMutation.mutate({ role: "user", content });
+      saveMessageMutation.mutate({ role: "user", content });
 
-    const assistantMessageId = crypto.randomUUID();
-    let fullResponse = "";
+      const assistantMessageId = crypto.randomUUID();
+      let fullResponse = "";
 
-    try {
-      const history = messagesRef.current
-        .filter((m) => m.id !== "welcome")
-        .map((m) => ({ role: m.role, content: m.content }))
-        .slice(-MAX_HISTORY_MESSAGES);
+      try {
+        const history = messagesRef.current
+          .filter((m) => m.id !== "welcome")
+          .map((m) => ({ role: m.role, content: m.content }))
+          .slice(-MAX_HISTORY_MESSAGES);
 
-      if (useStreaming) {
-        const placeholderMessage: Message = {
-          id: assistantMessageId,
-          role: "assistant",
-          content: "",
-          timestamp: getCurrentTimeString(),
-        };
-        setMessages((prev) => [...prev, placeholderMessage]);
+        if (useStreaming) {
+          const placeholderMessage: Message = {
+            id: assistantMessageId,
+            role: "assistant",
+            content: "",
+            timestamp: getCurrentTimeString(),
+          };
+          setMessages((prev) => [...prev, placeholderMessage]);
 
-        const response = await api.chat.sendStream({
-          message: content,
-          history
-        });
+          const response = await api.chat.sendStream({
+            message: content,
+            history,
+          });
 
-        const reader = response.body?.getReader();
-        const decoder = new TextDecoder();
+          const reader = response.body?.getReader();
+          const decoder = new TextDecoder();
 
-        if (!reader) {
-          throw new Error("No response body");
+          if (!reader) {
+            throw new Error("No response body");
+          }
+
+          fullResponse = await handleStreamResponse(
+            reader,
+            decoder,
+            assistantMessageId,
+            setMessages,
+          );
+
+          if (fullResponse) {
+            saveMessageMutation.mutate({ role: "assistant", content: fullResponse });
+          }
+        } else {
+          const data = await api.chat.send({
+            message: content,
+            history,
+          });
+
+          const assistantMessage: Message = {
+            id: assistantMessageId,
+            role: "assistant",
+            content: data.response,
+            timestamp: getCurrentTimeString(),
+            ragInfo: data.ragInfo,
+          };
+
+          setMessages((prev) => [...prev, assistantMessage]);
+          saveMessageMutation.mutate({ role: "assistant", content: data.response });
         }
-
-        fullResponse = await handleStreamResponse(reader, decoder, assistantMessageId, setMessages);
-
+      } catch {
+        // Ignore detailed errors in the UI, just show interruption message
         if (fullResponse) {
-          saveMessageMutation.mutate({ role: "assistant", content: fullResponse });
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMessageId
+                ? { ...m, content: fullResponse + "\n\n(Stream interrupted)" }
+                : m,
+            ),
+          );
+        } else {
+          const errorMessage: Message = {
+            id: assistantMessageId,
+            role: "assistant",
+            content: "Sorry, I encountered an error. Please try again.",
+            timestamp: getCurrentTimeString(),
+          };
+          setMessages((prev) => {
+            const withoutPlaceholder = prev.filter((m) => m.id !== assistantMessageId);
+            return [...withoutPlaceholder, errorMessage];
+          });
         }
-      } else {
-        const data = await api.chat.send({
-          message: content,
-          history
-        });
-
-        const assistantMessage: Message = {
-          id: assistantMessageId,
-          role: "assistant",
-          content: data.response,
-          timestamp: getCurrentTimeString(),
-          ragInfo: data.ragInfo,
-        };
-
-        setMessages((prev) => [...prev, assistantMessage]);
-        saveMessageMutation.mutate({ role: "assistant", content: data.response });
+      } finally {
+        setIsLoading(false);
+        isSubmittingRef.current = false;
       }
-    } catch {
-      // Ignore detailed errors in the UI, just show interruption message
-      if (fullResponse) {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantMessageId
-              ? { ...m, content: fullResponse + "\n\n(Stream interrupted)" }
-              : m
-          )
-        );
-      } else {
-        const errorMessage: Message = {
-          id: assistantMessageId,
-          role: "assistant",
-          content: "Sorry, I encountered an error. Please try again.",
-          timestamp: getCurrentTimeString(),
-        };
-        setMessages((prev) => {
-          const withoutPlaceholder = prev.filter(m => m.id !== assistantMessageId);
-          return [...withoutPlaceholder, errorMessage];
-        });
-      }
-    } finally {
-      setIsLoading(false);
-      isSubmittingRef.current = false;
-    }
-  }, [useStreaming, saveMessageMutation]);
+    },
+    [useStreaming, saveMessageMutation],
+  );
 
   const clearHistory = useCallback(() => {
     clearHistoryMutation.mutate();

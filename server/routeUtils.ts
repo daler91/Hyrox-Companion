@@ -45,8 +45,8 @@ export function rateLimiter(
             const authReq = req as AuthenticatedRequest;
             return !authReq.auth?.userId && !req.ip;
           },
-          standardHeaders: true,   // RateLimit-* headers (RFC 6585)
-          legacyHeaders: false,     // Disable X-RateLimit-* headers
+          standardHeaders: true, // RateLimit-* headers (RFC 6585)
+          legacyHeaders: false, // Disable X-RateLimit-* headers
           handler: (_req: Request, res: Response) => {
             res.setHeader("Retry-After", String(retryAfterSec));
             res.status(429).json({
@@ -62,7 +62,6 @@ export function rateLimiter(
     return limiter(req, res, next);
   };
 }
-
 
 // Exported for testing only — clears the limiter cache so each test starts fresh.
 export function clearRateLimitBuckets() {
@@ -97,7 +96,6 @@ export function calculateStreak(completedDates: Set<string>): number {
   return streak;
 }
 
-
 import { z } from "zod";
 
 export function validateBody(schema: z.ZodType<any, any, any>) {
@@ -113,10 +111,12 @@ export function validateBody(schema: z.ZodType<any, any, any>) {
   };
 }
 
-export const asyncHandler = (fn: (req: any, res: Response, next: NextFunction) => Promise<any>) => (req: Request, res: Response, next: NextFunction) => {
-  return Promise.resolve(fn(req, res, next)).catch((err) => {
-    const log = (req as any).log || logger;
-    log.error({ err }, `Route error in ${req.method} ${req.originalUrl}`);
-    next(err);
-  });
-};
+export const asyncHandler =
+  (fn: (req: any, res: Response, next: NextFunction) => Promise<any>) =>
+  (req: Request, res: Response, next: NextFunction) => {
+    return Promise.resolve(fn(req, res, next)).catch((err) => {
+      const log = (req as any).log || logger;
+      log.error({ err }, `Route error in ${req.method} ${req.originalUrl}`);
+      next(err);
+    });
+  };

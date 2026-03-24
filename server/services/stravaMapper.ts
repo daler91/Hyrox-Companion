@@ -50,7 +50,11 @@ function formatStravaPace(metersPerSecond: number, distanceUnit: DistanceUnit): 
   return formatPaceShared(metersPerSecond, distanceUnit);
 }
 
-export function mapStravaActivityToWorkout(activity: StravaActivity, userId: string, distanceUnit: DistanceUnit = "km") {
+export function mapStravaActivityToWorkout(
+  activity: StravaActivity,
+  userId: string,
+  distanceUnit: DistanceUnit = "km",
+) {
   const durationMinutes = Math.round(activity.moving_time / 60);
   const isDistanceActivity = activity.distance > 100;
 
@@ -60,7 +64,9 @@ export function mapStravaActivityToWorkout(activity: StravaActivity, userId: str
 
   const accessoryParts: string[] = [];
   if (activity.total_elevation_gain > 0) {
-    accessoryParts.push(`Elevation: ${formatElevation(activity.total_elevation_gain, distanceUnit)}`);
+    accessoryParts.push(
+      `Elevation: ${formatElevation(activity.total_elevation_gain, distanceUnit)}`,
+    );
   }
   if (isDistanceActivity && activity.average_speed > 0) {
     accessoryParts.push(`Pace: ${formatStravaPace(activity.average_speed, distanceUnit)}`);
@@ -91,7 +97,10 @@ export function mapStravaActivityToWorkout(activity: StravaActivity, userId: str
     planDayId: null,
     source: "strava" as const,
     stravaActivityId: String(activity.id),
-    calories: activity.calories || activity.kilojoules ? Math.round((activity.calories || 0) || (activity.kilojoules || 0) * 0.239) : null,
+    calories:
+      activity.calories || activity.kilojoules
+        ? Math.round(activity.calories || 0 || (activity.kilojoules || 0) * 0.239)
+        : null,
     distanceMeters: activity.distance || null,
     elevationGain: activity.total_elevation_gain || null,
     avgHeartrate: activity.average_heartrate ? Math.round(activity.average_heartrate) : null,

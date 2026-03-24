@@ -46,7 +46,13 @@ function getStatusBadge(status: string) {
   }
 }
 
-export function WorkoutDetailHeader({ status, source, dayName, focus, isEditing }: Readonly<WorkoutDetailHeaderProps>) {
+export function WorkoutDetailHeader({
+  status,
+  source,
+  dayName,
+  focus,
+  isEditing,
+}: Readonly<WorkoutDetailHeaderProps>) {
   return (
     <DialogHeader>
       <div className="flex items-center gap-2 flex-wrap">
@@ -57,16 +63,10 @@ export function WorkoutDetailHeader({ status, source, dayName, focus, isEditing 
             Strava
           </Badge>
         )}
-        {dayName && (
-          <Badge variant="secondary">{dayName}</Badge>
-        )}
+        {dayName && <Badge variant="secondary">{dayName}</Badge>}
       </div>
-      <DialogTitle className="text-left mt-2">
-        {isEditing ? "Edit Workout" : focus}
-      </DialogTitle>
-      <DialogDescription className="sr-only">
-        View and manage workout details
-      </DialogDescription>
+      <DialogTitle className="text-left mt-2">{isEditing ? "Edit Workout" : focus}</DialogTitle>
+      <DialogDescription className="sr-only">View and manage workout details</DialogDescription>
     </DialogHeader>
   );
 }

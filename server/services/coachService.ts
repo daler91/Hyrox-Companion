@@ -1,7 +1,11 @@
 import { logger } from "../logger";
 import { storage } from "../storage";
 import { buildTrainingContext } from "./aiService";
-import { generateWorkoutSuggestions, type UpcomingWorkout, type WorkoutSuggestion } from "../gemini/index";
+import {
+  generateWorkoutSuggestions,
+  type UpcomingWorkout,
+  type WorkoutSuggestion,
+} from "../gemini/index";
 import { buildCoachingMaterialsSection, buildRetrievedChunksSection } from "../prompts";
 import { retrieveRelevantChunks } from "./ragService";
 import { toDateStr } from "../types";
@@ -10,19 +14,13 @@ import { toDateStr } from "../types";
 // Helpers
 // ---------------------------------------------------------------------------
 
-function getExistingFieldValue(
-  suggestion: WorkoutSuggestion,
-  entry: UpcomingWorkout,
-): string {
+function getExistingFieldValue(suggestion: WorkoutSuggestion, entry: UpcomingWorkout): string {
   if (suggestion.targetField === "mainWorkout") return entry.mainWorkout;
   if (suggestion.targetField === "accessory") return entry.accessory || "";
   return "";
 }
 
-function buildUpdateValue(
-  suggestion: WorkoutSuggestion,
-  entry: UpcomingWorkout,
-): string {
+function buildUpdateValue(suggestion: WorkoutSuggestion, entry: UpcomingWorkout): string {
   if (suggestion.action !== "append") return suggestion.recommendation;
   const existing = getExistingFieldValue(suggestion, entry);
   return existing
@@ -67,7 +65,7 @@ async function getCoachingMaterialsString(
   try {
     const hasChunks = await storage.hasChunksForUser(userId);
     if (hasChunks) {
-      const query = upcomingWorkouts.map(w => `${w.focus} ${w.mainWorkout}`).join("; ");
+      const query = upcomingWorkouts.map((w) => `${w.focus} ${w.mainWorkout}`).join("; ");
       const chunks = await retrieveRelevantChunks(userId, query);
       if (chunks.length > 0) {
         return { text: buildRetrievedChunksSection(chunks), source: "rag" };
@@ -111,10 +109,7 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
 
       const upcomingWorkouts: UpcomingWorkout[] = timeline
         .filter(
-          (entry) =>
-            entry.status === "planned" &&
-            entry.date >= today &&
-            entry.planDayId !== null,
+          (entry) => entry.status === "planned" && entry.date >= today && entry.planDayId !== null,
         )
         // Fast string comparison for YYYY-MM-DD dates instead of localeCompare
         .sort((a, b) => {
@@ -144,7 +139,9 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
       );
 
       const results = await Promise.all(
-        suggestions.map((s) => applySuggestion(s, upcomingWorkouts, userId, coachingContext.source)),
+        suggestions.map((s) =>
+          applySuggestion(s, upcomingWorkouts, userId, coachingContext.source),
+        ),
       );
       const adjusted = results.filter(Boolean).length;
 

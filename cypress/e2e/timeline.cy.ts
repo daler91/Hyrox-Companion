@@ -68,9 +68,7 @@ describe("Timeline Page", () => {
             workoutLogId: "wl-1",
           },
         ],
-        plans: [
-          { id: "plan-1", name: "8 Week Hyrox Prep", userId: "test-user-123" },
-        ],
+        plans: [{ id: "plan-1", name: "8 Week Hyrox Prep", userId: "test-user-123" }],
       });
     });
 

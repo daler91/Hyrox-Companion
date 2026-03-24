@@ -15,8 +15,7 @@ const PREV: Partial<Record<Step, Step>> = {
   schedule: "plan",
 };
 
-const markComplete = () =>
-  localStorage.setItem("hyrox-onboarding-complete", "true");
+const markComplete = () => localStorage.setItem("hyrox-onboarding-complete", "true");
 
 export function useOnboardingWizard(onComplete: (choice: "sample" | "import" | "skip") => void) {
   const { toast } = useToast();
@@ -43,8 +42,7 @@ export function useOnboardingWizard(onComplete: (choice: "sample" | "import" | "
       setCreatedPlanId(data.id);
       setStep("schedule");
     },
-    onError: () =>
-      toast({ title: "Failed to create plan", variant: "destructive" }),
+    onError: () => toast({ title: "Failed to create plan", variant: "destructive" }),
   });
 
   const scheduleMutation = useMutation({
@@ -60,8 +58,7 @@ export function useOnboardingWizard(onComplete: (choice: "sample" | "import" | "
       markComplete();
       onComplete("sample");
     },
-    onError: () =>
-      toast({ title: "Failed to schedule plan", variant: "destructive" }),
+    onError: () => toast({ title: "Failed to schedule plan", variant: "destructive" }),
   });
 
   const handleNext = async () => {

@@ -1,4 +1,8 @@
-import { extendZodWithOpenApi, OpenAPIRegistry, OpenApiGeneratorV3 } from "@asteasolutions/zod-to-openapi";
+import {
+  extendZodWithOpenApi,
+  OpenAPIRegistry,
+  OpenApiGeneratorV3,
+} from "@asteasolutions/zod-to-openapi";
 import { z } from "zod";
 
 // MUST extend Zod before importing any schemas that use it
@@ -22,7 +26,7 @@ export const InsertWorkoutLogSchema = registry.register(
   insertWorkoutLogSchema.openapi({
     title: "InsertWorkoutLog",
     description: "Payload for creating a new workout log",
-  })
+  }),
 );
 
 export const ExerciseSetSchema = registry.register(
@@ -30,7 +34,7 @@ export const ExerciseSetSchema = registry.register(
   exerciseSetSchema.openapi({
     title: "ExerciseSet",
     description: "A single set of an exercise in a workout",
-  })
+  }),
 );
 
 export const InsertExerciseSetSchema = registry.register(
@@ -38,7 +42,7 @@ export const InsertExerciseSetSchema = registry.register(
   insertExerciseSetSchema.openapi({
     title: "InsertExerciseSet",
     description: "Payload for creating a new exercise set",
-  })
+  }),
 );
 
 export const UpdateUserPreferencesSchema = registry.register(
@@ -46,7 +50,7 @@ export const UpdateUserPreferencesSchema = registry.register(
   updateUserPreferencesSchema.openapi({
     title: "UpdateUserPreferences",
     description: "User profile preferences",
-  })
+  }),
 );
 
 export const InsertPlanDaySchema = registry.register(
@@ -54,35 +58,39 @@ export const InsertPlanDaySchema = registry.register(
   insertPlanDaySchema.openapi({
     title: "InsertPlanDay",
     description: "Payload for creating a planned workout day",
-  })
+  }),
 );
 
 // Create a combined schema for creating a workout that includes the optional exercises payload
 export const CreateWorkoutRequestSchema = registry.register(
   "CreateWorkoutRequest",
-  z.intersection(
-    insertWorkoutLogSchema,
-    z.object({
-      exercises: exercisesPayloadSchema.optional(),
-    })
-  ).openapi({
-    title: "CreateWorkoutRequest",
-    description: "Payload for creating a new workout log along with optional exercise sets",
-  })
+  z
+    .intersection(
+      insertWorkoutLogSchema,
+      z.object({
+        exercises: exercisesPayloadSchema.optional(),
+      }),
+    )
+    .openapi({
+      title: "CreateWorkoutRequest",
+      description: "Payload for creating a new workout log along with optional exercise sets",
+    }),
 );
 
 // Create a combined schema for updating a workout that includes the optional exercises payload
 export const UpdateWorkoutRequestSchema = registry.register(
   "UpdateWorkoutRequest",
-  z.intersection(
-    updateWorkoutLogSchema,
-    z.object({
-      exercises: exercisesPayloadSchema.optional(),
-    })
-  ).openapi({
-    title: "UpdateWorkoutRequest",
-    description: "Payload for updating a workout log along with optional exercise sets",
-  })
+  z
+    .intersection(
+      updateWorkoutLogSchema,
+      z.object({
+        exercises: exercisesPayloadSchema.optional(),
+      }),
+    )
+    .openapi({
+      title: "UpdateWorkoutRequest",
+      description: "Payload for updating a workout log along with optional exercise sets",
+    }),
 );
 
 export const WorkoutIdParam = registry.registerParameter(
@@ -94,7 +102,7 @@ export const WorkoutIdParam = registry.registerParameter(
     },
     example: "123e4567-e89b-12d3-a456-426614174000",
     description: "The UUID of the workout log",
-  })
+  }),
 );
 
 // Register Security Scheme
@@ -113,7 +121,8 @@ registry.registerPath({
   path: "/api/v1/workouts",
   tags: ["Workouts"],
   summary: "Create a new workout log",
-  description: "Creates a new workout log with optional detailed exercise sets (the `exercises` array).",
+  description:
+    "Creates a new workout log with optional detailed exercise sets (the `exercises` array).",
   security,
   request: {
     body: {
@@ -202,7 +211,8 @@ registry.registerPath({
   path: "/api/v1/workouts/{id}",
   tags: ["Workouts"],
   summary: "Update a specific workout log",
-  description: "Updates an existing workout log by its ID. You can optionally include an `exercises` array to replace the existing exercise sets.",
+  description:
+    "Updates an existing workout log by its ID. You can optionally include an `exercises` array to replace the existing exercise sets.",
   security,
   request: {
     params: z.object({

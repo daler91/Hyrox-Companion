@@ -3,8 +3,7 @@ import { api, QUERY_KEYS } from "@/lib/api";
 
 export function useSaveMessageMutation() {
   return useMutation({
-    mutationFn: (msg: { role: string; content: string }) =>
-      api.chat.saveMessage(msg),
+    mutationFn: (msg: { role: string; content: string }) => api.chat.saveMessage(msg),
   });
 }
 

@@ -32,7 +32,8 @@ export function useTimelineData(selectedPlanId: string | null) {
     }
   }, [timelineLoading]);
 
-  const isNewUser = !plansLoading && !timelineLoading && plans.length === 0 && timelineData.length === 0;
+  const isNewUser =
+    !plansLoading && !timelineLoading && plans.length === 0 && timelineData.length === 0;
 
   return {
     plans,

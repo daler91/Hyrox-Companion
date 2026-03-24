@@ -11,16 +11,28 @@ interface VoiceFieldButtonProps {
   "data-testid"?: string;
 }
 
-export function VoiceFieldButton({ onTranscript, onStopRef, size = "icon", className, "data-testid": dataTestId }: Readonly<VoiceFieldButtonProps>) {
+export function VoiceFieldButton({
+  onTranscript,
+  onStopRef,
+  size = "icon",
+  className,
+  "data-testid": dataTestId,
+}: Readonly<VoiceFieldButtonProps>) {
   const { toast } = useToast();
 
-  const handleResult = useCallback((transcript: string) => {
-    onTranscript(transcript);
-  }, [onTranscript]);
+  const handleResult = useCallback(
+    (transcript: string) => {
+      onTranscript(transcript);
+    },
+    [onTranscript],
+  );
 
-  const handleError = useCallback((message: string) => {
-    toast({ title: "Voice Input", description: message, variant: "destructive" });
-  }, [toast]);
+  const handleError = useCallback(
+    (message: string) => {
+      toast({ title: "Voice Input", description: message, variant: "destructive" });
+    },
+    [toast],
+  );
 
   const { isListening, isSupported, stopListening, toggleListening } = useVoiceInput({
     onResult: handleResult,

@@ -59,8 +59,7 @@ export default function EditWorkoutDialog({
     (field: "focus" | "mainWorkout" | "accessory" | "notes", text: string) => {
       const current = editFormRef.current;
       const val = current[field];
-      const separator =
-        val && !val.endsWith(" ") && !val.endsWith("\n") ? " " : "";
+      const separator = val && !val.endsWith(" ") && !val.endsWith("\n") ? " " : "";
       onEditFormChange({
         ...current,
         [field]: val + separator + text,
@@ -95,9 +94,7 @@ export default function EditWorkoutDialog({
               <Input
                 id="edit-focus"
                 value={editForm.focus}
-                onChange={(e) =>
-                  onEditFormChange({ ...editForm, focus: e.target.value })
-                }
+                onChange={(e) => onEditFormChange({ ...editForm, focus: e.target.value })}
                 data-testid="input-edit-focus"
                 placeholder="e.g., Upper Body Strength, Active Recovery..."
               />
@@ -114,9 +111,7 @@ export default function EditWorkoutDialog({
               <Input
                 id="edit-notes"
                 value={editForm.notes}
-                onChange={(e) =>
-                  onEditFormChange({ ...editForm, notes: e.target.value })
-                }
+                onChange={(e) => onEditFormChange({ ...editForm, notes: e.target.value })}
                 data-testid="input-edit-notes"
                 placeholder="Add any observations or notes..."
               />
@@ -170,9 +165,7 @@ export default function EditWorkoutDialog({
                 <Textarea
                   id="edit-accessory"
                   value={editForm.accessory}
-                  onChange={(e) =>
-                    onEditFormChange({ ...editForm, accessory: e.target.value })
-                  }
+                  onChange={(e) => onEditFormChange({ ...editForm, accessory: e.target.value })}
                   rows={4}
                   className="flex-1"
                   data-testid="input-edit-accessory"
@@ -185,11 +178,7 @@ export default function EditWorkoutDialog({
           <Button variant="outline" onClick={handleClose}>
             Cancel
           </Button>
-          <Button
-            onClick={handleSave}
-            disabled={isPending}
-            data-testid="button-save-edit"
-          >
+          <Button onClick={handleSave} disabled={isPending} data-testid="button-save-edit">
             {isPending ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />

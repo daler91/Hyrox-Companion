@@ -27,10 +27,7 @@ export class CoachingStorage {
   }
 
   async createCoachingMaterial(data: InsertCoachingMaterial): Promise<CoachingMaterial> {
-    const [material] = await db
-      .insert(coachingMaterials)
-      .values(data)
-      .returning();
+    const [material] = await db.insert(coachingMaterials).values(data).returning();
     return material;
   }
 
@@ -100,7 +97,9 @@ export class CoachingStorage {
     return result.rows;
   }
 
-  async getChunkCountsByMaterial(userId: string): Promise<{ materialId: string; chunkCount: number; hasEmbeddings: boolean }[]> {
+  async getChunkCountsByMaterial(
+    userId: string,
+  ): Promise<{ materialId: string; chunkCount: number; hasEmbeddings: boolean }[]> {
     const result = await pool.query(
       `SELECT material_id AS "materialId",
               COUNT(*)::int AS "chunkCount",
@@ -110,11 +109,13 @@ export class CoachingStorage {
        GROUP BY material_id`,
       [userId],
     );
-    return result.rows.map((r: { materialId: string; chunkCount: number; embeddedCount: number }) => ({
-      materialId: r.materialId,
-      chunkCount: r.chunkCount,
-      hasEmbeddings: r.embeddedCount > 0,
-    }));
+    return result.rows.map(
+      (r: { materialId: string; chunkCount: number; embeddedCount: number }) => ({
+        materialId: r.materialId,
+        chunkCount: r.chunkCount,
+        hasEmbeddings: r.embeddedCount > 0,
+      }),
+    );
   }
 
   async hasChunksForUser(userId: string): Promise<boolean> {

@@ -8,21 +8,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
-export type ExerciseType = 
-  | "running" 
-  | "skierg" 
-  | "sled_push" 
-  | "sled_pull" 
-  | "burpees" 
-  | "rowing" 
-  | "farmers_carry" 
+export type ExerciseType =
+  | "running"
+  | "skierg"
+  | "sled_push"
+  | "sled_pull"
+  | "burpees"
+  | "rowing"
+  | "farmers_carry"
   | "wall_balls"
   | "other";
 
@@ -62,16 +57,16 @@ const exerciseColors: Record<ExerciseType, string> = {
   other: "bg-gray-500/10 text-gray-600 dark:text-gray-400",
 };
 
-export function WorkoutCard({ 
-  id, 
-  date, 
-  title, 
-  duration, 
-  exercises, 
+export function WorkoutCard({
+  id,
+  date,
+  title,
+  duration,
+  exercises,
   notes,
   onEdit,
   onDelete,
-  onDuplicate 
+  onDuplicate,
 }: Readonly<WorkoutCardProps>) {
   const formatDuration = (mins: number) => {
     const hours = Math.floor(mins / 60);
@@ -98,7 +93,12 @@ export function WorkoutCard({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <DropdownMenuTrigger asChild>
-                    <Button size="icon" variant="ghost" data-testid={`button-workout-menu-${id}`} aria-label="More workout options">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      data-testid={`button-workout-menu-${id}`}
+                      aria-label="More workout options"
+                    >
                       <MoreVertical className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -110,11 +110,14 @@ export function WorkoutCard({
               <DropdownMenuItem onClick={() => onEdit?.(id)} data-testid={`button-edit-${id}`}>
                 Edit
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onDuplicate?.(id)} data-testid={`button-duplicate-${id}`}>
+              <DropdownMenuItem
+                onClick={() => onDuplicate?.(id)}
+                data-testid={`button-duplicate-${id}`}
+              >
                 Duplicate
               </DropdownMenuItem>
-              <DropdownMenuItem 
-                onClick={() => onDelete?.(id)} 
+              <DropdownMenuItem
+                onClick={() => onDelete?.(id)}
                 className="text-destructive"
                 data-testid={`button-delete-${id}`}
               >
@@ -137,22 +140,18 @@ export function WorkoutCard({
 
         <div className="flex flex-wrap gap-2 mt-3">
           {exercises.slice(0, 4).map((exercise, index) => (
-            <Badge 
+            <Badge
               key={`${id}-${exercise}-${index}`}
-              variant="secondary" 
+              variant="secondary"
               className={`${exerciseColors[exercise]} border-0`}
             >
               {exerciseLabels[exercise]}
             </Badge>
           ))}
-          {exercises.length > 4 && (
-            <Badge variant="secondary">+{exercises.length - 4} more</Badge>
-          )}
+          {exercises.length > 4 && <Badge variant="secondary">+{exercises.length - 4} more</Badge>}
         </div>
 
-        {notes && (
-          <p className="mt-3 text-sm text-muted-foreground line-clamp-2">{notes}</p>
-        )}
+        {notes && <p className="mt-3 text-sm text-muted-foreground line-clamp-2">{notes}</p>}
       </CardContent>
     </Card>
   );

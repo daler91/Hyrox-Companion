@@ -42,17 +42,17 @@ export function ConfirmDialog({
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
-          <AlertDialogDescription>
-            {description}
-          </AlertDialogDescription>
+          <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel data-testid={cancelTestId}>
-            {cancelText}
-          </AlertDialogCancel>
+          <AlertDialogCancel data-testid={cancelTestId}>{cancelText}</AlertDialogCancel>
           <AlertDialogAction
             onClick={onConfirm}
-            className={isDestructive ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""}
+            className={
+              isDestructive
+                ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                : ""
+            }
             data-testid={confirmTestId}
             disabled={isPending}
           >

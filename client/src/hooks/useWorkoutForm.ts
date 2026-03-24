@@ -38,21 +38,19 @@ export function useWorkoutForm({
     (msg: string) => {
       toast({ title: "Voice Input", description: msg, variant: "destructive" });
     },
-    [toast]
+    [toast],
   );
 
   const handleVoiceResult = useCallback((transcript: string) => {
     setFreeText((prev) => {
-      const separator =
-        prev && !prev.endsWith(" ") && !prev.endsWith("\n") ? " " : "";
+      const separator = prev && !prev.endsWith(" ") && !prev.endsWith("\n") ? " " : "";
       return prev + separator + transcript;
     });
   }, []);
 
   const handleNotesVoiceResult = useCallback((transcript: string) => {
     setNotes((prev) => {
-      const separator =
-        prev && !prev.endsWith(" ") && !prev.endsWith("\n") ? " " : "";
+      const separator = prev && !prev.endsWith(" ") && !prev.endsWith("\n") ? " " : "";
       return prev + separator + transcript;
     });
   }, []);
@@ -68,8 +66,12 @@ export function useWorkoutForm({
   });
 
   const saveMutation = useMutation({
-    mutationFn: (workoutData: Omit<InsertWorkoutLog, "userId"> & { title?: string, exercises?: ParsedExercise[] }) =>
-      api.workouts.create(workoutData),
+    mutationFn: (
+      workoutData: Omit<InsertWorkoutLog, "userId"> & {
+        title?: string;
+        exercises?: ParsedExercise[];
+      },
+    ) => api.workouts.create(workoutData),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workouts });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
@@ -128,16 +130,17 @@ export function useWorkoutForm({
         return;
       }
 
-      const exercises = exerciseBlocks
-        .map((id) => exerciseData[id])
-        .filter(Boolean);
+      const exercises = exerciseBlocks.map((id) => exerciseData[id]).filter(Boolean);
 
       const allWarnings = exercises.flatMap((ex) => getMissingFieldWarnings(ex));
       if (allWarnings.length > 0) {
         const uniqueWarnings = [...new Set(allWarnings)];
         toast({
           title: "Some data is missing",
-          description: uniqueWarnings.slice(0, 3).join(". ") + (uniqueWarnings.length > 3 ? ` (+${uniqueWarnings.length - 3} more)` : "") + ". Saving anyway — you can edit later.",
+          description:
+            uniqueWarnings.slice(0, 3).join(". ") +
+            (uniqueWarnings.length > 3 ? ` (+${uniqueWarnings.length - 3} more)` : "") +
+            ". Saving anyway — you can edit later.",
         });
       }
 

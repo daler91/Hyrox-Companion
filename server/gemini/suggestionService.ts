@@ -5,7 +5,6 @@ import { getAiClient, GEMINI_MODEL, retryWithBackoff, truncate } from "./client"
 import { sanitizeHtml } from "../utils/sanitize";
 import type { TrainingContext } from "./types";
 
-
 export interface UpcomingWorkout {
   id: string;
   date: string;
@@ -42,7 +41,10 @@ function parseAndValidateSuggestions(text: string): WorkoutSuggestion[] {
   try {
     raw = JSON.parse(text);
   } catch (parseErr) {
-    logger.error({ err: parseErr, rawResponse: truncate(text) }, "[gemini] suggestions JSON.parse failed.");
+    logger.error(
+      { err: parseErr, rawResponse: truncate(text) },
+      "[gemini] suggestions JSON.parse failed.",
+    );
     return [];
   }
 
@@ -56,10 +58,13 @@ function parseAndValidateSuggestions(text: string): WorkoutSuggestion[] {
         ...item,
         recommendation: sanitizeHtml(item.recommendation),
         rationale: sanitizeHtml(item.rationale),
-        workoutFocus: sanitizeHtml(item.workoutFocus)
+        workoutFocus: sanitizeHtml(item.workoutFocus),
       });
     } else {
-      logger.warn({ issues: result.error.issues, item: JSON.stringify(item).slice(0, 200) }, "[gemini] Dropping invalid suggestion:");
+      logger.warn(
+        { issues: result.error.issues, item: JSON.stringify(item).slice(0, 200) },
+        "[gemini] Dropping invalid suggestion:",
+      );
     }
   }
   return validated;
@@ -68,10 +73,23 @@ function parseAndValidateSuggestions(text: string): WorkoutSuggestion[] {
 function formatExerciseFrequency(breakdown: Record<string, number>): string {
   const entries = Object.entries(breakdown);
   if (entries.length === 0) return "";
-  return "\nExercise frequency:\n" + entries.map(([exercise, count]) => `- ${exercise}: ${count}x`).join("\n") + "\n";
+  return (
+    "\nExercise frequency:\n" +
+    entries.map(([exercise, count]) => `- ${exercise}: ${count}x`).join("\n") +
+    "\n"
+  );
 }
 
-function formatExerciseStatLine(exercise: string, stats: { count: number; maxWeight?: number; maxDistance?: number; bestTime?: number; avgReps?: number }): string {
+function formatExerciseStatLine(
+  exercise: string,
+  stats: {
+    count: number;
+    maxWeight?: number;
+    maxDistance?: number;
+    bestTime?: number;
+    avgReps?: number;
+  },
+): string {
   const parts = [`- ${exercise}: trained ${stats.count}x`];
   if (stats.maxWeight) parts.push(`max weight: ${stats.maxWeight}`);
   if (stats.maxDistance) parts.push(`max distance: ${stats.maxDistance}m`);
@@ -82,7 +100,13 @@ function formatExerciseStatLine(exercise: string, stats: { count: number; maxWei
 
 function formatPerformanceStats(stats: TrainingContext["structuredExerciseStats"]): string {
   if (!stats || Object.keys(stats).length === 0) return "";
-  return "\nExercise performance stats:\n" + Object.entries(stats).map(([ex, s]) => formatExerciseStatLine(ex, s)).join("\n") + "\n";
+  return (
+    "\nExercise performance stats:\n" +
+    Object.entries(stats)
+      .map(([ex, s]) => formatExerciseStatLine(ex, s))
+      .join("\n") +
+    "\n"
+  );
 }
 
 function formatRecentWorkout(workout: TrainingContext["recentWorkouts"][0]): string {
@@ -96,7 +120,11 @@ function formatRecentWorkout(workout: TrainingContext["recentWorkouts"][0]): str
 
 function formatRecentWorkouts(workouts: TrainingContext["recentWorkouts"]): string {
   if (workouts.length === 0) return "";
-  return "\nRecent completed workouts:\n" + workouts.slice(0, 10).map(formatRecentWorkout).join("\n") + "\n";
+  return (
+    "\nRecent completed workouts:\n" +
+    workouts.slice(0, 10).map(formatRecentWorkout).join("\n") +
+    "\n"
+  );
 }
 
 function formatUpcomingWorkout(workout: UpcomingWorkout): string {
@@ -118,7 +146,9 @@ function buildSuggestionsPrompt(
     `Completion rate: ${trainingContext.completionRate}%`,
     `Current streak: ${trainingContext.currentStreak} days`,
     `Completed workouts: ${trainingContext.completedWorkouts}`,
-    ...(trainingContext.weeklyGoal ? [`Weekly goal: ${trainingContext.weeklyGoal} workouts/week`] : []),
+    ...(trainingContext.weeklyGoal
+      ? [`Weekly goal: ${trainingContext.weeklyGoal} workouts/week`]
+      : []),
   ];
 
   const sections = [
@@ -146,7 +176,12 @@ export async function generateWorkoutSuggestions(
       return [];
     }
 
-    const prompt = buildSuggestionsPrompt(trainingContext, upcomingWorkouts, planGoal, coachingMaterials);
+    const prompt = buildSuggestionsPrompt(
+      trainingContext,
+      upcomingWorkouts,
+      planGoal,
+      coachingMaterials,
+    );
 
     const response = await retryWithBackoff(
       () =>

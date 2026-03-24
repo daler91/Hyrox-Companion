@@ -22,11 +22,7 @@ export function useStravaMutations() {
 
   const syncStravaMutation = useApiMutation({
     mutationFn: () => api.strava.sync(),
-    invalidateQueries: [
-      QUERY_KEYS.stravaStatus,
-      QUERY_KEYS.timeline,
-      QUERY_KEYS.workouts,
-    ],
+    invalidateQueries: [QUERY_KEYS.stravaStatus, QUERY_KEYS.timeline, QUERY_KEYS.workouts],
     successToast: (data) => ({
       title: "Sync Complete",
       description: `Imported ${data.imported} new activities. ${data.skipped} already existed.`,

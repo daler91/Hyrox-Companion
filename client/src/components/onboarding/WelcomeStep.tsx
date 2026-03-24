@@ -15,8 +15,8 @@ export function WelcomeStep() {
         </div>
       </div>
       <p className="text-muted-foreground">
-        HyroxTracker helps you train smarter for Hyrox with structured plans,
-        workout logging, and AI-powered coaching.
+        HyroxTracker helps you train smarter for Hyrox with structured plans, workout logging, and
+        AI-powered coaching.
       </p>
     </div>
   );

@@ -33,7 +33,15 @@ const getFillColor = (colorStr: string) => {
   return "#64748b"; // muted fallback
 };
 
-const CustomTooltip = ({ active, payload, chartLabel }: { active?: boolean; payload?: Array<{ value: number; payload?: ExerciseAnalyticDay }>; chartLabel?: string }) => {
+const CustomTooltip = ({
+  active,
+  payload,
+  chartLabel,
+}: {
+  active?: boolean;
+  payload?: Array<{ value: number; payload?: ExerciseAnalyticDay }>;
+  chartLabel?: string;
+}) => {
   if (!active || !payload?.length) return null;
 
   return (
@@ -71,15 +79,8 @@ export function MiniBarChart({
       </div>
       <div className="h-[200px] w-full" data-testid={`chart-${valueKey}`}>
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart
-            data={data}
-            margin={{ top: 5, right: 5, left: -20, bottom: 5 }}
-          >
-            <CartesianGrid
-              strokeDasharray="3 3"
-              vertical={false}
-              stroke="hsl(var(--border))"
-            />
+          <BarChart data={data} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
             <XAxis
               dataKey="date"
               tickFormatter={formatDate}
@@ -98,17 +99,9 @@ export function MiniBarChart({
               cursor={{ fill: "hsl(var(--muted)/0.5)" }}
               content={<CustomTooltip chartLabel={label} />}
             />
-            <Bar
-              dataKey={valueKey as string}
-              radius={[4, 4, 0, 0]}
-              maxBarSize={40}
-            >
+            <Bar dataKey={valueKey as string} radius={[4, 4, 0, 0]} maxBarSize={40}>
               {data.map((entry) => (
-                <Cell
-                  key={`cell-${entry.date}`}
-                  fill={fillColor}
-                  fillOpacity={0.8}
-                />
+                <Cell key={`cell-${entry.date}`} fill={fillColor} fillOpacity={0.8} />
               ))}
             </Bar>
           </BarChart>

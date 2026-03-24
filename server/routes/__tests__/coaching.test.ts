@@ -45,7 +45,9 @@ describe("Coaching materials routes", () => {
 
   describe("GET /api/v1/coaching-materials", () => {
     it("should list coaching materials", async () => {
-      const materials = [{ id: "m1", title: "Guide", content: "content", type: "document", userId: "test_user_id" }];
+      const materials = [
+        { id: "m1", title: "Guide", content: "content", type: "document", userId: "test_user_id" },
+      ];
       vi.mocked(storage.listCoachingMaterials).mockResolvedValue(materials as any);
 
       const response = await request(app).get("/api/v1/coaching-materials");
@@ -60,22 +62,26 @@ describe("Coaching materials routes", () => {
     const validBody = { title: "Guide", content: "Training content", type: "document" };
 
     it("should create material and trigger background embedding", async () => {
-      const createdMaterial = { id: "m1", ...validBody, userId: "test_user_id", createdAt: new Date(), updatedAt: new Date() };
+      const createdMaterial = {
+        id: "m1",
+        ...validBody,
+        userId: "test_user_id",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
       vi.mocked(storage.createCoachingMaterial).mockResolvedValue(createdMaterial as any);
 
-      const response = await request(app)
-        .post("/api/v1/coaching-materials")
-        .send(validBody);
+      const response = await request(app).post("/api/v1/coaching-materials").send(validBody);
 
       expect(response.status).toBe(201);
       expect(storage.createCoachingMaterial).toHaveBeenCalled();
-      expect(queue.send).toHaveBeenCalledWith("embed-coaching-material", { material: createdMaterial });
+      expect(queue.send).toHaveBeenCalledWith("embed-coaching-material", {
+        material: createdMaterial,
+      });
     });
 
     it("should return 400 for invalid data", async () => {
-      const response = await request(app)
-        .post("/api/v1/coaching-materials")
-        .send({ title: "" });
+      const response = await request(app).post("/api/v1/coaching-materials").send({ title: "" });
 
       expect(response.status).toBe(400);
       expect(queue.send).not.toHaveBeenCalled();
@@ -84,7 +90,13 @@ describe("Coaching materials routes", () => {
 
   describe("PATCH /api/v1/coaching-materials/:id", () => {
     it("should re-embed when content is updated", async () => {
-      const updatedMaterial = { id: "m1", title: "Guide", content: "New content", type: "document", userId: "test_user_id" };
+      const updatedMaterial = {
+        id: "m1",
+        title: "Guide",
+        content: "New content",
+        type: "document",
+        userId: "test_user_id",
+      };
       vi.mocked(storage.updateCoachingMaterial).mockResolvedValue(updatedMaterial as any);
 
       const response = await request(app)
@@ -92,11 +104,19 @@ describe("Coaching materials routes", () => {
         .send({ content: "New content" });
 
       expect(response.status).toBe(200);
-      expect(queue.send).toHaveBeenCalledWith("embed-coaching-material", { material: updatedMaterial });
+      expect(queue.send).toHaveBeenCalledWith("embed-coaching-material", {
+        material: updatedMaterial,
+      });
     });
 
     it("should re-embed when title is updated", async () => {
-      const updatedMaterial = { id: "m1", title: "New Title", content: "content", type: "document", userId: "test_user_id" };
+      const updatedMaterial = {
+        id: "m1",
+        title: "New Title",
+        content: "content",
+        type: "document",
+        userId: "test_user_id",
+      };
       vi.mocked(storage.updateCoachingMaterial).mockResolvedValue(updatedMaterial as any);
 
       const response = await request(app)
@@ -104,11 +124,19 @@ describe("Coaching materials routes", () => {
         .send({ title: "New Title" });
 
       expect(response.status).toBe(200);
-      expect(queue.send).toHaveBeenCalledWith("embed-coaching-material", { material: updatedMaterial });
+      expect(queue.send).toHaveBeenCalledWith("embed-coaching-material", {
+        material: updatedMaterial,
+      });
     });
 
     it("should NOT re-embed when only type is updated", async () => {
-      const updatedMaterial = { id: "m1", title: "Guide", content: "content", type: "principles", userId: "test_user_id" };
+      const updatedMaterial = {
+        id: "m1",
+        title: "Guide",
+        content: "content",
+        type: "principles",
+        userId: "test_user_id",
+      };
       vi.mocked(storage.updateCoachingMaterial).mockResolvedValue(updatedMaterial as any);
 
       const response = await request(app)

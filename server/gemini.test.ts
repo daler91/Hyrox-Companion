@@ -107,9 +107,7 @@ describe("workoutSuggestionSchema", () => {
   });
 
   it("rejects invalid action enum", () => {
-    expect(() =>
-      workoutSuggestionSchema.parse({ ...validSuggestion, action: "delete" }),
-    ).toThrow();
+    expect(() => workoutSuggestionSchema.parse({ ...validSuggestion, action: "delete" })).toThrow();
   });
 
   it("rejects invalid priority enum", () => {
@@ -153,18 +151,12 @@ describe("parsedExerciseSchema", () => {
   });
 
   it("rejects empty sets array", () => {
-    expect(() =>
-      parsedExerciseSchema.parse({ ...validExercise, sets: [] }),
-    ).toThrow();
+    expect(() => parsedExerciseSchema.parse({ ...validExercise, sets: [] })).toThrow();
   });
 
   it("rejects confidence outside 0-100 range", () => {
-    expect(() =>
-      parsedExerciseSchema.parse({ ...validExercise, confidence: 150 }),
-    ).toThrow();
-    expect(() =>
-      parsedExerciseSchema.parse({ ...validExercise, confidence: -5 }),
-    ).toThrow();
+    expect(() => parsedExerciseSchema.parse({ ...validExercise, confidence: 150 })).toThrow();
+    expect(() => parsedExerciseSchema.parse({ ...validExercise, confidence: -5 })).toThrow();
   });
 });
 

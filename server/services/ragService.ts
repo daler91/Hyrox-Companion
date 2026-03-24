@@ -73,11 +73,8 @@ export async function embedCoachingMaterial(material: CoachingMaterial): Promise
     );
 
     // Prefix chunks with title for better semantic context
-    const textsToEmbed = chunks.map(
-      (chunk, i) =>
-        i === 0
-          ? `${material.title}: ${chunk}`
-          : chunk,
+    const textsToEmbed = chunks.map((chunk, i) =>
+      i === 0 ? `${material.title}: ${chunk}` : chunk,
     );
 
     const embeddings = await generateEmbeddings(textsToEmbed);
@@ -124,7 +121,10 @@ export async function retrieveRelevantChunks(
   topK: number = TOP_K,
 ): Promise<string[]> {
   const queryEmbedding = await generateEmbedding(query);
-  logger.info({ userId, queryDim: queryEmbedding.length, topK }, "[rag] Searching chunks by embedding");
+  logger.info(
+    { userId, queryDim: queryEmbedding.length, topK },
+    "[rag] Searching chunks by embedding",
+  );
   const chunks = await storage.searchChunksByEmbedding(userId, queryEmbedding, topK);
   logger.info({ userId, found: chunks.length }, "[rag] Search returned chunks");
   return chunks.map((c) => c.content);
@@ -174,7 +174,8 @@ export async function getRagStatus(userId: string) {
   });
 
   const totalChunks = chunkCounts.reduce((sum, c) => sum + c.chunkCount, 0);
-  const allEmbedded = materials.length > 0 && materials.every((m) => chunkMap.get(m.id)?.hasEmbeddings);
+  const allEmbedded =
+    materials.length > 0 && materials.every((m) => chunkMap.get(m.id)?.hasEmbeddings);
 
   let embeddingApiStatus: { ok: boolean; dimension?: number; error?: string } = { ok: false };
   if (hasApiKey) {
@@ -205,7 +206,7 @@ export async function reembedAllMaterials(userId: string) {
   let count = 0;
 
   const results = await Promise.allSettled(
-    materials.map((material) => embedCoachingMaterial(material).then(() => material))
+    materials.map((material) => embedCoachingMaterial(material).then(() => material)),
   );
 
   for (let i = 0; i < results.length; i++) {

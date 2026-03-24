@@ -60,7 +60,9 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
         await ensureUserExists(auth.userId);
       } catch (error) {
         logger.error({ err: error }, "Error syncing user:");
-        return res.status(500).json({ error: "Failed to initialize user session", code: "INTERNAL_SERVER_ERROR" });
+        return res
+          .status(500)
+          .json({ error: "Failed to initialize user session", code: "INTERNAL_SERVER_ERROR" });
       }
       return next();
     }
@@ -71,7 +73,9 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
       await ensureDevUserExists();
     } catch (error) {
       logger.error({ err: error }, "Error creating dev user:");
-      return res.status(500).json({ error: "Failed to initialize dev user session", code: "INTERNAL_SERVER_ERROR" });
+      return res
+        .status(500)
+        .json({ error: "Failed to initialize dev user session", code: "INTERNAL_SERVER_ERROR" });
     }
     return next();
   }

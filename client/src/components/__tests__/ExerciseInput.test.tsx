@@ -15,9 +15,7 @@ describe("ExerciseInput", () => {
   const baseExercise: StructuredExercise = {
     exerciseName: "wall_balls",
     category: "hyrox_station",
-    sets: [
-      { setNumber: 1, reps: 20, weight: 6, time: 60 },
-    ],
+    sets: [{ setNumber: 1, reps: 20, weight: 6, time: 60 }],
   };
 
   afterEach(() => {
@@ -31,7 +29,7 @@ describe("ExerciseInput", () => {
           exercise={baseExercise}
           onChange={defaultOnChange}
           onRemove={defaultOnRemove}
-        />
+        />,
       );
 
       expect(screen.getByText("Wall Balls")).toBeInTheDocument();
@@ -55,7 +53,7 @@ describe("ExerciseInput", () => {
           exercise={baseExercise}
           onChange={defaultOnChange}
           onRemove={defaultOnRemove}
-        />
+        />,
       );
 
       const addButton = screen.getByTestId("button-add-set-wall_balls");
@@ -75,7 +73,7 @@ describe("ExerciseInput", () => {
         sets: [
           { setNumber: 1, reps: 20, weight: 6 },
           { setNumber: 2, reps: 15, weight: 6 },
-        ]
+        ],
       };
 
       render(
@@ -83,7 +81,7 @@ describe("ExerciseInput", () => {
           exercise={exerciseWithTwoSets}
           onChange={defaultOnChange}
           onRemove={defaultOnRemove}
-        />
+        />,
       );
 
       const removeButtons = screen.getAllByTestId(/button-remove-set-/);
@@ -104,7 +102,7 @@ describe("ExerciseInput", () => {
           exercise={baseExercise}
           onChange={defaultOnChange}
           onRemove={defaultOnRemove}
-        />
+        />,
       );
 
       const repsInput = screen.getByTestId("input-reps-wall_balls-0");
@@ -120,9 +118,7 @@ describe("ExerciseInput", () => {
     const singleSetExercise: StructuredExercise = {
       exerciseName: "easy_run",
       category: "running",
-      sets: [
-        { setNumber: 1, distance: 5, time: 30 },
-      ],
+      sets: [{ setNumber: 1, distance: 5, time: 30 }],
     };
 
     it("renders single set view correctly", () => {
@@ -131,7 +127,7 @@ describe("ExerciseInput", () => {
           exercise={singleSetExercise}
           onChange={defaultOnChange}
           onRemove={defaultOnRemove}
-        />
+        />,
       );
 
       // Verify label
@@ -156,7 +152,7 @@ describe("ExerciseInput", () => {
           exercise={singleSetExercise}
           onChange={defaultOnChange}
           onRemove={defaultOnRemove}
-        />
+        />,
       );
 
       const distanceInput = screen.getByTestId("input-distance-easy_run");
@@ -175,7 +171,7 @@ describe("ExerciseInput", () => {
           exercise={baseExercise}
           onChange={defaultOnChange}
           onRemove={defaultOnRemove}
-        />
+        />,
       );
 
       const removeButton = screen.getByTestId("button-remove-wall_balls");
@@ -195,7 +191,7 @@ describe("ExerciseInput", () => {
           exercise={exerciseWithConfidence}
           onChange={defaultOnChange}
           onRemove={defaultOnRemove}
-        />
+        />,
       );
 
       const badge = screen.getByTestId("badge-confidence-wall_balls");
@@ -214,7 +210,7 @@ describe("ExerciseInput", () => {
           exercise={exerciseWithHighConfidence}
           onChange={defaultOnChange}
           onRemove={defaultOnRemove}
-        />
+        />,
       );
 
       const badge = screen.queryByTestId("badge-confidence-wall_balls");
@@ -223,16 +219,16 @@ describe("ExerciseInput", () => {
 
     it("displays missing fields warning when returned by getExerciseMissingFields", async () => {
       // Mock getExerciseMissingFields specifically for this test
-            const getExerciseMissingFieldsMock = vi.mocked(
-        getExerciseMissingFields
-      ).mockReturnValueOnce(["Time", "Distance"]);
+      const getExerciseMissingFieldsMock = vi
+        .mocked(getExerciseMissingFields)
+        .mockReturnValueOnce(["Time", "Distance"]);
 
       render(
         <ExerciseInput
           exercise={baseExercise}
           onChange={defaultOnChange}
           onRemove={defaultOnRemove}
-        />
+        />,
       );
 
       const warning = screen.getByTestId("warning-missing-wall_balls");

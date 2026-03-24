@@ -13,7 +13,12 @@ interface WeeklySummaryProps {
   readonly totalDistance: number;
 }
 
-export function WeeklySummary({ days, totalWorkouts, totalHours, totalDistance }: Readonly<WeeklySummaryProps>) {
+export function WeeklySummary({
+  days,
+  totalWorkouts,
+  totalHours,
+  totalDistance,
+}: Readonly<WeeklySummaryProps>) {
   return (
     <Card data-testid="card-weekly-summary">
       <CardHeader className="pb-2">

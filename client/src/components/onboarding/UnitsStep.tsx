@@ -8,7 +8,12 @@ interface UnitsStepProps {
   readonly onDistanceUnitChange: (unit: "km" | "miles") => void;
 }
 
-export function UnitsStep({ weightUnit, distanceUnit, onWeightUnitChange, onDistanceUnitChange }: Readonly<UnitsStepProps>) {
+export function UnitsStep({
+  weightUnit,
+  distanceUnit,
+  onWeightUnitChange,
+  onDistanceUnitChange,
+}: Readonly<UnitsStepProps>) {
   return (
     <div className="space-y-6">
       <div className="space-y-3">
@@ -20,11 +25,15 @@ export function UnitsStep({ weightUnit, distanceUnit, onWeightUnitChange, onDist
         >
           <div className="flex items-center space-x-2">
             <RadioGroupItem value="kg" id="kg" />
-            <Label htmlFor="kg" className="cursor-pointer">Kilograms (kg)</Label>
+            <Label htmlFor="kg" className="cursor-pointer">
+              Kilograms (kg)
+            </Label>
           </div>
           <div className="flex items-center space-x-2">
             <RadioGroupItem value="lbs" id="lbs" />
-            <Label htmlFor="lbs" className="cursor-pointer">Pounds (lbs)</Label>
+            <Label htmlFor="lbs" className="cursor-pointer">
+              Pounds (lbs)
+            </Label>
           </div>
         </RadioGroup>
       </div>
@@ -38,11 +47,15 @@ export function UnitsStep({ weightUnit, distanceUnit, onWeightUnitChange, onDist
         >
           <div className="flex items-center space-x-2">
             <RadioGroupItem value="km" id="km" />
-            <Label htmlFor="km" className="cursor-pointer">Kilometers (km)</Label>
+            <Label htmlFor="km" className="cursor-pointer">
+              Kilometers (km)
+            </Label>
           </div>
           <div className="flex items-center space-x-2">
             <RadioGroupItem value="miles" id="miles" />
-            <Label htmlFor="miles" className="cursor-pointer">Miles</Label>
+            <Label htmlFor="miles" className="cursor-pointer">
+              Miles
+            </Label>
           </div>
         </RadioGroup>
       </div>

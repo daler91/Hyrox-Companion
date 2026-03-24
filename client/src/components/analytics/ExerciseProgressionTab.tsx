@@ -1,7 +1,13 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { TrendingUp } from "lucide-react";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { getExerciseLabel } from "@/lib/exerciseUtils";
@@ -37,9 +43,14 @@ export function ExerciseProgressionTab({ dateParams }: ExerciseProgressionTabPro
     }));
   }, [rawPRs]);
 
-  const { data: allAnalytics, isLoading: analyticsLoading } = useQuery<Record<string, ExerciseAnalyticDay[]>>({
+  const { data: allAnalytics, isLoading: analyticsLoading } = useQuery<
+    Record<string, ExerciseAnalyticDay[]>
+  >({
     queryKey: ["/api/v1/exercise-analytics", dateParams],
-    queryFn: () => api.analytics.getExerciseAnalytics(dateParams) as Promise<Record<string, ExerciseAnalyticDay[]>>,
+    queryFn: () =>
+      api.analytics.getExerciseAnalytics(dateParams) as Promise<
+        Record<string, ExerciseAnalyticDay[]>
+      >,
   });
 
   return (

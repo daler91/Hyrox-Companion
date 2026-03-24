@@ -1,9 +1,6 @@
 export const RETRYABLE_ERRORS = new Set(["network", "no-speech"]);
 
-export function getVoiceErrorMessage(
-  errorCode: string,
-  micGranted: boolean,
-): string | null {
+export function getVoiceErrorMessage(errorCode: string, micGranted: boolean): string | null {
   switch (errorCode) {
     case "not-allowed":
       if (micGranted) {

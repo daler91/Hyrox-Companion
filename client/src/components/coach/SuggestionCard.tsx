@@ -25,11 +25,17 @@ const PRIORITY_COLORS: Record<Suggestion["priority"], string> = {
   low: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
 };
 
-export function SuggestionCard({ suggestion, ragInfo, onApply, onDismiss, isApplying }: Readonly<SuggestionCardProps>) {
+export function SuggestionCard({
+  suggestion,
+  ragInfo,
+  onApply,
+  onDismiss,
+  isApplying,
+}: Readonly<SuggestionCardProps>) {
   const fieldLabel = FIELD_LABELS[suggestion.targetField] || "Notes";
-  
+
   const actionLabel = suggestion.action === "append" ? "Add to" : "Replace";
-  
+
   const priorityColor = PRIORITY_COLORS[suggestion.priority] || PRIORITY_COLORS.low;
 
   return (
@@ -41,9 +47,7 @@ export function SuggestionCard({ suggestion, ragInfo, onApply, onDismiss, isAppl
             <Badge variant="secondary" className="text-[10px] shrink-0">
               {suggestion.date}
             </Badge>
-            <Badge className={`text-[10px] shrink-0 ${priorityColor}`}>
-              {suggestion.priority}
-            </Badge>
+            <Badge className={`text-[10px] shrink-0 ${priorityColor}`}>{suggestion.priority}</Badge>
           </div>
           <div className="flex items-center gap-1 mt-1">
             <Zap className="h-3 w-3 text-primary shrink-0" />
@@ -53,11 +57,11 @@ export function SuggestionCard({ suggestion, ragInfo, onApply, onDismiss, isAppl
           </div>
         </div>
       </div>
-      
+
       <p className="text-sm">{suggestion.recommendation}</p>
       <p className="text-xs text-muted-foreground italic">{suggestion.rationale}</p>
       {ragInfo && <RagDebugBadge ragInfo={ragInfo} />}
-      
+
       <div className="flex items-center gap-2 pt-1">
         <Button
           size="sm"

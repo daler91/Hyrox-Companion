@@ -75,9 +75,7 @@ export function ExerciseProgressionCharts({
 
   if (!analyticsData || analyticsData.data.length === 0) {
     return (
-      <p className="text-muted-foreground text-sm py-4">
-        No data available for this exercise yet.
-      </p>
+      <p className="text-muted-foreground text-sm py-4">No data available for this exercise yet.</p>
     );
   }
 

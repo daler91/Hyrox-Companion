@@ -3,10 +3,30 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Target, Clock, Trophy, Dumbbell, Check } from "lucide-react";
 
 const goals = [
-  { id: "first", label: "Complete my first Hyrox", icon: Target, description: "New to Hyrox and building foundation" },
-  { id: "improve", label: "Improve my finish time", icon: Clock, description: "Already competed, want to get faster" },
-  { id: "podium", label: "Aim for the podium", icon: Trophy, description: "Competitive athlete targeting top placement" },
-  { id: "fitness", label: "General fitness", icon: Dumbbell, description: "Using Hyrox training for overall health" },
+  {
+    id: "first",
+    label: "Complete my first Hyrox",
+    icon: Target,
+    description: "New to Hyrox and building foundation",
+  },
+  {
+    id: "improve",
+    label: "Improve my finish time",
+    icon: Clock,
+    description: "Already competed, want to get faster",
+  },
+  {
+    id: "podium",
+    label: "Aim for the podium",
+    icon: Trophy,
+    description: "Competitive athlete targeting top placement",
+  },
+  {
+    id: "fitness",
+    label: "General fitness",
+    icon: Dumbbell,
+    description: "Using Hyrox training for overall health",
+  },
 ];
 
 interface GoalStepProps {
@@ -16,11 +36,7 @@ interface GoalStepProps {
 
 export function GoalStep({ selectedGoal, onGoalChange }: Readonly<GoalStepProps>) {
   return (
-    <RadioGroup
-      value={selectedGoal}
-      onValueChange={onGoalChange}
-      className="space-y-3"
-    >
+    <RadioGroup value={selectedGoal} onValueChange={onGoalChange} className="space-y-3">
       {goals.map((goal) => (
         <button
           type="button"
@@ -40,9 +56,7 @@ export function GoalStep({ selectedGoal, onGoalChange }: Readonly<GoalStepProps>
             </Label>
             <p className="text-xs text-muted-foreground">{goal.description}</p>
           </div>
-          {selectedGoal === goal.id && (
-            <Check className="h-4 w-4 text-primary" />
-          )}
+          {selectedGoal === goal.id && <Check className="h-4 w-4 text-primary" />}
         </button>
       ))}
     </RadioGroup>

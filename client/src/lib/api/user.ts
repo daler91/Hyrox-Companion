@@ -12,10 +12,22 @@ export const auth = {
 } as const;
 
 export const preferences = {
-  get: () => typedRequest<{ weightUnit: string; distanceUnit: string; weeklyGoal: number; emailNotifications: boolean; aiCoachEnabled: boolean }>("GET", "/api/v1/preferences"),
+  get: () =>
+    typedRequest<{
+      weightUnit: string;
+      distanceUnit: string;
+      weeklyGoal: number;
+      emailNotifications: boolean;
+      aiCoachEnabled: boolean;
+    }>("GET", "/api/v1/preferences"),
 
-  update: (data: { weightUnit?: string; distanceUnit?: string; weeklyGoal?: number; emailNotifications?: boolean; aiCoachEnabled?: boolean }) =>
-    typedRequest<User>("PATCH", "/api/v1/preferences", data),
+  update: (data: {
+    weightUnit?: string;
+    distanceUnit?: string;
+    weeklyGoal?: number;
+    emailNotifications?: boolean;
+    aiCoachEnabled?: boolean;
+  }) => typedRequest<User>("PATCH", "/api/v1/preferences", data),
 } as const;
 
 export const strava = {

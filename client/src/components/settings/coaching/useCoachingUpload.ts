@@ -59,7 +59,11 @@ export function useCoachingUpload() {
 
   const processSingleFile = async (file: File) => {
     if (file.size > MAX_FILE_SIZE) {
-      toast({ title: "File too large", description: "Maximum file size is 10MB.", variant: "destructive" });
+      toast({
+        title: "File too large",
+        description: "Maximum file size is 10MB.",
+        variant: "destructive",
+      });
       return;
     }
     try {

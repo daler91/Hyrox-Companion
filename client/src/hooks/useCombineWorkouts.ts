@@ -12,7 +12,20 @@ export function useCombineWorkouts() {
   const [showCombineDialog, setShowCombineDialog] = useState(false);
 
   const combineWorkoutsMutation = useMutation({
-    mutationFn: async ({ newWorkout, entriesToDelete }: { newWorkout: { date: string; focus: string; mainWorkout: string; duration?: number; calories?: number; notes?: string }; entriesToDelete: TimelineEntry[] }): Promise<any> => {
+    mutationFn: async ({
+      newWorkout,
+      entriesToDelete,
+    }: {
+      newWorkout: {
+        date: string;
+        focus: string;
+        mainWorkout: string;
+        duration?: number;
+        calories?: number;
+        notes?: string;
+      };
+      entriesToDelete: TimelineEntry[];
+    }): Promise<any> => {
       const created = await api.workouts.create(newWorkout);
 
       const deletePromises = [];
@@ -44,39 +57,48 @@ export function useCombineWorkouts() {
     },
   });
 
-  const handleCombine = useCallback((entry: TimelineEntry) => {
-    if (combiningEntry) {
-      if (combiningEntry.id === entry.id) {
-        setCombiningEntry(null);
-        toast({ title: "Combine cancelled" });
-      } else if (combiningEntry.date === entry.date) {
-        setCombineSecondEntry(entry);
-        setShowCombineDialog(true);
+  const handleCombine = useCallback(
+    (entry: TimelineEntry) => {
+      if (combiningEntry) {
+        if (combiningEntry.id === entry.id) {
+          setCombiningEntry(null);
+          toast({ title: "Combine cancelled" });
+        } else if (combiningEntry.date === entry.date) {
+          setCombineSecondEntry(entry);
+          setShowCombineDialog(true);
+        } else {
+          toast({ title: "Can only combine workouts on the same day", variant: "destructive" });
+          setCombiningEntry(null);
+        }
       } else {
-        toast({ title: "Can only combine workouts on the same day", variant: "destructive" });
-        setCombiningEntry(null);
+        setCombiningEntry(entry);
+        toast({
+          title: "Select another workout to combine with",
+          description: "Click on another workout on the same day",
+        });
       }
-    } else {
-      setCombiningEntry(entry);
-      toast({ title: "Select another workout to combine with", description: "Click on another workout on the same day" });
-    }
-  }, [combiningEntry, toast]);
+    },
+    [combiningEntry, toast],
+  );
 
-  const handleConfirmCombine = useCallback((combinedWorkout: {
-    date: string;
-    focus: string;
-    mainWorkout: string;
-    duration?: number;
-    calories?: number;
-    notes?: string;
-  }) => {
-    if (combiningEntry && combineSecondEntry) {
-      combineWorkoutsMutation.mutate({
-        newWorkout: combinedWorkout,
-        entriesToDelete: [combiningEntry, combineSecondEntry],
-      });
-    }
-  }, [combiningEntry, combineSecondEntry, combineWorkoutsMutation]);
+  const handleConfirmCombine = useCallback(
+    (combinedWorkout: {
+      date: string;
+      focus: string;
+      mainWorkout: string;
+      duration?: number;
+      calories?: number;
+      notes?: string;
+    }) => {
+      if (combiningEntry && combineSecondEntry) {
+        combineWorkoutsMutation.mutate({
+          newWorkout: combinedWorkout,
+          entriesToDelete: [combiningEntry, combineSecondEntry],
+        });
+      }
+    },
+    [combiningEntry, combineSecondEntry, combineWorkoutsMutation],
+  );
 
   return {
     combiningEntry,

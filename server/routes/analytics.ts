@@ -1,7 +1,11 @@
 import { Router, type Request as ExpressRequest, type Response } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
-import { calculatePersonalRecords, calculateExerciseAnalytics, type ExerciseSetWithDate } from "../services/analyticsService";
+import {
+  calculatePersonalRecords,
+  calculateExerciseAnalytics,
+  type ExerciseSetWithDate,
+} from "../services/analyticsService";
 import { getUserId } from "../types";
 import { rateLimiter, asyncHandler } from "../routeUtils";
 import { dateStringSchema } from "@shared/schema";
@@ -21,22 +25,25 @@ interface CacheEntry {
 export const _cacheForTesting = new Map<string, CacheEntry>();
 const cache = _cacheForTesting;
 
-function getExerciseSetsCoalesced(userId: string, from?: string, to?: string): Promise<ExerciseSetWithDate[]> {
-  const cacheKey = `${userId}-${from || 'none'}-${to || 'none'}`;
+function getExerciseSetsCoalesced(
+  userId: string,
+  from?: string,
+  to?: string,
+): Promise<ExerciseSetWithDate[]> {
+  const cacheKey = `${userId}-${from || "none"}-${to || "none"}`;
   const now = Date.now();
 
   const entry = cache.get(cacheKey);
-  if (entry && (now - entry.timestamp < CACHE_TTL_MS)) {
+  if (entry && now - entry.timestamp < CACHE_TTL_MS) {
     return entry.promise;
   }
 
   // If expired or missing, fetch from storage
-  const promise = storage.getAllExerciseSetsWithDates(userId, from, to)
-    .catch((error) => {
-      // Remove from cache on failure so subsequent requests retry immediately
-      cache.delete(cacheKey);
-      throw error;
-    });
+  const promise = storage.getAllExerciseSetsWithDates(userId, from, to).catch((error) => {
+    // Remove from cache on failure so subsequent requests retry immediately
+    cache.delete(cacheKey);
+    throw error;
+  });
 
   cache.set(cacheKey, { promise, timestamp: now });
   return promise;
@@ -48,27 +55,51 @@ export function validDate(val: unknown): string | undefined {
   return parsed.success ? parsed.data : undefined;
 }
 
-router.get("/api/v1/personal-records", isAuthenticated, rateLimiter("analytics", 20), asyncHandler(async (req: ExpressRequest<Record<string, never>, any, any, { from?: string; to?: string }>, res: Response) => {
-    const userId = getUserId(req);
-    const from = validDate(req.query.from);
-    const to = validDate(req.query.to);
+router.get(
+  "/api/v1/personal-records",
+  isAuthenticated,
+  rateLimiter("analytics", 20),
+  asyncHandler(
+    async (
+      req: ExpressRequest<Record<string, never>, any, any, { from?: string; to?: string }>,
+      res: Response,
+    ) => {
+      const userId = getUserId(req);
+      const from = validDate(req.query.from);
+      const to = validDate(req.query.to);
 
-    if (req.query.from && !from) return res.status(400).json({ error: "Invalid 'from' date format", code: "BAD_REQUEST" });
-    if (req.query.to && !to) return res.status(400).json({ error: "Invalid 'to' date format", code: "BAD_REQUEST" });
-    const allSets = await getExerciseSetsCoalesced(userId, from, to);
-    res.json(calculatePersonalRecords(allSets));
-  }));
+      if (req.query.from && !from)
+        return res.status(400).json({ error: "Invalid 'from' date format", code: "BAD_REQUEST" });
+      if (req.query.to && !to)
+        return res.status(400).json({ error: "Invalid 'to' date format", code: "BAD_REQUEST" });
+      const allSets = await getExerciseSetsCoalesced(userId, from, to);
+      res.json(calculatePersonalRecords(allSets));
+    },
+  ),
+);
 
-router.get("/api/v1/exercise-analytics", isAuthenticated, rateLimiter("analytics", 20), asyncHandler(async (req: ExpressRequest<Record<string, never>, any, any, { from?: string; to?: string }>, res: Response) => {
-    const userId = getUserId(req);
-    const from = validDate(req.query.from);
-    const to = validDate(req.query.to);
+router.get(
+  "/api/v1/exercise-analytics",
+  isAuthenticated,
+  rateLimiter("analytics", 20),
+  asyncHandler(
+    async (
+      req: ExpressRequest<Record<string, never>, any, any, { from?: string; to?: string }>,
+      res: Response,
+    ) => {
+      const userId = getUserId(req);
+      const from = validDate(req.query.from);
+      const to = validDate(req.query.to);
 
-    if (req.query.from && !from) return res.status(400).json({ error: "Invalid 'from' date format", code: "BAD_REQUEST" });
-    if (req.query.to && !to) return res.status(400).json({ error: "Invalid 'to' date format", code: "BAD_REQUEST" });
+      if (req.query.from && !from)
+        return res.status(400).json({ error: "Invalid 'from' date format", code: "BAD_REQUEST" });
+      if (req.query.to && !to)
+        return res.status(400).json({ error: "Invalid 'to' date format", code: "BAD_REQUEST" });
 
-    const allSets = await getExerciseSetsCoalesced(userId, from, to);
-    res.json(calculateExerciseAnalytics(allSets));
-  }));
+      const allSets = await getExerciseSetsCoalesced(userId, from, to);
+      res.json(calculateExerciseAnalytics(allSets));
+    },
+  ),
+);
 
 export default router;

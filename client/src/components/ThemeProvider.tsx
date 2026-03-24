@@ -30,16 +30,15 @@ export function ThemeProvider({ children }: Readonly<{ children: React.ReactNode
     setTheme((prev) => (prev === "light" ? "dark" : "light"));
   }, []);
 
-  const contextValue = useMemo(() => ({
-    theme,
-    toggleTheme
-  }), [theme, toggleTheme]);
-
-  return (
-    <ThemeContext.Provider value={contextValue}>
-      {children}
-    </ThemeContext.Provider>
+  const contextValue = useMemo(
+    () => ({
+      theme,
+      toggleTheme,
+    }),
+    [theme, toggleTheme],
   );
+
+  return <ThemeContext.Provider value={contextValue}>{children}</ThemeContext.Provider>;
 }
 
 export function useTheme() {

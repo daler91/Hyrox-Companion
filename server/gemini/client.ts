@@ -16,11 +16,7 @@ export function isRetryableError(error: unknown): boolean {
   if (error instanceof Error) {
     const msg = error.message.toLowerCase();
     if (msg.includes("429") || msg.includes("rate limit")) return true;
-    if (
-      msg.includes("500") ||
-      msg.includes("503") ||
-      msg.includes("internal server error")
-    )
+    if (msg.includes("500") || msg.includes("503") || msg.includes("internal server error"))
       return true;
     if (
       msg.includes("network") ||
@@ -47,7 +43,10 @@ export async function retryWithBackoff<T>(
       lastError = error;
       if (attempt < maxRetries && isRetryableError(error)) {
         const delay = baseDelayMs * Math.pow(2, attempt);
-        logger.warn({ err: error }, `[gemini] ${label} attempt ${attempt + 1} failed (retrying in ${delay}ms)`);
+        logger.warn(
+          { err: error },
+          `[gemini] ${label} attempt ${attempt + 1} failed (retrying in ${delay}ms)`,
+        );
         await new Promise((resolve) => setTimeout(resolve, delay));
       } else {
         break;

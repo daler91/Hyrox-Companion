@@ -15,7 +15,10 @@ export interface Suggestion {
 
 export const analytics = {
   getPersonalRecords: (dateParams?: string) =>
-    typedRequest<Record<string, PersonalRecord>>("GET", `/api/v1/personal-records${dateParams || ""}`),
+    typedRequest<Record<string, PersonalRecord>>(
+      "GET",
+      `/api/v1/personal-records${dateParams || ""}`,
+    ),
 
   getExerciseAnalytics: (dateParams?: string) =>
     typedRequest<unknown>("GET", `/api/v1/exercise-analytics${dateParams || ""}`),
@@ -28,5 +31,9 @@ export const timeline = {
   },
 
   getSuggestions: () =>
-    typedRequest<{ suggestions: Suggestion[]; ragInfo?: RagInfo }>("POST", "/api/v1/timeline/ai-suggestions", {}),
+    typedRequest<{ suggestions: Suggestion[]; ragInfo?: RagInfo }>(
+      "POST",
+      "/api/v1/timeline/ai-suggestions",
+      {},
+    ),
 } as const;

@@ -42,7 +42,7 @@ export function CombineWorkoutsDialog({
     val1: string | null | undefined,
     val2: string | null | undefined,
     customVal: string,
-    separator: string = " + "
+    separator: string = " + ",
   ): string => {
     switch (source) {
       case "entry1":
@@ -64,11 +64,29 @@ export function CombineWorkoutsDialog({
 
     const combinedWorkout = {
       date: entry1.date,
-      focus: getFieldValue(fields.focus.source, entry1.focus, entry2.focus, fields.focus.customValue),
-      mainWorkout: getFieldValue(fields.mainWorkout.source, entry1.mainWorkout, entry2.mainWorkout, fields.mainWorkout.customValue, "\n---\n"),
+      focus: getFieldValue(
+        fields.focus.source,
+        entry1.focus,
+        entry2.focus,
+        fields.focus.customValue,
+      ),
+      mainWorkout: getFieldValue(
+        fields.mainWorkout.source,
+        entry1.mainWorkout,
+        entry2.mainWorkout,
+        fields.mainWorkout.customValue,
+        "\n---\n",
+      ),
       duration: combinedDuration || undefined,
       calories: combinedCalories || undefined,
-      notes: getFieldValue(fields.notes.source, entry1.notes, entry2.notes, fields.notes.customValue, "\n\n") || undefined,
+      notes:
+        getFieldValue(
+          fields.notes.source,
+          entry1.notes,
+          entry2.notes,
+          fields.notes.customValue,
+          "\n\n",
+        ) || undefined,
     };
 
     onConfirm(combinedWorkout);
@@ -106,16 +124,8 @@ export function CombineWorkoutsDialog({
           <div className="space-y-6">
             {/* Side-by-side workout comparison */}
             <div className="grid grid-cols-2 gap-4">
-              <WorkoutCard
-                label="Workout 1"
-                entry={entry1}
-                variant="primary"
-              />
-              <WorkoutCard
-                label="Workout 2"
-                entry={entry2}
-                variant="secondary"
-              />
+              <WorkoutCard label="Workout 1" entry={entry1} variant="primary" />
+              <WorkoutCard label="Workout 2" entry={entry2} variant="secondary" />
             </div>
 
             <CombinedResultSummary duration={combinedDuration} calories={combinedCalories} />
@@ -125,9 +135,21 @@ export function CombineWorkoutsDialog({
               <Label className="text-base font-semibold">Choose what to keep for each field</Label>
               {[
                 { key: "focus" as const, label: "Focus", val1: entry1.focus, val2: entry2.focus },
-                { key: "mainWorkout" as const, label: "Main Workout", val1: entry1.mainWorkout, val2: entry2.mainWorkout, isTextArea: true },
-                { key: "notes" as const, label: "Notes", val1: entry1.notes, val2: entry2.notes, isTextArea: true }
-              ].map(f => (
+                {
+                  key: "mainWorkout" as const,
+                  label: "Main Workout",
+                  val1: entry1.mainWorkout,
+                  val2: entry2.mainWorkout,
+                  isTextArea: true,
+                },
+                {
+                  key: "notes" as const,
+                  label: "Notes",
+                  val1: entry1.notes,
+                  val2: entry2.notes,
+                  isTextArea: true,
+                },
+              ].map((f) => (
                 <FieldSelector
                   key={f.key}
                   label={f.label}
@@ -153,11 +175,7 @@ export function CombineWorkoutsDialog({
           >
             Cancel
           </Button>
-          <Button
-            onClick={handleConfirm}
-            disabled={isPending}
-            data-testid="button-confirm-combine"
-          >
+          <Button onClick={handleConfirm} disabled={isPending} data-testid="button-confirm-combine">
             {isPending ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />

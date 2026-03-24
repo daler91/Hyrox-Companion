@@ -24,12 +24,10 @@ describe("API Integration Tests", () => {
     });
 
     it("should update user preferences", async () => {
-      const response = await request(context.app)
-        .patch("/api/v1/preferences")
-        .send({
-          weightUnit: "lbs",
-          distanceUnit: "miles"
-        });
+      const response = await request(context.app).patch("/api/v1/preferences").send({
+        weightUnit: "lbs",
+        distanceUnit: "miles",
+      });
 
       expect(response.body?.error || response.error?.message).toBeUndefined();
       expect(response.status).toBe(200);

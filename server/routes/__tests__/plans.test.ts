@@ -50,7 +50,6 @@ describe("POST /api/plans/import Rate Limiting", () => {
     vi.setSystemTime(new Date(2025, 0, 1));
 
     app = createTestApp(plansRouter);
-
   });
 
   it("should rate limit requests to /api/plans/import after 5 requests", async () => {

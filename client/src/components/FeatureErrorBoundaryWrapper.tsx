@@ -10,14 +10,14 @@ interface Props {
 export function FeatureErrorBoundaryWrapper({ children, featureName }: Readonly<Props>) {
   const fallback = useCallback(
     (errorData: { error: unknown; resetError: () => void }) => (
-      <FeatureErrorBoundary error={errorData.error} resetError={errorData.resetError} featureName={featureName} />
+      <FeatureErrorBoundary
+        error={errorData.error}
+        resetError={errorData.resetError}
+        featureName={featureName}
+      />
     ),
-    [featureName]
+    [featureName],
   );
 
-  return (
-    <Sentry.ErrorBoundary fallback={fallback}>
-      {children}
-    </Sentry.ErrorBoundary>
-  );
+  return <Sentry.ErrorBoundary fallback={fallback}>{children}</Sentry.ErrorBoundary>;
 }

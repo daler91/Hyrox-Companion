@@ -82,7 +82,10 @@ describe("isAuthenticated middleware", () => {
     expect(getAuth).toHaveBeenCalledWith(req);
     expect(storage.getUser).toHaveBeenCalledWith("test-user-id");
     expect(res.status).toHaveBeenCalledWith(500);
-    expect(res.json).toHaveBeenCalledWith({ error: "Failed to initialize user session", code: "INTERNAL_SERVER_ERROR" });
+    expect(res.json).toHaveBeenCalledWith({
+      error: "Failed to initialize user session",
+      code: "INTERNAL_SERVER_ERROR",
+    });
     expect(next).not.toHaveBeenCalled();
 
     consoleErrorSpy.mockRestore();

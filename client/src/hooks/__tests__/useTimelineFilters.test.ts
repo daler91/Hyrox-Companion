@@ -95,7 +95,11 @@ describe("useTimelineFilters", () => {
     expect(result.current.pastGroups.map(([date]) => date)).toEqual([pastStr1, pastStr2]);
 
     // Future should be >= today, and the code calls .reverse() on it, so it becomes ascending
-    expect(result.current.futureGroups.map(([date]) => date)).toEqual([todayStr, futureStr1, futureStr2]);
+    expect(result.current.futureGroups.map(([date]) => date)).toEqual([
+      todayStr,
+      futureStr1,
+      futureStr2,
+    ]);
   });
 
   it("should handle pagination for visible groups", () => {

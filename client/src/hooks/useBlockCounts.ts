@@ -3,7 +3,7 @@ import type { StructuredExercise } from "@/components/ExerciseInput";
 
 export function useBlockCounts(
   editExercises: string[],
-  editExerciseData: Record<string, StructuredExercise>
+  editExerciseData: Record<string, StructuredExercise>,
 ) {
   return useMemo(() => {
     // ⚡ Bolt Performance Optimization:

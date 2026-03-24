@@ -1,9 +1,11 @@
 # Hyrox Training Tool - Design Guidelines
 
 ## Design Approach
+
 **System-Based Approach** inspired by premium fitness apps (Strava, TrainingPeaks, Whoop) with a focus on data clarity, athletic performance tracking, and seamless AI interaction.
 
 ## Core Design Principles
+
 1. **Performance-First**: Clear data hierarchy prioritizing key metrics
 2. **Athletic Professionalism**: Clean, focused interface that respects serious athletes
 3. **Scannable Information**: Quick-read cards and data visualization
@@ -17,6 +19,7 @@
 **Secondary Font**: Roboto Mono - for metrics and numbers
 
 **Hierarchy**:
+
 - H1 (Page Titles): text-4xl font-bold tracking-tight
 - H2 (Section Headers): text-2xl font-semibold
 - H3 (Card Titles): text-lg font-semibold
@@ -30,6 +33,7 @@
 ## Layout & Spacing System
 
 **Tailwind Units**: Primary spacing with 4, 6, 8, 12, 16, 24
+
 - Component padding: p-6
 - Card spacing: space-y-4
 - Section gaps: gap-8
@@ -37,6 +41,7 @@
 - Container max-width: max-w-7xl
 
 **Grid System**:
+
 - Dashboard: 3-column grid (lg:grid-cols-3) for metric cards
 - Workout List: Single column on mobile, 2-column on desktop (md:grid-cols-2)
 - Calendar View: 7-column grid for weekly planning
@@ -46,7 +51,9 @@
 ## Component Library
 
 ### Navigation
+
 **Top Navigation Bar**:
+
 - Fixed header with logo left, main nav center, profile right
 - Navigation items: Dashboard, Plan, Log, History, Chat
 - Mobile: Hamburger menu with slide-out drawer
@@ -54,7 +61,9 @@
 - Shadow: shadow-sm
 
 ### Dashboard Cards
+
 **Metric Cards** (3-column grid):
+
 - Large number display with label
 - Trend indicator (up/down arrow)
 - Rounded corners: rounded-xl
@@ -62,6 +71,7 @@
 - Border: border border-gray-200
 
 **Weekly Summary Card**:
+
 - Full-width card showing 7-day overview
 - Mini bar chart for daily volume
 - Quick stats row at bottom
@@ -69,12 +79,14 @@
 ### Workout Planning
 
 **Workout Builder**:
+
 - Left panel: Exercise selection (searchable list)
 - Center: Workout structure (drag-drop zones)
 - Right panel: Exercise details and notes
 - Exercise categories: Running, SkiErg, Sled Push/Pull, Burpees, Rowing, Farmers Carry, Wall Balls
 
 **Exercise Cards**:
+
 - Icon + Exercise name
 - Input fields for sets/reps/weight/time/distance
 - Compact form layout with inline labels
@@ -83,6 +95,7 @@
 ### Training Log
 
 **Log Entry Form**:
+
 - Date/time picker at top
 - Workout type selector (buttons group)
 - Expandable sections for each Hyrox station
@@ -90,6 +103,7 @@
 - Quick entry shortcuts for common workouts
 
 **History Timeline**:
+
 - Vertical timeline with workout cards
 - Each card shows: date, duration, key metrics, completion status
 - Filters: Date range, exercise type, workout type
@@ -98,6 +112,7 @@
 ### Chatbot Interface
 
 **Chat Panel** (can be sidebar or full-screen modal):
+
 - Message bubbles: User right-aligned, AI left-aligned
 - AI responses include data visualizations when relevant
 - Quick question chips above input ("Analyze my running", "Show weekly volume", "Compare to last month")
@@ -106,6 +121,7 @@
 - Avatar icons for both user and AI
 
 **Embedded Charts in Chat**:
+
 - Line graphs for progress trends
 - Bar charts for workout volume
 - Compact design: max height h-64
@@ -114,6 +130,7 @@
 ### Data Visualization
 
 **Progress Charts**:
+
 - Line chart for performance over time
 - Y-axis: metric values, X-axis: dates
 - Multiple series with legend
@@ -121,6 +138,7 @@
 - Min height: h-80
 
 **Workout Heatmap**:
+
 - Calendar grid showing training frequency
 - Intensity indicated by visual weight
 - Click date to see details
@@ -128,6 +146,7 @@
 ### Forms & Inputs
 
 **Input Fields**:
+
 - Floating labels
 - Border: border-2 on focus
 - Height: h-12
@@ -135,12 +154,14 @@
 - Error states with message below
 
 **Button Styles**:
+
 - Primary CTA: Large, rounded-lg, px-8 py-3, font-semibold
 - Secondary: Outlined variant
 - Icon buttons: Square (w-10 h-10), rounded-lg
 - Button groups for multi-choice (toggle buttons)
 
 **Number Steppers** (for weights/reps):
+
 - Inline +/- buttons flanking number display
 - Large touch targets: min-w-12 h-12
 
@@ -149,6 +170,7 @@
 ## Page Layouts
 
 ### Dashboard
+
 - Header with greeting and current week
 - 3-column metrics row (Total Volume, Workouts This Week, Personal Bests)
 - Weekly summary card (full width)
@@ -156,6 +178,7 @@
 - Chat shortcut floating action button (bottom-right)
 
 ### Planner
+
 - Calendar view (primary)
 - List view (alternative toggle)
 - Right sidebar: Workout template library
@@ -163,12 +186,14 @@
 - Click day to create/edit workout
 
 ### Logger
+
 - Quick log form (centered, max-w-2xl)
 - Previous workout reference (collapsible sidebar)
 - Timer integration for live logging
 - Exercise auto-complete
 
 ### History
+
 - Filter bar at top
 - Timeline view (default)
 - Grid view (toggle)
@@ -176,6 +201,7 @@
 - Infinite scroll for older entries
 
 ### Chat
+
 - Full-height layout (split-screen on desktop)
 - Left: Training context panel (current week summary)
 - Right: Chat interface
@@ -186,17 +212,20 @@
 ## Interaction Patterns
 
 **Minimal Animations**:
+
 - Card hover: subtle lift (translate-y-1)
 - Button press: scale-95 on active
 - Page transitions: fade only
 - NO complex scroll animations
 
 **Loading States**:
+
 - Skeleton screens for data-heavy views
 - Spinner for quick actions
 - Progress bar for uploads
 
 **Responsiveness**:
+
 - Mobile-first approach
 - Breakpoints: sm (640px), md (768px), lg (1024px), xl (1280px)
 - Stack columns on mobile
@@ -209,10 +238,12 @@
 **Hero Image**: NOT NEEDED - This is a utility-focused app, not a marketing site
 
 **Icon Library**: Heroicons (via CDN)
+
 - Line style for navigation and general UI
 - Solid style for active states and primary actions
 
 **Exercise Illustrations**: Use placeholder comments for custom Hyrox station icons
+
 - `<!-- CUSTOM ICON: SkiErg -->`
 - `<!-- CUSTOM ICON: Sled Push -->`
 - Consistent size: w-12 h-12 or w-16 h-16 for larger contexts

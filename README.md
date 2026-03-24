@@ -29,19 +29,23 @@ Plan structured training programs, log complex workouts with voice or free-text 
 ## 🌟 Capabilities Deep-Dive
 
 ### 📅 Unified Training Experience
+
 - **Interactive Timeline**: A drag-and-drop integrated view spanning past performance, today's focus, and future planned workouts. Visually distinguish between completed, planned, and missed workouts.
 - **Hyrox Plans**: Automatically import customized CSV training blocks or utilize the built-in 8-week rigorous Hyrox program out-of-the-box.
 - **Custom Exercises**: Log non-standard movements (e.g., custom sled pushes or sandbag lunges) natively alongside your core lifts.
 
 ### 🤖 Google Gemini AI Engine
-- **Intelligent Workout Parsing**: No more tapping dropdowns. Simply say or type: *"Did 3 sets of bench pressing at 225lbs for 8 reps, then ran 3 miles in 24 minutes"*. The Gemini Vision & Language API parses the raw text into structured database elements instantly using enforced Zod JSON schemas.
+
+- **Intelligent Workout Parsing**: No more tapping dropdowns. Simply say or type: _"Did 3 sets of bench pressing at 225lbs for 8 reps, then ran 3 miles in 24 minutes"_. The Gemini Vision & Language API parses the raw text into structured database elements instantly using enforced Zod JSON schemas.
 - **Real-time Auto-Coach**: The AI continuously reads your active plan's goal and your recent timeline. It evaluates fatigue, volume, and pacing, and provides actionable adjustments to your upcoming schedule automatically.
-- **Streaming Live Chat**: Interact directly with your Coach over a fast Server-Sent Events (SSE) stream for contextual questions like *"What pace should I aim for on my next 1km run based on yesterday's track session?"*
+- **Streaming Live Chat**: Interact directly with your Coach over a fast Server-Sent Events (SSE) stream for contextual questions like _"What pace should I aim for on my next 1km run based on yesterday's track session?"_
 
 ### 🚴 Strava Integration
+
 - **Zero-Friction Sync**: Link your primary Strava account using secure OAuth 2.0 flows. `HyroxTracker` listens to activity updates and automatically mounts them onto your timeline as completed workouts, decrypting access tokens locally on the fly.
 
 ### 📊 Meaningful Analytics
+
 - **Personal Records**: Automatically detects and graphs 1RM estimation progressions and lifetime PRs natively.
 - **Advanced Filtering**: Drill down into performance by exercise categories, dates, or particular micro-cycles.
 - **Notification Loops**: Fully backgrounded cron jobs leverage Resend to email you weekly training summaries or gentle reminders for missed days.
@@ -53,12 +57,14 @@ Plan structured training programs, log complex workouts with voice or free-text 
 This repository is a fully functional monorepo containing both the React frontend and the Express REST API backend written entirely in strictly typed **TypeScript**.
 
 ### Frontend
+
 - **Libraries**: React 18, Vite, TypeScript, Framer Motion (for fluid micro-animations).
 - **Styling**: Tailwind CSS layered perfectly over `shadcn/ui` (accessible Radix primitives).
 - **State Management**: Highly optimized caching via TanStack Query (React Query).
 - **Client Routing**: `wouter` for ultra-lightweight and fast navigation.
 
 ### Backend Network Layer
+
 - **API Runtime**: Node.js & Express API, utilizing thin Controller wrappers and thick Service abstractions.
 - **Database**: PostgreSQL bridged by the incredibly type-safe **Drizzle ORM**.
 - **Security Protocols**:
@@ -73,12 +79,14 @@ This repository is a fully functional monorepo containing both the React fronten
 Follow these instructions to run the full application ecosystem locally on your machine.
 
 ### Prerequisites
+
 - [Node.js](https://nodejs.org/) (v22 or higher)
 - [PostgreSQL](https://www.postgresql.org/download/) Database (Running locally on port 5432, or a hosted cloud instance)
 - A [Clerk.dev](https://clerk.dev/) account for Auth
 - A [Google AI Studio](https://aistudio.google.com/) account for the Gemini API key
 
 ### 1. Environment Variables
+
 Copy the example environment file and fill in your values:
 
 ```bash
@@ -86,12 +94,14 @@ cp .env.example .env
 ```
 
 At minimum, set the two **required** variables:
+
 - `DATABASE_URL` – PostgreSQL connection string
 - `ENCRYPTION_KEY` – 32+ char hex key (generate with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`)
 
 See `.env.example` for all available configuration options including Clerk auth, Gemini AI, Strava sync, and more.
 
 ### 2. Installation & Database Setup
+
 Install the necessary package dependencies and execute the Drizzle ORM schema migrations to structure your Postgres database.
 
 ```bash
@@ -103,6 +113,7 @@ npm run db:push
 ```
 
 ### 3. Start the Application
+
 Boot up the concurrent development server. This fires up the Vite frontend on HMR (Hot-Module-Reloading) and the backend Express server proxying internally onto port `5000`.
 
 ```bash
@@ -119,9 +130,9 @@ The repository guarantees extreme stability by prioritizing testing layers at al
 
 - **Fast Unit Tests (`vitest`)**: Over 500 strict assertions test the AI retry boundaries, functional calculations (streak aggregators, workout spreaders), decoupled Rate-Limiting mock state clearing, and schema validations.
   - Run via: `npm test` or `npm run test:watch`
-- **End-to-End Visual Tests (`cypress`)**: Cypress tests run headless browser sessions mimicking real user flows from Authentication redirects through to drag-and-drop timeline alterations. 
+- **End-to-End Visual Tests (`cypress`)**: Cypress tests run headless browser sessions mimicking real user flows from Authentication redirects through to drag-and-drop timeline alterations.
   - Run via: `npx cypress open`
-- **TypeScript Compiler**: Static safety enforced globally. 
+- **TypeScript Compiler**: Static safety enforced globally.
   - Run via: `npm run check`
 - **CI/CD (`.github/workflows`)**: Every branch triggers intensive GitHub Actions evaluating Trivy security configurations, SonarCloud cognitive complexity drops, and raw build outputs.
 
@@ -141,4 +152,5 @@ Contributions make the open-source community an amazing place to learn, inspire,
 ---
 
 ## 📄 License
+
 Distributed under the MIT License. See `LICENSE` for more information.

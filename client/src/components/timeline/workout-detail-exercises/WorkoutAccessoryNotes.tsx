@@ -26,9 +26,7 @@ export const WorkoutAccessoryNotes = React.memo(function WorkoutAccessoryNotes({
         <Textarea
           id="detail-accessory"
           value={editForm.accessory}
-          onChange={(e) =>
-            setEditForm({ ...editForm, accessory: e.target.value })
-          }
+          onChange={(e) => setEditForm({ ...editForm, accessory: e.target.value })}
           rows={2}
           data-testid="input-detail-accessory"
         />

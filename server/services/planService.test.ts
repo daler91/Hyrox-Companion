@@ -1,6 +1,11 @@
 import { logger } from "../logger";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { importPlanFromCSV, validateAndMapCSVRows, createSamplePlan, updatePlanDayWithCleanup } from "./planService";
+import {
+  importPlanFromCSV,
+  validateAndMapCSVRows,
+  createSamplePlan,
+  updatePlanDayWithCleanup,
+} from "./planService";
 import { db } from "../db";
 
 import { exerciseSets, planDays } from "@shared/schema";
@@ -53,7 +58,9 @@ describe("planService", () => {
       const invalidCSV = "invalid,csv,data";
       const userId = "test-user-id";
 
-      await expect(importPlanFromCSV(invalidCSV, userId)).rejects.toThrow("No valid rows found in CSV");
+      await expect(importPlanFromCSV(invalidCSV, userId)).rejects.toThrow(
+        "No valid rows found in CSV",
+      );
 
       expect(csvParse.parse).toHaveBeenCalledWith(invalidCSV, expect.any(Object));
       expect(loggerErrorSpy).toHaveBeenCalledWith({ err: mockError }, "CSV parse error:");
@@ -81,8 +88,12 @@ describe("planService", () => {
         updatedAt: new Date(),
       } as unknown as Awaited<ReturnType<typeof storage.createTrainingPlan>>);
 
-      vi.mocked(storage.createPlanDays).mockResolvedValue(undefined as unknown as Awaited<ReturnType<typeof storage.createPlanDays>>);
-      vi.mocked(storage.getTrainingPlan).mockResolvedValue(mockFullPlan as unknown as Awaited<ReturnType<typeof storage.getTrainingPlan>>);
+      vi.mocked(storage.createPlanDays).mockResolvedValue(
+        undefined as unknown as Awaited<ReturnType<typeof storage.createPlanDays>>,
+      );
+      vi.mocked(storage.getTrainingPlan).mockResolvedValue(
+        mockFullPlan as unknown as Awaited<ReturnType<typeof storage.getTrainingPlan>>,
+      );
 
       const result = await createSamplePlan(userId);
 
@@ -129,92 +140,108 @@ describe("planService", () => {
     });
 
     it("should map a complete record correctly", () => {
-      const records = [{
-        Week: "1",
-        Day: "Monday",
-        Focus: "Strength",
-        "Main Workout": "Squats",
-        "Accessory/Engine Work": "Lunges",
-        Accessory: "Calf Raises",
-        Notes: "Go heavy"
-      }];
+      const records = [
+        {
+          Week: "1",
+          Day: "Monday",
+          Focus: "Strength",
+          "Main Workout": "Squats",
+          "Accessory/Engine Work": "Lunges",
+          Accessory: "Calf Raises",
+          Notes: "Go heavy",
+        },
+      ];
 
       const result = validateAndMapCSVRows(records);
 
-      expect(result).toEqual([{
-        Week: "1",
-        Day: "Monday",
-        Focus: "Strength",
-        "Main Workout": "Squats",
-        "Accessory/Engine Work": "Lunges",
-        Accessory: "Calf Raises",
-        Notes: "Go heavy"
-      }]);
+      expect(result).toEqual([
+        {
+          Week: "1",
+          Day: "Monday",
+          Focus: "Strength",
+          "Main Workout": "Squats",
+          "Accessory/Engine Work": "Lunges",
+          Accessory: "Calf Raises",
+          Notes: "Go heavy",
+        },
+      ]);
     });
 
     it("should handle missing properties by defaulting to empty strings", () => {
-      const records = [{
-        Week: "2",
-        Day: "Tuesday"
-        // Missing Focus, Main Workout, Accessory/Engine Work, Accessory, Notes
-      }];
+      const records = [
+        {
+          Week: "2",
+          Day: "Tuesday",
+          // Missing Focus, Main Workout, Accessory/Engine Work, Accessory, Notes
+        },
+      ];
 
       const result = validateAndMapCSVRows(records);
 
-      expect(result).toEqual([{
-        Week: "2",
-        Day: "Tuesday",
-        Focus: "",
-        "Main Workout": "",
-        "Accessory/Engine Work": "",
-        Accessory: "",
-        Notes: ""
-      }]);
+      expect(result).toEqual([
+        {
+          Week: "2",
+          Day: "Tuesday",
+          Focus: "",
+          "Main Workout": "",
+          "Accessory/Engine Work": "",
+          Accessory: "",
+          Notes: "",
+        },
+      ]);
     });
 
     it("should convert numeric or non-string values to strings", () => {
-      const records = [{
-        Week: 3,
-        Day: { name: "Wednesday" },
-        Focus: null,
-        "Main Workout": undefined,
-        "Accessory/Engine Work": 100,
-        Accessory: false,
-        Notes: []
-      }];
+      const records = [
+        {
+          Week: 3,
+          Day: { name: "Wednesday" },
+          Focus: null,
+          "Main Workout": undefined,
+          "Accessory/Engine Work": 100,
+          Accessory: false,
+          Notes: [],
+        },
+      ];
 
       const result = validateAndMapCSVRows(records);
 
-      expect(result).toEqual([{
-        Week: "3",
-        Day: "",
-        Focus: "",
-        "Main Workout": "",
-        "Accessory/Engine Work": "100",
-        Accessory: "",
-        Notes: ""
-      }]);
+      expect(result).toEqual([
+        {
+          Week: "3",
+          Day: "",
+          Focus: "",
+          "Main Workout": "",
+          "Accessory/Engine Work": "100",
+          Accessory: "",
+          Notes: "",
+        },
+      ]);
     });
 
     it("should ignore unexpected extra properties", () => {
-      const records = [{
-        Week: "4",
-        Day: "Thursday",
-        ExtraField: "Should be ignored",
-        AnotherOne: 123
-      }];
+      const records = [
+        {
+          Week: "4",
+          Day: "Thursday",
+          ExtraField: "Should be ignored",
+          AnotherOne: 123,
+        },
+      ];
 
       const result = validateAndMapCSVRows(records);
 
-      expect(result).toEqual([{
-        Week: "4",
-        Day: "Thursday",
-        Focus: "",
-        "Main Workout": "",
-        "Accessory/Engine Work": "",
-        Accessory: "",
-        Notes: ""
-      }]);
+      expect(result).toEqual([
+        {
+          Week: "4",
+          Day: "Thursday",
+          Focus: "",
+          "Main Workout": "",
+          "Accessory/Engine Work": "",
+          Accessory: "",
+          Notes: "",
+        },
+      ]);
     });
   });
 
@@ -226,7 +253,11 @@ describe("planService", () => {
       vi.clearAllMocks();
     });
 
-    const setupMockTransaction = (linkedLogs: Record<string, unknown>[], dayExistenceResult: Record<string, unknown>[], expectedResult: Record<string, unknown>[]) => {
+    const setupMockTransaction = (
+      linkedLogs: Record<string, unknown>[],
+      dayExistenceResult: Record<string, unknown>[],
+      expectedResult: Record<string, unknown>[],
+    ) => {
       const mockTx = {
         select: vi.fn(),
         delete: vi.fn().mockReturnThis(),
@@ -236,24 +267,27 @@ describe("planService", () => {
         returning: vi.fn().mockResolvedValue(expectedResult),
       };
 
-      mockTx.select = vi.fn()
+      mockTx.select = vi
+        .fn()
         .mockReturnValueOnce({
           from: vi.fn().mockReturnValueOnce({
             where: vi.fn().mockReturnValueOnce({
               limit: vi.fn().mockResolvedValue(linkedLogs),
-            })
-          })
+            }),
+          }),
         })
         .mockReturnValueOnce({
           from: vi.fn().mockReturnValueOnce({
             innerJoin: vi.fn().mockReturnValueOnce({
-              where: vi.fn().mockResolvedValue(dayExistenceResult)
-            })
-          })
+              where: vi.fn().mockResolvedValue(dayExistenceResult),
+            }),
+          }),
         });
 
       vi.mocked(db.transaction).mockImplementation(async (callback) => {
-        return await callback(mockTx as unknown as Parameters<Parameters<typeof db.transaction>[0]>[0]);
+        return await callback(
+          mockTx as unknown as Parameters<Parameters<typeof db.transaction>[0]>[0],
+        );
       });
 
       return mockTx;
@@ -263,7 +297,9 @@ describe("planService", () => {
       const updates = { focus: "New Focus" };
       const expectedResult = { id: dayId, focus: "New Focus" };
 
-      vi.mocked(storage.updatePlanDay).mockResolvedValue(expectedResult as unknown as Awaited<ReturnType<typeof storage.updatePlanDay>>);
+      vi.mocked(storage.updatePlanDay).mockResolvedValue(
+        expectedResult as unknown as Awaited<ReturnType<typeof storage.updatePlanDay>>,
+      );
 
       const result = await updatePlanDayWithCleanup(dayId, updates, userId);
 
@@ -292,7 +328,11 @@ describe("planService", () => {
       const expectedResult = { id: dayId, mainWorkout: "New Workout" };
       const mockLinkedLog = { id: "log-id" };
 
-      const mockTx = setupMockTransaction([mockLinkedLog], [{ planDay: { id: dayId } }], [expectedResult]);
+      const mockTx = setupMockTransaction(
+        [mockLinkedLog],
+        [{ planDay: { id: dayId } }],
+        [expectedResult],
+      );
 
       const result = await updatePlanDayWithCleanup(dayId, updates, userId);
 

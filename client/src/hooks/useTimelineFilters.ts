@@ -8,15 +8,23 @@ export function useTimelineFilters(timelineData: TimelineEntry[]) {
   const [showAllPast, setShowAllPast] = useState(false);
   const [showAllFuture, setShowAllFuture] = useState(false);
 
-  const filteredTimeline = useMemo(() =>
-    timelineData.filter((entry) => {
-      if (filterStatus === "all") return true;
-      return entry.status === filterStatus;
-    }),
-    [timelineData, filterStatus]
+  const filteredTimeline = useMemo(
+    () =>
+      timelineData.filter((entry) => {
+        if (filterStatus === "all") return true;
+        return entry.status === filterStatus;
+      }),
+    [timelineData, filterStatus],
   );
 
-  const { pastGroups, futureGroups, visiblePastGroups, visibleFutureGroups, hiddenPastCount, hiddenFutureCount } = useMemo(() => {
+  const {
+    pastGroups,
+    futureGroups,
+    visiblePastGroups,
+    visibleFutureGroups,
+    hiddenPastCount,
+    hiddenFutureCount,
+  } = useMemo(() => {
     const groups: Record<string, TimelineEntry[]> = {};
     filteredTimeline.forEach((entry) => {
       if (!groups[entry.date]) {

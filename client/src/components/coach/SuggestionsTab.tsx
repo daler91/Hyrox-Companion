@@ -24,13 +24,14 @@ export function useSuggestions({ timeline, addLocalMessage, saveMessage }: UseSu
       setSuggestionsRagInfo(data.ragInfo);
       let responseContent: string;
       if (!data.suggestions || data.suggestions.length === 0) {
-        responseContent = "Your upcoming workouts look well-balanced! I don't have any specific improvements to suggest right now.";
+        responseContent =
+          "Your upcoming workouts look well-balanced! I don't have any specific improvements to suggest right now.";
         setPendingSuggestions([]);
       } else {
-        responseContent = `I have ${data.suggestions.length} suggestion${data.suggestions.length > 1 ? 's' : ''} for your upcoming workouts. Review them below and click Apply to add them to your plan.`;
+        responseContent = `I have ${data.suggestions.length} suggestion${data.suggestions.length > 1 ? "s" : ""} for your upcoming workouts. Review them below and click Apply to add them to your plan.`;
         setPendingSuggestions(data.suggestions);
       }
-      
+
       const suggestionsMessage: Message = {
         id: Date.now().toString(),
         role: "assistant",
@@ -60,7 +61,7 @@ export function useSuggestions({ timeline, addLocalMessage, saveMessage }: UseSu
   const handleApplySuggestion = async (suggestion: Suggestion) => {
     setApplyingId(suggestion.workoutId);
     try {
-      const workoutEntry = timeline.find(e => e.planDayId === suggestion.workoutId);
+      const workoutEntry = timeline.find((e) => e.planDayId === suggestion.workoutId);
       if (!workoutEntry) {
         const errorMessage: Message = {
           id: Date.now().toString(),
@@ -74,7 +75,7 @@ export function useSuggestions({ timeline, addLocalMessage, saveMessage }: UseSu
 
       const currentValue = (workoutEntry[suggestion.targetField] as string) || "";
       let newValue: string;
-      
+
       if (suggestion.action === "append") {
         if (currentValue.trim()) {
           newValue = `${currentValue}\n\nAI suggestion: ${suggestion.recommendation}`;
@@ -95,8 +96,8 @@ export function useSuggestions({ timeline, addLocalMessage, saveMessage }: UseSu
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.exerciseAnalytics });
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.personalRecords });
       }
-      setPendingSuggestions(prev => prev.filter(s => s.workoutId !== suggestion.workoutId));
-      
+      setPendingSuggestions((prev) => prev.filter((s) => s.workoutId !== suggestion.workoutId));
+
       const confirmMessage: Message = {
         id: Date.now().toString(),
         role: "assistant",
@@ -118,7 +119,7 @@ export function useSuggestions({ timeline, addLocalMessage, saveMessage }: UseSu
   };
 
   const handleDismissSuggestion = (workoutId: string) => {
-    setPendingSuggestions(prev => prev.filter(s => s.workoutId !== workoutId));
+    setPendingSuggestions((prev) => prev.filter((s) => s.workoutId !== workoutId));
   };
 
   const clearSuggestions = () => {
@@ -144,7 +145,13 @@ interface SuggestionsListProps {
   readonly onDismiss: (workoutId: string) => void;
 }
 
-export function SuggestionsList({ suggestions, applyingId, ragInfo, onApply, onDismiss }: Readonly<SuggestionsListProps>) {
+export function SuggestionsList({
+  suggestions,
+  applyingId,
+  ragInfo,
+  onApply,
+  onDismiss,
+}: Readonly<SuggestionsListProps>) {
   if (suggestions.length === 0) return null;
 
   return (

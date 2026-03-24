@@ -71,9 +71,7 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
           stopNotesRef={stopNotesRef}
         />
 
-        {source !== "strava" && (
-          <RpeSelector value={editRpe} onChange={setEditRpe} compact />
-        )}
+        {source !== "strava" && <RpeSelector value={editRpe} onChange={setEditRpe} compact />}
       </div>
 
       {/* Right Column */}

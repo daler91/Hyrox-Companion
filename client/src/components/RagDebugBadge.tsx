@@ -4,7 +4,8 @@ import type { RagInfo } from "@/hooks/useChatSession";
 
 const BADGE_COLORS: Record<RagInfo["source"], string> = {
   rag: "text-emerald-600 bg-emerald-50 border-emerald-200 dark:text-emerald-400 dark:bg-emerald-950 dark:border-emerald-800",
-  legacy: "text-amber-600 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-950 dark:border-amber-800",
+  legacy:
+    "text-amber-600 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-950 dark:border-amber-800",
   none: "text-muted-foreground bg-muted border-border",
 };
 
@@ -20,7 +21,8 @@ export function RagDebugBadge({ ragInfo }: Readonly<{ ragInfo: RagInfo }>) {
   const badgeColor = BADGE_COLORS[ragInfo.source];
   const Icon = ragInfo.source === "rag" ? Database : FileText;
   const label = getBadgeLabel(ragInfo);
-  const hasExpandableChunks = ragInfo.source === "rag" && ragInfo.chunks && ragInfo.chunks.length > 0;
+  const hasExpandableChunks =
+    ragInfo.source === "rag" && ragInfo.chunks && ragInfo.chunks.length > 0;
 
   return (
     <div className="mt-1">
@@ -31,9 +33,12 @@ export function RagDebugBadge({ ragInfo }: Readonly<{ ragInfo: RagInfo }>) {
       >
         <Icon className="h-2.5 w-2.5" />
         {label}
-        {hasExpandableChunks && (
-          expanded ? <ChevronDown className="h-2.5 w-2.5" /> : <ChevronRight className="h-2.5 w-2.5" />
-        )}
+        {hasExpandableChunks &&
+          (expanded ? (
+            <ChevronDown className="h-2.5 w-2.5" />
+          ) : (
+            <ChevronRight className="h-2.5 w-2.5" />
+          ))}
       </button>
       {expanded && hasExpandableChunks && (
         <div className="mt-1 space-y-1 max-h-48 overflow-y-auto">

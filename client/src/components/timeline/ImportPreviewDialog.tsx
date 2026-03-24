@@ -33,10 +33,7 @@ export default function ImportPreviewDialog({
   isPending,
 }: Readonly<ImportPreviewDialogProps>) {
   return (
-    <Dialog
-      open={!!preview}
-      onOpenChange={(open) => !open && onOpenChange(false)}
-    >
+    <Dialog open={!!preview} onOpenChange={(open) => !open && onOpenChange(false)}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -46,8 +43,7 @@ export default function ImportPreviewDialog({
         </DialogHeader>
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Preview of first {preview?.rows.length} workouts from your training
-            plan:
+            Preview of first {preview?.rows.length} workouts from your training plan:
           </p>
           <div className="border rounded-md overflow-hidden">
             <div className="overflow-x-auto">
@@ -62,17 +58,11 @@ export default function ImportPreviewDialog({
                 </thead>
                 <tbody>
                   {preview?.rows.map((row) => (
-                    <tr
-                      key={`${row.weekNumber}-${row.dayName}`}
-                      className="border-t"
-                    >
+                    <tr key={`${row.weekNumber}-${row.dayName}`} className="border-t">
                       <td className="p-2">{row.weekNumber}</td>
                       <td className="p-2">{row.dayName}</td>
                       <td className="p-2">{row.focus}</td>
-                      <td
-                        className="p-2 max-w-[200px] truncate"
-                        title={row.mainWorkout}
-                      >
+                      <td className="p-2 max-w-[200px] truncate" title={row.mainWorkout}>
                         {row.mainWorkout}
                       </td>
                     </tr>
@@ -91,11 +81,7 @@ export default function ImportPreviewDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button
-            onClick={onConfirm}
-            disabled={isPending}
-            data-testid="button-confirm-import"
-          >
+          <Button onClick={onConfirm} disabled={isPending} data-testid="button-confirm-import">
             {isPending ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />

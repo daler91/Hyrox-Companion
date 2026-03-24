@@ -13,7 +13,9 @@ describe("cn", () => {
   it("should merge tailwind classes properly using twMerge", () => {
     expect(cn("p-4", "p-8")).toBe("p-8");
     expect(cn("text-red-500", "text-blue-500")).toBe("text-blue-500");
-    expect(cn("bg-red-500", "bg-blue-500 hover:bg-green-500")).toBe("bg-blue-500 hover:bg-green-500");
+    expect(cn("bg-red-500", "bg-blue-500 hover:bg-green-500")).toBe(
+      "bg-blue-500 hover:bg-green-500",
+    );
   });
 
   it("should handle arrays and objects using clsx", () => {
@@ -30,8 +32,8 @@ describe("cn", () => {
           "text-blue-500": false,
         },
         ["bg-gray-100", "hover:bg-gray-200"],
-        "bg-white"
-      )
+        "bg-white",
+      ),
     ).toBe("text-red-500 p-8 hover:bg-gray-200 bg-white");
   });
 

@@ -28,7 +28,11 @@ function mapWorkoutLogToTimelineFields(log: WorkoutLog) {
   };
 }
 
-function calculatePlanDayStatus(dayStatus: string | null, scheduledDate: string, today: string): WorkoutStatus {
+function calculatePlanDayStatus(
+  dayStatus: string | null,
+  scheduledDate: string,
+  today: string,
+): WorkoutStatus {
   if (dayStatus === "skipped") return "skipped";
   if (dayStatus === "completed") return "completed";
   if (dayStatus === "missed") return "missed";
@@ -36,7 +40,11 @@ function calculatePlanDayStatus(dayStatus: string | null, scheduledDate: string,
   return "planned";
 }
 
-function createLinkedWorkoutEntry(day: PlanDay, linkedLog: WorkoutLog, row: { planName: string; planId: string }): TimelineEntry {
+function createLinkedWorkoutEntry(
+  day: PlanDay,
+  linkedLog: WorkoutLog,
+  row: { planName: string; planId: string },
+): TimelineEntry {
   return {
     id: `log-${linkedLog.id}`,
     date: linkedLog.date,
@@ -59,7 +67,12 @@ function createLinkedWorkoutEntry(day: PlanDay, linkedLog: WorkoutLog, row: { pl
   };
 }
 
-function createPlannedDayEntry(day: PlanDay, scheduledDate: string, row: { planName: string; planId: string }, today: string): TimelineEntry {
+function createPlannedDayEntry(
+  day: PlanDay,
+  scheduledDate: string,
+  row: { planName: string; planId: string },
+  today: string,
+): TimelineEntry {
   const status = calculatePlanDayStatus(day.status, scheduledDate, today);
   return {
     id: `plan-${day.id}`,
@@ -100,9 +113,7 @@ export class TimelineStorage {
   constructor(private readonly workoutStorage: WorkoutStorage) {}
 
   private async attachExerciseSets(entries: TimelineEntry[]): Promise<void> {
-    const workoutLogIds = entries
-      .filter(e => e.workoutLogId)
-      .map(e => e.workoutLogId!);
+    const workoutLogIds = entries.filter((e) => e.workoutLogId).map((e) => e.workoutLogId!);
 
     if (workoutLogIds.length === 0) return;
 
@@ -135,26 +146,33 @@ export class TimelineStorage {
       .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
       .where(planDayConditions);
 
-    return scheduledDaysResult.filter(r => r.planDay.scheduledDate);
+    return scheduledDaysResult.filter((r) => r.planDay.scheduledDate);
   }
 
-  async getTimeline(userId: string, planId?: string, limit?: number, offset?: number): Promise<TimelineEntry[]> {
+  async getTimeline(
+    userId: string,
+    planId?: string,
+    limit?: number,
+    offset?: number,
+  ): Promise<TimelineEntry[]> {
     const entries: TimelineEntry[] = [];
     const today = toDateStr();
 
     const scheduledDays = await this.fetchScheduledDays(userId, planId);
 
-    const planDayIds = scheduledDays.map(r => r.planDay.id);
+    const planDayIds = scheduledDays.map((r) => r.planDay.id);
 
     const [linkedWorkouts, standaloneWorkouts] = await Promise.all([
       planDayIds.length > 0
-        ? db.select().from(workoutLogs).where(
-            and(eq(workoutLogs.userId, userId), inArray(workoutLogs.planDayId, planDayIds))
-          )
+        ? db
+            .select()
+            .from(workoutLogs)
+            .where(and(eq(workoutLogs.userId, userId), inArray(workoutLogs.planDayId, planDayIds)))
         : Promise.resolve([]),
-      db.select().from(workoutLogs).where(
-        and(eq(workoutLogs.userId, userId), isNull(workoutLogs.planDayId))
-      ),
+      db
+        .select()
+        .from(workoutLogs)
+        .where(and(eq(workoutLogs.userId, userId), isNull(workoutLogs.planDayId))),
     ]);
 
     const workoutsByPlanDayId = new Map<string, WorkoutLog>();
@@ -169,9 +187,21 @@ export class TimelineStorage {
       if (day.scheduledDate) {
         const linkedLog = workoutsByPlanDayId.get(day.id);
         if (linkedLog) {
-          entries.push(createLinkedWorkoutEntry(day, linkedLog, { planName: row.planName, planId: row.planId }));
+          entries.push(
+            createLinkedWorkoutEntry(day, linkedLog, {
+              planName: row.planName,
+              planId: row.planId,
+            }),
+          );
         } else {
-          entries.push(createPlannedDayEntry(day, day.scheduledDate, { planName: row.planName, planId: row.planId }, today));
+          entries.push(
+            createPlannedDayEntry(
+              day,
+              day.scheduledDate,
+              { planName: row.planName, planId: row.planId },
+              today,
+            ),
+          );
         }
       }
     }

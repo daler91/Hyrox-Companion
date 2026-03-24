@@ -4,7 +4,13 @@ import { Link } from "wouter";
 import { Trophy, Dumbbell, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { PersonalRecordItem } from "./PersonalRecordItem";
 import { api } from "@/lib/api";
@@ -102,7 +108,8 @@ export function PersonalRecordsTab({ dateParams }: PersonalRecordsTabProps) {
               <div className="text-center py-4 space-y-3" data-testid="text-no-prs">
                 <Dumbbell className="h-10 w-10 mx-auto text-muted-foreground/40" />
                 <p className="text-muted-foreground text-sm">
-                  No personal records yet. Log workouts with structured exercise data to see your PRs here.
+                  No personal records yet. Log workouts with structured exercise data to see your
+                  PRs here.
                 </p>
                 <Link href="/log">
                   <Button variant="outline" data-testid="button-log-workout-from-analytics">

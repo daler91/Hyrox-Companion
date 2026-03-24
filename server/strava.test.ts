@@ -1,8 +1,8 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createSignedState, verifySignedState } from './strava';
-import crypto from 'node:crypto';
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { createSignedState, verifySignedState } from "./strava";
+import crypto from "node:crypto";
 
-describe('strava service state signing', () => {
+describe("strava service state signing", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(1700000000000)); // Nov 14 2023
@@ -13,130 +13,137 @@ describe('strava service state signing', () => {
     vi.restoreAllMocks();
   });
 
-  describe('createSignedState', () => {
-    it('generates a deterministically verifiable state', () => {
+  describe("createSignedState", () => {
+    it("generates a deterministically verifiable state", () => {
       // Mock crypto.randomBytes just for this test so we know the nonce
-      const randomBytesSpy = vi.spyOn(crypto, 'randomBytes').mockImplementation((size: number) => {
-        return Buffer.alloc(size, 'a'); // Fill with 'a' chars, 8 bytes
+      const randomBytesSpy = vi.spyOn(crypto, "randomBytes").mockImplementation((size: number) => {
+        return Buffer.alloc(size, "a"); // Fill with 'a' chars, 8 bytes
       });
 
-      const userId = 'user_123';
+      const userId = "user_123";
       const state = createSignedState(userId);
 
       // Restore to allow normal verify function execution
       randomBytesSpy.mockRestore();
 
       // State format should be `userId:timestamp:nonce:signature`
-      const parts = state.split(':');
+      const parts = state.split(":");
       expect(parts.length).toBe(4);
-      expect(parts[0]).toBe('user_123');
+      expect(parts[0]).toBe("user_123");
 
       // 1700000000000 in base36 is 'lo6z9d8g'
       expect(parts[1]).toBe((1700000000000).toString(36));
 
       // The nonce is 8 bytes of 'a' -> 16 hex chars
-      expect(parts[2]).toBe('6161616161616161');
+      expect(parts[2]).toBe("6161616161616161");
 
       // verifySignedState should be able to decode it correctly
       const verified = verifySignedState(state);
-      expect(verified).toStrictEqual({ userId: 'user_123' });
+      expect(verified).toStrictEqual({ userId: "user_123" });
     });
 
-    it('generates unique states for different times and nonces', () => {
-      const state1 = createSignedState('user_123');
+    it("generates unique states for different times and nonces", () => {
+      const state1 = createSignedState("user_123");
 
       vi.advanceTimersByTime(1000); // advance 1 second
 
-      const state2 = createSignedState('user_123');
+      const state2 = createSignedState("user_123");
 
       expect(state1).not.toBe(state2);
 
-      const parts1 = state1.split(':');
-      const parts2 = state2.split(':');
+      const parts1 = state1.split(":");
+      const parts2 = state2.split(":");
 
       // Timestamps or nonces should differ
       expect(parts1[1] !== parts2[1] || parts1[2] !== parts2[2]).toBe(true);
     });
   });
 
-
-  describe('state secret isolation', () => {
-    it('uses a dedicated secret instead of reusing CLERK_SECRET_KEY', async () => {
+  describe("state secret isolation", () => {
+    it("uses a dedicated secret instead of reusing CLERK_SECRET_KEY", async () => {
       // Isolate module imports
       vi.resetModules();
 
       // Mock the env with specific values to ensure they are distinct
-      vi.doMock('./env', () => ({
+      vi.doMock("./env", () => ({
         env: {
-          STRAVA_STATE_SECRET: 'dedicated-strava-secret-12345678',
-          CLERK_SECRET_KEY: 'shared-clerk-secret-87654321',
-          DATABASE_URL: 'postgres://dummy',
-          APP_URL: 'http://localhost'
-        }
+          STRAVA_STATE_SECRET: "dedicated-strava-secret-12345678",
+          CLERK_SECRET_KEY: "shared-clerk-secret-87654321",
+          DATABASE_URL: "postgres://dummy",
+          APP_URL: "http://localhost",
+        },
       }));
 
-      const { createSignedState, verifySignedState } = await import('./strava');
-      const crypto = await import('node:crypto');
+      const { createSignedState, verifySignedState } = await import("./strava");
+      const crypto = await import("node:crypto");
 
-      const userId = 'user_isolate_test';
+      const userId = "user_isolate_test";
       const state = createSignedState(userId);
-      const parts = state.split(':');
+      const parts = state.split(":");
       expect(parts.length).toBe(4);
 
       const [id, timestamp, nonce, signature] = parts;
       const payload = `${id}:${timestamp}:${nonce}`;
 
       // Verify the signature is generated using STRAVA_STATE_SECRET, not CLERK_SECRET_KEY
-      const expectedWithStrava = crypto.createHmac('sha256', 'dedicated-strava-secret-12345678').update(payload).digest('hex').slice(0, 16);
-      const expectedWithClerk = crypto.createHmac('sha256', 'shared-clerk-secret-87654321').update(payload).digest('hex').slice(0, 16);
+      const expectedWithStrava = crypto
+        .createHmac("sha256", "dedicated-strava-secret-12345678")
+        .update(payload)
+        .digest("hex")
+        .slice(0, 16);
+      const expectedWithClerk = crypto
+        .createHmac("sha256", "shared-clerk-secret-87654321")
+        .update(payload)
+        .digest("hex")
+        .slice(0, 16);
 
       expect(signature).toBe(expectedWithStrava);
       expect(signature).not.toBe(expectedWithClerk);
 
-      expect(verifySignedState(state)).toStrictEqual({ userId: 'user_isolate_test' });
+      expect(verifySignedState(state)).toStrictEqual({ userId: "user_isolate_test" });
     });
   });
 
-  describe('verifySignedState', () => {
-    it('returns user ID for a valid state', () => {
-      const state = createSignedState('user_123');
+  describe("verifySignedState", () => {
+    it("returns user ID for a valid state", () => {
+      const state = createSignedState("user_123");
       const verified = verifySignedState(state);
-      expect(verified).toStrictEqual({ userId: 'user_123' });
+      expect(verified).toStrictEqual({ userId: "user_123" });
     });
 
-    it('returns null if state is missing parts', () => {
+    it("returns null if state is missing parts", () => {
       // Missing signature
-      expect(verifySignedState('user_123:timestamp:nonce')).toBeNull();
+      expect(verifySignedState("user_123:timestamp:nonce")).toBeNull();
       // Only user ID
-      expect(verifySignedState('user_123')).toBeNull();
+      expect(verifySignedState("user_123")).toBeNull();
       // Empty string
-      expect(verifySignedState('')).toBeNull();
+      expect(verifySignedState("")).toBeNull();
     });
 
-    it('returns null if signature is invalid', () => {
-      const state = createSignedState('user_123');
+    it("returns null if signature is invalid", () => {
+      const state = createSignedState("user_123");
       // Tamper with the signature by changing the last character (to maintain length)
-      const tamperedState = state.slice(0, -1) + (state.endsWith('a') ? 'b' : 'a');
+      const tamperedState = state.slice(0, -1) + (state.endsWith("a") ? "b" : "a");
       expect(verifySignedState(tamperedState)).toBeNull();
 
       // Tamper with the user ID
-      const parts = state.split(':');
-      parts[0] = 'user_999';
-      expect(verifySignedState(parts.join(':'))).toBeNull();
+      const parts = state.split(":");
+      parts[0] = "user_999";
+      expect(verifySignedState(parts.join(":"))).toBeNull();
     });
 
-    it('returns null instead of throwing an exception for length mismatch (DoS protection)', () => {
-      const state = createSignedState('user_123');
+    it("returns null instead of throwing an exception for length mismatch (DoS protection)", () => {
+      const state = createSignedState("user_123");
       // Append an extra character to the signature, changing its length.
       // Prior to the fix, crypto.timingSafeEqual would throw an error here.
-      const tamperedState = state + 'a';
+      const tamperedState = state + "a";
       expect(() => verifySignedState(tamperedState)).not.toThrow();
       expect(verifySignedState(tamperedState)).toBeNull();
     });
 
-    it('returns null if state is expired', () => {
+    it("returns null if state is expired", () => {
       // STATE_MAX_AGE_MS is 10 * 60 * 1000 = 600,000ms
-      const state = createSignedState('user_123');
+      const state = createSignedState("user_123");
 
       // Advance time by 10 minutes and 1 millisecond
       vi.advanceTimersByTime(10 * 60 * 1000 + 1);
@@ -144,13 +151,13 @@ describe('strava service state signing', () => {
       expect(verifySignedState(state)).toBeNull();
     });
 
-    it('returns user ID if state is barely valid', () => {
-      const state = createSignedState('user_123');
+    it("returns user ID if state is barely valid", () => {
+      const state = createSignedState("user_123");
 
       // Advance time by exactly 10 minutes (still valid)
       vi.advanceTimersByTime(10 * 60 * 1000);
 
-      expect(verifySignedState(state)).toStrictEqual({ userId: 'user_123' });
+      expect(verifySignedState(state)).toStrictEqual({ userId: "user_123" });
     });
   });
 });

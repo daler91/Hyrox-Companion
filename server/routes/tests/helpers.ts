@@ -2,13 +2,7 @@ import express from "express";
 import { registerRoutes } from "../../routes";
 import { createServer } from "node:http";
 import { db } from "../../db";
-import {
-  users,
-  trainingPlans,
-  planDays,
-  workoutLogs,
-  exerciseSets
-} from "@shared/schema";
+import { users, trainingPlans, planDays, workoutLogs, exerciseSets } from "@shared/schema";
 import { beforeAll, afterAll, beforeEach, vi } from "vitest";
 import { queue } from "../../queue";
 
@@ -32,7 +26,13 @@ export async function createTestApp() {
   // Add error handling middleware to capture exact 500 errors in tests
   app.use((err: any, _req: any, res: any, _next: any) => {
     console.error("Test App Error Caught:", err);
-    res.status(err.status || err.statusCode || 500).json({ error: err.message, code: err.code || "INTERNAL_SERVER_ERROR", details: err.details });
+    res
+      .status(err.status || err.statusCode || 500)
+      .json({
+        error: err.message,
+        code: err.code || "INTERNAL_SERVER_ERROR",
+        details: err.details,
+      });
   });
 
   return { app, httpServer };
@@ -76,12 +76,15 @@ export function setupIntegrationTest() {
     await clearDatabase();
 
     // Ensure test user exists in the db to avoid foreign key errors
-    await db.insert(users).values({
-      id: testUserId,
-      email: "test@example.com",
-      weightUnit: "kg",
-      distanceUnit: "km",
-    }).onConflictDoNothing();
+    await db
+      .insert(users)
+      .values({
+        id: testUserId,
+        email: "test@example.com",
+        weightUnit: "kg",
+        distanceUnit: "km",
+      })
+      .onConflictDoNothing();
   });
 
   return context;

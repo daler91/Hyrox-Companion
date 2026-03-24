@@ -28,16 +28,18 @@ export function AppSidebar() {
   const { user } = useAuth();
   const signOut = useSignOut();
 
-  const userInitials = user 
-    ? `${user.firstName?.charAt(0) || ''}${user.lastName?.charAt(0) || ''}`.toUpperCase() || user.email?.charAt(0).toUpperCase() || 'U'
-    : 'U';
+  const userInitials = user
+    ? `${user.firstName?.charAt(0) || ""}${user.lastName?.charAt(0) || ""}`.toUpperCase() ||
+      user.email?.charAt(0).toUpperCase() ||
+      "U"
+    : "U";
 
-  let userName = 'User';
+  let userName = "User";
   if (user) {
     if (user.firstName && user.lastName) {
       userName = `${user.firstName} ${user.lastName}`;
     } else {
-      userName = user.email || 'User';
+      userName = user.email || "User";
     }
   }
 
@@ -79,15 +81,27 @@ export function AppSidebar() {
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <Avatar className="h-7 w-7">
-              <AvatarImage src={user?.profileImageUrl || undefined} alt={userName} className="object-cover" />
+              <AvatarImage
+                src={user?.profileImageUrl || undefined}
+                alt={userName}
+                className="object-cover"
+              />
               <AvatarFallback className="text-xs">{userInitials}</AvatarFallback>
             </Avatar>
-            <span className="text-sm font-medium truncate" data-testid="text-user-name">{userName}</span>
+            <span className="text-sm font-medium truncate" data-testid="text-user-name">
+              {userName}
+            </span>
           </div>
           <div className="flex items-center gap-1">
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" asChild data-testid="nav-settings" aria-label="Settings">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  asChild
+                  data-testid="nav-settings"
+                  aria-label="Settings"
+                >
                   <Link href="/settings">
                     <Settings className="h-4 w-4" />
                   </Link>
@@ -98,7 +112,13 @@ export function AppSidebar() {
             <ThemeToggle />
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" data-testid="button-logout" aria-label="Log out" onClick={() => signOut()}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  data-testid="button-logout"
+                  aria-label="Log out"
+                  onClick={() => signOut()}
+                >
                   <LogOut className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>

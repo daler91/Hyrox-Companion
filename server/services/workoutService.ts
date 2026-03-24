@@ -1,8 +1,20 @@
-import { workoutLogs, exerciseSets, planDays, trainingPlans, customExercises, type ParsedExercise, type InsertWorkoutLog, type UpdateWorkoutLog, type InsertExerciseSet, type WorkoutLog, type ExerciseSet, exercisesPayloadSchema } from "@shared/schema";
+import {
+  workoutLogs,
+  exerciseSets,
+  planDays,
+  trainingPlans,
+  customExercises,
+  type ParsedExercise,
+  type InsertWorkoutLog,
+  type UpdateWorkoutLog,
+  type InsertExerciseSet,
+  type WorkoutLog,
+  type ExerciseSet,
+  exercisesPayloadSchema,
+} from "@shared/schema";
 import { storage } from "../storage";
 import { db } from "../db";
 import { eq, and } from "drizzle-orm";
-
 
 export function extractAndDeduplicateCustomExercises(exercises: ParsedExercise[], userId: string) {
   const customExsToInsert = exercises
@@ -13,12 +25,13 @@ export function extractAndDeduplicateCustomExercises(exercises: ParsedExercise[]
       category: ex.category || "conditioning",
     }));
 
-  return Array.from(new Map(customExsToInsert.map(item => [item.name, item])).values());
+  return Array.from(new Map(customExsToInsert.map((item) => [item.name, item])).values());
 }
 
-
-
-export function expandExercisesToSetRows(exercises: ParsedExercise[], workoutLogId: string): InsertExerciseSet[] {
+export function expandExercisesToSetRows(
+  exercises: ParsedExercise[],
+  workoutLogId: string,
+): InsertExerciseSet[] {
   const rows: InsertExerciseSet[] = [];
   let sortOrder = 0;
   for (const ex of exercises) {
@@ -62,10 +75,9 @@ export function expandExercisesToSetRows(exercises: ParsedExercise[], workoutLog
   return rows;
 }
 
-
 export async function prepareParsedWorkout(
   workout: { id: string; mainWorkout?: string | null; accessory?: string | null },
-  weightUnit: string
+  weightUnit: string,
 ): Promise<{ exercises: ParsedExercise[]; setRows: InsertExerciseSet[] } | null> {
   const { parseExercisesFromText } = await import("../gemini");
 
@@ -81,7 +93,7 @@ export async function prepareParsedWorkout(
 
 export async function saveParsedWorkout(
   workoutId: string,
-  setRows: InsertExerciseSet[]
+  setRows: InsertExerciseSet[],
 ): Promise<number> {
   await db.transaction(async (tx) => {
     await tx.delete(exerciseSets).where(eq(exerciseSets.workoutLogId, workoutId));
@@ -95,7 +107,7 @@ export async function saveParsedWorkout(
 
 export async function reparseWorkout(
   workout: { id: string; mainWorkout?: string | null; accessory?: string | null },
-  weightUnit: string
+  weightUnit: string,
 ): Promise<{ exercises: ParsedExercise[]; setCount: number } | null> {
   const prepared = await prepareParsedWorkout(workout, weightUnit);
   if (!prepared) return null;
@@ -110,7 +122,7 @@ export type UpdateWorkoutResult = WorkoutLog & { exerciseSets?: ExerciseSet[] };
 export async function createWorkout(
   workoutData: InsertWorkoutLog,
   exercises: ParsedExercise[] | undefined,
-  userId: string
+  userId: string,
 ): Promise<CreateWorkoutResult> {
   if (exercises && Array.isArray(exercises) && exercises.length > 0) {
     return await db.transaction(async (tx) => {
@@ -128,8 +140,8 @@ export async function createWorkout(
             and(
               eq(planDays.id, workoutData.planDayId),
               eq(planDays.planId, trainingPlans.id),
-              eq(trainingPlans.userId, userId)
-            )
+              eq(trainingPlans.userId, userId),
+            ),
           );
       }
 
@@ -139,10 +151,7 @@ export async function createWorkout(
       const uniqueCustomExs = extractAndDeduplicateCustomExercises(exercises, userId);
 
       if (uniqueCustomExs.length > 0) {
-        await tx
-          .insert(customExercises)
-          .values(uniqueCustomExs)
-          .onConflictDoNothing();
+        await tx.insert(customExercises).values(uniqueCustomExs).onConflictDoNothing();
       }
 
       return { ...log, exerciseSets: savedSets };
@@ -156,7 +165,7 @@ export async function updateWorkout(
   workoutId: string,
   updateData: UpdateWorkoutLog,
   exercises: ParsedExercise[] | undefined,
-  userId: string
+  userId: string,
 ): Promise<UpdateWorkoutResult | null> {
   if (exercises && Array.isArray(exercises)) {
     return await db.transaction(async (tx) => {
@@ -181,10 +190,7 @@ export async function updateWorkout(
         const uniqueCustomExs = extractAndDeduplicateCustomExercises(exercises, userId);
 
         if (uniqueCustomExs.length > 0) {
-          await tx
-            .insert(customExercises)
-            .values(uniqueCustomExs)
-            .onConflictDoNothing();
+          await tx.insert(customExercises).values(uniqueCustomExs).onConflictDoNothing();
         }
 
         return { ...log, exerciseSets: savedSets };
@@ -201,14 +207,14 @@ export async function updateWorkout(
 
 export async function processBatchChunk(
   chunk: { id: string; mainWorkout?: string | null; accessory?: string | null }[],
-  weightUnit: string
+  weightUnit: string,
 ): Promise<{ parsed: number; failed: number }> {
   let parsed = 0;
   let failed = 0;
 
   // Parse workouts concurrently in chunks to optimize AI service usage
   const chunkResults = await Promise.allSettled(
-    chunk.map(workout => prepareParsedWorkout(workout, weightUnit))
+    chunk.map((workout) => prepareParsedWorkout(workout, weightUnit)),
   );
 
   // Save each successfully parsed workout sequentially to prevent DB connection strain
@@ -216,7 +222,7 @@ export async function processBatchChunk(
     const result = chunkResults[j];
     const workout = chunk[j];
 
-    if (result.status === 'rejected') {
+    if (result.status === "rejected") {
       const { logger } = await import("../logger");
       logger.error({ err: result.reason }, `Batch reparse failed for workout ${workout.id}:`);
       failed++;
@@ -241,7 +247,9 @@ export async function processBatchChunk(
   return { parsed, failed };
 }
 
-export async function batchReparseWorkouts(userId: string): Promise<{ total: number; parsed: number; failed: number }> {
+export async function batchReparseWorkouts(
+  userId: string,
+): Promise<{ total: number; parsed: number; failed: number }> {
   const workouts = await storage.getWorkoutsWithoutExerciseSets(userId);
   const user = await storage.getUser(userId);
   const weightUnit = user?.weightUnit || "kg";

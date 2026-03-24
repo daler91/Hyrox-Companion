@@ -1,10 +1,4 @@
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,15 +18,9 @@ interface StravaSectionProps {
   readonly stravaLoading: boolean;
 }
 
-export function StravaSection({
-  stravaStatus,
-  stravaLoading,
-}: Readonly<StravaSectionProps>) {
-  const {
-    connectStravaMutation,
-    disconnectStravaMutation,
-    syncStravaMutation,
-  } = useStravaMutations();
+export function StravaSection({ stravaStatus, stravaLoading }: Readonly<StravaSectionProps>) {
+  const { connectStravaMutation, disconnectStravaMutation, syncStravaMutation } =
+    useStravaMutations();
 
   let statusText = "Import activities from Strava";
   if (stravaStatus?.connected) {
@@ -50,9 +38,7 @@ export function StravaSection({
           <Link2 className="h-5 w-5" />
           Integrations
         </CardTitle>
-        <CardDescription>
-          Connect external services to sync your workouts
-        </CardDescription>
+        <CardDescription>Connect external services to sync your workouts</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex items-center justify-between gap-4">

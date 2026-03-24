@@ -31,9 +31,7 @@ describe("exerciseWarnings", () => {
       const exercise: StructuredExercise = {
         exerciseName: "back_squat",
         category: "strength",
-        sets: [
-          { setNumber: 1, reps: undefined, weight: undefined },
-        ],
+        sets: [{ setNumber: 1, reps: undefined, weight: undefined }],
       };
       const warnings = getMissingFieldWarnings(exercise);
       expect(warnings).toContain("Back Squat is missing weight");
@@ -60,9 +58,7 @@ describe("exerciseWarnings", () => {
       const exercise: StructuredExercise = {
         exerciseName: "skierg",
         category: "hyrox_station",
-        sets: [
-          { setNumber: 1, distance: 1000, time: undefined },
-        ],
+        sets: [{ setNumber: 1, distance: 1000, time: undefined }],
       };
       const warnings = getMissingFieldWarnings(exercise);
       expect(warnings).toContain("SkiErg is missing time");
@@ -73,9 +69,7 @@ describe("exerciseWarnings", () => {
       const exercise: StructuredExercise = {
         exerciseName: "easy_run",
         category: "running",
-        sets: [
-          { setNumber: 1, distance: undefined, time: undefined },
-        ],
+        sets: [{ setNumber: 1, distance: undefined, time: undefined }],
       };
       const warnings = getMissingFieldWarnings(exercise);
       expect(warnings).toContain("Easy Run is missing distance");
@@ -88,9 +82,7 @@ describe("exerciseWarnings", () => {
         exerciseName: "custom",
         category: "strength",
         customLabel: "My Custom Lift",
-        sets: [
-          { setNumber: 1, reps: undefined, weight: undefined },
-        ],
+        sets: [{ setNumber: 1, reps: undefined, weight: undefined }],
       };
       const warnings = getMissingFieldWarnings(exercise);
       expect(warnings).toContain("My Custom Lift is missing weight");
@@ -104,9 +96,7 @@ describe("exerciseWarnings", () => {
         exerciseName: "custom",
         category: "", // will fall back to conditioning
         customLabel: "Weird Exercise",
-        sets: [
-          { setNumber: 1, reps: undefined },
-        ],
+        sets: [{ setNumber: 1, reps: undefined }],
       } as StructuredExercise;
 
       const warnings = getMissingFieldWarnings(exercise);
@@ -118,9 +108,7 @@ describe("exerciseWarnings", () => {
       const exercise: StructuredExercise = {
         exerciseName: "custom",
         category: "strength",
-        sets: [
-          { setNumber: 1, reps: undefined, weight: undefined },
-        ],
+        sets: [{ setNumber: 1, reps: undefined, weight: undefined }],
       };
       const warnings = getMissingFieldWarnings(exercise);
       expect(warnings).toContain("Custom is missing weight");
@@ -134,9 +122,7 @@ describe("exerciseWarnings", () => {
       const exercise: StructuredExercise = {
         exerciseName: "easy_run",
         category: "running",
-        sets: [
-          { setNumber: 1, distance: undefined, time: undefined },
-        ],
+        sets: [{ setNumber: 1, distance: undefined, time: undefined }],
       };
       const missingFields = getExerciseMissingFields(exercise);
       expect(missingFields).toContain("Distance");
@@ -148,9 +134,7 @@ describe("exerciseWarnings", () => {
       const exercise: StructuredExercise = {
         exerciseName: "easy_run",
         category: "running",
-        sets: [
-          { setNumber: 1, distance: 5000, time: 1800 },
-        ],
+        sets: [{ setNumber: 1, distance: 5000, time: 1800 }],
       };
       const missingFields = getExerciseMissingFields(exercise);
       expect(missingFields).toEqual([]);

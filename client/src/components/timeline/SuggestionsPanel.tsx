@@ -1,11 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Lightbulb, X, ChevronDown, ChevronUp } from "lucide-react";
 import type { WorkoutSuggestion } from "./types";
 
@@ -16,8 +12,6 @@ interface SuggestionsPanelProps {
   readonly onDismiss: (workoutId: string) => void;
   readonly onApply: (suggestion: WorkoutSuggestion) => void;
 }
-
-
 
 function getBadgeVariant(priority: string) {
   if (priority === "high") return "destructive";
@@ -61,9 +55,7 @@ export default function SuggestionsPanel({
               >
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <Badge
-                      variant={getBadgeVariant(suggestion.priority)}
-                    >
+                    <Badge variant={getBadgeVariant(suggestion.priority)}>
                       {suggestion.priority}
                     </Badge>
                     <span className="text-sm font-medium">{suggestion.workoutFocus}</span>

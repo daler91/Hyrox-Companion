@@ -12,10 +12,7 @@ import preferencesRoutes from "./routes/preferences";
 import emailRoutes from "./routes/email";
 import coachingRoutes from "./routes/coaching";
 
-export async function registerRoutes(
-  httpServer: Server,
-  app: Express
-): Promise<Server> {
+export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
   await setupAuth(app);
   registerStravaRoutes(app);
 
