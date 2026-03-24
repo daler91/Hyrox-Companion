@@ -153,9 +153,8 @@ describe("useOnboardingWizard", () => {
     expect(mockOnComplete).toHaveBeenCalledWith("import");
   });
 
-  it("handles creating a sample plan successfully", async () => {
+  const setupSamplePlan = async () => {
     const { result } = renderHook(() => useOnboardingWizard(mockOnComplete), { wrapper });
-
     const mockPlan = { id: "plan-123" };
     (api.plans.createSample as any).mockResolvedValueOnce(mockPlan);
 
@@ -166,6 +165,12 @@ describe("useOnboardingWizard", () => {
     await waitFor(() => {
       expect(result.current.step).toBe("schedule");
     });
+
+    return result;
+  };
+
+  it("handles creating a sample plan successfully", async () => {
+    const result = await setupSamplePlan();
 
     expect(api.plans.createSample).toHaveBeenCalled();
     expect(result.current.isSamplePending).toBe(false);
@@ -192,19 +197,7 @@ describe("useOnboardingWizard", () => {
   });
 
   it("handles starting training successfully", async () => {
-    const { result } = renderHook(() => useOnboardingWizard(mockOnComplete), { wrapper });
-
-    // Setup: create sample plan first
-    const mockPlan = { id: "plan-123" };
-    (api.plans.createSample as any).mockResolvedValueOnce(mockPlan);
-
-    act(() => {
-      result.current.handleUseSamplePlan();
-    });
-
-    await waitFor(() => {
-      expect(result.current.step).toBe("schedule");
-    });
+    const result = await setupSamplePlan();
 
     // Action: schedule the plan
     (api.plans.schedule as any).mockResolvedValueOnce({});
@@ -229,19 +222,7 @@ describe("useOnboardingWizard", () => {
   });
 
   it("handles starting training failure", async () => {
-    const { result } = renderHook(() => useOnboardingWizard(mockOnComplete), { wrapper });
-
-    // Setup: create sample plan first
-    const mockPlan = { id: "plan-123" };
-    (api.plans.createSample as any).mockResolvedValueOnce(mockPlan);
-
-    act(() => {
-      result.current.handleUseSamplePlan();
-    });
-
-    await waitFor(() => {
-      expect(result.current.step).toBe("schedule");
-    });
+    const result = await setupSamplePlan();
 
     // Action: schedule the plan fails
     (api.plans.schedule as any).mockRejectedValueOnce(new Error("Failed"));
