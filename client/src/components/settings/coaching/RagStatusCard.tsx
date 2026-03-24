@@ -1,3 +1,4 @@
+import React from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -6,7 +7,7 @@ import { useRagStatus, useReEmbed, useCoachingMaterials } from "@/hooks/useCoach
 
 export function RagStatusCard() {
   const { data: materials } = useCoachingMaterials();
-  const { data: ragStatus, isLoading: ragLoading } = useRagStatus();
+  const { data: ragStatus, isLoading: ragLoading, error: ragError } = useRagStatus();
   const reEmbedMutation = useReEmbed();
 
   if (!materials || materials.length === 0) return null;
@@ -29,23 +30,26 @@ export function RagStatusCard() {
     );
   };
 
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          RAG Status
-          {getStatusBadge()}
-        </CardTitle>
-        <CardDescription>
-          Embedding status for AI-powered document retrieval
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {ragLoading ? (
-          <div className="flex items-center justify-center py-2">
-            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-          </div>
-        ) : ragStatus ? (
+  let content: React.ReactNode;
+  if (ragLoading) {
+    content = (
+      <div className="flex items-center justify-center py-2">
+        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+      </div>
+    );
+  } else if (ragError) {
+    const errorMessage = ragError instanceof Error ? ragError.message : "An unexpected error occurred";
+    content = (
+      <div className="flex items-start gap-2 p-2 rounded-md bg-destructive/10 text-destructive text-sm">
+        <XCircle className="h-4 w-4 shrink-0 mt-0.5" />
+        <div>
+          <p className="font-medium">Failed to load RAG status</p>
+          <p className="text-xs mt-0.5">{errorMessage}</p>
+        </div>
+      </div>
+    );
+  } else if (ragStatus) {
+    content = (
           <>
             {!ragStatus.hasApiKey && (
               <div className="flex items-center gap-2 p-2 rounded-md bg-destructive/10 text-destructive text-sm">
@@ -133,7 +137,22 @@ export function RagStatusCard() {
               Re-embed All
             </Button>
           </>
-        ) : null}
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          RAG Status
+          {getStatusBadge()}
+        </CardTitle>
+        <CardDescription>
+          Embedding status for AI-powered document retrieval
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {content}
       </CardContent>
     </Card>
   );

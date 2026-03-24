@@ -154,7 +154,12 @@ export async function getRagStatus(userId: string) {
   const chunkMap = new Map(chunkCounts.map((c) => [c.materialId, c]));
 
   const hasApiKey = Boolean(process.env.GEMINI_API_KEY);
-  const storedDimension = await storage.getStoredEmbeddingDimension(userId);
+  let storedDimension: number | null = null;
+  try {
+    storedDimension = await storage.getStoredEmbeddingDimension(userId);
+  } catch (err) {
+    logger.warn({ err, userId }, "[rag] Failed to read stored embedding dimension");
+  }
 
   const materialStatus = materials.map((m) => {
     const chunks = chunkMap.get(m.id);
