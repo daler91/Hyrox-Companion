@@ -1,5 +1,5 @@
 import { logger } from "../logger";
-import { Router, type Request as ExpressRequest, type Response } from "express";
+import express, { Router, type Request as ExpressRequest, type Response } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
 import { rateLimiter, asyncHandler, validateBody } from "../routeUtils";
@@ -10,6 +10,9 @@ import { queue } from "../queue";
 import { z } from "zod";
 
 const router = Router();
+
+// Override global 100kb body limit for coaching material routes that accept large document content
+const largeBodyParser = express.json({ limit: "2mb" });
 
 const updateCoachingMaterialSchema = z.object({
   title: z.string().trim().min(1).max(255).optional(),
@@ -24,7 +27,7 @@ router.get("/api/v1/coaching-materials", isAuthenticated, asyncHandler(async (re
   }));
 
 const createMaterialSchema = insertCoachingMaterialSchema.omit({ userId: true });
-router.post("/api/v1/coaching-materials", isAuthenticated, rateLimiter("coaching", 10), validateBody(createMaterialSchema), asyncHandler(async (req: ExpressRequest, res: Response) => {
+router.post("/api/v1/coaching-materials", largeBodyParser, isAuthenticated, rateLimiter("coaching", 10), validateBody(createMaterialSchema), asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const material = await storage.createCoachingMaterial({ ...req.body, userId });
 
@@ -34,7 +37,7 @@ router.post("/api/v1/coaching-materials", isAuthenticated, rateLimiter("coaching
     res.status(201).json(material);
   }));
 
-router.patch("/api/v1/coaching-materials/:id", isAuthenticated, rateLimiter("coaching", 10), validateBody(updateCoachingMaterialSchema), asyncHandler(async (req: ExpressRequest, res: Response) => {
+router.patch("/api/v1/coaching-materials/:id", largeBodyParser, isAuthenticated, rateLimiter("coaching", 10), validateBody(updateCoachingMaterialSchema), asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const material = await storage.updateCoachingMaterial(req.params.id, req.body, userId);
     if (!material) {
