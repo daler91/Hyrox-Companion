@@ -129,7 +129,8 @@ export class CoachingStorage {
   /** Return the dimension of the first stored embedding for a user, or null if none. */
   async getStoredEmbeddingDimension(userId: string): Promise<number | null> {
     const result = await pool.query(
-      `SELECT vector_dims(embedding) AS dims FROM document_chunks
+      `SELECT array_length(string_to_array(embedding::text, ','), 1) AS dims
+       FROM document_chunks
        WHERE user_id = $1 AND embedding IS NOT NULL
        LIMIT 1`,
       [userId],
