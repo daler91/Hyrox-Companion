@@ -1,8 +1,9 @@
 
-> hyrox-companion@1.0.0 dev /app
+> hyrox-companion@1.0.0 dev
 > NODE_ENV=development tsx server/index.ts
 
-[2026-03-23 01:40:21.207 +0000] [31mERROR[39m: [36mSchema migration check failed[39m
+[2026-03-23 21:33:17.736 +0000] [33mWARN[39m: [36m⚠️ WARNING: Dev auth bypass is ENABLED. All requests will run as dev-user. Do not use this outside of local development.[39m
+[2026-03-23 21:33:17.754 +0000] [31mERROR[39m: [36mSchema migration check failed[39m
     [35mcontext[39m: "db"
     err: {
       "type": "AggregateError",
@@ -44,12 +45,12 @@
       ],
       "code": "ECONNREFUSED"
     }
-[2026-03-23 01:40:21.212 +0000] [32mINFO[39m: [36mOrphaned data cleanup skipped: AggregateError[39m
+[2026-03-23 21:33:17.758 +0000] [32mINFO[39m: [36mOrphaned data cleanup skipped: AggregateError[39m
     [35mcontext[39m: "db"
-[2026-03-23 01:40:21.217 +0000] [32mINFO[39m: [36mMark missed days skipped: Error: Failed query: update "plan_days" set "status" = $1 where ("plan_days"."status" = $2 and "plan_days"."scheduled_date" < $3) returning "id"
+[2026-03-23 21:33:17.764 +0000] [32mINFO[39m: [36mMark missed days skipped: Error: Failed query: update "plan_days" set "status" = $1 where ("plan_days"."status" = $2 and "plan_days"."scheduled_date" < $3) returning "id"
 params: missed,planned,2026-03-23[39m
     [35mcontext[39m: "db"
-[2026-03-23 01:40:21.217 +0000] [32mINFO[39m: [36mStarting pg-boss queue...[39m
+[2026-03-23 21:33:17.764 +0000] [32mINFO[39m: [36mStarting pg-boss queue...[39m
 /app/node_modules/.pnpm/pg-pool@3.13.0_pg@8.20.0/node_modules/pg-pool/index.js:45
     Error.captureStackTrace(err)
           ^
@@ -87,4 +88,3 @@ AggregateError [ECONNREFUSED]:
 }
 
 Node.js v22.22.1
- ELIFECYCLE  Command failed with exit code 1.

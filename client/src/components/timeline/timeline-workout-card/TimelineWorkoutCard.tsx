@@ -74,7 +74,7 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
 
   return (
     <Card
-      className={`cursor-pointer transition-colors hover-elevate ${baseCardClasses} ${aiCoachClasses}`}
+      className={`cursor-pointer transition-colors hover-elevate focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${baseCardClasses} ${aiCoachClasses}`}
       onClick={handleCardClick}
       onKeyDown={handleCardKeyDown}
       role="button"
@@ -126,7 +126,11 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
             <div className="flex items-center gap-2 mb-2 flex-wrap">
               {getStatusBadge(entry.status)}
               {isTargetedByCoach && (
-                <Badge variant="outline" className="border-primary text-primary bg-primary/5 animate-pulse" data-testid={`badge-ai-coach-${entry.id}`}>
+                <Badge
+                  variant="outline"
+                  className="border-primary text-primary bg-primary/5 animate-pulse"
+                  data-testid={`badge-ai-coach-${entry.id}`}
+                >
                   <Loader2 className="h-3 w-3 mr-1 animate-spin" />
                   AI Modifying
                 </Badge>
@@ -138,22 +142,30 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
                 </Badge>
               )}
               {entry.planName && (
-                <Badge variant="outline" className="text-muted-foreground" data-testid={`badge-plan-${entry.id}`}>
+                <Badge
+                  variant="outline"
+                  className="text-muted-foreground"
+                  data-testid={`badge-plan-${entry.id}`}
+                >
                   <BookOpen className="h-3 w-3 mr-1" />
                   {entry.planName}
                 </Badge>
               )}
-              {entry.dayName && (
-                <Badge variant="secondary">{entry.dayName}</Badge>
-              )}
+              {entry.dayName && <Badge variant="secondary">{entry.dayName}</Badge>}
               {entry.aiSource === "rag" && (
-                <Badge variant="outline" className="text-emerald-600 border-emerald-200 bg-emerald-50 dark:text-emerald-400 dark:border-emerald-800 dark:bg-emerald-950 text-[10px]">
+                <Badge
+                  variant="outline"
+                  className="text-emerald-600 border-emerald-200 bg-emerald-50 dark:text-emerald-400 dark:border-emerald-800 dark:bg-emerald-950 text-[10px]"
+                >
                   <Database className="h-2.5 w-2.5 mr-1" />
                   RAG
                 </Badge>
               )}
               {entry.aiSource === "legacy" && (
-                <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50 dark:text-amber-400 dark:border-amber-800 dark:bg-amber-950 text-[10px]">
+                <Badge
+                  variant="outline"
+                  className="text-amber-600 border-amber-200 bg-amber-50 dark:text-amber-400 dark:border-amber-800 dark:bg-amber-950 text-[10px]"
+                >
                   <FileText className="h-2.5 w-2.5 mr-1" />
                   Legacy
                 </Badge>
@@ -170,19 +182,13 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
                 distanceUnit={distanceUnit}
               />
             ) : (
-              <p className="text-sm text-muted-foreground mb-1">
-                {entry.mainWorkout}
-              </p>
+              <p className="text-sm text-muted-foreground mb-1">{entry.mainWorkout}</p>
             )}
             {entry.accessory && (
-              <p className="text-sm text-muted-foreground/70 mb-1">
-                {entry.accessory}
-              </p>
+              <p className="text-sm text-muted-foreground/70 mb-1">{entry.accessory}</p>
             )}
             {entry.notes && (
-              <p className="text-xs text-muted-foreground italic mt-2">
-                {entry.notes}
-              </p>
+              <p className="text-xs text-muted-foreground italic mt-2">{entry.notes}</p>
             )}
             {entry.duration && entry.source !== "strava" && (
               <p className="text-xs text-muted-foreground mt-1">
