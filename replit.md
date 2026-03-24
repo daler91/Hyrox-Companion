@@ -79,6 +79,16 @@ AI response robustness (`server/gemini.ts`):
 - **Retry with backoff**: Transient failures (429 rate limit, 500/503 server errors, network errors) retry up to 2 times with exponential backoff (1s, 2s); non-retryable errors fail immediately
 - **Error logging**: Parse failures log truncated raw response text; Zod failures log validation issues and raw data for debugging
 
+### RAG Pipeline & pgvector Compatibility
+The AI coaching system uses a RAG (Retrieval-Augmented Generation) pipeline that embeds coaching materials into chunks, stores them in `document_chunks`, and retrieves relevant chunks via cosine similarity search when the auto-coach runs.
+
+**Critical: The `embedding` column in `document_chunks` is stored as `text` type** (Drizzle ORM has no native pgvector `vector` type). Even though the pgvector extension is installed in production, this text storage means:
+- Always cast `embedding::vector` before using pgvector operators like `<=>` (cosine distance)
+- Never use pgvector utility functions like `vector_dims()` — they expect `vector` type columns and will fail on `text`. Use portable SQL alternatives (e.g., `array_length(string_to_array(embedding::text, ','), 1)` to get dimension count)
+- The RAG pipeline silently falls back to "legacy" mode if any step throws an error, so pgvector-related failures can be hard to spot — check production logs for `[coach] RAG retrieval failed` or `[rag]` tags
+
+Key files: `server/storage/coaching.ts` (search/dimension queries), `server/services/ragService.ts` (embedding + retrieval), `server/services/coachService.ts` (orchestration + fallback logic)
+
 ## External Dependencies
 
 ### Third-Party Services

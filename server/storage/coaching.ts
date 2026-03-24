@@ -87,7 +87,9 @@ export class CoachingStorage {
     queryEmbedding: number[],
     topK: number,
   ): Promise<DocumentChunk[]> {
-    // Use raw SQL for pgvector cosine similarity search
+    // IMPORTANT: The `embedding` column is stored as `text` in production (Drizzle has no native vector type).
+    // Always cast to `::vector` before using pgvector operators like `<=>`.
+    // Similarly, avoid pgvector utility functions (e.g. `vector_dims()`) — use portable SQL instead.
     const embeddingStr = `[${queryEmbedding.join(",")}]`;
     const result = await pool.query(
       `SELECT id, material_id AS "materialId", user_id AS "userId", content, chunk_index AS "chunkIndex", created_at AS "createdAt"
