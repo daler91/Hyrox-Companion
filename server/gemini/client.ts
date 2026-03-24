@@ -64,7 +64,7 @@ export function truncate(text: string, maxLen: number = 500): string {
 const EMBEDDING_MODEL = "gemini-embedding-001";
 
 /** Expected dimension count for the current embedding model. */
-export const EMBEDDING_DIMENSIONS = 3072;
+export const EMBEDDING_DIMENSIONS = 768;
 
 /**
  * Generate an embedding vector for a text string using Gemini's embedding model.
