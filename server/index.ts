@@ -109,6 +109,9 @@ app.use((req, res, next) => {
   next();
 });
 
+// Coaching material routes accept large document content (up to 1.5M chars)
+app.use("/api/v1/coaching-materials", express.json({ limit: "2mb" }));
+
 app.use(
   express.json({
     limit: "100kb", // 🛡️ Sentinel: Limit request body size to prevent DoS
