@@ -1,8 +1,11 @@
--- Fix: Drop the HNSW index that was created for vector(3072) in migration 0010.
--- Migration 0012 changed the column to vector(768) but left the stale index.
--- Clear any corrupt embeddings and recreate the index for the correct dimension.
+-- Fix: Migration 0012 incorrectly changed embedding column to vector(768).
+-- The gemini-embedding-001 model returns 3072-dim vectors.
+-- Restore the correct dimension, clear stale embeddings, and rebuild the index.
 
 DROP INDEX IF EXISTS idx_document_chunks_embedding_hnsw;
+--> statement-breakpoint
+
+ALTER TABLE document_chunks ALTER COLUMN embedding SET DATA TYPE vector(3072);
 --> statement-breakpoint
 
 UPDATE document_chunks SET embedding = NULL WHERE embedding IS NOT NULL;

@@ -180,7 +180,7 @@ export const documentChunks = pgTable("document_chunks", {
   userId: varchar("user_id", { length: 255 }).notNull().references(() => users.id, { onDelete: "cascade" }),
   content: text("content").notNull(),
   chunkIndex: integer("chunk_index").notNull(),
-  embedding: vector("embedding", { dimensions: 768 }),
+  embedding: vector("embedding", { dimensions: 3072 }),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_document_chunks_material_id").on(table.materialId),
