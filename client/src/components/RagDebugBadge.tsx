@@ -10,7 +10,10 @@ const BADGE_COLORS: Record<RagInfo["source"], string> = {
 
 function getBadgeLabel(ragInfo: RagInfo): string {
   if (ragInfo.source === "rag") return `RAG: ${ragInfo.chunkCount} chunks`;
-  if (ragInfo.source === "legacy") return `Legacy: ${ragInfo.materialCount ?? 0} materials`;
+  if (ragInfo.source === "legacy") {
+    const reason = ragInfo.fallbackReason ? ` (${ragInfo.fallbackReason})` : "";
+    return `Legacy: ${ragInfo.materialCount ?? 0} materials${reason}`;
+  }
   return "No coaching data";
 }
 

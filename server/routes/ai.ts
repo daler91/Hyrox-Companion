@@ -32,6 +32,7 @@ export interface RagInfo {
   chunkCount: number;
   chunks?: string[];
   materialCount?: number;
+  fallbackReason?: string;
 }
 
 async function getCoachingContext(
@@ -39,6 +40,8 @@ async function getCoachingContext(
   query: string,
   log: any = logger,
 ): Promise<{ retrievedChunks?: string[]; coachingMaterials?: import("../prompts").CoachingMaterialInput[]; ragInfo: RagInfo }> {
+  let fallbackReason: string | undefined;
+
   try {
     const hasChunks = await storage.hasChunksForUser(userId);
 
@@ -50,8 +53,7 @@ async function getCoachingContext(
           { userId, storedDim, expectedDim: EMBEDDING_DIMENSIONS },
           "[rag] Embedding dimension mismatch — skipping RAG (re-embed via settings to fix)",
         );
-        // Fall through to legacy instead of trying to re-embed inline,
-        // which would burn API quota and slow down the chat request.
+        fallbackReason = `dimension_mismatch: stored=${storedDim}, expected=${EMBEDDING_DIMENSIONS}`;
       } else {
         const chunks = await retrieveRelevantChunks(userId, query);
         if (chunks.length > 0) {
@@ -60,11 +62,16 @@ async function getCoachingContext(
             ragInfo: { source: "rag", chunkCount: chunks.length, chunks },
           };
         }
-        log.warn({ userId }, "[rag] Retrieval returned 0 chunks despite embeddings existing");
+        fallbackReason = storedDim === null
+          ? "no_embeddings: chunks exist but none have embeddings — click Re-embed All"
+          : "no_matching_chunks: search returned 0 results";
+        log.warn({ userId, storedDim, fallbackReason }, "[rag] Retrieval returned 0 chunks");
       }
     }
   } catch (error) {
-    log.warn({ err: error, userId }, "[rag] Retrieval failed, falling back to legacy");
+    const errMsg = error instanceof Error ? error.message : String(error);
+    fallbackReason = `retrieval_error: ${errMsg}`;
+    log.error({ err: error, userId }, "[rag] Retrieval failed, falling back to legacy");
   }
 
   // Fallback to legacy truncation
@@ -75,6 +82,7 @@ async function getCoachingContext(
       source: coachingMaterials.length > 0 ? "legacy" : "none",
       chunkCount: 0,
       materialCount: coachingMaterials.length,
+      fallbackReason,
     },
   };
 }
