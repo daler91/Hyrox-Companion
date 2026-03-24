@@ -1,4 +1,4 @@
-import { asyncHandler } from "../routeUtils";
+import { asyncHandler, rateLimiter } from "../routeUtils";
 import { env } from "../env";
 import { Router, type Request as ExpressRequest, type Response } from "express";
 import crypto from "node:crypto";
@@ -9,7 +9,7 @@ import { getUserId } from "../types";
 
 const router = Router();
 
-router.post("/api/v1/emails/check", isAuthenticated, asyncHandler(async (req: ExpressRequest, res: Response) => {
+router.post("/api/v1/emails/check", isAuthenticated, rateLimiter("emailCheck", 5), asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const user = await storage.getUser(userId);
     if (!user) {
