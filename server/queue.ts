@@ -1,9 +1,9 @@
 import { embedCoachingMaterial } from "./services/ragService";
-import { type CoachingMaterial } from "@shared/schema";
 import { PgBoss, type Job } from "pg-boss";
 import { env } from "./env";
 import { logger } from "./logger";
 import { triggerAutoCoach } from "./services/coachService";
+import { storage } from "./storage";
 
 if (!env.DATABASE_URL) {
   throw new Error("DATABASE_URL must be set. Did you forget to provision a database?");
@@ -43,11 +43,16 @@ export async function startQueue() {
   await queue.work("embed-coaching-material", async (jobs: Job[]) => {
     const results = await Promise.allSettled(
       jobs.map(async (job) => {
-        logger.info({ jobId: job.id, data: job.data }, "[pg-boss] Processing embed-coaching-material job");
+        const { materialId, userId } = job.data as { materialId: string; userId: string };
+        logger.info({ jobId: job.id, materialId }, "[pg-boss] Processing embed-coaching-material job");
         try {
-          const { material } = job.data as { material: CoachingMaterial };
+          const material = await storage.getCoachingMaterial(materialId, userId);
+          if (!material) {
+            logger.warn({ jobId: job.id, materialId }, "[pg-boss] Material not found, skipping embed job");
+            return;
+          }
           await embedCoachingMaterial(material);
-          logger.info({ jobId: job.id }, "[pg-boss] Completed embed-coaching-material job");
+          logger.info({ jobId: job.id, materialId }, "[pg-boss] Completed embed-coaching-material job");
         } catch (error) {
           logger.error({ err: error, jobId: job.id }, "[pg-boss] Failed embed-coaching-material job");
           throw error; // Let pg-boss handle the retry
