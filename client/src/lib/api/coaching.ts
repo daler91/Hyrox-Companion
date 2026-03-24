@@ -6,6 +6,7 @@ export interface RagInfo {
   chunkCount: number;
   chunks?: string[];
   materialCount?: number;
+  fallbackReason?: string;
 }
 
 export interface RagStatus {

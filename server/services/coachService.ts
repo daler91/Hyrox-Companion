@@ -1,7 +1,7 @@
 import { logger } from "../logger";
 import { storage } from "../storage";
 import { buildTrainingContext } from "./aiService";
-import { generateWorkoutSuggestions, type UpcomingWorkout, type WorkoutSuggestion } from "../gemini/index";
+import { generateWorkoutSuggestions, EMBEDDING_DIMENSIONS, type UpcomingWorkout, type WorkoutSuggestion } from "../gemini/index";
 import { buildCoachingMaterialsSection, buildRetrievedChunksSection } from "../prompts";
 import { retrieveRelevantChunks } from "./ragService";
 import { toDateStr } from "../types";
@@ -67,14 +67,19 @@ async function getCoachingMaterialsString(
   try {
     const hasChunks = await storage.hasChunksForUser(userId);
     if (hasChunks) {
-      const query = upcomingWorkouts.map(w => `${w.focus} ${w.mainWorkout}`).join("; ");
-      const chunks = await retrieveRelevantChunks(userId, query);
-      if (chunks.length > 0) {
-        return { text: buildRetrievedChunksSection(chunks), source: "rag" };
+      const storedDim = await storage.getStoredEmbeddingDimension(userId);
+      if (storedDim !== null && storedDim !== EMBEDDING_DIMENSIONS) {
+        logger.warn({ userId, storedDim, expectedDim: EMBEDDING_DIMENSIONS }, "[coach] Embedding dimension mismatch — skipping RAG");
+      } else {
+        const query = upcomingWorkouts.map(w => `${w.focus} ${w.mainWorkout}`).join("; ");
+        const chunks = await retrieveRelevantChunks(userId, query);
+        if (chunks.length > 0) {
+          return { text: buildRetrievedChunksSection(chunks), source: "rag" };
+        }
       }
     }
   } catch (error) {
-    logger.warn({ err: error, userId }, "[coach] RAG retrieval failed, falling back to legacy");
+    logger.error({ err: error, userId }, "[coach] RAG retrieval failed, falling back to legacy");
   }
 
   const materials = await storage.listCoachingMaterials(userId);
