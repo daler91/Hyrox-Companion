@@ -5,7 +5,7 @@
 DROP INDEX IF EXISTS idx_document_chunks_embedding_hnsw;
 --> statement-breakpoint
 
-UPDATE document_chunks SET embedding = NULL;
+UPDATE document_chunks SET embedding = NULL WHERE embedding IS NOT NULL;
 --> statement-breakpoint
 
 CREATE INDEX idx_document_chunks_embedding_hnsw
