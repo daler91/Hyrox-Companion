@@ -28,8 +28,8 @@ router.post("/api/v1/coaching-materials", isAuthenticated, rateLimiter("coaching
     const userId = getUserId(req);
     const material = await storage.createCoachingMaterial({ ...req.body, userId });
 
-    // Fire-and-forget: chunk and embed in background
-    queue.send("embed-coaching-material", { material }).catch(err => (req.log || logger).error({ err }, "Failed to queue coaching material embedding"));
+    // Fire-and-forget: chunk and embed in background (send only ID to avoid pg-boss payload limits)
+    queue.send("embed-coaching-material", { materialId: material.id, userId }).catch(err => (req.log || logger).error({ err }, "Failed to queue coaching material embedding"));
 
     res.status(201).json(material);
   }));
@@ -43,7 +43,7 @@ router.patch("/api/v1/coaching-materials/:id", isAuthenticated, rateLimiter("coa
 
     // Re-embed if content or title changed
     if (req.body.content || req.body.title) {
-      queue.send("embed-coaching-material", { material }).catch(err => (req.log || logger).error({ err }, "Failed to queue coaching material embedding"));
+      queue.send("embed-coaching-material", { materialId: material.id, userId }).catch(err => (req.log || logger).error({ err }, "Failed to queue coaching material embedding"));
     }
 
     res.json(material);

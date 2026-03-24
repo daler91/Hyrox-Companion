@@ -74,8 +74,10 @@ async function getCoachingMaterialsString(
         const query = upcomingWorkouts.map(w => `${w.focus} ${w.mainWorkout}`).join("; ");
         const chunks = await retrieveRelevantChunks(userId, query);
         if (chunks.length > 0) {
+          logger.info({ userId, chunkCount: chunks.length }, "[coach] RAG retrieval succeeded");
           return { text: buildRetrievedChunksSection(chunks), source: "rag" };
         }
+        logger.warn({ userId, storedDim }, "[coach] RAG search returned 0 chunks — falling back to legacy");
       }
     }
   } catch (error) {

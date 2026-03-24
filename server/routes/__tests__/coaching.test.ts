@@ -69,7 +69,7 @@ describe("Coaching materials routes", () => {
 
       expect(response.status).toBe(201);
       expect(storage.createCoachingMaterial).toHaveBeenCalled();
-      expect(queue.send).toHaveBeenCalledWith("embed-coaching-material", { material: createdMaterial });
+      expect(queue.send).toHaveBeenCalledWith("embed-coaching-material", { materialId: createdMaterial.id, userId: "test_user_id" });
     });
 
     it("should return 400 for invalid data", async () => {
@@ -92,7 +92,7 @@ describe("Coaching materials routes", () => {
         .send({ content: "New content" });
 
       expect(response.status).toBe(200);
-      expect(queue.send).toHaveBeenCalledWith("embed-coaching-material", { material: updatedMaterial });
+      expect(queue.send).toHaveBeenCalledWith("embed-coaching-material", { materialId: updatedMaterial.id, userId: "test_user_id" });
     });
 
     it("should re-embed when title is updated", async () => {
@@ -104,7 +104,7 @@ describe("Coaching materials routes", () => {
         .send({ title: "New Title" });
 
       expect(response.status).toBe(200);
-      expect(queue.send).toHaveBeenCalledWith("embed-coaching-material", { material: updatedMaterial });
+      expect(queue.send).toHaveBeenCalledWith("embed-coaching-material", { materialId: updatedMaterial.id, userId: "test_user_id" });
     });
 
     it("should NOT re-embed when only type is updated", async () => {
