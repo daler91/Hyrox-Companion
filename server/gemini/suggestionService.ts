@@ -37,7 +37,7 @@ export const workoutSuggestionSchema = z.object({
   priority: z.enum(["high", "medium", "low"]),
 });
 
-function parseAndValidateSuggestions(text: string): WorkoutSuggestion[] {
+export function parseAndValidateSuggestions(text: string): WorkoutSuggestion[] {
   let raw: unknown;
   try {
     raw = JSON.parse(text);
