@@ -1,3 +1,6 @@
+import { generateWorkoutSuggestions } from "./gemini/suggestionService";
+import { logger } from "./logger";
+import * as clientModule from "./gemini/client";
 import { describe, it, expect, vi } from "vitest";
 import { exerciseSetSchema } from "@shared/schema";
 import {
@@ -189,5 +192,62 @@ describe("exerciseSetSchema", () => {
 
   it("accepts completely empty set", () => {
     expect(() => exerciseSetSchema.parse({})).not.toThrow();
+  });
+});
+
+vi.mock("./logger", () => ({
+  logger: {
+    error: vi.fn(),
+    warn: vi.fn(),
+    info: vi.fn(),
+  },
+}));
+
+vi.mock("./gemini/client", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./gemini/client")>();
+  return {
+    ...actual,
+    retryWithBackoff: vi.fn((fn) => {
+      // If we are in the generateWorkoutSuggestions test, throw the error
+      if (new Error().stack?.includes("generateWorkoutSuggestions")) {
+        return Promise.reject(new Error("Simulated AI generation failure"));
+      }
+      // Otherwise, keep the original behavior for other tests
+      return actual.retryWithBackoff(fn, "test");
+    }),
+  };
+});
+
+describe("generateWorkoutSuggestions", () => {
+  it("returns an empty array and logs error when AI client fails", async () => {
+    // 1. Arrange
+
+    const mockTrainingContext = {
+      completionRate: 85,
+      currentStreak: 5,
+      completedWorkouts: 20,
+      exerciseBreakdown: { "Squat": 5 },
+      structuredExerciseStats: {},
+      recentWorkouts: [],
+      weeklyGoal: 3,
+    };
+
+    const mockUpcomingWorkouts = [
+      { id: "1", date: "2024-11-20", focus: "Legs", mainWorkout: "Squats 5x5" }
+    ];
+
+    // 2. Act
+    const { generateWorkoutSuggestions } = await import("./gemini/suggestionService");
+    const { logger } = await import("./logger");
+    const result = await generateWorkoutSuggestions(mockTrainingContext, mockUpcomingWorkouts);
+
+    // 3. Assert
+    expect(result).toEqual([]);
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        err: expect.any(Error)
+      }),
+      "[gemini] suggestions error:"
+    );
   });
 });
