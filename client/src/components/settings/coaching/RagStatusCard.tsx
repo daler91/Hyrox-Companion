@@ -6,7 +6,7 @@ import { useRagStatus, useReEmbed, useCoachingMaterials } from "@/hooks/useCoach
 
 export function RagStatusCard() {
   const { data: materials } = useCoachingMaterials();
-  const { data: ragStatus, isLoading: ragLoading } = useRagStatus();
+  const { data: ragStatus, isLoading: ragLoading, error: ragError } = useRagStatus();
   const reEmbedMutation = useReEmbed();
 
   if (!materials || materials.length === 0) return null;
@@ -44,6 +44,14 @@ export function RagStatusCard() {
         {ragLoading ? (
           <div className="flex items-center justify-center py-2">
             <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+          </div>
+        ) : ragError ? (
+          <div className="flex items-start gap-2 p-2 rounded-md bg-destructive/10 text-destructive text-sm">
+            <XCircle className="h-4 w-4 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-medium">Failed to load RAG status</p>
+              <p className="text-xs mt-0.5">{ragError instanceof Error ? ragError.message : "An unexpected error occurred"}</p>
+            </div>
           </div>
         ) : ragStatus ? (
           <>

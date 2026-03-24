@@ -92,6 +92,13 @@
       "when": 1774311507644,
       "tag": "0012_sturdy_phantom_reporter",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1774483200000,
+      "tag": "0013_fix_embedding_hnsw_index",
+      "breakpoints": true
     }
   ]
 }

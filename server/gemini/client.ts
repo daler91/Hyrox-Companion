@@ -36,8 +36,8 @@ export function isRetryableError(error: unknown): boolean {
 export async function retryWithBackoff<T>(
   fn: () => Promise<T>,
   label: string,
-  maxRetries: number = 2,
-  baseDelayMs: number = 1000,
+  maxRetries: number = 4,
+  baseDelayMs: number = 2000,
 ): Promise<T> {
   let lastError: unknown;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -68,7 +68,7 @@ export const EMBEDDING_DIMENSIONS = 768;
 
 /**
  * Generate an embedding vector for a text string using Gemini's embedding model.
- * Returns a 3072-dimensional float array.
+ * Returns a 768-dimensional float array.
  */
 export async function generateEmbedding(text: string): Promise<number[]> {
   const response = await retryWithBackoff(
@@ -90,13 +90,17 @@ export async function generateEmbedding(text: string): Promise<number[]> {
  * Generate embeddings for multiple texts in batch.
  */
 export async function generateEmbeddings(texts: string[]): Promise<number[][]> {
-  // Process in parallel batches of 10 to avoid rate limits
-  const batchSize = 10;
+  // Process in parallel batches of 5 to avoid rate limits
+  const batchSize = 5;
   const results: number[][] = [];
   for (let i = 0; i < texts.length; i += batchSize) {
     const batch = texts.slice(i, i + batchSize);
     const embeddings = await Promise.all(batch.map(generateEmbedding));
     results.push(...embeddings);
+    // Small delay between batches to avoid burst rate-limiting
+    if (i + batchSize < texts.length) {
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
   }
   return results;
 }

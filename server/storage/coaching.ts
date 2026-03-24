@@ -70,7 +70,15 @@ export class CoachingStorage {
     return await db.transaction(async (tx) => {
       await tx.delete(documentChunks).where(eq(documentChunks.materialId, materialId));
       if (chunks.length === 0) return [];
-      return await tx.insert(documentChunks).values(chunks).returning();
+      // Batch inserts to avoid exceeding statement size limits for large documents
+      const BATCH_SIZE = 100;
+      const results: DocumentChunk[] = [];
+      for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+        const batch = chunks.slice(i, i + BATCH_SIZE);
+        const inserted = await tx.insert(documentChunks).values(batch).returning();
+        results.push(...inserted);
+      }
+      return results;
     });
   }
 
