@@ -93,7 +93,7 @@ export class CoachingStorage {
       `SELECT id, material_id AS "materialId", user_id AS "userId", content, chunk_index AS "chunkIndex", created_at AS "createdAt"
        FROM document_chunks
        WHERE user_id = $1 AND embedding IS NOT NULL
-       ORDER BY embedding <=> $2::vector
+       ORDER BY embedding::vector <=> $2::vector
        LIMIT $3`,
       [userId, embeddingStr, topK],
     );
