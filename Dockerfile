@@ -21,6 +21,12 @@ COPY server/ ./server/
 COPY shared/ ./shared/
 COPY tsconfig.json vite.config.ts components.json tailwind.config.ts drizzle.config.ts ./
 
+# Accept build-time variables that Vite embeds into the client bundle
+ARG VITE_CLERK_PUBLISHABLE_KEY
+ARG VITE_SENTRY_DSN
+ENV VITE_CLERK_PUBLISHABLE_KEY=$VITE_CLERK_PUBLISHABLE_KEY
+ENV VITE_SENTRY_DSN=$VITE_SENTRY_DSN
+
 # Build the frontend and backend
 RUN pnpm run build
 
