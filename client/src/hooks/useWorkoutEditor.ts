@@ -44,13 +44,30 @@ export function exerciseToPayload(ex: StructuredExercise) {
 
 export function generateSummary(exercises: StructuredExercise[], weightUnit: string, distanceUnit: string): string {
   const distLabel = distanceUnit === "km" ? "m" : "ft";
-  return exercises.map((ex) => {
+  // ⚡ Bolt Performance Optimization:
+  // Replaced multiple array method allocations (O(N) .map and .every) with single traversal for...of loops.
+  // This reduces memory pressure and function allocations during frequent renders.
+  const summaries: string[] = [];
+
+  for (const ex of exercises) {
     const def = EXERCISE_DEFINITIONS[ex.exerciseName];
     const name = ex.exerciseName === "custom" && ex.customLabel ? ex.customLabel : def?.label || ex.exerciseName;
     const sets = ex.sets || [];
-    if (sets.length === 0) return `${name}: completed`;
+
+    if (sets.length === 0) {
+      summaries.push(`${name}: completed`);
+      continue;
+    }
+
     const firstSet = sets[0];
-    const allSame = sets.every(s => s.reps === firstSet.reps && s.weight === firstSet.weight);
+    let allSame = true;
+    for (let i = 1; i < sets.length; i++) {
+      if (sets[i].reps !== firstSet.reps || sets[i].weight !== firstSet.weight) {
+        allSame = false;
+        break;
+      }
+    }
+
     const parts: string[] = [];
     if (allSame && sets.length > 1 && firstSet.reps) {
       parts.push(`${sets.length}x${firstSet.reps}`);
@@ -59,11 +76,15 @@ export function generateSummary(exercises: StructuredExercise[], weightUnit: str
     } else if (sets.length > 1) {
       parts.push(`${sets.length} sets`);
     }
+
     if (allSame && firstSet.weight) parts.push(`${firstSet.weight}${weightUnit}`);
     if (firstSet.distance) parts.push(`${firstSet.distance}${distLabel}`);
     if (firstSet.time) parts.push(`${firstSet.time}min`);
-    return `${name}: ${parts.join(", ") || "completed"}`;
-  }).join("; ");
+
+    summaries.push(`${name}: ${parts.join(", ") || "completed"}`);
+  }
+
+  return summaries.join("; ");
 }
 
 
