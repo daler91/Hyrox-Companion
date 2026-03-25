@@ -170,7 +170,7 @@ function computeRpeTrend(recentWorkouts: TrainingContext["recentWorkouts"]): Pic
   NonNullable<TrainingContext["coachingInsights"]>,
   "rpeTrend" | "avgRpeLast3" | "avgRpePrior3" | "fatigueFlag" | "undertrainingFlag"
 > {
-  const withRpe = recentWorkouts.filter(w => w.rpe != null && w.rpe! > 0);
+  const withRpe = recentWorkouts.filter((w): w is typeof w & { rpe: number } => w.rpe != null && w.rpe > 0);
   if (withRpe.length < 3) {
     return { rpeTrend: "insufficient_data", fatigueFlag: false, undertrainingFlag: false };
   }
@@ -199,6 +199,33 @@ function computeRpeTrend(recentWorkouts: TrainingContext["recentWorkouts"]): Pic
   return { rpeTrend, avgRpeLast3: avgLast3, avgRpePrior3: avgPrior3, fatigueFlag: avgLast3 >= 8, undertrainingFlag: avgLast3 <= 4 };
 }
 
+function updateLastTrained(record: Record<string, string | null>, key: string, date: string): void {
+  const current = record[key];
+  if (!current || date > current) {
+    record[key] = date;
+  }
+}
+
+function updateStationDatesFromSets(
+  record: Record<string, string | null>,
+  exerciseSets: NonNullable<TimelineEntry["exerciseSets"]>,
+  date: string,
+  allStations: string[],
+): void {
+  for (const es of exerciseSets) {
+    const name = es.exerciseName.toLowerCase();
+    if (allStations.includes(name)) updateLastTrained(record, name, date);
+    if (RUNNING_EXERCISE_NAMES.has(name)) updateLastTrained(record, "running", date);
+  }
+}
+
+function updateStationDatesFromFocus(record: Record<string, string | null>, focus: string, date: string): void {
+  const focusLower = focus.toLowerCase();
+  for (const [keyword, station] of Object.entries(STATION_FOCUS_MAP)) {
+    if (focusLower.includes(keyword)) updateLastTrained(record, station, date);
+  }
+}
+
 function computeStationGaps(timeline: TimelineEntry[]): NonNullable<TrainingContext["coachingInsights"]>["stationGaps"] {
   const today = toDateStr();
   const allStations = [...HYROX_STATION_NAMES, "running"];
@@ -207,39 +234,14 @@ function computeStationGaps(timeline: TimelineEntry[]): NonNullable<TrainingCont
 
   for (const entry of timeline) {
     if (entry.status !== "completed" || !entry.date) continue;
-
-    if (entry.exerciseSets) {
-      for (const es of entry.exerciseSets) {
-        const name = es.exerciseName.toLowerCase();
-        if (allStations.includes(name)) {
-          if (!lastTrainedDate[name] || entry.date > lastTrainedDate[name]!) {
-            lastTrainedDate[name] = entry.date;
-          }
-        }
-        if (RUNNING_EXERCISE_NAMES.has(name)) {
-          if (!lastTrainedDate["running"] || entry.date > lastTrainedDate["running"]!) {
-            lastTrainedDate["running"] = entry.date;
-          }
-        }
-      }
-    }
-
-    if (entry.focus) {
-      const focusLower = entry.focus.toLowerCase();
-      for (const [keyword, station] of Object.entries(STATION_FOCUS_MAP)) {
-        if (focusLower.includes(keyword)) {
-          if (!lastTrainedDate[station] || entry.date > lastTrainedDate[station]!) {
-            lastTrainedDate[station] = entry.date;
-          }
-        }
-      }
-    }
+    if (entry.exerciseSets) updateStationDatesFromSets(lastTrainedDate, entry.exerciseSets, entry.date, allStations);
+    if (entry.focus) updateStationDatesFromFocus(lastTrainedDate, entry.focus, entry.date);
   }
 
-  return allStations.map(station => ({
-    station,
-    daysSinceLastTrained: lastTrainedDate[station] ? daysBetween(lastTrainedDate[station]!, today) : null,
-  }));
+  return allStations.map(station => {
+    const last = lastTrainedDate[station];
+    return { station, daysSinceLastTrained: last ? daysBetween(last, today) : null };
+  });
 }
 
 function computePlanPhase(
@@ -292,67 +294,88 @@ function computeWeeklyVolume(
   return { thisWeekCompleted: thisWeek, lastWeekCompleted: lastWeek, goal: weeklyGoal, trend };
 }
 
-function computeProgressionFlags(timeline: TimelineEntry[]): NonNullable<TrainingContext["coachingInsights"]>["progressionFlags"] {
-  const exerciseHistory: Record<string, Array<{ date: string; maxWeight?: number; bestTime?: number }>> = {};
+type ProgressionFlag = NonNullable<TrainingContext["coachingInsights"]>["progressionFlags"][0];
+
+function compareEntryDates(a: TimelineEntry, b: TimelineEntry): number {
+  const dateA = a.date ?? "";
+  const dateB = b.date ?? "";
+  if (dateA < dateB) return -1;
+  if (dateA > dateB) return 1;
+  return 0;
+}
+
+function collectExerciseHistory(timeline: TimelineEntry[]): Record<string, Array<{ date: string; maxWeight?: number; bestTime?: number }>> {
+  const history: Record<string, Array<{ date: string; maxWeight?: number; bestTime?: number }>> = {};
 
   const completed = timeline
     .filter(e => e.status === "completed" && e.date && e.exerciseSets && e.exerciseSets.length > 0)
-    .sort((a, b) => (a.date! < b.date! ? -1 : a.date! > b.date! ? 1 : 0));
+    .sort(compareEntryDates);
 
   for (const entry of completed) {
     const perExercise: Record<string, { maxWeight?: number; bestTime?: number }> = {};
-    for (const es of entry.exerciseSets!) {
+    for (const es of entry.exerciseSets ?? []) {
       if (!perExercise[es.exerciseName]) perExercise[es.exerciseName] = {};
       const pe = perExercise[es.exerciseName];
       if (es.weight && (!pe.maxWeight || es.weight > pe.maxWeight)) pe.maxWeight = es.weight;
       if (es.time && (!pe.bestTime || es.time < pe.bestTime)) pe.bestTime = es.time;
     }
     for (const [name, stats] of Object.entries(perExercise)) {
-      if (!exerciseHistory[name]) exerciseHistory[name] = [];
-      exerciseHistory[name].push({ date: entry.date!, ...stats });
+      if (!history[name]) history[name] = [];
+      history[name].push({ date: entry.date ?? "", ...stats });
     }
   }
 
-  const flags: NonNullable<TrainingContext["coachingInsights"]>["progressionFlags"] = [];
+  return history;
+}
+
+function analyzeWeightProgression(exercise: string, values: number[]): ProgressionFlag | null {
+  if (values.length < 3) return null;
+  const recent3 = values.slice(-3);
+  if (recent3.every(w => w === recent3[0])) {
+    return { exercise, flag: "plateau", detail: `Weight stuck at ${recent3[0]}kg for last ${recent3.length} sessions` };
+  }
+  if (recent3[2] > recent3[0]) {
+    return { exercise, flag: "progressing", detail: `Weight increased from ${recent3[0]}kg to ${recent3[2]}kg over last 3 sessions` };
+  }
+  if (recent3[2] < recent3[0]) {
+    return { exercise, flag: "regressing", detail: `Weight decreased from ${recent3[0]}kg to ${recent3[2]}kg over last 3 sessions` };
+  }
+  return null;
+}
+
+function analyzeTimeProgression(exercise: string, values: number[]): ProgressionFlag | null {
+  if (values.length < 3) return null;
+  const recent3 = values.slice(-3);
+  if (recent3.every(t => Math.abs(t - recent3[0]) < 0.1)) {
+    return { exercise, flag: "plateau", detail: `Time stuck at ${recent3[0]}min for last ${recent3.length} sessions` };
+  }
+  if (recent3[2] < recent3[0]) {
+    return { exercise, flag: "progressing", detail: `Time improved from ${recent3[0]}min to ${recent3[2]}min over last 3 sessions` };
+  }
+  if (recent3[2] > recent3[0]) {
+    return { exercise, flag: "regressing", detail: `Time worsened from ${recent3[0]}min to ${recent3[2]}min over last 3 sessions` };
+  }
+  return null;
+}
+
+function computeProgressionFlags(timeline: TimelineEntry[]): NonNullable<TrainingContext["coachingInsights"]>["progressionFlags"] {
+  const exerciseHistory = collectExerciseHistory(timeline);
+  const flags: ProgressionFlag[] = [];
 
   for (const [exercise, history] of Object.entries(exerciseHistory)) {
-    if (history.length < 2) {
-      if (history.length === 1) {
-        flags.push({ exercise, flag: "new", detail: `Only trained once (${history[0].date})` });
-      }
+    if (history.length === 1) {
+      flags.push({ exercise, flag: "new", detail: `Only trained once (${history[0].date})` });
       continue;
     }
+    if (history.length < 2) continue;
 
-    const weights = history.filter(h => h.maxWeight != null).map(h => h.maxWeight!);
-    if (weights.length >= 3) {
-      const recent3 = weights.slice(-3);
-      const allSame = recent3.every(w => w === recent3[0]);
-      if (allSame) {
-        flags.push({ exercise, flag: "plateau", detail: `Weight stuck at ${recent3[0]}kg for last ${recent3.length} sessions` });
-        continue;
-      }
-      if (recent3[2] > recent3[0]) {
-        flags.push({ exercise, flag: "progressing", detail: `Weight increased from ${recent3[0]}kg to ${recent3[2]}kg over last 3 sessions` });
-      } else if (recent3[2] < recent3[0]) {
-        flags.push({ exercise, flag: "regressing", detail: `Weight decreased from ${recent3[0]}kg to ${recent3[2]}kg over last 3 sessions` });
-      }
-      continue;
-    }
+    const weights = history.filter(h => h.maxWeight != null).map(h => h.maxWeight as number);
+    const weightFlag = analyzeWeightProgression(exercise, weights);
+    if (weightFlag) { flags.push(weightFlag); continue; }
 
-    const times = history.filter(h => h.bestTime != null).map(h => h.bestTime!);
-    if (times.length >= 3) {
-      const recent3 = times.slice(-3);
-      const allSame = recent3.every(t => Math.abs(t - recent3[0]) < 0.1);
-      if (allSame) {
-        flags.push({ exercise, flag: "plateau", detail: `Time stuck at ${recent3[0]}min for last ${recent3.length} sessions` });
-        continue;
-      }
-      if (recent3[2] < recent3[0]) {
-        flags.push({ exercise, flag: "progressing", detail: `Time improved from ${recent3[0]}min to ${recent3[2]}min over last 3 sessions` });
-      } else if (recent3[2] > recent3[0]) {
-        flags.push({ exercise, flag: "regressing", detail: `Time worsened from ${recent3[0]}min to ${recent3[2]}min over last 3 sessions` });
-      }
-    }
+    const times = history.filter(h => h.bestTime != null).map(h => h.bestTime as number);
+    const timeFlag = analyzeTimeProgression(exercise, times);
+    if (timeFlag) flags.push(timeFlag);
   }
 
   return flags;

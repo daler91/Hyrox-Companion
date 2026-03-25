@@ -106,50 +106,57 @@ function formatUpcomingWorkout(workout: UpcomingWorkout): string {
   return line;
 }
 
-function formatCoachingAnalysis(insights: NonNullable<TrainingContext["coachingInsights"]>, planGoal?: string): string {
-  const lines: string[] = [`--- COACHING ANALYSIS ---`];
-
-  // RPE trend
-  if (insights.rpeTrend !== "insufficient_data") {
-    let rpeLine = `RPE TREND: ${insights.rpeTrend.toUpperCase()}`;
-    if (insights.avgRpeLast3 != null) rpeLine += ` (avg ${insights.avgRpeLast3} last 3 workouts`;
-    if (insights.avgRpePrior3 != null) rpeLine += ` vs ${insights.avgRpePrior3} prior 3`;
-    if (insights.avgRpeLast3 != null) rpeLine += `)`;
-    if (insights.fatigueFlag) rpeLine += `. FATIGUE FLAG ACTIVE — athlete needs volume reduction.`;
-    if (insights.undertrainingFlag) rpeLine += `. UNDERTRAINING FLAG ACTIVE — athlete needs more intensity.`;
-    lines.push(rpeLine);
-  } else {
-    lines.push(`RPE TREND: Insufficient data (fewer than 3 workouts with RPE logged).`);
+function formatRpeTrend(insights: NonNullable<TrainingContext["coachingInsights"]>): string {
+  if (insights.rpeTrend === "insufficient_data") {
+    return `RPE TREND: Insufficient data (fewer than 3 workouts with RPE logged).`;
   }
 
-  // Station gaps
-  const criticalGaps = insights.stationGaps.filter(g => g.daysSinceLastTrained === null || g.daysSinceLastTrained >= 14);
-  const highGaps = insights.stationGaps.filter(g => g.daysSinceLastTrained != null && g.daysSinceLastTrained >= 10 && g.daysSinceLastTrained < 14);
-  const okStations = insights.stationGaps.filter(g => g.daysSinceLastTrained != null && g.daysSinceLastTrained < 10);
+  let rpeLine = `RPE TREND: ${insights.rpeTrend.toUpperCase()}`;
+  if (insights.avgRpeLast3 != null) rpeLine += ` (avg ${insights.avgRpeLast3} last 3 workouts`;
+  if (insights.avgRpePrior3 != null) rpeLine += ` vs ${insights.avgRpePrior3} prior 3`;
+  if (insights.avgRpeLast3 != null) rpeLine += `)`;
+  if (insights.fatigueFlag) rpeLine += `. FATIGUE FLAG ACTIVE — athlete needs volume reduction.`;
+  if (insights.undertrainingFlag) rpeLine += `. UNDERTRAINING FLAG ACTIVE — athlete needs more intensity.`;
+  return rpeLine;
+}
 
-  let gapLine = `STATION GAPS: `;
+function formatStationGapEntry(g: NonNullable<TrainingContext["coachingInsights"]>["stationGaps"][0], severity: "critical" | "high"): string {
+  if (severity === "critical") {
+    const label = g.daysSinceLastTrained === null ? "NEVER TRAINED" : `${g.daysSinceLastTrained} days`;
+    return `${g.station} (${label} — CRITICAL)`;
+  }
+  return `${g.station} (${g.daysSinceLastTrained} days — needs attention)`;
+}
+
+function formatStationGaps(stationGaps: NonNullable<TrainingContext["coachingInsights"]>["stationGaps"]): string {
+  const criticalGaps = stationGaps.filter(g => g.daysSinceLastTrained === null || g.daysSinceLastTrained >= 14);
+  const highGaps = stationGaps.filter(g => g.daysSinceLastTrained != null && g.daysSinceLastTrained >= 10 && g.daysSinceLastTrained < 14);
+  const okCount = stationGaps.filter(g => g.daysSinceLastTrained != null && g.daysSinceLastTrained < 10).length;
+
   const gapParts: string[] = [];
-  for (const g of criticalGaps) {
-    gapParts.push(`${g.station} (${g.daysSinceLastTrained === null ? "NEVER TRAINED" : g.daysSinceLastTrained + " days"} — CRITICAL)`);
-  }
-  for (const g of highGaps) {
-    gapParts.push(`${g.station} (${g.daysSinceLastTrained} days — needs attention)`);
-  }
-  if (okStations.length > 0 && gapParts.length > 0) {
-    gapParts.push(`${okStations.length} stations OK (<10 days)`);
+  for (const g of criticalGaps) gapParts.push(formatStationGapEntry(g, "critical"));
+  for (const g of highGaps) gapParts.push(formatStationGapEntry(g, "high"));
+
+  if (okCount > 0 && gapParts.length > 0) {
+    gapParts.push(`${okCount} stations OK (<10 days)`);
   } else if (gapParts.length === 0) {
     gapParts.push(`All stations trained within 10 days — good coverage.`);
   }
-  gapLine += gapParts.join(", ");
-  lines.push(gapLine);
 
-  // Plan phase
+  return `STATION GAPS: ${gapParts.join(", ")}`;
+}
+
+function formatCoachingAnalysis(insights: NonNullable<TrainingContext["coachingInsights"]>, planGoal?: string): string {
+  const lines: string[] = [`--- COACHING ANALYSIS ---`];
+
+  lines.push(formatRpeTrend(insights));
+  lines.push(formatStationGaps(insights.stationGaps));
+
   if (insights.planPhase) {
     const p = insights.planPhase;
     lines.push(`PLAN PHASE: Week ${p.currentWeek} of ${p.totalWeeks} (${p.phaseLabel.toUpperCase()} phase, ${p.progressPct}% complete). Coach according to ${p.phaseLabel} phase guidelines.`);
   }
 
-  // Progression flags
   if (insights.progressionFlags.length > 0) {
     const flagLines = insights.progressionFlags.map(f =>
       `${f.exercise}: ${f.flag.toUpperCase()} — ${f.detail}`
@@ -157,13 +164,11 @@ function formatCoachingAnalysis(insights: NonNullable<TrainingContext["coachingI
     lines.push(`PROGRESSION:\n${flagLines.join("\n")}`);
   }
 
-  // Weekly volume
   if (insights.weeklyVolume) {
     const v = insights.weeklyVolume;
     lines.push(`WEEKLY VOLUME: ${v.thisWeekCompleted}/${v.goal} goal this week (last week: ${v.lastWeekCompleted}/${v.goal}). Trend: ${v.trend}.`);
   }
 
-  // Plan goal
   if (planGoal) {
     lines.push(`ATHLETE'S GOAL: "${planGoal}"`);
   }
