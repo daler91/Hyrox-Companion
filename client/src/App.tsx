@@ -79,7 +79,7 @@ function AuthenticatedLayout() {
         </a>
         <AppSidebar />
         <div className="flex flex-col flex-1 min-w-0">
-          <header className="flex items-center gap-2 p-2 border-b h-14 flex-shrink-0 md:hidden">
+          <header className="sticky top-0 z-50 flex items-center gap-2 p-2 border-b h-14 flex-shrink-0 md:hidden bg-background/80 backdrop-blur-sm">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
             <span className="font-semibold">HyroxTracker</span>
           </header>
