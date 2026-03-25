@@ -28,6 +28,8 @@ export default function FloatingActionButton({ coachPanelOpen, onCoachToggle }: 
         className="rounded-full shadow-lg gap-2"
         onClick={onCoachToggle}
         data-testid="button-coach-fab"
+        aria-expanded={coachPanelOpen}
+        title={coachPanelOpen ? "Close AI Coach" : "Open AI Coach"}
       >
         <MessageSquare className="h-4 w-4" />
         <span>AI Coach</span>
@@ -36,6 +38,7 @@ export default function FloatingActionButton({ coachPanelOpen, onCoachToggle }: 
         className="rounded-full shadow-lg gap-2"
         onClick={handleNewWorkout}
         data-testid="button-log-workout-fab"
+        title="Log New Workout"
       >
         <Plus className="h-5 w-5" />
         <span>New Workout</span>
