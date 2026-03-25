@@ -3,6 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { X, Timer, Ruler, Hash, Weight, Pencil, Plus, Minus, AlertTriangle, TriangleAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
@@ -138,9 +139,18 @@ export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg",
               </Badge>
             )}
           </div>
-          <Button size="icon" variant="ghost" onClick={onRemove} data-testid={`button-remove-${exercise.exerciseName}`} aria-label={`Remove ${displayLabel}`}>
-            <X className="h-4 w-4" />
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button size="icon" variant="ghost" onClick={onRemove} data-testid={`button-remove-${exercise.exerciseName}`} aria-label={`Remove ${displayLabel}`}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Remove exercise</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
 
         {missingFields.length > 0 && (
@@ -196,9 +206,18 @@ export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg",
                     aria-label={`${fieldConfig[field].getLabel(weightUnit, distanceUnit)} for set ${set.setNumber}`}
                   />
                 ))}
-                <Button size="icon" variant="ghost" onClick={() => removeSet(idx)} disabled={sets.length <= 1} className="h-6 w-6" data-testid={`button-remove-set-${idx}`} aria-label={`Remove set ${idx + 1}`}>
-                  <Minus className="h-3 w-3" />
-                </Button>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button size="icon" variant="ghost" onClick={() => removeSet(idx)} disabled={sets.length <= 1} className="h-6 w-6" data-testid={`button-remove-set-${idx}`} aria-label={`Remove set ${idx + 1}`}>
+                        <Minus className="h-3 w-3" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Remove set</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </div>
             ))}
             <Button variant="outline" size="sm" onClick={addSet} className="w-full mt-2" data-testid={`button-add-set-${exercise.exerciseName}`}>
