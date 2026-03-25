@@ -147,10 +147,11 @@ function formatStationGaps(stationGaps: NonNullable<TrainingContext["coachingIns
 }
 
 function formatCoachingAnalysis(insights: NonNullable<TrainingContext["coachingInsights"]>, planGoal?: string): string {
-  const lines: string[] = [`--- COACHING ANALYSIS ---`];
-
-  lines.push(formatRpeTrend(insights));
-  lines.push(formatStationGaps(insights.stationGaps));
+  const lines: string[] = [
+    `--- COACHING ANALYSIS ---`,
+    formatRpeTrend(insights),
+    formatStationGaps(insights.stationGaps),
+  ];
 
   if (insights.planPhase) {
     const p = insights.planPhase;

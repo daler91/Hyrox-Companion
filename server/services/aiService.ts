@@ -304,6 +304,17 @@ function compareEntryDates(a: TimelineEntry, b: TimelineEntry): number {
   return 0;
 }
 
+function aggregateExercisePeaks(exerciseSets: NonNullable<TimelineEntry["exerciseSets"]>): Record<string, { maxWeight?: number; bestTime?: number }> {
+  const perExercise: Record<string, { maxWeight?: number; bestTime?: number }> = {};
+  for (const es of exerciseSets) {
+    if (!perExercise[es.exerciseName]) perExercise[es.exerciseName] = {};
+    const pe = perExercise[es.exerciseName];
+    if (es.weight && (!pe.maxWeight || es.weight > pe.maxWeight)) pe.maxWeight = es.weight;
+    if (es.time && (!pe.bestTime || es.time < pe.bestTime)) pe.bestTime = es.time;
+  }
+  return perExercise;
+}
+
 function collectExerciseHistory(timeline: TimelineEntry[]): Record<string, Array<{ date: string; maxWeight?: number; bestTime?: number }>> {
   const history: Record<string, Array<{ date: string; maxWeight?: number; bestTime?: number }>> = {};
 
@@ -312,14 +323,8 @@ function collectExerciseHistory(timeline: TimelineEntry[]): Record<string, Array
     .sort(compareEntryDates);
 
   for (const entry of completed) {
-    const perExercise: Record<string, { maxWeight?: number; bestTime?: number }> = {};
-    for (const es of entry.exerciseSets ?? []) {
-      if (!perExercise[es.exerciseName]) perExercise[es.exerciseName] = {};
-      const pe = perExercise[es.exerciseName];
-      if (es.weight && (!pe.maxWeight || es.weight > pe.maxWeight)) pe.maxWeight = es.weight;
-      if (es.time && (!pe.bestTime || es.time < pe.bestTime)) pe.bestTime = es.time;
-    }
-    for (const [name, stats] of Object.entries(perExercise)) {
+    const peaks = aggregateExercisePeaks(entry.exerciseSets ?? []);
+    for (const [name, stats] of Object.entries(peaks)) {
       if (!history[name]) history[name] = [];
       history[name].push({ date: entry.date ?? "", ...stats });
     }
