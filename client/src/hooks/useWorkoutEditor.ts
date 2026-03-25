@@ -42,6 +42,17 @@ export function exerciseToPayload(ex: StructuredExercise) {
   };
 }
 
+function areSetsUniform(sets: NonNullable<StructuredExercise["sets"]>): boolean {
+  if (sets.length <= 1) return true;
+  const firstSet = sets[0];
+  for (let i = 1; i < sets.length; i++) {
+    if (sets[i].reps !== firstSet.reps || sets[i].weight !== firstSet.weight) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function formatExerciseSummary(ex: StructuredExercise, weightUnit: string, distLabel: string): string {
   const def = EXERCISE_DEFINITIONS[ex.exerciseName];
   const name = ex.exerciseName === "custom" && ex.customLabel ? ex.customLabel : def?.label || ex.exerciseName;
@@ -52,13 +63,7 @@ function formatExerciseSummary(ex: StructuredExercise, weightUnit: string, distL
   }
 
   const firstSet = sets[0];
-  let allSame = true;
-  for (let i = 1; i < sets.length; i++) {
-    if (sets[i].reps !== firstSet.reps || sets[i].weight !== firstSet.weight) {
-      allSame = false;
-      break;
-    }
-  }
+  const allSame = areSetsUniform(sets);
 
   const parts: string[] = [];
   if (allSame && sets.length > 1 && firstSet.reps) {
