@@ -40,4 +40,32 @@ export interface TrainingContext {
     currentWeek?: number;
     goal?: string | null;
   };
+  coachingInsights?: {
+    rpeTrend: "rising" | "stable" | "falling" | "insufficient_data";
+    avgRpeLast3?: number;
+    avgRpePrior3?: number;
+    fatigueFlag: boolean;
+    undertrainingFlag: boolean;
+    stationGaps: Array<{
+      station: string;
+      daysSinceLastTrained: number | null;
+    }>;
+    planPhase?: {
+      currentWeek: number;
+      totalWeeks: number;
+      phaseLabel: "early" | "build" | "peak" | "taper" | "race_week";
+      progressPct: number;
+    };
+    weeklyVolume?: {
+      thisWeekCompleted: number;
+      lastWeekCompleted: number;
+      goal: number;
+      trend: "increasing" | "stable" | "decreasing";
+    };
+    progressionFlags: Array<{
+      exercise: string;
+      flag: "plateau" | "progressing" | "regressing" | "new";
+      detail: string;
+    }>;
+  };
 }
