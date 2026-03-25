@@ -42,28 +42,57 @@ export function exerciseToPayload(ex: StructuredExercise) {
   };
 }
 
+function areSetsUniform(sets: NonNullable<StructuredExercise["sets"]>): boolean {
+  if (sets.length <= 1) return true;
+  const firstSet = sets[0];
+  for (let i = 1; i < sets.length; i++) {
+    if (sets[i].reps !== firstSet.reps || sets[i].weight !== firstSet.weight) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function formatExerciseSummary(ex: StructuredExercise, weightUnit: string, distLabel: string): string {
+  const def = EXERCISE_DEFINITIONS[ex.exerciseName];
+  const name = ex.exerciseName === "custom" && ex.customLabel ? ex.customLabel : def?.label || ex.exerciseName;
+  const sets = ex.sets || [];
+
+  if (sets.length === 0) {
+    return `${name}: completed`;
+  }
+
+  const firstSet = sets[0];
+  const allSame = areSetsUniform(sets);
+
+  const parts: string[] = [];
+  if (allSame && sets.length > 1 && firstSet.reps) {
+    parts.push(`${sets.length}x${firstSet.reps}`);
+  } else if (firstSet.reps) {
+    parts.push(`${sets.length > 1 ? sets.length + " sets, " : ""}${firstSet.reps} reps`);
+  } else if (sets.length > 1) {
+    parts.push(`${sets.length} sets`);
+  }
+
+  if (allSame && firstSet.weight) parts.push(`${firstSet.weight}${weightUnit}`);
+  if (firstSet.distance) parts.push(`${firstSet.distance}${distLabel}`);
+  if (firstSet.time) parts.push(`${firstSet.time}min`);
+
+  return `${name}: ${parts.join(", ") || "completed"}`;
+}
+
 export function generateSummary(exercises: StructuredExercise[], weightUnit: string, distanceUnit: string): string {
   const distLabel = distanceUnit === "km" ? "m" : "ft";
-  return exercises.map((ex) => {
-    const def = EXERCISE_DEFINITIONS[ex.exerciseName];
-    const name = ex.exerciseName === "custom" && ex.customLabel ? ex.customLabel : def?.label || ex.exerciseName;
-    const sets = ex.sets || [];
-    if (sets.length === 0) return `${name}: completed`;
-    const firstSet = sets[0];
-    const allSame = sets.every(s => s.reps === firstSet.reps && s.weight === firstSet.weight);
-    const parts: string[] = [];
-    if (allSame && sets.length > 1 && firstSet.reps) {
-      parts.push(`${sets.length}x${firstSet.reps}`);
-    } else if (firstSet.reps) {
-      parts.push(`${sets.length > 1 ? sets.length + " sets, " : ""}${firstSet.reps} reps`);
-    } else if (sets.length > 1) {
-      parts.push(`${sets.length} sets`);
-    }
-    if (allSame && firstSet.weight) parts.push(`${firstSet.weight}${weightUnit}`);
-    if (firstSet.distance) parts.push(`${firstSet.distance}${distLabel}`);
-    if (firstSet.time) parts.push(`${firstSet.time}min`);
-    return `${name}: ${parts.join(", ") || "completed"}`;
-  }).join("; ");
+  // ⚡ Bolt Performance Optimization:
+  // Replaced multiple array method allocations (O(N) .map and .every) with single traversal for...of loops.
+  // This reduces memory pressure and function allocations during frequent renders.
+  const summaries: string[] = [];
+
+  for (const ex of exercises) {
+    summaries.push(formatExerciseSummary(ex, weightUnit, distLabel));
+  }
+
+  return summaries.join("; ");
 }
 
 
