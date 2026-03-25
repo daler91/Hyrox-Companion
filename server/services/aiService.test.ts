@@ -42,6 +42,12 @@ describe("buildTrainingContext", () => {
       exerciseBreakdown: {},
       structuredExerciseStats: undefined,
       activePlan: undefined,
+      coachingInsights: expect.objectContaining({
+        rpeTrend: "insufficient_data",
+        fatigueFlag: false,
+        undertrainingFlag: false,
+        progressionFlags: [],
+      }),
     });
   });
 
@@ -144,6 +150,7 @@ describe("buildTrainingContext", () => {
     expect(result.activePlan).toEqual({
       name: "Hyrox Base",
       totalWeeks: 12,
+      currentWeek: 1,
       goal: "Complete a sub-1:30 race",
     });
   });
