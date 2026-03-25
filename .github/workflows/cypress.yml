@@ -104,6 +104,7 @@ jobs:
         with:
           record: true
           parallel: true
+          ci-build-id: ${{ github.run_id }}-${{ github.run_attempt }}
           install: false
         env:
           CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
