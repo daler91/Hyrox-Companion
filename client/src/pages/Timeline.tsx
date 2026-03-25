@@ -276,7 +276,7 @@ export default function Timeline() {
         );
       })()}
 
-          <FloatingActionButton coachPanelOpen={coachOpen} onCoachToggle={() => setCoachOpen(!coachOpen)} />
+          {!detailEntry && <FloatingActionButton coachPanelOpen={coachOpen} onCoachToggle={() => setCoachOpen(!coachOpen)} />}
 
           <SchedulePlanDialog
             open={!!schedulingPlanId}
