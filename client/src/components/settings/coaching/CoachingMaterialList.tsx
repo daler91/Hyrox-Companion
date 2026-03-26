@@ -50,6 +50,8 @@ export function CoachingMaterialList({
                 variant="ghost"
                 size="icon"
                 onClick={() => handleDelete(material.id)}
+                aria-label={`Delete ${material.title}`}
+                title={`Delete ${material.title}`}
                 disabled={deleteMutation.isPending}
               >
                 <Trash2 className="h-4 w-4 text-destructive" />
