@@ -1,7 +1,22 @@
 import { db, pool } from "./db";
 import { sql } from "drizzle-orm";
+import { migrate } from "drizzle-orm/node-postgres/migrator";
+import path from "node:path";
 import type { IStorage } from "./storage";
 import { logger } from "./logger";
+
+async function ensurePgvectorExtension() {
+  let client;
+  try {
+    client = await pool.connect();
+    await client.query("CREATE EXTENSION IF NOT EXISTS vector");
+    logger.info({ context: "db" }, "pgvector extension ensured");
+  } catch (error) {
+    logger.warn({ context: "db", err: error }, "Could not enable pgvector extension (may already exist or lack permissions)");
+  } finally {
+    if (client) client.release();
+  }
+}
 
 async function ensureSchemaUpToDate() {
   let client;
@@ -121,7 +136,20 @@ async function cleanOrphanedData() {
   }
 }
 
+async function runDrizzleMigrations() {
+  try {
+    const migrationsFolder = path.resolve(import.meta.dirname, "..", "migrations");
+    await migrate(db, { migrationsFolder });
+    logger.info({ context: "db" }, "Drizzle migrations applied successfully");
+  } catch (error) {
+    logger.error({ context: "db", err: error }, "Drizzle migration failed");
+    throw error;
+  }
+}
+
 export async function runStartupMaintenance(storage: IStorage): Promise<void> {
+  await ensurePgvectorExtension();
+  await runDrizzleMigrations();
   await ensureSchemaUpToDate();
   await cleanOrphanedData();
   try {
