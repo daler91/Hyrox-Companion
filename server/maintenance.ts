@@ -139,6 +139,7 @@ async function cleanOrphanedData() {
 async function runDrizzleMigrations() {
   try {
     const migrationsFolder = path.resolve(import.meta.dirname, "..", "migrations");
+    logger.info({ context: "db", migrationsFolder }, "Running Drizzle migrations...");
     await migrate(db, { migrationsFolder });
     logger.info({ context: "db" }, "Drizzle migrations applied successfully");
   } catch (error) {
@@ -148,6 +149,7 @@ async function runDrizzleMigrations() {
 }
 
 export async function runStartupMaintenance(storage: IStorage): Promise<void> {
+  logger.info({ context: "db" }, "Starting startup maintenance...");
   await ensurePgvectorExtension();
   await runDrizzleMigrations();
   await ensureSchemaUpToDate();
