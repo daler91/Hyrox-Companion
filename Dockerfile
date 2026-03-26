@@ -19,6 +19,7 @@ RUN pnpm install --frozen-lockfile
 COPY client/ ./client/
 COPY server/ ./server/
 COPY shared/ ./shared/
+COPY migrations/ ./migrations/
 COPY tsconfig.json vite.config.ts components.json tailwind.config.ts drizzle.config.ts ./
 
 # Accept build-time variables that Vite embeds into the client bundle
