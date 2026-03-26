@@ -7,4 +7,4 @@ nixPkgs = []
 cmds = []
 
 [start]
-cmd = "echo 'NIXPACKS_START: begin' && which node && node script/start.js"
+cmd = "node script/start.js"
