@@ -45,6 +45,7 @@ ENV PORT=5000
 # Copy dependency files and build outputs from the builder stage
 COPY --from=builder /app/package.json /app/pnpm-lock.yaml ./
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/migrations ./migrations
 COPY --from=builder /app/script ./script
 
 # Install only production dependencies
