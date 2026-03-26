@@ -58,5 +58,5 @@ USER 1000
 # Expose port 5000 as configured in the project
 EXPOSE 5000
 
-# Start the Node.js application directly
-CMD ["node", "dist/index.js"]
+# Start via wrapper that captures any startup crash
+CMD ["node", "script/start.js"]
