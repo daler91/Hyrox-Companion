@@ -148,8 +148,27 @@ async function runDrizzleMigrations() {
   }
 }
 
+async function testDatabaseConnection() {
+  logger.info({ context: "db" }, "Testing database connection...");
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error("Database connection timed out after 15s — check DATABASE_URL and network connectivity")), 15000),
+  );
+  let client;
+  try {
+    client = await Promise.race([pool.connect(), timeout]);
+    const result = await client.query("SELECT 1 as ok");
+    logger.info({ context: "db" }, "Database connection successful");
+  } catch (error) {
+    logger.fatal({ context: "db", err: error }, "Cannot connect to database — app cannot start");
+    throw error;
+  } finally {
+    if (client) client.release();
+  }
+}
+
 export async function runStartupMaintenance(storage: IStorage): Promise<void> {
   logger.info({ context: "db" }, "Starting startup maintenance...");
+  await testDatabaseConnection();
   await ensurePgvectorExtension();
   await runDrizzleMigrations();
   await ensureSchemaUpToDate();
