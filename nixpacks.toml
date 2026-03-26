@@ -5,3 +5,6 @@ nixPkgs = ["nodejs_20", "pnpm-9_x", "openssl"]
 [phases.caddy]
 nixPkgs = []
 cmds = []
+
+[start]
+cmd = "node script/start.js"
