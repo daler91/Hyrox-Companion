@@ -7,6 +7,7 @@ import {
   type InsertDocumentChunk,
 } from "@shared/schema";
 import { db, pool } from "../db";
+import { vectorPool } from "../vectorDb";
 import { eq, and } from "drizzle-orm";
 
 export class CoachingStorage {
@@ -55,31 +56,81 @@ export class CoachingStorage {
     return result.length > 0;
   }
 
-  // RAG chunk methods
+  // RAG chunk methods — all use vectorPool (Supabase when VECTOR_DATABASE_URL is set)
 
   async insertChunks(chunks: InsertDocumentChunk[]): Promise<DocumentChunk[]> {
     if (chunks.length === 0) return [];
-    return await db.insert(documentChunks).values(chunks).returning();
+    const BATCH_SIZE = 100;
+    const results: DocumentChunk[] = [];
+    for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+      const batch = chunks.slice(i, i + BATCH_SIZE);
+      const cols = '("id", "material_id", "user_id", "content", "chunk_index", "embedding")';
+      const placeholders = batch
+        .map((_, j) => {
+          const o = j * 6;
+          return `(gen_random_uuid(), $${o + 1}, $${o + 2}, $${o + 3}, $${o + 4}, $${o + 5}, $${o + 6})`;
+        })
+        .join(", ");
+      const values = batch.flatMap((c) => [
+        c.materialId,
+        c.userId,
+        c.content,
+        c.chunkIndex,
+        c.embedding ? `[${c.embedding.join(",")}]` : null,
+      ]);
+      const result = await vectorPool.query(
+        `INSERT INTO document_chunks ${cols} VALUES ${batch
+          .map((_, j) => {
+            const o = j * 5;
+            return `(gen_random_uuid(), $${o + 1}, $${o + 2}, $${o + 3}, $${o + 4}, $${o + 5})`;
+          })
+          .join(", ")} RETURNING id, material_id AS "materialId", user_id AS "userId", content, chunk_index AS "chunkIndex", created_at AS "createdAt"`,
+        values,
+      );
+      results.push(...result.rows);
+    }
+    return results;
   }
 
   async deleteChunksByMaterialId(materialId: string): Promise<void> {
-    await db.delete(documentChunks).where(eq(documentChunks.materialId, materialId));
+    await vectorPool.query(`DELETE FROM document_chunks WHERE material_id = $1`, [materialId]);
   }
 
   async replaceChunks(materialId: string, chunks: InsertDocumentChunk[]): Promise<DocumentChunk[]> {
-    return await db.transaction(async (tx) => {
-      await tx.delete(documentChunks).where(eq(documentChunks.materialId, materialId));
-      if (chunks.length === 0) return [];
-      // Batch inserts to avoid exceeding statement size limits for large documents
+    const client = await vectorPool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(`DELETE FROM document_chunks WHERE material_id = $1`, [materialId]);
+      if (chunks.length === 0) {
+        await client.query("COMMIT");
+        return [];
+      }
       const BATCH_SIZE = 100;
       const results: DocumentChunk[] = [];
       for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
         const batch = chunks.slice(i, i + BATCH_SIZE);
-        const inserted = await tx.insert(documentChunks).values(batch).returning();
-        results.push(...inserted);
+        const values: unknown[] = [];
+        const rows = batch.map((c, j) => {
+          const o = j * 5;
+          values.push(c.materialId, c.userId, c.content, c.chunkIndex, c.embedding ? `[${c.embedding.join(",")}]` : null);
+          return `(gen_random_uuid(), $${o + 1}, $${o + 2}, $${o + 3}, $${o + 4}, $${o + 5})`;
+        });
+        const result = await client.query(
+          `INSERT INTO document_chunks ("id", "material_id", "user_id", "content", "chunk_index", "embedding")
+           VALUES ${rows.join(", ")}
+           RETURNING id, material_id AS "materialId", user_id AS "userId", content, chunk_index AS "chunkIndex", created_at AS "createdAt"`,
+          values,
+        );
+        results.push(...result.rows);
       }
+      await client.query("COMMIT");
       return results;
-    });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async searchChunksByEmbedding(
@@ -87,11 +138,8 @@ export class CoachingStorage {
     queryEmbedding: number[],
     topK: number,
   ): Promise<DocumentChunk[]> {
-    // IMPORTANT: The `embedding` column is stored as `text` in production (Drizzle has no native vector type).
-    // Always cast to `::vector` before using pgvector operators like `<=>`.
-    // Similarly, avoid pgvector utility functions (e.g. `vector_dims()`) — use portable SQL instead.
     const embeddingStr = `[${queryEmbedding.join(",")}]`;
-    const result = await pool.query(
+    const result = await vectorPool.query(
       `SELECT id, material_id AS "materialId", user_id AS "userId", content, chunk_index AS "chunkIndex", created_at AS "createdAt"
        FROM document_chunks
        WHERE user_id = $1 AND embedding IS NOT NULL
@@ -103,7 +151,7 @@ export class CoachingStorage {
   }
 
   async getChunkCountsByMaterial(userId: string): Promise<{ materialId: string; chunkCount: number; hasEmbeddings: boolean }[]> {
-    const result = await pool.query(
+    const result = await vectorPool.query(
       `SELECT material_id AS "materialId",
               COUNT(*)::int AS "chunkCount",
               COUNT(embedding)::int AS "embeddedCount"
@@ -120,17 +168,16 @@ export class CoachingStorage {
   }
 
   async hasChunksForUser(userId: string): Promise<boolean> {
-    const result = await db
-      .select({ id: documentChunks.id })
-      .from(documentChunks)
-      .where(eq(documentChunks.userId, userId))
-      .limit(1);
-    return result.length > 0;
+    const result = await vectorPool.query(
+      `SELECT id FROM document_chunks WHERE user_id = $1 LIMIT 1`,
+      [userId],
+    );
+    return result.rows.length > 0;
   }
 
   /** Return the dimension of the first stored embedding for a user, or null if none. */
   async getStoredEmbeddingDimension(userId: string): Promise<number | null> {
-    const result = await pool.query(
+    const result = await vectorPool.query(
       `SELECT array_length(string_to_array(embedding::text, ','), 1) AS dims
        FROM document_chunks
        WHERE user_id = $1 AND embedding IS NOT NULL
