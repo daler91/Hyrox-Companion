@@ -79,7 +79,7 @@ CREATE TABLE "users" (
 	"weight_unit" varchar(255) DEFAULT 'kg',
 	"distance_unit" varchar(255) DEFAULT 'km',
 	"weekly_goal" integer DEFAULT 5,
-	"email_notifications" integer DEFAULT 1,
+	"email_notifications" boolean DEFAULT true,
 	"last_weekly_summary_at" timestamp,
 	"last_missed_reminder_at" timestamp,
 	"created_at" timestamp DEFAULT now(),
