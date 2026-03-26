@@ -3,6 +3,8 @@ builder = "nixpacks"
 buildCommand = "pnpm install --frozen-lockfile && pnpm run build"
 
 [deploy]
-startCommand = "echo 'BOOT: starting' && . /root/.profile && echo \"BOOT: PATH=$PATH\" && echo \"BOOT: node=$(which node 2>&1)\" && echo \"BOOT: PORT=$PORT\" && ls -la /app/dist/index.js && node --version && exec node script/start.js"
+startCommand = "node script/start.js"
+healthcheckPath = "/api/v1/health"
+healthcheckTimeout = 120
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
