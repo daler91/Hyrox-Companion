@@ -14,6 +14,7 @@ import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import { storage } from "./storage";
 import { pool } from "./db";
+import { vectorPool } from "./vectorDb";
 import { getAuth } from "@clerk/express";
 import { runStartupMaintenance } from "./maintenance";
 import { startQueue, queue } from "./queue";
@@ -221,12 +222,12 @@ const shutdown = () => {
       logger.error(err, "Error stopping queue");
     }
 
-    logger.info("Draining database pool...");
-    pool.end().then(() => {
-      logger.info("Database pool drained. Exiting process.");
+    logger.info("Draining database pools...");
+    Promise.all([pool.end(), vectorPool.end()]).then(() => {
+      logger.info("Database pools drained. Exiting process.");
       process.exit(0);
     }).catch((err) => {
-      logger.error(err, "Error draining database pool. Exiting process.");
+      logger.error(err, "Error draining database pools. Exiting process.");
       process.exit(1);
     });
   });

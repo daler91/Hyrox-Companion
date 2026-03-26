@@ -1,4 +1,5 @@
 import { db, pool } from "./db";
+import { vectorPool } from "./vectorDb";
 import { sql } from "drizzle-orm";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import path from "node:path";
@@ -8,11 +9,11 @@ import { logger } from "./logger";
 async function ensurePgvectorExtension() {
   let client;
   try {
-    client = await pool.connect();
+    client = await vectorPool.connect();
     await client.query("CREATE EXTENSION IF NOT EXISTS vector");
-    logger.info({ context: "db" }, "pgvector extension ensured");
+    logger.info({ context: "db" }, "pgvector extension ensured on vector DB");
   } catch (error) {
-    logger.warn({ context: "db", err: error }, "Could not enable pgvector extension (may already exist or lack permissions)");
+    logger.warn({ context: "db", err: error }, "Could not enable pgvector extension on vector DB (may already exist or lack permissions)");
   } finally {
     if (client) client.release();
   }
@@ -87,37 +88,7 @@ async function ensureSchemaUpToDate() {
       `);
       logger.info({ context: "db" }, "Created missing coaching_materials table");
     }
-    const chunksTable = await client.query(
-      `SELECT 1 FROM information_schema.tables WHERE table_name = 'document_chunks'`,
-    );
-    if (chunksTable.rowCount === 0) {
-      await client.query(`
-        CREATE TABLE "document_chunks" (
-          "id" varchar(255) PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-          "material_id" varchar(255) NOT NULL,
-          "user_id" varchar(255) NOT NULL,
-          "content" text NOT NULL,
-          "chunk_index" integer NOT NULL,
-          "embedding" text,
-          "created_at" timestamp DEFAULT now()
-        )
-      `);
-      await client.query(`
-        ALTER TABLE "document_chunks" ADD CONSTRAINT "document_chunks_material_id_coaching_materials_id_fk"
-          FOREIGN KEY ("material_id") REFERENCES "public"."coaching_materials"("id") ON DELETE cascade ON UPDATE no action
-      `);
-      await client.query(`
-        ALTER TABLE "document_chunks" ADD CONSTRAINT "document_chunks_user_id_users_id_fk"
-          FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action
-      `);
-      await client.query(`
-        CREATE INDEX "idx_document_chunks_material_id" ON "document_chunks" USING btree ("material_id")
-      `);
-      await client.query(`
-        CREATE INDEX "idx_document_chunks_user_id" ON "document_chunks" USING btree ("user_id")
-      `);
-      logger.info({ context: "db" }, "Created missing document_chunks table");
-    }
+    // document_chunks table is now on the vector DB — see ensureVectorSchema()
   } catch (error) {
     logger.error({ context: "db", err: error }, "Schema migration check failed");
   } finally {
@@ -148,11 +119,74 @@ async function runDrizzleMigrations() {
   }
 }
 
+async function ensureVectorSchema() {
+  let client;
+  try {
+    client = await vectorPool.connect();
+    const chunksTable = await client.query(
+      `SELECT 1 FROM information_schema.tables WHERE table_name = 'document_chunks'`,
+    );
+    if (chunksTable.rowCount === 0) {
+      await client.query(`
+        CREATE TABLE "document_chunks" (
+          "id" varchar(255) PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+          "material_id" varchar(255) NOT NULL,
+          "user_id" varchar(255) NOT NULL,
+          "content" text NOT NULL,
+          "chunk_index" integer NOT NULL,
+          "embedding" vector(3072),
+          "created_at" timestamp DEFAULT now()
+        )
+      `);
+      await client.query(`
+        CREATE INDEX "idx_document_chunks_material_id" ON "document_chunks" USING btree ("material_id")
+      `);
+      await client.query(`
+        CREATE INDEX "idx_document_chunks_user_id" ON "document_chunks" USING btree ("user_id")
+      `);
+      logger.info({ context: "db" }, "Created document_chunks table on vector DB");
+    }
+
+    // Ensure the embedding column uses native vector type (not text)
+    const embCol = await client.query(
+      `SELECT data_type FROM information_schema.columns WHERE table_name = 'document_chunks' AND column_name = 'embedding'`,
+    );
+    if (embCol.rows.length > 0 && embCol.rows[0].data_type === "text") {
+      await client.query(`ALTER TABLE document_chunks ALTER COLUMN embedding TYPE vector(3072) USING embedding::vector(3072)`);
+      logger.info({ context: "db" }, "Converted embedding column from text to vector(3072)");
+    }
+  } catch (error) {
+    logger.error({ context: "db", err: error }, "Vector schema setup failed");
+  } finally {
+    if (client) client.release();
+  }
+}
+
+async function testDatabaseConnection() {
+  logger.info({ context: "db" }, "Testing database connection...");
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error("Database connection timed out after 15s — check DATABASE_URL and network connectivity")), 15000),
+  );
+  let client;
+  try {
+    client = await Promise.race([pool.connect(), timeout]);
+    const result = await client.query("SELECT 1 as ok");
+    logger.info({ context: "db" }, "Database connection successful");
+  } catch (error) {
+    logger.fatal({ context: "db", err: error }, "Cannot connect to database — app cannot start");
+    throw error;
+  } finally {
+    if (client) client.release();
+  }
+}
+
 export async function runStartupMaintenance(storage: IStorage): Promise<void> {
   logger.info({ context: "db" }, "Starting startup maintenance...");
-  await ensurePgvectorExtension();
+  await testDatabaseConnection();
   await runDrizzleMigrations();
   await ensureSchemaUpToDate();
+  await ensurePgvectorExtension();
+  await ensureVectorSchema();
   await cleanOrphanedData();
   try {
     const marked = await storage.markMissedPlanDays();

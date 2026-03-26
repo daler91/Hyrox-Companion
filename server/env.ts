@@ -1,3 +1,6 @@
+// Earliest possible startup signal — emitted before any validation
+console.log(JSON.stringify({ level: "info", msg: "Process starting — validating environment...", context: "boot", pid: process.pid, timestamp: new Date().toISOString() }));
+
 import { z } from "zod";
 
 const envSchema = z.object({
@@ -16,6 +19,7 @@ const envSchema = z.object({
   STRAVA_CLIENT_SECRET: z.string().optional(),
   STRAVA_STATE_SECRET: z.string().optional(),
   APP_URL: z.string().url().optional(),
+  VECTOR_DATABASE_URL: z.string().url().optional(),
   ALLOW_DEV_AUTH_BYPASS: z.string().optional(),
   LOG_LEVEL: z.string().default("info"),
   RAG_CHUNK_SIZE: z.coerce.number().default(600),
@@ -28,7 +32,11 @@ const envSchema = z.object({
 const parsed = envSchema.safeParse(process.env);
 
 if (!parsed.success) {
-  throw new Error(`❌ Invalid environment variables: ${JSON.stringify(parsed.error.format(), null, 2)}`);
+  // Log to both stdout and stderr so Railway captures it regardless of log drain config
+  const msg = `❌ Invalid environment variables: ${JSON.stringify(parsed.error.format(), null, 2)}`;
+  console.error(msg);
+  console.log(JSON.stringify({ level: "fatal", msg, context: "env" }));
+  throw new Error(msg);
 }
 
 export const env = parsed.data;
