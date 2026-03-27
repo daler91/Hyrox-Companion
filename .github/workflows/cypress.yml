@@ -78,11 +78,7 @@ jobs:
           export ALLOW_DEV_AUTH_BYPASS="true"
           export NODE_ENV="test"
           export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/postgres"
-          npx drizzle-kit push
           pnpm exec vitest run --config vitest.integration.config.ts
-
-      - name: Push database schema
-        run: npx drizzle-kit push
 
       - name: Start server
         run: NODE_ENV=test node dist/index.js &
