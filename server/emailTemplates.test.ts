@@ -53,12 +53,12 @@ describe("email generation", () => {
       vi.unstubAllEnvs();
       // explicitly delete it just in case the real env has it
       delete process.env.APP_URL;
-      expect(getAppUrl()).toBe("https://hyrox-companion.com");
+      expect(getAppUrl()).toBe("https://fitai.coach");
     });
 
     it("returns default URL when process.env.APP_URL is an empty string", () => {
       vi.stubEnv("APP_URL", "");
-      expect(getAppUrl()).toBe("https://hyrox-companion.com");
+      expect(getAppUrl()).toBe("https://fitai.coach");
     });
   });
 

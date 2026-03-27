@@ -53,7 +53,7 @@ export function baseStyles(): string {
 }
 
 export function getAppUrl(): string {
-  return process.env.APP_URL || "https://hyrox-companion.com";
+  return process.env.APP_URL || "https://fitai.coach";
 }
 
 export function buildWeeklySummaryEmail(

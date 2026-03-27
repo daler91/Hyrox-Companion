@@ -58,7 +58,7 @@ app.use(compression());
 
 const isDev = env.NODE_ENV !== "production";
 const clerkDomains =
-  "https://*.clerk.accounts.dev https://*.hyroxcompanion.life https://clerk.hyroxcompanion.life";
+  "https://*.clerk.accounts.dev https://*.fitai.coach https://clerk.fitai.coach";
 const connectSrc = isDev
   ? [
       "'self'",
