@@ -78,7 +78,11 @@ jobs:
           export ALLOW_DEV_AUTH_BYPASS="true"
           export NODE_ENV="test"
           export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/postgres"
+          pnpm run db:migrate
           pnpm exec vitest run --config vitest.integration.config.ts
+
+      - name: Push database schema
+        run: pnpm run db:migrate
 
       - name: Start server
         run: NODE_ENV=test node dist/index.js &
