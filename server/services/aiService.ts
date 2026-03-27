@@ -374,11 +374,19 @@ function computeProgressionFlags(timeline: TimelineEntry[]): NonNullable<Trainin
     }
     if (history.length < 2) continue;
 
-    const weights = history.filter(h => h.maxWeight != null).map(h => h.maxWeight as number);
+    // ⚡ Bolt Performance Optimization:
+    // Combine sequential .filter() and .map() into a single O(N) traversal
+    // to prevent intermediate array allocations.
+    const weights: number[] = [];
+    const times: number[] = [];
+    for (const h of history) {
+      if (h.maxWeight != null) weights.push(h.maxWeight);
+      if (h.bestTime != null) times.push(h.bestTime);
+    }
+
     const weightFlag = analyzeWeightProgression(exercise, weights);
     if (weightFlag) { flags.push(weightFlag); continue; }
 
-    const times = history.filter(h => h.bestTime != null).map(h => h.bestTime as number);
     const timeFlag = analyzeTimeProgression(exercise, times);
     if (timeFlag) flags.push(timeFlag);
   }

@@ -183,7 +183,13 @@ export class PlanStorage {
         .set({ scheduledDate: caseSql as unknown as string })
         .where(inArray(planDays.id, updateIds));
 
-      const resetUpdateIds = dateUpdates.filter(u => u.resetStatus).map(u => u.id);
+      // ⚡ Bolt Performance Optimization:
+      // Combine filter and map into a single O(N) reduction to prevent intermediate array allocations.
+      const resetUpdateIds = dateUpdates.reduce<string[]>((acc, u) => {
+        if (u.resetStatus) acc.push(u.id);
+        return acc;
+      }, []);
+
       if (resetUpdateIds.length > 0) {
         await tx.update(planDays).set({ status: 'planned' }).where(inArray(planDays.id, resetUpdateIds));
       }
