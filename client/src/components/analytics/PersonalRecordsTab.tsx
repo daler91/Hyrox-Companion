@@ -78,7 +78,7 @@ export function PersonalRecordsTab({ dateParams }: PersonalRecordsTabProps) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Categories</SelectItem>
-                <SelectItem value="hyrox_station">Hyrox Station</SelectItem>
+                <SelectItem value="functional">Functional</SelectItem>
                 <SelectItem value="running">Running</SelectItem>
                 <SelectItem value="strength">Strength</SelectItem>
                 <SelectItem value="conditioning">Conditioning</SelectItem>

@@ -2,21 +2,21 @@ import { EXERCISE_DEFINITIONS, type ExerciseName, type ExerciseSet } from "@shar
 import { type StructuredExercise } from "@/components/ExerciseInput";
 
 export const categoryChipColors: Record<string, string> = {
-  hyrox_station: "bg-orange-500/10 text-orange-600 dark:text-orange-400",
+  functional: "bg-orange-500/10 text-orange-600 dark:text-orange-400",
   running: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
   strength: "bg-purple-500/10 text-purple-600 dark:text-purple-400",
   conditioning: "bg-red-500/10 text-red-600 dark:text-red-400",
 };
 
 export const categoryBorderColors: Record<string, string> = {
-  hyrox_station: "border-l-orange-500",
+  functional: "border-l-orange-500",
   running: "border-l-blue-500",
   strength: "border-l-purple-500",
   conditioning: "border-l-red-500",
 };
 
 export const categoryLabels: Record<string, string> = {
-  hyrox_station: "Hyrox Station",
+  functional: "Functional",
   running: "Running",
   strength: "Strength",
   conditioning: "Conditioning",

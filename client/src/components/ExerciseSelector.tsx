@@ -59,10 +59,10 @@ const exerciseIcons: Partial<Record<ExerciseName, typeof Wind>> = {
 
 const selectorCategoryLabels: Record<ExerciseCategory, string> = {
   ...categoryLabels,
-  hyrox_station: "Hyrox Stations",
+  functional: "Functional",
 } as Record<ExerciseCategory, string>;
 
-const categoryOrder: ExerciseCategory[] = ["hyrox_station", "running", "strength", "conditioning"];
+const categoryOrder: ExerciseCategory[] = ["functional", "running", "strength", "conditioning"];
 
 // ⚡ Bolt Performance Optimization:
 // Move static array allocation and filtering outside of the component.

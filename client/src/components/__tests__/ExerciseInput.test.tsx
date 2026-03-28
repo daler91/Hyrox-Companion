@@ -14,7 +14,7 @@ describe("ExerciseInput", () => {
 
   const baseExercise: StructuredExercise = {
     exerciseName: "wall_balls",
-    category: "hyrox_station",
+    category: "functional",
     sets: [
       { setNumber: 1, reps: 20, weight: 6, time: 60 },
     ],

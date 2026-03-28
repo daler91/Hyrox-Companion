@@ -24,9 +24,9 @@ export function PlanStep({ isPending, onUseSamplePlan, onImportPlan, onSkip }: R
             <Sparkles className="h-5 w-5" />
           )}
           <div className="text-left flex-1">
-            <div className="font-medium">Use 8-Week Hyrox Plan</div>
+            <div className="font-medium">Use 8-Week Fitness Plan</div>
             <div className="text-xs opacity-80 font-normal">
-              Recommended - structured program for all levels
+              Structured program with running, strength, and functional exercises
             </div>
           </div>
         </div>

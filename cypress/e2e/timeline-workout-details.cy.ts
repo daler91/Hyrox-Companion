@@ -43,7 +43,7 @@ describe("Timeline Workout Details Interactions", () => {
           planDayId: planDayId,
           weekNumber: 1,
           dayName: "Monday",
-          planName: "8 Week Hyrox Prep",
+          planName: "8 Week Fitness Plan",
           planId: "plan-1",
         },
       ],

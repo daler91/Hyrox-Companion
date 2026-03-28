@@ -7,7 +7,7 @@ describe('generateSummary', () => {
     const exercises: StructuredExercise[] = [
       {
         exerciseName: 'skierg',
-        category: 'hyrox_station',
+        category: 'functional',
         sets: []
       }
     ];
@@ -19,7 +19,7 @@ describe('generateSummary', () => {
     const exercises: StructuredExercise[] = [
       {
         exerciseName: 'wall_balls',
-        category: 'hyrox_station',
+        category: 'functional',
         sets: [
           { setNumber: 1, reps: 15 }
         ]
@@ -33,7 +33,7 @@ describe('generateSummary', () => {
     const exercises: StructuredExercise[] = [
       {
         exerciseName: 'sandbag_lunges',
-        category: 'hyrox_station',
+        category: 'functional',
         sets: [
           { setNumber: 1, reps: 10, weight: 20 },
           { setNumber: 2, reps: 10, weight: 20 },
@@ -49,7 +49,7 @@ describe('generateSummary', () => {
     const exercises: StructuredExercise[] = [
       {
         exerciseName: 'sandbag_lunges',
-        category: 'hyrox_station',
+        category: 'functional',
         sets: [
           { setNumber: 1, reps: 10, weight: 20 },
           { setNumber: 2, reps: 8, weight: 20 },
@@ -65,7 +65,7 @@ describe('generateSummary', () => {
     const exercises: StructuredExercise[] = [
       {
         exerciseName: 'rowing',
-        category: 'hyrox_station',
+        category: 'functional',
         sets: [
           { setNumber: 1, distance: 1000, time: 4.5 }
         ]
@@ -79,7 +79,7 @@ describe('generateSummary', () => {
     const exercises: StructuredExercise[] = [
       {
         exerciseName: 'sled_push',
-        category: 'hyrox_station',
+        category: 'functional',
         sets: [
           { setNumber: 1, distance: 50 }
         ]
@@ -93,7 +93,7 @@ describe('generateSummary', () => {
     const exercises: StructuredExercise[] = [
       {
         exerciseName: 'sled_push',
-        category: 'hyrox_station',
+        category: 'functional',
         sets: [
           { setNumber: 1, distance: 50 }
         ]
@@ -129,14 +129,14 @@ describe('generateSummary', () => {
     const exercises: StructuredExercise[] = [
       {
         exerciseName: 'skierg',
-        category: 'hyrox_station',
+        category: 'functional',
         sets: [
           { setNumber: 1, distance: 1000 }
         ]
       },
       {
         exerciseName: 'wall_balls',
-        category: 'hyrox_station',
+        category: 'functional',
         sets: [
           { setNumber: 1, reps: 20, weight: 14 }
         ]
@@ -150,7 +150,7 @@ describe('generateSummary', () => {
     const exercises: StructuredExercise[] = [
       {
         exerciseName: 'burpee_broad_jump',
-        category: 'hyrox_station',
+        category: 'functional',
         sets: [
           { setNumber: 1, reps: 20 },
           { setNumber: 2, reps: 20 }
@@ -304,7 +304,7 @@ describe('exerciseToPayload', () => {
     // but the function defensively handles it: `(ex.sets || []).map(...)`
     const exercise = {
       exerciseName: 'wall_balls',
-      category: 'hyrox_station',
+      category: 'functional',
       // sets is omitted
     } as unknown as StructuredExercise;
 
@@ -313,7 +313,7 @@ describe('exerciseToPayload', () => {
     expect(payload).toEqual({
       exerciseName: 'wall_balls',
       customLabel: undefined,
-      category: 'hyrox_station',
+      category: 'functional',
       confidence: undefined,
       sets: []
     });

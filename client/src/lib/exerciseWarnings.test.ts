@@ -56,10 +56,10 @@ describe("exerciseWarnings", () => {
       expect(warnings).toEqual([]);
     });
 
-    it("should warn about missing time for hyrox_station exercises", () => {
+    it("should warn about missing time for functional exercises", () => {
       const exercise: StructuredExercise = {
         exerciseName: "skierg",
-        category: "hyrox_station",
+        category: "functional",
         sets: [
           { setNumber: 1, distance: 1000, time: undefined },
         ],

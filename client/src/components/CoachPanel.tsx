@@ -12,13 +12,13 @@ import { CoachPanelStats } from "@/components/coach/CoachPanelStats";
 import { CoachPanelChatArea } from "@/components/coach/CoachPanelChatArea";
 import { CoachPanelFooter } from "@/components/coach/CoachPanelFooter";
 
-const WELCOME_TEXT = "Welcome to HyroxTracker! I'm your AI training coach, here to help you prepare for Hyrox.\n\nTo get started, you can:\n- **Use our 8-week training plan** - a structured program covering running, strength, and all Hyrox stations\n- **Import your own plan** - if you have a CSV training plan\n- **Log individual workouts** - track sessions as you complete them\n\nOnce you have some training data, I can analyze your progress, suggest improvements, and help with pacing strategies. What would you like to know about Hyrox training?";
+const WELCOME_TEXT = "Welcome to fitai.coach! I'm your AI training coach, here to help you reach your fitness goals.\n\nTo get started, you can:\n- **Use our 8-week fitness plan** - a structured program covering running, strength, and functional exercises\n- **Import your own plan** - if you have a CSV training plan\n- **Log individual workouts** - track sessions as you complete them\n\nOnce you have some training data, I can analyze your progress, suggest improvements, and help optimize your training. What are you working towards?";
 
 const QUICK_ACTIONS = [
   { id: "suggestions", label: "Get workout suggestions" },
   { id: "analyze", label: "Analyze my training" },
   { id: "pacing", label: "Pacing tips" },
-  { id: "sled", label: "Sled push help" },
+  { id: "form", label: "Exercise form tips" },
 ];
 
 interface CoachPanelProps {

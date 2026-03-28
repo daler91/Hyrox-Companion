@@ -37,7 +37,7 @@ exports[`email generation > buildMissedWorkoutEmail > generates HTML snapshot co
     </div>
   </div>
   <div class="footer">
-    <p>You're receiving this because you enabled email reminders in your HyroxTracker preferences.</p>
+    <p>You're receiving this because you enabled email reminders in your fitai.coach preferences.</p>
   </div>
 </body>
 </html>"
@@ -116,7 +116,7 @@ exports[`email generation > buildWeeklySummaryEmail > generates HTML snapshot co
     </div>
   </div>
   <div class="footer">
-    <p>HyroxTracker — Train Smarter for Hyrox</p>
+    <p>fitai.coach — Train Smarter with AI</p>
     <p><a href="https://fitai.coach/settings">Manage email preferences</a></p>
   </div>
 </div>

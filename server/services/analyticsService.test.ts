@@ -60,8 +60,8 @@ describe("calculatePersonalRecords", () => {
 
   it("tracks maxDistance PR", () => {
     const sets = [
-      makeSet({ exerciseName: "skierg", category: "hyrox_station", distance: 1000, workoutLogId: "w1" }),
-      makeSet({ exerciseName: "skierg", category: "hyrox_station", distance: 2000, workoutLogId: "w2" }),
+      makeSet({ exerciseName: "skierg", category: "functional", distance: 1000, workoutLogId: "w1" }),
+      makeSet({ exerciseName: "skierg", category: "functional", distance: 2000, workoutLogId: "w2" }),
     ];
     const prs = calculatePersonalRecords(sets);
     expect(prs["skierg"].maxDistance?.value).toBe(2000);
@@ -147,8 +147,8 @@ describe("calculateExerciseAnalytics", () => {
 
   it("accumulates distance", () => {
     const sets = [
-      makeSet({ exerciseName: "skierg", category: "hyrox_station", distance: 500, date: "2026-01-15" }),
-      makeSet({ exerciseName: "skierg", category: "hyrox_station", distance: 500, date: "2026-01-15" }),
+      makeSet({ exerciseName: "skierg", category: "functional", distance: 500, date: "2026-01-15" }),
+      makeSet({ exerciseName: "skierg", category: "functional", distance: 500, date: "2026-01-15" }),
     ];
     const analytics = calculateExerciseAnalytics(sets);
     expect(analytics["skierg"][0].totalDistance).toBe(1000);

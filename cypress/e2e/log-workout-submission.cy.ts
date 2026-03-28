@@ -19,7 +19,7 @@ describe("Log Workout Submission", () => {
     cy.getBySel("button-mode-freetext").click();
 
     // Fill out the basic details
-    cy.getBySel("input-workout-title").type("Morning Hyrox Run");
+    cy.getBySel("input-workout-title").type("Morning Training Run");
 
     // Fill the free text area
     cy.getBySel("input-freetext").type("5km tempo run\n4x10 pushups");
@@ -32,7 +32,7 @@ describe("Log Workout Submission", () => {
     // Wait for the save request to be made and check the payload
     cy.wait("@saveWorkout").then((interception) => {
       expect(interception.request.body).to.include({
-        title: "Morning Hyrox Run",
+        title: "Morning Training Run",
         mainWorkout: "5km tempo run\n4x10 pushups",
         notes: "Felt really good today!"
       });

@@ -11,7 +11,7 @@ const CRITICAL_FIELDS: Record<string, FieldRequirement[]> = {
     { field: "weight", label: "Weight" },
     { field: "reps", label: "Reps" },
   ],
-  hyrox_station: [
+  functional: [
     { field: "time", label: "Time" },
   ],
   running: [
