@@ -155,7 +155,7 @@ describe("buildTrainingContext", () => {
     });
   });
 
-  it("calculates exercise breakdown matching Hyrox exercises", async () => {
+  it("calculates exercise breakdown matching functional exercises", async () => {
     vi.mocked(storage.listTrainingPlans).mockResolvedValue([]);
     vi.mocked(storage.getExerciseSetsByWorkoutLogs).mockResolvedValue([]);
 
@@ -168,8 +168,8 @@ describe("buildTrainingContext", () => {
     const result = await buildTrainingContext("user-1");
 
     expect(result.exerciseBreakdown).toBeDefined();
-    expect(result.exerciseBreakdown["wall balls"]).toBe(1); // 'wall balls' is in HYROX_EXERCISES
-    expect(result.exerciseBreakdown["burpees"]).toBe(1); // 'burpees' is in HYROX_EXERCISES
+    expect(result.exerciseBreakdown["wall balls"]).toBe(1); // 'wall balls' is in FUNCTIONAL_EXERCISES
+    expect(result.exerciseBreakdown["burpees"]).toBe(1); // 'burpees' is in FUNCTIONAL_EXERCISES
     expect(result.exerciseBreakdown["custom movement"]).toBe(1);
   });
 });

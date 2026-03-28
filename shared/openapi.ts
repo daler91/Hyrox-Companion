@@ -307,7 +307,7 @@ export function generateOpenApiDocument() {
     openapi: "3.0.0",
     info: {
       version: "1.0.0",
-      title: "Hyrox-Companion Workout API",
+      title: "fitai.coach Workout API",
       description: `
 API for managing workouts, exercises, and training plans.
 

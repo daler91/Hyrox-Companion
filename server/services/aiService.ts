@@ -1,7 +1,7 @@
 import { storage } from "../storage";
 import type { TrainingContext } from "../gemini/index";
 import { calculateStreak } from "../routeUtils";
-import { HYROX_EXERCISES } from "../prompts";
+import { FUNCTIONAL_EXERCISES } from "../prompts";
 import { toDateStr } from "../types";
 
 import type { TimelineEntry as SharedTimelineEntry } from "@shared/schema";
@@ -38,7 +38,7 @@ function calculateTrainingStats(timeline: TimelineEntry[]) {
   return { completedWorkouts, plannedWorkouts, missedWorkouts, skippedWorkouts, totalWorkouts, completionRate, completedDates };
 }
 
-const hyroxRegex = new RegExp(HYROX_EXERCISES.join('|'), 'gi');
+const functionalRegex = new RegExp(FUNCTIONAL_EXERCISES.join('|'), 'gi');
 
 function getExerciseBreakdown(timeline: TimelineEntry[]): Record<string, number> {
   const breakdown: Record<string, number> = {};
@@ -46,13 +46,13 @@ function getExerciseBreakdown(timeline: TimelineEntry[]): Record<string, number>
     if (entry.status === "completed" && entry.focus) {
       let matched = false;
       let match;
-      hyroxRegex.lastIndex = 0;
+      functionalRegex.lastIndex = 0;
 
       // We only want to count each unique exercise ONCE per workout log entry
       // to match the previous string.includes() behavior.
       const seenInEntry = new Set<string>();
 
-      while ((match = hyroxRegex.exec(entry.focus)) !== null) {
+      while ((match = functionalRegex.exec(entry.focus)) !== null) {
         const exercise = match[0].toLowerCase();
         if (!seenInEntry.has(exercise)) {
           seenInEntry.add(exercise);
@@ -141,12 +141,12 @@ function getStructuredExerciseStats(timeline: TimelineEntry[]) {
 // Coaching Insights
 // ---------------------------------------------------------------------------
 
-const HYROX_STATION_NAMES = [
+const FUNCTIONAL_EXERCISE_NAMES = [
   "skierg", "sled_push", "sled_pull", "burpee_broad_jump",
   "rowing", "farmers_carry", "sandbag_lunges", "wall_balls",
 ];
 
-const STATION_FOCUS_MAP: Record<string, string> = {
+const EXERCISE_FOCUS_MAP: Record<string, string> = {
   "skierg": "skierg", "ski erg": "skierg", "ski-erg": "skierg",
   "sled push": "sled_push", "sled_push": "sled_push",
   "sled pull": "sled_pull", "sled_pull": "sled_pull",
@@ -206,7 +206,7 @@ function updateLastTrained(record: Record<string, string | null>, key: string, d
   }
 }
 
-function updateStationDatesFromSets(
+function updateExerciseDatesFromSets(
   record: Record<string, string | null>,
   exerciseSets: NonNullable<TimelineEntry["exerciseSets"]>,
   date: string,
@@ -219,23 +219,23 @@ function updateStationDatesFromSets(
   }
 }
 
-function updateStationDatesFromFocus(record: Record<string, string | null>, focus: string, date: string): void {
+function updateExerciseDatesFromFocus(record: Record<string, string | null>, focus: string, date: string): void {
   const focusLower = focus.toLowerCase();
-  for (const [keyword, station] of Object.entries(STATION_FOCUS_MAP)) {
+  for (const [keyword, station] of Object.entries(EXERCISE_FOCUS_MAP)) {
     if (focusLower.includes(keyword)) updateLastTrained(record, station, date);
   }
 }
 
-function computeStationGaps(timeline: TimelineEntry[]): NonNullable<TrainingContext["coachingInsights"]>["stationGaps"] {
+function computeExerciseGaps(timeline: TimelineEntry[]): NonNullable<TrainingContext["coachingInsights"]>["stationGaps"] {
   const today = toDateStr();
-  const allStations = [...HYROX_STATION_NAMES, "running"];
+  const allStations = [...FUNCTIONAL_EXERCISE_NAMES, "running"];
   const lastTrainedDate: Record<string, string | null> = {};
   for (const station of allStations) lastTrainedDate[station] = null;
 
   for (const entry of timeline) {
     if (entry.status !== "completed" || !entry.date) continue;
-    if (entry.exerciseSets) updateStationDatesFromSets(lastTrainedDate, entry.exerciseSets, entry.date, allStations);
-    if (entry.focus) updateStationDatesFromFocus(lastTrainedDate, entry.focus, entry.date);
+    if (entry.exerciseSets) updateExerciseDatesFromSets(lastTrainedDate, entry.exerciseSets, entry.date, allStations);
+    if (entry.focus) updateExerciseDatesFromFocus(lastTrainedDate, entry.focus, entry.date);
   }
 
   return allStations.map(station => {
@@ -427,7 +427,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
   }
 
   const rpeTrend = computeRpeTrend(recentWorkouts);
-  const stationGaps = computeStationGaps(timeline);
+  const stationGaps = computeExerciseGaps(timeline);
   const weeklyGoal = user?.weeklyGoal ?? 0;
   const planPhase = activePlan
     ? computePlanPhase(activePlan.totalWeeks, activePlan.currentWeek ?? 1)

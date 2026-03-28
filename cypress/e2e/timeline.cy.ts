@@ -51,7 +51,7 @@ describe("Timeline Page", () => {
             planDayId: "pd-1",
             weekNumber: 1,
             dayName: "Monday",
-            planName: "8 Week Hyrox Prep",
+            planName: "8 Week Fitness Plan",
             planId: "plan-1",
           },
           {
@@ -69,7 +69,7 @@ describe("Timeline Page", () => {
           },
         ],
         plans: [
-          { id: "plan-1", name: "8 Week Hyrox Prep", userId: "test-user-123" },
+          { id: "plan-1", name: "8 Week Fitness Plan", userId: "test-user-123" },
         ],
       });
     });

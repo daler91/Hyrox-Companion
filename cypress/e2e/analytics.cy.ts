@@ -36,7 +36,7 @@ describe("Analytics Page", () => {
           },
           ski_erg: {
             customLabel: null,
-            category: "hyrox_station",
+            category: "functional",
             bestTime: { value: 180, date: "2024-01-01", workoutLogId: "2" },
             maxDistance: { value: 1000, date: "2024-01-01", workoutLogId: "2" },
           },

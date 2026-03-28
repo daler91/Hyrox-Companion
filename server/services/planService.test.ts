@@ -68,13 +68,13 @@ describe("planService", () => {
     it("should create a sample plan and its days correctly", async () => {
       const userId = "test-user-id";
       const mockPlanId = "mock-plan-id";
-      const mockFullPlan = { id: mockPlanId, name: "8-Week Hyrox Training Plan", userId, days: [] };
+      const mockFullPlan = { id: mockPlanId, name: "8-Week Functional Fitness Plan", userId, days: [] };
 
       // Mock the storage functions
       vi.mocked(storage.createTrainingPlan).mockResolvedValue({
         id: mockPlanId,
         userId,
-        name: "8-Week Hyrox Training Plan",
+        name: "8-Week Functional Fitness Plan",
         sourceFileName: null,
         totalWeeks: 8,
         createdAt: new Date(),
@@ -90,7 +90,7 @@ describe("planService", () => {
       expect(storage.createTrainingPlan).toHaveBeenCalledTimes(1);
       expect(storage.createTrainingPlan).toHaveBeenCalledWith({
         userId,
-        name: "8-Week Hyrox Training Plan",
+        name: "8-Week Functional Fitness Plan",
         sourceFileName: null,
         totalWeeks: 8,
       });

@@ -138,12 +138,12 @@ function formatStationGaps(stationGaps: NonNullable<TrainingContext["coachingIns
   for (const g of highGaps) gapParts.push(formatStationGapEntry(g, "high"));
 
   if (okCount > 0 && gapParts.length > 0) {
-    gapParts.push(`${okCount} stations OK (<10 days)`);
+    gapParts.push(`${okCount} exercises OK (<10 days)`);
   } else if (gapParts.length === 0) {
-    gapParts.push(`All stations trained within 10 days — good coverage.`);
+    gapParts.push(`All exercises trained within 10 days — good coverage.`);
   }
 
-  return `STATION GAPS: ${gapParts.join(", ")}`;
+  return `EXERCISE GAPS: ${gapParts.join(", ")}`;
 }
 
 function formatCoachingAnalysis(insights: NonNullable<TrainingContext["coachingInsights"]>, planGoal?: string): string {

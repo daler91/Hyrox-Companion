@@ -22,7 +22,7 @@ interface OnboardingWizardProps {
 type Step = "welcome" | "units" | "goal" | "plan" | "schedule";
 
 const TITLES: Record<Step, string> = {
-  welcome: "Welcome to HyroxTracker",
+  welcome: "Welcome to fitai.coach",
   units: "Set Your Preferences",
   goal: "What's Your Goal?",
   plan: "Choose Your Path",

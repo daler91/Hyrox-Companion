@@ -121,7 +121,7 @@ export async function importPlanFromCSV(
 export async function createSamplePlan(userId: string): Promise<TrainingPlanWithDays> {
   const plan = await storage.createTrainingPlan({
     userId,
-    name: "8-Week Hyrox Training Plan",
+    name: "8-Week Functional Fitness Plan",
     sourceFileName: null,
     totalWeeks: 8,
   });

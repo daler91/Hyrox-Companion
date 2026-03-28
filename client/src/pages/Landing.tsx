@@ -85,10 +85,10 @@ function TimelineMockup() {
             <div className="absolute inset-0 bg-gradient-to-r from-primary/5 to-transparent animate-pulse" />
             <div className="relative flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-primary animate-pulse" />
-              <span className="text-sm font-medium">Hyrox Simulation</span>
+              <span className="text-sm font-medium">Circuit Simulation</span>
               <Badge className="text-[10px] px-1.5 py-0 bg-primary/20 text-primary border-0 ml-auto">AI Modified</Badge>
             </div>
-            <p className="relative text-xs text-muted-foreground pl-6">8x1km run + all stations (AI adjusted based on your progress)</p>
+            <p className="relative text-xs text-muted-foreground pl-6">Full circuit workout (AI adjusted based on your progress)</p>
           </div>
 
           <div className="rounded-lg border border-border/40 p-3">
@@ -104,27 +104,24 @@ function TimelineMockup() {
   );
 }
 
-function StationGrid() {
-  const stations = [
-    { name: "SkiErg", icon: Activity },
-    { name: "Sled Push", icon: Dumbbell },
-    { name: "Sled Pull", icon: Dumbbell },
-    { name: "Burpees", icon: Zap },
-    { name: "Rowing", icon: Activity },
-    { name: "Farmers Carry", icon: Dumbbell },
-    { name: "Lunges", icon: Target },
-    { name: "Wall Balls", icon: Target },
+function CategoryGrid() {
+  const categories = [
+    { name: "Functional", icon: Zap, examples: "SkiErg, Sled Push, Rowing, Wall Balls" },
+    { name: "Running", icon: Activity, examples: "Easy runs, Tempo, Intervals, Long runs" },
+    { name: "Strength", icon: Dumbbell, examples: "Squats, Deadlifts, Bench, Pull-ups" },
+    { name: "Conditioning", icon: Target, examples: "Burpees, Box Jumps, KB Swings" },
   ];
 
   return (
-    <div className="grid grid-cols-4 gap-3 max-w-lg mx-auto">
-      {stations.map((station) => (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-2xl mx-auto">
+      {categories.map((cat) => (
         <div
-          key={station.name}
-          className="flex flex-col items-center gap-1.5 p-3 rounded-lg border border-border/50 bg-card/50 hover:bg-primary/5 hover:border-primary/30 transition-colors"
+          key={cat.name}
+          className="flex flex-col items-center gap-2 p-4 rounded-lg border border-border/50 bg-card/50 hover:bg-primary/5 hover:border-primary/30 transition-colors"
         >
-          <station.icon className="h-5 w-5 text-primary" />
-          <span className="text-[11px] font-medium text-center leading-tight">{station.name}</span>
+          <cat.icon className="h-6 w-6 text-primary" />
+          <span className="text-sm font-semibold">{cat.name}</span>
+          <span className="text-[10px] text-muted-foreground text-center leading-tight">{cat.examples}</span>
         </div>
       ))}
     </div>
@@ -163,9 +160,9 @@ export default function Landing() {
         <div className="container mx-auto px-4 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-sm">H</span>
+              <span className="text-primary-foreground font-bold text-sm">F</span>
             </div>
-            <span className="font-bold text-lg">HyroxTracker</span>
+            <span className="font-bold text-lg">fitai.coach</span>
           </div>
           <div className="flex items-center gap-3">
             <a href="#features" className="text-sm text-muted-foreground hover:text-foreground transition-colors hidden sm:block">Features</a>
@@ -191,9 +188,9 @@ export default function Landing() {
                   </Badge>
                 </div>
                 <h1 className="fade-up text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-5 leading-[1.1]">
-                  Your Hyrox
+                  Your AI
                   <br />
-                  <span className="text-primary">Training Partner</span>
+                  <span className="text-primary">Fitness Coach</span>
                 </h1>
                 <p className="fade-up text-lg md:text-xl text-muted-foreground mb-8 max-w-lg mx-auto lg:mx-0">
                   Plan, track, and analyze every session. Our AI coach watches your progress and automatically adapts your upcoming workouts.
@@ -224,7 +221,7 @@ export default function Landing() {
             <div className="flex flex-wrap items-center justify-center gap-x-10 gap-y-4 text-muted-foreground">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4 text-success" />
-                <span className="text-sm font-medium">All 8 Hyrox Stations</span>
+                <span className="text-sm font-medium">40+ Exercises</span>
               </div>
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4 text-success" />
@@ -246,10 +243,10 @@ export default function Landing() {
           <div className="container mx-auto px-4">
             <div className="text-center mb-14">
               <h2 className="fade-up text-3xl md:text-4xl font-bold mb-4">
-                Everything You Need for Race Day
+                Everything You Need to Train Smarter
               </h2>
               <p className="fade-up text-lg text-muted-foreground max-w-2xl mx-auto">
-                From structured training plans to real-time AI coaching, every tool is designed specifically for Hyrox athletes.
+                From structured training plans to real-time AI coaching, every tool adapts to your fitness goals.
               </p>
             </div>
             <div className="grid md:grid-cols-2 gap-6 max-w-5xl mx-auto">
@@ -354,7 +351,7 @@ export default function Landing() {
                 </div>
                 <h3 className="font-semibold text-lg mb-2">Import Your Plan</h3>
                 <p className="text-muted-foreground text-sm leading-relaxed">
-                  Upload a CSV training plan or use our built-in 8-week Hyrox template. Set a start date and your timeline is ready.
+                  Upload a CSV training plan or use our built-in fitness templates. Set a start date and your timeline is ready.
                 </p>
               </div>
 
@@ -376,7 +373,7 @@ export default function Landing() {
                 </div>
                 <h3 className="font-semibold text-lg mb-2">AI Adapts</h3>
                 <p className="text-muted-foreground text-sm leading-relaxed">
-                  Your AI coach analyzes your data, identifies weak spots, and automatically modifies upcoming workouts to optimize your prep.
+                  Your AI coach analyzes your data, identifies weak spots, and automatically modifies upcoming workouts to keep you progressing.
                 </p>
               </div>
             </div>
@@ -397,14 +394,14 @@ export default function Landing() {
           <div className="container mx-auto px-4">
             <div className="text-center mb-14">
               <h2 className="fade-up text-3xl md:text-4xl font-bold mb-4">
-                Built for All 8 Stations
+                Built for Every Training Style
               </h2>
               <p className="fade-up text-lg text-muted-foreground max-w-2xl mx-auto">
-                Track every Hyrox discipline with station-specific exercises, times, and personal records.
+                Track every exercise across functional, running, strength, and conditioning — with times and personal records.
               </p>
             </div>
             <div className="fade-up">
-              <StationGrid />
+              <CategoryGrid />
             </div>
             <div className="mt-12 grid md:grid-cols-2 gap-8 max-w-3xl mx-auto">
               <div className="fade-up flex gap-4">
@@ -414,7 +411,7 @@ export default function Landing() {
                 <div>
                   <h3 className="font-semibold mb-1">Gap Analysis</h3>
                   <p className="text-muted-foreground text-sm">
-                    Your AI coach identifies which stations you're neglecting and adjusts your plan to address weaknesses.
+                    Your AI coach identifies which exercises you're neglecting and adjusts your plan to address weaknesses.
                   </p>
                 </div>
               </div>
@@ -425,7 +422,7 @@ export default function Landing() {
                 <div>
                   <h3 className="font-semibold mb-1">Pacing Strategy</h3>
                   <p className="text-muted-foreground text-sm">
-                    Get race-day pacing advice based on your training data and target finish time.
+                    Get pacing advice based on your training data and performance goals.
                   </p>
                 </div>
               </div>
@@ -447,7 +444,7 @@ export default function Landing() {
                 <div>
                   <h3 className="font-semibold mb-1">Chat with Your Coach</h3>
                   <p className="text-muted-foreground text-sm">
-                    Ask questions about your training, get exercise tips, or discuss race strategy with an AI that knows your data.
+                    Ask questions about your training, get exercise tips, or discuss strategy with an AI that knows your data.
                   </p>
                 </div>
               </div>
@@ -463,7 +460,7 @@ export default function Landing() {
                 Ready to Train Smarter?
               </h2>
               <p className="fade-up text-lg text-muted-foreground mb-8">
-                Join athletes who are using AI-powered coaching to prepare for their next Hyrox race. Free to get started.
+                Join athletes using AI-powered coaching to reach their fitness goals. Free to get started.
               </p>
               <div className="fade-up">
                 <SignInButton mode="modal">
@@ -483,12 +480,12 @@ export default function Landing() {
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <div className="w-6 h-6 rounded bg-primary flex items-center justify-center">
-                <span className="text-primary-foreground font-bold text-xs">H</span>
+                <span className="text-primary-foreground font-bold text-xs">F</span>
               </div>
-              <span className="font-semibold text-sm">HyroxTracker</span>
+              <span className="font-semibold text-sm">fitai.coach</span>
             </div>
             <p className="text-sm text-muted-foreground">
-              Train for Hyrox with confidence
+              Train smarter with AI
             </p>
           </div>
         </div>

@@ -33,7 +33,7 @@ export const samplePlanDays = [
 
   { week: 5, day: "Monday", focus: "Speed Work", main: "8x200m sprints with 90s rest", accessory: "Core: 4x(30s hollow hold, 20 mountain climbers)", notes: null },
   { week: 5, day: "Tuesday", focus: "Heavy Strength", main: "5x3 deadlifts, 4x5 weighted lunges, 4x8 hip thrusts", accessory: "3x12 leg press", notes: null },
-  { week: 5, day: "Wednesday", focus: "Hyrox Simulation", main: "4 rounds: 1km run, 500m ski, 500m row", accessory: null, notes: "Race pace practice" },
+  { week: 5, day: "Wednesday", focus: "Circuit Simulation", main: "4 rounds: 1km run, 500m ski, 500m row", accessory: null, notes: "Race pace practice" },
   { week: 5, day: "Thursday", focus: "Active Recovery", main: "45min yoga", accessory: null, notes: null },
   { week: 5, day: "Friday", focus: "Wall Balls + Carry", main: "100 wall balls, 400m farmers carry, 100 wall balls", accessory: null, notes: "Break as needed" },
   { week: 5, day: "Saturday", focus: "Long Run", main: "14km at marathon pace", accessory: null, notes: null },
@@ -41,7 +41,7 @@ export const samplePlanDays = [
 
   { week: 6, day: "Monday", focus: "Interval Run", main: "5x800m at 5K pace with 400m jog recovery", accessory: "Core circuit", notes: null },
   { week: 6, day: "Tuesday", focus: "Full Body", main: "5x5 power cleans, 4x8 push press, 4x10 pull-ups", accessory: "3x15 dips", notes: null },
-  { week: 6, day: "Wednesday", focus: "Mini Hyrox", main: "8 rounds: 1km run + 1 station (rotate through all 8)", accessory: null, notes: "Full race simulation" },
+  { week: 6, day: "Wednesday", focus: "Full Circuit", main: "8 rounds: 1km run + 1 station (rotate through all 8)", accessory: null, notes: "Full circuit simulation" },
   { week: 6, day: "Thursday", focus: "Active Recovery", main: "30min easy swim", accessory: "Foam rolling", notes: null },
   { week: 6, day: "Friday", focus: "Sled + Burpees", main: "5x(100m sled push, 100m sled pull, 20 burpees)", accessory: null, notes: null },
   { week: 6, day: "Saturday", focus: "Race Pace Run", main: "10km at target race pace", accessory: null, notes: null },
@@ -60,6 +60,6 @@ export const samplePlanDays = [
   { week: 8, day: "Wednesday", focus: "Activation", main: "2km jog, 10 burpees, 250m row, 250m ski", accessory: null, notes: "Keep it light" },
   { week: 8, day: "Thursday", focus: "Rest", main: "Complete rest, hydrate well", accessory: null, notes: "Pre-race prep" },
   { week: 8, day: "Friday", focus: "Rest", main: "Complete rest, carb loading", accessory: null, notes: null },
-  { week: 8, day: "Saturday", focus: "RACE DAY", main: "HYROX RACE - Give it everything!", accessory: null, notes: "Trust your training!" },
+  { week: 8, day: "Saturday", focus: "RACE DAY", main: "RACE DAY - Give it everything!", accessory: null, notes: "Trust your training!" },
   { week: 8, day: "Sunday", focus: "Recovery", main: "Light walk, celebrate!", accessory: null, notes: "Well done!" },
 ];

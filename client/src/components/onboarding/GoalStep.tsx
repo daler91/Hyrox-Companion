@@ -1,12 +1,13 @@
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Target, Clock, Trophy, Dumbbell, Check } from "lucide-react";
+import { Target, Dumbbell, Check, Activity, Zap, TrendingDown } from "lucide-react";
 
 const goals = [
-  { id: "first", label: "Complete my first Hyrox", icon: Target, description: "New to Hyrox and building foundation" },
-  { id: "improve", label: "Improve my finish time", icon: Clock, description: "Already competed, want to get faster" },
-  { id: "podium", label: "Aim for the podium", icon: Trophy, description: "Competitive athlete targeting top placement" },
-  { id: "fitness", label: "General fitness", icon: Dumbbell, description: "Using Hyrox training for overall health" },
+  { id: "strength", label: "Build strength", icon: Dumbbell, description: "Get stronger with progressive resistance training" },
+  { id: "endurance", label: "Improve endurance", icon: Activity, description: "Train for races or improve cardio fitness" },
+  { id: "functional", label: "Functional fitness", icon: Zap, description: "Hyrox, CrossFit, or general functional training" },
+  { id: "weight_loss", label: "Lose weight", icon: TrendingDown, description: "Combine training with body composition goals" },
+  { id: "fitness", label: "General fitness", icon: Target, description: "Overall health and well-being" },
 ];
 
 interface GoalStepProps {

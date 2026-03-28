@@ -53,12 +53,12 @@ function WelcomeEmptyState({
 
       <div>
         <h2 className="text-2xl font-bold mb-2">
-          Welcome to HyroxTracker
+          Welcome to fitai.coach
         </h2>
         <p className="text-muted-foreground max-w-md mx-auto">
-          Your personal training companion for Hyrox preparation.
-          Track workouts, follow structured plans, and get AI-powered
-          coaching.
+          Your AI-powered fitness coaching companion.
+          Track workouts, follow structured plans, and get personalized
+          coaching for any goal.
         </p>
       </div>
 
@@ -74,7 +74,7 @@ function WelcomeEmptyState({
           ) : (
             <Sparkles className="h-4 w-4 mr-2" />
           )}
-          Use 8-Week Hyrox Plan
+          Use 8-Week Fitness Plan
         </Button>
         <div>
           <Label
@@ -122,7 +122,7 @@ function WelcomeEmptyState({
       </div>
 
       <p className="text-xs text-muted-foreground pt-2">
-        New to Hyrox? Ask our AI Coach for training recommendations.
+        Not sure where to start? Ask our AI Coach for training recommendations.
       </p>
     </div>
   );

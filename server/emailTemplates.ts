@@ -141,7 +141,7 @@ ${data.currentStreak > 0 ? `
     </div>
   </div>
   <div class="footer">
-    <p>HyroxTracker — Train Smarter for Hyrox</p>
+    <p>fitai.coach — Train Smarter with AI</p>
     <p><a href="${getAppUrl()}/settings">Manage email preferences</a></p>
   </div>
 </div>
@@ -206,7 +206,7 @@ ${workoutItems}
     </div>
   </div>
   <div class="footer">
-    <p>You're receiving this because you enabled email reminders in your HyroxTracker preferences.</p>
+    <p>You're receiving this because you enabled email reminders in your fitai.coach preferences.</p>
   </div>
 </body>
 </html>`;
