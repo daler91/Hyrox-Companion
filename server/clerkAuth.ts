@@ -64,6 +64,8 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
       }
       return next();
     }
+    // Log auth failure details for debugging
+    logger.warn({ path: req.path, authObj: auth ? { userId: auth.userId, sessionId: auth.sessionId } : null }, "Clerk auth failed — no userId");
   }
 
   if (isDevBypassEnabled() && req.headers["x-test-no-bypass"] !== "true") {
