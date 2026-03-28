@@ -65,7 +65,14 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
       return next();
     }
     // Log auth failure details for debugging
-    logger.warn({ path: req.path, authObj: auth ? { userId: auth.userId, sessionId: auth.sessionId } : null }, "Clerk auth failed — no userId");
+    logger.warn({
+      path: req.path,
+      authUserId: auth?.userId ?? null,
+      authSessionId: auth?.sessionId ?? null,
+      hasCookie: !!(req.headers.cookie),
+      cookieKeys: req.headers.cookie ? req.headers.cookie.split(';').map(c => c.trim().split('=')[0]) : [],
+      authHeader: !!req.headers.authorization,
+    }, "Clerk auth failed — no userId");
   }
 
   if (isDevBypassEnabled() && req.headers["x-test-no-bypass"] !== "true") {
