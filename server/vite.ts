@@ -6,6 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { nanoid } from "nanoid";
 import rateLimit from "express-rate-limit";
+import { RATE_LIMIT_WINDOW_15M_MS } from "./constants";
 
 const viteLogger = createLogger();
 
@@ -34,7 +35,7 @@ export async function setupVite(server: Server, app: Express) {
 
 
   const viteFallbackLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
+    windowMs: RATE_LIMIT_WINDOW_15M_MS,
     max: 100,
   });
 

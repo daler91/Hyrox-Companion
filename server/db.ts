@@ -2,6 +2,7 @@ import { env } from "./env";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import * as schema from "@shared/schema";
+import { DB_CONNECTION_TIMEOUT_MS, DB_IDLE_TIMEOUT_MS, DB_STATEMENT_TIMEOUT_MS } from "./constants";
 
 const { Pool } = pg;
 
@@ -14,8 +15,8 @@ if (!env.DATABASE_URL) {
 export const pool = new Pool({
   connectionString: env.DATABASE_URL,
   max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000,
-  statement_timeout: 30000,
+  idleTimeoutMillis: DB_IDLE_TIMEOUT_MS,
+  connectionTimeoutMillis: DB_CONNECTION_TIMEOUT_MS,
+  statement_timeout: DB_STATEMENT_TIMEOUT_MS,
 });
 export const db = drizzle(pool, { schema });

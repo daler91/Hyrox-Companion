@@ -27,7 +27,7 @@ describe("isAuthenticated middleware", () => {
   let next: NextFunction;
 
   beforeEach(() => {
-    req = {} as Request;
+    req = { headers: {}, path: "/test" } as Request;
     res = { status: vi.fn().mockReturnThis(), json: vi.fn() } as unknown as Response;
     next = vi.fn() as unknown as NextFunction;
     vi.clearAllMocks();

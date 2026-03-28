@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { useUser, useAuth as useClerkAuth } from "@clerk/clerk-react";
+import { useUser, useAuth as useClerkAuth } from "@clerk/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { User } from "@shared/schema";
 import { QUERY_KEYS } from "@/lib/api";

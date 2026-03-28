@@ -66,14 +66,14 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     }
     // Log auth failure details for debugging
     const cookieKeys = req.headers.cookie ? req.headers.cookie.split(';').map(c => c.trim().split('=')[0]) : [];
-    console.log("CLERK_DEBUG: auth failed", JSON.stringify({
+    logger.debug({
       path: req.path,
       userId: auth?.userId ?? null,
       sessionId: auth?.sessionId ?? null,
       hasCookie: !!req.headers.cookie,
       cookieKeys,
       hasAuthHeader: !!req.headers.authorization,
-    }));
+    }, "Clerk auth failed");
   }
 
   if (isDevBypassEnabled() && req.headers["x-test-no-bypass"] !== "true") {

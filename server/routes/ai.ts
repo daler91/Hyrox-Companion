@@ -97,7 +97,7 @@ async function prepareChatContext(req: ExpressRequest): Promise<{ success: false
   const userId = getUserId(req);
   const [trainingContext, coachingContext] = await Promise.all([
     buildTrainingContext(userId),
-    getCoachingContext(userId, message, (req as any).log || logger),
+    getCoachingContext(userId, message, req.log || logger),
   ]);
 
   if (!trainingContext) {
@@ -150,7 +150,7 @@ router.post("/api/v1/chat/stream", isAuthenticated, rateLimiter("chat", 10), val
       res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
       res.end();
     } catch (streamError) {
-      const log = (req as any).log || logger;
+      const log = req.log || logger;
       log.error({ err: streamError }, "Stream error:");
       res.write(`data: ${JSON.stringify({ error: "Stream error" })}\n\n`);
       res.end();
@@ -214,7 +214,7 @@ router.post("/api/v1/timeline/ai-suggestions", isAuthenticated, rateLimiter("sug
 
     const [trainingContext, coachingContext] = await Promise.all([
       buildTrainingContext(userId),
-      getCoachingContext(userId, suggestionQuery, (req as any).log || logger),
+      getCoachingContext(userId, suggestionQuery, req.log || logger),
     ]);
 
     // Build coaching materials string for suggestions prompt
