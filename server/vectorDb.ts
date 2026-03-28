@@ -1,6 +1,7 @@
 import { env } from "./env";
 import pg from "pg";
 import { logger } from "./logger";
+import { VECTOR_DB_CONNECTION_TIMEOUT_MS, DB_IDLE_TIMEOUT_MS, DB_STATEMENT_TIMEOUT_MS } from "./constants";
 
 const { Pool } = pg;
 
@@ -14,9 +15,9 @@ const vectorUrl = env.VECTOR_DATABASE_URL || env.DATABASE_URL;
 export const vectorPool = new Pool({
   connectionString: vectorUrl,
   max: 5,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000,
-  statement_timeout: 30000,
+  idleTimeoutMillis: DB_IDLE_TIMEOUT_MS,
+  connectionTimeoutMillis: VECTOR_DB_CONNECTION_TIMEOUT_MS,
+  statement_timeout: DB_STATEMENT_TIMEOUT_MS,
 });
 
 export const isVectorDbSeparate = Boolean(env.VECTOR_DATABASE_URL);

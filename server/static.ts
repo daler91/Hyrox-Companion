@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { fileURLToPath } from "node:url";
 import rateLimit from "express-rate-limit";
+import { RATE_LIMIT_WINDOW_15M_MS } from "./constants";
 
 const currentFilename = fileURLToPath(import.meta.url);
 const currentDirname = path.dirname(currentFilename);
@@ -27,7 +28,7 @@ export function serveStatic(app: Express) {
   app.use(express.static(distPath, { maxAge: 0, index: false }));
 
   const fallbackLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
+    windowMs: RATE_LIMIT_WINDOW_15M_MS,
     max: 100,
   });
 

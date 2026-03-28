@@ -8,6 +8,7 @@ import { type DistanceUnit } from "@shared/unitConversion";
 import { mapStravaActivityToWorkout, type StravaActivity } from "./services/stravaMapper";
 import { getUserId } from "./types";
 import rateLimit from "express-rate-limit";
+import { RATE_LIMIT_WINDOW_15M_MS, STRAVA_STATE_MAX_AGE_MS } from "./constants";
 
 const STRAVA_CLIENT_ID = env.STRAVA_CLIENT_ID;
 const STRAVA_CLIENT_SECRET = env.STRAVA_CLIENT_SECRET;
@@ -18,11 +19,11 @@ const STRAVA_REDIRECT_URI = env.APP_URL
 const STATE_SECRET = env.STRAVA_STATE_SECRET || crypto.randomBytes(32).toString("hex");
 
 const stravaAuthLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
+  windowMs: RATE_LIMIT_WINDOW_15M_MS,
   max: 20,
   message: "Too many requests from this IP, please try again after 15 minutes",
 });
-const STATE_MAX_AGE_MS = 10 * 60 * 1000;
+const STATE_MAX_AGE_MS = STRAVA_STATE_MAX_AGE_MS;
 
 
 export function createSignedState(userId: string): string {

@@ -6,6 +6,7 @@ import { updatePlanDaySchema, importPlanRequestSchema, schedulePlanRequestSchema
 import { getUserId } from "../types";
 import { importPlanFromCSV, createSamplePlan, updatePlanDayWithCleanup, updatePlanDayStatus } from "../services/planService";
 import { rateLimiter, asyncHandler, validateBody } from "../routeUtils";
+import { logger } from "../logger";
 
 const router = Router();
 
@@ -61,7 +62,7 @@ router.post("/api/v1/plans/import", isAuthenticated, rateLimiter("planImport", 5
       const fullPlan = await importPlanFromCSV(csvContent, userId, { fileName, planName });
       res.json(fullPlan);
     } catch (error: any) {
-      const log = (req as any).log || console;
+      const log = req.log || logger;
       log.error({ err: error }, "Failed to import plan from CSV");
       return res.status(400).json({ error: "Failed to parse CSV content. Please ensure it follows the expected template format.", code: "INVALID_CSV" });
     }

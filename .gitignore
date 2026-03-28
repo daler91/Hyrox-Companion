@@ -20,3 +20,12 @@ coverage/
 
 # Node compile cache
 node-compile-cache/
+
+# Generated reports
+eslint_report*.json
+
+# Stale lock files (project uses pnpm)
+package-lock.json
+
+# Backup files
+*.bak

@@ -2,8 +2,9 @@ import { logger } from "./logger";
 import { toDateStr } from "./types";
 import rateLimit, { MemoryStore } from "express-rate-limit";
 import type { Request, Response, NextFunction } from "express";
+import { DEFAULT_RATE_LIMIT_WINDOW_MS, MS_PER_DAY } from "./constants";
 
-export const DEFAULT_WINDOW_MS = 60000;
+export const DEFAULT_WINDOW_MS = DEFAULT_RATE_LIMIT_WINDOW_MS;
 
 interface AuthenticatedRequest extends Request {
   auth?: { userId?: string };
@@ -76,7 +77,7 @@ export function calculateStreak(completedDates: Set<string>): number {
   today.setHours(0, 0, 0, 0);
   const todayStr = toDateStr(today);
 
-  const yesterday = new Date(today.getTime() - 86400000);
+  const yesterday = new Date(today.getTime() - MS_PER_DAY);
   const yesterdayStr = toDateStr(yesterday);
 
   if (!completedDates.has(todayStr) && !completedDates.has(yesterdayStr)) return 0;
@@ -115,7 +116,7 @@ export function validateBody(schema: z.ZodType<any, any, any>) {
 
 export const asyncHandler = (fn: (req: any, res: Response, next: NextFunction) => Promise<any>) => (req: Request, res: Response, next: NextFunction) => {
   return Promise.resolve(fn(req, res, next)).catch((err) => {
-    const log = (req as any).log || logger;
+    const log = req.log || logger;
     log.error({ err }, `Route error in ${req.method} ${req.originalUrl}`);
     next(err);
   });

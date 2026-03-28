@@ -3,6 +3,9 @@ import type { Request } from "express";
 import { getAuth } from "@clerk/express";
 import { DEV_USER_ID } from "./clerkAuth";
 
+// Ensure pino-http's type augmentation (req.log) is visible to TypeScript
+import "pino-http";
+
 export function getUserId(req: Request): string {
   try {
     const auth = getAuth(req);

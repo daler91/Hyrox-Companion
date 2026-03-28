@@ -5,11 +5,11 @@ import { calculatePersonalRecords, calculateExerciseAnalytics, type ExerciseSetW
 import { getUserId } from "../types";
 import { rateLimiter, asyncHandler } from "../routeUtils";
 import { dateStringSchema } from "@shared/schema";
+import { ANALYTICS_CACHE_TTL_MS } from "../constants";
 
 const router = Router();
 
-// Cache TTL in milliseconds (5 minutes)
-const CACHE_TTL_MS = 5 * 60 * 1000;
+const CACHE_TTL_MS = ANALYTICS_CACHE_TTL_MS;
 
 interface CacheEntry {
   promise: Promise<ExerciseSetWithDate[]>;

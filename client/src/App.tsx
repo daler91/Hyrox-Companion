@@ -1,6 +1,6 @@
 import { lazy, Suspense } from "react";
 import { Switch, Route } from "wouter";
-import { ClerkProvider, SignedIn, SignedOut } from "@clerk/clerk-react";
+import { ClerkProvider, Show } from "@clerk/react";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -98,16 +98,16 @@ function AppContent() {
   }
 
   return (
-    <>
-      <SignedIn>
-        <AuthenticatedLayout />
-      </SignedIn>
-      <SignedOut>
+    <Show
+      when="signed-in"
+      fallback={
         <Suspense fallback={<LazyFallback />}>
           <Landing />
         </Suspense>
-      </SignedOut>
-    </>
+      }
+    >
+      <AuthenticatedLayout />
+    </Show>
   );
 }
 

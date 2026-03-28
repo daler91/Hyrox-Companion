@@ -19,7 +19,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { SiStrava } from "react-icons/si";
-import { SignInButton } from "@clerk/clerk-react";
+import { SignInButton } from "@clerk/react";
 
 function useInView() {
   const ref = useRef<HTMLDivElement>(null);
