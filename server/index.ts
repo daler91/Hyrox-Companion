@@ -124,8 +124,10 @@ app.use(
 
 app.use(express.urlencoded({ extended: false }));
 
+let isReady = false;
+
 app.get("/api/v1/health", (_req, res) => {
-  res.json({ status: "ok", timestamp: Date.now() });
+  res.json({ status: isReady ? "ok" : "starting", timestamp: Date.now() });
 });
 
 
@@ -155,6 +157,12 @@ app.use(pinoHttp({
     ignore: (req) => !req.url?.startsWith('/api/v1')
   }
 }));
+
+// Listen early so the health endpoint is reachable during startup (unblocks CI wait-on)
+const port = Number.parseInt(env.PORT || "5000", 10);
+httpServer.listen({ port, host: "0.0.0.0", reusePort: true }, () => {
+  logger.info({ port }, `listening on port ${port} (startup in progress...)`);
+});
 
 await runStartupMaintenance(storage);
 await startQueue();
@@ -193,22 +201,8 @@ if (process.env.NODE_ENV === "production" || process.env.NODE_ENV === "test") {
   await setupVite(httpServer, app);
 }
 
-// ALWAYS serve the app on the port specified in the environment variable PORT
-// Other ports are firewalled. Default to 5000 if not specified.
-// this serves both the API and the client.
-// It is the only port that is not firewalled.
-const port = Number.parseInt(env.PORT || "5000", 10);
-
-httpServer.listen(
-  {
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  },
-  () => {
-    logger.info({ port }, `serving on port ${port}`);
-  },
-);
+isReady = true;
+logger.info({ port }, `startup complete — serving on port ${port}`);
 
 // Graceful shutdown
 const shutdown = () => {
