@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { logger } from "../logger";
 import { SUGGESTIONS_PROMPT } from "../prompts";
-import { getAiClient, GEMINI_MODEL, retryWithBackoff, truncate } from "./client";
+import { getAiClient, GEMINI_SUGGESTIONS_MODEL, retryWithBackoff, truncate } from "./client";
 import { sanitizeHtml } from "../utils/sanitize";
 import type { TrainingContext } from "./types";
 
@@ -231,10 +231,11 @@ export async function generateWorkoutSuggestions(
     const response = await retryWithBackoff(
       () =>
         getAiClient().models.generateContent({
-          model: GEMINI_MODEL,
+          model: GEMINI_SUGGESTIONS_MODEL,
           config: {
             systemInstruction: SUGGESTIONS_PROMPT,
             responseMimeType: "application/json",
+            thinkingConfig: { thinkingLevel: "high" },
           },
           contents: [{ role: "user", parts: [{ text: prompt }] }],
         }),

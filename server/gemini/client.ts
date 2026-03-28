@@ -3,6 +3,7 @@ import { logger } from "../logger";
 import { GoogleGenAI } from "@google/genai";
 
 export const GEMINI_MODEL = "gemini-2.5-flash-lite";
+export const GEMINI_SUGGESTIONS_MODEL = "gemini-3.1-pro-preview";
 
 let _ai: GoogleGenAI | null = null;
 export function getAiClient(): GoogleGenAI {
