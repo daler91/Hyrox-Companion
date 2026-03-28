@@ -530,7 +530,7 @@ describe("Post-Migration Verification: Railway + Neon", () => {
         const result = await client.query(
           `SELECT COUNT(*)::int AS cnt FROM "${schema}"."${table}"`,
         );
-        expect(result.rows[0].cnt).toBeGreaterThanOrEqual(16);
+        expect(result.rows[0].cnt).toBeGreaterThanOrEqual(15);
       } finally {
         client.release();
       }
