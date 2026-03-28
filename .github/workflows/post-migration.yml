@@ -29,6 +29,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Apply migrations to Neon
+        env:
+          DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+        run: npx drizzle-kit push
+
       - name: Run post-migration tests against Neon
         env:
           DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
