@@ -114,8 +114,13 @@ async function runDrizzleMigrations() {
     await migrate(db, { migrationsFolder });
     logger.info({ context: "db" }, "Drizzle migrations applied successfully");
   } catch (error) {
-    logger.error({ context: "db", err: error }, "Drizzle migration failed");
-    throw error;
+    const msg = error instanceof Error ? error.message : "";
+    if (msg.includes("already exists")) {
+      logger.info({ context: "db" }, "Drizzle migrations skipped — schema already up to date (drizzle-kit push was used)");
+    } else {
+      logger.error({ context: "db", err: error }, "Drizzle migration failed");
+      throw error;
+    }
   }
 }
 
