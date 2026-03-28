@@ -2,6 +2,7 @@ import { z } from "zod";
 import { logger } from "../logger";
 import { SUGGESTIONS_PROMPT } from "../prompts";
 import { getAiClient, GEMINI_SUGGESTIONS_MODEL, retryWithBackoff, truncate } from "./client";
+import { ThinkingLevel } from "@google/genai";
 import { sanitizeHtml } from "../utils/sanitize";
 import type { TrainingContext } from "./types";
 
@@ -235,7 +236,7 @@ export async function generateWorkoutSuggestions(
           config: {
             systemInstruction: SUGGESTIONS_PROMPT,
             responseMimeType: "application/json",
-            thinkingConfig: { thinkingLevel: "high" },
+            thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
           },
           contents: [{ role: "user", parts: [{ text: prompt }] }],
         }),

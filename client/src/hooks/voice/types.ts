@@ -26,6 +26,9 @@ declare global {
     SpeechRecognition: new () => SpeechRecognitionInstance;
     webkitSpeechRecognition: new () => SpeechRecognitionInstance;
   }
+  // Needed because the hook accesses these via globalThis rather than window
+  var SpeechRecognition: (new () => SpeechRecognitionInstance) | undefined;
+  var webkitSpeechRecognition: (new () => SpeechRecognitionInstance) | undefined;
 }
 
 export interface UseVoiceInputOptions {

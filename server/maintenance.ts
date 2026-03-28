@@ -170,7 +170,7 @@ async function testDatabaseConnection() {
   let client;
   try {
     client = await Promise.race([pool.connect(), timeout]);
-    const result = await client.query("SELECT 1 as ok");
+    await client.query("SELECT 1 as ok");
     logger.info({ context: "db" }, "Database connection successful");
   } catch (error) {
     logger.fatal({ context: "db", err: error }, "Cannot connect to database — app cannot start");

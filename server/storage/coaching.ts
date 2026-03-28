@@ -1,12 +1,11 @@
 import {
   coachingMaterials,
-  documentChunks,
   type CoachingMaterial,
   type InsertCoachingMaterial,
   type DocumentChunk,
   type InsertDocumentChunk,
 } from "@shared/schema";
-import { db, pool } from "../db";
+import { db } from "../db";
 import { vectorPool } from "../vectorDb";
 import { eq, and } from "drizzle-orm";
 
@@ -65,12 +64,6 @@ export class CoachingStorage {
     for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
       const batch = chunks.slice(i, i + BATCH_SIZE);
       const cols = '("id", "material_id", "user_id", "content", "chunk_index", "embedding")';
-      const placeholders = batch
-        .map((_, j) => {
-          const o = j * 6;
-          return `(gen_random_uuid(), $${o + 1}, $${o + 2}, $${o + 3}, $${o + 4}, $${o + 5}, $${o + 6})`;
-        })
-        .join(", ");
       const values = batch.flatMap((c) => [
         c.materialId,
         c.userId,
