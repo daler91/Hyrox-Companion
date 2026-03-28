@@ -363,32 +363,38 @@ function analyzeTimeProgression(exercise: string, values: number[]): Progression
   return null;
 }
 
+function computeExerciseProgressionFlag(exercise: string, history: TimelineEntry[]): ProgressionFlag | null {
+  if (history.length === 1) {
+    return { exercise, flag: "new", detail: `Only trained once (${history[0].date})` };
+  }
+  if (history.length < 2) return null;
+
+  // ⚡ Bolt Performance Optimization: Combine multiple filter and map passes
+  // into a single O(N) loop to prevent intermediate array allocations.
+  const weights: number[] = [];
+  const times: number[] = [];
+
+  for (const h of history) {
+    if (h.maxWeight != null) weights.push(h.maxWeight);
+    if (h.bestTime != null) times.push(h.bestTime);
+  }
+
+  const weightFlag = analyzeWeightProgression(exercise, weights);
+  if (weightFlag) return weightFlag;
+
+  const timeFlag = analyzeTimeProgression(exercise, times);
+  if (timeFlag) return timeFlag;
+
+  return null;
+}
+
 function computeProgressionFlags(timeline: TimelineEntry[]): NonNullable<TrainingContext["coachingInsights"]>["progressionFlags"] {
   const exerciseHistory = collectExerciseHistory(timeline);
   const flags: ProgressionFlag[] = [];
 
   for (const [exercise, history] of Object.entries(exerciseHistory)) {
-    if (history.length === 1) {
-      flags.push({ exercise, flag: "new", detail: `Only trained once (${history[0].date})` });
-      continue;
-    }
-    if (history.length < 2) continue;
-
-    // ⚡ Bolt Performance Optimization: Combine multiple filter and map passes
-    // into a single O(N) loop to prevent intermediate array allocations.
-    const weights: number[] = [];
-    const times: number[] = [];
-
-    for (const h of history) {
-      if (h.maxWeight != null) weights.push(h.maxWeight);
-      if (h.bestTime != null) times.push(h.bestTime);
-    }
-
-    const weightFlag = analyzeWeightProgression(exercise, weights);
-    if (weightFlag) { flags.push(weightFlag); continue; }
-
-    const timeFlag = analyzeTimeProgression(exercise, times);
-    if (timeFlag) flags.push(timeFlag);
+    const flag = computeExerciseProgressionFlag(exercise, history);
+    if (flag) flags.push(flag);
   }
 
   return flags;

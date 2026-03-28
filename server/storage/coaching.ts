@@ -1,6 +1,6 @@
 import {
   coachingMaterials,
-
+  documentChunks,
   type CoachingMaterial,
   type InsertCoachingMaterial,
   type DocumentChunk,
