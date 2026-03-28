@@ -108,6 +108,10 @@ async function cleanOrphanedData() {
 }
 
 async function runDrizzleMigrations() {
+  if (process.env.NODE_ENV === "test") {
+    logger.info({ context: "db" }, "Skipping Drizzle migrations in test environment");
+    return;
+  }
   try {
     const migrationsFolder = path.resolve(import.meta.dirname, "..", "migrations");
     logger.info({ context: "db", migrationsFolder }, "Running Drizzle migrations...");
@@ -170,7 +174,7 @@ async function testDatabaseConnection() {
   let client;
   try {
     client = await Promise.race([pool.connect(), timeout]);
-    const result = await client.query("SELECT 1 as ok");
+    await client.query("SELECT 1 as ok");
     logger.info({ context: "db" }, "Database connection successful");
   } catch (error) {
     logger.fatal({ context: "db", err: error }, "Cannot connect to database — app cannot start");
