@@ -32,7 +32,8 @@ jobs:
       - name: Apply migrations to Neon
         env:
           DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
-        run: npx drizzle-kit push
+          ENCRYPTION_KEY: "01234567890123456789012345678901"
+        run: pnpm run db:migrate
 
       - name: Run post-migration tests against Neon
         env:
