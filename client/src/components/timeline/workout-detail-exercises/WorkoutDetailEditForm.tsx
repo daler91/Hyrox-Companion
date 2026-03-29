@@ -110,7 +110,7 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
               onClick={() => {
                 stopAllVoice();
                 if (!useTextMode) setUseTextMode(true);
-                startMainListening();
+                void startMainListening();
               }}
               data-testid="button-detail-mode-voice"
               title="Use voice input"

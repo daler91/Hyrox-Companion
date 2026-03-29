@@ -99,7 +99,7 @@ export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }
       saveMessage({ role: "user", content: action.label });
       suggestionsMutation.mutate();
     } else {
-      sendMessage(action.label);
+      void sendMessage(action.label);
     }
   };
 

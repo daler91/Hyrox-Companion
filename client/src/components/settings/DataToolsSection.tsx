@@ -16,7 +16,7 @@ export function DataToolsSection() {
   const findUnstructuredMutation = useMutation({
     mutationFn: async () => {
       const response = await apiRequest("GET", "/api/v1/workouts/unstructured");
-      return response.json();
+      return response.json() as Promise<Array<{ id: string }>>;
     },
     onSuccess: (data: Array<{ id: string }>) => {
       setUnstructuredCount(data.length);
@@ -38,8 +38,8 @@ export function DataToolsSection() {
     mutationFn: () => api.workouts.batchReparse(),
     onSuccess: (data) => {
       setParseResults({ success: data.parsed, failed: data.failed });
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workouts });
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workouts });
       toast({
         title: "Parsing Complete",
         description: `Parsed ${data.parsed} workouts successfully. ${data.failed} could not be parsed.`,

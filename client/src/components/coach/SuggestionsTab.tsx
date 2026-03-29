@@ -90,10 +90,10 @@ export function useSuggestions({ timeline, addLocalMessage, saveMessage }: UseSu
         aiSource: suggestionsRagInfo?.source ?? null,
       });
 
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
       if (suggestion.action === "replace" && suggestion.targetField === "mainWorkout") {
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.exerciseAnalytics });
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.personalRecords });
+        void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.exerciseAnalytics });
+        void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.personalRecords });
       }
       setPendingSuggestions(prev => prev.filter(s => s.workoutId !== suggestion.workoutId));
       

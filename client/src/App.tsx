@@ -19,7 +19,7 @@ const Settings = lazy(() => import("@/pages/Settings"));
 const Analytics = lazy(() => import("@/pages/Analytics"));
 const Landing = lazy(() => import("@/pages/Landing"));
 
-const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string | undefined;
 
 function isCypressTest(): boolean {
   return globalThis.window !== undefined && "Cypress" in globalThis.window;
@@ -129,7 +129,7 @@ function App() {
   }
 
   return (
-    <ClerkProvider publishableKey={clerkPubKey}>
+    <ClerkProvider publishableKey={clerkPubKey!}>
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
           <TooltipProvider>

@@ -14,7 +14,7 @@ export function useClearHistoryMutation(onSuccessCallback?: () => void) {
   return useMutation({
     mutationFn: () => api.chat.clearHistory(),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.chatHistory });
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.chatHistory });
       if (onSuccessCallback) {
         onSuccessCallback();
       }

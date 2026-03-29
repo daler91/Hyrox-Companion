@@ -31,15 +31,15 @@ export function useOnboardingWizard(onComplete: (choice: "sample" | "import" | "
     mutationFn: (prefs: { weightUnit: string; distanceUnit: string }) =>
       api.preferences.update(prefs),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.preferences });
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.authUser });
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.preferences });
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.authUser });
     },
   });
 
   const sampleMutation = useMutation({
     mutationFn: () => api.plans.createSample(),
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans });
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans });
       setCreatedPlanId(data.id);
       setStep("schedule");
     },
@@ -51,8 +51,8 @@ export function useOnboardingWizard(onComplete: (choice: "sample" | "import" | "
     mutationFn: ({ planId, date }: { planId: string; date: string }) =>
       api.plans.schedule(planId, date),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans });
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans });
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
       toast({
         title: "Your training plan is ready!",
         description: "Workouts have been scheduled on your timeline.",

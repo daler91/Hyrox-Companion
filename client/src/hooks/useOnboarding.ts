@@ -39,8 +39,8 @@ export function useOnboarding(
         fileInputRef.current?.click();
       }, IMPORT_INPUT_DELAY_MS);
     } else if (choice === "sample") {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/plans"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] });
+      void queryClient.invalidateQueries({ queryKey: ["/api/v1/plans"] });
+      void queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] });
     }
   }, [fileInputRef]);
 
