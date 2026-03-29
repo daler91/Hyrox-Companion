@@ -97,6 +97,32 @@ interface UseChatSessionOptions {
 
 const DEFAULT_WELCOME = "Hey! I'm your AI training coach. Ask me about pacing, training tips, or anything Hyrox-related!";
 const MAX_HISTORY_MESSAGES = 20;
+const MAX_HISTORY_CHARS = 30000;
+const TRUNCATED_MSG_LENGTH = 200;
+
+function truncateHistory(history: { role: string; content: string }[]): { role: string; content: string }[] {
+  let totalChars = 0;
+  for (const msg of history) {
+    totalChars += msg.content.length;
+  }
+  if (totalChars <= MAX_HISTORY_CHARS) return history;
+
+  // Walk backward, preserving recent messages in full
+  const result = [...history];
+  let budget = MAX_HISTORY_CHARS;
+  for (let i = result.length - 1; i >= 0; i--) {
+    if (budget >= result[i].content.length) {
+      budget -= result[i].content.length;
+    } else {
+      result[i] = {
+        ...result[i],
+        content: result[i].content.slice(0, TRUNCATED_MSG_LENGTH) + " [truncated]",
+      };
+      budget = 0;
+    }
+  }
+  return result;
+}
 
 export function useChatSession(options: UseChatSessionOptions = {}) {
   const {
@@ -182,10 +208,12 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     let fullResponse = "";
 
     try {
-      const history = messagesRef.current
-        .filter((m) => m.id !== "welcome")
-        .map((m) => ({ role: m.role, content: m.content }))
-        .slice(-MAX_HISTORY_MESSAGES);
+      const history = truncateHistory(
+        messagesRef.current
+          .filter((m) => m.id !== "welcome")
+          .map((m) => ({ role: m.role, content: m.content }))
+          .slice(-MAX_HISTORY_MESSAGES)
+      );
 
       if (useStreaming) {
         const placeholderMessage: Message = {
