@@ -31,6 +31,9 @@ export const workouts = {
 
   delete: (id: string) => typedRequest<{ success: boolean }>("DELETE", `/api/v1/workouts/${id}`),
 
+  deleteAfterDate: (after: string) =>
+    typedRequest<{ success: boolean; deletedCount: number }>("DELETE", `/api/v1/workouts?after=${after}`),
+
   getUnstructured: () => typedRequest<WorkoutLog[]>("GET", "/api/v1/workouts/unstructured"),
 
   reparse: (id: string) => typedRequest<WorkoutLog>("POST", `/api/v1/workouts/${id}/reparse`),
