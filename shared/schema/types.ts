@@ -149,7 +149,7 @@ export const dateStringSchema = z.string().max(10).regex(/^\d{4}-\d{2}-\d{2}$/, 
 
 export const chatMessageSchema = z.object({
   role: z.enum(["user", "assistant"]),
-  content: z.string().min(1, "Message content cannot be empty").max(1000, "Message must be 1000 characters or less"),
+  content: z.string().min(1, "Message content cannot be empty").max(50000, "Message must be 50000 characters or less"),
 });
 
 export const chatRequestSchema = z.object({
