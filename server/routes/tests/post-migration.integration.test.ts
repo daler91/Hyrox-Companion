@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { pool, db } from "../../db";
-import { vectorPool, isVectorDbSeparate } from "../../vectorDb";
+import { vectorPool } from "../../vectorDb";
 import { sql } from "drizzle-orm";
 import * as schema from "@shared/schema";
 
