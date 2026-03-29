@@ -26,8 +26,20 @@ if (import.meta.env.VITE_SENTRY_DSN) {
   });
 }
 
+import { registerSW } from "virtual:pwa-register";
+
 createRoot(document.getElementById("root")!).render(
   <Sentry.ErrorBoundary fallback={FallbackErrorBoundary}>
     <App />
   </Sentry.ErrorBoundary>
 );
+
+// Register service worker for PWA support
+registerSW({
+  onNeedRefresh() {
+    // A new version is available - the user can refresh when ready
+  },
+  onOfflineReady() {
+    // The app is ready to work offline
+  },
+});

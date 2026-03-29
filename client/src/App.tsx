@@ -9,6 +9,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { FeatureErrorBoundaryWrapper } from "@/components/FeatureErrorBoundaryWrapper";
+import { OfflineIndicator } from "@/components/ui/OfflineIndicator";
 import NotFound from "@/pages/not-found";
 import Timeline from "@/pages/Timeline";
 import { Loader2 } from "lucide-react";
@@ -120,6 +121,7 @@ function App() {
             {isDevPreview() && <DevModeBanner />}
             <AppContent />
             <Toaster />
+            <OfflineIndicator />
           </TooltipProvider>
         </ThemeProvider>
       </QueryClientProvider>
@@ -133,6 +135,7 @@ function App() {
           <TooltipProvider>
             <AppContent />
             <Toaster />
+            <OfflineIndicator />
           </TooltipProvider>
         </ThemeProvider>
       </QueryClientProvider>

@@ -251,3 +251,16 @@ export type CoachingMaterial = typeof coachingMaterials.$inferSelect;
 // Document chunk types
 export type DocumentChunk = typeof documentChunks.$inferSelect;
 export type InsertDocumentChunk = typeof documentChunks.$inferInsert;
+
+// AI Plan Generation
+export const generatePlanInputSchema = z.object({
+  goal: z.string().min(1, "Goal is required").max(500, "Goal must be 500 characters or less"),
+  totalWeeks: z.number().min(1).max(24).default(8),
+  daysPerWeek: z.number().min(2).max(7).default(5),
+  experienceLevel: z.enum(["beginner", "intermediate", "advanced"]),
+  raceDate: dateStringSchema.optional(),
+  focusAreas: z.array(z.string().max(100)).max(10).optional(),
+  injuries: z.string().max(500).optional(),
+});
+
+export type GeneratePlanInput = z.infer<typeof generatePlanInputSchema>;

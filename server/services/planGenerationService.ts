@@ -1,0 +1,174 @@
+import { z } from "zod";
+import { logger } from "../logger";
+import { storage } from "../storage";
+import { getAiClient, GEMINI_SUGGESTIONS_MODEL, retryWithBackoff } from "../gemini/client";
+import { PLAN_GENERATION_PROMPT } from "../prompts";
+import { ThinkingLevel } from "@google/genai";
+import type { GeneratePlanInput, TrainingPlanWithDays } from "@shared/schema";
+import { sanitizeHtml } from "../utils/sanitize";
+
+const generatedDaySchema = z.object({
+  weekNumber: z.number().min(1),
+  dayName: z.enum(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]),
+  focus: z.string().max(255),
+  mainWorkout: z.string().max(5000),
+  accessory: z.string().max(5000).nullable().optional(),
+  notes: z.string().max(2000).nullable().optional(),
+});
+
+type GeneratedDay = z.infer<typeof generatedDaySchema>;
+
+function buildGenerationPrompt(input: GeneratePlanInput): string {
+  const lines: string[] = [
+    `Generate a ${input.totalWeeks}-week training plan with ${input.daysPerWeek} training days per week.`,
+    ``,
+    `ATHLETE PROFILE:`,
+    `- Goal: ${input.goal}`,
+    `- Experience Level: ${input.experienceLevel}`,
+    `- Training Days Per Week: ${input.daysPerWeek}`,
+    `- Total Weeks: ${input.totalWeeks}`,
+  ];
+
+  if (input.raceDate) {
+    lines.push(`- Race Date: ${input.raceDate} (structure phases to peak for this date)`);
+  }
+
+  if (input.focusAreas && input.focusAreas.length > 0) {
+    lines.push(`- Focus Areas: ${input.focusAreas.join(", ")} (prioritize these in programming)`);
+  }
+
+  if (input.injuries) {
+    lines.push(`- Injuries/Limitations: ${input.injuries} (avoid exercises that aggravate these)`);
+  }
+
+  // Include rest days in the total
+  const restDaysPerWeek = 7 - input.daysPerWeek;
+  lines.push(``);
+  lines.push(`Generate ${input.totalWeeks * 7} day entries (${input.daysPerWeek} training + ${restDaysPerWeek} rest per week).`);
+  lines.push(`Return the complete JSON array for ALL weeks.`);
+
+  return lines.join("\n");
+}
+
+function parseAndValidateDays(text: string): GeneratedDay[] {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    logger.error({ rawResponse: text.slice(0, 500) }, "[planGen] JSON parse failed");
+    throw new Error("Failed to parse AI response as JSON");
+  }
+
+  if (!Array.isArray(raw)) {
+    throw new Error("AI response is not an array");
+  }
+
+  const validated: GeneratedDay[] = [];
+  for (const item of raw) {
+    const result = generatedDaySchema.safeParse(item);
+    if (result.success) {
+      validated.push({
+        ...result.data,
+        focus: sanitizeHtml(result.data.focus),
+        mainWorkout: sanitizeHtml(result.data.mainWorkout),
+        accessory: result.data.accessory ? sanitizeHtml(result.data.accessory) : null,
+        notes: result.data.notes ? sanitizeHtml(result.data.notes) : null,
+      });
+    } else {
+      logger.warn(
+        { issues: result.error.issues, item: JSON.stringify(item).slice(0, 200) },
+        "[planGen] Dropping invalid day",
+      );
+    }
+  }
+
+  return validated;
+}
+
+function calculateStartDate(raceDate: string, totalWeeks: number): string {
+  const race = new Date(raceDate);
+  const start = new Date(race);
+  start.setDate(start.getDate() - totalWeeks * 7);
+  // Align to nearest Monday
+  const dayOfWeek = start.getDay();
+  const mondayOffset = dayOfWeek === 0 ? 1 : dayOfWeek === 1 ? 0 : 8 - dayOfWeek;
+  start.setDate(start.getDate() + mondayOffset);
+  return start.toISOString().split("T")[0];
+}
+
+export async function generatePlan(
+  input: GeneratePlanInput,
+  userId: string,
+): Promise<TrainingPlanWithDays> {
+  const prompt = buildGenerationPrompt(input);
+
+  logger.info(
+    { userId, totalWeeks: input.totalWeeks, daysPerWeek: input.daysPerWeek, experienceLevel: input.experienceLevel },
+    "[planGen] Generating AI training plan",
+  );
+
+  const response = await retryWithBackoff(
+    () =>
+      getAiClient().models.generateContent({
+        model: GEMINI_SUGGESTIONS_MODEL,
+        config: {
+          systemInstruction: PLAN_GENERATION_PROMPT,
+          responseMimeType: "application/json",
+          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
+        },
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+      }),
+    "planGeneration",
+  );
+
+  const text = response.text || "[]";
+  const days = parseAndValidateDays(text);
+
+  if (days.length === 0) {
+    throw new Error("AI generated no valid plan days");
+  }
+
+  // Create the training plan record
+  const planName = `AI Plan: ${input.goal.slice(0, 80)}`;
+  const plan = await storage.createTrainingPlan({
+    userId,
+    name: planName,
+    sourceFileName: null,
+    totalWeeks: input.totalWeeks,
+    goal: input.goal,
+  });
+
+  // Create plan days
+  const planDays = days.map((day) => ({
+    planId: plan.id,
+    weekNumber: day.weekNumber,
+    dayName: day.dayName,
+    focus: day.focus,
+    mainWorkout: day.mainWorkout,
+    accessory: day.accessory || null,
+    notes: day.notes || null,
+    status: "planned" as const,
+    aiSource: "generated" as const,
+  }));
+
+  await storage.createPlanDays(planDays);
+
+  // If race date is provided, auto-schedule the plan
+  if (input.raceDate) {
+    const startDate = calculateStartDate(input.raceDate, input.totalWeeks);
+    await storage.schedulePlan(plan.id, startDate, userId);
+  }
+
+  // Fetch the complete plan with days
+  const fullPlan = await storage.getTrainingPlan(plan.id, userId);
+  if (!fullPlan) {
+    throw new Error("Failed to retrieve generated plan");
+  }
+
+  logger.info(
+    { userId, planId: plan.id, dayCount: days.length },
+    "[planGen] AI plan generated successfully",
+  );
+
+  return fullPlan;
+}

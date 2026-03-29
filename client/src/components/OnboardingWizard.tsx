@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -12,6 +13,7 @@ import { UnitsStep } from "@/components/onboarding/UnitsStep";
 import { GoalStep } from "@/components/onboarding/GoalStep";
 import { PlanStep } from "@/components/onboarding/PlanStep";
 import { ScheduleStep } from "@/components/onboarding/ScheduleStep";
+import { GeneratePlanDialog } from "@/components/plans/GeneratePlanDialog";
 import { useOnboardingWizard } from "@/hooks/useOnboardingWizard";
 
 interface OnboardingWizardProps {
@@ -38,6 +40,7 @@ const DESCS: Record<Step, string> = {
 const STEPS: Step[] = ["welcome", "units", "goal", "plan", "schedule"];
 
 export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizardProps>) {
+  const [showGenerateDialog, setShowGenerateDialog] = useState(false);
   const {
     step,
     idx,
@@ -135,12 +138,24 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
             />
           )}
           {step === "plan" && (
-            <PlanStep
-              isPending={isSamplePending}
-              onUseSamplePlan={handleUseSamplePlan}
-              onImportPlan={handleImportPlan}
-              onSkip={handleSkip}
-            />
+            <>
+              <PlanStep
+                isPending={isSamplePending}
+                onUseSamplePlan={handleUseSamplePlan}
+                onImportPlan={handleImportPlan}
+                onGeneratePlan={() => setShowGenerateDialog(true)}
+                onSkip={handleSkip}
+              />
+              <GeneratePlanDialog
+                open={showGenerateDialog}
+                onOpenChange={(v) => {
+                  setShowGenerateDialog(v);
+                  if (!v) {
+                    // If dialog closed after generating, complete onboarding
+                  }
+                }}
+              />
+            </>
           )}
           {step === "schedule" && (
             <ScheduleStep

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,10 +11,12 @@ import {
   Target,
   Zap,
   Sparkles,
+  Wand2,
 } from "lucide-react";
 import { Link } from "wouter";
 import { FilterStatus } from "./types";
 import { TrainingPlan } from "@shared/schema";
+import { GeneratePlanDialog } from "@/components/plans/GeneratePlanDialog";
 
 interface TimelineEmptyStateProps {
   readonly filterStatus: FilterStatus;
@@ -37,6 +40,8 @@ function WelcomeEmptyState({
   importMutation,
   handleFileUpload,
 }: Readonly<WelcomeEmptyStateProps>) {
+  const [showGenerateDialog, setShowGenerateDialog] = useState(false);
+
   return (
     <div className="text-center space-y-6">
       <div className="flex justify-center gap-3 mb-2">
@@ -65,6 +70,15 @@ function WelcomeEmptyState({
       <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
         <Button
           size="lg"
+          onClick={() => setShowGenerateDialog(true)}
+          data-testid="button-generate-ai-plan"
+        >
+          <Wand2 className="h-4 w-4 mr-2" />
+          Generate AI Plan
+        </Button>
+        <Button
+          size="lg"
+          variant="outline"
           onClick={() => samplePlanMutation.mutate()}
           disabled={samplePlanMutation.isPending}
           data-testid="button-use-sample-plan"
@@ -74,7 +88,7 @@ function WelcomeEmptyState({
           ) : (
             <Sparkles className="h-4 w-4 mr-2" />
           )}
-          Use 8-Week Fitness Plan
+          Use 8-Week Plan
         </Button>
         <div>
           <Label
@@ -124,6 +138,11 @@ function WelcomeEmptyState({
       <p className="text-xs text-muted-foreground pt-2">
         Not sure where to start? Ask our AI Coach for training recommendations.
       </p>
+
+      <GeneratePlanDialog
+        open={showGenerateDialog}
+        onOpenChange={setShowGenerateDialog}
+      />
     </div>
   );
 }

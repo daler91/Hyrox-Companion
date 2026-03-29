@@ -1,17 +1,36 @@
 import { Button } from "@/components/ui/button";
-import { Loader2, Sparkles, FileText } from "lucide-react";
+import { Loader2, Sparkles, FileText, Wand2 } from "lucide-react";
 
 interface PlanStepProps {
   readonly isPending: boolean;
   readonly onUseSamplePlan: () => void;
   readonly onImportPlan: () => void;
+  readonly onGeneratePlan: () => void;
   readonly onSkip: () => void;
 }
 
-export function PlanStep({ isPending, onUseSamplePlan, onImportPlan, onSkip }: Readonly<PlanStepProps>) {
+export function PlanStep({ isPending, onUseSamplePlan, onImportPlan, onGeneratePlan, onSkip }: Readonly<PlanStepProps>) {
   return (
     <div className="space-y-3">
       <Button
+        className="w-full justify-start h-auto py-4"
+        onClick={onGeneratePlan}
+        disabled={isPending}
+        data-testid="button-onboarding-generate-plan"
+      >
+        <div className="flex items-center gap-3 w-full">
+          <Wand2 className="h-5 w-5" />
+          <div className="text-left flex-1">
+            <div className="font-medium">Generate AI Plan</div>
+            <div className="text-xs opacity-80 font-normal">
+              AI creates a personalized periodized plan based on your goals
+            </div>
+          </div>
+        </div>
+      </Button>
+
+      <Button
+        variant="outline"
         className="w-full justify-start h-auto py-4"
         onClick={onUseSamplePlan}
         disabled={isPending}
