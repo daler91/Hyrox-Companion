@@ -41,6 +41,10 @@ function buildGenerationPrompt(input: GeneratePlanInput): string {
     lines.push(`- Injuries/Limitations: ${input.injuries} (avoid exercises that aggravate these)`);
   }
 
+  if (input.restDays && input.restDays.length > 0) {
+    lines.push(`- Rest Days: ${input.restDays.join(", ")} (these MUST be rest days every week, schedule all training on the remaining days)`);
+  }
+
   // Include rest days in the total
   const restDaysPerWeek = 7 - input.daysPerWeek;
   lines.push(
@@ -158,10 +162,15 @@ export async function generatePlan(
 
   await storage.createPlanDays(planDays);
 
-  // If race date is provided, auto-schedule the plan
-  if (input.raceDate) {
-    const startDate = calculateStartDate(input.raceDate, input.totalWeeks);
-    await storage.schedulePlan(plan.id, startDate, userId);
+  // Auto-schedule the plan if a start date is provided or can be derived from race date
+  let resolvedStartDate: string | undefined;
+  if (input.startDate) {
+    resolvedStartDate = input.startDate;
+  } else if (input.raceDate) {
+    resolvedStartDate = calculateStartDate(input.raceDate, input.totalWeeks);
+  }
+  if (resolvedStartDate) {
+    await storage.schedulePlan(plan.id, resolvedStartDate, userId);
   }
 
   // Fetch the complete plan with days

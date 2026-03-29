@@ -259,6 +259,10 @@ export const generatePlanInputSchema = z.object({
   daysPerWeek: z.number().min(2).max(7).default(5),
   experienceLevel: z.enum(["beginner", "intermediate", "advanced"]),
   raceDate: dateStringSchema.optional(),
+  startDate: dateStringSchema.optional(),
+  restDays: z.array(
+    z.enum(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]),
+  ).optional(),
   focusAreas: z.array(z.string().max(100)).max(10).optional(),
   injuries: z.string().max(500).optional(),
 });
