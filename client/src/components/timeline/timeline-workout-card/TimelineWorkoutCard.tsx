@@ -190,10 +190,12 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
             {entry.notes && (
               <p className="text-xs text-muted-foreground italic mt-2">{entry.notes}</p>
             )}
-            {entry.duration && entry.source !== "strava" && (
+            {(entry.duration || entry.rpe) && entry.source !== "strava" && (
               <p className="text-xs text-muted-foreground mt-1">
-                Duration: {entry.duration} min
-                {entry.rpe && ` | RPE: ${entry.rpe}`}
+                {[
+                  entry.duration ? `Duration: ${entry.duration} min` : null,
+                  entry.rpe ? `RPE: ${entry.rpe}` : null,
+                ].filter(Boolean).join(" | ")}
               </p>
             )}
             <WorkoutStravaStats entry={entry} distanceUnit={distanceUnit} />
