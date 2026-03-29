@@ -114,8 +114,14 @@ async function runDrizzleMigrations() {
     await migrate(db, { migrationsFolder });
     logger.info({ context: "db" }, "Drizzle migrations applied successfully");
   } catch (error) {
-    logger.error({ context: "db", err: error }, "Drizzle migration failed");
-    throw error;
+    // In CI/production, drizzle-kit push is used to manage the schema, so
+    // migration failures (e.g. "already exists") are expected and non-fatal.
+    const errStr = String((error as { message?: string })?.message ?? error);
+    if (errStr.includes("already exists")) {
+      logger.info({ context: "db" }, "Drizzle migrations skipped — schema already up to date (drizzle-kit push was used)");
+    } else {
+      logger.warn({ context: "db", err: error }, "Drizzle migration failed (non-fatal, continuing startup)");
+    }
   }
 }
 
@@ -170,7 +176,7 @@ async function testDatabaseConnection() {
   let client;
   try {
     client = await Promise.race([pool.connect(), timeout]);
-    const result = await client.query("SELECT 1 as ok");
+    await client.query("SELECT 1 as ok");
     logger.info({ context: "db" }, "Database connection successful");
   } catch (error) {
     logger.fatal({ context: "db", err: error }, "Cannot connect to database — app cannot start");

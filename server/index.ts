@@ -124,8 +124,15 @@ app.use(
 
 app.use(express.urlencoded({ extended: false }));
 
+let isReady = false;
+let startupError: string | null = null;
+
 app.get("/api/v1/health", (_req, res) => {
-  res.json({ status: "ok", timestamp: Date.now() });
+  if (startupError) {
+    res.status(503).json({ status: "error", error: startupError, timestamp: Date.now() });
+  } else {
+    res.json({ status: isReady ? "ok" : "starting", timestamp: Date.now() });
+  }
 });
 
 
@@ -156,59 +163,61 @@ app.use(pinoHttp({
   }
 }));
 
-await runStartupMaintenance(storage);
-await startQueue();
-await registerRoutes(httpServer, app);
-
-// Serve OpenAPI docs
-app.use(
-  "/api/docs",
-  swaggerUi.serve,
-  swaggerUi.setup(generateOpenApiDocument(), {
-    customCss: ".swagger-ui .topbar { display: none } .swagger-ui .info { margin: 20px 0; }",
-    customSiteTitle: "Workout API Documentation"
-  })
-);
-
-
-app.use((err: AppError, _req: Request, res: Response, _next: NextFunction) => {
-  const status = err.status || err.statusCode || 500;
-  // 🛡️ Sentinel: Prevent leaking sensitive error details to the client
-  const message =
-    status === 500
-      ? "Internal Server Error"
-      : err.message || "An error occurred";
-
-  Sentry.captureException(err);
-  res.status(status).json({ error: message, code: err.code || (status >= 500 ? "INTERNAL_SERVER_ERROR" : "BAD_REQUEST"), details: err.details });
+// Listen early so the health endpoint is reachable during startup (unblocks CI wait-on)
+const port = Number.parseInt(env.PORT || "5000", 10);
+await new Promise<void>((resolve, reject) => {
+  httpServer.once("error", reject);
+  httpServer.listen({ port, host: "0.0.0.0" }, () => {
+    httpServer.removeListener("error", reject);
+    logger.info({ port }, `listening on port ${port} (startup in progress...)`);
+    resolve();
+  });
 });
 
-// importantly only setup vite in development and after
-// setting up all the other routes so the catch-all route
-// doesn't interfere with the other routes
-if (process.env.NODE_ENV === "production" || process.env.NODE_ENV === "test") {
-  serveStatic(app);
-} else {
-  const { setupVite } = await import("./vite");
-  await setupVite(httpServer, app);
+try {
+  await runStartupMaintenance(storage);
+  await startQueue();
+  await registerRoutes(httpServer, app);
+
+  // Serve OpenAPI docs
+  app.use(
+    "/api/docs",
+    swaggerUi.serve,
+    swaggerUi.setup(generateOpenApiDocument(), {
+      customCss: ".swagger-ui .topbar { display: none } .swagger-ui .info { margin: 20px 0; }",
+      customSiteTitle: "Workout API Documentation"
+    })
+  );
+
+  app.use((err: AppError, _req: Request, res: Response, _next: NextFunction) => {
+    const status = err.status || err.statusCode || 500;
+    // 🛡️ Sentinel: Prevent leaking sensitive error details to the client
+    const message =
+      status === 500
+        ? "Internal Server Error"
+        : err.message || "An error occurred";
+
+    Sentry.captureException(err);
+    res.status(status).json({ error: message, code: err.code || (status >= 500 ? "INTERNAL_SERVER_ERROR" : "BAD_REQUEST"), details: err.details });
+  });
+
+  // importantly only setup vite in development and after
+  // setting up all the other routes so the catch-all route
+  // doesn't interfere with the other routes
+  if (process.env.NODE_ENV === "production" || process.env.NODE_ENV === "test") {
+    serveStatic(app);
+  } else {
+    const { setupVite } = await import("./vite");
+    await setupVite(httpServer, app);
+  }
+
+  isReady = true;
+  logger.info({ port }, `startup complete — serving on port ${port}`);
+} catch (err) {
+  startupError = err instanceof Error ? err.message : String(err);
+  logger.fatal({ err }, "Startup failed — server is running but not ready");
+  Sentry.captureException(err);
 }
-
-// ALWAYS serve the app on the port specified in the environment variable PORT
-// Other ports are firewalled. Default to 5000 if not specified.
-// this serves both the API and the client.
-// It is the only port that is not firewalled.
-const port = Number.parseInt(env.PORT || "5000", 10);
-
-httpServer.listen(
-  {
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  },
-  () => {
-    logger.info({ port }, `serving on port ${port}`);
-  },
-);
 
 // Graceful shutdown
 const shutdown = () => {

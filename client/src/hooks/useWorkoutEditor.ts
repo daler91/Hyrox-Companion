@@ -25,7 +25,7 @@ export function getBlockExerciseName(blockId: string): string {
   return name;
 }
 
-export function exerciseToPayload(ex: StructuredExercise) {
+export function exerciseToPayload(ex: StructuredExercise | ParsedExercise) {
   return {
     exerciseName: ex.exerciseName,
     customLabel: ex.customLabel,
