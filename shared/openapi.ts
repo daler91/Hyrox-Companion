@@ -16,6 +16,95 @@ import {
 
 export const registry = new OpenAPIRegistry();
 
+// ---------------------------------------------------------------------------
+// Realistic Hyrox-specific examples for Swagger UI "Try it out"
+// ---------------------------------------------------------------------------
+
+const EXAMPLE_EXERCISE_SLED_PUSH = {
+  exerciseName: "Sled Push",
+  category: "conditioning",
+  numSets: 3,
+  sets: [
+    { setNumber: 1, distance: 50, time: 42, notes: "Smooth pace" },
+    { setNumber: 2, distance: 50, time: 45 },
+    { setNumber: 3, distance: 50, time: 48 },
+  ],
+};
+
+const EXAMPLE_EXERCISE_BURPEE_BROAD_JUMPS = {
+  exerciseName: "Burpee Broad Jumps",
+  category: "functional",
+  numSets: 2,
+  reps: 10,
+  sets: [
+    { setNumber: 1, reps: 10, notes: "Full extension" },
+    { setNumber: 2, reps: 10 },
+  ],
+};
+
+const EXAMPLE_EXERCISE_ROWING = {
+  exerciseName: "Rowing",
+  category: "conditioning",
+  numSets: 1,
+  distance: 1000,
+  time: 210,
+  sets: [{ setNumber: 1, distance: 1000, time: 210 }],
+};
+
+const EXAMPLE_CREATE_WORKOUT = {
+  date: "2026-03-29",
+  focus: "conditioning",
+  mainWorkout: "3 rounds: Sled Push 50m, Burpee Broad Jumps x10, 1km Row",
+  accessory: "Core circuit: 3x20 sit-ups, 3x30s plank",
+  notes: "Hyrox simulation - focus on transitions",
+  duration: 55,
+  rpe: 7,
+  source: "manual",
+  exercises: [
+    EXAMPLE_EXERCISE_SLED_PUSH,
+    EXAMPLE_EXERCISE_BURPEE_BROAD_JUMPS,
+    EXAMPLE_EXERCISE_ROWING,
+  ],
+};
+
+const EXAMPLE_UPDATE_WORKOUT = {
+  duration: 52,
+  rpe: 8,
+  notes: "Felt stronger on the sled push rounds today",
+  exercises: [EXAMPLE_EXERCISE_SLED_PUSH, EXAMPLE_EXERCISE_ROWING],
+};
+
+const EXAMPLE_WORKOUT_RESPONSE = {
+  date: "2026-03-29",
+  focus: "conditioning",
+  mainWorkout: "3 rounds: Sled Push 50m, Burpee Broad Jumps x10, 1km Row",
+  accessory: "Core circuit: 3x20 sit-ups, 3x30s plank",
+  notes: "Hyrox simulation - focus on transitions",
+  duration: 55,
+  rpe: 7,
+  source: "manual",
+  planDayId: null,
+  stravaActivityId: null,
+  calories: null,
+  distanceMeters: null,
+  elevationGain: null,
+  avgHeartrate: null,
+  maxHeartrate: null,
+  avgSpeed: null,
+  maxSpeed: null,
+  avgCadence: null,
+  avgWatts: null,
+  sufferScore: null,
+};
+
+const EXAMPLE_PREFERENCES = {
+  weightUnit: "kg",
+  distanceUnit: "km",
+  weeklyGoal: 4,
+  emailNotifications: true,
+  aiCoachEnabled: true,
+};
+
 // Register base schemas as reusable components
 export const InsertWorkoutLogSchema = registry.register(
   "InsertWorkoutLog",
@@ -120,6 +209,7 @@ registry.registerPath({
       content: {
         "application/json": {
           schema: CreateWorkoutRequestSchema,
+          example: EXAMPLE_CREATE_WORKOUT,
         },
       },
     },
@@ -133,6 +223,10 @@ registry.registerPath({
             message: z.string().openapi({ example: "Workout log created successfully" }),
             workout: InsertWorkoutLogSchema,
           }),
+          example: {
+            message: "Workout log created successfully",
+            workout: EXAMPLE_WORKOUT_RESPONSE,
+          },
         },
       },
     },
@@ -158,6 +252,7 @@ registry.registerPath({
       content: {
         "application/json": {
           schema: z.array(InsertWorkoutLogSchema),
+          example: [EXAMPLE_WORKOUT_RESPONSE],
         },
       },
     },
@@ -185,6 +280,7 @@ registry.registerPath({
       content: {
         "application/json": {
           schema: InsertWorkoutLogSchema,
+          example: EXAMPLE_WORKOUT_RESPONSE,
         },
       },
     },
@@ -212,6 +308,7 @@ registry.registerPath({
       content: {
         "application/json": {
           schema: UpdateWorkoutRequestSchema,
+          example: EXAMPLE_UPDATE_WORKOUT,
         },
       },
     },
@@ -222,6 +319,7 @@ registry.registerPath({
       content: {
         "application/json": {
           schema: InsertWorkoutLogSchema,
+          example: EXAMPLE_WORKOUT_RESPONSE,
         },
       },
     },
@@ -281,6 +379,7 @@ registry.registerPath({
       content: {
         "application/json": {
           schema: UpdateUserPreferencesSchema,
+          example: EXAMPLE_PREFERENCES,
         },
       },
     },
@@ -291,6 +390,7 @@ registry.registerPath({
       content: {
         "application/json": {
           schema: UpdateUserPreferencesSchema,
+          example: EXAMPLE_PREFERENCES,
         },
       },
     },
