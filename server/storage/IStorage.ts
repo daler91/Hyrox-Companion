@@ -56,7 +56,6 @@ export interface IWorkoutStorage {
   updateWorkoutLog(logId: string, updates: UpdateWorkoutLog, userId: string): Promise<WorkoutLog | undefined>;
   deleteWorkoutLog(logId: string, userId: string): Promise<boolean>;
   deleteWorkoutLogByPlanDayId(planDayId: string, userId: string): Promise<boolean>;
-  deleteWorkoutLogsAfterDate(userId: string, afterDate: string): Promise<number>;
   getWorkoutLogByPlanDayId(planDayId: string, userId: string): Promise<WorkoutLog | undefined>;
 
   createExerciseSets(sets: InsertExerciseSet[]): Promise<ExerciseSet[]>;

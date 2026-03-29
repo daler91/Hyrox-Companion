@@ -129,16 +129,6 @@ router.patch("/api/v1/workouts/:id", isAuthenticated, rateLimiter("workout", 40)
     res.json(result);
   }));
 
-router.delete("/api/v1/workouts", isAuthenticated, rateLimiter("workout", 40), asyncHandler(async (req: Request<Record<string, never>, Record<string, never>, Record<string, never>, { after?: string }>, res: Response) => {
-    const userId = getUserId(req);
-    const after = req.query.after;
-    if (!after || !/^\d{4}-\d{2}-\d{2}$/.test(after)) {
-      return res.status(400).json({ error: "Query parameter 'after' is required in YYYY-MM-DD format", code: "BAD_REQUEST" });
-    }
-    const deletedCount = await storage.deleteWorkoutLogsAfterDate(userId, after);
-    res.json({ success: true, deletedCount });
-  }));
-
 router.delete("/api/v1/workouts/:id", isAuthenticated, rateLimiter("workout", 40), asyncHandler(async (req: Request<{ id: string }>, res: Response) => {
     const userId = getUserId(req);
     await storage.deleteExerciseSetsByWorkoutLog(req.params.id, userId);
