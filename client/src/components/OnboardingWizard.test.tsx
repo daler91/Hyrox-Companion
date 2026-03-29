@@ -28,7 +28,7 @@ vi.mock('@/hooks/use-toast', () => ({
 vi.mock('@/lib/queryClient', () => ({
   apiRequest: vi.fn(),
   queryClient: {
-    invalidateQueries: vi.fn(),
+    invalidateQueries: vi.fn().mockResolvedValue(undefined),
   },
 }));
 

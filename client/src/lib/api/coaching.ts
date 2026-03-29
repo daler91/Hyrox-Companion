@@ -1,7 +1,7 @@
 import { typedRequest, rawRequest } from "./client";
 import type { InsertCoachingMaterial, CoachingMaterial, ChatMessage, RagInfo } from "@shared/schema";
 
-export type { RagInfo };
+export type { RagInfo } from "@shared/schema";
 
 export interface RagStatus {
   hasApiKey: boolean;

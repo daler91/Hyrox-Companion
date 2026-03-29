@@ -18,7 +18,7 @@ const wrapper = ({ children }: { children: React.ReactNode }) => (
 vi.mock('@/lib/queryClient', () => ({
   apiRequest: vi.fn(),
   queryClient: {
-    invalidateQueries: vi.fn(),
+    invalidateQueries: vi.fn().mockResolvedValue(undefined),
     cancelQueries: vi.fn().mockResolvedValue(undefined),
     getQueryData: vi.fn().mockReturnValue([]),
     setQueryData: vi.fn(),

@@ -117,7 +117,7 @@ export function validateBody(schema: z.ZodType<any, any, any>) {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const asyncHandler = (fn: (req: any, res: Response, next: NextFunction) => Promise<any>) => (req: Request, res: Response, next: NextFunction): void => {
-  void Promise.resolve(fn(req, res, next)).catch((err) => {
+  Promise.resolve(fn(req, res, next)).catch((err) => {
     const log = req.log || logger;
     log.error({ err }, `Route error in ${req.method} ${req.originalUrl}`);
     next(err);

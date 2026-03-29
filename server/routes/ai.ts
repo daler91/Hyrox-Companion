@@ -9,9 +9,8 @@ import { buildCoachingMaterialsSection, buildRetrievedChunksSection } from "../p
 import { retrieveRelevantChunks } from "../services/ragService";
 import { toDateStr, getUserId } from "../types";
 import { chatRequestSchema, parseExercisesRequestSchema, insertChatMessageSchema, type InsertChatMessage, type RagInfo } from "@shared/schema";
+export type { RagInfo } from "@shared/schema";
 import { z } from "zod";
-
-export type { RagInfo };
 
 const router = Router();
 

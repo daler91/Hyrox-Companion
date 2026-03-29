@@ -40,7 +40,7 @@ export async function setupVite(server: Server, app: Express) {
   });
 
   app.use("*", viteFallbackLimiter, (req, res, next) => {
-    void (async () => {
+    (async () => {
     const url = req.originalUrl;
 
     try {
@@ -63,6 +63,6 @@ export async function setupVite(server: Server, app: Express) {
       vite.ssrFixStacktrace(e as Error);
       next(e);
     }
-    })();
+    })().catch(next);
   });
 }

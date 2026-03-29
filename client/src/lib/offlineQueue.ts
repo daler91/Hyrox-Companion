@@ -62,10 +62,10 @@ export async function flushQueue(): Promise<{ synced: number; failed: number }> 
 // Auto-flush when coming back online
 if (globalThis.window !== undefined) {
   globalThis.addEventListener("online", () => {
-    void flushQueue().then(({ synced }) => {
+    flushQueue().then(({ synced }) => {
       if (synced > 0) {
         globalThis.dispatchEvent(new CustomEvent("offline-sync-complete", { detail: { synced } }));
       }
-    });
+    }).catch(() => {});
   });
 }

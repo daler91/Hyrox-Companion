@@ -38,8 +38,8 @@ export function DataToolsSection() {
     mutationFn: () => api.workouts.batchReparse(),
     onSuccess: (data) => {
       setParseResults({ success: data.parsed, failed: data.failed });
-      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
-      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workouts });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }).catch(() => {});
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workouts }).catch(() => {});
       toast({
         title: "Parsing Complete",
         description: `Parsed ${data.parsed} workouts successfully. ${data.failed} could not be parsed.`,

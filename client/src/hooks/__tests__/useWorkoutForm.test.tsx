@@ -26,7 +26,7 @@ vi.mock('@/hooks/useVoiceInput', () => ({
 vi.mock('@/lib/queryClient', () => ({
   apiRequest: vi.fn(),
   queryClient: {
-    invalidateQueries: vi.fn(),
+    invalidateQueries: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -66,6 +66,7 @@ describe('useWorkoutForm', () => {
     vi.mocked(queryClientLib.apiRequest).mockResolvedValue({
       json: () => Promise.resolve({ success: true }),
     } as Response);
+    vi.mocked(queryClientLib.queryClient.invalidateQueries).mockResolvedValue(undefined);
 
     // Mock useVoiceInput returns
     let callCount = 0;

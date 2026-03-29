@@ -71,8 +71,8 @@ export function useWorkoutForm({
     mutationFn: (workoutData: Omit<InsertWorkoutLog, "userId"> & { title?: string, exercises?: ParsedExercise[] }) =>
       api.workouts.create(workoutData),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workouts });
-      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workouts }).catch(() => {});
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }).catch(() => {});
       toast({
         title: "Workout logged",
         description: "Your workout has been saved successfully.",

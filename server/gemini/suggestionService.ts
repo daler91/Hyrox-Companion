@@ -16,8 +16,8 @@ export interface UpcomingWorkout {
   notes?: string;
 }
 
+export type { WorkoutSuggestion } from "@shared/schema";
 import type { WorkoutSuggestion } from "@shared/schema";
-export type { WorkoutSuggestion };
 
 export const workoutSuggestionSchema = z.object({
   workoutId: z.string(),

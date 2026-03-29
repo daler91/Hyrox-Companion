@@ -8,7 +8,7 @@ import * as toastHook from "@/hooks/use-toast";
 import type { TimelineEntry } from "@shared/schema";
 
 vi.mock("@/lib/queryClient", () => ({
-  queryClient: { invalidateQueries: vi.fn() },
+  queryClient: { invalidateQueries: vi.fn().mockResolvedValue(undefined) },
   apiRequest: vi.fn(),
 }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: vi.fn() }));
@@ -27,7 +27,7 @@ describe("useCombineWorkouts", () => {
 
   beforeEach(() => {
     queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    vi.mocked(queryClientLib.queryClient.invalidateQueries).mockClear();
+    vi.mocked(queryClientLib.queryClient.invalidateQueries).mockClear().mockResolvedValue(undefined);
     vi.mocked(toastHook.useToast).mockReturnValue({ toast: mockToast } as unknown as ReturnType<typeof toastHook.useToast>);
     vi.mocked(queryClientLib.apiRequest).mockResolvedValue({ json: vi.fn().mockResolvedValue({ id: "new" }) } as unknown as Response);
   });

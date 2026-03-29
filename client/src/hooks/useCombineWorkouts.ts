@@ -29,8 +29,8 @@ export function useCombineWorkouts() {
       return created;
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
-      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workouts });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }).catch(() => {});
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workouts }).catch(() => {});
       setCombiningEntry(null);
       setCombineSecondEntry(null);
       setShowCombineDialog(false);
