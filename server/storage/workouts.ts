@@ -10,7 +10,7 @@ import {
   type InsertExerciseSet,
 } from "@shared/schema";
 import { db } from "../db";
-import { eq, and, or, desc, asc, isNull, isNotNull, sql, inArray } from "drizzle-orm";
+import { eq, and, or, desc, asc, isNull, isNotNull, sql, inArray, gt } from "drizzle-orm";
 import { queryExerciseSetsWithDates } from "./shared";
 
 export class WorkoutStorage {
@@ -125,6 +125,13 @@ export class WorkoutStorage {
     
     const result = await db.delete(workoutLogs).where(and(eq(workoutLogs.id, logId), eq(workoutLogs.userId, userId)));
     return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  async deleteWorkoutLogsAfterDate(userId: string, afterDate: string): Promise<number> {
+    const result = await db
+      .delete(workoutLogs)
+      .where(and(eq(workoutLogs.userId, userId), gt(workoutLogs.date, afterDate)));
+    return result.rowCount ?? 0;
   }
 
   async deleteWorkoutLogByPlanDayId(planDayId: string, userId: string): Promise<boolean> {
