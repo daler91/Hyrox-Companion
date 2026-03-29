@@ -30,7 +30,9 @@ export function RagDebugBadge({ ragInfo }: Readonly<{ ragInfo: RagInfo }>) {
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
-        className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border font-medium ${badgeColor} hover:opacity-80 transition-opacity`}
+        aria-expanded={expanded}
+        aria-label={`${label} – ${expanded ? "collapse" : "expand"} details`}
+        className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border font-medium ${badgeColor} hover:opacity-80 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
       >
         <Icon className="h-2.5 w-2.5" />
         {label}

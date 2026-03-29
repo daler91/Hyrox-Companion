@@ -94,6 +94,7 @@ export function StravaSection({
                   size="sm"
                   onClick={() => disconnectStravaMutation.mutate()}
                   disabled={disconnectStravaMutation.isPending}
+                  aria-label="Disconnect Strava"
                   data-testid="button-disconnect-strava"
                 >
                   {disconnectStravaMutation.isPending ? (
