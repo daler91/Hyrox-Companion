@@ -96,28 +96,38 @@ export function ExerciseSelector({ selectedExercises, onToggle, onAdd, allowDupl
               const count = countOf(name);
               const isSelected = count > 0;
               const Icon = exerciseIcons[name] || Plus;
+
+              if (allowDuplicates) {
+                return (
+                  <Button
+                    key={name}
+                    variant={isSelected ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => (onAdd ? onAdd(name) : onToggle(name))}
+                    data-testid={`button-exercise-${name}`}
+                  >
+                    <Icon className="h-3.5 w-3.5 mr-1.5" />
+                    {def.label}
+                    {count > 0 && (
+                      <Badge variant="secondary" className="ml-1.5 h-4 min-w-[1rem] px-1 text-[10px]">
+                        {count}
+                      </Badge>
+                    )}
+                  </Button>
+                );
+              }
+
               return (
                 <Button
                   key={name}
                   variant={isSelected ? "default" : "outline"}
                   size="sm"
-                  onClick={() => {
-                    if (allowDuplicates && onAdd) {
-                      onAdd(name);
-                    } else {
-                      onToggle(name);
-                    }
-                  }}
+                  onClick={() => onToggle(name)}
                   data-testid={`button-exercise-${name}`}
-                  aria-pressed={!allowDuplicates ? (isSelected ? "true" : "false") : undefined}
+                  aria-pressed={isSelected}
                 >
                   <Icon className="h-3.5 w-3.5 mr-1.5" />
                   {def.label}
-                  {allowDuplicates && count > 0 && (
-                    <Badge variant="secondary" className="ml-1.5 h-4 min-w-[1rem] px-1 text-[10px]">
-                      {count}
-                    </Badge>
-                  )}
                 </Button>
               );
             })}
