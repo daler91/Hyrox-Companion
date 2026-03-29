@@ -18,6 +18,7 @@ import { vectorPool } from "./vectorDb";
 import { getAuth } from "@clerk/express";
 import { runStartupMaintenance } from "./maintenance";
 import { startQueue, queue } from "./queue";
+import { startCron, stopCron } from "./cron";
 
 // 🛡️ Sentinel: Dev Auth Bypass double-guard
 if (env.ALLOW_DEV_AUTH_BYPASS === "true") {
@@ -177,6 +178,7 @@ await new Promise<void>((resolve, reject) => {
 try {
   await runStartupMaintenance(storage);
   await startQueue();
+  startCron(storage);
   await registerRoutes(httpServer, app);
 
   // Serve OpenAPI docs
@@ -222,6 +224,7 @@ try {
 // Graceful shutdown
 const shutdown = () => {
   logger.info("Received shutdown signal. Closing HTTP server...");
+  stopCron();
   httpServer.close(() => {
     logger.info("HTTP server closed. Stopping queue...");
     queue.stop().then(() => {

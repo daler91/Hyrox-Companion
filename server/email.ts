@@ -17,7 +17,7 @@ function getResendClient() {
     throw new Error("RESEND_API_KEY environment variable is not set");
   }
   const fromEmail =
-    env.RESEND_FROM_EMAIL || "fitai.coach <noreply@resend.dev>";
+    env.RESEND_FROM_EMAIL || "fitai.coach <Timmy@fitai.coach>";
   return {
     client: new Resend(apiKey),
     fromEmail,
