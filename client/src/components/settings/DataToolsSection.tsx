@@ -1,18 +1,7 @@
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { Loader2, Download, FileSpreadsheet, FileJson, Sparkles, Trash2 } from "lucide-react";
+import { Loader2, Download, FileSpreadsheet, FileJson, Sparkles } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { api, QUERY_KEYS } from "@/lib/api";
@@ -23,7 +12,6 @@ export function DataToolsSection() {
   const { toast } = useToast();
   const [unstructuredCount, setUnstructuredCount] = useState<number | null>(null);
   const [parseResults, setParseResults] = useState<{ success: number; failed: number } | null>(null);
-  const [deletedCount, setDeletedCount] = useState<number | null>(null);
 
   const findUnstructuredMutation = useMutation({
     mutationFn: async () => {
@@ -61,26 +49,6 @@ export function DataToolsSection() {
       toast({
         title: "Parsing Failed",
         description: "Failed to parse workouts with AI.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const deleteFutureWorkoutsMutation = useMutation({
-    mutationFn: () => api.workouts.deleteAfterDate("2026-04-06"),
-    onSuccess: (data) => {
-      setDeletedCount(data.deletedCount);
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workouts });
-      toast({
-        title: "Workouts Deleted",
-        description: `Deleted ${data.deletedCount} workout${data.deletedCount === 1 ? "" : "s"} after April 6th, 2026.`,
-      });
-    },
-    onError: () => {
-      toast({
-        title: "Deletion Failed",
-        description: "Failed to delete workouts.",
         variant: "destructive",
       });
     },
@@ -202,60 +170,6 @@ export function DataToolsSection() {
           <p className="text-xs text-muted-foreground">
             CSV includes your workout history. JSON includes full data with training plans.
           </p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Trash2 className="h-5 w-5" />
-            Delete Future Workouts
-          </CardTitle>
-          <CardDescription>Remove all workouts logged after April 6th, 2026</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {deletedCount !== null ? (
-            <p className="text-sm text-muted-foreground" data-testid="text-deleted-count">
-              Deleted {deletedCount} workout{deletedCount === 1 ? "" : "s"}.
-            </p>
-          ) : (
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button
-                  variant="destructive"
-                  disabled={deleteFutureWorkoutsMutation.isPending}
-                  data-testid="button-delete-future-workouts"
-                >
-                  {deleteFutureWorkoutsMutation.isPending ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      Deleting...
-                    </>
-                  ) : (
-                    "Delete Workouts After April 6th"
-                  )}
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Delete future workouts?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This will permanently delete all workouts with dates after April 6th, 2026. This action cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel data-testid="button-cancel-delete-future">Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={() => deleteFutureWorkoutsMutation.mutate()}
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                    data-testid="button-confirm-delete-future"
-                  >
-                    Delete
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          )}
         </CardContent>
       </Card>
     </>
