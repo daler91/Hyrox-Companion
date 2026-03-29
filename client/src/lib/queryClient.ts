@@ -16,7 +16,7 @@ async function throwIfResNotOk(res: Response) {
 
     if (res.status === 429) {
       const retryAfterRaw = res.headers.get("Retry-After");
-      const retryAfter = retryAfterRaw ? parseInt(retryAfterRaw, 10) : null;
+      const retryAfter = retryAfterRaw ? Number.parseInt(retryAfterRaw, 10) : null;
       throw new RateLimitError(
         text,
         Number.isNaN(retryAfter) ? null : retryAfter,
