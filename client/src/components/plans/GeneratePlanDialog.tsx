@@ -16,6 +16,17 @@ const MAX_DAYS_PER_WEEK = 7;
 const MIN_DAYS_PER_WEEK = 2;
 const DEFAULT_DAYS_PER_WEEK = 5;
 
+const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] as const;
+
+const DEFAULT_REST_DAYS: Record<number, string[]> = {
+  7: [],
+  6: ["Sunday"],
+  5: ["Saturday", "Sunday"],
+  4: ["Wednesday", "Saturday", "Sunday"],
+  3: ["Tuesday", "Thursday", "Saturday", "Sunday"],
+  2: ["Monday", "Wednesday", "Friday", "Saturday", "Sunday"],
+};
+
 interface GeneratePlanDialogProps {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
@@ -41,6 +52,8 @@ export function GeneratePlanDialog({ open, onOpenChange }: GeneratePlanDialogPro
   const [daysPerWeek, setDaysPerWeek] = useState(DEFAULT_DAYS_PER_WEEK);
   const [experienceLevel, setExperienceLevel] = useState<"beginner" | "intermediate" | "advanced">("intermediate");
   const [raceDate, setRaceDate] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [restDays, setRestDays] = useState<string[]>(DEFAULT_REST_DAYS[DEFAULT_DAYS_PER_WEEK]);
   const [focusAreas, setFocusAreas] = useState<string[]>([]);
   const [injuries, setInjuries] = useState("");
 
@@ -53,6 +66,8 @@ export function GeneratePlanDialog({ open, onOpenChange }: GeneratePlanDialogPro
       daysPerWeek,
       experienceLevel,
       ...(raceDate ? { raceDate } : {}),
+      ...(startDate ? { startDate } : {}),
+      ...(daysPerWeek < 7 && restDays.length > 0 ? { restDays: restDays as GeneratePlanInput["restDays"] } : {}),
       ...(focusAreas.length > 0 ? { focusAreas } : {}),
       ...(injuries ? { injuries } : {}),
     };
@@ -72,6 +87,8 @@ export function GeneratePlanDialog({ open, onOpenChange }: GeneratePlanDialogPro
     setDaysPerWeek(DEFAULT_DAYS_PER_WEEK);
     setExperienceLevel("intermediate");
     setRaceDate("");
+    setStartDate("");
+    setRestDays(DEFAULT_REST_DAYS[DEFAULT_DAYS_PER_WEEK]);
     setFocusAreas([]);
     setInjuries("");
   };
@@ -82,8 +99,41 @@ export function GeneratePlanDialog({ open, onOpenChange }: GeneratePlanDialogPro
     );
   };
 
+  const toggleRestDay = (day: string) => {
+    setRestDays((prev) =>
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day],
+    );
+  };
+
+  const handleDaysPerWeekChange = (value: number) => {
+    const clamped = Math.min(MAX_DAYS_PER_WEEK, Math.max(MIN_DAYS_PER_WEEK, value));
+    setDaysPerWeek(clamped);
+    setRestDays(DEFAULT_REST_DAYS[clamped] ?? []);
+  };
+
+  const calculateSuggestedStartDate = (race: string, weeks: number): string => {
+    const raceD = new Date(race);
+    const start = new Date(raceD);
+    start.setDate(start.getDate() - weeks * 7);
+    const dayOfWeek = start.getDay();
+    let mondayOffset: number;
+    if (dayOfWeek === 0) mondayOffset = 1;
+    else if (dayOfWeek === 1) mondayOffset = 0;
+    else mondayOffset = 8 - dayOfWeek;
+    start.setDate(start.getDate() + mondayOffset);
+    return start.toISOString().split("T")[0];
+  };
+
+  const handleRaceDateChange = (value: string) => {
+    setRaceDate(value);
+    if (value && !startDate) {
+      setStartDate(calculateSuggestedStartDate(value, totalWeeks));
+    }
+  };
+
+  const requiredRestDays = 7 - daysPerWeek;
   const canProceedStep0 = goal.trim().length > 0;
-  const canProceedStep1 = true; // All fields have defaults
+  const canProceedStep1 = daysPerWeek === 7 || restDays.length === requiredRestDays;
   const canGenerate = canProceedStep0 && canProceedStep1;
 
   return (
@@ -144,10 +194,31 @@ export function GeneratePlanDialog({ open, onOpenChange }: GeneratePlanDialogPro
                   min={MIN_DAYS_PER_WEEK}
                   max={MAX_DAYS_PER_WEEK}
                   value={daysPerWeek}
-                  onChange={(e) => setDaysPerWeek(Math.min(MAX_DAYS_PER_WEEK, Math.max(MIN_DAYS_PER_WEEK, Number.parseInt(e.target.value) || DEFAULT_DAYS_PER_WEEK)))}
+                  onChange={(e) => handleDaysPerWeekChange(Number.parseInt(e.target.value) || DEFAULT_DAYS_PER_WEEK)}
                 />
               </div>
             </div>
+
+            {daysPerWeek < 7 && (
+              <div className="space-y-2">
+                <Label>Rest Days <span className="text-muted-foreground font-normal">(select {requiredRestDays})</span></Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {DAY_NAMES.map((day) => (
+                    <Button
+                      key={day}
+                      variant={restDays.includes(day) ? "default" : "outline"}
+                      size="sm"
+                      className="text-xs px-2 py-1 h-7"
+                      onClick={() => toggleRestDay(day)}
+                      disabled={!restDays.includes(day) && restDays.length >= requiredRestDays}
+                      type="button"
+                    >
+                      {day.slice(0, 3)}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label>Experience Level</Label>
@@ -163,16 +234,27 @@ export function GeneratePlanDialog({ open, onOpenChange }: GeneratePlanDialogPro
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="raceDate">Race Date (optional)</Label>
-              <Input
-                id="raceDate"
-                type="date"
-                value={raceDate}
-                onChange={(e) => setRaceDate(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">
-                If set, the plan will auto-schedule to peak for this date.
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="startDate">Start Date</Label>
+                <Input
+                  id="startDate"
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="raceDate">Race Date</Label>
+                <Input
+                  id="raceDate"
+                  type="date"
+                  value={raceDate}
+                  onChange={(e) => handleRaceDateChange(e.target.value)}
+                />
+              </div>
+              <p className="col-span-2 text-xs text-muted-foreground -mt-2">
+                Both optional. Race date structures phases to peak on that day.
               </p>
             </div>
 

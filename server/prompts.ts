@@ -196,7 +196,7 @@ RETURN FORMAT: Return ONLY a valid JSON array. Each element:
 }
 
 RULES:
-1. Each week MUST have exactly the requested number of training days (with remaining days as rest).
+1. Each week MUST have exactly the requested number of training days (with remaining days as rest). If specific rest days are provided in the athlete profile, those days MUST be rest days every week.
 2. Include at least 3 running sessions per week for Hyrox goals.
 3. Balance grip-intensive exercises across the week (don't stack farmers carry, sled pull, rowing on consecutive days).
 4. Be SPECIFIC with prescriptions: "4x8 back squat at 60kg" not just "squats".
