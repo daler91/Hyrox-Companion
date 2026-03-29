@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { OnboardingWizard } from './OnboardingWizard';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
+import * as queryClientLib from '@/lib/queryClient';
 
 // Mock child components to isolate OnboardingWizard
 vi.mock('@/components/onboarding/WelcomeStep', () => ({
@@ -39,6 +40,7 @@ describe('OnboardingWizard Error Handling', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(queryClientLib.queryClient.invalidateQueries).mockResolvedValue(undefined);
     vi.mocked(useToast).mockReturnValue({ toast: mockToast } as unknown as ReturnType<typeof useToast>);
     queryClient = new QueryClient({
       defaultOptions: {

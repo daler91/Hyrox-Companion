@@ -48,6 +48,7 @@ vi.mock('@tanstack/react-query', async (importOriginal) => {
 describe('useChatSession', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(queryClient.queryClient.invalidateQueries).mockResolvedValue(undefined);
     globalThis.fetch = vi.fn();
     // Default apiRequest mock to return a simple response to avoid 'json' of undefined errors
     vi.mocked(queryClient.apiRequest).mockResolvedValue({
