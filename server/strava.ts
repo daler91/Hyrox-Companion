@@ -90,7 +90,7 @@ async function refreshStravaToken(refreshToken: string): Promise<StravaTokenResp
       return null;
     }
 
-    return await response.json();
+    return (await response.json()) as StravaTokenResponse;
   } catch (error) {
     logger.error({ err: error }, "Error refreshing Strava token:");
     return null;
@@ -199,7 +199,7 @@ async function handleStravaCallback(req: Request, res: Response) {
       return res.redirect("/settings?strava=error");
     }
 
-    const tokenData: StravaTokenResponse = await tokenResponse.json();
+    const tokenData = (await tokenResponse.json()) as StravaTokenResponse;
 
     await storage.upsertStravaConnection({
       userId,
@@ -253,7 +253,7 @@ async function handleStravaSync(req: Request, res: Response) {
       return res.status(500).json({ error: "Failed to fetch activities from Strava", code: "INTERNAL_SERVER_ERROR" });
     }
 
-    const activities: StravaActivity[] = await activitiesResponse.json();
+    const activities = (await activitiesResponse.json()) as StravaActivity[];
 
     const activityIds = activities.map(a => String(a.id));
     const existingIds = await storage.getExistingStravaActivityIds(userId, activityIds);

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { Router, type Response, type Request as ExpressRequest } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
-import { updatePlanDaySchema, importPlanRequestSchema, schedulePlanRequestSchema, updateTrainingPlanGoalSchema, workoutStatusEnum, dateStringSchema, generatePlanInputSchema, type UpdatePlanDay, type PlanDay, type UpdateTrainingPlanGoal } from "@shared/schema";
+import { updatePlanDaySchema, importPlanRequestSchema, schedulePlanRequestSchema, updateTrainingPlanGoalSchema, workoutStatusEnum, dateStringSchema, generatePlanInputSchema, type UpdatePlanDay, type PlanDay, type UpdateTrainingPlanGoal, type GeneratePlanInput } from "@shared/schema";
 import { getUserId } from "../types";
 import { importPlanFromCSV, createSamplePlan, updatePlanDayWithCleanup, updatePlanDayStatus } from "../services/planService";
 import { generatePlan } from "../services/planGenerationService";
@@ -78,7 +78,7 @@ router.post("/api/v1/plans/sample", isAuthenticated, rateLimiter("planSample", 5
 router.post("/api/v1/plans/generate", isAuthenticated, rateLimiter("planGenerate", 3), validateBody(generatePlanInputSchema), asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     try {
-      const fullPlan = await generatePlan(req.body, userId);
+      const fullPlan = await generatePlan(req.body as GeneratePlanInput, userId);
       res.json(fullPlan);
     } catch (error: unknown) {
       const log = req.log || logger;

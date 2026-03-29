@@ -108,6 +108,7 @@ export default function Timeline() {
     return [...visiblePastGroups.slice().reverse(), ...visibleFutureGroups];
   }, [visiblePastGroups, visibleFutureGroups]);
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual known issue
   const rowVirtualizer = useVirtualizer({
     count: allVisibleGroups.length,
     getScrollElement: () => scrollRef.current,

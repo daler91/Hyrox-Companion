@@ -157,7 +157,7 @@ async function ensureVectorSchema() {
     const embCol = await client.query(
       `SELECT data_type FROM information_schema.columns WHERE table_name = 'document_chunks' AND column_name = 'embedding'`,
     );
-    if (embCol.rows.length > 0 && embCol.rows[0].data_type === "text") {
+    if (embCol.rows.length > 0 && (embCol.rows[0] as { data_type: string }).data_type === "text") {
       await client.query(`ALTER TABLE document_chunks ALTER COLUMN embedding TYPE vector(3072) USING embedding::vector(3072)`);
       logger.info({ context: "db" }, "Converted embedding column from text to vector(3072)");
     }

@@ -71,7 +71,7 @@ export class CoachingStorage {
         c.chunkIndex,
         c.embedding ? `[${c.embedding.join(",")}]` : null,
       ]);
-      const result = await vectorPool.query(
+      const result = await vectorPool.query<DocumentChunk>(
         `INSERT INTO document_chunks ${cols} VALUES ${batch
           .map((_, j) => {
             const o = j * 5;
@@ -108,7 +108,7 @@ export class CoachingStorage {
           values.push(c.materialId, c.userId, c.content, c.chunkIndex, c.embedding ? `[${c.embedding.join(",")}]` : null);
           return `(gen_random_uuid(), $${o + 1}, $${o + 2}, $${o + 3}, $${o + 4}, $${o + 5})`;
         });
-        const result = await client.query(
+        const result = await client.query<DocumentChunk>(
           `INSERT INTO document_chunks ("id", "material_id", "user_id", "content", "chunk_index", "embedding")
            VALUES ${rows.join(", ")}
            RETURNING id, material_id AS "materialId", user_id AS "userId", content, chunk_index AS "chunkIndex", created_at AS "createdAt"`,
@@ -132,7 +132,7 @@ export class CoachingStorage {
     topK: number,
   ): Promise<DocumentChunk[]> {
     const embeddingStr = `[${queryEmbedding.join(",")}]`;
-    const result = await vectorPool.query(
+    const result = await vectorPool.query<DocumentChunk>(
       `SELECT id, material_id AS "materialId", user_id AS "userId", content, chunk_index AS "chunkIndex", created_at AS "createdAt"
        FROM document_chunks
        WHERE user_id = $1 AND embedding IS NOT NULL
@@ -178,6 +178,6 @@ export class CoachingStorage {
       [userId],
     );
     if (result.rows.length === 0) return null;
-    return result.rows[0].dims ?? null;
+    return (result.rows[0] as { dims: number | null }).dims ?? null;
   }
 }

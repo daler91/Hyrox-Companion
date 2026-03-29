@@ -213,7 +213,7 @@ export async function reembedAllMaterials(userId: string) {
     if (result.status === "fulfilled") {
       count++;
     } else {
-      const err = result.reason;
+      const err: unknown = result.reason;
       // We map directly with index, so we can reliably get the failed material
       const material = materials[i];
       errors.push(`${material.id}: ${err instanceof Error ? err.message : String(err)}`);

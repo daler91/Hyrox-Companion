@@ -15,7 +15,7 @@ export type { RagInfo };
 
 const router = Router();
 
-router.post("/api/v1/parse-exercises", isAuthenticated, rateLimiter("parse", 5), validateBody(parseExercisesRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, any, z.infer<typeof parseExercisesRequestSchema>>, res: Response) => {
+router.post("/api/v1/parse-exercises", isAuthenticated, rateLimiter("parse", 5), validateBody(parseExercisesRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof parseExercisesRequestSchema>>, res: Response) => {
     const { text } = req.body;
     const userId = getUserId(req);
     const user = await storage.getUser(userId);
@@ -104,7 +104,7 @@ async function prepareChatContext(req: ExpressRequest): Promise<{ success: false
   };
 }
 
-router.post("/api/v1/chat", isAuthenticated, rateLimiter("chat", 10), validateBody(chatRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, any, z.infer<typeof chatRequestSchema>>, res: Response) => {
+router.post("/api/v1/chat", isAuthenticated, rateLimiter("chat", 10), validateBody(chatRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof chatRequestSchema>>, res: Response) => {
     const context = await prepareChatContext(req);
     if (!context.success) {
       return res.status(400).json({ error: context.error, code: "BAD_REQUEST" });
@@ -115,7 +115,7 @@ router.post("/api/v1/chat", isAuthenticated, rateLimiter("chat", 10), validateBo
     res.json({ response, ragInfo });
   }));
 
-router.post("/api/v1/chat/stream", isAuthenticated, rateLimiter("chat", 10), validateBody(chatRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, any, z.infer<typeof chatRequestSchema>>, res: Response) => {
+router.post("/api/v1/chat/stream", isAuthenticated, rateLimiter("chat", 10), validateBody(chatRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof chatRequestSchema>>, res: Response) => {
     const context = await prepareChatContext(req);
     if (!context.success) {
       return res.status(400).json({ error: context.error, code: "BAD_REQUEST" });
@@ -154,7 +154,7 @@ router.get("/api/v1/chat/history", isAuthenticated, asyncHandler(async (req: Exp
     res.json(messages);
   }));
 
-router.post("/api/v1/chat/message", isAuthenticated, rateLimiter("chatMessage", 20), validateBody(insertChatMessageSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, any, InsertChatMessage>, res: Response) => {
+router.post("/api/v1/chat/message", isAuthenticated, rateLimiter("chatMessage", 20), validateBody(insertChatMessageSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, InsertChatMessage>, res: Response) => {
     const userId = getUserId(req);
     const { role, content } = req.body;
 

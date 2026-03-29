@@ -41,6 +41,7 @@ export const getQueryFn: <T>(options: {
     }
 
     await throwIfResNotOk(res);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return -- json() returns any; typed via QueryFunction<T>
     return await res.json();
   };
 

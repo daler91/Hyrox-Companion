@@ -89,11 +89,16 @@ export default tseslint.config(
 
   // Relax rules for test files
   {
-    files: ["**/*.test.ts", "**/*.test.tsx"],
+    files: ["**/*.test.ts", "**/*.test.tsx", "**/tests/**/*.ts", "**/testUtils.ts", "**/helpers.ts"],
     rules: {
       "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/no-floating-promises": "off",
       "@typescript-eslint/no-misused-promises": "off",
+      "@typescript-eslint/no-unsafe-assignment": "off",
+      "@typescript-eslint/no-unsafe-call": "off",
+      "@typescript-eslint/no-unsafe-member-access": "off",
+      "@typescript-eslint/no-unsafe-argument": "off",
+      "@typescript-eslint/no-unsafe-return": "off",
       "@typescript-eslint/unbound-method": "off",
       "@typescript-eslint/await-thenable": "off",
       "@typescript-eslint/no-unused-vars": "off",
