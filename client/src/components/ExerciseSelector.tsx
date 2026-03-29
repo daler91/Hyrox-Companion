@@ -109,6 +109,7 @@ export function ExerciseSelector({ selectedExercises, onToggle, onAdd, allowDupl
                     }
                   }}
                   data-testid={`button-exercise-${name}`}
+                  aria-pressed={!allowDuplicates ? isSelected : undefined}
                 >
                   <Icon className="h-3.5 w-3.5 mr-1.5" />
                   {def.label}
