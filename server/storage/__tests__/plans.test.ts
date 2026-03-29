@@ -13,7 +13,7 @@ vi.mock("../../storage", () => ({ storage: {} }));
 function mockSelectChain(result: unknown[]) {
   const whereMock = vi.fn().mockResolvedValue(result);
   const fromMock = vi.fn().mockReturnValue({ where: whereMock });
-  vi.mocked(db.select).mockReturnValue({ from: fromMock } as any);
+  vi.mocked(db.select).mockReturnValue({ from: fromMock } as never);
   return { fromMock, whereMock };
 }
 
@@ -21,20 +21,20 @@ function mockSelectWithJoin(result: unknown[]) {
   const whereMock = vi.fn().mockResolvedValue(result);
   const innerJoinMock = vi.fn().mockReturnValue({ where: whereMock });
   const fromMock = vi.fn().mockReturnValue({ innerJoin: innerJoinMock });
-  vi.mocked(db.select).mockReturnValue({ from: fromMock } as any);
+  vi.mocked(db.select).mockReturnValue({ from: fromMock } as never);
 }
 
 function mockInsertChain(result: unknown[]) {
   const returningMock = vi.fn().mockResolvedValue(result);
   const valuesMock = vi.fn().mockReturnValue({ returning: returningMock });
-  vi.mocked(db.insert).mockReturnValue({ values: valuesMock } as any);
+  vi.mocked(db.insert).mockReturnValue({ values: valuesMock } as never);
 }
 
 function mockUpdateChain(result: unknown[]) {
   const returningMock = vi.fn().mockResolvedValue(result);
   const whereMock = vi.fn().mockReturnValue({ returning: returningMock });
   const setMock = vi.fn().mockReturnValue({ where: whereMock });
-  vi.mocked(db.update).mockReturnValue({ set: setMock } as any);
+  vi.mocked(db.update).mockReturnValue({ set: setMock } as never);
 }
 
 // -- Tests --------------------------------------------------------------------
@@ -83,8 +83,8 @@ describe("PlanStorage", () => {
       ];
 
       vi.mocked(db.select)
-        .mockReturnValueOnce({ from: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue([mockPlan]) }) } as any)
-        .mockReturnValueOnce({ from: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(mockDays) }) } as any);
+        .mockReturnValueOnce({ from: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue([mockPlan]) }) } as never)
+        .mockReturnValueOnce({ from: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(mockDays) }) } as never);
 
       const result = await storage.getTrainingPlan("plan-1", "u1");
       expect(result).toBeDefined();
@@ -120,7 +120,7 @@ describe("PlanStorage", () => {
 
       const result = await storage.createPlanDays([
         { planId: "plan-1", weekNumber: 1, dayName: "Monday", focus: "Strength", mainWorkout: "Squats", status: "planned" },
-      ] as any);
+      ] as never);
       expect(result).toEqual(mockDays);
     });
   });
@@ -135,7 +135,7 @@ describe("PlanStorage", () => {
       mockSelectChain([{ id: "plan-1" }]);
       vi.mocked(db.transaction).mockImplementation(async (callback) => {
         const mockTx = { delete: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue({ rowCount: 1 }) }) };
-        return await callback(mockTx as any);
+        return await callback(mockTx as never);
       });
 
       expect(await storage.deleteTrainingPlan("plan-1", "u1")).toBe(true);
@@ -181,7 +181,7 @@ describe("PlanStorage", () => {
 
     it("should delete the day and return true when found", async () => {
       mockSelectWithJoin([{ planDay: { id: "d1" } }]);
-      vi.mocked(db.delete).mockReturnValue({ where: vi.fn().mockResolvedValue({ rowCount: 1 }) } as any);
+      vi.mocked(db.delete).mockReturnValue({ where: vi.fn().mockResolvedValue({ rowCount: 1 }) } as never);
 
       expect(await storage.deletePlanDay("d1", "u1")).toBe(true);
     });

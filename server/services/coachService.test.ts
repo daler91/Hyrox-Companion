@@ -27,7 +27,7 @@ vi.mock("../logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.
 // -- Helpers ------------------------------------------------------------------
 
 function mockEnabledUser() {
-  vi.mocked(storage.getUser).mockResolvedValue({ aiCoachEnabled: true, isAutoCoaching: false } as any);
+  vi.mocked(storage.getUser).mockResolvedValue({ aiCoachEnabled: true, isAutoCoaching: false } as never);
   vi.mocked(storage.updateIsAutoCoaching).mockResolvedValue(undefined);
 }
 
@@ -37,9 +37,9 @@ function makeTimelineEntry(overrides: Record<string, unknown> = {}) {
 
 function mockBaseAutoCoachDeps(timeline: Record<string, unknown>[] = [makeTimelineEntry()]) {
   mockEnabledUser();
-  vi.mocked(buildTrainingContext).mockResolvedValue({} as any);
+  vi.mocked(buildTrainingContext).mockResolvedValue({} as never);
   vi.mocked(storage.listTrainingPlans).mockResolvedValue([]);
-  vi.mocked(storage.getTimeline).mockResolvedValue(timeline as any);
+  vi.mocked(storage.getTimeline).mockResolvedValue(timeline as never);
   vi.mocked(storage.hasChunksForUser).mockResolvedValue(false);
   vi.mocked(storage.listCoachingMaterials).mockResolvedValue([]);
 }
@@ -67,7 +67,7 @@ describe("coachService", () => {
 
   describe("triggerAutoCoach", () => {
     it("returns 0 when user has aiCoachEnabled=false", async () => {
-      vi.mocked(storage.getUser).mockResolvedValue({ aiCoachEnabled: false } as any);
+      vi.mocked(storage.getUser).mockResolvedValue({ aiCoachEnabled: false } as never);
       expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 0 });
       expect(storage.updateIsAutoCoaching).not.toHaveBeenCalled();
     });
@@ -78,7 +78,7 @@ describe("coachService", () => {
     });
 
     it("returns 0 when user is already auto-coaching", async () => {
-      vi.mocked(storage.getUser).mockResolvedValue({ aiCoachEnabled: true, isAutoCoaching: true } as any);
+      vi.mocked(storage.getUser).mockResolvedValue({ aiCoachEnabled: true, isAutoCoaching: true } as never);
       expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 0 });
       expect(storage.updateIsAutoCoaching).not.toHaveBeenCalled();
     });
@@ -92,9 +92,9 @@ describe("coachService", () => {
 
     it("applies suggestions and returns adjusted count", async () => {
       mockBaseAutoCoachDeps([makeTimelineEntry(), makeTimelineEntry({ planDayId: "day-2", date: "2026-01-17", focus: "Running", mainWorkout: "5km easy" })]);
-      vi.mocked(storage.listTrainingPlans).mockResolvedValue([{ id: "plan-1", goal: "Sub-90 Hyrox" } as any]);
+      vi.mocked(storage.listTrainingPlans).mockResolvedValue([{ id: "plan-1", goal: "Sub-90 Hyrox" } as never]);
       vi.mocked(generateWorkoutSuggestions).mockResolvedValue([makeSuggestion()]);
-      vi.mocked(storage.updatePlanDay).mockResolvedValue({} as any);
+      vi.mocked(storage.updatePlanDay).mockResolvedValue({} as never);
 
       expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 1 });
       expect(storage.updatePlanDay).toHaveBeenCalledWith("day-1", { mainWorkout: "4x5 Squats @ 80%", aiSource: null }, "user-1");
@@ -106,7 +106,7 @@ describe("coachService", () => {
       vi.mocked(storage.getStoredEmbeddingDimension).mockResolvedValue(3072);
       vi.mocked(retrieveRelevantChunks).mockResolvedValue(["chunk 1", "chunk 2"]);
       vi.mocked(generateWorkoutSuggestions).mockResolvedValue([makeSuggestion({ targetField: "notes", recommendation: "Focus on form", priority: "low" })]);
-      vi.mocked(storage.updatePlanDay).mockResolvedValue({} as any);
+      vi.mocked(storage.updatePlanDay).mockResolvedValue({} as never);
 
       expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 1 });
       expect(retrieveRelevantChunks).toHaveBeenCalled();
@@ -128,7 +128,7 @@ describe("coachService", () => {
       vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
         makeSuggestion({ targetField: "accessory", action: "append", recommendation: "Add 3x10 calf raises" }),
       ]);
-      vi.mocked(storage.updatePlanDay).mockResolvedValue({} as any);
+      vi.mocked(storage.updatePlanDay).mockResolvedValue({} as never);
 
       expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 1 });
       expect(storage.updatePlanDay).toHaveBeenCalledWith("day-1", { accessory: "Leg Press\n[AI Coach] Add 3x10 calf raises", aiSource: null }, "user-1");

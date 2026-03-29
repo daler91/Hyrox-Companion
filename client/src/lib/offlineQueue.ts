@@ -13,8 +13,9 @@ const STORAGE_KEY = "hyrox-offline-queue";
 function getQueue(): PendingMutation[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
+    return raw ? (JSON.parse(raw) as PendingMutation[]) : [];
+  } catch (_err) {
+    // Corrupted localStorage data — reset to empty queue
     return [];
   }
 }
@@ -24,7 +25,7 @@ function saveQueue(queue: PendingMutation[]) {
 }
 
 export function enqueueMutation(method: string, url: string, body: unknown): string {
-  const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  const id = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
   const queue = getQueue();
   queue.push({ id, method, url, body, timestamp: Date.now() });
   saveQueue(queue);
@@ -47,7 +48,8 @@ export async function flushQueue(): Promise<{ synced: number; failed: number }> 
     try {
       await apiRequest(mutation.method, mutation.url, mutation.body);
       synced++;
-    } catch {
+    } catch (_err) {
+      // Mutation will be retried on next flush
       failed++;
       remaining.push(mutation);
     }

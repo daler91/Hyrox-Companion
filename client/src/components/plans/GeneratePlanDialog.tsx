@@ -9,6 +9,13 @@ import { Loader2, Sparkles, ChevronRight, ChevronLeft } from "lucide-react";
 import { useGeneratePlan } from "@/hooks/usePlanGeneration";
 import type { GeneratePlanInput } from "@shared/schema";
 
+const MAX_WEEKS = 24;
+const MIN_WEEKS = 1;
+const DEFAULT_WEEKS = 8;
+const MAX_DAYS_PER_WEEK = 7;
+const MIN_DAYS_PER_WEEK = 2;
+const DEFAULT_DAYS_PER_WEEK = 5;
+
 interface GeneratePlanDialogProps {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
@@ -30,8 +37,8 @@ const FOCUS_OPTIONS = [
 export function GeneratePlanDialog({ open, onOpenChange }: GeneratePlanDialogProps) {
   const [step, setStep] = useState(0);
   const [goal, setGoal] = useState("");
-  const [totalWeeks, setTotalWeeks] = useState(8);
-  const [daysPerWeek, setDaysPerWeek] = useState(5);
+  const [totalWeeks, setTotalWeeks] = useState(DEFAULT_WEEKS);
+  const [daysPerWeek, setDaysPerWeek] = useState(DEFAULT_DAYS_PER_WEEK);
   const [experienceLevel, setExperienceLevel] = useState<"beginner" | "intermediate" | "advanced">("intermediate");
   const [raceDate, setRaceDate] = useState("");
   const [focusAreas, setFocusAreas] = useState<string[]>([]);
@@ -61,8 +68,8 @@ export function GeneratePlanDialog({ open, onOpenChange }: GeneratePlanDialogPro
   const resetForm = () => {
     setStep(0);
     setGoal("");
-    setTotalWeeks(8);
-    setDaysPerWeek(5);
+    setTotalWeeks(DEFAULT_WEEKS);
+    setDaysPerWeek(DEFAULT_DAYS_PER_WEEK);
     setExperienceLevel("intermediate");
     setRaceDate("");
     setFocusAreas([]);
@@ -123,10 +130,10 @@ export function GeneratePlanDialog({ open, onOpenChange }: GeneratePlanDialogPro
                 <Input
                   id="weeks"
                   type="number"
-                  min={1}
-                  max={24}
+                  min={MIN_WEEKS}
+                  max={MAX_WEEKS}
                   value={totalWeeks}
-                  onChange={(e) => setTotalWeeks(Math.min(24, Math.max(1, parseInt(e.target.value) || 8)))}
+                  onChange={(e) => setTotalWeeks(Math.min(MAX_WEEKS, Math.max(MIN_WEEKS, parseInt(e.target.value) || DEFAULT_WEEKS)))}
                 />
               </div>
               <div className="space-y-2">
@@ -134,10 +141,10 @@ export function GeneratePlanDialog({ open, onOpenChange }: GeneratePlanDialogPro
                 <Input
                   id="days"
                   type="number"
-                  min={2}
-                  max={7}
+                  min={MIN_DAYS_PER_WEEK}
+                  max={MAX_DAYS_PER_WEEK}
                   value={daysPerWeek}
-                  onChange={(e) => setDaysPerWeek(Math.min(7, Math.max(2, parseInt(e.target.value) || 5)))}
+                  onChange={(e) => setDaysPerWeek(Math.min(MAX_DAYS_PER_WEEK, Math.max(MIN_DAYS_PER_WEEK, parseInt(e.target.value) || DEFAULT_DAYS_PER_WEEK)))}
                 />
               </div>
             </div>
