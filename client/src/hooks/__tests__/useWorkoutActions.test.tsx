@@ -18,7 +18,7 @@ const wrapper = ({ children }: { children: React.ReactNode }) => (
 vi.mock('@/lib/queryClient', () => ({
   apiRequest: vi.fn(),
   queryClient: {
-    invalidateQueries: vi.fn(),
+    invalidateQueries: vi.fn().mockResolvedValue(undefined),
     cancelQueries: vi.fn().mockResolvedValue(undefined),
     getQueryData: vi.fn().mockReturnValue([]),
     setQueryData: vi.fn(),
@@ -36,6 +36,7 @@ describe('useWorkoutActions', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(queryClientLib.queryClient.invalidateQueries).mockResolvedValue(undefined);
     vi.mocked(toastHook.useToast).mockReturnValue({ toast: mockToast } as unknown as ReturnType<typeof toastHook.useToast>);
     vi.mocked(queryClientLib.apiRequest).mockResolvedValue({
       json: () => Promise.resolve({ success: true }),

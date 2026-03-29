@@ -17,7 +17,7 @@ function useAutoCoachWatcher(user?: User) {
       const isCoaching = !!user.isAutoCoaching;
       // If transitioned from true to false, invalidate timeline
       if (wasCoachingRef.current && !isCoaching) {
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }).catch(() => {});
       }
       wasCoachingRef.current = isCoaching;
     }

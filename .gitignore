@@ -24,9 +24,24 @@ node-compile-cache/
 # Generated reports
 eslint_report*.json
 test_report.json
+vitest_report.json
+
+# Placeholder files
+dummy.png
 
 # Stale lock files (project uses pnpm)
 package-lock.json
 
 # Backup files
 *.bak
+
+# Runtime logs
+*.log
+
+# Temp/output files
+*_output.txt
+tmp_*.txt
+
+# Development artifacts
+attached_assets/
+pr_description.md

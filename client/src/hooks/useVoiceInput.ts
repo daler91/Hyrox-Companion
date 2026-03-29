@@ -229,7 +229,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
     if (isListening) {
       stopListening();
     } else {
-      startListening();
+      startListening().catch(() => {});
     }
   }, [isListening, startListening, stopListening]);
 

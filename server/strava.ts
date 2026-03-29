@@ -7,6 +7,7 @@ import { isAuthenticated } from "./clerkAuth";
 import { type DistanceUnit } from "@shared/unitConversion";
 import { mapStravaActivityToWorkout, type StravaActivity } from "./services/stravaMapper";
 import { getUserId } from "./types";
+import { asyncHandler } from "./routeUtils";
 import rateLimit from "express-rate-limit";
 import { RATE_LIMIT_WINDOW_15M_MS, STRAVA_STATE_MAX_AGE_MS } from "./constants";
 
@@ -89,7 +90,7 @@ async function refreshStravaToken(refreshToken: string): Promise<StravaTokenResp
       return null;
     }
 
-    return await response.json();
+    return (await response.json()) as StravaTokenResponse;
   } catch (error) {
     logger.error({ err: error }, "Error refreshing Strava token:");
     return null;
@@ -198,7 +199,7 @@ async function handleStravaCallback(req: Request, res: Response) {
       return res.redirect("/settings?strava=error");
     }
 
-    const tokenData: StravaTokenResponse = await tokenResponse.json();
+    const tokenData = (await tokenResponse.json()) as StravaTokenResponse;
 
     await storage.upsertStravaConnection({
       userId,
@@ -252,7 +253,7 @@ async function handleStravaSync(req: Request, res: Response) {
       return res.status(500).json({ error: "Failed to fetch activities from Strava", code: "INTERNAL_SERVER_ERROR" });
     }
 
-    const activities: StravaActivity[] = await activitiesResponse.json();
+    const activities = (await activitiesResponse.json()) as StravaActivity[];
 
     const activityIds = activities.map(a => String(a.id));
     const existingIds = await storage.getExistingStravaActivityIds(userId, activityIds);
@@ -290,9 +291,9 @@ async function handleStravaSync(req: Request, res: Response) {
 }
 
 export function registerStravaRoutes(app: Express): void {
-  app.get("/api/v1/strava/status", isAuthenticated, handleStravaStatus);
-  app.get("/api/v1/strava/auth", isAuthenticated, stravaAuthLimiter, handleStravaAuth);
-  app.get("/api/v1/strava/callback", stravaAuthLimiter, handleStravaCallback);
-  app.delete("/api/v1/strava/disconnect", isAuthenticated, handleStravaDisconnect);
-  app.post("/api/v1/strava/sync", isAuthenticated, handleStravaSync);
+  app.get("/api/v1/strava/status", isAuthenticated, asyncHandler(handleStravaStatus));
+  app.get("/api/v1/strava/auth", isAuthenticated, stravaAuthLimiter, asyncHandler(handleStravaAuth));
+  app.get("/api/v1/strava/callback", stravaAuthLimiter, asyncHandler(handleStravaCallback));
+  app.delete("/api/v1/strava/disconnect", isAuthenticated, asyncHandler(handleStravaDisconnect));
+  app.post("/api/v1/strava/sync", isAuthenticated, asyncHandler(handleStravaSync));
 }

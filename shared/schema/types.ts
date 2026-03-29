@@ -268,3 +268,23 @@ export const generatePlanInputSchema = z.object({
 });
 
 export type GeneratePlanInput = z.infer<typeof generatePlanInputSchema>;
+
+// AI coaching types (shared between client and server)
+export interface RagInfo {
+  source: "rag" | "legacy" | "none";
+  chunkCount: number;
+  chunks?: string[];
+  materialCount?: number;
+  fallbackReason?: string;
+}
+
+export interface WorkoutSuggestion {
+  workoutId: string;
+  workoutDate: string;
+  workoutFocus: string;
+  targetField: "mainWorkout" | "accessory" | "notes";
+  action: "replace" | "append";
+  recommendation: string;
+  rationale: string;
+  priority: "high" | "medium" | "low";
+}

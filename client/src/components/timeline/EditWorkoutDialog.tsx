@@ -15,11 +15,9 @@ import type { TimelineEntry } from "@shared/schema";
 import { VoiceFieldButton } from "@/components/VoiceFieldButton";
 import { RpeSelector } from "@/components/RpeSelector";
 
-export interface EditFormState {
-  focus: string;
-  mainWorkout: string;
-  accessory: string;
-  notes: string;
+import { type EditFormState as BaseEditFormState } from "@/hooks/useWorkoutVoiceForm";
+
+export interface EditFormState extends BaseEditFormState {
   rpe: number | null;
 }
 

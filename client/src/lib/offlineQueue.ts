@@ -66,6 +66,6 @@ if (globalThis.window !== undefined) {
       if (synced > 0) {
         globalThis.dispatchEvent(new CustomEvent("offline-sync-complete", { detail: { synced } }));
       }
-    });
+    }).catch(() => {});
   });
 }

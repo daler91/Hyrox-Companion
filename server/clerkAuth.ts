@@ -52,6 +52,7 @@ export async function setupAuth(app: Express) {
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
   if (hasClerkKeys()) {
     const auth = getAuth(req);

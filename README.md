@@ -73,7 +73,7 @@ This repository is a fully functional monorepo containing both the React fronten
 Follow these instructions to run the full application ecosystem locally on your machine.
 
 ### Prerequisites
-- [Node.js](https://nodejs.org/) (v22 or higher)
+- [Node.js](https://nodejs.org/) (v20 or higher)
 - [PostgreSQL](https://www.postgresql.org/download/) Database (Running locally on port 5432, or a hosted cloud instance)
 - A [Clerk.dev](https://clerk.dev/) account for Auth
 - A [Google AI Studio](https://aistudio.google.com/) account for the Gemini API key

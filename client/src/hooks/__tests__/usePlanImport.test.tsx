@@ -13,7 +13,7 @@ const createWrapper = () => {
 };
 
 vi.mock('@/lib/queryClient', () => ({
-  apiRequest: vi.fn(), queryClient: { invalidateQueries: vi.fn() }
+  apiRequest: vi.fn(), queryClient: { invalidateQueries: vi.fn().mockResolvedValue(undefined) }
 }));
 vi.mock('@/hooks/use-toast', () => ({ useToast: vi.fn() }));
 
@@ -25,6 +25,7 @@ describe('usePlanImport', () => {
     vi.clearAllMocks();
     vi.mocked(toastHook.useToast).mockReturnValue({ toast: mockToast } as unknown as ReturnType<typeof toastHook.useToast>);
     vi.mocked(queryClientLib.apiRequest).mockResolvedValue({ json: () => Promise.resolve({ success: true, id: 'test-plan-id' }) } as Response);
+    vi.mocked(queryClientLib.queryClient.invalidateQueries).mockResolvedValue(undefined);
     const w = createWrapper();
     qc = w.qc;
     wrapper = w.wrapper;

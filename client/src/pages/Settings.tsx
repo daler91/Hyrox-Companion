@@ -87,7 +87,7 @@ export default function Settings() {
       aiCoachEnabled: boolean;
     }) => api.preferences.update(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.preferences });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.preferences }).catch(() => {});
       setHasChanges(false);
       toast({
         title: "Settings saved",

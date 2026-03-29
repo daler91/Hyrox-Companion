@@ -23,7 +23,7 @@ export function usePlanImport({ onPlanScheduled }: UsePlanImportOptions = {}) {
     mutationFn: (data: { csvContent: string; fileName: string }) =>
       api.plans.import(data),
     onSuccess: (plan) => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans }).catch(() => {});
       setSchedulingPlanId(plan.id);
       toast({ title: "Plan imported! Now set a start date." });
     },
@@ -35,7 +35,7 @@ export function usePlanImport({ onPlanScheduled }: UsePlanImportOptions = {}) {
   const samplePlanMutation = useMutation({
     mutationFn: () => api.plans.createSample(),
     onSuccess: (plan) => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans }).catch(() => {});
       setSchedulingPlanId(plan.id);
       toast({ title: "Sample plan created! Now set a start date." });
     },
@@ -48,8 +48,8 @@ export function usePlanImport({ onPlanScheduled }: UsePlanImportOptions = {}) {
     mutationFn: ({ planId, name }: { planId: string; name: string }) =>
       api.plans.rename(planId, name),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans });
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans }).catch(() => {});
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }).catch(() => {});
       toast({ title: "Plan renamed" });
     },
     onError: () => {
@@ -61,7 +61,7 @@ export function usePlanImport({ onPlanScheduled }: UsePlanImportOptions = {}) {
     mutationFn: ({ planId, goal }: { planId: string; goal: string | null }) =>
       api.plans.updateGoal(planId, goal),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans }).catch(() => {});
       toast({ title: "Goal saved" });
     },
     onError: () => {
@@ -74,8 +74,8 @@ export function usePlanImport({ onPlanScheduled }: UsePlanImportOptions = {}) {
       api.plans.schedule(planId, sd),
     onSuccess: () => {
       const planIdToSelect = schedulingPlanId;
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline", planIdToSelect] });
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline", planIdToSelect] }).catch(() => {});
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans }).catch(() => {});
       if (planIdToSelect) {
         onPlanScheduled?.(planIdToSelect);
       }

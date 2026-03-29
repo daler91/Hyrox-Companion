@@ -8,12 +8,13 @@ import { buildTrainingContext } from "../services/aiService";
 import { buildCoachingMaterialsSection, buildRetrievedChunksSection } from "../prompts";
 import { retrieveRelevantChunks } from "../services/ragService";
 import { toDateStr, getUserId } from "../types";
-import { chatRequestSchema, parseExercisesRequestSchema, insertChatMessageSchema, type InsertChatMessage } from "@shared/schema";
+import { chatRequestSchema, parseExercisesRequestSchema, insertChatMessageSchema, type InsertChatMessage, type RagInfo } from "@shared/schema";
+export type { RagInfo } from "@shared/schema";
 import { z } from "zod";
 
 const router = Router();
 
-router.post("/api/v1/parse-exercises", isAuthenticated, rateLimiter("parse", 5), validateBody(parseExercisesRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, any, z.infer<typeof parseExercisesRequestSchema>>, res: Response) => {
+router.post("/api/v1/parse-exercises", isAuthenticated, rateLimiter("parse", 5), validateBody(parseExercisesRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof parseExercisesRequestSchema>>, res: Response) => {
     const { text } = req.body;
     const userId = getUserId(req);
     const user = await storage.getUser(userId);
@@ -24,21 +25,10 @@ router.post("/api/v1/parse-exercises", isAuthenticated, rateLimiter("parse", 5),
     res.json(exercises);
   }));
 
-/**
- * Try RAG retrieval for the user's query. Falls back to legacy if no chunks exist.
- */
-export interface RagInfo {
-  source: "rag" | "legacy" | "none";
-  chunkCount: number;
-  chunks?: string[];
-  materialCount?: number;
-  fallbackReason?: string;
-}
-
 async function getCoachingContext(
   userId: string,
   query: string,
-  log: any = logger,
+  log: Pick<typeof logger, "warn" | "info" | "error"> = logger,
 ): Promise<{ retrievedChunks?: string[]; coachingMaterials?: import("../prompts").CoachingMaterialInput[]; ragInfo: RagInfo }> {
   let fallbackReason: string | undefined;
 
@@ -113,7 +103,7 @@ async function prepareChatContext(req: ExpressRequest): Promise<{ success: false
   };
 }
 
-router.post("/api/v1/chat", isAuthenticated, rateLimiter("chat", 10), validateBody(chatRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, any, z.infer<typeof chatRequestSchema>>, res: Response) => {
+router.post("/api/v1/chat", isAuthenticated, rateLimiter("chat", 10), validateBody(chatRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof chatRequestSchema>>, res: Response) => {
     const context = await prepareChatContext(req);
     if (!context.success) {
       return res.status(400).json({ error: context.error, code: "BAD_REQUEST" });
@@ -124,7 +114,7 @@ router.post("/api/v1/chat", isAuthenticated, rateLimiter("chat", 10), validateBo
     res.json({ response, ragInfo });
   }));
 
-router.post("/api/v1/chat/stream", isAuthenticated, rateLimiter("chat", 10), validateBody(chatRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, any, z.infer<typeof chatRequestSchema>>, res: Response) => {
+router.post("/api/v1/chat/stream", isAuthenticated, rateLimiter("chat", 10), validateBody(chatRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof chatRequestSchema>>, res: Response) => {
     const context = await prepareChatContext(req);
     if (!context.success) {
       return res.status(400).json({ error: context.error, code: "BAD_REQUEST" });
@@ -163,7 +153,7 @@ router.get("/api/v1/chat/history", isAuthenticated, asyncHandler(async (req: Exp
     res.json(messages);
   }));
 
-router.post("/api/v1/chat/message", isAuthenticated, rateLimiter("chatMessage", 20), validateBody(insertChatMessageSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, any, InsertChatMessage>, res: Response) => {
+router.post("/api/v1/chat/message", isAuthenticated, rateLimiter("chatMessage", 20), validateBody(insertChatMessageSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, InsertChatMessage>, res: Response) => {
     const userId = getUserId(req);
     const { role, content } = req.body;
 

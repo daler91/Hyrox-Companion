@@ -48,7 +48,7 @@ export function validDate(val: unknown): string | undefined {
   return parsed.success ? parsed.data : undefined;
 }
 
-router.get("/api/v1/personal-records", isAuthenticated, rateLimiter("analytics", 20), asyncHandler(async (req: ExpressRequest<Record<string, never>, any, any, { from?: string; to?: string }>, res: Response) => {
+router.get("/api/v1/personal-records", isAuthenticated, rateLimiter("analytics", 20), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, unknown, { from?: string; to?: string }>, res: Response) => {
     const userId = getUserId(req);
     const from = validDate(req.query.from);
     const to = validDate(req.query.to);
@@ -59,7 +59,7 @@ router.get("/api/v1/personal-records", isAuthenticated, rateLimiter("analytics",
     res.json(calculatePersonalRecords(allSets));
   }));
 
-router.get("/api/v1/exercise-analytics", isAuthenticated, rateLimiter("analytics", 20), asyncHandler(async (req: ExpressRequest<Record<string, never>, any, any, { from?: string; to?: string }>, res: Response) => {
+router.get("/api/v1/exercise-analytics", isAuthenticated, rateLimiter("analytics", 20), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, unknown, { from?: string; to?: string }>, res: Response) => {
     const userId = getUserId(req);
     const from = validDate(req.query.from);
     const to = validDate(req.query.to);

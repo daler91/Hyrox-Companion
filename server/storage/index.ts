@@ -36,6 +36,7 @@ function createDatabaseStorage(): IStorage {
       for (const delegate of delegates) {
         const value = (delegate as unknown as Record<string | symbol, unknown>)[prop];
         if (typeof value === "function") {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-return -- dynamic proxy delegation
           return value.bind(delegate);
         }
       }
@@ -44,6 +45,7 @@ function createDatabaseStorage(): IStorage {
         throw new Error(`Method '${String(prop)}' not implemented in any storage delegate.`);
       }
 
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-return -- Proxy passthrough
       return Reflect.get(_target, prop, receiver);
     },
   });

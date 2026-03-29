@@ -16,7 +16,7 @@ const wrapper = ({ children }: { children: React.ReactNode }) => (
 vi.mock('@/lib/queryClient', () => ({
   apiRequest: vi.fn(),
   queryClient: {
-    invalidateQueries: vi.fn(),
+    invalidateQueries: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -48,6 +48,7 @@ vi.mock('@tanstack/react-query', async (importOriginal) => {
 describe('useChatSession', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(queryClient.queryClient.invalidateQueries).mockResolvedValue(undefined);
     globalThis.fetch = vi.fn();
     // Default apiRequest mock to return a simple response to avoid 'json' of undefined errors
     vi.mocked(queryClient.apiRequest).mockResolvedValue({
