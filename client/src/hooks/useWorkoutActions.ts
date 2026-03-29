@@ -100,6 +100,35 @@ export function useWorkoutActions(selectedPlanId: string | null) {
     invalidateQueries: [QUERY_KEYS.timeline, QUERY_KEYS.workouts],
     successToast: "Workout updated",
     errorToast: "Failed to update workout",
+    onMutate: async ({ workoutId, updates }) => {
+      await queryClient.cancelQueries({ queryKey: [...QUERY_KEYS.timeline, selectedPlanId] });
+      const previousTimeline = queryClient.getQueryData<TimelineEntry[]>([...QUERY_KEYS.timeline, selectedPlanId]);
+
+      if (previousTimeline) {
+        queryClient.setQueryData<TimelineEntry[]>([...QUERY_KEYS.timeline, selectedPlanId], (old) => {
+          if (!old) return old;
+          return old.map((entry) =>
+            entry.workoutLogId === workoutId
+              ? {
+                  ...entry,
+                  ...updates.focus != null && { focus: updates.focus },
+                  ...updates.mainWorkout != null && { mainWorkout: updates.mainWorkout },
+                  ...updates.accessory !== undefined && { accessory: updates.accessory },
+                  ...updates.notes !== undefined && { notes: updates.notes },
+                  ...updates.rpe !== undefined && { rpe: updates.rpe },
+                }
+              : entry
+          );
+        });
+      }
+
+      return { previousTimeline };
+    },
+    onError: (err, variables, context: { previousTimeline?: TimelineEntry[] } | undefined) => {
+      if (context?.previousTimeline) {
+        queryClient.setQueryData([...QUERY_KEYS.timeline, selectedPlanId], context.previousTimeline);
+      }
+    },
     onSuccess: () => {
       setDetailEntry(null);
     },
@@ -178,7 +207,10 @@ export function useWorkoutActions(selectedPlanId: string | null) {
 
     if (!detailEntry.planDayId) return;
 
-    if (updates.exercises && updates.exercises.length > 0) {
+    const hasExercises = updates.exercises && updates.exercises.length > 0;
+    const hasWorkoutLogFields = updates.rpe != null;
+
+    if (hasExercises || hasWorkoutLogFields) {
       logWorkoutMutation.mutate({
         planDayId: detailEntry.planDayId,
         date: detailEntry.date,
@@ -207,6 +239,7 @@ export function useWorkoutActions(selectedPlanId: string | null) {
       mainWorkout: entry.mainWorkout,
       accessory: entry.accessory || undefined,
       notes: entry.notes || undefined,
+      rpe: entry.rpe ?? undefined,
     });
   }, [logWorkoutMutation]);
 
