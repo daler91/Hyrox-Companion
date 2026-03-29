@@ -15,15 +15,19 @@ const wrapper = ({ children }: { children: React.ReactNode }) => (
   <QueryClientProvider client={createTestQueryClient()}>{children}</QueryClientProvider>
 );
 
-vi.mock('@/lib/queryClient', () => ({
-  apiRequest: vi.fn(),
-  queryClient: {
-    invalidateQueries: vi.fn().mockResolvedValue(undefined),
-    cancelQueries: vi.fn().mockResolvedValue(undefined),
-    getQueryData: vi.fn().mockReturnValue([]),
-    setQueryData: vi.fn(),
-  },
-}));
+vi.mock('@/lib/queryClient', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/queryClient')>();
+  return {
+    ...actual,
+    apiRequest: vi.fn(),
+    queryClient: {
+      invalidateQueries: vi.fn().mockResolvedValue(undefined),
+      cancelQueries: vi.fn().mockResolvedValue(undefined),
+      getQueryData: vi.fn().mockReturnValue([]),
+      setQueryData: vi.fn(),
+    },
+  };
+});
 
 vi.mock('@/hooks/use-toast', () => ({
   useToast: vi.fn(),
