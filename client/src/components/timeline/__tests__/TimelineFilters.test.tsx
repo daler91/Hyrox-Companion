@@ -3,6 +3,11 @@ import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from "vitest";
 import TimelineFilters from "../timeline-filters";
 
+// Mock GeneratePlanDialog to avoid requiring QueryClientProvider in tests
+vi.mock("@/components/plans/GeneratePlanDialog", () => ({
+  GeneratePlanDialog: () => null,
+}));
+
 // Mock pointer capture and scrollIntoView for Radix UI components in JSDOM
 const originalHasPointerCapture = HTMLElement.prototype.hasPointerCapture;
 const originalSetPointerCapture = HTMLElement.prototype.setPointerCapture;
