@@ -43,9 +43,11 @@ function buildGenerationPrompt(input: GeneratePlanInput): string {
 
   // Include rest days in the total
   const restDaysPerWeek = 7 - input.daysPerWeek;
-  lines.push(``);
-  lines.push(`Generate ${input.totalWeeks * 7} day entries (${input.daysPerWeek} training + ${restDaysPerWeek} rest per week).`);
-  lines.push(`Return the complete JSON array for ALL weeks.`);
+  lines.push(
+    ``,
+    `Generate ${input.totalWeeks * 7} day entries (${input.daysPerWeek} training + ${restDaysPerWeek} rest per week).`,
+    `Return the complete JSON array for ALL weeks.`,
+  );
 
   return lines.join("\n");
 }
@@ -60,7 +62,7 @@ function parseAndValidateDays(text: string): GeneratedDay[] {
   }
 
   if (!Array.isArray(raw)) {
-    throw new Error("AI response is not an array");
+    throw new TypeError("AI response is not an array");
   }
 
   const validated: GeneratedDay[] = [];
@@ -91,7 +93,10 @@ function calculateStartDate(raceDate: string, totalWeeks: number): string {
   start.setDate(start.getDate() - totalWeeks * 7);
   // Align to nearest Monday
   const dayOfWeek = start.getDay();
-  const mondayOffset = dayOfWeek === 0 ? 1 : dayOfWeek === 1 ? 0 : 8 - dayOfWeek;
+  let mondayOffset: number;
+  if (dayOfWeek === 0) mondayOffset = 1;        // Sunday → next Monday
+  else if (dayOfWeek === 1) mondayOffset = 0;    // Already Monday
+  else mondayOffset = 8 - dayOfWeek;             // Tue-Sat → next Monday
   start.setDate(start.getDate() + mondayOffset);
   return start.toISOString().split("T")[0];
 }

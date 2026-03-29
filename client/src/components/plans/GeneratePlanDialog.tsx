@@ -133,7 +133,7 @@ export function GeneratePlanDialog({ open, onOpenChange }: GeneratePlanDialogPro
                   min={MIN_WEEKS}
                   max={MAX_WEEKS}
                   value={totalWeeks}
-                  onChange={(e) => setTotalWeeks(Math.min(MAX_WEEKS, Math.max(MIN_WEEKS, parseInt(e.target.value) || DEFAULT_WEEKS)))}
+                  onChange={(e) => setTotalWeeks(Math.min(MAX_WEEKS, Math.max(MIN_WEEKS, Number.parseInt(e.target.value) || DEFAULT_WEEKS)))}
                 />
               </div>
               <div className="space-y-2">
@@ -144,7 +144,7 @@ export function GeneratePlanDialog({ open, onOpenChange }: GeneratePlanDialogPro
                   min={MIN_DAYS_PER_WEEK}
                   max={MAX_DAYS_PER_WEEK}
                   value={daysPerWeek}
-                  onChange={(e) => setDaysPerWeek(Math.min(MAX_DAYS_PER_WEEK, Math.max(MIN_DAYS_PER_WEEK, parseInt(e.target.value) || DEFAULT_DAYS_PER_WEEK)))}
+                  onChange={(e) => setDaysPerWeek(Math.min(MAX_DAYS_PER_WEEK, Math.max(MIN_DAYS_PER_WEEK, Number.parseInt(e.target.value) || DEFAULT_DAYS_PER_WEEK)))}
                 />
               </div>
             </div>

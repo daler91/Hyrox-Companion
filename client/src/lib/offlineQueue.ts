@@ -14,8 +14,8 @@ function getQueue(): PendingMutation[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     return raw ? (JSON.parse(raw) as PendingMutation[]) : [];
-  } catch (_err) {
-    // Corrupted localStorage data — reset to empty queue
+  } catch (err: unknown) {
+    console.warn("Failed to parse offline queue from localStorage", err);
     return [];
   }
 }
@@ -48,8 +48,8 @@ export async function flushQueue(): Promise<{ synced: number; failed: number }> 
     try {
       await apiRequest(mutation.method, mutation.url, mutation.body);
       synced++;
-    } catch (_err) {
-      // Mutation will be retried on next flush
+    } catch (err: unknown) {
+      console.warn("Offline mutation failed, will retry on next flush", err);
       failed++;
       remaining.push(mutation);
     }
@@ -60,12 +60,11 @@ export async function flushQueue(): Promise<{ synced: number; failed: number }> 
 }
 
 // Auto-flush when coming back online
-if (typeof window !== "undefined") {
-  window.addEventListener("online", () => {
+if (typeof globalThis.window !== "undefined") {
+  globalThis.addEventListener("online", () => {
     flushQueue().then(({ synced }) => {
       if (synced > 0) {
-        // Trigger a re-fetch of queries after syncing
-        window.dispatchEvent(new CustomEvent("offline-sync-complete", { detail: { synced } }));
+        globalThis.dispatchEvent(new CustomEvent("offline-sync-complete", { detail: { synced } }));
       }
     });
   });
