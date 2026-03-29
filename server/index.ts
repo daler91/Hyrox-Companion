@@ -222,22 +222,21 @@ try {
 // Graceful shutdown
 const shutdown = () => {
   logger.info("Received shutdown signal. Closing HTTP server...");
-  httpServer.close(async () => {
+  httpServer.close(() => {
     logger.info("HTTP server closed. Stopping queue...");
-    try {
-      await queue.stop();
+    queue.stop().then(() => {
       logger.info("Queue stopped.");
-    } catch (err) {
-      logger.error(err, "Error stopping queue");
-    }
-
-    logger.info("Draining database pools...");
-    Promise.all([pool.end(), vectorPool.end()]).then(() => {
-      logger.info("Database pools drained. Exiting process.");
-      process.exit(0);
     }).catch((err) => {
-      logger.error(err, "Error draining database pools. Exiting process.");
-      process.exit(1);
+      logger.error(err, "Error stopping queue");
+    }).finally(() => {
+      logger.info("Draining database pools...");
+      Promise.all([pool.end(), vectorPool.end()]).then(() => {
+        logger.info("Database pools drained. Exiting process.");
+        process.exit(0);
+      }).catch((err) => {
+        logger.error(err, "Error draining database pools. Exiting process.");
+        process.exit(1);
+      });
     });
   });
 };

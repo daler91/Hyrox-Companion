@@ -12,7 +12,7 @@ export function useCombineWorkouts() {
   const [showCombineDialog, setShowCombineDialog] = useState(false);
 
   const combineWorkoutsMutation = useMutation({
-    mutationFn: async ({ newWorkout, entriesToDelete }: { newWorkout: { date: string; focus: string; mainWorkout: string; duration?: number; calories?: number; notes?: string }; entriesToDelete: TimelineEntry[] }): Promise<any> => {
+    mutationFn: async ({ newWorkout, entriesToDelete }: { newWorkout: { date: string; focus: string; mainWorkout: string; duration?: number; calories?: number; notes?: string }; entriesToDelete: TimelineEntry[] }) => {
       const created = await api.workouts.create(newWorkout);
 
       const deletePromises = [];
@@ -29,8 +29,8 @@ export function useCombineWorkouts() {
       return created;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workouts });
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workouts });
       setCombiningEntry(null);
       setCombineSecondEntry(null);
       setShowCombineDialog(false);

@@ -101,6 +101,7 @@ export function calculateStreak(completedDates: Set<string>): number {
 
 import { z } from "zod";
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function validateBody(schema: z.ZodType<any, any, any>) {
   return (req: Request, res: Response, next: NextFunction) => {
     const parsed = schema.safeParse(req.body);
@@ -109,14 +110,14 @@ export function validateBody(schema: z.ZodType<any, any, any>) {
       res.status(400).json({ error: errorMessage, details: parsed.error });
       return;
     }
-    req.body = parsed.data;
+    req.body = parsed.data; // eslint-disable-line @typescript-eslint/no-unsafe-assignment
     next();
   };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const asyncHandler = (fn: (req: any, res: Response, next: NextFunction) => Promise<any>) => (req: Request, res: Response, next: NextFunction) => {
-  return Promise.resolve(fn(req, res, next)).catch((err) => {
+export const asyncHandler = (fn: (req: any, res: Response, next: NextFunction) => Promise<any>) => (req: Request, res: Response, next: NextFunction): void => {
+  void Promise.resolve(fn(req, res, next)).catch((err) => {
     const log = req.log || logger;
     log.error({ err }, `Route error in ${req.method} ${req.originalUrl}`);
     next(err);

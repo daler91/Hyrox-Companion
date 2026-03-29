@@ -16,15 +16,15 @@ function processStreamLines(
   let updatedResponse = currentResponse;
   for (const line of lines) {
     if (!line.startsWith("data: ")) continue;
-    let data;
+    let data: { ragInfo?: RagInfo; text?: string; error?: string };
     try {
-      data = JSON.parse(line.slice(6));
+      data = JSON.parse(line.slice(6)) as typeof data;
     } catch {
       // Ignore parse errors for incomplete stream chunks
       continue;
     }
     if (data.ragInfo) {
-      const info = data.ragInfo as RagInfo;
+      const info = data.ragInfo;
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantMessageId

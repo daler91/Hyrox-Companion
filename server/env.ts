@@ -1,4 +1,5 @@
-// Earliest possible startup signal — emitted before any validation
+// Earliest possible startup signal — emitted before any validation (pino logger not yet available)
+// eslint-disable-next-line no-console
 console.log(JSON.stringify({ level: "info", msg: "Process starting — validating environment...", context: "boot", pid: process.pid, timestamp: new Date().toISOString() }));
 
 import { z } from "zod";
@@ -35,7 +36,7 @@ if (!parsed.success) {
   // Log to both stdout and stderr so Railway captures it regardless of log drain config
   const msg = `❌ Invalid environment variables: ${JSON.stringify(parsed.error.format(), null, 2)}`;
   console.error(msg);
-  console.log(JSON.stringify({ level: "fatal", msg, context: "env" }));
+  console.log(JSON.stringify({ level: "fatal", msg, context: "env" })); // eslint-disable-line no-console
   throw new Error(msg);
 }
 
