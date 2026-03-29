@@ -16,13 +16,14 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Upload, Loader2, Filter, Download, Pencil, Target } from "lucide-react";
+import { Upload, Loader2, Filter, Download, Pencil, Target, Sparkles } from "lucide-react";
 import type { FilterStatus } from "../types";
 import type { TimelineFiltersProps } from "./types";
 import { downloadTemplate } from "./csv-utils";
 import { PlanSelector } from "./PlanSelector";
 import { RenamePlanDialog } from "./RenamePlanDialog";
 import { GoalDialog } from "./GoalDialog";
+import { GeneratePlanDialog } from "@/components/plans/GeneratePlanDialog";
 
 export default function TimelineFilters({
   plans,
@@ -42,6 +43,7 @@ export default function TimelineFilters({
   const [renameName, setRenameName] = useState("");
   const [goalDialogOpen, setGoalDialogOpen] = useState(false);
   const [goalText, setGoalText] = useState("");
+  const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
 
   const selectedPlan = plans.find((p) => p.id === selectedPlanId);
 
@@ -102,6 +104,15 @@ export default function TimelineFilters({
           </Select>
 
           <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setGenerateDialogOpen(true)}
+              data-testid="button-generate-ai-plan"
+            >
+              <Sparkles className="h-4 w-4 mr-2" />
+              AI Plan
+            </Button>
+
             <Button
               variant="outline"
               onClick={downloadTemplate}
@@ -188,6 +199,11 @@ export default function TimelineFilters({
       setGoalText={setGoalText}
       onSubmit={handleGoalSubmit}
       isUpdatingGoal={isUpdatingGoal}
+    />
+
+    <GeneratePlanDialog
+      open={generateDialogOpen}
+      onOpenChange={setGenerateDialogOpen}
     />
     </>
   );
