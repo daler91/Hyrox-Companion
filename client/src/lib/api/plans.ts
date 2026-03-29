@@ -1,5 +1,5 @@
 import { typedRequest, rawRequest } from "./client";
-import type { TrainingPlan, PlanDay } from "@shared/schema";
+import type { TrainingPlan, PlanDay, GeneratePlanInput, TrainingPlanWithDays } from "@shared/schema";
 
 export const plans = {
   list: () => typedRequest<TrainingPlan[]>("GET", "/api/v1/plans"),
@@ -30,4 +30,7 @@ export const plans = {
 
   updateDayStatus: (dayId: string, status: string) =>
     typedRequest<PlanDay>("PATCH", `/api/v1/plans/days/${dayId}/status`, { status }),
+
+  generate: (input: GeneratePlanInput) =>
+    typedRequest<TrainingPlanWithDays>("POST", "/api/v1/plans/generate", input),
 } as const;

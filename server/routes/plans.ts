@@ -2,9 +2,10 @@ import { z } from "zod";
 import { Router, type Response, type Request as ExpressRequest } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
-import { updatePlanDaySchema, importPlanRequestSchema, schedulePlanRequestSchema, updateTrainingPlanGoalSchema, workoutStatusEnum, dateStringSchema, type UpdatePlanDay, type PlanDay, type UpdateTrainingPlanGoal } from "@shared/schema";
+import { updatePlanDaySchema, importPlanRequestSchema, schedulePlanRequestSchema, updateTrainingPlanGoalSchema, workoutStatusEnum, dateStringSchema, generatePlanInputSchema, type UpdatePlanDay, type PlanDay, type UpdateTrainingPlanGoal } from "@shared/schema";
 import { getUserId } from "../types";
 import { importPlanFromCSV, createSamplePlan, updatePlanDayWithCleanup, updatePlanDayStatus } from "../services/planService";
+import { generatePlan } from "../services/planGenerationService";
 import { rateLimiter, asyncHandler, validateBody } from "../routeUtils";
 import { logger } from "../logger";
 
@@ -72,6 +73,18 @@ router.post("/api/v1/plans/sample", isAuthenticated, rateLimiter("planSample", 5
     const userId = getUserId(req);
     const fullPlan = await createSamplePlan(userId);
     res.json(fullPlan);
+  }));
+
+router.post("/api/v1/plans/generate", isAuthenticated, rateLimiter("planGenerate", 3), validateBody(generatePlanInputSchema), asyncHandler(async (req: ExpressRequest, res: Response) => {
+    const userId = getUserId(req);
+    try {
+      const fullPlan = await generatePlan(req.body, userId);
+      res.json(fullPlan);
+    } catch (error: any) {
+      const log = req.log || logger;
+      log.error({ err: error }, "Failed to generate AI training plan");
+      return res.status(500).json({ error: "Failed to generate training plan. Please try again.", code: "GENERATION_FAILED" });
+    }
   }));
 
 router.patch("/api/v1/plans/:planId/days/:dayId", isAuthenticated, rateLimiter("planDayUpdate", 20), handlePlanDayUpdate((dayId, data, userId) => storage.updatePlanDay(dayId, data, userId)));
