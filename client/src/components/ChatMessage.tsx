@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { User, Bot } from "lucide-react";
 import { RagDebugBadge } from "@/components/RagDebugBadge";
@@ -10,7 +11,13 @@ interface ChatMessageProps {
   readonly ragInfo?: RagInfo;
 }
 
-export function ChatMessage({ role, content, timestamp, ragInfo }: Readonly<ChatMessageProps>) {
+// ⚡ Perf: React.memo prevents re-rendering unchanged messages during streaming.
+// During AI response streaming, setMessages fires on every token chunk, triggering
+// a re-render of the entire message list. Without memo, all N messages re-render
+// per chunk; with memo, only the actively streaming message re-renders (~N-1 fewer
+// re-renders per chunk). All props are primitives or stable references, so the
+// default shallow comparison works correctly.
+export const ChatMessage = memo(function ChatMessage({ role, content, timestamp, ragInfo }: Readonly<ChatMessageProps>) {
   const isUser = role === "user";
 
   return (
@@ -37,4 +44,5 @@ export function ChatMessage({ role, content, timestamp, ragInfo }: Readonly<Chat
       </div>
     </div>
   );
-}
+});
+ChatMessage.displayName = "ChatMessage";
