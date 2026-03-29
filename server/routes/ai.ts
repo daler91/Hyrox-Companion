@@ -8,8 +8,10 @@ import { buildTrainingContext } from "../services/aiService";
 import { buildCoachingMaterialsSection, buildRetrievedChunksSection } from "../prompts";
 import { retrieveRelevantChunks } from "../services/ragService";
 import { toDateStr, getUserId } from "../types";
-import { chatRequestSchema, parseExercisesRequestSchema, insertChatMessageSchema, type InsertChatMessage } from "@shared/schema";
+import { chatRequestSchema, parseExercisesRequestSchema, insertChatMessageSchema, type InsertChatMessage, type RagInfo } from "@shared/schema";
 import { z } from "zod";
+
+export type { RagInfo };
 
 const router = Router();
 
@@ -24,21 +26,10 @@ router.post("/api/v1/parse-exercises", isAuthenticated, rateLimiter("parse", 5),
     res.json(exercises);
   }));
 
-/**
- * Try RAG retrieval for the user's query. Falls back to legacy if no chunks exist.
- */
-export interface RagInfo {
-  source: "rag" | "legacy" | "none";
-  chunkCount: number;
-  chunks?: string[];
-  materialCount?: number;
-  fallbackReason?: string;
-}
-
 async function getCoachingContext(
   userId: string,
   query: string,
-  log: any = logger,
+  log: Pick<typeof logger, "warn" | "info" | "error"> = logger,
 ): Promise<{ retrievedChunks?: string[]; coachingMaterials?: import("../prompts").CoachingMaterialInput[]; ragInfo: RagInfo }> {
   let fallbackReason: string | undefined;
 

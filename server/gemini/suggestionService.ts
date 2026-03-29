@@ -16,16 +16,8 @@ export interface UpcomingWorkout {
   notes?: string;
 }
 
-export interface WorkoutSuggestion {
-  workoutId: string;
-  workoutDate: string;
-  workoutFocus: string;
-  targetField: "mainWorkout" | "accessory" | "notes";
-  action: "replace" | "append";
-  recommendation: string;
-  rationale: string;
-  priority: "high" | "medium" | "low";
-}
+import type { WorkoutSuggestion } from "@shared/schema";
+export type { WorkoutSuggestion };
 
 export const workoutSuggestionSchema = z.object({
   workoutId: z.string(),

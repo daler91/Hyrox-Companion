@@ -30,3 +30,14 @@ package-lock.json
 
 # Backup files
 *.bak
+
+# Runtime logs
+*.log
+
+# Temp/output files
+*_output.txt
+tmp_*.txt
+
+# Development artifacts
+attached_assets/
+pr_description.md

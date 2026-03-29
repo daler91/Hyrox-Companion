@@ -1,13 +1,7 @@
 import { typedRequest, rawRequest } from "./client";
-import type { InsertCoachingMaterial, CoachingMaterial, ChatMessage } from "@shared/schema";
+import type { InsertCoachingMaterial, CoachingMaterial, ChatMessage, RagInfo } from "@shared/schema";
 
-export interface RagInfo {
-  source: "rag" | "legacy" | "none";
-  chunkCount: number;
-  chunks?: string[];
-  materialCount?: number;
-  fallbackReason?: string;
-}
+export type { RagInfo };
 
 export interface RagStatus {
   hasApiKey: boolean;

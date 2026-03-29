@@ -62,7 +62,7 @@ router.post("/api/v1/plans/import", isAuthenticated, rateLimiter("planImport", 5
     try {
       const fullPlan = await importPlanFromCSV(csvContent, userId, { fileName, planName });
       res.json(fullPlan);
-    } catch (error: any) {
+    } catch (error: unknown) {
       const log = req.log || logger;
       log.error({ err: error }, "Failed to import plan from CSV");
       return res.status(400).json({ error: "Failed to parse CSV content. Please ensure it follows the expected template format.", code: "INVALID_CSV" });
@@ -80,7 +80,7 @@ router.post("/api/v1/plans/generate", isAuthenticated, rateLimiter("planGenerate
     try {
       const fullPlan = await generatePlan(req.body, userId);
       res.json(fullPlan);
-    } catch (error: any) {
+    } catch (error: unknown) {
       const log = req.log || logger;
       log.error({ err: error }, "Failed to generate AI training plan");
       return res.status(500).json({ error: "Failed to generate training plan. Please try again.", code: "GENERATION_FAILED" });

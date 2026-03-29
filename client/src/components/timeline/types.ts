@@ -1,10 +1,3 @@
-export type FilterStatus = "all" | "completed" | "planned" | "missed" | "skipped";
+export type { WorkoutSuggestion } from "@shared/schema";
 
-export interface WorkoutSuggestion {
-  workoutId: string;
-  workoutDate: string;
-  workoutFocus: string;
-  recommendation: string;
-  rationale: string;
-  priority: "high" | "medium" | "low";
-}
+export type FilterStatus = "all" | "completed" | "planned" | "missed" | "skipped";

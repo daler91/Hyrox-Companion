@@ -92,7 +92,7 @@ export function RagStatusCard() {
               </div>
               <div className="p-2 rounded-md bg-muted">
                 <p className="text-lg font-semibold">
-                  {ragStatus.materials.filter((m: any) => m.hasEmbeddings).length}/{ragStatus.totalMaterials}
+                  {ragStatus.materials.filter((m) => m.hasEmbeddings).length}/{ragStatus.totalMaterials}
                 </p>
                 <p className="text-xs text-muted-foreground">Embedded</p>
               </div>
@@ -106,7 +106,7 @@ export function RagStatusCard() {
             )}
 
             <div className="space-y-1.5">
-              {ragStatus.materials.map((m: any) => (
+              {ragStatus.materials.map((m) => (
                 <div key={m.id} className="flex items-center justify-between text-sm px-2 py-1.5 rounded border">
                   <span className="truncate mr-2">{m.title}</span>
                   <div className="flex items-center gap-2 shrink-0">
