@@ -33,7 +33,7 @@ export function RpeSelector({ value, onChange, showLabel = true, compact = false
         </legend>
       )}
       {!showLabel && <legend className="sr-only">RPE selector</legend>}
-      <div className="flex items-center gap-1.5" data-testid="input-rpe-selector">
+      <div className="flex flex-wrap items-center gap-1.5" data-testid="input-rpe-selector">
         {Array.from({ length: 10 }, (_, i) => i + 1).map((rpeValue) => (
           <button
             key={rpeValue}
@@ -51,12 +51,12 @@ export function RpeSelector({ value, onChange, showLabel = true, compact = false
             {rpeValue}
           </button>
         ))}
-        {value && (
-          <span className="ml-2 text-xs text-muted-foreground" data-testid="text-rpe-label">
-            {getRpeLabel(value)}
-          </span>
-        )}
       </div>
+      {value && (
+        <span className="text-xs text-muted-foreground" data-testid="text-rpe-label">
+          {getRpeLabel(value)}
+        </span>
+      )}
     </fieldset>
   );
 }

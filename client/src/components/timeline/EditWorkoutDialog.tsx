@@ -87,7 +87,7 @@ export default function EditWorkoutDialog({
         </DialogHeader>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Left Column: Metadata & Notes */}
-          <div className="space-y-4">
+          <div className="space-y-4 min-w-0">
             <div>
               <Label htmlFor="edit-focus">Focus</Label>
               <Input
