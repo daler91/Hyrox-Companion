@@ -41,7 +41,7 @@ export function RpeSelector({ value, onChange, showLabel = true, compact = false
             onClick={() => onChange(value === rpeValue ? null : rpeValue)}
             aria-label={`RPE ${rpeValue}, ${getRpeLabel(rpeValue)}`}
             aria-pressed={value === rpeValue}
-            className={`${buttonSize} rounded-md font-medium transition-colors ${
+            className={`${buttonSize} rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${
               value === rpeValue
                 ? getRpeColor(rpeValue)
                 : "bg-muted hover:bg-muted/80 text-muted-foreground"
