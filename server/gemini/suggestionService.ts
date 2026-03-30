@@ -47,9 +47,9 @@ export function parseAndValidateSuggestions(text: string): WorkoutSuggestion[] {
       const item = result.data;
       validated.push({
         ...item,
-        recommendation: sanitizeHtml(item.recommendation),
-        rationale: sanitizeHtml(item.rationale),
-        workoutFocus: sanitizeHtml(item.workoutFocus)
+        recommendation: sanitizeHtml(item.recommendation.replaceAll("&", "and")),
+        rationale: sanitizeHtml(item.rationale.replaceAll("&", "and")),
+        workoutFocus: sanitizeHtml(item.workoutFocus.replaceAll("&", "and"))
       });
     } else {
       logger.warn({ issues: result.error.issues, item: JSON.stringify(item).slice(0, 200) }, "[gemini] Dropping invalid suggestion:");

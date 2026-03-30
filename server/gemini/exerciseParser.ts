@@ -89,19 +89,19 @@ and use the matching name as customLabel: ${customExerciseNames.join(", ")}`;
         confidence = Math.min(100, Math.max(0, Math.round(ex.confidence)));
       }
       return {
-        exerciseName: isKnown ? sanitizeHtml(ex.exerciseName) : "custom",
-        category: validCategory ? sanitizeHtml(ex.category) : "conditioning",
+        exerciseName: isKnown ? sanitizeHtml(ex.exerciseName.replaceAll("&", "and")) : "custom",
+        category: validCategory ? sanitizeHtml(ex.category.replaceAll("&", "and")) : "conditioning",
         customLabel: (() => {
           if (isKnown) {
-            return ex.customLabel ? sanitizeHtml(ex.customLabel) : undefined;
+            return ex.customLabel ? sanitizeHtml(ex.customLabel.replaceAll("&", "and")) : undefined;
           }
-          return sanitizeHtml(ex.customLabel || ex.exerciseName);
+          return sanitizeHtml((ex.customLabel || ex.exerciseName).replaceAll("&", "and"));
         })(),
         confidence,
         missingFields: Array.isArray(ex.missingFields)
           ? ex.missingFields.filter(
               (f) => typeof f === "string" && f.length > 0,
-            ).map(f => sanitizeHtml(f))
+            ).map(f => sanitizeHtml(f.replaceAll("&", "and")))
           : undefined,
         sets: ex.sets.map((s, i) => ({
           setNumber: s.setNumber || i + 1,

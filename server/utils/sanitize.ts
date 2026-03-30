@@ -23,6 +23,7 @@ export function sanitizeUserInput(input: string): string {
   return sanitizeHtml(input);
 }
 
+
 /**
  * Validates AI output to detect prompt injection leakage or unexpected system-level content.
  * Throws an error or returns a safe fallback if restricted content is detected.

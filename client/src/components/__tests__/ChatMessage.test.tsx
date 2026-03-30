@@ -30,10 +30,11 @@ describe('ChatMessage', () => {
     const messageContainer = screen.getByTestId('message-assistant');
     expect(messageContainer).not.toHaveClass('flex-row-reverse');
 
-    // Check if the actual text container has the correct background
-    const textContainer = screen.getByText('Test styling').parentElement;
-    expect(textContainer).toHaveClass('bg-card');
-    expect(textContainer).toHaveClass('border');
+    // For assistant messages, ReactMarkdown wraps content in a prose div inside the card div
+    const textEl = screen.getByText('Test styling');
+    const cardContainer = textEl.closest('.bg-card');
+    expect(cardContainer).toBeInTheDocument();
+    expect(cardContainer).toHaveClass('border');
   });
 
   it('renders timestamp when provided', () => {

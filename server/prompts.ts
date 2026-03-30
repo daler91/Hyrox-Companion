@@ -93,6 +93,9 @@ RULES:
 
 Limit to 1 suggestion per workout, max 5 suggestions total.
 
+FORMATTING:
+- Always write "and" instead of "&". Never use ampersands in any output.
+
 HARD CONSTRAINTS (these override ALL other rules):
 - NEVER use "append" on mainWorkout or accessory during TAPER or RACE_WEEK phases. Only "replace" (to reduce volume) or "append" on notes (for coaching cues) are allowed.
 - NEVER increase total workout volume during TAPER or RACE_WEEK. Every modification in these phases must result in LESS or EQUAL work, not more.
@@ -194,6 +197,9 @@ RETURN FORMAT: Return ONLY a valid JSON array. Each element:
   "accessory": "<supplementary exercises or null>",
   "notes": "<coaching cues, pacing targets, or null>"
 }
+
+FORMATTING:
+- Always write "and" instead of "&". Never use ampersands in any output.
 
 RULES:
 1. Each week MUST have exactly the requested number of training days (with remaining days as rest). If specific rest days are provided in the athlete profile, those days MUST be rest days every week.

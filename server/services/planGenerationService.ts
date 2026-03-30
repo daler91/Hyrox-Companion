@@ -75,10 +75,10 @@ function parseAndValidateDays(text: string): GeneratedDay[] {
     if (result.success) {
       validated.push({
         ...result.data,
-        focus: sanitizeHtml(result.data.focus),
-        mainWorkout: sanitizeHtml(result.data.mainWorkout),
-        accessory: result.data.accessory ? sanitizeHtml(result.data.accessory) : null,
-        notes: result.data.notes ? sanitizeHtml(result.data.notes) : null,
+        focus: sanitizeHtml(result.data.focus.replaceAll("&", "and")),
+        mainWorkout: sanitizeHtml(result.data.mainWorkout.replaceAll("&", "and")),
+        accessory: result.data.accessory ? sanitizeHtml(result.data.accessory.replaceAll("&", "and")) : null,
+        notes: result.data.notes ? sanitizeHtml(result.data.notes.replaceAll("&", "and")) : null,
       });
     } else {
       logger.warn(
