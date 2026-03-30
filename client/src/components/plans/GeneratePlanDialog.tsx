@@ -223,7 +223,7 @@ export function GeneratePlanDialog({ open, onOpenChange }: GeneratePlanDialogPro
             <div className="space-y-2">
               <Label>Experience Level</Label>
               <Select value={experienceLevel} onValueChange={(v) => setExperienceLevel(v as typeof experienceLevel)}>
-                <SelectTrigger>
+                <SelectTrigger aria-label="Select experience level">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
