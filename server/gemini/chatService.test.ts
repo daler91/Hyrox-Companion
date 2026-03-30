@@ -4,7 +4,7 @@ import { getAiClient } from "./client";
 
 vi.mock("./client", () => ({
   getAiClient: vi.fn(),
-  GEMINI_MODEL: "gemini-model"
+  GEMINI_SUGGESTIONS_MODEL: "gemini-model"
 }));
 
 describe("chatService", () => {
