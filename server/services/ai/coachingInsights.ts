@@ -235,11 +235,18 @@ export function computeProgressionFlags(timeline: TimelineEntry[]): NonNullable<
     }
     if (history.length < 2) continue;
 
-    const weights = history.filter(h => h.maxWeight != null).map(h => h.maxWeight as number);
+    // Single-pass extraction: collect weights and times in one O(N) traversal
+    // instead of two separate .filter().map() chains (which allocate 4 intermediate arrays).
+    const weights: number[] = [];
+    const times: number[] = [];
+    for (const h of history) {
+      if (h.maxWeight != null) weights.push(h.maxWeight);
+      if (h.bestTime != null) times.push(h.bestTime);
+    }
+
     const weightFlag = analyzeWeightProgression(exercise, weights);
     if (weightFlag) { flags.push(weightFlag); continue; }
 
-    const times = history.filter(h => h.bestTime != null).map(h => h.bestTime as number);
     const timeFlag = analyzeTimeProgression(exercise, times);
     if (timeFlag) flags.push(timeFlag);
   }
