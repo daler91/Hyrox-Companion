@@ -1,7 +1,8 @@
 import { logger } from "../logger";
 import { buildSystemPrompt, type CoachingMaterialInput } from "../prompts";
 import { sanitizeUserInput, validateAiOutput } from "../utils/sanitize";
-import { getAiClient, GEMINI_MODEL } from "./client";
+import { ThinkingLevel } from "@google/genai";
+import { getAiClient, GEMINI_SUGGESTIONS_MODEL } from "./client";
 import type { ChatMessage } from "@shared/schema";
 import type { TrainingContext } from "./types";
 
@@ -26,9 +27,10 @@ export async function chatWithCoach(
     const systemPrompt = buildSystemPrompt(trainingContext, coachingMaterials, retrievedChunks);
 
     const response = await getAiClient().models.generateContent({
-      model: GEMINI_MODEL,
+      model: GEMINI_SUGGESTIONS_MODEL,
       config: {
         systemInstruction: systemPrompt,
+        thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
       },
       contents: messages,
     });
@@ -62,9 +64,10 @@ export async function* streamChatWithCoach(
     const systemPrompt = buildSystemPrompt(trainingContext, coachingMaterials, retrievedChunks);
 
     const response = await getAiClient().models.generateContentStream({
-      model: GEMINI_MODEL,
+      model: GEMINI_SUGGESTIONS_MODEL,
       config: {
         systemInstruction: systemPrompt,
+        thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
       },
       contents: messages,
     });
