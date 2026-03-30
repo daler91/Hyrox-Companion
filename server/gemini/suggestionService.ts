@@ -3,7 +3,7 @@ import { logger } from "../logger";
 import { SUGGESTIONS_PROMPT } from "../prompts";
 import { getAiClient, GEMINI_SUGGESTIONS_MODEL, retryWithBackoff, truncate } from "./client";
 import { ThinkingLevel } from "@google/genai";
-import { sanitizeAiOutput } from "../utils/sanitize";
+import { sanitizeHtml } from "../utils/sanitize";
 import type { TrainingContext } from "./types";
 
 
@@ -47,9 +47,9 @@ export function parseAndValidateSuggestions(text: string): WorkoutSuggestion[] {
       const item = result.data;
       validated.push({
         ...item,
-        recommendation: sanitizeAiOutput(item.recommendation),
-        rationale: sanitizeAiOutput(item.rationale),
-        workoutFocus: sanitizeAiOutput(item.workoutFocus)
+        recommendation: sanitizeHtml(item.recommendation.replaceAll("&", "and")),
+        rationale: sanitizeHtml(item.rationale.replaceAll("&", "and")),
+        workoutFocus: sanitizeHtml(item.workoutFocus.replaceAll("&", "and"))
       });
     } else {
       logger.warn({ issues: result.error.issues, item: JSON.stringify(item).slice(0, 200) }, "[gemini] Dropping invalid suggestion:");

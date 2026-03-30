@@ -5,7 +5,7 @@ import { getAiClient, GEMINI_SUGGESTIONS_MODEL, retryWithBackoff } from "../gemi
 import { PLAN_GENERATION_PROMPT } from "../prompts";
 import { ThinkingLevel } from "@google/genai";
 import type { GeneratePlanInput, TrainingPlanWithDays } from "@shared/schema";
-import { sanitizeAiOutput } from "../utils/sanitize";
+import { sanitizeHtml } from "../utils/sanitize";
 
 const generatedDaySchema = z.object({
   weekNumber: z.number().min(1),
@@ -75,10 +75,10 @@ function parseAndValidateDays(text: string): GeneratedDay[] {
     if (result.success) {
       validated.push({
         ...result.data,
-        focus: sanitizeAiOutput(result.data.focus),
-        mainWorkout: sanitizeAiOutput(result.data.mainWorkout),
-        accessory: result.data.accessory ? sanitizeAiOutput(result.data.accessory) : null,
-        notes: result.data.notes ? sanitizeAiOutput(result.data.notes) : null,
+        focus: sanitizeHtml(result.data.focus.replaceAll("&", "and")),
+        mainWorkout: sanitizeHtml(result.data.mainWorkout.replaceAll("&", "and")),
+        accessory: result.data.accessory ? sanitizeHtml(result.data.accessory.replaceAll("&", "and")) : null,
+        notes: result.data.notes ? sanitizeHtml(result.data.notes.replaceAll("&", "and")) : null,
       });
     } else {
       logger.warn(
