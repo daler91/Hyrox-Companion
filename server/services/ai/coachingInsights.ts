@@ -224,6 +224,17 @@ function analyzeTimeProgression(exercise: string, values: number[]): Progression
   return null;
 }
 
+/** Single-pass extraction of weight and time values from exercise history. */
+function extractWeightsAndTimes(history: Array<{ maxWeight?: number; bestTime?: number }>): { weights: number[]; times: number[] } {
+  const weights: number[] = [];
+  const times: number[] = [];
+  for (const h of history) {
+    if (h.maxWeight != null) weights.push(h.maxWeight);
+    if (h.bestTime != null) times.push(h.bestTime);
+  }
+  return { weights, times };
+}
+
 export function computeProgressionFlags(timeline: TimelineEntry[]): NonNullable<TrainingContext["coachingInsights"]>["progressionFlags"] {
   const exerciseHistory = collectExerciseHistory(timeline);
   const flags: ProgressionFlag[] = [];
@@ -235,14 +246,7 @@ export function computeProgressionFlags(timeline: TimelineEntry[]): NonNullable<
     }
     if (history.length < 2) continue;
 
-    // Single-pass extraction: collect weights and times in one O(N) traversal
-    // instead of two separate .filter().map() chains (which allocate 4 intermediate arrays).
-    const weights: number[] = [];
-    const times: number[] = [];
-    for (const h of history) {
-      if (h.maxWeight != null) weights.push(h.maxWeight);
-      if (h.bestTime != null) times.push(h.bestTime);
-    }
+    const { weights, times } = extractWeightsAndTimes(history);
 
     const weightFlag = analyzeWeightProgression(exercise, weights);
     if (weightFlag) { flags.push(weightFlag); continue; }
