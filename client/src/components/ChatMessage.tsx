@@ -1,4 +1,5 @@
 import { memo } from "react";
+import ReactMarkdown from "react-markdown";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { User, Bot } from "lucide-react";
 import { RagDebugBadge } from "@/components/RagDebugBadge";
@@ -35,7 +36,13 @@ export const ChatMessage = memo(function ChatMessage({ role, content, timestamp,
               : "bg-card border"
           }`}
         >
-          <p className="text-sm whitespace-pre-wrap">{content}</p>
+          {isUser ? (
+            <p className="text-sm whitespace-pre-wrap">{content}</p>
+          ) : (
+            <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-headings:my-2">
+              <ReactMarkdown>{content}</ReactMarkdown>
+            </div>
+          )}
         </div>
         {timestamp && (
           <span className="text-xs text-muted-foreground mt-1">{timestamp}</span>

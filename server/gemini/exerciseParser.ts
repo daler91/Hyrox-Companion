@@ -2,7 +2,7 @@ import { z } from "zod";
 import { logger } from "../logger";
 import { PARSE_EXERCISES_PROMPT, VALID_EXERCISE_NAMES, VALID_CATEGORIES } from "../prompts";
 import { getAiClient, GEMINI_MODEL, retryWithBackoff, truncate } from "./client";
-import { sanitizeHtml, sanitizeUserInput, validateAiOutput } from "../utils/sanitize";
+import { sanitizeAiOutput, sanitizeUserInput, validateAiOutput } from "../utils/sanitize";
 import { exerciseSetSchema, type ParsedExercise } from "@shared/schema";
 
 export const parsedExerciseSchema = z.object({
@@ -89,19 +89,19 @@ and use the matching name as customLabel: ${customExerciseNames.join(", ")}`;
         confidence = Math.min(100, Math.max(0, Math.round(ex.confidence)));
       }
       return {
-        exerciseName: isKnown ? sanitizeHtml(ex.exerciseName) : "custom",
-        category: validCategory ? sanitizeHtml(ex.category) : "conditioning",
+        exerciseName: isKnown ? sanitizeAiOutput(ex.exerciseName) : "custom",
+        category: validCategory ? sanitizeAiOutput(ex.category) : "conditioning",
         customLabel: (() => {
           if (isKnown) {
-            return ex.customLabel ? sanitizeHtml(ex.customLabel) : undefined;
+            return ex.customLabel ? sanitizeAiOutput(ex.customLabel) : undefined;
           }
-          return sanitizeHtml(ex.customLabel || ex.exerciseName);
+          return sanitizeAiOutput(ex.customLabel || ex.exerciseName);
         })(),
         confidence,
         missingFields: Array.isArray(ex.missingFields)
           ? ex.missingFields.filter(
               (f) => typeof f === "string" && f.length > 0,
-            ).map(f => sanitizeHtml(f))
+            ).map(f => sanitizeAiOutput(f))
           : undefined,
         sets: ex.sets.map((s, i) => ({
           setNumber: s.setNumber || i + 1,

@@ -24,6 +24,23 @@ export function sanitizeUserInput(input: string): string {
 }
 
 /**
+ * Sanitizes AI-generated output by stripping dangerous HTML tags/attributes
+ * without entity-encoding normal characters like & < >.
+ * This prevents double-encoding when React renders the text.
+ */
+export function sanitizeAiOutput(str: string): string {
+  if (typeof str !== "string") return str;
+  return str
+    .replace(/<script[\s>][\s\S]*?<\/script>/gi, "")
+    .replace(/<iframe[\s>][\s\S]*?<\/iframe>/gi, "")
+    .replace(/<object[\s>][\s\S]*?<\/object>/gi, "")
+    .replace(/<embed[\s>][\s\S]*?<\/embed>/gi, "")
+    .replace(/\s*on\w+\s*=\s*"[^"]*"/gi, "")
+    .replace(/\s*on\w+\s*=\s*'[^']*'/gi, "")
+    .replace(/\s*on\w+\s*=\s*[^\s>]+/gi, "");
+}
+
+/**
  * Validates AI output to detect prompt injection leakage or unexpected system-level content.
  * Throws an error or returns a safe fallback if restricted content is detected.
  */
