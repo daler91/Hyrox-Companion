@@ -56,7 +56,7 @@ export function ExerciseProgressionTab({ dateParams }: ExerciseProgressionTabPro
       <CardContent>
         <div className="mb-6">
           <Select value={selectedExercise || undefined} onValueChange={setSelectedExercise}>
-            <SelectTrigger data-testid="select-exercise-progression">
+            <SelectTrigger data-testid="select-exercise-progression" aria-label="Select an exercise to view progression">
               <SelectValue placeholder="Select an exercise..." />
             </SelectTrigger>
             <SelectContent>

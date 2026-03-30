@@ -43,7 +43,7 @@ export function PreferencesSection({
               <p className="text-sm text-muted-foreground">For sled weights, wall balls, etc.</p>
             </div>
             <Select value={weightUnit} onValueChange={onWeightUnitChange}>
-              <SelectTrigger className="w-24" data-testid="select-weight-unit">
+              <SelectTrigger className="w-24" data-testid="select-weight-unit" aria-label="Select weight unit">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -58,7 +58,7 @@ export function PreferencesSection({
               <p className="text-sm text-muted-foreground">For running, rowing, etc.</p>
             </div>
             <Select value={distanceUnit} onValueChange={onDistanceUnitChange}>
-              <SelectTrigger className="w-24" data-testid="select-distance-unit">
+              <SelectTrigger className="w-24" data-testid="select-distance-unit" aria-label="Select distance unit">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -82,7 +82,7 @@ export function PreferencesSection({
               <p className="text-sm text-muted-foreground">Target number of workouts per week</p>
             </div>
             <Select value={weeklyGoal} onValueChange={onWeeklyGoalChange}>
-              <SelectTrigger className="w-24" data-testid="select-weekly-goal">
+              <SelectTrigger className="w-24" data-testid="select-weekly-goal" aria-label="Select weekly workout goal">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

@@ -73,7 +73,7 @@ export function PersonalRecordsTab({ dateParams }: PersonalRecordsTabProps) {
           </div>
           <div className="flex items-center gap-2">
             <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="w-40" data-testid="select-pr-category">
+              <SelectTrigger className="w-40" data-testid="select-pr-category" aria-label="Select personal record category">
                 <SelectValue placeholder="All Categories" />
               </SelectTrigger>
               <SelectContent>
