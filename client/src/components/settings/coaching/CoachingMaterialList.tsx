@@ -51,6 +51,7 @@ export function CoachingMaterialList({
                 size="icon"
                 onClick={() => handleDelete(material.id)}
                 disabled={deleteMutation.isPending}
+                aria-label={`Delete ${material.title}`}
               >
                 <Trash2 className="h-4 w-4 text-destructive" />
               </Button>
@@ -78,6 +79,7 @@ export function CoachingMaterialList({
           accept=".txt,.md,.csv,.pdf,.docx"
           multiple
           className="hidden"
+          aria-label="Upload coaching documents"
           onChange={handleFileUpload}
         />
       </div>

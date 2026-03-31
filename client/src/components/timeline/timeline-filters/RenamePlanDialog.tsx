@@ -36,6 +36,7 @@ export function RenamePlanDialog({
           value={renameName}
           onChange={(e) => setRenameName(e.target.value)}
           placeholder="Plan name"
+          aria-label="Plan name"
           onKeyDown={(e) => e.key === "Enter" && onSubmit()}
           data-testid="input-rename-plan"
         />

@@ -63,6 +63,7 @@ export const WorkoutTextMode = ({
           value={freeText}
           onChange={(e) => setFreeText(e.target.value)}
           className="min-h-[120px]"
+          aria-label="Workout description"
           data-testid="input-freetext"
         />
         {isListening && interimTranscript && (
