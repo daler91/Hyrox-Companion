@@ -138,43 +138,37 @@ export class TimelineStorage {
       query = query.limit(sqlLimit);
     }
 
-    return await query;
+    return query;
   }
 
-  async getTimeline(userId: string, planId?: string, limit?: number, offset?: number): Promise<TimelineEntry[]> {
-    const entries: TimelineEntry[] = [];
-    const today = toDateStr();
+  private computeSqlOverFetch(limit?: number, offset?: number): number | undefined {
+    if (limit === undefined && offset === undefined) return undefined;
+    if (limit === undefined) return undefined;
+    return (offset || 0) + limit * 3;
+  }
 
-    // When pagination is requested, over-fetch from SQL (3x) to account for
-    // the merge of plan days + standalone workouts before the final slice.
-    const wantsPagination = limit !== undefined || offset !== undefined;
-    const sqlOverFetch = wantsPagination && limit !== undefined
-      ? (offset || 0) + limit * 3
-      : undefined;
-
-    const scheduledDays = await this.fetchScheduledDays(userId, planId, sqlOverFetch);
-
-    const planDayIds = scheduledDays.map(r => r.planDay.id);
-
-    let standaloneQuery = db
+  private async fetchStandaloneWorkouts(userId: string, sqlLimit?: number): Promise<WorkoutLog[]> {
+    let query = db
       .select()
       .from(workoutLogs)
       .where(and(eq(workoutLogs.userId, userId), isNull(workoutLogs.planDayId)))
       .orderBy(desc(workoutLogs.date))
       .$dynamic();
 
-    if (sqlOverFetch !== undefined) {
-      standaloneQuery = standaloneQuery.limit(sqlOverFetch);
+    if (sqlLimit !== undefined) {
+      query = query.limit(sqlLimit);
     }
 
-    const [linkedWorkouts, standaloneWorkouts] = await Promise.all([
-      planDayIds.length > 0
-        ? db.select().from(workoutLogs).where(
-            and(eq(workoutLogs.userId, userId), inArray(workoutLogs.planDayId, planDayIds))
-          )
-        : Promise.resolve([]),
-      standaloneQuery,
-    ]);
+    return query;
+  }
+
+  private buildTimelineEntries(
+    scheduledDays: Awaited<ReturnType<TimelineStorage["fetchScheduledDays"]>>,
+    linkedWorkouts: WorkoutLog[],
+    standaloneWorkouts: WorkoutLog[],
+    today: string,
+  ): TimelineEntry[] {
+    const entries: TimelineEntry[] = [];
 
     const workoutsByPlanDayId = new Map<string, WorkoutLog>();
     for (const log of linkedWorkouts) {
@@ -185,13 +179,12 @@ export class TimelineStorage {
 
     for (const row of scheduledDays) {
       const day = row.planDay;
-      if (day.scheduledDate) {
-        const linkedLog = workoutsByPlanDayId.get(day.id);
-        if (linkedLog) {
-          entries.push(createLinkedWorkoutEntry(day, linkedLog, { planName: row.planName, planId: row.planId }));
-        } else {
-          entries.push(createPlannedDayEntry(day, day.scheduledDate, { planName: row.planName, planId: row.planId }, today));
-        }
+      if (!day.scheduledDate) continue;
+      const linkedLog = workoutsByPlanDayId.get(day.id);
+      if (linkedLog) {
+        entries.push(createLinkedWorkoutEntry(day, linkedLog, { planName: row.planName, planId: row.planId }));
+      } else {
+        entries.push(createPlannedDayEntry(day, day.scheduledDate, { planName: row.planName, planId: row.planId }, today));
       }
     }
 
@@ -199,6 +192,26 @@ export class TimelineStorage {
       entries.push(createStandaloneWorkoutEntry(log));
     }
 
+    return entries;
+  }
+
+  async getTimeline(userId: string, planId?: string, limit?: number, offset?: number): Promise<TimelineEntry[]> {
+    const today = toDateStr();
+    const sqlOverFetch = this.computeSqlOverFetch(limit, offset);
+
+    const scheduledDays = await this.fetchScheduledDays(userId, planId, sqlOverFetch);
+    const planDayIds = scheduledDays.map(r => r.planDay.id);
+
+    const [linkedWorkouts, standaloneWorkouts] = await Promise.all([
+      planDayIds.length > 0
+        ? db.select().from(workoutLogs).where(
+            and(eq(workoutLogs.userId, userId), inArray(workoutLogs.planDayId, planDayIds))
+          )
+        : Promise.resolve([]),
+      this.fetchStandaloneWorkouts(userId, sqlOverFetch),
+    ]);
+
+    const entries = this.buildTimelineEntries(scheduledDays, linkedWorkouts, standaloneWorkouts, today);
     await this.attachExerciseSets(entries);
 
     // Fast string comparison for YYYY-MM-DD dates instead of Date object instantiation
@@ -208,7 +221,7 @@ export class TimelineStorage {
       return 0;
     });
 
-    if (wantsPagination) {
+    if (sqlOverFetch !== undefined) {
       const start = offset || 0;
       const end = limit === undefined ? undefined : start + limit;
       return entries.slice(start, end);
