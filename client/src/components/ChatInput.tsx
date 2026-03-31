@@ -58,6 +58,7 @@ export function ChatInput({ onSend, isLoading, placeholder = "Ask about your tra
           placeholder={isListening ? "Listening..." : placeholder}
           className="min-h-[44px] max-h-32 resize-none"
           disabled={isLoading}
+          aria-label="Chat message"
           data-testid="input-chat-message"
         />
         {isListening && interimTranscript && (

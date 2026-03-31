@@ -39,6 +39,7 @@ export const WorkoutNotesCard = ({
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           className="min-h-[100px]"
+          aria-label="Workout notes"
           data-testid="input-workout-notes"
         />
         {isNotesListening && notesInterim && (
