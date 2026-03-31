@@ -56,6 +56,20 @@ export function groupExerciseSets(dbSets: ExerciseSet[]): GroupedExercise[] {
   return groups;
 }
 
+// ⚡ Perf: Single loop with early exit replaces two separate .every() traversals,
+// cutting iterations from 2N to at most N.
+function checkSetUniformity(sets: ExerciseSet[]): { allSameReps: boolean; allSameWeight: boolean } {
+  const firstSet = sets[0];
+  let allSameReps = true;
+  let allSameWeight = true;
+  for (let i = 1; i < sets.length; i++) {
+    if (allSameReps && sets[i].reps !== firstSet.reps) allSameReps = false;
+    if (allSameWeight && sets[i].weight !== firstSet.weight) allSameWeight = false;
+    if (!allSameReps && !allSameWeight) break;
+  }
+  return { allSameReps, allSameWeight };
+}
+
 // ⚡ Perf: Use Set for O(1) lookups instead of Array.includes() which is O(N),
 // reducing overall complexity from O(N²) to O(N).
 function getUniqueWeights(sets: ExerciseSet[]): number[] {
@@ -77,15 +91,7 @@ export function formatExerciseSummary(group: GroupedExercise, weightUnit: string
   if (sets.length === 0) return name;
 
   const firstSet = sets[0];
-  // ⚡ Perf: Single loop with early exit replaces two separate .every() traversals,
-  // cutting iterations from 2N to at most N.
-  let allSameReps = true;
-  let allSameWeight = true;
-  for (let i = 1; i < sets.length; i++) {
-    if (allSameReps && sets[i].reps !== firstSet.reps) allSameReps = false;
-    if (allSameWeight && sets[i].weight !== firstSet.weight) allSameWeight = false;
-    if (!allSameReps && !allSameWeight) break;
-  }
+  const { allSameReps, allSameWeight } = checkSetUniformity(sets);
   const parts: string[] = [];
 
   if (allSameReps && firstSet.reps && sets.length > 1) {
