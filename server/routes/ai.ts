@@ -126,7 +126,12 @@ router.post("/api/v1/chat/stream", isAuthenticated, rateLimiter("chat", 10), val
     res.setHeader("Connection", "keep-alive");
     res.flushHeaders();
 
-    // Emit RAG diagnostics before streaming text
+    // Track client disconnection to stop consuming AI tokens when the client is gone
+    let clientDisconnected = false;
+    req.on("close", () => {
+      clientDisconnected = true;
+    });
+
     try {
       // Emit RAG diagnostics before streaming text
       res.write(`data: ${JSON.stringify({ ragInfo })}\n\n`);
@@ -134,12 +139,20 @@ router.post("/api/v1/chat/stream", isAuthenticated, rateLimiter("chat", 10), val
       const stream = streamChatWithCoach(message, history, trainingContext, coachingMaterials, retrievedChunks);
 
       for await (const chunk of stream) {
+        if (clientDisconnected) {
+          const log = req.log || logger;
+          log.info("Client disconnected mid-stream, stopping AI generation");
+          break;
+        }
         res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
       }
 
-      res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+      if (!clientDisconnected) {
+        res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+      }
       res.end();
     } catch (streamError) {
+      if (clientDisconnected) return;
       const log = req.log || logger;
       log.error({ err: streamError }, "Stream error:");
       res.write(`data: ${JSON.stringify({ error: "Stream error" })}\n\n`);

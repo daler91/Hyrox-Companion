@@ -2,6 +2,7 @@ import { env } from "./env";
 import * as Sentry from "@sentry/node";
 import express, { type Request, Response, NextFunction } from "express";
 import compression from "compression";
+import cors from "cors";
 import helmet from "helmet";
 import { logger } from "./logger";
 import pinoHttp from "pino-http";
@@ -58,6 +59,25 @@ declare module "http" {
 app.use(compression());
 
 const isDev = env.NODE_ENV !== "production";
+
+// CORS — restrict cross-origin API access to known origins
+const allowedOrigins = [
+  env.APP_URL,
+  "https://fitai.coach",
+  ...(isDev ? ["http://localhost:5000", "http://localhost:5173"] : []),
+].filter(Boolean) as string[];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow same-origin requests (no Origin header) and allowed origins
+    if (!origin || allowedOrigins.some(allowed => origin === allowed)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  credentials: true,
+}));
 const clerkDomains =
   "https://*.clerk.accounts.dev https://*.fitai.coach https://clerk.fitai.coach";
 const connectSrc = isDev

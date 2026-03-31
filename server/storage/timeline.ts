@@ -8,7 +8,7 @@ import {
   type WorkoutStatus,
 } from "@shared/schema";
 import { db } from "../db";
-import { eq, and, isNull, inArray } from "drizzle-orm";
+import { eq, and, isNull, isNotNull, inArray, desc } from "drizzle-orm";
 import type { WorkoutStorage } from "./workouts";
 import { toDateStr } from "../types";
 
@@ -121,30 +121,51 @@ export class TimelineStorage {
     }
   }
 
-  private async fetchScheduledDays(userId: string, planId?: string) {
-    let planDayConditions;
-    if (planId) {
-      planDayConditions = and(eq(trainingPlans.userId, userId), eq(planDays.planId, planId));
-    } else {
-      planDayConditions = eq(trainingPlans.userId, userId);
-    }
+  private async fetchScheduledDays(userId: string, planId?: string, sqlLimit?: number) {
+    const conditions = planId
+      ? and(eq(trainingPlans.userId, userId), eq(planDays.planId, planId), isNotNull(planDays.scheduledDate))
+      : and(eq(trainingPlans.userId, userId), isNotNull(planDays.scheduledDate));
 
-    const scheduledDaysResult = await db
+    let query = db
       .select({ planDay: planDays, planName: trainingPlans.name, planId: trainingPlans.id })
       .from(planDays)
       .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
-      .where(planDayConditions);
+      .where(conditions)
+      .orderBy(desc(planDays.scheduledDate))
+      .$dynamic();
 
-    return scheduledDaysResult.filter(r => r.planDay.scheduledDate);
+    if (sqlLimit !== undefined) {
+      query = query.limit(sqlLimit);
+    }
+
+    return await query;
   }
 
   async getTimeline(userId: string, planId?: string, limit?: number, offset?: number): Promise<TimelineEntry[]> {
     const entries: TimelineEntry[] = [];
     const today = toDateStr();
 
-    const scheduledDays = await this.fetchScheduledDays(userId, planId);
+    // When pagination is requested, over-fetch from SQL (3x) to account for
+    // the merge of plan days + standalone workouts before the final slice.
+    const wantsPagination = limit !== undefined || offset !== undefined;
+    const sqlOverFetch = wantsPagination && limit !== undefined
+      ? (offset || 0) + limit * 3
+      : undefined;
+
+    const scheduledDays = await this.fetchScheduledDays(userId, planId, sqlOverFetch);
 
     const planDayIds = scheduledDays.map(r => r.planDay.id);
+
+    let standaloneQuery = db
+      .select()
+      .from(workoutLogs)
+      .where(and(eq(workoutLogs.userId, userId), isNull(workoutLogs.planDayId)))
+      .orderBy(desc(workoutLogs.date))
+      .$dynamic();
+
+    if (sqlOverFetch !== undefined) {
+      standaloneQuery = standaloneQuery.limit(sqlOverFetch);
+    }
 
     const [linkedWorkouts, standaloneWorkouts] = await Promise.all([
       planDayIds.length > 0
@@ -152,9 +173,7 @@ export class TimelineStorage {
             and(eq(workoutLogs.userId, userId), inArray(workoutLogs.planDayId, planDayIds))
           )
         : Promise.resolve([]),
-      db.select().from(workoutLogs).where(
-        and(eq(workoutLogs.userId, userId), isNull(workoutLogs.planDayId))
-      ),
+      standaloneQuery,
     ]);
 
     const workoutsByPlanDayId = new Map<string, WorkoutLog>();
@@ -189,7 +208,7 @@ export class TimelineStorage {
       return 0;
     });
 
-    if (limit !== undefined || offset !== undefined) {
+    if (wantsPagination) {
       const start = offset || 0;
       const end = limit === undefined ? undefined : start + limit;
       return entries.slice(start, end);
