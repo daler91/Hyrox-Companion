@@ -202,7 +202,7 @@ export function GeneratePlanDialog({ open, onOpenChange }: GeneratePlanDialogPro
             {daysPerWeek < 7 && (
               <div className="space-y-2">
                 <Label>Rest Days <span className="text-muted-foreground font-normal">(select {requiredRestDays})</span></Label>
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-1.5" role="group" aria-label="Rest day selection">
                   {DAY_NAMES.map((day) => (
                     <Button
                       key={day}
@@ -212,6 +212,8 @@ export function GeneratePlanDialog({ open, onOpenChange }: GeneratePlanDialogPro
                       onClick={() => toggleRestDay(day)}
                       disabled={!restDays.includes(day) && restDays.length >= requiredRestDays}
                       type="button"
+                      aria-pressed={restDays.includes(day)}
+                      aria-label={`${day} as rest day`}
                     >
                       {day.slice(0, 3)}
                     </Button>
@@ -273,7 +275,7 @@ export function GeneratePlanDialog({ open, onOpenChange }: GeneratePlanDialogPro
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Focus Areas (optional)</Label>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2" role="group" aria-label="Focus area selection">
                 {FOCUS_OPTIONS.map((opt) => (
                   <Button
                     key={opt.value}
@@ -281,6 +283,7 @@ export function GeneratePlanDialog({ open, onOpenChange }: GeneratePlanDialogPro
                     size="sm"
                     onClick={() => toggleFocus(opt.value)}
                     type="button"
+                    aria-pressed={focusAreas.includes(opt.value)}
                   >
                     {opt.label}
                   </Button>
