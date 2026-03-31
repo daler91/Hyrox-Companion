@@ -45,10 +45,14 @@ export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }
   } = useChatSession({ useStreaming: true });
 
   const messages = useMemo(() => {
+    // ⚡ Perf: Use Set for O(1) ID lookups instead of .some() which is O(N),
+    // reducing deduplication from O(N*M) to O(N+M).
+    const existingIds = new Set(hookMessages.map(m => m.id));
     const allMessages = [...hookMessages];
     for (const localMsg of localMessages) {
-      if (!allMessages.some(m => m.id === localMsg.id)) {
+      if (!existingIds.has(localMsg.id)) {
         allMessages.push(localMsg);
+        existingIds.add(localMsg.id);
       }
     }
     allMessages.sort((a, b) => {
