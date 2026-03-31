@@ -8,7 +8,7 @@ import {
   type WorkoutStatus,
 } from "@shared/schema";
 import { db } from "../db";
-import { eq, and, isNull, inArray } from "drizzle-orm";
+import { eq, and, isNull, isNotNull, inArray, desc } from "drizzle-orm";
 import type { WorkoutStorage } from "./workouts";
 import { toDateStr } from "../types";
 
@@ -121,41 +121,54 @@ export class TimelineStorage {
     }
   }
 
-  private async fetchScheduledDays(userId: string, planId?: string) {
-    let planDayConditions;
-    if (planId) {
-      planDayConditions = and(eq(trainingPlans.userId, userId), eq(planDays.planId, planId));
-    } else {
-      planDayConditions = eq(trainingPlans.userId, userId);
-    }
+  private async fetchScheduledDays(userId: string, planId?: string, sqlLimit?: number) {
+    const conditions = planId
+      ? and(eq(trainingPlans.userId, userId), eq(planDays.planId, planId), isNotNull(planDays.scheduledDate))
+      : and(eq(trainingPlans.userId, userId), isNotNull(planDays.scheduledDate));
 
-    const scheduledDaysResult = await db
+    let query = db
       .select({ planDay: planDays, planName: trainingPlans.name, planId: trainingPlans.id })
       .from(planDays)
       .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
-      .where(planDayConditions);
+      .where(conditions)
+      .orderBy(desc(planDays.scheduledDate))
+      .$dynamic();
 
-    return scheduledDaysResult.filter(r => r.planDay.scheduledDate);
+    if (sqlLimit !== undefined) {
+      query = query.limit(sqlLimit);
+    }
+
+    return query;
   }
 
-  async getTimeline(userId: string, planId?: string, limit?: number, offset?: number): Promise<TimelineEntry[]> {
+  private computeSqlOverFetch(limit?: number, offset?: number): number | undefined {
+    if (limit === undefined && offset === undefined) return undefined;
+    if (limit === undefined) return undefined;
+    return (offset || 0) + limit * 3;
+  }
+
+  private async fetchStandaloneWorkouts(userId: string, sqlLimit?: number): Promise<WorkoutLog[]> {
+    let query = db
+      .select()
+      .from(workoutLogs)
+      .where(and(eq(workoutLogs.userId, userId), isNull(workoutLogs.planDayId)))
+      .orderBy(desc(workoutLogs.date))
+      .$dynamic();
+
+    if (sqlLimit !== undefined) {
+      query = query.limit(sqlLimit);
+    }
+
+    return query;
+  }
+
+  private buildTimelineEntries(
+    scheduledDays: Awaited<ReturnType<TimelineStorage["fetchScheduledDays"]>>,
+    linkedWorkouts: WorkoutLog[],
+    standaloneWorkouts: WorkoutLog[],
+    today: string,
+  ): TimelineEntry[] {
     const entries: TimelineEntry[] = [];
-    const today = toDateStr();
-
-    const scheduledDays = await this.fetchScheduledDays(userId, planId);
-
-    const planDayIds = scheduledDays.map(r => r.planDay.id);
-
-    const [linkedWorkouts, standaloneWorkouts] = await Promise.all([
-      planDayIds.length > 0
-        ? db.select().from(workoutLogs).where(
-            and(eq(workoutLogs.userId, userId), inArray(workoutLogs.planDayId, planDayIds))
-          )
-        : Promise.resolve([]),
-      db.select().from(workoutLogs).where(
-        and(eq(workoutLogs.userId, userId), isNull(workoutLogs.planDayId))
-      ),
-    ]);
 
     const workoutsByPlanDayId = new Map<string, WorkoutLog>();
     for (const log of linkedWorkouts) {
@@ -166,13 +179,12 @@ export class TimelineStorage {
 
     for (const row of scheduledDays) {
       const day = row.planDay;
-      if (day.scheduledDate) {
-        const linkedLog = workoutsByPlanDayId.get(day.id);
-        if (linkedLog) {
-          entries.push(createLinkedWorkoutEntry(day, linkedLog, { planName: row.planName, planId: row.planId }));
-        } else {
-          entries.push(createPlannedDayEntry(day, day.scheduledDate, { planName: row.planName, planId: row.planId }, today));
-        }
+      if (!day.scheduledDate) continue;
+      const linkedLog = workoutsByPlanDayId.get(day.id);
+      if (linkedLog) {
+        entries.push(createLinkedWorkoutEntry(day, linkedLog, { planName: row.planName, planId: row.planId }));
+      } else {
+        entries.push(createPlannedDayEntry(day, day.scheduledDate, { planName: row.planName, planId: row.planId }, today));
       }
     }
 
@@ -180,6 +192,26 @@ export class TimelineStorage {
       entries.push(createStandaloneWorkoutEntry(log));
     }
 
+    return entries;
+  }
+
+  async getTimeline(userId: string, planId?: string, limit?: number, offset?: number): Promise<TimelineEntry[]> {
+    const today = toDateStr();
+    const sqlOverFetch = this.computeSqlOverFetch(limit, offset);
+
+    const scheduledDays = await this.fetchScheduledDays(userId, planId, sqlOverFetch);
+    const planDayIds = scheduledDays.map(r => r.planDay.id);
+
+    const [linkedWorkouts, standaloneWorkouts] = await Promise.all([
+      planDayIds.length > 0
+        ? db.select().from(workoutLogs).where(
+            and(eq(workoutLogs.userId, userId), inArray(workoutLogs.planDayId, planDayIds))
+          )
+        : Promise.resolve([]),
+      this.fetchStandaloneWorkouts(userId, sqlOverFetch),
+    ]);
+
+    const entries = this.buildTimelineEntries(scheduledDays, linkedWorkouts, standaloneWorkouts, today);
     await this.attachExerciseSets(entries);
 
     // Fast string comparison for YYYY-MM-DD dates instead of Date object instantiation
@@ -189,7 +221,7 @@ export class TimelineStorage {
       return 0;
     });
 
-    if (limit !== undefined || offset !== undefined) {
+    if (sqlOverFetch !== undefined) {
       const start = offset || 0;
       const end = limit === undefined ? undefined : start + limit;
       return entries.slice(start, end);
