@@ -3,7 +3,7 @@ import { logger } from "./logger";
 import { runEmailCronJob } from "./emailScheduler";
 import type { IStorage } from "./storage";
 
-let task: cron.ScheduledTask | null = null;
+let task: ReturnType<typeof cron.schedule> | null = null;
 
 /** Start the internal cron scheduler. Runs email checks daily at 09:00 UTC. */
 export function startCron(storage: IStorage): void {
