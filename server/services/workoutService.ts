@@ -4,16 +4,24 @@ import { db } from "../db";
 import { eq, and } from "drizzle-orm";
 
 
+// ⚡ Bolt Performance Optimization:
+// Combined multiple O(N) array traversals (.filter, .map, .map) into a single loop
+// using a Map to avoid redundant array allocations and garbage collection overhead.
 export function extractAndDeduplicateCustomExercises(exercises: ParsedExercise[], userId: string) {
-  const customExsToInsert = exercises
-    .filter((ex) => ex.exerciseName === "custom" && ex.customLabel)
-    .map((ex) => ({
-      userId,
-      name: ex.customLabel!,
-      category: ex.category || "conditioning",
-    }));
+  const uniqueCustomExs = new Map<string, { userId: string, name: string, category: string }>();
 
-  return Array.from(new Map(customExsToInsert.map(item => [item.name, item])).values());
+  for (const ex of exercises) {
+    if (ex.exerciseName === "custom" && ex.customLabel) {
+      // Intentionally overwriting to match previous behavior (last-wins)
+      uniqueCustomExs.set(ex.customLabel, {
+        userId,
+        name: ex.customLabel,
+        category: ex.category || "conditioning",
+      });
+    }
+  }
+
+  return Array.from(uniqueCustomExs.values());
 }
 
 
