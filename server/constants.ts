@@ -24,3 +24,11 @@ export const DB_IDLE_TIMEOUT_MS = 30_000;
 
 /** DB statement timeout */
 export const DB_STATEMENT_TIMEOUT_MS = 30_000;
+
+/** The 8 Hyrox functional stations + running */
+export const HYROX_STATIONS = [
+  "skierg", "sled_push", "sled_pull", "burpee_broad_jump",
+  "rowing", "farmers_carry", "sandbag_lunges", "wall_balls",
+] as const;
+
+export const HYROX_STATIONS_WITH_RUNNING = [...HYROX_STATIONS, "running"] as const;

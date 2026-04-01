@@ -2,9 +2,9 @@ import { createTestApp } from "./testUtils";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import express from "express";
 import request from "supertest";
-import analyticsRouter, { validDate, _cacheForTesting } from "../analytics";
+import analyticsRouter, { validDate, _cacheForTesting, _workoutLogCacheForTesting } from "../analytics";
 import { storage } from "../../storage";
-import { calculatePersonalRecords, calculateExerciseAnalytics } from "../../services/analyticsService";
+import { calculatePersonalRecords, calculateExerciseAnalytics, calculateTrainingOverview } from "../../services/analyticsService";
 
 // Mock the clerkAuth middleware to simulate authentication
 vi.mock("../../clerkAuth", () => ({
@@ -23,6 +23,7 @@ vi.mock("../../types", () => ({
 vi.mock("../../storage", () => ({
   storage: {
     getAllExerciseSetsWithDates: vi.fn(),
+    getWorkoutLogsByDateRange: vi.fn(),
   },
 }));
 
@@ -30,6 +31,7 @@ vi.mock("../../storage", () => ({
 vi.mock("../../services/analyticsService", () => ({
   calculatePersonalRecords: vi.fn(),
   calculateExerciseAnalytics: vi.fn(),
+  calculateTrainingOverview: vi.fn(),
 }));
 
 import { clearRateLimitBuckets } from "../../routeUtils";
@@ -59,8 +61,8 @@ describe("Analytics Routes", () => {
     clearRateLimitBuckets();
     vi.clearAllMocks();
     _cacheForTesting.clear();
+    _workoutLogCacheForTesting.clear();
     app = createTestApp(analyticsRouter);
-
   });
 
   const testInvalidDates = (endpoint: string) => {
@@ -200,5 +202,43 @@ describe("Analytics Routes", () => {
       // Even without advancing time, the cache should clear on failure
       expect(storage.getAllExerciseSetsWithDates).toHaveBeenCalledTimes(2);
     });
+  });
+
+  describe("GET /api/v1/training-overview", () => {
+    it("should return training overview data", async () => {
+      const mockOverview = {
+        weeklySummaries: [{ weekStart: "2026-01-12", workoutCount: 3 }],
+        workoutDates: ["2026-01-13"],
+        categoryTotals: {},
+        stationCoverage: [],
+      };
+
+      vi.mocked(storage.getWorkoutLogsByDateRange).mockResolvedValue([]);
+      vi.mocked(storage.getAllExerciseSetsWithDates).mockResolvedValue([]);
+      vi.mocked(calculateTrainingOverview).mockReturnValue(mockOverview);
+
+      const response = await request(app).get("/api/v1/training-overview");
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual(mockOverview);
+      expect(storage.getWorkoutLogsByDateRange).toHaveBeenCalledWith("test_user_id", undefined, undefined);
+      expect(storage.getAllExerciseSetsWithDates).toHaveBeenCalledWith("test_user_id", undefined, undefined);
+      expect(calculateTrainingOverview).toHaveBeenCalled();
+    });
+
+    it("should pass date params to storage", async () => {
+      vi.mocked(storage.getWorkoutLogsByDateRange).mockResolvedValue([]);
+      vi.mocked(storage.getAllExerciseSetsWithDates).mockResolvedValue([]);
+      vi.mocked(calculateTrainingOverview).mockReturnValue({
+        weeklySummaries: [], workoutDates: [], categoryTotals: {}, stationCoverage: [],
+      });
+
+      const response = await request(app).get("/api/v1/training-overview?from=2026-01-01&to=2026-03-31");
+
+      expect(response.status).toBe(200);
+      expect(storage.getWorkoutLogsByDateRange).toHaveBeenCalledWith("test_user_id", "2026-01-01", "2026-03-31");
+    });
+
+    testInvalidDates("/api/v1/training-overview");
   });
 });

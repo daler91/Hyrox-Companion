@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { Trophy, Dumbbell, Loader2 } from "lucide-react";
+import { Trophy, Dumbbell, Loader2, Sparkles } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -37,18 +37,18 @@ export function PersonalRecordsTab({ dateParams }: PersonalRecordsTabProps) {
     queryFn: () => api.analytics.getPersonalRecords(dateParams),
   });
 
-  const filteredPRs = useMemo(() => {
-    if (!rawPRs) return [];
+  const { filteredPRs, recentPRs } = useMemo(() => {
+    if (!rawPRs) return { filteredPRs: [], recentPRs: [] };
 
-    // ⚡ Bolt Performance Optimization:
-    // Combine mapping and filtering into a single O(N) array traversal
-    // instead of creating an intermediate array and filtering it again.
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const cutoff = thirtyDaysAgo.toISOString().split("T")[0];
+
     const results = [];
+    const recent = [];
+
     for (const [exerciseName, pr] of Object.entries(rawPRs)) {
-      if (categoryFilter !== "all" && pr.category !== categoryFilter) {
-        continue;
-      }
-      results.push({
+      const mapped = {
         exerciseName,
         customLabel: pr.customLabel,
         category: pr.category,
@@ -58,9 +58,24 @@ export function PersonalRecordsTab({ dateParams }: PersonalRecordsTabProps) {
         maxDistanceDate: pr.maxDistance?.date ?? null,
         bestTime: pr.bestTime?.value ?? null,
         bestTimeDate: pr.bestTime?.date ?? null,
-      });
+      };
+
+      if (categoryFilter !== "all" && pr.category !== categoryFilter) {
+        continue;
+      }
+      results.push(mapped);
+
+      // Check if any PR date is within last 30 days
+      const hasRecentPR =
+        (pr.maxWeight?.date && pr.maxWeight.date >= cutoff) ||
+        (pr.maxDistance?.date && pr.maxDistance.date >= cutoff) ||
+        (pr.bestTime?.date && pr.bestTime.date >= cutoff);
+
+      if (hasRecentPR) {
+        recent.push(mapped);
+      }
     }
-    return results;
+    return { filteredPRs: results, recentPRs: recent };
   }, [rawPRs, categoryFilter]);
 
   return (
@@ -114,15 +129,35 @@ export function PersonalRecordsTab({ dateParams }: PersonalRecordsTabProps) {
             );
           }
           return (
-            <div className="divide-y border rounded-lg overflow-hidden">
-              {filteredPRs.map((pr) => (
-                <PersonalRecordItem
-                  key={`${pr.exerciseName}-${pr.customLabel || ""}`}
-                  pr={pr}
-                  weightLabel={weightLabel}
-                  dLabel={dLabel}
-                />
-              ))}
+            <div className="space-y-4">
+              {recentPRs.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Sparkles className="h-4 w-4 text-amber-500" />
+                    <p className="text-sm font-semibold text-amber-600 dark:text-amber-400">Recent PRs (last 30 days)</p>
+                  </div>
+                  <div className="divide-y border rounded-lg overflow-hidden border-amber-500/30 bg-amber-500/5">
+                    {recentPRs.map((pr) => (
+                      <PersonalRecordItem
+                        key={`recent-${pr.exerciseName}-${pr.customLabel || ""}`}
+                        pr={pr}
+                        weightLabel={weightLabel}
+                        dLabel={dLabel}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="divide-y border rounded-lg overflow-hidden">
+                {filteredPRs.map((pr) => (
+                  <PersonalRecordItem
+                    key={`${pr.exerciseName}-${pr.customLabel || ""}`}
+                    pr={pr}
+                    weightLabel={weightLabel}
+                    dLabel={dLabel}
+                  />
+                ))}
+              </div>
             </div>
           );
         })()}

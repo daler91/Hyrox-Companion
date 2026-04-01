@@ -1,10 +1,14 @@
 import { useState, useMemo } from "react";
 import { format, subDays } from "date-fns";
-import { Activity, Trophy } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { BarChart3, Activity, Trophy, PieChart } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { QUERY_KEYS } from "@/lib/api";
 import { PersonalRecordsTab } from "@/components/analytics/PersonalRecordsTab";
 import { ExerciseProgressionTab } from "@/components/analytics/ExerciseProgressionTab";
+import { TrainingOverviewTab } from "@/components/analytics/TrainingOverviewTab";
+import { CategoryBreakdownTab } from "@/components/analytics/CategoryBreakdownTab";
 
 export default function Analytics() {
   const [dateRange, setDateRange] = useState<string>("90");
@@ -15,12 +19,16 @@ export default function Analytics() {
     return `?from=${from}`;
   }, [dateRange]);
 
+  const { data: preferences } = useQuery<{ weeklyGoal?: number }>({
+    queryKey: QUERY_KEYS.preferences,
+  });
+
   return (
     <div className="max-w-4xl mx-auto p-4 md:p-6 space-y-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold" data-testid="text-analytics-title">Analytics</h1>
-          <p className="text-muted-foreground">Personal records and exercise progression</p>
+          <p className="text-muted-foreground">Training overview, progression, and personal records</p>
         </div>
 
         <Select value={dateRange} onValueChange={setDateRange}>
@@ -37,24 +45,40 @@ export default function Analytics() {
         </Select>
       </div>
 
-      <Tabs defaultValue="trends" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 mb-6">
+      <Tabs defaultValue="overview" className="w-full">
+        <TabsList className="grid w-full grid-cols-4 mb-6">
+          <TabsTrigger value="overview" data-testid="tab-overview">
+            <BarChart3 className="h-4 w-4 mr-2 hidden sm:block" />
+            Overview
+          </TabsTrigger>
           <TabsTrigger value="trends" data-testid="tab-trends">
-            <Activity className="h-4 w-4 mr-2" />
-            Trends & Progression
+            <Activity className="h-4 w-4 mr-2 hidden sm:block" />
+            Progression
           </TabsTrigger>
           <TabsTrigger value="prs" data-testid="tab-prs">
-            <Trophy className="h-4 w-4 mr-2" />
-            Personal Records
+            <Trophy className="h-4 w-4 mr-2 hidden sm:block" />
+            Records
+          </TabsTrigger>
+          <TabsTrigger value="breakdown" data-testid="tab-breakdown">
+            <PieChart className="h-4 w-4 mr-2 hidden sm:block" />
+            Breakdown
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="overview" className="space-y-6">
+          <TrainingOverviewTab dateParams={dateParams} weeklyGoal={preferences?.weeklyGoal} />
+        </TabsContent>
+
+        <TabsContent value="trends" className="space-y-6">
+          <ExerciseProgressionTab dateParams={dateParams} />
+        </TabsContent>
 
         <TabsContent value="prs" className="space-y-6">
           <PersonalRecordsTab dateParams={dateParams} />
         </TabsContent>
 
-        <TabsContent value="trends" className="space-y-6">
-          <ExerciseProgressionTab dateParams={dateParams} />
+        <TabsContent value="breakdown" className="space-y-6">
+          <CategoryBreakdownTab dateParams={dateParams} />
         </TabsContent>
       </Tabs>
     </div>

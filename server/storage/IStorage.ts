@@ -74,6 +74,7 @@ export interface IWorkoutStorage {
 export interface IAnalyticsStorage {
   getTimeline(userId: string, planId?: string, limit?: number, offset?: number): Promise<TimelineEntry[]>;
   getWeeklyStats(userId: string, weekStart: string, weekEnd: string): Promise<{ completedCount: number; plannedCount: number; missedCount: number; skippedCount: number; totalDuration: number }>;
+  getWorkoutLogsByDateRange(userId: string, from?: string, to?: string): Promise<WorkoutLog[]>;
 }
 
 export interface IChatStorage {

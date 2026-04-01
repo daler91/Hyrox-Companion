@@ -1,5 +1,5 @@
 import { typedRequest } from "./client";
-import type { PersonalRecord, TimelineEntry } from "@shared/schema";
+import type { PersonalRecord, TimelineEntry, TrainingOverview } from "@shared/schema";
 import type { RagInfo } from "./coaching";
 
 export interface Suggestion {
@@ -19,6 +19,9 @@ export const analytics = {
 
   getExerciseAnalytics: (dateParams?: string) =>
     typedRequest<unknown>("GET", `/api/v1/exercise-analytics${dateParams || ""}`),
+
+  getTrainingOverview: (dateParams?: string) =>
+    typedRequest<TrainingOverview>("GET", `/api/v1/training-overview${dateParams || ""}`),
 } as const;
 
 export const timeline = {
