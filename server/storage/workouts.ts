@@ -107,10 +107,8 @@ export class WorkoutStorage {
     return log;
   }
 
+  // ⚡ Bolt: Single UPDATE with WHERE auth check instead of SELECT + UPDATE (saves 1 DB roundtrip)
   async updateWorkoutLog(logId: string, updates: UpdateWorkoutLog, userId: string): Promise<WorkoutLog | undefined> {
-    const existingLog = await this.getWorkoutLog(logId, userId);
-    if (!existingLog) return undefined;
-    
     const [updatedLog] = await db
       .update(workoutLogs)
       .set(updates)
@@ -119,10 +117,8 @@ export class WorkoutStorage {
     return updatedLog;
   }
 
+  // ⚡ Bolt: Single DELETE with WHERE auth check instead of SELECT + DELETE (saves 1 DB roundtrip)
   async deleteWorkoutLog(logId: string, userId: string): Promise<boolean> {
-    const existingLog = await this.getWorkoutLog(logId, userId);
-    if (!existingLog) return false;
-    
     const result = await db.delete(workoutLogs).where(and(eq(workoutLogs.id, logId), eq(workoutLogs.userId, userId)));
     return result.rowCount !== null && result.rowCount > 0;
   }
@@ -188,10 +184,8 @@ export class WorkoutStorage {
       .orderBy(asc(exerciseSets.sortOrder));
   }
 
+  // ⚡ Bolt: Removed redundant SELECT pre-check; the subquery already enforces user ownership
   async deleteExerciseSetsByWorkoutLog(workoutLogId: string, userId: string): Promise<boolean> {
-    const existingLog = await this.getWorkoutLog(workoutLogId, userId);
-    if (!existingLog) return false;
-
     await db
       .delete(exerciseSets)
       .where(

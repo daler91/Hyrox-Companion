@@ -93,14 +93,13 @@ export class PlanStorage {
     return await db.insert(planDays).values(days).returning();
   }
 
+  // ⚡ Bolt: Single UPDATE with JOIN-based auth instead of SELECT + UPDATE (saves 1 DB roundtrip)
   async updatePlanDay(dayId: string, updates: UpdatePlanDay, userId: string): Promise<PlanDay | undefined> {
-    const day = await this.getPlanDay(dayId, userId);
-    if (!day) return undefined;
-    
     const [updatedDay] = await db
       .update(planDays)
       .set(updates)
-      .where(eq(planDays.id, dayId))
+      .from(trainingPlans)
+      .where(and(eq(planDays.id, dayId), eq(planDays.planId, trainingPlans.id), eq(trainingPlans.userId, userId)))
       .returning();
     return updatedDay;
   }
@@ -115,11 +114,14 @@ export class PlanStorage {
     return result[0]?.planDay;
   }
 
+  // ⚡ Bolt: Single DELETE with subquery auth instead of SELECT + DELETE (saves 1 DB roundtrip)
   async deletePlanDay(dayId: string, userId: string): Promise<boolean> {
-    const existingDay = await this.getPlanDay(dayId, userId);
-    if (!existingDay) return false;
-    
-    const result = await db.delete(planDays).where(eq(planDays.id, dayId));
+    const result = await db
+      .delete(planDays)
+      .where(and(
+        eq(planDays.id, dayId),
+        inArray(planDays.planId, db.select({ id: trainingPlans.id }).from(trainingPlans).where(eq(trainingPlans.userId, userId)))
+      ));
     return result.rowCount !== null && result.rowCount > 0;
   }
 

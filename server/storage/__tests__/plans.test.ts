@@ -37,6 +37,24 @@ function mockUpdateChain(result: unknown[]) {
   vi.mocked(db.update).mockReturnValue({ set: setMock } as never);
 }
 
+function mockUpdateWithFromChain(result: unknown[]) {
+  const returningMock = vi.fn().mockResolvedValue(result);
+  const whereMock = vi.fn().mockReturnValue({ returning: returningMock });
+  const fromMock = vi.fn().mockReturnValue({ where: whereMock });
+  const setMock = vi.fn().mockReturnValue({ from: fromMock });
+  vi.mocked(db.update).mockReturnValue({ set: setMock } as never);
+}
+
+function mockDeleteWithSubqueryChain(rowCount: number) {
+  // Mock db.select() for the subquery inside inArray()
+  const subqueryWhereMock = vi.fn().mockReturnValue("subquery");
+  const subqueryFromMock = vi.fn().mockReturnValue({ where: subqueryWhereMock });
+  vi.mocked(db.select).mockReturnValue({ from: subqueryFromMock } as never);
+  // Mock db.delete() for the main DELETE
+  const deletWhereMock = vi.fn().mockResolvedValue({ rowCount });
+  vi.mocked(db.delete).mockReturnValue({ where: deletWhereMock } as never);
+}
+
 // -- Tests --------------------------------------------------------------------
 
 describe("PlanStorage", () => {
@@ -158,16 +176,13 @@ describe("PlanStorage", () => {
 
   describe("updatePlanDay", () => {
     it("should return undefined when day does not belong to user", async () => {
-      mockSelectWithJoin([]);
+      mockUpdateWithFromChain([]);
       expect(await storage.updatePlanDay("d1", { focus: "Running" }, "u1")).toBeUndefined();
-      expect(db.update).not.toHaveBeenCalled();
     });
 
     it("should update and return the plan day when found", async () => {
-      const mockDay = { id: "d1", planId: "plan-1", weekNumber: 1 };
-      const updatedDay = { ...mockDay, focus: "Running" };
-      mockSelectWithJoin([{ planDay: mockDay }]);
-      mockUpdateChain([updatedDay]);
+      const updatedDay = { id: "d1", planId: "plan-1", weekNumber: 1, focus: "Running" };
+      mockUpdateWithFromChain([updatedDay]);
 
       expect(await storage.updatePlanDay("d1", { focus: "Running" }, "u1")).toEqual(updatedDay);
     });
@@ -175,14 +190,12 @@ describe("PlanStorage", () => {
 
   describe("deletePlanDay", () => {
     it("should return false when day not found", async () => {
-      mockSelectWithJoin([]);
+      mockDeleteWithSubqueryChain(0);
       expect(await storage.deletePlanDay("nonexistent", "u1")).toBe(false);
     });
 
     it("should delete the day and return true when found", async () => {
-      mockSelectWithJoin([{ planDay: { id: "d1" } }]);
-      vi.mocked(db.delete).mockReturnValue({ where: vi.fn().mockResolvedValue({ rowCount: 1 }) } as never);
-
+      mockDeleteWithSubqueryChain(1);
       expect(await storage.deletePlanDay("d1", "u1")).toBe(true);
     });
   });
