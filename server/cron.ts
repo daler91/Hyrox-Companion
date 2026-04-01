@@ -35,7 +35,8 @@ export function startCron(storage: IStorage): void {
 
 export function stopCron(): void {
   if (task) {
-    void task.stop();
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    task.stop();
     task = null;
     logger.info({ context: "cron" }, "Cron stopped");
   }
