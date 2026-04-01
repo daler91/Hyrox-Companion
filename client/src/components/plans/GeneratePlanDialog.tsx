@@ -212,6 +212,8 @@ export function GeneratePlanDialog({ open, onOpenChange }: GeneratePlanDialogPro
                       onClick={() => toggleRestDay(day)}
                       disabled={!restDays.includes(day) && restDays.length >= requiredRestDays}
                       type="button"
+                      aria-pressed={restDays.includes(day)}
+                      aria-label={`${day} rest day`}
                     >
                       {day.slice(0, 3)}
                     </Button>
@@ -281,6 +283,7 @@ export function GeneratePlanDialog({ open, onOpenChange }: GeneratePlanDialogPro
                     size="sm"
                     onClick={() => toggleFocus(opt.value)}
                     type="button"
+                    aria-pressed={focusAreas.includes(opt.value)}
                   >
                     {opt.label}
                   </Button>
