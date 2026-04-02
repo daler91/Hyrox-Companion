@@ -139,7 +139,7 @@ export function PersonalRecordsTab({ dateParams }: PersonalRecordsTabProps) {
                   <div className="divide-y border rounded-lg overflow-hidden border-amber-500/30 bg-amber-500/5">
                     {recentPRs.map((pr) => (
                       <PersonalRecordItem
-                        key={`recent-${pr.exerciseName}-${pr.customLabel || ""}`}
+                        key={`recent-${pr.exerciseName}-${pr.customLabel ?? ""}`}
                         pr={pr}
                         weightLabel={weightLabel}
                         dLabel={dLabel}
@@ -151,7 +151,7 @@ export function PersonalRecordsTab({ dateParams }: PersonalRecordsTabProps) {
               <div className="divide-y border rounded-lg overflow-hidden">
                 {filteredPRs.map((pr) => (
                   <PersonalRecordItem
-                    key={`${pr.exerciseName}-${pr.customLabel || ""}`}
+                    key={`${pr.exerciseName}-${pr.customLabel ?? ""}`}
                     pr={pr}
                     weightLabel={weightLabel}
                     dLabel={dLabel}

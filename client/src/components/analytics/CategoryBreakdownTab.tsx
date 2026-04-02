@@ -66,9 +66,9 @@ export function CategoryBreakdownTab({ dateParams }: CategoryBreakdownTabProps) 
     return Object.entries(overview.categoryTotals)
       .filter(([, v]) => v.count > 0)
       .map(([cat, v]) => ({
-        name: categoryLabels[cat] || cat,
+        name: categoryLabels[cat] ?? cat,
         value: v.count,
-        fill: CATEGORY_COLORS[cat] || CATEGORY_COLORS.other,
+        fill: CATEGORY_COLORS[cat] ?? CATEGORY_COLORS.other,
       }))
       .sort((a, b) => b.value - a.value);
   }, [overview]);
@@ -146,7 +146,7 @@ export function CategoryBreakdownTab({ dateParams }: CategoryBreakdownTabProps) 
                 className={`p-3 rounded-lg border text-sm ${getFreshnessColor(station.daysSince)}`}
               >
                 <p className="font-semibold">
-                  {STATION_LABELS[station.station] || station.station}
+                  {STATION_LABELS[station.station] ?? station.station}
                 </p>
                 <p className="text-xs mt-1 opacity-80">
                   {getFreshnessLabel(station.daysSince)}

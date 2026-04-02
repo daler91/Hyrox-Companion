@@ -21,7 +21,7 @@ export const analytics = {
     typedRequest<unknown>("GET", `/api/v1/exercise-analytics${dateParams || ""}`),
 
   getTrainingOverview: (dateParams?: string) =>
-    typedRequest<TrainingOverview>("GET", `/api/v1/training-overview${dateParams || ""}`),
+    typedRequest<TrainingOverview>("GET", `/api/v1/training-overview${dateParams ?? ""}`),
 } as const;
 
 export const timeline = {

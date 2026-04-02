@@ -24,7 +24,8 @@ function LineChartTooltip({ active, payload, chartLabel }: { active?: boolean; p
   if (!active || !payload?.length) return null;
 
   const firstPayload = payload[0]?.payload;
-  const dateStr = String(firstPayload?.date ?? firstPayload?.weekStart ?? "");
+  const rawDate = firstPayload?.date ?? firstPayload?.weekStart ?? "";
+  const dateStr = typeof rawDate === "string" ? rawDate : "";
 
   return (
     <div className="bg-popover text-popover-foreground border px-3 py-2 rounded shadow-md text-sm">
@@ -66,7 +67,7 @@ export function MiniLineChart({
       <div className="h-[200px] w-full" data-testid={`line-chart-${valueKey}`}>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
-            data={data as object[]}
+            data={[...data]}
             margin={{ top: 5, right: 5, left: -20, bottom: 5 }}
           >
             <CartesianGrid

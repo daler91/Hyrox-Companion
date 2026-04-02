@@ -4,6 +4,9 @@ import { MiniBarChart, type ExerciseAnalyticDay } from "@/components/analytics/M
 import { MiniLineChart } from "@/components/analytics/MiniLineChart";
 import { Button } from "@/components/ui/button";
 
+type TrendDirection = "up" | "down" | "flat";
+const FLAT: TrendDirection = "flat";
+
 interface ExerciseProgressionChartsProps {
   readonly selectedExercise: string | null;
   readonly allAnalytics: Record<string, ExerciseAnalyticDay[]> | undefined;
@@ -19,7 +22,7 @@ function computeTrend(data: ExerciseAnalyticDay[], key: keyof ExerciseAnalyticDa
   const secondHalf = data.slice(mid);
 
   const avg = (arr: ExerciseAnalyticDay[]) =>
-    arr.reduce((s, d) => s + (d[key] as number), 0) / arr.length;
+    arr.reduce((s, d) => s + Number(d[key] ?? 0), 0) / arr.length;
 
   const firstAvg = avg(firstHalf);
   const secondAvg = avg(secondHalf);
@@ -72,9 +75,9 @@ function summarizeExerciseData(data: ExerciseAnalyticDay[]) {
     sessions,
     avgVolume: sessions > 0 ? Math.round(totalVolume / sessions) : 0,
     avgReps: sessions > 0 ? Math.round(totalReps / sessions) : 0,
-    volumeTrend: hasVolume ? computeTrend(data, "totalVolume") : "flat" as const,
-    weightTrend: hasMaxWeight ? computeTrend(data, "maxWeight") : "flat" as const,
-    repsTrend: hasTotalReps ? computeTrend(data, "totalReps") : "flat" as const,
+    volumeTrend: hasVolume ? computeTrend(data, "totalVolume") : FLAT,
+    weightTrend: hasMaxWeight ? computeTrend(data, "maxWeight") : FLAT,
+    repsTrend: hasTotalReps ? computeTrend(data, "totalReps") : FLAT,
   };
 }
 
