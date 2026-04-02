@@ -18,6 +18,10 @@ import {
   Cell,
 } from "recharts";
 
+const MUTED_FG = "hsl(var(--muted-foreground))";
+const GRID_BORDER = "hsl(var(--border))";
+const GRID_DASH = "3 3";
+
 interface TrainingOverviewTabProps {
   readonly dateParams: string;
   readonly weeklyGoal?: number;
@@ -140,20 +144,20 @@ export function TrainingOverviewTab({ dateParams, weeklyGoal }: TrainingOverview
               data={overview.weeklySummaries}
               margin={{ top: 5, right: 5, left: -20, bottom: 5 }}
             >
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+              <CartesianGrid strokeDasharray={GRID_DASH} vertical={false} stroke={GRID_BORDER} />
               <XAxis
                 dataKey="weekStart"
                 tickFormatter={formatWeek}
                 fontSize={12}
                 tickLine={false}
                 axisLine={false}
-                tick={{ fill: "hsl(var(--muted-foreground))" }}
+                tick={{ fill: MUTED_FG }}
               />
               <YAxis
                 fontSize={12}
                 tickLine={false}
                 axisLine={false}
-                tick={{ fill: "hsl(var(--muted-foreground))" }}
+                tick={{ fill: MUTED_FG }}
                 allowDecimals={false}
               />
               <Tooltip

@@ -143,7 +143,7 @@ export function calculateTrainingOverview(
     categoryTotals[cat].totalSets++;
 
     if (!exercisesByCategory.has(cat)) exercisesByCategory.set(cat, new Set());
-    exercisesByCategory.get(cat)!.add(set.workoutLogId);
+    exercisesByCategory.get(cat)?.add(set.workoutLogId);
   }
 
   // Count unique workout logs per category

@@ -6,8 +6,7 @@ describe("Analytics Page", () => {
       setupAuthIntercepts();
       cy.visit("/analytics");
       cy.wait("@authUser");
-      cy.wait("@records");
-      cy.wait("@exerciseAnalytics");
+      cy.wait("@trainingOverview");
     });
 
     it("shows the analytics page title", () => {
@@ -16,11 +15,13 @@ describe("Analytics Page", () => {
 
     it("shows no personal records message when empty", () => {
       cy.getBySel("tab-prs").click();
+      cy.wait("@records");
       cy.getBySel("text-no-prs").should("exist");
     });
 
     it("shows the category filter", () => {
       cy.getBySel("tab-prs").click();
+      cy.wait("@records");
       cy.getBySel("select-pr-category").should("exist");
     });
   });
@@ -56,23 +57,26 @@ describe("Analytics Page", () => {
       });
       cy.visit("/analytics");
       cy.wait("@authUser");
-      cy.wait("@records");
-      cy.wait("@exerciseAnalytics");
+      cy.wait("@trainingOverview");
     });
 
     it("shows PR cards for exercises", () => {
       cy.getBySel("tab-prs").click();
+      cy.wait("@records");
       cy.getBySel("card-pr-back_squat").should("exist");
       cy.getBySel("card-pr-ski_erg").should("exist");
     });
 
     it("displays weight PR value", () => {
       cy.getBySel("tab-prs").click();
+      cy.wait("@records");
       cy.getBySel("text-pr-weight-back_squat").should("contain", "100");
     });
 
     it("shows volume stats section", () => {
       cy.getBySel("tab-trends").click();
+      cy.wait("@records");
+      cy.wait("@exerciseAnalytics");
       cy.getBySel("select-exercise-progression").click();
       cy.get('[role="option"]').contains("Back Squat").click();
       cy.getBySel("text-total-sessions").should("exist");

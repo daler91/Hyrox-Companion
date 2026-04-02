@@ -9,15 +9,16 @@ import {
   ReferenceLine,
 } from "recharts";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type DataPoint = Record<string, any>;
+const MUTED_FG = "hsl(var(--muted-foreground))";
+const GRID_BORDER = "hsl(var(--border))";
+const GRID_DASH = "3 3";
 
 function formatDate(d: string): string {
   const date = new Date(d + "T00:00:00");
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-const getStrokeColor = (colorStr: string) => {
+const getStrokeColor = (colorStr: string): string => {
   if (colorStr.includes("primary")) return "#ea580c";
   if (colorStr.includes("purple")) return "#a855f7";
   if (colorStr.includes("blue")) return "#3b82f6";
@@ -27,13 +28,16 @@ const getStrokeColor = (colorStr: string) => {
   return "#64748b";
 };
 
-const CustomTooltip = ({ active, payload, chartLabel }: { active?: boolean; payload?: Array<{ value: number; payload?: DataPoint }>; chartLabel?: string }) => {
+const CustomTooltip = ({ active, payload, chartLabel }: { active?: boolean; payload?: Array<{ value: number; payload?: Record<string, unknown> }>; chartLabel?: string }) => {
   if (!active || !payload?.length) return null;
+
+  const firstPayload = payload[0]?.payload;
+  const dateStr = (firstPayload?.date ?? firstPayload?.weekStart ?? "") as string;
 
   return (
     <div className="bg-popover text-popover-foreground border px-3 py-2 rounded shadow-md text-sm">
       <p className="font-semibold mb-1">
-        {payload[0]?.payload?.date ? formatDate(payload[0].payload.date as string) : payload[0]?.payload?.weekStart ? formatDate(payload[0].payload.weekStart as string) : ""}
+        {dateStr ? formatDate(dateStr) : ""}
       </p>
       <p>
         <span className="text-muted-foreground mr-2">{chartLabel}:</span>
@@ -51,7 +55,7 @@ export function MiniLineChart({
   label,
   referenceLine,
 }: Readonly<{
-  data: DataPoint[];
+  data: readonly object[];
   xKey?: string;
   valueKey: string;
   color: string;
@@ -74,9 +78,9 @@ export function MiniLineChart({
             margin={{ top: 5, right: 5, left: -20, bottom: 5 }}
           >
             <CartesianGrid
-              strokeDasharray="3 3"
+              strokeDasharray={GRID_DASH}
               vertical={false}
-              stroke="hsl(var(--border))"
+              stroke={GRID_BORDER}
             />
             <XAxis
               dataKey={xKey}
@@ -84,16 +88,16 @@ export function MiniLineChart({
               fontSize={12}
               tickLine={false}
               axisLine={false}
-              tick={{ fill: "hsl(var(--muted-foreground))" }}
+              tick={{ fill: MUTED_FG }}
             />
             <YAxis
               fontSize={12}
               tickLine={false}
               axisLine={false}
-              tick={{ fill: "hsl(var(--muted-foreground))" }}
+              tick={{ fill: MUTED_FG }}
             />
             <Tooltip
-              cursor={{ stroke: "hsl(var(--muted-foreground))", strokeDasharray: "3 3" }}
+              cursor={{ stroke: MUTED_FG, strokeDasharray: GRID_DASH }}
               content={<CustomTooltip chartLabel={label} />}
             />
             {referenceLine && (

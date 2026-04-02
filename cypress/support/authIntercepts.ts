@@ -4,6 +4,7 @@ export function setupAuthIntercepts(overrides?: {
   workouts?: any[];
   personalRecords?: any[];
   exerciseAnalytics?: any[];
+  trainingOverview?: any;
   stravaStatus?: { connected: boolean; athleteId?: string; lastSyncedAt?: string | null };
   preferences?: { weightUnit: string; distanceUnit: string; weeklyGoal: number; emailNotifications: boolean };
 }) {
@@ -53,6 +54,16 @@ export function setupAuthIntercepts(overrides?: {
     statusCode: 200,
     body: overrides?.exerciseAnalytics ?? {},
   }).as("exerciseAnalytics");
+
+  cy.intercept("GET", "/api/v1/training-overview*", {
+    statusCode: 200,
+    body: overrides?.trainingOverview ?? {
+      weeklySummaries: [],
+      workoutDates: [],
+      categoryTotals: {},
+      stationCoverage: [],
+    },
+  }).as("trainingOverview");
 
   cy.intercept("GET", "/api/v1/strava/status", {
     statusCode: 200,
