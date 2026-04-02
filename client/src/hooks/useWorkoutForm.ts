@@ -73,6 +73,7 @@ export function useWorkoutForm({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workouts }).catch(() => {});
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }).catch(() => {});
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.authUser }).catch(() => {});
       toast({
         title: "Workout logged",
         description: "Your workout has been saved successfully.",

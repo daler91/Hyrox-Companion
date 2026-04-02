@@ -7,6 +7,7 @@ import { generateCSV, generateJSON } from "../services/exportService";
 import { createWorkout, updateWorkout, reparseWorkout, batchReparseWorkouts, validateExercisesPayload } from "../services/workoutService";
 import { getUserId } from "../types";
 import { queue } from "../queue";
+import { logger } from "../logger";
 
 const router = Router();
 
@@ -102,9 +103,22 @@ router.post("/api/v1/workouts", isAuthenticated, rateLimiter("workout", 40), asy
 
     const userId = getUserId(req);
     const result = await createWorkout(parseResult.data, validatedExercises, userId);
+
+    // Pre-set coaching flag so client can start polling immediately
+    const user = await storage.getUser(userId);
+    if (user?.aiCoachEnabled) {
+      await storage.updateIsAutoCoaching(userId, true);
+    }
+
     res.json(result);
-    // Queue job: auto-coach adjusts upcoming plan days based on this completed workout
-    await queue.send("auto-coach", { userId });
+
+    // Fire-and-forget: queue auto-coach job (matching planService.ts pattern)
+    queue
+      .send("auto-coach", { userId })
+      .catch((err) => {
+        logger.error({ err }, "Failed to queue auto-coach job");
+        storage.updateIsAutoCoaching(userId, false).catch(() => {});
+      });
   }));
 
 router.patch("/api/v1/workouts/:id", isAuthenticated, rateLimiter("workout", 40), asyncHandler(async (req: Request<{ id: string }, Record<string, never>, UpdateWorkoutLog & { exercises?: ParsedExercise[] }>, res: Response) => {
