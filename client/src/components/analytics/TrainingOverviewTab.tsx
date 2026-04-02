@@ -17,10 +17,7 @@ import {
   ReferenceLine,
   Cell,
 } from "recharts";
-
-const MUTED_FG = "hsl(var(--muted-foreground))";
-const GRID_BORDER = "hsl(var(--border))";
-const GRID_DASH = "3 3";
+import { MUTED_FG, GRID_BORDER, GRID_DASH, MUTED_CURSOR } from "./chartConstants";
 
 interface TrainingOverviewTabProps {
   readonly dateParams: string;
@@ -32,7 +29,7 @@ function formatWeek(d: string): string {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-const WeeklyTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ value: number; payload?: { weekStart: string } }> }) => {
+function WeeklyTooltip({ active, payload }: { active?: boolean; payload?: Array<{ value: number; payload?: { weekStart: string } }> }) {
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-popover text-popover-foreground border px-3 py-2 rounded shadow-md text-sm">
@@ -45,7 +42,7 @@ const WeeklyTooltip = ({ active, payload }: { active?: boolean; payload?: Array<
       </p>
     </div>
   );
-};
+}
 
 export function TrainingOverviewTab({ dateParams, weeklyGoal }: TrainingOverviewTabProps) {
   const { data: overview, isLoading } = useQuery<TrainingOverview>({
@@ -161,7 +158,7 @@ export function TrainingOverviewTab({ dateParams, weeklyGoal }: TrainingOverview
                 allowDecimals={false}
               />
               <Tooltip
-                cursor={{ fill: "hsl(var(--muted)/0.5)" }}
+                cursor={{ fill: MUTED_CURSOR }}
                 content={<WeeklyTooltip />}
               />
               {weeklyGoal && (

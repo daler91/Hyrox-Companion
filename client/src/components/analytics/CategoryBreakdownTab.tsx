@@ -45,7 +45,7 @@ interface CategoryBreakdownTabProps {
   readonly dateParams: string;
 }
 
-const CategoryTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ name: string; value: number; payload?: { fill: string } }> }) => {
+function CategoryTooltip({ active, payload }: { active?: boolean; payload?: Array<{ name: string; value: number; payload?: { fill: string } }> }) {
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-popover text-popover-foreground border px-3 py-2 rounded shadow-md text-sm">
@@ -53,7 +53,7 @@ const CategoryTooltip = ({ active, payload }: { active?: boolean; payload?: Arra
       <p className="text-muted-foreground">{payload[0]?.value} sessions</p>
     </div>
   );
-};
+}
 
 export function CategoryBreakdownTab({ dateParams }: CategoryBreakdownTabProps) {
   const { data: overview, isLoading } = useQuery<TrainingOverview>({

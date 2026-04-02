@@ -8,10 +8,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
-
-const MUTED_FG = "hsl(var(--muted-foreground))";
-const GRID_BORDER = "hsl(var(--border))";
-const GRID_DASH = "3 3";
+import { MUTED_FG, GRID_BORDER, GRID_DASH } from "./chartConstants";
 
 function formatDate(d: string): string {
   const date = new Date(d + "T00:00:00");
@@ -28,11 +25,11 @@ const getStrokeColor = (colorStr: string): string => {
   return "#64748b";
 };
 
-const CustomTooltip = ({ active, payload, chartLabel }: { active?: boolean; payload?: Array<{ value: number; payload?: Record<string, unknown> }>; chartLabel?: string }) => {
+function LineChartTooltip({ active, payload, chartLabel }: { active?: boolean; payload?: Array<{ value: number; payload?: Record<string, unknown> }>; chartLabel?: string }) {
   if (!active || !payload?.length) return null;
 
   const firstPayload = payload[0]?.payload;
-  const dateStr = (firstPayload?.date ?? firstPayload?.weekStart ?? "") as string;
+  const dateStr = ((firstPayload?.date ?? firstPayload?.weekStart) ?? "") as string;
 
   return (
     <div className="bg-popover text-popover-foreground border px-3 py-2 rounded shadow-md text-sm">
@@ -45,7 +42,7 @@ const CustomTooltip = ({ active, payload, chartLabel }: { active?: boolean; payl
       </p>
     </div>
   );
-};
+}
 
 export function MiniLineChart({
   data,
@@ -74,7 +71,7 @@ export function MiniLineChart({
       <div className="h-[200px] w-full" data-testid={`line-chart-${valueKey}`}>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
-            data={data}
+            data={data as object[]}
             margin={{ top: 5, right: 5, left: -20, bottom: 5 }}
           >
             <CartesianGrid
@@ -98,7 +95,7 @@ export function MiniLineChart({
             />
             <Tooltip
               cursor={{ stroke: MUTED_FG, strokeDasharray: GRID_DASH }}
-              content={<CustomTooltip chartLabel={label} />}
+              content={<LineChartTooltip chartLabel={label} />}
             />
             {referenceLine && (
               <ReferenceLine

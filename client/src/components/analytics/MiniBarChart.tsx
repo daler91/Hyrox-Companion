@@ -8,6 +8,7 @@ import {
   ResponsiveContainer,
   Cell,
 } from "recharts";
+import { MUTED_FG, GRID_BORDER, GRID_DASH, MUTED_CURSOR } from "./chartConstants";
 
 interface ExerciseAnalyticDay {
   date: string;
@@ -23,17 +24,15 @@ function formatDate(d: string): string {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-// Convert Tailwind classes like "bg-primary/60" to hex colors for Recharts
-// Fallback to basic colors if specific classes aren't matched
-const getFillColor = (colorStr: string) => {
-  if (colorStr.includes("primary")) return "#ea580c"; // Matches our orange primary
+const getFillColor = (colorStr: string): string => {
+  if (colorStr.includes("primary")) return "#ea580c";
   if (colorStr.includes("purple")) return "#a855f7";
   if (colorStr.includes("blue")) return "#3b82f6";
   if (colorStr.includes("green")) return "#22c55e";
-  return "#64748b"; // muted fallback
+  return "#64748b";
 };
 
-const CustomTooltip = ({ active, payload, chartLabel }: { active?: boolean; payload?: Array<{ value: number; payload?: ExerciseAnalyticDay }>; chartLabel?: string }) => {
+function BarChartTooltip({ active, payload, chartLabel }: { active?: boolean; payload?: Array<{ value: number; payload?: ExerciseAnalyticDay }>; chartLabel?: string }) {
   if (!active || !payload?.length) return null;
 
   return (
@@ -47,7 +46,7 @@ const CustomTooltip = ({ active, payload, chartLabel }: { active?: boolean; payl
       </p>
     </div>
   );
-};
+}
 
 export function MiniBarChart({
   data,
@@ -76,9 +75,9 @@ export function MiniBarChart({
             margin={{ top: 5, right: 5, left: -20, bottom: 5 }}
           >
             <CartesianGrid
-              strokeDasharray="3 3"
+              strokeDasharray={GRID_DASH}
               vertical={false}
-              stroke="hsl(var(--border))"
+              stroke={GRID_BORDER}
             />
             <XAxis
               dataKey="date"
@@ -86,17 +85,17 @@ export function MiniBarChart({
               fontSize={12}
               tickLine={false}
               axisLine={false}
-              tick={{ fill: "hsl(var(--muted-foreground))" }}
+              tick={{ fill: MUTED_FG }}
             />
             <YAxis
               fontSize={12}
               tickLine={false}
               axisLine={false}
-              tick={{ fill: "hsl(var(--muted-foreground))" }}
+              tick={{ fill: MUTED_FG }}
             />
             <Tooltip
-              cursor={{ fill: "hsl(var(--muted)/0.5)" }}
-              content={<CustomTooltip chartLabel={label} />}
+              cursor={{ fill: MUTED_CURSOR }}
+              content={<BarChartTooltip chartLabel={label} />}
             />
             <Bar
               dataKey={valueKey as string}

@@ -25,7 +25,12 @@ function computeTrend(data: ExerciseAnalyticDay[], key: keyof ExerciseAnalyticDa
   const secondAvg = avg(secondHalf);
 
   if (firstAvg === 0 && secondAvg === 0) return "flat";
-  const change = firstAvg > 0 ? (secondAvg - firstAvg) / firstAvg : secondAvg > 0 ? 1 : 0;
+  let change: number;
+  if (firstAvg > 0) {
+    change = (secondAvg - firstAvg) / firstAvg;
+  } else {
+    change = secondAvg > 0 ? 1 : 0;
+  }
   if (change > 0.05) return "up";
   if (change < -0.05) return "down";
   return "flat";
@@ -35,6 +40,42 @@ function TrendArrow({ trend }: { trend: "up" | "down" | "flat" }) {
   if (trend === "up") return <TrendingUp className="h-4 w-4 text-green-500 inline ml-1" />;
   if (trend === "down") return <TrendingDown className="h-4 w-4 text-red-500 inline ml-1" />;
   return <Minus className="h-4 w-4 text-muted-foreground inline ml-1" />;
+}
+
+function summarizeExerciseData(data: ExerciseAnalyticDay[]) {
+  const hasVolume = data.some((d) => d.totalVolume > 0);
+  const hasMaxWeight = data.some((d) => d.maxWeight > 0);
+  const hasTotalReps = data.some((d) => d.totalReps > 0);
+  const hasTotalDistance = data.some((d) => d.totalDistance > 0);
+
+  let totalSets = 0;
+  let totalReps = 0;
+  let totalVolume = 0;
+
+  for (const d of data) {
+    totalSets += d.totalSets;
+    totalReps += d.totalReps;
+    totalVolume += d.totalVolume;
+  }
+
+  const sessions = data.length;
+
+  return {
+    data,
+    hasVolume,
+    hasMaxWeight,
+    hasTotalReps,
+    hasTotalDistance,
+    totalSets,
+    totalReps,
+    totalVolume,
+    sessions,
+    avgVolume: sessions > 0 ? Math.round(totalVolume / sessions) : 0,
+    avgReps: sessions > 0 ? Math.round(totalReps / sessions) : 0,
+    volumeTrend: hasVolume ? computeTrend(data, "totalVolume") : "flat" as const,
+    weightTrend: hasMaxWeight ? computeTrend(data, "maxWeight") : "flat" as const,
+    repsTrend: hasTotalReps ? computeTrend(data, "totalReps") : "flat" as const,
+  };
 }
 
 export function ExerciseProgressionCharts({
@@ -50,45 +91,7 @@ export function ExerciseProgressionCharts({
     if (!allAnalytics || !selectedExercise) return null;
     const data = allAnalytics[selectedExercise];
     if (!data || data.length === 0) return null;
-
-    let hasVolume = false;
-    let hasMaxWeight = false;
-    let hasTotalReps = false;
-    let hasTotalDistance = false;
-
-    let totalSets = 0;
-    let totalReps = 0;
-    let totalVolume = 0;
-
-    for (const d of data) {
-      if (d.totalVolume > 0) hasVolume = true;
-      if (d.maxWeight > 0) hasMaxWeight = true;
-      if (d.totalReps > 0) hasTotalReps = true;
-      if (d.totalDistance > 0) hasTotalDistance = true;
-
-      totalSets += d.totalSets;
-      totalReps += d.totalReps;
-      totalVolume += d.totalVolume;
-    }
-
-    const sessions = data.length;
-
-    return {
-      data,
-      hasVolume,
-      hasMaxWeight,
-      hasTotalReps,
-      hasTotalDistance,
-      totalSets,
-      totalReps,
-      totalVolume,
-      sessions,
-      avgVolume: sessions > 0 ? Math.round(totalVolume / sessions) : 0,
-      avgReps: sessions > 0 ? Math.round(totalReps / sessions) : 0,
-      volumeTrend: hasVolume ? computeTrend(data, "totalVolume") : "flat" as const,
-      weightTrend: hasMaxWeight ? computeTrend(data, "maxWeight") : "flat" as const,
-      repsTrend: hasTotalReps ? computeTrend(data, "totalReps") : "flat" as const,
-    };
+    return summarizeExerciseData(data);
   }, [allAnalytics, selectedExercise]);
 
   if (!selectedExercise) {

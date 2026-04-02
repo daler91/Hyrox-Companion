@@ -95,7 +95,7 @@ export const _workoutLogCacheForTesting = new Map<string, WorkoutLogCacheEntry>(
 const workoutLogCache = _workoutLogCacheForTesting;
 
 function getWorkoutLogsCoalesced(userId: string, from?: string, to?: string): Promise<WorkoutLog[]> {
-  const cacheKey = `wl-${userId}-${from || 'none'}-${to || 'none'}`;
+  const cacheKey = `wl-${userId}-${from ?? 'none'}-${to ?? 'none'}`;
   const now = Date.now();
 
   const entry = workoutLogCache.get(cacheKey);
