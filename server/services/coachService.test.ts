@@ -66,21 +66,18 @@ describe("coachService", () => {
   });
 
   describe("triggerAutoCoach", () => {
-    it("returns 0 when user has aiCoachEnabled=false", async () => {
+    it("returns 0 and resets flag when user has aiCoachEnabled=false", async () => {
       vi.mocked(storage.getUser).mockResolvedValue({ aiCoachEnabled: false } as never);
+      vi.mocked(storage.updateIsAutoCoaching).mockResolvedValue(undefined);
       expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 0 });
-      expect(storage.updateIsAutoCoaching).not.toHaveBeenCalled();
+      expect(storage.updateIsAutoCoaching).toHaveBeenCalledWith("user-1", false);
     });
 
-    it("returns 0 when user is not found", async () => {
+    it("returns 0 and resets flag when user is not found", async () => {
       vi.mocked(storage.getUser).mockResolvedValue(undefined);
+      vi.mocked(storage.updateIsAutoCoaching).mockResolvedValue(undefined);
       expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 0 });
-    });
-
-    it("returns 0 when user is already auto-coaching", async () => {
-      vi.mocked(storage.getUser).mockResolvedValue({ aiCoachEnabled: true, isAutoCoaching: true } as never);
-      expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 0 });
-      expect(storage.updateIsAutoCoaching).not.toHaveBeenCalled();
+      expect(storage.updateIsAutoCoaching).toHaveBeenCalledWith("user-1", false);
     });
 
     it("returns 0 when no upcoming planned workouts exist", async () => {

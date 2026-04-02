@@ -101,8 +101,11 @@ async function getCoachingMaterialsString(
 export async function triggerAutoCoach(userId: string): Promise<{ adjusted: number }> {
   try {
     const user = await storage.getUser(userId);
-    if (!user?.aiCoachEnabled) return { adjusted: 0 };
-    if (user.isAutoCoaching) return { adjusted: 0 }; // Prevent overlapping runs
+    if (!user?.aiCoachEnabled) {
+      // Reset in case caller pre-set the flag
+      await storage.updateIsAutoCoaching(userId, false);
+      return { adjusted: 0 };
+    }
 
     await storage.updateIsAutoCoaching(userId, true);
 
