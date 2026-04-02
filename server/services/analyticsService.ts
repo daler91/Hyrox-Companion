@@ -135,7 +135,11 @@ function buildWeeklySummaries(
       avgRpe: w.rpeCount > 0 ? Math.round((w.rpeSum / w.rpeCount) * 10) / 10 : null,
       categoryBreakdown: w.categoryBreakdown,
     }))
-    .sort((a, b) => a.weekStart.localeCompare(b.weekStart));
+    .sort((a, b) => {
+      if (b.weekStart < a.weekStart) return 1;
+      if (b.weekStart > a.weekStart) return -1;
+      return 0;
+    });
 
   return { summaries, workoutDates };
 }
