@@ -4,14 +4,27 @@ import {
   workoutLogs,
 
   type ExerciseSet,
+  type WorkoutLog,
 } from "@shared/schema";
 import { db } from "../db";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, desc, gte, lte, type SQL } from "drizzle-orm";
 import { queryExerciseSetsWithDates } from "./shared";
 
 export class AnalyticsStorage {
   async getAllExerciseSetsWithDates(userId: string, from?: string, to?: string): Promise<(ExerciseSet & { date: string })[]> {
     return await queryExerciseSetsWithDates(userId, { from, to });
+  }
+
+  async getWorkoutLogsByDateRange(userId: string, from?: string, to?: string): Promise<WorkoutLog[]> {
+    const conditions: SQL[] = [eq(workoutLogs.userId, userId)];
+    if (from) conditions.push(gte(workoutLogs.date, from));
+    if (to) conditions.push(lte(workoutLogs.date, to));
+
+    return await db
+      .select()
+      .from(workoutLogs)
+      .where(and(...conditions))
+      .orderBy(desc(workoutLogs.date));
   }
 
   async getMissedWorkoutsForDate(userId: string, date: string): Promise<{ date: string; focus: string; mainWorkout: string; planName?: string }[]> {

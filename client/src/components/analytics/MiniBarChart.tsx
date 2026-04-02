@@ -8,6 +8,7 @@ import {
   ResponsiveContainer,
   Cell,
 } from "recharts";
+import { MUTED_FG, GRID_BORDER, GRID_DASH, MUTED_CURSOR, COLOR_PRIMARY, CHART_CARD_CLASS, formatChartDate } from "./chartConstants";
 
 interface ExerciseAnalyticDay {
   date: string;
@@ -18,28 +19,21 @@ interface ExerciseAnalyticDay {
   totalDistance: number;
 }
 
-function formatDate(d: string): string {
-  const date = new Date(d + "T00:00:00");
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
-// Convert Tailwind classes like "bg-primary/60" to hex colors for Recharts
-// Fallback to basic colors if specific classes aren't matched
-const getFillColor = (colorStr: string) => {
-  if (colorStr.includes("primary")) return "#ea580c"; // Matches our orange primary
+const getFillColor = (colorStr: string): string => {
+  if (colorStr.includes("primary")) return COLOR_PRIMARY;
   if (colorStr.includes("purple")) return "#a855f7";
   if (colorStr.includes("blue")) return "#3b82f6";
   if (colorStr.includes("green")) return "#22c55e";
-  return "#64748b"; // muted fallback
+  return "#64748b";
 };
 
-const CustomTooltip = ({ active, payload, chartLabel }: { active?: boolean; payload?: Array<{ value: number; payload?: ExerciseAnalyticDay }>; chartLabel?: string }) => {
+function BarChartTooltip({ active, payload, chartLabel }: Readonly<{ active?: boolean; payload?: Array<{ value: number; payload?: ExerciseAnalyticDay }>; chartLabel?: string }>) {
   if (!active || !payload?.length) return null;
 
   return (
     <div className="bg-popover text-popover-foreground border px-3 py-2 rounded shadow-md text-sm">
       <p className="font-semibold mb-1">
-        {payload[0]?.payload?.date ? formatDate(payload[0].payload.date) : ""}
+        {payload[0]?.payload?.date ? formatChartDate(payload[0].payload.date) : ""}
       </p>
       <p>
         <span className="text-muted-foreground mr-2">{chartLabel}:</span>
@@ -47,7 +41,7 @@ const CustomTooltip = ({ active, payload, chartLabel }: { active?: boolean; payl
       </p>
     </div>
   );
-};
+}
 
 export function MiniBarChart({
   data,
@@ -65,7 +59,7 @@ export function MiniBarChart({
   const fillColor = getFillColor(color);
 
   return (
-    <div className="space-y-3 p-4 border rounded-lg bg-card text-card-foreground shadow-sm">
+    <div className={CHART_CARD_CLASS}>
       <div className="flex justify-between items-center">
         <p className="text-sm font-semibold">{label}</p>
       </div>
@@ -76,27 +70,27 @@ export function MiniBarChart({
             margin={{ top: 5, right: 5, left: -20, bottom: 5 }}
           >
             <CartesianGrid
-              strokeDasharray="3 3"
+              strokeDasharray={GRID_DASH}
               vertical={false}
-              stroke="hsl(var(--border))"
+              stroke={GRID_BORDER}
             />
             <XAxis
               dataKey="date"
-              tickFormatter={formatDate}
+              tickFormatter={formatChartDate}
               fontSize={12}
               tickLine={false}
               axisLine={false}
-              tick={{ fill: "hsl(var(--muted-foreground))" }}
+              tick={{ fill: MUTED_FG }}
             />
             <YAxis
               fontSize={12}
               tickLine={false}
               axisLine={false}
-              tick={{ fill: "hsl(var(--muted-foreground))" }}
+              tick={{ fill: MUTED_FG }}
             />
             <Tooltip
-              cursor={{ fill: "hsl(var(--muted)/0.5)" }}
-              content={<CustomTooltip chartLabel={label} />}
+              cursor={{ fill: MUTED_CURSOR }}
+              content={<BarChartTooltip chartLabel={label} />}
             />
             <Bar
               dataKey={valueKey as string}

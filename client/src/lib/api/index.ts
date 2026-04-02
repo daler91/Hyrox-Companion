@@ -49,6 +49,7 @@ export const QUERY_KEYS = {
   workouts: ["/api/v1/workouts"] as const,
   personalRecords: ["/api/v1/personal-records"] as const,
   exerciseAnalytics: ["/api/v1/exercise-analytics"] as const,
+  trainingOverview: ["/api/v1/training-overview"] as const,
   chatHistory: ["/api/v1/chat/history"] as const,
   coachingMaterials: ["/api/v1/coaching-materials"] as const,
   ragStatus: ["/api/v1/coaching-materials/rag-status"] as const,

@@ -288,3 +288,19 @@ export interface WorkoutSuggestion {
   rationale: string;
   priority: "high" | "medium" | "low";
 }
+
+// Analytics — Training Overview types
+export interface WeeklySummary {
+  weekStart: string; // YYYY-MM-DD (Monday)
+  workoutCount: number;
+  totalDuration: number; // minutes
+  avgRpe: number | null;
+  categoryBreakdown: Record<string, number>;
+}
+
+export interface TrainingOverview {
+  weeklySummaries: WeeklySummary[];
+  workoutDates: string[];
+  categoryTotals: Record<string, { count: number; totalSets: number }>;
+  stationCoverage: Array<{ station: string; lastTrained: string | null; daysSince: number | null }>;
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calculatePersonalRecords, calculateExerciseAnalytics } from "./analyticsService";
+import { calculatePersonalRecords, calculateExerciseAnalytics, calculateTrainingOverview } from "./analyticsService";
 
 function makeSet(overrides: Record<string, unknown> = {}) {
   return {
@@ -164,5 +164,122 @@ describe("calculateExerciseAnalytics", () => {
     expect(analytics["custom:B"]).toBeDefined();
     expect(analytics["custom:A"][0].totalVolume).toBe(50);
     expect(analytics["custom:B"][0].totalVolume).toBe(100);
+  });
+});
+
+function makeWorkoutLog(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "wl1",
+    userId: "u1",
+    date: "2026-01-15",
+    focus: "strength",
+    exercises: "",
+    mainSummary: null,
+    planDayId: null,
+    duration: null,
+    rpe: null,
+    source: "manual" as const,
+    distanceMeters: null,
+    elevationGain: null,
+    avgHeartrate: null,
+    maxHeartrate: null,
+    avgSpeed: null,
+    maxSpeed: null,
+    avgCadence: null,
+    avgWatts: null,
+    sufferScore: null,
+    calories: null,
+    stravaActivityId: null,
+    ...overrides,
+  };
+}
+
+describe("calculateTrainingOverview", () => {
+  it("returns empty overview for no data", () => {
+    const result = calculateTrainingOverview([], []);
+    expect(result.weeklySummaries).toEqual([]);
+    expect(result.workoutDates).toEqual([]);
+    expect(result.categoryTotals).toEqual({});
+    expect(result.stationCoverage).toHaveLength(9); // 8 stations + running
+    expect(result.stationCoverage.every((s) => s.lastTrained === null)).toBe(true);
+  });
+
+  it("groups workouts into weekly summaries", () => {
+    const logs = [
+      makeWorkoutLog({ id: "w1", date: "2026-01-13", duration: 60, rpe: 7 }), // Monday
+      makeWorkoutLog({ id: "w2", date: "2026-01-14", duration: 45, rpe: 6 }), // Tuesday
+      makeWorkoutLog({ id: "w3", date: "2026-01-20", duration: 50, rpe: 8 }), // Next Monday
+    ];
+    const result = calculateTrainingOverview(logs, []);
+    expect(result.weeklySummaries).toHaveLength(2);
+
+    const week1 = result.weeklySummaries[0];
+    expect(week1.weekStart).toBe("2026-01-12"); // Monday of that week
+    expect(week1.workoutCount).toBe(2);
+    expect(week1.totalDuration).toBe(105);
+    expect(week1.avgRpe).toBe(6.5);
+
+    const week2 = result.weeklySummaries[1];
+    expect(week2.workoutCount).toBe(1);
+  });
+
+  it("collects workout dates", () => {
+    const logs = [
+      makeWorkoutLog({ id: "w1", date: "2026-01-13" }),
+      makeWorkoutLog({ id: "w2", date: "2026-01-15" }),
+    ];
+    const result = calculateTrainingOverview(logs, []);
+    expect(result.workoutDates).toEqual(["2026-01-13", "2026-01-15"]);
+  });
+
+  it("computes category totals from exercise sets", () => {
+    const sets = [
+      makeSet({ exerciseName: "back_squat", category: "strength", workoutLogId: "w1", date: "2026-01-13" }),
+      makeSet({ exerciseName: "back_squat", category: "strength", workoutLogId: "w1", date: "2026-01-13" }),
+      makeSet({ exerciseName: "easy_run", category: "running", workoutLogId: "w2", date: "2026-01-14" }),
+    ];
+    const result = calculateTrainingOverview([], sets);
+    expect(result.categoryTotals["strength"]).toEqual({ count: 1, totalSets: 2 });
+    expect(result.categoryTotals["running"]).toEqual({ count: 1, totalSets: 1 });
+  });
+
+  it("detects station coverage for Hyrox exercises", () => {
+    const sets = [
+      makeSet({ exerciseName: "skierg", category: "functional", date: "2026-03-25" }),
+      makeSet({ exerciseName: "wall_balls", category: "functional", date: "2026-03-20" }),
+    ];
+    const result = calculateTrainingOverview([], sets);
+
+    const skierg = result.stationCoverage.find((s) => s.station === "skierg");
+    expect(skierg?.lastTrained).toBe("2026-03-25");
+    expect(skierg?.daysSince).toBeTypeOf("number");
+
+    const wallBalls = result.stationCoverage.find((s) => s.station === "wall_balls");
+    expect(wallBalls?.lastTrained).toBe("2026-03-20");
+
+    const sledPush = result.stationCoverage.find((s) => s.station === "sled_push");
+    expect(sledPush?.lastTrained).toBeNull();
+    expect(sledPush?.daysSince).toBeNull();
+  });
+
+  it("handles null RPE gracefully", () => {
+    const logs = [
+      makeWorkoutLog({ id: "w1", date: "2026-01-13", rpe: null }),
+      makeWorkoutLog({ id: "w2", date: "2026-01-14", rpe: null }),
+    ];
+    const result = calculateTrainingOverview(logs, []);
+    expect(result.weeklySummaries[0].avgRpe).toBeNull();
+  });
+
+  it("sorts weekly summaries chronologically", () => {
+    const logs = [
+      makeWorkoutLog({ id: "w1", date: "2026-02-10" }),
+      makeWorkoutLog({ id: "w2", date: "2026-01-06" }),
+      makeWorkoutLog({ id: "w3", date: "2026-01-20" }),
+    ];
+    const result = calculateTrainingOverview(logs, []);
+    const weekStarts = result.weeklySummaries.map((w) => w.weekStart);
+    const sorted = [...weekStarts].sort((a, b) => a.localeCompare(b));
+    expect(weekStarts).toEqual(sorted);
   });
 });
