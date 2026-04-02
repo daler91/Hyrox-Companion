@@ -1,4 +1,3 @@
-
-## 2024-03-30 - Added ARIA labels to Select dropdown triggers
-**Learning:** React select components from UI libraries (like Radix UI / shadcn) often require explicit `aria-label`s on their `<SelectTrigger>` elements to be screen reader accessible, as they are typically rendered as `button` elements that might not be easily associated with a visual `<Label>` without strict `htmlFor` / `id` bindings.
-**Action:** When adding or auditing `<Select>` components, always ensure the `<SelectTrigger>` has an explicit `aria-label` describing what is being selected if it's not programmatically linked to a label.
+## 2026-04-02 - Added `aria-expanded` and `aria-controls` to AI Coach Floating Action Button
+**Learning:** Found a missing `aria-expanded` attribute on a button that toggles a side panel. Providing this state is critical for screen reader users to understand if the panel is open or closed.
+**Action:** Always check interactive elements that toggle visibility of other elements to ensure they include `aria-expanded` and `aria-controls` attributes.
