@@ -44,20 +44,49 @@ export function TrainingOverviewTab({ dateParams, weeklyGoal }: TrainingOverview
     queryFn: () => api.analytics.getTrainingOverview(dateParams),
   });
 
-  const stats = useMemo(() => {
-    if (!overview || overview.weeklySummaries.length === 0) return null;
+  // ⚡ Single O(N) pass computes stats, rpeData, and durationData together.
+  // Previously this was ~7 separate array traversals (3 reduces + filter + 2x filter().map()),
+  // with rpeData/durationData recalculated on every render outside useMemo.
+  const { stats, rpeData, durationData } = useMemo(() => {
+    if (!overview || overview.weeklySummaries.length === 0) {
+      return { stats: null, rpeData: [], durationData: [] };
+    }
     const weeks = overview.weeklySummaries;
-    const totalWorkouts = weeks.reduce((s, w) => s + w.workoutCount, 0);
+
+    let totalWorkouts = 0;
+    let totalDuration = 0;
+    let rpeSum = 0;
+    let rpeCount = 0;
+    const rpe: Array<{ weekStart: string; avgRpe: number | null }> = [];
+    const duration: Array<{ weekStart: string; avgDuration: number }> = [];
+
+    for (const w of weeks) {
+      totalWorkouts += w.workoutCount;
+      totalDuration += w.totalDuration;
+
+      if (w.avgRpe !== null) {
+        rpeSum += w.avgRpe;
+        rpeCount++;
+        rpe.push({ weekStart: w.weekStart, avgRpe: w.avgRpe });
+      }
+
+      if (w.totalDuration > 0) {
+        duration.push({
+          weekStart: w.weekStart,
+          avgDuration: w.workoutCount > 0 ? Math.round(w.totalDuration / w.workoutCount) : 0,
+        });
+      }
+    }
+
     const avgPerWeek = Math.round((totalWorkouts / weeks.length) * 10) / 10;
-    const totalDuration = weeks.reduce((s, w) => s + w.totalDuration, 0);
     const avgDuration = totalWorkouts > 0 ? Math.round(totalDuration / totalWorkouts) : 0;
+    const avgRpe = rpeCount > 0 ? Math.round((rpeSum / rpeCount) * 10) / 10 : null;
 
-    const rpeWeeks = weeks.filter((w) => w.avgRpe !== null);
-    const avgRpe = rpeWeeks.length > 0
-      ? Math.round((rpeWeeks.reduce((s, w) => s + (w.avgRpe ?? 0), 0) / rpeWeeks.length) * 10) / 10
-      : null;
-
-    return { avgPerWeek, avgDuration, avgRpe, totalWorkouts };
+    return {
+      stats: { avgPerWeek, avgDuration, avgRpe, totalWorkouts },
+      rpeData: rpe,
+      durationData: duration,
+    };
   }, [overview]);
 
   if (isLoading) {
@@ -78,17 +107,6 @@ export function TrainingOverviewTab({ dateParams, weeklyGoal }: TrainingOverview
       </div>
     );
   }
-
-  const rpeData = overview.weeklySummaries
-    .filter((w) => w.avgRpe !== null)
-    .map((w) => ({ weekStart: w.weekStart, avgRpe: w.avgRpe }));
-
-  const durationData = overview.weeklySummaries
-    .filter((w) => w.totalDuration > 0)
-    .map((w) => ({
-      weekStart: w.weekStart,
-      avgDuration: w.workoutCount > 0 ? Math.round(w.totalDuration / w.workoutCount) : 0,
-    }));
 
   return (
     <div className="space-y-6">
