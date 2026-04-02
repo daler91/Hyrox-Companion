@@ -20,7 +20,7 @@ const getStrokeColor = (colorStr: string): string => {
   return "#64748b";
 };
 
-function LineChartTooltip({ active, payload, chartLabel }: { active?: boolean; payload?: Array<{ value: number; payload?: Record<string, unknown> }>; chartLabel?: string }) {
+function LineChartTooltip({ active, payload, chartLabel }: Readonly<{ active?: boolean; payload?: Array<{ value: number; payload?: Record<string, unknown> }>; chartLabel?: string }>) {
   if (!active || !payload?.length) return null;
 
   const firstPayload = payload[0]?.payload;
@@ -34,7 +34,7 @@ function LineChartTooltip({ active, payload, chartLabel }: { active?: boolean; p
       </p>
       <p>
         <span className="text-muted-foreground mr-2">{chartLabel}:</span>
-        <span className="font-medium">{payload[0]?.value != null ? Math.round(payload[0].value * 10) / 10 : "N/A"}</span>
+        <span className="font-medium">{payload[0]?.value == null ? "N/A" : Math.round(payload[0].value * 10) / 10}</span>
       </p>
     </div>
   );

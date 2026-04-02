@@ -39,7 +39,7 @@ function computeTrend(data: ExerciseAnalyticDay[], key: keyof ExerciseAnalyticDa
   return "flat";
 }
 
-function TrendArrow({ trend }: { trend: "up" | "down" | "flat" }) {
+function TrendArrow({ trend }: Readonly<{ trend: "up" | "down" | "flat" }>) {
   if (trend === "up") return <TrendingUp className="h-4 w-4 text-green-500 inline ml-1" />;
   if (trend === "down") return <TrendingDown className="h-4 w-4 text-red-500 inline ml-1" />;
   return <Minus className="h-4 w-4 text-muted-foreground inline ml-1" />;

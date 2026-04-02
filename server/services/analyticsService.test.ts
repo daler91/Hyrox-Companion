@@ -279,7 +279,7 @@ describe("calculateTrainingOverview", () => {
     ];
     const result = calculateTrainingOverview(logs, []);
     const weekStarts = result.weeklySummaries.map((w) => w.weekStart);
-    const sorted = [...weekStarts].sort();
+    const sorted = [...weekStarts].sort((a, b) => a.localeCompare(b));
     expect(weekStarts).toEqual(sorted);
   });
 });

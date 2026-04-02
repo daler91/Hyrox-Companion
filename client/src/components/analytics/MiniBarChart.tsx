@@ -27,7 +27,7 @@ const getFillColor = (colorStr: string): string => {
   return "#64748b";
 };
 
-function BarChartTooltip({ active, payload, chartLabel }: { active?: boolean; payload?: Array<{ value: number; payload?: ExerciseAnalyticDay }>; chartLabel?: string }) {
+function BarChartTooltip({ active, payload, chartLabel }: Readonly<{ active?: boolean; payload?: Array<{ value: number; payload?: ExerciseAnalyticDay }>; chartLabel?: string }>) {
   if (!active || !payload?.length) return null;
 
   return (

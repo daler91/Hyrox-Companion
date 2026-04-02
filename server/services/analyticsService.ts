@@ -39,6 +39,28 @@ interface DayAnalytics {
   totalDistance: number;
 }
 
+function accumulateSet(day: DayAnalytics, s: ExerciseSetWithDate): void {
+  day.totalSets += 1;
+  if (s.weight && s.reps) {
+    day.totalVolume += s.weight * s.reps;
+  }
+  if (s.weight && s.weight > day.maxWeight) {
+    day.maxWeight = s.weight;
+  }
+  if (s.reps) {
+    day.totalReps += s.reps;
+  }
+  if (s.distance) {
+    day.totalDistance += s.distance;
+  }
+}
+
+function sortByDateAsc(a: DayAnalytics, b: DayAnalytics): number {
+  if (a.date < b.date) return -1;
+  if (a.date > b.date) return 1;
+  return 0;
+}
+
 export function calculateExerciseAnalytics(allSets: ExerciseSetWithDate[]): Record<string, DayAnalytics[]> {
   const analytics: Record<string, Record<string, DayAnalytics>> = {};
 
@@ -62,29 +84,12 @@ export function calculateExerciseAnalytics(allSets: ExerciseSetWithDate[]): Reco
       };
     }
 
-    const day = byDate[s.date];
-    day.totalSets += 1;
-    if (s.weight && s.reps) {
-      day.totalVolume += s.weight * s.reps;
-    }
-    if (s.weight && s.weight > day.maxWeight) {
-      day.maxWeight = s.weight;
-    }
-    if (s.reps) {
-      day.totalReps += s.reps;
-    }
-    if (s.distance) {
-      day.totalDistance += s.distance;
-    }
+    accumulateSet(byDate[s.date], s);
   }
 
   const finalAnalytics: Record<string, DayAnalytics[]> = {};
   for (const [exercise, data] of Object.entries(analytics)) {
-    finalAnalytics[exercise] = Object.values(data).sort((a, b) => {
-      if (b.date < a.date) return 1;
-      if (b.date > a.date) return -1;
-      return 0;
-    });
+    finalAnalytics[exercise] = Object.values(data).sort(sortByDateAsc);
   }
 
   return finalAnalytics;
@@ -130,7 +135,7 @@ function buildWeeklySummaries(
       avgRpe: w.rpeCount > 0 ? Math.round((w.rpeSum / w.rpeCount) * 10) / 10 : null,
       categoryBreakdown: w.categoryBreakdown,
     }))
-    .sort((a, b) => (a.weekStart < b.weekStart ? -1 : a.weekStart > b.weekStart ? 1 : 0));
+    .sort((a, b) => a.weekStart.localeCompare(b.weekStart));
 
   return { summaries, workoutDates };
 }
@@ -164,7 +169,7 @@ function buildStationCoverage(
   const stationLastTrained = new Map<string, string>();
 
   for (const set of exerciseSets) {
-    const normalizedKey = getExerciseKey(set).toLowerCase().replace(/[\s-]/g, "_");
+    const normalizedKey = getExerciseKey(set).toLowerCase().replaceAll(/[\s-]/g, "_");
 
     for (const station of HYROX_STATIONS_WITH_RUNNING) {
       if (normalizedKey.includes(station)) {

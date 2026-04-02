@@ -1,7 +1,15 @@
 import { useMemo } from "react";
 import { CHART_CARD_CLASS } from "./chartConstants";
 
-const DAY_LABELS = ["Mon", "", "Wed", "", "Fri", "", "Sun"];
+const DAY_LABELS = [
+  { key: "mon", label: "Mon" },
+  { key: "tue", label: "" },
+  { key: "wed", label: "Wed" },
+  { key: "thu", label: "" },
+  { key: "fri", label: "Fri" },
+  { key: "sat", label: "" },
+  { key: "sun", label: "Sun" },
+];
 const WEEKS_TO_SHOW = 16;
 
 function getMonday(date: Date): Date {
@@ -15,6 +23,12 @@ function getMonday(date: Date): Date {
 
 function toDateStr(d: Date): string {
   return d.toISOString().split("T")[0];
+}
+
+function getHeatmapCellColor(cell: { isFuture: boolean; hasWorkout: boolean }): string {
+  if (cell.isFuture) return "bg-muted/30";
+  if (cell.hasWorkout) return "bg-primary";
+  return "bg-muted/60";
 }
 
 interface WorkoutHeatmapProps {
@@ -99,27 +113,21 @@ export function WorkoutHeatmap({ workoutDates }: WorkoutHeatmapProps) {
             <div className="flex gap-0">
               {/* Day labels */}
               <div className="flex flex-col gap-[2px] mr-1 shrink-0">
-                {DAY_LABELS.map((label, i) => (
-                  <div key={i} className="h-[14px] w-6 text-[10px] text-muted-foreground flex items-center justify-end pr-1">
-                    {label}
+                {DAY_LABELS.map((day) => (
+                  <div key={day.key} className="h-[14px] w-6 text-[10px] text-muted-foreground flex items-center justify-end pr-1">
+                    {day.label}
                   </div>
                 ))}
               </div>
 
               {/* Grid */}
               <div className="flex gap-[2px]">
-                {grid.map((week, wi) => (
-                  <div key={wi} className="flex flex-col gap-[2px]">
+                {grid.map((week) => (
+                  <div key={week[0].date} className="flex flex-col gap-[2px]">
                     {week.map((cell) => (
                       <div
                         key={cell.date}
-                        className={`h-[14px] w-[14px] rounded-sm ${
-                          cell.isFuture
-                            ? "bg-muted/30"
-                            : cell.hasWorkout
-                              ? "bg-primary"
-                              : "bg-muted/60"
-                        }`}
+                        className={`h-[14px] w-[14px] rounded-sm ${getHeatmapCellColor(cell)}`}
                         title={`${cell.date}${cell.hasWorkout ? " - Workout logged" : ""}`}
                       />
                     ))}
