@@ -19,9 +19,13 @@ export function PlanStep({ isPending, onUseSamplePlan, onImportPlan, onGenerateP
         data-testid="button-onboarding-generate-plan"
       >
         <div className="flex items-center gap-3 w-full">
-          <Wand2 className="h-5 w-5" />
+          {isPending ? (
+            <Loader2 className="h-5 w-5 animate-spin" />
+          ) : (
+            <Wand2 className="h-5 w-5" />
+          )}
           <div className="text-left flex-1">
-            <div className="font-medium">Generate AI Plan</div>
+            <div className="font-medium">{isPending ? "Generating..." : "Generate AI Plan"}</div>
             <div className="text-xs opacity-80 font-normal">
               AI creates a personalized periodized plan based on your goals
             </div>
