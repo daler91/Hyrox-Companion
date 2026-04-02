@@ -143,7 +143,7 @@ app.use(
   }),
 );
 
-app.use(express.urlencoded({ extended: false }));
+app.use(express.urlencoded({ extended: false, limit: "100kb" })); // 🛡️ Sentinel: Limit urlencoded body size to prevent DoS
 
 let isReady = false;
 let startupError: string | null = null;
