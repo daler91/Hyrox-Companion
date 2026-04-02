@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { CHART_CARD_CLASS } from "./chartConstants";
 
 const DAY_LABELS = ["Mon", "", "Wed", "", "Fri", "", "Sun"];
 const WEEKS_TO_SHOW = 16;
@@ -61,7 +62,7 @@ export function WorkoutHeatmap({ workoutDates }: WorkoutHeatmapProps) {
   }, [workoutDates]);
 
   return (
-    <div className="space-y-3 p-4 border rounded-lg bg-card text-card-foreground shadow-sm">
+    <div className={CHART_CARD_CLASS}>
       <p className="text-sm font-semibold">Workout Consistency</p>
       <div className="overflow-x-auto">
         <div className="min-w-[400px]">

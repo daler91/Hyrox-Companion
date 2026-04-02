@@ -1,7 +1,6 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, BarChart3, Clock, Flame, Zap } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { api } from "@/lib/api";
 import type { TrainingOverview } from "@shared/schema";
 import { MiniLineChart } from "./MiniLineChart";
@@ -17,16 +16,11 @@ import {
   ReferenceLine,
   Cell,
 } from "recharts";
-import { MUTED_FG, GRID_BORDER, GRID_DASH, MUTED_CURSOR } from "./chartConstants";
+import { MUTED_FG, GRID_BORDER, GRID_DASH, MUTED_CURSOR, COLOR_GREEN, COLOR_PRIMARY, CHART_CARD_CLASS, formatChartDate } from "./chartConstants";
 
 interface TrainingOverviewTabProps {
   readonly dateParams: string;
   readonly weeklyGoal?: number;
-}
-
-function formatWeek(d: string): string {
-  const date = new Date(d + "T00:00:00");
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 function WeeklyTooltip({ active, payload }: { active?: boolean; payload?: Array<{ value: number; payload?: { weekStart: string } }> }) {
@@ -34,7 +28,7 @@ function WeeklyTooltip({ active, payload }: { active?: boolean; payload?: Array<
   return (
     <div className="bg-popover text-popover-foreground border px-3 py-2 rounded shadow-md text-sm">
       <p className="font-semibold mb-1">
-        Week of {payload[0]?.payload?.weekStart ? formatWeek(payload[0].payload.weekStart) : ""}
+        Week of {payload[0]?.payload?.weekStart ? formatChartDate(payload[0].payload.weekStart) : ""}
       </p>
       <p>
         <span className="text-muted-foreground mr-2">Workouts:</span>
@@ -133,7 +127,7 @@ export function TrainingOverviewTab({ dateParams, weeklyGoal }: TrainingOverview
       )}
 
       {/* Weekly Workouts Bar Chart */}
-      <div className="space-y-3 p-4 border rounded-lg bg-card text-card-foreground shadow-sm">
+      <div className={CHART_CARD_CLASS}>
         <p className="text-sm font-semibold">Weekly Workouts</p>
         <div className="h-[200px] w-full" data-testid="chart-weekly-workouts">
           <ResponsiveContainer width="100%" height="100%">
@@ -144,7 +138,7 @@ export function TrainingOverviewTab({ dateParams, weeklyGoal }: TrainingOverview
               <CartesianGrid strokeDasharray={GRID_DASH} vertical={false} stroke={GRID_BORDER} />
               <XAxis
                 dataKey="weekStart"
-                tickFormatter={formatWeek}
+                tickFormatter={formatChartDate}
                 fontSize={12}
                 tickLine={false}
                 axisLine={false}
@@ -164,12 +158,12 @@ export function TrainingOverviewTab({ dateParams, weeklyGoal }: TrainingOverview
               {weeklyGoal && (
                 <ReferenceLine
                   y={weeklyGoal}
-                  stroke="#22c55e"
+                  stroke={COLOR_GREEN}
                   strokeDasharray="6 3"
                   label={{
                     value: `Goal: ${weeklyGoal}`,
                     position: "right",
-                    fill: "#22c55e",
+                    fill: COLOR_GREEN,
                     fontSize: 11,
                   }}
                 />
@@ -178,7 +172,7 @@ export function TrainingOverviewTab({ dateParams, weeklyGoal }: TrainingOverview
                 {overview.weeklySummaries.map((entry) => (
                   <Cell
                     key={entry.weekStart}
-                    fill={weeklyGoal && entry.workoutCount >= weeklyGoal ? "#22c55e" : "#ea580c"}
+                    fill={weeklyGoal && entry.workoutCount >= weeklyGoal ? COLOR_GREEN : COLOR_PRIMARY}
                     fillOpacity={0.8}
                   />
                 ))}

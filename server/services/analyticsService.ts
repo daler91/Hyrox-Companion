@@ -109,7 +109,9 @@ function buildWeeklySummaries(
     if (!weekMap.has(weekStart)) {
       weekMap.set(weekStart, { count: 0, totalDuration: 0, rpeSum: 0, rpeCount: 0, categoryBreakdown: {} });
     }
-    const week = weekMap.get(weekStart)!;
+    // Safe: we just set this key above if it was missing
+    const week = weekMap.get(weekStart);
+    if (!week) continue;
     week.count++;
     if (log.duration) week.totalDuration += log.duration;
     if (log.rpe) { week.rpeSum += log.rpe; week.rpeCount++; }

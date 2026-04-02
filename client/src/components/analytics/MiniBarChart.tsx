@@ -8,7 +8,7 @@ import {
   ResponsiveContainer,
   Cell,
 } from "recharts";
-import { MUTED_FG, GRID_BORDER, GRID_DASH, MUTED_CURSOR } from "./chartConstants";
+import { MUTED_FG, GRID_BORDER, GRID_DASH, MUTED_CURSOR, COLOR_PRIMARY, CHART_CARD_CLASS, formatChartDate } from "./chartConstants";
 
 interface ExerciseAnalyticDay {
   date: string;
@@ -19,13 +19,8 @@ interface ExerciseAnalyticDay {
   totalDistance: number;
 }
 
-function formatDate(d: string): string {
-  const date = new Date(d + "T00:00:00");
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
 const getFillColor = (colorStr: string): string => {
-  if (colorStr.includes("primary")) return "#ea580c";
+  if (colorStr.includes("primary")) return COLOR_PRIMARY;
   if (colorStr.includes("purple")) return "#a855f7";
   if (colorStr.includes("blue")) return "#3b82f6";
   if (colorStr.includes("green")) return "#22c55e";
@@ -38,7 +33,7 @@ function BarChartTooltip({ active, payload, chartLabel }: { active?: boolean; pa
   return (
     <div className="bg-popover text-popover-foreground border px-3 py-2 rounded shadow-md text-sm">
       <p className="font-semibold mb-1">
-        {payload[0]?.payload?.date ? formatDate(payload[0].payload.date) : ""}
+        {payload[0]?.payload?.date ? formatChartDate(payload[0].payload.date) : ""}
       </p>
       <p>
         <span className="text-muted-foreground mr-2">{chartLabel}:</span>
@@ -64,7 +59,7 @@ export function MiniBarChart({
   const fillColor = getFillColor(color);
 
   return (
-    <div className="space-y-3 p-4 border rounded-lg bg-card text-card-foreground shadow-sm">
+    <div className={CHART_CARD_CLASS}>
       <div className="flex justify-between items-center">
         <p className="text-sm font-semibold">{label}</p>
       </div>
@@ -81,7 +76,7 @@ export function MiniBarChart({
             />
             <XAxis
               dataKey="date"
-              tickFormatter={formatDate}
+              tickFormatter={formatChartDate}
               fontSize={12}
               tickLine={false}
               axisLine={false}

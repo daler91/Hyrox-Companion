@@ -8,18 +8,13 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
-import { MUTED_FG, GRID_BORDER, GRID_DASH } from "./chartConstants";
-
-function formatDate(d: string): string {
-  const date = new Date(d + "T00:00:00");
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
+import { MUTED_FG, GRID_BORDER, GRID_DASH, COLOR_GREEN, COLOR_PRIMARY, CHART_CARD_CLASS, formatChartDate } from "./chartConstants";
 
 const getStrokeColor = (colorStr: string): string => {
-  if (colorStr.includes("primary")) return "#ea580c";
+  if (colorStr.includes("primary")) return COLOR_PRIMARY;
   if (colorStr.includes("purple")) return "#a855f7";
   if (colorStr.includes("blue")) return "#3b82f6";
-  if (colorStr.includes("green")) return "#22c55e";
+  if (colorStr.includes("green")) return COLOR_GREEN;
   if (colorStr.includes("amber")) return "#f59e0b";
   if (colorStr.includes("red")) return "#ef4444";
   return "#64748b";
@@ -29,12 +24,12 @@ function LineChartTooltip({ active, payload, chartLabel }: { active?: boolean; p
   if (!active || !payload?.length) return null;
 
   const firstPayload = payload[0]?.payload;
-  const dateStr = ((firstPayload?.date ?? firstPayload?.weekStart) ?? "") as string;
+  const dateStr = String(firstPayload?.date ?? firstPayload?.weekStart ?? "");
 
   return (
     <div className="bg-popover text-popover-foreground border px-3 py-2 rounded shadow-md text-sm">
       <p className="font-semibold mb-1">
-        {dateStr ? formatDate(dateStr) : ""}
+        {dateStr ? formatChartDate(dateStr) : ""}
       </p>
       <p>
         <span className="text-muted-foreground mr-2">{chartLabel}:</span>
@@ -64,7 +59,7 @@ export function MiniLineChart({
   const strokeColor = getStrokeColor(color);
 
   return (
-    <div className="space-y-3 p-4 border rounded-lg bg-card text-card-foreground shadow-sm">
+    <div className={CHART_CARD_CLASS}>
       <div className="flex justify-between items-center">
         <p className="text-sm font-semibold">{label}</p>
       </div>
@@ -81,7 +76,7 @@ export function MiniLineChart({
             />
             <XAxis
               dataKey={xKey}
-              tickFormatter={(v: string) => formatDate(v)}
+              tickFormatter={(v: string) => formatChartDate(v)}
               fontSize={12}
               tickLine={false}
               axisLine={false}
@@ -100,12 +95,12 @@ export function MiniLineChart({
             {referenceLine && (
               <ReferenceLine
                 y={referenceLine.value}
-                stroke="#22c55e"
+                stroke={COLOR_GREEN}
                 strokeDasharray="6 3"
                 label={{
                   value: referenceLine.label,
                   position: "right",
-                  fill: "#22c55e",
+                  fill: COLOR_GREEN,
                   fontSize: 11,
                 }}
               />
