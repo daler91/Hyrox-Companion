@@ -18,6 +18,7 @@ function getQueue(): PendingMutation[] {
     const raw = localStorage.getItem(STORAGE_KEY);
     return raw ? (JSON.parse(raw) as PendingMutation[]) : [];
   } catch {
+    // Corrupted localStorage data — return empty queue so it gets overwritten on next save
     return [];
   }
 }
@@ -66,6 +67,7 @@ export async function flushQueue(): Promise<{ synced: number; failed: number; dr
       await apiRequest(mutation.method, mutation.url, mutation.body);
       synced++;
     } catch {
+      // Network/server error — increment retry count; mutation will be dropped after MAX_RETRIES
       failed++;
       remaining.push({ ...mutation, retryCount: retryCount + 1 });
     }
@@ -78,10 +80,15 @@ export async function flushQueue(): Promise<{ synced: number; failed: number; dr
 // Auto-flush when coming back online
 if (globalThis.window !== undefined) {
   globalThis.addEventListener("online", () => {
-    void flushQueue().then(({ synced, dropped }) => {
-      if (synced > 0 || dropped > 0) {
-        globalThis.dispatchEvent(new CustomEvent("offline-sync-complete", { detail: { synced, dropped } }));
-      }
-    });
+    void flushQueue()
+      .then(({ synced, dropped }) => {
+        if (synced > 0 || dropped > 0) {
+          globalThis.dispatchEvent(new CustomEvent("offline-sync-complete", { detail: { synced, dropped } }));
+        }
+      })
+      .catch(() => {
+        // Individual mutation failures are already handled inside flushQueue.
+        // This catches unexpected errors (e.g. localStorage unavailable).
+      });
   });
 }
