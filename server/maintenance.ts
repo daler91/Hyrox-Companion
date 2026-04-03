@@ -103,7 +103,7 @@ async function cleanOrphanedData() {
     });
     logger.info({ context: "db" }, "Orphaned data cleanup complete");
   } catch (error) {
-    logger.info({ context: "db" }, `Orphaned data cleanup skipped: ${error}`);
+    logger.warn({ context: "db", err: error }, "Orphaned data cleanup skipped");
   }
 }
 
@@ -198,6 +198,6 @@ export async function runStartupMaintenance(storage: IStorage): Promise<void> {
     const marked = await storage.markMissedPlanDays();
     if (marked > 0) logger.info({ context: "db" }, `Marked ${marked} past planned day(s) as missed`);
   } catch (error) {
-    logger.info({ context: "db" }, `Mark missed days skipped: ${error}`);
+    logger.warn({ context: "db", err: error }, "Mark missed days skipped");
   }
 }

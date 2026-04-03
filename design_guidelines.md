@@ -13,8 +13,9 @@
 
 ## Typography System
 
-**Primary Font**: Inter (Google Fonts) - clean, readable at all sizes
-**Secondary Font**: Roboto Mono - for metrics and numbers
+**Heading Font**: Space Grotesk - bold, modern geometric sans-serif for headings
+**Body Font**: Geist - clean, readable at all sizes for body text
+**Mono Font**: Geist Mono - for metrics, numbers, and code
 
 **Hierarchy**:
 - H1 (Page Titles): text-4xl font-bold tracking-tight
@@ -39,168 +40,174 @@
 **Grid System**:
 - Dashboard: 3-column grid (lg:grid-cols-3) for metric cards
 - Workout List: Single column on mobile, 2-column on desktop (md:grid-cols-2)
-- Calendar View: 7-column grid for weekly planning
+- Analytics: Responsive charts with full-width containers
 
 ---
 
 ## Component Library
 
+**UI Framework**: shadcn/ui (Radix UI primitives) with Tailwind CSS and class-variance-authority (CVA)
+
 ### Navigation
-**Top Navigation Bar**:
-- Fixed header with logo left, main nav center, profile right
-- Navigation items: Dashboard, Plan, Log, History, Chat
-- Mobile: Hamburger menu with slide-out drawer
-- Height: h-16
-- Shadow: shadow-sm
+**Sidebar Navigation**:
+- Persistent sidebar on desktop (16rem width, 3rem icon mode)
+- Collapses to icon-only on mobile with hamburger trigger
+- Navigation items: Training (timeline), Log Workout, Analytics, Settings
+- Mobile: Sticky top header with breadcrumb navigation
+- User profile display with avatar in sidebar footer
+- Theme toggle and logout in footer
 
-### Dashboard Cards
-**Metric Cards** (3-column grid):
-- Large number display with label
-- Trend indicator (up/down arrow)
-- Rounded corners: rounded-xl
-- Padding: p-6
-- Border: border border-gray-200
+### Theme System
+- **Dark Mode**: Full support with class-based toggle
+- **Storage**: Persisted to localStorage, falls back to OS preference
+- **CSS Variables**: 36+ theme variables for light/dark modes
+- **Elevation System**: Custom `--elevate-1` and `--elevate-2` for hover/active states
 
-**Weekly Summary Card**:
-- Full-width card showing 7-day overview
-- Mini bar chart for daily volume
-- Quick stats row at bottom
-
-### Workout Planning
-
-**Workout Builder**:
-- Left panel: Exercise selection (searchable list)
-- Center: Workout structure (drag-drop zones)
-- Right panel: Exercise details and notes
-- Exercise categories: Running, SkiErg, Sled Push/Pull, Burpees, Rowing, Farmers Carry, Wall Balls
-
-**Exercise Cards**:
-- Icon + Exercise name
-- Input fields for sets/reps/weight/time/distance
+### Workout Cards
+**Timeline Workout Cards**:
+- Icon + Exercise name with category color coding
+- Status indicators (completed, planned, missed, skipped)
 - Compact form layout with inline labels
-- Border-l-4 for exercise type color coding
+- Drag-and-drop reordering via dnd-kit
+
+**Exercise Input Cards**:
+- Input fields for sets/reps/weight/time/distance (dynamic per exercise type)
+- AI parsing confidence shown as color-coded badges (green 80+, yellow 60-80, red <60)
+- Missing field warnings with yellow alert boxes
 
 ### Training Log
 
-**Log Entry Form**:
-- Date/time picker at top
-- Workout type selector (buttons group)
-- Expandable sections for each Hyrox station
-- Large "Save Workout" button at bottom
-- Quick entry shortcuts for common workouts
+**Log Entry Form** (3 input modes):
+- **Voice Input**: Web Speech API with Gemini AI parsing
+- **Text Input**: Free-form text parsed by Gemini
+- **Form Mode**: Structured exercise entry with drag-and-drop ordering
+- Exercise autocomplete (200+ base exercises + custom)
+- Set/rep/weight/distance/time tracking
+- RPE selector and notes field
 
-**History Timeline**:
-- Vertical timeline with workout cards
-- Each card shows: date, duration, key metrics, completion status
-- Filters: Date range, exercise type, workout type
-- Hover reveals quick actions (edit, delete, duplicate)
+**Training Timeline**:
+- Vertical timeline with workout cards and date grouping
+- Drag-and-drop workout reordering
+- Filters by status (completed, planned, missed, skipped)
+- Import training plans (CSV/PDF/DOCX)
+- Inline workout detail dialog with edit mode
+- Floating action button for quick workout logging
 
-### Chatbot Interface
+### AI Coach Interface
 
-**Chat Panel** (can be sidebar or full-screen modal):
+**Coach Panel** (slide-out sheet overlay):
+- Streaming chat via Server-Sent Events
+- Auto-suggestions based on plan and recent performance
+- RAG-powered responses from uploaded coaching materials
+- Coach personality customization
 - Message bubbles: User right-aligned, AI left-aligned
-- AI responses include data visualizations when relevant
-- Quick question chips above input ("Analyze my running", "Show weekly volume", "Compare to last month")
-- Input: Fixed bottom with rounded-full border
-- Message padding: p-4
-- Avatar icons for both user and AI
+- Input: Fixed bottom with rounded border
 
-**Embedded Charts in Chat**:
-- Line graphs for progress trends
-- Bar charts for workout volume
-- Compact design: max height h-64
-- Inline with conversation flow
+### Analytics Dashboard
+- Personal Records tab (1RM estimation, max weight/distance, best time)
+- Exercise Progression Charts (line, bar, heatmap via Recharts)
+- Training Overview (weekly volume, frequency, intensity)
+- Category Breakdown (strength, conditioning, running, mobility, functional)
+- Advanced filtering by date range and exercise
 
 ### Data Visualization
 
-**Progress Charts**:
+**Progress Charts** (Recharts):
 - Line chart for performance over time
 - Y-axis: metric values, X-axis: dates
 - Multiple series with legend
 - Tooltip on hover showing exact values
-- Min height: h-80
+- ResponsiveContainer for all chart sizes
 
 **Workout Heatmap**:
 - Calendar grid showing training frequency
 - Intensity indicated by visual weight
-- Click date to see details
 
 ### Forms & Inputs
 
 **Input Fields**:
-- Floating labels
+- Tailwind + Radix primitives via shadcn/ui
 - Border: border-2 on focus
 - Height: h-12
 - Rounded: rounded-lg
 - Error states with message below
 
-**Button Styles**:
-- Primary CTA: Large, rounded-lg, px-8 py-3, font-semibold
-- Secondary: Outlined variant
-- Icon buttons: Square (w-10 h-10), rounded-lg
-- Button groups for multi-choice (toggle buttons)
-
-**Number Steppers** (for weights/reps):
-- Inline +/- buttons flanking number display
-- Large touch targets: min-w-12 h-12
+**Button Styles** (CVA variants):
+- Primary CTA: default variant, rounded-lg, font-semibold
+- Secondary: outline variant
+- Destructive: destructive variant for dangerous actions
+- Icon buttons: icon variant (square)
+- Size variants: sm, default, lg
 
 ---
 
 ## Page Layouts
 
-### Dashboard
-- Header with greeting and current week
-- 3-column metrics row (Total Volume, Workouts This Week, Personal Bests)
-- Weekly summary card (full width)
-- Recent workouts list (2-column on desktop)
-- Chat shortcut floating action button (bottom-right)
+### Training Timeline (/)
+- Sidebar navigation (persistent on desktop)
+- Timeline with date-grouped workout cards
+- Filter bar for status filtering
+- Floating action button (bottom-right) for quick log
+- Coach panel overlay (slide-out sheet)
+- Empty states: welcome wizard, import plan, generate plan
 
-### Planner
-- Calendar view (primary)
-- List view (alternative toggle)
-- Right sidebar: Workout template library
-- Drag workouts from library to calendar
-- Click day to create/edit workout
+### Log Workout (/log)
+- Mode selector (voice, text, form)
+- Exercise blocks with drag-and-drop ordering
+- AI-powered parsing for voice and text modes
+- Exercise autocomplete and custom exercise support
 
-### Logger
-- Quick log form (centered, max-w-2xl)
-- Previous workout reference (collapsible sidebar)
-- Timer integration for live logging
-- Exercise auto-complete
+### Analytics (/analytics)
+- Tabbed interface (Personal Records, Progression, Overview)
+- Responsive chart containers
+- Date range and exercise filters
+- Category breakdown cards
 
-### History
-- Filter bar at top
-- Timeline view (default)
-- Grid view (toggle)
-- Stats summary card pinned at top
-- Infinite scroll for older entries
-
-### Chat
-- Full-height layout (split-screen on desktop)
-- Left: Training context panel (current week summary)
-- Right: Chat interface
-- Mobile: Full-screen chat with swipe-up drawer for context
+### Settings (/settings)
+- Unit and notification preferences
+- Coach personality settings
+- Coaching materials upload (PDF/DOCX/CSV)
+- Strava account linking/unlinking
+- Email subscription management
 
 ---
 
 ## Interaction Patterns
 
 **Minimal Animations**:
-- Card hover: subtle lift (translate-y-1)
-- Button press: scale-95 on active
-- Page transitions: fade only
-- NO complex scroll animations
+- Card hover: subtle elevation shift (custom `hover-elevate` utility)
+- Dialog entrance: zoom + slide (200ms)
+- Sheet transitions: slide (500ms open, 300ms close)
+- Skeleton screens with `animate-pulse`
+- Loading spinners with `animate-spin`
+- Coach thinking indicator: 3-dot bounce with staggered delays
 
 **Loading States**:
-- Skeleton screens for data-heavy views
-- Spinner for quick actions
-- Progress bar for uploads
+- Skeleton screens (TimelineSkeleton) for data-heavy views
+- Spinner (Loader2 icon) for async operations
+- Button disabled state with spinner overlay
+
+**Empty States** (4 variants based on user context):
+- Welcome state with onboarding CTAs
+- Ready state for unscheduled plans
+- No-results state for active filters
+- General empty state
 
 **Responsiveness**:
 - Mobile-first approach
-- Breakpoints: sm (640px), md (768px), lg (1024px), xl (1280px)
+- Breakpoints: sm (640px), md (768px), lg (1024px)
 - Stack columns on mobile
-- Collapsible sidebars
+- Collapsible sidebar navigation
+
+**Error Handling**:
+- FallbackErrorBoundary for full-page crashes
+- FeatureErrorBoundary for isolated component failures
+- Toast notifications (max 5, 5-second auto-dismiss, swipe-to-dismiss on mobile)
+
+**Offline Support**:
+- PWA with service worker caching (Workbox)
+- Offline mutation queue with auto-flush on reconnect
+- Visual offline indicator (bottom-left, WifiOff icon)
 
 ---
 
@@ -208,11 +215,9 @@
 
 **Hero Image**: NOT NEEDED - This is a utility-focused app, not a marketing site
 
-**Icon Library**: Heroicons (via CDN)
-- Line style for navigation and general UI
-- Solid style for active states and primary actions
+**Icon Library**: Lucide React
+- Line style icons throughout the UI
+- Consistent sizing with Tailwind classes
 
-**Exercise Illustrations**: Use placeholder comments for custom Hyrox station icons
-- `<!-- CUSTOM ICON: SkiErg -->`
-- `<!-- CUSTOM ICON: Sled Push -->`
+**Exercise Illustrations**: Category-based color coding and icons from Lucide
 - Consistent size: w-12 h-12 or w-16 h-16 for larger contexts
