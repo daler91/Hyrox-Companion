@@ -117,7 +117,7 @@ router.patch("/api/v1/plans/:id/goal", isAuthenticated, rateLimiter("planUpdate"
     res.json(updated);
   }));
 
-router.delete("/api/v1/plans/:id", isAuthenticated, rateLimiter("planDelete", 10), handleGetOrDeletePlan(async (id, userId) => { await storage.deleteTrainingPlan(id, userId); return { success: true }; }, "true"));
+router.delete("/api/v1/plans/:id", isAuthenticated, rateLimiter("planDelete", 10), handleGetOrDeletePlan(async (id, userId) => { const deleted = await storage.deleteTrainingPlan(id, userId); return deleted ? { success: true } : null; }, "true"));
 
 router.post("/api/v1/plans/:planId/schedule", isAuthenticated, rateLimiter("planSchedule", 10), asyncHandler(async (req: ExpressRequest<{ planId: string }, unknown, z.infer<typeof schedulePlanRequestSchema>>, res: Response) => {
     const parseResult = schedulePlanRequestSchema.safeParse(req.body);
