@@ -2,11 +2,11 @@ import { logger } from "../logger";
 import { Router, type Request as ExpressRequest, type Response } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
-import { chatWithCoach, streamChatWithCoach, generateWorkoutSuggestions, parseExercisesFromText, EMBEDDING_DIMENSIONS, type UpcomingWorkout } from "../gemini/index";
+import { chatWithCoach, streamChatWithCoach, generateWorkoutSuggestions, parseExercisesFromText, type UpcomingWorkout } from "../gemini/index";
 import { rateLimiter, asyncHandler, validateBody } from "../routeUtils";
 import { buildTrainingContext } from "../services/aiService";
 import { buildCoachingMaterialsSection, buildRetrievedChunksSection } from "../prompts";
-import { retrieveRelevantChunks } from "../services/ragService";
+import { retrieveCoachingContext } from "../services/ragRetrieval";
 import { toDateStr, getUserId } from "../types";
 import { chatRequestSchema, parseExercisesRequestSchema, insertChatMessageSchema, type InsertChatMessage, type RagInfo } from "@shared/schema";
 export type { RagInfo } from "@shared/schema";
@@ -25,57 +25,8 @@ router.post("/api/v1/parse-exercises", isAuthenticated, rateLimiter("parse", 5),
     res.json(exercises);
   }));
 
-async function getCoachingContext(
-  userId: string,
-  query: string,
-  log: Pick<typeof logger, "warn" | "info" | "error"> = logger,
-): Promise<{ retrievedChunks?: string[]; coachingMaterials?: import("../prompts").CoachingMaterialInput[]; ragInfo: RagInfo }> {
-  let fallbackReason: string | undefined;
-
-  try {
-    const hasChunks = await storage.hasChunksForUser(userId);
-
-    if (hasChunks) {
-      // Check if stored embeddings match the current model's dimensions
-      const storedDim = await storage.getStoredEmbeddingDimension(userId);
-      if (storedDim !== null && storedDim !== EMBEDDING_DIMENSIONS) {
-        log.warn(
-          { userId, storedDim, expectedDim: EMBEDDING_DIMENSIONS },
-          "[rag] Embedding dimension mismatch — skipping RAG (re-embed via settings to fix)",
-        );
-        fallbackReason = `dimension_mismatch: stored=${storedDim}, expected=${EMBEDDING_DIMENSIONS}`;
-      } else {
-        const chunks = await retrieveRelevantChunks(userId, query);
-        if (chunks.length > 0) {
-          return {
-            retrievedChunks: chunks,
-            ragInfo: { source: "rag", chunkCount: chunks.length, chunks },
-          };
-        }
-        fallbackReason = storedDim === null
-          ? "no_embeddings: chunks exist but none have embeddings — click Re-embed All"
-          : "no_matching_chunks: search returned 0 results";
-        log.warn({ userId, storedDim, fallbackReason }, "[rag] Retrieval returned 0 chunks");
-      }
-    }
-  } catch (error) {
-    const errMsg = error instanceof Error ? error.message : String(error);
-    fallbackReason = `retrieval_error: ${errMsg}`;
-    log.error({ err: error, userId }, "[rag] Retrieval failed, falling back to legacy");
-  }
-
-  // Fallback to legacy truncation
-  const coachingMaterials = await storage.listCoachingMaterials(userId);
-  return {
-    coachingMaterials,
-    ragInfo: {
-      source: coachingMaterials.length > 0 ? "legacy" : "none",
-      chunkCount: 0,
-      materialCount: coachingMaterials.length,
-      fallbackReason,
-    },
-  };
-}
+// getCoachingContext delegates to the shared ragRetrieval service
+const getCoachingContext = retrieveCoachingContext;
 
 async function prepareChatContext(req: ExpressRequest): Promise<{ success: false; error: string } | { success: true; message: string; history: Pick<import("@shared/schema").ChatMessage, "role" | "content">[]; trainingContext: import("../gemini/index").TrainingContext; coachingMaterials?: import("../prompts").CoachingMaterialInput[]; retrievedChunks?: string[]; ragInfo: RagInfo }> {
   const parseResult = chatRequestSchema.safeParse(req.body);

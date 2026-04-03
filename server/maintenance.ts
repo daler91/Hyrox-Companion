@@ -5,6 +5,7 @@ import { migrate } from "drizzle-orm/node-postgres/migrator";
 import path from "node:path";
 import type { IStorage } from "./storage";
 import { logger } from "./logger";
+import { EMBEDDING_DIMENSIONS } from "./gemini/client";
 
 async function ensurePgvectorExtension() {
   let client;
@@ -140,7 +141,7 @@ async function ensureVectorSchema() {
           "user_id" varchar(255) NOT NULL,
           "content" text NOT NULL,
           "chunk_index" integer NOT NULL,
-          "embedding" vector(3072),
+          "embedding" vector(${EMBEDDING_DIMENSIONS}),
           "created_at" timestamp DEFAULT now()
         )
       `);
@@ -158,8 +159,8 @@ async function ensureVectorSchema() {
       `SELECT data_type FROM information_schema.columns WHERE table_name = 'document_chunks' AND column_name = 'embedding'`,
     );
     if (embCol.rows.length > 0 && (embCol.rows[0] as { data_type: string }).data_type === "text") {
-      await client.query(`ALTER TABLE document_chunks ALTER COLUMN embedding TYPE vector(3072) USING embedding::vector(3072)`);
-      logger.info({ context: "db" }, "Converted embedding column from text to vector(3072)");
+      await client.query(`ALTER TABLE document_chunks ALTER COLUMN embedding TYPE vector(${EMBEDDING_DIMENSIONS}) USING embedding::vector(${EMBEDDING_DIMENSIONS})`);
+      logger.info({ context: "db", dimensions: EMBEDDING_DIMENSIONS }, "Converted embedding column from text to vector type");
     }
   } catch (error) {
     logger.error({ context: "db", err: error }, "Vector schema setup failed");

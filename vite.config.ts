@@ -33,7 +33,7 @@ export default defineConfig({
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff,woff2}"],
         runtimeCaching: [
           apiCacheRule(/^\/api\/v1\/plans/, "api-plans", "StaleWhileRevalidate"),
-          apiCacheRule(/^\/api\/v1\/timeline/, "api-timeline", "StaleWhileRevalidate", 50),
+          apiCacheRule(/^\/api\/v1\/timeline/, "api-timeline", "NetworkFirst", 50),
           apiCacheRule(/^\/api\/v1\/personal-records/, "api-analytics", "StaleWhileRevalidate"),
           apiCacheRule(/^\/api\/v1\/workouts/, "api-workouts", "NetworkFirst", 50),
         ],

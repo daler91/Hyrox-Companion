@@ -8,6 +8,7 @@ import { createWorkout, updateWorkout, reparseWorkout, batchReparseWorkouts, val
 import { getUserId } from "../types";
 import { queue } from "../queue";
 import { logger } from "../logger";
+import { DEFAULT_TIMELINE_LIMIT } from "../constants";
 
 const router = Router();
 
@@ -69,8 +70,8 @@ router.post("/api/v1/custom-exercises", isAuthenticated, rateLimiter("customExer
 
 router.get("/api/v1/workouts", isAuthenticated, asyncHandler(async (req: Request<Record<string, never>, Record<string, never>, Record<string, never>, { limit?: string; offset?: string }>, res: Response) => {
     const userId = getUserId(req);
-    const limit = req.query.limit ? Number.parseInt(req.query.limit) : undefined;
-    const offset = req.query.offset ? Number.parseInt(req.query.offset) : undefined;
+    const limit = req.query.limit ? Number.parseInt(req.query.limit, 10) : undefined;
+    const offset = req.query.offset ? Number.parseInt(req.query.offset, 10) : undefined;
 
     if (limit !== undefined && Number.isNaN(limit)) return res.status(400).json({ error: "Invalid limit", code: "BAD_REQUEST" });
     if (offset !== undefined && Number.isNaN(offset)) return res.status(400).json({ error: "Invalid offset", code: "BAD_REQUEST" });
@@ -117,7 +118,9 @@ router.post("/api/v1/workouts", isAuthenticated, rateLimiter("workout", 40), asy
       .send("auto-coach", { userId })
       .catch((err) => {
         logger.error({ err }, "Failed to queue auto-coach job");
-        storage.updateIsAutoCoaching(userId, false).catch(() => {});
+        storage.updateIsAutoCoaching(userId, false).catch((resetErr) => {
+          logger.error({ err: resetErr }, "Failed to reset isAutoCoaching flag after queue error");
+        });
       });
   }));
 
@@ -162,9 +165,8 @@ router.get("/api/v1/exercises/:exerciseName/history", isAuthenticated, asyncHand
 router.get("/api/v1/timeline", isAuthenticated, asyncHandler(async (req: Request<Record<string, never>, Record<string, never>, Record<string, never>, { planId?: string; limit?: string; offset?: string }>, res: Response) => {
     const userId = getUserId(req);
     const planId = req.query.planId;
-    const DEFAULT_TIMELINE_LIMIT = 500;
-    const limit = req.query.limit ? Number.parseInt(req.query.limit) : DEFAULT_TIMELINE_LIMIT;
-    const offset = req.query.offset ? Number.parseInt(req.query.offset) : undefined;
+    const limit = req.query.limit ? Number.parseInt(req.query.limit, 10) : DEFAULT_TIMELINE_LIMIT;
+    const offset = req.query.offset ? Number.parseInt(req.query.offset, 10) : undefined;
 
     if (Number.isNaN(limit)) return res.status(400).json({ error: "Invalid limit", code: "BAD_REQUEST" });
     if (offset !== undefined && Number.isNaN(offset)) return res.status(400).json({ error: "Invalid offset", code: "BAD_REQUEST" });

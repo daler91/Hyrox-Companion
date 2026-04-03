@@ -32,10 +32,15 @@ export async function apiRequest(
   url: string,
   data?: unknown,
   signal?: AbortSignal,
+  extraHeaders?: Record<string, string>,
 ): Promise<Response> {
+  const headers: Record<string, string> = {
+    ...(data ? { "Content-Type": "application/json" } : {}),
+    ...extraHeaders,
+  };
   const res = await fetch(url, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers,
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
     signal,
@@ -51,6 +56,7 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey, signal }) => {
+    // Query keys are path segments (e.g. ["/api/v1", "workouts"]) joined to form the URL
     const res = await fetch(queryKey.join("/"), {
       credentials: "include",
       signal,

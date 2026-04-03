@@ -20,6 +20,10 @@ export const vectorPool = new Pool({
   statement_timeout: DB_STATEMENT_TIMEOUT_MS,
 });
 
+vectorPool.on("error", (err) => {
+  logger.error({ err, context: "vectorDb" }, "Unexpected error on idle vector DB client");
+});
+
 export const isVectorDbSeparate = Boolean(env.VECTOR_DATABASE_URL);
 
 logger.info(

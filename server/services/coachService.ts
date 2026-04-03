@@ -1,9 +1,8 @@
 import { logger } from "../logger";
 import { storage } from "../storage";
 import { buildTrainingContext } from "./aiService";
-import { generateWorkoutSuggestions, EMBEDDING_DIMENSIONS, type UpcomingWorkout, type WorkoutSuggestion } from "../gemini/index";
-import { buildCoachingMaterialsSection, buildRetrievedChunksSection } from "../prompts";
-import { retrieveRelevantChunks } from "./ragService";
+import { generateWorkoutSuggestions, type UpcomingWorkout, type WorkoutSuggestion } from "../gemini/index";
+import { retrieveCoachingText } from "./ragRetrieval";
 import { toDateStr } from "../types";
 
 // ---------------------------------------------------------------------------
@@ -58,35 +57,14 @@ async function applySuggestion(
 }
 
 /**
- * Get coaching materials string — try RAG first, fall back to legacy truncation.
+ * Get coaching materials string — delegates to shared RAG retrieval logic.
  */
 async function getCoachingMaterialsString(
   userId: string,
   upcomingWorkouts: UpcomingWorkout[],
 ): Promise<{ text: string | undefined; source: "rag" | "legacy" | null }> {
-  try {
-    const hasChunks = await storage.hasChunksForUser(userId);
-    if (hasChunks) {
-      const storedDim = await storage.getStoredEmbeddingDimension(userId);
-      if (storedDim !== null && storedDim !== EMBEDDING_DIMENSIONS) {
-        logger.warn({ userId, storedDim, expectedDim: EMBEDDING_DIMENSIONS }, "[coach] Embedding dimension mismatch — skipping RAG");
-      } else {
-        const query = upcomingWorkouts.map(w => `${w.focus} ${w.mainWorkout}`).join("; ");
-        const chunks = await retrieveRelevantChunks(userId, query);
-        if (chunks.length > 0) {
-          logger.info({ userId, chunkCount: chunks.length }, "[coach] RAG retrieval succeeded");
-          return { text: buildRetrievedChunksSection(chunks), source: "rag" };
-        }
-        logger.warn({ userId, storedDim }, "[coach] RAG search returned 0 chunks — falling back to legacy");
-      }
-    }
-  } catch (error) {
-    logger.error({ err: error, userId }, "[coach] RAG retrieval failed, falling back to legacy");
-  }
-
-  const materials = await storage.listCoachingMaterials(userId);
-  const text = buildCoachingMaterialsSection(materials) || undefined;
-  return { text, source: text ? "legacy" : null };
+  const query = upcomingWorkouts.map(w => `${w.focus} ${w.mainWorkout}`).join("; ");
+  return retrieveCoachingText(userId, query);
 }
 
 // ---------------------------------------------------------------------------
