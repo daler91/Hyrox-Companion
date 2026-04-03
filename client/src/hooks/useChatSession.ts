@@ -67,28 +67,30 @@ async function handleStreamResponse(
     }
   };
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
 
-    buffer += decoder.decode(value, { stream: true });
-    const events = buffer.split("\n\n");
-    buffer = events.pop() || "";
+      buffer += decoder.decode(value, { stream: true });
+      const events = buffer.split("\n\n");
+      buffer = events.pop() || "";
 
-    for (const event of events) {
-      processStreamLines(event.split("\n"), acc);
+      for (const event of events) {
+        processStreamLines(event.split("\n"), acc);
+      }
+      scheduleFlush();
     }
-    scheduleFlush();
-  }
 
-  if (buffer.trim()) {
-    processStreamLines(buffer.split("\n"), acc);
+    if (buffer.trim()) {
+      processStreamLines(buffer.split("\n"), acc);
+    }
+  } finally {
+    // Always flush buffered content — preserves partial output on error paths
+    cancelAnimationFrame(rafId);
+    dirty = true;
+    flush();
   }
-
-  // Final synchronous flush to ensure the last chunks are rendered
-  cancelAnimationFrame(rafId);
-  dirty = true;
-  flush();
 
   return acc.content;
 }
