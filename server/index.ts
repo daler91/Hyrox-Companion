@@ -104,13 +104,24 @@ if (!isDev) {
 
 app.use(
   helmet({
-    contentSecurityPolicy: false, // Managed manually below for nonce support
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+        fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
+        imgSrc: ["'self'", "data:", "https:"],
+        connectSrc: ["'self'"],
+        frameSrc: ["'self'"],
+        workerSrc: ["'self'", "blob:"],
+      },
+    },
     crossOriginEmbedderPolicy: false,
     referrerPolicy: { policy: "strict-origin-when-cross-origin" },
   }),
 );
 
-// Manual CSP — production uses per-request nonces instead of 'unsafe-inline'
+// Override helmet's default CSP with per-request nonce-based policy
 app.use((_req, res, next) => {
   const scriptSrc = isDev
     ? `'self' 'unsafe-inline' 'unsafe-eval' ${clerkDomains}`
