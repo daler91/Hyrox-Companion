@@ -13,6 +13,8 @@ import { OfflineIndicator } from "@/components/ui/OfflineIndicator";
 import NotFound from "@/pages/not-found";
 import Timeline from "@/pages/Timeline";
 import { Loader2 } from "lucide-react";
+import { useEmailCheck } from "@/hooks/useEmailCheck";
+import { useAuth } from "@/hooks/useAuth";
 
 const LogWorkout = lazy(() => import("@/pages/LogWorkout"));
 const Settings = lazy(() => import("@/pages/Settings"));
@@ -67,6 +69,9 @@ function AuthenticatedRouter() {
 }
 
 function AuthenticatedLayout() {
+  const { isAuthenticated } = useAuth();
+  useEmailCheck(isAuthenticated);
+
   const style = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3rem",

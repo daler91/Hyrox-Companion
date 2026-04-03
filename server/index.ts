@@ -199,6 +199,9 @@ try {
   await runStartupMaintenance(storage);
   await startQueue();
   startCron(storage);
+  if (!env.RESEND_API_KEY) {
+    logger.warn({ context: "email" }, "RESEND_API_KEY is not set — email delivery is disabled");
+  }
   await registerRoutes(httpServer, app);
 
   // Serve OpenAPI docs
