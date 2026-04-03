@@ -18,6 +18,9 @@ const STRAVA_REDIRECT_URI = env.APP_URL
   : "http://localhost:5000/api/v1/strava/callback";
 
 const STATE_SECRET = env.STRAVA_STATE_SECRET || crypto.randomBytes(32).toString("hex");
+if (!env.STRAVA_STATE_SECRET) {
+  logger.warn({ context: "strava" }, "STRAVA_STATE_SECRET not configured — using random secret. Strava OAuth state will not be verifiable across multiple server instances.");
+}
 
 const stravaAuthLimiter = rateLimit({
   windowMs: RATE_LIMIT_WINDOW_15M_MS,

@@ -101,8 +101,7 @@ export function calculateStreak(completedDates: Set<string>): number {
 
 import { z } from "zod";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function validateBody(schema: z.ZodType<any, any, any>) {
+export function validateBody(schema: z.ZodTypeAny) {
   return (req: Request, res: Response, next: NextFunction) => {
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) {
@@ -115,10 +114,9 @@ export function validateBody(schema: z.ZodType<any, any, any>) {
   };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const asyncHandler = (fn: (req: any, res: Response, next: NextFunction) => Promise<any>) => (req: Request, res: Response, next: NextFunction): void => {
-  Promise.resolve(fn(req, res, next)).catch((err) => {
-    const log = req.log || logger;
+export const asyncHandler = <Req extends Request>(fn: (req: Req, res: Response, next: NextFunction) => Promise<unknown>) => (req: Request, res: Response, next: NextFunction): void => {
+  Promise.resolve(fn(req as Req, res, next)).catch((err) => {
+    const log = req.log ?? logger;
     log.error({ err }, `Route error in ${req.method} ${req.originalUrl}`);
     next(err);
   });
