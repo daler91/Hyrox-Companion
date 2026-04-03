@@ -116,7 +116,7 @@ export function validateBody(schema: z.ZodTypeAny) {
 
 export const asyncHandler = <Req extends Request>(fn: (req: Req, res: Response, next: NextFunction) => Promise<unknown>) => (req: Request, res: Response, next: NextFunction): void => {
   Promise.resolve(fn(req as Req, res, next)).catch((err) => {
-    const log = req.log || logger;
+    const log = req.log ?? logger;
     log.error({ err }, `Route error in ${req.method} ${req.originalUrl}`);
     next(err);
   });

@@ -35,7 +35,7 @@ export function startCron(storage: IStorage): void {
 
 export function stopCron(): void {
   if (task) {
-    void task.stop();
+    const _stop = task.stop(); // result intentionally unused; stop is best-effort during shutdown
     task = null;
     logger.info({ context: "cron" }, "Cron stopped");
   }
