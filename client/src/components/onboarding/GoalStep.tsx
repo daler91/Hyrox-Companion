@@ -26,7 +26,7 @@ export function GoalStep({ selectedGoal, onGoalChange }: Readonly<GoalStepProps>
         <button
           type="button"
           key={goal.id}
-          className={`w-full text-left flex items-center space-x-3 p-3 rounded-md border cursor-pointer transition-colors ${
+          className={`w-full text-left flex items-center space-x-3 p-3 rounded-md border cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${
             selectedGoal === goal.id
               ? "border-primary bg-primary/5"
               : "border-border hover:bg-muted/50"
