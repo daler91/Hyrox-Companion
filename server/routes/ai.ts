@@ -17,9 +17,13 @@ const router = Router();
 router.post("/api/v1/parse-exercises", isAuthenticated, rateLimiter("parse", 5), validateBody(parseExercisesRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof parseExercisesRequestSchema>>, res: Response) => {
     const { text } = req.body;
     const userId = getUserId(req);
-    const user = await storage.getUser(userId);
+    // ⚡ Perf: Parallelize independent DB queries to cut latency from
+    // 2 sequential round trips down to 1 concurrent round trip.
+    const [user, userCustomExercises] = await Promise.all([
+      storage.getUser(userId),
+      storage.getCustomExercises(userId),
+    ]);
     const weightUnit = user?.weightUnit || "kg";
-    const userCustomExercises = await storage.getCustomExercises(userId);
     const customNames = userCustomExercises.map(e => e.name);
     const exercises = await parseExercisesFromText(text.trim(), weightUnit, customNames);
     res.json(exercises);

@@ -21,11 +21,15 @@ router.get("/api/v1/workouts/unstructured", isAuthenticated, asyncHandler(async 
 router.post("/api/v1/workouts/:id/reparse", isAuthenticated, rateLimiter("reparse", 5), asyncHandler(async (req: Request<{ id: string }>, res: Response) => {
     const userId = getUserId(req);
     const workoutId = req.params.id;
-    const workout = await storage.getWorkoutLog(workoutId, userId);
+    // ⚡ Perf: Parallelize independent DB queries — getWorkoutLog and getUser
+    // don't depend on each other, so run them concurrently to halve latency.
+    const [workout, user] = await Promise.all([
+      storage.getWorkoutLog(workoutId, userId),
+      storage.getUser(userId),
+    ]);
     if (!workout) {
       return res.status(404).json({ error: "Workout not found", code: "NOT_FOUND" });
     }
-    const user = await storage.getUser(userId);
     const weightUnit = user?.weightUnit || "kg";
     const result = await reparseWorkout(workout, weightUnit);
     if (!result) {
