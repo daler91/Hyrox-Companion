@@ -33,74 +33,14 @@ import { useAuth } from "@/hooks/useAuth";
 
 
 export default function Timeline() {
-  const state = useTimelineState();
-  const {
-    plans,
-    plansLoading,
-    personalRecords,
-    timelineData,
-    timelineLoading,
-    isNewUser,
-    selectedPlanId,
-    setSelectedPlanId,
-    filterStatus,
-    setFilterStatus,
-    detailEntry,
-    setDetailEntry,
-    schedulingPlanId,
-    setSchedulingPlanId,
-    startDate,
-    setStartDate,
-    skipConfirmEntry,
-    setSkipConfirmEntry,
-    csvPreview,
-    setCsvPreview,
-    showAllPast,
-    setShowAllPast,
-    showAllFuture,
-    setShowAllFuture,
-    combiningEntry,
-    setCombiningEntry,
-    combineSecondEntry,
-    setCombineSecondEntry,
-    showCombineDialog,
-    setShowCombineDialog,
-    coachOpen,
-    setCoachOpen,
-    showOnboarding,
-    todayRef,
-    fileInputRef,
-    scrollToToday,
-    handleOnboardingComplete,
-    handleFileUpload,
-    confirmImport,
-    openDetailDialog,
-    handleSaveFromDetail,
-    handleMarkComplete,
-    handleChangeStatus,
-    handleDelete,
-    handleCombine,
-    handleConfirmCombine,
-    confirmSkip,
-    importMutation,
-    samplePlanMutation,
-    renamePlanMutation,
-    schedulePlanMutation,
-    updateDayMutation,
-    logWorkoutMutation,
-    updateWorkoutMutation,
-    deleteWorkoutMutation,
-    deletePlanDayMutation,
-    combineWorkoutsMutation,
-    filteredTimeline,
-    pastGroups,
-    futureGroups,
-    visiblePastGroups,
-    visibleFutureGroups,
-    hiddenPastCount,
-    hiddenFutureCount,
-    updatePlanGoalMutation,
-  } = state;
+  const { data, filters, onboarding, planImport, workoutActions, combine, selectedPlanId, setSelectedPlanId } = useTimelineState();
+
+  const { plans, plansLoading, personalRecords, timelineData, timelineLoading, isNewUser, todayRef, scrollToToday } = data;
+  const { filterStatus, setFilterStatus, showAllPast, setShowAllPast, showAllFuture, setShowAllFuture, filteredTimeline, pastGroups, futureGroups, visiblePastGroups, visibleFutureGroups, hiddenPastCount, hiddenFutureCount } = filters;
+  const { showOnboarding, coachOpen, setCoachOpen, handleOnboardingComplete } = onboarding;
+  const { csvPreview, setCsvPreview, schedulingPlanId, setSchedulingPlanId, startDate, setStartDate, fileInputRef, handleFileUpload, confirmImport, importMutation, samplePlanMutation, renamePlanMutation, schedulePlanMutation, updatePlanGoalMutation } = planImport;
+  const { detailEntry, setDetailEntry, skipConfirmEntry, setSkipConfirmEntry, openDetailDialog, handleSaveFromDetail, handleMarkComplete, handleChangeStatus, handleDelete, confirmSkip, updateDayMutation, logWorkoutMutation, updateWorkoutMutation, deleteWorkoutMutation, deletePlanDayMutation } = workoutActions;
+  const { combiningEntry, setCombiningEntry, combineSecondEntry, setCombineSecondEntry, showCombineDialog, setShowCombineDialog, handleCombine, handleConfirmCombine, combineWorkoutsMutation } = combine;
   const { user } = useAuth();
   const scrollRef = useRef<HTMLDivElement>(null);
 

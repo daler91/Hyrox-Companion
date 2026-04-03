@@ -16,8 +16,20 @@ export const STRAVA_STATE_MAX_AGE_MS = 10 * 60 * 1000;
 /** Timeout for external HTTP requests (e.g. Strava API) */
 export const EXTERNAL_API_TIMEOUT_MS = 15_000;
 
+/** Hard timeout budget for a single AI request (including all retries) */
+export const AI_REQUEST_TIMEOUT_MS = 30_000;
+
+/** Timeout for a single AI API call attempt */
+export const AI_CALL_TIMEOUT_MS = 15_000;
+
 /** Default timeline query limit */
 export const DEFAULT_TIMELINE_LIMIT = 500;
+
+/** Default pagination limit for list endpoints */
+export const DEFAULT_PAGE_LIMIT = 50;
+
+/** Hard maximum for pagination limit to prevent unbounded reads */
+export const MAX_PAGE_LIMIT = 200;
 
 /** Main DB connection timeout */
 export const DB_CONNECTION_TIMEOUT_MS = 5_000;

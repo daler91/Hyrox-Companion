@@ -27,6 +27,12 @@ const stravaAuthLimiter = rateLimit({
   max: 20,
   message: "Too many requests from this IP, please try again after 15 minutes",
 });
+
+const stravaSyncLimiter = rateLimit({
+  windowMs: RATE_LIMIT_WINDOW_15M_MS,
+  max: 5,
+  message: "Too many sync requests, please try again after 15 minutes",
+});
 const STATE_MAX_AGE_MS = STRAVA_STATE_MAX_AGE_MS;
 
 
@@ -301,5 +307,5 @@ export function registerStravaRoutes(app: Express): void {
   app.get("/api/v1/strava/auth", isAuthenticated, stravaAuthLimiter, asyncHandler(handleStravaAuth));
   app.get("/api/v1/strava/callback", stravaAuthLimiter, asyncHandler(handleStravaCallback));
   app.delete("/api/v1/strava/disconnect", isAuthenticated, asyncHandler(handleStravaDisconnect));
-  app.post("/api/v1/strava/sync", isAuthenticated, asyncHandler(handleStravaSync));
+  app.post("/api/v1/strava/sync", isAuthenticated, stravaSyncLimiter, asyncHandler(handleStravaSync));
 }

@@ -73,6 +73,7 @@ export interface IWorkoutStorage {
 
 export interface IAnalyticsStorage {
   getTimeline(userId: string, planId?: string, limit?: number, offset?: number): Promise<TimelineEntry[]>;
+  getUpcomingPlannedDays(userId: string, limit: number): Promise<Array<{ planDayId: string; date: string; focus: string; mainWorkout: string; accessory: string | null; notes: string | null }>>;
   getWeeklyStats(userId: string, weekStart: string, weekEnd: string): Promise<{ completedCount: number; plannedCount: number; missedCount: number; skippedCount: number; totalDuration: number }>;
   getWorkoutLogsByDateRange(userId: string, from?: string, to?: string): Promise<WorkoutLog[]>;
 }

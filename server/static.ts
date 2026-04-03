@@ -27,6 +27,9 @@ export function serveStatic(app: Express) {
 
   app.use(express.static(distPath, { maxAge: 0, index: false }));
 
+  // Read HTML once at startup — inject per-request nonce for CSP
+  const indexHtml = fs.readFileSync(path.resolve(distPath, "index.html"), "utf-8");
+
   const fallbackLimiter = rateLimit({
     windowMs: RATE_LIMIT_WINDOW_15M_MS,
     max: 100,
@@ -34,6 +37,9 @@ export function serveStatic(app: Express) {
 
   app.use("*", fallbackLimiter, (_req, res) => {
     res.setHeader("Cache-Control", "no-cache");
-    res.sendFile(path.resolve(distPath, "index.html"));
+    const nonce = res.locals.cspNonce;
+    const html = indexHtml.replaceAll("<script ", `<script nonce="${nonce}" `);
+    res.setHeader("Content-Type", "text/html");
+    res.send(html);
   });
 }

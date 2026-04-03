@@ -12,6 +12,7 @@ interface PendingMutation {
 const STORAGE_KEY = "hyrox-offline-queue";
 const MAX_RETRIES = 5;
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const MAX_QUEUE_SIZE = 100;
 
 function getQueue(): PendingMutation[] {
   try {
@@ -24,12 +25,29 @@ function getQueue(): PendingMutation[] {
 }
 
 function saveQueue(queue: PendingMutation[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(queue));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(queue));
+  } catch {
+    // QuotaExceededError — evict oldest half and retry once
+    const trimmed = queue.slice(Math.floor(queue.length / 2));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+    } catch {
+      // Still failing — clear the queue entirely to recover
+      localStorage.removeItem(STORAGE_KEY);
+    }
+  }
 }
 
 export function enqueueMutation(method: string, url: string, body: unknown): string {
   const id = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
   const queue = getQueue();
+
+  // Evict oldest entries when queue is at capacity
+  while (queue.length >= MAX_QUEUE_SIZE) {
+    queue.shift();
+  }
+
   queue.push({ id, method, url, body, timestamp: Date.now(), retryCount: 0 });
   saveQueue(queue);
   return id;

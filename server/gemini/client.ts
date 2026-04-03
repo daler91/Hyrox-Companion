@@ -1,6 +1,7 @@
 import { env } from "../env";
 import { logger } from "../logger";
 import { GoogleGenAI } from "@google/genai";
+import { AI_REQUEST_TIMEOUT_MS, AI_CALL_TIMEOUT_MS } from "../constants";
 
 export const GEMINI_MODEL = "gemini-2.5-flash-lite";
 export const GEMINI_SUGGESTIONS_MODEL = "gemini-3.1-pro-preview";
@@ -8,9 +9,23 @@ export const GEMINI_SUGGESTIONS_MODEL = "gemini-3.1-pro-preview";
 let _ai: GoogleGenAI | null = null;
 export function getAiClient(): GoogleGenAI {
   if (!_ai) {
-    _ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY || "" });
+    if (!env.GEMINI_API_KEY) {
+      throw new Error("GEMINI_API_KEY is required for AI features");
+    }
+    _ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
   }
   return _ai;
+}
+
+/** Race a promise against a timeout; rejects with a descriptive error on expiry. */
+export function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timerId: ReturnType<typeof setTimeout>;
+  return Promise.race([
+    promise.finally(() => clearTimeout(timerId)),
+    new Promise<never>((_, reject) => {
+      timerId = setTimeout(() => reject(new Error(`AI call timed out after ${ms}ms (${label})`)), ms);
+    }),
+  ]);
 }
 
 export function isRetryableError(error: unknown): boolean {
@@ -39,15 +54,22 @@ export async function retryWithBackoff<T>(
   label: string,
   maxRetries: number = 4,
   baseDelayMs: number = 2000,
+  budgetMs: number = AI_REQUEST_TIMEOUT_MS,
 ): Promise<T> {
+  const deadline = Date.now() + budgetMs;
   let lastError: unknown;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    if (Date.now() >= deadline) {
+      throw lastError ?? new Error(`AI request budget exhausted for ${label}`);
+    }
     try {
-      return await fn();
+      const remaining = deadline - Date.now();
+      return await withTimeout(fn(), Math.min(remaining, AI_CALL_TIMEOUT_MS), label);
     } catch (error) {
       lastError = error;
       if (attempt < maxRetries && isRetryableError(error)) {
         const delay = baseDelayMs * Math.pow(2, attempt);
+        if (Date.now() + delay >= deadline) break; // no time left for retry
         logger.warn({ err: error }, `[gemini] ${label} attempt ${attempt + 1} failed (retrying in ${delay}ms)`);
         await new Promise((resolve) => setTimeout(resolve, delay));
       } else {

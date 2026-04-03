@@ -58,7 +58,7 @@ export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }
     allMessages.sort((a, b) => {
       if (a.id === "welcome") return -1;
       if (b.id === "welcome") return 1;
-      return Number(a.id) - Number(b.id);
+      return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
     });
     return allMessages;
   }, [hookMessages, localMessages]);

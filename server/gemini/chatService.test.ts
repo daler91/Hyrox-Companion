@@ -4,7 +4,12 @@ import { getAiClient } from "./client";
 
 vi.mock("./client", () => ({
   getAiClient: vi.fn(),
-  GEMINI_SUGGESTIONS_MODEL: "gemini-model"
+  GEMINI_SUGGESTIONS_MODEL: "gemini-model",
+  withTimeout: <T>(p: Promise<T>) => p,
+}));
+
+vi.mock("../constants", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../constants")>()),
 }));
 
 describe("chatService", () => {

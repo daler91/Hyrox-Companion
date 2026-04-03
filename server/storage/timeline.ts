@@ -8,7 +8,7 @@ import {
   type WorkoutStatus,
 } from "@shared/schema";
 import { db } from "../db";
-import { eq, and, isNull, isNotNull, inArray, desc } from "drizzle-orm";
+import { eq, and, isNull, isNotNull, inArray, desc, asc, gte, notInArray } from "drizzle-orm";
 import type { WorkoutStorage } from "./workouts";
 import { toDateStr } from "../types";
 
@@ -227,5 +227,54 @@ export class TimelineStorage {
       return entries.slice(start, end);
     }
     return entries;
+  }
+
+  /**
+   * Fetch only upcoming planned workouts directly from DB with LIMIT.
+   * Avoids loading the full timeline for AI suggestions.
+   */
+  async getUpcomingPlannedDays(userId: string, limit: number): Promise<Array<{
+    planDayId: string;
+    date: string;
+    focus: string;
+    mainWorkout: string;
+    accessory: string | null;
+    notes: string | null;
+  }>> {
+    const today = toDateStr();
+    const rows = await db
+      .select({
+        planDayId: planDays.id,
+        date: planDays.scheduledDate,
+        focus: planDays.focus,
+        mainWorkout: planDays.mainWorkout,
+        accessory: planDays.accessory,
+        notes: planDays.notes,
+        status: planDays.status,
+      })
+      .from(planDays)
+      .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
+      .where(
+        and(
+          eq(trainingPlans.userId, userId),
+          isNotNull(planDays.scheduledDate),
+          gte(planDays.scheduledDate, today),
+          // Exclude already-completed/skipped/missed days
+          notInArray(planDays.status, ["completed", "skipped", "missed"]),
+        ),
+      )
+      .orderBy(asc(planDays.scheduledDate))
+      .limit(limit);
+
+    return rows
+      .filter((r): r is typeof r & { date: string } => r.date !== null)
+      .map((r) => ({
+        planDayId: r.planDayId,
+        date: r.date,
+        focus: r.focus || "",
+        mainWorkout: r.mainWorkout || "",
+        accessory: r.accessory,
+        notes: r.notes,
+      }));
   }
 }
