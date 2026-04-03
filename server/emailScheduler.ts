@@ -110,19 +110,38 @@ export async function runEmailCronJob(storage: IStorage): Promise<{ usersChecked
 
     logger.info({ context: "email" }, `Cron: Checking emails for ${usersToCheck.length} user(s)`);
 
-    for (const user of usersToCheck) {
-      try {
-        const sent = await checkAndSendEmailsForUser(storage, user);
-        emailsSent += sent.length;
-        if (sent.length > 0) {
-          const detail = `Sent ${sent.join(", ")} to ${user.email}`;
+    // Process users with bounded concurrency to avoid overwhelming the email API
+    // while still being faster than fully sequential processing.
+    const CONCURRENCY = 5;
+    for (let i = 0; i < usersToCheck.length; i += CONCURRENCY) {
+      const batch = usersToCheck.slice(i, i + CONCURRENCY);
+      const results = await Promise.allSettled(
+        batch.map(async (user) => {
+          try {
+            const sent = await checkAndSendEmailsForUser(storage, user);
+            return { user, sent, error: null as unknown };
+          } catch (err) {
+            return { user, sent: [] as string[], error: err };
+          }
+        }),
+      );
+
+      for (const result of results) {
+        // All promises resolve (errors caught internally), but guard against unexpected rejections
+        if (result.status !== "fulfilled") continue;
+        const { user, sent, error } = result.value;
+        if (error) {
+          const detail = `Failed for user ${user.id}: ${error}`;
           details.push(detail);
-          logger.info({ context: "email" }, detail);
+          logger.error({ context: "email", userId: user.id, err: error }, "Failed to check and send emails for user");
+        } else {
+          emailsSent += sent.length;
+          if (sent.length > 0) {
+            const detail = `Sent ${sent.join(", ")} to ${user.email}`;
+            details.push(detail);
+            logger.info({ context: "email" }, detail);
+          }
         }
-      } catch (err) {
-        const detail = `Failed for user ${user.id}: ${err}`;
-        details.push(detail);
-        logger.error({ context: "email", userId: user.id, err }, "Failed to check and send emails for user");
       }
     }
 

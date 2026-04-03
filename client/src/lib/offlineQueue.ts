@@ -64,7 +64,9 @@ export async function flushQueue(): Promise<{ synced: number; failed: number; dr
     }
 
     try {
-      await apiRequest(mutation.method, mutation.url, mutation.body);
+      await apiRequest(mutation.method, mutation.url, mutation.body, undefined, {
+        "X-Idempotency-Key": mutation.id,
+      });
       synced++;
     } catch {
       // Network/server error — increment retry count; mutation will be dropped after MAX_RETRIES
