@@ -223,7 +223,7 @@ try {
         : err.message || "An error occurred";
 
     Sentry.captureException(err);
-    res.status(status).json({ error: message, code: err.code || (status >= 500 ? "INTERNAL_SERVER_ERROR" : "BAD_REQUEST"), details: err.details });
+    res.status(status).json({ error: message, code: err.code || (status >= 500 ? "INTERNAL_SERVER_ERROR" : "BAD_REQUEST"), ...(status < 500 && err.details ? { details: err.details } : {}) });
   });
 
   // importantly only setup vite in development and after

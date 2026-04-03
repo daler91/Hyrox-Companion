@@ -3,6 +3,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import express from "express";
 import request from "supertest";
 import plansRouter from "../plans";
+import { clearRateLimitBuckets } from "../../routeUtils";
+import { storage } from "../../storage";
 
 // Mock the clerkAuth middleware to simulate authentication
 vi.mock("../../clerkAuth", () => ({
@@ -79,5 +81,34 @@ describe("POST /api/plans/import Rate Limiting", () => {
     // Next request should succeed again
     const successfulResponse = await request(app).post("/api/v1/plans/import").send(payload);
     expect(successfulResponse.status).toBe(200);
+  });
+});
+
+describe("DELETE /api/v1/plans/:id", () => {
+  let app: express.Express;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearRateLimitBuckets();
+    app = createTestApp(plansRouter);
+  });
+
+  it("should return 200 with success when plan exists", async () => {
+    vi.mocked(storage.deleteTrainingPlan).mockResolvedValue(true);
+
+    const response = await request(app).delete("/api/v1/plans/plan-123");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ success: true });
+    expect(storage.deleteTrainingPlan).toHaveBeenCalledWith("plan-123", "test_user_id");
+  });
+
+  it("should return 404 when plan does not exist", async () => {
+    vi.mocked(storage.deleteTrainingPlan).mockResolvedValue(false);
+
+    const response = await request(app).delete("/api/v1/plans/nonexistent");
+
+    expect(response.status).toBe(404);
+    expect(response.body).toEqual({ error: "Training plan not found", code: "NOT_FOUND" });
   });
 });
