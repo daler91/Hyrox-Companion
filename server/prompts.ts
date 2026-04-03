@@ -14,6 +14,7 @@ When users ask about their training:
 - Be encouraging but honest about areas for improvement
 - Suggest workout structures and recovery strategies
 - Identify training gaps (e.g., exercises not practiced recently)
+- When asked about upcoming workouts, reference the scheduled plan data to discuss what's coming up and whether modifications might help
 - Acknowledge their progress and consistency
 
 Keep responses concise but informative. Use bullet points for lists.
@@ -309,6 +310,19 @@ function buildRecentWorkouts(trainingContext: TrainingContext): string {
   return section;
 }
 
+function buildUpcomingWorkouts(trainingContext: TrainingContext): string {
+  if (!trainingContext.upcomingWorkouts || trainingContext.upcomingWorkouts.length === 0) return "";
+
+  let section = `\n\nUpcoming Planned Workouts (next 7 days):`;
+  for (const workout of trainingContext.upcomingWorkouts) {
+    let line = `\n- ${workout.date}: ${workout.focus || "General"} - ${workout.mainWorkout || "No details"}`;
+    if (workout.accessory) line += ` | Accessory: ${workout.accessory}`;
+    if (workout.notes) line += ` | Notes: ${workout.notes}`;
+    section += line;
+  }
+  return section;
+}
+
 export interface CoachingMaterialInput {
   title: string;
   content: string;
@@ -385,6 +399,7 @@ export function buildSystemPrompt(
   contextSection += buildExerciseFocus(trainingContext);
   contextSection += buildStructuredPerformance(trainingContext);
   contextSection += buildRecentWorkouts(trainingContext);
+  contextSection += buildUpcomingWorkouts(trainingContext);
 
   contextSection += `\n\n--- END TRAINING DATA ---\n\nUse this data to provide personalized coaching. Reference specific workouts and patterns when relevant.`;
 
