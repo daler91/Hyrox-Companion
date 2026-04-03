@@ -27,5 +27,5 @@ export const strava = {
 } as const;
 
 export const email = {
-  check: () => typedRequest<{ success: boolean }>("POST", "/api/v1/emails/check"),
+  check: () => typedRequest<{ sent: string[] }>("POST", "/api/v1/emails/check"),
 } as const;

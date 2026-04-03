@@ -31,6 +31,24 @@ export function startCron(storage: IStorage): void {
   );
 
   logger.info({ context: "cron" }, "Email cron scheduled: daily at 09:00 UTC");
+
+  // Run a catch-up if the server started after 09:00 UTC (e.g. Railway restart).
+  // The idempotency guards in emailScheduler prevent duplicate sends.
+  const currentHour = new Date().getUTCHours();
+  if (currentHour >= 9) {
+    setTimeout(async () => {
+      logger.info({ context: "cron" }, "Running startup email catch-up (server started after 09:00 UTC)");
+      try {
+        const result = await runEmailCronJob(storage);
+        logger.info(
+          { context: "cron", ...result },
+          `Startup catch-up complete: ${result.emailsSent} sent, ${result.usersChecked} checked`,
+        );
+      } catch (err) {
+        logger.error({ context: "cron", err }, "Startup email catch-up failed");
+      }
+    }, 30_000);
+  }
 }
 
 export function stopCron(): void {
