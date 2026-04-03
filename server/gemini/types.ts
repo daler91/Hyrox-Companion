@@ -23,6 +23,13 @@ export interface TrainingContext {
       time?: number | null;
     }>;
   }>;
+  upcomingWorkouts?: Array<{
+    date: string;
+    focus: string;
+    mainWorkout: string;
+    accessory?: string | null;
+    notes?: string | null;
+  }>;
   exerciseBreakdown: Record<string, number>;
   structuredExerciseStats?: Record<
     string,

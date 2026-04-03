@@ -5,10 +5,11 @@ import { calculateTrainingStats, getExerciseBreakdown, collectRecentWorkouts, ge
 import { computeRpeTrend, computeExerciseGaps, computePlanPhase, computeWeeklyVolume, computeProgressionFlags, computeCurrentWeek } from "./coachingInsights";
 
 export async function buildTrainingContext(userId: string): Promise<TrainingContext> {
-  const [timeline, plans, user] = await Promise.all([
+  const [timeline, plans, user, upcomingDays] = await Promise.all([
     storage.getTimeline(userId),
     storage.listTrainingPlans(userId),
     storage.getUser(userId),
+    storage.getUpcomingPlannedDays(userId, 7),
   ]);
 
   const { completedWorkouts, plannedWorkouts, missedWorkouts, skippedWorkouts, totalWorkouts, completionRate, completedDates } = calculateTrainingStats(timeline);
@@ -50,6 +51,13 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     currentStreak,
     weeklyGoal: user?.weeklyGoal ?? undefined,
     recentWorkouts: recentWorkouts.slice(0, 10),
+    upcomingWorkouts: upcomingDays.map(d => ({
+      date: d.date,
+      focus: d.focus,
+      mainWorkout: d.mainWorkout,
+      accessory: d.accessory,
+      notes: d.notes,
+    })),
     exerciseBreakdown,
     structuredExerciseStats,
     activePlan,
