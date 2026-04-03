@@ -38,7 +38,7 @@ export function serveStatic(app: Express) {
   app.use("*", fallbackLimiter, (_req, res) => {
     res.setHeader("Cache-Control", "no-cache");
     const nonce = res.locals.cspNonce;
-    const html = indexHtml.replace(/<script /g, `<script nonce="${nonce}" `);
+    const html = indexHtml.replaceAll("<script ", `<script nonce="${nonce}" `);
     res.setHeader("Content-Type", "text/html");
     res.send(html);
   });

@@ -1,7 +1,7 @@
 import { logger } from "../logger";
 import { buildSystemPrompt, type CoachingMaterialInput } from "../prompts";
 import { sanitizeUserInput, validateAiOutput } from "../utils/sanitize";
-import { ThinkingLevel } from "@google/genai";
+import { ThinkingLevel, type GenerateContentResponse } from "@google/genai";
 import { getAiClient, GEMINI_SUGGESTIONS_MODEL, withTimeout } from "./client";
 import { AI_REQUEST_TIMEOUT_MS } from "../constants";
 import type { ChatMessage } from "@shared/schema";
@@ -68,7 +68,7 @@ export async function* streamChatWithCoach(
 
     const systemPrompt = buildSystemPrompt(trainingContext, coachingMaterials, retrievedChunks);
 
-    const response = await withTimeout(
+    const stream: AsyncGenerator<GenerateContentResponse> = await withTimeout(
       getAiClient().models.generateContentStream({
         model: GEMINI_SUGGESTIONS_MODEL,
         config: {
@@ -81,7 +81,7 @@ export async function* streamChatWithCoach(
       "chat-stream",
     );
 
-    for await (const chunk of response) {
+    for await (const chunk of stream) {
       const text = chunk.text;
       if (text) {
         yield validateAiOutput(text);

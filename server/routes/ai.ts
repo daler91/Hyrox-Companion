@@ -6,8 +6,7 @@ import { chatWithCoach, streamChatWithCoach, generateWorkoutSuggestions, parseEx
 import { rateLimiter, asyncHandler, validateBody } from "../routeUtils";
 import { buildAIContext, extractCoachingMaterialsText, type AIContext, type ChatInput } from "../services/aiContextService";
 import { getUserId } from "../types";
-import { chatRequestSchema, parseExercisesRequestSchema, insertChatMessageSchema, type InsertChatMessage, type RagInfo } from "@shared/schema";
-export type { RagInfo } from "@shared/schema";
+import { chatRequestSchema, parseExercisesRequestSchema, insertChatMessageSchema, type InsertChatMessage } from "@shared/schema";
 import { z } from "zod";
 
 const router = Router();
