@@ -40,6 +40,7 @@ vi.mock("../../storage", () => ({
     saveChatMessage: vi.fn(),
     clearChatHistory: vi.fn(),
     getTimeline: vi.fn(),
+    getUpcomingPlannedDays: vi.fn().mockResolvedValue([]),
     listCoachingMaterials: vi.fn(),
     hasChunksForUser: vi.fn().mockResolvedValue(false),
     getStoredEmbeddingDimension: vi.fn().mockResolvedValue(3072),
@@ -407,35 +408,21 @@ describe("POST /api/timeline/ai-suggestions", () => {
 
     vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
 
-    const mockTimeline = [
+    // getUpcomingPlannedDays returns only upcoming planned days (filtering is done in DB)
+    vi.mocked(storage.getUpcomingPlannedDays).mockResolvedValue([
       {
-        status: "planned",
+        planDayId: "1",
         date: "2024-03-12",
-        planDayId: 1,
         focus: "Legs",
         mainWorkout: "Squats",
         accessory: "Lunges",
+        notes: null,
       },
-      {
-        status: "planned",
-        date: "2024-03-09", // Past date, should be filtered out
-        planDayId: 2,
-        focus: "Chest",
-        mainWorkout: "Bench",
-      },
-      {
-        status: "completed", // Completed, should be filtered out
-        date: "2024-03-13",
-        planDayId: 3,
-        focus: "Back",
-        mainWorkout: "Pullups",
-      },
-    ];
-    vi.mocked(storage.getTimeline).mockResolvedValue(mockTimeline);
+    ]);
 
     const rawSuggestions = [
       {
-        workoutId: 1,
+        workoutId: "1",
         targetField: "notes",
         action: "append",
         recommendation: "Increase volume",
@@ -450,7 +437,7 @@ describe("POST /api/timeline/ai-suggestions", () => {
     expect(response.status).toBe(200);
     expect(response.body.suggestions).toHaveLength(1);
     expect(response.body.suggestions[0]).toEqual({
-      workoutId: 1,
+      workoutId: "1",
       date: "2024-03-12",
       focus: "Legs",
       targetField: "notes",
@@ -460,10 +447,9 @@ describe("POST /api/timeline/ai-suggestions", () => {
       priority: "high",
     });
 
-    // Check that it filtered only future planned workouts
     const expectedUpcomingWorkouts = [
       {
-        id: 1,
+        id: "1",
         date: "2024-03-12",
         focus: "Legs",
         mainWorkout: "Squats",
@@ -472,7 +458,7 @@ describe("POST /api/timeline/ai-suggestions", () => {
       },
     ];
     expect(generateWorkoutSuggestions).toHaveBeenCalledWith(
-      "Training context",
+      expect.anything(),
       expectedUpcomingWorkouts,
       undefined,
       undefined,
@@ -482,15 +468,8 @@ describe("POST /api/timeline/ai-suggestions", () => {
   it("should handle no upcoming planned workouts gracefully", async () => {
 
     vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
-    // No planned, future workouts
-    vi.mocked(storage.getTimeline).mockResolvedValue([
-      {
-        status: "completed",
-        date: "2024-03-12",
-        planDayId: 1,
-        focus: "Legs",
-      },
-    ]);
+    // DB returns empty when no upcoming planned days exist
+    vi.mocked(storage.getUpcomingPlannedDays).mockResolvedValue([]);
 
     const response = await request(app).post(TIMELINE_SUGGESTIONS_ENDPOINT);
 
@@ -504,13 +483,14 @@ describe("POST /api/timeline/ai-suggestions", () => {
 
   it("should return 500 when AI suggestions generation fails", async () => {
     vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
-    vi.mocked(storage.getTimeline).mockResolvedValue([
+    vi.mocked(storage.getUpcomingPlannedDays).mockResolvedValue([
       {
-        status: "planned",
+        planDayId: "1",
         date: "2024-03-12",
-        planDayId: 1,
         focus: "Legs",
         mainWorkout: "Squats",
+        accessory: null,
+        notes: null,
       }
     ]);
     vi.mocked(generateWorkoutSuggestions).mockRejectedValue(new Error("AI Workout generation error"));
@@ -523,7 +503,7 @@ describe("POST /api/timeline/ai-suggestions", () => {
 
   it("should return 500 on error", async () => {
 
-    vi.mocked(storage.getTimeline).mockRejectedValue(new Error("DB Error"));
+    vi.mocked(storage.getUpcomingPlannedDays).mockRejectedValue(new Error("DB Error"));
 
     const response = await request(app).post(TIMELINE_SUGGESTIONS_ENDPOINT);
 

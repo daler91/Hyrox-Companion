@@ -101,12 +101,22 @@ export function calculateStreak(completedDates: Set<string>): number {
 
 import { z } from "zod";
 
+/** Project safe validation issues from a Zod error — never leak raw internals. */
+export function formatValidationErrors(error: z.ZodError): { issues: Array<{ path: string; message: string }> } {
+  return {
+    issues: error.errors.map((e) => ({
+      path: e.path.join("."),
+      message: e.message,
+    })),
+  };
+}
+
 export function validateBody(schema: z.ZodTypeAny) {
   return (req: Request, res: Response, next: NextFunction) => {
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) {
       const errorMessage = parsed.error.errors[0]?.message || "Invalid request data";
-      res.status(400).json({ error: errorMessage, details: parsed.error });
+      res.status(400).json({ error: errorMessage, code: "VALIDATION_ERROR", details: formatValidationErrors(parsed.error) });
       return;
     }
     req.body = parsed.data; // eslint-disable-line @typescript-eslint/no-unsafe-assignment

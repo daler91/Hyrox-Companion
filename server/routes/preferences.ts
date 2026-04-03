@@ -1,6 +1,6 @@
 import { Router, type Request as ExpressRequest, type Response } from "express";
 import { isAuthenticated } from "../clerkAuth";
-import { rateLimiter, asyncHandler } from "../routeUtils";
+import { rateLimiter, asyncHandler, formatValidationErrors } from "../routeUtils";
 import { storage } from "../storage";
 import { updateUserPreferencesSchema, type UpdateUserPreferences } from "@shared/schema";
 import { getUserId } from "../types";
@@ -26,7 +26,7 @@ router.patch('/api/v1/preferences', isAuthenticated, rateLimiter("preferences", 
     const userId = getUserId(req);
     const parseResult = updateUserPreferencesSchema.safeParse(req.body);
     if (!parseResult.success) {
-      return res.status(400).json({ error: "Invalid preferences data", code: "VALIDATION_ERROR", details: parseResult.error });
+      return res.status(400).json({ error: "Invalid preferences data", code: "VALIDATION_ERROR", details: formatValidationErrors(parseResult.error) });
     }
 
     const user = await storage.updateUserPreferences(userId, parseResult.data);

@@ -10,6 +10,7 @@ import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import swaggerUi from "swagger-ui-express";
 import { generateOpenApiDocument } from "../shared/openapi";
+import { cspNonceMiddleware } from "./middleware/cspNonce";
 
 import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
@@ -95,33 +96,38 @@ const connectSrc = isDev
       "https://www.strava.com",
       "https://*.ingest.us.sentry.io",
     ];
-const scriptSrc = isDev
-  ? ["'self'", "'unsafe-inline'", "'unsafe-eval'", clerkDomains]
-  : ["'self'", "'unsafe-inline'", clerkDomains];
+
+// Generate per-request CSP nonce (production only; dev uses 'unsafe-inline')
+if (!isDev) {
+  app.use(cspNonceMiddleware);
+}
 
 app.use(
   helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc,
-        styleSrc: [
-          "'self'",
-          "'unsafe-inline'",
-          "https://fonts.googleapis.com",
-          clerkDomains,
-        ],
-        fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
-        imgSrc: ["'self'", "data:", "https:"],
-        connectSrc,
-        frameSrc: ["'self'", clerkDomains],
-        workerSrc: ["'self'", "blob:"],
-      },
-    },
+    contentSecurityPolicy: false, // Managed manually below for nonce support
     crossOriginEmbedderPolicy: false,
     referrerPolicy: { policy: "strict-origin-when-cross-origin" },
   }),
 );
+
+// Manual CSP — production uses per-request nonces instead of 'unsafe-inline'
+app.use((_req, res, next) => {
+  const scriptSrc = isDev
+    ? `'self' 'unsafe-inline' 'unsafe-eval' ${clerkDomains}`
+    : `'self' 'nonce-${res.locals.cspNonce}' ${clerkDomains}`;
+  const policy = [
+    `default-src 'self'`,
+    `script-src ${scriptSrc}`,
+    `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com ${clerkDomains}`,
+    `font-src 'self' https://fonts.gstatic.com data:`,
+    `img-src 'self' data: https:`,
+    `connect-src ${connectSrc.join(" ")}`,
+    `frame-src 'self' ${clerkDomains}`,
+    `worker-src 'self' blob:`,
+  ].join("; ");
+  res.setHeader("Content-Security-Policy", policy);
+  next();
+});
 
 app.use((req, res, next) => {
   res.setHeader(
@@ -204,7 +210,14 @@ try {
   }
   await registerRoutes(httpServer, app);
 
-  // Serve OpenAPI docs
+  // Serve OpenAPI docs — swagger-ui injects inline scripts, so use a relaxed CSP
+  app.use("/api/docs", (_req, res, next) => {
+    res.setHeader(
+      "Content-Security-Policy",
+      "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:",
+    );
+    next();
+  });
   app.use(
     "/api/docs",
     swaggerUi.serve,

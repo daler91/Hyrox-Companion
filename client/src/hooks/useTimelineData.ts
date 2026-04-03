@@ -26,9 +26,10 @@ export function useTimelineData(selectedPlanId: string | null) {
 
   useEffect(() => {
     if (!timelineLoading && todayRef.current) {
-      setTimeout(() => {
+      const timerId = setTimeout(() => {
         todayRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       }, SCROLL_TO_TODAY_DELAY_MS);
+      return () => clearTimeout(timerId);
     }
   }, [timelineLoading]);
 

@@ -21,15 +21,13 @@ export function useTimelineState() {
   const combine = useCombineWorkouts();
 
   return {
-    ...data,
-
+    data,
+    filters,
+    onboarding,
+    planImport,
+    workoutActions,
+    combine,
     selectedPlanId,
     setSelectedPlanId,
-    ...filters,
-
-    ...onboarding,
-    ...planImport,
-    ...workoutActions,
-    ...combine,
   };
 }

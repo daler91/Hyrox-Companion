@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { isAuthenticated } from "../clerkAuth";
-import { rateLimiter, asyncHandler } from "../routeUtils";
+import { rateLimiter, asyncHandler, formatValidationErrors } from "../routeUtils";
 import { storage } from "../storage";
 import { insertWorkoutLogSchema, updateWorkoutLogSchema, insertCustomExerciseSchema, type InsertWorkoutLog, type UpdateWorkoutLog, type InsertCustomExercise , type ParsedExercise} from "@shared/schema";
 import { generateCSV, generateJSON } from "../services/exportService";
@@ -8,7 +8,7 @@ import { createWorkout, updateWorkout, reparseWorkout, batchReparseWorkouts, val
 import { getUserId } from "../types";
 import { queue } from "../queue";
 import { logger } from "../logger";
-import { DEFAULT_TIMELINE_LIMIT } from "../constants";
+import { DEFAULT_TIMELINE_LIMIT, DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from "../constants";
 
 const router = Router();
 
@@ -70,12 +70,13 @@ router.post("/api/v1/custom-exercises", isAuthenticated, rateLimiter("customExer
 
 router.get("/api/v1/workouts", isAuthenticated, asyncHandler(async (req: Request<Record<string, never>, Record<string, never>, Record<string, never>, { limit?: string; offset?: string }>, res: Response) => {
     const userId = getUserId(req);
-    const limit = req.query.limit ? Number.parseInt(req.query.limit, 10) : undefined;
+    const rawLimit = req.query.limit ? Number.parseInt(req.query.limit, 10) : DEFAULT_PAGE_LIMIT;
     const offset = req.query.offset ? Number.parseInt(req.query.offset, 10) : undefined;
 
-    if (limit !== undefined && Number.isNaN(limit)) return res.status(400).json({ error: "Invalid limit", code: "BAD_REQUEST" });
-    if (offset !== undefined && Number.isNaN(offset)) return res.status(400).json({ error: "Invalid offset", code: "BAD_REQUEST" });
+    if (Number.isNaN(rawLimit) || rawLimit < 1) return res.status(400).json({ error: "Invalid limit", code: "BAD_REQUEST" });
+    if (offset !== undefined && (Number.isNaN(offset) || offset < 0)) return res.status(400).json({ error: "Invalid offset", code: "BAD_REQUEST" });
 
+    const limit = Math.min(rawLimit, MAX_PAGE_LIMIT);
     const logs = await storage.listWorkoutLogs(userId, limit, offset);
     res.json(logs);
   }));
@@ -93,12 +94,12 @@ router.post("/api/v1/workouts", isAuthenticated, rateLimiter("workout", 40), asy
     const { exercises, ...workoutData } = req.body;
     const parseResult = insertWorkoutLogSchema.safeParse(workoutData);
     if (!parseResult.success) {
-      return res.status(400).json({ error: "Invalid workout data", code: "VALIDATION_ERROR", details: parseResult.error });
+      return res.status(400).json({ error: "Invalid workout data", code: "VALIDATION_ERROR", details: formatValidationErrors(parseResult.error) });
     }
 
     const exerciseValidation = validateExercisesPayload(exercises);
     if (!exerciseValidation.success) {
-      return res.status(400).json({ error: "Invalid exercises data", code: "VALIDATION_ERROR", details: exerciseValidation.error });
+      return res.status(400).json({ error: "Invalid exercises data", code: "VALIDATION_ERROR", details: exerciseValidation.error ? formatValidationErrors(exerciseValidation.error) : undefined });
     }
     const validatedExercises = exerciseValidation.data as ParsedExercise[] | undefined;
 
@@ -128,12 +129,12 @@ router.patch("/api/v1/workouts/:id", isAuthenticated, rateLimiter("workout", 40)
     const { exercises, ...updateData } = req.body;
     const parseResult = updateWorkoutLogSchema.safeParse(updateData);
     if (!parseResult.success) {
-      return res.status(400).json({ error: "Invalid update data", code: "VALIDATION_ERROR", details: parseResult.error });
+      return res.status(400).json({ error: "Invalid update data", code: "VALIDATION_ERROR", details: formatValidationErrors(parseResult.error) });
     }
 
     const exerciseValidation = validateExercisesPayload(exercises);
     if (!exerciseValidation.success) {
-      return res.status(400).json({ error: "Invalid exercises data", code: "VALIDATION_ERROR", details: exerciseValidation.error });
+      return res.status(400).json({ error: "Invalid exercises data", code: "VALIDATION_ERROR", details: exerciseValidation.error ? formatValidationErrors(exerciseValidation.error) : undefined });
     }
     const validatedExercises = exerciseValidation.data as ParsedExercise[] | undefined;
 
@@ -165,12 +166,13 @@ router.get("/api/v1/exercises/:exerciseName/history", isAuthenticated, asyncHand
 router.get("/api/v1/timeline", isAuthenticated, asyncHandler(async (req: Request<Record<string, never>, Record<string, never>, Record<string, never>, { planId?: string; limit?: string; offset?: string }>, res: Response) => {
     const userId = getUserId(req);
     const planId = req.query.planId;
-    const limit = req.query.limit ? Number.parseInt(req.query.limit, 10) : DEFAULT_TIMELINE_LIMIT;
+    const rawLimit = req.query.limit ? Number.parseInt(req.query.limit, 10) : DEFAULT_TIMELINE_LIMIT;
     const offset = req.query.offset ? Number.parseInt(req.query.offset, 10) : undefined;
 
-    if (Number.isNaN(limit)) return res.status(400).json({ error: "Invalid limit", code: "BAD_REQUEST" });
-    if (offset !== undefined && Number.isNaN(offset)) return res.status(400).json({ error: "Invalid offset", code: "BAD_REQUEST" });
+    if (Number.isNaN(rawLimit) || rawLimit < 1) return res.status(400).json({ error: "Invalid limit", code: "BAD_REQUEST" });
+    if (offset !== undefined && (Number.isNaN(offset) || offset < 0)) return res.status(400).json({ error: "Invalid offset", code: "BAD_REQUEST" });
 
+    const limit = Math.min(rawLimit, DEFAULT_TIMELINE_LIMIT);
     const entries = await storage.getTimeline(userId, planId, limit, offset);
     res.json(entries);
   }));

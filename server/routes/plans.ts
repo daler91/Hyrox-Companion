@@ -6,7 +6,7 @@ import { updatePlanDaySchema, importPlanRequestSchema, schedulePlanRequestSchema
 import { getUserId } from "../types";
 import { importPlanFromCSV, createSamplePlan, updatePlanDayWithCleanup, updatePlanDayStatus } from "../services/planService";
 import { generatePlan } from "../services/planGenerationService";
-import { rateLimiter, asyncHandler, validateBody } from "../routeUtils";
+import { rateLimiter, asyncHandler, validateBody, formatValidationErrors } from "../routeUtils";
 import { logger } from "../logger";
 
 const router = Router();
@@ -108,7 +108,7 @@ router.patch("/api/v1/plans/:id/goal", isAuthenticated, rateLimiter("planUpdate"
     const userId = getUserId(req);
     const parseResult = updateTrainingPlanGoalSchema.safeParse(req.body);
     if (!parseResult.success) {
-      return res.status(400).json({ error: "Invalid goal data", code: "VALIDATION_ERROR", details: parseResult.error });
+      return res.status(400).json({ error: "Invalid goal data", code: "VALIDATION_ERROR", details: formatValidationErrors(parseResult.error) });
     }
     const updated = await storage.updateTrainingPlanGoal(req.params.id, parseResult.data.goal, userId);
     if (!updated) {
@@ -148,7 +148,7 @@ router.patch("/api/v1/plans/days/:dayId/status", isAuthenticated, rateLimiter("p
 
     const parseResult = patchDayStatusSchema.safeParse(req.body);
     if (!parseResult.success) {
-      return res.status(400).json({ error: "Invalid status or date", code: "VALIDATION_ERROR", details: parseResult.error });
+      return res.status(400).json({ error: "Invalid status or date", code: "VALIDATION_ERROR", details: formatValidationErrors(parseResult.error) });
     }
     const { status, scheduledDate } = parseResult.data;
 

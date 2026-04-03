@@ -4,10 +4,8 @@ import { isAuthenticated } from "../clerkAuth";
 import { storage } from "../storage";
 import { chatWithCoach, streamChatWithCoach, generateWorkoutSuggestions, parseExercisesFromText, type UpcomingWorkout } from "../gemini/index";
 import { rateLimiter, asyncHandler, validateBody } from "../routeUtils";
-import { buildTrainingContext } from "../services/aiService";
-import { buildCoachingMaterialsSection, buildRetrievedChunksSection } from "../prompts";
-import { retrieveCoachingContext } from "../services/ragRetrieval";
-import { toDateStr, getUserId } from "../types";
+import { buildAIContext, extractCoachingMaterialsText, type AIContext, type ChatInput } from "../services/aiContextService";
+import { getUserId } from "../types";
 import { chatRequestSchema, parseExercisesRequestSchema, insertChatMessageSchema, type InsertChatMessage, type RagInfo } from "@shared/schema";
 export type { RagInfo } from "@shared/schema";
 import { z } from "zod";
@@ -25,74 +23,55 @@ router.post("/api/v1/parse-exercises", isAuthenticated, rateLimiter("parse", 5),
     res.json(exercises);
   }));
 
-// getCoachingContext delegates to the shared ragRetrieval service
-const getCoachingContext = retrieveCoachingContext;
-
-async function prepareChatContext(req: ExpressRequest): Promise<{ success: false; error: string } | { success: true; message: string; history: Pick<import("@shared/schema").ChatMessage, "role" | "content">[]; trainingContext: import("../gemini/index").TrainingContext; coachingMaterials?: import("../prompts").CoachingMaterialInput[]; retrievedChunks?: string[]; ragInfo: RagInfo }> {
+async function prepareChatContext(req: ExpressRequest): Promise<{ success: false; error: string } | { success: true; input: ChatInput; aiContext: AIContext }> {
   const parseResult = chatRequestSchema.safeParse(req.body);
   if (!parseResult.success) {
     return { success: false, error: parseResult.error.errors[0].message };
   }
   const { message, history } = parseResult.data;
-
   const userId = getUserId(req);
-  const [trainingContext, coachingContext] = await Promise.all([
-    buildTrainingContext(userId),
-    getCoachingContext(userId, message, req.log || logger),
-  ]);
-
-  if (!trainingContext) {
-    return { success: false, error: "Training context could not be loaded" };
-  }
+  const aiContext = await buildAIContext(userId, message, req.log || logger);
 
   return {
     success: true,
-    message,
-    history: history || [],
-    trainingContext,
-    ...coachingContext,
+    input: { message, history: history || [] },
+    aiContext,
   };
 }
 
 router.post("/api/v1/chat", isAuthenticated, rateLimiter("chat", 10), validateBody(chatRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof chatRequestSchema>>, res: Response) => {
-    const context = await prepareChatContext(req);
-    if (!context.success) {
-      return res.status(400).json({ error: context.error, code: "BAD_REQUEST" });
+    const ctx = await prepareChatContext(req);
+    if (!ctx.success) {
+      return res.status(400).json({ error: ctx.error, code: "BAD_REQUEST" });
     }
-    const { message, history, trainingContext, coachingMaterials, retrievedChunks, ragInfo } = context;
-
-    const response = await chatWithCoach(message, history, trainingContext, coachingMaterials, retrievedChunks);
-    res.json({ response, ragInfo });
+    const { input, aiContext } = ctx;
+    const response = await chatWithCoach(input.message, input.history, aiContext.trainingContext, aiContext.coachingMaterials, aiContext.retrievedChunks);
+    res.json({ response, ragInfo: aiContext.ragInfo });
   }));
 
 router.post("/api/v1/chat/stream", isAuthenticated, rateLimiter("chat", 10), validateBody(chatRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof chatRequestSchema>>, res: Response) => {
-    const context = await prepareChatContext(req);
-    if (!context.success) {
-      return res.status(400).json({ error: context.error, code: "BAD_REQUEST" });
+    const ctx = await prepareChatContext(req);
+    if (!ctx.success) {
+      return res.status(400).json({ error: ctx.error, code: "BAD_REQUEST" });
     }
-    const { message, history, trainingContext, coachingMaterials, retrievedChunks, ragInfo } = context;
+    const { input, aiContext } = ctx;
 
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
     res.flushHeaders();
 
-    // Track client disconnection to stop consuming AI tokens when the client is gone
     let clientDisconnected = false;
-    req.on("close", () => {
-      clientDisconnected = true;
-    });
+    req.on("close", () => { clientDisconnected = true; });
 
     try {
-      // Emit RAG diagnostics before streaming text
-      res.write(`data: ${JSON.stringify({ ragInfo })}\n\n`);
+      res.write(`data: ${JSON.stringify({ ragInfo: aiContext.ragInfo })}\n\n`);
 
-      const stream = streamChatWithCoach(message, history, trainingContext, coachingMaterials, retrievedChunks);
+      const stream = streamChatWithCoach(input.message, input.history, aiContext.trainingContext, aiContext.coachingMaterials, aiContext.retrievedChunks);
 
       for await (const chunk of stream) {
         if (clientDisconnected) {
-          const log = req.log || logger;
-          log.info("Client disconnected mid-stream, stopping AI generation");
+          (req.log || logger).info("Client disconnected mid-stream, stopping AI generation");
           break;
         }
         res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
@@ -104,8 +83,7 @@ router.post("/api/v1/chat/stream", isAuthenticated, rateLimiter("chat", 10), val
       res.end();
     } catch (streamError) {
       if (clientDisconnected) return;
-      const log = req.log || logger;
-      log.error({ err: streamError }, "Stream error:");
+      (req.log || logger).error({ err: streamError }, "Stream error:");
       res.write(`data: ${JSON.stringify({ error: "Stream error" })}\n\n`);
       res.end();
     }
@@ -134,57 +112,27 @@ router.delete("/api/v1/chat/history", isAuthenticated, rateLimiter("chatHistoryD
 router.post("/api/v1/timeline/ai-suggestions", isAuthenticated, rateLimiter("suggestions", 3), asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
 
-    const timeline = await storage.getTimeline(userId);
-    const today = toDateStr();
-
-    const upcomingWorkouts: UpcomingWorkout[] = timeline
-      .filter(entry =>
-        entry.status === "planned" &&
-        entry.date &&
-        entry.date >= today &&
-        entry.planDayId !== null
-      )
-      .sort((a, b) => {
-        if (b.date < a.date) return 1;
-        if (b.date > a.date) return -1;
-        return 0;
-      })
-      .slice(0, 5)
-      .map(entry => ({
-        id: entry.planDayId || "",
-        date: entry.date,
-        focus: entry.focus || "",
-        mainWorkout: entry.mainWorkout || "",
-        accessory: entry.accessory || undefined,
-        notes: entry.notes || undefined,
-      }));
+    const plannedDays = await storage.getUpcomingPlannedDays(userId, 5);
+    const upcomingWorkouts: UpcomingWorkout[] = plannedDays.map((d) => ({
+      id: d.planDayId,
+      date: d.date,
+      focus: d.focus,
+      mainWorkout: d.mainWorkout,
+      accessory: d.accessory || undefined,
+      notes: d.notes || undefined,
+    }));
 
     if (upcomingWorkouts.length === 0) {
       return res.json({ suggestions: [], message: "No upcoming planned workouts found" });
     }
 
-    // Build a query from upcoming workout context for RAG retrieval
     const suggestionQuery = upcomingWorkouts.map(w => `${w.focus} ${w.mainWorkout}`).join("; ");
+    const aiContext = await buildAIContext(userId, suggestionQuery, req.log || logger);
+    const coachingMaterials = extractCoachingMaterialsText(aiContext);
 
-    const [trainingContext, coachingContext] = await Promise.all([
-      buildTrainingContext(userId),
-      getCoachingContext(userId, suggestionQuery, req.log || logger),
-    ]);
-
-    // Build coaching materials string for suggestions prompt
-    let coachingMaterials: string | undefined;
-    if (coachingContext.retrievedChunks && coachingContext.retrievedChunks.length > 0) {
-      coachingMaterials = buildRetrievedChunksSection(coachingContext.retrievedChunks);
-    } else if (coachingContext.coachingMaterials) {
-      coachingMaterials = buildCoachingMaterialsSection(coachingContext.coachingMaterials) || undefined;
-    }
-
-    const rawSuggestions = await generateWorkoutSuggestions(trainingContext, upcomingWorkouts, undefined, coachingMaterials);
+    const rawSuggestions = await generateWorkoutSuggestions(aiContext.trainingContext, upcomingWorkouts, undefined, coachingMaterials);
 
     const workoutMap = new Map(upcomingWorkouts.map(w => [w.id, w]));
-    // ⚡ Bolt Performance Optimization:
-    // Combine map and filter into a single O(N) reduction to prevent
-    // intermediate array allocations.
     const suggestions = rawSuggestions.reduce<{ workoutId: string; date: string; focus: string; targetField: "notes" | "mainWorkout" | "accessory"; action: "replace" | "append"; recommendation: string; rationale: string; priority: "low" | "medium" | "high" }[]>((acc, s) => {
       const workout = workoutMap.get(s.workoutId);
       const mapped = {
@@ -203,7 +151,7 @@ router.post("/api/v1/timeline/ai-suggestions", isAuthenticated, rateLimiter("sug
       return acc;
     }, []);
 
-    res.json({ suggestions, ragInfo: coachingContext.ragInfo });
+    res.json({ suggestions, ragInfo: aiContext.ragInfo });
   }));
 
 export default router;

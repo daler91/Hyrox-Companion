@@ -2,7 +2,8 @@ import { logger } from "../logger";
 import { buildSystemPrompt, type CoachingMaterialInput } from "../prompts";
 import { sanitizeUserInput, validateAiOutput } from "../utils/sanitize";
 import { ThinkingLevel } from "@google/genai";
-import { getAiClient, GEMINI_SUGGESTIONS_MODEL } from "./client";
+import { getAiClient, GEMINI_SUGGESTIONS_MODEL, withTimeout } from "./client";
+import { AI_REQUEST_TIMEOUT_MS } from "../constants";
 import type { ChatMessage } from "@shared/schema";
 import type { TrainingContext } from "./types";
 
@@ -26,14 +27,18 @@ export async function chatWithCoach(
 
     const systemPrompt = buildSystemPrompt(trainingContext, coachingMaterials, retrievedChunks);
 
-    const response = await getAiClient().models.generateContent({
-      model: GEMINI_SUGGESTIONS_MODEL,
-      config: {
-        systemInstruction: systemPrompt,
-        thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
-      },
-      contents: messages,
-    });
+    const response = await withTimeout(
+      getAiClient().models.generateContent({
+        model: GEMINI_SUGGESTIONS_MODEL,
+        config: {
+          systemInstruction: systemPrompt,
+          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
+        },
+        contents: messages,
+      }),
+      AI_REQUEST_TIMEOUT_MS,
+      "chat",
+    );
 
     const textOutput = response.text || "I apologize, but I couldn't generate a response. Please try again.";
     return validateAiOutput(textOutput);
@@ -63,14 +68,18 @@ export async function* streamChatWithCoach(
 
     const systemPrompt = buildSystemPrompt(trainingContext, coachingMaterials, retrievedChunks);
 
-    const response = await getAiClient().models.generateContentStream({
-      model: GEMINI_SUGGESTIONS_MODEL,
-      config: {
-        systemInstruction: systemPrompt,
-        thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
-      },
-      contents: messages,
-    });
+    const response = await withTimeout(
+      getAiClient().models.generateContentStream({
+        model: GEMINI_SUGGESTIONS_MODEL,
+        config: {
+          systemInstruction: systemPrompt,
+          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
+        },
+        contents: messages,
+      }),
+      AI_REQUEST_TIMEOUT_MS,
+      "chat-stream",
+    );
 
     for await (const chunk of response) {
       const text = chunk.text;

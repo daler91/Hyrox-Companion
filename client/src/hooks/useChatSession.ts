@@ -7,58 +7,65 @@ import type { ChatMessage as DBChatMessage } from "@shared/schema";
 
 export type { RagInfo } from "@/lib/api";
 
+/** Parse SSE lines and accumulate text + ragInfo without triggering React state updates. */
 function processStreamLines(
   lines: string[],
-  currentResponse: string,
-  assistantMessageId: string,
-  setMessages: React.Dispatch<React.SetStateAction<Message[]>>
-): string {
-  let updatedResponse = currentResponse;
+  acc: { content: string; ragInfo?: RagInfo },
+): void {
   for (const line of lines) {
     if (!line.startsWith("data: ")) continue;
     let data: { ragInfo?: RagInfo; text?: string; error?: string };
     try {
       data = JSON.parse(line.slice(6)) as typeof data;
     } catch {
-      // Ignore parse errors for incomplete stream chunks
       continue;
     }
     if (data.ragInfo) {
-      const info = data.ragInfo;
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === assistantMessageId
-            ? { ...m, ragInfo: info }
-            : m
-        )
-      );
+      acc.ragInfo = data.ragInfo;
     }
     if (data.text) {
-      updatedResponse += data.text;
-      const newResponse = updatedResponse; // capture in closure
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === assistantMessageId
-            ? { ...m, content: newResponse }
-            : m
-        )
-      );
+      acc.content += data.text;
     }
     if (data.error) {
       throw new Error(data.error);
     }
   }
-  return updatedResponse;
 }
 
+/**
+ * Read the SSE stream and batch state updates via requestAnimationFrame
+ * so we flush at most once per frame instead of once per chunk.
+ */
 async function handleStreamResponse(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   decoder: TextDecoder,
   assistantMessageId: string,
-  setMessages: React.Dispatch<React.SetStateAction<Message[]>>
+  setMessages: React.Dispatch<React.SetStateAction<Message[]>>,
 ): Promise<string> {
-  let fullResponse = "";
+  const acc = { content: "", ragInfo: undefined as RagInfo | undefined };
   let buffer = "";
+  let rafId = 0;
+  let dirty = false;
+
+  const flush = () => {
+    if (!dirty) return;
+    dirty = false;
+    const snapshot = { content: acc.content, ragInfo: acc.ragInfo };
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === assistantMessageId
+          ? { ...m, content: snapshot.content, ...(snapshot.ragInfo ? { ragInfo: snapshot.ragInfo } : {}) }
+          : m,
+      ),
+    );
+  };
+
+  const scheduleFlush = () => {
+    if (!dirty) {
+      dirty = true;
+      rafId = requestAnimationFrame(flush);
+    }
+  };
 
   while (true) {
     const { done, value } = await reader.read();
@@ -69,17 +76,21 @@ async function handleStreamResponse(
     buffer = events.pop() || "";
 
     for (const event of events) {
-      const lines = event.split("\n");
-      fullResponse = processStreamLines(lines, fullResponse, assistantMessageId, setMessages);
+      processStreamLines(event.split("\n"), acc);
     }
+    scheduleFlush();
   }
 
   if (buffer.trim()) {
-    const lines = buffer.split("\n");
-    fullResponse = processStreamLines(lines, fullResponse, assistantMessageId, setMessages);
+    processStreamLines(buffer.split("\n"), acc);
   }
 
-  return fullResponse;
+  // Final synchronous flush to ensure the last chunks are rendered
+  cancelAnimationFrame(rafId);
+  dirty = true;
+  flush();
+
+  return acc.content;
 }
 
 export interface Message {

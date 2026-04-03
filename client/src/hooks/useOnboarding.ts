@@ -23,12 +23,13 @@ export function useOnboarding(
     if (!showOnboarding && onboardingTriggered && !hasAutoOpenedCoach) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setHasAutoOpenedCoach(true);
-      setTimeout(() => {
+      const timerId = setTimeout(() => {
         const isCurrentlyMobile = globalThis.innerWidth < MOBILE_BREAKPOINT_PX;
         if (!isCurrentlyMobile) {
           setCoachOpen(true);
         }
       }, COACH_AUTO_OPEN_DELAY_MS);
+      return () => clearTimeout(timerId);
     }
   }, [showOnboarding, onboardingTriggered, hasAutoOpenedCoach]);
 
