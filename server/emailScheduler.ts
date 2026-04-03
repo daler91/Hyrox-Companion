@@ -93,6 +93,50 @@ export async function checkAndSendEmailsForUser(storage: IStorage, user: User): 
   return sent;
 }
 
+interface BatchResult {
+  emailsSent: number;
+  details: string[];
+}
+
+async function processUserBatch(
+  storage: IStorage,
+  batch: User[],
+): Promise<BatchResult> {
+  let emailsSent = 0;
+  const details: string[] = [];
+
+  const results = await Promise.allSettled(
+    batch.map(async (user) => {
+      try {
+        const sent = await checkAndSendEmailsForUser(storage, user);
+        return { user, sent, errorMsg: null as string | null };
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        return { user, sent: [] as string[], errorMsg };
+      }
+    }),
+  );
+
+  for (const result of results) {
+    if (result.status !== "fulfilled") continue;
+    const { user, sent, errorMsg } = result.value;
+    if (errorMsg) {
+      const detail = `Failed for user ${user.id}: ${errorMsg}`;
+      details.push(detail);
+      logger.error({ context: "email", userId: user.id, errorMsg }, "Failed to check and send emails for user");
+      continue;
+    }
+    emailsSent += sent.length;
+    if (sent.length > 0) {
+      const detail = `Sent ${sent.join(", ")} to ${user.email}`;
+      details.push(detail);
+      logger.info({ context: "email" }, detail);
+    }
+  }
+
+  return { emailsSent, details };
+}
+
 export async function runEmailCronJob(storage: IStorage): Promise<{ usersChecked: number; emailsSent: number; details: string[] }> {
   const details: string[] = [];
   let emailsSent = 0;
@@ -110,39 +154,12 @@ export async function runEmailCronJob(storage: IStorage): Promise<{ usersChecked
 
     logger.info({ context: "email" }, `Cron: Checking emails for ${usersToCheck.length} user(s)`);
 
-    // Process users with bounded concurrency to avoid overwhelming the email API
-    // while still being faster than fully sequential processing.
     const CONCURRENCY = 5;
     for (let i = 0; i < usersToCheck.length; i += CONCURRENCY) {
       const batch = usersToCheck.slice(i, i + CONCURRENCY);
-      const results = await Promise.allSettled(
-        batch.map(async (user) => {
-          try {
-            const sent = await checkAndSendEmailsForUser(storage, user);
-            return { user, sent, error: null as unknown };
-          } catch (err) {
-            return { user, sent: [] as string[], error: err };
-          }
-        }),
-      );
-
-      for (const result of results) {
-        // All promises resolve (errors caught internally), but guard against unexpected rejections
-        if (result.status !== "fulfilled") continue;
-        const { user, sent, error } = result.value;
-        if (error) {
-          const detail = `Failed for user ${user.id}: ${error}`;
-          details.push(detail);
-          logger.error({ context: "email", userId: user.id, err: error }, "Failed to check and send emails for user");
-        } else {
-          emailsSent += sent.length;
-          if (sent.length > 0) {
-            const detail = `Sent ${sent.join(", ")} to ${user.email}`;
-            details.push(detail);
-            logger.info({ context: "email" }, detail);
-          }
-        }
-      }
+      const batchResult = await processUserBatch(storage, batch);
+      emailsSent += batchResult.emailsSent;
+      details.push(...batchResult.details);
     }
 
     logger.info({ context: "email" }, `Cron complete: ${emailsSent} email(s) sent to ${usersToCheck.length} user(s)`);

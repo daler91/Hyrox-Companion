@@ -42,7 +42,7 @@ describe('runEmailCronJob', () => {
     expect(result.usersChecked).toBe(1);
     expect(result.emailsSent).toBe(0);
     expect(result.details).toHaveLength(1);
-    expect(result.details[0]).toContain('Failed for user 1: Error: Simulated storage error');
+    expect(result.details[0]).toContain('Failed for user 1: Simulated storage error');
   });
 
   it('should process multiple users independently if one fails', async () => {
@@ -85,7 +85,7 @@ describe('runEmailCronJob', () => {
     // We expect emailsSent to be 1 since mock getWeeklyStats succeeded for user 2
     expect(result.emailsSent).toBe(1);
     expect(result.details).toHaveLength(2);
-    expect(result.details[0]).toContain('Failed for user 1: Error: Simulated storage error');
+    expect(result.details[0]).toContain('Failed for user 1: Simulated storage error');
     expect(result.details[1]).toContain('Sent weekly_summary to pass@example.com');
   });
 });
