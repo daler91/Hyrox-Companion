@@ -13,6 +13,12 @@ export const ANALYTICS_CACHE_TTL_MS = 5 * 60 * 1000;
 /** Maximum age for Strava OAuth state tokens (10 minutes) */
 export const STRAVA_STATE_MAX_AGE_MS = 10 * 60 * 1000;
 
+/** Timeout for external HTTP requests (e.g. Strava API) */
+export const EXTERNAL_API_TIMEOUT_MS = 15_000;
+
+/** Default timeline query limit */
+export const DEFAULT_TIMELINE_LIMIT = 500;
+
 /** Main DB connection timeout */
 export const DB_CONNECTION_TIMEOUT_MS = 5_000;
 

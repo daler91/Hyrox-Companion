@@ -51,6 +51,7 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey, signal }) => {
+    // Query keys are path segments (e.g. ["/api/v1", "workouts"]) joined to form the URL
     const res = await fetch(queryKey.join("/"), {
       credentials: "include",
       signal,

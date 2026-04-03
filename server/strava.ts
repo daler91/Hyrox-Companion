@@ -9,7 +9,7 @@ import { mapStravaActivityToWorkout, type StravaActivity } from "./services/stra
 import { getUserId } from "./types";
 import { asyncHandler } from "./routeUtils";
 import rateLimit from "express-rate-limit";
-import { RATE_LIMIT_WINDOW_15M_MS, STRAVA_STATE_MAX_AGE_MS } from "./constants";
+import { RATE_LIMIT_WINDOW_15M_MS, STRAVA_STATE_MAX_AGE_MS, EXTERNAL_API_TIMEOUT_MS } from "./constants";
 
 const STRAVA_CLIENT_ID = env.STRAVA_CLIENT_ID;
 const STRAVA_CLIENT_SECRET = env.STRAVA_CLIENT_SECRET;
@@ -86,6 +86,7 @@ async function refreshStravaToken(refreshToken: string): Promise<StravaTokenResp
         refresh_token: refreshToken,
         grant_type: "refresh_token",
       }),
+      signal: AbortSignal.timeout(EXTERNAL_API_TIMEOUT_MS),
     });
 
     if (!response.ok) {
@@ -195,6 +196,7 @@ async function handleStravaCallback(req: Request, res: Response) {
         code,
         grant_type: "authorization_code",
       }),
+      signal: AbortSignal.timeout(EXTERNAL_API_TIMEOUT_MS),
     });
 
     if (!tokenResponse.ok) {
@@ -248,6 +250,7 @@ async function handleStravaSync(req: Request, res: Response) {
       "https://www.strava.com/api/v3/athlete/activities?per_page=30",
       {
         headers: { Authorization: `Bearer ${accessToken}` },
+        signal: AbortSignal.timeout(EXTERNAL_API_TIMEOUT_MS),
       }
     );
 
