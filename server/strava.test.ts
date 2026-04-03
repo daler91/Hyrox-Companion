@@ -87,8 +87,8 @@ describe('strava service state signing', () => {
       const payload = `${id}:${timestamp}:${nonce}`;
 
       // Verify the signature is generated using STRAVA_STATE_SECRET, not CLERK_SECRET_KEY
-      const expectedWithStrava = crypto.createHmac('sha256', 'dedicated-strava-secret-12345678').update(payload).digest('hex').slice(0, 16);
-      const expectedWithClerk = crypto.createHmac('sha256', 'shared-clerk-secret-87654321').update(payload).digest('hex').slice(0, 16);
+      const expectedWithStrava = crypto.createHmac('sha256', 'dedicated-strava-secret-12345678').update(payload).digest('hex').slice(0, 32);
+      const expectedWithClerk = crypto.createHmac('sha256', 'shared-clerk-secret-87654321').update(payload).digest('hex').slice(0, 32);
 
       expect(signature).toBe(expectedWithStrava);
       expect(signature).not.toBe(expectedWithClerk);

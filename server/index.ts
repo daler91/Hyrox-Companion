@@ -242,8 +242,17 @@ try {
 }
 
 // Graceful shutdown
+const SHUTDOWN_TIMEOUT_MS = 30_000;
 const shutdown = () => {
   logger.info("Received shutdown signal. Closing HTTP server...");
+
+  // Force exit if graceful shutdown takes too long (e.g. lingering SSE streams)
+  const forceExit = setTimeout(() => {
+    logger.error("Graceful shutdown timed out. Forcing exit.");
+    process.exit(1);
+  }, SHUTDOWN_TIMEOUT_MS);
+  forceExit.unref();
+
   stopCron();
   httpServer.close(() => {
     logger.info("HTTP server closed. Stopping queue...");

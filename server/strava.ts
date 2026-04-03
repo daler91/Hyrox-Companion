@@ -34,7 +34,7 @@ export function createSignedState(userId: string): string {
   const timestamp = Date.now().toString(36);
   const nonce = crypto.randomBytes(8).toString("hex");
   const payload = `${userId}:${timestamp}:${nonce}`;
-  const signature = crypto.createHmac("sha256", STATE_SECRET).update(payload).digest("hex").slice(0, 16);
+  const signature = crypto.createHmac("sha256", STATE_SECRET).update(payload).digest("hex").slice(0, 32);
   return `${payload}:${signature}`;
 }
 
@@ -43,7 +43,7 @@ export function verifySignedState(state: string): { userId: string } | null {
   if (parts.length !== 4) return null;
   const [userId, timestamp, nonce, signature] = parts;
   const payload = `${userId}:${timestamp}:${nonce}`;
-  const expected = crypto.createHmac("sha256", STATE_SECRET).update(payload).digest("hex").slice(0, 16);
+  const expected = crypto.createHmac("sha256", STATE_SECRET).update(payload).digest("hex").slice(0, 32);
 
   // Use timingSafeEqual with hashed values to prevent timing attacks
   // and safely handle different string lengths.

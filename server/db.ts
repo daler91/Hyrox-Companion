@@ -2,6 +2,7 @@ import { env } from "./env";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import * as schema from "@shared/schema";
+import { logger } from "./logger";
 import { DB_CONNECTION_TIMEOUT_MS, DB_IDLE_TIMEOUT_MS, DB_STATEMENT_TIMEOUT_MS } from "./constants";
 
 const { Pool } = pg;
@@ -19,4 +20,9 @@ export const pool = new Pool({
   connectionTimeoutMillis: DB_CONNECTION_TIMEOUT_MS,
   statement_timeout: DB_STATEMENT_TIMEOUT_MS,
 });
+
+pool.on("error", (err) => {
+  logger.error({ err, context: "db" }, "Unexpected error on idle database client");
+});
+
 export const db = drizzle(pool, { schema });
