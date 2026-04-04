@@ -26,6 +26,55 @@ export default defineConfig({
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff,woff2}"],
         cleanupOutdatedCaches: true,
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }: { url: URL }) =>
+              url.pathname.startsWith("/api/"),
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "api-cache",
+              networkTimeoutSeconds: 10,
+              expiration: {
+                maxEntries: 50,
+                maxAgeSeconds: 5 * 60,
+              },
+            },
+          },
+          {
+            urlPattern:
+              /^https:\/\/fonts\.(?:googleapis|gstatic)\.com\/.*/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "font-cache",
+              expiration: {
+                maxEntries: 20,
+                maxAgeSeconds: 365 * 24 * 60 * 60,
+              },
+            },
+          },
+          {
+            urlPattern: /\.(?:woff2?|ttf|otf|eot)$/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "font-cache",
+              expiration: {
+                maxEntries: 20,
+                maxAgeSeconds: 365 * 24 * 60 * 60,
+              },
+            },
+          },
+          {
+            urlPattern: /\.(?:png|jpg|jpeg|svg|webp)$/i,
+            handler: "StaleWhileRevalidate",
+            options: {
+              cacheName: "image-cache",
+              expiration: {
+                maxEntries: 100,
+                maxAgeSeconds: 30 * 24 * 60 * 60,
+              },
+            },
+          },
+        ],
       },
     }),
   ],

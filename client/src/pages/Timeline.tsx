@@ -29,7 +29,180 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { useRef, useMemo, useCallback } from "react";
 import { useTimelineState } from "@/hooks/useTimelineState";
 import { useAuth } from "@/hooks/useAuth";
+import type { Virtualizer } from "@tanstack/react-virtual";
 
+type TimelineState = ReturnType<typeof useTimelineState>;
+type TimelineData = TimelineState["data"];
+type TimelineFiltersState = TimelineState["filters"];
+type PlanImportState = TimelineState["planImport"];
+
+interface TimelineContentProps {
+  timelineLoading: TimelineData["timelineLoading"];
+  filteredTimeline: TimelineFiltersState["filteredTimeline"];
+  filterStatus: TimelineFiltersState["filterStatus"];
+  selectedPlanId: TimelineState["selectedPlanId"];
+  plans: TimelineData["plans"];
+  samplePlanMutation: PlanImportState["samplePlanMutation"];
+  importMutation: PlanImportState["importMutation"];
+  handleFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  setSchedulingPlanId: PlanImportState["setSchedulingPlanId"];
+  setFilterStatus: TimelineFiltersState["setFilterStatus"];
+  hiddenPastCount: TimelineFiltersState["hiddenPastCount"];
+  setShowAllPast: TimelineFiltersState["setShowAllPast"];
+  showAllPast: TimelineFiltersState["showAllPast"];
+  pastGroups: TimelineFiltersState["pastGroups"];
+  hiddenFutureCount: TimelineFiltersState["hiddenFutureCount"];
+  setShowAllFuture: TimelineFiltersState["setShowAllFuture"];
+  showAllFuture: TimelineFiltersState["showAllFuture"];
+  futureGroups: TimelineFiltersState["futureGroups"];
+  allVisibleGroups: TimelineFiltersState["pastGroups"];
+  rowVirtualizer: Virtualizer<HTMLDivElement, Element>;
+  todayRef: TimelineData["todayRef"];
+  handleMarkComplete: ReturnType<typeof useTimelineState>["workoutActions"]["handleMarkComplete"];
+  openDetailDialog: (entry: Parameters<ReturnType<typeof useTimelineState>["workoutActions"]["openDetailDialog"]>[0]) => void;
+  handleCombine: ReturnType<typeof useTimelineState>["combine"]["handleCombine"];
+  combiningEntry: ReturnType<typeof useTimelineState>["combine"]["combiningEntry"];
+  personalRecords: TimelineData["personalRecords"];
+  isAutoCoaching: boolean;
+}
+
+function TimelineContent({
+  timelineLoading,
+  filteredTimeline,
+  filterStatus,
+  selectedPlanId,
+  plans,
+  samplePlanMutation,
+  importMutation,
+  handleFileUpload,
+  setSchedulingPlanId,
+  setFilterStatus,
+  hiddenPastCount,
+  setShowAllPast,
+  showAllPast,
+  pastGroups,
+  hiddenFutureCount,
+  setShowAllFuture,
+  showAllFuture,
+  futureGroups,
+  allVisibleGroups,
+  rowVirtualizer,
+  todayRef,
+  handleMarkComplete,
+  openDetailDialog,
+  handleCombine,
+  combiningEntry,
+  personalRecords,
+  isAutoCoaching,
+}: Readonly<TimelineContentProps>) {
+  if (timelineLoading) {
+    return <TimelineSkeleton />;
+  }
+
+  if (filteredTimeline.length === 0) {
+    return (
+      <TimelineEmptyState
+        filterStatus={filterStatus}
+        selectedPlanId={selectedPlanId}
+        plans={plans}
+        samplePlanMutation={samplePlanMutation}
+        importMutation={importMutation}
+        handleFileUpload={handleFileUpload}
+        setSchedulingPlanId={setSchedulingPlanId}
+        setFilterStatus={setFilterStatus}
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {hiddenPastCount > 0 && (
+        <Button
+          variant="outline"
+          className="w-full"
+          onClick={() => setShowAllPast(true)}
+          data-testid="button-show-more-past"
+        >
+          <ChevronUp className="h-4 w-4 mr-2" />
+          Show {hiddenPastCount} more past workout{hiddenPastCount > 1 ? 's' : ''}
+        </Button>
+      )}
+
+      {showAllPast && pastGroups.length > 7 && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full"
+          onClick={() => setShowAllPast(false)}
+          data-testid="button-hide-past"
+        >
+          Hide older workouts
+        </Button>
+      )}
+
+      <div style={{ position: 'relative' }}>
+        <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}>
+          {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+            const [date, entries] = allVisibleGroups[virtualRow.index];
+            return (
+              <div
+                key={virtualRow.key}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  transform: `translateY(${virtualRow.start}px)`,
+                }}
+                ref={rowVirtualizer.measureElement}
+                data-index={virtualRow.index}
+              >
+                <TimelineDateGroup
+                  key={date}
+                  ref={isToday(parseISO(date)) ? todayRef : undefined}
+                  date={date}
+                  entries={entries}
+                  onMarkComplete={handleMarkComplete}
+                  onClick={openDetailDialog}
+                  onCombineSelect={handleCombine}
+                  isCombining={!!combiningEntry}
+                  combiningEntryId={combiningEntry?.id || null}
+                  combiningEntryDate={combiningEntry?.date || null}
+                  personalRecords={personalRecords}
+                  isAutoCoaching={isAutoCoaching}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {hiddenFutureCount > 0 && (
+        <Button
+          variant="outline"
+          className="w-full"
+          onClick={() => setShowAllFuture(true)}
+          data-testid="button-show-more-future"
+        >
+          <ChevronDown className="h-4 w-4 mr-2" />
+          Show {hiddenFutureCount} more upcoming workout{hiddenFutureCount > 1 ? 's' : ''}
+        </Button>
+      )}
+
+      {showAllFuture && futureGroups.length > 7 && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full"
+          onClick={() => setShowAllFuture(false)}
+          data-testid="button-hide-future"
+        >
+          Hide later workouts
+        </Button>
+      )}
+    </div>
+  );
+}
 
 
 export default function Timeline() {
@@ -106,116 +279,35 @@ export default function Timeline() {
         isUpdatingGoal={updatePlanGoalMutation.isPending}
       />
 
-      {(() => {
-        if (timelineLoading) {
-          return <TimelineSkeleton />;
-        }
-
-        if (filteredTimeline.length === 0) {
-          return (
-            <TimelineEmptyState
-              filterStatus={filterStatus}
-              selectedPlanId={selectedPlanId}
-              plans={plans}
-              samplePlanMutation={samplePlanMutation}
-              importMutation={importMutation}
-              handleFileUpload={handleFileUpload}
-              setSchedulingPlanId={setSchedulingPlanId}
-              setFilterStatus={setFilterStatus}
-            />
-          );
-        }
-
-        return (
-          <div className="space-y-4">
-            {hiddenPastCount > 0 && (
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => setShowAllPast(true)}
-                data-testid="button-show-more-past"
-              >
-                <ChevronUp className="h-4 w-4 mr-2" />
-                Show {hiddenPastCount} more past workout{hiddenPastCount > 1 ? 's' : ''}
-              </Button>
-            )}
-
-            {showAllPast && pastGroups.length > 7 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full"
-                onClick={() => setShowAllPast(false)}
-                data-testid="button-hide-past"
-              >
-                Hide older workouts
-              </Button>
-            )}
-
-
-            <div style={{ position: 'relative' }}>
-              <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}>
-                {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                  const [date, entries] = allVisibleGroups[virtualRow.index];
-                  return (
-                    <div
-                      key={virtualRow.key}
-                      style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        width: '100%',
-                        transform: `translateY(${virtualRow.start}px)`,
-                      }}
-                      ref={rowVirtualizer.measureElement}
-                      data-index={virtualRow.index}
-                    >
-                      <TimelineDateGroup
-                        key={date}
-                        ref={isToday(parseISO(date)) ? todayRef : undefined}
-                        date={date}
-                        entries={entries}
-                        onMarkComplete={handleMarkComplete}
-                        onClick={openDetailDialog}
-                        onCombineSelect={handleCombine}
-                        isCombining={!!combiningEntry}
-                        combiningEntryId={combiningEntry?.id || null}
-                        combiningEntryDate={combiningEntry?.date || null}
-                        personalRecords={personalRecords}
-                        isAutoCoaching={!!user?.isAutoCoaching}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {hiddenFutureCount > 0 && (
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => setShowAllFuture(true)}
-                data-testid="button-show-more-future"
-              >
-                <ChevronDown className="h-4 w-4 mr-2" />
-                Show {hiddenFutureCount} more upcoming workout{hiddenFutureCount > 1 ? 's' : ''}
-              </Button>
-            )}
-
-            {showAllFuture && futureGroups.length > 7 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full"
-                onClick={() => setShowAllFuture(false)}
-                data-testid="button-hide-future"
-              >
-                Hide later workouts
-              </Button>
-            )}
-          </div>
-        );
-      })()}
+      <TimelineContent
+        timelineLoading={timelineLoading}
+        filteredTimeline={filteredTimeline}
+        filterStatus={filterStatus}
+        selectedPlanId={selectedPlanId}
+        plans={plans}
+        samplePlanMutation={samplePlanMutation}
+        importMutation={importMutation}
+        handleFileUpload={handleFileUpload}
+        setSchedulingPlanId={setSchedulingPlanId}
+        setFilterStatus={setFilterStatus}
+        hiddenPastCount={hiddenPastCount}
+        setShowAllPast={setShowAllPast}
+        showAllPast={showAllPast}
+        pastGroups={pastGroups}
+        hiddenFutureCount={hiddenFutureCount}
+        setShowAllFuture={setShowAllFuture}
+        showAllFuture={showAllFuture}
+        futureGroups={futureGroups}
+        allVisibleGroups={allVisibleGroups}
+        rowVirtualizer={rowVirtualizer}
+        todayRef={todayRef}
+        handleMarkComplete={handleMarkComplete}
+        openDetailDialog={openDetailDialog}
+        handleCombine={handleCombine}
+        combiningEntry={combiningEntry}
+        personalRecords={personalRecords}
+        isAutoCoaching={!!user?.isAutoCoaching}
+      />
 
           {!detailEntry && <FloatingActionButton coachPanelOpen={coachOpen} onCoachToggle={() => setCoachOpen(!coachOpen)} />}
 

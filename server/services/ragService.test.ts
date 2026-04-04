@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { chunkText, embedCoachingMaterial, retrieveRelevantChunks, buildRetrievedMaterialsSection } from "./ragService";
+import { chunkText, embedCoachingMaterial, retrieveRelevantChunks } from "./ragService";
 import type { CoachingMaterial } from "@shared/schema";
 
 // Mock dependencies
@@ -234,34 +234,4 @@ describe("retrieveRelevantChunks", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// buildRetrievedMaterialsSection
-// ---------------------------------------------------------------------------
 
-describe("buildRetrievedMaterialsSection", () => {
-  it("should return empty string for no chunks", () => {
-    expect(buildRetrievedMaterialsSection([])).toBe("");
-  });
-
-  it("should format chunks with excerpt labels", () => {
-    const result = buildRetrievedMaterialsSection(["First chunk", "Second chunk"]);
-
-    expect(result).toContain("COACHING REFERENCE MATERIALS");
-    expect(result).toContain("[Excerpt 1]");
-    expect(result).toContain("First chunk");
-    expect(result).toContain("[Excerpt 2]");
-    expect(result).toContain("Second chunk");
-    expect(result).toContain("END COACHING MATERIALS");
-  });
-
-  it("should include all chunks in order", () => {
-    const chunks = ["A", "B", "C"];
-    const result = buildRetrievedMaterialsSection(chunks);
-
-    const indexA = result.indexOf("[Excerpt 1]");
-    const indexB = result.indexOf("[Excerpt 2]");
-    const indexC = result.indexOf("[Excerpt 3]");
-    expect(indexA).toBeLessThan(indexB);
-    expect(indexB).toBeLessThan(indexC);
-  });
-});

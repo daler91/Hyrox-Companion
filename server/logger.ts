@@ -1,5 +1,6 @@
 import { env } from "./env";
 import pino from "pino";
+import { getRequestContext } from "./requestContext";
 
 const isDev = env.NODE_ENV !== "production";
 
@@ -22,3 +23,11 @@ export const logger = pino({
     },
   },
 });
+
+export function getContextLogger() {
+  const ctx = getRequestContext();
+  if (ctx) {
+    return logger.child({ requestId: ctx.requestId, userId: ctx.userId });
+  }
+  return logger;
+}

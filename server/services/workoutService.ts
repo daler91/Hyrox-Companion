@@ -1,5 +1,6 @@
 import { workoutLogs, exerciseSets, planDays, trainingPlans, customExercises, type ParsedExercise, type InsertWorkoutLog, type UpdateWorkoutLog, type InsertExerciseSet, type WorkoutLog, type ExerciseSet, exercisesPayloadSchema } from "@shared/schema";
 import { storage } from "../storage";
+import { logger } from "../logger";
 import { db } from "../db";
 import { eq, and } from "drizzle-orm";
 
@@ -264,7 +265,6 @@ export async function processBatchChunk(
     const workout = chunk[j];
 
     if (result.status === 'rejected') {
-      const { logger } = await import("../logger");
       logger.error({ err: result.reason }, `Batch reparse failed for workout ${workout.id}:`);
       failed++;
       continue;
@@ -279,7 +279,6 @@ export async function processBatchChunk(
       await saveParsedWorkout(workout.id, result.value.setRows);
       parsed++;
     } catch (dbError) {
-      const { logger } = await import("../logger");
       logger.error({ err: dbError }, `Failed to save re-parsed workout ${workout.id}:`);
       failed++;
     }

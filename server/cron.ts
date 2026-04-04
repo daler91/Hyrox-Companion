@@ -36,7 +36,7 @@ export function startCron(storage: IStorage): void {
   // The idempotency guards in emailScheduler prevent duplicate sends.
   const currentHour = new Date().getUTCHours();
   if (currentHour >= 9) {
-    setTimeout(async () => {
+    const runCatchUp = async () => {
       logger.info({ context: "cron" }, "Running startup email catch-up (server started after 09:00 UTC)");
       try {
         const result = await runEmailCronJob(storage);
@@ -47,7 +47,8 @@ export function startCron(storage: IStorage): void {
       } catch (err) {
         logger.error({ context: "cron", err }, "Startup email catch-up failed");
       }
-    }, 30_000);
+    };
+    setTimeout(() => void runCatchUp(), 30_000);
   }
 }
 

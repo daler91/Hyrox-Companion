@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { buildTrainingContext } from "./aiService";
+import { buildTrainingContext } from "./ai";
 import { storage } from "../storage";
 
 vi.mock("../storage", () => ({

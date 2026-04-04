@@ -18,9 +18,11 @@ import { storage } from "./storage";
 import { pool } from "./db";
 import { vectorPool } from "./vectorDb";
 import { getAuth } from "@clerk/express";
+import { runWithRequestContext } from "./requestContext";
 import { runStartupMaintenance } from "./maintenance";
 import { startQueue, queue } from "./queue";
 import { startCron, stopCron } from "./cron";
+import { AppError } from "./errors";
 
 // 🛡️ Sentinel: Dev Auth Bypass double-guard
 if (env.ALLOW_DEV_AUTH_BYPASS === "true") {
@@ -44,7 +46,11 @@ const app = express();
 app.disable("x-powered-by");
 const httpServer = createServer(app);
 
-export interface AppError extends Error {
+// Re-export AppError class from errors module; also keep a loose interface
+// so the error handler can handle both AppError instances and plain errors
+// with ad-hoc status/code properties (e.g. from third-party middleware).
+export type { AppError } from "./errors";
+interface LegacyError extends Error {
   status?: number;
   statusCode?: number;
   code?: string;
@@ -62,16 +68,24 @@ app.use(compression());
 const isDev = env.NODE_ENV !== "production";
 
 // CORS — restrict cross-origin API access to known origins
-const allowedOrigins = [
+const defaultOrigins = [
   env.APP_URL,
   "https://fitai.coach",
-  ...(isDev ? ["http://localhost:5000", "http://localhost:5173"] : []),
 ].filter(Boolean) as string[];
+
+const configuredOrigins = env.ALLOWED_ORIGINS
+  ? env.ALLOWED_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean)
+  : defaultOrigins;
+
+const allowedOrigins = new Set([
+  ...configuredOrigins,
+  ...(isDev ? ["http://localhost:5000", "http://localhost:5173"] : []),
+]);
 
 app.use(cors({
   origin: (origin, callback) => {
     // Allow same-origin requests (no Origin header) and allowed origins
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin || allowedOrigins.has(origin)) {
       callback(null, true);
     } else {
       callback(new Error("Not allowed by CORS"));
@@ -208,6 +222,12 @@ app.use(pinoHttp({
   }
 }));
 
+app.use((req, _res, next) => {
+  const r = req as Request & { id?: string; auth?: { userId?: string } };
+  const ctx = { requestId: r.id ?? "", userId: r.auth?.userId };
+  runWithRequestContext(ctx, () => next());
+});
+
 // Listen early so the health endpoint is reachable during startup (unblocks CI wait-on)
 const port = Number.parseInt(env.PORT || "5000", 10);
 await new Promise<void>((resolve, reject) => {
@@ -248,8 +268,21 @@ try {
     );
   }
 
-  app.use((err: AppError, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
+  app.use((err: AppError | LegacyError, _req: Request, res: Response, _next: NextFunction) => {
+    // Derive status and code from either the structured AppError class
+    // or legacy ad-hoc error properties (e.g. from third-party middleware).
+    const isAppError = err.name === "AppError" && "code" in err;
+    const status = isAppError
+      ? (err as import("./errors").AppError).status
+      : ((err as LegacyError).status || (err as LegacyError).statusCode || 500);
+    const defaultCode = status >= 500 ? "INTERNAL_SERVER_ERROR" : "BAD_REQUEST";
+    const code = isAppError
+      ? (err as import("./errors").AppError).code
+      : ((err as LegacyError).code || defaultCode);
+    const details = isAppError
+      ? (err as import("./errors").AppError).details
+      : (err as LegacyError).details;
+
     // 🛡️ Sentinel: Prevent leaking sensitive error details to the client
     const message =
       status === 500
@@ -257,13 +290,13 @@ try {
         : err.message || "An error occurred";
 
     Sentry.captureException(err);
-    res.status(status).json({ error: message, code: err.code || (status >= 500 ? "INTERNAL_SERVER_ERROR" : "BAD_REQUEST"), ...(status < 500 && err.details ? { details: err.details } : {}) });
+    res.status(status).json({ error: message, code, ...(status < 500 && details ? { details } : {}) });
   });
 
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
-  if (process.env.NODE_ENV === "production" || process.env.NODE_ENV === "test") {
+  if (env.NODE_ENV === "production" || env.NODE_ENV === "test") {
     serveStatic(app);
   } else {
     const { setupVite } = await import("./vite");

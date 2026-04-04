@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { triggerAutoCoach } from "./coachService";
 import { storage } from "../storage";
-import { buildTrainingContext } from "./aiService";
+import { buildTrainingContext } from "./ai";
 import { generateWorkoutSuggestions } from "../gemini/index";
 import { retrieveRelevantChunks } from "./ragService";
 
@@ -19,10 +19,10 @@ vi.mock("../storage", () => ({
   },
 }));
 
-vi.mock("./aiService", () => ({ buildTrainingContext: vi.fn() }));
+vi.mock("./ai", () => ({ buildTrainingContext: vi.fn() }));
 vi.mock("../gemini/index", () => ({ generateWorkoutSuggestions: vi.fn(), EMBEDDING_DIMENSIONS: 3072 }));
 vi.mock("./ragService", () => ({ retrieveRelevantChunks: vi.fn() }));
-vi.mock("../prompts", () => ({ buildCoachingMaterialsSection: vi.fn().mockReturnValue(""), buildRetrievedChunksSection: vi.fn().mockReturnValue("[RAG chunks]") }));
+vi.mock("../prompts", () => ({ buildCoachingMaterialsSection: vi.fn().mockReturnValue(""), buildRetrievedChunksSection: vi.fn().mockReturnValue("[RAG chunks]"), FUNCTIONAL_EXERCISES: ["skierg", "sled_push", "sled_pull", "burpee_broad_jump", "rowing", "farmers_carry", "sandbag_lunges", "wall_balls"] }));
 vi.mock("../logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 
 // -- Helpers ------------------------------------------------------------------
