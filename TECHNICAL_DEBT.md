@@ -32,7 +32,7 @@
 - **Effort:** 15 min
 
 ### 5. Route all `process.env` access through `env.ts`
-- **Files:** `server/index.ts` (line 266), `server/emailTemplates.ts`, `vitest.integration.setup.ts`
+- **Files:** `server/index.ts`, `server/emailTemplates.ts`, `server/services/ragService.ts`
 - **Issue:** Direct `process.env` access bypasses the Zod-validated env schema, creating risk of undefined values and inconsistent configuration.
 - **Fix:** Replace direct access with imports from `env.ts`. For test setup files, use a test-specific env helper.
 - **Effort:** 1 hour
@@ -72,7 +72,7 @@
 - **Effort:** 2-3 days
 
 ### 11. Formalize API error codes
-- **Files:** Throughout `server/` (36+ `throw new Error` instances)
+- **Files:** Throughout `server/` (28 `throw new Error` instances across 17 files)
 - **Issue:** Errors are ad-hoc strings with no structured error codes. API consumers cannot programmatically distinguish error types. Additionally, `server/services/workoutService.ts` (lines 267, 282) dynamically imports the logger inside catch blocks — an anti-pattern that adds latency to error paths.
 - **Fix:** Create an `AppError` class with error codes (e.g., `VALIDATION_ERROR`, `NOT_FOUND`, `AI_TIMEOUT`). Add error-code mapping to HTTP status codes in error middleware. Move logger imports to module level.
 - **Effort:** 2-3 days
@@ -107,30 +107,28 @@
 - **Fix:** Create `shared/constants.ts` for cross-cutting values and domain-specific constant files where appropriate.
 - **Effort:** 1 day
 
-### 15. Reduce state management complexity
-- **Files:**
-  - `client/src/pages/Timeline.tsx` (line 36) — `useTimelineState()` returns 8+ properties
-  - `client/src/components/plans/GeneratePlanDialog.tsx` (lines 49-58) — 9 separate `useState` calls
-- **Issue:** Hooks managing too much state become hard to test and reason about. Multiple related `useState` calls suggest the need for a reducer or form library.
-- **Fix:** Split `useTimelineState` into domain-specific hooks (e.g., `useTimelineFilters`, `useTimelineData`). Convert `GeneratePlanDialog` state to `useReducer` or a form library like react-hook-form.
-- **Effort:** 1-2 days
+### 15. Reduce GeneratePlanDialog state complexity
+- **File:** `client/src/components/plans/GeneratePlanDialog.tsx` (329 lines, 11 useState references)
+- **Issue:** Many individual `useState` calls managing multi-step form state interleaved with UI logic. Hard to test and reason about.
+- **Fix:** Extract form state into a `useGeneratePlanForm()` hook or use `useReducer` for the multi-step flow. Extract step UI into sub-components.
+- **Effort:** 1 day
 
 ### 16. Improve test type safety
-- **Files:** `server/services/planService.test.ts`, `server/emailScheduler.test.ts`, `server/storage/users.test.ts`, `shared/unitConversion.test.ts`, and others
-- **Issue:** 20+ instances of `as unknown as` type assertions in test mocks, defeating TypeScript's purpose in tests. Makes refactoring risky since tests won't catch type mismatches.
+- **Files:** 73 occurrences across 23 test files. Worst offenders: `client/src/hooks/__tests__/useWorkoutActions.test.tsx` (17), `server/services/planService.test.ts` (9), `client/src/hooks/__tests__/useWorkoutForm.test.tsx` (8), `server/storage/__tests__/workouts.test.ts` (7).
+- **Issue:** `as unknown as` type assertions bypass TypeScript entirely in test mocks. Tests don't catch interface drift, making refactoring risky.
 - **Fix:** Create typed mock factories using `vi.fn()` with proper generic types. Use Vitest's `vi.mocked()` helper for typed mock access.
 - **Effort:** 2 days
 
-### 17. Fix email scheduler race conditions
-- **File:** `server/emailScheduler.ts`
-- **Issue:** If multiple server instances start simultaneously, they may trigger duplicate email sends. No distributed locking or deduplication.
-- **Fix:** Use pg-boss's built-in job deduplication and retry mechanisms instead of the custom scheduler.
+### 17. Migrate email scheduler to pg-boss queue
+- **File:** `server/emailScheduler.ts` (171 lines)
+- **Issue:** Processes all users synchronously in a cron callback. The app already has pg-boss (`server/queue.ts`) for async job processing, but the email scheduler doesn't use it. Risk of startup race conditions, duplicate sends in clustered deployments, and blocking the event loop.
+- **Fix:** Refactor the cron to enqueue one pg-boss job per user. Let pg-boss handle concurrency, retries, and dead-letter.
 - **Effort:** 1 day
 
-### 18. Add request ID / tracing context
-- **Files:** `server/index.ts` (middleware), `server/logger.ts`
-- **Issue:** Logs lack correlation IDs, making it impossible to trace a single request across multiple log entries.
-- **Fix:** Add middleware that generates a UUID per request, stores it in `AsyncLocalStorage`, and includes it in all pino log output.
+### 18. Propagate request ID / tracing context to service layer
+- **Files:** `server/index.ts` (lines 178-204), service layer files
+- **Issue:** `pino-http` already generates request IDs at the HTTP layer, but service-layer functions (storage, AI services, email) don't receive or log request context. Correlating a user-facing error to backend logs requires manual timestamp matching.
+- **Fix:** Use `AsyncLocalStorage` to propagate request context. Create a middleware that stores `{ requestId, userId }` and a `getRequestContext()` helper that services can call.
 - **Effort:** 1 day
 
 ---
@@ -138,9 +136,9 @@
 ## P3 — Low Priority / Ongoing
 
 ### 19. Resolve dependency security overrides
-- **File:** `package.json` (npm overrides section)
-- **Issue:** 4 dependency overrides mask known vulnerabilities instead of fixing root causes. If upstream packages update, these overrides may silently break compatibility.
-- **Fix:** Investigate each override, determine if the vulnerability is exploitable in this context, and either upgrade the parent dependency or document the accepted risk.
+- **File:** `package.json` (lines 90-94 and 138-143)
+- **Issue:** 4 dependency overrides (`esbuild`, `yauzl`, `undici`, `serialize-javascript`) mask known vulnerabilities. Duplicated in both npm and pnpm override sections. GitHub Dependabot reports 10 vulnerabilities (5 high, 5 moderate).
+- **Fix:** Investigate each override, determine if the vulnerability is exploitable in this context, and either upgrade the parent dependency or document the accepted risk. Consolidate duplicate override sections.
 - **Effort:** 1 day
 
 ### 20. Persistent rate limiter
