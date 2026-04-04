@@ -1,4 +1,5 @@
 import type { TrainingContext } from "./gemini/types";
+import { sanitizeUserInput } from "./utils/sanitize";
 
 export const BASE_SYSTEM_PROMPT = `You are an expert AI fitness coach. You help athletes plan, track, and optimize their training for any fitness goal — from running races and functional fitness competitions (like Hyrox) to strength building, weight loss, and general health.
 
@@ -368,7 +369,8 @@ export function buildRetrievedChunksSection(chunks: string[]): string {
   section += `Use these relevant excerpts from the athlete's coaching materials to guide your coaching decisions.\n\n`;
 
   for (let i = 0; i < chunks.length; i++) {
-    section += `[Excerpt ${i + 1}]\n${chunks[i]}\n\n`;
+    // 🛡️ Sentinel: Sanitize retrieved chunks to mitigate prompt injection via user-uploaded materials
+    section += `[Excerpt ${i + 1}]\n${sanitizeUserInput(chunks[i])}\n\n`;
   }
 
   section += `--- END COACHING MATERIALS ---\n`;

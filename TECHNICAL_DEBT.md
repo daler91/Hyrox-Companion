@@ -5,43 +5,16 @@
 
 ---
 
-## P0 — Quick Wins (< 2 hours each)
+## ~~P0 — Quick Wins~~ (RESOLVED)
 
-### 1. Remove unused `aiService.ts` re-export wrapper
-- **File:** `server/services/aiService.ts`
-- **Issue:** This file is a 2-line backward-compatibility re-export. It adds an unnecessary indirection layer.
-- **Fix:** Delete the file and update any imports to reference `server/services/ai/index.ts` directly.
-- **Effort:** 30 min
+> All P0 items resolved on 2026-04-04.
 
-### 2. Move Gemini model names to environment config
-- **File:** `server/gemini/client.ts` (lines 6-7)
-- **Issue:** Model names `gemini-2.5-flash-lite` and `gemini-3.1-pro-preview` are hardcoded. Changing models requires a code change and redeploy.
-- **Fix:** Add `GEMINI_MODEL` and `GEMINI_SUGGESTIONS_MODEL` to `env.ts` schema with current values as defaults.
-- **Effort:** 30 min
-
-### 3. Replace `console.log` with structured logger
-- **Files:** `server/env.ts` (line 3), `script/build.ts`, `script/cleanup-orphans.ts`
-- **Issue:** These files use `console.log` instead of the pino logger, producing inconsistent log format and missing structured context. The `env.ts` case is intentional (pino not yet initialized at boot) but should still emit structured JSON.
-- **Fix:** For `env.ts`, keep console but ensure structured format (already partially done). For scripts, import and use pino directly.
-- **Effort:** 1 hour
-
-### 4. Fix weak `isStreamData` type guard
-- **File:** `client/src/hooks/useChatSession.ts` (lines 10-12)
-- **Issue:** The type guard only checks `typeof v === "object" && v !== null` — this would match any object, including arrays, Dates, etc. It does not validate that the expected properties (`ragInfo`, `text`, `error`) actually exist.
-- **Fix:** Add property existence checks (e.g., `"text" in v || "error" in v || "ragInfo" in v`).
-- **Effort:** 15 min
-
-### 5. Route all `process.env` access through `env.ts`
-- **Files:** `server/index.ts`, `server/emailTemplates.ts`, `server/services/ragService.ts`
-- **Issue:** Direct `process.env` access bypasses the Zod-validated env schema, creating risk of undefined values and inconsistent configuration.
-- **Fix:** Replace direct access with imports from `env.ts`. For test setup files, use a test-specific env helper.
-- **Effort:** 1 hour
-
-### 6. Consolidate timeout constants
-- **Files:** `server/constants.ts`, `server/gemini/client.ts`, `server/strava.ts`, various route files
-- **Issue:** AI timeouts, DB timeouts, and Strava timeouts are scattered across multiple files with no single source of truth.
-- **Fix:** Create a centralized timeout config section in `server/constants.ts` and reference it everywhere.
-- **Effort:** 1 hour
+- ~~**1. Remove unused `aiService.ts` re-export wrapper**~~ — Deleted file, updated 4 importers.
+- ~~**2. Move Gemini model names to environment config**~~ — Added to `env.ts` with defaults.
+- ~~**3. Replace `console.log` with structured logger**~~ — Not needed: `env.ts` is pre-logger boot (intentional), scripts are standalone CLI tools where console is appropriate.
+- ~~**4. Fix weak `isStreamData` type guard**~~ — Added `!Array.isArray` and property existence checks.
+- ~~**5. Route all `process.env` access through `env.ts`**~~ — Fixed in 3 production files.
+- ~~**6. Consolidate timeout constants**~~ — Already centralized in `server/constants.ts`. No action needed.
 
 ---
 
