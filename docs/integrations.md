@@ -37,6 +37,31 @@ All integrations are configured through environment variables and initialized du
 - `server/crypto.ts` -- AES-256-GCM encryption/decryption for tokens at rest
 - `shared/schema/tables.ts` -- `stravaConnections` table definition
 
+### Strava OAuth Flow Diagram
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Client as React App
+    participant Server as Express API
+    participant Strava as Strava API
+    participant DB as PostgreSQL
+    
+    User->>Client: Click "Connect Strava"
+    Client->>Server: GET /api/v1/strava/auth
+    Server->>Server: createSignedState(userId) with HMAC-SHA256
+    Server->>Client: { url: "strava.com/oauth/authorize?state=..." }
+    Client->>Strava: Redirect to authorization URL
+    User->>Strava: Approve access
+    Strava->>Server: GET /api/v1/strava/callback?code=...&state=...
+    Server->>Server: verifySignedState(state) — CSRF check + max age
+    Server->>Strava: POST /oauth/token (exchange code for tokens)
+    Strava->>Server: { access_token, refresh_token, expires_at }
+    Server->>Server: encryptToken(access_token), encryptToken(refresh_token)
+    Server->>DB: INSERT strava_connections (encrypted tokens)
+    Server->>Client: Redirect to /settings
+```
+
 ### Environment Variables
 
 | Variable | Required | Description |
@@ -87,6 +112,38 @@ When `getValidAccessToken()` is called and the current token's `expiresAt` has p
 3. The fresh access token is returned for use
 
 All external Strava API calls use `AbortSignal.timeout(15000)` (the `EXTERNAL_API_TIMEOUT_MS` constant).
+
+### Token Refresh Flow
+
+```typescript
+// From server/strava.ts — getValidAccessToken()
+async function getValidAccessToken(userId: string): Promise<string | null> {
+  const connection = await storage.getStravaConnection(userId);
+  if (!connection) return null;
+
+  // Token still valid — return decrypted token
+  if (connection.expiresAt > new Date()) {
+    return connection.accessToken; // auto-decrypted by storage layer
+  }
+
+  // Token expired — refresh via Strava API
+  const refreshed = await refreshStravaToken(connection.refreshToken);
+  if (!refreshed) return null;
+
+  // Store new encrypted tokens
+  await storage.upsertStravaConnection({
+    userId,
+    stravaAthleteId: connection.stravaAthleteId,
+    accessToken: refreshed.access_token,   // encrypted on write
+    refreshToken: refreshed.refresh_token,  // encrypted on write
+    expiresAt: new Date(refreshed.expires_at * 1000),
+    scope: connection.scope,
+    lastSyncedAt: connection.lastSyncedAt,
+  });
+
+  return refreshed.access_token;
+}
+```
 
 ### Activity Sync
 
@@ -215,6 +272,17 @@ The `sendEmail()` function in `server/email.ts`:
 
 The external cron endpoint (`/api/v1/cron/emails`) allows platforms like Railway or external cron services to trigger the email job via HTTP, as an alternative to the internal node-cron scheduler.
 
+### Encryption at Rest
+
+All Strava tokens are encrypted at rest using AES-256-GCM (`server/crypto.ts`):
+
+- **Algorithm**: AES-256-GCM with random 12-byte IV per encryption
+- **Key**: 32-byte key from `ENCRYPTION_KEY` env var. Accepts hex-encoded or raw string (SHA-256 hashed to 32 bytes as fallback).
+- **Format**: Stored as `${iv}:${authTag}:${encryptedText}` (all hex-encoded)
+- **Legacy detection**: If stored value doesn't match the `iv:tag:data` format (3 colon-separated parts), it's treated as unencrypted legacy data -- enabling graceful migration.
+- **Lazy key loading**: Key is loaded on first use, not at boot. This allows the server to start in CI environments without `ENCRYPTION_KEY`.
+- **Failure mode**: Decryption failures throw (strict) -- never return corrupted data.
+
 ---
 
 ## Job Queue (pg-boss)
@@ -335,3 +403,7 @@ The `runStartupMaintenance(storage)` function runs a sequence of checks and migr
 8. **Mark missed plan days** -- Calls `storage.markMissedPlanDays()` to flag any past planned days that were never completed.
 
 All steps after the database connection test are non-fatal: failures are logged as warnings and the server continues to start.
+
+---
+
+See also: [Database -- stravaConnections Table](database.md#schema-tables), [Authentication](authentication.md), [Architecture -- Service Dependencies](architecture.md#service-dependencies)

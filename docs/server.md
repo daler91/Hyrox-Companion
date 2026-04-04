@@ -81,6 +81,16 @@ Middleware is applied in the following order in `server/index.ts`:
 | 10 | Health check route | `GET /api/v1/health` (registered inline, not in routes.ts) |
 | 11 | `pino-http` | Structured request logging with request ID and user context |
 
+### Middleware Ordering Rationale
+
+Middleware is ordered intentionally:
+1. **compression** first -- compresses all responses including error pages
+2. **CORS** early -- rejects disallowed origins before any processing
+3. **CSP nonce + Helmet** before route handlers -- security headers on every response
+4. **Custom CSP override** -- refines Helmet defaults with Clerk domains and nonce
+5. **Body parsing** after security -- limits apply to parsed bodies only
+6. **pino-http** last in pre-route stack -- logs after auth context is available (extracts userId from Clerk)
+
 ### CORS allowed origins
 
 - `APP_URL` (from environment)
@@ -160,6 +170,26 @@ Client-supplied `X-Request-ID` headers are validated against the pattern `^[\w.:
 
 The global error handler returns generic `"Internal Server Error"` messages for 500-status errors. Error details (`err.details`) are only included in the response for non-500 errors. All errors are reported to Sentry.
 
+### Error Handling Flow
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Express
+    participant Handler as Route Handler
+    participant Sentry
+    
+    Client->>Express: API Request
+    Express->>Handler: After middleware
+    Handler-->>Express: throw Error(status, message)
+    Express->>Sentry: captureException(err)
+    alt status < 500
+        Express->>Client: { error: err.message, code, details }
+    else status >= 500
+        Express->>Client: { error: "Internal Server Error", code: "INTERNAL_SERVER_ERROR" }
+    end
+```
+
 ---
 
 ## Logging
@@ -201,6 +231,15 @@ Auto-logging is filtered to API routes only (`req.url` starting with `/api/v1`).
 5. **Drain database pools** -- `pool.end()` (main DB) and `vectorPool.end()` (vector DB) are called in parallel.
 
 6. **Exit** -- `process.exit(0)` on success, `process.exit(1)` on error.
+
+### Health Check Lifecycle
+
+- `isReady` starts as `false`, `startupError` as `null`
+- Server listens on port BEFORE routes register (allows health check during startup)
+- `GET /api/v1/health` returns `{ status: "starting" }` while bootstrapping
+- After `registerRoutes()` completes, `isReady = true` -- returns `{ status: "ok" }`
+- If startup throws, `startupError` is set -- returns `{ status: "error", error: "..." }` with 503
+- CI tools (wait-on) poll this endpoint to know when the server is ready
 
 ---
 
@@ -305,3 +344,7 @@ In production (`server/static.ts`):
 - Other static files are served with `max-age=0` and no index
 - The SPA fallback (`*`) reads `index.html` once at startup and injects the per-request CSP nonce into all `<script>` tags
 - The fallback route is rate-limited to 100 requests per 15-minute window
+
+---
+
+See also: [Authentication](authentication.md), [Database -- Storage Layer](database.md#storage-layer), [Architecture -- Request Lifecycle](architecture.md#request-lifecycle)

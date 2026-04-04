@@ -218,6 +218,7 @@ Detailed documentation for each subsystem is available in the [`docs/`](docs/) d
 
 | Document | Description |
 |----------|-------------|
+| [Architecture Overview](docs/architecture.md) | End-to-end flows, service dependencies, RAG decision tree, schema pipeline |
 | [Client (Frontend)](docs/client.md) | React SPA: pages, components, routing, styling, PWA, error tracking |
 | [Server (Backend)](docs/server.md) | Express API: bootstrap, middleware stack, security, logging, graceful shutdown |
 | [Database](docs/database.md) | PostgreSQL schema, Drizzle ORM, pgvector, migrations, storage layer |

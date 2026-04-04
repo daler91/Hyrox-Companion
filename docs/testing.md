@@ -390,6 +390,54 @@ npx drizzle-kit push
 pnpm exec vitest run --config vitest.integration.config.ts
 ```
 
+---
+
+## Debugging Failed Tests
+
+### Running a Single Test
+
+```bash
+# Run a specific test file
+pnpm exec vitest run server/routes/__tests__/workouts.test.ts
+
+# Run tests matching a pattern
+pnpm exec vitest run -t "should return 404"
+
+# Run in watch mode for a specific file
+pnpm exec vitest watch server/services/workoutService.test.ts
+```
+
+### Common CI vs Local Mismatches
+
+- **Timezone issues**: CI runs in UTC. Use `toDateStr()` helper instead of `new Date().toISOString()` for date comparisons.
+- **Rate limiting**: Tests that hit the same endpoint rapidly may trigger rate limits. Use `clearRateLimitBuckets()` from `server/routeUtils.ts` in `beforeEach`.
+- **Database state**: Integration tests share a real database. Always use `clearDatabase()` in setup. Check for leaked state from parallel test runs.
+- **Missing env vars**: CI may not have all optional env vars. Tests that depend on `GEMINI_API_KEY` should be conditional or mocked.
+
+---
+
+## Coverage Enforcement
+
+Coverage thresholds are configured in `vitest.config.ts`:
+
+```typescript
+coverage: {
+  provider: "v8",
+  thresholds: {
+    statements: 80,
+    branches: 80,
+    functions: 80,
+    lines: 80,
+  }
+}
+```
+
+Run coverage locally: `pnpm exec vitest run --coverage`
+
+CI enforces thresholds in the test workflow -- the build fails if any metric drops below 80%.
+
+---
+
 ### Running Cypress locally
 
 1. Build and start the app:
@@ -525,3 +573,7 @@ project-root/
 - **Cypress specs:** Named with the `.cy.ts` suffix in `cypress/e2e/`.
 - **Test data factories:** Helper functions like `makeSet()` and `makeWorkoutLog()` are defined at the top of test files to build test data with sensible defaults and per-test overrides.
 - **`data-testid` attributes:** Used in React components for Cypress selectors via `cy.getBySel()`.
+
+---
+
+See also: [Server -- Route Registration](server.md#route-registration), [Database -- Storage Layer](database.md#storage-layer)

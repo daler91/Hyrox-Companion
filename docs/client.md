@@ -239,6 +239,43 @@ Barrel exports via `index.ts` files in each subdirectory.
 - `QuickActions` -- Quick action buttons.
 - `WorkoutCard` -- Workout display card.
 
+### Component Communication Patterns
+
+- **Props drilling**: Parent pages pass data to child components (e.g., Timeline passes `entries` to TimelineWorkoutCard)
+- **Shared hooks**: Multiple components use the same React Query hook (e.g., `useTimelineData` consumed by both timeline and coach panel)
+- **Query invalidation**: After mutations, hooks call `queryClient.invalidateQueries()` to trigger refetches (e.g., `useWorkoutActions` invalidates timeline after creating a workout)
+- **Event-driven updates**: `useAutoCoachWatcher` detects when `isAutoCoaching` transitions from true to false, then invalidates the timeline query
+
+```mermaid
+flowchart TD
+    subgraph Hooks
+        UTD[useTimelineData]
+        UTF[useTimelineFilters]
+        UTS[useTimelineState]
+    end
+    
+    subgraph Components
+        TL[Timeline Page]
+        TH[TimelineHeader]
+        TF[TimelineFilters]
+        TDG[TimelineDateGroup]
+        TWC[TimelineWorkoutCard]
+        WDD[WorkoutDetailDialog]
+        CP[CoachPanel]
+    end
+    
+    UTS --> UTD
+    UTS --> UTF
+    UTD -->|entries, plans, PRs| TL
+    UTF -->|filters| TL
+    TL --> TH
+    TL --> TF
+    TL -->|grouped entries| TDG
+    TDG --> TWC
+    TWC -->|click| WDD
+    TL --> CP
+```
+
 ---
 
 ## Styling
@@ -285,6 +322,14 @@ Configured via `components.json` at the project root:
 - **CSS variables**: enabled
 - **RSC**: disabled (client-side React)
 - **TSX**: enabled
+
+### Accessibility
+
+- Skip-to-content link in `AuthenticatedLayout` (`<a href="#main-content" className="skip-to-content">`)
+- ARIA roles on chat panel: `role="log"`, `aria-live="polite"` for screen reader updates
+- Keyboard navigation: All interactive elements are focusable, dialog components trap focus
+- Semantic HTML: `<main>`, `<header>`, `<nav>` landmark elements
+- Color contrast: HSL-based theme with light/dark variants designed for WCAG compliance
 
 ---
 
@@ -391,3 +436,7 @@ shadcn/ui CLI configuration:
 - **Base color**: `neutral`.
 - **CSS variables**: enabled.
 - **Aliases**: `@/components`, `@/lib/utils`, `@/components/ui`, `@/lib`, `@/hooks`.
+
+---
+
+See also: [State Management -- Custom Hooks](state-management.md#custom-hooks-catalog), [API Reference](api-reference.md)

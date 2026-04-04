@@ -46,6 +46,48 @@ All errors follow a standard format:
 - `details` is only included for validation errors and non-500 responses.
 - 500 errors always return `"Internal Server Error"` to prevent leaking internals.
 
+**Validation error example (400):**
+
+```json
+{
+  "error": "Invalid workout data",
+  "code": "VALIDATION_ERROR",
+  "details": {
+    "issues": [
+      { "path": "date", "message": "Must be a valid date in YYYY-MM-DD format" },
+      { "path": "rpe", "message": "Number must be less than or equal to 10" },
+      { "path": "exercises[0].exerciseName", "message": "String must contain at least 1 character(s)" }
+    ]
+  }
+}
+```
+
+**Rate limit error example (429):**
+
+```
+HTTP/1.1 429 Too Many Requests
+Retry-After: 45
+RateLimit-Limit: 5
+RateLimit-Remaining: 0
+RateLimit-Reset: 1710500045
+```
+
+```json
+{
+  "error": "Rate limit exceeded",
+  "code": "RATE_LIMITED"
+}
+```
+
+**Not found error example (404):**
+
+```json
+{
+  "error": "Workout not found",
+  "code": "NOT_FOUND"
+}
+```
+
 **Common HTTP status codes:**
 
 | Status | Code | Meaning |
@@ -138,6 +180,81 @@ Create a new workout log, optionally with parsed exercises.
 - **Validation:** `insertWorkoutLogSchema` + `exercisesPayloadSchema`
 - **Side effects:** If user has AI coach enabled, sets `isAutoCoaching` flag and queues an `auto-coach` job.
 - **Response:** Created `WorkoutLog` with expanded `exerciseSets`
+
+**Request example:**
+
+```json
+{
+  "date": "2025-03-15",
+  "focus": "Strength and Running",
+  "mainWorkout": "4x8 back squat at 80kg, then 5km easy run",
+  "accessory": "3x12 lunges, 3x15 wall balls",
+  "duration": 75,
+  "rpe": 7,
+  "exercises": [
+    {
+      "exerciseName": "back_squat",
+      "category": "strength",
+      "confidence": 95,
+      "sets": [
+        { "setNumber": 1, "reps": 8, "weight": 80 },
+        { "setNumber": 2, "reps": 8, "weight": 80 },
+        { "setNumber": 3, "reps": 8, "weight": 80 },
+        { "setNumber": 4, "reps": 8, "weight": 80 }
+      ]
+    },
+    {
+      "exerciseName": "easy_run",
+      "category": "running",
+      "confidence": 90,
+      "sets": [
+        { "setNumber": 1, "distance": 5000, "time": 28 }
+      ]
+    }
+  ]
+}
+```
+
+**Response example:**
+
+```json
+{
+  "id": "wl_abc123",
+  "userId": "user_456",
+  "date": "2025-03-15",
+  "focus": "Strength and Running",
+  "mainWorkout": "4x8 back squat at 80kg, then 5km easy run",
+  "accessory": "3x12 lunges, 3x15 wall balls",
+  "duration": 75,
+  "rpe": 7,
+  "source": "manual",
+  "createdAt": "2025-03-15T10:30:00.000Z",
+  "exerciseSets": [
+    {
+      "id": "es_001",
+      "workoutLogId": "wl_abc123",
+      "exerciseName": "back_squat",
+      "category": "strength",
+      "setNumber": 1,
+      "reps": 8,
+      "weight": 80,
+      "distance": null,
+      "time": null
+    },
+    {
+      "id": "es_002",
+      "workoutLogId": "wl_abc123",
+      "exerciseName": "back_squat",
+      "category": "strength",
+      "setNumber": 2,
+      "reps": 8,
+      "weight": 80,
+      "distance": null,
+      "time": null
+    }
+  ]
+}
+```
 
 ### PATCH /api/v1/workouts/:id
 
@@ -371,6 +488,41 @@ Parse free-text or voice input into structured exercise data using Gemini AI.
 - **Validation:** `parseExercisesRequestSchema`
 - **Response:** `ParsedExercise[]` with confidence scores and category classification
 
+**Request example:**
+
+```json
+{
+  "text": "3 sets bench 225lbs x 8, then 3 miles in 24 min"
+}
+```
+
+**Response example:**
+
+```json
+[
+  {
+    "exerciseName": "bench_press",
+    "category": "strength",
+    "confidence": 95,
+    "missingFields": [],
+    "sets": [
+      { "setNumber": 1, "reps": 8, "weight": 225 },
+      { "setNumber": 2, "reps": 8, "weight": 225 },
+      { "setNumber": 3, "reps": 8, "weight": 225 }
+    ]
+  },
+  {
+    "exerciseName": "easy_run",
+    "category": "running",
+    "confidence": 80,
+    "missingFields": [],
+    "sets": [
+      { "setNumber": 1, "distance": 4828, "time": 24 }
+    ]
+  }
+]
+```
+
 ### POST /api/v1/chat
 
 Send a message to the AI coach and receive a complete response.
@@ -394,6 +546,38 @@ Send a message to the AI coach and receive a streaming response via Server-Sent 
   - `{ text: string }` — Streaming text chunks
   - `{ done: true }` — Stream complete
   - `{ error: string }` — Stream error
+
+**Request example:**
+
+```json
+{
+  "message": "How should I pace my sled push at competition?",
+  "history": [
+    { "role": "user", "content": "I have a Hyrox race in 6 weeks" },
+    { "role": "assistant", "content": "Great! Let me help you prepare..." }
+  ]
+}
+```
+
+**SSE response sequence:**
+
+```
+data: {"ragInfo":{"source":"rag","chunkCount":3,"materialCount":2}}
+
+data: {"text":"For the sled push, "}
+
+data: {"text":"I recommend breaking it into "}
+
+data: {"text":"three phases: an aggressive start, steady middle, and controlled finish."}
+
+data: {"done":true}
+```
+
+If an error occurs mid-stream:
+
+```
+data: {"error":"Stream error"}
+```
 
 ### GET /api/v1/chat/history
 
@@ -594,6 +778,61 @@ Get merged timeline of planned and logged workouts.
 - **Query:** `planId?` (filter by plan), `limit?` (default capped), `offset?`
 - **Response:** `TimelineEntry[]` — merged planned + logged workouts sorted by date
 
+**Response example:**
+
+```json
+[
+  {
+    "id": "pd_101",
+    "date": "2025-03-17",
+    "type": "planned",
+    "status": "planned",
+    "focus": "Sled Push + SkiErg",
+    "mainWorkout": "4x50m sled push at 100kg, 3x500m SkiErg",
+    "accessory": "3x15 wall balls",
+    "notes": null,
+    "planDayId": "pd_101",
+    "workoutLogId": null,
+    "weekNumber": 3,
+    "dayName": "Monday",
+    "planName": "Hyrox 8-Week Prep",
+    "planId": "plan_abc"
+  },
+  {
+    "id": "wl_202",
+    "date": "2025-03-16",
+    "type": "logged",
+    "status": "completed",
+    "focus": "Easy Run",
+    "mainWorkout": "5km easy run",
+    "accessory": null,
+    "notes": "Felt good, kept HR under 145",
+    "duration": 30,
+    "rpe": 4,
+    "planDayId": null,
+    "workoutLogId": "wl_202",
+    "source": "strava",
+    "exerciseSets": [
+      {
+        "id": "es_501",
+        "workoutLogId": "wl_202",
+        "exerciseName": "easy_run",
+        "category": "running",
+        "setNumber": 1,
+        "distance": 5000,
+        "time": 30,
+        "reps": null,
+        "weight": null
+      }
+    ],
+    "calories": 320,
+    "distanceMeters": 5000,
+    "avgHeartrate": 142,
+    "maxHeartrate": 155
+  }
+]
+```
+
 ### GET /api/v1/exercises/:exerciseName/history
 
 Get historical exercise sets for a specific exercise.
@@ -609,3 +848,10 @@ Export all training data as CSV or JSON.
 - **Rate limit:** `export` category, 5/min
 - **Query:** `format` — `"csv"` (default) or `"json"`
 - **Response:** File download with appropriate Content-Type and Content-Disposition headers
+
+---
+
+## See Also
+
+- [AI and RAG](ai-and-rag.md) -- Architecture of the RAG pipeline, embedding strategy, and coaching material processing.
+- [Authentication](authentication.md) -- Clerk JWT setup, middleware configuration, and session management.

@@ -61,6 +61,24 @@ export const useAuth = shouldBypassAuth ? useTestAuthImpl : useClerkAuthImpl;
 
 All API requests include `credentials: "include"` so that Clerk session cookies are sent with every fetch. This is configured in the shared `apiRequest` function and the default `queryFn` in `client/src/lib/queryClient.ts`.
 
+```mermaid
+sequenceDiagram
+    participant Browser
+    participant Clerk
+    participant React as React App
+    participant API as Express API
+    participant DB as PostgreSQL
+    
+    Browser->>Clerk: Sign in
+    Clerk->>Browser: JWT cookie
+    React->>API: GET /api/v1/auth/user (credentials: include)
+    API->>API: clerkMiddleware extracts userId
+    API->>DB: storage.upsertUser({ id, email, name })
+    DB->>API: User record
+    API->>React: User JSON
+    React->>React: useAuth returns { user, isAuthenticated: true }
+```
+
 ---
 
 ## Server-Side Auth
@@ -158,6 +176,19 @@ Three independent layers prevent the bypass from being used in production:
 
 3. **Runtime guard** (`server/clerkAuth.ts`) -- The `isDevBypassEnabled()` function returns `false` unconditionally when `NODE_ENV` is `"production"`, regardless of the `ALLOW_DEV_AUTH_BYPASS` value.
 
+### Hook Selection Logic
+
+The `useAuth` export is determined at module load time (not runtime):
+
+```typescript
+const shouldBypassAuth = isCypressTest || isDevPreview;
+export const useAuth = shouldBypassAuth ? useTestAuthImpl : useClerkAuthImpl;
+```
+
+- `useClerkAuthImpl`: Uses `@clerk/react` hooks (`useAuth`, `useUser`). Fetches DB user via React Query when `isSignedIn`. Falls back to Clerk profile while DB loads.
+- `useTestAuthImpl`: Skips Clerk entirely. Fetches DB user directly (server uses hardcoded `dev-user` ID).
+- Both implementations share `useCoachingPollInterval()` for auto-coach polling and `useAutoCoachWatcher()` for timeline invalidation.
+
 ### Behavior When Active
 
 - **Client:** `ClerkProvider` is not rendered. The `<Show>` gate is skipped and `<AuthenticatedLayout>` renders directly. A yellow "DEV MODE" banner appears at the top of the page in dev preview mode. The `useTestAuthImpl` hook is used instead of `useClerkAuthImpl`.
@@ -219,3 +250,7 @@ The server sets `trust proxy` to `1` in `setupAuth` to ensure correct client IP 
 | `ALLOW_DEV_AUTH_BYPASS` | Optional | Both | Set to `"true"` to enable the dev auth bypass. Only permitted in `development` and `test` environments. Fatal in production. |
 
 *The Clerk keys are optional in the Zod schema but are effectively required for production. If they are absent and `ALLOW_DEV_AUTH_BYPASS` is not `"true"`, the server will throw an error on startup.
+
+---
+
+See also: [Server -- Middleware Stack](server.md#middleware-stack), [Database -- Users Table](database.md#schema-tables)

@@ -163,6 +163,28 @@ All hooks are in `client/src/hooks/`.
 |------|------|---------|
 | `useVoiceInput` | `useVoiceInput.ts` | Web Speech API integration. Manages microphone permissions, speech recognition start/stop, transcript accumulation, and error handling. |
 
+### Hook Dependency Tree
+
+```mermaid
+flowchart TD
+    UTS[useTimelineState] --> UTD[useTimelineData]
+    UTS --> UTF[useTimelineFilters]
+    UTD --> |React Query| API["/api/v1/timeline"]
+    UTD --> |React Query| API2["/api/v1/plans"]
+    UTD --> |React Query| API3["/api/v1/personal-records"]
+    
+    UWF[useWorkoutForm] --> UWE[useWorkoutEditor]
+    UWF --> UWA[useWorkoutActions]
+    UWVF[useWorkoutVoiceForm] --> UWF
+    UWVF --> UVI[useVoiceInput]
+    
+    UCS[useChatSession] --> UCM[useChatMutations]
+    UCS --> |SSE stream| API4["/api/v1/chat/stream"]
+    
+    UA[useAuth] --> |polling| API5["/api/v1/auth/user"]
+    UA --> |invalidates| UTD
+```
+
 ---
 
 ## Offline Queue
@@ -196,6 +218,41 @@ When the browser fires the `online` event, `flushQueue()` runs automatically. On
 - `QuotaExceededError` on save: Evicts the oldest half of the queue, retries once, then clears entirely if still failing.
 - Corrupted localStorage: Returns empty queue (gets overwritten on next save).
 - Individual mutation failures: Incremented `retryCount`, kept in queue for next flush.
+
+### Offline Queue Lifecycle
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Hook as useMutation
+    participant Queue as offlineQueue
+    participant Storage as localStorage
+    participant Server as Express API
+    
+    User->>Hook: Submit action
+    alt Online
+        Hook->>Server: API request
+        Server->>Hook: Response
+    else Offline
+        Hook->>Queue: enqueueMutation(method, url, body)
+        Queue->>Storage: Save with unique ID + timestamp
+        Queue->>User: Queued (offline indicator)
+    end
+    
+    Note over Queue: Browser fires 'online' event
+    Queue->>Queue: flushQueue()
+    loop Each pending mutation
+        Queue->>Server: Replay with X-Idempotency-Key header
+        alt Success
+            Queue->>Storage: Remove from queue
+        else Failure (retryCount < 5)
+            Queue->>Storage: Increment retryCount
+        else Stale (> 7 days) or max retries
+            Queue->>Storage: Drop mutation
+        end
+    end
+    Queue->>User: CustomEvent("offline-sync-complete")
+```
 
 ---
 
@@ -274,6 +331,38 @@ if (!rafIdRef.current) {
 }
 ```
 
+### requestAnimationFrame Batching Detail
+
+The `useChatSession` hook uses rAF batching to prevent excessive React re-renders during SSE streaming:
+
+```typescript
+// From client/src/hooks/useChatSession.ts
+const acc = { content: "", ragInfo: undefined };
+let dirty = false;
+
+const flush = () => {
+  if (!dirty) return;
+  dirty = false;
+  const snapshot = { content: acc.content, ragInfo: acc.ragInfo };
+  setMessages((prev) =>
+    prev.map((m) =>
+      m.id === assistantMessageId
+        ? { ...m, content: snapshot.content, ...(snapshot.ragInfo ? { ragInfo: snapshot.ragInfo } : {}) }
+        : m,
+    ),
+  );
+};
+
+const scheduleFlush = () => {
+  if (!dirty) {
+    dirty = true;
+    rafId = requestAnimationFrame(flush);
+  }
+};
+```
+
+Without batching, each SSE chunk (arriving every ~50ms) would trigger a React state update + re-render. With rAF batching, multiple chunks are accumulated and flushed once per animation frame (~16ms), reducing renders by 3-5x.
+
 ### Parallel Data Fetching
 
 Independent data fetches use `Promise.all()` to run concurrently:
@@ -303,3 +392,7 @@ The 5-minute stale time prevents redundant API calls when navigating between pag
 | `client/src/lib/dateUtils.ts` | Date formatting and predicates |
 | `client/src/lib/exerciseUtils.ts` | Exercise data helpers |
 | `client/src/lib/statsUtils.ts` | Statistics calculations |
+
+---
+
+See also: [Client -- Component Architecture](client.md#component-architecture), [API Reference](api-reference.md), [Architecture -- Request Lifecycle](architecture.md#request-lifecycle)

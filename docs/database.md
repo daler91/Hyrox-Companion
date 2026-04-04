@@ -283,6 +283,22 @@ users
   |-- 1:N --> custom_exercises
 ```
 
+```mermaid
+erDiagram
+    users ||--o{ trainingPlans : "has"
+    users ||--o{ workoutLogs : "logs"
+    users ||--o{ chatMessages : "sends"
+    users ||--o{ coachingMaterials : "uploads"
+    users ||--o{ customExercises : "defines"
+    users ||--|| stravaConnections : "connects"
+    
+    trainingPlans ||--o{ planDays : "contains"
+    workoutLogs ||--o{ exerciseSets : "has"
+    workoutLogs }o--o| planDays : "links to"
+    workoutLogs }o--o| trainingPlans : "belongs to"
+    coachingMaterials ||--o{ documentChunks : "chunked into"
+```
+
 Key relationships:
 
 - **users -> training_plans -> plan_days**: A user owns multiple training plans, each containing plan days organized by week number and day name. All cascade on user/plan deletion.
@@ -293,6 +309,22 @@ Key relationships:
 - **users -> strava_connections**: One-to-one relationship enforced by UNIQUE constraint on `user_id`.
 - **users -> chat_messages**: Conversation history for the AI coach, ordered by timestamp.
 - **users -> custom_exercises**: User-defined exercises with a unique constraint on `(user_id, name)` to prevent duplicates.
+
+```mermaid
+erDiagram
+    users ||--o{ trainingPlans : "has"
+    users ||--o{ workoutLogs : "logs"
+    users ||--o{ chatMessages : "sends"
+    users ||--o{ coachingMaterials : "uploads"
+    users ||--o{ customExercises : "defines"
+    users ||--|| stravaConnections : "connects"
+    
+    trainingPlans ||--o{ planDays : "contains"
+    workoutLogs ||--o{ exerciseSets : "has"
+    workoutLogs }o--o| planDays : "links to"
+    workoutLogs }o--o| trainingPlans : "belongs to"
+    coachingMaterials ||--o{ documentChunks : "chunked into"
+```
 
 ---
 
@@ -415,6 +447,33 @@ The pgvector extension itself is ensured via `CREATE EXTENSION IF NOT EXISTS vec
 
 ### Architecture
 
+## Transaction Patterns
+
+Drizzle transactions are used for atomic multi-table operations. Example from `workoutService.ts`:
+
+```typescript
+// Replace exercise sets atomically -- delete old, insert new
+await db.transaction(async (tx) => {
+  await tx.delete(exerciseSets)
+    .where(eq(exerciseSets.workoutLogId, workoutId));
+  if (setRows.length > 0) {
+    await tx.insert(exerciseSets).values(setRows);
+  }
+});
+```
+
+The workout creation flow uses multiple related operations:
+1. Insert `workoutLogs` record
+2. If linked to a plan day, update `planDays` status to "completed"
+3. Expand parsed exercises into `exerciseSets` rows
+4. Upsert `customExercises` for any new custom exercise names
+
+These run in a service-level orchestration (not a single DB transaction) because some steps involve external calls (AI parsing). The exercise set replacement uses a proper transaction to avoid partial state.
+
+---
+
+### Architecture
+
 The storage layer follows a **repository pattern** with interface segregation. The `IStorage` interface (defined in `server/storage/IStorage.ts`) is composed from several smaller interfaces:
 
 ```
@@ -534,6 +593,46 @@ In addition to Drizzle Kit migrations, `server/maintenance.ts` runs at applicati
 
 ---
 
+## Transaction Patterns
+
+Drizzle transactions are used for atomic multi-table operations. Example from `server/services/workoutService.ts`:
+
+```typescript
+// Replace exercise sets atomically — delete old, insert new
+await db.transaction(async (tx) => {
+  await tx.delete(exerciseSets)
+    .where(eq(exerciseSets.workoutLogId, workoutId));
+  if (setRows.length > 0) {
+    await tx.insert(exerciseSets).values(setRows);
+  }
+});
+```
+
+The workout creation flow orchestrates multiple related operations:
+
+1. Insert `workoutLogs` record
+2. If linked to a plan day, update `planDays` status to `"completed"` via JOIN-based update
+3. Expand parsed exercises into `exerciseSets` rows (using `expandExercisesToSetRows()`)
+4. Upsert `customExercises` for any new custom exercise names
+
+These run as service-level orchestration (not a single DB transaction) because some steps involve external API calls (Gemini AI parsing). The exercise set replacement uses a proper transaction to avoid partial state where old sets are deleted but new ones fail to insert.
+
+**Custom exercise deduplication** uses a `Map` with "last-wins" strategy:
+
+```typescript
+// Single-pass deduplication using Map (O(N) instead of O(N^2))
+const uniqueCustomExs = new Map<string, { userId: string; name: string; category: string }>();
+for (const ex of exercises) {
+  if (ex.exerciseName === "custom" && ex.customLabel) {
+    uniqueCustomExs.set(ex.customLabel, {
+      userId, name: ex.customLabel, category: ex.category || "conditioning",
+    });
+  }
+}
+```
+
+---
+
 ## Indexing Strategy
 
 ### Summary by Table
@@ -563,6 +662,32 @@ In addition to Drizzle Kit migrations, `server/maintenance.ts` runs at applicati
 
 **custom_exercises** also has:
 - Unique composite: `(user_id, name)` to prevent duplicate exercise names per user
+
+---
+
+## Performance Considerations
+
+**Coalesced Analytics Cache:**
+The analytics routes (`server/routes/analytics.ts`) use an in-memory promise cache to prevent redundant DB queries:
+```typescript
+// Multiple concurrent requests for the same user's analytics data
+// share a single database query via a cached Promise
+const cacheKey = `${userId}-${from || 'none'}-${to || 'none'}`;
+const entry = cache.get(cacheKey);
+if (entry && (now - entry.timestamp < CACHE_TTL_MS)) {
+  return entry.promise; // Return the same Promise to all callers
+}
+```
+This coalescing pattern means 3 concurrent analytics requests result in 1 DB query, not 3.
+
+**N+1 Avoidance:**
+- `getExerciseSetsByWorkoutLogs(ids[])`: Batch-fetches exercise sets for multiple workouts in a single query, avoiding per-workout queries on the timeline.
+- `getAllExerciseSetsWithDates(userId, from?, to?)`: Fetches all sets in a date range in one query for analytics computation.
+
+**Key Index Usage:**
+- `idx_workout_logs_user_date` -- Most-used index. Powers timeline queries (WHERE userId = ? ORDER BY date).
+- `idx_exercise_sets_workout_sort` -- Powers ordered exercise display within a workout.
+- `idx_plan_days_plan_status` -- Composite index for "find all planned days in a plan" (used by auto-coach).
 
 ---
 
@@ -617,3 +742,7 @@ Type-safe enums are defined in `shared/schema/enums.ts`:
 ### Exercise Definitions
 
 The canonical exercise list is defined in `shared/schema/exercises.ts` as `EXERCISE_DEFINITIONS`, mapping exercise keys (e.g., `skierg`, `back_squat`) to their display labels, categories, and applicable measurement fields. The `ExerciseName` type is derived from the keys of this object.
+
+---
+
+See also: [Server -- Storage Layer Usage](server.md), [AI and RAG -- documentChunks](ai-and-rag.md#rag-pipeline), [Architecture -- Schema Pipeline](architecture.md#schema-pipeline)
