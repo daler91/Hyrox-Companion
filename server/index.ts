@@ -222,8 +222,9 @@ app.use(pinoHttp({
   }
 }));
 
-app.use((req: Request & { id?: string; auth?: { userId?: string } }, _res, next) => {
-  const ctx = { requestId: req.id ?? "", userId: req.auth?.userId };
+app.use((req, _res, next) => {
+  const r = req as Request & { id?: string; auth?: { userId?: string } };
+  const ctx = { requestId: r.id ?? "", userId: r.auth?.userId };
   runWithRequestContext(ctx, () => next());
 });
 
