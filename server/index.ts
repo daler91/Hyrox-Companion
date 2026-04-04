@@ -21,6 +21,7 @@ import { getAuth } from "@clerk/express";
 import { runStartupMaintenance } from "./maintenance";
 import { startQueue, queue } from "./queue";
 import { startCron, stopCron } from "./cron";
+import { AppError } from "./errors";
 
 // 🛡️ Sentinel: Dev Auth Bypass double-guard
 if (env.ALLOW_DEV_AUTH_BYPASS === "true") {
@@ -44,7 +45,11 @@ const app = express();
 app.disable("x-powered-by");
 const httpServer = createServer(app);
 
-export interface AppError extends Error {
+// Re-export AppError class from errors module; also keep a loose interface
+// so the error handler can handle both AppError instances and plain errors
+// with ad-hoc status/code properties (e.g. from third-party middleware).
+export type { AppError } from "./errors";
+interface LegacyError extends Error {
   status?: number;
   statusCode?: number;
   code?: string;
@@ -248,8 +253,20 @@ try {
     );
   }
 
-  app.use((err: AppError, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
+  app.use((err: AppError | LegacyError, _req: Request, res: Response, _next: NextFunction) => {
+    // Derive status and code from either the structured AppError class
+    // or legacy ad-hoc error properties (e.g. from third-party middleware).
+    const isAppError = err.name === "AppError" && "code" in err;
+    const status = isAppError
+      ? (err as import("./errors").AppError).status
+      : ((err as LegacyError).status || (err as LegacyError).statusCode || 500);
+    const code = isAppError
+      ? (err as import("./errors").AppError).code
+      : ((err as LegacyError).code || (status >= 500 ? "INTERNAL_SERVER_ERROR" : "BAD_REQUEST"));
+    const details = isAppError
+      ? (err as import("./errors").AppError).details
+      : (err as LegacyError).details;
+
     // 🛡️ Sentinel: Prevent leaking sensitive error details to the client
     const message =
       status === 500
@@ -257,7 +274,7 @@ try {
         : err.message || "An error occurred";
 
     Sentry.captureException(err);
-    res.status(status).json({ error: message, code: err.code || (status >= 500 ? "INTERNAL_SERVER_ERROR" : "BAD_REQUEST"), ...(status < 500 && err.details ? { details: err.details } : {}) });
+    res.status(status).json({ error: message, code, ...(status < 500 && details ? { details } : {}) });
   });
 
   // importantly only setup vite in development and after
