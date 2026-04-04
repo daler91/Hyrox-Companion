@@ -4,9 +4,11 @@ import { importPlanFromCSV, validateAndMapCSVRows, createSamplePlan, updatePlanD
 import { db } from "../db";
 
 import { exerciseSets, planDays } from "@shared/schema";
+import type { PlanDay } from "@shared/schema";
 import { storage } from "../storage";
 import { samplePlanDays } from "../samplePlan";
 import * as csvParse from "csv-parse/sync";
+import { createMockTrainingPlan, createMockTrainingPlanWithDays, createMockPlanDay } from "../../test/factories";
 
 vi.mock("csv-parse/sync", () => {
   return {
@@ -68,21 +70,23 @@ describe("planService", () => {
     it("should create a sample plan and its days correctly", async () => {
       const userId = "test-user-id";
       const mockPlanId = "mock-plan-id";
-      const mockFullPlan = { id: mockPlanId, name: "8-Week Functional Fitness Plan", userId, days: [] };
+      const mockFullPlan = createMockTrainingPlanWithDays({
+        id: mockPlanId,
+        userId,
+        name: "8-Week Functional Fitness Plan",
+      });
 
       // Mock the storage functions
-      vi.mocked(storage.createTrainingPlan).mockResolvedValue({
+      vi.mocked(storage.createTrainingPlan).mockResolvedValue(createMockTrainingPlan({
         id: mockPlanId,
         userId,
         name: "8-Week Functional Fitness Plan",
         sourceFileName: null,
         totalWeeks: 8,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      } as unknown as Awaited<ReturnType<typeof storage.createTrainingPlan>>);
+      }));
 
-      vi.mocked(storage.createPlanDays).mockResolvedValue(undefined as unknown as Awaited<ReturnType<typeof storage.createPlanDays>>);
-      vi.mocked(storage.getTrainingPlan).mockResolvedValue(mockFullPlan as unknown as Awaited<ReturnType<typeof storage.getTrainingPlan>>);
+      vi.mocked(storage.createPlanDays).mockResolvedValue([] as PlanDay[]);
+      vi.mocked(storage.getTrainingPlan).mockResolvedValue(mockFullPlan);
 
       const result = await createSamplePlan(userId);
 
@@ -261,9 +265,9 @@ describe("planService", () => {
 
     it("should call storage.updatePlanDay when mainWorkout is not updated", async () => {
       const updates = { focus: "New Focus" };
-      const expectedResult = { id: dayId, focus: "New Focus" };
+      const expectedResult = createMockPlanDay({ id: dayId, focus: "New Focus" });
 
-      vi.mocked(storage.updatePlanDay).mockResolvedValue(expectedResult as unknown as Awaited<ReturnType<typeof storage.updatePlanDay>>);
+      vi.mocked(storage.updatePlanDay).mockResolvedValue(expectedResult);
 
       const result = await updatePlanDayWithCleanup(dayId, updates, userId);
 
