@@ -212,6 +212,24 @@ Hyrox-Companion/
 
 ---
 
+## 📚 Documentation
+
+Detailed documentation for each subsystem is available in the [`docs/`](docs/) directory:
+
+| Document | Description |
+|----------|-------------|
+| [Client (Frontend)](docs/client.md) | React SPA: pages, components, routing, styling, PWA, error tracking |
+| [Server (Backend)](docs/server.md) | Express API: bootstrap, middleware stack, security, logging, graceful shutdown |
+| [Database](docs/database.md) | PostgreSQL schema, Drizzle ORM, pgvector, migrations, storage layer |
+| [AI and RAG](docs/ai-and-rag.md) | Gemini integration, workout parsing, auto-coach, RAG pipeline |
+| [State Management](docs/state-management.md) | TanStack Query, custom hooks, offline queue, utility functions |
+| [API Reference](docs/api-reference.md) | All API endpoints with request/response shapes and rate limits |
+| [Authentication](docs/authentication.md) | Clerk setup, user sync, dev auth bypass, route protection |
+| [Integrations](docs/integrations.md) | Strava OAuth, email system, pg-boss queue, cron scheduling |
+| [Testing](docs/testing.md) | Vitest, Cypress E2E, CI workflows, test patterns |
+
+---
+
 ## 📖 API Documentation
 
 Interactive API documentation is available via **Swagger UI** at `/api/docs` when the server is running. The spec is auto-generated from Zod schemas using `@asteasolutions/zod-to-openapi`, ensuring documentation always stays in sync with the codebase.
