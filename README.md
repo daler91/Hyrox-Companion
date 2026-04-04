@@ -78,10 +78,10 @@ This repository is a fully functional monorepo containing both the React fronten
 
 ### Backend
 - **API Runtime**: Node.js + Express 4 with thin controller wrappers and thick service abstractions
-- **Database**: PostgreSQL (hosted on [Neon](https://neon.tech/)) bridged by the type-safe Drizzle ORM
+- **Database**: PostgreSQL (hosted on [Railway](https://railway.app/)) bridged by the type-safe Drizzle ORM
 - **Authentication**: Clerk JWT middleware protecting all private endpoints
 - **AI**: Google Gemini API (`@google/genai`) for workout parsing and coaching
-- **Vector DB**: pgvector extension on a separate [Neon](https://neon.tech/) instance for RAG document embeddings
+- **Vector DB**: pgvector on [Neon](https://neon.tech/) for RAG document embeddings
 - **Job Queue**: pg-boss for background tasks (email scheduling, maintenance)
 - **Email**: Resend for transactional email delivery
 - **Logging**: Pino + pino-http for structured, high-performance logging
@@ -117,9 +117,9 @@ flowchart TB
         Queue[pg-boss Job Queue]
     end
 
-    subgraph Data["Data Layer (Neon)"]
-        PG[(PostgreSQL — Main)]
-        PGV[(pgvector — Vector DB)]
+    subgraph Data["Data Layer"]
+        PG[(PostgreSQL — Railway)]
+        PGV[(pgvector — Neon)]
     end
 
     subgraph External["External Services"]
@@ -225,7 +225,7 @@ Follow these instructions to run the full application ecosystem locally.
 ### Prerequisites
 - [Node.js](https://nodejs.org/) (v20 or higher)
 - [pnpm](https://pnpm.io/) (v9.x — run `corepack enable` to auto-install)
-- [PostgreSQL](https://www.postgresql.org/download/) with the [pgvector](https://github.com/pgvector/pgvector) extension — production uses [Neon](https://neon.tech/) with a separate vector DB instance for RAG embeddings
+- [PostgreSQL](https://www.postgresql.org/download/) with the [pgvector](https://github.com/pgvector/pgvector) extension — production uses [Railway](https://railway.app/) for the main DB and [Neon](https://neon.tech/) for vector embeddings
 - A [Clerk.dev](https://clerk.dev/) account for auth (optional — use `ALLOW_DEV_AUTH_BYPASS=true` for local dev)
 - A [Google AI Studio](https://aistudio.google.com/) key for AI features (optional)
 
