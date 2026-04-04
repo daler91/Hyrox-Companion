@@ -9,7 +9,7 @@ import {
   type TrainingPlanWithDays,
 } from "@shared/schema";
 import { db } from "../db";
-import { eq, and, sql, inArray, isNotNull, desc } from "drizzle-orm";
+import { eq, and, sql, inArray, isNotNull } from "drizzle-orm";
 import { toDateStr } from "../types";
 
 export class PlanStorage {
@@ -168,8 +168,9 @@ export class PlanStorage {
 
     // Derive plan-level start/end dates from the scheduled days
     const scheduledDates = dateUpdates.map(u => u.scheduledDate);
-    const planStartDate = scheduledDates.reduce((a, b) => (a < b ? a : b));
-    const planEndDate = scheduledDates.reduce((a, b) => (a > b ? a : b));
+    scheduledDates.sort();
+    const planStartDate = scheduledDates[0];
+    const planEndDate = scheduledDates[scheduledDates.length - 1];
 
     return await db.transaction(async (tx) => {
       // Secure batch update using idiomatic Drizzle query builder and a CASE statement
