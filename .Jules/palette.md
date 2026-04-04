@@ -1,0 +1,3 @@
+## 2026-04-04 - Screen Reader Support for Radix Dialogs
+**Learning:** Radix UI Dialog components (used in shadcn/ui) require a `<DialogDescription>` element to be accessible to screen readers, otherwise they throw a console warning and fail strict a11y checks.
+**Action:** When creating or modifying Dialog components, always ensure a `<DialogDescription>` is present. If the design does not call for visible description text, add one anyway and hide it using `<DialogDescription className="sr-only">`.

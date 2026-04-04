@@ -6,6 +6,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Loader2 } from "lucide-react";
 
@@ -31,6 +32,9 @@ export function RenamePlanDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Rename Training Plan</DialogTitle>
+          <DialogDescription className="sr-only">
+            Rename the selected training plan.
+          </DialogDescription>
         </DialogHeader>
         <Input
           value={renameName}
