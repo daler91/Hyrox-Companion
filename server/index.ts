@@ -77,15 +77,15 @@ const configuredOrigins = env.ALLOWED_ORIGINS
   ? env.ALLOWED_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean)
   : defaultOrigins;
 
-const allowedOrigins = [
+const allowedOrigins = new Set([
   ...configuredOrigins,
   ...(isDev ? ["http://localhost:5000", "http://localhost:5173"] : []),
-];
+]);
 
 app.use(cors({
   origin: (origin, callback) => {
     // Allow same-origin requests (no Origin header) and allowed origins
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin || allowedOrigins.has(origin)) {
       callback(null, true);
     } else {
       callback(new Error("Not allowed by CORS"));
@@ -274,9 +274,10 @@ try {
     const status = isAppError
       ? (err as import("./errors").AppError).status
       : ((err as LegacyError).status || (err as LegacyError).statusCode || 500);
+    const defaultCode = status >= 500 ? "INTERNAL_SERVER_ERROR" : "BAD_REQUEST";
     const code = isAppError
       ? (err as import("./errors").AppError).code
-      : ((err as LegacyError).code || (status >= 500 ? "INTERNAL_SERVER_ERROR" : "BAD_REQUEST"));
+      : ((err as LegacyError).code || defaultCode);
     const details = isAppError
       ? (err as import("./errors").AppError).details
       : (err as LegacyError).details;

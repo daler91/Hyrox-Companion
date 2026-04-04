@@ -60,7 +60,7 @@ export async function retryWithBackoff<T>(
   let lastError: unknown;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     if (Date.now() >= deadline) {
-      throw lastError ?? new Error(`AI request budget exhausted for ${label}`);
+      throw (lastError instanceof Error ? lastError : new Error(`AI request budget exhausted for ${label}`));
     }
     try {
       const remaining = deadline - Date.now();

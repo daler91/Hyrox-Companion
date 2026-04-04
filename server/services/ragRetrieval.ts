@@ -85,7 +85,7 @@ export async function retrieveCoachingContext(
 /** Strip internal debug details from ragInfo for production API responses. */
 export function sanitizeRagInfo(ragInfo: RagInfo): RagInfo {
   if (env.NODE_ENV === "production") {
-    const { chunks, fallbackReason, ...safe } = ragInfo;
+    const { chunks: _chunks, fallbackReason: _fallbackReason, ...safe } = ragInfo;
     return safe;
   }
   return ragInfo;

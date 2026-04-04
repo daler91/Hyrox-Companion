@@ -89,7 +89,7 @@ function TimelineContent({
   combiningEntry,
   personalRecords,
   isAutoCoaching,
-}: TimelineContentProps) {
+}: Readonly<TimelineContentProps>) {
   if (timelineLoading) {
     return <TimelineSkeleton />;
   }

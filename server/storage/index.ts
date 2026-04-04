@@ -15,12 +15,12 @@ type DelegateUnion = UserStorage & WorkoutStorage & PlanStorage & TimelineStorag
 type _CheckCoverage = AssertAllKeys<IStorage, DelegateUnion>;
 
 class DatabaseStorage implements IStorage {
-  private userStorage = new UserStorage();
-  private workoutStorage = new WorkoutStorage();
-  private planStorage = new PlanStorage();
-  private timelineStorage = new TimelineStorage(this.workoutStorage);
-  private analyticsStorage = new AnalyticsStorage();
-  private coachingStorage = new CoachingStorage();
+  private readonly userStorage = new UserStorage();
+  private readonly workoutStorage = new WorkoutStorage();
+  private readonly planStorage = new PlanStorage();
+  private readonly timelineStorage = new TimelineStorage(this.workoutStorage);
+  private readonly analyticsStorage = new AnalyticsStorage();
+  private readonly coachingStorage = new CoachingStorage();
 
   // ── IUserStorage ──────────────────────────────────────────────
   getUser: IStorage["getUser"] = (...args) => this.userStorage.getUser(...args);

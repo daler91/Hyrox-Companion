@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useUser, useAuth as useClerkAuth } from "@clerk/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { User } from "@shared/schema";
@@ -21,7 +21,7 @@ const COACHING_POLL_INTERVAL_MS = 2000;
 function useCoachingPollInterval() {
   const pollStartRef = useRef<number | null>(null);
 
-  return useRef((query: { state: { data?: User } }) => {
+  return useCallback((query: { state: { data?: User } }) => {
     const isCoaching = !!query.state.data?.isAutoCoaching;
 
     if (!isCoaching) {
@@ -45,7 +45,7 @@ function useCoachingPollInterval() {
     }
 
     return COACHING_POLL_INTERVAL_MS;
-  }).current;
+  }, []);
 }
 
 function useAutoCoachWatcher(user?: User) {
