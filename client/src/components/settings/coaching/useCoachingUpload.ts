@@ -1,11 +1,11 @@
 import { useState, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useCreateCoachingMaterial } from "@/hooks/useCoachingMaterials";
-import * as pdfjsLib from "pdfjs-dist";
+import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
 import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import mammoth from "mammoth";
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
+GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
@@ -17,7 +17,7 @@ function sanitizeText(text: string): string {
 
 async function extractPdfText(file: File): Promise<string> {
   const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const pdf = await getDocument({ data: arrayBuffer }).promise;
   const pages: string[] = [];
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);

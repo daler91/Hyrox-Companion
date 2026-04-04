@@ -29,7 +29,175 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { useRef, useMemo, useCallback } from "react";
 import { useTimelineState } from "@/hooks/useTimelineState";
 import { useAuth } from "@/hooks/useAuth";
+import type { Virtualizer } from "@tanstack/react-virtual";
 
+interface TimelineContentProps {
+  timelineLoading: boolean;
+  filteredTimeline: unknown[];
+  filterStatus: string;
+  selectedPlanId: string | null;
+  plans: ReturnType<typeof useTimelineState>["data"]["plans"];
+  samplePlanMutation: ReturnType<typeof useTimelineState>["planImport"]["samplePlanMutation"];
+  importMutation: ReturnType<typeof useTimelineState>["planImport"]["importMutation"];
+  handleFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  setSchedulingPlanId: (id: string | null) => void;
+  setFilterStatus: (status: string) => void;
+  hiddenPastCount: number;
+  setShowAllPast: (v: boolean) => void;
+  showAllPast: boolean;
+  pastGroups: [string, unknown[]][];
+  hiddenFutureCount: number;
+  setShowAllFuture: (v: boolean) => void;
+  showAllFuture: boolean;
+  futureGroups: [string, unknown[]][];
+  allVisibleGroups: [string, unknown[]][];
+  rowVirtualizer: Virtualizer<HTMLDivElement, Element>;
+  todayRef: React.RefObject<HTMLDivElement | null>;
+  handleMarkComplete: (entry: unknown) => void;
+  openDetailDialog: (entry: unknown) => void;
+  handleCombine: (entry: unknown) => void;
+  combiningEntry: { id: string; date: string } | null;
+  personalRecords: unknown;
+  isAutoCoaching: boolean;
+}
+
+function TimelineContent({
+  timelineLoading,
+  filteredTimeline,
+  filterStatus,
+  selectedPlanId,
+  plans,
+  samplePlanMutation,
+  importMutation,
+  handleFileUpload,
+  setSchedulingPlanId,
+  setFilterStatus,
+  hiddenPastCount,
+  setShowAllPast,
+  showAllPast,
+  pastGroups,
+  hiddenFutureCount,
+  setShowAllFuture,
+  showAllFuture,
+  futureGroups,
+  allVisibleGroups,
+  rowVirtualizer,
+  todayRef,
+  handleMarkComplete,
+  openDetailDialog,
+  handleCombine,
+  combiningEntry,
+  personalRecords,
+  isAutoCoaching,
+}: TimelineContentProps) {
+  if (timelineLoading) {
+    return <TimelineSkeleton />;
+  }
+
+  if (filteredTimeline.length === 0) {
+    return (
+      <TimelineEmptyState
+        filterStatus={filterStatus}
+        selectedPlanId={selectedPlanId}
+        plans={plans}
+        samplePlanMutation={samplePlanMutation}
+        importMutation={importMutation}
+        handleFileUpload={handleFileUpload}
+        setSchedulingPlanId={setSchedulingPlanId}
+        setFilterStatus={setFilterStatus}
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {hiddenPastCount > 0 && (
+        <Button
+          variant="outline"
+          className="w-full"
+          onClick={() => setShowAllPast(true)}
+          data-testid="button-show-more-past"
+        >
+          <ChevronUp className="h-4 w-4 mr-2" />
+          Show {hiddenPastCount} more past workout{hiddenPastCount > 1 ? 's' : ''}
+        </Button>
+      )}
+
+      {showAllPast && pastGroups.length > 7 && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full"
+          onClick={() => setShowAllPast(false)}
+          data-testid="button-hide-past"
+        >
+          Hide older workouts
+        </Button>
+      )}
+
+      <div style={{ position: 'relative' }}>
+        <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}>
+          {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+            const [date, entries] = allVisibleGroups[virtualRow.index];
+            return (
+              <div
+                key={virtualRow.key}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  transform: `translateY(${virtualRow.start}px)`,
+                }}
+                ref={rowVirtualizer.measureElement}
+                data-index={virtualRow.index}
+              >
+                <TimelineDateGroup
+                  key={date}
+                  ref={isToday(parseISO(date)) ? todayRef : undefined}
+                  date={date}
+                  entries={entries}
+                  onMarkComplete={handleMarkComplete}
+                  onClick={openDetailDialog}
+                  onCombineSelect={handleCombine}
+                  isCombining={!!combiningEntry}
+                  combiningEntryId={combiningEntry?.id || null}
+                  combiningEntryDate={combiningEntry?.date || null}
+                  personalRecords={personalRecords}
+                  isAutoCoaching={isAutoCoaching}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {hiddenFutureCount > 0 && (
+        <Button
+          variant="outline"
+          className="w-full"
+          onClick={() => setShowAllFuture(true)}
+          data-testid="button-show-more-future"
+        >
+          <ChevronDown className="h-4 w-4 mr-2" />
+          Show {hiddenFutureCount} more upcoming workout{hiddenFutureCount > 1 ? 's' : ''}
+        </Button>
+      )}
+
+      {showAllFuture && futureGroups.length > 7 && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full"
+          onClick={() => setShowAllFuture(false)}
+          data-testid="button-hide-future"
+        >
+          Hide later workouts
+        </Button>
+      )}
+    </div>
+  );
+}
 
 
 export default function Timeline() {
@@ -106,116 +274,35 @@ export default function Timeline() {
         isUpdatingGoal={updatePlanGoalMutation.isPending}
       />
 
-      {(() => {
-        if (timelineLoading) {
-          return <TimelineSkeleton />;
-        }
-
-        if (filteredTimeline.length === 0) {
-          return (
-            <TimelineEmptyState
-              filterStatus={filterStatus}
-              selectedPlanId={selectedPlanId}
-              plans={plans}
-              samplePlanMutation={samplePlanMutation}
-              importMutation={importMutation}
-              handleFileUpload={handleFileUpload}
-              setSchedulingPlanId={setSchedulingPlanId}
-              setFilterStatus={setFilterStatus}
-            />
-          );
-        }
-
-        return (
-          <div className="space-y-4">
-            {hiddenPastCount > 0 && (
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => setShowAllPast(true)}
-                data-testid="button-show-more-past"
-              >
-                <ChevronUp className="h-4 w-4 mr-2" />
-                Show {hiddenPastCount} more past workout{hiddenPastCount > 1 ? 's' : ''}
-              </Button>
-            )}
-
-            {showAllPast && pastGroups.length > 7 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full"
-                onClick={() => setShowAllPast(false)}
-                data-testid="button-hide-past"
-              >
-                Hide older workouts
-              </Button>
-            )}
-
-
-            <div style={{ position: 'relative' }}>
-              <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}>
-                {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                  const [date, entries] = allVisibleGroups[virtualRow.index];
-                  return (
-                    <div
-                      key={virtualRow.key}
-                      style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        width: '100%',
-                        transform: `translateY(${virtualRow.start}px)`,
-                      }}
-                      ref={rowVirtualizer.measureElement}
-                      data-index={virtualRow.index}
-                    >
-                      <TimelineDateGroup
-                        key={date}
-                        ref={isToday(parseISO(date)) ? todayRef : undefined}
-                        date={date}
-                        entries={entries}
-                        onMarkComplete={handleMarkComplete}
-                        onClick={openDetailDialog}
-                        onCombineSelect={handleCombine}
-                        isCombining={!!combiningEntry}
-                        combiningEntryId={combiningEntry?.id || null}
-                        combiningEntryDate={combiningEntry?.date || null}
-                        personalRecords={personalRecords}
-                        isAutoCoaching={!!user?.isAutoCoaching}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {hiddenFutureCount > 0 && (
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => setShowAllFuture(true)}
-                data-testid="button-show-more-future"
-              >
-                <ChevronDown className="h-4 w-4 mr-2" />
-                Show {hiddenFutureCount} more upcoming workout{hiddenFutureCount > 1 ? 's' : ''}
-              </Button>
-            )}
-
-            {showAllFuture && futureGroups.length > 7 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full"
-                onClick={() => setShowAllFuture(false)}
-                data-testid="button-hide-future"
-              >
-                Hide later workouts
-              </Button>
-            )}
-          </div>
-        );
-      })()}
+      <TimelineContent
+        timelineLoading={timelineLoading}
+        filteredTimeline={filteredTimeline}
+        filterStatus={filterStatus}
+        selectedPlanId={selectedPlanId}
+        plans={plans}
+        samplePlanMutation={samplePlanMutation}
+        importMutation={importMutation}
+        handleFileUpload={handleFileUpload}
+        setSchedulingPlanId={setSchedulingPlanId}
+        setFilterStatus={setFilterStatus}
+        hiddenPastCount={hiddenPastCount}
+        setShowAllPast={setShowAllPast}
+        showAllPast={showAllPast}
+        pastGroups={pastGroups}
+        hiddenFutureCount={hiddenFutureCount}
+        setShowAllFuture={setShowAllFuture}
+        showAllFuture={showAllFuture}
+        futureGroups={futureGroups}
+        allVisibleGroups={allVisibleGroups}
+        rowVirtualizer={rowVirtualizer}
+        todayRef={todayRef}
+        handleMarkComplete={handleMarkComplete}
+        openDetailDialog={openDetailDialog}
+        handleCombine={handleCombine}
+        combiningEntry={combiningEntry}
+        personalRecords={personalRecords}
+        isAutoCoaching={!!user?.isAutoCoaching}
+      />
 
           {!detailEntry && <FloatingActionButton coachPanelOpen={coachOpen} onCoachToggle={() => setCoachOpen(!coachOpen)} />}
 
