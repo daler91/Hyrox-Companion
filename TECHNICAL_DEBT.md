@@ -64,11 +64,7 @@
 - ~~**27. No route guards for authenticated pages**~~ — Added auth loading guard in `App.tsx` showing spinner while auth state loads.
 - ~~**28. Full pdfjs-dist namespace import**~~ — Changed to targeted `{getDocument, GlobalWorkerOptions}` import.
 
-### 19. Resolve dependency security overrides
-- **File:** `package.json` (npm and pnpm override sections)
-- **Issue:** 4 dependency overrides (`esbuild`, `yauzl`, `undici`, `serialize-javascript`) mask known vulnerabilities. Duplicated in both npm and pnpm override sections.
-- **Fix:** Add documentation comments to overrides explaining CVE and removal conditions. Periodically check if upstream dependencies have updated.
-- **Effort:** Ongoing maintenance
+- ~~**19. Resolve dependency security overrides**~~ — Documented all 4 overrides with CVE/GHSA IDs, parent dependency info, and removal conditions. Fixed esbuild range inconsistency. Found `serialize-javascript` is removable now, `undici` safe to remove on next lockfile regen.
 
 ### 20. Persistent rate limiter
 - **File:** `server/index.ts` (rate limiting setup)
@@ -107,5 +103,5 @@
 | P0 — Quick Wins | 6/6 | 0 | All resolved |
 | P1 — High | 5/6 | 1 | #10 (Drizzle relations) deferred — needs DB |
 | P2 — Medium | 5/6 | 1 | #16 (test mocks) is ongoing/incremental |
-| P3 — Low | 4/10 | 6 | #19-23 are documented with clear status |
-| **Total** | **20/28** | **8** | Remaining items are deferred, incremental, or architecture-dependent |
+| P3 — Low | 5/10 | 5 | #19-23 documented with clear status |
+| **Total** | **21/28** | **7** | Remaining items are deferred, incremental, or architecture-dependent |
