@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { triggerAutoCoach } from "./coachService";
 import { storage } from "../storage";
-import { buildTrainingContext } from "./aiService";
+import { buildTrainingContext } from "./ai";
 import { generateWorkoutSuggestions } from "../gemini/index";
 import { retrieveRelevantChunks } from "./ragService";
 

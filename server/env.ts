@@ -25,6 +25,8 @@ const envSchema = z.object({
   LOG_LEVEL: z.string().default("info"),
   RAG_CHUNK_SIZE: z.coerce.number().default(600),
   RAG_CHUNK_OVERLAP: z.coerce.number().default(100),
+  GEMINI_MODEL: z.string().default("gemini-2.5-flash-lite"),
+  GEMINI_SUGGESTIONS_MODEL: z.string().default("gemini-3.1-pro-preview"),
 }).refine((data) => !(data.NODE_ENV === "production" && data.ALLOW_DEV_AUTH_BYPASS === "true"), {
   message: "❌ FATAL: ALLOW_DEV_AUTH_BYPASS cannot be enabled in production environment",
   path: ["ALLOW_DEV_AUTH_BYPASS"],

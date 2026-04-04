@@ -8,7 +8,7 @@ import type { ChatMessage as DBChatMessage } from "@shared/schema";
 export type { RagInfo } from "@/lib/api";
 
 function isStreamData(v: unknown): v is { ragInfo?: RagInfo; text?: string; error?: string } {
-  return typeof v === "object" && v !== null;
+  return typeof v === "object" && v !== null && !Array.isArray(v) && ("text" in v || "error" in v || "ragInfo" in v);
 }
 
 /** Parse SSE lines and accumulate text + ragInfo without triggering React state updates. */

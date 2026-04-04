@@ -1,5 +1,5 @@
 import { logger as rootLogger } from "../logger";
-import { buildTrainingContext } from "./aiService";
+import { buildTrainingContext } from "./ai";
 import { retrieveCoachingContext } from "./ragRetrieval";
 import { buildCoachingMaterialsSection, buildRetrievedChunksSection, type CoachingMaterialInput } from "../prompts";
 import type { TrainingContext } from "../gemini/index";

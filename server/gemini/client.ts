@@ -3,8 +3,8 @@ import { logger } from "../logger";
 import { GoogleGenAI } from "@google/genai";
 import { AI_REQUEST_TIMEOUT_MS, AI_CALL_TIMEOUT_MS } from "../constants";
 
-export const GEMINI_MODEL = "gemini-2.5-flash-lite";
-export const GEMINI_SUGGESTIONS_MODEL = "gemini-3.1-pro-preview";
+export const GEMINI_MODEL = env.GEMINI_MODEL;
+export const GEMINI_SUGGESTIONS_MODEL = env.GEMINI_SUGGESTIONS_MODEL;
 
 let _ai: GoogleGenAI | null = null;
 export function getAiClient(): GoogleGenAI {

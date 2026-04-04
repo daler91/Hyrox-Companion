@@ -156,7 +156,7 @@ export async function getRagStatus(userId: string) {
   const chunkCounts = await storage.getChunkCountsByMaterial(userId);
   const chunkMap = new Map(chunkCounts.map((c) => [c.materialId, c]));
 
-  const hasApiKey = Boolean(process.env.GEMINI_API_KEY);
+  const hasApiKey = Boolean(env.GEMINI_API_KEY);
   let storedDimension: number | null = null;
   try {
     storedDimension = await storage.getStoredEmbeddingDimension(userId);
