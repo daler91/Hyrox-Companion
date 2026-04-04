@@ -192,61 +192,46 @@ async function backfillPlanDatesAndWorkoutLinks() {
   try {
     client = await pool.connect();
 
-    // Backfill startDate/endDate on training_plans from their planDays
-    const planDateResult = await client.query(`
-      UPDATE training_plans tp
-      SET start_date = sub.min_date,
-          end_date = sub.max_date
-      FROM (
-        SELECT plan_id,
-               MIN(scheduled_date) AS min_date,
-               MAX(scheduled_date) AS max_date
-        FROM plan_days
-        WHERE scheduled_date IS NOT NULL
-        GROUP BY plan_id
-      ) sub
-      WHERE tp.id = sub.plan_id
-        AND tp.start_date IS NULL
-    `);
-    if (planDateResult.rowCount && planDateResult.rowCount > 0) {
-      logger.info({ context: "db", count: planDateResult.rowCount }, "Backfilled start/end dates on training plans");
-    }
+    const backfillQueries: Array<{ sql: string; label: string }> = [
+      {
+        label: "Backfilled start/end dates on training plans",
+        sql: `UPDATE training_plans tp
+              SET start_date = sub.min_date, end_date = sub.max_date
+              FROM (
+                SELECT plan_id, MIN(scheduled_date) AS min_date, MAX(scheduled_date) AS max_date
+                FROM plan_days WHERE scheduled_date IS NOT NULL GROUP BY plan_id
+              ) sub
+              WHERE tp.id = sub.plan_id AND tp.start_date IS NULL`,
+      },
+      {
+        label: "Backfilled planId on workout logs from planDayId",
+        sql: `UPDATE workout_logs wl SET plan_id = pd.plan_id
+              FROM plan_days pd
+              WHERE wl.plan_day_id = pd.id AND wl.plan_id IS NULL`,
+      },
+      {
+        label: "Backfilled planId on standalone workout logs from plan date ranges",
+        // DISTINCT ON picks one plan per workout (latest end_date) to handle overlapping ranges
+        sql: `UPDATE workout_logs wl SET plan_id = best.plan_id
+              FROM (
+                SELECT DISTINCT ON (wl2.id) wl2.id AS workout_id, tp.id AS plan_id
+                FROM workout_logs wl2
+                JOIN training_plans tp
+                  ON wl2.user_id = tp.user_id
+                 AND tp.start_date IS NOT NULL AND tp.end_date IS NOT NULL
+                 AND wl2.date >= tp.start_date AND wl2.date <= tp.end_date
+                WHERE wl2.plan_id IS NULL AND wl2.plan_day_id IS NULL
+                ORDER BY wl2.id, tp.end_date DESC
+              ) best
+              WHERE wl.id = best.workout_id`,
+      },
+    ];
 
-    // Backfill planId on workout_logs that have a planDayId but no planId
-    const workoutPlanIdResult = await client.query(`
-      UPDATE workout_logs wl
-      SET plan_id = pd.plan_id
-      FROM plan_days pd
-      WHERE wl.plan_day_id = pd.id
-        AND wl.plan_id IS NULL
-    `);
-    if (workoutPlanIdResult.rowCount && workoutPlanIdResult.rowCount > 0) {
-      logger.info({ context: "db", count: workoutPlanIdResult.rowCount }, "Backfilled planId on workout logs from planDayId");
-    }
-
-    // Backfill planId on standalone workouts by matching date to plan date ranges.
-    // Use a subquery to pick exactly one plan per workout (latest end_date wins)
-    // to avoid nondeterministic results when plan ranges overlap.
-    const standaloneResult = await client.query(`
-      UPDATE workout_logs wl
-      SET plan_id = best.plan_id
-      FROM (
-        SELECT DISTINCT ON (wl2.id) wl2.id AS workout_id, tp.id AS plan_id
-        FROM workout_logs wl2
-        JOIN training_plans tp
-          ON wl2.user_id = tp.user_id
-         AND tp.start_date IS NOT NULL
-         AND tp.end_date IS NOT NULL
-         AND wl2.date >= tp.start_date
-         AND wl2.date <= tp.end_date
-        WHERE wl2.plan_id IS NULL
-          AND wl2.plan_day_id IS NULL
-        ORDER BY wl2.id, tp.end_date DESC
-      ) best
-      WHERE wl.id = best.workout_id
-    `);
-    if (standaloneResult.rowCount && standaloneResult.rowCount > 0) {
-      logger.info({ context: "db", count: standaloneResult.rowCount }, "Backfilled planId on standalone workout logs from plan date ranges");
+    for (const { sql: query, label } of backfillQueries) {
+      const result = await client.query(query);
+      if (result.rowCount && result.rowCount > 0) {
+        logger.info({ context: "db", count: result.rowCount }, label);
+      }
     }
   } catch (error) {
     logger.warn({ context: "db", err: error }, "Plan dates/workout links backfill skipped");

@@ -9,7 +9,7 @@ import {
   type TrainingPlanWithDays,
 } from "@shared/schema";
 import { db } from "../db";
-import { eq, and, sql, inArray, lte, gte, isNotNull, desc, asc } from "drizzle-orm";
+import { eq, and, sql, inArray, isNotNull, desc } from "drizzle-orm";
 import { toDateStr } from "../types";
 
 export class PlanStorage {
@@ -223,8 +223,9 @@ export class PlanStorage {
   }
 
   async getPlanForDate(userId: string, date: string): Promise<TrainingPlan | undefined> {
-    // Primary: plan whose date range covers the given date
-    const [current] = await db
+    // Single query with priority-based ordering:
+    //   0 = plan covering the date, 1 = most recently ended, 2 = next upcoming
+    const [plan] = await db
       .select()
       .from(trainingPlans)
       .where(
@@ -232,46 +233,20 @@ export class PlanStorage {
           eq(trainingPlans.userId, userId),
           isNotNull(trainingPlans.startDate),
           isNotNull(trainingPlans.endDate),
-          lte(trainingPlans.startDate, date),
-          gte(trainingPlans.endDate, date),
         )
       )
-      .orderBy(desc(trainingPlans.endDate))
-      .limit(1);
-
-    if (current) return current;
-
-    // Fallback 1: most recently ended plan before the given date
-    const [recent] = await db
-      .select()
-      .from(trainingPlans)
-      .where(
-        and(
-          eq(trainingPlans.userId, userId),
-          isNotNull(trainingPlans.endDate),
-          sql`${trainingPlans.endDate} < ${date}`,
-        )
+      .orderBy(
+        sql`CASE
+          WHEN ${trainingPlans.startDate} <= ${date} AND ${trainingPlans.endDate} >= ${date} THEN 0
+          WHEN ${trainingPlans.endDate} < ${date} THEN 1
+          WHEN ${trainingPlans.startDate} > ${date} THEN 2
+        END`,
+        sql`CASE WHEN ${trainingPlans.startDate} > ${date} THEN ${trainingPlans.startDate} END ASC NULLS LAST`,
+        sql`${trainingPlans.endDate} DESC`,
       )
-      .orderBy(desc(trainingPlans.endDate))
       .limit(1);
 
-    if (recent) return recent;
-
-    // Fallback 2: next upcoming plan after the given date
-    const [upcoming] = await db
-      .select()
-      .from(trainingPlans)
-      .where(
-        and(
-          eq(trainingPlans.userId, userId),
-          isNotNull(trainingPlans.startDate),
-          sql`${trainingPlans.startDate} > ${date}`,
-        )
-      )
-      .orderBy(asc(trainingPlans.startDate))
-      .limit(1);
-
-    return upcoming;
+    return plan;
   }
 
   async markMissedPlanDays(): Promise<number> {
