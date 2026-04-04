@@ -18,6 +18,7 @@ import { storage } from "./storage";
 import { pool } from "./db";
 import { vectorPool } from "./vectorDb";
 import { getAuth } from "@clerk/express";
+import { runWithRequestContext } from "./requestContext";
 import { runStartupMaintenance } from "./maintenance";
 import { startQueue, queue } from "./queue";
 import { startCron, stopCron } from "./cron";
@@ -67,11 +68,19 @@ app.use(compression());
 const isDev = env.NODE_ENV !== "production";
 
 // CORS — restrict cross-origin API access to known origins
-const allowedOrigins = [
+const defaultOrigins = [
   env.APP_URL,
   "https://fitai.coach",
-  ...(isDev ? ["http://localhost:5000", "http://localhost:5173"] : []),
 ].filter(Boolean) as string[];
+
+const configuredOrigins = env.ALLOWED_ORIGINS
+  ? env.ALLOWED_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean)
+  : defaultOrigins;
+
+const allowedOrigins = [
+  ...configuredOrigins,
+  ...(isDev ? ["http://localhost:5000", "http://localhost:5173"] : []),
+];
 
 app.use(cors({
   origin: (origin, callback) => {
@@ -212,6 +221,11 @@ app.use(pinoHttp({
     ignore: (req) => !req.url?.startsWith('/api/v1')
   }
 }));
+
+app.use((req, _res, next) => {
+  const ctx = { requestId: req.id as string, userId: (req as any).auth?.userId };
+  runWithRequestContext(ctx, () => next());
+});
 
 // Listen early so the health endpoint is reachable during startup (unblocks CI wait-on)
 const port = Number.parseInt(env.PORT || "5000", 10);

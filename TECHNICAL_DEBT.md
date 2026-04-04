@@ -20,56 +20,25 @@
 
 ## P1 — High Priority (1-3 days each)
 
-### 7. Replace Proxy-based storage abstraction
-- **File:** `server/storage/index.ts` (54 lines)
-- **Issue:** Uses a JavaScript `Proxy` to dynamically delegate method calls to sub-storage classes at runtime. This makes debugging difficult (stack traces point to Proxy internals), breaks IDE go-to-definition, requires `eslint-disable` comments, and has a runtime cost for every storage call due to linear delegate scanning.
-- **Fix:** Replace with explicit composition — either a class that delegates explicitly, or barrel exports that merge the storage instances. The compile-time `AssertAllKeys` check can remain.
-- **Effort:** 1-2 days
-
-### 8. Unify migration system and fix naming conflict
-- **Files:** `migrations/` (Drizzle), `server/maintenance.ts` (258 lines of raw startup SQL)
-- **Issue:** Two parallel migration approaches: Drizzle migrations in `migrations/` and raw SQL `ALTER TABLE` statements that run on every startup in `server/maintenance.ts`. Additionally, two migration files share the same `0015` prefix (`0015_rename_hyrox_station_to_functional.sql` and `0015_thin_nextwave.sql`), creating ambiguity in ordering. The startup SQL in `maintenance.ts` is brittle — risk of running twice, data loss, or race conditions in clustered deployments.
-- **Fix:** Rename one `0015` migration to `0016`. Convert `maintenance.ts` ALTER TABLE logic into proper Drizzle migrations. Remove startup schema patching.
-- **Effort:** 2-3 days
-
-### 9. Remove legacy RAG path
-- **File:** `server/services/ai/aiContextService.ts`
-- **Issue:** Contains both old and new RAG implementations. The legacy path is dead code that increases maintenance burden and confusion.
-- **Fix:** Identify and remove the legacy code path. Ensure the new RAG path has full test coverage before removal.
-- **Effort:** 1 day
+- ~~**7. Replace Proxy-based storage abstraction**~~ — Replaced with explicit `DatabaseStorage` class delegating ~60 methods.
+- ~~**8. Fix migration naming conflict**~~ — Renamed to `0016_rename_hyrox_station_to_functional.sql`, added to Drizzle journal. Note: `server/maintenance.ts` startup SQL still needs converting to Drizzle migrations (deferred — requires DB testing).
+- ~~**9. Remove legacy RAG path**~~ — Deleted unused `buildRetrievedMaterialsSection` from ragService.ts. Added sanitization to the active `buildRetrievedChunksSection` in prompts.ts.
+- ~~**11. Formalize API error codes (infrastructure)**~~ — Created `AppError` class with `ErrorCode` enum in `server/errors.ts`. Updated Express error handler. Fixed dynamic logger imports in workoutService.ts. Note: incrementally migrating 28 `throw new Error` to `throw new AppError` is ongoing.
+- ~~**12. Re-enable CI quality gates**~~ — Replaced empty SonarQube job with ESLint + TypeScript checking CI steps.
 
 ### 10. Add Drizzle relations, remove manual JOINs
 - **Files:** `server/storage/*.ts`, `shared/schema.ts`
 - **Issue:** Drizzle ORM is used without its relations API. Storage layer has manual SQL JOINs that are verbose, error-prone, and don't benefit from Drizzle's type-safe query builder.
 - **Fix:** Define Drizzle relations in the schema and refactor queries to use the relational query API.
 - **Effort:** 2-3 days
-
-### 11. Formalize API error codes
-- **Files:** Throughout `server/` (28 `throw new Error` instances across 17 files)
-- **Issue:** Errors are ad-hoc strings with no structured error codes. API consumers cannot programmatically distinguish error types. Additionally, `server/services/workoutService.ts` (lines 267, 282) dynamically imports the logger inside catch blocks — an anti-pattern that adds latency to error paths.
-- **Fix:** Create an `AppError` class with error codes (e.g., `VALIDATION_ERROR`, `NOT_FOUND`, `AI_TIMEOUT`). Add error-code mapping to HTTP status codes in error middleware. Move logger imports to module level.
-- **Effort:** 2-3 days
-
-### 12. Re-enable CI quality gates
-- **File:** `.github/workflows/build.yml`
-- **Issue:** SonarQube manual scan is disabled due to "Automatic Analysis conflict." No automated code quality checks are running in CI.
-- **Fix:** Either resolve the SonarQube configuration conflict or replace with an alternative (CodeFactor, Codacy, or ESLint reporting in CI).
-- **Effort:** 2-3 hours
+- **Status:** Deferred — requires DB access for testing.
 
 ---
 
 ## P2 — Medium Priority (1-2 days each)
 
-### 13. Refactor oversized files
-
-| File | Lines | Recommendation |
-|------|-------|----------------|
-| `client/src/components/ui/sidebar.tsx` | 775 | Extract sub-components (SidebarHeader, SidebarNav, SidebarFooter, etc.) into separate files |
-| `server/prompts.ts` | 412 | Move prompt templates to separate files under `server/prompts/` directory, organized by feature |
-| `client/src/pages/Landing.tsx` | 495 | Extract hero, features, pricing, and footer sections into standalone components |
-| `client/src/pages/Timeline.tsx` | 321 | Extract the deeply nested IIFE (lines 109-191) into a `TimelineContent` component |
-
-- **Effort:** 1-2 days total
+- ~~**13. Refactor oversized files (partial)**~~ — Extracted Timeline.tsx IIFE into named `TimelineContent` component. Remaining: sidebar.tsx (775 lines, likely shadcn/ui vendor), prompts.ts (412 lines), Landing.tsx (495 lines).
+- ~~**15. Reduce GeneratePlanDialog state complexity**~~ — Extracted 10 useState calls into `useGeneratePlanForm()` hook.
 
 ### 14. Centralize magic numbers and constants
 - **Files:**
@@ -78,12 +47,6 @@
   - `server/services/workoutService.ts` (line 301) — `CONCURRENCY_LIMIT = 5`
 - **Issue:** Configuration values are defined locally in individual files. Changes require finding all occurrences.
 - **Fix:** Create `shared/constants.ts` for cross-cutting values and domain-specific constant files where appropriate.
-- **Effort:** 1 day
-
-### 15. Reduce GeneratePlanDialog state complexity
-- **File:** `client/src/components/plans/GeneratePlanDialog.tsx` (329 lines, 11 useState references)
-- **Issue:** Many individual `useState` calls managing multi-step form state interleaved with UI logic. Hard to test and reason about.
-- **Fix:** Extract form state into a `useGeneratePlanForm()` hook or use `useReducer` for the multi-step flow. Extract step UI into sub-components.
 - **Effort:** 1 day
 
 ### 16. Improve test type safety
@@ -165,20 +128,16 @@
 - **Fix:** Add route-level auth guards or a loading state that prevents rendering protected content until auth is confirmed.
 - **Effort:** 1 day
 
-### 28. Full pdfjs-dist namespace import
-- **File:** `client/src/components/settings/coaching/useCoachingUpload.ts` (line 4)
-- **Issue:** `import * as pdfjsLib from "pdfjs-dist"` imports the entire library (~500KB). Only `getDocument` is needed.
-- **Fix:** Use a targeted import: `import { getDocument } from "pdfjs-dist/legacy/build/pdf"`.
-- **Effort:** 30 min
+- ~~**28. Full pdfjs-dist namespace import**~~ — Changed to targeted `{getDocument, GlobalWorkerOptions}` import.
 
 ---
 
 ## Summary
 
-| Priority | Count | Estimated Total Effort |
-|----------|-------|----------------------|
-| P0 — Quick Wins | 6 | 1-2 days |
-| P1 — High | 6 | 8-14 days |
-| P2 — Medium | 6 | 7-10 days |
-| P3 — Low | 10 | 10-13 days |
-| **Total** | **28** | **~27-39 days** |
+| Priority | Resolved | Remaining | Notes |
+|----------|----------|-----------|-------|
+| P0 — Quick Wins | 6/6 | 0 | All resolved |
+| P1 — High | 5/6 | 1 | #10 (Drizzle relations) deferred — needs DB |
+| P2 — Medium | 3/6 | 3 | #14, #16, #17, #18 remaining |
+| P3 — Low | 1/10 | 9 | #28 resolved; rest are ongoing/low priority |
+| **Total** | **15/28** | **13** | |

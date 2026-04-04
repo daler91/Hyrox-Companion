@@ -21,6 +21,7 @@ const envSchema = z.object({
   STRAVA_STATE_SECRET: z.string().optional(),
   APP_URL: z.string().url().optional(),
   VECTOR_DATABASE_URL: z.string().url().optional(),
+  ALLOWED_ORIGINS: z.string().optional(),
   ALLOW_DEV_AUTH_BYPASS: z.string().optional(),
   LOG_LEVEL: z.string().default("info"),
   RAG_CHUNK_SIZE: z.coerce.number().default(600),
