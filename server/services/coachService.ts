@@ -91,13 +91,13 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
       // ⚡ Parallelize all three independent data fetches into a single await
       // instead of running getTimeline sequentially after the first two.
       // Saves ~50-100ms of DB round-trip latency per auto-coach trigger.
-      const [trainingContext, plans, timeline] = await Promise.all([
+      const [trainingContext, activePlanRecord, timeline] = await Promise.all([
         buildTrainingContext(userId),
-        storage.listTrainingPlans(userId),
+        storage.getActivePlan(userId),
         storage.getTimeline(userId),
       ]);
 
-      const activePlanGoal = plans[0]?.goal ?? undefined;
+      const activePlanGoal = activePlanRecord?.goal ?? undefined;
       const today = toDateStr();
 
       const upcomingWorkouts: UpcomingWorkout[] = timeline

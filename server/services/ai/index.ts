@@ -5,9 +5,9 @@ import { calculateTrainingStats, getExerciseBreakdown, collectRecentWorkouts, ge
 import { computeRpeTrend, computeExerciseGaps, computePlanPhase, computeWeeklyVolume, computeProgressionFlags, computeCurrentWeek } from "./coachingInsights";
 
 export async function buildTrainingContext(userId: string): Promise<TrainingContext> {
-  const [timeline, plans, user, upcomingDays] = await Promise.all([
+  const [timeline, activePlanRecord, user, upcomingDays] = await Promise.all([
     storage.getTimeline(userId),
-    storage.listTrainingPlans(userId),
+    storage.getActivePlan(userId),
     storage.getUser(userId),
     storage.getUpcomingPlannedDays(userId, 7),
   ]);
@@ -19,9 +19,9 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
   const structuredExerciseStats = getStructuredExerciseStats(timeline);
 
   let activePlan: TrainingContext["activePlan"];
-  if (plans.length > 0) {
-    const currentWeek = computeCurrentWeek(timeline, plans[0].totalWeeks);
-    activePlan = { name: plans[0].name, totalWeeks: plans[0].totalWeeks, currentWeek, goal: plans[0].goal ?? undefined };
+  if (activePlanRecord) {
+    const currentWeek = computeCurrentWeek(timeline, activePlanRecord.totalWeeks);
+    activePlan = { name: activePlanRecord.name, totalWeeks: activePlanRecord.totalWeeks, currentWeek, goal: activePlanRecord.goal ?? undefined };
   }
 
   const rpeTrend = computeRpeTrend(recentWorkouts);

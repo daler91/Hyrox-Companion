@@ -9,7 +9,7 @@ import {
   type TrainingPlanWithDays,
 } from "@shared/schema";
 import { db } from "../db";
-import { eq, and, sql, inArray } from "drizzle-orm";
+import { eq, and, sql, inArray, isNotNull } from "drizzle-orm";
 import { toDateStr } from "../types";
 
 export class PlanStorage {
@@ -166,6 +166,12 @@ export class PlanStorage {
 
     if (dateUpdates.length === 0) return true;
 
+    // Derive plan-level start/end dates from the scheduled days
+    const scheduledDates = dateUpdates.map(u => u.scheduledDate);
+    scheduledDates.sort((a, b) => a.localeCompare(b));
+    const planStartDate = scheduledDates[0];
+    const planEndDate = scheduledDates.at(-1)!;
+
     return await db.transaction(async (tx) => {
       // Secure batch update using idiomatic Drizzle query builder and a CASE statement
       const caseChunks = [];
@@ -188,8 +194,60 @@ export class PlanStorage {
         await tx.update(planDays).set({ status: 'planned' }).where(inArray(planDays.id, resetUpdateIds));
       }
 
+      // Update plan-level start/end dates
+      await tx.update(trainingPlans)
+        .set({ startDate: planStartDate, endDate: planEndDate })
+        .where(eq(trainingPlans.id, planId));
+
       return true;
     });
+  }
+
+  async findMatchingPlanDay(planId: string, date: string): Promise<PlanDay | undefined> {
+    const [match] = await db
+      .select()
+      .from(planDays)
+      .where(
+        and(
+          eq(planDays.planId, planId),
+          eq(planDays.scheduledDate, date),
+          eq(planDays.status, 'planned'),
+        )
+      )
+      .limit(1);
+
+    return match;
+  }
+
+  async getActivePlan(userId: string): Promise<TrainingPlan | undefined> {
+    return this.getPlanForDate(userId, toDateStr());
+  }
+
+  async getPlanForDate(userId: string, date: string): Promise<TrainingPlan | undefined> {
+    // Single query with priority-based ordering:
+    //   0 = plan covering the date, 1 = most recently ended, 2 = next upcoming
+    const [plan] = await db
+      .select()
+      .from(trainingPlans)
+      .where(
+        and(
+          eq(trainingPlans.userId, userId),
+          isNotNull(trainingPlans.startDate),
+          isNotNull(trainingPlans.endDate),
+        )
+      )
+      .orderBy(
+        sql`CASE
+          WHEN ${trainingPlans.startDate} <= ${date} AND ${trainingPlans.endDate} >= ${date} THEN 0
+          WHEN ${trainingPlans.endDate} < ${date} THEN 1
+          WHEN ${trainingPlans.startDate} > ${date} THEN 2
+        END`,
+        sql`CASE WHEN ${trainingPlans.startDate} > ${date} THEN ${trainingPlans.startDate} END ASC NULLS LAST`,
+        sql`${trainingPlans.endDate} DESC`,
+      )
+      .limit(1);
+
+    return plan;
   }
 
   async markMissedPlanDays(): Promise<number> {

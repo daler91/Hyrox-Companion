@@ -6,6 +6,7 @@ vi.mock("../storage", () => ({
   storage: {
     getTimeline: vi.fn(),
     listTrainingPlans: vi.fn(),
+    getActivePlan: vi.fn(),
     getExerciseSetsByWorkoutLogs: vi.fn(),
     getUser: vi.fn(),
     getUpcomingPlannedDays: vi.fn(),
@@ -26,7 +27,7 @@ describe("buildTrainingContext", () => {
 
   it("returns default zeroed context when user has no timeline or plans", async () => {
     vi.mocked(storage.getTimeline).mockResolvedValue([]);
-    vi.mocked(storage.listTrainingPlans).mockResolvedValue([]);
+    vi.mocked(storage.getActivePlan).mockResolvedValue(undefined);
     vi.mocked(storage.getExerciseSetsByWorkoutLogs).mockResolvedValue([]);
 
     const result = await buildTrainingContext("user-1");
@@ -55,7 +56,7 @@ describe("buildTrainingContext", () => {
   });
 
   it("calculates basic stats and completion rate correctly", async () => {
-    vi.mocked(storage.listTrainingPlans).mockResolvedValue([]);
+    vi.mocked(storage.getActivePlan).mockResolvedValue(undefined);
     vi.mocked(storage.getExerciseSetsByWorkoutLogs).mockResolvedValue([]);
 
     vi.mocked(storage.getTimeline).mockResolvedValue([
@@ -80,7 +81,7 @@ describe("buildTrainingContext", () => {
   });
 
   it("collects and sorts recent workouts, maintaining a max limit of 10", async () => {
-    vi.mocked(storage.listTrainingPlans).mockResolvedValue([]);
+    vi.mocked(storage.getActivePlan).mockResolvedValue(undefined);
     vi.mocked(storage.getExerciseSetsByWorkoutLogs).mockResolvedValue([]);
 
     const timeline = Array.from({ length: 15 }, (_, i) => ({
@@ -102,7 +103,7 @@ describe("buildTrainingContext", () => {
   });
 
   it("calculates structured exercise stats correctly", async () => {
-    vi.mocked(storage.listTrainingPlans).mockResolvedValue([]);
+    vi.mocked(storage.getActivePlan).mockResolvedValue(undefined);
 
     vi.mocked(storage.getTimeline).mockResolvedValue([
       {
@@ -144,9 +145,9 @@ describe("buildTrainingContext", () => {
     vi.mocked(storage.getTimeline).mockResolvedValue([]);
     vi.mocked(storage.getExerciseSetsByWorkoutLogs).mockResolvedValue([]);
 
-    vi.mocked(storage.listTrainingPlans).mockResolvedValue([
-      { id: "plan-1", name: "Hyrox Base", totalWeeks: 12, goal: "Complete a sub-1:30 race" } as unknown as Awaited<ReturnType<typeof storage.listTrainingPlans>>[number],
-    ]);
+    vi.mocked(storage.getActivePlan).mockResolvedValue(
+      { id: "plan-1", name: "Hyrox Base", totalWeeks: 12, goal: "Complete a sub-1:30 race" } as unknown as Awaited<ReturnType<typeof storage.getActivePlan>>,
+    );
 
     const result = await buildTrainingContext("user-1");
 
@@ -159,7 +160,7 @@ describe("buildTrainingContext", () => {
   });
 
   it("calculates exercise breakdown matching functional exercises", async () => {
-    vi.mocked(storage.listTrainingPlans).mockResolvedValue([]);
+    vi.mocked(storage.getActivePlan).mockResolvedValue(undefined);
     vi.mocked(storage.getExerciseSetsByWorkoutLogs).mockResolvedValue([]);
 
     vi.mocked(storage.getTimeline).mockResolvedValue([

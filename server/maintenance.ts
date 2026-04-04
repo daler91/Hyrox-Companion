@@ -187,6 +187,59 @@ async function testDatabaseConnection() {
   }
 }
 
+async function backfillPlanDatesAndWorkoutLinks() {
+  let client;
+  try {
+    client = await pool.connect();
+
+    const backfillQueries: Array<{ query: string; label: string }> = [
+      {
+        label: "Backfilled start/end dates on training plans",
+        query: `UPDATE training_plans tp
+              SET start_date = sub.min_date, end_date = sub.max_date
+              FROM (
+                SELECT plan_id, MIN(scheduled_date) AS min_date, MAX(scheduled_date) AS max_date
+                FROM plan_days WHERE scheduled_date IS NOT NULL GROUP BY plan_id
+              ) sub
+              WHERE tp.id = sub.plan_id AND tp.start_date IS NULL`,
+      },
+      {
+        label: "Backfilled planId on workout logs from planDayId",
+        query: `UPDATE workout_logs wl SET plan_id = pd.plan_id
+              FROM plan_days pd
+              WHERE wl.plan_day_id = pd.id AND wl.plan_id IS NULL`,
+      },
+      {
+        label: "Backfilled planId on standalone workout logs from plan date ranges",
+        // DISTINCT ON picks one plan per workout (latest end_date) to handle overlapping ranges
+        query: `UPDATE workout_logs wl SET plan_id = best.plan_id
+              FROM (
+                SELECT DISTINCT ON (wl2.id) wl2.id AS workout_id, tp.id AS plan_id
+                FROM workout_logs wl2
+                JOIN training_plans tp
+                  ON wl2.user_id = tp.user_id
+                 AND tp.start_date IS NOT NULL AND tp.end_date IS NOT NULL
+                 AND wl2.date >= tp.start_date AND wl2.date <= tp.end_date
+                WHERE wl2.plan_id IS NULL AND wl2.plan_day_id IS NULL
+                ORDER BY wl2.id, tp.end_date DESC
+              ) best
+              WHERE wl.id = best.workout_id`,
+      },
+    ];
+
+    for (const { query, label } of backfillQueries) {
+      const result = await client.query(query);
+      if (result.rowCount && result.rowCount > 0) {
+        logger.info({ context: "db", count: result.rowCount }, label);
+      }
+    }
+  } catch (error) {
+    logger.warn({ context: "db", err: error }, "Plan dates/workout links backfill skipped");
+  } finally {
+    if (client) client.release();
+  }
+}
+
 export async function runStartupMaintenance(storage: IStorage): Promise<void> {
   logger.info({ context: "db" }, "Starting startup maintenance...");
   await testDatabaseConnection();
@@ -195,6 +248,7 @@ export async function runStartupMaintenance(storage: IStorage): Promise<void> {
   await ensurePgvectorExtension();
   await ensureVectorSchema();
   await cleanOrphanedData();
+  await backfillPlanDatesAndWorkoutLinks();
   try {
     const marked = await storage.markMissedPlanDays();
     if (marked > 0) logger.info({ context: "db" }, `Marked ${marked} past planned day(s) as missed`);
