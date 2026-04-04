@@ -49,6 +49,13 @@ export function isRetryableError(error: unknown): boolean {
   return false;
 }
 
+function shouldRetry(error: unknown, attempt: number, maxRetries: number, baseDelayMs: number, deadline: number): number | false {
+  if (attempt >= maxRetries || !isRetryableError(error)) return false;
+  const delay = baseDelayMs * Math.pow(2, attempt);
+  if (Date.now() + delay >= deadline) return false;
+  return delay;
+}
+
 export async function retryWithBackoff<T>(
   fn: () => Promise<T>,
   label: string,
@@ -67,14 +74,10 @@ export async function retryWithBackoff<T>(
       return await withTimeout(fn(), Math.min(remaining, AI_CALL_TIMEOUT_MS), label);
     } catch (error) {
       lastError = error;
-      if (attempt < maxRetries && isRetryableError(error)) {
-        const delay = baseDelayMs * Math.pow(2, attempt);
-        if (Date.now() + delay >= deadline) break; // no time left for retry
-        logger.warn({ err: error }, `[gemini] ${label} attempt ${attempt + 1} failed (retrying in ${delay}ms)`);
-        await new Promise((resolve) => setTimeout(resolve, delay));
-      } else {
-        break;
-      }
+      const delay = shouldRetry(error, attempt, maxRetries, baseDelayMs, deadline);
+      if (delay === false) break;
+      logger.warn({ err: error }, `[gemini] ${label} attempt ${attempt + 1} failed (retrying in ${delay}ms)`);
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
   throw lastError;
