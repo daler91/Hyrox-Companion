@@ -36,9 +36,15 @@ function buildWorkoutLogTitles(timeline: TimelineEntry[]): Record<string, string
 }
 
 export async function generateJSON(userId: string, storage: IStorage) {
-  const timeline = await storage.getTimeline(userId);
-  const plans = await storage.listTrainingPlans(userId);
-  const allExerciseSets = await storage.getAllExerciseSetsWithDates(userId);
+  // ⚡ Bolt Performance Optimization:
+  // Parallelize independent database queries to reduce total latency.
+  // Previously these were executed sequentially, causing the total time
+  // to be the sum of all three queries rather than the maximum of them.
+  const [timeline, plans, allExerciseSets] = await Promise.all([
+    storage.getTimeline(userId),
+    storage.listTrainingPlans(userId),
+    storage.getAllExerciseSetsWithDates(userId)
+  ]);
   const workoutLogTitles = buildWorkoutLogTitles(timeline);
 
   const exerciseSetRows = allExerciseSets.map((s: ExerciseSetRow) => ({
