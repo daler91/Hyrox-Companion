@@ -113,13 +113,6 @@
       "when": 1775262747150,
       "tag": "0015_thin_nextwave",
       "breakpoints": true
-    },
-    {
-      "idx": 16,
-      "version": "7",
-      "when": 1775348400000,
-      "tag": "0016_rename_hyrox_station_to_functional",
-      "breakpoints": true
     }
   ]
 }

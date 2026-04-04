@@ -6,6 +6,7 @@ import {
   WeeklySummaryData,
   MissedWorkoutData,
 } from "./emailTemplates";
+import { env } from "./env";
 import type { User } from "@shared/schema";
 
 describe("email generation", () => {
@@ -38,26 +39,24 @@ describe("email generation", () => {
   };
 
   describe("getAppUrl", () => {
+    const originalAppUrl = env.APP_URL;
+
     afterEach(() => {
-      vi.unstubAllEnvs();
+      env.APP_URL = originalAppUrl;
     });
 
-    it("returns process.env.APP_URL when present", () => {
-      vi.stubEnv("APP_URL", "https://custom-url.com");
+    it("returns env.APP_URL when present", () => {
+      env.APP_URL = "https://custom-url.com";
       expect(getAppUrl()).toBe("https://custom-url.com");
     });
 
-    it("returns default URL when process.env.APP_URL is undefined", () => {
-      // Vitest's stubEnv handles undefined/empty strings when unstubAllEnvs is called
-      // Since it's not set, it should fall back to the default
-      vi.unstubAllEnvs();
-      // explicitly delete it just in case the real env has it
-      delete process.env.APP_URL;
+    it("returns default URL when env.APP_URL is undefined", () => {
+      env.APP_URL = undefined;
       expect(getAppUrl()).toBe("https://fitai.coach");
     });
 
-    it("returns default URL when process.env.APP_URL is an empty string", () => {
-      vi.stubEnv("APP_URL", "");
+    it("returns default URL when env.APP_URL is an empty string", () => {
+      env.APP_URL = "" as unknown as undefined;
       expect(getAppUrl()).toBe("https://fitai.coach");
     });
   });

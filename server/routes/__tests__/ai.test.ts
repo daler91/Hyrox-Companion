@@ -5,7 +5,7 @@ import request from "supertest";
 import aiRouter from "../ai";
 import { storage } from "../../storage";
 import { parseExercisesFromText, chatWithCoach, streamChatWithCoach, generateWorkoutSuggestions } from "../../gemini";
-import { buildTrainingContext } from "../../services/aiService";
+import { buildTrainingContext } from "../../services/ai";
 import { retrieveRelevantChunks } from "../../services/ragService";
 
 const MOCK_TRAINING_CONTEXT = "Training context";
@@ -57,7 +57,7 @@ vi.mock("../../gemini", () => ({
 }));
 
 // Mock aiService
-vi.mock("../../services/aiService", () => ({
+vi.mock("../../services/ai", () => ({
   buildTrainingContext: vi.fn(),
 }));
 

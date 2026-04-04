@@ -46,7 +46,7 @@ class DatabaseStorage implements IStorage {
   updateLastMissedReminderAt: IStorage["updateLastMissedReminderAt"] = (...args) => this.userStorage.updateLastMissedReminderAt(...args);
   getUsersWithEmailNotifications: IStorage["getUsersWithEmailNotifications"] = (...args) => this.userStorage.getUsersWithEmailNotifications(...args);
   markMissedPlanDays: IStorage["markMissedPlanDays"] = (...args) => this.planStorage.markMissedPlanDays(...args);
-  getMissedWorkoutsForDate: IStorage["getMissedWorkoutsForDate"] = (...args) => this.timelineStorage.getMissedWorkoutsForDate(...args);
+  getMissedWorkoutsForDate: IStorage["getMissedWorkoutsForDate"] = (...args) => this.analyticsStorage.getMissedWorkoutsForDate(...args);
 
   // ── IWorkoutStorage ───────────────────────────────────────────
   createWorkoutLog: IStorage["createWorkoutLog"] = (...args) => this.workoutStorage.createWorkoutLog(...args);
@@ -65,7 +65,7 @@ class DatabaseStorage implements IStorage {
   getCustomExercises: IStorage["getCustomExercises"] = (...args) => this.userStorage.getCustomExercises(...args);
   upsertCustomExercise: IStorage["upsertCustomExercise"] = (...args) => this.userStorage.upsertCustomExercise(...args);
   getWorkoutsWithoutExerciseSets: IStorage["getWorkoutsWithoutExerciseSets"] = (...args) => this.workoutStorage.getWorkoutsWithoutExerciseSets(...args);
-  getAllExerciseSetsWithDates: IStorage["getAllExerciseSetsWithDates"] = (...args) => this.timelineStorage.getAllExerciseSetsWithDates(...args);
+  getAllExerciseSetsWithDates: IStorage["getAllExerciseSetsWithDates"] = (...args) => this.analyticsStorage.getAllExerciseSetsWithDates(...args);
 
   // ── IPlanStorage ──────────────────────────────────────────────
   createTrainingPlan: IStorage["createTrainingPlan"] = (...args) => this.planStorage.createTrainingPlan(...args);
