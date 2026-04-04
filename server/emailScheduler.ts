@@ -128,9 +128,9 @@ async function processUserBatch(
     }
     emailsSent += sent.length;
     if (sent.length > 0) {
-      const detail = `Sent ${sent.join(", ")} to ${user.email}`;
+      const detail = `Sent ${sent.join(", ")} to user ${user.id}`;
       details.push(detail);
-      logger.info({ context: "email" }, detail);
+      logger.info({ context: "email", userId: user.id, emailTypes: sent }, `Sent ${sent.length} email(s)`);
     }
   }
 

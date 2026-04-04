@@ -18,6 +18,7 @@ function getBadgeLabel(ragInfo: RagInfo): string {
 }
 
 export function RagDebugBadge({ ragInfo }: Readonly<{ ragInfo: RagInfo }>) {
+  if (import.meta.env.PROD) return null;
   const [expanded, setExpanded] = useState(false);
 
   const badgeColor = BADGE_COLORS[ragInfo.source];

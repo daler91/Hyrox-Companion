@@ -11,6 +11,28 @@ import { ANALYTICS_CACHE_TTL_MS } from "../constants";
 const router = Router();
 
 const CACHE_TTL_MS = ANALYTICS_CACHE_TTL_MS;
+const MAX_CACHE_SIZE = 500;
+
+function evictStale<T extends { timestamp: number }>(map: Map<string, T>, ttl: number, maxSize: number): void {
+  const now = Date.now();
+  // First pass: remove expired entries
+  for (const [key, entry] of map) {
+    if (now - entry.timestamp >= ttl) map.delete(key);
+  }
+  // Second pass: if still over limit, drop oldest
+  while (map.size > maxSize) {
+    let oldestKey: string | null = null;
+    let oldestTime = Infinity;
+    for (const [key, entry] of map) {
+      if (entry.timestamp < oldestTime) {
+        oldestTime = entry.timestamp;
+        oldestKey = key;
+      }
+    }
+    if (oldestKey) map.delete(oldestKey);
+    else break;
+  }
+}
 
 interface CacheEntry {
   promise: Promise<ExerciseSetWithDate[]>;
@@ -40,6 +62,7 @@ function getExerciseSetsCoalesced(userId: string, from?: string, to?: string): P
     });
 
   cache.set(cacheKey, { promise, timestamp: now });
+  evictStale(cache, CACHE_TTL_MS, MAX_CACHE_SIZE);
   return promise;
 }
 
@@ -110,6 +133,7 @@ function getWorkoutLogsCoalesced(userId: string, from?: string, to?: string): Pr
     });
 
   workoutLogCache.set(cacheKey, { promise, timestamp: now });
+  evictStale(workoutLogCache, CACHE_TTL_MS, MAX_CACHE_SIZE);
   return promise;
 }
 

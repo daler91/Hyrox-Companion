@@ -36,7 +36,7 @@ if (env.SENTRY_DSN) {
   Sentry.init({
     dsn: env.SENTRY_DSN,
     environment: env.NODE_ENV || "development",
-    sendDefaultPii: true,
+    sendDefaultPii: false,
   });
 }
 
@@ -167,7 +167,7 @@ let startupError: string | null = null;
 
 app.get("/api/v1/health", (_req, res) => {
   if (startupError) {
-    res.status(503).json({ status: "error", error: startupError, timestamp: Date.now() });
+    res.status(503).json({ status: "error", error: "startup_error", timestamp: Date.now() });
   } else {
     res.json({ status: isReady ? "ok" : "starting", timestamp: Date.now() });
   }
@@ -193,7 +193,7 @@ app.use(pinoHttp({
       context: 'http',
       userId,
       requestId: req.id,
-      route: req.url || req.originalUrl,
+      route: req.url?.split('?')[0] || req.originalUrl?.split('?')[0],
     };
   },
   autoLogging: {

@@ -1,3 +1,4 @@
+import { env } from "../env";
 import { logger } from "../logger";
 import { storage } from "../storage";
 import { EMBEDDING_DIMENSIONS } from "../gemini/client";
@@ -79,6 +80,15 @@ export async function retrieveCoachingContext(
       fallbackReason,
     },
   };
+}
+
+/** Strip internal debug details from ragInfo for production API responses. */
+export function sanitizeRagInfo(ragInfo: RagInfo): RagInfo {
+  if (env.NODE_ENV === "production") {
+    const { chunks, fallbackReason, ...safe } = ragInfo;
+    return safe;
+  }
+  return ragInfo;
 }
 
 /**

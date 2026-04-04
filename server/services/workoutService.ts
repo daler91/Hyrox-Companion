@@ -122,7 +122,11 @@ async function resolveActivePlanLinks(
   if (workoutData.planDayId) {
     // Already linked to a plan day — derive planId from it
     const planDay = await storage.getPlanDay(workoutData.planDayId, userId);
-    return { planId: planDay?.planId ?? null, planDayId: workoutData.planDayId };
+    if (!planDay) {
+      // planDayId does not belong to this user — reject it
+      return { planId: null, planDayId: null };
+    }
+    return { planId: planDay.planId, planDayId: workoutData.planDayId };
   }
 
   // Standalone workout — find the plan covering the workout's date
