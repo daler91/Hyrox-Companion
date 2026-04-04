@@ -110,7 +110,7 @@ app.use(
         scriptSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
-        imgSrc: ["'self'", "data:", "https:"],
+        imgSrc: ["'self'", "data:", "https://img.clerk.com", "https://*.clerk.com", "https://*.strava.com"],
         connectSrc: ["'self'"],
         frameSrc: ["'self'"],
         workerSrc: ["'self'", "blob:"],
@@ -131,7 +131,7 @@ app.use((_req, res, next) => {
     `script-src ${scriptSrc}`,
     `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com ${clerkDomains}`,
     `font-src 'self' https://fonts.gstatic.com data:`,
-    `img-src 'self' data: https:`,
+    `img-src 'self' data: https://img.clerk.com https://*.clerk.com https://*.strava.com`,
     `connect-src ${connectSrc.join(" ")}`,
     `frame-src 'self' ${clerkDomains}`,
     `worker-src 'self' blob:`,
@@ -177,7 +177,14 @@ app.get("/api/v1/health", (_req, res) => {
 
 app.use(pinoHttp({
   logger,
-  genReqId: (req) => req.headers['x-request-id'] || randomUUID(),
+  genReqId: (req) => {
+    const clientId = req.headers['x-request-id'];
+    // 🛡️ Sentinel: Validate client-supplied request IDs to prevent log injection
+    if (typeof clientId === 'string' && clientId.length <= 64 && /^[\w.:-]+$/.test(clientId)) {
+      return clientId;
+    }
+    return randomUUID();
+  },
   customProps: (req, _res) => {
     let userId = 'anonymous';
     try {
@@ -221,22 +228,25 @@ try {
   }
   await registerRoutes(httpServer, app);
 
-  // Serve OpenAPI docs — swagger-ui injects inline scripts, so use a relaxed CSP
-  app.use("/api/docs", (_req, res, next) => {
-    res.setHeader(
-      "Content-Security-Policy",
-      "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:",
+  // 🛡️ Sentinel: Swagger UI is restricted to development — it exposes the full API
+  // schema and requires a relaxed CSP (unsafe-inline) which widens the attack surface.
+  if (isDev) {
+    app.use("/api/docs", (_req, res, next) => {
+      res.setHeader(
+        "Content-Security-Policy",
+        "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:",
+      );
+      next();
+    });
+    app.use(
+      "/api/docs",
+      swaggerUi.serve,
+      swaggerUi.setup(generateOpenApiDocument(), {
+        customCss: ".swagger-ui .topbar { display: none } .swagger-ui .info { margin: 20px 0; }",
+        customSiteTitle: "Workout API Documentation"
+      })
     );
-    next();
-  });
-  app.use(
-    "/api/docs",
-    swaggerUi.serve,
-    swaggerUi.setup(generateOpenApiDocument(), {
-      customCss: ".swagger-ui .topbar { display: none } .swagger-ui .info { margin: 20px 0; }",
-      customSiteTitle: "Workout API Documentation"
-    })
-  );
+  }
 
   app.use((err: AppError, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
