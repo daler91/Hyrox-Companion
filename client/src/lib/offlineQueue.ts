@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { apiRequest } from "./queryClient";
 
 interface PendingMutation {
@@ -9,6 +10,16 @@ interface PendingMutation {
   retryCount?: number;
 }
 
+const pendingMutationSchema: z.ZodType<PendingMutation> = z.object({
+  id: z.string(),
+  method: z.string(),
+  url: z.string(),
+  body: z.unknown(),
+  timestamp: z.number(),
+  retryCount: z.number().optional(),
+}) as z.ZodType<PendingMutation>;
+const pendingMutationArraySchema = z.array(pendingMutationSchema);
+
 const STORAGE_KEY = "hyrox-offline-queue";
 const MAX_RETRIES = 5;
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -17,7 +28,9 @@ const MAX_QUEUE_SIZE = 100;
 function getQueue(): PendingMutation[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as PendingMutation[]) : [];
+    if (!raw) return [];
+    const parsed = pendingMutationArraySchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : [];
   } catch {
     // Corrupted localStorage data — return empty queue so it gets overwritten on next save
     return [];

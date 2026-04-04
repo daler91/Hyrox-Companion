@@ -7,6 +7,10 @@ import type { ChatMessage as DBChatMessage } from "@shared/schema";
 
 export type { RagInfo } from "@/lib/api";
 
+function isStreamData(v: unknown): v is { ragInfo?: RagInfo; text?: string; error?: string } {
+  return typeof v === "object" && v !== null;
+}
+
 /** Parse SSE lines and accumulate text + ragInfo without triggering React state updates. */
 function processStreamLines(
   lines: string[],
@@ -16,7 +20,9 @@ function processStreamLines(
     if (!line.startsWith("data: ")) continue;
     let data: { ragInfo?: RagInfo; text?: string; error?: string };
     try {
-      data = JSON.parse(line.slice(6)) as typeof data;
+      const parsed: unknown = JSON.parse(line.slice(6));
+      if (!isStreamData(parsed)) continue;
+      data = parsed;
     } catch {
       continue;
     }

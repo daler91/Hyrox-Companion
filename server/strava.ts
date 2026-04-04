@@ -180,7 +180,12 @@ async function handleStravaCallback(req: Request, res: Response) {
     return res.redirect("/settings?strava=error");
   }
 
-  const verified = verifySignedState(state as string);
+  if (typeof state !== "string" || typeof code !== "string") {
+    (req.log || logger).error("Strava OAuth callback received invalid query params");
+    return res.redirect("/settings?strava=error");
+  }
+
+  const verified = verifySignedState(state);
   if (!verified) {
     (req.log || logger).error("Strava OAuth state invalid or expired - possible CSRF attack");
     return res.redirect("/settings?strava=error");
@@ -188,7 +193,7 @@ async function handleStravaCallback(req: Request, res: Response) {
 
   const userId = verified.userId;
 
-  if (!code || !userId || !STRAVA_CLIENT_ID || !STRAVA_CLIENT_SECRET) {
+  if (!userId || !STRAVA_CLIENT_ID || !STRAVA_CLIENT_SECRET) {
     return res.redirect("/settings?strava=error");
   }
 

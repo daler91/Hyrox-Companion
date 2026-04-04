@@ -170,7 +170,7 @@ export class PlanStorage {
     const scheduledDates = dateUpdates.map(u => u.scheduledDate);
     scheduledDates.sort((a, b) => a.localeCompare(b));
     const planStartDate = scheduledDates[0];
-    const planEndDate = scheduledDates.at(-1)!;
+    const planEndDate = scheduledDates.at(-1) ?? scheduledDates[0];
 
     return await db.transaction(async (tx) => {
       // Secure batch update using idiomatic Drizzle query builder and a CASE statement

@@ -59,7 +59,8 @@ export function rateLimiter(
       );
     }
 
-    const limiter = limiterCache.get(cacheKey)!;
+    const limiter = limiterCache.get(cacheKey);
+    if (!limiter) throw new Error(`Rate limiter not found for ${category}`);
     return limiter(req, res, next);
   };
 }
