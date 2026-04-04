@@ -9,7 +9,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  DialogDescription,
 } from "@/components/ui/dialog";
 import { Loader2 } from "lucide-react";
 import type { TimelineEntry } from "@shared/schema";
@@ -85,9 +84,6 @@ export default function EditWorkoutDialog({
           <DialogTitle>
             Edit {entry?.dayName} - Week {entry?.weekNumber}
           </DialogTitle>
-          <DialogDescription className="sr-only">
-            Edit workout focus, notes, and exercises.
-          </DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Left Column: Metadata & Notes */}

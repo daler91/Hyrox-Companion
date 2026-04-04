@@ -7,7 +7,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  DialogDescription,
 } from "@/components/ui/dialog";
 import { Loader2, Target } from "lucide-react";
 
@@ -36,9 +35,6 @@ export function GoalDialog({
             <Target className="h-4 w-4" />
             Plan Goal
           </DialogTitle>
-          <DialogDescription className="sr-only">
-            Update the current training plan goal.
-          </DialogDescription>
         </DialogHeader>
         <div className="space-y-2">
           <Label htmlFor="plan-goal-input">What are you training towards?</Label>
