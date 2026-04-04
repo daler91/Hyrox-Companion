@@ -60,6 +60,27 @@ export function TrainingOverviewTab({ dateParams, weeklyGoal }: TrainingOverview
     return { avgPerWeek, avgDuration, avgRpe, totalWorkouts };
   }, [overview]);
 
+  // ⚡ Memoize chart data in a single O(N) pass instead of two separate
+  // .filter().map() chains (4 array traversals → 1). This also stabilises
+  // array references so MiniLineChart can skip re-renders via React.memo.
+  const { rpeData, durationData } = useMemo(() => {
+    if (!overview) return { rpeData: [] as Array<{ weekStart: string; avgRpe: number | null }>, durationData: [] as Array<{ weekStart: string; avgDuration: number }> };
+    const rpe: Array<{ weekStart: string; avgRpe: number | null }> = [];
+    const duration: Array<{ weekStart: string; avgDuration: number }> = [];
+    for (const w of overview.weeklySummaries) {
+      if (w.avgRpe !== null) {
+        rpe.push({ weekStart: w.weekStart, avgRpe: w.avgRpe });
+      }
+      if (w.totalDuration > 0) {
+        duration.push({
+          weekStart: w.weekStart,
+          avgDuration: w.workoutCount > 0 ? Math.round(w.totalDuration / w.workoutCount) : 0,
+        });
+      }
+    }
+    return { rpeData: rpe, durationData: duration };
+  }, [overview]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -78,17 +99,6 @@ export function TrainingOverviewTab({ dateParams, weeklyGoal }: TrainingOverview
       </div>
     );
   }
-
-  const rpeData = overview.weeklySummaries
-    .filter((w) => w.avgRpe !== null)
-    .map((w) => ({ weekStart: w.weekStart, avgRpe: w.avgRpe }));
-
-  const durationData = overview.weeklySummaries
-    .filter((w) => w.totalDuration > 0)
-    .map((w) => ({
-      weekStart: w.weekStart,
-      avgDuration: w.workoutCount > 0 ? Math.round(w.totalDuration / w.workoutCount) : 0,
-    }));
 
   return (
     <div className="space-y-6">
