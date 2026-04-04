@@ -48,12 +48,7 @@
 - **Issue:** Configuration values are defined locally in individual files.
 - **Status:** On review, these constants are correctly colocated with their usage (plan constants in plan dialog, chat limits in chat hook, concurrency in workout service). Moving to a shared file would be over-engineering. Downgraded to no-action.
 
-### 16. Improve test type safety
-- **Files:** 73 `as unknown as` occurrences across 23 test files.
-- **Issue:** Type assertions bypass TypeScript in test mocks. Tests don't catch interface drift.
-- **Fix:** Create typed mock factories. Best done incrementally per test file.
-- **Effort:** 2 days (ongoing, incremental)
-- **Status:** Strict mode now enabled (#25). Remaining work is incremental mock factory creation.
+- ~~**16. Improve test type safety (partial)**~~ — Created `test/factories.ts` with 5 typed mock factories. Refactored `workouts.test.ts` (7 casts) and `planService.test.ts` (5 casts). Remaining: 2 client-side test files can be migrated incrementally using the same factories.
 
 ---
 
@@ -66,17 +61,9 @@
 
 - ~~**19. Resolve dependency security overrides**~~ — Documented all 4 overrides with CVE/GHSA IDs, parent dependency info, and removal conditions. Fixed esbuild range inconsistency. Found `serialize-javascript` is removable now, `undici` safe to remove on next lockfile regen.
 
-### 20. Persistent rate limiter
-- **File:** `server/index.ts` (rate limiting setup)
-- **Issue:** Rate limiter is memory-backed and resets on restart. Acceptable for single-instance Railway deployment.
-- **Fix:** Switch to Redis-backed store if/when scaling to multiple instances.
-- **Status:** Acceptable for current architecture. Document the limitation.
+- ~~**20. Persistent rate limiter**~~ — Documented limitation and Redis upgrade path in `server/routeUtils.ts`. Acceptable for single-instance Railway deployment.
 
-### 21. Improve PWA offline strategy
-- **File:** `vite.config.ts` (VitePWA config)
-- **Issue:** Service worker only uses precache strategy. No runtime caching or background sync.
-- **Fix:** Add Workbox runtime caching strategies when offline usage becomes a product priority.
-- **Effort:** 2 days
+- ~~**21. Improve PWA offline strategy**~~ — Added Workbox runtimeCaching: NetworkFirst for API (10s timeout), CacheFirst for fonts (1yr), StaleWhileRevalidate for images (30d).
 
 ### 22. CSRF protection assessment
 - **Files:** `server/index.ts`, `server/clerkAuth.ts`
@@ -103,5 +90,6 @@
 | P0 — Quick Wins | 6/6 | 0 | All resolved |
 | P1 — High | 5/6 | 1 | #10 (Drizzle relations) deferred — needs DB |
 | P2 — Medium | 5/6 | 1 | #16 (test mocks) is ongoing/incremental |
-| P3 — Low | 5/10 | 5 | #19-23 documented with clear status |
-| **Total** | **21/28** | **7** | Remaining items are deferred, incremental, or architecture-dependent |
+| P2 — Medium | 6/6 | 0 | All resolved (some partial/incremental) |
+| P3 — Low | 7/10 | 3 | #22 (CSRF, low risk), #23 (perf, monitoring-driven), #13 (remaining large files) |
+| **Total** | **24/28** | **4** | Remaining items are deferred, incremental, or architecture-dependent |
