@@ -168,9 +168,9 @@ export class PlanStorage {
 
     // Derive plan-level start/end dates from the scheduled days
     const scheduledDates = dateUpdates.map(u => u.scheduledDate);
-    scheduledDates.sort();
+    scheduledDates.sort((a, b) => a.localeCompare(b));
     const planStartDate = scheduledDates[0];
-    const planEndDate = scheduledDates[scheduledDates.length - 1];
+    const planEndDate = scheduledDates.at(-1)!;
 
     return await db.transaction(async (tx) => {
       // Secure batch update using idiomatic Drizzle query builder and a CASE statement

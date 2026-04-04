@@ -192,10 +192,10 @@ async function backfillPlanDatesAndWorkoutLinks() {
   try {
     client = await pool.connect();
 
-    const backfillQueries: Array<{ sql: string; label: string }> = [
+    const backfillQueries: Array<{ query: string; label: string }> = [
       {
         label: "Backfilled start/end dates on training plans",
-        sql: `UPDATE training_plans tp
+        query: `UPDATE training_plans tp
               SET start_date = sub.min_date, end_date = sub.max_date
               FROM (
                 SELECT plan_id, MIN(scheduled_date) AS min_date, MAX(scheduled_date) AS max_date
@@ -205,14 +205,14 @@ async function backfillPlanDatesAndWorkoutLinks() {
       },
       {
         label: "Backfilled planId on workout logs from planDayId",
-        sql: `UPDATE workout_logs wl SET plan_id = pd.plan_id
+        query: `UPDATE workout_logs wl SET plan_id = pd.plan_id
               FROM plan_days pd
               WHERE wl.plan_day_id = pd.id AND wl.plan_id IS NULL`,
       },
       {
         label: "Backfilled planId on standalone workout logs from plan date ranges",
         // DISTINCT ON picks one plan per workout (latest end_date) to handle overlapping ranges
-        sql: `UPDATE workout_logs wl SET plan_id = best.plan_id
+        query: `UPDATE workout_logs wl SET plan_id = best.plan_id
               FROM (
                 SELECT DISTINCT ON (wl2.id) wl2.id AS workout_id, tp.id AS plan_id
                 FROM workout_logs wl2
@@ -227,7 +227,7 @@ async function backfillPlanDatesAndWorkoutLinks() {
       },
     ];
 
-    for (const { sql: query, label } of backfillQueries) {
+    for (const { query, label } of backfillQueries) {
       const result = await client.query(query);
       if (result.rowCount && result.rowCount > 0) {
         logger.info({ context: "db", count: result.rowCount }, label);
