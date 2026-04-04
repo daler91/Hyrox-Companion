@@ -6,7 +6,7 @@ import { VECTOR_DB_CONNECTION_TIMEOUT_MS, DB_IDLE_TIMEOUT_MS, DB_STATEMENT_TIMEO
 const { Pool } = pg;
 
 /**
- * Separate connection pool for vector/RAG storage (Supabase).
+ * Separate connection pool for vector/RAG storage (Neon).
  * Falls back to the main DATABASE_URL when VECTOR_DATABASE_URL is not set,
  * so the app works in both single-DB and split-DB configurations.
  */
@@ -29,6 +29,6 @@ export const isVectorDbSeparate = Boolean(env.VECTOR_DATABASE_URL);
 logger.info(
   { context: "db", separate: isVectorDbSeparate },
   isVectorDbSeparate
-    ? "Vector DB configured (separate Supabase instance)"
+    ? "Vector DB configured (separate Neon instance)"
     : "Vector DB using main DATABASE_URL (single-DB mode)",
 );
