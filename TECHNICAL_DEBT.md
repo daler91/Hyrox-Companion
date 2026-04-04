@@ -176,6 +176,30 @@
 - **Fix:** Move allowed origins to environment configuration (comma-separated env var).
 - **Effort:** 30 min
 
+### 25. Strict mode disabled in test TypeScript config
+- **File:** `tsconfig.test.json` (lines 19-21)
+- **Issue:** `strict: false`, `noImplicitAny: false`, `strictNullChecks: false` in the test config. This means tests don't catch type errors that would appear in production code. The 80% coverage threshold in `vitest.config.ts` is undermined because tests can pass with type-unsafe code.
+- **Fix:** Enable strict mode in `tsconfig.test.json` to match production settings. Fix resulting type errors in test files (likely related to the `as unknown` casts noted in item #16).
+- **Effort:** 1-2 days
+
+### 26. Silent data loss in offline mutation queue
+- **File:** `client/src/lib/offlineQueue.ts` (lines 24-26)
+- **Issue:** After 5 retries, offline mutations are silently dropped with no user notification. Users may believe their workout data was saved when it was actually lost.
+- **Fix:** Add a callback/toast notification when mutations are permanently dropped. Consider increasing retry count or adding a manual retry UI.
+- **Effort:** 1 day
+
+### 27. No route guards for authenticated pages
+- **File:** `client/src/App.tsx` (lines 57-69)
+- **Issue:** `AuthenticatedRouter` is rendered without proper route-level auth guards. If the auth check fails or is slow, users may briefly see authenticated content.
+- **Fix:** Add route-level auth guards or a loading state that prevents rendering protected content until auth is confirmed.
+- **Effort:** 1 day
+
+### 28. Full pdfjs-dist namespace import
+- **File:** `client/src/components/settings/coaching/useCoachingUpload.ts` (line 4)
+- **Issue:** `import * as pdfjsLib from "pdfjs-dist"` imports the entire library (~500KB). Only `getDocument` is needed.
+- **Fix:** Use a targeted import: `import { getDocument } from "pdfjs-dist/legacy/build/pdf"`.
+- **Effort:** 30 min
+
 ---
 
 ## Summary
@@ -185,5 +209,5 @@
 | P0 — Quick Wins | 6 | 1-2 days |
 | P1 — High | 6 | 8-14 days |
 | P2 — Medium | 6 | 7-10 days |
-| P3 — Low | 6 | 7-9 days |
-| **Total** | **24** | **~23-35 days** |
+| P3 — Low | 10 | 10-13 days |
+| **Total** | **28** | **~27-39 days** |
