@@ -10,6 +10,7 @@ vi.mock("../storage", () => ({
     getUser: vi.fn(),
     updateIsAutoCoaching: vi.fn(),
     listTrainingPlans: vi.fn(),
+    getActivePlan: vi.fn(),
     getTimeline: vi.fn(),
     updatePlanDay: vi.fn(),
     hasChunksForUser: vi.fn(),
@@ -38,7 +39,7 @@ function makeTimelineEntry(overrides: Record<string, unknown> = {}) {
 function mockBaseAutoCoachDeps(timeline: Record<string, unknown>[] = [makeTimelineEntry()]) {
   mockEnabledUser();
   vi.mocked(buildTrainingContext).mockResolvedValue({} as never);
-  vi.mocked(storage.listTrainingPlans).mockResolvedValue([]);
+  vi.mocked(storage.getActivePlan).mockResolvedValue(undefined);
   vi.mocked(storage.getTimeline).mockResolvedValue(timeline as never);
   vi.mocked(storage.hasChunksForUser).mockResolvedValue(false);
   vi.mocked(storage.listCoachingMaterials).mockResolvedValue([]);
@@ -89,7 +90,7 @@ describe("coachService", () => {
 
     it("applies suggestions and returns adjusted count", async () => {
       mockBaseAutoCoachDeps([makeTimelineEntry(), makeTimelineEntry({ planDayId: "day-2", date: "2026-01-17", focus: "Running", mainWorkout: "5km easy" })]);
-      vi.mocked(storage.listTrainingPlans).mockResolvedValue([{ id: "plan-1", goal: "Sub-90 Hyrox" } as never]);
+      vi.mocked(storage.getActivePlan).mockResolvedValue({ id: "plan-1", goal: "Sub-90 Hyrox" } as never);
       vi.mocked(generateWorkoutSuggestions).mockResolvedValue([makeSuggestion()]);
       vi.mocked(storage.updatePlanDay).mockResolvedValue({} as never);
 

@@ -44,6 +44,8 @@ export const trainingPlans = pgTable("training_plans", {
   sourceFileName: text("source_file_name"),
   totalWeeks: integer("total_weeks").notNull(),
   goal: text("goal"),
+  startDate: date("start_date"),
+  endDate: date("end_date"),
 }, (table) => [
   index("idx_training_plans_user_id").on(table.userId),
 ]);
@@ -80,6 +82,7 @@ export const workoutLogs = pgTable("workout_logs", {
   duration: integer("duration"),
   rpe: integer("rpe"),
   planDayId: varchar("plan_day_id", { length: 255 }).references(() => planDays.id, { onDelete: "set null" }),
+  planId: varchar("plan_id", { length: 255 }).references(() => trainingPlans.id, { onDelete: "set null" }),
   source: varchar("source", { length: 255 }).default("manual"),
   stravaActivityId: varchar("strava_activity_id", { length: 255 }),
   calories: integer("calories"),
@@ -97,6 +100,7 @@ export const workoutLogs = pgTable("workout_logs", {
   index("idx_workout_logs_date").on(table.date),
   index("idx_workout_logs_user_date").on(table.userId, table.date),
   index("idx_workout_logs_plan_day_id").on(table.planDayId),
+  index("idx_workout_logs_plan_id").on(table.planId),
   index("idx_workout_logs_strava_activity_id").on(table.stravaActivityId),
   index("idx_workout_logs_source").on(table.source),
 ]);

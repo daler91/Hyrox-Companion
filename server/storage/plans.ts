@@ -9,7 +9,7 @@ import {
   type TrainingPlanWithDays,
 } from "@shared/schema";
 import { db } from "../db";
-import { eq, and, sql, inArray } from "drizzle-orm";
+import { eq, and, sql, inArray, lte, gte, isNotNull, desc, asc } from "drizzle-orm";
 import { toDateStr } from "../types";
 
 export class PlanStorage {
@@ -166,6 +166,11 @@ export class PlanStorage {
 
     if (dateUpdates.length === 0) return true;
 
+    // Derive plan-level start/end dates from the scheduled days
+    const scheduledDates = dateUpdates.map(u => u.scheduledDate);
+    const planStartDate = scheduledDates.reduce((a, b) => (a < b ? a : b));
+    const planEndDate = scheduledDates.reduce((a, b) => (a > b ? a : b));
+
     return await db.transaction(async (tx) => {
       // Secure batch update using idiomatic Drizzle query builder and a CASE statement
       const caseChunks = [];
@@ -188,8 +193,83 @@ export class PlanStorage {
         await tx.update(planDays).set({ status: 'planned' }).where(inArray(planDays.id, resetUpdateIds));
       }
 
+      // Update plan-level start/end dates
+      await tx.update(trainingPlans)
+        .set({ startDate: planStartDate, endDate: planEndDate })
+        .where(eq(trainingPlans.id, planId));
+
       return true;
     });
+  }
+
+  async findMatchingPlanDay(planId: string, date: string): Promise<PlanDay | undefined> {
+    const [match] = await db
+      .select()
+      .from(planDays)
+      .where(
+        and(
+          eq(planDays.planId, planId),
+          eq(planDays.scheduledDate, date),
+          eq(planDays.status, 'planned'),
+        )
+      )
+      .limit(1);
+
+    return match;
+  }
+
+  async getActivePlan(userId: string): Promise<TrainingPlan | undefined> {
+    const today = toDateStr();
+
+    // Primary: plan whose date range covers today
+    const [current] = await db
+      .select()
+      .from(trainingPlans)
+      .where(
+        and(
+          eq(trainingPlans.userId, userId),
+          isNotNull(trainingPlans.startDate),
+          isNotNull(trainingPlans.endDate),
+          lte(trainingPlans.startDate, today),
+          gte(trainingPlans.endDate, today),
+        )
+      )
+      .orderBy(desc(trainingPlans.endDate))
+      .limit(1);
+
+    if (current) return current;
+
+    // Fallback 1: most recently ended plan
+    const [recent] = await db
+      .select()
+      .from(trainingPlans)
+      .where(
+        and(
+          eq(trainingPlans.userId, userId),
+          isNotNull(trainingPlans.endDate),
+          sql`${trainingPlans.endDate} < ${today}`,
+        )
+      )
+      .orderBy(desc(trainingPlans.endDate))
+      .limit(1);
+
+    if (recent) return recent;
+
+    // Fallback 2: next upcoming plan
+    const [upcoming] = await db
+      .select()
+      .from(trainingPlans)
+      .where(
+        and(
+          eq(trainingPlans.userId, userId),
+          isNotNull(trainingPlans.startDate),
+          sql`${trainingPlans.startDate} > ${today}`,
+        )
+      )
+      .orderBy(asc(trainingPlans.startDate))
+      .limit(1);
+
+    return upcoming;
   }
 
   async markMissedPlanDays(): Promise<number> {

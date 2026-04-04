@@ -40,6 +40,8 @@ describe("TimelineFilters", () => {
         updatedAt: null,
         sourceFileName: null,
         goal: null,
+        startDate: null,
+        endDate: null,
       },
       {
         id: "plan-2",
@@ -50,6 +52,8 @@ describe("TimelineFilters", () => {
         updatedAt: null,
         sourceFileName: null,
         goal: null,
+        startDate: null,
+        endDate: null,
       },
     ],
     plansLoading: false,

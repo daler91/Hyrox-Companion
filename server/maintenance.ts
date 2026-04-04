@@ -187,6 +187,66 @@ async function testDatabaseConnection() {
   }
 }
 
+async function backfillPlanDatesAndWorkoutLinks() {
+  let client;
+  try {
+    client = await pool.connect();
+
+    // Backfill startDate/endDate on training_plans from their planDays
+    const planDateResult = await client.query(`
+      UPDATE training_plans tp
+      SET start_date = sub.min_date,
+          end_date = sub.max_date
+      FROM (
+        SELECT plan_id,
+               MIN(scheduled_date) AS min_date,
+               MAX(scheduled_date) AS max_date
+        FROM plan_days
+        WHERE scheduled_date IS NOT NULL
+        GROUP BY plan_id
+      ) sub
+      WHERE tp.id = sub.plan_id
+        AND tp.start_date IS NULL
+    `);
+    if (planDateResult.rowCount && planDateResult.rowCount > 0) {
+      logger.info({ context: "db", count: planDateResult.rowCount }, "Backfilled start/end dates on training plans");
+    }
+
+    // Backfill planId on workout_logs that have a planDayId but no planId
+    const workoutPlanIdResult = await client.query(`
+      UPDATE workout_logs wl
+      SET plan_id = pd.plan_id
+      FROM plan_days pd
+      WHERE wl.plan_day_id = pd.id
+        AND wl.plan_id IS NULL
+    `);
+    if (workoutPlanIdResult.rowCount && workoutPlanIdResult.rowCount > 0) {
+      logger.info({ context: "db", count: workoutPlanIdResult.rowCount }, "Backfilled planId on workout logs from planDayId");
+    }
+
+    // Backfill planId on standalone workouts by matching date to plan date ranges
+    const standaloneResult = await client.query(`
+      UPDATE workout_logs wl
+      SET plan_id = tp.id
+      FROM training_plans tp
+      WHERE wl.plan_id IS NULL
+        AND wl.plan_day_id IS NULL
+        AND wl.user_id = tp.user_id
+        AND tp.start_date IS NOT NULL
+        AND tp.end_date IS NOT NULL
+        AND wl.date >= tp.start_date
+        AND wl.date <= tp.end_date
+    `);
+    if (standaloneResult.rowCount && standaloneResult.rowCount > 0) {
+      logger.info({ context: "db", count: standaloneResult.rowCount }, "Backfilled planId on standalone workout logs from plan date ranges");
+    }
+  } catch (error) {
+    logger.warn({ context: "db", err: error }, "Plan dates/workout links backfill skipped");
+  } finally {
+    if (client) client.release();
+  }
+}
+
 export async function runStartupMaintenance(storage: IStorage): Promise<void> {
   logger.info({ context: "db" }, "Starting startup maintenance...");
   await testDatabaseConnection();
@@ -195,6 +255,7 @@ export async function runStartupMaintenance(storage: IStorage): Promise<void> {
   await ensurePgvectorExtension();
   await ensureVectorSchema();
   await cleanOrphanedData();
+  await backfillPlanDatesAndWorkoutLinks();
   try {
     const marked = await storage.markMissedPlanDays();
     if (marked > 0) logger.info({ context: "db" }, `Marked ${marked} past planned day(s) as missed`);
