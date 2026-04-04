@@ -18,7 +18,7 @@
 
 ---
 
-## P1 — High Priority (1-3 days each)
+## ~~P1 — High Priority~~ (5/6 RESOLVED)
 
 - ~~**7. Replace Proxy-based storage abstraction**~~ — Replaced with explicit `DatabaseStorage` class delegating ~60 methods.
 - ~~**8. Fix migration naming conflict**~~ — Renamed to `0016_rename_hyrox_station_to_functional.sql`, added to Drizzle journal. Note: `server/maintenance.ts` startup SQL still needs converting to Drizzle migrations (deferred — requires DB testing).
@@ -35,100 +35,68 @@
 
 ---
 
-## P2 — Medium Priority (1-2 days each)
+## ~~P2 — Medium Priority~~ (5/6 RESOLVED)
 
 - ~~**13. Refactor oversized files (partial)**~~ — Extracted Timeline.tsx IIFE into named `TimelineContent` component. Remaining: sidebar.tsx (775 lines, likely shadcn/ui vendor), prompts.ts (412 lines), Landing.tsx (495 lines).
 - ~~**15. Reduce GeneratePlanDialog state complexity**~~ — Extracted 10 useState calls into `useGeneratePlanForm()` hook.
+- ~~**17. Migrate email scheduler to pg-boss queue**~~ — Cron now enqueues per-user `send-weekly-summary` and `send-missed-reminder` jobs. Workers registered in `queue.ts`.
+- ~~**18. Propagate request ID / tracing context to service layer**~~ — Added `AsyncLocalStorage`-based `requestContext.ts` with middleware. `getContextLogger()` returns child logger with request context.
+- ~~**25. Strict mode disabled in test TypeScript config**~~ — Enabled `strict: true` in `tsconfig.test.json`. Tests now enforce the same type safety as production code.
 
 ### 14. Centralize magic numbers and constants
-- **Files:**
-  - `client/src/components/plans/GeneratePlanDialog.tsx` (lines 12-28) — `MAX_WEEKS`, `MIN_WEEKS`, `DEFAULT_WEEKS`, etc.
-  - `client/src/hooks/useChatSession.ts` (lines 118-120) — `MAX_HISTORY_MESSAGES`, `MAX_HISTORY_CHARS`
-  - `server/services/workoutService.ts` (line 301) — `CONCURRENCY_LIMIT = 5`
-- **Issue:** Configuration values are defined locally in individual files. Changes require finding all occurrences.
-- **Fix:** Create `shared/constants.ts` for cross-cutting values and domain-specific constant files where appropriate.
-- **Effort:** 1 day
+- **Files:** `client/src/components/plans/GeneratePlanDialog.tsx`, `client/src/hooks/useChatSession.ts`, `server/services/workoutService.ts`
+- **Issue:** Configuration values are defined locally in individual files.
+- **Status:** On review, these constants are correctly colocated with their usage (plan constants in plan dialog, chat limits in chat hook, concurrency in workout service). Moving to a shared file would be over-engineering. Downgraded to no-action.
 
 ### 16. Improve test type safety
-- **Files:** 73 occurrences across 23 test files. Worst offenders: `client/src/hooks/__tests__/useWorkoutActions.test.tsx` (17), `server/services/planService.test.ts` (9), `client/src/hooks/__tests__/useWorkoutForm.test.tsx` (8), `server/storage/__tests__/workouts.test.ts` (7).
-- **Issue:** `as unknown as` type assertions bypass TypeScript entirely in test mocks. Tests don't catch interface drift, making refactoring risky.
-- **Fix:** Create typed mock factories using `vi.fn()` with proper generic types. Use Vitest's `vi.mocked()` helper for typed mock access.
-- **Effort:** 2 days
-
-### 17. Migrate email scheduler to pg-boss queue
-- **File:** `server/emailScheduler.ts` (171 lines)
-- **Issue:** Processes all users synchronously in a cron callback. The app already has pg-boss (`server/queue.ts`) for async job processing, but the email scheduler doesn't use it. Risk of startup race conditions, duplicate sends in clustered deployments, and blocking the event loop.
-- **Fix:** Refactor the cron to enqueue one pg-boss job per user. Let pg-boss handle concurrency, retries, and dead-letter.
-- **Effort:** 1 day
-
-### 18. Propagate request ID / tracing context to service layer
-- **Files:** `server/index.ts` (lines 178-204), service layer files
-- **Issue:** `pino-http` already generates request IDs at the HTTP layer, but service-layer functions (storage, AI services, email) don't receive or log request context. Correlating a user-facing error to backend logs requires manual timestamp matching.
-- **Fix:** Use `AsyncLocalStorage` to propagate request context. Create a middleware that stores `{ requestId, userId }` and a `getRequestContext()` helper that services can call.
-- **Effort:** 1 day
+- **Files:** 73 `as unknown as` occurrences across 23 test files.
+- **Issue:** Type assertions bypass TypeScript in test mocks. Tests don't catch interface drift.
+- **Fix:** Create typed mock factories. Best done incrementally per test file.
+- **Effort:** 2 days (ongoing, incremental)
+- **Status:** Strict mode now enabled (#25). Remaining work is incremental mock factory creation.
 
 ---
 
 ## P3 — Low Priority / Ongoing
 
+- ~~**24. Hardcoded CORS origins**~~ — Moved to `ALLOWED_ORIGINS` env var with backward-compatible fallback.
+- ~~**26. Silent data loss in offline mutation queue**~~ — Added `onMutationDropped` callback with `useOfflineDropNotifier` hook showing destructive toast on data loss.
+- ~~**27. No route guards for authenticated pages**~~ — Added auth loading guard in `App.tsx` showing spinner while auth state loads.
+- ~~**28. Full pdfjs-dist namespace import**~~ — Changed to targeted `{getDocument, GlobalWorkerOptions}` import.
+
 ### 19. Resolve dependency security overrides
-- **File:** `package.json` (lines 90-94 and 138-143)
-- **Issue:** 4 dependency overrides (`esbuild`, `yauzl`, `undici`, `serialize-javascript`) mask known vulnerabilities. Duplicated in both npm and pnpm override sections. GitHub Dependabot reports 10 vulnerabilities (5 high, 5 moderate).
-- **Fix:** Investigate each override, determine if the vulnerability is exploitable in this context, and either upgrade the parent dependency or document the accepted risk. Consolidate duplicate override sections.
-- **Effort:** 1 day
+- **File:** `package.json` (npm and pnpm override sections)
+- **Issue:** 4 dependency overrides (`esbuild`, `yauzl`, `undici`, `serialize-javascript`) mask known vulnerabilities. Duplicated in both npm and pnpm override sections.
+- **Fix:** Add documentation comments to overrides explaining CVE and removal conditions. Periodically check if upstream dependencies have updated.
+- **Effort:** Ongoing maintenance
 
 ### 20. Persistent rate limiter
 - **File:** `server/index.ts` (rate limiting setup)
-- **Issue:** Rate limiter is memory-backed and resets on every server restart. In a multi-instance deployment, limits are per-instance rather than global.
-- **Fix:** Use a Redis-backed store (e.g., `rate-limit-redis`) for shared, persistent rate limiting.
-- **Effort:** 1 day
+- **Issue:** Rate limiter is memory-backed and resets on restart. Acceptable for single-instance Railway deployment.
+- **Fix:** Switch to Redis-backed store if/when scaling to multiple instances.
+- **Status:** Acceptable for current architecture. Document the limitation.
 
 ### 21. Improve PWA offline strategy
 - **File:** `vite.config.ts` (VitePWA config)
-- **Issue:** Service worker only uses precache strategy. No runtime caching, background sync, or intelligent cache invalidation.
-- **Fix:** Add Workbox runtime caching strategies (StaleWhileRevalidate for API, CacheFirst for assets) and background sync for offline mutations.
+- **Issue:** Service worker only uses precache strategy. No runtime caching or background sync.
+- **Fix:** Add Workbox runtime caching strategies when offline usage becomes a product priority.
 - **Effort:** 2 days
 
-### 22. Global CSRF protection
-- **File:** `server/strava.ts`, `server/index.ts`
-- **Issue:** CSRF state tokens are only implemented for Strava OAuth flow, not globally. Other state-changing endpoints rely solely on Clerk auth tokens.
-- **Fix:** Evaluate whether SameSite cookies + Clerk tokens provide sufficient CSRF protection, or add a global CSRF middleware.
-- **Effort:** 1 day
+### 22. CSRF protection assessment
+- **Files:** `server/index.ts`, `server/clerkAuth.ts`
+- **Issue:** The app uses cookie-based auth (`credentials: "include"`) via Clerk, which is CSRF-vulnerable in principle.
+- **Mitigations already in place:** CORS with explicit origin allowlist rejects cross-origin requests. Clerk uses SameSite cookies by default. CSP with nonce prevents inline script injection.
+- **Remaining risk:** Low. A same-site CSRF attack would require XSS first (mitigated by CSP). Consider adding `csrf-csrf` middleware if the threat model changes.
+- **Status:** Documented. No immediate action needed.
 
 ### 23. Performance optimizations
-- **Files:** `server/services/ai/aiContextService.ts`, `server/emailScheduler.ts`, `server/services/workoutService.ts`
+- **Files:** `server/services/ai/aiContextService.ts`, `server/services/workoutService.ts`
 - **Issues:**
   - RAG retrieval is not cached between requests — identical context lookups repeat vector searches
   - Auto-coach is triggered per workout instead of batched via cron
-  - Email cron processes users synchronously, blocking until all are done
-- **Fix:** Add short-TTL cache for RAG results. Batch auto-coach into periodic cron job. Make email cron async with concurrency limits.
-- **Effort:** 2-3 days total
-
-### 24. Hardcoded CORS origins
-- **File:** `server/index.ts` (lines 65-98)
-- **Issue:** Allowed origins include hardcoded domains (`fitai.coach`) and localhost ports. Adding a new domain requires a code change.
-- **Fix:** Move allowed origins to environment configuration (comma-separated env var).
-- **Effort:** 30 min
-
-### 25. Strict mode disabled in test TypeScript config
-- **File:** `tsconfig.test.json` (lines 19-21)
-- **Issue:** `strict: false`, `noImplicitAny: false`, `strictNullChecks: false` in the test config. This means tests don't catch type errors that would appear in production code. The 80% coverage threshold in `vitest.config.ts` is undermined because tests can pass with type-unsafe code.
-- **Fix:** Enable strict mode in `tsconfig.test.json` to match production settings. Fix resulting type errors in test files (likely related to the `as unknown` casts noted in item #16).
+- **Note:** Email cron sync processing is resolved (#17 — migrated to pg-boss).
+- **Fix:** Add short-TTL cache for RAG results. Use pg-boss `singletonKey` for auto-coach debouncing.
 - **Effort:** 1-2 days
-
-### 26. Silent data loss in offline mutation queue
-- **File:** `client/src/lib/offlineQueue.ts` (lines 24-26)
-- **Issue:** After 5 retries, offline mutations are silently dropped with no user notification. Users may believe their workout data was saved when it was actually lost.
-- **Fix:** Add a callback/toast notification when mutations are permanently dropped. Consider increasing retry count or adding a manual retry UI.
-- **Effort:** 1 day
-
-### 27. No route guards for authenticated pages
-- **File:** `client/src/App.tsx` (lines 57-69)
-- **Issue:** `AuthenticatedRouter` is rendered without proper route-level auth guards. If the auth check fails or is slow, users may briefly see authenticated content.
-- **Fix:** Add route-level auth guards or a loading state that prevents rendering protected content until auth is confirmed.
-- **Effort:** 1 day
-
-- ~~**28. Full pdfjs-dist namespace import**~~ — Changed to targeted `{getDocument, GlobalWorkerOptions}` import.
 
 ---
 
@@ -138,6 +106,6 @@
 |----------|----------|-----------|-------|
 | P0 — Quick Wins | 6/6 | 0 | All resolved |
 | P1 — High | 5/6 | 1 | #10 (Drizzle relations) deferred — needs DB |
-| P2 — Medium | 3/6 | 3 | #14, #16, #17, #18 remaining |
-| P3 — Low | 1/10 | 9 | #28 resolved; rest are ongoing/low priority |
-| **Total** | **15/28** | **13** | |
+| P2 — Medium | 5/6 | 1 | #16 (test mocks) is ongoing/incremental |
+| P3 — Low | 4/10 | 6 | #19-23 are documented with clear status |
+| **Total** | **20/28** | **8** | Remaining items are deferred, incremental, or architecture-dependent |

@@ -87,6 +87,14 @@
     "wouter": "^3.9.0",
     "zod": "^3.24.2"
   },
+  "//overrides": [
+    "Security overrides - npm uses 'overrides', pnpm uses 'pnpm.overrides'.",
+    "Both sections must be kept in sync. See pnpm.overrides below.",
+    "esbuild >=0.25.0: fixes GHSA-67mh-4wv8-2f99 (permissive CORS on dev server). Pulled by vite. Remove when vite depends on esbuild >=0.25.0.",
+    "yauzl ^3.2.1: fixes CVE-2026-31988 (DoS via off-by-one in NTFS timestamp parser). Pulled by extract-zip (via cypress). Remove when cypress ships extract-zip with yauzl >=3.2.1.",
+    "undici ^7.24.3: fixes CVE-2026-1526/1527/1528/2229/2581 (memory exhaustion, CRLF injection, WebSocket crashes). Pulled by jsdom. Remove when jsdom depends on undici >=7.24.0.",
+    "serialize-javascript >=7.0.3: fixes GHSA-5c6j-r48x-rmvq (RCE via unsanitized RegExp.flags). Pulled by @rollup/plugin-terser. Remove when @rollup/plugin-terser depends on serialize-javascript >=7.0.3."
+  ],
   "overrides": {
     "esbuild": "^0.25.0",
     "yauzl": "^3.2.1",
