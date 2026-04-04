@@ -37,6 +37,7 @@ export interface IPlanStorage {
   createTrainingPlan(plan: InsertTrainingPlan): Promise<TrainingPlan>;
   listTrainingPlans(userId: string): Promise<TrainingPlan[]>;
   getActivePlan(userId: string): Promise<TrainingPlan | undefined>;
+  getPlanForDate(userId: string, date: string): Promise<TrainingPlan | undefined>;
   findMatchingPlanDay(planId: string, date: string): Promise<PlanDay | undefined>;
   getTrainingPlan(planId: string, userId: string): Promise<TrainingPlanWithDays | undefined>;
   renameTrainingPlan(planId: string, name: string, userId: string): Promise<TrainingPlan | undefined>;

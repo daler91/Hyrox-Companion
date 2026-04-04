@@ -125,18 +125,18 @@ async function resolveActivePlanLinks(
     return { planId: planDay?.planId ?? null, planDayId: workoutData.planDayId };
   }
 
-  // Standalone workout — try to link to active plan
-  const activePlan = await storage.getActivePlan(userId);
-  if (!activePlan) return {};
+  // Standalone workout — find the plan covering the workout's date
+  if (!workoutData.date) return {};
 
-  const planId = activePlan.id;
+  const plan = await storage.getPlanForDate(userId, workoutData.date);
+  if (!plan) return {};
+
+  const planId = plan.id;
 
   // Try to auto-match to a specific plan day on the same date
-  if (workoutData.date) {
-    const matchingDay = await storage.findMatchingPlanDay(planId, workoutData.date);
-    if (matchingDay) {
-      return { planId, planDayId: matchingDay.id };
-    }
+  const matchingDay = await storage.findMatchingPlanDay(planId, workoutData.date);
+  if (matchingDay) {
+    return { planId, planDayId: matchingDay.id };
   }
 
   return { planId };

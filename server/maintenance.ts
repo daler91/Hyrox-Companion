@@ -224,18 +224,26 @@ async function backfillPlanDatesAndWorkoutLinks() {
       logger.info({ context: "db", count: workoutPlanIdResult.rowCount }, "Backfilled planId on workout logs from planDayId");
     }
 
-    // Backfill planId on standalone workouts by matching date to plan date ranges
+    // Backfill planId on standalone workouts by matching date to plan date ranges.
+    // Use a subquery to pick exactly one plan per workout (latest end_date wins)
+    // to avoid nondeterministic results when plan ranges overlap.
     const standaloneResult = await client.query(`
       UPDATE workout_logs wl
-      SET plan_id = tp.id
-      FROM training_plans tp
-      WHERE wl.plan_id IS NULL
-        AND wl.plan_day_id IS NULL
-        AND wl.user_id = tp.user_id
-        AND tp.start_date IS NOT NULL
-        AND tp.end_date IS NOT NULL
-        AND wl.date >= tp.start_date
-        AND wl.date <= tp.end_date
+      SET plan_id = best.plan_id
+      FROM (
+        SELECT DISTINCT ON (wl2.id) wl2.id AS workout_id, tp.id AS plan_id
+        FROM workout_logs wl2
+        JOIN training_plans tp
+          ON wl2.user_id = tp.user_id
+         AND tp.start_date IS NOT NULL
+         AND tp.end_date IS NOT NULL
+         AND wl2.date >= tp.start_date
+         AND wl2.date <= tp.end_date
+        WHERE wl2.plan_id IS NULL
+          AND wl2.plan_day_id IS NULL
+        ORDER BY wl2.id, tp.end_date DESC
+      ) best
+      WHERE wl.id = best.workout_id
     `);
     if (standaloneResult.rowCount && standaloneResult.rowCount > 0) {
       logger.info({ context: "db", count: standaloneResult.rowCount }, "Backfilled planId on standalone workout logs from plan date ranges");

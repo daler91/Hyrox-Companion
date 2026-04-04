@@ -219,9 +219,11 @@ export class PlanStorage {
   }
 
   async getActivePlan(userId: string): Promise<TrainingPlan | undefined> {
-    const today = toDateStr();
+    return this.getPlanForDate(userId, toDateStr());
+  }
 
-    // Primary: plan whose date range covers today
+  async getPlanForDate(userId: string, date: string): Promise<TrainingPlan | undefined> {
+    // Primary: plan whose date range covers the given date
     const [current] = await db
       .select()
       .from(trainingPlans)
@@ -230,8 +232,8 @@ export class PlanStorage {
           eq(trainingPlans.userId, userId),
           isNotNull(trainingPlans.startDate),
           isNotNull(trainingPlans.endDate),
-          lte(trainingPlans.startDate, today),
-          gte(trainingPlans.endDate, today),
+          lte(trainingPlans.startDate, date),
+          gte(trainingPlans.endDate, date),
         )
       )
       .orderBy(desc(trainingPlans.endDate))
@@ -239,7 +241,7 @@ export class PlanStorage {
 
     if (current) return current;
 
-    // Fallback 1: most recently ended plan
+    // Fallback 1: most recently ended plan before the given date
     const [recent] = await db
       .select()
       .from(trainingPlans)
@@ -247,7 +249,7 @@ export class PlanStorage {
         and(
           eq(trainingPlans.userId, userId),
           isNotNull(trainingPlans.endDate),
-          sql`${trainingPlans.endDate} < ${today}`,
+          sql`${trainingPlans.endDate} < ${date}`,
         )
       )
       .orderBy(desc(trainingPlans.endDate))
@@ -255,7 +257,7 @@ export class PlanStorage {
 
     if (recent) return recent;
 
-    // Fallback 2: next upcoming plan
+    // Fallback 2: next upcoming plan after the given date
     const [upcoming] = await db
       .select()
       .from(trainingPlans)
@@ -263,7 +265,7 @@ export class PlanStorage {
         and(
           eq(trainingPlans.userId, userId),
           isNotNull(trainingPlans.startDate),
-          sql`${trainingPlans.startDate} > ${today}`,
+          sql`${trainingPlans.startDate} > ${date}`,
         )
       )
       .orderBy(asc(trainingPlans.startDate))
