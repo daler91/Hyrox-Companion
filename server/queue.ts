@@ -4,6 +4,7 @@ import { env } from "./env";
 import { logger } from "./logger";
 import { triggerAutoCoach } from "./services/coachService";
 import { storage } from "./storage";
+import { processWeeklySummary, processMissedWorkoutReminder } from "./emailScheduler";
 
 if (!env.DATABASE_URL) {
   throw new Error("DATABASE_URL must be set. Did you forget to provision a database?");
@@ -64,6 +65,52 @@ export async function startQueue() {
     if (failed.length > 0) {
       throw new Error(`Batch processing failed for ${failed.length} embed-coaching-material jobs`);
     }
+  });
+
+  // Register worker for send-weekly-summary
+  await queue.createQueue("send-weekly-summary");
+  await queue.work("send-weekly-summary", async (jobs: Job[]) => {
+    await Promise.all(
+      jobs.map(async (job) => {
+        const { userId } = job.data as { userId: string };
+        logger.info({ jobId: job.id, userId }, "[pg-boss] Processing send-weekly-summary job");
+        try {
+          const user = await storage.getUser(userId);
+          if (!user) {
+            logger.warn({ jobId: job.id, userId }, "[pg-boss] User not found, skipping send-weekly-summary job");
+            return;
+          }
+          const sent = await processWeeklySummary(storage, user, new Date());
+          logger.info({ jobId: job.id, userId, sent }, "[pg-boss] Completed send-weekly-summary job");
+        } catch (error) {
+          logger.error({ err: error, jobId: job.id, userId }, "[pg-boss] Failed send-weekly-summary job");
+          throw error; // Let pg-boss handle the retry
+        }
+      })
+    );
+  });
+
+  // Register worker for send-missed-reminder
+  await queue.createQueue("send-missed-reminder");
+  await queue.work("send-missed-reminder", async (jobs: Job[]) => {
+    await Promise.all(
+      jobs.map(async (job) => {
+        const { userId } = job.data as { userId: string };
+        logger.info({ jobId: job.id, userId }, "[pg-boss] Processing send-missed-reminder job");
+        try {
+          const user = await storage.getUser(userId);
+          if (!user) {
+            logger.warn({ jobId: job.id, userId }, "[pg-boss] User not found, skipping send-missed-reminder job");
+            return;
+          }
+          const sent = await processMissedWorkoutReminder(storage, user, new Date());
+          logger.info({ jobId: job.id, userId, sent }, "[pg-boss] Completed send-missed-reminder job");
+        } catch (error) {
+          logger.error({ err: error, jobId: job.id, userId }, "[pg-boss] Failed send-missed-reminder job");
+          throw error; // Let pg-boss handle the retry
+        }
+      })
+    );
   });
 
   logger.info("pg-boss queue started and workers registered");

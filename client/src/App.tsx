@@ -15,6 +15,7 @@ import Timeline from "@/pages/Timeline";
 import { Loader2 } from "lucide-react";
 import { useEmailCheck } from "@/hooks/useEmailCheck";
 import { useAuth } from "@/hooks/useAuth";
+import { useOfflineDropNotifier } from "@/hooks/useOfflineDropNotifier";
 
 const LogWorkout = lazy(() => import("@/pages/LogWorkout"));
 const Settings = lazy(() => import("@/pages/Settings"));
@@ -69,8 +70,13 @@ function AuthenticatedRouter() {
 }
 
 function AuthenticatedLayout() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
   useEmailCheck(isAuthenticated);
+  useOfflineDropNotifier();
+
+  if (isLoading) {
+    return <LazyFallback />;
+  }
 
   const style = {
     "--sidebar-width": "16rem",

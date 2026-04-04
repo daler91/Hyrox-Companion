@@ -4,8 +4,9 @@ import { sendWeeklySummary, sendMissedWorkoutReminder, type WeeklySummaryData, t
 import { logger } from "./logger";
 import { toDateStr } from "./types";
 import { calculateStreak } from "./routeUtils";
+import { queue } from "./queue";
 
-async function processWeeklySummary(storage: IStorage, user: User, now: Date): Promise<boolean> {
+export async function processWeeklySummary(storage: IStorage, user: User, now: Date): Promise<boolean> {
   const dayOfWeek = now.getDay();
   if (dayOfWeek !== 1) return false;
 
@@ -51,7 +52,7 @@ async function processWeeklySummary(storage: IStorage, user: User, now: Date): P
   return false;
 }
 
-async function processMissedWorkoutReminder(storage: IStorage, user: User, now: Date): Promise<boolean> {
+export async function processMissedWorkoutReminder(storage: IStorage, user: User, now: Date): Promise<boolean> {
   const lastMissedSent = user.lastMissedReminderAt;
   const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   if (lastMissedSent && lastMissedSent >= oneDayAgo) return false;
@@ -93,53 +94,9 @@ export async function checkAndSendEmailsForUser(storage: IStorage, user: User): 
   return sent;
 }
 
-interface BatchResult {
-  emailsSent: number;
-  details: string[];
-}
-
-async function processUserBatch(
-  storage: IStorage,
-  batch: User[],
-): Promise<BatchResult> {
-  let emailsSent = 0;
-  const details: string[] = [];
-
-  const results = await Promise.allSettled(
-    batch.map(async (user) => {
-      try {
-        const sent = await checkAndSendEmailsForUser(storage, user);
-        return { user, sent, errorMsg: null as string | null };
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : String(err);
-        return { user, sent: [] as string[], errorMsg };
-      }
-    }),
-  );
-
-  for (const result of results) {
-    if (result.status !== "fulfilled") continue;
-    const { user, sent, errorMsg } = result.value;
-    if (errorMsg) {
-      const detail = `Failed for user ${user.id}: ${errorMsg}`;
-      details.push(detail);
-      logger.error({ context: "email", userId: user.id, errorMsg }, "Failed to check and send emails for user");
-      continue;
-    }
-    emailsSent += sent.length;
-    if (sent.length > 0) {
-      const detail = `Sent ${sent.join(", ")} to user ${user.id}`;
-      details.push(detail);
-      logger.info({ context: "email", userId: user.id, emailTypes: sent }, `Sent ${sent.length} email(s)`);
-    }
-  }
-
-  return { emailsSent, details };
-}
-
 export async function runEmailCronJob(storage: IStorage): Promise<{ usersChecked: number; emailsSent: number; details: string[] }> {
   const details: string[] = [];
-  let emailsSent = 0;
+  let jobsEnqueued = 0;
 
   try {
     const markedMissed = await storage.markMissedPlanDays();
@@ -152,20 +109,31 @@ export async function runEmailCronJob(storage: IStorage): Promise<{ usersChecked
       return { usersChecked: 0, emailsSent: 0, details: ["No users with email notifications enabled"] };
     }
 
-    logger.info({ context: "email" }, `Cron: Checking emails for ${usersToCheck.length} user(s)`);
+    logger.info({ context: "email" }, `Cron: Enqueuing email jobs for ${usersToCheck.length} user(s)`);
 
-    const CONCURRENCY = 5;
-    for (let i = 0; i < usersToCheck.length; i += CONCURRENCY) {
-      const batch = usersToCheck.slice(i, i + CONCURRENCY);
-      const batchResult = await processUserBatch(storage, batch);
-      emailsSent += batchResult.emailsSent;
-      details.push(...batchResult.details);
+    const now = new Date();
+    const isMonday = now.getDay() === 1;
+
+    for (const user of usersToCheck) {
+      if (isMonday) {
+        queue.send("send-weekly-summary", { userId: user.id }).catch((err) => {
+          logger.error({ context: "email", userId: user.id, err }, "Failed to enqueue send-weekly-summary job");
+        });
+        jobsEnqueued++;
+      }
+
+      queue.send("send-missed-reminder", { userId: user.id }).catch((err) => {
+        logger.error({ context: "email", userId: user.id, err }, "Failed to enqueue send-missed-reminder job");
+      });
+      jobsEnqueued++;
     }
 
-    logger.info({ context: "email" }, `Cron complete: ${emailsSent} email(s) sent to ${usersToCheck.length} user(s)`);
-    return { usersChecked: usersToCheck.length, emailsSent, details };
+    const detail = `Enqueued ${jobsEnqueued} job(s) for ${usersToCheck.length} user(s)`;
+    details.push(detail);
+    logger.info({ context: "email" }, `Cron complete: ${detail}`);
+    return { usersChecked: usersToCheck.length, emailsSent: jobsEnqueued, details };
   } catch (err) {
-    logger.error({ context: "email", err }, "Cron error during email checks");
+    logger.error({ context: "email", err }, "Cron error during email job enqueue");
     throw err;
   }
 }

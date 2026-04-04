@@ -16,9 +16,7 @@
     "dist"
   ],
   "compilerOptions": {
-    "strict": false,
-    "noImplicitAny": false,
-    "strictNullChecks": false,
+    "strict": true,
     "types": ["node", "vite/client", "vitest/globals", "vitest/importMeta", "@testing-library/jest-dom"]
   }
 }
