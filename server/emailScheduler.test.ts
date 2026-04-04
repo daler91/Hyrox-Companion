@@ -86,6 +86,6 @@ describe('runEmailCronJob', () => {
     expect(result.emailsSent).toBe(1);
     expect(result.details).toHaveLength(2);
     expect(result.details[0]).toContain('Failed for user 1: Simulated storage error');
-    expect(result.details[1]).toContain('Sent weekly_summary to pass@example.com');
+    expect(result.details[1]).toContain('Sent weekly_summary to user');
   });
 });

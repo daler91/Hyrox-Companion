@@ -56,7 +56,7 @@ describe("suggestionService - parseAndValidateSuggestions", () => {
     expect(result).toEqual([]);
     expect(logger.error).toHaveBeenCalledWith(
       expect.objectContaining({
-        rawResponse: "This is definitely not JSON"
+        responseLength: 27
       }),
       "[gemini] suggestions JSON.parse failed."
     );

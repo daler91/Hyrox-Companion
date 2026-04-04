@@ -19,6 +19,7 @@ function getBadgeLabel(ragInfo: RagInfo): string {
 
 export function RagDebugBadge({ ragInfo }: Readonly<{ ragInfo: RagInfo }>) {
   const [expanded, setExpanded] = useState(false);
+  if (import.meta.env.PROD) return null;
 
   const badgeColor = BADGE_COLORS[ragInfo.source];
   const Icon = ragInfo.source === "rag" ? Database : FileText;

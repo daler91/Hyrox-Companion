@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { logger } from "../logger";
 import { PARSE_EXERCISES_PROMPT, VALID_EXERCISE_NAMES, VALID_CATEGORIES } from "../prompts";
-import { getAiClient, GEMINI_MODEL, retryWithBackoff, truncate } from "./client";
+import { getAiClient, GEMINI_MODEL, retryWithBackoff } from "./client";
 import { sanitizeHtml, sanitizeUserInput, validateAiOutput } from "../utils/sanitize";
 import { exerciseSetSchema, type ParsedExercise } from "@shared/schema";
 
@@ -62,7 +62,7 @@ and use the matching name as customLabel: ${customExerciseNames.join(", ")}`;
     try {
       raw = JSON.parse(responseText);
     } catch (parseErr) {
-      logger.error({ err: parseErr, rawResponse: truncate(responseText) }, "[gemini] exercise-parse JSON.parse failed.");
+      logger.error({ err: parseErr, responseLength: responseText.length }, "[gemini] exercise-parse JSON.parse failed.");
       throw new Error("AI returned invalid JSON for exercise parsing");
     }
 
@@ -73,10 +73,6 @@ and use the matching name as customLabel: ${customExerciseNames.join(", ")}`;
       logger.error(
         { err: zodResult.error },
         "[gemini] exercise-parse Zod validation failed"
-      );
-      logger.error(
-        { rawData: truncate(JSON.stringify(rawArray)) },
-        "[gemini] Raw parsed data"
       );
       throw new Error("AI returned malformed exercise data");
     }
