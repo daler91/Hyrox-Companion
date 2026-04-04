@@ -1,3 +1,4 @@
+import { memo } from "react";
 import {
   LineChart,
   Line,
@@ -40,7 +41,9 @@ function LineChartTooltip({ active, payload, chartLabel }: Readonly<{ active?: b
   );
 }
 
-export function MiniLineChart({
+// ⚡ React.memo prevents expensive Recharts re-renders when parent
+// re-renders but chart props (data, color, label, etc.) haven't changed.
+export const MiniLineChart = memo(function MiniLineChart({
   data,
   xKey = "date",
   valueKey,
@@ -67,7 +70,7 @@ export function MiniLineChart({
       <div className="h-[200px] w-full" data-testid={`line-chart-${valueKey}`}>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
-            data={[...data]}
+            data={data as object[]}
             margin={{ top: 5, right: 5, left: -20, bottom: 5 }}
           >
             <CartesianGrid
@@ -120,4 +123,4 @@ export function MiniLineChart({
       </div>
     </div>
   );
-}
+});
