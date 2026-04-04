@@ -117,9 +117,16 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
           )}
 
           {entry.status === "completed" && (
-            <div className="shrink-0 mt-0.5 text-success">
-              <CheckCircle2 className="h-5 w-5" />
-            </div>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="shrink-0 mt-0.5 text-success" role="img" aria-label="Completed">
+                    <CheckCircle2 className="h-5 w-5" />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>Completed</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           )}
 
           <div className="flex-1 min-w-0">

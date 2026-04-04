@@ -127,6 +127,8 @@ export default function TimelineFilters({
                 variant="outline"
                 className="pointer-events-none"
                 disabled={isImporting}
+                aria-busy={isImporting}
+                aria-label={isImporting ? "Importing plan…" : "Import training plan from CSV"}
               >
                 {isImporting ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
