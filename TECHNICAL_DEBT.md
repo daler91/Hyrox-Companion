@@ -53,10 +53,10 @@
 - **Fix:** Replace with explicit composition — either a class that delegates explicitly, or barrel exports that merge the storage instances. The compile-time `AssertAllKeys` check can remain.
 - **Effort:** 1-2 days
 
-### 8. Unify migration system
-- **Files:** `migrations/` (Drizzle), `server/migrations/` (manual SQL)
-- **Issue:** Two parallel migration systems create confusion about which is authoritative. Risk of conflicts or missed migrations.
-- **Fix:** Consolidate all migrations into Drizzle. Convert remaining manual SQL scripts to Drizzle migration format. Remove `server/migrations/` directory.
+### 8. Unify migration system and fix naming conflict
+- **Files:** `migrations/` (Drizzle), `server/maintenance.ts` (258 lines of raw startup SQL)
+- **Issue:** Two parallel migration approaches: Drizzle migrations in `migrations/` and raw SQL `ALTER TABLE` statements that run on every startup in `server/maintenance.ts`. Additionally, two migration files share the same `0015` prefix (`0015_rename_hyrox_station_to_functional.sql` and `0015_thin_nextwave.sql`), creating ambiguity in ordering. The startup SQL in `maintenance.ts` is brittle — risk of running twice, data loss, or race conditions in clustered deployments.
+- **Fix:** Rename one `0015` migration to `0016`. Convert `maintenance.ts` ALTER TABLE logic into proper Drizzle migrations. Remove startup schema patching.
 - **Effort:** 2-3 days
 
 ### 9. Remove legacy RAG path
