@@ -3,6 +3,7 @@ import { useUser, useAuth as useClerkAuth } from "@clerk/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { User } from "@shared/schema";
 import { QUERY_KEYS } from "@/lib/api";
+import { resetCsrfToken } from "@/lib/queryClient";
 
 const isCypressTest = globalThis.window !== undefined && "Cypress" in globalThis.window;
 const isDevPreview = import.meta.env.DEV && globalThis.window !== undefined && (!import.meta.env.VITE_CLERK_PUBLISHABLE_KEY || globalThis.window.self !== globalThis.window.top);
@@ -67,6 +68,20 @@ function useClerkAuthImpl() {
   const { isSignedIn, isLoaded } = useClerkAuth();
   const { user: clerkUser } = useUser();
   const coachingPollInterval = useCoachingPollInterval();
+
+  // Invalidate the cached CSRF token on any sign-in state transition. The
+  // server binds CSRF tokens to the Clerk userId (or req.ip pre-login), so a
+  // token cached while anonymous is not valid once the user signs in and
+  // vice versa. This effect is registered before useEmailCheck in the parent
+  // component (AuthenticatedLayout), so it flushes first and the next
+  // mutation picks up a fresh token.
+  const prevSignedInRef = useRef<boolean | undefined>(undefined);
+  useEffect(() => {
+    if (prevSignedInRef.current !== undefined && prevSignedInRef.current !== isSignedIn) {
+      resetCsrfToken();
+    }
+    prevSignedInRef.current = isSignedIn;
+  }, [isSignedIn]);
 
   const { data: dbUser, isLoading: isDbLoading } = useQuery<User>({
     queryKey: QUERY_KEYS.authUser,

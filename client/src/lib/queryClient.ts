@@ -36,6 +36,12 @@ async function getCsrfToken(forceRefresh = false): Promise<string> {
   return csrfTokenPromise;
 }
 
+/** Clear the cached CSRF token. Call on auth state transitions so the next
+ *  mutation fetches a token bound to the new session identifier. */
+export function resetCsrfToken(): void {
+  csrfTokenPromise = null;
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
