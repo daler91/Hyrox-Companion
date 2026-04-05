@@ -1,5 +1,5 @@
 import { relations, sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, date, timestamp, index, real, uniqueIndex, boolean, check, customType } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, date, timestamp, index, real, uniqueIndex, boolean, check, customType, jsonb, primaryKey } from "drizzle-orm/pg-core";
 
 // pgvector custom type: maps PostgreSQL vector(N) ↔ TypeScript number[]
 const vector = customType<{
@@ -181,6 +181,24 @@ export const coachingMaterials = pgTable("coaching_materials", {
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
   index("idx_coaching_materials_user_id").on(table.userId),
+]);
+
+// Idempotency keys — cache responses for mutating requests so offline/retry
+// replays (CODEBASE_AUDIT.md §2) do not double-write. Scoped per user so a
+// key collision across users is impossible. Rows are pruned by cron after
+// `expiresAt`.
+export const idempotencyKeys = pgTable("idempotency_keys", {
+  userId: varchar("user_id", { length: 255 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  key: varchar("key", { length: 255 }).notNull(),
+  method: varchar("method", { length: 10 }).notNull(),
+  path: text("path").notNull(),
+  statusCode: integer("status_code").notNull(),
+  responseBody: jsonb("response_body").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  expiresAt: timestamp("expires_at").notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.userId, table.key] }),
+  index("idx_idempotency_keys_expires_at").on(table.expiresAt),
 ]);
 
 // Document chunks for RAG pipeline - stores embedded chunks of coaching materials

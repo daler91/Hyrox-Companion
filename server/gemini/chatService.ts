@@ -55,6 +55,7 @@ export async function* streamChatWithCoach(
   trainingContext?: TrainingContext,
   coachingMaterials?: CoachingMaterialInput[],
   retrievedChunks?: string[],
+  signal?: AbortSignal,
 ): AsyncGenerator<string> {
   try {
     const messages = conversationHistory.map((msg) => ({
@@ -75,6 +76,13 @@ export async function* streamChatWithCoach(
         config: {
           systemInstruction: systemPrompt,
           thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
+          // Propagate client disconnect upstream so @google/genai stops
+          // reading the response stream promptly (CODEBASE_AUDIT.md §3).
+          // NOTE: the SDK documents abortSignal as client-side only — it
+          // halts local iteration but does not refund tokens already
+          // committed server-side — so we also check signal.aborted in the
+          // consumer loop to return as early as possible.
+          ...(signal ? { abortSignal: signal } : {}),
         },
         contents: messages,
       }),
@@ -83,6 +91,7 @@ export async function* streamChatWithCoach(
     );
 
     for await (const chunk of stream) {
+      if (signal?.aborted) return;
       const text = chunk.text;
       if (text) {
         yield validateAiOutput(text);

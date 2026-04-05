@@ -53,28 +53,31 @@ router.post("/api/v1/chat/stream", isAuthenticated, rateLimiter("chat", 10), val
     res.setHeader("Connection", "keep-alive");
     res.flushHeaders();
 
-    let clientDisconnected = false;
-    req.on("close", () => { clientDisconnected = true; });
+    // Bridge Express req-close → AbortController so upstream Gemini
+    // generation is torn down promptly on client disconnect
+    // (CODEBASE_AUDIT.md §3).
+    const controller = new AbortController();
+    req.on("close", () => controller.abort());
 
     try {
       res.write(`data: ${JSON.stringify({ ragInfo: sanitizeRagInfo(aiContext.ragInfo) })}\n\n`);
 
-      const stream = streamChatWithCoach(input.message, input.history, aiContext.trainingContext, aiContext.coachingMaterials, aiContext.retrievedChunks);
+      const stream = streamChatWithCoach(input.message, input.history, aiContext.trainingContext, aiContext.coachingMaterials, aiContext.retrievedChunks, controller.signal);
 
       for await (const chunk of stream) {
-        if (clientDisconnected) {
+        if (controller.signal.aborted) {
           (req.log || logger).info("Client disconnected mid-stream, stopping AI generation");
           break;
         }
         res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
       }
 
-      if (!clientDisconnected) {
+      if (!controller.signal.aborted) {
         res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
       }
       res.end();
     } catch (streamError) {
-      if (clientDisconnected) return;
+      if (controller.signal.aborted) return;
       (req.log || logger).error({ err: streamError }, "Stream error:");
       res.write(`data: ${JSON.stringify({ error: "Stream error" })}\n\n`);
       res.end();

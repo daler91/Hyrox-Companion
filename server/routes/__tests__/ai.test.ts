@@ -284,7 +284,7 @@ describe("POST /api/chat/stream", () => {
     expect(chunks[3]).toContain('{"done":true}');
 
     expect(buildTrainingContext).toHaveBeenCalledWith("test_user_id");
-    expect(streamChatWithCoach).toHaveBeenCalledWith("Hello stream", [], MOCK_TRAINING_CONTEXT, [], undefined);
+    expect(streamChatWithCoach).toHaveBeenCalledWith("Hello stream", [], MOCK_TRAINING_CONTEXT, [], undefined, expect.any(AbortSignal));
   });
 
   it("should handle stream errors gracefully", async () => {
@@ -624,6 +624,7 @@ describe("RAG pipeline in chat endpoints", () => {
       MOCK_TRAINING_CONTEXT,
       undefined,
       ["relevant chunk"],
+      expect.any(AbortSignal),
     );
   });
 });
