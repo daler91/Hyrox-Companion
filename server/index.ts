@@ -2,6 +2,7 @@ import { env } from "./env";
 import * as Sentry from "@sentry/node";
 import express, { type Request, Response, NextFunction } from "express";
 import compression from "compression";
+import cookieParser from "cookie-parser";
 import cors from "cors";
 import helmet from "helmet";
 import { logger } from "./logger";
@@ -175,6 +176,10 @@ app.use(
 );
 
 app.use(express.urlencoded({ extended: false, limit: "100kb" })); // 🛡️ Sentinel: Limit urlencoded body size to prevent DoS
+
+// Cookie parser is required by the CSRF double-submit middleware mounted
+// in registerRoutes(); it must run before any route that reads cookies.
+app.use(cookieParser());
 
 let isReady = false;
 let startupError: string | null = null;
