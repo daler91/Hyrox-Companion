@@ -8,6 +8,14 @@ export function setupAuthIntercepts(overrides?: {
   stravaStatus?: { connected: boolean; athleteId?: string; lastSyncedAt?: string | null };
   preferences?: { weightUnit: string; distanceUnit: string; weeklyGoal: number; emailNotifications: boolean };
 }) {
+  // The SPA fetches a CSRF token before any mutating request (see
+  // client/src/lib/queryClient.ts). Stub it so the e2e harness doesn't need
+  // the real endpoint to respond under every test scenario.
+  cy.intercept("GET", "/api/v1/csrf-token", {
+    statusCode: 200,
+    body: { csrfToken: "cypress-test-token" },
+  }).as("csrfToken");
+
   cy.intercept("GET", "/api/v1/auth/user", {
     statusCode: 200,
     body: {

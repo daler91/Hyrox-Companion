@@ -16,15 +16,31 @@ describe("API Validation", () => {
     { method: "GET", url: "/api/v1/auth/user" },
   ];
 
+  const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+  // For mutating endpoints the CSRF middleware runs before auth, so we must
+  // present a valid token; otherwise we'd get a 403 before the 401 the test
+  // is actually verifying. Fetch it once per spec run.
+  let csrfToken: string | null = null;
+  before(() => {
+    cy.request({ url: "/api/v1/csrf-token" }).then((res) => {
+      csrfToken = (res.body as { csrfToken: string }).csrfToken;
+    });
+  });
+
   protectedEndpoints.forEach(({ method, url }) => {
     it(`${method} ${url} returns 401 without auth`, () => {
+      const headers: Record<string, string> = {
+        "x-test-no-bypass": "true",
+      };
+      if (MUTATING.has(method) && csrfToken) {
+        headers["x-csrf-token"] = csrfToken;
+      }
       cy.request({
         method,
         url,
         failOnStatusCode: false,
-        headers: {
-          "x-test-no-bypass": "true",
-        },
+        headers,
         body: method === "POST" || method === "PATCH" ? {} : undefined,
       }).then((response) => {
         if (url === "/api/v1/auth/user" && method === "GET") {
