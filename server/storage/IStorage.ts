@@ -4,6 +4,7 @@ import type { PlanStorage } from "./plans";
 import type { TimelineStorage } from "./timeline";
 import type { AnalyticsStorage } from "./analytics";
 import type { CoachingStorage } from "./coaching";
+import type { IdempotencyStorage } from "./idempotency";
 
 /**
  * Composed storage facade. Callers access domain classes directly:
@@ -21,4 +22,5 @@ export interface IStorage {
   timeline: TimelineStorage;
   analytics: AnalyticsStorage;
   coaching: CoachingStorage;
+  idempotency: IdempotencyStorage;
 }

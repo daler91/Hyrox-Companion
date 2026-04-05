@@ -1,139 +1,146 @@
 {
-	"version": "7",
-	"dialect": "postgresql",
-	"entries": [
-		{
-			"idx": 0,
-			"version": "7",
-			"when": 1773775066584,
-			"tag": "0000_huge_sentry",
-			"breakpoints": true
-		},
-		{
-			"idx": 1,
-			"version": "7",
-			"when": 1773793743371,
-			"tag": "0001_flippant_shriek",
-			"breakpoints": true
-		},
-		{
-			"idx": 2,
-			"version": "7",
-			"when": 1773803166352,
-			"tag": "0002_handy_living_lightning",
-			"breakpoints": true
-		},
-		{
-			"idx": 3,
-			"version": "7",
-			"when": 1773849631537,
-			"tag": "0003_abandoned_bug",
-			"breakpoints": true
-		},
-		{
-			"idx": 4,
-			"version": "7",
-			"when": 1773854487255,
-			"tag": "0004_youthful_nebula",
-			"breakpoints": true
-		},
-		{
-			"idx": 5,
-			"version": "7",
-			"when": 1773858884572,
-			"tag": "0005_quiet_frightful_four",
-			"breakpoints": true
-		},
-		{
-			"idx": 6,
-			"version": "7",
-			"when": 1773866315317,
-			"tag": "0006_solid_vin_gonzales",
-			"breakpoints": true
-		},
-		{
-			"idx": 7,
-			"version": "7",
-			"when": 1773973916380,
-			"tag": "0007_brown_nova",
-			"breakpoints": true
-		},
-		{
-			"idx": 8,
-			"version": "7",
-			"when": 1774310400000,
-			"tag": "0008_add_document_chunks",
-			"breakpoints": true
-		},
-		{
-			"idx": 9,
-			"version": "7",
-			"when": 1774119488847,
-			"tag": "0009_lovely_ser_duncan",
-			"breakpoints": true
-		},
-		{
-			"idx": 10,
-			"version": "7",
-			"when": 1774310400001,
-			"tag": "0010_migrate_embedding_to_vector",
-			"breakpoints": true
-		},
-		{
-			"idx": 11,
-			"version": "7",
-			"when": 1774230141604,
-			"tag": "0011_shocking_triathlon",
-			"breakpoints": true
-		},
-		{
-			"idx": 12,
-			"version": "7",
-			"when": 1774311507644,
-			"tag": "0012_sturdy_phantom_reporter",
-			"breakpoints": true
-		},
-		{
-			"idx": 13,
-			"version": "7",
-			"when": 1774483200000,
-			"tag": "0013_fix_embedding_hnsw_index",
-			"breakpoints": true
-		},
-		{
-			"idx": 14,
-			"version": "7",
-			"when": 1774569600000,
-			"tag": "0014_ensure_embedding_vector_3072",
-			"breakpoints": true
-		},
-		{
-			"idx": 15,
-			"version": "7",
-			"when": 1775262747150,
-			"tag": "0015_thin_nextwave",
-			"breakpoints": true
-		},
-		{
-			"idx": 16,
-			"version": "7",
-			"when": 1775334000000,
-			"tag": "0016_rename_hyrox_station_to_functional",
-			"breakpoints": true
-		},
-		{
-			"idx": 17,
-			"version": "7",
-			"when": 1775406906352,
-			"tag": "0017_workout_logs_strava_unique",
-			"breakpoints": true
-		},
-		{
-			"idx": 18,
-			"version": "7",
-			"when": 1775491200000,
-			"tag": "0018_backfill_plan_dates_and_workout_links",
-			"breakpoints": true
-		}
-	]
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1773775066584,
+      "tag": "0000_huge_sentry",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1773793743371,
+      "tag": "0001_flippant_shriek",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1773803166352,
+      "tag": "0002_handy_living_lightning",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1773849631537,
+      "tag": "0003_abandoned_bug",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1773854487255,
+      "tag": "0004_youthful_nebula",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1773858884572,
+      "tag": "0005_quiet_frightful_four",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1773866315317,
+      "tag": "0006_solid_vin_gonzales",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1773973916380,
+      "tag": "0007_brown_nova",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1774310400000,
+      "tag": "0008_add_document_chunks",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1774119488847,
+      "tag": "0009_lovely_ser_duncan",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1774310400001,
+      "tag": "0010_migrate_embedding_to_vector",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1774230141604,
+      "tag": "0011_shocking_triathlon",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1774311507644,
+      "tag": "0012_sturdy_phantom_reporter",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1774483200000,
+      "tag": "0013_fix_embedding_hnsw_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1774569600000,
+      "tag": "0014_ensure_embedding_vector_3072",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1775262747150,
+      "tag": "0015_thin_nextwave",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1775334000000,
+      "tag": "0016_rename_hyrox_station_to_functional",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1775406906352,
+      "tag": "0017_workout_logs_strava_unique",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1775491200000,
+      "tag": "0018_backfill_plan_dates_and_workout_links",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1775428793648,
+      "tag": "0019_add_idempotency_keys",
+      "breakpoints": true
+    }
+  ]
 }
