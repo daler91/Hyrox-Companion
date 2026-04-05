@@ -3,9 +3,10 @@ import { z } from "zod";
 import { isAuthenticated } from "../clerkAuth";
 import { rateLimiter, asyncHandler, validateBody } from "../routeUtils";
 import { storage } from "../storage";
-import { insertWorkoutLogSchema, updateWorkoutLogSchema, insertCustomExerciseSchema, exercisesPayloadSchema, type InsertWorkoutLog, type UpdateWorkoutLog, type InsertCustomExercise , type ParsedExercise} from "@shared/schema";
+import { insertWorkoutLogSchema, updateWorkoutLogSchema, insertCustomExerciseSchema, exercisesPayloadSchema } from "@shared/schema";
 import { generateCSV, generateJSON } from "../services/exportService";
-import { createWorkoutAndScheduleCoaching, updateWorkout, reparseWorkout, batchReparseWorkouts } from "../services/workoutService";
+import { reparseWorkout, batchReparseWorkouts } from "../services/workoutService";
+import { createWorkout, updateWorkoutUseCase } from "../services/workoutUseCases";
 import { getUserId } from "../types";
 import { DEFAULT_TIMELINE_LIMIT, DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from "../constants";
 
@@ -20,6 +21,13 @@ const updateWorkoutRouteSchema = updateWorkoutLogSchema.extend({
 });
 type CreateWorkoutRoutePayload = z.infer<typeof createWorkoutRouteSchema>;
 type UpdateWorkoutRoutePayload = z.infer<typeof updateWorkoutRouteSchema>;
+
+// Custom-exercise endpoint now uses the shared `validateBody` middleware
+// for a uniform VALIDATION_ERROR contract (CODEBASE_AUDIT.md §4). The table
+// schema carries `userId` but clients never supply it — it's injected from
+// the authenticated session — so omit it from the request schema.
+const createCustomExerciseSchema = insertCustomExerciseSchema.omit({ userId: true });
+type CreateCustomExercisePayload = z.infer<typeof createCustomExerciseSchema>;
 
 const router = Router();
 
@@ -62,19 +70,9 @@ router.get("/api/v1/custom-exercises", isAuthenticated, asyncHandler(async (req:
     res.json(exercises);
   }));
 
-router.post("/api/v1/custom-exercises", isAuthenticated, rateLimiter("customExercise", 20), asyncHandler(async (req: Request<Record<string, never>, Record<string, never>, InsertCustomExercise & { userId?: string }>, res: Response) => {
+router.post("/api/v1/custom-exercises", isAuthenticated, rateLimiter("customExercise", 20), validateBody(createCustomExerciseSchema), asyncHandler(async (req: Request<Record<string, never>, Record<string, never>, CreateCustomExercisePayload>, res: Response) => {
     const userId = getUserId(req);
-
-    // Add default userId to body for safeParse if needed by schema, though we override it below
-    const payload = { ...req.body, userId };
-    const parseResult = insertCustomExerciseSchema.safeParse(payload);
-
-    if (!parseResult.success) {
-      return res.status(400).json({ error: parseResult.error.errors[0].message, code: "BAD_REQUEST" });
-    }
-
-    const { name, category } = parseResult.data;
-
+    const { name, category } = req.body;
     const exercise = await storage.users.upsertCustomExercise({
       userId,
       name: name.trim(),
@@ -106,16 +104,14 @@ router.get("/api/v1/workouts/:id", isAuthenticated, asyncHandler(async (req: Req
   }));
 
 router.post("/api/v1/workouts", isAuthenticated, rateLimiter("workout", 40), validateBody(createWorkoutRouteSchema), asyncHandler(async (req: Request<Record<string, never>, Record<string, never>, CreateWorkoutRoutePayload>, res: Response) => {
-    const { exercises, ...workoutData } = req.body;
     const userId = getUserId(req);
-    const result = await createWorkoutAndScheduleCoaching(workoutData as InsertWorkoutLog, exercises as ParsedExercise[] | undefined, userId);
+    const result = await createWorkout({ userId, payload: req.body });
     res.json(result);
   }));
 
 router.patch("/api/v1/workouts/:id", isAuthenticated, rateLimiter("workout", 40), validateBody(updateWorkoutRouteSchema), asyncHandler(async (req: Request<{ id: string }, Record<string, never>, UpdateWorkoutRoutePayload>, res: Response) => {
-    const { exercises, ...updateData } = req.body;
     const userId = getUserId(req);
-    const result = await updateWorkout(req.params.id, updateData as UpdateWorkoutLog, exercises as ParsedExercise[] | undefined, userId);
+    const result = await updateWorkoutUseCase({ userId, workoutId: req.params.id, payload: req.body });
     if (!result) {
       return res.status(404).json({ error: "Workout not found", code: "NOT_FOUND" });
     }
