@@ -175,7 +175,7 @@ export class PlanStorage {
     return await db.transaction(async (tx) => {
       // Secure batch update using idiomatic Drizzle query builder and a CASE statement
       const caseChunks = [];
-      caseChunks.push(sql`CASE "${sql.raw(planDays.id.name)}" `);
+      caseChunks.push(sql`CASE ${planDays.id} `);
       for (const u of dateUpdates) {
         caseChunks.push(sql`WHEN ${u.id} THEN ${u.scheduledDate}::date `);
       }
