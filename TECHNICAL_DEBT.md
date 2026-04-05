@@ -18,20 +18,15 @@
 
 ---
 
-## ~~P1 — High Priority~~ (5/6 RESOLVED)
+## ~~P1 — High Priority~~ (6/6 RESOLVED)
 
 - ~~**7. Replace Proxy-based storage abstraction**~~ — Replaced with explicit `DatabaseStorage` class delegating ~60 methods.
-- ~~**8. Fix migration naming conflict**~~ — Renamed to `0016_rename_hyrox_station_to_functional.sql`, added to Drizzle journal. Note: `server/maintenance.ts` startup SQL still needs converting to Drizzle migrations (deferred — requires DB testing).
+- ~~**8. Fix migration naming conflict + consolidate startup SQL**~~ — `0016_rename_hyrox_station_to_functional.sql` is now in the Drizzle journal (it was missing from the prior fix attempt, so the category rename never actually ran via drizzle-kit). `server/maintenance.ts` startup SQL consolidated into `0018_backfill_plan_dates_and_workout_links.sql`: orphaned plan_day_id cleanup, plan start/end date backfill, and workout log plan_id backfill. Deleted the redundant `ensureSchemaUpToDate()` function (all columns it defensively added are already declared in earlier migrations). Vector-DB setup (`ensurePgvectorExtension`, `ensureVectorSchema`) intentionally remains code-driven since it runs on a separate `vectorPool` that drizzle migrations don't manage.
 - ~~**9. Remove legacy RAG path**~~ — Deleted unused `buildRetrievedMaterialsSection` from ragService.ts. Added sanitization to the active `buildRetrievedChunksSection` in prompts.ts.
 - ~~**11. Formalize API error codes**~~ — Created `AppError` class with `ErrorCode` enum in `server/errors.ts`. Updated Express error handler. Migrated all service-layer `throw new Error` call sites to `throw new AppError` (planService, planGenerationService, chatService, exerciseParser, strava, sanitize). Startup/invariant errors correctly remain as `Error`.
 - ~~**12. Re-enable CI quality gates**~~ — Replaced empty SonarQube job with ESLint + TypeScript checking CI steps.
 
-### 10. Add Drizzle relations, remove manual JOINs
-- **Files:** `server/storage/*.ts`, `shared/schema.ts`
-- **Issue:** Drizzle ORM is used without its relations API. Storage layer has manual SQL JOINs that are verbose, error-prone, and don't benefit from Drizzle's type-safe query builder.
-- **Fix:** Define Drizzle relations in the schema and refactor queries to use the relational query API.
-- **Effort:** 2-3 days
-- **Status:** Deferred — requires DB access for testing.
+- ~~**10. Add Drizzle relations, remove manual JOINs**~~ — Added `relations()` definitions for all 10 tables in `shared/schema/tables.ts` (users, trainingPlans, planDays, workoutLogs, stravaConnections, exerciseSets, customExercises, chatMessages, coachingMaterials, documentChunks). Refactored 5 manual-JOIN call sites to `db.query.<table>.findMany({ with: { ... } })`: `PlanStorage.getPlanDay`, `AnalyticsStorage.getMissedWorkoutsForDate`, `TimelineStorage.fetchScheduledDays`, `TimelineStorage.getUpcomingPlannedDays`, and `queryExerciseSetsWithDates` in `storage/shared.ts`. Two complex queries retained as manual SQL (`WorkoutStorage.getWorkoutsWithoutExerciseSets` uses an anti-join, `AnalyticsStorage.getWeeklyStats` uses GROUP BY aggregates). Verified end-to-end by running fresh migrations + test suite + a 15-check smoke test exercising user isolation and result shapes against real Postgres.
 
 ---
 
@@ -81,7 +76,7 @@
 | Priority | Resolved | Remaining | Notes |
 |----------|----------|-----------|-------|
 | P0 — Quick Wins | 6/6 | 0 | All resolved |
-| P1 — High | 5/6 | 1 | #10 (Drizzle relations) deferred — needs DB |
+| P1 — High | 6/6 | 0 | All resolved |
 | P2 — Medium | 6/6 | 0 | All resolved |
 | P3 — Low | 9/10 | 1 | #22 (CSRF) documented as acceptable — low risk, no action needed |
-| **Total** | **26/28** | **2** | Both remaining items explicitly deferred (DB-dependent or documented as acceptable) |
+| **Total** | **27/28** | **1** | Only #22 remains, documented as acceptable under current threat model |

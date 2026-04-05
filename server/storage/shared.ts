@@ -1,27 +1,9 @@
 import {
-  exerciseSets,
   workoutLogs,
   type ExerciseSet,
 } from "@shared/schema";
 import { db } from "../db";
 import { eq, and, desc, gte, lte, type SQL } from "drizzle-orm";
-
-const exerciseSetWithDateFields = {
-  id: exerciseSets.id,
-  workoutLogId: exerciseSets.workoutLogId,
-  exerciseName: exerciseSets.exerciseName,
-  customLabel: exerciseSets.customLabel,
-  category: exerciseSets.category,
-  setNumber: exerciseSets.setNumber,
-  reps: exerciseSets.reps,
-  weight: exerciseSets.weight,
-  distance: exerciseSets.distance,
-  time: exerciseSets.time,
-  notes: exerciseSets.notes,
-  confidence: exerciseSets.confidence,
-  sortOrder: exerciseSets.sortOrder,
-  date: workoutLogs.date,
-};
 
 export async function queryExerciseSetsWithDates(
   userId: string,
@@ -31,22 +13,30 @@ export async function queryExerciseSetsWithDates(
     to?: string;
   }
 ): Promise<(ExerciseSet & { date: string })[]> {
+  // Relational query: fetch the user's workout logs (with optional date range)
+  // and pull their exercise sets. The output flattens sets + the parent log's
+  // date to match the prior shape. An optional exerciseName filter is applied
+  // at the nested-relation level so it runs in SQL.
   const conditions: SQL[] = [eq(workoutLogs.userId, userId)];
+  if (filters?.from) conditions.push(gte(workoutLogs.date, filters.from));
+  if (filters?.to) conditions.push(lte(workoutLogs.date, filters.to));
 
-  if (filters?.exerciseName) {
-    conditions.push(eq(exerciseSets.exerciseName, filters.exerciseName));
-  }
-  if (filters?.from) {
-    conditions.push(gte(workoutLogs.date, filters.from));
-  }
-  if (filters?.to) {
-    conditions.push(lte(workoutLogs.date, filters.to));
-  }
+  const logs = await db.query.workoutLogs.findMany({
+    where: and(...conditions),
+    columns: { id: true, date: true },
+    with: {
+      exerciseSets: filters?.exerciseName
+        ? { where: (es, { eq: innerEq }) => innerEq(es.exerciseName, filters.exerciseName!) }
+        : true,
+    },
+    orderBy: desc(workoutLogs.date),
+  });
 
-  return await db
-    .select(exerciseSetWithDateFields)
-    .from(exerciseSets)
-    .innerJoin(workoutLogs, eq(exerciseSets.workoutLogId, workoutLogs.id))
-    .where(and(...conditions))
-    .orderBy(desc(workoutLogs.date));
+  const result: (ExerciseSet & { date: string })[] = [];
+  for (const log of logs) {
+    for (const set of log.exerciseSets) {
+      result.push({ ...set, date: log.date });
+    }
+  }
+  return result;
 }

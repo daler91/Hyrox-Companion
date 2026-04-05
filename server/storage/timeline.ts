@@ -122,23 +122,37 @@ export class TimelineStorage {
   }
 
   private async fetchScheduledDays(userId: string, planId?: string, sqlLimit?: number) {
-    const conditions = planId
-      ? and(eq(trainingPlans.userId, userId), eq(planDays.planId, planId), isNotNull(planDays.scheduledDate))
-      : and(eq(trainingPlans.userId, userId), isNotNull(planDays.scheduledDate));
+    // Two-step relational query. First, resolve the user's plan metadata
+    // (cheap — a user has ≪10 plans). Then query planDays filtered by those
+    // plan IDs using the relational API. This replaces the prior manual
+    // `innerJoin(trainingPlans ON plan_days.plan_id)` and keeps all filtering
+    // and pagination in SQL, unlike a post-fetch user filter which would
+    // break `sqlLimit` semantics.
+    const userPlans = await db.query.trainingPlans.findMany({
+      where: eq(trainingPlans.userId, userId),
+      columns: { id: true, name: true },
+    });
+    if (userPlans.length === 0) return [];
 
-    let query = db
-      .select({ planDay: planDays, planName: trainingPlans.name, planId: trainingPlans.id })
-      .from(planDays)
-      .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
-      .where(conditions)
-      .orderBy(desc(planDays.scheduledDate))
-      .$dynamic();
+    const planIds = userPlans.map((p) => p.id);
+    const relevantPlanIds = planId && planIds.includes(planId) ? [planId] : planIds;
+    if (relevantPlanIds.length === 0) return [];
+    const planNameById = new Map(userPlans.map((p) => [p.id, p.name]));
 
-    if (sqlLimit !== undefined) {
-      query = query.limit(sqlLimit);
-    }
+    const days = await db.query.planDays.findMany({
+      where: and(
+        inArray(planDays.planId, relevantPlanIds),
+        isNotNull(planDays.scheduledDate),
+      ),
+      orderBy: desc(planDays.scheduledDate),
+      ...(sqlLimit !== undefined ? { limit: sqlLimit } : {}),
+    });
 
-    return query;
+    return days.map((day) => ({
+      planDay: day as PlanDay,
+      planName: planNameById.get(day.planId)!,
+      planId: day.planId,
+    }));
   }
 
   private computeSqlOverFetch(limit?: number, offset?: number): number | undefined {
@@ -242,31 +256,47 @@ export class TimelineStorage {
     notes: string | null;
   }>> {
     const today = toDateStr();
-    const rows = await db
-      .select({
-        planDayId: planDays.id,
-        date: planDays.scheduledDate,
-        focus: planDays.focus,
-        mainWorkout: planDays.mainWorkout,
-        accessory: planDays.accessory,
-        notes: planDays.notes,
-        status: planDays.status,
+    // Relational query: resolve user's plans first, then pull matching days
+    // filtered by plan IDs. Same pattern as fetchScheduledDays.
+    const userPlanIds = (
+      await db.query.trainingPlans.findMany({
+        where: eq(trainingPlans.userId, userId),
+        columns: { id: true },
       })
-      .from(planDays)
-      .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
-      .where(
-        and(
-          eq(trainingPlans.userId, userId),
-          isNotNull(planDays.scheduledDate),
-          gte(planDays.scheduledDate, today),
-          // Exclude already-completed/skipped/missed days
-          notInArray(planDays.status, ["completed", "skipped", "missed"]),
-        ),
-      )
-      .orderBy(asc(planDays.scheduledDate))
-      .limit(limit);
+    ).map((p) => p.id);
+    if (userPlanIds.length === 0) return [];
+
+    const rows = await db.query.planDays.findMany({
+      where: and(
+        inArray(planDays.planId, userPlanIds),
+        isNotNull(planDays.scheduledDate),
+        gte(planDays.scheduledDate, today),
+        // Exclude already-completed/skipped/missed days
+        notInArray(planDays.status, ["completed", "skipped", "missed"]),
+      ),
+      columns: {
+        id: true,
+        scheduledDate: true,
+        focus: true,
+        mainWorkout: true,
+        accessory: true,
+        notes: true,
+        status: true,
+      },
+      orderBy: asc(planDays.scheduledDate),
+      limit,
+    });
 
     return rows
+      .map((r) => ({
+        planDayId: r.id,
+        date: r.scheduledDate,
+        focus: r.focus,
+        mainWorkout: r.mainWorkout,
+        accessory: r.accessory,
+        notes: r.notes,
+        status: r.status,
+      }))
       .filter((r): r is typeof r & { date: string } => r.date !== null)
       .map((r) => ({
         planDayId: r.planDayId,

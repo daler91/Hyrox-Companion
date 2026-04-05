@@ -106,13 +106,22 @@ export class PlanStorage {
   }
 
   async getPlanDay(dayId: string, userId: string): Promise<PlanDay | undefined> {
-    const result = await db
-      .select({ planDay: planDays })
-      .from(planDays)
-      .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
-      .where(and(eq(planDays.id, dayId), eq(trainingPlans.userId, userId)));
-    
-    return result[0]?.planDay;
+    // Uses the relational query API: fetch the plan day and filter via its
+    // parent plan's owner in-memory. Equivalent to an inner join with an auth
+    // guard on training_plans.user_id.
+    const day = await db.query.planDays.findFirst({
+      where: eq(planDays.id, dayId),
+      with: {
+        plan: {
+          columns: { userId: true },
+        },
+      },
+    });
+    if (!day || day.plan?.userId !== userId) return undefined;
+    // Strip the joined relation before returning to preserve the original shape.
+    const { plan: _plan, ...planDay } = day;
+    void _plan;
+    return planDay as PlanDay;
   }
 
   async deletePlanDay(dayId: string, userId: string): Promise<boolean> {

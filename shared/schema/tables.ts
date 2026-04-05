@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import { pgTable, text, varchar, integer, date, timestamp, index, real, uniqueIndex, boolean, check, customType } from "drizzle-orm/pg-core";
 
 // pgvector custom type: maps PostgreSQL vector(N) ↔ TypeScript number[]
@@ -196,3 +196,101 @@ export const documentChunks = pgTable("document_chunks", {
   index("idx_document_chunks_material_id").on(table.materialId),
   index("idx_document_chunks_user_id").on(table.userId),
 ]);
+
+// ---------------------------------------------------------------------------
+// Drizzle relations — enables `db.query.<table>.findMany({ with: { ... } })`
+// for type-safe nested queries in the storage layer.
+// ---------------------------------------------------------------------------
+
+export const usersRelations = relations(users, ({ many, one }) => ({
+  trainingPlans: many(trainingPlans),
+  workoutLogs: many(workoutLogs),
+  stravaConnection: one(stravaConnections, {
+    fields: [users.id],
+    references: [stravaConnections.userId],
+  }),
+  customExercises: many(customExercises),
+  chatMessages: many(chatMessages),
+  coachingMaterials: many(coachingMaterials),
+  documentChunks: many(documentChunks),
+}));
+
+export const trainingPlansRelations = relations(trainingPlans, ({ one, many }) => ({
+  user: one(users, {
+    fields: [trainingPlans.userId],
+    references: [users.id],
+  }),
+  days: many(planDays),
+  workoutLogs: many(workoutLogs),
+}));
+
+export const planDaysRelations = relations(planDays, ({ one, many }) => ({
+  plan: one(trainingPlans, {
+    fields: [planDays.planId],
+    references: [trainingPlans.id],
+  }),
+  workoutLogs: many(workoutLogs),
+}));
+
+export const workoutLogsRelations = relations(workoutLogs, ({ one, many }) => ({
+  user: one(users, {
+    fields: [workoutLogs.userId],
+    references: [users.id],
+  }),
+  planDay: one(planDays, {
+    fields: [workoutLogs.planDayId],
+    references: [planDays.id],
+  }),
+  plan: one(trainingPlans, {
+    fields: [workoutLogs.planId],
+    references: [trainingPlans.id],
+  }),
+  exerciseSets: many(exerciseSets),
+}));
+
+export const stravaConnectionsRelations = relations(stravaConnections, ({ one }) => ({
+  user: one(users, {
+    fields: [stravaConnections.userId],
+    references: [users.id],
+  }),
+}));
+
+export const exerciseSetsRelations = relations(exerciseSets, ({ one }) => ({
+  workoutLog: one(workoutLogs, {
+    fields: [exerciseSets.workoutLogId],
+    references: [workoutLogs.id],
+  }),
+}));
+
+export const customExercisesRelations = relations(customExercises, ({ one }) => ({
+  user: one(users, {
+    fields: [customExercises.userId],
+    references: [users.id],
+  }),
+}));
+
+export const chatMessagesRelations = relations(chatMessages, ({ one }) => ({
+  user: one(users, {
+    fields: [chatMessages.userId],
+    references: [users.id],
+  }),
+}));
+
+export const coachingMaterialsRelations = relations(coachingMaterials, ({ one, many }) => ({
+  user: one(users, {
+    fields: [coachingMaterials.userId],
+    references: [users.id],
+  }),
+  chunks: many(documentChunks),
+}));
+
+export const documentChunksRelations = relations(documentChunks, ({ one }) => ({
+  material: one(coachingMaterials, {
+    fields: [documentChunks.materialId],
+    references: [coachingMaterials.id],
+  }),
+  user: one(users, {
+    fields: [documentChunks.userId],
+    references: [users.id],
+  }),
+}));
