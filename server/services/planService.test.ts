@@ -28,11 +28,13 @@ vi.mock("../db", () => {
 vi.mock("../storage", () => {
   return {
     storage: {
+    plans: {
       createTrainingPlan: vi.fn(),
       createPlanDays: vi.fn(),
       getTrainingPlan: vi.fn(),
       updatePlanDay: vi.fn(),
     },
+  },
   };
 });
 
@@ -77,7 +79,7 @@ describe("planService", () => {
       });
 
       // Mock the storage functions
-      vi.mocked(storage.createTrainingPlan).mockResolvedValue(createMockTrainingPlan({
+      vi.mocked(storage.plans.createTrainingPlan).mockResolvedValue(createMockTrainingPlan({
         id: mockPlanId,
         userId,
         name: "8-Week Functional Fitness Plan",
@@ -85,14 +87,14 @@ describe("planService", () => {
         totalWeeks: 8,
       }));
 
-      vi.mocked(storage.createPlanDays).mockResolvedValue([] as PlanDay[]);
-      vi.mocked(storage.getTrainingPlan).mockResolvedValue(mockFullPlan);
+      vi.mocked(storage.plans.createPlanDays).mockResolvedValue([] as PlanDay[]);
+      vi.mocked(storage.plans.getTrainingPlan).mockResolvedValue(mockFullPlan);
 
       const result = await createSamplePlan(userId);
 
       // Verify createTrainingPlan was called with correct parameters
-      expect(storage.createTrainingPlan).toHaveBeenCalledTimes(1);
-      expect(storage.createTrainingPlan).toHaveBeenCalledWith({
+      expect(storage.plans.createTrainingPlan).toHaveBeenCalledTimes(1);
+      expect(storage.plans.createTrainingPlan).toHaveBeenCalledWith({
         userId,
         name: "8-Week Functional Fitness Plan",
         sourceFileName: null,
@@ -100,7 +102,7 @@ describe("planService", () => {
       });
 
       // Verify createPlanDays was called with correct parameters
-      expect(storage.createPlanDays).toHaveBeenCalledTimes(1);
+      expect(storage.plans.createPlanDays).toHaveBeenCalledTimes(1);
 
       const expectedDays = samplePlanDays.map((d) => ({
         planId: mockPlanId,
@@ -113,11 +115,11 @@ describe("planService", () => {
         status: "planned",
       }));
 
-      expect(storage.createPlanDays).toHaveBeenCalledWith(expectedDays);
+      expect(storage.plans.createPlanDays).toHaveBeenCalledWith(expectedDays);
 
       // Verify getTrainingPlan was called
-      expect(storage.getTrainingPlan).toHaveBeenCalledTimes(1);
-      expect(storage.getTrainingPlan).toHaveBeenCalledWith(mockPlanId, userId);
+      expect(storage.plans.getTrainingPlan).toHaveBeenCalledTimes(1);
+      expect(storage.plans.getTrainingPlan).toHaveBeenCalledWith(mockPlanId, userId);
 
       // Verify the returned result
       expect(result).toEqual(mockFullPlan);
@@ -263,16 +265,16 @@ describe("planService", () => {
       return mockTx;
     };
 
-    it("should call storage.updatePlanDay when mainWorkout is not updated", async () => {
+    it("should call storage.plans.updatePlanDay when mainWorkout is not updated", async () => {
       const updates = { focus: "New Focus" };
       const expectedResult = createMockPlanDay({ id: dayId, focus: "New Focus" });
 
-      vi.mocked(storage.updatePlanDay).mockResolvedValue(expectedResult);
+      vi.mocked(storage.plans.updatePlanDay).mockResolvedValue(expectedResult);
 
       const result = await updatePlanDayWithCleanup(dayId, updates, userId);
 
-      expect(storage.updatePlanDay).toHaveBeenCalledTimes(1);
-      expect(storage.updatePlanDay).toHaveBeenCalledWith(dayId, updates, userId);
+      expect(storage.plans.updatePlanDay).toHaveBeenCalledTimes(1);
+      expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(dayId, updates, userId);
       expect(db.transaction).not.toHaveBeenCalled();
       expect(result).toEqual(expectedResult);
     });

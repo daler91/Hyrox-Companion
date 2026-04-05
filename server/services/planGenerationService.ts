@@ -139,7 +139,7 @@ export async function generatePlan(
 
   // Create the training plan record
   const planName = `AI Plan: ${input.goal.slice(0, 80)}`;
-  const plan = await storage.createTrainingPlan({
+  const plan = await storage.plans.createTrainingPlan({
     userId,
     name: planName,
     sourceFileName: null,
@@ -160,7 +160,7 @@ export async function generatePlan(
     aiSource: "generated" as const,
   }));
 
-  await storage.createPlanDays(planDays);
+  await storage.plans.createPlanDays(planDays);
 
   // Auto-schedule the plan if a start date is provided or can be derived from race date
   let resolvedStartDate: string | undefined;
@@ -170,11 +170,11 @@ export async function generatePlan(
     resolvedStartDate = calculateStartDate(input.raceDate, input.totalWeeks);
   }
   if (resolvedStartDate) {
-    await storage.schedulePlan(plan.id, resolvedStartDate, userId);
+    await storage.plans.schedulePlan(plan.id, resolvedStartDate, userId);
   }
 
   // Fetch the complete plan with days
-  const fullPlan = await storage.getTrainingPlan(plan.id, userId);
+  const fullPlan = await storage.plans.getTrainingPlan(plan.id, userId);
   if (!fullPlan) {
     throw new Error("Failed to retrieve generated plan");
   }

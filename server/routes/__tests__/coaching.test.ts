@@ -20,10 +20,12 @@ vi.mock("../../types", () => ({
 
 vi.mock("../../storage", () => ({
   storage: {
-    listCoachingMaterials: vi.fn(),
-    createCoachingMaterial: vi.fn(),
-    updateCoachingMaterial: vi.fn(),
-    deleteCoachingMaterial: vi.fn(),
+    coaching: {
+      listCoachingMaterials: vi.fn(),
+      createCoachingMaterial: vi.fn(),
+      updateCoachingMaterial: vi.fn(),
+      deleteCoachingMaterial: vi.fn(),
+    },
   },
 }));
 
@@ -46,13 +48,13 @@ describe("Coaching materials routes", () => {
   describe("GET /api/v1/coaching-materials", () => {
     it("should list coaching materials", async () => {
       const materials = [{ id: "m1", title: "Guide", content: "content", type: "document", userId: "test_user_id" }];
-      vi.mocked(storage.listCoachingMaterials).mockResolvedValue(materials as any);
+      vi.mocked(storage.coaching.listCoachingMaterials).mockResolvedValue(materials as any);
 
       const response = await request(app).get("/api/v1/coaching-materials");
 
       expect(response.status).toBe(200);
       expect(response.body).toEqual(materials);
-      expect(storage.listCoachingMaterials).toHaveBeenCalledWith("test_user_id");
+      expect(storage.coaching.listCoachingMaterials).toHaveBeenCalledWith("test_user_id");
     });
   });
 
@@ -61,14 +63,14 @@ describe("Coaching materials routes", () => {
 
     it("should create material and trigger background embedding", async () => {
       const createdMaterial = { id: "m1", ...validBody, userId: "test_user_id", createdAt: new Date(), updatedAt: new Date() };
-      vi.mocked(storage.createCoachingMaterial).mockResolvedValue(createdMaterial as any);
+      vi.mocked(storage.coaching.createCoachingMaterial).mockResolvedValue(createdMaterial as any);
 
       const response = await request(app)
         .post("/api/v1/coaching-materials")
         .send(validBody);
 
       expect(response.status).toBe(201);
-      expect(storage.createCoachingMaterial).toHaveBeenCalled();
+      expect(storage.coaching.createCoachingMaterial).toHaveBeenCalled();
       expect(queue.send).toHaveBeenCalledWith("embed-coaching-material", { materialId: createdMaterial.id, userId: "test_user_id" });
     });
 
@@ -85,7 +87,7 @@ describe("Coaching materials routes", () => {
   describe("PATCH /api/v1/coaching-materials/:id", () => {
     it("should re-embed when content is updated", async () => {
       const updatedMaterial = { id: "m1", title: "Guide", content: "New content", type: "document", userId: "test_user_id" };
-      vi.mocked(storage.updateCoachingMaterial).mockResolvedValue(updatedMaterial as any);
+      vi.mocked(storage.coaching.updateCoachingMaterial).mockResolvedValue(updatedMaterial as any);
 
       const response = await request(app)
         .patch("/api/v1/coaching-materials/m1")
@@ -97,7 +99,7 @@ describe("Coaching materials routes", () => {
 
     it("should re-embed when title is updated", async () => {
       const updatedMaterial = { id: "m1", title: "New Title", content: "content", type: "document", userId: "test_user_id" };
-      vi.mocked(storage.updateCoachingMaterial).mockResolvedValue(updatedMaterial as any);
+      vi.mocked(storage.coaching.updateCoachingMaterial).mockResolvedValue(updatedMaterial as any);
 
       const response = await request(app)
         .patch("/api/v1/coaching-materials/m1")
@@ -109,7 +111,7 @@ describe("Coaching materials routes", () => {
 
     it("should NOT re-embed when only type is updated", async () => {
       const updatedMaterial = { id: "m1", title: "Guide", content: "content", type: "principles", userId: "test_user_id" };
-      vi.mocked(storage.updateCoachingMaterial).mockResolvedValue(updatedMaterial as any);
+      vi.mocked(storage.coaching.updateCoachingMaterial).mockResolvedValue(updatedMaterial as any);
 
       const response = await request(app)
         .patch("/api/v1/coaching-materials/m1")
@@ -120,7 +122,7 @@ describe("Coaching materials routes", () => {
     });
 
     it("should return 404 when material not found", async () => {
-      vi.mocked(storage.updateCoachingMaterial).mockResolvedValue(undefined);
+      vi.mocked(storage.coaching.updateCoachingMaterial).mockResolvedValue(undefined);
 
       const response = await request(app)
         .patch("/api/v1/coaching-materials/nonexistent")
@@ -133,16 +135,16 @@ describe("Coaching materials routes", () => {
 
   describe("DELETE /api/v1/coaching-materials/:id", () => {
     it("should delete material (chunks cascade-deleted via FK)", async () => {
-      vi.mocked(storage.deleteCoachingMaterial).mockResolvedValue(true);
+      vi.mocked(storage.coaching.deleteCoachingMaterial).mockResolvedValue(true);
 
       const response = await request(app).delete("/api/v1/coaching-materials/m1");
 
       expect(response.status).toBe(200);
-      expect(storage.deleteCoachingMaterial).toHaveBeenCalledWith("m1", "test_user_id");
+      expect(storage.coaching.deleteCoachingMaterial).toHaveBeenCalledWith("m1", "test_user_id");
     });
 
     it("should return 404 when material not found", async () => {
-      vi.mocked(storage.deleteCoachingMaterial).mockResolvedValue(false);
+      vi.mocked(storage.coaching.deleteCoachingMaterial).mockResolvedValue(false);
 
       const response = await request(app).delete("/api/v1/coaching-materials/nonexistent");
 

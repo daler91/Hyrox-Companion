@@ -40,10 +40,10 @@ export async function retrieveCoachingContext(
   let fallbackReason: string | undefined;
 
   try {
-    const hasChunks = await storage.hasChunksForUser(userId);
+    const hasChunks = await storage.coaching.hasChunksForUser(userId);
 
     if (hasChunks) {
-      const storedDim = await storage.getStoredEmbeddingDimension(userId);
+      const storedDim = await storage.coaching.getStoredEmbeddingDimension(userId);
       if (storedDim !== null && storedDim !== EMBEDDING_DIMENSIONS) {
         log.warn(
           { userId, storedDim, expectedDim: EMBEDDING_DIMENSIONS },
@@ -70,7 +70,7 @@ export async function retrieveCoachingContext(
     log.error({ err: error, userId }, "[rag] Retrieval failed, falling back to legacy");
   }
 
-  const coachingMaterials = await storage.listCoachingMaterials(userId);
+  const coachingMaterials = await storage.coaching.listCoachingMaterials(userId);
   return {
     coachingMaterials,
     ragInfo: {

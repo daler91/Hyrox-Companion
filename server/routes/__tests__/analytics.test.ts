@@ -22,8 +22,10 @@ vi.mock("../../types", () => ({
 // Mock the storage functions
 vi.mock("../../storage", () => ({
   storage: {
-    getAllExerciseSetsWithDates: vi.fn(),
-    getWorkoutLogsByDateRange: vi.fn(),
+    analytics: {
+      getAllExerciseSetsWithDates: vi.fn(),
+      getWorkoutLogsByDateRange: vi.fn(),
+    },
   },
 }));
 
@@ -82,8 +84,8 @@ describe("Analytics Routes", () => {
   const testEndpoint = (endpoint: string, mockMethod: ReturnType<typeof vi.fn>, expectedBody: Record<string, unknown>) => {
     describe(`GET ${endpoint}`, () => {
       it("should return analytics for a user", async () => {
-        vi.mocked(storage.getAllExerciseSetsWithDates).mockResolvedValue([
-          { id: "set1", exerciseName: "Test", weight: "100", reps: 10 } as unknown as Awaited<ReturnType<typeof storage.getAllExerciseSetsWithDates>>[number]
+        vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([
+          { id: "set1", exerciseName: "Test", weight: "100", reps: 10 } as unknown as Awaited<ReturnType<typeof storage.analytics.getAllExerciseSetsWithDates>>[number]
         ]);
 
         vi.mocked(mockMethod).mockReturnValue(expectedBody);
@@ -91,7 +93,7 @@ describe("Analytics Routes", () => {
         const response = await request(app).get(endpoint);
 
         expect(response.status).toBe(200);
-        expect(storage.getAllExerciseSetsWithDates).toHaveBeenCalledWith("test_user_id", undefined, undefined);
+        expect(storage.analytics.getAllExerciseSetsWithDates).toHaveBeenCalledWith("test_user_id", undefined, undefined);
         expect(mockMethod).toHaveBeenCalledWith([
           expect.objectContaining({ id: "set1", exerciseName: "Test", weight: "100", reps: 10 })
         ]);
@@ -99,19 +101,19 @@ describe("Analytics Routes", () => {
       });
 
       it("should handle from and to date queries properly", async () => {
-        vi.mocked(storage.getAllExerciseSetsWithDates).mockResolvedValue([]);
+        vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([]);
         vi.mocked(mockMethod).mockReturnValue({});
 
         const response = await request(app).get(`${endpoint}?from=2024-01-01&to=2024-12-31`);
 
         expect(response.status).toBe(200);
-        expect(storage.getAllExerciseSetsWithDates).toHaveBeenCalledWith("test_user_id", "2024-01-01", "2024-12-31");
+        expect(storage.analytics.getAllExerciseSetsWithDates).toHaveBeenCalledWith("test_user_id", "2024-01-01", "2024-12-31");
       });
 
       testInvalidDates(endpoint);
 
       it("should return 500 when storage throws an error", async () => {
-        vi.mocked(storage.getAllExerciseSetsWithDates).mockRejectedValue(new Error("Database error"));
+        vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockRejectedValue(new Error("Database error"));
 
         const response = await request(app).get(endpoint);
 
@@ -128,13 +130,13 @@ describe("Analytics Routes", () => {
     const makeRequest = () => request(app).get("/api/v1/personal-records");
 
     it("should coalesce concurrent requests to the database", async () => {
-      type ExerciseSetWithDate = Awaited<ReturnType<typeof storage.getAllExerciseSetsWithDates>>;
+      type ExerciseSetWithDate = Awaited<ReturnType<typeof storage.analytics.getAllExerciseSetsWithDates>>;
       let resolvePromise: (value: ExerciseSetWithDate) => void;
       const delayedPromise = new Promise<ExerciseSetWithDate>((resolve) => {
         resolvePromise = resolve;
       });
 
-      vi.mocked(storage.getAllExerciseSetsWithDates).mockImplementation(() => delayedPromise);
+      vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockImplementation(() => delayedPromise);
 
       const p1 = makeRequest();
       const p2 = makeRequest();
@@ -155,7 +157,7 @@ describe("Analytics Routes", () => {
       expect(res2.status).toBe(200);
       expect(res3.status).toBe(200);
 
-      expect(storage.getAllExerciseSetsWithDates).toHaveBeenCalledTimes(1);
+      expect(storage.analytics.getAllExerciseSetsWithDates).toHaveBeenCalledTimes(1);
     });
 
     beforeEach(() => {
@@ -167,16 +169,16 @@ describe("Analytics Routes", () => {
     });
 
     it("should coalesce sequential requests within the 5-minute TTL", async () => {
-      vi.mocked(storage.getAllExerciseSetsWithDates).mockResolvedValue([]);
+      vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([]);
 
       await makeRequest();
       await makeRequest();
 
-      expect(storage.getAllExerciseSetsWithDates).toHaveBeenCalledTimes(1);
+      expect(storage.analytics.getAllExerciseSetsWithDates).toHaveBeenCalledTimes(1);
     });
 
     it("should refetch from DB after the 5-minute TTL expires", async () => {
-      vi.mocked(storage.getAllExerciseSetsWithDates).mockResolvedValue([]);
+      vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([]);
 
       await makeRequest();
 
@@ -185,11 +187,11 @@ describe("Analytics Routes", () => {
 
       await makeRequest();
 
-      expect(storage.getAllExerciseSetsWithDates).toHaveBeenCalledTimes(2);
+      expect(storage.analytics.getAllExerciseSetsWithDates).toHaveBeenCalledTimes(2);
     });
 
     it("should clear cache if the promise rejects so subsequent requests retry immediately", async () => {
-      vi.mocked(storage.getAllExerciseSetsWithDates)
+      vi.mocked(storage.analytics.getAllExerciseSetsWithDates)
         .mockRejectedValueOnce(new Error("Database error"))
         .mockResolvedValueOnce([]);
 
@@ -200,7 +202,7 @@ describe("Analytics Routes", () => {
       expect(res2.status).toBe(200);
 
       // Even without advancing time, the cache should clear on failure
-      expect(storage.getAllExerciseSetsWithDates).toHaveBeenCalledTimes(2);
+      expect(storage.analytics.getAllExerciseSetsWithDates).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -213,22 +215,22 @@ describe("Analytics Routes", () => {
         stationCoverage: [],
       };
 
-      vi.mocked(storage.getWorkoutLogsByDateRange).mockResolvedValue([]);
-      vi.mocked(storage.getAllExerciseSetsWithDates).mockResolvedValue([]);
+      vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([]);
+      vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([]);
       vi.mocked(calculateTrainingOverview).mockReturnValue(mockOverview);
 
       const response = await request(app).get("/api/v1/training-overview");
 
       expect(response.status).toBe(200);
       expect(response.body).toEqual(mockOverview);
-      expect(storage.getWorkoutLogsByDateRange).toHaveBeenCalledWith("test_user_id", undefined, undefined);
-      expect(storage.getAllExerciseSetsWithDates).toHaveBeenCalledWith("test_user_id", undefined, undefined);
+      expect(storage.analytics.getWorkoutLogsByDateRange).toHaveBeenCalledWith("test_user_id", undefined, undefined);
+      expect(storage.analytics.getAllExerciseSetsWithDates).toHaveBeenCalledWith("test_user_id", undefined, undefined);
       expect(calculateTrainingOverview).toHaveBeenCalled();
     });
 
     it("should pass date params to storage", async () => {
-      vi.mocked(storage.getWorkoutLogsByDateRange).mockResolvedValue([]);
-      vi.mocked(storage.getAllExerciseSetsWithDates).mockResolvedValue([]);
+      vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([]);
+      vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([]);
       vi.mocked(calculateTrainingOverview).mockReturnValue({
         weeklySummaries: [], workoutDates: [], categoryTotals: {}, stationCoverage: [],
       });
@@ -236,7 +238,7 @@ describe("Analytics Routes", () => {
       const response = await request(app).get("/api/v1/training-overview?from=2026-01-01&to=2026-03-31");
 
       expect(response.status).toBe(200);
-      expect(storage.getWorkoutLogsByDateRange).toHaveBeenCalledWith("test_user_id", "2026-01-01", "2026-03-31");
+      expect(storage.analytics.getWorkoutLogsByDateRange).toHaveBeenCalledWith("test_user_id", "2026-01-01", "2026-03-31");
     });
 
     testInvalidDates("/api/v1/training-overview");

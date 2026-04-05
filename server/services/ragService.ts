@@ -116,7 +116,7 @@ export async function embedCoachingMaterial(material: CoachingMaterial): Promise
 
     // Replace old chunks with new ones transactionally, so a failure
     // doesn't leave the material with zero chunks or in an inconsistent state.
-    await storage.replaceChunks(
+    await storage.coaching.replaceChunks(
       material.id,
       chunks.map((content, i) => ({
         materialId: material.id,
@@ -157,20 +157,20 @@ export async function retrieveRelevantChunks(
 ): Promise<string[]> {
   const queryEmbedding = await generateEmbedding(query);
   logger.info({ userId, queryDim: queryEmbedding.length, topK }, "[rag] Searching chunks by embedding");
-  const chunks = await storage.searchChunksByEmbedding(userId, queryEmbedding, topK);
+  const chunks = await storage.coaching.searchChunksByEmbedding(userId, queryEmbedding, topK);
   logger.info({ userId, found: chunks.length }, "[rag] Search returned chunks");
   return chunks.map((c) => c.content);
 }
 
 export async function getRagStatus(userId: string) {
-  const materials = await storage.listCoachingMaterials(userId);
-  const chunkCounts = await storage.getChunkCountsByMaterial(userId);
+  const materials = await storage.coaching.listCoachingMaterials(userId);
+  const chunkCounts = await storage.coaching.getChunkCountsByMaterial(userId);
   const chunkMap = new Map(chunkCounts.map((c) => [c.materialId, c]));
 
   const hasApiKey = Boolean(env.GEMINI_API_KEY);
   let storedDimension: number | null = null;
   try {
-    storedDimension = await storage.getStoredEmbeddingDimension(userId);
+    storedDimension = await storage.coaching.getStoredEmbeddingDimension(userId);
   } catch (err) {
     logger.warn({ err, userId }, "[rag] Failed to read stored embedding dimension");
   }
@@ -208,7 +208,7 @@ export async function getRagStatus(userId: string) {
 }
 
 export async function reembedAllMaterials(userId: string) {
-  const materials = await storage.listCoachingMaterials(userId);
+  const materials = await storage.coaching.listCoachingMaterials(userId);
   const errors: string[] = [];
   let count = 0;
 

@@ -79,7 +79,7 @@ export async function startQueue() {
       const { materialId, userId } = job.data as { materialId: string; userId: string };
       logger.info({ jobId: job.id, materialId }, "[pg-boss] Processing embed-coaching-material job");
       try {
-        const material = await storage.getCoachingMaterial(materialId, userId);
+        const material = await storage.coaching.getCoachingMaterial(materialId, userId);
         if (!material) {
           logger.warn({ jobId: job.id, materialId }, "[pg-boss] Material not found, skipping embed job");
           return;
@@ -100,7 +100,7 @@ export async function startQueue() {
       const { userId } = job.data as { userId: string };
       logger.info({ jobId: job.id, userId }, "[pg-boss] Processing send-weekly-summary job");
       try {
-        const user = await storage.getUser(userId);
+        const user = await storage.users.getUser(userId);
         if (!user) {
           logger.warn({ jobId: job.id, userId }, "[pg-boss] User not found, skipping send-weekly-summary job");
           return;
@@ -121,7 +121,7 @@ export async function startQueue() {
       const { userId } = job.data as { userId: string };
       logger.info({ jobId: job.id, userId }, "[pg-boss] Processing send-missed-reminder job");
       try {
-        const user = await storage.getUser(userId);
+        const user = await storage.users.getUser(userId);
         if (!user) {
           logger.warn({ jobId: job.id, userId }, "[pg-boss] User not found, skipping send-missed-reminder job");
           return;

@@ -21,9 +21,9 @@ function hasClerkKeys(): boolean {
 }
 
 async function ensureDevUserExists(): Promise<void> {
-  const existing = await storage.getUser(DEV_USER_ID);
+  const existing = await storage.users.getUser(DEV_USER_ID);
   if (existing) return;
-  await storage.upsertUser({
+  await storage.users.upsertUser({
     id: DEV_USER_ID,
     email: "dev@localhost",
     firstName: "Dev",
@@ -100,13 +100,13 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
 };
 
 async function ensureUserExists(clerkUserId: string): Promise<void> {
-  const existing = await storage.getUser(clerkUserId);
+  const existing = await storage.users.getUser(clerkUserId);
   if (existing) return;
 
   const clerkUser = await clerkClient.users.getUser(clerkUserId);
   const email = clerkUser.emailAddresses?.[0]?.emailAddress || null;
 
-  await storage.upsertUser({
+  await storage.users.upsertUser({
     id: clerkUserId,
     email,
     firstName: clerkUser.firstName,

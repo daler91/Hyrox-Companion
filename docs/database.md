@@ -474,66 +474,63 @@ These run in a service-level orchestration (not a single DB transaction) because
 
 ### Architecture
 
-The storage layer follows a **repository pattern** with interface segregation. The `IStorage` interface (defined in `server/storage/IStorage.ts`) is composed from several smaller interfaces:
+The storage layer follows a **repository pattern** with domain-oriented classes. The `IStorage` type (defined in `server/storage/IStorage.ts`) is a composed object exposing each domain class as a property:
 
-```
-IStorage = IUserStorage
-          & IPlanStorage
-          & IWorkoutStorage
-          & IAnalyticsStorage
-          & IChatStorage
-          & IIntegrationStorage
-          & INotificationStorage
-          & ICoachingStorage
+```typescript
+interface IStorage {
+  users: UserStorage;
+  workouts: WorkoutStorage;
+  plans: PlanStorage;
+  timeline: TimelineStorage;
+  analytics: AnalyticsStorage;
+  coaching: CoachingStorage;
+}
 ```
 
 ### Storage Classes
 
-Each interface is implemented by one or more concrete storage classes:
+Each domain class owns a cohesive slice of functionality:
 
-| Class | File | Implements |
+| Class | File | Responsibility |
 |---|---|---|
-| `UserStorage` | `server/storage/users.ts` | `IUserStorage`, `IChatStorage`, `IIntegrationStorage`, `INotificationStorage` |
-| `WorkoutStorage` | `server/storage/workouts.ts` | `IWorkoutStorage` (partial) |
-| `PlanStorage` | `server/storage/plans.ts` | `IPlanStorage`, `INotificationStorage.markMissedPlanDays` |
-| `TimelineStorage` | `server/storage/timeline.ts` | `IAnalyticsStorage.getTimeline`, `IAnalyticsStorage.getUpcomingPlannedDays` |
-| `AnalyticsStorage` | `server/storage/analytics.ts` | `IAnalyticsStorage` (partial), `IWorkoutStorage.getAllExerciseSetsWithDates` |
-| `CoachingStorage` | `server/storage/coaching.ts` | `ICoachingStorage` |
+| `UserStorage` | `server/storage/users.ts` | Users, chat, Strava connection, custom exercises, notification bookkeeping |
+| `WorkoutStorage` | `server/storage/workouts.ts` | Workout logs, exercise sets, Strava activity dedupe |
+| `PlanStorage` | `server/storage/plans.ts` | Training plans, plan days, scheduling, missed-day marking |
+| `TimelineStorage` | `server/storage/timeline.ts` | Unified timeline and upcoming planned days |
+| `AnalyticsStorage` | `server/storage/analytics.ts` | Weekly stats, date-range queries, missed-workout reporting |
+| `CoachingStorage` | `server/storage/coaching.ts` | Coaching materials and RAG document chunks |
 
 Shared query logic (e.g., joining exercise sets with workout dates) is extracted into `server/storage/shared.ts`.
 
-### Proxy-Based Delegation (`server/storage/index.ts`)
+### Composed Facade (`server/storage/index.ts`)
 
-Rather than a single monolithic class, the storage layer uses a **JavaScript Proxy** to compose the individual storage classes into one object conforming to `IStorage`:
+`server/storage/index.ts` composes the domain classes into a single `storage` object. Callers reach domains by name:
 
 ```typescript
-function createDatabaseStorage(): IStorage {
-  const delegates = [
-    new UserStorage(),
-    new WorkoutStorage(),
-    new PlanStorage(),
-    new TimelineStorage(workoutStorage),
-    new AnalyticsStorage(),
-    new CoachingStorage(),
-  ];
+const workouts = new WorkoutStorage();
 
-  return new Proxy({} as IStorage, {
-    get(_target, prop) {
-      for (const delegate of delegates) {
-        const value = delegate[prop];
-        if (typeof value === "function") {
-          return value.bind(delegate);
-        }
-      }
-      throw new Error(`Method '${prop}' not implemented`);
-    },
-  });
-}
-
-export const storage = createDatabaseStorage();
+export const storage: IStorage = {
+  users: new UserStorage(),
+  workouts,
+  plans: new PlanStorage(),
+  timeline: new TimelineStorage(workouts),
+  analytics: new AnalyticsStorage(),
+  coaching: new CoachingStorage(),
+};
 ```
 
-When any method is called on `storage`, the Proxy searches through the delegate list and dispatches to the first class that implements it. A compile-time type check (`AssertAllKeys<IStorage, DelegateUnion>`) verifies that the union of all storage classes covers every method in `IStorage`.
+Usage from routes and services:
+
+```typescript
+await storage.users.getUser(userId);
+await storage.workouts.createWorkoutLog(log);
+await storage.plans.getActivePlan(userId);
+await storage.timeline.getTimeline(userId);
+await storage.analytics.getWeeklyStats(userId, start, end);
+await storage.coaching.searchChunksByEmbedding(userId, embedding, topK);
+```
+
+Adding a new storage method means editing exactly one file — the owning domain class — rather than also wiring it through a central facade.
 
 ### Notable Storage Patterns
 

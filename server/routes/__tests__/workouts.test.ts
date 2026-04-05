@@ -21,7 +21,9 @@ vi.mock("../../types", () => ({
 // Mock the storage functions
 vi.mock("../../storage", () => ({
   storage: {
-    listWorkoutLogs: vi.fn(),
+    workouts: {
+      listWorkoutLogs: vi.fn(),
+    },
   },
 }));
 
@@ -87,19 +89,19 @@ describe("Workouts Routes", () => {
         { id: "1", userId: "test_user_id", date: "2024-03-10", notes: "Great workout" },
         { id: "2", userId: "test_user_id", date: "2024-03-12", notes: "Felt tired" }
       ];
-      vi.mocked(storage.listWorkoutLogs).mockResolvedValue(mockLogs);
+      vi.mocked(storage.workouts.listWorkoutLogs).mockResolvedValue(mockLogs);
 
       const response = await request(app).get("/api/v1/workouts");
 
       expect(response.status).toBe(200);
-      expect(storage.listWorkoutLogs).toHaveBeenCalledWith("test_user_id", 50, undefined);
+      expect(storage.workouts.listWorkoutLogs).toHaveBeenCalledWith("test_user_id", 50, undefined);
       expect(response.body).toEqual(mockLogs);
     });
 
     it("should return 500 when storage throws an error", async () => {
       // Mock the storage to throw an error
       const { storage } = await import("../../storage");
-      vi.mocked(storage.listWorkoutLogs).mockRejectedValue(new Error("Database error"));
+      vi.mocked(storage.workouts.listWorkoutLogs).mockRejectedValue(new Error("Database error"));
 
       const response = await request(app).get("/api/v1/workouts");
 

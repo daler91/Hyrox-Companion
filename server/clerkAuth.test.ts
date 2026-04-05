@@ -16,8 +16,10 @@ vi.mock("@clerk/express", () => ({
 
 vi.mock("./storage", () => ({
   storage: {
-    getUser: vi.fn(),
-    upsertUser: vi.fn(),
+    users: {
+      getUser: vi.fn(),
+      upsertUser: vi.fn(),
+    },
   },
 }));
 
@@ -61,12 +63,12 @@ describe("isAuthenticated middleware", () => {
 
   it("calls next when auth.userId exists and ensureUserExists succeeds", async () => {
     vi.mocked(getAuth).mockReturnValue({ userId: "test-user-id" });
-    vi.mocked(storage.getUser).mockResolvedValue({ id: "test-user-id" });
+    vi.mocked(storage.users.getUser).mockResolvedValue({ id: "test-user-id" });
 
     await isAuthenticated(req, res, next);
 
     expect(getAuth).toHaveBeenCalledWith(req);
-    expect(storage.getUser).toHaveBeenCalledWith("test-user-id");
+    expect(storage.users.getUser).toHaveBeenCalledWith("test-user-id");
     expect(next).toHaveBeenCalled();
     expect(res.status).not.toHaveBeenCalled();
     expect(res.json).not.toHaveBeenCalled();
@@ -75,12 +77,12 @@ describe("isAuthenticated middleware", () => {
   it("returns 500 when ensureUserExists throws an error", async () => {
     vi.mocked(getAuth).mockReturnValue({ userId: "test-user-id" });
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    vi.mocked(storage.getUser).mockRejectedValue(new Error("Database error"));
+    vi.mocked(storage.users.getUser).mockRejectedValue(new Error("Database error"));
 
     await isAuthenticated(req, res, next);
 
     expect(getAuth).toHaveBeenCalledWith(req);
-    expect(storage.getUser).toHaveBeenCalledWith("test-user-id");
+    expect(storage.users.getUser).toHaveBeenCalledWith("test-user-id");
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith({ error: "Failed to initialize user session", code: "INTERNAL_SERVER_ERROR" });
     expect(next).not.toHaveBeenCalled();

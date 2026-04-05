@@ -250,7 +250,7 @@ export async function runStartupMaintenance(storage: IStorage): Promise<void> {
   await cleanOrphanedData();
   await backfillPlanDatesAndWorkoutLinks();
   try {
-    const marked = await storage.markMissedPlanDays();
+    const marked = await storage.plans.markMissedPlanDays();
     if (marked > 0) logger.info({ context: "db" }, `Marked ${marked} past planned day(s) as missed`);
   } catch (error) {
     logger.warn({ context: "db", err: error }, "Mark missed days skipped");

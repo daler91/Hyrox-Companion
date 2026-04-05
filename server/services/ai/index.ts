@@ -6,10 +6,10 @@ import { computeRpeTrend, computeExerciseGaps, computePlanPhase, computeWeeklyVo
 
 export async function buildTrainingContext(userId: string): Promise<TrainingContext> {
   const [timeline, activePlanRecord, user, upcomingDays] = await Promise.all([
-    storage.getTimeline(userId),
-    storage.getActivePlan(userId),
-    storage.getUser(userId),
-    storage.getUpcomingPlannedDays(userId, 7),
+    storage.timeline.getTimeline(userId),
+    storage.plans.getActivePlan(userId),
+    storage.users.getUser(userId),
+    storage.timeline.getUpcomingPlannedDays(userId, 7),
   ]);
 
   const { completedWorkouts, plannedWorkouts, missedWorkouts, skippedWorkouts, totalWorkouts, completionRate, completedDates } = calculateTrainingStats(timeline);

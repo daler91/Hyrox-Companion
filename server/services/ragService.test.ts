@@ -10,10 +10,12 @@ vi.mock("../gemini/client", () => ({
 
 vi.mock("../storage", () => ({
   storage: {
-    deleteChunksByMaterialId: vi.fn(),
-    insertChunks: vi.fn(),
-    replaceChunks: vi.fn(),
-    searchChunksByEmbedding: vi.fn(),
+    coaching: {
+      deleteChunksByMaterialId: vi.fn(),
+      insertChunks: vi.fn(),
+      replaceChunks: vi.fn(),
+      searchChunksByEmbedding: vi.fn(),
+    },
   },
 }));
 
@@ -130,11 +132,11 @@ describe("embedCoachingMaterial", () => {
 
   it("should replace existing chunks with new ones", async () => {
     vi.mocked(generateEmbeddings).mockResolvedValue([[0.1, 0.2]]);
-    vi.mocked(storage.replaceChunks).mockResolvedValue([]);
+    vi.mocked(storage.coaching.replaceChunks).mockResolvedValue([]);
 
     await embedCoachingMaterial(mockMaterial);
 
-    expect(storage.replaceChunks).toHaveBeenCalledWith("mat_1", [
+    expect(storage.coaching.replaceChunks).toHaveBeenCalledWith("mat_1", [
       {
         materialId: "mat_1",
         userId: "user_1",
@@ -147,7 +149,7 @@ describe("embedCoachingMaterial", () => {
 
   it("should prefix first chunk with material title", async () => {
     vi.mocked(generateEmbeddings).mockResolvedValue([[0.1]]);
-    vi.mocked(storage.replaceChunks).mockResolvedValue([]);
+    vi.mocked(storage.coaching.replaceChunks).mockResolvedValue([]);
 
     await embedCoachingMaterial(mockMaterial);
 
@@ -161,7 +163,7 @@ describe("embedCoachingMaterial", () => {
 
     await embedCoachingMaterial(emptyMaterial);
 
-    expect(storage.replaceChunks).not.toHaveBeenCalled();
+    expect(storage.coaching.replaceChunks).not.toHaveBeenCalled();
     expect(generateEmbeddings).not.toHaveBeenCalled();
   });
 
@@ -173,11 +175,11 @@ describe("embedCoachingMaterial", () => {
     vi.mocked(generateEmbeddings).mockImplementation(async (texts) =>
       texts.map(() => [0.5]),
     );
-    vi.mocked(storage.replaceChunks).mockResolvedValue([]);
+    vi.mocked(storage.coaching.replaceChunks).mockResolvedValue([]);
 
     await embedCoachingMaterial(longMaterial);
 
-    const insertedChunks = vi.mocked(storage.replaceChunks).mock.calls[0][1];
+    const insertedChunks = vi.mocked(storage.coaching.replaceChunks).mock.calls[0][1];
     expect(insertedChunks.length).toBeGreaterThan(1);
     // Verify indices are sequential
     insertedChunks.forEach((chunk, i) => {
@@ -206,7 +208,7 @@ describe("retrieveRelevantChunks", () => {
   it("should embed query and search for similar chunks", async () => {
     const queryEmbedding = [0.1, 0.2, 0.3];
     vi.mocked(generateEmbedding).mockResolvedValue(queryEmbedding);
-    vi.mocked(storage.searchChunksByEmbedding).mockResolvedValue([
+    vi.mocked(storage.coaching.searchChunksByEmbedding).mockResolvedValue([
       { id: "c1", materialId: "m1", userId: "u1", content: "chunk 1", chunkIndex: 0, embedding: null, createdAt: new Date() },
       { id: "c2", materialId: "m1", userId: "u1", content: "chunk 2", chunkIndex: 1, embedding: null, createdAt: new Date() },
     ]);
@@ -214,17 +216,17 @@ describe("retrieveRelevantChunks", () => {
     const result = await retrieveRelevantChunks("u1", "how to train");
 
     expect(generateEmbedding).toHaveBeenCalledWith("how to train");
-    expect(storage.searchChunksByEmbedding).toHaveBeenCalledWith("u1", queryEmbedding, 6);
+    expect(storage.coaching.searchChunksByEmbedding).toHaveBeenCalledWith("u1", queryEmbedding, 6);
     expect(result).toEqual(["chunk 1", "chunk 2"]);
   });
 
   it("should respect custom topK parameter", async () => {
     vi.mocked(generateEmbedding).mockResolvedValue([0.1]);
-    vi.mocked(storage.searchChunksByEmbedding).mockResolvedValue([]);
+    vi.mocked(storage.coaching.searchChunksByEmbedding).mockResolvedValue([]);
 
     await retrieveRelevantChunks("u1", "query", 3);
 
-    expect(storage.searchChunksByEmbedding).toHaveBeenCalledWith("u1", [0.1], 3);
+    expect(storage.coaching.searchChunksByEmbedding).toHaveBeenCalledWith("u1", [0.1], 3);
   });
 
   it("should propagate errors to caller", async () => {

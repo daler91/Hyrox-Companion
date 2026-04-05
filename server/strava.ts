@@ -120,7 +120,7 @@ async function refreshStravaToken(refreshToken: string): Promise<StravaTokenResp
 }
 
 async function getValidAccessToken(userId: string): Promise<string | null> {
-  const connection = await storage.getStravaConnection(userId);
+  const connection = await storage.users.getStravaConnection(userId);
   if (!connection) return null;
 
   const now = new Date();
@@ -131,7 +131,7 @@ async function getValidAccessToken(userId: string): Promise<string | null> {
   const refreshed = await refreshStravaToken(connection.refreshToken);
   if (!refreshed) return null;
 
-  await storage.upsertStravaConnection({
+  await storage.users.upsertStravaConnection({
     userId,
     stravaAthleteId: connection.stravaAthleteId,
     accessToken: refreshed.access_token,
@@ -147,7 +147,7 @@ async function getValidAccessToken(userId: string): Promise<string | null> {
 async function handleStravaStatus(req: Request, res: Response) {
   try {
     const userId = getUserId(req);
-    const connection = await storage.getStravaConnection(userId);
+    const connection = await storage.users.getStravaConnection(userId);
 
     if (!connection) {
       return res.json({ connected: false });
@@ -229,7 +229,7 @@ async function handleStravaCallback(req: Request, res: Response) {
 
     const tokenData = (await tokenResponse.json()) as StravaTokenResponse;
 
-    await storage.upsertStravaConnection({
+    await storage.users.upsertStravaConnection({
       userId,
       stravaAthleteId: String(tokenData.athlete.id),
       accessToken: tokenData.access_token,
@@ -249,7 +249,7 @@ async function handleStravaCallback(req: Request, res: Response) {
 async function handleStravaDisconnect(req: Request, res: Response) {
   try {
     const userId = getUserId(req);
-    await storage.deleteStravaConnection(userId);
+    await storage.users.deleteStravaConnection(userId);
     res.json({ success: true });
   } catch (error) {
     (req.log || logger).error({ err: error }, "Strava disconnect error:");
@@ -266,7 +266,7 @@ async function handleStravaSync(req: Request, res: Response) {
       return res.status(401).json({ error: "Strava not connected or token expired", code: "UNAUTHORIZED" });
     }
 
-    const user = await storage.getUser(userId);
+    const user = await storage.users.getUser(userId);
     const distanceUnit = (user?.distanceUnit || "km") as DistanceUnit;
 
     let activities: StravaActivity[];
@@ -304,7 +304,7 @@ async function handleStravaSync(req: Request, res: Response) {
     }
 
     const activityIds = activities.map(a => String(a.id));
-    const existingIds = await storage.getExistingStravaActivityIds(userId, activityIds);
+    const existingIds = await storage.workouts.getExistingStravaActivityIds(userId, activityIds);
     const existingStravaIds = new Set(existingIds);
 
     let skipped = 0;
@@ -320,11 +320,11 @@ async function handleStravaSync(req: Request, res: Response) {
     }
 
     if (workoutsToImport.length > 0) {
-      await storage.createWorkoutLogs(workoutsToImport);
+      await storage.workouts.createWorkoutLogs(workoutsToImport);
     }
     const imported = workoutsToImport.length;
 
-    await storage.updateStravaLastSync(userId);
+    await storage.users.updateStravaLastSync(userId);
 
     res.json({
       success: true,

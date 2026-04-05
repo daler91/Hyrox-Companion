@@ -41,7 +41,7 @@ async function applySuggestion(
 
   try {
     const updateValue = buildUpdateValue(suggestion, entry);
-    await storage.updatePlanDay(
+    await storage.plans.updatePlanDay(
       suggestion.workoutId,
       { [suggestion.targetField]: updateValue, aiSource: aiSource ?? null },
       userId,
@@ -78,14 +78,14 @@ async function getCoachingMaterialsString(
  */
 export async function triggerAutoCoach(userId: string): Promise<{ adjusted: number }> {
   try {
-    const user = await storage.getUser(userId);
+    const user = await storage.users.getUser(userId);
     if (!user?.aiCoachEnabled) {
       // Reset in case caller pre-set the flag
-      await storage.updateIsAutoCoaching(userId, false);
+      await storage.users.updateIsAutoCoaching(userId, false);
       return { adjusted: 0 };
     }
 
-    await storage.updateIsAutoCoaching(userId, true);
+    await storage.users.updateIsAutoCoaching(userId, true);
 
     try {
       // ⚡ Parallelize all three independent data fetches into a single await
@@ -93,8 +93,8 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
       // Saves ~50-100ms of DB round-trip latency per auto-coach trigger.
       const [trainingContext, activePlanRecord, timeline] = await Promise.all([
         buildTrainingContext(userId),
-        storage.getActivePlan(userId),
-        storage.getTimeline(userId),
+        storage.plans.getActivePlan(userId),
+        storage.timeline.getTimeline(userId),
       ]);
 
       const activePlanGoal = activePlanRecord?.goal ?? undefined;
@@ -144,7 +144,7 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
       }
       return { adjusted };
     } finally {
-      await storage.updateIsAutoCoaching(userId, false);
+      await storage.users.updateIsAutoCoaching(userId, false);
     }
   } catch (error) {
     logger.error({ err: error, userId }, "[coach] Auto-coach error:");

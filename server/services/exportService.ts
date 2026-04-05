@@ -41,9 +41,9 @@ export async function generateJSON(userId: string, storage: IStorage) {
   // Previously these were executed sequentially, causing the total time
   // to be the sum of all three queries rather than the maximum of them.
   const [timeline, plans, allExerciseSets] = await Promise.all([
-    storage.getTimeline(userId),
-    storage.listTrainingPlans(userId),
-    storage.getAllExerciseSetsWithDates(userId)
+    storage.timeline.getTimeline(userId),
+    storage.plans.listTrainingPlans(userId),
+    storage.analytics.getAllExerciseSetsWithDates(userId)
   ]);
   const workoutLogTitles = buildWorkoutLogTitles(timeline);
 
@@ -119,8 +119,8 @@ function generateExerciseSetsCsvRows(allExerciseSets: ExerciseSetRow[], workoutL
 
 export async function generateCSV(userId: string, storage: IStorage): Promise<string> {
   const [timeline, allExerciseSets] = await Promise.all([
-    storage.getTimeline(userId),
-    storage.getAllExerciseSetsWithDates(userId),
+    storage.timeline.getTimeline(userId),
+    storage.analytics.getAllExerciseSetsWithDates(userId),
   ]);
 
   const csvRows = ["Date,Type,Status,Focus,Main Workout,Accessory,Notes,Duration,RPE"];

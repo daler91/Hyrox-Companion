@@ -87,7 +87,7 @@ export async function importPlanFromCSV(
   const uniqueWeeks = new Set(weekNumbers);
   const totalWeeks = uniqueWeeks.size;
 
-  const plan = await storage.createTrainingPlan({
+  const plan = await storage.plans.createTrainingPlan({
     userId,
     name: options?.planName || options?.fileName?.replace(".csv", "") || "Imported Plan",
     sourceFileName: options?.fileName || null,
@@ -112,9 +112,9 @@ export async function importPlanFromCSV(
     return acc;
   }, []);
 
-  await storage.createPlanDays(days);
+  await storage.plans.createPlanDays(days);
 
-  const fullPlan = await storage.getTrainingPlan(plan.id, userId);
+  const fullPlan = await storage.plans.getTrainingPlan(plan.id, userId);
   if (!fullPlan) {
     throw new Error(`Failed to retrieve training plan ${plan.id} after creation`);
   }
@@ -122,7 +122,7 @@ export async function importPlanFromCSV(
 }
 
 export async function createSamplePlan(userId: string): Promise<TrainingPlanWithDays> {
-  const plan = await storage.createTrainingPlan({
+  const plan = await storage.plans.createTrainingPlan({
     userId,
     name: "8-Week Functional Fitness Plan",
     sourceFileName: null,
@@ -140,9 +140,9 @@ export async function createSamplePlan(userId: string): Promise<TrainingPlanWith
     status: "planned",
   }));
 
-  await storage.createPlanDays(days);
+  await storage.plans.createPlanDays(days);
 
-  const fullPlan = await storage.getTrainingPlan(plan.id, userId);
+  const fullPlan = await storage.plans.getTrainingPlan(plan.id, userId);
   if (!fullPlan) {
     throw new Error(`Failed to retrieve training plan ${plan.id} after creation`);
   }
@@ -184,7 +184,7 @@ export async function updatePlanDayWithCleanup(
     });
   }
 
-  return await storage.updatePlanDay(dayId, updates, userId);
+  return await storage.plans.updatePlanDay(dayId, updates, userId);
 }
 
 export async function updatePlanDayStatus(
@@ -200,10 +200,10 @@ export async function updatePlanDayStatus(
   if (scheduledDate !== undefined) updates.scheduledDate = scheduledDate ?? null;
 
   if (status && status !== "completed") {
-    await storage.deleteWorkoutLogByPlanDayId(dayId, userId);
+    await storage.workouts.deleteWorkoutLogByPlanDayId(dayId, userId);
   }
 
-  const updatedDay = await storage.updatePlanDay(dayId, updates, userId);
+  const updatedDay = await storage.plans.updatePlanDay(dayId, updates, userId);
 
   if (updatedDay && status === "completed") {
     queue

@@ -19,8 +19,8 @@ router.post("/api/v1/parse-exercises", isAuthenticated, rateLimiter("parse", 5),
     // ⚡ Perf: Parallelize independent DB queries to cut latency from
     // 2 sequential round trips down to 1 concurrent round trip.
     const [user, userCustomExercises] = await Promise.all([
-      storage.getUser(userId),
-      storage.getCustomExercises(userId),
+      storage.users.getUser(userId),
+      storage.users.getCustomExercises(userId),
     ]);
     const weightUnit = user?.weightUnit || "kg";
     const customNames = userCustomExercises.map(e => e.name);
@@ -83,7 +83,7 @@ router.post("/api/v1/chat/stream", isAuthenticated, rateLimiter("chat", 10), val
 
 router.get("/api/v1/chat/history", isAuthenticated, asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
-    const messages = await storage.getChatMessages(userId);
+    const messages = await storage.users.getChatMessages(userId);
     res.json(messages);
   }));
 
@@ -91,13 +91,13 @@ router.post("/api/v1/chat/message", isAuthenticated, rateLimiter("chatMessage", 
     const userId = getUserId(req);
     const { role, content } = req.body;
 
-    const message = await storage.saveChatMessage({ userId, role, content });
+    const message = await storage.users.saveChatMessage({ userId, role, content });
     res.json(message);
   }));
 
 router.delete("/api/v1/chat/history", isAuthenticated, rateLimiter("chatHistoryDelete", 5), asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
-    await storage.clearChatHistory(userId);
+    await storage.users.clearChatHistory(userId);
     res.json({ success: true });
   }));
 
