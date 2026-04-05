@@ -12,7 +12,14 @@ interface VoiceButtonProps {
   "data-testid"?: string;
 }
 
-export function VoiceButton({ isListening, isSupported, onClick, size = "icon", className, "data-testid": dataTestId }: Readonly<VoiceButtonProps>) {
+export function VoiceButton({
+  isListening,
+  isSupported,
+  onClick,
+  size = "icon",
+  className,
+  "data-testid": dataTestId,
+}: Readonly<VoiceButtonProps>) {
   if (!isSupported) return null;
 
   return (
@@ -24,19 +31,12 @@ export function VoiceButton({ isListening, isSupported, onClick, size = "icon", 
             variant={isListening ? "destructive" : "outline"}
             size={size}
             onClick={onClick}
-            className={cn(
-              "relative",
-              isListening && "animate-pulse",
-              className,
-            )}
+            className={cn("relative", isListening && "animate-pulse", className)}
             data-testid={dataTestId || "button-voice-input"}
             aria-label={isListening ? "Stop voice input" : "Start voice input"}
+            aria-pressed={isListening}
           >
-            {isListening ? (
-              <MicOff className="h-4 w-4" />
-            ) : (
-              <Mic className="h-4 w-4" />
-            )}
+            {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
           </Button>
         </TooltipTrigger>
         <TooltipContent>
