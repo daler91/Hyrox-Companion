@@ -1,3 +1,4 @@
+import { randomInt } from "node:crypto";
 import { logger } from "../logger";
 
 /**
@@ -51,7 +52,10 @@ export async function retryWithJitter<T>(
         throw err;
       }
       const expBase = Math.min(maxDelayMs, minDelayMs * 2 ** attempt);
-      const jitter = Math.random() * expBase;
+      // randomInt from node:crypto is used instead of Math.random to silence
+      // Sonar S2245; the value is only used to desynchronise retry storms and
+      // is not security-sensitive.
+      const jitter = randomInt(0, Math.max(1, Math.ceil(expBase)));
       const serverHint = err.retryAfterMs;
       const delay = serverHint === null ? jitter : Math.min(serverHint, maxDelayMs);
       logger.warn(
