@@ -96,7 +96,6 @@ export async function checkAndSendEmailsForUser(storage: IStorage, user: User): 
 
 export async function runEmailCronJob(storage: IStorage): Promise<{ usersChecked: number; emailsSent: number; details: string[] }> {
   const details: string[] = [];
-  let jobsEnqueued = 0;
 
   try {
     const markedMissed = await storage.plans.markMissedPlanDays();
@@ -114,24 +113,42 @@ export async function runEmailCronJob(storage: IStorage): Promise<{ usersChecked
     const now = new Date();
     const isMonday = now.getDay() === 1;
 
+    // Await every enqueue so reported counts reflect what actually made it into
+    // the queue (CODEBASE_AUDIT.md §5b). Fire-and-forget would overreport when
+    // pg-boss backpressure or DB errors reject some sends.
+    type EnqueueMeta = { userId: string; jobName: string };
+    const ops: Promise<unknown>[] = [];
+    const meta: EnqueueMeta[] = [];
     for (const user of usersToCheck) {
       if (isMonday) {
-        queue.send("send-weekly-summary", { userId: user.id }).catch((err) => {
-          logger.error({ context: "email", userId: user.id, err }, "Failed to enqueue send-weekly-summary job");
-        });
-        jobsEnqueued++;
+        ops.push(queue.send("send-weekly-summary", { userId: user.id }));
+        meta.push({ userId: user.id, jobName: "send-weekly-summary" });
       }
-
-      queue.send("send-missed-reminder", { userId: user.id }).catch((err) => {
-        logger.error({ context: "email", userId: user.id, err }, "Failed to enqueue send-missed-reminder job");
-      });
-      jobsEnqueued++;
+      ops.push(queue.send("send-missed-reminder", { userId: user.id }));
+      meta.push({ userId: user.id, jobName: "send-missed-reminder" });
     }
 
-    const detail = `Enqueued ${jobsEnqueued} job(s) for ${usersToCheck.length} user(s)`;
+    const settled = await Promise.allSettled(ops);
+    const fulfilled = settled.filter((r) => r.status === "fulfilled").length;
+    const failed = settled.length - fulfilled;
+
+    settled.forEach((result, idx) => {
+      if (result.status === "rejected") {
+        const info = meta[idx];
+        logger.error(
+          { context: "email", userId: info.userId, err: result.reason },
+          `Failed to enqueue ${info.jobName} job`,
+        );
+      }
+    });
+
+    const detail = `Enqueued ${fulfilled}/${settled.length} job(s) for ${usersToCheck.length} user(s)`;
     details.push(detail);
+    if (failed > 0) {
+      details.push(`Failed: ${failed}`);
+    }
     logger.info({ context: "email" }, `Cron complete: ${detail}`);
-    return { usersChecked: usersToCheck.length, emailsSent: jobsEnqueued, details };
+    return { usersChecked: usersToCheck.length, emailsSent: fulfilled, details };
   } catch (err) {
     logger.error({ context: "email", err }, "Cron error during email job enqueue");
     throw err;
