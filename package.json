@@ -115,7 +115,7 @@
     "  REMOVABLE NOW: ^7.0.3 already satisfies >=7.0.3; the parent dep has been updated."
   ],
   "overrides": {
-    "esbuild": "0.27.5",
+    "esbuild": "0.28.0",
     "yauzl": "^3.2.1",
     "undici": "^7.24.3",
     "serialize-javascript": ">=7.0.3"
@@ -142,7 +142,7 @@
     "cross-env": "^10.1.0",
     "cypress": "15.12.0",
     "drizzle-kit": "^0.31.10",
-    "esbuild": "0.27.5",
+    "esbuild": "0.28.0",
     "eslint": "^9.39.4",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react-hooks": "^7.0.1",
@@ -164,7 +164,7 @@
   "pnpm": {
     "//overrides": "Mirror of top-level 'overrides' (for npm). Keep both in sync. See //overrides above for rationale.",
     "overrides": {
-      "esbuild": "0.27.5",
+      "esbuild": "0.28.0",
       "yauzl": "^3.2.1",
       "undici": "^7.24.3",
       "serialize-javascript": ">=7.0.3"
