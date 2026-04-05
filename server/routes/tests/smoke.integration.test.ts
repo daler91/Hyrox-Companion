@@ -68,7 +68,8 @@ async function waitForReady(child: ChildProcess, maxMs = 60_000): Promise<void> 
       const result = await checkHealth();
       lastStatus = result.status;
       if (result.ready) return;
-    } catch { // Connection refused — server not listening yet
+    } catch {
+      lastStatus = "unreachable";
     }
 
     await new Promise((r) => setTimeout(r, 500));
