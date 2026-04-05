@@ -1,4 +1,5 @@
 import React from "react";
+import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import {
@@ -17,6 +18,8 @@ import { WorkoutExerciseMode } from "@/components/workout/WorkoutExerciseMode";
 
 export default function LogWorkout() {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
+  const handleCancel = React.useCallback(() => setLocation("/"), [setLocation]);
   const { weightUnit, distanceUnit, weightLabel } = useUnitPreferences();
 
   const {
@@ -116,6 +119,7 @@ export default function LogWorkout() {
           <WorkoutSaveButton
             handleSave={handleSave}
             isPending={saveMutation.isPending}
+            onCancel={handleCancel}
           />
         </div>
 
