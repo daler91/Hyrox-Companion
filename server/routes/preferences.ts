@@ -9,7 +9,7 @@ const router = Router();
 
 router.get('/api/v1/preferences', isAuthenticated, asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
-    const user = await storage.getUser(userId);
+    const user = await storage.users.getUser(userId);
     if (!user) {
       return res.status(404).json({ error: "User not found", code: "NOT_FOUND" });
     }
@@ -29,7 +29,7 @@ router.patch('/api/v1/preferences', isAuthenticated, rateLimiter("preferences", 
       return res.status(400).json({ error: "Invalid preferences data", code: "VALIDATION_ERROR", details: formatValidationErrors(parseResult.error) });
     }
 
-    const user = await storage.updateUserPreferences(userId, parseResult.data);
+    const user = await storage.users.updateUserPreferences(userId, parseResult.data);
     if (!user) {
       return res.status(404).json({ error: "User not found", code: "NOT_FOUND" });
     }

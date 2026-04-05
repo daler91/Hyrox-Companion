@@ -141,7 +141,7 @@ describe.runIf(runEval)("AI Services Evaluation Harness", () => {
       const targetEmbedding = await generateEmbedding(targetChunk);
 
       // 2. Mock storage to return chunks as if it was returning from DB
-      const mockSearchChunks = vi.spyOn(storage, "searchChunksByEmbedding").mockImplementation(async (userId, queryEmbedding, topK) => {
+      const mockSearchChunks = vi.spyOn(storage.coaching, "searchChunksByEmbedding").mockImplementation(async (userId, queryEmbedding, topK) => {
         // In real execution, pgvector handles the cosine distance sorting. But here we just mock
         // the returned data to verify that retrieveRelevantChunks returns the right strings.
         return [

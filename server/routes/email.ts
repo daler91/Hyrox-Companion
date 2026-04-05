@@ -11,7 +11,7 @@ const router = Router();
 
 router.post("/api/v1/emails/check", isAuthenticated, rateLimiter("emailCheck", 5), asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
-    const user = await storage.getUser(userId);
+    const user = await storage.users.getUser(userId);
     if (!user) {
       return res.json({ sent: [] });
     }

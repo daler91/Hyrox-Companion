@@ -21,7 +21,9 @@ vi.mock("../../types", () => ({
 // Mock the storage functions
 vi.mock("../../storage", () => ({
   storage: {
-    getUser: vi.fn(),
+    users: {
+      getUser: vi.fn(),
+    },
   },
 }));
 
@@ -34,15 +36,15 @@ describe("GET /api/preferences", () => {
 
   });
 
-  it("should return 500 when storage.getUser throws an error", async () => {
-    // Mock storage.getUser to throw an error
+  it("should return 500 when storage.users.getUser throws an error", async () => {
+    // Mock storage.users.getUser to throw an error
     const errorMessage = "Database connection failed";
-    vi.mocked(storage.getUser).mockRejectedValueOnce(new Error(errorMessage));
+    vi.mocked(storage.users.getUser).mockRejectedValueOnce(new Error(errorMessage));
 
     const response = await request(app).get("/api/v1/preferences");
 
     expect(response.status).toBe(500);
     expect(response.body).toEqual({ error: "Internal Server Error", code: "INTERNAL_SERVER_ERROR" });
-    expect(storage.getUser).toHaveBeenCalledWith("test_user_id");
+    expect(storage.users.getUser).toHaveBeenCalledWith("test_user_id");
   });
 });

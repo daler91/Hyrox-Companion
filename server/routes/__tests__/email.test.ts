@@ -8,7 +8,9 @@ import emailRouter from "../email";
 // Mock storage
 vi.mock("../../storage", () => ({
   storage: {
-    getUser: vi.fn(),
+    users: {
+      getUser: vi.fn(),
+    },
   },
 }));
 

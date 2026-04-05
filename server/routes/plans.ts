@@ -45,11 +45,11 @@ const handleGetOrDeletePlan = (
 
 router.get("/api/v1/plans", isAuthenticated, asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
-    const plans = await storage.listTrainingPlans(userId);
+    const plans = await storage.plans.listTrainingPlans(userId);
     res.json(plans);
   }));
 
-router.get("/api/v1/plans/:id", isAuthenticated, handleGetOrDeletePlan(storage.getTrainingPlan.bind(storage)));
+router.get("/api/v1/plans/:id", isAuthenticated, handleGetOrDeletePlan(storage.plans.getTrainingPlan.bind(storage)));
 
 router.post("/api/v1/plans/import", isAuthenticated, rateLimiter("planImport", 5), validateBody(importPlanRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof importPlanRequestSchema>>, res: Response) => {
     const { csvContent, fileName, planName } = req.body;
@@ -82,7 +82,7 @@ router.post("/api/v1/plans/generate", isAuthenticated, rateLimiter("planGenerate
     }
   }));
 
-router.patch("/api/v1/plans/:planId/days/:dayId", isAuthenticated, rateLimiter("planDayUpdate", 20), handlePlanDayUpdate((dayId, data, userId) => storage.updatePlanDay(dayId, data, userId)));
+router.patch("/api/v1/plans/:planId/days/:dayId", isAuthenticated, rateLimiter("planDayUpdate", 20), handlePlanDayUpdate((dayId, data, userId) => storage.plans.updatePlanDay(dayId, data, userId)));
 
 router.patch("/api/v1/plans/days/:dayId", isAuthenticated, rateLimiter("planDayUpdate", 20), handlePlanDayUpdate(updatePlanDayWithCleanup));
 
@@ -92,7 +92,7 @@ const renameTrainingPlanSchema = z.object({
 
 router.patch("/api/v1/plans/:id", isAuthenticated, rateLimiter("planUpdate", 20), validateBody(renameTrainingPlanSchema), asyncHandler(async (req: ExpressRequest<{ id: string }, unknown, { name: string }>, res: Response) => {
     const userId = getUserId(req);
-    const updated = await storage.renameTrainingPlan(req.params.id, req.body.name, userId);
+    const updated = await storage.plans.renameTrainingPlan(req.params.id, req.body.name, userId);
     if (!updated) {
       return res.status(404).json({ error: "Training plan not found", code: "NOT_FOUND" });
     }
@@ -101,21 +101,21 @@ router.patch("/api/v1/plans/:id", isAuthenticated, rateLimiter("planUpdate", 20)
 
 router.patch("/api/v1/plans/:id/goal", isAuthenticated, rateLimiter("planUpdate", 20), validateBody(updateTrainingPlanGoalSchema), asyncHandler(async (req: ExpressRequest<{ id: string }, unknown, UpdateTrainingPlanGoal>, res: Response) => {
     const userId = getUserId(req);
-    const updated = await storage.updateTrainingPlanGoal(req.params.id, req.body.goal, userId);
+    const updated = await storage.plans.updateTrainingPlanGoal(req.params.id, req.body.goal, userId);
     if (!updated) {
       return res.status(404).json({ error: "Training plan not found", code: "NOT_FOUND" });
     }
     res.json(updated);
   }));
 
-router.delete("/api/v1/plans/:id", isAuthenticated, rateLimiter("planDelete", 10), handleGetOrDeletePlan(async (id, userId) => { const deleted = await storage.deleteTrainingPlan(id, userId); return deleted ? { success: true } : null; }, "true"));
+router.delete("/api/v1/plans/:id", isAuthenticated, rateLimiter("planDelete", 10), handleGetOrDeletePlan(async (id, userId) => { const deleted = await storage.plans.deleteTrainingPlan(id, userId); return deleted ? { success: true } : null; }, "true"));
 
 router.post("/api/v1/plans/:planId/schedule", isAuthenticated, rateLimiter("planSchedule", 10), validateBody(schedulePlanRequestSchema), asyncHandler(async (req: ExpressRequest<{ planId: string }, unknown, z.infer<typeof schedulePlanRequestSchema>>, res: Response) => {
     const { startDate } = req.body;
     const userId = getUserId(req);
     const { planId } = req.params;
 
-    const success = await storage.schedulePlan(planId, startDate, userId);
+    const success = await storage.plans.schedulePlan(planId, startDate, userId);
     if (!success) {
       return res.status(404).json({ error: "Training plan not found", code: "NOT_FOUND" });
     }
@@ -144,7 +144,7 @@ router.patch("/api/v1/plans/days/:dayId/status", isAuthenticated, rateLimiter("p
 router.delete("/api/v1/plans/days/:dayId", isAuthenticated, rateLimiter("planDayDelete", 10), asyncHandler(async (req: ExpressRequest<{ dayId: string }>, res: Response) => {
     const { dayId } = req.params;
     const userId = getUserId(req);
-    const deleted = await storage.deletePlanDay(dayId, userId);
+    const deleted = await storage.plans.deletePlanDay(dayId, userId);
     if (!deleted) {
       return res.status(404).json({ error: "Plan day not found", code: "NOT_FOUND" });
     }

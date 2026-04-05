@@ -33,7 +33,7 @@ export async function generateTimelineAiSuggestions(
   userId: string,
   log: Logger,
 ): Promise<TimelineSuggestionsResult> {
-  const plannedDays = await storage.getUpcomingPlannedDays(userId, 5);
+  const plannedDays = await storage.timeline.getUpcomingPlannedDays(userId, 5);
   const upcomingWorkouts: UpcomingWorkout[] = plannedDays.map((d) => ({
     id: d.planDayId,
     date: d.date,

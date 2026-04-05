@@ -126,7 +126,7 @@ async function resolveActivePlanLinks(
 ): Promise<{ planId?: string | null; planDayId?: string | null }> {
   if (workoutData.planDayId) {
     // Already linked to a plan day — derive planId from it
-    const planDay = await storage.getPlanDay(workoutData.planDayId, userId);
+    const planDay = await storage.plans.getPlanDay(workoutData.planDayId, userId);
     if (!planDay) {
       // planDayId does not belong to this user — reject it
       return { planId: null, planDayId: null };
@@ -137,13 +137,13 @@ async function resolveActivePlanLinks(
   // Standalone workout — find the plan covering the workout's date
   if (!workoutData.date) return {};
 
-  const plan = await storage.getPlanForDate(userId, workoutData.date);
+  const plan = await storage.plans.getPlanForDate(userId, workoutData.date);
   if (!plan) return {};
 
   const planId = plan.id;
 
   // Try to auto-match to a specific plan day on the same date
-  const matchingDay = await storage.findMatchingPlanDay(planId, workoutData.date);
+  const matchingDay = await storage.plans.findMatchingPlanDay(planId, workoutData.date);
   if (matchingDay) {
     return { planId, planDayId: matchingDay.id };
   }
@@ -263,7 +263,7 @@ export async function createWorkoutAndScheduleCoaching(
       .send("auto-coach", { userId })
       .catch((err) => {
         logger.error({ err }, "Failed to queue auto-coach job after workout creation");
-        storage.updateIsAutoCoaching(userId, false).catch((resetErr) => {
+        storage.users.updateIsAutoCoaching(userId, false).catch((resetErr) => {
           logger.error({ err: resetErr }, "Failed to reset isAutoCoaching flag after queue error");
         });
       });
@@ -314,7 +314,7 @@ export async function updateWorkout(
     });
   }
 
-  const log = await storage.updateWorkoutLog(workoutId, updateData, userId);
+  const log = await storage.workouts.updateWorkoutLog(workoutId, updateData, userId);
   if (!log) return null;
   return log;
 }
@@ -360,8 +360,8 @@ export async function processBatchChunk(
 }
 
 export async function batchReparseWorkouts(userId: string): Promise<{ total: number; parsed: number; failed: number }> {
-  const workouts = await storage.getWorkoutsWithoutExerciseSets(userId);
-  const user = await storage.getUser(userId);
+  const workouts = await storage.workouts.getWorkoutsWithoutExerciseSets(userId);
+  const user = await storage.users.getUser(userId);
   const weightUnit = user?.weightUnit || "kg";
 
   let totalParsed = 0;

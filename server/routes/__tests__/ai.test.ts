@@ -34,16 +34,22 @@ vi.mock("../../types", () => ({
 // Mock the storage functions
 vi.mock("../../storage", () => ({
   storage: {
-    getUser: vi.fn(),
-    getCustomExercises: vi.fn(),
-    getChatMessages: vi.fn(),
-    saveChatMessage: vi.fn(),
-    clearChatHistory: vi.fn(),
-    getTimeline: vi.fn(),
-    getUpcomingPlannedDays: vi.fn().mockResolvedValue([]),
-    listCoachingMaterials: vi.fn(),
-    hasChunksForUser: vi.fn().mockResolvedValue(false),
-    getStoredEmbeddingDimension: vi.fn().mockResolvedValue(3072),
+    users: {
+      getUser: vi.fn(),
+      getCustomExercises: vi.fn(),
+      getChatMessages: vi.fn(),
+      saveChatMessage: vi.fn(),
+      clearChatHistory: vi.fn(),
+    },
+    timeline: {
+      getTimeline: vi.fn(),
+      getUpcomingPlannedDays: vi.fn().mockResolvedValue([]),
+    },
+    coaching: {
+      listCoachingMaterials: vi.fn(),
+      hasChunksForUser: vi.fn().mockResolvedValue(false),
+      getStoredEmbeddingDimension: vi.fn().mockResolvedValue(3072),
+    },
   },
 }));
 
@@ -93,8 +99,8 @@ describe("POST /api/parse-exercises", () => {
 
   it("should successfully parse exercises and return them", async () => {
 
-    vi.mocked(storage.getUser).mockResolvedValue({ weightUnit: "lbs" });
-    vi.mocked(storage.getCustomExercises).mockResolvedValue([{ name: "Custom Squat" }]);
+    vi.mocked(storage.users.getUser).mockResolvedValue({ weightUnit: "lbs" });
+    vi.mocked(storage.users.getCustomExercises).mockResolvedValue([{ name: "Custom Squat" }]);
 
     const mockParsedExercises = [
       { name: "Bench Press", sets: [{ weight: 135, reps: 10 }] }
@@ -107,8 +113,8 @@ describe("POST /api/parse-exercises", () => {
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual(mockParsedExercises);
-    expect(storage.getUser).toHaveBeenCalledWith("test_user_id");
-    expect(storage.getCustomExercises).toHaveBeenCalledWith("test_user_id");
+    expect(storage.users.getUser).toHaveBeenCalledWith("test_user_id");
+    expect(storage.users.getCustomExercises).toHaveBeenCalledWith("test_user_id");
     expect(parseExercisesFromText).toHaveBeenCalledWith("Bench press 135x10", "lbs", ["Custom Squat"]);
   });
 
@@ -123,8 +129,8 @@ describe("POST /api/parse-exercises", () => {
 
 
   it("should return 500 when AI parsing fails", async () => {
-    vi.mocked(storage.getUser).mockResolvedValue({ weightUnit: "lbs" });
-    vi.mocked(storage.getCustomExercises).mockResolvedValue([]);
+    vi.mocked(storage.users.getUser).mockResolvedValue({ weightUnit: "lbs" });
+    vi.mocked(storage.users.getCustomExercises).mockResolvedValue([]);
     vi.mocked(parseExercisesFromText).mockRejectedValue(new Error("AI error"));
 
     const response = await request(app)
@@ -149,7 +155,7 @@ describe("POST /api/parse-exercises", () => {
   });
 
   it("should return 500 on internal error", async () => {
-    vi.mocked(storage.getUser).mockRejectedValue(new Error("Database error"));
+    vi.mocked(storage.users.getUser).mockRejectedValue(new Error("Database error"));
 
     const response = await request(app)
       .post("/api/v1/parse-exercises")
@@ -161,8 +167,8 @@ describe("POST /api/parse-exercises", () => {
 
   it("should rate limit requests after 5 attempts", async () => {
 
-    vi.mocked(storage.getUser).mockResolvedValue({ weightUnit: "kg" });
-    vi.mocked(storage.getCustomExercises).mockResolvedValue([]);
+    vi.mocked(storage.users.getUser).mockResolvedValue({ weightUnit: "kg" });
+    vi.mocked(storage.users.getCustomExercises).mockResolvedValue([]);
     vi.mocked(parseExercisesFromText).mockResolvedValue([]);
 
     const payload = { text: "Squat 100x5" };
@@ -195,7 +201,7 @@ describe("POST /api/chat", () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    vi.mocked(storage.listCoachingMaterials).mockResolvedValue([]);
+    vi.mocked(storage.coaching.listCoachingMaterials).mockResolvedValue([]);
     const routeUtils = await import("../../routeUtils");
     routeUtils.clearRateLimitBuckets();
     app = createTestApp(aiRouter);
@@ -247,7 +253,7 @@ describe("POST /api/chat/stream", () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    vi.mocked(storage.listCoachingMaterials).mockResolvedValue([]);
+    vi.mocked(storage.coaching.listCoachingMaterials).mockResolvedValue([]);
     const routeUtils = await import("../../routeUtils");
     routeUtils.clearRateLimitBuckets();
     app = createTestApp(aiRouter);
@@ -323,18 +329,18 @@ describe("Chat History and Messages Routes", () => {
   it("should get chat history", async () => {
 
     const mockMessages = [{ id: 1, role: "user", content: "Hi" }];
-    vi.mocked(storage.getChatMessages).mockResolvedValue(mockMessages);
+    vi.mocked(storage.users.getChatMessages).mockResolvedValue(mockMessages);
 
     const response = await request(app).get(CHAT_HISTORY_ENDPOINT);
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual(mockMessages);
-    expect(storage.getChatMessages).toHaveBeenCalledWith("test_user_id");
+    expect(storage.users.getChatMessages).toHaveBeenCalledWith("test_user_id");
   });
 
   it("should return 500 when getting history fails", async () => {
 
-    vi.mocked(storage.getChatMessages).mockRejectedValue(new Error("Database Error"));
+    vi.mocked(storage.users.getChatMessages).mockRejectedValue(new Error("Database Error"));
 
     const response = await request(app).get(CHAT_HISTORY_ENDPOINT);
 
@@ -345,7 +351,7 @@ describe("Chat History and Messages Routes", () => {
   it("should save chat message", async () => {
 
     const savedMessage = { id: 1, userId: "test_user_id", role: "user", content: "Hello" };
-    vi.mocked(storage.saveChatMessage).mockResolvedValue(savedMessage);
+    vi.mocked(storage.users.saveChatMessage).mockResolvedValue(savedMessage);
 
     const response = await request(app)
       .post(CHAT_MESSAGE_ENDPOINT)
@@ -353,7 +359,7 @@ describe("Chat History and Messages Routes", () => {
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual(savedMessage);
-    expect(storage.saveChatMessage).toHaveBeenCalledWith({
+    expect(storage.users.saveChatMessage).toHaveBeenCalledWith({
       userId: "test_user_id",
       role: "user",
       content: "Hello",
@@ -371,18 +377,18 @@ describe("Chat History and Messages Routes", () => {
 
   it("should clear chat history", async () => {
 
-    vi.mocked(storage.clearChatHistory).mockResolvedValue(undefined);
+    vi.mocked(storage.users.clearChatHistory).mockResolvedValue(undefined);
 
     const response = await request(app).delete(CHAT_HISTORY_ENDPOINT);
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ success: true });
-    expect(storage.clearChatHistory).toHaveBeenCalledWith("test_user_id");
+    expect(storage.users.clearChatHistory).toHaveBeenCalledWith("test_user_id");
   });
 
   it("should return 500 when clearing history fails", async () => {
 
-    vi.mocked(storage.clearChatHistory).mockRejectedValue(new Error("Delete failed"));
+    vi.mocked(storage.users.clearChatHistory).mockRejectedValue(new Error("Delete failed"));
 
     const response = await request(app).delete(CHAT_HISTORY_ENDPOINT);
 
@@ -397,7 +403,7 @@ describe("POST /api/timeline/ai-suggestions", () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    vi.mocked(storage.listCoachingMaterials).mockResolvedValue([]);
+    vi.mocked(storage.coaching.listCoachingMaterials).mockResolvedValue([]);
     const routeUtils = await import("../../routeUtils");
     routeUtils.clearRateLimitBuckets();
     app = createTestApp(aiRouter);
@@ -409,7 +415,7 @@ describe("POST /api/timeline/ai-suggestions", () => {
     vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
 
     // getUpcomingPlannedDays returns only upcoming planned days (filtering is done in DB)
-    vi.mocked(storage.getUpcomingPlannedDays).mockResolvedValue([
+    vi.mocked(storage.timeline.getUpcomingPlannedDays).mockResolvedValue([
       {
         planDayId: "1",
         date: "2024-03-12",
@@ -469,7 +475,7 @@ describe("POST /api/timeline/ai-suggestions", () => {
 
     vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
     // DB returns empty when no upcoming planned days exist
-    vi.mocked(storage.getUpcomingPlannedDays).mockResolvedValue([]);
+    vi.mocked(storage.timeline.getUpcomingPlannedDays).mockResolvedValue([]);
 
     const response = await request(app).post(TIMELINE_SUGGESTIONS_ENDPOINT);
 
@@ -483,7 +489,7 @@ describe("POST /api/timeline/ai-suggestions", () => {
 
   it("should return 500 when AI suggestions generation fails", async () => {
     vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
-    vi.mocked(storage.getUpcomingPlannedDays).mockResolvedValue([
+    vi.mocked(storage.timeline.getUpcomingPlannedDays).mockResolvedValue([
       {
         planDayId: "1",
         date: "2024-03-12",
@@ -503,7 +509,7 @@ describe("POST /api/timeline/ai-suggestions", () => {
 
   it("should return 500 on error", async () => {
 
-    vi.mocked(storage.getUpcomingPlannedDays).mockRejectedValue(new Error("DB Error"));
+    vi.mocked(storage.timeline.getUpcomingPlannedDays).mockRejectedValue(new Error("DB Error"));
 
     const response = await request(app).post(TIMELINE_SUGGESTIONS_ENDPOINT);
 
@@ -530,7 +536,7 @@ describe("RAG pipeline in chat endpoints", () => {
   it("should use RAG retrieval when user has embedded chunks", async () => {
     vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
     vi.mocked(chatWithCoach).mockResolvedValue("RAG response");
-    vi.mocked(storage.hasChunksForUser).mockResolvedValue(true);
+    vi.mocked(storage.coaching.hasChunksForUser).mockResolvedValue(true);
     vi.mocked(retrieveRelevantChunks).mockResolvedValue(["chunk about squats", "chunk about programming"]);
 
     const response = await request(app)
@@ -538,7 +544,7 @@ describe("RAG pipeline in chat endpoints", () => {
       .send({ message: "How should I train squats?", history: [] });
 
     expect(response.status).toBe(200);
-    expect(storage.hasChunksForUser).toHaveBeenCalledWith("test_user_id");
+    expect(storage.coaching.hasChunksForUser).toHaveBeenCalledWith("test_user_id");
     expect(retrieveRelevantChunks).toHaveBeenCalledWith("test_user_id", "How should I train squats?");
     // Should pass retrievedChunks instead of coachingMaterials
     expect(chatWithCoach).toHaveBeenCalledWith(
@@ -549,31 +555,31 @@ describe("RAG pipeline in chat endpoints", () => {
       ["chunk about squats", "chunk about programming"],
     );
     // Should NOT fall back to legacy materials
-    expect(storage.listCoachingMaterials).not.toHaveBeenCalled();
+    expect(storage.coaching.listCoachingMaterials).not.toHaveBeenCalled();
   });
 
   it("should fall back to legacy materials when no chunks exist", async () => {
     vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
     vi.mocked(chatWithCoach).mockResolvedValue("Legacy response");
-    vi.mocked(storage.hasChunksForUser).mockResolvedValue(false);
-    vi.mocked(storage.listCoachingMaterials).mockResolvedValue([]);
+    vi.mocked(storage.coaching.hasChunksForUser).mockResolvedValue(false);
+    vi.mocked(storage.coaching.listCoachingMaterials).mockResolvedValue([]);
 
     const response = await request(app)
       .post(CHAT_ENDPOINT)
       .send({ message: "Hello", history: [] });
 
     expect(response.status).toBe(200);
-    expect(storage.hasChunksForUser).toHaveBeenCalledWith("test_user_id");
+    expect(storage.coaching.hasChunksForUser).toHaveBeenCalledWith("test_user_id");
     expect(retrieveRelevantChunks).not.toHaveBeenCalled();
-    expect(storage.listCoachingMaterials).toHaveBeenCalledWith("test_user_id");
+    expect(storage.coaching.listCoachingMaterials).toHaveBeenCalledWith("test_user_id");
   });
 
   it("should fall back to legacy materials when RAG retrieval returns empty", async () => {
     vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
     vi.mocked(chatWithCoach).mockResolvedValue("Fallback response");
-    vi.mocked(storage.hasChunksForUser).mockResolvedValue(true);
+    vi.mocked(storage.coaching.hasChunksForUser).mockResolvedValue(true);
     vi.mocked(retrieveRelevantChunks).mockResolvedValue([]);
-    vi.mocked(storage.listCoachingMaterials).mockResolvedValue([]);
+    vi.mocked(storage.coaching.listCoachingMaterials).mockResolvedValue([]);
 
     const response = await request(app)
       .post(CHAT_ENDPOINT)
@@ -581,14 +587,14 @@ describe("RAG pipeline in chat endpoints", () => {
 
     expect(response.status).toBe(200);
     // Empty retrieval should trigger fallback
-    expect(storage.listCoachingMaterials).toHaveBeenCalledWith("test_user_id");
+    expect(storage.coaching.listCoachingMaterials).toHaveBeenCalledWith("test_user_id");
   });
 
   it("should fall back to legacy materials when RAG retrieval throws", async () => {
     vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
     vi.mocked(chatWithCoach).mockResolvedValue("Error fallback");
-    vi.mocked(storage.hasChunksForUser).mockRejectedValue(new Error("DB error"));
-    vi.mocked(storage.listCoachingMaterials).mockResolvedValue([]);
+    vi.mocked(storage.coaching.hasChunksForUser).mockRejectedValue(new Error("DB error"));
+    vi.mocked(storage.coaching.listCoachingMaterials).mockResolvedValue([]);
 
     const response = await request(app)
       .post(CHAT_ENDPOINT)
@@ -596,12 +602,12 @@ describe("RAG pipeline in chat endpoints", () => {
 
     expect(response.status).toBe(200);
     // Should gracefully fall back
-    expect(storage.listCoachingMaterials).toHaveBeenCalledWith("test_user_id");
+    expect(storage.coaching.listCoachingMaterials).toHaveBeenCalledWith("test_user_id");
   });
 
   it("should use RAG retrieval for streaming endpoint", async () => {
     vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
-    vi.mocked(storage.hasChunksForUser).mockResolvedValue(true);
+    vi.mocked(storage.coaching.hasChunksForUser).mockResolvedValue(true);
     vi.mocked(retrieveRelevantChunks).mockResolvedValue(["relevant chunk"]);
     vi.mocked(streamChatWithCoach).mockImplementation(async function* () {
       yield "Streamed";

@@ -21,8 +21,8 @@ export async function processWeeklySummary(storage: IStorage, user: User, now: D
   const weekStartStr = toDateStr(weekStart);
   const weekEndStr = toDateStr(weekEnd);
 
-  const stats = await storage.getWeeklyStats(user.id, weekStartStr, weekEndStr);
-  const timeline = await storage.getTimeline(user.id);
+  const stats = await storage.analytics.getWeeklyStats(user.id, weekStartStr, weekEndStr);
+  const timeline = await storage.timeline.getTimeline(user.id);
   const completedDates = new Set(
     timeline
       .filter(e => e.status === "completed" && e.date)
@@ -46,7 +46,7 @@ export async function processWeeklySummary(storage: IStorage, user: User, now: D
 
   const success = await sendWeeklySummary(user, summaryData);
   if (success) {
-    await storage.updateLastWeeklySummaryAt(user.id);
+    await storage.users.updateLastWeeklySummaryAt(user.id);
     return true;
   }
   return false;
@@ -60,7 +60,7 @@ export async function processMissedWorkoutReminder(storage: IStorage, user: User
   const yesterday = new Date(now);
   yesterday.setDate(yesterday.getDate() - 1);
   const yesterdayStr = toDateStr(yesterday);
-  const missed = await storage.getMissedWorkoutsForDate(user.id, yesterdayStr);
+  const missed = await storage.analytics.getMissedWorkoutsForDate(user.id, yesterdayStr);
   if (missed.length === 0) return false;
 
   const missedData: MissedWorkoutData[] = missed.map(m => ({
@@ -71,7 +71,7 @@ export async function processMissedWorkoutReminder(storage: IStorage, user: User
   }));
   const success = await sendMissedWorkoutReminder(user, missedData);
   if (success) {
-    await storage.updateLastMissedReminderAt(user.id);
+    await storage.users.updateLastMissedReminderAt(user.id);
     return true;
   }
   return false;
@@ -99,12 +99,12 @@ export async function runEmailCronJob(storage: IStorage): Promise<{ usersChecked
   let jobsEnqueued = 0;
 
   try {
-    const markedMissed = await storage.markMissedPlanDays();
+    const markedMissed = await storage.plans.markMissedPlanDays();
     if (markedMissed > 0) {
       logger.info({ context: "email" }, `Marked ${markedMissed} past planned day(s) as missed`);
     }
 
-    const usersToCheck = await storage.getUsersWithEmailNotifications();
+    const usersToCheck = await storage.users.getUsersWithEmailNotifications();
     if (usersToCheck.length === 0) {
       return { usersChecked: 0, emailsSent: 0, details: ["No users with email notifications enabled"] };
     }

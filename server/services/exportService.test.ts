@@ -10,8 +10,8 @@ describe('exportService - generateCSV', () => {
     exerciseSets: unknown[] = []
   ): IStorage => {
     return {
-      getTimeline: vi.fn().mockResolvedValue(timeline),
-      getAllExerciseSetsWithDates: vi.fn().mockResolvedValue(exerciseSets),
+      timeline: { getTimeline: vi.fn().mockResolvedValue(timeline) },
+      analytics: { getAllExerciseSetsWithDates: vi.fn().mockResolvedValue(exerciseSets) },
     } as unknown as IStorage;
   };
 
@@ -124,7 +124,7 @@ describe('exportService - generateCSV', () => {
 
   it('should propagate errors when storage fails', async () => {
     const storage = createMockStorage([], []);
-    storage.getTimeline = vi.fn().mockRejectedValue(new Error('Storage failure'));
+    storage.timeline.getTimeline = vi.fn().mockRejectedValue(new Error('Storage failure'));
 
     await expect(generateCSV(mockUserId, storage)).rejects.toThrow('Storage failure');
   });

@@ -22,16 +22,18 @@ describe('runEmailCronJob', () => {
     vi.setSystemTime(new Date('2023-10-16T12:00:00Z'));
 
     mockStorage = {
-      markMissedPlanDays: vi.fn().mockResolvedValue(0),
-      getUsersWithEmailNotifications: vi.fn().mockResolvedValue([
-        {
-          id: 1,
-          email: 'test@example.com',
-          emailNotifications: true,
-          lastWeeklySummaryAt: null,
-          lastMissedReminderAt: null,
-        } as unknown as User,
-      ]),
+      plans: { markMissedPlanDays: vi.fn().mockResolvedValue(0) },
+      users: {
+        getUsersWithEmailNotifications: vi.fn().mockResolvedValue([
+          {
+            id: 1,
+            email: 'test@example.com',
+            emailNotifications: true,
+            lastWeeklySummaryAt: null,
+            lastMissedReminderAt: null,
+          } as unknown as User,
+        ]),
+      },
     } as unknown as IStorage;
   });
 
@@ -54,7 +56,7 @@ describe('runEmailCronJob', () => {
   it('should enqueue jobs for multiple users independently', async () => {
     const { queue } = await import('./queue');
 
-    mockStorage.getUsersWithEmailNotifications = vi.fn().mockResolvedValue([
+    mockStorage.users.getUsersWithEmailNotifications = vi.fn().mockResolvedValue([
       {
         id: 1,
         email: 'user1@example.com',
@@ -94,7 +96,7 @@ describe('runEmailCronJob', () => {
   });
 
   it('should return early when no users have notifications', async () => {
-    mockStorage.getUsersWithEmailNotifications = vi.fn().mockResolvedValue([]);
+    mockStorage.users.getUsersWithEmailNotifications = vi.fn().mockResolvedValue([]);
 
     const result = await runEmailCronJob(mockStorage);
 

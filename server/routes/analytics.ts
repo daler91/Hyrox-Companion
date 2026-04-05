@@ -54,7 +54,7 @@ function getExerciseSetsCoalesced(userId: string, from?: string, to?: string): P
   }
 
   // If expired or missing, fetch from storage
-  const promise = storage.getAllExerciseSetsWithDates(userId, from, to)
+  const promise = storage.analytics.getAllExerciseSetsWithDates(userId, from, to)
     .catch((error) => {
       // Remove from cache on failure so subsequent requests retry immediately
       cache.delete(cacheKey);
@@ -126,7 +126,7 @@ function getWorkoutLogsCoalesced(userId: string, from?: string, to?: string): Pr
     return entry.promise;
   }
 
-  const promise = storage.getWorkoutLogsByDateRange(userId, from, to)
+  const promise = storage.analytics.getWorkoutLogsByDateRange(userId, from, to)
     .catch((error) => {
       workoutLogCache.delete(cacheKey);
       throw error;

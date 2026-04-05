@@ -31,7 +31,9 @@ vi.mock("../../logger", () => ({
 
 vi.mock("../../storage", () => ({
   storage: {
-    getUser: vi.fn(),
+    users: {
+      getUser: vi.fn(),
+    },
   },
 }));
 
@@ -52,17 +54,17 @@ describe("Auth Routes", () => {
         email: "test@example.com",
         createdAt: "2024-03-10",
       };
-      vi.mocked(storage.getUser).mockResolvedValue(mockUser);
+      vi.mocked(storage.users.getUser).mockResolvedValue(mockUser);
 
       const response = await request(app).get(ENDPOINT_URL);
 
       expect(response.status).toBe(200);
-      expect(storage.getUser).toHaveBeenCalledWith(TEST_USER_ID);
+      expect(storage.users.getUser).toHaveBeenCalledWith(TEST_USER_ID);
       expect(response.body).toEqual(mockUser);
     });
 
     it("should return 500 when storage throws an error", async () => {
-      vi.mocked(storage.getUser).mockRejectedValue(new Error("Database error"));
+      vi.mocked(storage.users.getUser).mockRejectedValue(new Error("Database error"));
 
       const response = await request(app).get(ENDPOINT_URL);
 

@@ -22,14 +22,18 @@ vi.mock("../../types", () => ({
 // Mock the storage functions
 vi.mock("../../storage", () => ({
   storage: {
-    listTrainingPlans: vi.fn(),
-    getTrainingPlan: vi.fn(),
-    updatePlanDay: vi.fn(),
-    renameTrainingPlan: vi.fn(),
-    deleteTrainingPlan: vi.fn(),
-    schedulePlan: vi.fn(),
-    deleteWorkoutLogByPlanDayId: vi.fn(),
-    deletePlanDay: vi.fn(),
+    workouts: {
+      deleteWorkoutLogByPlanDayId: vi.fn(),
+    },
+    plans: {
+      listTrainingPlans: vi.fn(),
+      getTrainingPlan: vi.fn(),
+      updatePlanDay: vi.fn(),
+      renameTrainingPlan: vi.fn(),
+      deleteTrainingPlan: vi.fn(),
+      schedulePlan: vi.fn(),
+      deletePlanDay: vi.fn(),
+    },
   },
 }));
 
@@ -94,17 +98,17 @@ describe("DELETE /api/v1/plans/:id", () => {
   });
 
   it("should return 200 with success when plan exists", async () => {
-    vi.mocked(storage.deleteTrainingPlan).mockResolvedValue(true);
+    vi.mocked(storage.plans.deleteTrainingPlan).mockResolvedValue(true);
 
     const response = await request(app).delete("/api/v1/plans/plan-123");
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ success: true });
-    expect(storage.deleteTrainingPlan).toHaveBeenCalledWith("plan-123", "test_user_id");
+    expect(storage.plans.deleteTrainingPlan).toHaveBeenCalledWith("plan-123", "test_user_id");
   });
 
   it("should return 404 when plan does not exist", async () => {
-    vi.mocked(storage.deleteTrainingPlan).mockResolvedValue(false);
+    vi.mocked(storage.plans.deleteTrainingPlan).mockResolvedValue(false);
 
     const response = await request(app).delete("/api/v1/plans/nonexistent");
 
