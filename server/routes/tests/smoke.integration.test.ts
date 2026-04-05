@@ -68,8 +68,7 @@ async function waitForReady(child: ChildProcess, maxMs = 60_000): Promise<void> 
       const result = await checkHealth();
       lastStatus = result.status;
       if (result.ready) return;
-    } catch (_err: unknown) {
-      // Connection refused — server not listening yet
+    } catch { // Connection refused — server not listening yet
     }
 
     await new Promise((r) => setTimeout(r, 500));
@@ -117,7 +116,7 @@ describe("Production Smoke Test", { timeout: 90_000 }, () => {
   });
 
   afterAll(async () => {
-    if (!server || server?.exitCode !== null) return;
+    if (server?.exitCode !== null) return;
 
     const exited = new Promise<number | null>((resolve) => {
       server.once("exit", (code) => resolve(code));
