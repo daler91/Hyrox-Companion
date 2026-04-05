@@ -5,10 +5,9 @@ import { Label } from "@/components/ui/label";
 import { Type, Dumbbell, Mic } from "lucide-react";
 import { RpeSelector } from "@/components/RpeSelector";
 import { useWorkoutVoiceForm } from "@/hooks/useWorkoutVoiceForm";
-import { useBlockCounts } from "@/hooks/useBlockCounts";
 import { WorkoutAccessoryNotes } from "./WorkoutAccessoryNotes";
 import { WorkoutTextMode } from "./WorkoutTextMode";
-import { WorkoutBlockMode } from "./WorkoutBlockMode";
+import { WorkoutExerciseMode } from "@/components/workout/WorkoutExerciseMode";
 import type { WorkoutDetailEditFormProps } from "./types";
 
 export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
@@ -21,20 +20,15 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
   setUseTextMode,
   editExercises,
   editExerciseData,
-  dialogSensors,
-  handleEditDragEnd,
   handleAddExercise,
   handleRemoveBlock,
   updateBlock,
-  getSelectedExerciseNames,
   parseMutation,
   weightUnit,
   distanceUnit,
   onParseText,
   stopAllVoiceRef,
 }: WorkoutDetailEditFormProps) {
-  const { blockCounts, blockIndices } = useBlockCounts(editExercises, editExerciseData);
-
   const {
     appendToField,
     stopAccessoryRef,
@@ -135,19 +129,14 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
             parseMutation={parseMutation}
           />
         ) : (
-          <WorkoutBlockMode
-            editExercises={editExercises}
-            editExerciseData={editExerciseData}
-            dialogSensors={dialogSensors}
-            handleEditDragEnd={handleEditDragEnd}
-            handleAddExercise={handleAddExercise}
-            handleRemoveBlock={handleRemoveBlock}
+          <WorkoutExerciseMode
+            exerciseBlocks={editExercises}
+            exerciseData={editExerciseData}
+            addExercise={handleAddExercise}
             updateBlock={updateBlock}
-            getSelectedExerciseNames={getSelectedExerciseNames}
+            removeBlock={handleRemoveBlock}
             weightUnit={weightUnit}
             distanceUnit={distanceUnit}
-            blockCounts={blockCounts}
-            blockIndices={blockIndices}
           />
         )}
       </div>
