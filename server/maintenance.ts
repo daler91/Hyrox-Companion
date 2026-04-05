@@ -24,6 +24,11 @@ async function ensurePgvectorExtension() {
 }
 
 async function ensureSchemaUpToDate() {
+  if (process.env.NODE_ENV === "test") {
+    logger.info({ context: "db" }, "Skipping programmatic schema additions in test environment");
+    return;
+  }
+
   let client;
   try {
     client = await pool.connect();
@@ -155,6 +160,14 @@ async function runDrizzleMigrations() {
 }
 
 async function ensureVectorSchema() {
+  if (process.env.NODE_ENV === "test") {
+    logger.info(
+      { context: "db" },
+      "Skipping programmatic vector schema additions in test environment",
+    );
+    return;
+  }
+
   let client;
   try {
     client = await vectorPool.connect();
