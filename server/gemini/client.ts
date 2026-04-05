@@ -2,6 +2,12 @@ import { env } from "../env";
 import { logger } from "../logger";
 import { GoogleGenAI } from "@google/genai";
 import { AI_REQUEST_TIMEOUT_MS, AI_CALL_TIMEOUT_MS } from "../constants";
+import {
+  assertBreakerClosed,
+  recordBreakerFailure,
+  recordBreakerSuccess,
+  CircuitBreakerOpenError,
+} from "./circuitBreaker";
 
 export const GEMINI_MODEL = env.GEMINI_MODEL;
 export const GEMINI_SUGGESTIONS_MODEL = env.GEMINI_SUGGESTIONS_MODEL;
@@ -63,6 +69,11 @@ export async function retryWithBackoff<T>(
   baseDelayMs: number = 2000,
   budgetMs: number = AI_REQUEST_TIMEOUT_MS,
 ): Promise<T> {
+  // Fast-fail when the breaker is open so prolonged outages don't amplify
+  // latency across every caller (CODEBASE_AUDIT.md §5). Breaker open error
+  // is not retryable — bail immediately so upstream queues can back off.
+  assertBreakerClosed();
+
   const deadline = Date.now() + budgetMs;
   let lastError: unknown;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -71,15 +82,23 @@ export async function retryWithBackoff<T>(
     }
     try {
       const remaining = deadline - Date.now();
-      return await withTimeout(fn(), Math.min(remaining, AI_CALL_TIMEOUT_MS), label);
+      const result = await withTimeout(fn(), Math.min(remaining, AI_CALL_TIMEOUT_MS), label);
+      recordBreakerSuccess();
+      return result;
     } catch (error) {
       lastError = error;
+      // A breaker-open error thrown mid-flight (from nested retryWithBackoff
+      // call) should propagate without counting again.
+      if (error instanceof CircuitBreakerOpenError) throw error;
       const delay = shouldRetry(error, attempt, maxRetries, baseDelayMs, deadline);
       if (delay === false) break;
       logger.warn({ err: error }, `[gemini] ${label} attempt ${attempt + 1} failed (retrying in ${delay}ms)`);
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
+  // Only count a logical failure (after all retries exhausted) against the
+  // breaker — individual retry attempts should not accelerate tripping.
+  recordBreakerFailure();
   throw lastError;
 }
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { exerciseSetSchema } from "@shared/schema";
 import {
   isRetryableError,
@@ -6,6 +6,7 @@ import {
   workoutSuggestionSchema,
   parsedExerciseSchema,
 } from "./gemini/index";
+import { __resetCircuitBreakerForTests } from "./gemini/circuitBreaker";
 
 describe("isRetryableError", () => {
   it("returns true for 429 rate limit", () => {
@@ -49,6 +50,10 @@ describe("isRetryableError", () => {
 });
 
 describe("retryWithBackoff", () => {
+  beforeEach(() => {
+    __resetCircuitBreakerForTests();
+  });
+
   it("succeeds on first try without retrying", async () => {
     const fn = vi.fn().mockResolvedValue("success");
     const result = await retryWithBackoff(fn, "test", 2, 1);
