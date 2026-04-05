@@ -46,30 +46,36 @@ async function request(urlPath: string, init?: RequestInit): Promise<Response> {
   return res;
 }
 
+/** Single health-check attempt. Returns "ok", a status string, or null if unreachable. */
+async function checkHealth(): Promise<{ ready: boolean; status: string }> {
+  const res = await fetch(`${BASE}/api/v1/health`);
+  const body = (await res.json()) as { status: string; error?: string };
+  const status = `${res.status} ${body.status}${body.error ? ` (${body.error})` : ""}`;
+  return { ready: res.ok && body.status === "ok", status };
+}
+
 /** Poll the health endpoint until the server reports ready. */
 async function waitForReady(child: ChildProcess, maxMs = 60_000): Promise<void> {
   const deadline = Date.now() + maxMs;
-  let lastStatus = "";
+  let lastStatus = "unreachable";
+
   while (Date.now() < deadline) {
-    // Bail early if the child process crashed
     if (child.exitCode !== null) {
-      throw new Error(`Server process exited with code ${child.exitCode} before becoming ready (last health status: ${lastStatus || "unreachable"})`);
+      throw new Error(`Server process exited with code ${child.exitCode} before becoming ready (last status: ${lastStatus})`);
     }
+
     try {
-      const res = await fetch(`${BASE}/api/v1/health`);
-      const body = (await res.json()) as { status: string; error?: string };
-      lastStatus = `${res.status} ${body.status}${body.error ? ` (${body.error})` : ""}`;
-      if (res.ok && body.status === "ok") return;
-      if (body.status === "error") {
-        throw new Error(`Server startup failed: ${lastStatus}`);
-      }
-    } catch (err: unknown) {
-      if (err instanceof Error && err.message.startsWith("Server")) throw err;
-      // Connection refused — server not up yet, retry
+      const result = await checkHealth();
+      lastStatus = result.status;
+      if (result.ready) return;
+    } catch (_err: unknown) {
+      // Connection refused — server not listening yet
     }
+
     await new Promise((r) => setTimeout(r, 500));
   }
-  throw new Error(`Server did not become ready within ${maxMs} ms (last health status: ${lastStatus || "unreachable"})`);
+
+  throw new Error(`Server did not become ready within ${maxMs} ms (last status: ${lastStatus})`);
 }
 
 // ── Test suite ───────────────────────────────────────────────────────
