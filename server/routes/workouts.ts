@@ -4,10 +4,8 @@ import { rateLimiter, asyncHandler, formatValidationErrors } from "../routeUtils
 import { storage } from "../storage";
 import { insertWorkoutLogSchema, updateWorkoutLogSchema, insertCustomExerciseSchema, type InsertWorkoutLog, type UpdateWorkoutLog, type InsertCustomExercise , type ParsedExercise} from "@shared/schema";
 import { generateCSV, generateJSON } from "../services/exportService";
-import { createWorkout, updateWorkout, reparseWorkout, batchReparseWorkouts, validateExercisesPayload } from "../services/workoutService";
+import { createWorkoutAndScheduleCoaching, updateWorkout, reparseWorkout, batchReparseWorkouts, validateExercisesPayload } from "../services/workoutService";
 import { getUserId } from "../types";
-import { queue } from "../queue";
-import { logger } from "../logger";
 import { DEFAULT_TIMELINE_LIMIT, DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from "../constants";
 
 const router = Router();
@@ -108,25 +106,9 @@ router.post("/api/v1/workouts", isAuthenticated, rateLimiter("workout", 40), asy
     const validatedExercises = exerciseValidation.data as ParsedExercise[] | undefined;
 
     const userId = getUserId(req);
-    const result = await createWorkout(parseResult.data, validatedExercises, userId);
-
-    // Pre-set coaching flag so client can start polling immediately
-    const user = await storage.getUser(userId);
-    if (user?.aiCoachEnabled) {
-      await storage.updateIsAutoCoaching(userId, true);
-    }
+    const result = await createWorkoutAndScheduleCoaching(parseResult.data, validatedExercises, userId);
 
     res.json(result);
-
-    // Fire-and-forget: queue auto-coach job (matching planService.ts pattern)
-    queue
-      .send("auto-coach", { userId })
-      .catch((err) => {
-        logger.error({ err }, "Failed to queue auto-coach job");
-        storage.updateIsAutoCoaching(userId, false).catch((resetErr) => {
-          logger.error({ err: resetErr }, "Failed to reset isAutoCoaching flag after queue error");
-        });
-      });
   }));
 
 router.patch("/api/v1/workouts/:id", isAuthenticated, rateLimiter("workout", 40), asyncHandler(async (req: Request<{ id: string }, Record<string, never>, UpdateWorkoutLog & { exercises?: ParsedExercise[] }>, res: Response) => {
