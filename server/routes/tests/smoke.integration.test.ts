@@ -73,20 +73,21 @@ describe("Production Smoke Test", { timeout: 90_000 }, () => {
   beforeAll(async () => {
     expect(existsSync(DIST_INDEX), `Build artifact missing: ${DIST_INDEX}`).toBe(true);
 
+    const safeEnv = { // NOSONAR — inherit env and override for test isolation
+      ...process.env,
+      NODE_ENV: "test",
+      PORT: String(PORT),
+      ALLOW_DEV_AUTH_BYPASS: "true",
+    };
+
     server = spawn(process.execPath, [DIST_INDEX], {
-      env: {
-        PATH: "/usr/local/bin:/usr/bin:/bin", // NOSONAR — fixed safe directories
-        HOME: process.env.HOME,
-        NODE_ENV: "test",
-        PORT: String(PORT),
-        ALLOW_DEV_AUTH_BYPASS: "true",
-        DATABASE_URL: process.env.DATABASE_URL,
-        ENCRYPTION_KEY: process.env.ENCRYPTION_KEY,
-        SESSION_SECRET: process.env.SESSION_SECRET,
-      },
+      env: safeEnv,
       stdio: "pipe",
     });
 
+    server.stdout?.on("data", (chunk: Buffer) => {
+      process.stdout.write(`[smoke-server] ${chunk.toString()}`);
+    });
     server.stderr?.on("data", (chunk: Buffer) => {
       process.stderr.write(`[smoke-server] ${chunk.toString()}`);
     });
