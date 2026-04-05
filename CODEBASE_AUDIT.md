@@ -178,32 +178,11 @@ router.post(
 
 ## 5) External Integrations
 
-### [Severity Level]: Medium
+### [Severity Level]: Medium — RESOLVED (verified already correct)
 **File/Location:** `server/strava.ts` (`handleStravaSync`)
 
-**The Issue:**
-`skipped` is incremented twice for each already-imported activity.
-
-```ts
-if (existingStravaIds.has(String(activity.id))) {
-  skipped++;
-  skipped++;
-  continue;
-}
-```
-
-**Why it matters:**
-Sync metrics become wrong (`imported/skipped/total`), which degrades UX trust and operational visibility.
-
-**The Fix:**
-Increment once.
-
-```ts
-if (existingStravaIds.has(String(activity.id))) {
-  skipped++;
-  continue;
-}
-```
+**Status:** No code change required. Verified at `server/strava.ts:315-322`: `skipped` is already
+incremented exactly once per already-imported activity. This audit item was stale.
 
 ### [Severity Level]: Medium
 **File/Location:** `server/emailScheduler.ts` (`runEmailCronJob`)
