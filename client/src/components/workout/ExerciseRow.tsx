@@ -1,4 +1,4 @@
-import { useId } from "react";
+import React, { useId } from "react";
 import { ChevronDown, Plus, Trash2, X, Pencil, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -186,6 +186,28 @@ interface ExerciseBlockEditorProps {
   readonly onRemove: () => void;
 }
 
+function renderGhostIconButton(opts: {
+  onClick: () => void;
+  ariaLabel: string;
+  className: string;
+  testId?: string;
+  icon: React.ReactNode;
+}) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      onClick={opts.onClick}
+      aria-label={opts.ariaLabel}
+      className={opts.className}
+      data-testid={opts.testId}
+    >
+      {opts.icon}
+    </Button>
+  );
+}
+
 function ExerciseBlockEditor({
   block,
   blockIndex,
@@ -234,17 +256,13 @@ function ExerciseBlockEditor({
           <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
             Block #{blockIndex + 1}
           </span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={onRemove}
-            aria-label={`Remove block ${blockIndex + 1}`}
-            className="h-8 w-8"
-            data-testid={`button-remove-block-${block.blockId}`}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          {renderGhostIconButton({
+            onClick: onRemove,
+            ariaLabel: `Remove block ${blockIndex + 1}`,
+            className: "h-8 w-8",
+            testId: `button-remove-block-${block.blockId}`,
+            icon: <Trash2 className="h-4 w-4" />,
+          })}
         </div>
       )}
 
@@ -281,19 +299,14 @@ function ExerciseBlockEditor({
               <span className="text-sm font-semibold text-foreground">
                 Set {set.setNumber}
               </span>
-              {sets.length > 1 && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => removeSet(idx)}
-                  aria-label={`Remove set ${set.setNumber}`}
-                  className="h-7 w-7"
-                  data-testid={`button-remove-set-${block.blockId}-${idx}`}
-                >
-                  <X className="h-3.5 w-3.5" />
-                </Button>
-              )}
+              {sets.length > 1 &&
+                renderGhostIconButton({
+                  onClick: () => removeSet(idx),
+                  ariaLabel: `Remove set ${set.setNumber}`,
+                  className: "h-7 w-7",
+                  testId: `button-remove-set-${block.blockId}-${idx}`,
+                  icon: <X className="h-3.5 w-3.5" />,
+                })}
             </div>
             <div
               className={cn(

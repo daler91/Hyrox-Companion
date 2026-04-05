@@ -66,20 +66,29 @@ export function NumberStepper({
     setStep(next);
   };
 
+  const renderSideButton = (
+    dir: "decrement" | "increment",
+    onClick: () => void,
+    IconCmp: typeof Minus,
+    extraClass: string,
+  ) => (
+    <Button
+      type="button"
+      variant="outline"
+      size="icon"
+      onClick={onClick}
+      aria-label={`${dir === "decrement" ? "Decrease" : "Increase"} ${ariaLabel}`}
+      className={cn("h-11 w-11 shrink-0", extraClass)}
+      data-testid={testId ? `${testId}-${dir}` : undefined}
+    >
+      <IconCmp className="h-4 w-4" />
+    </Button>
+  );
+
   return (
     <div className={cn("flex flex-col items-center gap-1", className)}>
       <div className="flex items-stretch w-full">
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          onClick={decrement}
-          aria-label={`Decrease ${ariaLabel}`}
-          className="h-11 w-11 rounded-r-none border-r-0 shrink-0"
-          data-testid={testId ? `${testId}-decrement` : undefined}
-        >
-          <Minus className="h-4 w-4" />
-        </Button>
+        {renderSideButton("decrement", decrement, Minus, "rounded-r-none border-r-0")}
         <Input
           type="number"
           inputMode="decimal"
@@ -90,17 +99,7 @@ export function NumberStepper({
           className="h-11 flex-1 min-w-0 rounded-none text-center text-base font-semibold tabular-nums"
           data-testid={testId}
         />
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          onClick={increment}
-          aria-label={`Increase ${ariaLabel}`}
-          className="h-11 w-11 rounded-l-none border-l-0 shrink-0"
-          data-testid={testId ? `${testId}-increment` : undefined}
-        >
-          <Plus className="h-4 w-4" />
-        </Button>
+        {renderSideButton("increment", increment, Plus, "rounded-l-none border-l-0")}
       </div>
       {stepOptions && stepOptions.length > 1 ? (
         <button
