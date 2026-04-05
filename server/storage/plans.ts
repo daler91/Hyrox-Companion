@@ -120,8 +120,7 @@ export class PlanStorage {
     if (!day || day.plan?.userId !== userId) return undefined;
     // Strip the joined relation before returning to preserve the original shape.
     const { plan: _plan, ...planDay } = day;
-    void _plan;
-    return planDay as PlanDay;
+    return planDay;
   }
 
   async deletePlanDay(dayId: string, userId: string): Promise<boolean> {

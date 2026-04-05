@@ -145,7 +145,7 @@ export class TimelineStorage {
         isNotNull(planDays.scheduledDate),
       ),
       orderBy: desc(planDays.scheduledDate),
-      ...(sqlLimit !== undefined ? { limit: sqlLimit } : {}),
+      ...(sqlLimit === undefined ? {} : { limit: sqlLimit }),
     });
 
     return days.map((day) => ({
