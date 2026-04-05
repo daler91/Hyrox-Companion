@@ -11,7 +11,7 @@ const DIST_INDEX = path.resolve(__dirname, "../../../dist/index.js");
 // ── Lightweight cookie jar for native fetch ──────────────────────────
 
 class CookieJar {
-  private cookies = new Map<string, string>();
+  private readonly cookies = new Map<string, string>();
 
   update(res: Response): void {
     const raw = res.headers.getSetCookie?.() ?? [];
@@ -33,9 +33,9 @@ class CookieJar {
 
 const jar = new CookieJar();
 
-/** fetch that carries cookies automatically */
-async function f(path: string, init?: RequestInit): Promise<Response> {
-  const res = await fetch(`${BASE}${path}`, {
+/** fetch wrapper that carries cookies automatically */
+async function request(urlPath: string, init?: RequestInit): Promise<Response> {
+  const res = await fetch(`${BASE}${urlPath}`, {
     ...init,
     headers: {
       cookie: jar.header(),
@@ -73,15 +73,16 @@ describe("Production Smoke Test", { timeout: 90_000 }, () => {
   beforeAll(async () => {
     expect(existsSync(DIST_INDEX), `Build artifact missing: ${DIST_INDEX}`).toBe(true);
 
-    server = spawn("node", [DIST_INDEX], {
+    server = spawn(process.execPath, [DIST_INDEX], {
       env: {
-        ...process.env,
+        PATH: "/usr/local/bin:/usr/bin:/bin", // NOSONAR — fixed safe directories
+        HOME: process.env.HOME,
         NODE_ENV: "test",
         PORT: String(PORT),
         ALLOW_DEV_AUTH_BYPASS: "true",
         DATABASE_URL: process.env.DATABASE_URL,
-        ENCRYPTION_KEY: "01234567890123456789012345678901",
-        SESSION_SECRET: "dummy_session_secret_for_smoke_test",
+        ENCRYPTION_KEY: process.env.ENCRYPTION_KEY,
+        SESSION_SECRET: process.env.SESSION_SECRET,
       },
       stdio: "pipe",
     });
@@ -93,15 +94,15 @@ describe("Production Smoke Test", { timeout: 90_000 }, () => {
     await waitForReady();
 
     // Obtain CSRF token (also seeds the CSRF cookie in the jar)
-    const res = await f("/api/v1/csrf-token");
+    const res = await request("/api/v1/csrf-token");
     csrfToken = ((await res.json()) as { csrfToken: string }).csrfToken;
 
     // Hit preferences to auto-create the dev-user row in the DB
-    await f("/api/v1/preferences");
+    await request("/api/v1/preferences");
   });
 
   afterAll(async () => {
-    if (!server || server.exitCode !== null) return;
+    if (!server || server?.exitCode !== null) return;
 
     const exited = new Promise<number | null>((resolve) => {
       server.once("exit", (code) => resolve(code));
@@ -125,7 +126,7 @@ describe("Production Smoke Test", { timeout: 90_000 }, () => {
 
   describe("Health & Startup", () => {
     it("health endpoint returns ok", async () => {
-      const res = await f("/api/v1/health");
+      const res = await request("/api/v1/health");
       expect(res.status).toBe(200);
       const body = (await res.json()) as { status: string; timestamp: number };
       expect(body.status).toBe("ok");
@@ -139,7 +140,7 @@ describe("Production Smoke Test", { timeout: 90_000 }, () => {
     let indexHtml: string;
 
     it("serves the frontend at /", async () => {
-      const res = await f("/");
+      const res = await request("/");
       expect(res.status).toBe(200);
       expect(res.headers.get("content-type")).toContain("text/html");
 
@@ -149,7 +150,7 @@ describe("Production Smoke Test", { timeout: 90_000 }, () => {
     });
 
     it("serves static JS assets with immutable cache headers", async () => {
-      const match = indexHtml?.match(/\/assets\/[^"'\s]+\.js/);
+      const match = /\/assets\/[^"'\s]+\.js/.exec(indexHtml ?? "");
       expect(match, "No /assets/*.js found in index.html").toBeTruthy();
 
       const res = await fetch(`${BASE}${match![0]}`);
@@ -159,7 +160,7 @@ describe("Production Smoke Test", { timeout: 90_000 }, () => {
     });
 
     it("serves static CSS assets", async () => {
-      const match = indexHtml?.match(/\/assets\/[^"'\s]+\.css/);
+      const match = /\/assets\/[^"'\s]+\.css/.exec(indexHtml ?? "");
       expect(match, "No /assets/*.css found in index.html").toBeTruthy();
 
       const res = await fetch(`${BASE}${match![0]}`);
@@ -172,19 +173,19 @@ describe("Production Smoke Test", { timeout: 90_000 }, () => {
 
   describe("Security Headers", () => {
     it("X-Powered-By is absent", async () => {
-      const res = await f("/");
+      const res = await request("/");
       expect(res.headers.get("x-powered-by")).toBeNull();
     });
 
     it("Content-Security-Policy is present on HTML responses", async () => {
-      const res = await f("/");
+      const res = await request("/");
       const csp = res.headers.get("content-security-policy");
       expect(csp).toBeTruthy();
       expect(csp).toContain("default-src");
     });
 
     it("X-Content-Type-Options is nosniff", async () => {
-      const res = await f("/");
+      const res = await request("/");
       expect(res.headers.get("x-content-type-options")).toBe("nosniff");
     });
   });
@@ -193,14 +194,14 @@ describe("Production Smoke Test", { timeout: 90_000 }, () => {
 
   describe("CSRF Protection", () => {
     it("CSRF token endpoint returns a token", async () => {
-      const res = await f("/api/v1/csrf-token");
+      const res = await request("/api/v1/csrf-token");
       expect(res.status).toBe(200);
       const body = (await res.json()) as { csrfToken: string };
       expect(body.csrfToken).toBeTruthy();
     });
 
     it("POST without CSRF token is rejected", async () => {
-      const res = await f("/api/v1/workouts", {
+      const res = await request("/api/v1/workouts", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ date: "2025-01-01", focus: "test", mainWorkout: "test" }),
@@ -209,7 +210,7 @@ describe("Production Smoke Test", { timeout: 90_000 }, () => {
     });
 
     it("POST with valid CSRF token succeeds (or returns validation error, not 403)", async () => {
-      const res = await f("/api/v1/workouts", {
+      const res = await request("/api/v1/workouts", {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -226,7 +227,7 @@ describe("Production Smoke Test", { timeout: 90_000 }, () => {
 
   describe("Authentication", () => {
     it("GET /api/v1/auth/user returns dev user info", async () => {
-      const res = await f("/api/v1/auth/user");
+      const res = await request("/api/v1/auth/user");
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body).toHaveProperty("id");
@@ -240,7 +241,7 @@ describe("Production Smoke Test", { timeout: 90_000 }, () => {
     let workoutId: string;
 
     it("creates a workout", async () => {
-      const res = await f("/api/v1/workouts", {
+      const res = await request("/api/v1/workouts", {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -262,7 +263,7 @@ describe("Production Smoke Test", { timeout: 90_000 }, () => {
     });
 
     it("lists workouts including the created one", async () => {
-      const res = await f("/api/v1/workouts");
+      const res = await request("/api/v1/workouts");
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(Array.isArray(body)).toBe(true);
@@ -270,7 +271,7 @@ describe("Production Smoke Test", { timeout: 90_000 }, () => {
     });
 
     it("fetches the workout by id", async () => {
-      const res = await f(`/api/v1/workouts/${workoutId}`);
+      const res = await request(`/api/v1/workouts/${workoutId}`);
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.id).toBe(workoutId);
@@ -278,7 +279,7 @@ describe("Production Smoke Test", { timeout: 90_000 }, () => {
     });
 
     it("updates the workout", async () => {
-      const res = await f(`/api/v1/workouts/${workoutId}`, {
+      const res = await request(`/api/v1/workouts/${workoutId}`, {
         method: "PATCH",
         headers: {
           "content-type": "application/json",
@@ -292,7 +293,7 @@ describe("Production Smoke Test", { timeout: 90_000 }, () => {
     });
 
     it("deletes the workout", async () => {
-      const res = await f(`/api/v1/workouts/${workoutId}`, {
+      const res = await request(`/api/v1/workouts/${workoutId}`, {
         method: "DELETE",
         headers: { "x-csrf-token": csrfToken },
       });
@@ -300,7 +301,7 @@ describe("Production Smoke Test", { timeout: 90_000 }, () => {
     });
 
     it("returns 404 for deleted workout", async () => {
-      const res = await f(`/api/v1/workouts/${workoutId}`);
+      const res = await request(`/api/v1/workouts/${workoutId}`);
       expect(res.status).toBe(404);
     });
   });
@@ -309,14 +310,14 @@ describe("Production Smoke Test", { timeout: 90_000 }, () => {
 
   describe("Plans & Analytics", () => {
     it("GET /api/v1/plans returns an array", async () => {
-      const res = await f("/api/v1/plans");
+      const res = await request("/api/v1/plans");
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(Array.isArray(body)).toBe(true);
     });
 
     it("GET /api/v1/personal-records returns an object", async () => {
-      const res = await f("/api/v1/personal-records");
+      const res = await request("/api/v1/personal-records");
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(typeof body).toBe("object");
@@ -324,14 +325,14 @@ describe("Production Smoke Test", { timeout: 90_000 }, () => {
     });
 
     it("GET /api/v1/exercise-analytics returns an object", async () => {
-      const res = await f("/api/v1/exercise-analytics");
+      const res = await request("/api/v1/exercise-analytics");
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(typeof body).toBe("object");
     });
 
     it("GET /api/v1/training-overview returns overview data", async () => {
-      const res = await f("/api/v1/training-overview");
+      const res = await request("/api/v1/training-overview");
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body).toHaveProperty("weeklySummaries");
@@ -341,7 +342,7 @@ describe("Production Smoke Test", { timeout: 90_000 }, () => {
     });
 
     it("GET /api/v1/timeline returns an array", async () => {
-      const res = await f("/api/v1/timeline");
+      const res = await request("/api/v1/timeline");
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(Array.isArray(body)).toBe(true);
@@ -352,7 +353,7 @@ describe("Production Smoke Test", { timeout: 90_000 }, () => {
 
   describe("Export", () => {
     it("GET /api/v1/export?format=json returns JSON", async () => {
-      const res = await f("/api/v1/export?format=json");
+      const res = await request("/api/v1/export?format=json");
       expect(res.status).toBe(200);
       expect(res.headers.get("content-type")).toContain("json");
       const body = await res.json();
@@ -360,7 +361,7 @@ describe("Production Smoke Test", { timeout: 90_000 }, () => {
     });
 
     it("GET /api/v1/export?format=csv returns CSV text", async () => {
-      const res = await f("/api/v1/export?format=csv");
+      const res = await request("/api/v1/export?format=csv");
       expect(res.status).toBe(200);
       expect(res.headers.get("content-type")).toContain("csv");
       const text = await res.text();
@@ -372,12 +373,12 @@ describe("Production Smoke Test", { timeout: 90_000 }, () => {
 
   describe("Error Handling", () => {
     it("unknown API route returns 404", async () => {
-      const res = await f("/api/v1/nonexistent-route");
+      const res = await request("/api/v1/nonexistent-route");
       expect(res.status).toBe(404);
     });
 
     it("invalid workout payload returns 400", async () => {
-      const res = await f("/api/v1/workouts", {
+      const res = await request("/api/v1/workouts", {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -400,7 +401,7 @@ describe("Production Smoke Test", { timeout: 90_000 }, () => {
         mainWorkout: "2K row test",
       };
 
-      const res1 = await f("/api/v1/workouts", {
+      const res1 = await request("/api/v1/workouts", {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -412,7 +413,7 @@ describe("Production Smoke Test", { timeout: 90_000 }, () => {
       expect(res1.status).toBe(200);
       const body1 = await res1.json();
 
-      const res2 = await f("/api/v1/workouts", {
+      const res2 = await request("/api/v1/workouts", {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -428,7 +429,7 @@ describe("Production Smoke Test", { timeout: 90_000 }, () => {
       expect(body2.id).toBe(body1.id);
 
       // Clean up
-      await f(`/api/v1/workouts/${body1.id}`, {
+      await request(`/api/v1/workouts/${body1.id}`, {
         method: "DELETE",
         headers: { "x-csrf-token": csrfToken },
       });
@@ -439,7 +440,7 @@ describe("Production Smoke Test", { timeout: 90_000 }, () => {
 
   describe("Strava", () => {
     it("GET /api/v1/strava/status returns disconnected", async () => {
-      const res = await f("/api/v1/strava/status");
+      const res = await request("/api/v1/strava/status");
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body).toHaveProperty("connected", false);

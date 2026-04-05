@@ -81,16 +81,17 @@ jobs:
           npx drizzle-kit push
           pnpm exec vitest run --config vitest.integration.config.ts
 
+      - name: Push database schema
+        run: npx drizzle-kit push
+
       - name: Run Smoke Test
         run: pnpm exec vitest run --config vitest.integration.config.ts server/routes/tests/smoke.integration.test.ts
         env:
           ALLOW_DEV_AUTH_BYPASS: "true"
           NODE_ENV: test
+          DATABASE_URL: ${{ env.DATABASE_URL }}
           ENCRYPTION_KEY: "01234567890123456789012345678901"
           SESSION_SECRET: "dummy_session_secret_for_ci"
-
-      - name: Push database schema
-        run: npx drizzle-kit push
 
       - name: Start server
         run: NODE_ENV=test node dist/index.js &
