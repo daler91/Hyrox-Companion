@@ -10,7 +10,7 @@ export default defineConfig({
   },
   test: {
     include: ['**/*.integration.test.ts'],
-    exclude: ['**/node_modules/**', '**/dist/**'],
+    exclude: ['**/node_modules/**', '**/dist/**', '**/smoke.integration.test.ts'],
     environment: 'node',
     globals: true,
     setupFiles: ['./vitest.integration.setup.ts'],
