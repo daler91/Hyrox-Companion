@@ -6,6 +6,7 @@ import { PLAN_GENERATION_PROMPT } from "../prompts";
 import { ThinkingLevel } from "@google/genai";
 import type { GeneratePlanInput, TrainingPlanWithDays } from "@shared/schema";
 import { sanitizeHtml } from "../utils/sanitize";
+import { AppError, ErrorCode } from "../errors";
 
 const generatedDaySchema = z.object({
   weekNumber: z.number().min(1),
@@ -62,7 +63,7 @@ function parseAndValidateDays(text: string): GeneratedDay[] {
     raw = JSON.parse(text);
   } catch {
     logger.error({ responseLength: text.length }, "[planGen] JSON parse failed");
-    throw new Error("Failed to parse AI response as JSON");
+    throw new AppError(ErrorCode.AI_ERROR, "Failed to parse AI response as JSON", 502);
   }
 
   if (!Array.isArray(raw)) {
@@ -134,7 +135,7 @@ export async function generatePlan(
   const days = parseAndValidateDays(text);
 
   if (days.length === 0) {
-    throw new Error("AI generated no valid plan days");
+    throw new AppError(ErrorCode.AI_ERROR, "AI generated no valid plan days", 502);
   }
 
   // Create the training plan record
@@ -176,7 +177,7 @@ export async function generatePlan(
   // Fetch the complete plan with days
   const fullPlan = await storage.plans.getTrainingPlan(plan.id, userId);
   if (!fullPlan) {
-    throw new Error("Failed to retrieve generated plan");
+    throw new AppError(ErrorCode.INTERNAL_ERROR, "Failed to retrieve generated plan", 500);
   }
 
   logger.info(

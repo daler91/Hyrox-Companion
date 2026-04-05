@@ -1,5 +1,22 @@
 import type { TrainingContext } from "./gemini/types";
-import { sanitizeUserInput } from "./utils/sanitize";
+import {
+  buildOverallStats,
+  buildExerciseFocus,
+  buildStructuredPerformance,
+  buildRecentWorkouts,
+  buildUpcomingWorkouts,
+} from "./prompts/coachingContext";
+import {
+  buildCoachingMaterialsSection,
+  buildRetrievedChunksSection,
+  type CoachingMaterialInput,
+} from "./prompts/materialsBuilder";
+
+export type { CoachingMaterialInput } from "./prompts/materialsBuilder";
+export {
+  buildCoachingMaterialsSection,
+  buildRetrievedChunksSection,
+} from "./prompts/materialsBuilder";
 
 export const BASE_SYSTEM_PROMPT = `You are an expert AI fitness coach. You help athletes plan, track, and optimize their training for any fitness goal — from running races and functional fitness competitions (like Hyrox) to strength building, weight loss, and general health.
 
@@ -230,152 +247,6 @@ export const FUNCTIONAL_EXERCISES = [
   "running", "skierg", "sled push", "sled pull", "burpees",
   "rowing", "farmers carry", "wall balls", "lunges",
 ];
-
-function formatExerciseDetails(exerciseDetails: NonNullable<TrainingContext["recentWorkouts"][0]["exerciseDetails"]>): string {
-  type ExDetail = typeof exerciseDetails[0];
-  const grouped = new Map<string, ExDetail[]>();
-  for (const ex of exerciseDetails) {
-    if (!grouped.has(ex.name)) grouped.set(ex.name, []);
-    grouped.get(ex.name)!.push(ex);
-  }
-  const details: string[] = [];
-  grouped.forEach((sets, name) => {
-    const parts = [name];
-    const firstSet = sets[0];
-    const allSameReps = sets.every((s: ExDetail) => s.reps === firstSet.reps);
-    if (allSameReps && firstSet.reps && sets.length > 1) parts.push(`${sets.length}x${firstSet.reps}`);
-    else if (firstSet.reps) parts.push(`${sets.length > 1 ? sets.length + "x" : ""}${firstSet.reps}reps`);
-    if (firstSet.weight) parts.push(`@${firstSet.weight}`);
-    if (firstSet.distance) parts.push(`${firstSet.distance}m`);
-    if (firstSet.time) parts.push(`${firstSet.time}min`);
-    details.push(parts.join(" "));
-  });
-  return details.join(", ");
-}
-
-function buildOverallStats(trainingContext: TrainingContext): string {
-  let section = `\nOverall Stats:
-- Total workouts tracked: ${trainingContext.totalWorkouts}
-- Completed: ${trainingContext.completedWorkouts}
-- Planned (upcoming): ${trainingContext.plannedWorkouts}
-- Missed: ${trainingContext.missedWorkouts}
-- Skipped: ${trainingContext.skippedWorkouts}
-- Completion rate: ${trainingContext.completionRate}%
-- Current streak: ${trainingContext.currentStreak} day${trainingContext.currentStreak === 1 ? "" : "s"}`;
-
-  if (trainingContext.activePlan) {
-    section += `\n\nActive Training Plan: "${trainingContext.activePlan.name}" (${trainingContext.activePlan.totalWeeks} weeks)`;
-    if (trainingContext.activePlan.goal) {
-      section += `\nPlan Goal: ${trainingContext.activePlan.goal}`;
-    }
-  }
-  return section;
-}
-
-function buildExerciseFocus(trainingContext: TrainingContext): string {
-  if (Object.keys(trainingContext.exerciseBreakdown).length === 0) return "";
-
-  let section = `\n\nExercise Focus (times trained):`;
-  for (const [exercise, count] of Object.entries(trainingContext.exerciseBreakdown)) {
-    section += `\n- ${exercise}: ${count}x`;
-  }
-  return section;
-}
-
-function buildStructuredPerformance(trainingContext: TrainingContext): string {
-  if (!trainingContext.structuredExerciseStats || Object.keys(trainingContext.structuredExerciseStats).length === 0) return "";
-
-  let section = `\n\nStructured Exercise Performance:`;
-  for (const [exercise, stats] of Object.entries(trainingContext.structuredExerciseStats)) {
-    let line = `\n- ${exercise}: trained ${stats.count}x`;
-    if (stats.maxWeight) line += `, max weight: ${stats.maxWeight}`;
-    if (stats.maxDistance) line += `, max distance: ${stats.maxDistance}`;
-    if (stats.bestTime) line += `, best time: ${stats.bestTime}min`;
-    if (stats.avgReps) line += `, avg reps: ${stats.avgReps}`;
-    section += line;
-  }
-  return section;
-}
-
-function buildRecentWorkouts(trainingContext: TrainingContext): string {
-  if (trainingContext.recentWorkouts.length === 0) return "";
-
-  let section = `\n\nRecent Workouts (last 7):`;
-  for (const workout of trainingContext.recentWorkouts.slice(0, 7)) {
-    let line = `\n- ${workout.date}: ${workout.focus || "General"} - ${workout.mainWorkout || "No details"} (${workout.status})`;
-    if (workout.exerciseDetails && workout.exerciseDetails.length > 0) {
-      line += ` [${formatExerciseDetails(workout.exerciseDetails)}]`;
-    }
-    section += line;
-  }
-  return section;
-}
-
-function buildUpcomingWorkouts(trainingContext: TrainingContext): string {
-  if (!trainingContext.upcomingWorkouts || trainingContext.upcomingWorkouts.length === 0) return "";
-
-  let section = `\n\nUpcoming Planned Workouts (next 7 days):`;
-  for (const workout of trainingContext.upcomingWorkouts) {
-    let line = `\n- ${workout.date}: ${workout.focus || "General"} - ${workout.mainWorkout || "No details"}`;
-    if (workout.accessory) line += ` | Accessory: ${workout.accessory}`;
-    if (workout.notes) line += ` | Notes: ${workout.notes}`;
-    section += line;
-  }
-  return section;
-}
-
-export interface CoachingMaterialInput {
-  title: string;
-  content: string;
-  type: string;
-}
-
-const MAX_COACHING_MATERIALS_CHARS = 8000;
-
-/**
- * Legacy fallback: build coaching materials by simple truncation.
- * Used when RAG pipeline is not available (no embedded chunks yet).
- */
-export function buildCoachingMaterialsSection(materials: CoachingMaterialInput[]): string {
-  if (!materials || materials.length === 0) return "";
-
-  let section = `\n--- COACHING REFERENCE MATERIALS ---\n`;
-  section += `Use these materials to guide your coaching decisions, exercise selection, and programming.\n\n`;
-
-  let totalChars = 0;
-  for (const material of materials) {
-    const remaining = MAX_COACHING_MATERIALS_CHARS - totalChars;
-    if (remaining <= 0) break;
-
-    const content = material.content.length > remaining
-      ? material.content.slice(0, remaining) + "... [truncated]"
-      : material.content;
-
-    section += `### ${material.title} (${material.type})\n${content}\n\n`;
-    totalChars += content.length;
-  }
-
-  section += `--- END COACHING MATERIALS ---\n`;
-  return section;
-}
-
-/**
- * Build coaching materials section from RAG-retrieved chunks.
- */
-export function buildRetrievedChunksSection(chunks: string[]): string {
-  if (chunks.length === 0) return "";
-
-  let section = `\n--- COACHING REFERENCE MATERIALS ---\n`;
-  section += `Use these relevant excerpts from the athlete's coaching materials to guide your coaching decisions.\n\n`;
-
-  for (let i = 0; i < chunks.length; i++) {
-    // 🛡️ Sentinel: Sanitize retrieved chunks to mitigate prompt injection via user-uploaded materials
-    section += `[Excerpt ${i + 1}]\n${sanitizeUserInput(chunks[i])}\n\n`;
-  }
-
-  section += `--- END COACHING MATERIALS ---\n`;
-  return section;
-}
 
 /**
  * Build system prompt with optional RAG-retrieved chunks or legacy coaching materials.

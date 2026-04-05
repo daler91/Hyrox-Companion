@@ -3,7 +3,16 @@ import { PlanStorage } from "../plans";
 import { db } from "../../db";
 
 vi.mock("../../db", () => ({
-  db: { insert: vi.fn(), update: vi.fn(), delete: vi.fn(), select: vi.fn(), transaction: vi.fn() },
+  db: {
+    insert: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+    select: vi.fn(),
+    transaction: vi.fn(),
+    query: {
+      planDays: { findFirst: vi.fn() },
+    },
+  },
 }));
 
 vi.mock("../../storage", () => ({ storage: {} }));
@@ -17,11 +26,11 @@ function mockSelectChain(result: unknown[]) {
   return { fromMock, whereMock };
 }
 
-function mockSelectWithJoin(result: unknown[]) {
-  const whereMock = vi.fn().mockResolvedValue(result);
-  const innerJoinMock = vi.fn().mockReturnValue({ where: whereMock });
-  const fromMock = vi.fn().mockReturnValue({ innerJoin: innerJoinMock });
-  vi.mocked(db.select).mockReturnValue({ from: fromMock } as never);
+// Mock the relational query `db.query.planDays.findFirst` used by
+// PlanStorage.getPlanDay. Pass `undefined` (or omit) to simulate "not found",
+// or a planDay row (with nested `plan.userId`) to simulate a hit.
+function mockFindPlanDayFirst(result: { id: string; plan?: { userId: string } } | undefined) {
+  vi.mocked(db.query.planDays.findFirst).mockResolvedValue(result as never);
 }
 
 function mockInsertChain(result: unknown[]) {
@@ -145,28 +154,34 @@ describe("PlanStorage", () => {
 
   describe("getPlanDay", () => {
     it("should return undefined when day not found", async () => {
-      mockSelectWithJoin([]);
+      mockFindPlanDayFirst(undefined);
       expect(await storage.getPlanDay("nonexistent", "u1")).toBeUndefined();
     });
 
+    it("should return undefined when day belongs to a different user", async () => {
+      mockFindPlanDayFirst({ id: "d1", plan: { userId: "other-user" } });
+      expect(await storage.getPlanDay("d1", "u1")).toBeUndefined();
+    });
+
     it("should return the plan day when found", async () => {
-      const mockDay = { id: "d1", planId: "plan-1", weekNumber: 1 };
-      mockSelectWithJoin([{ planDay: mockDay }]);
-      expect(await storage.getPlanDay("d1", "u1")).toEqual(mockDay);
+      mockFindPlanDayFirst({ id: "d1", plan: { userId: "u1" } });
+      const result = await storage.getPlanDay("d1", "u1");
+      expect(result).toMatchObject({ id: "d1" });
+      // The nested `plan` relation must be stripped before returning.
+      expect(result).not.toHaveProperty("plan");
     });
   });
 
   describe("updatePlanDay", () => {
     it("should return undefined when day does not belong to user", async () => {
-      mockSelectWithJoin([]);
+      mockFindPlanDayFirst(undefined);
       expect(await storage.updatePlanDay("d1", { focus: "Running" }, "u1")).toBeUndefined();
       expect(db.update).not.toHaveBeenCalled();
     });
 
     it("should update and return the plan day when found", async () => {
-      const mockDay = { id: "d1", planId: "plan-1", weekNumber: 1 };
-      const updatedDay = { ...mockDay, focus: "Running" };
-      mockSelectWithJoin([{ planDay: mockDay }]);
+      mockFindPlanDayFirst({ id: "d1", plan: { userId: "u1" } });
+      const updatedDay = { id: "d1", focus: "Running" };
       mockUpdateChain([updatedDay]);
 
       expect(await storage.updatePlanDay("d1", { focus: "Running" }, "u1")).toEqual(updatedDay);
@@ -175,12 +190,12 @@ describe("PlanStorage", () => {
 
   describe("deletePlanDay", () => {
     it("should return false when day not found", async () => {
-      mockSelectWithJoin([]);
+      mockFindPlanDayFirst(undefined);
       expect(await storage.deletePlanDay("nonexistent", "u1")).toBe(false);
     });
 
     it("should delete the day and return true when found", async () => {
-      mockSelectWithJoin([{ planDay: { id: "d1" } }]);
+      mockFindPlanDayFirst({ id: "d1", plan: { userId: "u1" } });
       vi.mocked(db.delete).mockReturnValue({ where: vi.fn().mockResolvedValue({ rowCount: 1 }) } as never);
 
       expect(await storage.deletePlanDay("d1", "u1")).toBe(true);

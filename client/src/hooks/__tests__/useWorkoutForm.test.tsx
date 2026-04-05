@@ -160,8 +160,8 @@ describe('useWorkoutForm', () => {
       });
 
       act(() => {
-        (handlers.getMainHandler() as any).onResult("is fun");
-        (handlers.getNotesHandler() as any).onResult("and fun");
+        handlers.getMainHandler()!.onResult!("is fun");
+        handlers.getNotesHandler()!.onResult!("and fun");
       });
 
       expect(result.current.freeText).toBe('Running is fun');
@@ -178,7 +178,7 @@ describe('useWorkoutForm', () => {
       });
 
       act(() => {
-        (handlers.getMainHandler() as any).onResult("is fun");
+        handlers.getMainHandler()!.onResult!("is fun");
       });
 
       expect(result.current.freeText).toBe('Running is fun');
@@ -188,7 +188,7 @@ describe('useWorkoutForm', () => {
       });
 
       act(() => {
-        (handlers.getMainHandler() as any).onResult("is fun");
+        handlers.getMainHandler()!.onResult!("is fun");
       });
 
       expect(result.current.freeText).toBe('Running\nis fun');
@@ -200,7 +200,7 @@ describe('useWorkoutForm', () => {
       renderFormHook(defaultProps);
 
       act(() => {
-        (handlers.getMainHandler() as any).onError("Microphone not found");
+        handlers.getMainHandler()!.onError!("Microphone not found");
       });
 
       expect(mockToast).toHaveBeenCalledWith({

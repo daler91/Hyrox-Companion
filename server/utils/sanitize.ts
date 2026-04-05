@@ -1,3 +1,5 @@
+import { AppError, ErrorCode } from "../errors";
+
 /**
  * Safely encodes HTML special characters to their corresponding HTML entities.
  * This prevents XSS attacks when rendering un-trusted data.
@@ -44,7 +46,11 @@ export function validateAiOutput(output: string): string {
 
   for (const pattern of restrictedPatterns) {
     if (lowerOutput.includes(pattern)) {
-      throw new Error("AI output validation failed: detected restricted system-level content");
+      throw new AppError(
+        ErrorCode.AI_ERROR,
+        "AI output validation failed: detected restricted system-level content",
+        502,
+      );
     }
   }
 

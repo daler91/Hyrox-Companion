@@ -4,6 +4,7 @@ import { PARSE_EXERCISES_PROMPT, VALID_EXERCISE_NAMES, VALID_CATEGORIES } from "
 import { getAiClient, GEMINI_MODEL, retryWithBackoff } from "./client";
 import { sanitizeHtml, sanitizeUserInput, validateAiOutput } from "../utils/sanitize";
 import { exerciseSetSchema, type ParsedExercise } from "@shared/schema";
+import { AppError, ErrorCode } from "../errors";
 
 export const parsedExerciseSchema = z.object({
   exerciseName: z.string(),
@@ -63,7 +64,7 @@ and use the matching name as customLabel: ${customExerciseNames.join(", ")}`;
       raw = JSON.parse(responseText);
     } catch (parseErr) {
       logger.error({ err: parseErr, responseLength: responseText.length }, "[gemini] exercise-parse JSON.parse failed.");
-      throw new Error("AI returned invalid JSON for exercise parsing");
+      throw new AppError(ErrorCode.AI_ERROR, "AI returned invalid JSON for exercise parsing", 502);
     }
 
     const rawArray = Array.isArray(raw) ? raw : [];
@@ -74,7 +75,7 @@ and use the matching name as customLabel: ${customExerciseNames.join(", ")}`;
         { err: zodResult.error },
         "[gemini] exercise-parse Zod validation failed"
       );
-      throw new Error("AI returned malformed exercise data");
+      throw new AppError(ErrorCode.AI_ERROR, "AI returned malformed exercise data", 502);
     }
 
     return zodResult.data.map((ex) => {
@@ -109,14 +110,10 @@ and use the matching name as customLabel: ${customExerciseNames.join(", ")}`;
       };
     });
   } catch (error) {
-    if (
-      error instanceof Error &&
-      (error.message === "AI returned invalid JSON for exercise parsing" ||
-        error.message === "AI returned malformed exercise data")
-    ) {
+    if (error instanceof AppError) {
       throw error;
     }
     logger.error({ err: error }, "[gemini] exercise-parse error:");
-    throw new Error("Failed to parse exercises from text");
+    throw new AppError(ErrorCode.AI_ERROR, "Failed to parse exercises from text", 502);
   }
 }

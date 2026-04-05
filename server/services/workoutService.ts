@@ -259,8 +259,15 @@ export async function createWorkoutAndScheduleCoaching(
   if (shouldCoach) {
     // Post-commit enqueue. On failure we reset the flag so the client stops
     // polling for a coaching result that will never arrive.
+    // singletonKey + singletonSeconds coalesces rapid-fire workout creation
+    // (e.g. bulk CSV import) into a single auto-coach invocation per user
+    // within the debounce window (TECHNICAL_DEBT #23).
     queue
-      .send("auto-coach", { userId })
+      .send(
+        "auto-coach",
+        { userId },
+        { singletonKey: `auto-coach:${userId}`, singletonSeconds: 60 },
+      )
       .catch((err) => {
         logger.error({ err }, "Failed to queue auto-coach job after workout creation");
         storage.users.updateIsAutoCoaching(userId, false).catch((resetErr) => {

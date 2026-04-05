@@ -115,10 +115,24 @@
 			"breakpoints": true
 		},
 		{
+			"idx": 16,
+			"version": "7",
+			"when": 1775334000000,
+			"tag": "0016_rename_hyrox_station_to_functional",
+			"breakpoints": true
+		},
+		{
 			"idx": 17,
 			"version": "7",
 			"when": 1775406906352,
 			"tag": "0017_workout_logs_strava_unique",
+			"breakpoints": true
+		},
+		{
+			"idx": 18,
+			"version": "7",
+			"when": 1775491200000,
+			"tag": "0018_backfill_plan_dates_and_workout_links",
 			"breakpoints": true
 		}
 	]
