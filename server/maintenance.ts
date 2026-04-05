@@ -14,31 +14,51 @@ async function ensurePgvectorExtension() {
     await client.query("CREATE EXTENSION IF NOT EXISTS vector");
     logger.info({ context: "db" }, "pgvector extension ensured on vector DB");
   } catch (error) {
-    logger.warn({ context: "db", err: error }, "Could not enable pgvector extension on vector DB (may already exist or lack permissions)");
+    logger.warn(
+      { context: "db", err: error },
+      "Could not enable pgvector extension on vector DB (may already exist or lack permissions)",
+    );
   } finally {
     if (client) client.release();
   }
 }
 
 async function ensureSchemaUpToDate() {
+  if (process.env.NODE_ENV === "test") {
+    logger.info({ context: "db" }, "Skipping programmatic schema additions in test environment");
+    return;
+  }
+
   let client;
   try {
     client = await pool.connect();
     const userCols = await client.query(
       `SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'users' AND column_name IN ('ai_coach_enabled', 'email_notifications')`,
     );
-    const columns = new Map(userCols.rows.map((r: { column_name: string; data_type: string }) => [r.column_name, r.data_type]));
+    const columns = new Map(
+      userCols.rows.map((r: { column_name: string; data_type: string }) => [
+        r.column_name,
+        r.data_type,
+      ]),
+    );
 
     if (!columns.has("ai_coach_enabled")) {
-      await client.query(`ALTER TABLE users ADD COLUMN ai_coach_enabled boolean DEFAULT true NOT NULL`);
+      await client.query(
+        `ALTER TABLE users ADD COLUMN ai_coach_enabled boolean DEFAULT true NOT NULL`,
+      );
       logger.info({ context: "db" }, "Added missing ai_coach_enabled column to users table");
     }
 
     if (columns.get("email_notifications") === "integer") {
       await client.query(`ALTER TABLE users ALTER COLUMN email_notifications DROP DEFAULT`);
-      await client.query(`ALTER TABLE users ALTER COLUMN email_notifications TYPE boolean USING email_notifications::boolean`);
+      await client.query(
+        `ALTER TABLE users ALTER COLUMN email_notifications TYPE boolean USING email_notifications::boolean`,
+      );
       await client.query(`ALTER TABLE users ALTER COLUMN email_notifications SET DEFAULT true`);
-      logger.info({ context: "db" }, "Converted email_notifications column from integer to boolean");
+      logger.info(
+        { context: "db" },
+        "Converted email_notifications column from integer to boolean",
+      );
     }
 
     const tpGoal = await client.query(
@@ -100,7 +120,9 @@ async function ensureSchemaUpToDate() {
 async function cleanOrphanedData() {
   try {
     await db.transaction(async (tx) => {
-      await tx.execute(sql`UPDATE workout_logs SET plan_day_id = NULL WHERE plan_day_id IS NOT NULL AND plan_day_id NOT IN (SELECT id FROM plan_days)`);
+      await tx.execute(
+        sql`UPDATE workout_logs SET plan_day_id = NULL WHERE plan_day_id IS NOT NULL AND plan_day_id NOT IN (SELECT id FROM plan_days)`,
+      );
     });
     logger.info({ context: "db" }, "Orphaned data cleanup complete");
   } catch (error) {
@@ -109,6 +131,11 @@ async function cleanOrphanedData() {
 }
 
 async function runDrizzleMigrations() {
+  if (process.env.NODE_ENV === "test") {
+    logger.info({ context: "db" }, "Skipping programmatic Drizzle migrations in test environment");
+    return;
+  }
+
   try {
     const migrationsFolder = path.resolve(import.meta.dirname, "..", "migrations");
     logger.info({ context: "db", migrationsFolder }, "Running Drizzle migrations...");
@@ -119,14 +146,28 @@ async function runDrizzleMigrations() {
     // migration failures (e.g. "already exists") are expected and non-fatal.
     const errStr = String((error as { message?: string })?.message ?? error);
     if (errStr.includes("already exists")) {
-      logger.info({ context: "db" }, "Drizzle migrations skipped — schema already up to date (drizzle-kit push was used)");
+      logger.info(
+        { context: "db" },
+        "Drizzle migrations skipped — schema already up to date (drizzle-kit push was used)",
+      );
     } else {
-      logger.warn({ context: "db", err: error }, "Drizzle migration failed (non-fatal, continuing startup)");
+      logger.warn(
+        { context: "db", err: error },
+        "Drizzle migration failed (non-fatal, continuing startup)",
+      );
     }
   }
 }
 
 async function ensureVectorSchema() {
+  if (process.env.NODE_ENV === "test") {
+    logger.info(
+      { context: "db" },
+      "Skipping programmatic vector schema additions in test environment",
+    );
+    return;
+  }
+
   let client;
   try {
     client = await vectorPool.connect();
@@ -159,8 +200,13 @@ async function ensureVectorSchema() {
       `SELECT data_type FROM information_schema.columns WHERE table_name = 'document_chunks' AND column_name = 'embedding'`,
     );
     if (embCol.rows.length > 0 && (embCol.rows[0] as { data_type: string }).data_type === "text") {
-      await client.query(`ALTER TABLE document_chunks ALTER COLUMN embedding TYPE vector(${EMBEDDING_DIMENSIONS}) USING embedding::vector(${EMBEDDING_DIMENSIONS})`);
-      logger.info({ context: "db", dimensions: EMBEDDING_DIMENSIONS }, "Converted embedding column from text to vector type");
+      await client.query(
+        `ALTER TABLE document_chunks ALTER COLUMN embedding TYPE vector(${EMBEDDING_DIMENSIONS}) USING embedding::vector(${EMBEDDING_DIMENSIONS})`,
+      );
+      logger.info(
+        { context: "db", dimensions: EMBEDDING_DIMENSIONS },
+        "Converted embedding column from text to vector type",
+      );
     }
   } catch (error) {
     logger.error({ context: "db", err: error }, "Vector schema setup failed");
@@ -172,7 +218,15 @@ async function ensureVectorSchema() {
 async function testDatabaseConnection() {
   logger.info({ context: "db" }, "Testing database connection...");
   const timeout = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error("Database connection timed out after 15s — check DATABASE_URL and network connectivity")), 15000),
+    setTimeout(
+      () =>
+        reject(
+          new Error(
+            "Database connection timed out after 15s — check DATABASE_URL and network connectivity",
+          ),
+        ),
+      15000,
+    ),
   );
   let client;
   try {
@@ -251,7 +305,8 @@ export async function runStartupMaintenance(storage: IStorage): Promise<void> {
   await backfillPlanDatesAndWorkoutLinks();
   try {
     const marked = await storage.markMissedPlanDays();
-    if (marked > 0) logger.info({ context: "db" }, `Marked ${marked} past planned day(s) as missed`);
+    if (marked > 0)
+      logger.info({ context: "db" }, `Marked ${marked} past planned day(s) as missed`);
   } catch (error) {
     logger.warn({ context: "db", err: error }, "Mark missed days skipped");
   }
