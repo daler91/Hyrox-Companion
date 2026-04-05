@@ -1,8 +1,12 @@
-import { workoutLogs, exerciseSets, planDays, trainingPlans, customExercises, type ParsedExercise, type InsertWorkoutLog, type UpdateWorkoutLog, type InsertExerciseSet, type WorkoutLog, type ExerciseSet, exercisesPayloadSchema } from "@shared/schema";
+import { workoutLogs, exerciseSets, planDays, trainingPlans, customExercises, users, type ParsedExercise, type InsertWorkoutLog, type UpdateWorkoutLog, type InsertExerciseSet, type WorkoutLog, type ExerciseSet } from "@shared/schema";
 import { storage } from "../storage";
 import { logger } from "../logger";
 import { db } from "../db";
+import { queue } from "../queue";
 import { eq, and } from "drizzle-orm";
+
+// Drizzle transaction type — any method chain valid on `db` is also valid on `tx`.
+type WorkoutTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 
 // ⚡ Bolt Performance Optimization:
@@ -147,6 +151,51 @@ async function resolveActivePlanLinks(
   return { planId };
 }
 
+// Insert a workout (+ optional exercise sets + plan-day completion + custom exercises)
+// inside a caller-provided transaction. All writes are atomic with the caller's tx.
+async function createWorkoutInTx(
+  tx: WorkoutTx,
+  enrichedData: InsertWorkoutLog,
+  exercises: ParsedExercise[] | undefined,
+  userId: string
+): Promise<CreateWorkoutResult> {
+  const [log] = await tx
+    .insert(workoutLogs)
+    .values({ ...enrichedData, userId })
+    .returning();
+
+  if (enrichedData.planDayId) {
+    await tx
+      .update(planDays)
+      .set({ status: "completed" })
+      .from(trainingPlans)
+      .where(
+        and(
+          eq(planDays.id, enrichedData.planDayId),
+          eq(planDays.planId, trainingPlans.id),
+          eq(trainingPlans.userId, userId)
+        )
+      );
+  }
+
+  if (exercises && Array.isArray(exercises) && exercises.length > 0) {
+    const exerciseSetData = expandExercisesToSetRows(exercises, log.id);
+    const savedSets = await tx.insert(exerciseSets).values(exerciseSetData).returning();
+
+    const uniqueCustomExs = extractAndDeduplicateCustomExercises(exercises, userId);
+    if (uniqueCustomExs.length > 0) {
+      await tx
+        .insert(customExercises)
+        .values(uniqueCustomExs)
+        .onConflictDoNothing();
+    }
+
+    return { ...log, exerciseSets: savedSets };
+  }
+
+  return log;
+}
+
 export async function createWorkout(
   workoutData: InsertWorkoutLog,
   exercises: ParsedExercise[] | undefined,
@@ -160,44 +209,67 @@ export async function createWorkout(
     ...(planLinks.planDayId !== undefined && { planDayId: planLinks.planDayId }),
   };
 
-  if (exercises && Array.isArray(exercises) && exercises.length > 0) {
-    return await db.transaction(async (tx) => {
-      const [log] = await tx
-        .insert(workoutLogs)
-        .values({ ...enrichedData, userId })
-        .returning();
+  return await db.transaction((tx) => createWorkoutInTx(tx, enrichedData, exercises, userId));
+}
 
-      if (enrichedData.planDayId) {
-        await tx
-          .update(planDays)
-          .set({ status: "completed" })
-          .from(trainingPlans)
-          .where(
-            and(
-              eq(planDays.id, enrichedData.planDayId),
-              eq(planDays.planId, trainingPlans.id),
-              eq(trainingPlans.userId, userId)
-            )
-          );
-      }
+/**
+ * Atomically creates a workout and flips the user's isAutoCoaching flag when
+ * AI coaching is enabled, then enqueues the auto-coach job post-commit.
+ *
+ * Rationale (CODEBASE_AUDIT.md §4): previously the workout insert, flag
+ * update, and queue enqueue were sequential and non-atomic, so a failure
+ * between steps could leave the flag or queue state inconsistent with the
+ * workout that had already been committed. Wrapping the DB writes in a
+ * single transaction guarantees the flag matches the committed workout.
+ * The queue.send stays post-commit (pg-boss has its own transaction, but
+ * mixing it with the app tx needs schema changes we're intentionally
+ * avoiding here); on enqueue failure we reset the flag as before.
+ */
+export async function createWorkoutAndScheduleCoaching(
+  workoutData: InsertWorkoutLog,
+  exercises: ParsedExercise[] | undefined,
+  userId: string
+): Promise<CreateWorkoutResult> {
+  const planLinks = await resolveActivePlanLinks(workoutData, userId);
+  const enrichedData = {
+    ...workoutData,
+    ...(planLinks.planId !== undefined && { planId: planLinks.planId }),
+    ...(planLinks.planDayId !== undefined && { planDayId: planLinks.planDayId }),
+  };
 
-      const exerciseSetData = expandExercisesToSetRows(exercises, log.id);
-      const savedSets = await tx.insert(exerciseSets).values(exerciseSetData).returning();
+  const { workout, shouldCoach } = await db.transaction(async (tx) => {
+    const created = await createWorkoutInTx(tx, enrichedData, exercises, userId);
 
-      const uniqueCustomExs = extractAndDeduplicateCustomExercises(exercises, userId);
+    const [user] = await tx
+      .select({ aiCoachEnabled: users.aiCoachEnabled })
+      .from(users)
+      .where(eq(users.id, userId));
 
-      if (uniqueCustomExs.length > 0) {
-        await tx
-          .insert(customExercises)
-          .values(uniqueCustomExs)
-          .onConflictDoNothing();
-      }
+    const should = user?.aiCoachEnabled === true;
+    if (should) {
+      await tx
+        .update(users)
+        .set({ isAutoCoaching: true, updatedAt: new Date() })
+        .where(eq(users.id, userId));
+    }
 
-      return { ...log, exerciseSets: savedSets };
-    });
+    return { workout: created, shouldCoach: should };
+  });
+
+  if (shouldCoach) {
+    // Post-commit enqueue. On failure we reset the flag so the client stops
+    // polling for a coaching result that will never arrive.
+    queue
+      .send("auto-coach", { userId })
+      .catch((err) => {
+        logger.error({ err }, "Failed to queue auto-coach job after workout creation");
+        storage.updateIsAutoCoaching(userId, false).catch((resetErr) => {
+          logger.error({ err: resetErr }, "Failed to reset isAutoCoaching flag after queue error");
+        });
+      });
   }
 
-  return await storage.createWorkoutLog({ ...enrichedData, userId });
+  return workout;
 }
 
 export async function updateWorkout(
@@ -306,13 +378,4 @@ export async function batchReparseWorkouts(userId: string): Promise<{ total: num
   }
 
   return { total: workouts.length, parsed: totalParsed, failed: totalFailed };
-}
-
-export function validateExercisesPayload(exercises: unknown) {
-  if (!exercises) return { success: true, data: exercises };
-  const parseResult = exercisesPayloadSchema.safeParse(exercises);
-  if (!parseResult.success) {
-    return { success: false, error: parseResult.error };
-  }
-  return { success: true, data: parseResult.data };
 }

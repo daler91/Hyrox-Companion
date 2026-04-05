@@ -8,6 +8,7 @@ import { type DistanceUnit } from "@shared/unitConversion";
 import { mapStravaActivityToWorkout, type StravaActivity } from "./services/stravaMapper";
 import { getUserId } from "./types";
 import { asyncHandler } from "./routeUtils";
+import { retryWithJitter, RetryableHttpError, parseRetryAfter } from "./utils/httpRetry";
 import rateLimit from "express-rate-limit";
 import { RATE_LIMIT_WINDOW_15M_MS, STRAVA_STATE_MAX_AGE_MS, EXTERNAL_API_TIMEOUT_MS } from "./constants";
 
@@ -84,24 +85,34 @@ async function refreshStravaToken(refreshToken: string): Promise<StravaTokenResp
   }
 
   try {
-    const response = await fetch("https://www.strava.com/oauth/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        client_id: STRAVA_CLIENT_ID,
-        client_secret: STRAVA_CLIENT_SECRET,
-        refresh_token: refreshToken,
-        grant_type: "refresh_token",
-      }),
-      signal: AbortSignal.timeout(EXTERNAL_API_TIMEOUT_MS),
-    });
+    return await retryWithJitter(
+      async () => {
+        const response = await fetch("https://www.strava.com/oauth/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            client_id: STRAVA_CLIENT_ID,
+            client_secret: STRAVA_CLIENT_SECRET,
+            refresh_token: refreshToken,
+            grant_type: "refresh_token",
+          }),
+          signal: AbortSignal.timeout(EXTERNAL_API_TIMEOUT_MS),
+        });
 
-    if (!response.ok) {
-      logger.error({ err: await response.text() }, "Failed to refresh Strava token:");
-      return null;
-    }
-
-    return (await response.json()) as StravaTokenResponse;
+        if (response.status === 429 || response.status >= 500) {
+          throw new RetryableHttpError(
+            response.status,
+            parseRetryAfter(response.headers.get("retry-after")),
+          );
+        }
+        if (!response.ok) {
+          logger.error({ err: await response.text(), status: response.status }, "Failed to refresh Strava token:");
+          return null;
+        }
+        return (await response.json()) as StravaTokenResponse;
+      },
+      { label: "strava.refreshToken", retries: 3 },
+    );
   } catch (error) {
     logger.error({ err: error }, "Error refreshing Strava token:");
     return null;
@@ -258,20 +269,39 @@ async function handleStravaSync(req: Request, res: Response) {
     const user = await storage.getUser(userId);
     const distanceUnit = (user?.distanceUnit || "km") as DistanceUnit;
 
-    const activitiesResponse = await fetch(
-      "https://www.strava.com/api/v3/athlete/activities?per_page=30",
-      {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        signal: AbortSignal.timeout(EXTERNAL_API_TIMEOUT_MS),
-      }
-    );
+    let activities: StravaActivity[];
+    try {
+      activities = await retryWithJitter(
+        async () => {
+          const activitiesResponse = await fetch(
+            "https://www.strava.com/api/v3/athlete/activities?per_page=30",
+            {
+              headers: { Authorization: `Bearer ${accessToken}` },
+              signal: AbortSignal.timeout(EXTERNAL_API_TIMEOUT_MS),
+            },
+          );
 
-    if (!activitiesResponse.ok) {
-      (req.log || logger).error({ err: await activitiesResponse.text() }, "Failed to fetch Strava activities:");
+          if (activitiesResponse.status === 429 || activitiesResponse.status >= 500) {
+            throw new RetryableHttpError(
+              activitiesResponse.status,
+              parseRetryAfter(activitiesResponse.headers.get("retry-after")),
+            );
+          }
+          if (!activitiesResponse.ok) {
+            (req.log || logger).error(
+              { err: await activitiesResponse.text(), status: activitiesResponse.status },
+              "Failed to fetch Strava activities:",
+            );
+            throw new Error(`Strava activities request failed: ${activitiesResponse.status}`);
+          }
+          return (await activitiesResponse.json()) as StravaActivity[];
+        },
+        { label: "strava.listActivities", retries: 3 },
+      );
+    } catch (err) {
+      (req.log || logger).error({ err }, "Failed to fetch Strava activities after retries:");
       return res.status(500).json({ error: "Failed to fetch activities from Strava", code: "INTERNAL_SERVER_ERROR" });
     }
-
-    const activities = (await activitiesResponse.json()) as StravaActivity[];
 
     const activityIds = activities.map(a => String(a.id));
     const existingIds = await storage.getExistingStravaActivityIds(userId, activityIds);

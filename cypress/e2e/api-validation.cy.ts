@@ -16,15 +16,38 @@ describe("API Validation", () => {
     { method: "GET", url: "/api/v1/auth/user" },
   ];
 
+  const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+  // For mutating endpoints the CSRF middleware runs before auth, so we must
+  // present a valid token; otherwise we'd get a 403 before the 401 the test
+  // is actually verifying. Re-fetch per test because Cypress 12+ clears the
+  // cookie jar between tests (testIsolation defaults to true), which would
+  // drop the signed csrf cookie set by a single `before` hook. Send the
+  // same `x-test-no-bypass` header the mutating calls use so both requests
+  // bind to the same session identifier.
+  let csrfToken: string | null = null;
+  beforeEach(() => {
+    cy.request({
+      url: "/api/v1/csrf-token",
+      headers: { "x-test-no-bypass": "true" },
+    }).then((res) => {
+      csrfToken = (res.body as { csrfToken: string }).csrfToken;
+    });
+  });
+
   protectedEndpoints.forEach(({ method, url }) => {
     it(`${method} ${url} returns 401 without auth`, () => {
+      const headers: Record<string, string> = {
+        "x-test-no-bypass": "true",
+      };
+      if (MUTATING.has(method) && csrfToken) {
+        headers["x-csrf-token"] = csrfToken;
+      }
       cy.request({
         method,
         url,
         failOnStatusCode: false,
-        headers: {
-          "x-test-no-bypass": "true",
-        },
+        headers,
         body: method === "POST" || method === "PATCH" ? {} : undefined,
       }).then((response) => {
         if (url === "/api/v1/auth/user" && method === "GET") {

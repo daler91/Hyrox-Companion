@@ -6,7 +6,7 @@ import { updatePlanDaySchema, importPlanRequestSchema, schedulePlanRequestSchema
 import { getUserId } from "../types";
 import { importPlanFromCSV, createSamplePlan, updatePlanDayWithCleanup, updatePlanDayStatus } from "../services/planService";
 import { generatePlan } from "../services/planGenerationService";
-import { rateLimiter, asyncHandler, validateBody, formatValidationErrors } from "../routeUtils";
+import { rateLimiter, asyncHandler, validateBody } from "../routeUtils";
 import { logger } from "../logger";
 
 const router = Router();
@@ -51,13 +51,8 @@ router.get("/api/v1/plans", isAuthenticated, asyncHandler(async (req: ExpressReq
 
 router.get("/api/v1/plans/:id", isAuthenticated, handleGetOrDeletePlan(storage.getTrainingPlan.bind(storage)));
 
-router.post("/api/v1/plans/import", isAuthenticated, rateLimiter("planImport", 5), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof importPlanRequestSchema>>, res: Response) => {
-    const parseResult = importPlanRequestSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      return res.status(400).json({ error: "CSV content is required", code: "BAD_REQUEST" });
-    }
-    const { csvContent, fileName, planName } = parseResult.data;
-
+router.post("/api/v1/plans/import", isAuthenticated, rateLimiter("planImport", 5), validateBody(importPlanRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof importPlanRequestSchema>>, res: Response) => {
+    const { csvContent, fileName, planName } = req.body;
     const userId = getUserId(req);
     try {
       const fullPlan = await importPlanFromCSV(csvContent, userId, { fileName, planName });
@@ -104,13 +99,9 @@ router.patch("/api/v1/plans/:id", isAuthenticated, rateLimiter("planUpdate", 20)
     res.json(updated);
   }));
 
-router.patch("/api/v1/plans/:id/goal", isAuthenticated, rateLimiter("planUpdate", 20), asyncHandler(async (req: ExpressRequest<{ id: string }, unknown, UpdateTrainingPlanGoal>, res: Response) => {
+router.patch("/api/v1/plans/:id/goal", isAuthenticated, rateLimiter("planUpdate", 20), validateBody(updateTrainingPlanGoalSchema), asyncHandler(async (req: ExpressRequest<{ id: string }, unknown, UpdateTrainingPlanGoal>, res: Response) => {
     const userId = getUserId(req);
-    const parseResult = updateTrainingPlanGoalSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      return res.status(400).json({ error: "Invalid goal data", code: "VALIDATION_ERROR", details: formatValidationErrors(parseResult.error) });
-    }
-    const updated = await storage.updateTrainingPlanGoal(req.params.id, parseResult.data.goal, userId);
+    const updated = await storage.updateTrainingPlanGoal(req.params.id, req.body.goal, userId);
     if (!updated) {
       return res.status(404).json({ error: "Training plan not found", code: "NOT_FOUND" });
     }
@@ -119,13 +110,8 @@ router.patch("/api/v1/plans/:id/goal", isAuthenticated, rateLimiter("planUpdate"
 
 router.delete("/api/v1/plans/:id", isAuthenticated, rateLimiter("planDelete", 10), handleGetOrDeletePlan(async (id, userId) => { const deleted = await storage.deleteTrainingPlan(id, userId); return deleted ? { success: true } : null; }, "true"));
 
-router.post("/api/v1/plans/:planId/schedule", isAuthenticated, rateLimiter("planSchedule", 10), asyncHandler(async (req: ExpressRequest<{ planId: string }, unknown, z.infer<typeof schedulePlanRequestSchema>>, res: Response) => {
-    const parseResult = schedulePlanRequestSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      return res.status(400).json({ error: "Invalid start date format. Must be YYYY-MM-DD", code: "BAD_REQUEST" });
-    }
-    const { startDate } = parseResult.data;
-
+router.post("/api/v1/plans/:planId/schedule", isAuthenticated, rateLimiter("planSchedule", 10), validateBody(schedulePlanRequestSchema), asyncHandler(async (req: ExpressRequest<{ planId: string }, unknown, z.infer<typeof schedulePlanRequestSchema>>, res: Response) => {
+    const { startDate } = req.body;
     const userId = getUserId(req);
     const { planId } = req.params;
 
@@ -142,15 +128,10 @@ const patchDayStatusSchema = z.object({
   scheduledDate: dateStringSchema.nullable().optional(),
 });
 
-router.patch("/api/v1/plans/days/:dayId/status", isAuthenticated, rateLimiter("planDayStatus", 20), asyncHandler(async (req: ExpressRequest<{ dayId: string }, unknown, { status?: "planned" | "completed" | "skipped"; scheduledDate?: string | null }>, res: Response) => {
+router.patch("/api/v1/plans/days/:dayId/status", isAuthenticated, rateLimiter("planDayStatus", 20), validateBody(patchDayStatusSchema), asyncHandler(async (req: ExpressRequest<{ dayId: string }, unknown, z.infer<typeof patchDayStatusSchema>>, res: Response) => {
     const { dayId } = req.params;
     const userId = getUserId(req);
-
-    const parseResult = patchDayStatusSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      return res.status(400).json({ error: "Invalid status or date", code: "VALIDATION_ERROR", details: formatValidationErrors(parseResult.error) });
-    }
-    const { status, scheduledDate } = parseResult.data;
+    const { status, scheduledDate } = req.body;
 
     const updatedDay = await updatePlanDayStatus(dayId, { status, scheduledDate }, userId);
     if (!updatedDay) {

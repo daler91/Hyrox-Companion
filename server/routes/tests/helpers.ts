@@ -1,4 +1,5 @@
 import express from "express";
+import cookieParser from "cookie-parser";
 import { registerRoutes } from "../../routes";
 import { createServer } from "node:http";
 import { db } from "../../db";
@@ -22,6 +23,9 @@ export async function createTestApp() {
   const app = express();
   app.use(express.json());
   app.use(express.urlencoded({ extended: false }));
+  // Mirror production middleware order: csrf-csrf reads the signed cookie via
+  // req.cookies, so cookie-parser must be mounted before registerRoutes.
+  app.use(cookieParser());
 
   // Mock dev auth bypass headers or variables are set in process.env
   // ALLOW_DEV_AUTH_BYPASS="true" is in test env

@@ -29,8 +29,10 @@ vi.mock("../../storage", () => ({
 vi.mock("../../queue", () => ({ queue: { send: vi.fn().mockResolvedValue(undefined) } }));
 vi.mock("../../services/workoutService", () => ({
   createWorkout: vi.fn(),
+  createWorkoutAndScheduleCoaching: vi.fn(),
   updateWorkout: vi.fn(),
   reparseWorkout: vi.fn(),
+  validateExercisesPayload: (exercises: unknown) => ({ success: true, data: exercises }),
 }));
 
 // Mock the exportService functions
@@ -53,9 +55,9 @@ describe("Workouts Routes", () => {
 
   describe("POST /api/workouts", () => {
     it("should return 500 when createWorkout throws an error", async () => {
-      // Mock the createWorkout to throw an error
-      const { createWorkout } = await import("../../services/workoutService");
-      vi.mocked(createWorkout).mockRejectedValue(new Error("Service error"));
+      // Mock the createWorkoutAndScheduleCoaching use case to throw an error
+      const { createWorkoutAndScheduleCoaching } = await import("../../services/workoutService");
+      vi.mocked(createWorkoutAndScheduleCoaching).mockRejectedValue(new Error("Service error"));
 
 
 

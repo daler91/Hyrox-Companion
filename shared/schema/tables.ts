@@ -103,6 +103,12 @@ export const workoutLogs = pgTable("workout_logs", {
   index("idx_workout_logs_plan_id").on(table.planId),
   index("idx_workout_logs_strava_activity_id").on(table.stravaActivityId),
   index("idx_workout_logs_source").on(table.source),
+  // Enforce Strava activity uniqueness per user at the DB layer so concurrent
+  // sync requests cannot create duplicate workouts for the same activity
+  // (CODEBASE_AUDIT.md §5). Partial index so non-Strava rows are unaffected.
+  uniqueIndex("idx_workout_logs_user_strava_unique")
+    .on(table.userId, table.stravaActivityId)
+    .where(sql`${table.stravaActivityId} IS NOT NULL`),
 ]);
 
 // Strava OAuth connection storage

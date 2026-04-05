@@ -9,6 +9,7 @@ const envSchema = z.object({
   CLERK_PUBLISHABLE_KEY: z.string().min(1).optional(),
   CLERK_SECRET_KEY: z.string().min(1).optional(),
   ENCRYPTION_KEY: z.string().min(32, "Encryption key must be at least 32 characters long"),
+  CSRF_SECRET: z.string().min(32, "CSRF secret must be at least 32 characters long").optional(),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   PORT: z.string().default("5000"),
   SENTRY_DSN: z.string().optional(),
@@ -24,6 +25,12 @@ const envSchema = z.object({
   ALLOWED_ORIGINS: z.string().optional(),
   ALLOW_DEV_AUTH_BYPASS: z.string().optional(),
   LOG_LEVEL: z.string().default("info"),
+  // Controls Express "trust proxy" setting. Hardcoding this to 1 is risky in
+  // deployments where the number of trusted hops changes, because req.ip then
+  // derives from forwarded headers that could be attacker-controlled
+  // (CODEBASE_AUDIT.md §2). Accepted values: "0" (off), "1" (one hop),
+  // "loopback" (only local proxies).
+  TRUST_PROXY: z.enum(["0", "1", "loopback"]).default("1"),
   RAG_CHUNK_SIZE: z.coerce.number().default(600),
   RAG_CHUNK_OVERLAP: z.coerce.number().default(100),
   GEMINI_MODEL: z.string().default("gemini-2.5-flash-lite"),

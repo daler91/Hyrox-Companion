@@ -10,6 +10,32 @@ export class RateLimitError extends Error {
   }
 }
 
+// CSRF token cache — the server issues a token via GET /api/v1/csrf-token
+// paired with a signed cookie. We fetch once, reuse, and refetch on 403 so
+// the first mutation after login (which rebinds the session id) recovers
+// automatically.
+let csrfTokenPromise: Promise<string> | null = null;
+const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+async function fetchCsrfToken(): Promise<string> {
+  const res = await fetch("/api/v1/csrf-token", { credentials: "include" });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch CSRF token: ${res.status}`);
+  }
+  const body = (await res.json()) as { csrfToken: string };
+  return body.csrfToken;
+}
+
+async function getCsrfToken(forceRefresh = false): Promise<string> {
+  if (forceRefresh || !csrfTokenPromise) {
+    csrfTokenPromise = fetchCsrfToken().catch((err) => {
+      csrfTokenPromise = null;
+      throw err;
+    });
+  }
+  return csrfTokenPromise;
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
@@ -34,17 +60,36 @@ export async function apiRequest(
   signal?: AbortSignal,
   extraHeaders?: Record<string, string>,
 ): Promise<Response> {
-  const headers: Record<string, string> = {
+  const isMutation = MUTATING_METHODS.has(method.toUpperCase());
+  const baseHeaders: Record<string, string> = {
     ...(data ? { "Content-Type": "application/json" } : {}),
     ...extraHeaders,
   };
-  const res = await fetch(url, {
-    method,
-    headers,
-    body: data ? JSON.stringify(data) : undefined,
-    credentials: "include",
-    signal,
-  });
+
+  const doFetch = async (csrfToken?: string) => {
+    const headers = csrfToken ? { ...baseHeaders, "x-csrf-token": csrfToken } : baseHeaders;
+    return fetch(url, {
+      method,
+      headers,
+      body: data ? JSON.stringify(data) : undefined,
+      credentials: "include",
+      signal,
+    });
+  };
+
+  let res: Response;
+  if (isMutation) {
+    const token = await getCsrfToken();
+    res = await doFetch(token);
+    // On 403 the token may have been invalidated (e.g. session rebind after
+    // login). Refresh once and retry before surfacing the error.
+    if (res.status === 403) {
+      const freshToken = await getCsrfToken(true);
+      res = await doFetch(freshToken);
+    }
+  } else {
+    res = await doFetch();
+  }
 
   await throwIfResNotOk(res);
   return res;

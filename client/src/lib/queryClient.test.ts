@@ -34,29 +34,42 @@ describe("queryClient", () => {
   }
 
   describe("apiRequest", () => {
-    it.each([
-      [
-        "POST",
-        { foo: "bar" },
-        { "Content-Type": "application/json" },
-        JSON.stringify({ foo: "bar" })
-      ],
-      [
-        "GET",
-        undefined,
-        {},
-        undefined
-      ],
-    ])("should make a request with correct method %s and body provided: %s", async (method, data, expectedHeaders, expectedBody) => {
+    it("should attach CSRF token header on mutating POST requests", async () => {
+      const mockResponse = { ok: true, status: 200, statusText: "OK" };
+      // First call: GET /api/v1/csrf-token — returns token JSON
+      // Second call: the actual POST
+      fetchMock.mockImplementation((url: string) => {
+        if (typeof url === "string" && url === "/api/v1/csrf-token") {
+          return Promise.resolve({ ok: true, status: 200, json: vi.fn().mockResolvedValue({ csrfToken: "tok-123" }) } as unknown as Response);
+        }
+        return Promise.resolve(mockResponse as unknown as Response);
+      });
+
+      const res = await apiRequest("POST", "/api/test", { foo: "bar" });
+
+      // csrf-token fetch
+      expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/v1/csrf-token", { credentials: "include" });
+      // actual mutation with token header
+      expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-csrf-token": "tok-123" },
+        body: JSON.stringify({ foo: "bar" }),
+        credentials: "include",
+        signal: undefined,
+      });
+      expect(res).toBe(mockResponse);
+    });
+
+    it("should not fetch or attach a CSRF token on GET requests", async () => {
       const mockResponse = mockFetchResponse({});
 
-      const url = "/api/test";
-      const res = await apiRequest(method, url, data);
+      const res = await apiRequest("GET", "/api/test");
 
-      expect(fetchMock).toHaveBeenCalledWith(url, {
-        method,
-        headers: expectedHeaders,
-        body: expectedBody,
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock).toHaveBeenCalledWith("/api/test", {
+        method: "GET",
+        headers: {},
+        body: undefined,
         credentials: "include",
         signal: undefined,
       });

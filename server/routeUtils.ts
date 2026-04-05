@@ -40,10 +40,13 @@ export function rateLimiter(
           store: new MemoryStore(), // Explicitly give each limiter its own store so caching clears reset state
           validate: { default: false }, // Suppress dynamic creation warning since we use it intentionally for tests
           // Per-user key, namespaced by category so limits are independent per route group.
+          // Explicit user:/ip: prefixes prevent collision between a userId that
+          // happens to equal a client IP (CODEBASE_AUDIT.md §2).
           keyGenerator: (req: Request) => {
             const authReq = req as AuthenticatedRequest;
-            const id = authReq.auth?.userId ?? req.ip;
-            return id ? `${category}:${id}` : "";
+            if (authReq.auth?.userId) return `${category}:user:${authReq.auth.userId}`;
+            if (req.ip) return `${category}:ip:${req.ip}`;
+            return "";
           },
           // Skip rate-limiting entirely when there is no identifier.
           skip: (req: Request) => {

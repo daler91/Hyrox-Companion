@@ -1,8 +1,39 @@
+import pLimit from "p-limit";
 import { logger } from "../logger";
 import { generateEmbedding, generateEmbeddings, EMBEDDING_DIMENSIONS } from "../gemini/client";
 import { storage } from "../storage";
 import type { CoachingMaterial } from "@shared/schema";
 import { env } from "../env";
+
+// Bound concurrent Gemini + DB writes during bulk re-embed so a large
+// tenant cannot burst-load the embedding provider or DB pool
+// (CODEBASE_AUDIT.md §3).
+const REEMBED_CONCURRENCY = 3;
+
+// Cache the embedding-provider health probe so UI polling of getRagStatus
+// does not issue a live generateEmbedding("test") call on every request
+// (CODEBASE_AUDIT.md §3).
+type EmbeddingHealth = { ok: boolean; dimension?: number; error?: string };
+const EMBEDDING_HEALTH_TTL_MS = 5 * 60_000;
+let cachedEmbeddingHealth: { value: EmbeddingHealth; at: number } | null = null;
+
+async function probeEmbeddingHealth(): Promise<EmbeddingHealth> {
+  try {
+    const probe = await generateEmbedding("test");
+    return { ok: true, dimension: probe.length };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+async function getEmbeddingHealth(): Promise<EmbeddingHealth> {
+  if (cachedEmbeddingHealth && Date.now() - cachedEmbeddingHealth.at < EMBEDDING_HEALTH_TTL_MS) {
+    return cachedEmbeddingHealth.value;
+  }
+  const value = await probeEmbeddingHealth();
+  cachedEmbeddingHealth = { value, at: Date.now() };
+  return value;
+}
 
 
 // ---------------------------------------------------------------------------
@@ -159,15 +190,9 @@ export async function getRagStatus(userId: string) {
   const totalChunks = chunkCounts.reduce((sum, c) => sum + c.chunkCount, 0);
   const allEmbedded = materials.length > 0 && materials.every((m) => chunkMap.get(m.id)?.hasEmbeddings);
 
-  let embeddingApiStatus: { ok: boolean; dimension?: number; error?: string } = { ok: false };
-  if (hasApiKey) {
-    try {
-      const probe = await generateEmbedding("test");
-      embeddingApiStatus = { ok: true, dimension: probe.length };
-    } catch (err) {
-      embeddingApiStatus = { ok: false, error: err instanceof Error ? err.message : String(err) };
-    }
-  }
+  const embeddingApiStatus: EmbeddingHealth = hasApiKey
+    ? await getEmbeddingHealth()
+    : { ok: false };
 
   return {
     hasApiKey,
@@ -187,8 +212,11 @@ export async function reembedAllMaterials(userId: string) {
   const errors: string[] = [];
   let count = 0;
 
+  const limit = pLimit(REEMBED_CONCURRENCY);
   const results = await Promise.allSettled(
-    materials.map((material) => embedCoachingMaterial(material).then(() => material))
+    materials.map((material) =>
+      limit(() => embedCoachingMaterial(material).then(() => material))
+    )
   );
 
   for (let i = 0; i < results.length; i++) {
