@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "idx_workout_logs_user_strava_unique" ON "workout_logs" USING btree ("user_id","strava_activity_id") WHERE "workout_logs"."strava_activity_id" IS NOT NULL;

@@ -44,9 +44,18 @@ export class WorkoutStorage {
   async createWorkoutLogs(logs: (InsertWorkoutLog & { userId: string })[]): Promise<WorkoutLog[]> {
     if (logs.length === 0) return [];
 
+    // Use onConflictDoNothing against the (user_id, strava_activity_id) unique
+    // index (partial: WHERE strava_activity_id IS NOT NULL) so concurrent
+    // Strava syncs cannot create duplicate rows for the same activity
+    // (CODEBASE_AUDIT.md §5). Non-Strava inserts are unaffected because the
+    // index is partial and does not cover NULL activity IDs.
     const createdLogs = await db
       .insert(workoutLogs)
       .values(logs)
+      .onConflictDoNothing({
+        target: [workoutLogs.userId, workoutLogs.stravaActivityId],
+        where: sql`${workoutLogs.stravaActivityId} IS NOT NULL`,
+      })
       .returning();
 
     // Group planDayIds by userId to ensure proper authorization per user

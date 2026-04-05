@@ -125,7 +125,8 @@ describe("WorkoutStorage.createWorkoutLogs", () => {
     ];
 
     const returningMock = vi.fn().mockResolvedValue(mockLogs);
-    const valuesMock = vi.fn().mockReturnValue({ returning: returningMock });
+    const onConflictMock = vi.fn().mockReturnValue({ returning: returningMock });
+    const valuesMock = vi.fn().mockReturnValue({ onConflictDoNothing: onConflictMock });
     vi.mocked(db.insert).mockReturnValue({ values: valuesMock });
 
     const logsToInsert = [
@@ -138,6 +139,7 @@ describe("WorkoutStorage.createWorkoutLogs", () => {
     expect(result).toEqual(mockLogs);
     expect(db.insert).toHaveBeenCalledTimes(1);
     expect(valuesMock).toHaveBeenCalledWith(logsToInsert);
+    expect(onConflictMock).toHaveBeenCalledTimes(1);
     expect(db.update).not.toHaveBeenCalled();
   });
 
@@ -149,7 +151,8 @@ describe("WorkoutStorage.createWorkoutLogs", () => {
     ];
 
     const insertReturningMock = vi.fn().mockResolvedValue(mockLogs);
-    const insertValuesMock = vi.fn().mockReturnValue({ returning: insertReturningMock });
+    const insertOnConflictMock = vi.fn().mockReturnValue({ returning: insertReturningMock });
+    const insertValuesMock = vi.fn().mockReturnValue({ onConflictDoNothing: insertOnConflictMock });
     vi.mocked(db.insert).mockReturnValue({ values: insertValuesMock });
 
     const updateWhereMock = vi.fn().mockResolvedValue([]);
