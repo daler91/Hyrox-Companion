@@ -75,10 +75,10 @@ export function ExerciseRow({
   const borderColor = def ? categoryBorderColors[def.category] : undefined;
 
   const handleClick = () => {
-    if (!isAdded) {
-      onAdd();
-    } else {
+    if (isAdded) {
       onToggle();
+    } else {
+      onAdd();
     }
   };
 
@@ -100,7 +100,7 @@ export function ExerciseRow({
           onClick={handleClick}
           className="flex w-full items-center gap-3 px-4 py-3 text-left hover-elevate active-elevate-2"
           aria-expanded={isExpanded}
-          data-testid={`exercise-row-header-${exerciseName}`}
+          data-testid={`button-exercise-${exerciseName}`}
         >
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted text-foreground">
             <Icon className="h-5 w-5" />

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
@@ -15,16 +15,9 @@ import { cn } from "@/lib/utils";
 interface WorkoutExerciseModeProps {
   exerciseBlocks: string[];
   exerciseData: Record<string, StructuredExercise>;
-  getSelectedExerciseNames: () => ExerciseName[];
   addExercise: (exercise: ExerciseName) => void;
   updateBlock: (blockId: string, exData: StructuredExercise) => void;
   removeBlock: (blockId: string) => void;
-  // DnD props kept for API compatibility; currently unused in the unified tab view.
-  sensors: unknown;
-  handleDragEnd: unknown;
-  blockCounts: Record<string, number>;
-  blockIndices: Record<string, number>;
-  getBlockExerciseName: (blockId: string) => string | undefined;
   weightUnit: "kg" | "lbs";
   distanceUnit: "km" | "miles";
 }
@@ -95,7 +88,7 @@ export const WorkoutExerciseMode = ({
   const customBlocks: ExerciseRowBlock[] = blocksByName.get("custom") ?? [];
 
   return (
-    <div className="space-y-4" data-testid="workout-exercise-mode">
+    <div className="space-y-4" data-testid="exercise-selector">
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabValue)}>
         <TabsList
           className={cn(
