@@ -1,5 +1,6 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { encryptToken, decryptToken } from './crypto';
+import { logger } from './logger';
 
 // We need to mock env since it requires ENCRYPTION_KEY
 vi.mock('./env', () => {
@@ -10,7 +11,19 @@ vi.mock('./env', () => {
   };
 });
 
+// Mock the logger to verify error logging
+vi.mock('./logger', () => ({
+  logger: {
+    error: vi.fn(),
+    info: vi.fn()
+  }
+}));
+
 describe('crypto utilities', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   describe('encryptToken', () => {
     it('should return empty string if empty string is passed', () => {
       expect(encryptToken('')).toBe('');
@@ -48,7 +61,7 @@ describe('crypto utilities', () => {
       expect(decrypted).toBe(text);
     });
 
-    it('should throw an error on corrupted data', () => {
+    it('should throw an error and log it on corrupted data', () => {
       const text = 'my-secret-token';
       const encrypted = encryptToken(text);
 
@@ -58,9 +71,10 @@ describe('crypto utilities', () => {
       const corrupted = parts.join(':');
 
       expect(() => decryptToken(corrupted)).toThrow('Failed to decrypt token');
+      expect(logger.error).toHaveBeenCalled();
     });
 
-    it('should throw an error if auth tag is modified', () => {
+    it('should throw an error and log it if auth tag is modified', () => {
       const text = 'my-secret-token';
       const encrypted = encryptToken(text);
 
@@ -70,6 +84,34 @@ describe('crypto utilities', () => {
       const corrupted = parts.join(':');
 
       expect(() => decryptToken(corrupted)).toThrow('Failed to decrypt token');
+      expect(logger.error).toHaveBeenCalled();
+    });
+
+    it('should throw an error and log it if IV length is invalid', () => {
+      const text = 'my-secret-token';
+      const encrypted = encryptToken(text);
+
+      // Corrupt the IV length
+      const parts = encrypted.split(':');
+      parts[0] = '00'; // Invalid IV length
+      const corrupted = parts.join(':');
+
+      expect(() => decryptToken(corrupted)).toThrow('Failed to decrypt token');
+      expect(logger.error).toHaveBeenCalled();
+    });
+
+    it('should throw an error and log it if data contains non-hex characters', () => {
+      const corrupted = 'zzzzzzzz:zzzzzzzz:zzzzzzzz';
+
+      expect(() => decryptToken(corrupted)).toThrow('Failed to decrypt token');
+      expect(logger.error).toHaveBeenCalled();
+    });
+
+    it('should throw an error and log it for a 3-part string with empty components', () => {
+      const corrupted = '::';
+
+      expect(() => decryptToken(corrupted)).toThrow('Failed to decrypt token');
+      expect(logger.error).toHaveBeenCalled();
     });
   });
 });
