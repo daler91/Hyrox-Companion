@@ -1,12 +1,25 @@
 import { Router, type Request, type Response } from "express";
+import { z } from "zod";
 import { isAuthenticated } from "../clerkAuth";
-import { rateLimiter, asyncHandler, formatValidationErrors } from "../routeUtils";
+import { rateLimiter, asyncHandler, validateBody } from "../routeUtils";
 import { storage } from "../storage";
-import { insertWorkoutLogSchema, updateWorkoutLogSchema, insertCustomExerciseSchema, type InsertWorkoutLog, type UpdateWorkoutLog, type InsertCustomExercise , type ParsedExercise} from "@shared/schema";
+import { insertWorkoutLogSchema, updateWorkoutLogSchema, insertCustomExerciseSchema, exercisesPayloadSchema, type InsertWorkoutLog, type UpdateWorkoutLog, type InsertCustomExercise , type ParsedExercise} from "@shared/schema";
 import { generateCSV, generateJSON } from "../services/exportService";
-import { createWorkoutAndScheduleCoaching, updateWorkout, reparseWorkout, batchReparseWorkouts, validateExercisesPayload } from "../services/workoutService";
+import { createWorkoutAndScheduleCoaching, updateWorkout, reparseWorkout, batchReparseWorkouts } from "../services/workoutService";
 import { getUserId } from "../types";
 import { DEFAULT_TIMELINE_LIMIT, DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from "../constants";
+
+// Route schemas — combine core table schema with the optional exercises payload
+// so a single validateBody() middleware covers both in one pass and emits a
+// uniform VALIDATION_ERROR contract (CODEBASE_AUDIT.md §1).
+const createWorkoutRouteSchema = insertWorkoutLogSchema.extend({
+  exercises: exercisesPayloadSchema.optional(),
+});
+const updateWorkoutRouteSchema = updateWorkoutLogSchema.extend({
+  exercises: exercisesPayloadSchema.optional(),
+});
+type CreateWorkoutRoutePayload = z.infer<typeof createWorkoutRouteSchema>;
+type UpdateWorkoutRoutePayload = z.infer<typeof updateWorkoutRouteSchema>;
 
 const router = Router();
 
@@ -92,40 +105,17 @@ router.get("/api/v1/workouts/:id", isAuthenticated, asyncHandler(async (req: Req
     res.json(log);
   }));
 
-router.post("/api/v1/workouts", isAuthenticated, rateLimiter("workout", 40), asyncHandler(async (req: Request<Record<string, never>, Record<string, never>, InsertWorkoutLog & { exercises?: ParsedExercise[] }>, res: Response) => {
+router.post("/api/v1/workouts", isAuthenticated, rateLimiter("workout", 40), validateBody(createWorkoutRouteSchema), asyncHandler(async (req: Request<Record<string, never>, Record<string, never>, CreateWorkoutRoutePayload>, res: Response) => {
     const { exercises, ...workoutData } = req.body;
-    const parseResult = insertWorkoutLogSchema.safeParse(workoutData);
-    if (!parseResult.success) {
-      return res.status(400).json({ error: "Invalid workout data", code: "VALIDATION_ERROR", details: formatValidationErrors(parseResult.error) });
-    }
-
-    const exerciseValidation = validateExercisesPayload(exercises);
-    if (!exerciseValidation.success) {
-      return res.status(400).json({ error: "Invalid exercises data", code: "VALIDATION_ERROR", details: exerciseValidation.error ? formatValidationErrors(exerciseValidation.error) : undefined });
-    }
-    const validatedExercises = exerciseValidation.data as ParsedExercise[] | undefined;
-
     const userId = getUserId(req);
-    const result = await createWorkoutAndScheduleCoaching(parseResult.data, validatedExercises, userId);
-
+    const result = await createWorkoutAndScheduleCoaching(workoutData as InsertWorkoutLog, exercises as ParsedExercise[] | undefined, userId);
     res.json(result);
   }));
 
-router.patch("/api/v1/workouts/:id", isAuthenticated, rateLimiter("workout", 40), asyncHandler(async (req: Request<{ id: string }, Record<string, never>, UpdateWorkoutLog & { exercises?: ParsedExercise[] }>, res: Response) => {
+router.patch("/api/v1/workouts/:id", isAuthenticated, rateLimiter("workout", 40), validateBody(updateWorkoutRouteSchema), asyncHandler(async (req: Request<{ id: string }, Record<string, never>, UpdateWorkoutRoutePayload>, res: Response) => {
     const { exercises, ...updateData } = req.body;
-    const parseResult = updateWorkoutLogSchema.safeParse(updateData);
-    if (!parseResult.success) {
-      return res.status(400).json({ error: "Invalid update data", code: "VALIDATION_ERROR", details: formatValidationErrors(parseResult.error) });
-    }
-
-    const exerciseValidation = validateExercisesPayload(exercises);
-    if (!exerciseValidation.success) {
-      return res.status(400).json({ error: "Invalid exercises data", code: "VALIDATION_ERROR", details: exerciseValidation.error ? formatValidationErrors(exerciseValidation.error) : undefined });
-    }
-    const validatedExercises = exerciseValidation.data as ParsedExercise[] | undefined;
-
     const userId = getUserId(req);
-    const result = await updateWorkout(req.params.id, parseResult.data, validatedExercises, userId);
+    const result = await updateWorkout(req.params.id, updateData as UpdateWorkoutLog, exercises as ParsedExercise[] | undefined, userId);
     if (!result) {
       return res.status(404).json({ error: "Workout not found", code: "NOT_FOUND" });
     }

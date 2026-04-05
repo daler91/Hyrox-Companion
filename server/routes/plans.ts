@@ -51,13 +51,8 @@ router.get("/api/v1/plans", isAuthenticated, asyncHandler(async (req: ExpressReq
 
 router.get("/api/v1/plans/:id", isAuthenticated, handleGetOrDeletePlan(storage.getTrainingPlan.bind(storage)));
 
-router.post("/api/v1/plans/import", isAuthenticated, rateLimiter("planImport", 5), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof importPlanRequestSchema>>, res: Response) => {
-    const parseResult = importPlanRequestSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      return res.status(400).json({ error: "CSV content is required", code: "BAD_REQUEST" });
-    }
-    const { csvContent, fileName, planName } = parseResult.data;
-
+router.post("/api/v1/plans/import", isAuthenticated, rateLimiter("planImport", 5), validateBody(importPlanRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof importPlanRequestSchema>>, res: Response) => {
+    const { csvContent, fileName, planName } = req.body;
     const userId = getUserId(req);
     try {
       const fullPlan = await importPlanFromCSV(csvContent, userId, { fileName, planName });

@@ -1,4 +1,4 @@
-import { workoutLogs, exerciseSets, planDays, trainingPlans, customExercises, users, type ParsedExercise, type InsertWorkoutLog, type UpdateWorkoutLog, type InsertExerciseSet, type WorkoutLog, type ExerciseSet, exercisesPayloadSchema } from "@shared/schema";
+import { workoutLogs, exerciseSets, planDays, trainingPlans, customExercises, users, type ParsedExercise, type InsertWorkoutLog, type UpdateWorkoutLog, type InsertExerciseSet, type WorkoutLog, type ExerciseSet } from "@shared/schema";
 import { storage } from "../storage";
 import { logger } from "../logger";
 import { db } from "../db";
@@ -378,13 +378,4 @@ export async function batchReparseWorkouts(userId: string): Promise<{ total: num
   }
 
   return { total: workouts.length, parsed: totalParsed, failed: totalFailed };
-}
-
-export function validateExercisesPayload(exercises: unknown) {
-  if (!exercises) return { success: true, data: exercises };
-  const parseResult = exercisesPayloadSchema.safeParse(exercises);
-  if (!parseResult.success) {
-    return { success: false, error: parseResult.error };
-  }
-  return { success: true, data: parseResult.data };
 }
