@@ -92,9 +92,14 @@
     "Security overrides - npm uses 'overrides', pnpm uses 'pnpm.overrides'.",
     "Both sections MUST be kept in sync. See pnpm.overrides near the bottom of this file.",
     "",
-    "esbuild >=0.27.0: fixes GHSA-67mh-4wv8-2f99 (permissive CORS on esbuild dev server).",
+    "esbuild 0.27.5 (exact pin): fixes GHSA-67mh-4wv8-2f99 (permissive CORS on esbuild dev server, fixed in 0.27.0).",
     "  Pulled by vite (depends on esbuild ^0.21.3). Still needed as of vite 5.4.21.",
-    "  Remove when vite is upgraded to a version that depends on esbuild >=0.25.0.",
+    "  Pinned to ~0.27.5 (not ^0.27.0) because esbuild 0.27.7+ (through 0.28.0) regressed the",
+    "  transform-check path: with vite's default `supported: { dynamic-import, import-meta }`",
+    "  overrides, esbuild erroneously demands destructuring lowering for chrome87/es2020/",
+    "  firefox78/safari14 targets and fails the client build with 'Transforming destructuring",
+    "  ... is not supported yet'. Re-evaluate bumping past 0.27.5 when upstream fixes the regression.",
+    "  Remove when vite is upgraded to a version that depends on esbuild >=0.27.0.",
     "",
     "yauzl ^3.2.1: fixes CVE-2026-31988 (DoS via off-by-one in NTFS timestamp parser).",
     "  Pulled by extract-zip ^2.0.1 (via cypress), which depends on yauzl ^2.10.0. Still needed.",
@@ -110,7 +115,7 @@
     "  REMOVABLE NOW: ^7.0.3 already satisfies >=7.0.3; the parent dep has been updated."
   ],
   "overrides": {
-    "esbuild": "^0.26.0",
+    "esbuild": "0.27.5",
     "yauzl": "^3.2.1",
     "undici": "^7.24.3",
     "serialize-javascript": ">=7.0.3"
@@ -137,7 +142,7 @@
     "cross-env": "^10.1.0",
     "cypress": "15.12.0",
     "drizzle-kit": "^0.31.10",
-    "esbuild": "^0.26.0",
+    "esbuild": "0.27.5",
     "eslint": "^9.39.4",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react-hooks": "^7.0.1",
@@ -159,7 +164,7 @@
   "pnpm": {
     "//overrides": "Mirror of top-level 'overrides' (for npm). Keep both in sync. See //overrides above for rationale.",
     "overrides": {
-      "esbuild": "^0.26.0",
+      "esbuild": "0.27.5",
       "yauzl": "^3.2.1",
       "undici": "^7.24.3",
       "serialize-javascript": ">=7.0.3"
