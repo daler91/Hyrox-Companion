@@ -33,7 +33,16 @@ async function ensureDevUserExists(): Promise<void> {
 }
 
 export async function setupAuth(app: Express) {
-  app.set("trust proxy", 1);
+  // Drive "trust proxy" from validated env config so req.ip is not derived
+  // from attacker-controlled forwarded headers in misconfigured deployments
+  // (CODEBASE_AUDIT.md §2).
+  const trustProxy =
+    env.TRUST_PROXY === "0"
+      ? false
+      : env.TRUST_PROXY === "loopback"
+        ? "loopback"
+        : 1;
+  app.set("trust proxy", trustProxy);
 
   if (hasClerkKeys()) {
     app.use(clerkMiddleware());
