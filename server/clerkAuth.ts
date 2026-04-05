@@ -74,15 +74,15 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
       }
       return next();
     }
-    // Log auth failure details for debugging
-    const cookieKeys = req.headers.cookie ? req.headers.cookie.split(';').map(c => c.trim().split('=')[0]) : [];
+    // Log coarse auth failure signals only. We intentionally do NOT log the
+    // set of cookie key names — exposing internal cookie inventory in logs
+    // widens the attack surface for anyone who can read observability
+    // pipelines (CODEBASE_AUDIT.md §2, Low severity).
     logger.debug({
       path: req.path,
-      userId: auth?.userId ?? null,
-      sessionId: auth?.sessionId ?? null,
       hasCookie: !!req.headers.cookie,
-      cookieKeys,
       hasAuthHeader: !!req.headers.authorization,
+      clerkUserIdPresent: !!auth?.userId,
     }, "Clerk auth failed");
   }
 
