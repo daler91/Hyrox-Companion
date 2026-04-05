@@ -47,21 +47,29 @@ async function request(urlPath: string, init?: RequestInit): Promise<Response> {
 }
 
 /** Poll the health endpoint until the server reports ready. */
-async function waitForReady(maxMs = 60_000): Promise<void> {
+async function waitForReady(child: ChildProcess, maxMs = 60_000): Promise<void> {
   const deadline = Date.now() + maxMs;
+  let lastStatus = "";
   while (Date.now() < deadline) {
+    // Bail early if the child process crashed
+    if (child.exitCode !== null) {
+      throw new Error(`Server process exited with code ${child.exitCode} before becoming ready (last health status: ${lastStatus || "unreachable"})`);
+    }
     try {
       const res = await fetch(`${BASE}/api/v1/health`);
-      if (res.ok) {
-        const body = (await res.json()) as { status: string };
-        if (body.status === "ok") return;
+      const body = (await res.json()) as { status: string; error?: string };
+      lastStatus = `${res.status} ${body.status}${body.error ? ` (${body.error})` : ""}`;
+      if (res.ok && body.status === "ok") return;
+      if (body.status === "error") {
+        throw new Error(`Server startup failed: ${lastStatus}`);
       }
-    } catch {
-      // Server not up yet — retry
+    } catch (err: unknown) {
+      if (err instanceof Error && err.message.startsWith("Server")) throw err;
+      // Connection refused — server not up yet, retry
     }
     await new Promise((r) => setTimeout(r, 500));
   }
-  throw new Error(`Server did not become ready within ${maxMs} ms`);
+  throw new Error(`Server did not become ready within ${maxMs} ms (last health status: ${lastStatus || "unreachable"})`);
 }
 
 // ── Test suite ───────────────────────────────────────────────────────
@@ -92,7 +100,7 @@ describe("Production Smoke Test", { timeout: 90_000 }, () => {
       process.stderr.write(`[smoke-server] ${chunk.toString()}`);
     });
 
-    await waitForReady();
+    await waitForReady(server);
 
     // Obtain CSRF token (also seeds the CSRF cookie in the jar)
     const res = await request("/api/v1/csrf-token");
