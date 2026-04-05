@@ -1,13 +1,26 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 import request from "supertest";
 import { setupIntegrationTest } from "./helpers";
 
 describe("API Integration Tests", () => {
   const context = setupIntegrationTest();
 
+  // The /api/v1 router is guarded by csrf-csrf, which requires a signed
+  // cookie + matching x-csrf-token header on every mutating request. Share
+  // a supertest agent so cookies persist, fetch the token once, and attach
+  // it to mutating calls below.
+  let agent: ReturnType<typeof request.agent>;
+  let csrfToken: string;
+
+  beforeAll(async () => {
+    agent = request.agent(context.app);
+    const res = await agent.get("/api/v1/csrf-token");
+    csrfToken = (res.body as { csrfToken: string }).csrfToken;
+  });
+
   describe("Plans Integration Tests", () => {
     it("should list training plans", async () => {
-      const response = await request(context.app).get("/api/v1/plans");
+      const response = await agent.get("/api/v1/plans");
       expect(response.body?.error || response.error?.message).toBeUndefined();
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body)).toBe(true);
@@ -16,7 +29,7 @@ describe("API Integration Tests", () => {
 
   describe("Preferences and Timeline Integration Tests", () => {
     it("should get user preferences", async () => {
-      const response = await request(context.app).get("/api/v1/preferences");
+      const response = await agent.get("/api/v1/preferences");
       expect(response.body?.error || response.error?.message).toBeUndefined();
       expect(response.status).toBe(200);
       expect(response.body.weightUnit).toBe("kg");
@@ -24,8 +37,9 @@ describe("API Integration Tests", () => {
     });
 
     it("should update user preferences", async () => {
-      const response = await request(context.app)
+      const response = await agent
         .patch("/api/v1/preferences")
+        .set("x-csrf-token", csrfToken)
         .send({
           weightUnit: "lbs",
           distanceUnit: "miles"
@@ -38,7 +52,7 @@ describe("API Integration Tests", () => {
     });
 
     it("should fetch timeline correctly", async () => {
-      const response = await request(context.app).get("/api/v1/timeline?days=7");
+      const response = await agent.get("/api/v1/timeline?days=7");
       expect(response.body?.error || response.error?.message).toBeUndefined();
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body)).toBe(true);
@@ -47,8 +61,9 @@ describe("API Integration Tests", () => {
 
   describe("Workouts Integration Tests", () => {
     it("should create a new workout log", async () => {
-      const response = await request(context.app)
+      const response = await agent
         .post("/api/v1/workouts")
+        .set("x-csrf-token", csrfToken)
         .send({
           date: new Date().toISOString().split("T")[0],
           focus: "strength",
@@ -64,15 +79,16 @@ describe("API Integration Tests", () => {
     });
 
     it("should retrieve workouts", async () => {
-      await request(context.app)
+      await agent
         .post("/api/v1/workouts")
+        .set("x-csrf-token", csrfToken)
         .send({
           date: new Date().toISOString().split("T")[0],
           focus: "conditioning",
           mainWorkout: "Hyrox Simulator",
         });
 
-      const response = await request(context.app).get("/api/v1/workouts");
+      const response = await agent.get("/api/v1/workouts");
 
       expect(response.body?.error || response.error?.message).toBeUndefined();
       expect(response.status).toBe(200);

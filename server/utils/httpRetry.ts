@@ -53,7 +53,7 @@ export async function retryWithJitter<T>(
       const expBase = Math.min(maxDelayMs, minDelayMs * 2 ** attempt);
       const jitter = Math.random() * expBase;
       const serverHint = err.retryAfterMs;
-      const delay = serverHint !== null ? Math.min(serverHint, maxDelayMs) : jitter;
+      const delay = serverHint === null ? jitter : Math.min(serverHint, maxDelayMs);
       logger.warn(
         { label, status: err.status, attempt: attempt + 1, delay },
         "[http] retryable failure — backing off",
