@@ -127,6 +127,10 @@ export async function embedCoachingMaterial(material: CoachingMaterial): Promise
       })),
     );
 
+    // Invalidate cached retrievals for this user so freshly-embedded
+    // material is discoverable on the next query.
+    clearRagCache(material.userId);
+
     logger.info(
       { materialId: material.id, chunkCount: chunks.length },
       "[rag] Finished embedding coaching material",
@@ -146,6 +150,29 @@ export async function embedCoachingMaterial(material: CoachingMaterial): Promise
 
 const TOP_K = 6; // Number of chunks to retrieve
 
+// Short-TTL cache for RAG retrieval results. Collapses bursts where the
+// context-building pipeline issues identical lookups for the same user/query
+// (e.g. rapid chat messages or bulk workout creation). Invalidated per-user
+// whenever new coaching material is embedded.
+const RAG_CACHE_TTL_MS = 120_000;
+type CachedRagResult = { chunks: string[]; at: number };
+const ragCache = new Map<string, CachedRagResult>();
+
+function ragCacheKey(userId: string, query: string, topK: number): string {
+  return `${userId}::${topK}::${query}`;
+}
+
+export function clearRagCache(userId?: string): void {
+  if (!userId) {
+    ragCache.clear();
+    return;
+  }
+  const prefix = `${userId}::`;
+  for (const key of ragCache.keys()) {
+    if (key.startsWith(prefix)) ragCache.delete(key);
+  }
+}
+
 /**
  * Retrieve the most relevant coaching material chunks for a given query.
  * Returns chunk content strings ordered by relevance.
@@ -155,11 +182,20 @@ export async function retrieveRelevantChunks(
   query: string,
   topK: number = TOP_K,
 ): Promise<string[]> {
+  const key = ragCacheKey(userId, query, topK);
+  const cached = ragCache.get(key);
+  if (cached && Date.now() - cached.at < RAG_CACHE_TTL_MS) {
+    logger.debug({ userId, topK, cacheHit: true }, "[rag] Returning cached chunks");
+    return cached.chunks;
+  }
+
   const queryEmbedding = await generateEmbedding(query);
   logger.info({ userId, queryDim: queryEmbedding.length, topK }, "[rag] Searching chunks by embedding");
   const chunks = await storage.coaching.searchChunksByEmbedding(userId, queryEmbedding, topK);
   logger.info({ userId, found: chunks.length }, "[rag] Search returned chunks");
-  return chunks.map((c) => c.content);
+  const content = chunks.map((c) => c.content);
+  ragCache.set(key, { chunks: content, at: Date.now() });
+  return content;
 }
 
 export async function getRagStatus(userId: string) {

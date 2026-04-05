@@ -4,8 +4,8 @@ import { useWorkoutActions } from '../useWorkoutActions';
 import * as queryClientLib from '@/lib/queryClient';
 import * as toastHook from '@/hooks/use-toast';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { TimelineEntry } from '@shared/schema';
 import React from 'react';
+import { createMockTimelineEntry } from '../../../../test/factories';
 
 // Setup test QueryClient
 const createTestQueryClient = () => new QueryClient({
@@ -61,10 +61,10 @@ describe('useWorkoutActions', () => {
 
     it('sets detailEntry on openDetailDialog', () => {
       const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
-      const mockEntry = { id: 1, date: '2024-01-01', focus: 'strength' };
+      const mockEntry = createMockTimelineEntry({ date: '2024-01-01', focus: 'strength' });
 
       act(() => {
-        result.current.openDetailDialog(mockEntry as unknown as TimelineEntry);
+        result.current.openDetailDialog(mockEntry);
       });
 
       expect(result.current.detailEntry).toEqual(mockEntry);
@@ -72,10 +72,10 @@ describe('useWorkoutActions', () => {
 
     it('sets skipConfirmEntry on handleSkip', () => {
       const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
-      const mockEntry = { id: 1, date: '2024-01-01', focus: 'cardio' };
+      const mockEntry = createMockTimelineEntry({ date: '2024-01-01', focus: 'cardio' });
 
       act(() => {
-        result.current.handleSkip(mockEntry as unknown as TimelineEntry);
+        result.current.handleSkip(mockEntry);
       });
 
       expect(result.current.skipConfirmEntry).toEqual(mockEntry);
@@ -86,10 +86,10 @@ describe('useWorkoutActions', () => {
     describe('handleSaveFromDetail', () => {
       it('updates existing workout if workoutLogId is present', async () => {
         const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
-        const mockEntry = { workoutLogId: 'w-1', date: '2024-01-01', focus: 'strength' };
+        const mockEntry = createMockTimelineEntry({ workoutLogId: 'w-1', date: '2024-01-01', focus: 'strength' });
 
         act(() => {
-          result.current.openDetailDialog(mockEntry as unknown as TimelineEntry);
+          result.current.openDetailDialog(mockEntry);
         });
 
         const updates = { focus: 'cardio', mainWorkout: 'run', accessory: null, notes: null };
@@ -108,10 +108,10 @@ describe('useWorkoutActions', () => {
 
       it('logs new workout if planDayId is present and exercises exist', async () => {
         const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
-        const mockEntry = { planDayId: 'pd-1', date: '2024-01-01', focus: 'strength' };
+        const mockEntry = createMockTimelineEntry({ planDayId: 'pd-1', date: '2024-01-01', focus: 'strength' });
 
         act(() => {
-          result.current.openDetailDialog(mockEntry as unknown as TimelineEntry);
+          result.current.openDetailDialog(mockEntry);
         });
 
         const updates = { focus: 'cardio', mainWorkout: 'run', accessory: null, notes: null, exercises: [{ exerciseName: 'run', category: 'conditioning', sets: [] }] };
@@ -135,10 +135,10 @@ describe('useWorkoutActions', () => {
 
       it('updates plan day if planDayId is present and no exercises exist', async () => {
         const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
-        const mockEntry = { planDayId: 'pd-1', date: '2024-01-01', focus: 'strength' };
+        const mockEntry = createMockTimelineEntry({ planDayId: 'pd-1', date: '2024-01-01', focus: 'strength' });
 
         act(() => {
-          result.current.openDetailDialog(mockEntry as unknown as TimelineEntry);
+          result.current.openDetailDialog(mockEntry);
         });
 
         const updates = { focus: 'cardio', mainWorkout: 'run', accessory: null, notes: null };
@@ -156,10 +156,10 @@ describe('useWorkoutActions', () => {
     describe('handleMarkComplete', () => {
       it('logs a workout based on planDayId', async () => {
         const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
-        const mockEntry = { planDayId: 'pd-1', date: '2024-01-01', focus: 'strength', mainWorkout: 'lift', accessory: 'curls', notes: 'good' };
+        const mockEntry = createMockTimelineEntry({ planDayId: 'pd-1', date: '2024-01-01', focus: 'strength', mainWorkout: 'lift', accessory: 'curls', notes: 'good' });
 
         act(() => {
-          result.current.handleMarkComplete(mockEntry as unknown as TimelineEntry);
+          result.current.handleMarkComplete(mockEntry);
         });
 
         await waitFor(() => {
@@ -178,10 +178,10 @@ describe('useWorkoutActions', () => {
     describe('confirmSkip', () => {
       it('updates plan day status to skipped and resets skipConfirmEntry', async () => {
         const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
-        const mockEntry = { planDayId: 'pd-1', date: '2024-01-01', focus: 'cardio' };
+        const mockEntry = createMockTimelineEntry({ planDayId: 'pd-1', date: '2024-01-01', focus: 'cardio' });
 
         act(() => {
-          result.current.handleSkip(mockEntry as unknown as TimelineEntry);
+          result.current.handleSkip(mockEntry);
         });
 
         act(() => {
@@ -198,10 +198,10 @@ describe('useWorkoutActions', () => {
     describe('handleChangeStatus', () => {
       it('updates plan day status', async () => {
         const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
-        const mockEntry = { planDayId: 'pd-1', date: '2024-01-01', focus: 'cardio' };
+        const mockEntry = createMockTimelineEntry({ planDayId: 'pd-1', date: '2024-01-01', focus: 'cardio' });
 
         act(() => {
-          result.current.handleChangeStatus(mockEntry as unknown as TimelineEntry, 'completed');
+          result.current.handleChangeStatus(mockEntry, 'completed');
         });
 
         await waitFor(() => {
@@ -213,10 +213,10 @@ describe('useWorkoutActions', () => {
     describe('handleDelete', () => {
       it('deletes workout if workoutLogId is present and planDayId is not', async () => {
         const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
-        const mockEntry = { workoutLogId: 'w-1', date: '2024-01-01', focus: 'strength' };
+        const mockEntry = createMockTimelineEntry({ workoutLogId: 'w-1', date: '2024-01-01', focus: 'strength' });
 
         act(() => {
-          result.current.handleDelete(mockEntry as unknown as TimelineEntry);
+          result.current.handleDelete(mockEntry);
         });
 
         await waitFor(() => {
@@ -226,10 +226,10 @@ describe('useWorkoutActions', () => {
 
       it('deletes plan day if planDayId is present', async () => {
         const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
-        const mockEntry = { planDayId: 'pd-1', date: '2024-01-01', focus: 'strength' };
+        const mockEntry = createMockTimelineEntry({ planDayId: 'pd-1', date: '2024-01-01', focus: 'strength' });
 
         act(() => {
-          result.current.handleDelete(mockEntry as unknown as TimelineEntry);
+          result.current.handleDelete(mockEntry);
         });
 
         await waitFor(() => {
@@ -239,10 +239,10 @@ describe('useWorkoutActions', () => {
 
       it('deletes plan day if both workoutLogId and planDayId are present', async () => {
         const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
-        const mockEntry = { planDayId: 'pd-1', workoutLogId: 'w-1', date: '2024-01-01', focus: 'strength' };
+        const mockEntry = createMockTimelineEntry({ planDayId: 'pd-1', workoutLogId: 'w-1', date: '2024-01-01', focus: 'strength' });
 
         act(() => {
-          result.current.handleDelete(mockEntry as unknown as TimelineEntry);
+          result.current.handleDelete(mockEntry);
         });
 
         await waitFor(() => {
@@ -272,21 +272,22 @@ describe('useWorkoutActions', () => {
       ['deletePlanDayMutation', { planDayId: 'pd-1', date: '2024-01-01', focus: 'strength' }, 'handleDelete', [{}], false, 'Failed to delete workout']
     ];
 
-    it.each(mutationTestCases)('triggers error toast on failed %s', async (_, mockEntry, actionName, args, needsDialog, expectedTitle) => {
+    it.each(mutationTestCases)('triggers error toast on failed %s', async (_, mockEntryFields, actionName, args, needsDialog, expectedTitle) => {
       vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(new Error('API Failure'));
       const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
+      const mockEntry = createMockTimelineEntry(mockEntryFields);
 
       if (needsDialog) {
         act(() => {
-          result.current.openDetailDialog(mockEntry as unknown as TimelineEntry);
+          result.current.openDetailDialog(mockEntry);
         });
       }
 
       act(() => {
         if (actionName === 'handleDelete') {
-          result.current.handleDelete(mockEntry as unknown as TimelineEntry);
+          result.current.handleDelete(mockEntry);
         } else if (actionName === 'handleMarkComplete') {
-          result.current.handleMarkComplete(mockEntry as unknown as TimelineEntry);
+          result.current.handleMarkComplete(mockEntry);
         } else if (actionName === 'handleSaveFromDetail') {
           result.current.handleSaveFromDetail(args[0]);
         }
@@ -298,10 +299,10 @@ describe('useWorkoutActions', () => {
     });
     it('triggers success toast and invalidates timeline on successful status update', async () => {
       const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
-      const mockEntry = { planDayId: 'pd-1', date: '2024-01-01', focus: 'cardio' };
+      const mockEntry = createMockTimelineEntry({ planDayId: 'pd-1', date: '2024-01-01', focus: 'cardio' });
 
       act(() => {
-        result.current.handleChangeStatus(mockEntry as unknown as TimelineEntry, 'completed');
+        result.current.handleChangeStatus(mockEntry, 'completed');
       });
 
       await waitFor(() => {
@@ -315,10 +316,10 @@ describe('useWorkoutActions', () => {
       vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(new Error('Network Error'));
 
       const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
-      const mockEntry = { planDayId: 'pd-1', date: '2024-01-01', focus: 'cardio' };
+      const mockEntry = createMockTimelineEntry({ planDayId: 'pd-1', date: '2024-01-01', focus: 'cardio' });
 
       act(() => {
-        result.current.handleChangeStatus(mockEntry as unknown as TimelineEntry, 'completed');
+        result.current.handleChangeStatus(mockEntry, 'completed');
       });
 
       await waitFor(() => {

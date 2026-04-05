@@ -11,6 +11,7 @@ import { asyncHandler } from "./routeUtils";
 import { retryWithJitter, RetryableHttpError, parseRetryAfter } from "./utils/httpRetry";
 import rateLimit from "express-rate-limit";
 import { RATE_LIMIT_WINDOW_15M_MS, STRAVA_STATE_MAX_AGE_MS, EXTERNAL_API_TIMEOUT_MS } from "./constants";
+import { AppError, ErrorCode } from "./errors";
 
 const STRAVA_CLIENT_ID = env.STRAVA_CLIENT_ID;
 const STRAVA_CLIENT_SECRET = env.STRAVA_CLIENT_SECRET;
@@ -292,7 +293,11 @@ async function handleStravaSync(req: Request, res: Response) {
               { err: await activitiesResponse.text(), status: activitiesResponse.status },
               "Failed to fetch Strava activities:",
             );
-            throw new Error(`Strava activities request failed: ${activitiesResponse.status}`);
+            throw new AppError(
+              ErrorCode.EXTERNAL_API_ERROR,
+              `Strava activities request failed: ${activitiesResponse.status}`,
+              502,
+            );
           }
           return (await activitiesResponse.json()) as StravaActivity[];
         },

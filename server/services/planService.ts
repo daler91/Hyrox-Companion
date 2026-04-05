@@ -7,6 +7,7 @@ import { exerciseSets, planDays, trainingPlans, workoutLogs } from "@shared/sche
 import type { InsertPlanDay, TrainingPlanWithDays, UpdatePlanDay } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import { samplePlanDays } from "../samplePlan";
+import { AppError, ErrorCode } from "../errors";
 
 interface CSVRow {
   Week: string;
@@ -72,7 +73,7 @@ export async function importPlanFromCSV(
 ): Promise<TrainingPlanWithDays> {
   const rows = parseCSV(csvContent);
   if (rows.length === 0) {
-    throw new Error("No valid rows found in CSV");
+    throw new AppError(ErrorCode.VALIDATION_ERROR, "No valid rows found in CSV", 400);
   }
 
   // ⚡ Bolt Performance Optimization: Combine map and filter into a single O(N) reduction to prevent intermediate array allocations.
@@ -82,7 +83,7 @@ export async function importPlanFromCSV(
     return acc;
   }, []);
   if (weekNumbers.length === 0) {
-    throw new Error("No valid week numbers found in CSV");
+    throw new AppError(ErrorCode.VALIDATION_ERROR, "No valid week numbers found in CSV", 400);
   }
   const uniqueWeeks = new Set(weekNumbers);
   const totalWeeks = uniqueWeeks.size;
@@ -116,7 +117,11 @@ export async function importPlanFromCSV(
 
   const fullPlan = await storage.plans.getTrainingPlan(plan.id, userId);
   if (!fullPlan) {
-    throw new Error(`Failed to retrieve training plan ${plan.id} after creation`);
+    throw new AppError(
+      ErrorCode.INTERNAL_ERROR,
+      `Failed to retrieve training plan ${plan.id} after creation`,
+      500,
+    );
   }
   return fullPlan;
 }
@@ -144,7 +149,11 @@ export async function createSamplePlan(userId: string): Promise<TrainingPlanWith
 
   const fullPlan = await storage.plans.getTrainingPlan(plan.id, userId);
   if (!fullPlan) {
-    throw new Error(`Failed to retrieve training plan ${plan.id} after creation`);
+    throw new AppError(
+      ErrorCode.INTERNAL_ERROR,
+      `Failed to retrieve training plan ${plan.id} after creation`,
+      500,
+    );
   }
   return fullPlan;
 }

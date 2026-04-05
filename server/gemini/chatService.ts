@@ -4,6 +4,7 @@ import { sanitizeUserInput, validateAiOutput } from "../utils/sanitize";
 import { ThinkingLevel, type GenerateContentResponse } from "@google/genai";
 import { getAiClient, GEMINI_SUGGESTIONS_MODEL, withTimeout } from "./client";
 import { AI_REQUEST_TIMEOUT_MS } from "../constants";
+import { AppError, ErrorCode } from "../errors";
 import type { ChatMessage } from "@shared/schema";
 import type { TrainingContext } from "./types";
 
@@ -44,7 +45,7 @@ export async function chatWithCoach(
     return validateAiOutput(textOutput);
   } catch (error) {
     logger.error({ err: error }, "Gemini API error:");
-    throw new Error("Failed to get response from AI coach");
+    throw new AppError(ErrorCode.AI_ERROR, "Failed to get response from AI coach", 502);
   }
 }
 
@@ -89,6 +90,6 @@ export async function* streamChatWithCoach(
     }
   } catch (error) {
     logger.error({ err: error }, "Gemini streaming API error:");
-    throw new Error("Failed to get streaming response from AI coach");
+    throw new AppError(ErrorCode.AI_ERROR, "Failed to get streaming response from AI coach", 502);
   }
 }
