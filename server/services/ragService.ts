@@ -1,8 +1,14 @@
+import pLimit from "p-limit";
 import { logger } from "../logger";
 import { generateEmbedding, generateEmbeddings, EMBEDDING_DIMENSIONS } from "../gemini/client";
 import { storage } from "../storage";
 import type { CoachingMaterial } from "@shared/schema";
 import { env } from "../env";
+
+// Bound concurrent Gemini + DB writes during bulk re-embed so a large
+// tenant cannot burst-load the embedding provider or DB pool
+// (CODEBASE_AUDIT.md §3).
+const REEMBED_CONCURRENCY = 3;
 
 
 // ---------------------------------------------------------------------------
@@ -187,8 +193,11 @@ export async function reembedAllMaterials(userId: string) {
   const errors: string[] = [];
   let count = 0;
 
+  const limit = pLimit(REEMBED_CONCURRENCY);
   const results = await Promise.allSettled(
-    materials.map((material) => embedCoachingMaterial(material).then(() => material))
+    materials.map((material) =>
+      limit(() => embedCoachingMaterial(material).then(() => material))
+    )
   );
 
   for (let i = 0; i < results.length; i++) {
