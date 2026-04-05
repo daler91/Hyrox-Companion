@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { apiRequest } from "./queryClient";
 
 interface PendingMutation {
@@ -9,6 +10,51 @@ interface PendingMutation {
   retryCount?: number;
 }
 
+export interface DroppedMutationInfo {
+  id: string;
+  method: string;
+  url: string;
+  retryCount: number;
+  reason: "max_retries" | "max_age" | "queue_overflow";
+  ageMs: number;
+}
+
+export type OnMutationDroppedCallback = (info: DroppedMutationInfo) => void;
+
+const droppedCallbacks: OnMutationDroppedCallback[] = [];
+
+/**
+ * Register a callback that fires whenever a mutation is permanently dropped
+ * from the offline queue. Returns an unsubscribe function.
+ */
+export function onMutationDropped(cb: OnMutationDroppedCallback): () => void {
+  droppedCallbacks.push(cb);
+  return () => {
+    const idx = droppedCallbacks.indexOf(cb);
+    if (idx >= 0) droppedCallbacks.splice(idx, 1);
+  };
+}
+
+function notifyDropped(info: DroppedMutationInfo) {
+  for (const cb of droppedCallbacks) {
+    try {
+      cb(info);
+    } catch {
+      // Never let a callback error break the queue
+    }
+  }
+}
+
+const pendingMutationSchema: z.ZodType<PendingMutation> = z.object({
+  id: z.string(),
+  method: z.string(),
+  url: z.string(),
+  body: z.unknown(),
+  timestamp: z.number(),
+  retryCount: z.number().optional(),
+}) as z.ZodType<PendingMutation>;
+const pendingMutationArraySchema = z.array(pendingMutationSchema);
+
 const STORAGE_KEY = "hyrox-offline-queue";
 const MAX_RETRIES = 5;
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -17,7 +63,9 @@ const MAX_QUEUE_SIZE = 100;
 function getQueue(): PendingMutation[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as PendingMutation[]) : [];
+    if (!raw) return [];
+    const parsed = pendingMutationArraySchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : [];
   } catch {
     // Corrupted localStorage data — return empty queue so it gets overwritten on next save
     return [];
@@ -45,7 +93,17 @@ export function enqueueMutation(method: string, url: string, body: unknown): str
 
   // Evict oldest entries when queue is at capacity
   while (queue.length >= MAX_QUEUE_SIZE) {
-    queue.shift();
+    const evicted = queue.shift();
+    if (evicted) {
+      notifyDropped({
+        id: evicted.id,
+        method: evicted.method,
+        url: evicted.url,
+        retryCount: evicted.retryCount ?? 0,
+        reason: "queue_overflow",
+        ageMs: Date.now() - evicted.timestamp,
+      });
+    }
   }
 
   queue.push({ id, method, url, body, timestamp: Date.now(), retryCount: 0 });
@@ -68,16 +126,20 @@ export async function flushQueue(): Promise<{ synced: number; failed: number; dr
   const remaining: PendingMutation[] = [];
 
   for (const mutation of queue) {
+    const retryCount = mutation.retryCount ?? 0;
+    const ageMs = now - mutation.timestamp;
+
     // Drop stale mutations older than MAX_AGE_MS
-    if (now - mutation.timestamp > MAX_AGE_MS) {
+    if (ageMs > MAX_AGE_MS) {
       dropped++;
+      notifyDropped({ id: mutation.id, method: mutation.method, url: mutation.url, retryCount, reason: "max_age", ageMs });
       continue;
     }
 
     // Drop mutations that have exceeded MAX_RETRIES
-    const retryCount = mutation.retryCount ?? 0;
     if (retryCount >= MAX_RETRIES) {
       dropped++;
+      notifyDropped({ id: mutation.id, method: mutation.method, url: mutation.url, retryCount, reason: "max_retries", ageMs });
       continue;
     }
 

@@ -258,19 +258,10 @@ export function computeProgressionFlags(timeline: TimelineEntry[]): NonNullable<
   return flags;
 }
 
-export function computeCurrentWeek(timeline: TimelineEntry[], totalWeeks: number): number {
-  let earliestDate: string | null = null;
-  for (const entry of timeline) {
-    if (entry.weekNumber != null && entry.date) {
-      if (!earliestDate || entry.date < earliestDate) {
-        earliestDate = entry.date;
-      }
-    }
-  }
-  if (!earliestDate) return 1;
-
+export function computeCurrentWeek(planStartDate: string | null | undefined, totalWeeks: number): number {
+  if (!planStartDate) return 1;
   const today = toDateStr();
-  const days = daysBetween(earliestDate, today);
+  const days = daysBetween(planStartDate, today);
   const week = Math.max(1, Math.ceil((days + 1) / 7));
   return Math.min(week, totalWeeks);
 }

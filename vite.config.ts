@@ -4,12 +4,6 @@ import tailwindcss from "@tailwindcss/vite";
 import { VitePWA } from "vite-plugin-pwa";
 import path from "node:path";
 
-const CACHE_MAX_AGE_SECONDS = 86400; // 24 hours
-
-function apiCacheRule(urlPattern: RegExp, cacheName: string, handler: "StaleWhileRevalidate" | "NetworkFirst", maxEntries = 20) {
-  return { urlPattern, handler, options: { cacheName, expiration: { maxEntries, maxAgeSeconds: CACHE_MAX_AGE_SECONDS } } };
-}
-
 export default defineConfig({
   plugins: [
     tailwindcss(),
@@ -31,11 +25,55 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff,woff2}"],
+        cleanupOutdatedCaches: true,
         runtimeCaching: [
-          apiCacheRule(/^\/api\/v1\/plans/, "api-plans", "StaleWhileRevalidate"),
-          apiCacheRule(/^\/api\/v1\/timeline/, "api-timeline", "NetworkFirst", 50),
-          apiCacheRule(/^\/api\/v1\/personal-records/, "api-analytics", "StaleWhileRevalidate"),
-          apiCacheRule(/^\/api\/v1\/workouts/, "api-workouts", "NetworkFirst", 50),
+          {
+            urlPattern: ({ url }: { url: URL }) =>
+              url.pathname.startsWith("/api/"),
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "api-cache",
+              networkTimeoutSeconds: 10,
+              expiration: {
+                maxEntries: 50,
+                maxAgeSeconds: 5 * 60,
+              },
+            },
+          },
+          {
+            urlPattern:
+              /^https:\/\/fonts\.(?:googleapis|gstatic)\.com\/.*/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "font-cache",
+              expiration: {
+                maxEntries: 20,
+                maxAgeSeconds: 365 * 24 * 60 * 60,
+              },
+            },
+          },
+          {
+            urlPattern: /\.(?:woff2?|ttf|otf|eot)$/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "font-cache",
+              expiration: {
+                maxEntries: 20,
+                maxAgeSeconds: 365 * 24 * 60 * 60,
+              },
+            },
+          },
+          {
+            urlPattern: /\.(?:png|jpg|jpeg|svg|webp)$/i,
+            handler: "StaleWhileRevalidate",
+            options: {
+              cacheName: "image-cache",
+              expiration: {
+                maxEntries: 100,
+                maxAgeSeconds: 30 * 24 * 60 * 60,
+              },
+            },
+          },
         ],
       },
     }),

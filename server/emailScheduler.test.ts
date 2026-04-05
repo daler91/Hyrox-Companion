@@ -3,12 +3,22 @@ import { runEmailCronJob } from './emailScheduler';
 import type { IStorage } from './storage';
 import type { User } from '@shared/schema';
 
+vi.mock('./queue', () => ({
+  queue: {
+    send: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
+vi.mock('./logger', () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
+
 describe('runEmailCronJob', () => {
   let mockStorage: IStorage;
 
   beforeEach(() => {
     vi.useFakeTimers();
-    // Set to a Monday so processWeeklySummary runs
+    // Set to a Monday so weekly summary jobs are enqueued
     vi.setSystemTime(new Date('2023-10-16T12:00:00Z'));
 
     mockStorage = {
@@ -19,73 +29,77 @@ describe('runEmailCronJob', () => {
           email: 'test@example.com',
           emailNotifications: true,
           lastWeeklySummaryAt: null,
-          lastMissedReminderAt: null
-        } as unknown as User
+          lastMissedReminderAt: null,
+        } as unknown as User,
       ]),
-      getWeeklyStats: vi.fn().mockRejectedValue(new Error('Simulated storage error')),
-      getTimeline: vi.fn().mockResolvedValue([]),
-      getMissedWorkoutsForDate: vi.fn().mockResolvedValue([]),
-      updateLastWeeklySummaryAt: vi.fn().mockResolvedValue(undefined),
-      updateLastMissedReminderAt: vi.fn().mockResolvedValue(undefined),
-      // Dummy to prevent SonarCloud issues
-      isMock: true,
     } as unknown as IStorage;
   });
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.clearAllMocks();
   });
 
-  it('should catch and log errors for individual users but continue processing', async () => {
+  it('should enqueue email jobs for users with notifications', async () => {
+    const { queue } = await import('./queue');
     const result = await runEmailCronJob(mockStorage);
 
     expect(result.usersChecked).toBe(1);
-    expect(result.emailsSent).toBe(0);
-    expect(result.details).toHaveLength(1);
-    expect(result.details[0]).toContain('Failed for user 1: Simulated storage error');
+    // On Monday: 1 weekly summary + 1 missed reminder = 2 jobs
+    expect(result.emailsSent).toBe(2);
+    expect(queue.send).toHaveBeenCalledWith('send-weekly-summary', { userId: 1 });
+    expect(queue.send).toHaveBeenCalledWith('send-missed-reminder', { userId: 1 });
   });
 
-  it('should process multiple users independently if one fails', async () => {
+  it('should enqueue jobs for multiple users independently', async () => {
+    const { queue } = await import('./queue');
+
     mockStorage.getUsersWithEmailNotifications = vi.fn().mockResolvedValue([
       {
         id: 1,
-        email: 'fail@example.com',
+        email: 'user1@example.com',
         emailNotifications: true,
         lastWeeklySummaryAt: null,
-        lastMissedReminderAt: null
+        lastMissedReminderAt: null,
       } as unknown as User,
       {
         id: 2,
-        email: 'pass@example.com',
+        email: 'user2@example.com',
         emailNotifications: true,
         lastWeeklySummaryAt: null,
-        lastMissedReminderAt: null
-      } as unknown as User
+        lastMissedReminderAt: null,
+      } as unknown as User,
     ]);
-
-    mockStorage.getWeeklyStats = vi.fn()
-      .mockRejectedValueOnce(new Error('Simulated storage error'))
-      .mockResolvedValueOnce({
-        completedCount: 1,
-        plannedCount: 1,
-        missedCount: 0,
-        skippedCount: 0,
-        totalDuration: 60
-      });
-
-    vi.mock('./email', () => ({
-      sendWeeklySummary: vi.fn().mockResolvedValue(true),
-      sendMissedWorkoutReminder: vi.fn().mockResolvedValue(false)
-    }));
 
     const result = await runEmailCronJob(mockStorage);
 
     expect(result.usersChecked).toBe(2);
-    // User 1 failed, User 2 was processed successfully.
-    // We expect emailsSent to be 1 since mock getWeeklyStats succeeded for user 2
+    // On Monday: 2 weekly summary + 2 missed reminder = 4 jobs
+    expect(result.emailsSent).toBe(4);
+    expect(queue.send).toHaveBeenCalledTimes(4);
+  });
+
+  it('should only enqueue missed-reminder jobs on non-Monday', async () => {
+    const { queue } = await import('./queue');
+    // Set to a Tuesday
+    vi.setSystemTime(new Date('2023-10-17T12:00:00Z'));
+
+    const result = await runEmailCronJob(mockStorage);
+
+    expect(result.usersChecked).toBe(1);
+    // Not Monday: only 1 missed reminder
     expect(result.emailsSent).toBe(1);
-    expect(result.details).toHaveLength(2);
-    expect(result.details[0]).toContain('Failed for user 1: Simulated storage error');
-    expect(result.details[1]).toContain('Sent weekly_summary to pass@example.com');
+    expect(queue.send).toHaveBeenCalledWith('send-missed-reminder', { userId: 1 });
+    expect(queue.send).not.toHaveBeenCalledWith('send-weekly-summary', expect.anything());
+  });
+
+  it('should return early when no users have notifications', async () => {
+    mockStorage.getUsersWithEmailNotifications = vi.fn().mockResolvedValue([]);
+
+    const result = await runEmailCronJob(mockStorage);
+
+    expect(result.usersChecked).toBe(0);
+    expect(result.emailsSent).toBe(0);
+    expect(result.details).toContain('No users with email notifications enabled');
   });
 });

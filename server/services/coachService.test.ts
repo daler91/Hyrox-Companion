@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { triggerAutoCoach } from "./coachService";
 import { storage } from "../storage";
-import { buildTrainingContext } from "./aiService";
+import { buildTrainingContext } from "./ai";
 import { generateWorkoutSuggestions } from "../gemini/index";
 import { retrieveRelevantChunks } from "./ragService";
 
@@ -10,6 +10,7 @@ vi.mock("../storage", () => ({
     getUser: vi.fn(),
     updateIsAutoCoaching: vi.fn(),
     listTrainingPlans: vi.fn(),
+    getActivePlan: vi.fn(),
     getTimeline: vi.fn(),
     updatePlanDay: vi.fn(),
     hasChunksForUser: vi.fn(),
@@ -18,10 +19,10 @@ vi.mock("../storage", () => ({
   },
 }));
 
-vi.mock("./aiService", () => ({ buildTrainingContext: vi.fn() }));
+vi.mock("./ai", () => ({ buildTrainingContext: vi.fn() }));
 vi.mock("../gemini/index", () => ({ generateWorkoutSuggestions: vi.fn(), EMBEDDING_DIMENSIONS: 3072 }));
 vi.mock("./ragService", () => ({ retrieveRelevantChunks: vi.fn() }));
-vi.mock("../prompts", () => ({ buildCoachingMaterialsSection: vi.fn().mockReturnValue(""), buildRetrievedChunksSection: vi.fn().mockReturnValue("[RAG chunks]") }));
+vi.mock("../prompts", () => ({ buildCoachingMaterialsSection: vi.fn().mockReturnValue(""), buildRetrievedChunksSection: vi.fn().mockReturnValue("[RAG chunks]"), FUNCTIONAL_EXERCISES: ["skierg", "sled_push", "sled_pull", "burpee_broad_jump", "rowing", "farmers_carry", "sandbag_lunges", "wall_balls"] }));
 vi.mock("../logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 
 // -- Helpers ------------------------------------------------------------------
@@ -38,7 +39,7 @@ function makeTimelineEntry(overrides: Record<string, unknown> = {}) {
 function mockBaseAutoCoachDeps(timeline: Record<string, unknown>[] = [makeTimelineEntry()]) {
   mockEnabledUser();
   vi.mocked(buildTrainingContext).mockResolvedValue({} as never);
-  vi.mocked(storage.listTrainingPlans).mockResolvedValue([]);
+  vi.mocked(storage.getActivePlan).mockResolvedValue(undefined);
   vi.mocked(storage.getTimeline).mockResolvedValue(timeline as never);
   vi.mocked(storage.hasChunksForUser).mockResolvedValue(false);
   vi.mocked(storage.listCoachingMaterials).mockResolvedValue([]);
@@ -89,7 +90,7 @@ describe("coachService", () => {
 
     it("applies suggestions and returns adjusted count", async () => {
       mockBaseAutoCoachDeps([makeTimelineEntry(), makeTimelineEntry({ planDayId: "day-2", date: "2026-01-17", focus: "Running", mainWorkout: "5km easy" })]);
-      vi.mocked(storage.listTrainingPlans).mockResolvedValue([{ id: "plan-1", goal: "Sub-90 Hyrox" } as never]);
+      vi.mocked(storage.getActivePlan).mockResolvedValue({ id: "plan-1", goal: "Sub-90 Hyrox" } as never);
       vi.mocked(generateWorkoutSuggestions).mockResolvedValue([makeSuggestion()]);
       vi.mocked(storage.updatePlanDay).mockResolvedValue({} as never);
 

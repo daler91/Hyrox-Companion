@@ -18,9 +18,11 @@ import { storage } from "./storage";
 import { pool } from "./db";
 import { vectorPool } from "./vectorDb";
 import { getAuth } from "@clerk/express";
+import { runWithRequestContext } from "./requestContext";
 import { runStartupMaintenance } from "./maintenance";
 import { startQueue, queue } from "./queue";
 import { startCron, stopCron } from "./cron";
+import { AppError } from "./errors";
 
 // 🛡️ Sentinel: Dev Auth Bypass double-guard
 if (env.ALLOW_DEV_AUTH_BYPASS === "true") {
@@ -36,7 +38,7 @@ if (env.SENTRY_DSN) {
   Sentry.init({
     dsn: env.SENTRY_DSN,
     environment: env.NODE_ENV || "development",
-    sendDefaultPii: true,
+    sendDefaultPii: false,
   });
 }
 
@@ -44,7 +46,11 @@ const app = express();
 app.disable("x-powered-by");
 const httpServer = createServer(app);
 
-export interface AppError extends Error {
+// Re-export AppError class from errors module; also keep a loose interface
+// so the error handler can handle both AppError instances and plain errors
+// with ad-hoc status/code properties (e.g. from third-party middleware).
+export type { AppError } from "./errors";
+interface LegacyError extends Error {
   status?: number;
   statusCode?: number;
   code?: string;
@@ -62,16 +68,24 @@ app.use(compression());
 const isDev = env.NODE_ENV !== "production";
 
 // CORS — restrict cross-origin API access to known origins
-const allowedOrigins = [
+const defaultOrigins = [
   env.APP_URL,
   "https://fitai.coach",
-  ...(isDev ? ["http://localhost:5000", "http://localhost:5173"] : []),
 ].filter(Boolean) as string[];
+
+const configuredOrigins = env.ALLOWED_ORIGINS
+  ? env.ALLOWED_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean)
+  : defaultOrigins;
+
+const allowedOrigins = new Set([
+  ...configuredOrigins,
+  ...(isDev ? ["http://localhost:5000", "http://localhost:5173"] : []),
+]);
 
 app.use(cors({
   origin: (origin, callback) => {
     // Allow same-origin requests (no Origin header) and allowed origins
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin || allowedOrigins.has(origin)) {
       callback(null, true);
     } else {
       callback(new Error("Not allowed by CORS"));
@@ -110,7 +124,7 @@ app.use(
         scriptSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
-        imgSrc: ["'self'", "data:", "https:"],
+        imgSrc: ["'self'", "data:", "https://img.clerk.com", "https://*.clerk.com", "https://*.strava.com"],
         connectSrc: ["'self'"],
         frameSrc: ["'self'"],
         workerSrc: ["'self'", "blob:"],
@@ -131,7 +145,7 @@ app.use((_req, res, next) => {
     `script-src ${scriptSrc}`,
     `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com ${clerkDomains}`,
     `font-src 'self' https://fonts.gstatic.com data:`,
-    `img-src 'self' data: https:`,
+    `img-src 'self' data: https://img.clerk.com https://*.clerk.com https://*.strava.com`,
     `connect-src ${connectSrc.join(" ")}`,
     `frame-src 'self' ${clerkDomains}`,
     `worker-src 'self' blob:`,
@@ -167,7 +181,7 @@ let startupError: string | null = null;
 
 app.get("/api/v1/health", (_req, res) => {
   if (startupError) {
-    res.status(503).json({ status: "error", error: startupError, timestamp: Date.now() });
+    res.status(503).json({ status: "error", error: "startup_error", timestamp: Date.now() });
   } else {
     res.json({ status: isReady ? "ok" : "starting", timestamp: Date.now() });
   }
@@ -177,7 +191,14 @@ app.get("/api/v1/health", (_req, res) => {
 
 app.use(pinoHttp({
   logger,
-  genReqId: (req) => req.headers['x-request-id'] || randomUUID(),
+  genReqId: (req) => {
+    const clientId = req.headers['x-request-id'];
+    // 🛡️ Sentinel: Validate client-supplied request IDs to prevent log injection
+    if (typeof clientId === 'string' && clientId.length <= 64 && /^[\w.:-]+$/.test(clientId)) {
+      return clientId;
+    }
+    return randomUUID();
+  },
   customProps: (req, _res) => {
     let userId = 'anonymous';
     try {
@@ -193,13 +214,19 @@ app.use(pinoHttp({
       context: 'http',
       userId,
       requestId: req.id,
-      route: req.url || req.originalUrl,
+      route: req.url?.split('?')[0] || req.originalUrl?.split('?')[0],
     };
   },
   autoLogging: {
     ignore: (req) => !req.url?.startsWith('/api/v1')
   }
 }));
+
+app.use((req, _res, next) => {
+  const r = req as Request & { id?: string; auth?: { userId?: string } };
+  const ctx = { requestId: r.id ?? "", userId: r.auth?.userId };
+  runWithRequestContext(ctx, () => next());
+});
 
 // Listen early so the health endpoint is reachable during startup (unblocks CI wait-on)
 const port = Number.parseInt(env.PORT || "5000", 10);
@@ -221,25 +248,41 @@ try {
   }
   await registerRoutes(httpServer, app);
 
-  // Serve OpenAPI docs — swagger-ui injects inline scripts, so use a relaxed CSP
-  app.use("/api/docs", (_req, res, next) => {
-    res.setHeader(
-      "Content-Security-Policy",
-      "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:",
+  // 🛡️ Sentinel: Swagger UI is restricted to development — it exposes the full API
+  // schema and requires a relaxed CSP (unsafe-inline) which widens the attack surface.
+  if (isDev) {
+    app.use("/api/docs", (_req, res, next) => {
+      res.setHeader(
+        "Content-Security-Policy",
+        "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:",
+      );
+      next();
+    });
+    app.use(
+      "/api/docs",
+      swaggerUi.serve,
+      swaggerUi.setup(generateOpenApiDocument(), {
+        customCss: ".swagger-ui .topbar { display: none } .swagger-ui .info { margin: 20px 0; }",
+        customSiteTitle: "Workout API Documentation"
+      })
     );
-    next();
-  });
-  app.use(
-    "/api/docs",
-    swaggerUi.serve,
-    swaggerUi.setup(generateOpenApiDocument(), {
-      customCss: ".swagger-ui .topbar { display: none } .swagger-ui .info { margin: 20px 0; }",
-      customSiteTitle: "Workout API Documentation"
-    })
-  );
+  }
 
-  app.use((err: AppError, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
+  app.use((err: AppError | LegacyError, _req: Request, res: Response, _next: NextFunction) => {
+    // Derive status and code from either the structured AppError class
+    // or legacy ad-hoc error properties (e.g. from third-party middleware).
+    const isAppError = err.name === "AppError" && "code" in err;
+    const status = isAppError
+      ? (err as import("./errors").AppError).status
+      : ((err as LegacyError).status || (err as LegacyError).statusCode || 500);
+    const defaultCode = status >= 500 ? "INTERNAL_SERVER_ERROR" : "BAD_REQUEST";
+    const code = isAppError
+      ? (err as import("./errors").AppError).code
+      : ((err as LegacyError).code || defaultCode);
+    const details = isAppError
+      ? (err as import("./errors").AppError).details
+      : (err as LegacyError).details;
+
     // 🛡️ Sentinel: Prevent leaking sensitive error details to the client
     const message =
       status === 500
@@ -247,13 +290,13 @@ try {
         : err.message || "An error occurred";
 
     Sentry.captureException(err);
-    res.status(status).json({ error: message, code: err.code || (status >= 500 ? "INTERNAL_SERVER_ERROR" : "BAD_REQUEST"), ...(status < 500 && err.details ? { details: err.details } : {}) });
+    res.status(status).json({ error: message, code, ...(status < 500 && details ? { details } : {}) });
   });
 
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
-  if (process.env.NODE_ENV === "production" || process.env.NODE_ENV === "test") {
+  if (env.NODE_ENV === "production" || env.NODE_ENV === "test") {
     serveStatic(app);
   } else {
     const { setupVite } = await import("./vite");

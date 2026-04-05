@@ -1,5 +1,6 @@
 import { workoutLogs, exerciseSets, planDays, trainingPlans, customExercises, type ParsedExercise, type InsertWorkoutLog, type UpdateWorkoutLog, type InsertExerciseSet, type WorkoutLog, type ExerciseSet, exercisesPayloadSchema } from "@shared/schema";
 import { storage } from "../storage";
+import { logger } from "../logger";
 import { db } from "../db";
 import { eq, and } from "drizzle-orm";
 
@@ -115,26 +116,65 @@ export async function reparseWorkout(
 export type CreateWorkoutResult = WorkoutLog & { exerciseSets?: ExerciseSet[] };
 export type UpdateWorkoutResult = WorkoutLog & { exerciseSets?: ExerciseSet[] };
 
+async function resolveActivePlanLinks(
+  workoutData: InsertWorkoutLog,
+  userId: string
+): Promise<{ planId?: string | null; planDayId?: string | null }> {
+  if (workoutData.planDayId) {
+    // Already linked to a plan day — derive planId from it
+    const planDay = await storage.getPlanDay(workoutData.planDayId, userId);
+    if (!planDay) {
+      // planDayId does not belong to this user — reject it
+      return { planId: null, planDayId: null };
+    }
+    return { planId: planDay.planId, planDayId: workoutData.planDayId };
+  }
+
+  // Standalone workout — find the plan covering the workout's date
+  if (!workoutData.date) return {};
+
+  const plan = await storage.getPlanForDate(userId, workoutData.date);
+  if (!plan) return {};
+
+  const planId = plan.id;
+
+  // Try to auto-match to a specific plan day on the same date
+  const matchingDay = await storage.findMatchingPlanDay(planId, workoutData.date);
+  if (matchingDay) {
+    return { planId, planDayId: matchingDay.id };
+  }
+
+  return { planId };
+}
+
 export async function createWorkout(
   workoutData: InsertWorkoutLog,
   exercises: ParsedExercise[] | undefined,
   userId: string
 ): Promise<CreateWorkoutResult> {
+  // Resolve plan linkage before creating the workout
+  const planLinks = await resolveActivePlanLinks(workoutData, userId);
+  const enrichedData = {
+    ...workoutData,
+    ...(planLinks.planId !== undefined && { planId: planLinks.planId }),
+    ...(planLinks.planDayId !== undefined && { planDayId: planLinks.planDayId }),
+  };
+
   if (exercises && Array.isArray(exercises) && exercises.length > 0) {
     return await db.transaction(async (tx) => {
       const [log] = await tx
         .insert(workoutLogs)
-        .values({ ...workoutData, userId })
+        .values({ ...enrichedData, userId })
         .returning();
 
-      if (workoutData.planDayId) {
+      if (enrichedData.planDayId) {
         await tx
           .update(planDays)
           .set({ status: "completed" })
           .from(trainingPlans)
           .where(
             and(
-              eq(planDays.id, workoutData.planDayId),
+              eq(planDays.id, enrichedData.planDayId),
               eq(planDays.planId, trainingPlans.id),
               eq(trainingPlans.userId, userId)
             )
@@ -157,7 +197,7 @@ export async function createWorkout(
     });
   }
 
-  return await storage.createWorkoutLog({ ...workoutData, userId });
+  return await storage.createWorkoutLog({ ...enrichedData, userId });
 }
 
 export async function updateWorkout(
@@ -225,7 +265,6 @@ export async function processBatchChunk(
     const workout = chunk[j];
 
     if (result.status === 'rejected') {
-      const { logger } = await import("../logger");
       logger.error({ err: result.reason }, `Batch reparse failed for workout ${workout.id}:`);
       failed++;
       continue;
@@ -240,7 +279,6 @@ export async function processBatchChunk(
       await saveParsedWorkout(workout.id, result.value.setRows);
       parsed++;
     } catch (dbError) {
-      const { logger } = await import("../logger");
       logger.error({ err: dbError }, `Failed to save re-parsed workout ${workout.id}:`);
       failed++;
     }

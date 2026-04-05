@@ -4,13 +4,14 @@
 
   <p>
     <a href="#features">Features</a> •
-    <a href="#architecture--tech-stack">Tech Stack</a> •
-    <a href="#project-structure">Project Structure</a> •
-    <a href="#getting-started">Getting Started</a> •
-    <a href="#available-scripts">Scripts</a> •
-    <a href="#testing--code-quality">Testing</a> •
-    <a href="#cicd-pipeline">CI/CD</a> •
-    <a href="#license">License</a>
+    <a href="#-architecture--tech-stack">Tech Stack</a> •
+    <a href="#-system-architecture">Architecture</a> •
+    <a href="#-project-structure">Project Structure</a> •
+    <a href="#-getting-started">Getting Started</a> •
+    <a href="#-available-scripts">Scripts</a> •
+    <a href="#-testing--code-quality">Testing</a> •
+    <a href="#-cicd-pipeline">CI/CD</a> •
+    <a href="#-license">License</a>
   </p>
 
   <p>
@@ -30,33 +31,34 @@
 
 Plan structured training programs, log complex workouts with voice or free-text using Gemini LLMs to parse sets & reps, automatically sync activities from Strava, and get real-time prescriptive AI coaching to adjust your volume based on your completed results.
 
-## 🌟 Capabilities Deep-Dive
+## Features
 
-### 📅 Unified Training Experience
-- **Interactive Timeline**: A drag-and-drop integrated view spanning past performance, today's focus, and future planned workouts. Visually distinguish between completed, planned, and missed workouts.
-- **Hyrox Plans**: Import customized CSV, DOCX, or PDF training blocks, or utilize the built-in 8-week rigorous Hyrox program out-of-the-box.
-- **Custom Exercises**: Log non-standard movements (e.g., custom sled pushes or sandbag lunges) natively alongside your core lifts.
-- **Onboarding Wizard**: A guided setup flow that configures your profile, preferred units, weekly training goals, and AI coach personality on first launch.
+### Unified Training Experience
+- **Interactive Timeline** — Drag-and-drop view spanning past, present, and future workouts with status indicators (completed, planned, missed).
+- **Training Plans** — Import CSV, DOCX, or PDF training blocks, use the built-in 8-week Hyrox program, or generate a fully custom plan via AI.
+- **Custom Exercises** — Log non-standard movements (sled pushes, sandbag lunges) alongside standard lifts.
+- **Guided Onboarding** — Configure profile, units, weekly goals, and AI coach personality on first launch.
 
-### 🤖 Google Gemini AI Engine
-- **Intelligent Workout Parsing**: No more tapping dropdowns. Simply say or type: *"Did 3 sets of bench pressing at 225lbs for 8 reps, then ran 3 miles in 24 minutes"*. The Gemini Vision & Language API parses the raw text into structured database elements instantly using enforced Zod JSON schemas.
-- **Real-time Auto-Coach**: The AI continuously reads your active plan's goal and your recent timeline. It evaluates fatigue, volume, and pacing, and provides actionable adjustments to your upcoming schedule automatically.
-- **Streaming Live Chat**: Interact directly with your Coach over a fast Server-Sent Events (SSE) stream for contextual questions like *"What pace should I aim for on my next 1km run based on yesterday's track session?"*
+### Gemini AI Engine
+- **Workout Parsing** — Say or type *"3 sets bench 225lbs x 8, then 3 miles in 24 min"* and Gemini parses it into structured data with Zod-validated schemas.
+- **Auto-Coach** — Reads your plan and recent activity to evaluate fatigue, volume, and pacing, then suggests schedule adjustments.
+- **Streaming Chat** — Ask contextual questions over Server-Sent Events (SSE), e.g. *"What pace for my next 1km run?"*
 
-### 📚 RAG-Powered Coaching
-- **Document Uploads**: Upload your own coaching materials (CSV, DOCX, PDF) to enrich the AI coach's knowledge base with sport-specific or personal training methodologies.
-- **Vector Embeddings**: Documents are chunked and embedded via pgvector, enabling semantic retrieval-augmented generation (RAG) for highly contextual coaching responses.
+### RAG-Powered Coaching
+- **Document Uploads** — Upload coaching materials (CSV, DOCX, PDF) to enrich the AI coach's knowledge base.
+- **Vector Search** — Documents are chunked and embedded via pgvector for semantic retrieval-augmented generation.
 
-### 🚴 Strava Integration
-- **Zero-Friction Sync**: Link your primary Strava account using secure OAuth 2.0 flows. HyroxTracker listens to activity updates and automatically mounts them onto your timeline as completed workouts, decrypting access tokens locally on the fly.
+### Strava Integration
+- **OAuth Sync** — Link your Strava account; activities automatically appear on your timeline with encrypted token storage.
 
-### 📊 Meaningful Analytics
-- **Personal Records**: Automatically detects and graphs 1RM estimation progressions and lifetime PRs natively.
-- **Advanced Filtering**: Drill down into performance by exercise categories, dates, or particular micro-cycles.
-- **Weekly Email Summaries**: Backgrounded cron jobs via pg-boss leverage Resend to email you weekly training summaries or gentle reminders for missed days.
+### Analytics & Export
+- **Personal Records** — 1RM estimation, lifetime PRs, and progression charts.
+- **Filtering** — Drill down by exercise category, date range, or micro-cycle.
+- **Data Export** — Download workout timeline and exercise sets as CSV or JSON.
+- **Weekly Emails** — Automated training summaries and missed-day reminders via pg-boss + Resend.
 
-### 📱 PWA & Offline Support
-- **Installable App**: Built as a Progressive Web App with Workbox service worker for offline caching and native-like experience on mobile devices.
+### PWA & Offline
+- **Installable** — Progressive Web App with Workbox service worker for offline caching and native-like mobile experience.
 
 ---
 
@@ -76,10 +78,10 @@ This repository is a fully functional monorepo containing both the React fronten
 
 ### Backend
 - **API Runtime**: Node.js + Express 4 with thin controller wrappers and thick service abstractions
-- **Database**: PostgreSQL bridged by the type-safe Drizzle ORM
+- **Database**: PostgreSQL (hosted on [Railway](https://railway.app/)) bridged by the type-safe Drizzle ORM
 - **Authentication**: Clerk JWT middleware protecting all private endpoints
 - **AI**: Google Gemini API (`@google/genai`) for workout parsing and coaching
-- **Vector DB**: pgvector extension for RAG document embeddings
+- **Vector DB**: pgvector on [Neon](https://neon.tech/) for RAG document embeddings
 - **Job Queue**: pg-boss for background tasks (email scheduling, maintenance)
 - **Email**: Resend for transactional email delivery
 - **Logging**: Pino + pino-http for structured, high-performance logging
@@ -90,10 +92,89 @@ This repository is a fully functional monorepo containing both the React fronten
   - express-rate-limit for granular API rate limiting
   - AES-256-GCM encryption for Strava token storage
   - Strava OAuth CSRF state verification
+  - HTML sanitization of AI-generated content
 
 ### Shared
 - Shared Zod schemas and TypeScript types between client and server
 - OpenAPI spec generation from Zod schemas
+
+---
+
+## 🔀 System Architecture
+
+```mermaid
+flowchart TB
+    subgraph Client["Client (React SPA)"]
+        UI[Vite + React 18]
+        TQ[TanStack Query]
+        SW[Service Worker / PWA]
+    end
+
+    subgraph Server["Express API"]
+        API[Route Handlers]
+        Services[Service Layer]
+        Gemini[Gemini AI Engine]
+        Queue[pg-boss Job Queue]
+    end
+
+    subgraph Data["Data Layer"]
+        PG[(PostgreSQL — Railway)]
+        PGV[(pgvector — Neon)]
+    end
+
+    subgraph External["External Services"]
+        Clerk[Clerk Auth]
+        Strava[Strava OAuth]
+        Resend[Resend Email]
+        GeminiAPI[Google Gemini API]
+    end
+
+    UI --> TQ --> API
+    API --> Services
+    Services --> PG
+    Services --> PGV
+    Services --> Gemini --> GeminiAPI
+    API --> Clerk
+    Services --> Strava
+    Queue --> Resend
+    Queue --> PG
+    SW -.->|offline cache| UI
+```
+
+### AI Pipeline
+
+```mermaid
+flowchart LR
+    subgraph Input
+        Voice[Voice Input]
+        Text[Free-Text Input]
+    end
+
+    subgraph Parsing
+        GP[Gemini Parser]
+        ZV[Zod Validation]
+    end
+
+    subgraph Storage
+        DB[(PostgreSQL)]
+    end
+
+    Voice --> GP
+    Text --> GP
+    GP --> ZV --> DB
+
+    subgraph RAG["RAG Coaching"]
+        Doc[Document Upload]
+        Chunk[Chunking]
+        Embed[(pgvector Embeddings)]
+        Retrieve[Semantic Retrieval]
+        Coach[Gemini Coach]
+    end
+
+    Doc --> Chunk --> Embed
+    Embed --> Retrieve --> Coach
+    DB -.->|training context| Coach
+```
 
 ---
 
@@ -131,6 +212,25 @@ Hyrox-Companion/
 
 ---
 
+## 📚 Documentation
+
+Detailed documentation for each subsystem is available in the [`docs/`](docs/) directory:
+
+| Document | Description |
+|----------|-------------|
+| [Architecture Overview](docs/architecture.md) | End-to-end flows, service dependencies, RAG decision tree, schema pipeline |
+| [Client (Frontend)](docs/client.md) | React SPA: pages, components, routing, styling, PWA, error tracking |
+| [Server (Backend)](docs/server.md) | Express API: bootstrap, middleware stack, security, logging, graceful shutdown |
+| [Database](docs/database.md) | PostgreSQL schema, Drizzle ORM, pgvector, migrations, storage layer |
+| [AI and RAG](docs/ai-and-rag.md) | Gemini integration, workout parsing, auto-coach, RAG pipeline |
+| [State Management](docs/state-management.md) | TanStack Query, custom hooks, offline queue, utility functions |
+| [API Reference](docs/api-reference.md) | All API endpoints with request/response shapes and rate limits |
+| [Authentication](docs/authentication.md) | Clerk setup, user sync, dev auth bypass, route protection |
+| [Integrations](docs/integrations.md) | Strava OAuth, email system, pg-boss queue, cron scheduling |
+| [Testing](docs/testing.md) | Vitest, Cypress E2E, CI workflows, test patterns |
+
+---
+
 ## 📖 API Documentation
 
 Interactive API documentation is available via **Swagger UI** at `/api/docs` when the server is running. The spec is auto-generated from Zod schemas using `@asteasolutions/zod-to-openapi`, ensuring documentation always stays in sync with the codebase.
@@ -144,7 +244,7 @@ Follow these instructions to run the full application ecosystem locally.
 ### Prerequisites
 - [Node.js](https://nodejs.org/) (v20 or higher)
 - [pnpm](https://pnpm.io/) (v9.x — run `corepack enable` to auto-install)
-- [PostgreSQL](https://www.postgresql.org/download/) with the [pgvector](https://github.com/pgvector/pgvector) extension (for RAG features)
+- [PostgreSQL](https://www.postgresql.org/download/) with the [pgvector](https://github.com/pgvector/pgvector) extension — production uses [Railway](https://railway.app/) for the main DB and [Neon](https://neon.tech/) for vector embeddings
 - A [Clerk.dev](https://clerk.dev/) account for auth (optional — use `ALLOW_DEV_AUTH_BYPASS=true` for local dev)
 - A [Google AI Studio](https://aistudio.google.com/) key for AI features (optional)
 
@@ -204,16 +304,12 @@ This fires up the Vite frontend with HMR and the Express backend on port `5000`.
 
 ## 🧪 Testing & Code Quality
 
-The repository maintains stability through comprehensive testing at all mutation points.
-
-- **Unit & Integration Tests (Vitest)**: 750+ test cases across 60+ test files covering AI retry boundaries, functional calculations (streak aggregators, workout spreaders), rate-limiting state, schema validations, and service logic.
-  - Run via: `pnpm test` or `pnpm test:watch`
-- **End-to-End Tests (Cypress)**: 120+ E2E test cases running headless browser sessions mimicking real user flows from authentication through drag-and-drop timeline interactions.
-  - Run via: `pnpm exec cypress open`
-- **TypeScript Compiler**: Strict static type safety enforced globally.
-  - Run via: `pnpm check`
-- **Linting & Formatting**: ESLint + Prettier for consistent code style.
-  - Run via: `pnpm lint` and `pnpm format:check`
+| Layer | Tool | Coverage | Command |
+|---|---|---|---|
+| Unit & Integration | Vitest | 750+ tests across 60+ files (80% threshold) | `pnpm test` |
+| End-to-End | Cypress | 120+ tests across 9 suites | `pnpm exec cypress open` |
+| Type Safety | TypeScript 5.9 (strict) | Full codebase | `pnpm check` |
+| Lint & Format | ESLint + Prettier | Full codebase | `pnpm lint` / `pnpm format:check` |
 
 ---
 

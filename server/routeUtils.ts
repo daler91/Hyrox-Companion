@@ -12,6 +12,10 @@ interface AuthenticatedRequest extends Request {
 
 // One limiter instance per unique (category, maxRequests, windowMs) combination.
 // This preserves the per-category isolation of the previous Map-based design.
+//
+// Limitation: MemoryStore is memory-backed, resets on restart, and is per-instance.
+// This is acceptable for our single-instance Railway deployment.
+// If scaling to multiple instances, swap to `rate-limit-redis` for shared state.
 const limiterCache = new Map<string, ReturnType<typeof rateLimit>>();
 
 export function rateLimiter(
@@ -59,7 +63,8 @@ export function rateLimiter(
       );
     }
 
-    const limiter = limiterCache.get(cacheKey)!;
+    const limiter = limiterCache.get(cacheKey);
+    if (!limiter) throw new Error(`Rate limiter not found for ${category}`);
     return limiter(req, res, next);
   };
 }

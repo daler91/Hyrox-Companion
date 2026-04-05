@@ -115,7 +115,10 @@ export async function importPlanFromCSV(
   await storage.createPlanDays(days);
 
   const fullPlan = await storage.getTrainingPlan(plan.id, userId);
-  return fullPlan!;
+  if (!fullPlan) {
+    throw new Error(`Failed to retrieve training plan ${plan.id} after creation`);
+  }
+  return fullPlan;
 }
 
 export async function createSamplePlan(userId: string): Promise<TrainingPlanWithDays> {
@@ -140,7 +143,10 @@ export async function createSamplePlan(userId: string): Promise<TrainingPlanWith
   await storage.createPlanDays(days);
 
   const fullPlan = await storage.getTrainingPlan(plan.id, userId);
-  return fullPlan!;
+  if (!fullPlan) {
+    throw new Error(`Failed to retrieve training plan ${plan.id} after creation`);
+  }
+  return fullPlan;
 }
 
 export async function updatePlanDayWithCleanup(

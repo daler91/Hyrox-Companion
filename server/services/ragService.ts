@@ -4,6 +4,7 @@ import { storage } from "../storage";
 import type { CoachingMaterial } from "@shared/schema";
 import { env } from "../env";
 
+
 // ---------------------------------------------------------------------------
 // Chunking
 // ---------------------------------------------------------------------------
@@ -130,30 +131,12 @@ export async function retrieveRelevantChunks(
   return chunks.map((c) => c.content);
 }
 
-/**
- * Build a coaching materials section from retrieved chunks instead of
- * the old truncation approach.
- */
-export function buildRetrievedMaterialsSection(chunks: string[]): string {
-  if (chunks.length === 0) return "";
-
-  let section = `\n--- COACHING REFERENCE MATERIALS ---\n`;
-  section += `Use these relevant excerpts from the athlete's coaching materials to guide your coaching decisions.\n\n`;
-
-  for (let i = 0; i < chunks.length; i++) {
-    section += `[Excerpt ${i + 1}]\n${chunks[i]}\n\n`;
-  }
-
-  section += `--- END COACHING MATERIALS ---\n`;
-  return section;
-}
-
 export async function getRagStatus(userId: string) {
   const materials = await storage.listCoachingMaterials(userId);
   const chunkCounts = await storage.getChunkCountsByMaterial(userId);
   const chunkMap = new Map(chunkCounts.map((c) => [c.materialId, c]));
 
-  const hasApiKey = Boolean(process.env.GEMINI_API_KEY);
+  const hasApiKey = Boolean(env.GEMINI_API_KEY);
   let storedDimension: number | null = null;
   try {
     storedDimension = await storage.getStoredEmbeddingDimension(userId);

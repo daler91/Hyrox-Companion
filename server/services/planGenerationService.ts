@@ -61,7 +61,7 @@ function parseAndValidateDays(text: string): GeneratedDay[] {
   try {
     raw = JSON.parse(text);
   } catch {
-    logger.error({ rawResponse: text.slice(0, 500) }, "[planGen] JSON parse failed");
+    logger.error({ responseLength: text.length }, "[planGen] JSON parse failed");
     throw new Error("Failed to parse AI response as JSON");
   }
 
@@ -82,7 +82,7 @@ function parseAndValidateDays(text: string): GeneratedDay[] {
       });
     } else {
       logger.warn(
-        { issues: result.error.issues, item: JSON.stringify(item).slice(0, 200) },
+        { issues: result.error.issues },
         "[planGen] Dropping invalid day",
       );
     }

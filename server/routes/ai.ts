@@ -5,6 +5,7 @@ import { storage } from "../storage";
 import { chatWithCoach, streamChatWithCoach, generateWorkoutSuggestions, parseExercisesFromText, type UpcomingWorkout } from "../gemini/index";
 import { rateLimiter, asyncHandler, validateBody } from "../routeUtils";
 import { buildAIContext, extractCoachingMaterialsText, type AIContext, type ChatInput } from "../services/aiContextService";
+import { sanitizeRagInfo } from "../services/ragRetrieval";
 import { getUserId } from "../types";
 import { chatRequestSchema, parseExercisesRequestSchema, insertChatMessageSchema, type InsertChatMessage } from "@shared/schema";
 import { z } from "zod";
@@ -49,7 +50,7 @@ router.post("/api/v1/chat", isAuthenticated, rateLimiter("chat", 10), validateBo
     }
     const { input, aiContext } = ctx;
     const response = await chatWithCoach(input.message, input.history, aiContext.trainingContext, aiContext.coachingMaterials, aiContext.retrievedChunks);
-    res.json({ response, ragInfo: aiContext.ragInfo });
+    res.json({ response, ragInfo: sanitizeRagInfo(aiContext.ragInfo) });
   }));
 
 router.post("/api/v1/chat/stream", isAuthenticated, rateLimiter("chat", 10), validateBody(chatRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof chatRequestSchema>>, res: Response) => {
@@ -68,7 +69,7 @@ router.post("/api/v1/chat/stream", isAuthenticated, rateLimiter("chat", 10), val
     req.on("close", () => { clientDisconnected = true; });
 
     try {
-      res.write(`data: ${JSON.stringify({ ragInfo: aiContext.ragInfo })}\n\n`);
+      res.write(`data: ${JSON.stringify({ ragInfo: sanitizeRagInfo(aiContext.ragInfo) })}\n\n`);
 
       const stream = streamChatWithCoach(input.message, input.history, aiContext.trainingContext, aiContext.coachingMaterials, aiContext.retrievedChunks);
 
@@ -154,7 +155,7 @@ router.post("/api/v1/timeline/ai-suggestions", isAuthenticated, rateLimiter("sug
       return acc;
     }, []);
 
-    res.json({ suggestions, ragInfo: aiContext.ragInfo });
+    res.json({ suggestions, ragInfo: sanitizeRagInfo(aiContext.ragInfo) });
   }));
 
 export default router;

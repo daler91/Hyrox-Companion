@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { logger } from "../logger";
 import { SUGGESTIONS_PROMPT } from "../prompts";
-import { getAiClient, GEMINI_SUGGESTIONS_MODEL, retryWithBackoff, truncate } from "./client";
+import { getAiClient, GEMINI_SUGGESTIONS_MODEL, retryWithBackoff } from "./client";
 import { ThinkingLevel } from "@google/genai";
 import { sanitizeHtml } from "../utils/sanitize";
 import type { TrainingContext } from "./types";
@@ -35,7 +35,7 @@ export function parseAndValidateSuggestions(text: string): WorkoutSuggestion[] {
   try {
     raw = JSON.parse(text);
   } catch (parseErr) {
-    logger.error({ err: parseErr, rawResponse: truncate(text) }, "[gemini] suggestions JSON.parse failed.");
+    logger.error({ err: parseErr, responseLength: text.length }, "[gemini] suggestions JSON.parse failed.");
     return [];
   }
 

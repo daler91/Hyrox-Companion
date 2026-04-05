@@ -1,4 +1,5 @@
 import type { TrainingContext } from "./gemini/types";
+import { sanitizeUserInput } from "./utils/sanitize";
 
 export const BASE_SYSTEM_PROMPT = `You are an expert AI fitness coach. You help athletes plan, track, and optimize their training for any fitness goal — from running races and functional fitness competitions (like Hyrox) to strength building, weight loss, and general health.
 
@@ -14,6 +15,7 @@ When users ask about their training:
 - Be encouraging but honest about areas for improvement
 - Suggest workout structures and recovery strategies
 - Identify training gaps (e.g., exercises not practiced recently)
+- When asked about upcoming workouts, reference the scheduled plan data to discuss what's coming up and whether modifications might help
 - Acknowledge their progress and consistency
 
 Keep responses concise but informative. Use bullet points for lists.
@@ -309,6 +311,19 @@ function buildRecentWorkouts(trainingContext: TrainingContext): string {
   return section;
 }
 
+function buildUpcomingWorkouts(trainingContext: TrainingContext): string {
+  if (!trainingContext.upcomingWorkouts || trainingContext.upcomingWorkouts.length === 0) return "";
+
+  let section = `\n\nUpcoming Planned Workouts (next 7 days):`;
+  for (const workout of trainingContext.upcomingWorkouts) {
+    let line = `\n- ${workout.date}: ${workout.focus || "General"} - ${workout.mainWorkout || "No details"}`;
+    if (workout.accessory) line += ` | Accessory: ${workout.accessory}`;
+    if (workout.notes) line += ` | Notes: ${workout.notes}`;
+    section += line;
+  }
+  return section;
+}
+
 export interface CoachingMaterialInput {
   title: string;
   content: string;
@@ -354,7 +369,8 @@ export function buildRetrievedChunksSection(chunks: string[]): string {
   section += `Use these relevant excerpts from the athlete's coaching materials to guide your coaching decisions.\n\n`;
 
   for (let i = 0; i < chunks.length; i++) {
-    section += `[Excerpt ${i + 1}]\n${chunks[i]}\n\n`;
+    // 🛡️ Sentinel: Sanitize retrieved chunks to mitigate prompt injection via user-uploaded materials
+    section += `[Excerpt ${i + 1}]\n${sanitizeUserInput(chunks[i])}\n\n`;
   }
 
   section += `--- END COACHING MATERIALS ---\n`;
@@ -385,6 +401,7 @@ export function buildSystemPrompt(
   contextSection += buildExerciseFocus(trainingContext);
   contextSection += buildStructuredPerformance(trainingContext);
   contextSection += buildRecentWorkouts(trainingContext);
+  contextSection += buildUpcomingWorkouts(trainingContext);
 
   contextSection += `\n\n--- END TRAINING DATA ---\n\nUse this data to provide personalized coaching. Reference specific workouts and patterns when relevant.`;
 

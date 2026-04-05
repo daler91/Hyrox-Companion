@@ -106,6 +106,13 @@
       "when": 1774569600000,
       "tag": "0014_ensure_embedding_vector_3072",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1775262747150,
+      "tag": "0015_thin_nextwave",
+      "breakpoints": true
     }
   ]
 }

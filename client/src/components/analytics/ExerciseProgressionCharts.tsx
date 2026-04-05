@@ -1,5 +1,12 @@
 import { useMemo, useState } from "react";
-import { Loader2, TrendingUp, TrendingDown, Minus, BarChart3, LineChart as LineChartIcon } from "lucide-react";
+import {
+  Loader2,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  BarChart3,
+  LineChart as LineChartIcon,
+} from "lucide-react";
 import { MiniBarChart, type ExerciseAnalyticDay } from "@/components/analytics/MiniBarChart";
 import { MiniLineChart } from "@/components/analytics/MiniLineChart";
 import { Button } from "@/components/ui/button";
@@ -15,7 +22,10 @@ interface ExerciseProgressionChartsProps {
   readonly dLabel: string;
 }
 
-function computeTrend(data: ExerciseAnalyticDay[], key: keyof ExerciseAnalyticDay): "up" | "down" | "flat" {
+function computeTrend(
+  data: ExerciseAnalyticDay[],
+  key: keyof ExerciseAnalyticDay,
+): "up" | "down" | "flat" {
   if (data.length < 2) return "flat";
   const mid = Math.floor(data.length / 2);
   const firstHalf = data.slice(0, mid);
@@ -46,10 +56,10 @@ function TrendArrow({ trend }: Readonly<{ trend: "up" | "down" | "flat" }>) {
 }
 
 function summarizeExerciseData(data: ExerciseAnalyticDay[]) {
-  const hasVolume = data.some((d) => d.totalVolume > 0);
-  const hasMaxWeight = data.some((d) => d.maxWeight > 0);
-  const hasTotalReps = data.some((d) => d.totalReps > 0);
-  const hasTotalDistance = data.some((d) => d.totalDistance > 0);
+  let hasVolume = false;
+  let hasMaxWeight = false;
+  let hasTotalReps = false;
+  let hasTotalDistance = false;
 
   let totalSets = 0;
   let totalReps = 0;
@@ -59,6 +69,11 @@ function summarizeExerciseData(data: ExerciseAnalyticDay[]) {
     totalSets += d.totalSets;
     totalReps += d.totalReps;
     totalVolume += d.totalVolume;
+
+    if (d.totalVolume > 0) hasVolume = true;
+    if (d.maxWeight > 0) hasMaxWeight = true;
+    if (d.totalReps > 0) hasTotalReps = true;
+    if (d.totalDistance > 0) hasTotalDistance = true;
   }
 
   const sessions = data.length;
@@ -118,9 +133,7 @@ export function ExerciseProgressionCharts({
 
   if (!analyticsData || analyticsData.data.length === 0) {
     return (
-      <p className="text-muted-foreground text-sm py-4">
-        No data available for this exercise yet.
-      </p>
+      <p className="text-muted-foreground text-sm py-4">No data available for this exercise yet.</p>
     );
   }
 
@@ -217,7 +230,9 @@ export function ExerciseProgressionCharts({
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Volume ({weightLabel}) <TrendArrow trend={analyticsData.volumeTrend} />
                 </p>
-                <p className="text-sm text-muted-foreground mt-1">{analyticsData.avgVolume.toLocaleString()}/session</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {analyticsData.avgVolume.toLocaleString()}/session
+                </p>
               </div>
             )}
           </div>

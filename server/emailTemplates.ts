@@ -1,4 +1,6 @@
 import type { User } from "@shared/schema";
+import { sanitizeHtml } from "./utils/sanitize";
+import { env } from "./env";
 
 export interface WeeklySummaryData {
   completedCount: number;
@@ -53,7 +55,7 @@ export function baseStyles(): string {
 }
 
 export function getAppUrl(): string {
-  return process.env.APP_URL || "https://fitai.coach";
+  return env.APP_URL || "https://fitai.coach";
 }
 
 export function buildWeeklySummaryEmail(
@@ -101,10 +103,10 @@ export function buildWeeklySummaryEmail(
 <div class="container">
   <div class="header">
     <h1>Weekly Training Summary</h1>
-    <p>${data.weekStartDate} – ${data.weekEndDate}</p>
+    <p>${sanitizeHtml(data.weekStartDate)} – ${sanitizeHtml(data.weekEndDate)}</p>
   </div>
   <div class="content">
-    <p style="font-size:16px;color:#334155;">Hey ${name}, here's how your week went:</p>
+    <p style="font-size:16px;color:#334155;">Hey ${sanitizeHtml(name)}, here's how your week went:</p>
 
     <div class="stat-grid">
       <div class="stat-card">
@@ -168,9 +170,9 @@ export function buildMissedWorkoutEmail(
     .map(
       (w) => `
     <div class="workout-item">
-      <div class="workout-focus">${w.focus}</div>
-      <div class="workout-detail">${w.mainWorkout.substring(0, 120)}${w.mainWorkout.length > 120 ? "..." : ""}</div>
-      <div class="workout-date">${w.date}${w.planName ? ` • ${w.planName}` : ""}</div>
+      <div class="workout-focus">${sanitizeHtml(w.focus)}</div>
+      <div class="workout-detail">${sanitizeHtml(w.mainWorkout.substring(0, 120))}${w.mainWorkout.length > 120 ? "..." : ""}</div>
+      <div class="workout-date">${sanitizeHtml(w.date)}${w.planName ? ` • ${sanitizeHtml(w.planName)}` : ""}</div>
     </div>`,
     )
     .join("");
@@ -197,7 +199,7 @@ export function buildMissedWorkoutEmail(
     <p>Don't let momentum slip away</p>
   </div>
   <div class="content">
-    <p style="font-size:16px;color:#334155;">Hey ${name}, you had ${count} planned session${pluralSuffix} that ${wasWere} missed:</p>
+    <p style="font-size:16px;color:#334155;">Hey ${sanitizeHtml(name)}, you had ${count} planned session${pluralSuffix} that ${wasWere} missed:</p>
 ${workoutItems}
     <p style="font-size:14px;color:#64748b;margin-top:16px;">Missing a session happens to everyone. The important thing is to get back on track. You can mark these as skipped or reschedule them in the app.</p>
 

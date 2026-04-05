@@ -45,7 +45,20 @@ const FOCUS_OPTIONS = [
   { value: "conditioning", label: "Conditioning" },
 ];
 
-export function GeneratePlanDialog({ open, onOpenChange }: GeneratePlanDialogProps) {
+function calculateSuggestedStartDate(race: string, weeks: number): string {
+  const raceD = new Date(race);
+  const start = new Date(raceD);
+  start.setDate(start.getDate() - weeks * 7);
+  const dayOfWeek = start.getDay();
+  let mondayOffset: number;
+  if (dayOfWeek === 0) mondayOffset = 1;
+  else if (dayOfWeek === 1) mondayOffset = 0;
+  else mondayOffset = 8 - dayOfWeek;
+  start.setDate(start.getDate() + mondayOffset);
+  return start.toISOString().split("T")[0];
+}
+
+function useGeneratePlanForm() {
   const [step, setStep] = useState(0);
   const [goal, setGoal] = useState("");
   const [totalWeeks, setTotalWeeks] = useState(DEFAULT_WEEKS);
@@ -56,29 +69,6 @@ export function GeneratePlanDialog({ open, onOpenChange }: GeneratePlanDialogPro
   const [restDays, setRestDays] = useState<string[]>(DEFAULT_REST_DAYS[DEFAULT_DAYS_PER_WEEK]);
   const [focusAreas, setFocusAreas] = useState<string[]>([]);
   const [injuries, setInjuries] = useState("");
-
-  const generatePlan = useGeneratePlan();
-
-  const handleGenerate = () => {
-    const input: GeneratePlanInput = {
-      goal,
-      totalWeeks,
-      daysPerWeek,
-      experienceLevel,
-      ...(raceDate ? { raceDate } : {}),
-      ...(startDate ? { startDate } : {}),
-      ...(daysPerWeek < 7 && restDays.length > 0 ? { restDays: restDays as GeneratePlanInput["restDays"] } : {}),
-      ...(focusAreas.length > 0 ? { focusAreas } : {}),
-      ...(injuries ? { injuries } : {}),
-    };
-
-    generatePlan.mutate(input, {
-      onSuccess: () => {
-        onOpenChange(false);
-        resetForm();
-      },
-    });
-  };
 
   const resetForm = () => {
     setStep(0);
@@ -111,19 +101,6 @@ export function GeneratePlanDialog({ open, onOpenChange }: GeneratePlanDialogPro
     setRestDays(DEFAULT_REST_DAYS[clamped] ?? []);
   };
 
-  const calculateSuggestedStartDate = (race: string, weeks: number): string => {
-    const raceD = new Date(race);
-    const start = new Date(raceD);
-    start.setDate(start.getDate() - weeks * 7);
-    const dayOfWeek = start.getDay();
-    let mondayOffset: number;
-    if (dayOfWeek === 0) mondayOffset = 1;
-    else if (dayOfWeek === 1) mondayOffset = 0;
-    else mondayOffset = 8 - dayOfWeek;
-    start.setDate(start.getDate() + mondayOffset);
-    return start.toISOString().split("T")[0];
-  };
-
   const handleRaceDateChange = (value: string) => {
     setRaceDate(value);
     if (value && !startDate) {
@@ -136,8 +113,56 @@ export function GeneratePlanDialog({ open, onOpenChange }: GeneratePlanDialogPro
   const canProceedStep1 = daysPerWeek === 7 || restDays.length === requiredRestDays;
   const canGenerate = canProceedStep0 && canProceedStep1;
 
+  return {
+    step, setStep,
+    goal, setGoal,
+    totalWeeks, setTotalWeeks,
+    daysPerWeek,
+    experienceLevel, setExperienceLevel,
+    raceDate,
+    startDate, setStartDate,
+    restDays,
+    focusAreas,
+    injuries, setInjuries,
+    resetForm,
+    toggleFocus,
+    toggleRestDay,
+    handleDaysPerWeekChange,
+    handleRaceDateChange,
+    requiredRestDays,
+    canProceedStep0,
+    canProceedStep1,
+    canGenerate,
+  };
+}
+
+export function GeneratePlanDialog({ open, onOpenChange }: GeneratePlanDialogProps) {
+  const form = useGeneratePlanForm();
+  const generatePlan = useGeneratePlan();
+
+  const handleGenerate = () => {
+    const input: GeneratePlanInput = {
+      goal: form.goal,
+      totalWeeks: form.totalWeeks,
+      daysPerWeek: form.daysPerWeek,
+      experienceLevel: form.experienceLevel,
+      ...(form.raceDate ? { raceDate: form.raceDate } : {}),
+      ...(form.startDate ? { startDate: form.startDate } : {}),
+      ...(form.daysPerWeek < 7 && form.restDays.length > 0 ? { restDays: form.restDays as GeneratePlanInput["restDays"] } : {}),
+      ...(form.focusAreas.length > 0 ? { focusAreas: form.focusAreas } : {}),
+      ...(form.injuries ? { injuries: form.injuries } : {}),
+    };
+
+    generatePlan.mutate(input, {
+      onSuccess: () => {
+        onOpenChange(false);
+        form.resetForm();
+      },
+    });
+  };
+
   return (
-    <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) resetForm(); }}>
+    <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) form.resetForm(); }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -145,34 +170,34 @@ export function GeneratePlanDialog({ open, onOpenChange }: GeneratePlanDialogPro
             Generate AI Training Plan
           </DialogTitle>
           <DialogDescription>
-            {step === 0 && "What's your training goal?"}
-            {step === 1 && "Set your plan duration and experience level."}
-            {step === 2 && "Optional: focus areas and additional details."}
+            {form.step === 0 && "What's your training goal?"}
+            {form.step === 1 && "Set your plan duration and experience level."}
+            {form.step === 2 && "Optional: focus areas and additional details."}
           </DialogDescription>
         </DialogHeader>
 
-        {step === 0 && (
+        {form.step === 0 && (
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="goal">Goal</Label>
               <Textarea
                 id="goal"
                 placeholder="e.g., Complete Hyrox Open in under 90 minutes, or Train for my first half marathon"
-                value={goal}
-                onChange={(e) => setGoal(e.target.value)}
+                value={form.goal}
+                onChange={(e) => form.setGoal(e.target.value)}
                 maxLength={500}
                 rows={3}
               />
             </div>
             <div className="flex justify-end">
-              <Button onClick={() => setStep(1)} disabled={!canProceedStep0}>
+              <Button onClick={() => form.setStep(1)} disabled={!form.canProceedStep0}>
                 Next <ChevronRight className="ml-1 h-4 w-4" />
               </Button>
             </div>
           </div>
         )}
 
-        {step === 1 && (
+        {form.step === 1 && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -182,8 +207,8 @@ export function GeneratePlanDialog({ open, onOpenChange }: GeneratePlanDialogPro
                   type="number"
                   min={MIN_WEEKS}
                   max={MAX_WEEKS}
-                  value={totalWeeks}
-                  onChange={(e) => setTotalWeeks(Math.min(MAX_WEEKS, Math.max(MIN_WEEKS, Number.parseInt(e.target.value) || DEFAULT_WEEKS)))}
+                  value={form.totalWeeks}
+                  onChange={(e) => form.setTotalWeeks(Math.min(MAX_WEEKS, Math.max(MIN_WEEKS, Number.parseInt(e.target.value) || DEFAULT_WEEKS)))}
                 />
               </div>
               <div className="space-y-2">
@@ -193,24 +218,24 @@ export function GeneratePlanDialog({ open, onOpenChange }: GeneratePlanDialogPro
                   type="number"
                   min={MIN_DAYS_PER_WEEK}
                   max={MAX_DAYS_PER_WEEK}
-                  value={daysPerWeek}
-                  onChange={(e) => handleDaysPerWeekChange(Number.parseInt(e.target.value) || DEFAULT_DAYS_PER_WEEK)}
+                  value={form.daysPerWeek}
+                  onChange={(e) => form.handleDaysPerWeekChange(Number.parseInt(e.target.value) || DEFAULT_DAYS_PER_WEEK)}
                 />
               </div>
             </div>
 
-            {daysPerWeek < 7 && (
+            {form.daysPerWeek < 7 && (
               <div className="space-y-2">
-                <Label>Rest Days <span className="text-muted-foreground font-normal">(select {requiredRestDays})</span></Label>
+                <Label>Rest Days <span className="text-muted-foreground font-normal">(select {form.requiredRestDays})</span></Label>
                 <div className="flex flex-wrap gap-1.5">
                   {DAY_NAMES.map((day) => (
                     <Button
                       key={day}
-                      variant={restDays.includes(day) ? "default" : "outline"}
+                      variant={form.restDays.includes(day) ? "default" : "outline"}
                       size="sm"
                       className="text-xs px-2 py-1 h-7"
-                      onClick={() => toggleRestDay(day)}
-                      disabled={!restDays.includes(day) && restDays.length >= requiredRestDays}
+                      onClick={() => form.toggleRestDay(day)}
+                      disabled={!form.restDays.includes(day) && form.restDays.length >= form.requiredRestDays}
                       type="button"
                     >
                       {day.slice(0, 3)}
@@ -222,7 +247,7 @@ export function GeneratePlanDialog({ open, onOpenChange }: GeneratePlanDialogPro
 
             <div className="space-y-2">
               <Label>Experience Level</Label>
-              <Select value={experienceLevel} onValueChange={(v) => setExperienceLevel(v as typeof experienceLevel)}>
+              <Select value={form.experienceLevel} onValueChange={(v) => form.setExperienceLevel(v as typeof form.experienceLevel)}>
                 <SelectTrigger aria-label="Select experience level">
                   <SelectValue />
                 </SelectTrigger>
@@ -240,8 +265,8 @@ export function GeneratePlanDialog({ open, onOpenChange }: GeneratePlanDialogPro
                 <Input
                   id="startDate"
                   type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
+                  value={form.startDate}
+                  onChange={(e) => form.setStartDate(e.target.value)}
                 />
               </div>
               <div className="space-y-2">
@@ -249,8 +274,8 @@ export function GeneratePlanDialog({ open, onOpenChange }: GeneratePlanDialogPro
                 <Input
                   id="raceDate"
                   type="date"
-                  value={raceDate}
-                  onChange={(e) => handleRaceDateChange(e.target.value)}
+                  value={form.raceDate}
+                  onChange={(e) => form.handleRaceDateChange(e.target.value)}
                 />
               </div>
               <p className="col-span-2 text-xs text-muted-foreground -mt-2">
@@ -259,17 +284,17 @@ export function GeneratePlanDialog({ open, onOpenChange }: GeneratePlanDialogPro
             </div>
 
             <div className="flex justify-between">
-              <Button variant="outline" onClick={() => setStep(0)}>
+              <Button variant="outline" onClick={() => form.setStep(0)}>
                 <ChevronLeft className="mr-1 h-4 w-4" /> Back
               </Button>
-              <Button onClick={() => setStep(2)}>
+              <Button onClick={() => form.setStep(2)}>
                 Next <ChevronRight className="ml-1 h-4 w-4" />
               </Button>
             </div>
           </div>
         )}
 
-        {step === 2 && (
+        {form.step === 2 && (
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Focus Areas (optional)</Label>
@@ -277,9 +302,9 @@ export function GeneratePlanDialog({ open, onOpenChange }: GeneratePlanDialogPro
                 {FOCUS_OPTIONS.map((opt) => (
                   <Button
                     key={opt.value}
-                    variant={focusAreas.includes(opt.value) ? "default" : "outline"}
+                    variant={form.focusAreas.includes(opt.value) ? "default" : "outline"}
                     size="sm"
-                    onClick={() => toggleFocus(opt.value)}
+                    onClick={() => form.toggleFocus(opt.value)}
                     type="button"
                   >
                     {opt.label}
@@ -293,20 +318,20 @@ export function GeneratePlanDialog({ open, onOpenChange }: GeneratePlanDialogPro
               <Textarea
                 id="injuries"
                 placeholder="e.g., Recovering from knee injury, avoid heavy squats"
-                value={injuries}
-                onChange={(e) => setInjuries(e.target.value)}
+                value={form.injuries}
+                onChange={(e) => form.setInjuries(e.target.value)}
                 maxLength={500}
                 rows={2}
               />
             </div>
 
             <div className="flex justify-between">
-              <Button variant="outline" onClick={() => setStep(1)}>
+              <Button variant="outline" onClick={() => form.setStep(1)}>
                 <ChevronLeft className="mr-1 h-4 w-4" /> Back
               </Button>
               <Button
                 onClick={handleGenerate}
-                disabled={!canGenerate || generatePlan.isPending}
+                disabled={!form.canGenerate || generatePlan.isPending}
               >
                 {generatePlan.isPending ? (
                   <>
