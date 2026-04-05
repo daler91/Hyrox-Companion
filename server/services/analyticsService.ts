@@ -185,14 +185,19 @@ function buildStationCoverage(
     }
   }
 
+  // Perf: hoist the todayStr->epoch conversion out of the per-station loop so
+  // we allocate one Date object total instead of one per station (N allocations).
+  // Previously `new Date(todayStr)` was invoked inside the .map callback on every
+  // iteration, producing redundant GC pressure on a hot analytics-overview path.
+  const todayTime = new Date(todayStr).getTime();
+  const MS_PER_DAY = 1000 * 60 * 60 * 24;
+
   return HYROX_STATIONS_WITH_RUNNING.map((station) => {
     const lastTrained = stationLastTrained.get(station) ?? null;
-    let daysSince: number | null = null;
-    if (lastTrained) {
-      daysSince = Math.round(
-        (new Date(todayStr).getTime() - new Date(lastTrained).getTime()) / (1000 * 60 * 60 * 24)
-      );
-    }
+    const daysSince =
+      lastTrained !== null
+        ? Math.round((todayTime - new Date(lastTrained).getTime()) / MS_PER_DAY)
+        : null;
     return { station, lastTrained, daysSince };
   });
 }
