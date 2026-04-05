@@ -10,7 +10,16 @@ import {
   type ExerciseCategory,
 } from "@shared/schema";
 import { categoryLabels } from "@/lib/exerciseUtils";
-import { cn } from "@/lib/utils";
+
+const TAB_TRIGGER_CLASS =
+  "shrink-0 rounded-full border border-border bg-card px-4 py-2 text-sm font-medium " +
+  "data-[state=active]:bg-primary data-[state=active]:text-primary-foreground " +
+  "data-[state=active]:border-primary data-[state=active]:shadow-none";
+
+const TAB_LIST_CLASS =
+  "flex h-auto w-full justify-start gap-2 overflow-x-auto scrollbar-none bg-transparent p-0";
+
+const noop = () => {};
 
 interface WorkoutExerciseModeProps {
   exerciseBlocks: string[];
@@ -87,61 +96,53 @@ export const WorkoutExerciseMode = ({
 
   const customBlocks: ExerciseRowBlock[] = blocksByName.get("custom") ?? [];
 
+  const renderRow = (
+    name: ExerciseName,
+    displayLabel: string,
+    blocks: ExerciseRowBlock[],
+    overrides?: { key?: string; isExpanded?: boolean; onToggle?: () => void; showCustomNameInput?: boolean },
+  ) => {
+    const add = () => handleAdd(name);
+    return (
+      <ExerciseRow
+        key={overrides?.key ?? name}
+        exerciseName={name}
+        displayLabel={displayLabel}
+        blocks={blocks}
+        isExpanded={overrides?.isExpanded ?? expanded.has(name)}
+        onToggle={overrides?.onToggle ?? (() => toggleExpanded(name))}
+        onAdd={add}
+        onDuplicate={add}
+        onUpdateBlock={updateBlock}
+        onRemoveBlock={removeBlock}
+        weightUnit={weightUnit}
+        distanceUnit={distanceUnit}
+        showCustomNameInput={overrides?.showCustomNameInput}
+      />
+    );
+  };
+
   return (
     <div className="space-y-4" data-testid="exercise-selector">
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabValue)}>
-        <TabsList
-          className={cn(
-            "flex h-auto w-full justify-start gap-2 overflow-x-auto scrollbar-none",
-            "bg-transparent p-0",
-          )}
-        >
-          {categoryOrder.map((cat) => (
+        <TabsList className={TAB_LIST_CLASS}>
+          {(categoryOrder as TabValue[]).concat("custom").map((cat) => (
             <TabsTrigger
               key={cat}
               value={cat}
-              className={cn(
-                "shrink-0 rounded-full border border-border bg-card px-4 py-2 text-sm font-medium",
-                "data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-primary data-[state=active]:shadow-none",
-              )}
+              className={TAB_TRIGGER_CLASS}
               data-testid={`tab-${cat}`}
             >
               {tabLabels[cat]}
             </TabsTrigger>
           ))}
-          <TabsTrigger
-            value="custom"
-            className={cn(
-              "shrink-0 rounded-full border border-border bg-card px-4 py-2 text-sm font-medium",
-              "data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-primary data-[state=active]:shadow-none",
-            )}
-            data-testid="tab-custom"
-          >
-            Custom
-          </TabsTrigger>
         </TabsList>
 
         {exercisesByCategory.map(({ category, exercises }) => (
           <TabsContent key={category} value={category} className="mt-4 space-y-2">
-            {exercises.map(([name, def]) => {
-              const blocks = blocksByName.get(name) ?? [];
-              return (
-                <ExerciseRow
-                  key={name}
-                  exerciseName={name}
-                  displayLabel={def.label}
-                  blocks={blocks}
-                  isExpanded={expanded.has(name)}
-                  onToggle={() => toggleExpanded(name)}
-                  onAdd={() => handleAdd(name)}
-                  onDuplicate={() => handleAdd(name)}
-                  onUpdateBlock={updateBlock}
-                  onRemoveBlock={removeBlock}
-                  weightUnit={weightUnit}
-                  distanceUnit={distanceUnit}
-                />
-              );
-            })}
+            {exercises.map(([name, def]) =>
+              renderRow(name, def.label, blocksByName.get(name) ?? []),
+            )}
           </TabsContent>
         ))}
 
@@ -161,23 +162,14 @@ export const WorkoutExerciseMode = ({
               No custom exercises yet. Tap above to create one.
             </p>
           ) : (
-            customBlocks.map((block) => (
-              <ExerciseRow
-                key={block.blockId}
-                exerciseName="custom"
-                displayLabel={block.data.customLabel || "Custom exercise"}
-                blocks={[block]}
-                isExpanded
-                onToggle={() => {}}
-                onAdd={() => handleAdd("custom")}
-                onDuplicate={() => handleAdd("custom")}
-                onUpdateBlock={updateBlock}
-                onRemoveBlock={removeBlock}
-                weightUnit={weightUnit}
-                distanceUnit={distanceUnit}
-                showCustomNameInput
-              />
-            ))
+            customBlocks.map((block) =>
+              renderRow("custom", block.data.customLabel || "Custom exercise", [block], {
+                key: block.blockId,
+                isExpanded: true,
+                onToggle: noop,
+                showCustomNameInput: true,
+              }),
+            )
           )}
         </TabsContent>
       </Tabs>
