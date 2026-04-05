@@ -1,23 +1,10 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Wind,
-  ArrowRight,
-  ArrowLeft,
-  Zap,
-  Ship,
-  Dumbbell,
-  Target,
-  Plus,
-  PersonStanding,
-  Footprints,
-  Timer,
-  Flame,
-  CircleDot,
-} from "lucide-react";
+import { Plus } from "lucide-react";
 import { EXERCISE_DEFINITIONS, type ExerciseName, type ExerciseCategory } from "@shared/schema";
 import React from "react";
 import { categoryLabels } from "@/lib/exerciseUtils";
+import { exerciseIcons } from "@/lib/exerciseIcons";
 
 interface ExerciseSelectorProps {
   readonly selectedExercises: ExerciseName[];
@@ -25,37 +12,6 @@ interface ExerciseSelectorProps {
   readonly onAdd?: (name: ExerciseName) => void;
   readonly allowDuplicates?: boolean;
 }
-
-const exerciseIcons: Partial<Record<ExerciseName, typeof Wind>> = {
-  skierg: Wind,
-  sled_push: ArrowRight,
-  sled_pull: ArrowLeft,
-  burpee_broad_jump: Zap,
-  rowing: Ship,
-  farmers_carry: Dumbbell,
-  sandbag_lunges: Footprints,
-  wall_balls: Target,
-  easy_run: PersonStanding,
-  tempo_run: PersonStanding,
-  interval_run: Timer,
-  long_run: PersonStanding,
-  back_squat: Dumbbell,
-  front_squat: Dumbbell,
-  deadlift: Dumbbell,
-  romanian_deadlift: Dumbbell,
-  bench_press: Dumbbell,
-  overhead_press: Dumbbell,
-  pull_up: Dumbbell,
-  bent_over_row: Dumbbell,
-  lunges: Footprints,
-  hip_thrust: Dumbbell,
-  burpees: Zap,
-  box_jumps: Flame,
-  assault_bike: CircleDot,
-  kettlebell_swings: Dumbbell,
-  battle_ropes: Flame,
-  custom: Plus,
-};
 
 const selectorCategoryLabels: Record<ExerciseCategory, string> = {
   ...categoryLabels,
