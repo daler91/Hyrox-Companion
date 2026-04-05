@@ -20,7 +20,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
 
   let activePlan: TrainingContext["activePlan"];
   if (activePlanRecord) {
-    const currentWeek = computeCurrentWeek(timeline, activePlanRecord.totalWeeks);
+    const currentWeek = computeCurrentWeek(activePlanRecord.startDate, activePlanRecord.totalWeeks);
     activePlan = { name: activePlanRecord.name, totalWeeks: activePlanRecord.totalWeeks, currentWeek, goal: activePlanRecord.goal ?? undefined };
   }
 
