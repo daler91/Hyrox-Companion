@@ -1,7 +1,7 @@
 CREATE TABLE "idempotency_keys" (
-	"user_id" varchar(255) NOT NULL,
-	"key" varchar(255) NOT NULL,
-	"method" varchar(10) NOT NULL,
+	"user_id" varchar(255) NOT NULL, -- NOSONAR: PostgreSQL varchar (Oracle VARCHAR2 rule N/A)
+	"key" varchar(255) NOT NULL, -- NOSONAR: PostgreSQL varchar (Oracle VARCHAR2 rule N/A)
+	"method" varchar(10) NOT NULL, -- NOSONAR: PostgreSQL varchar (Oracle VARCHAR2 rule N/A)
 	"path" text NOT NULL,
 	"status_code" integer NOT NULL,
 	"response_body" jsonb NOT NULL,
