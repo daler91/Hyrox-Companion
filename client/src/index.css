@@ -4,6 +4,15 @@
 
 @config "../../tailwind.config.ts";
 
+/* Hide scrollbars while preserving scroll. Used for horizontal tab bars. */
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
 /* Skip-to-content link: hidden until focused */
 .skip-to-content {
   position: absolute;

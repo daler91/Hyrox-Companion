@@ -1,10 +1,8 @@
 import React from "react";
+import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
-import {
-  useWorkoutEditor,
-  getBlockExerciseName,
-} from "@/hooks/useWorkoutEditor";
+import { useWorkoutEditor } from "@/hooks/useWorkoutEditor";
 import { useWorkoutForm } from "@/hooks/useWorkoutForm";
 
 import { WorkoutHeader } from "@/components/workout/WorkoutHeader";
@@ -17,6 +15,8 @@ import { WorkoutExerciseMode } from "@/components/workout/WorkoutExerciseMode";
 
 export default function LogWorkout() {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
+  const handleCancel = React.useCallback(() => setLocation("/"), [setLocation]);
   const { weightUnit, distanceUnit, weightLabel } = useUnitPreferences();
 
   const {
@@ -24,12 +24,9 @@ export default function LogWorkout() {
     exerciseData,
     useTextMode,
     setUseTextMode,
-    sensors,
-    handleDragEnd,
     addExercise,
     removeBlock,
     updateBlock,
-    getSelectedExerciseNames,
     parseMutation,
   } = useWorkoutEditor();
 
@@ -72,24 +69,6 @@ export default function LogWorkout() {
     toggleListening: toggleNotesListening,
   } = notesVoiceInput;
 
-  const { blockCounts, blockIndices } = React.useMemo(() => {
-    // ⚡ Bolt Performance Optimization:
-    // Combine two O(N) array traversals into a single O(N) traversal
-    // and remove the need for a secondary runningCounts object allocation.
-    const counts: Record<string, number> = {};
-    const indices: Record<string, number> = {};
-
-    for (const blockId of exerciseBlocks) {
-      const name = getBlockExerciseName(blockId);
-      if (name) {
-        counts[name] = (counts[name] || 0) + 1;
-        indices[blockId] = counts[name];
-      }
-    }
-
-    return { blockCounts: counts, blockIndices: indices };
-  }, [exerciseBlocks]);
-
   return (
     <div className="container max-w-5xl mx-auto p-4 pb-20 md:pb-8 pt-4 md:pt-8 min-h-screen">
       <WorkoutHeader />
@@ -116,6 +95,7 @@ export default function LogWorkout() {
           <WorkoutSaveButton
             handleSave={handleSave}
             isPending={saveMutation.isPending}
+            onCancel={handleCancel}
           />
         </div>
 
@@ -146,15 +126,9 @@ export default function LogWorkout() {
             <WorkoutExerciseMode
               exerciseBlocks={exerciseBlocks}
               exerciseData={exerciseData}
-              getSelectedExerciseNames={getSelectedExerciseNames}
               addExercise={addExercise}
               updateBlock={updateBlock}
               removeBlock={removeBlock}
-              sensors={sensors}
-              handleDragEnd={handleDragEnd}
-              blockCounts={blockCounts}
-              blockIndices={blockIndices}
-              getBlockExerciseName={getBlockExerciseName}
               weightUnit={weightUnit}
               distanceUnit={distanceUnit}
             />

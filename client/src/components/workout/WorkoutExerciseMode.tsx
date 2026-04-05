@@ -1,107 +1,178 @@
-import React from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ExerciseSelector } from "@/components/ExerciseSelector";
-import { SortableExerciseBlock } from "@/components/workout/SortableExerciseBlock";
-import { DndContext, closestCenter, type DragEndEvent, type SensorDescriptor, type SensorOptions } from "@dnd-kit/core";
-import {
-  SortableContext,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
+import { useMemo, useState } from "react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { Plus } from "lucide-react";
+import { ExerciseRow, type ExerciseRowBlock } from "@/components/workout/ExerciseRow";
 import type { StructuredExercise } from "@/components/ExerciseInput";
-import type { ExerciseName } from "@shared/schema";
+import {
+  EXERCISE_DEFINITIONS,
+  type ExerciseName,
+  type ExerciseCategory,
+} from "@shared/schema";
+import { categoryLabels } from "@/lib/exerciseUtils";
+
+const TAB_TRIGGER_CLASS =
+  "shrink-0 rounded-full border border-border bg-card px-4 py-2 text-sm font-medium " +
+  "data-[state=active]:bg-primary data-[state=active]:text-primary-foreground " +
+  "data-[state=active]:border-primary data-[state=active]:shadow-none";
+
+const TAB_LIST_CLASS =
+  "flex h-auto w-full justify-start gap-2 overflow-x-auto scrollbar-none bg-transparent p-0";
+
+const noop = () => {};
 
 interface WorkoutExerciseModeProps {
   exerciseBlocks: string[];
   exerciseData: Record<string, StructuredExercise>;
-  getSelectedExerciseNames: () => ExerciseName[];
   addExercise: (exercise: ExerciseName) => void;
   updateBlock: (blockId: string, exData: StructuredExercise) => void;
   removeBlock: (blockId: string) => void;
-  sensors: SensorDescriptor<SensorOptions>[];
-  handleDragEnd: (event: DragEndEvent) => void;
-  blockCounts: Record<string, number>;
-  blockIndices: Record<string, number>;
-  getBlockExerciseName: (blockId: string) => string | undefined;
   weightUnit: "kg" | "lbs";
   distanceUnit: "km" | "miles";
 }
 
+const categoryOrder: ExerciseCategory[] = [
+  "functional",
+  "running",
+  "strength",
+  "conditioning",
+];
+
+type TabValue = ExerciseCategory | "custom";
+
+const tabLabels: Record<TabValue, string> = {
+  ...(categoryLabels as Record<ExerciseCategory, string>),
+  custom: "Custom",
+};
+
+// Static list of built-in exercises grouped by category (excluding "custom").
+const exercisesByCategory = categoryOrder.map((cat) => ({
+  category: cat,
+  exercises: (
+    Object.entries(EXERCISE_DEFINITIONS) as Array<
+      [ExerciseName, (typeof EXERCISE_DEFINITIONS)[ExerciseName]]
+    >
+  ).filter(([name, def]) => def.category === cat && name !== "custom"),
+}));
+
 export const WorkoutExerciseMode = ({
   exerciseBlocks,
   exerciseData,
-  getSelectedExerciseNames,
   addExercise,
   updateBlock,
   removeBlock,
-  sensors,
-  handleDragEnd,
-  blockCounts,
-  blockIndices,
-  getBlockExerciseName,
   weightUnit,
   distanceUnit,
 }: Readonly<WorkoutExerciseModeProps>) => {
-  return (
-    <>
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <CardTitle className="text-lg">Select Exercises</CardTitle>
-            <p className="text-xs text-muted-foreground">
-              Click an exercise to add it. You can add the same exercise
-              multiple times.
-            </p>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <ExerciseSelector
-            selectedExercises={getSelectedExerciseNames()}
-            onToggle={() => {}}
-            onAdd={addExercise}
-            allowDuplicates
-          />
-        </CardContent>
-      </Card>
+  const [activeTab, setActiveTab] = useState<TabValue>("strength");
+  const [expanded, setExpanded] = useState<Set<ExerciseName>>(new Set());
 
-      {exerciseBlocks.length > 0 && (
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold">Exercise Details</h2>
-          <p className="text-xs text-muted-foreground">
-            Drag the handle to reorder exercises.
-          </p>
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
-            <SortableContext
-              items={exerciseBlocks}
-              strategy={verticalListSortingStrategy}
+  // Group existing blocks by exerciseName for quick lookup.
+  const blocksByName = useMemo(() => {
+    const map = new Map<ExerciseName, ExerciseRowBlock[]>();
+    for (const blockId of exerciseBlocks) {
+      const data = exerciseData[blockId];
+      if (!data) continue;
+      const list = map.get(data.exerciseName) ?? [];
+      list.push({ blockId, data });
+      map.set(data.exerciseName, list);
+    }
+    return map;
+  }, [exerciseBlocks, exerciseData]);
+
+  const toggleExpanded = (name: ExerciseName) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
+
+  const handleAdd = (name: ExerciseName) => {
+    addExercise(name);
+    setExpanded((prev) => new Set(prev).add(name));
+  };
+
+  const customBlocks: ExerciseRowBlock[] = blocksByName.get("custom") ?? [];
+
+  const renderRow = (
+    name: ExerciseName,
+    displayLabel: string,
+    blocks: ExerciseRowBlock[],
+    overrides?: { key?: string; isExpanded?: boolean; onToggle?: () => void; showCustomNameInput?: boolean },
+  ) => {
+    const add = () => handleAdd(name);
+    return (
+      <ExerciseRow
+        key={overrides?.key ?? name}
+        exerciseName={name}
+        displayLabel={displayLabel}
+        blocks={blocks}
+        isExpanded={overrides?.isExpanded ?? expanded.has(name)}
+        onToggle={overrides?.onToggle ?? (() => toggleExpanded(name))}
+        onAdd={add}
+        onDuplicate={add}
+        onUpdateBlock={updateBlock}
+        onRemoveBlock={removeBlock}
+        weightUnit={weightUnit}
+        distanceUnit={distanceUnit}
+        showCustomNameInput={overrides?.showCustomNameInput}
+      />
+    );
+  };
+
+  return (
+    <div className="space-y-4" data-testid="exercise-selector">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabValue)}>
+        <TabsList className={TAB_LIST_CLASS}>
+          {(categoryOrder as TabValue[]).concat("custom").map((cat) => (
+            <TabsTrigger
+              key={cat}
+              value={cat}
+              className={TAB_TRIGGER_CLASS}
+              data-testid={`tab-${cat}`}
             >
-              {exerciseBlocks.map((blockId) => {
-                const exData = exerciseData[blockId];
-                if (!exData) return null;
-                const name = getBlockExerciseName(blockId);
-                const blockCount = name ? blockCounts[name] || 1 : 1;
-                const blockIndex = name ? blockIndices[blockId] || 1 : 1;
-                const showBlockNumber = blockCount > 1;
-                return (
-                  <SortableExerciseBlock
-                    key={blockId}
-                    blockId={blockId}
-                    exData={exData}
-                    blockLabel={showBlockNumber ? `#${blockIndex}` : undefined}
-                    weightUnit={weightUnit}
-                    distanceUnit={distanceUnit}
-                    onChange={updateBlock}
-                    onRemove={removeBlock}
-                  />
-                );
-              })}
-            </SortableContext>
-          </DndContext>
-        </div>
-      )}
-    </>
+              {tabLabels[cat]}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+
+        {exercisesByCategory.map(({ category, exercises }) => (
+          <TabsContent key={category} value={category} className="mt-4 space-y-2">
+            {exercises.map(([name, def]) =>
+              renderRow(name, def.label, blocksByName.get(name) ?? []),
+            )}
+          </TabsContent>
+        ))}
+
+        <TabsContent value="custom" className="mt-4 space-y-3">
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            onClick={() => handleAdd("custom")}
+            data-testid="button-add-custom-exercise"
+          >
+            <Plus className="h-4 w-4 mr-1.5" />
+            Add custom exercise
+          </Button>
+          {customBlocks.length === 0 ? (
+            <p className="text-center text-sm text-muted-foreground py-6">
+              No custom exercises yet. Tap above to create one.
+            </p>
+          ) : (
+            customBlocks.map((block) =>
+              renderRow("custom", block.data.customLabel || "Custom exercise", [block], {
+                key: block.blockId,
+                isExpanded: true,
+                onToggle: noop,
+                showCustomNameInput: true,
+              }),
+            )
+          )}
+        </TabsContent>
+      </Tabs>
+    </div>
   );
 };
