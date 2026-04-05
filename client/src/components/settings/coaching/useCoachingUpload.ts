@@ -78,23 +78,25 @@ export function useCoachingUpload() {
     const failed: string[] = [];
     let uploaded = 0;
 
-    for (const file of files) {
-      if (file.size > MAX_FILE_SIZE) {
-        tooLarge.push(file.name);
-        continue;
-      }
-      try {
-        const text = await extractFileText(file);
-        await createMutation.mutateAsync({
-          title: file.name.replace(/\.[^/.]+$/, ""),
-          content: text.slice(0, 1500000),
-          type: "document",
-        });
-        uploaded++;
-      } catch {
-        failed.push(file.name);
-      }
-    }
+    await Promise.all(
+      files.map(async (file) => {
+        if (file.size > MAX_FILE_SIZE) {
+          tooLarge.push(file.name);
+          return;
+        }
+        try {
+          const text = await extractFileText(file);
+          await createMutation.mutateAsync({
+            title: file.name.replace(/\.[^/.]+$/, ""),
+            content: text.slice(0, 1500000),
+            type: "document",
+          });
+          uploaded++;
+        } catch {
+          failed.push(file.name);
+        }
+      }),
+    );
 
     if (uploaded > 0) {
       toast({ title: `Uploaded ${uploaded} document${uploaded > 1 ? "s" : ""}` });
