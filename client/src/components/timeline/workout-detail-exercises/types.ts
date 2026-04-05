@@ -1,20 +1,9 @@
 import type { ParsedExercise, TimelineEntry, ExerciseName } from "@shared/schema";
 import type { StructuredExercise } from "@/components/ExerciseInput";
 import type { GroupedExercise } from "@/lib/exerciseUtils";
-import type { SensorDescriptor, SensorOptions, DragEndEvent } from "@dnd-kit/core";
 import type { UseMutationResult } from "@tanstack/react-query";
 import type { EditFormState } from "@/hooks/useWorkoutVoiceForm";
 import type React from "react";
-
-export interface SortableDialogBlockProps {
-  readonly blockId: string;
-  readonly exData: StructuredExercise;
-  readonly blockLabel?: string;
-  readonly weightUnit: "kg" | "lbs";
-  readonly distanceUnit: "km" | "miles";
-  readonly onChange: (blockId: string, ex: StructuredExercise) => void;
-  readonly onRemove: (blockId: string) => void;
-}
 
 export interface WorkoutDetailViewProps {
   readonly entry: TimelineEntry;
@@ -36,12 +25,9 @@ export interface WorkoutDetailEditFormProps {
   readonly setUseTextMode: (mode: boolean) => void;
   readonly editExercises: string[];
   readonly editExerciseData: Record<string, StructuredExercise>;
-  readonly dialogSensors: SensorDescriptor<SensorOptions>[];
-  readonly handleEditDragEnd: (event: DragEndEvent) => void;
   readonly handleAddExercise: (name: ExerciseName) => void;
   readonly handleRemoveBlock: (blockId: string) => void;
   readonly updateBlock: (blockId: string, ex: StructuredExercise) => void;
-  readonly getSelectedExerciseNames: () => ExerciseName[];
   readonly parseMutation: UseMutationResult<ParsedExercise[], Error, string, unknown>;
   readonly weightUnit: "kg" | "lbs";
   readonly distanceUnit: "km" | "miles";
@@ -63,21 +49,6 @@ export interface WorkoutTextModeProps {
   readonly toggleMainListening: () => void;
   readonly onParseText: () => void;
   readonly parseMutation: UseMutationResult<ParsedExercise[], Error, string, unknown>;
-}
-
-export interface WorkoutBlockModeProps {
-  readonly editExercises: string[];
-  readonly editExerciseData: Record<string, StructuredExercise>;
-  readonly dialogSensors: SensorDescriptor<SensorOptions>[];
-  readonly handleEditDragEnd: (event: DragEndEvent) => void;
-  readonly handleAddExercise: (name: ExerciseName) => void;
-  readonly handleRemoveBlock: (blockId: string) => void;
-  readonly updateBlock: (blockId: string, ex: StructuredExercise) => void;
-  readonly getSelectedExerciseNames: () => ExerciseName[];
-  readonly weightUnit: "kg" | "lbs";
-  readonly distanceUnit: "km" | "miles";
-  readonly blockCounts: Record<string, number>;
-  readonly blockIndices: Record<string, number>;
 }
 
 export interface WorkoutAccessoryNotesProps {

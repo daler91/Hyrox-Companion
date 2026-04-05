@@ -43,12 +43,9 @@ export function WorkoutDetailEditMode({
     exerciseData: editExerciseData,
     useTextMode,
     setUseTextMode,
-    sensors: dialogSensors,
-    handleDragEnd: handleEditDragEnd,
     addExercise: handleAddExercise,
     removeBlock: handleRemoveBlock,
     updateBlock,
-    getSelectedExerciseNames,
     parseMutation,
     resetEditor,
   } = useWorkoutEditor({ initialBlockCounter: 100 });
@@ -160,12 +157,9 @@ export function WorkoutDetailEditMode({
         setUseTextMode={setUseTextMode}
         editExercises={editExercises}
         editExerciseData={editExerciseData}
-        dialogSensors={dialogSensors}
-        handleEditDragEnd={handleEditDragEnd}
         handleAddExercise={handleAddExercise}
         handleRemoveBlock={handleRemoveBlock}
         updateBlock={updateBlock}
-        getSelectedExerciseNames={getSelectedExerciseNames}
         parseMutation={parseMutation}
         weightUnit={weightUnit}
         distanceUnit={distanceUnit}
