@@ -117,7 +117,7 @@ describe("Production Smoke Test", { timeout: 90_000 }, () => {
   });
 
   afterAll(async () => {
-    if (server?.exitCode !== null) return;
+    if (server === undefined || server === null || server.exitCode !== null) return;
 
     const exited = new Promise<number | null>((resolve) => {
       server.once("exit", (code) => resolve(code));
