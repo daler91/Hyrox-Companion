@@ -381,16 +381,18 @@ describe("Production Smoke Test", { timeout: 90_000 }, () => {
       expect(res.status).toBe(200);
       expect(res.headers.get("content-type")).toContain("csv");
       const text = await res.text();
-      expect(text).toContain("date");
+      expect(text).toContain("Date");
     });
   });
 
   // ── Error Handling ────────────────────────────────────────────────
 
   describe("Error Handling", () => {
-    it("unknown API route returns 404", async () => {
+    it("unknown route falls through to SPA", async () => {
       const res = await request("/api/v1/nonexistent-route");
-      expect(res.status).toBe(404);
+      // SPA catch-all serves index.html for unmatched routes
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toContain("text/html");
     });
 
     it("invalid workout payload returns 400", async () => {

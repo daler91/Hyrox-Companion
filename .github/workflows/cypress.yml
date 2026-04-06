@@ -85,7 +85,6 @@ jobs:
         run: npx drizzle-kit push
 
       - name: Run Smoke Test
-        continue-on-error: true
         run: pnpm exec vitest run --config vitest.smoke.config.ts
         env:
           ALLOW_DEV_AUTH_BYPASS: "true"
