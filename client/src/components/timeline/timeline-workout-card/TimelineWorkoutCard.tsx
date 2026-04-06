@@ -1,4 +1,3 @@
-import { format } from "date-fns";
 import { BookOpen, CheckCircle2, Circle, Database, FileText,Loader2 } from "lucide-react";
 import React, { useMemo } from "react";
 import { SiStrava } from "react-icons/si";
@@ -33,8 +32,15 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
   const canBeCombinedWith = isCombining && !isBeingCombined && isSameDate;
   const isPlanned = entry.status === "planned" && entry.planDayId;
 
-  const todayStr = format(new Date(), "yyyy-MM-dd");
-  const isTargetedByCoach = isAutoCoaching && isPlanned && entry.date >= todayStr;
+  // ⚡ Bolt: short-circuit skips date computation for most cards (only needed
+  // when auto-coaching is active on a planned entry). Native Date methods
+  // replace date-fns format() to avoid format-string parsing in this hot path.
+  let isTargetedByCoach = false;
+  if (isAutoCoaching && isPlanned) {
+    const d = new Date();
+    const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    isTargetedByCoach = entry.date >= todayStr;
+  }
 
   const handleCardClick = (_e: React.MouseEvent) => {
     if (canBeCombinedWith) {
