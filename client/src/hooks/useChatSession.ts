@@ -161,17 +161,19 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
           throw new Error("No response body");
         }
 
+        const updateAssistantMessage = (snapshot: { content: string; meta?: RagInfo }) => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMessageId
+                ? { ...m, content: snapshot.content, ...(snapshot.meta ? { ragInfo: snapshot.meta } : {}) }
+                : m,
+            ),
+          );
+        };
+
         const result = await consumeSSEStream<RagInfo>(reader, {
           metaKey: "ragInfo",
-          onFlush: (snapshot) => {
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === assistantMessageId
-                  ? { ...m, content: snapshot.content, ...(snapshot.meta ? { ragInfo: snapshot.meta } : {}) }
-                  : m,
-              ),
-            );
-          },
+          onFlush: updateAssistantMessage,
         });
         fullResponse = result.content;
 

@@ -30,7 +30,7 @@ describe('useUnitPreferences', () => {
 
   type TestCase = {
     description: string;
-    mockData?: { weightUnit?: string; distanceUnit?: string; weeklyGoal?: number } | undefined;
+    mockData?: { weightUnit?: string; distanceUnit?: string; weeklyGoal?: number };
     expectedWeight: 'kg' | 'lbs';
     expectedDistance: 'km' | 'miles';
     expectedLoading: boolean | undefined;
