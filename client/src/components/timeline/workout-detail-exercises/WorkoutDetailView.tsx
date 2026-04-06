@@ -1,17 +1,19 @@
-import React from "react";
-import { Badge } from "@/components/ui/badge";
+import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
 import { Plus } from "lucide-react";
+import React from "react";
+
+import { Badge } from "@/components/ui/badge";
+import { exerciseIcons } from "@/lib/exerciseIcons";
 import {
   categoryBorderColors,
   formatExerciseSummary,
   getExerciseLabel,
   type GroupedExercise,
 } from "@/lib/exerciseUtils";
-import { exerciseIcons } from "@/lib/exerciseIcons";
-import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
 import { cn } from "@/lib/utils";
-import { WorkoutDetailStravaMetrics } from "./WorkoutDetailStravaMetrics";
+
 import type { WorkoutDetailViewProps } from "./types";
+import { WorkoutDetailStravaMetrics } from "./WorkoutDetailStravaMetrics";
 
 function SummaryRow({
   group,

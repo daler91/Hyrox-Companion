@@ -1,8 +1,9 @@
-import { Router, type Request as ExpressRequest, type Response } from "express";
+import { type UpdateUserPreferences,updateUserPreferencesSchema } from "@shared/schema";
+import { type Request as ExpressRequest, type Response,Router } from "express";
+
 import { isAuthenticated } from "../clerkAuth";
-import { rateLimiter, asyncHandler, formatValidationErrors } from "../routeUtils";
+import { asyncHandler, formatValidationErrors,rateLimiter } from "../routeUtils";
 import { storage } from "../storage";
-import { updateUserPreferencesSchema, type UpdateUserPreferences } from "@shared/schema";
 import { getUserId } from "../types";
 
 const router = Router();

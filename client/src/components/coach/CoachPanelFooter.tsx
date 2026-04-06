@@ -1,5 +1,5 @@
-import { QuickActions, type QuickAction } from "@/components/QuickActions";
 import { ChatInput } from "@/components/ChatInput";
+import { type QuickAction,QuickActions } from "@/components/QuickActions";
 
 interface CoachPanelFooterProps {
   readonly quickActions: QuickAction[];

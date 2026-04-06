@@ -1,10 +1,10 @@
-import type { UserStorage } from "./users";
-import type { WorkoutStorage } from "./workouts";
-import type { PlanStorage } from "./plans";
-import type { TimelineStorage } from "./timeline";
 import type { AnalyticsStorage } from "./analytics";
 import type { CoachingStorage } from "./coaching";
 import type { IdempotencyStorage } from "./idempotency";
+import type { PlanStorage } from "./plans";
+import type { TimelineStorage } from "./timeline";
+import type { UserStorage } from "./users";
+import type { WorkoutStorage } from "./workouts";
 
 /**
  * Composed storage facade. Callers access domain classes directly:

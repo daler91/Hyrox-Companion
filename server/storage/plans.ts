@@ -1,15 +1,16 @@
 import {
-  trainingPlans,
-  planDays,
-  type TrainingPlan,
+  type InsertPlanDay,
   type InsertTrainingPlan,
   type PlanDay,
-  type InsertPlanDay,
-  type UpdatePlanDay,
+  planDays,
+  type TrainingPlan,
+  trainingPlans,
   type TrainingPlanWithDays,
+  type UpdatePlanDay,
 } from "@shared/schema";
+import { and, eq, inArray, isNotNull,sql } from "drizzle-orm";
+
 import { db } from "../db";
-import { eq, and, sql, inArray, isNotNull } from "drizzle-orm";
 import { toDateStr } from "../types";
 
 export class PlanStorage {

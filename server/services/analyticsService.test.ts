@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { calculatePersonalRecords, calculateExerciseAnalytics, calculateTrainingOverview } from "./analyticsService";
+import { describe, expect,it } from "vitest";
+
+import { calculateExerciseAnalytics, calculatePersonalRecords, calculateTrainingOverview } from "./analyticsService";
 
 function makeSet(overrides: Record<string, unknown> = {}) {
   return {

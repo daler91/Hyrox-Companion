@@ -1,6 +1,8 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createSignedState, verifySignedState } from './strava';
 import crypto from 'node:crypto';
+
+import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { createSignedState, verifySignedState } from './strava';
 
 describe('strava service state signing', () => {
   beforeEach(() => {

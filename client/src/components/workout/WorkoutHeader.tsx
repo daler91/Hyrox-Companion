@@ -1,6 +1,7 @@
+import { ArrowLeft } from "lucide-react";
 import React from "react";
 import { Link } from "wouter";
-import { ArrowLeft } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 
 export function WorkoutHeader() {

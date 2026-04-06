@@ -1,7 +1,8 @@
+import { clerkClient,clerkMiddleware, getAuth } from "@clerk/express";
+import type { Express, RequestHandler } from "express";
+
 import { env } from "./env";
 import { logger } from "./logger";
-import { clerkMiddleware, getAuth, clerkClient } from "@clerk/express";
-import type { Express, RequestHandler } from "express";
 import { storage } from "./storage";
 
 export const DEV_USER_ID = "dev-user";

@@ -1,5 +1,6 @@
+import { Loader2, MessageSquare, Trash2, X } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
-import { MessageSquare, Trash2, Loader2, X } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface CoachPanelHeaderProps {

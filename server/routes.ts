@@ -1,18 +1,19 @@
-import type { Express } from "express";
 import type { Server } from "node:http";
+
+import type { Express } from "express";
+
 import { setupAuth } from "./clerkAuth";
-import { registerStravaRoutes } from "./strava";
 import { csrfProtection, csrfTokenHandler } from "./middleware/csrf";
 import { idempotencyMiddleware } from "./middleware/idempotency";
-
 import aiRoutes from "./routes/ai";
 import analyticsRoutes from "./routes/analytics";
-import workoutRoutes from "./routes/workouts";
-import planRoutes from "./routes/plans";
 import authRoutes from "./routes/auth";
-import preferencesRoutes from "./routes/preferences";
-import emailRoutes from "./routes/email";
 import coachingRoutes from "./routes/coaching";
+import emailRoutes from "./routes/email";
+import planRoutes from "./routes/plans";
+import preferencesRoutes from "./routes/preferences";
+import workoutRoutes from "./routes/workouts";
+import { registerStravaRoutes } from "./strava";
 
 export async function registerRoutes(
   httpServer: Server,

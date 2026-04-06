@@ -1,12 +1,13 @@
-import { Router, type Request as ExpressRequest, type Response } from "express";
-import { isAuthenticated } from "../clerkAuth";
-import { storage } from "../storage";
-import { calculatePersonalRecords, calculateExerciseAnalytics, calculateTrainingOverview, type ExerciseSetWithDate } from "../services/analyticsService";
 import type { WorkoutLog } from "@shared/schema";
-import { getUserId } from "../types";
-import { rateLimiter, asyncHandler } from "../routeUtils";
 import { dateStringSchema } from "@shared/schema";
+import { type Request as ExpressRequest, type Response,Router } from "express";
+
+import { isAuthenticated } from "../clerkAuth";
 import { ANALYTICS_CACHE_TTL_MS } from "../constants";
+import { asyncHandler,rateLimiter } from "../routeUtils";
+import { calculateExerciseAnalytics, calculatePersonalRecords, calculateTrainingOverview, type ExerciseSetWithDate } from "../services/analyticsService";
+import { storage } from "../storage";
+import { getUserId } from "../types";
 
 const router = Router();
 

@@ -1,10 +1,11 @@
+import type { ChatMessage,RagInfo } from "@shared/schema";
+import type { Logger } from "pino";
+
+import type { TrainingContext } from "../gemini/index";
 import { logger as rootLogger } from "../logger";
+import { buildCoachingMaterialsSection, buildRetrievedChunksSection, type CoachingMaterialInput } from "../prompts";
 import { buildTrainingContext } from "./ai";
 import { retrieveCoachingContext } from "./ragRetrieval";
-import { buildCoachingMaterialsSection, buildRetrievedChunksSection, type CoachingMaterialInput } from "../prompts";
-import type { TrainingContext } from "../gemini/index";
-import type { RagInfo, ChatMessage } from "@shared/schema";
-import type { Logger } from "pino";
 
 export interface AIContext {
   trainingContext: TrainingContext;

@@ -1,5 +1,6 @@
-import { Flame, Zap, Activity, TrendingUp } from "lucide-react";
 import { formatSpeed } from "@shared/unitConversion";
+import { Activity, Flame, TrendingUp,Zap } from "lucide-react";
+
 import type { WorkoutStravaStatsProps } from "./types";
 
 export function WorkoutStravaStats({ entry, distanceUnit }: Readonly<WorkoutStravaStatsProps>) {

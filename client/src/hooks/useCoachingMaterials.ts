@@ -1,8 +1,10 @@
-import { useQuery } from "@tanstack/react-query";
-import { api, QUERY_KEYS, type RagStatus } from "@/lib/api";
-import { useApiMutation } from "./useApiMutation";
 import type { CoachingMaterial } from "@shared/schema";
+import { useQuery } from "@tanstack/react-query";
+
 import { useToast } from "@/hooks/use-toast";
+import { api, QUERY_KEYS, type RagStatus } from "@/lib/api";
+
+import { useApiMutation } from "./useApiMutation";
 
 export type { RagStatus } from "@/lib/api";
 

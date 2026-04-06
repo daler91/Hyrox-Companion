@@ -1,6 +1,8 @@
+import { fireEvent,render, screen } from "@testing-library/react";
+import { afterEach,describe, expect, it, vi } from "vitest";
+
 import { getExerciseMissingFields } from "@/lib/exerciseWarnings";
-import { render, screen, fireEvent } from "@testing-library/react";
-import { describe, it, expect, vi, afterEach } from "vitest";
+
 import { ExerciseInput, StructuredExercise } from "../ExerciseInput";
 
 // Mock missing fields utility to prevent issues

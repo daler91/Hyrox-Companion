@@ -1,7 +1,8 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { User } from '@shared/schema';
+import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { runEmailCronJob } from './emailScheduler';
 import type { IStorage } from './storage';
-import type { User } from '@shared/schema';
 
 vi.mock('./queue', () => ({
   queue: {

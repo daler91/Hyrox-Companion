@@ -1,4 +1,7 @@
+import { ArrowRight,Loader2 } from "lucide-react";
 import { useState } from "react";
+
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -7,14 +10,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, ArrowRight } from "lucide-react";
-import type { FieldSource, CombineWorkoutsDialogProps } from "./types";
-import { WorkoutCard } from "./WorkoutCard";
-import { FieldSelector } from "./FieldSelector";
+
 import { CombinedResultSummary } from "./CombinedResultSummary";
+import { FieldSelector } from "./FieldSelector";
+import type { CombineWorkoutsDialogProps,FieldSource } from "./types";
+import { WorkoutCard } from "./WorkoutCard";
 
 export function CombineWorkoutsDialog({
   open,

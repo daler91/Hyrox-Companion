@@ -1,5 +1,6 @@
+import { FileText, Loader2, Sparkles, Wand2 } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
-import { Loader2, Sparkles, FileText, Wand2 } from "lucide-react";
 
 interface PlanStepProps {
   readonly isPending: boolean;

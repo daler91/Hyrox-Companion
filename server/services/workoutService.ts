@@ -1,9 +1,10 @@
-import { workoutLogs, exerciseSets, planDays, trainingPlans, customExercises, users, type ParsedExercise, type InsertWorkoutLog, type UpdateWorkoutLog, type InsertExerciseSet, type WorkoutLog, type ExerciseSet } from "@shared/schema";
-import { storage } from "../storage";
-import { logger } from "../logger";
+import { customExercises, type ExerciseSet,exerciseSets, type InsertExerciseSet, type InsertWorkoutLog, type ParsedExercise, planDays, trainingPlans, type UpdateWorkoutLog, users, type WorkoutLog, workoutLogs } from "@shared/schema";
+import { and,eq } from "drizzle-orm";
+
 import { db } from "../db";
+import { logger } from "../logger";
 import { queue } from "../queue";
-import { eq, and } from "drizzle-orm";
+import { storage } from "../storage";
 
 // Drizzle transaction type — any method chain valid on `db` is also valid on `tx`.
 type WorkoutTx = Parameters<Parameters<typeof db.transaction>[0]>[0];

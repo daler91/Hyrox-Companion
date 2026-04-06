@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeAll } from "vitest";
 import request from "supertest";
+import { beforeAll,describe, expect, it } from "vitest";
+
 import { setupIntegrationTest } from "./helpers";
 
 describe("API Integration Tests", () => {

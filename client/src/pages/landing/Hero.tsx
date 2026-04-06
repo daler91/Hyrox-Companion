@@ -1,8 +1,9 @@
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { SignInButton } from "@clerk/react";
 import { ArrowRight, CheckCircle2, Sparkles } from "lucide-react";
 import { SiStrava } from "react-icons/si";
-import { SignInButton } from "@clerk/react";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 function TimelineMockup() {
   return (

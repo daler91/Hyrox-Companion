@@ -1,21 +1,22 @@
 import {
-  users,
-  chatMessages,
-  stravaConnections,
-  customExercises,
-  type User,
-  type UpsertUser,
-  type UpdateUserPreferences,
   type ChatMessage,
-  type InsertChatMessage,
-  type StravaConnection,
-  type InsertStravaConnection,
+  chatMessages,
   type CustomExercise,
+  customExercises,
+  type InsertChatMessage,
   type InsertCustomExercise,
+  type InsertStravaConnection,
+  type StravaConnection,
+  stravaConnections,
+  type UpdateUserPreferences,
+  type UpsertUser,
+  type User,
+  users,
 } from "@shared/schema";
-import { encryptToken, decryptToken } from "../crypto";
+import { and, eq, isNotNull } from "drizzle-orm";
+
+import { decryptToken,encryptToken } from "../crypto";
 import { db } from "../db";
-import { eq, and, isNotNull } from "drizzle-orm";
 
 export class UserStorage {
   async getUser(id: string): Promise<User | undefined> {

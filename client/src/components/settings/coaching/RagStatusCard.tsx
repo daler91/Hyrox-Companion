@@ -1,9 +1,10 @@
+import { AlertCircle, CheckCircle2, Loader2, RefreshCw, XCircle } from "lucide-react";
 import React from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, RefreshCw, CheckCircle2, AlertCircle, XCircle } from "lucide-react";
-import { useRagStatus, useReEmbed, useCoachingMaterials } from "@/hooks/useCoachingMaterials";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useCoachingMaterials,useRagStatus, useReEmbed } from "@/hooks/useCoachingMaterials";
 
 export function RagStatusCard() {
   const { data: materials } = useCoachingMaterials();

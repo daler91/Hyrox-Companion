@@ -1,9 +1,10 @@
-import pLimit from "p-limit";
-import { logger } from "../logger";
-import { generateEmbedding, generateEmbeddings, EMBEDDING_DIMENSIONS } from "../gemini/client";
-import { storage } from "../storage";
 import type { CoachingMaterial } from "@shared/schema";
+import pLimit from "p-limit";
+
 import { env } from "../env";
+import { EMBEDDING_DIMENSIONS,generateEmbedding, generateEmbeddings } from "../gemini/client";
+import { logger } from "../logger";
+import { storage } from "../storage";
 
 // Bound concurrent Gemini + DB writes during bulk re-embed so a large
 // tenant cannot burst-load the embedding provider or DB pool

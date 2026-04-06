@@ -1,14 +1,15 @@
 import type { InsertWorkoutLog, ParsedExercise } from "@shared/schema";
-import { useState, useCallback } from "react";
 import { useMutation } from "@tanstack/react-query";
+import { useCallback,useState } from "react";
 import { useLocation } from "wouter";
+
+import type { StructuredExercise } from "@/components/ExerciseInput";
 import { useToast } from "@/hooks/use-toast";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
-import { queryClient } from "@/lib/queryClient";
+import { exerciseToPayload,generateSummary } from "@/hooks/useWorkoutEditor";
 import { api, QUERY_KEYS } from "@/lib/api";
-import { generateSummary, exerciseToPayload } from "@/hooks/useWorkoutEditor";
-import type { StructuredExercise } from "@/components/ExerciseInput";
 import { getMissingFieldWarnings } from "@/lib/exerciseWarnings";
+import { queryClient } from "@/lib/queryClient";
 
 interface UseWorkoutFormProps {
   useTextMode: boolean;

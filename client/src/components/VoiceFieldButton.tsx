@@ -1,7 +1,8 @@
 import { useCallback, useEffect } from "react";
-import { useVoiceInput } from "@/hooks/useVoiceInput";
+
 import { VoiceButton } from "@/components/VoiceButton";
 import { useToast } from "@/hooks/use-toast";
+import { useVoiceInput } from "@/hooks/useVoiceInput";
 
 interface VoiceFieldButtonProps {
   onTranscript: (text: string) => void;

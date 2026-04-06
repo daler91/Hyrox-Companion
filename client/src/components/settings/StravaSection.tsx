@@ -1,3 +1,9 @@
+import { formatDistanceToNow } from "date-fns";
+import { Link2, Loader2, RefreshCw, Unlink } from "lucide-react";
+import { SiStrava } from "react-icons/si";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -6,12 +12,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Loader2, Link2, RefreshCw, Unlink } from "lucide-react";
-import { SiStrava } from "react-icons/si";
 import { useStravaMutations } from "@/hooks/useStravaMutations";
-import { formatDistanceToNow } from "date-fns";
 
 interface StravaStatus {
   connected: boolean;

@@ -1,8 +1,10 @@
 import React from "react";
+
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 import { VoiceFieldButton } from "@/components/VoiceFieldButton";
+
 import type { WorkoutAccessoryNotesProps } from "./types";
 
 export const WorkoutAccessoryNotes = React.memo(function WorkoutAccessoryNotes({

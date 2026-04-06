@@ -1,6 +1,8 @@
-import { useApiMutation } from "./useApiMutation";
-import { api } from "@/lib/api";
 import type { GeneratePlanInput, TrainingPlanWithDays } from "@shared/schema";
+
+import { api } from "@/lib/api";
+
+import { useApiMutation } from "./useApiMutation";
 
 export function useGeneratePlan() {
   return useApiMutation<TrainingPlanWithDays, Error, GeneratePlanInput>({

@@ -1,7 +1,9 @@
-import { describe, it, expect } from "vitest";
 import { renderHook } from "@testing-library/react";
-import { useBlockCounts } from "../useBlockCounts";
+import { describe, expect,it } from "vitest";
+
 import type { StructuredExercise } from "@/components/ExerciseInput";
+
+import { useBlockCounts } from "../useBlockCounts";
 
 describe("useBlockCounts", () => {
   describe("basic functionality via it.each", () => {

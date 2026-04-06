@@ -1,5 +1,6 @@
+import { Activity, Calendar, Flame,Target, TrendingUp } from "lucide-react";
+
 import { StatBadge } from "@/components/coach/StatBadge";
-import { Activity, Target, Calendar, TrendingUp, Flame } from "lucide-react";
 
 interface CoachPanelStatsProps {
   readonly stats: {

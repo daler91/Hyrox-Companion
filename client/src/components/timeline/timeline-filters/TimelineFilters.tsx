@@ -1,4 +1,7 @@
+import { Download, Filter, Loader2, Pencil, Sparkles,Target, Upload } from "lucide-react";
 import { useState } from "react";
+
+import { GeneratePlanDialog } from "@/components/plans/GeneratePlanDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -16,14 +19,13 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Upload, Loader2, Filter, Download, Pencil, Target, Sparkles } from "lucide-react";
+
 import type { FilterStatus } from "../types";
-import type { TimelineFiltersProps } from "./types";
 import { downloadTemplate } from "./csv-utils";
+import { GoalDialog } from "./GoalDialog";
 import { PlanSelector } from "./PlanSelector";
 import { RenamePlanDialog } from "./RenamePlanDialog";
-import { GoalDialog } from "./GoalDialog";
-import { GeneratePlanDialog } from "@/components/plans/GeneratePlanDialog";
+import type { TimelineFiltersProps } from "./types";
 
 export default function TimelineFilters({
   plans,

@@ -1,14 +1,15 @@
-import { Router, type Request, type Response } from "express";
+import { exercisesPayloadSchema,insertCustomExerciseSchema, insertWorkoutLogSchema, updateWorkoutLogSchema } from "@shared/schema";
+import { type Request, type Response,Router } from "express";
 import { z } from "zod";
+
 import { isAuthenticated } from "../clerkAuth";
-import { rateLimiter, asyncHandler, validateBody } from "../routeUtils";
-import { storage } from "../storage";
-import { insertWorkoutLogSchema, updateWorkoutLogSchema, insertCustomExerciseSchema, exercisesPayloadSchema } from "@shared/schema";
+import { DEFAULT_PAGE_LIMIT, DEFAULT_TIMELINE_LIMIT, MAX_PAGE_LIMIT } from "../constants";
+import { asyncHandler, rateLimiter, validateBody } from "../routeUtils";
 import { generateCSV, generateJSON } from "../services/exportService";
-import { reparseWorkout, batchReparseWorkouts } from "../services/workoutService";
+import { batchReparseWorkouts,reparseWorkout } from "../services/workoutService";
 import { createWorkout, updateWorkoutUseCase } from "../services/workoutUseCases";
+import { storage } from "../storage";
 import { getUserId } from "../types";
-import { DEFAULT_TIMELINE_LIMIT, DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from "../constants";
 
 // Route schemas — combine core table schema with the optional exercises payload
 // so a single validateBody() middleware covers both in one pass and emits a

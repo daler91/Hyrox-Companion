@@ -1,16 +1,17 @@
 import {
-  workoutLogs,
+  type ExerciseSet,
+  exerciseSets,
+  type InsertExerciseSet,
+  type InsertWorkoutLog,
   planDays,
   trainingPlans,
-  exerciseSets,
-  type WorkoutLog,
-  type InsertWorkoutLog,
   type UpdateWorkoutLog,
-  type ExerciseSet,
-  type InsertExerciseSet,
+  type WorkoutLog,
+  workoutLogs,
 } from "@shared/schema";
+import { and, asc, desc, eq, inArray,isNotNull, isNull, or, sql } from "drizzle-orm";
+
 import { db } from "../db";
-import { eq, and, or, desc, asc, isNull, isNotNull, sql, inArray } from "drizzle-orm";
 import { queryExerciseSetsWithDates } from "./shared";
 
 export class WorkoutStorage {

@@ -1,9 +1,10 @@
-import { useState, useRef } from "react";
-import { useToast } from "@/hooks/use-toast";
-import { useCreateCoachingMaterial } from "@/hooks/useCoachingMaterials";
+import mammoth from "mammoth";
 import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
 import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import mammoth from "mammoth";
+import { useRef,useState } from "react";
+
+import { useToast } from "@/hooks/use-toast";
+import { useCreateCoachingMaterial } from "@/hooks/useCoachingMaterials";
 
 GlobalWorkerOptions.workerSrc = pdfjsWorker;
 

@@ -1,11 +1,13 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { renderHook, act, waitFor } from "@testing-library/react";
-import { useCombineWorkouts } from "../useCombineWorkouts";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import React from "react";
-import * as queryClientLib from "@/lib/queryClient";
-import * as toastHook from "@/hooks/use-toast";
 import type { TimelineEntry } from "@shared/schema";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, renderHook, waitFor } from "@testing-library/react";
+import React from "react";
+import { afterEach,beforeEach, describe, expect, it, vi } from "vitest";
+
+import * as toastHook from "@/hooks/use-toast";
+import * as queryClientLib from "@/lib/queryClient";
+
+import { useCombineWorkouts } from "../useCombineWorkouts";
 
 vi.mock("@/lib/queryClient", () => ({
   queryClient: { invalidateQueries: vi.fn().mockResolvedValue(undefined) },

@@ -1,9 +1,9 @@
-import { useInView } from "./landing/useInView";
-import { Hero, LandingHeader } from "./landing/Hero";
-import { Features, SocialProof } from "./landing/Features";
-import { HowItWorks } from "./landing/HowItWorks";
-import { ExerciseShowcase } from "./landing/ExerciseShowcase";
 import { CtaSection, LandingFooter } from "./landing/CtaFooter";
+import { ExerciseShowcase } from "./landing/ExerciseShowcase";
+import { Features, SocialProof } from "./landing/Features";
+import { Hero, LandingHeader } from "./landing/Hero";
+import { HowItWorks } from "./landing/HowItWorks";
+import { useInView } from "./landing/useInView";
 
 export default function Landing() {
   const sectionRef = useInView();

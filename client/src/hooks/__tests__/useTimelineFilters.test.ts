@@ -1,8 +1,9 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
-import { useTimelineFilters } from "../useTimelineFilters";
 import type { TimelineEntry } from "@shared/schema";
-import { format, addDays, subDays } from "date-fns";
+import { act,renderHook } from "@testing-library/react";
+import { addDays, format, subDays } from "date-fns";
+import { afterEach,beforeEach, describe, expect, it, vi } from "vitest";
+
+import { useTimelineFilters } from "../useTimelineFilters";
 
 // Helper to create mock timeline data
 function createMockEntry(overrides: Partial<TimelineEntry>): TimelineEntry {

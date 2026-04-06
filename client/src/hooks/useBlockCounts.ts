@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+
 import type { StructuredExercise } from "@/components/ExerciseInput";
 
 export function useBlockCounts(

@@ -1,9 +1,10 @@
-import { createTestApp } from "./testUtils";
-import { env } from "../../env";
-import { describe, it, expect, vi, beforeEach } from "vitest";
 import express from "express";
 import request from "supertest";
+import { beforeEach,describe, expect, it, vi } from "vitest";
+
+import { env } from "../../env";
 import emailRouter from "../email";
+import { createTestApp } from "./testUtils";
 
 // Mock storage
 vi.mock("../../storage", () => ({

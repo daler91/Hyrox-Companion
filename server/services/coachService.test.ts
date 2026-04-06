@@ -1,8 +1,9 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { triggerAutoCoach } from "./coachService";
+import { afterEach,beforeEach, describe, expect, it, vi } from "vitest";
+
+import { generateWorkoutSuggestions } from "../gemini/index";
 import { storage } from "../storage";
 import { buildTrainingContext } from "./ai";
-import { generateWorkoutSuggestions } from "../gemini/index";
+import { triggerAutoCoach } from "./coachService";
 import { retrieveRelevantChunks } from "./ragService";
 
 vi.mock("../storage", () => ({

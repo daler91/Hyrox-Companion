@@ -1,10 +1,11 @@
-import { z } from "zod";
-import { logger } from "../logger";
-import { PARSE_EXERCISES_PROMPT, VALID_EXERCISE_NAMES, VALID_CATEGORIES } from "../prompts";
-import { getAiClient, GEMINI_MODEL, retryWithBackoff } from "./client";
-import { sanitizeHtml, sanitizeUserInput, validateAiOutput } from "../utils/sanitize";
 import { exerciseSetSchema, type ParsedExercise } from "@shared/schema";
+import { z } from "zod";
+
 import { AppError, ErrorCode } from "../errors";
+import { logger } from "../logger";
+import { PARSE_EXERCISES_PROMPT, VALID_CATEGORIES,VALID_EXERCISE_NAMES } from "../prompts";
+import { sanitizeHtml, sanitizeUserInput, validateAiOutput } from "../utils/sanitize";
+import { GEMINI_MODEL, getAiClient, retryWithBackoff } from "./client";
 
 export const parsedExerciseSchema = z.object({
   exerciseName: z.string(),

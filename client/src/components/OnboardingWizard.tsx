@@ -1,19 +1,20 @@
+import { ChevronLeft,ChevronRight, Loader2 } from "lucide-react";
 import { useState } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Loader2, ChevronRight, ChevronLeft } from "lucide-react";
-import { WelcomeStep } from "@/components/onboarding/WelcomeStep";
-import { UnitsStep } from "@/components/onboarding/UnitsStep";
+
 import { GoalStep } from "@/components/onboarding/GoalStep";
 import { PlanStep } from "@/components/onboarding/PlanStep";
 import { ScheduleStep } from "@/components/onboarding/ScheduleStep";
+import { UnitsStep } from "@/components/onboarding/UnitsStep";
+import { WelcomeStep } from "@/components/onboarding/WelcomeStep";
 import { GeneratePlanDialog } from "@/components/plans/GeneratePlanDialog";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useOnboardingWizard } from "@/hooks/useOnboardingWizard";
 
 interface OnboardingWizardProps {

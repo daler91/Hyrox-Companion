@@ -1,7 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { WorkoutStorage } from "../workouts";
-import { db } from "../../db";
+import { beforeEach,describe, expect, it, vi } from "vitest";
+
 import { createMockWorkoutLog } from "../../../test/factories";
+import { db } from "../../db";
+import { WorkoutStorage } from "../workouts";
 
 
 vi.mock("../../db", () => ({

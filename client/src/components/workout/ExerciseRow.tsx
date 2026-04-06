@@ -1,14 +1,15 @@
+import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
+import { ChevronDown, Copy,Pencil, Plus, Trash2, X } from "lucide-react";
 import React, { useId } from "react";
-import { ChevronDown, Plus, Trash2, X, Pencil, Copy } from "lucide-react";
+
+import type { SetData,StructuredExercise } from "@/components/ExerciseInput";
+import { createDefaultSet } from "@/components/ExerciseInput";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { NumberStepper } from "@/components/ui/number-stepper";
-import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
-import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
-import type { StructuredExercise, SetData } from "@/components/ExerciseInput";
-import { createDefaultSet } from "@/components/ExerciseInput";
 import { exerciseIcons } from "@/lib/exerciseIcons";
 import { categoryBorderColors } from "@/lib/exerciseUtils";
 import { cn } from "@/lib/utils";

@@ -1,2 +1,2 @@
-export { WorkoutDetailView } from "./WorkoutDetailView";
 export { WorkoutDetailEditForm } from "./WorkoutDetailEditForm";
+export { WorkoutDetailView } from "./WorkoutDetailView";

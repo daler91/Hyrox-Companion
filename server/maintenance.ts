@@ -1,11 +1,13 @@
-import { pool } from "./db";
-import { vectorPool } from "./vectorDb";
-import { migrate } from "drizzle-orm/node-postgres/migrator";
-import { drizzle } from "drizzle-orm/node-postgres";
 import path from "node:path";
-import type { IStorage } from "./storage";
-import { logger } from "./logger";
+
+import { drizzle } from "drizzle-orm/node-postgres";
+import { migrate } from "drizzle-orm/node-postgres/migrator";
+
+import { pool } from "./db";
 import { EMBEDDING_DIMENSIONS } from "./gemini/client";
+import { logger } from "./logger";
+import type { IStorage } from "./storage";
+import { vectorPool } from "./vectorDb";
 
 async function ensurePgvectorExtension() {
   let client;

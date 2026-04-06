@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { workouts } from './workouts';
+import { beforeEach,describe, expect, it, vi } from 'vitest';
+
 import { typedRequest } from './client';
+import { workouts } from './workouts';
 
 vi.mock('./client', () => ({
   typedRequest: vi.fn(),

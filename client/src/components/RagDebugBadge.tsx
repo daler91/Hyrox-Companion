@@ -1,5 +1,6 @@
+import { ChevronDown, ChevronRight,Database, FileText } from "lucide-react";
 import { useState } from "react";
-import { Database, FileText, ChevronDown, ChevronRight } from "lucide-react";
+
 import type { RagInfo } from "@/hooks/useChatSession";
 
 const BADGE_COLORS: Record<RagInfo["source"], string> = {

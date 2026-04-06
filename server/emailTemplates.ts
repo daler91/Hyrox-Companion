@@ -1,6 +1,7 @@
 import type { User } from "@shared/schema";
-import { sanitizeHtml } from "./utils/sanitize";
+
 import { env } from "./env";
+import { sanitizeHtml } from "./utils/sanitize";
 
 export interface WeeklySummaryData {
   completedCount: number;

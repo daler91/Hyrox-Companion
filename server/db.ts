@@ -1,9 +1,10 @@
-import { env } from "./env";
+import * as schema from "@shared/schema";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
-import * as schema from "@shared/schema";
-import { logger } from "./logger";
+
 import { DB_CONNECTION_TIMEOUT_MS, DB_IDLE_TIMEOUT_MS, DB_STATEMENT_TIMEOUT_MS } from "./constants";
+import { env } from "./env";
+import { logger } from "./logger";
 
 const { Pool } = pg;
 

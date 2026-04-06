@@ -1,5 +1,6 @@
-import { useApiMutation } from "./useApiMutation";
 import { api, QUERY_KEYS } from "@/lib/api";
+
+import { useApiMutation } from "./useApiMutation";
 
 export function useStravaMutations() {
   const connectStravaMutation = useApiMutation({

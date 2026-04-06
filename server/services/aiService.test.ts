@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { buildTrainingContext } from "./ai";
+import { afterEach,beforeEach, describe, expect, it, vi } from "vitest";
+
 import { storage } from "../storage";
+import { buildTrainingContext } from "./ai";
 
 vi.mock("../storage", () => ({
   storage: {

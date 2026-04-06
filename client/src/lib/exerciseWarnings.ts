@@ -1,4 +1,5 @@
 import { EXERCISE_DEFINITIONS } from "@shared/schema";
+
 import type { StructuredExercise } from "@/components/ExerciseInput";
 
 interface FieldRequirement {

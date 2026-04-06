@@ -1,12 +1,13 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import express from "express";
-import { createTestApp } from "./testUtils";
 import request from "supertest";
-import aiRouter from "../ai";
-import { storage } from "../../storage";
-import { parseExercisesFromText, chatWithCoach, streamChatWithCoach, generateWorkoutSuggestions } from "../../gemini";
+import { afterEach,beforeEach, describe, expect, it, vi } from "vitest";
+
+import { chatWithCoach, generateWorkoutSuggestions,parseExercisesFromText, streamChatWithCoach } from "../../gemini";
 import { buildTrainingContext } from "../../services/ai";
 import { retrieveRelevantChunks } from "../../services/ragService";
+import { storage } from "../../storage";
+import aiRouter from "../ai";
+import { createTestApp } from "./testUtils";
 
 const MOCK_TRAINING_CONTEXT = "Training context";
 const CHAT_STREAM_ENDPOINT = "/api/v1/chat/stream";

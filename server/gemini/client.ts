@@ -1,12 +1,13 @@
+import { GoogleGenAI } from "@google/genai";
+
+import { AI_CALL_TIMEOUT_MS,AI_REQUEST_TIMEOUT_MS } from "../constants";
 import { env } from "../env";
 import { logger } from "../logger";
-import { GoogleGenAI } from "@google/genai";
-import { AI_REQUEST_TIMEOUT_MS, AI_CALL_TIMEOUT_MS } from "../constants";
 import {
   assertBreakerClosed,
+  CircuitBreakerOpenError,
   recordBreakerFailure,
   recordBreakerSuccess,
-  CircuitBreakerOpenError,
 } from "./circuitBreaker";
 
 export const GEMINI_MODEL = env.GEMINI_MODEL;

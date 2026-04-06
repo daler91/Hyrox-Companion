@@ -1,12 +1,14 @@
 import { type ParsedExercise, type TimelineEntry } from "@shared/schema";
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef,useState } from "react";
+
 import { useToast } from "@/hooks/use-toast";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
-import { getExerciseLabel, exerciseSetsToStructured } from "@/lib/exerciseUtils";
-import { useWorkoutEditor, exerciseToPayload } from "@/hooks/useWorkoutEditor";
-import { WorkoutDetailHeader } from "./WorkoutDetailHeader";
+import { exerciseToPayload,useWorkoutEditor } from "@/hooks/useWorkoutEditor";
+import { exerciseSetsToStructured,getExerciseLabel } from "@/lib/exerciseUtils";
+
 import { WorkoutDetailEditForm } from "./workout-detail-exercises";
 import { WorkoutDetailFooter } from "./WorkoutDetailActions";
+import { WorkoutDetailHeader } from "./WorkoutDetailHeader";
 
 interface WorkoutDetailEditModeProps {
   readonly entry: TimelineEntry;

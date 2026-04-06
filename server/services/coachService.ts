@@ -1,9 +1,9 @@
+import { generateWorkoutSuggestions, type UpcomingWorkout, type WorkoutSuggestion } from "../gemini/index";
 import { logger } from "../logger";
 import { storage } from "../storage";
-import { buildTrainingContext } from "./ai";
-import { generateWorkoutSuggestions, type UpcomingWorkout, type WorkoutSuggestion } from "../gemini/index";
-import { retrieveCoachingText } from "./ragRetrieval";
 import { toDateStr } from "../types";
+import { buildTrainingContext } from "./ai";
+import { retrieveCoachingText } from "./ragRetrieval";
 
 // ---------------------------------------------------------------------------
 // Helpers

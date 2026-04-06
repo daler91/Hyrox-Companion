@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef } from "react";
-import { useUser, useAuth as useClerkAuth } from "@clerk/react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAuth as useClerkAuth,useUser } from "@clerk/react";
 import type { User } from "@shared/schema";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useRef } from "react";
+
 import { QUERY_KEYS } from "@/lib/api";
 import { resetCsrfToken } from "@/lib/queryClient";
 

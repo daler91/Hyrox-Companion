@@ -1,13 +1,14 @@
+import type { GeneratePlanInput } from "@shared/schema";
+import { ChevronLeft,ChevronRight, Loader2, Sparkles } from "lucide-react";
 import { useState } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Sparkles, ChevronRight, ChevronLeft } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 import { useGeneratePlan } from "@/hooks/usePlanGeneration";
-import type { GeneratePlanInput } from "@shared/schema";
 
 const MAX_WEEKS = 24;
 const MIN_WEEKS = 1;

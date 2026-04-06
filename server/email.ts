@@ -1,13 +1,14 @@
+import type { User } from "@shared/schema";
+import { Resend } from "resend";
+
+import {
+  buildMissedWorkoutEmail,
+  buildWeeklySummaryEmail,
+  type MissedWorkoutData,
+  type WeeklySummaryData,
+} from "./emailTemplates";
 import { env } from "./env";
 import { logger } from "./logger";
-import { Resend } from "resend";
-import type { User } from "@shared/schema";
-import {
-  buildWeeklySummaryEmail,
-  buildMissedWorkoutEmail,
-  type WeeklySummaryData,
-  type MissedWorkoutData,
-} from "./emailTemplates";
 
 export * from "./emailTemplates";
 

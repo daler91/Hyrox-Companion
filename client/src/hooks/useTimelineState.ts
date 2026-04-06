@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { useTimelineData } from "./useTimelineData";
-import { useTimelineFilters } from "./useTimelineFilters";
+
+import { useCombineWorkouts } from "./useCombineWorkouts";
 import { useOnboarding } from "./useOnboarding";
 import { usePlanImport } from "./usePlanImport";
+import { useTimelineData } from "./useTimelineData";
+import { useTimelineFilters } from "./useTimelineFilters";
 import { useWorkoutActions } from "./useWorkoutActions";
-import { useCombineWorkouts } from "./useCombineWorkouts";
 
 export function useTimelineState() {
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);

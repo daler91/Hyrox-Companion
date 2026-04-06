@@ -1,6 +1,7 @@
-import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, Clock, XCircle, SkipForward } from "lucide-react";
 import type { PersonalRecord } from "@shared/schema";
+import { CheckCircle2, Clock, SkipForward,XCircle } from "lucide-react";
+
+import { Badge } from "@/components/ui/badge";
 import type { GroupedExercise } from "@/lib/exerciseUtils";
 
 export function hasPRInWorkout(

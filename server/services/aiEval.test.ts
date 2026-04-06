@@ -1,9 +1,10 @@
-import { describe, it, expect, vi, beforeAll } from "vitest";
-import { chatWithCoach } from "../gemini/chatService";
-import { retrieveRelevantChunks } from "./ragService";
-import { generateEmbedding } from "../gemini/client";
+import { beforeAll,describe, expect, it, vi } from "vitest";
+
 import { env } from "../env";
+import { chatWithCoach } from "../gemini/chatService";
+import { generateEmbedding } from "../gemini/client";
 import { storage } from "../storage";
+import { retrieveRelevantChunks } from "./ragService";
 
 // These evaluation tests run against the real Gemini API to monitor AI regression.
 // They are skipped by default in normal CI runs to avoid costs and flakiness,

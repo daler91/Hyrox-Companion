@@ -1,16 +1,17 @@
 import {
-  trainingPlans,
-  planDays,
-  workoutLogs,
-  type WorkoutLog,
-  type TimelineEntry,
   type PlanDay,
+  planDays,
+  type TimelineEntry,
+  trainingPlans,
+  type WorkoutLog,
+  workoutLogs,
   type WorkoutStatus,
 } from "@shared/schema";
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, notInArray } from "drizzle-orm";
+
 import { db } from "../db";
-import { eq, and, isNull, isNotNull, inArray, desc, asc, gte, notInArray } from "drizzle-orm";
-import type { WorkoutStorage } from "./workouts";
 import { toDateStr } from "../types";
+import type { WorkoutStorage } from "./workouts";
 
 function mapWorkoutLogToTimelineFields(log: WorkoutLog) {
   return {

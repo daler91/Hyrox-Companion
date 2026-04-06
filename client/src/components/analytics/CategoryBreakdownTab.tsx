@@ -1,10 +1,11 @@
-import { useMemo } from "react";
+import type { TrainingOverview } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, PieChart as PieChartIcon } from "lucide-react";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { useMemo } from "react";
+import { Cell, Legend,Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+
+import { Card, CardContent, CardDescription,CardHeader, CardTitle } from "@/components/ui/card";
 import { api } from "@/lib/api";
-import type { TrainingOverview } from "@shared/schema";
 import { categoryLabels } from "@/lib/exerciseUtils";
 
 const CATEGORY_COLORS: Record<string, string> = {

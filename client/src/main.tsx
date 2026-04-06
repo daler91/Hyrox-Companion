@@ -11,12 +11,13 @@ import "@fontsource/geist-sans/500.css";
 import "@fontsource/geist-sans/600.css";
 import "@fontsource/geist-mono/400.css";
 import "@fontsource/geist-mono/500.css";
+import "./index.css";
 
 import * as Sentry from "@sentry/react";
 import { createRoot } from "react-dom/client";
+
 import App from "./App";
 import { FallbackErrorBoundary } from "./components/FallbackErrorBoundary";
-import "./index.css";
 
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({

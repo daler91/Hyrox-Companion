@@ -1,6 +1,7 @@
-import { Button } from "@/components/ui/button";
-import { ArrowRight } from "lucide-react";
 import { SignInButton } from "@clerk/react";
+import { ArrowRight } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
 
 export function CtaSection() {
   return (

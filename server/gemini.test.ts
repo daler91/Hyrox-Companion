@@ -1,12 +1,13 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
 import { exerciseSetSchema } from "@shared/schema";
+import { beforeEach,describe, expect, it, vi } from "vitest";
+
+import { __resetCircuitBreakerForTests } from "./gemini/circuitBreaker";
 import {
   isRetryableError,
+  parsedExerciseSchema,
   retryWithBackoff,
   workoutSuggestionSchema,
-  parsedExerciseSchema,
 } from "./gemini/index";
-import { __resetCircuitBreakerForTests } from "./gemini/circuitBreaker";
 
 describe("isRetryableError", () => {
   it("returns true for 429 rate limit", () => {

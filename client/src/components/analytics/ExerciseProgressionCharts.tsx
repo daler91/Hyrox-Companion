@@ -1,13 +1,14 @@
-import { useMemo, useState } from "react";
 import {
-  Loader2,
-  TrendingUp,
-  TrendingDown,
-  Minus,
   BarChart3,
   LineChart as LineChartIcon,
+  Loader2,
+  Minus,
+  TrendingDown,
+  TrendingUp,
 } from "lucide-react";
-import { MiniBarChart, type ExerciseAnalyticDay } from "@/components/analytics/MiniBarChart";
+import { useMemo, useState } from "react";
+
+import { type ExerciseAnalyticDay,MiniBarChart } from "@/components/analytics/MiniBarChart";
 import { MiniLineChart } from "@/components/analytics/MiniLineChart";
 import { Button } from "@/components/ui/button";
 

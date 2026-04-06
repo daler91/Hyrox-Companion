@@ -1,8 +1,10 @@
+import { HelpCircle,Trophy } from "lucide-react";
+
 import { Badge } from "@/components/ui/badge";
-import { Trophy, HelpCircle } from "lucide-react";
 import { categoryChipColors, formatExerciseSummary } from "@/lib/exerciseUtils";
-import { hasPRInWorkout } from "./utils";
+
 import type { ExerciseChipsProps } from "./types";
+import { hasPRInWorkout } from "./utils";
 
 export function ExerciseChips({
   entryId,

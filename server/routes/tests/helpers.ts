@@ -1,17 +1,18 @@
-import express from "express";
-import cookieParser from "cookie-parser";
-import { registerRoutes } from "../../routes";
 import { createServer } from "node:http";
-import { db } from "../../db";
+
 import {
-  users,
-  trainingPlans,
+  exerciseSets,
   planDays,
-  workoutLogs,
-  exerciseSets
-} from "@shared/schema";
-import { beforeAll, afterAll, beforeEach, vi } from "vitest";
+  trainingPlans,
+  users,
+  workoutLogs} from "@shared/schema";
+import cookieParser from "cookie-parser";
+import express from "express";
+import { afterAll, beforeAll, beforeEach, vi } from "vitest";
+
+import { db } from "../../db";
 import { queue } from "../../queue";
+import { registerRoutes } from "../../routes";
 
 // Common test user ID matching DEV_USER_ID if ALLOW_DEV_AUTH_BYPASS is true
 export const testUserId = "dev-user";

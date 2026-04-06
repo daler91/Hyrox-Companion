@@ -1,14 +1,15 @@
-import { useMemo, useState } from "react";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
-import { ExerciseRow, type ExerciseRowBlock } from "@/components/workout/ExerciseRow";
-import type { StructuredExercise } from "@/components/ExerciseInput";
 import {
   EXERCISE_DEFINITIONS,
-  type ExerciseName,
   type ExerciseCategory,
+  type ExerciseName,
 } from "@shared/schema";
+import { Plus } from "lucide-react";
+import { useMemo, useState } from "react";
+
+import type { StructuredExercise } from "@/components/ExerciseInput";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent,TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ExerciseRow, type ExerciseRowBlock } from "@/components/workout/ExerciseRow";
 import { categoryLabels } from "@/lib/exerciseUtils";
 
 const TAB_TRIGGER_CLASS =

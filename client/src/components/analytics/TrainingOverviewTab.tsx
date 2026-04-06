@@ -1,22 +1,24 @@
-import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Loader2, BarChart3, Clock, Flame, Zap } from "lucide-react";
-import { api } from "@/lib/api";
 import type { TrainingOverview } from "@shared/schema";
-import { MiniLineChart } from "./MiniLineChart";
-import { WorkoutHeatmap } from "./WorkoutHeatmap";
+import { useQuery } from "@tanstack/react-query";
+import { BarChart3, Clock, Flame, Loader2, Zap } from "lucide-react";
+import { useMemo } from "react";
 import {
-  BarChart,
   Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  ReferenceLine,
-  Cell,
 } from "recharts";
-import { MUTED_FG, GRID_BORDER, GRID_DASH, MUTED_CURSOR, COLOR_GREEN, COLOR_PRIMARY, CHART_CARD_CLASS, formatChartDate } from "./chartConstants";
+
+import { api } from "@/lib/api";
+
+import { CHART_CARD_CLASS, COLOR_GREEN, COLOR_PRIMARY, formatChartDate,GRID_BORDER, GRID_DASH, MUTED_CURSOR, MUTED_FG } from "./chartConstants";
+import { MiniLineChart } from "./MiniLineChart";
+import { WorkoutHeatmap } from "./WorkoutHeatmap";
 
 interface TrainingOverviewTabProps {
   readonly dateParams: string;

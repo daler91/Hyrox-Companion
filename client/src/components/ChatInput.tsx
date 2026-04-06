@@ -1,10 +1,11 @@
-import { useState, useCallback } from "react";
+import { Loader2,Send } from "lucide-react";
+import { useCallback,useState } from "react";
+
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Send, Loader2 } from "lucide-react";
-import { useVoiceInput } from "@/hooks/useVoiceInput";
 import { VoiceButton } from "@/components/VoiceButton";
 import { useToast } from "@/hooks/use-toast";
+import { useVoiceInput } from "@/hooks/useVoiceInput";
 
 interface ChatInputProps {
   readonly onSend: (message: string) => void;

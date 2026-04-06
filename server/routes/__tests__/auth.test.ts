@@ -1,10 +1,11 @@
-import { createTestApp } from "./testUtils";
-import { describe, it, expect, vi, beforeEach } from "vitest";
 import express from "express";
 import request from "supertest";
-import authRouter from "../auth";
+import { beforeEach,describe, expect, it, vi } from "vitest";
+
 import { storage } from "../../storage";
 import { getUserId } from "../../types";
+import authRouter from "../auth";
+import { createTestApp } from "./testUtils";
 
 const { TEST_USER_ID } = vi.hoisted(() => ({ TEST_USER_ID: "test_user_id" }));
 const ENDPOINT_URL = "/api/v1/auth/user";

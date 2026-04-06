@@ -1,9 +1,9 @@
 import type { TrainingContext } from "./gemini/types";
 import {
-  buildOverallStats,
   buildExerciseFocus,
-  buildStructuredPerformance,
+  buildOverallStats,
   buildRecentWorkouts,
+  buildStructuredPerformance,
   buildUpcomingWorkouts,
 } from "./prompts/coachingContext";
 import {

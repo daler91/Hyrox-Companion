@@ -1,13 +1,15 @@
-import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Dumbbell, Loader2, Sparkles,Trophy } from "lucide-react";
+import { useMemo,useState } from "react";
 import { Link } from "wouter";
-import { Trophy, Dumbbell, Loader2, Sparkles } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription,CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
-import { PersonalRecordItem } from "./PersonalRecordItem";
 import { api } from "@/lib/api";
+
+import { PersonalRecordItem } from "./PersonalRecordItem";
 
 interface PRValue {
   value: number;

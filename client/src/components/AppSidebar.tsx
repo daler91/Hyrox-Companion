@@ -1,22 +1,24 @@
+import { BarChart3,CalendarRange, LogOut, Settings } from "lucide-react";
+import { Link,useLocation } from "wouter";
+
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarFooter,
 } from "@/components/ui/sidebar";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import { Settings, CalendarRange, LogOut, BarChart3 } from "lucide-react";
-import { useLocation, Link } from "wouter";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { ThemeToggle } from "./ThemeToggle";
 import { useAuth } from "@/hooks/useAuth";
 import { useSignOut } from "@/hooks/useSignOut";
+
+import { ThemeToggle } from "./ThemeToggle";
 
 const menuItems = [
   { title: "Training", url: "/", icon: CalendarRange },

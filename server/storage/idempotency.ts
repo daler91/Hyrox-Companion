@@ -1,6 +1,7 @@
 import { idempotencyKeys } from "@shared/schema";
-import { db } from "../db";
 import { and, eq, lt } from "drizzle-orm";
+
+import { db } from "../db";
 
 export interface IdempotencyRecord {
   statusCode: number;

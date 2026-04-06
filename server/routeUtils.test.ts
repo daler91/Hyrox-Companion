@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import type { Request, Response, NextFunction } from "express";
+import type { NextFunction,Request, Response } from "express";
+import { afterEach,beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 // ---------------------------------------------------------------------------
@@ -67,9 +67,10 @@ vi.mock("express-rate-limit", () => {
   };
 });
 
-import { calculateStreak, rateLimiter, clearRateLimitBuckets, validateBody, DEFAULT_WINDOW_MS } from "./routeUtils";
-import { expandExercisesToSetRows } from "./services/workoutService";
 import rateLimit from "express-rate-limit";
+
+import { calculateStreak, clearRateLimitBuckets, DEFAULT_WINDOW_MS,rateLimiter, validateBody } from "./routeUtils";
+import { expandExercisesToSetRows } from "./services/workoutService";
 
 describe("rateLimiter", () => {
   let req: { auth: { userId: string }; ip: string };

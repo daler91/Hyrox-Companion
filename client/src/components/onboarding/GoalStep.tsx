@@ -1,6 +1,7 @@
+import { Activity, Check, Dumbbell, Target, TrendingDown,Zap } from "lucide-react";
+
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Target, Dumbbell, Check, Activity, Zap, TrendingDown } from "lucide-react";
 
 const goals = [
   { id: "strength", label: "Build strength", icon: Dumbbell, description: "Get stronger with progressive resistance training" },

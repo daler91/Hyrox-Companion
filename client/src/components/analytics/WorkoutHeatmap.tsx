@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+
 import { CHART_CARD_CLASS } from "./chartConstants";
 
 const DAY_LABELS = [

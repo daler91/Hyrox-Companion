@@ -1,9 +1,11 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act, waitFor } from '@testing-library/react';
-import { useChatSession } from '../useChatSession';
-import * as queryClient from '@/lib/queryClient';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import React from 'react';
+import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+
+import * as queryClient from '@/lib/queryClient';
+
+import { useChatSession } from '../useChatSession';
 
 // Setup mock QueryClient
 const testQueryClient = new QueryClient({

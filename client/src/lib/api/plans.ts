@@ -1,5 +1,6 @@
-import { typedRequest, rawRequest } from "./client";
-import type { TrainingPlan, PlanDay, GeneratePlanInput, TrainingPlanWithDays } from "@shared/schema";
+import type { GeneratePlanInput, PlanDay, TrainingPlan, TrainingPlanWithDays } from "@shared/schema";
+
+import { rawRequest,typedRequest } from "./client";
 
 export const plans = {
   list: () => typedRequest<TrainingPlan[]>("GET", "/api/v1/plans"),

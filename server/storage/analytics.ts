@@ -1,13 +1,13 @@
 import {
-  trainingPlans,
-  planDays,
-  workoutLogs,
-
   type ExerciseSet,
+  planDays,
+  trainingPlans,
   type WorkoutLog,
+  workoutLogs,
 } from "@shared/schema";
+import { and, desc, eq, gte, lte, type SQL,sql } from "drizzle-orm";
+
 import { db } from "../db";
-import { eq, and, sql, desc, gte, lte, type SQL } from "drizzle-orm";
 import { queryExerciseSetsWithDates } from "./shared";
 
 export class AnalyticsStorage {

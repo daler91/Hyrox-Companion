@@ -1,5 +1,6 @@
-import { Button } from "@/components/ui/button";
 import { CalendarCheck } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
 
 interface TimelineHeaderProps {
   readonly onScrollToToday: () => void;

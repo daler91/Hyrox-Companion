@@ -1,7 +1,9 @@
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Label } from "@/components/ui/label";
 import { Clock, Flame } from "lucide-react";
+
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+
 import type { WorkoutCardProps } from "./types";
 
 function truncate(text: string | null | undefined, maxLen: number = 150) {

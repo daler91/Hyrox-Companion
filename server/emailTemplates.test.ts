@@ -1,13 +1,14 @@
-import { describe, it, expect, afterEach } from "vitest";
+import type { User } from "@shared/schema";
+import { afterEach,describe, expect, it } from "vitest";
+
 import {
-  getAppUrl,
-  buildWeeklySummaryEmail,
   buildMissedWorkoutEmail,
-  WeeklySummaryData,
+  buildWeeklySummaryEmail,
+  getAppUrl,
   MissedWorkoutData,
+  WeeklySummaryData,
 } from "./emailTemplates";
 import { env } from "./env";
-import type { User } from "@shared/schema";
 
 describe("email generation", () => {
   const baseUser: User = {

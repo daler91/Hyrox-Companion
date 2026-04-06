@@ -1,5 +1,6 @@
-import { typedRequest } from "./client";
 import type { PersonalRecord, TimelineEntry, TrainingOverview } from "@shared/schema";
+
+import { typedRequest } from "./client";
 import type { RagInfo } from "./coaching";
 
 export interface Suggestion {

@@ -1,8 +1,9 @@
 import type { TimelineEntry } from "@shared/schema";
+
 import { 
-  getTodayString, 
-  getStartOfWeekString, 
   getEndOfWeekString, 
+  getStartOfWeekString, 
+  getTodayString, 
   isDateInRange 
 } from "./dateUtils";
 

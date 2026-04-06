@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { apiRequest, getQueryFn } from "./queryClient";
 import { QueryFunctionContext } from "@tanstack/react-query";
+import { afterEach,beforeEach, describe, expect, it, vi } from "vitest";
+
+import { apiRequest, getQueryFn } from "./queryClient";
 
 describe("queryClient", () => {
   const originalFetch = globalThis.fetch;

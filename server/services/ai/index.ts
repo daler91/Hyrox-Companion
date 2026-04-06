@@ -1,8 +1,8 @@
-import { storage } from "../../storage";
 import type { TrainingContext } from "../../gemini/index";
 import { calculateStreak } from "../../routeUtils";
-import { calculateTrainingStats, getExerciseBreakdown, collectRecentWorkouts, getStructuredExerciseStats } from "./trainingStats";
-import { computeRpeTrend, computeExerciseGaps, computePlanPhase, computeWeeklyVolume, computeProgressionFlags, computeCurrentWeek } from "./coachingInsights";
+import { storage } from "../../storage";
+import { computeCurrentWeek,computeExerciseGaps, computePlanPhase, computeProgressionFlags, computeRpeTrend, computeWeeklyVolume } from "./coachingInsights";
+import { calculateTrainingStats, collectRecentWorkouts, getExerciseBreakdown, getStructuredExerciseStats } from "./trainingStats";
 
 export async function buildTrainingContext(userId: string): Promise<TrainingContext> {
   const [timeline, activePlanRecord, user, upcomingDays] = await Promise.all([

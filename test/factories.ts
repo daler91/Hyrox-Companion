@@ -1,4 +1,4 @@
-import type { TimelineEntry, InsertWorkoutLog, TrainingPlan, TrainingPlanWithDays, PlanDay } from "@shared/schema";
+import type { InsertWorkoutLog, PlanDay,TimelineEntry, TrainingPlan, TrainingPlanWithDays } from "@shared/schema";
 
 export function createMockTimelineEntry(overrides: Partial<TimelineEntry> = {}): TimelineEntry {
   return {

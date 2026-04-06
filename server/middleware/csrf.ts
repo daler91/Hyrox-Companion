@@ -1,6 +1,7 @@
-import type { Request, RequestHandler } from "express";
-import { doubleCsrf } from "csrf-csrf";
 import { getAuth } from "@clerk/express";
+import { doubleCsrf } from "csrf-csrf";
+import type { Request, RequestHandler } from "express";
+
 import { env } from "../env";
 
 /**
@@ -50,7 +51,7 @@ const { doubleCsrfProtection, generateCsrfToken } = doubleCsrf({
   // Method list intentionally excludes GET/HEAD/OPTIONS (safe methods)
   // so clients can fetch the token endpoint without first having a token.
   ignoredMethods: ["GET", "HEAD", "OPTIONS"],
-  getCsrfTokenFromRequest: (req: Request) => req.headers["x-csrf-token"] as string | undefined,
+  getCsrfTokenFromRequest: (req: Request) => req.headers["x-csrf-token"],
 });
 
 export const csrfProtection: RequestHandler = doubleCsrfProtection;

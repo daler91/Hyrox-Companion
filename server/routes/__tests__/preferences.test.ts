@@ -1,9 +1,10 @@
-import { createTestApp } from "./testUtils";
-import { describe, it, expect, vi, beforeEach } from "vitest";
 import express from "express";
 import request from "supertest";
-import preferencesRouter from "../preferences";
+import { beforeEach,describe, expect, it, vi } from "vitest";
+
 import { storage } from "../../storage";
+import preferencesRouter from "../preferences";
+import { createTestApp } from "./testUtils";
 
 // Mock the clerkAuth middleware to simulate authentication
 vi.mock("../../clerkAuth", () => ({

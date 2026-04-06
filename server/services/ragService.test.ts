@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { chunkText, embedCoachingMaterial, retrieveRelevantChunks } from "./ragService";
 import type { CoachingMaterial } from "@shared/schema";
+import { beforeEach,describe, expect, it, vi } from "vitest";
+
+import { chunkText, embedCoachingMaterial, retrieveRelevantChunks } from "./ragService";
 
 // Mock dependencies
 vi.mock("../gemini/client", () => ({

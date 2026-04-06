@@ -1,10 +1,11 @@
-import { createTestApp } from "./testUtils";
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import express from "express";
 import request from "supertest";
-import analyticsRouter, { validDate, _cacheForTesting, _workoutLogCacheForTesting } from "../analytics";
+import { afterEach,beforeEach, describe, expect, it, vi } from "vitest";
+
+import { calculateExerciseAnalytics, calculatePersonalRecords, calculateTrainingOverview } from "../../services/analyticsService";
 import { storage } from "../../storage";
-import { calculatePersonalRecords, calculateExerciseAnalytics, calculateTrainingOverview } from "../../services/analyticsService";
+import analyticsRouter, { _cacheForTesting, _workoutLogCacheForTesting,validDate } from "../analytics";
+import { createTestApp } from "./testUtils";
 
 // Mock the clerkAuth middleware to simulate authentication
 vi.mock("../../clerkAuth", () => ({

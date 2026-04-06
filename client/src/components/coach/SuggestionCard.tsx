@@ -1,8 +1,9 @@
-import { Card } from "@/components/ui/card";
+import { Check, Loader2, XIcon,Zap } from "lucide-react";
+
+import { RagDebugBadge } from "@/components/RagDebugBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Zap, Loader2, Check, XIcon } from "lucide-react";
-import { RagDebugBadge } from "@/components/RagDebugBadge";
+import { Card } from "@/components/ui/card";
 import type { RagInfo, Suggestion } from "@/lib/api";
 
 interface SuggestionCardProps {

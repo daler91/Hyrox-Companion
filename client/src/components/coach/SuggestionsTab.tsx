@@ -1,11 +1,13 @@
-import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
-import { SuggestionCard } from "./SuggestionCard";
-import { queryClient } from "@/lib/queryClient";
-import { api, QUERY_KEYS, type Suggestion, type RagInfo } from "@/lib/api";
-import { getCurrentTimeString } from "@/lib/dateUtils";
-import type { Message } from "@/hooks/useChatSession";
 import type { TimelineEntry } from "@shared/schema";
+import { useMutation } from "@tanstack/react-query";
+import { useState } from "react";
+
+import type { Message } from "@/hooks/useChatSession";
+import { api, QUERY_KEYS, type RagInfo,type Suggestion } from "@/lib/api";
+import { getCurrentTimeString } from "@/lib/dateUtils";
+import { queryClient } from "@/lib/queryClient";
+
+import { SuggestionCard } from "./SuggestionCard";
 
 interface UseSuggestionsOptions {
   timeline: TimelineEntry[];

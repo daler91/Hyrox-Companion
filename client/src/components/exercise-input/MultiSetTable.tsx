@@ -1,9 +1,11 @@
-import { Input } from "@/components/ui/input";
+import { Minus,Plus } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, Minus } from "lucide-react";
+
 import type { SetData } from "../ExerciseInput";
-import type { FieldKey, FieldConfig } from "./types";
+import type { FieldConfig,FieldKey } from "./types";
 
 interface MultiSetTableProps {
   readonly exerciseName: string;

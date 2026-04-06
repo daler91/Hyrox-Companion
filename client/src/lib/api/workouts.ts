@@ -1,11 +1,12 @@
-import { typedRequest } from "./client";
 import type {
+  ExerciseSet,
   InsertWorkoutLog,
+  ParsedExercise,
   UpdateWorkoutLog,
   WorkoutLog,
-  ParsedExercise,
-  ExerciseSet,
 } from "@shared/schema";
+
+import { typedRequest } from "./client";
 
 export interface BatchReparseResponse {
   total: number;

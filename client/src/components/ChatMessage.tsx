@@ -1,8 +1,9 @@
+import { Bot,User } from "lucide-react";
 import { memo } from "react";
 import ReactMarkdown from "react-markdown";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { User, Bot } from "lucide-react";
+
 import { RagDebugBadge } from "@/components/RagDebugBadge";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import type { RagInfo } from "@/hooks/useChatSession";
 
 interface ChatMessageProps {

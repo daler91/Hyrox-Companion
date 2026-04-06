@@ -1,10 +1,11 @@
-import type { IStorage } from "./storage";
 import type { User } from "@shared/schema";
-import { sendWeeklySummary, sendMissedWorkoutReminder, type WeeklySummaryData, type MissedWorkoutData } from "./email";
+
+import { type MissedWorkoutData,sendMissedWorkoutReminder, sendWeeklySummary, type WeeklySummaryData } from "./email";
 import { logger } from "./logger";
-import { toDateStr } from "./types";
-import { calculateStreak } from "./routeUtils";
 import { queue } from "./queue";
+import { calculateStreak } from "./routeUtils";
+import type { IStorage } from "./storage";
+import { toDateStr } from "./types";
 
 export async function processWeeklySummary(storage: IStorage, user: User, now: Date): Promise<boolean> {
   const dayOfWeek = now.getDay();

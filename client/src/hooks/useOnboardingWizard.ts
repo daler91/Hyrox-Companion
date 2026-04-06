@@ -1,9 +1,10 @@
-import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { format, addDays } from "date-fns";
-import { queryClient } from "@/lib/queryClient";
-import { api, QUERY_KEYS } from "@/lib/api";
+import { addDays,format } from "date-fns";
+import { useState } from "react";
+
 import { useToast } from "@/hooks/use-toast";
+import { api, QUERY_KEYS } from "@/lib/api";
+import { queryClient } from "@/lib/queryClient";
 
 type Step = "welcome" | "units" | "goal" | "plan" | "schedule";
 

@@ -1,17 +1,17 @@
 import React from "react";
 import { useLocation } from "wouter";
+
+import { WorkoutDetailsCard } from "@/components/workout/WorkoutDetailsCard";
+import { WorkoutExerciseMode } from "@/components/workout/WorkoutExerciseMode";
+import { WorkoutHeader } from "@/components/workout/WorkoutHeader";
+import { WorkoutModeSelector } from "@/components/workout/WorkoutModeSelector";
+import { WorkoutNotesCard } from "@/components/workout/WorkoutNotesCard";
+import { WorkoutSaveButton } from "@/components/workout/WorkoutSaveButton";
+import { WorkoutTextMode } from "@/components/workout/WorkoutTextMode";
 import { useToast } from "@/hooks/use-toast";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { useWorkoutEditor } from "@/hooks/useWorkoutEditor";
 import { useWorkoutForm } from "@/hooks/useWorkoutForm";
-
-import { WorkoutHeader } from "@/components/workout/WorkoutHeader";
-import { WorkoutDetailsCard } from "@/components/workout/WorkoutDetailsCard";
-import { WorkoutNotesCard } from "@/components/workout/WorkoutNotesCard";
-import { WorkoutSaveButton } from "@/components/workout/WorkoutSaveButton";
-import { WorkoutModeSelector } from "@/components/workout/WorkoutModeSelector";
-import { WorkoutTextMode } from "@/components/workout/WorkoutTextMode";
-import { WorkoutExerciseMode } from "@/components/workout/WorkoutExerciseMode";
 
 export default function LogWorkout() {
   const { toast } = useToast();

@@ -1,13 +1,14 @@
-import { logger } from "../logger";
-import { Router, type Request as ExpressRequest, type Response } from "express";
-import { isAuthenticated } from "../clerkAuth";
-import { storage } from "../storage";
-import { rateLimiter, asyncHandler, validateBody } from "../routeUtils";
-import { getUserId } from "../types";
-import { insertCoachingMaterialSchema, type InsertCoachingMaterial } from "@shared/schema";
-import { getRagStatus, reembedAllMaterials } from "../services/ragService";
-import { queue } from "../queue";
+import { type InsertCoachingMaterial,insertCoachingMaterialSchema } from "@shared/schema";
+import { type Request as ExpressRequest, type Response,Router } from "express";
 import { z } from "zod";
+
+import { isAuthenticated } from "../clerkAuth";
+import { logger } from "../logger";
+import { queue } from "../queue";
+import { asyncHandler, rateLimiter, validateBody } from "../routeUtils";
+import { getRagStatus, reembedAllMaterials } from "../services/ragService";
+import { storage } from "../storage";
+import { getUserId } from "../types";
 
 const router = Router();
 

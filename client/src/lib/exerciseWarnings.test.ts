@@ -1,6 +1,8 @@
-import { describe, it, expect } from "vitest";
-import { getMissingFieldWarnings, getExerciseMissingFields } from "./exerciseWarnings";
+import { describe, expect,it } from "vitest";
+
 import type { StructuredExercise } from "@/components/ExerciseInput";
+
+import { getExerciseMissingFields,getMissingFieldWarnings } from "./exerciseWarnings";
 
 describe("exerciseWarnings", () => {
   describe("getMissingFieldWarnings", () => {

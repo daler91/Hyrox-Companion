@@ -1,4 +1,5 @@
 import type { TimelineEntry } from "@shared/schema";
+
 import { ConfirmDialog } from "./ConfirmDialog";
 
 interface SkipConfirmDialogProps {

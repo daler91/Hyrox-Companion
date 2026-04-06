@@ -1,8 +1,9 @@
-import { describe, it, expect } from "vitest";
-import { pool, db } from "../../db";
-import { vectorPool } from "../../vectorDb";
-import { sql } from "drizzle-orm";
 import * as schema from "@shared/schema";
+import { sql } from "drizzle-orm";
+import { describe, expect,it } from "vitest";
+
+import { db,pool } from "../../db";
+import { vectorPool } from "../../vectorDb";
 
 /**
  * Post-migration verification suite for Railway + Neon.

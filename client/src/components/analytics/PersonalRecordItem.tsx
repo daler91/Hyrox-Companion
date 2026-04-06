@@ -1,4 +1,5 @@
-import { Weight, Ruler, Timer } from "lucide-react";
+import { Ruler, Timer,Weight } from "lucide-react";
+
 import { Badge } from "@/components/ui/badge";
 import { categoryChipColors, categoryLabels, getExerciseLabel } from "@/lib/exerciseUtils";
 

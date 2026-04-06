@@ -1,13 +1,14 @@
-import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TrendingUp } from "lucide-react";
-import { useUnitPreferences } from "@/hooks/useUnitPreferences";
-import { getExerciseLabel } from "@/lib/exerciseUtils";
-import { api } from "@/lib/api";
-import { type ExerciseAnalyticDay } from "@/components/analytics/MiniBarChart";
+import { useMemo,useState } from "react";
+
 import { ExerciseProgressionCharts } from "@/components/analytics/ExerciseProgressionCharts";
+import { type ExerciseAnalyticDay } from "@/components/analytics/MiniBarChart";
+import { Card, CardContent, CardDescription,CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useUnitPreferences } from "@/hooks/useUnitPreferences";
+import { api } from "@/lib/api";
+import { getExerciseLabel } from "@/lib/exerciseUtils";
 
 interface RawPREntry {
   category: string;

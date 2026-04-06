@@ -1,5 +1,6 @@
-import { typedRequest, rawRequest } from "./client";
-import type { InsertCoachingMaterial, CoachingMaterial, ChatMessage, RagInfo } from "@shared/schema";
+import type { ChatMessage, CoachingMaterial, InsertCoachingMaterial, RagInfo } from "@shared/schema";
+
+import { rawRequest,typedRequest } from "./client";
 
 export type { RagInfo } from "@shared/schema";
 

@@ -1,3 +1,5 @@
+import { Loader2, Pencil } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -8,10 +10,10 @@ import {
 } from "@/components/ui/select";
 import {
   Tooltip,
-  TooltipTrigger,
   TooltipContent,
+  TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Loader2, Pencil } from "lucide-react";
+
 import type { PlanSelectorProps } from "./types";
 
 export function PlanSelector({

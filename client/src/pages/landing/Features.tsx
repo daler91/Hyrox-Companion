@@ -1,6 +1,7 @@
-import { Card, CardContent } from "@/components/ui/card";
 import { Activity, BarChart3, Brain, Calendar, CheckCircle2, Sparkles, TrendingUp } from "lucide-react";
 import { SiStrava } from "react-icons/si";
+
+import { Card, CardContent } from "@/components/ui/card";
 
 export function SocialProof() {
   return (

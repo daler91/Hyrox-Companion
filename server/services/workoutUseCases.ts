@@ -1,5 +1,6 @@
+import type { exercisesPayloadSchema, InsertWorkoutLog, insertWorkoutLogSchema, ParsedExercise,UpdateWorkoutLog, updateWorkoutLogSchema } from "@shared/schema";
 import type { z } from "zod";
-import type { insertWorkoutLogSchema, updateWorkoutLogSchema, exercisesPayloadSchema, InsertWorkoutLog, UpdateWorkoutLog, ParsedExercise } from "@shared/schema";
+
 import { createWorkoutAndScheduleCoaching, updateWorkout } from "./workoutService";
 
 // Route-level payloads carry the core table columns plus an optional parsed

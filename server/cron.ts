@@ -1,6 +1,7 @@
 import cron from "node-cron";
-import { logger } from "./logger";
+
 import { runEmailCronJob } from "./emailScheduler";
+import { logger } from "./logger";
 import type { IStorage } from "./storage";
 
 let task: ReturnType<typeof cron.schedule> | null = null;

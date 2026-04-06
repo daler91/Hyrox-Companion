@@ -1,9 +1,11 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { OnboardingWizard } from './OnboardingWizard';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach,describe, expect, it, vi } from 'vitest';
+
 import { useToast } from '@/hooks/use-toast';
 import * as queryClientLib from '@/lib/queryClient';
+
+import { OnboardingWizard } from './OnboardingWizard';
 
 // Mock child components to isolate OnboardingWizard
 vi.mock('@/components/onboarding/WelcomeStep', () => ({

@@ -1,7 +1,8 @@
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import type { FieldSource, FieldSelectorProps } from "./types";
+import { Textarea } from "@/components/ui/textarea";
+
+import type { FieldSelectorProps,FieldSource } from "./types";
 
 export function FieldSelector({
   label,

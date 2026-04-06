@@ -1,17 +1,19 @@
-import { env } from "./env";
-import { logger } from "./logger";
-import type { Express, Request, Response } from "express";
 import crypto from "node:crypto";
-import { storage } from "./storage";
-import { isAuthenticated } from "./clerkAuth";
+
 import { type DistanceUnit } from "@shared/unitConversion";
-import { mapStravaActivityToWorkout, type StravaActivity } from "./services/stravaMapper";
-import { getUserId } from "./types";
-import { asyncHandler } from "./routeUtils";
-import { retryWithJitter, RetryableHttpError, parseRetryAfter } from "./utils/httpRetry";
+import type { Express, Request, Response } from "express";
 import rateLimit from "express-rate-limit";
-import { RATE_LIMIT_WINDOW_15M_MS, STRAVA_STATE_MAX_AGE_MS, EXTERNAL_API_TIMEOUT_MS } from "./constants";
+
+import { isAuthenticated } from "./clerkAuth";
+import { EXTERNAL_API_TIMEOUT_MS,RATE_LIMIT_WINDOW_15M_MS, STRAVA_STATE_MAX_AGE_MS } from "./constants";
+import { env } from "./env";
 import { AppError, ErrorCode } from "./errors";
+import { logger } from "./logger";
+import { asyncHandler } from "./routeUtils";
+import { mapStravaActivityToWorkout, type StravaActivity } from "./services/stravaMapper";
+import { storage } from "./storage";
+import { getUserId } from "./types";
+import { parseRetryAfter,RetryableHttpError, retryWithJitter } from "./utils/httpRetry";
 
 const STRAVA_CLIENT_ID = env.STRAVA_CLIENT_ID;
 const STRAVA_CLIENT_SECRET = env.STRAVA_CLIENT_SECRET;

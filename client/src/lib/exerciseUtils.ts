@@ -1,4 +1,5 @@
 import { EXERCISE_DEFINITIONS, type ExerciseName, type ExerciseSet } from "@shared/schema";
+
 import { type StructuredExercise } from "@/components/ExerciseInput";
 
 export const categoryChipColors: Record<string, string> = {

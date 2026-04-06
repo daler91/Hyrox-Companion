@@ -1,13 +1,14 @@
 import {
-  coachingMaterials,
   type CoachingMaterial,
-  type InsertCoachingMaterial,
+  coachingMaterials,
   type DocumentChunk,
+  type InsertCoachingMaterial,
   type InsertDocumentChunk,
 } from "@shared/schema";
+import { and,eq } from "drizzle-orm";
+
 import { db } from "../db";
 import { vectorPool } from "../vectorDb";
-import { eq, and } from "drizzle-orm";
 
 export class CoachingStorage {
   async listCoachingMaterials(userId: string): Promise<CoachingMaterial[]> {

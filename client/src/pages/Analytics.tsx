@@ -1,14 +1,15 @@
-import { useState, useMemo } from "react";
-import { format, subDays } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, Activity, Trophy, PieChart } from "lucide-react";
+import { format, subDays } from "date-fns";
+import { Activity, BarChart3, PieChart,Trophy } from "lucide-react";
+import { useMemo,useState } from "react";
+
+import { CategoryBreakdownTab } from "@/components/analytics/CategoryBreakdownTab";
+import { ExerciseProgressionTab } from "@/components/analytics/ExerciseProgressionTab";
+import { PersonalRecordsTab } from "@/components/analytics/PersonalRecordsTab";
+import { TrainingOverviewTab } from "@/components/analytics/TrainingOverviewTab";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { QUERY_KEYS } from "@/lib/api";
-import { PersonalRecordsTab } from "@/components/analytics/PersonalRecordsTab";
-import { ExerciseProgressionTab } from "@/components/analytics/ExerciseProgressionTab";
-import { TrainingOverviewTab } from "@/components/analytics/TrainingOverviewTab";
-import { CategoryBreakdownTab } from "@/components/analytics/CategoryBreakdownTab";
 
 export default function Analytics() {
   const [dateRange, setDateRange] = useState<string>("90");

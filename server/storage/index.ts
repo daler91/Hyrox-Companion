@@ -1,11 +1,11 @@
-import { UserStorage } from "./users";
-import { WorkoutStorage } from "./workouts";
-import { PlanStorage } from "./plans";
-import { TimelineStorage } from "./timeline";
 import { AnalyticsStorage } from "./analytics";
 import { CoachingStorage } from "./coaching";
 import { IdempotencyStorage } from "./idempotency";
 import type { IStorage } from "./IStorage";
+import { PlanStorage } from "./plans";
+import { TimelineStorage } from "./timeline";
+import { UserStorage } from "./users";
+import { WorkoutStorage } from "./workouts";
 
 export type { IStorage } from "./IStorage";
 

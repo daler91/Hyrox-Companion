@@ -1,7 +1,8 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import type { Request, Response, NextFunction } from "express";
-import { isAuthenticated } from "./clerkAuth";
 import { getAuth } from "@clerk/express";
+import type { NextFunction,Request, Response } from "express";
+import { afterEach,beforeEach, describe, expect, it, vi } from "vitest";
+
+import { isAuthenticated } from "./clerkAuth";
 import { storage } from "./storage";
 
 vi.mock("@clerk/express", () => ({

@@ -1,10 +1,11 @@
-import { typedRequest } from "./client";
 import type {
-  ParsedExercise,
-  ExerciseSet,
   CustomExercise,
+  ExerciseSet,
   InsertCustomExercise,
+  ParsedExercise,
 } from "@shared/schema";
+
+import { typedRequest } from "./client";
 
 export const exercises = {
   parse: (text: string) =>

@@ -1,15 +1,16 @@
-import { logger } from "../logger";
-import { Router, type Request as ExpressRequest, type Response } from "express";
-import { isAuthenticated } from "../clerkAuth";
-import { storage } from "../storage";
-import { chatWithCoach, streamChatWithCoach, parseExercisesFromText } from "../gemini/index";
-import { rateLimiter, asyncHandler, validateBody } from "../routeUtils";
-import { buildAIContext, type AIContext, type ChatInput } from "../services/aiContextService";
-import { sanitizeRagInfo } from "../services/ragRetrieval";
-import { generateTimelineAiSuggestions } from "../services/aiSuggestionService";
-import { getUserId } from "../types";
-import { chatRequestSchema, parseExercisesRequestSchema, insertChatMessageSchema, type InsertChatMessage } from "@shared/schema";
+import { chatRequestSchema, type InsertChatMessage,insertChatMessageSchema, parseExercisesRequestSchema } from "@shared/schema";
+import { type Request as ExpressRequest, type Response,Router } from "express";
 import { z } from "zod";
+
+import { isAuthenticated } from "../clerkAuth";
+import { chatWithCoach, parseExercisesFromText,streamChatWithCoach } from "../gemini/index";
+import { logger } from "../logger";
+import { asyncHandler, rateLimiter, validateBody } from "../routeUtils";
+import { type AIContext, buildAIContext, type ChatInput } from "../services/aiContextService";
+import { generateTimelineAiSuggestions } from "../services/aiSuggestionService";
+import { sanitizeRagInfo } from "../services/ragRetrieval";
+import { storage } from "../storage";
+import { getUserId } from "../types";
 
 const router = Router();
 

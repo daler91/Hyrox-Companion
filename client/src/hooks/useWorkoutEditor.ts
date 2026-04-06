@@ -1,12 +1,13 @@
-import { EXERCISE_DEFINITIONS, type ParsedExercise, type ExerciseName } from "@shared/schema";
-import type { MutableRefObject } from "react";
-import { useState, useRef, useCallback } from "react";
+import { type DragEndEvent,KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { arrayMove,sortableKeyboardCoordinates } from "@dnd-kit/sortable";
+import { EXERCISE_DEFINITIONS, type ExerciseName,type ParsedExercise } from "@shared/schema";
 import { useMutation } from "@tanstack/react-query";
-import { useSensor, useSensors, PointerSensor, KeyboardSensor, type DragEndEvent } from "@dnd-kit/core";
-import { sortableKeyboardCoordinates, arrayMove } from "@dnd-kit/sortable";
-import { type StructuredExercise, createDefaultSet } from "@/components/ExerciseInput";
-import { api } from "@/lib/api";
+import type { MutableRefObject } from "react";
+import { useCallback,useRef, useState } from "react";
+
+import { createDefaultSet,type StructuredExercise } from "@/components/ExerciseInput";
 import { useToast } from "@/hooks/use-toast";
+import { api } from "@/lib/api";
 
 
 interface UseWorkoutEditorOptions {

@@ -1,14 +1,16 @@
+import { Dumbbell, Mic,Type } from "lucide-react";
 import React from "react";
+
+import { RpeSelector } from "@/components/RpeSelector";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Type, Dumbbell, Mic } from "lucide-react";
-import { RpeSelector } from "@/components/RpeSelector";
+import { WorkoutExerciseMode } from "@/components/workout/WorkoutExerciseMode";
 import { useWorkoutVoiceForm } from "@/hooks/useWorkoutVoiceForm";
+
+import type { WorkoutDetailEditFormProps } from "./types";
 import { WorkoutAccessoryNotes } from "./WorkoutAccessoryNotes";
 import { WorkoutTextMode } from "./WorkoutTextMode";
-import { WorkoutExerciseMode } from "@/components/workout/WorkoutExerciseMode";
-import type { WorkoutDetailEditFormProps } from "./types";
 
 export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
   editRpe = null,

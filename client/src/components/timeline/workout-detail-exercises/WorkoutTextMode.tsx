@@ -1,8 +1,10 @@
+import { Loader2, Mic,Sparkles } from "lucide-react";
 import React from "react";
+
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Sparkles, Mic } from "lucide-react";
 import { VoiceButton } from "@/components/VoiceButton";
+
 import type { WorkoutTextModeProps } from "./types";
 
 export const WorkoutTextMode = React.memo(function WorkoutTextMode({

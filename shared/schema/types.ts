@@ -1,18 +1,19 @@
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+
+import type { WorkoutStatus } from "./enums";
 import {
-  users,
-  trainingPlans,
-  planDays,
-  workoutLogs,
-  stravaConnections,
-  exerciseSets,
-  customExercises,
   chatMessages,
   coachingMaterials,
+  customExercises,
   documentChunks,
+  exerciseSets,
+  planDays,
+  stravaConnections,
+  trainingPlans,
+  users,
+  workoutLogs,
 } from "./tables";
-import type { WorkoutStatus } from "./enums";
 
 // User types and schemas
 export type UpsertUser = typeof users.$inferInsert;

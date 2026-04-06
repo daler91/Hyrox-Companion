@@ -1,8 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { UserStorage } from './users';
-import { db } from '../db';
-import { users, type InsertStravaConnection } from '@shared/schema';
+import { type InsertStravaConnection,users } from '@shared/schema';
+import { beforeEach,describe, expect, it, vi } from 'vitest';
+
 import * as crypto from '../crypto';
+import { db } from '../db';
+import { UserStorage } from './users';
 
 vi.mock('../crypto', () => ({
   encryptToken: vi.fn((t) => `encrypted-${t}`),

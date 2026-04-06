@@ -1,5 +1,6 @@
-import { describe, it, expect, vi } from 'vitest';
-import { encryptToken, decryptToken } from './crypto';
+import { describe, expect, it, vi } from 'vitest';
+
+import { decryptToken,encryptToken } from './crypto';
 
 // We need to mock env since it requires ENCRYPTION_KEY
 vi.mock('./env', () => {

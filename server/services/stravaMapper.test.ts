@@ -1,6 +1,7 @@
-import { describe, it, expect } from "vitest";
-import { mapStravaActivityToWorkout, formatStravaDistance } from "./stravaMapper";
+import { describe, expect,it } from "vitest";
+
 import type { StravaActivity } from "./stravaMapper";
+import { formatStravaDistance,mapStravaActivityToWorkout } from "./stravaMapper";
 
 function makeActivity(overrides: Partial<StravaActivity> = {}): StravaActivity {
   return {

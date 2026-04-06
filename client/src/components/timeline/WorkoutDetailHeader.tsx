@@ -1,7 +1,8 @@
-import { Badge } from "@/components/ui/badge";
-import { DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { CheckCircle2, Clock, XCircle, SkipForward } from "lucide-react";
+import { CheckCircle2, Clock, SkipForward,XCircle } from "lucide-react";
 import { SiStrava } from "react-icons/si";
+
+import { Badge } from "@/components/ui/badge";
+import { DialogDescription,DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 interface WorkoutDetailHeaderProps {
   readonly status: string;

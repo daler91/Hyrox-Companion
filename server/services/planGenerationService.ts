@@ -1,12 +1,13 @@
-import { z } from "zod";
-import { logger } from "../logger";
-import { storage } from "../storage";
-import { getAiClient, GEMINI_SUGGESTIONS_MODEL, retryWithBackoff } from "../gemini/client";
-import { PLAN_GENERATION_PROMPT } from "../prompts";
 import { ThinkingLevel } from "@google/genai";
 import type { GeneratePlanInput, TrainingPlanWithDays } from "@shared/schema";
-import { sanitizeHtml } from "../utils/sanitize";
+import { z } from "zod";
+
 import { AppError, ErrorCode } from "../errors";
+import { GEMINI_SUGGESTIONS_MODEL, getAiClient, retryWithBackoff } from "../gemini/client";
+import { logger } from "../logger";
+import { PLAN_GENERATION_PROMPT } from "../prompts";
+import { storage } from "../storage";
+import { sanitizeHtml } from "../utils/sanitize";
 
 const generatedDaySchema = z.object({
   weekNumber: z.number().min(1),

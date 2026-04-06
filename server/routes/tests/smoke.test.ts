@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { spawn, type ChildProcess } from "node:child_process";
+import { type ChildProcess,spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
+
+import { afterAll,beforeAll, describe, expect, it } from "vitest";
 
 
 const PORT = 5111;

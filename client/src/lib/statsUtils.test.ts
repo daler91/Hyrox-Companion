@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { calculateStats } from "./statsUtils";
 import type { TimelineEntry } from "@shared/schema";
+import { afterEach,beforeEach, describe, expect, it, vi } from "vitest";
+
+import { calculateStats } from "./statsUtils";
 
 // Set a fixed date for testing: May 15, 2024 is a Wednesday.
 // This means the start of the week (Sunday) is May 12, 2024.

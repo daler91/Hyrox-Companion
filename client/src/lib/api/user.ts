@@ -1,5 +1,6 @@
-import { typedRequest, rawRequest } from "./client";
 import type { User } from "@shared/schema";
+
+import { rawRequest,typedRequest } from "./client";
 
 export interface StravaSyncResponse {
   imported: number;

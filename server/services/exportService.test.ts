@@ -1,6 +1,7 @@
-import { describe, it, expect, vi } from 'vitest';
-import { generateCSV } from './exportService';
+import { describe, expect, it, vi } from 'vitest';
+
 import type { IStorage } from '../storage';
+import { generateCSV } from './exportService';
 
 describe('exportService - generateCSV', () => {
   const mockUserId = 'user-1';

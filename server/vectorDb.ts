@@ -1,7 +1,8 @@
-import { env } from "./env";
 import pg from "pg";
+
+import { DB_IDLE_TIMEOUT_MS, DB_STATEMENT_TIMEOUT_MS,VECTOR_DB_CONNECTION_TIMEOUT_MS } from "./constants";
+import { env } from "./env";
 import { logger } from "./logger";
-import { VECTOR_DB_CONNECTION_TIMEOUT_MS, DB_IDLE_TIMEOUT_MS, DB_STATEMENT_TIMEOUT_MS } from "./constants";
 
 const { Pool } = pg;
 

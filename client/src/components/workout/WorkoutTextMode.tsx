@@ -1,11 +1,12 @@
+import type { ParsedExercise } from "@shared/schema";
+import { UseMutationResult } from "@tanstack/react-query";
+import { Loader2, Mic,Sparkles } from "lucide-react";
 import React from "react";
+
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { Button } from "@/components/ui/button";
-import { Loader2, Sparkles, Mic } from "lucide-react";
 import { VoiceButton } from "@/components/VoiceButton";
-import { UseMutationResult } from "@tanstack/react-query";
-import type { ParsedExercise } from "@shared/schema";
 import type { toast as toastFn } from "@/hooks/use-toast";
 
 interface WorkoutTextModeProps {

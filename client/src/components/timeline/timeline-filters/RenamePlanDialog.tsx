@@ -1,13 +1,14 @@
+import { Loader2 } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog";
-import { Loader2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
 
 interface RenamePlanDialogProps {
   readonly open: boolean;

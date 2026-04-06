@@ -1,8 +1,9 @@
-import React from "react";
-import { ExerciseInput } from "@/components/ExerciseInput";
-import { GripVertical } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { GripVertical } from "lucide-react";
+import React from "react";
+
+import { ExerciseInput } from "@/components/ExerciseInput";
 
 export interface SortableExerciseBlockProps {
   readonly blockId: string;

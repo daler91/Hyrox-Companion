@@ -1,7 +1,8 @@
+import { Dumbbell, Mic,Type } from "lucide-react";
 import React from "react";
+
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Dumbbell, Type, Mic } from "lucide-react";
 
 interface WorkoutModeSelectorProps {
   useTextMode: boolean;

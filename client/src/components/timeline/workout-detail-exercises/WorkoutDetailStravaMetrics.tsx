@@ -1,6 +1,7 @@
-import React from "react";
-import { Flame, Zap, Activity, TrendingUp } from "lucide-react";
 import { formatSpeed } from "@shared/unitConversion";
+import { Activity, Flame, TrendingUp,Zap } from "lucide-react";
+import React from "react";
+
 import type { WorkoutDetailStravaMetricsProps } from "./types";
 
 export const WorkoutDetailStravaMetrics = React.memo(

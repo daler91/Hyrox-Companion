@@ -1,16 +1,16 @@
-import { extendZodWithOpenApi, OpenAPIRegistry, OpenApiGeneratorV3 } from "@asteasolutions/zod-to-openapi";
+import { extendZodWithOpenApi, OpenApiGeneratorV3,OpenAPIRegistry } from "@asteasolutions/zod-to-openapi";
 import { z } from "zod";
 
 // MUST extend Zod before importing any schemas that use it
 extendZodWithOpenApi(z);
 
 import {
-  insertWorkoutLogSchema,
-  insertExerciseSetSchema,
-  insertPlanDaySchema,
-  updateUserPreferencesSchema,
   exerciseSetSchema,
   exercisesPayloadSchema,
+  insertExerciseSetSchema,
+  insertPlanDaySchema,
+  insertWorkoutLogSchema,
+  updateUserPreferencesSchema,
   updateWorkoutLogSchema,
 } from "./schema";
 

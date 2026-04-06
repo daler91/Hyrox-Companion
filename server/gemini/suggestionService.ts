@@ -1,9 +1,10 @@
+import { ThinkingLevel } from "@google/genai";
 import { z } from "zod";
+
 import { logger } from "../logger";
 import { SUGGESTIONS_PROMPT } from "../prompts";
-import { getAiClient, GEMINI_SUGGESTIONS_MODEL, retryWithBackoff } from "./client";
-import { ThinkingLevel } from "@google/genai";
 import { sanitizeHtml } from "../utils/sanitize";
+import { GEMINI_SUGGESTIONS_MODEL, getAiClient, retryWithBackoff } from "./client";
 import type { TrainingContext } from "./types";
 
 

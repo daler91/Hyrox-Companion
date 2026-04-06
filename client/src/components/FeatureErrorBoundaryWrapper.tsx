@@ -1,5 +1,6 @@
 import * as Sentry from "@sentry/react";
 import { ReactNode, useCallback } from "react";
+
 import { FeatureErrorBoundary } from "./FeatureErrorBoundary";
 
 interface Props {

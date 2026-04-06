@@ -1,28 +1,23 @@
-export { workouts } from "./workouts";
-export type { BatchReparseResponse } from "./workouts";
-
-export { plans } from "./plans";
-
-export { chat, coaching } from "./coaching";
-export type { RagInfo, RagStatus } from "./coaching";
-
-export { analytics, timeline } from "./analytics";
 export type { Suggestion } from "./analytics";
-
-export { auth, preferences, strava, email } from "./user";
-export type { StravaSyncResponse } from "./user";
-
+export { analytics, timeline } from "./analytics";
+export type { RagInfo, RagStatus } from "./coaching";
+export { chat, coaching } from "./coaching";
 export { exercises } from "./exercises";
+export { plans } from "./plans";
+export type { StravaSyncResponse } from "./user";
+export { auth, email,preferences, strava } from "./user";
+export type { BatchReparseResponse } from "./workouts";
+export { workouts } from "./workouts";
 
 // ---------------------------------------------------------------------------
 // Re-assembled api object (preserves existing import shape)
 // ---------------------------------------------------------------------------
-import { workouts } from "./workouts";
-import { plans } from "./plans";
-import { chat, coaching } from "./coaching";
 import { analytics, timeline } from "./analytics";
-import { auth, preferences, strava, email } from "./user";
+import { chat, coaching } from "./coaching";
 import { exercises } from "./exercises";
+import { plans } from "./plans";
+import { auth, email,preferences, strava } from "./user";
+import { workouts } from "./workouts";
 
 export const api = {
   auth,

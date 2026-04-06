@@ -1,20 +1,22 @@
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { DialogFooter } from "@/components/ui/dialog";
-import { ConfirmDialog } from "./ConfirmDialog";
+import { type TimelineEntry, type WorkoutStatus } from "@shared/schema";
 import {
-  Loader2,
   CheckCircle2,
   Clock,
-  XCircle,
-  SkipForward,
-  Pencil,
-  Trash2,
   Combine,
+  Loader2,
+  Pencil,
   Save,
+  SkipForward,
+  Trash2,
   X,
+  XCircle,
 } from "lucide-react";
-import { type TimelineEntry, type WorkoutStatus } from "@shared/schema";
+
+import { Button } from "@/components/ui/button";
+import { DialogFooter } from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
+
+import { ConfirmDialog } from "./ConfirmDialog";
 
 interface StatusChangeSectionProps {
   readonly entry: TimelineEntry;

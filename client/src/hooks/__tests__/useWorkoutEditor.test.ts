@@ -1,6 +1,8 @@
-import { describe, it, expect } from 'vitest';
-import { generateSummary, makeBlockId, getBlockExerciseName, exerciseToPayload } from '../useWorkoutEditor';
+import { describe, expect,it } from 'vitest';
+
 import type { StructuredExercise } from '@/components/ExerciseInput';
+
+import { exerciseToPayload,generateSummary, getBlockExerciseName, makeBlockId } from '../useWorkoutEditor';
 
 describe('generateSummary', () => {
   it('should handle exercises with no sets', () => {

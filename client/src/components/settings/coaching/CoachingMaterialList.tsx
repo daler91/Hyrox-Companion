@@ -1,4 +1,5 @@
-import { Loader2, FileText, Trash2, Plus, Upload } from "lucide-react";
+import { FileText, Loader2, Plus, Trash2, Upload } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { useCoachingMaterials, useDeleteCoachingMaterial } from "@/hooks/useCoachingMaterials";
 

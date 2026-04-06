@@ -1,9 +1,10 @@
 import { forwardRef } from "react";
-import { ScrollArea } from "@/components/ui/scroll-area";
+
 import { ChatMessage } from "@/components/ChatMessage";
 import { SuggestionsList } from "@/components/coach/SuggestionsTab";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import type { Message } from "@/hooks/useChatSession";
-import type { Suggestion, RagInfo } from "@/lib/api";
+import type { RagInfo,Suggestion } from "@/lib/api";
 
 interface CoachPanelChatAreaProps {
   readonly messages: Message[];

@@ -1,7 +1,9 @@
-import { useRef, useEffect, useCallback } from "react";
+import type { PersonalRecord,TimelineEntry, TrainingPlan } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
-import type { TrainingPlan, TimelineEntry, PersonalRecord } from "@shared/schema";
+import { useCallback,useEffect, useRef } from "react";
+
 import { api, QUERY_KEYS } from "@/lib/api";
+
 import { SCROLL_TO_TODAY_DELAY_MS } from "./constants";
 
 export function useTimelineData(selectedPlanId: string | null) {

@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { parseExercisesFromText } from "./exerciseParser";
+import { beforeEach,describe, expect, it, vi } from "vitest";
+
 import { retryWithBackoff } from "./client";
+import { parseExercisesFromText } from "./exerciseParser";
 
 vi.mock("./client", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./client")>();

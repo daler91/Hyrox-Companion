@@ -1,9 +1,10 @@
 import {
-  workoutLogs,
   type ExerciseSet,
+  workoutLogs,
 } from "@shared/schema";
+import { and, desc, eq, gte, lte, type SQL } from "drizzle-orm";
+
 import { db } from "../db";
-import { eq, and, desc, gte, lte, type SQL } from "drizzle-orm";
 
 export async function queryExerciseSetsWithDates(
   userId: string,

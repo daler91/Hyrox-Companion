@@ -1,22 +1,24 @@
+import { TrainingPlan } from "@shared/schema";
+import {
+  Calendar,
+  Dumbbell,
+  FileText,
+  Loader2,
+  Sparkles,
+  Target,
+  Wand2,
+  Zap,
+} from "lucide-react";
 import { useState } from "react";
+import { Link } from "wouter";
+
+import { GeneratePlanDialog } from "@/components/plans/GeneratePlanDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  FileText,
-  Calendar,
-  Loader2,
-  Dumbbell,
-  Target,
-  Zap,
-  Sparkles,
-  Wand2,
-} from "lucide-react";
-import { Link } from "wouter";
+
 import { FilterStatus } from "./types";
-import { TrainingPlan } from "@shared/schema";
-import { GeneratePlanDialog } from "@/components/plans/GeneratePlanDialog";
 
 interface TimelineEmptyStateProps {
   readonly filterStatus: FilterStatus;

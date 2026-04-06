@@ -1,4 +1,4 @@
-import { Target, Dumbbell, Trophy } from "lucide-react";
+import { Dumbbell, Target, Trophy } from "lucide-react";
 
 export function WelcomeStep() {
   return (

@@ -1,10 +1,11 @@
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { EXERCISE_DEFINITIONS, type ExerciseCategory,type ExerciseName } from "@shared/schema";
 import { Plus } from "lucide-react";
-import { EXERCISE_DEFINITIONS, type ExerciseName, type ExerciseCategory } from "@shared/schema";
 import React from "react";
-import { categoryLabels } from "@/lib/exerciseUtils";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { exerciseIcons } from "@/lib/exerciseIcons";
+import { categoryLabels } from "@/lib/exerciseUtils";
 
 interface ExerciseSelectorProps {
   readonly selectedExercises: ExerciseName[];

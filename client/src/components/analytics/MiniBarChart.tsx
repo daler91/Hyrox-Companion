@@ -1,14 +1,15 @@
 import {
-  BarChart,
   Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
 } from "recharts";
-import { MUTED_FG, GRID_BORDER, GRID_DASH, MUTED_CURSOR, COLOR_PRIMARY, CHART_CARD_CLASS, formatChartDate } from "./chartConstants";
+
+import { CHART_CARD_CLASS, COLOR_PRIMARY, formatChartDate,GRID_BORDER, GRID_DASH, MUTED_CURSOR, MUTED_FG } from "./chartConstants";
 
 interface ExerciseAnalyticDay {
   date: string;

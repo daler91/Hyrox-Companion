@@ -1,20 +1,20 @@
-import { useCallback, useRef, useEffect } from "react";
+import type { TimelineEntry } from "@shared/schema";
+import { Loader2 } from "lucide-react";
+import { useCallback, useEffect,useRef } from "react";
+
+import { RpeSelector } from "@/components/RpeSelector";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog";
-import { Loader2 } from "lucide-react";
-import type { TimelineEntry } from "@shared/schema";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { VoiceFieldButton } from "@/components/VoiceFieldButton";
-import { RpeSelector } from "@/components/RpeSelector";
-
 import { type EditFormState as BaseEditFormState } from "@/hooks/useWorkoutVoiceForm";
 
 export interface EditFormState extends BaseEditFormState {

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+
 import { email } from "@/lib/api/user";
 
 /** Fire-and-forget email check once per authenticated session. */

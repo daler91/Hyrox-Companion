@@ -1,5 +1,5 @@
 import { relations, sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, date, timestamp, index, real, uniqueIndex, boolean, check, customType, jsonb, primaryKey } from "drizzle-orm/pg-core";
+import { boolean, check, customType, date, index, integer, jsonb, pgTable, primaryKey,real, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 
 // pgvector custom type: maps PostgreSQL vector(N) ↔ TypeScript number[]
 const vector = customType<{

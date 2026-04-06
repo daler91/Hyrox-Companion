@@ -1,4 +1,5 @@
 import type { TrainingPlan } from "@shared/schema";
+
 import type { FilterStatus } from "../types";
 
 export interface TimelineFiltersProps {

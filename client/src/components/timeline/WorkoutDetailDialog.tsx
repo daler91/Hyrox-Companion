@@ -1,7 +1,9 @@
 import { type ParsedExercise, type TimelineEntry, type WorkoutStatus } from "@shared/schema";
 import { useState } from "react";
+
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+
 import { DeleteConfirmDialog } from "./WorkoutDetailActions";
 import { WorkoutDetailEditMode } from "./WorkoutDetailEditMode";
 import { WorkoutDetailViewMode } from "./WorkoutDetailViewMode";

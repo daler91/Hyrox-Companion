@@ -1,7 +1,8 @@
 import { render, screen } from "@testing-library/react";
-import { describe, it, expect } from "vitest";
-import { MetricCard } from "../MetricCard";
 import { Activity } from "lucide-react";
+import { describe, expect,it } from "vitest";
+
+import { MetricCard } from "../MetricCard";
 
 describe("MetricCard", () => {
   const defaultProps = {

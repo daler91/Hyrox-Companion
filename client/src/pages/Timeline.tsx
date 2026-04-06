@@ -1,35 +1,32 @@
-import { Button } from "@/components/ui/button";
-
-
-import { Input } from "@/components/ui/input";
-
+import type { Virtualizer } from "@tanstack/react-virtual";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { format,isToday, parseISO } from "date-fns";
 import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
+import { useCallback,useMemo, useRef } from "react";
 
-import { FeatureErrorBoundaryWrapper } from "@/components/FeatureErrorBoundaryWrapper";
 import { CoachPanel } from "@/components/CoachPanel";
+import { FeatureErrorBoundaryWrapper } from "@/components/FeatureErrorBoundaryWrapper";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
-import { isToday, parseISO, format } from "date-fns";
 import {
-  TimelineSkeleton,
-  TimelineHeader,
-  TimelineFilters,
-  TimelineEmptyState,
-  TimelineDateGroup,
-  SchedulePlanDialog,
-  WorkoutDetailDialog,
-  SkipConfirmDialog,
-  ImportPreviewDialog,
-  FloatingActionButton,
   CombineWorkoutsDialog,
+  FloatingActionButton,
+  ImportPreviewDialog,
+  SchedulePlanDialog,
+  SkipConfirmDialog,
+  TimelineDateGroup,
+  TimelineEmptyState,
+  TimelineFilters,
+  TimelineHeader,
+  TimelineSkeleton,
+  WorkoutDetailDialog,
 } from "@/components/timeline";
-import { useVirtualizer } from "@tanstack/react-virtual";
-import { useRef, useMemo, useCallback } from "react";
-import { useTimelineState } from "@/hooks/useTimelineState";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/useAuth";
-import type { Virtualizer } from "@tanstack/react-virtual";
+import { useTimelineState } from "@/hooks/useTimelineState";
 
 type TimelineState = ReturnType<typeof useTimelineState>;
 type TimelineData = TimelineState["data"];

@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { parseAndValidateSuggestions } from "./suggestionService";
+import { beforeEach,describe, expect, it, vi } from "vitest";
+
 import { logger } from "../logger";
+import { parseAndValidateSuggestions } from "./suggestionService";
 
 vi.mock("../logger", () => ({
   logger: {

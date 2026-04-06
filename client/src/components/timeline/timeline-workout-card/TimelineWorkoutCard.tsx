@@ -1,17 +1,19 @@
+import { format } from "date-fns";
+import { BookOpen, CheckCircle2, Circle, Database, FileText,Loader2 } from "lucide-react";
 import React, { useMemo } from "react";
+import { SiStrava } from "react-icons/si";
+
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Circle, BookOpen, Loader2, CheckCircle2, Database, FileText } from "lucide-react";
-import { format } from "date-fns";
-import { SiStrava } from "react-icons/si";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { groupExerciseSets } from "@/lib/exerciseUtils";
-import { getStatusBadge, getCardClasses } from "./utils";
-import { WorkoutStravaStats } from "./WorkoutStravaStats";
+
 import { ExerciseChips } from "./ExerciseChips";
 import type { TimelineWorkoutCardProps } from "./types";
+import { getCardClasses,getStatusBadge } from "./utils";
+import { WorkoutStravaStats } from "./WorkoutStravaStats";
 
 const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
   entry,

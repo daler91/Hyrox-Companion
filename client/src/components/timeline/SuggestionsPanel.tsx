@@ -1,12 +1,14 @@
+import { ChevronDown, ChevronUp,Lightbulb, X } from "lucide-react";
+
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { Lightbulb, X, ChevronDown, ChevronUp } from "lucide-react";
+
 import type { WorkoutSuggestion } from "./types";
 
 interface SuggestionsPanelProps {

@@ -1,9 +1,9 @@
 import {
-  formatPace as formatPaceShared,
-  formatElevation,
-  metersToUserDistance,
-  formatNumberWithUnit,
   type DistanceUnit,
+  formatElevation,
+  formatNumberWithUnit,
+  formatPace as formatPaceShared,
+  metersToUserDistance,
 } from "@shared/unitConversion";
 
 interface StravaActivity {

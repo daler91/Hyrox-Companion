@@ -1,9 +1,10 @@
-import type { ParsedExercise, TimelineEntry, ExerciseName } from "@shared/schema";
-import type { StructuredExercise } from "@/components/ExerciseInput";
-import type { GroupedExercise } from "@/lib/exerciseUtils";
+import type { ExerciseName,ParsedExercise, TimelineEntry } from "@shared/schema";
 import type { UseMutationResult } from "@tanstack/react-query";
-import type { EditFormState } from "@/hooks/useWorkoutVoiceForm";
 import type React from "react";
+
+import type { StructuredExercise } from "@/components/ExerciseInput";
+import type { EditFormState } from "@/hooks/useWorkoutVoiceForm";
+import type { GroupedExercise } from "@/lib/exerciseUtils";
 
 export interface WorkoutDetailViewProps {
   readonly entry: TimelineEntry;

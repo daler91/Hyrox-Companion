@@ -1,17 +1,18 @@
-import { Button } from "@/components/ui/button";
-import { useEffect, useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/hooks/useAuth";
-import { queryClient } from "@/lib/queryClient";
-import { api, QUERY_KEYS } from "@/lib/api";
+import { useMutation,useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useLocation, useSearch } from "wouter";
+
+import { CoachingSection } from "@/components/settings/CoachingSection";
+import { DataToolsSection } from "@/components/settings/DataToolsSection";
+import { PreferencesSection } from "@/components/settings/PreferencesSection";
 import { ProfileSection } from "@/components/settings/ProfileSection";
 import { StravaSection } from "@/components/settings/StravaSection";
-import { PreferencesSection } from "@/components/settings/PreferencesSection";
-import { DataToolsSection } from "@/components/settings/DataToolsSection";
-import { CoachingSection } from "@/components/settings/CoachingSection";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { api, QUERY_KEYS } from "@/lib/api";
+import { queryClient } from "@/lib/queryClient";
 
 interface Preferences {
   weightUnit: string;

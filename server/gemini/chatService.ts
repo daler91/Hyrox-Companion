@@ -1,11 +1,12 @@
+import { type GenerateContentResponse,ThinkingLevel } from "@google/genai";
+import type { ChatMessage } from "@shared/schema";
+
+import { AI_REQUEST_TIMEOUT_MS } from "../constants";
+import { AppError, ErrorCode } from "../errors";
 import { logger } from "../logger";
 import { buildSystemPrompt, type CoachingMaterialInput } from "../prompts";
 import { sanitizeUserInput, validateAiOutput } from "../utils/sanitize";
-import { ThinkingLevel, type GenerateContentResponse } from "@google/genai";
-import { getAiClient, GEMINI_SUGGESTIONS_MODEL, withTimeout } from "./client";
-import { AI_REQUEST_TIMEOUT_MS } from "../constants";
-import { AppError, ErrorCode } from "../errors";
-import type { ChatMessage } from "@shared/schema";
+import { GEMINI_SUGGESTIONS_MODEL, getAiClient, withTimeout } from "./client";
 import type { TrainingContext } from "./types";
 
 export async function chatWithCoach(

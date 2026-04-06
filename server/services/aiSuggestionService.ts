@@ -1,6 +1,7 @@
 import type { Logger } from "pino";
-import { storage } from "../storage";
+
 import { generateWorkoutSuggestions, type UpcomingWorkout } from "../gemini/index";
+import { storage } from "../storage";
 import { buildAIContext, extractCoachingMaterialsText } from "./aiContextService";
 import { sanitizeRagInfo } from "./ragRetrieval";
 

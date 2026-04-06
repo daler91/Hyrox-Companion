@@ -1,6 +1,7 @@
 import { format } from "date-fns";
-import { Calendar } from "@/components/ui/calendar";
 import { CalendarDays } from "lucide-react";
+
+import { Calendar } from "@/components/ui/calendar";
 
 interface ScheduleStepProps {
   readonly startDate: Date;

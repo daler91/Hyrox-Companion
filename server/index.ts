@@ -1,29 +1,30 @@
-import { env } from "./env";
+import { randomUUID } from "node:crypto";
+import { createServer } from "node:http";
+
+import { getAuth } from "@clerk/express";
 import * as Sentry from "@sentry/node";
-import express, { type Request, Response, NextFunction } from "express";
 import compression from "compression";
 import cookieParser from "cookie-parser";
 import cors from "cors";
+import express, { NextFunction,type Request, Response } from "express";
 import helmet from "helmet";
-import { logger } from "./logger";
 import pinoHttp from "pino-http";
+import swaggerUi from "swagger-ui-express";
+
+import { generateOpenApiDocument } from "../shared/openapi";
+import { startCron, stopCron } from "./cron";
+import { pool } from "./db";
+import { env } from "./env";
+import { AppError } from "./errors";
+import { logger } from "./logger";
+import { runStartupMaintenance } from "./maintenance";
+import { cspNonceMiddleware } from "./middleware/cspNonce";
+import { queue,startQueue } from "./queue";
+import { runWithRequestContext } from "./requestContext";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
-import swaggerUi from "swagger-ui-express";
-import { generateOpenApiDocument } from "../shared/openapi";
-import { cspNonceMiddleware } from "./middleware/cspNonce";
-
-import { createServer } from "node:http";
-import { randomUUID } from "node:crypto";
 import { storage } from "./storage";
-import { pool } from "./db";
 import { vectorPool } from "./vectorDb";
-import { getAuth } from "@clerk/express";
-import { runWithRequestContext } from "./requestContext";
-import { runStartupMaintenance } from "./maintenance";
-import { startQueue, queue } from "./queue";
-import { startCron, stopCron } from "./cron";
-import { AppError } from "./errors";
 
 // 🛡️ Sentinel: Dev Auth Bypass double-guard
 if (env.ALLOW_DEV_AUTH_BYPASS === "true") {

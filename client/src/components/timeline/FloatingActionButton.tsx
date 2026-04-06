@@ -1,7 +1,8 @@
+import { MessageSquare,Plus } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useLocation } from "wouter";
+
 import { Button } from "@/components/ui/button";
-import { Plus, MessageSquare } from "lucide-react";
 
 interface FloatingActionButtonProps {
   readonly coachPanelOpen?: boolean;

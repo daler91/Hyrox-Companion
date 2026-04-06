@@ -1,13 +1,15 @@
+import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
+import { Hash, Pencil,Ruler, Timer, Weight } from "lucide-react";
 import { useId, useMemo } from "react";
+
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Timer, Ruler, Hash, Weight, Pencil } from "lucide-react";
-import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
 import { categoryBorderColors } from "@/lib/exerciseUtils";
 import { getExerciseMissingFields } from "@/lib/exerciseWarnings";
+
+import type { FieldConfig,FieldKey } from "./exercise-input";
 import { ExerciseHeader, ExerciseWarnings, MultiSetTable, SingleSetFields } from "./exercise-input";
-import type { FieldKey, FieldConfig } from "./exercise-input";
 
 export interface SetData {
   setNumber: number;

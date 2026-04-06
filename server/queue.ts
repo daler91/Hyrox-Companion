@@ -1,11 +1,12 @@
 import pLimit from "p-limit";
-import { embedCoachingMaterial } from "./services/ragService";
-import { PgBoss, type Job } from "pg-boss";
+import { type Job,PgBoss } from "pg-boss";
+
+import { processMissedWorkoutReminder,processWeeklySummary } from "./emailScheduler";
 import { env } from "./env";
 import { logger } from "./logger";
 import { triggerAutoCoach } from "./services/coachService";
+import { embedCoachingMaterial } from "./services/ragService";
 import { storage } from "./storage";
-import { processWeeklySummary, processMissedWorkoutReminder } from "./emailScheduler";
 
 if (!env.DATABASE_URL) {
   throw new Error("DATABASE_URL must be set. Did you forget to provision a database?");

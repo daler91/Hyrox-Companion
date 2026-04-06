@@ -1,4 +1,5 @@
-import type { ExerciseSet, PersonalRecord, WorkoutLog, TrainingOverview, WeeklySummary } from "@shared/schema";
+import type { ExerciseSet, PersonalRecord, TrainingOverview, WeeklySummary,WorkoutLog } from "@shared/schema";
+
 import { HYROX_STATIONS_WITH_RUNNING } from "../constants";
 
 export type ExerciseSetWithDate = ExerciseSet & { date: string };

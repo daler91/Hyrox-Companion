@@ -1,15 +1,16 @@
 import { memo } from "react";
 import {
-  LineChart,
+  CartesianGrid,
   Line,
+  LineChart,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  ReferenceLine,
 } from "recharts";
-import { MUTED_FG, GRID_BORDER, GRID_DASH, COLOR_GREEN, COLOR_PRIMARY, CHART_CARD_CLASS, formatChartDate } from "./chartConstants";
+
+import { CHART_CARD_CLASS, COLOR_GREEN, COLOR_PRIMARY, formatChartDate,GRID_BORDER, GRID_DASH, MUTED_FG } from "./chartConstants";
 
 const getStrokeColor = (colorStr: string): string => {
   if (colorStr.includes("primary")) return COLOR_PRIMARY;

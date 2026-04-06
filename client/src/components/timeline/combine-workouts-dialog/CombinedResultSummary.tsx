@@ -1,5 +1,6 @@
-import { Label } from "@/components/ui/label";
 import { Clock, Flame } from "lucide-react";
+
+import { Label } from "@/components/ui/label";
 
 export function CombinedResultSummary({
   duration,

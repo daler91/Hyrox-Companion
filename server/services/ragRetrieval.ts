@@ -1,10 +1,11 @@
-import { env } from "../env";
-import { logger } from "../logger";
-import { storage } from "../storage";
-import { EMBEDDING_DIMENSIONS } from "../gemini/client";
-import { buildCoachingMaterialsSection, buildRetrievedChunksSection, type CoachingMaterialInput } from "../prompts";
-import { retrieveRelevantChunks } from "./ragService";
 import type { RagInfo } from "@shared/schema";
+
+import { env } from "../env";
+import { EMBEDDING_DIMENSIONS } from "../gemini/client";
+import { logger } from "../logger";
+import { buildCoachingMaterialsSection, buildRetrievedChunksSection, type CoachingMaterialInput } from "../prompts";
+import { storage } from "../storage";
+import { retrieveRelevantChunks } from "./ragService";
 
 /** Minimal logger interface for request-scoped logging. */
 type Log = Pick<typeof logger, "warn" | "info" | "error">;

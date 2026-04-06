@@ -1,20 +1,20 @@
-import {
-  Wind,
-  ArrowRight,
-  ArrowLeft,
-  Zap,
-  Ship,
-  Dumbbell,
-  Target,
-  Plus,
-  PersonStanding,
-  Footprints,
-  Timer,
-  Flame,
-  CircleDot,
-  type LucideIcon,
-} from "lucide-react";
 import type { ExerciseName } from "@shared/schema";
+import {
+  ArrowLeft,
+  ArrowRight,
+  CircleDot,
+  Dumbbell,
+  Flame,
+  Footprints,
+  type LucideIcon,
+  PersonStanding,
+  Plus,
+  Ship,
+  Target,
+  Timer,
+  Wind,
+  Zap,
+} from "lucide-react";
 
 export const exerciseIcons: Partial<Record<ExerciseName, LucideIcon>> = {
   skierg: Wind,

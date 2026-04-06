@@ -1,11 +1,13 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act, waitFor } from '@testing-library/react';
-import { useWorkoutActions } from '../useWorkoutActions';
-import * as queryClientLib from '@/lib/queryClient';
-import * as toastHook from '@/hooks/use-toast';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import React from 'react';
+import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+
+import * as toastHook from '@/hooks/use-toast';
+import * as queryClientLib from '@/lib/queryClient';
+
 import { createMockTimelineEntry } from '../../../../test/factories';
+import { useWorkoutActions } from '../useWorkoutActions';
 
 // Setup test QueryClient
 const createTestQueryClient = () => new QueryClient({

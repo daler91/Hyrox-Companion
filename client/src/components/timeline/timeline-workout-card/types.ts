@@ -1,6 +1,7 @@
-import type { TimelineEntry, PersonalRecord } from "@shared/schema";
-import type { GroupedExercise } from "@/lib/exerciseUtils";
+import type { PersonalRecord,TimelineEntry } from "@shared/schema";
 import type { DistanceUnit } from "@shared/unitConversion";
+
+import type { GroupedExercise } from "@/lib/exerciseUtils";
 
 export interface TimelineWorkoutCardProps {
   readonly entry: TimelineEntry;

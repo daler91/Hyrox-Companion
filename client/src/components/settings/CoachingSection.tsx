@@ -1,9 +1,11 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { BookOpen } from "lucide-react";
-import { useCoachingUpload } from "./coaching/useCoachingUpload";
+
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+
 import { CoachingMaterialList } from "./coaching/CoachingMaterialList";
-import { RagStatusCard } from "./coaching/RagStatusCard";
 import { CoachingUploadDialog } from "./coaching/CoachingUploadDialog";
+import { RagStatusCard } from "./coaching/RagStatusCard";
+import { useCoachingUpload } from "./coaching/useCoachingUpload";
 
 export function CoachingSection() {
   const {

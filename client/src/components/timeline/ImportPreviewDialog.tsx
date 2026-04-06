@@ -1,12 +1,13 @@
+import { FileText, Loader2 } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog";
-import { FileText, Loader2 } from "lucide-react";
 
 export interface CsvPreviewData {
   fileName: string;

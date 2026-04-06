@@ -1,11 +1,12 @@
-import { describe, it, expect } from "vitest";
+import { type ExerciseSet } from "@shared/schema";
+import { describe, expect,it } from "vitest";
+
 import {
+  exerciseSetsToStructured,
   formatExerciseSummary,
   getExerciseLabel,
   type GroupedExercise,
-  exerciseSetsToStructured,
 } from "./exerciseUtils";
-import { type ExerciseSet } from "@shared/schema";
 
 describe("getExerciseLabel", () => {
   it("returns label for known exercise name", () => {

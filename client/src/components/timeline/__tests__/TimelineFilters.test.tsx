@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from "vitest";
+import { afterAll,beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+
 import TimelineFilters from "../timeline-filters";
 
 // Mock GeneratePlanDialog to avoid requiring QueryClientProvider in tests
