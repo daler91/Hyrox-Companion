@@ -17,11 +17,11 @@ describe("chatService", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    (getAiClient as any).mockReturnValue({
+    vi.mocked(getAiClient).mockReturnValue({
       models: {
         generateContent: mockGenerateContent
       }
-    });
+    } as unknown as ReturnType<typeof getAiClient>);
   });
 
   it("should block AI responses containing system-level leakage", async () => {

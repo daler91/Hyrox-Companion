@@ -35,6 +35,10 @@ vi.mock("../../queue", () => ({
   },
 }));
 
+type MaterialRecord = Awaited<ReturnType<typeof storage.coaching.createCoachingMaterial>>;
+type MaterialList = Awaited<ReturnType<typeof storage.coaching.listCoachingMaterials>>;
+type MaterialUpdate = Awaited<ReturnType<typeof storage.coaching.updateCoachingMaterial>>;
+
 describe("Coaching materials routes", () => {
   let app: express.Express;
 
@@ -48,7 +52,7 @@ describe("Coaching materials routes", () => {
   describe("GET /api/v1/coaching-materials", () => {
     it("should list coaching materials", async () => {
       const materials = [{ id: "m1", title: "Guide", content: "content", type: "document", userId: "test_user_id" }];
-      vi.mocked(storage.coaching.listCoachingMaterials).mockResolvedValue(materials as any);
+      vi.mocked(storage.coaching.listCoachingMaterials).mockResolvedValue(materials as unknown as MaterialList);
 
       const response = await request(app).get("/api/v1/coaching-materials");
 
@@ -63,7 +67,7 @@ describe("Coaching materials routes", () => {
 
     it("should create material and trigger background embedding", async () => {
       const createdMaterial = { id: "m1", ...validBody, userId: "test_user_id", createdAt: new Date(), updatedAt: new Date() };
-      vi.mocked(storage.coaching.createCoachingMaterial).mockResolvedValue(createdMaterial as any);
+      vi.mocked(storage.coaching.createCoachingMaterial).mockResolvedValue(createdMaterial as unknown as MaterialRecord);
 
       const response = await request(app)
         .post("/api/v1/coaching-materials")
@@ -87,7 +91,7 @@ describe("Coaching materials routes", () => {
   describe("PATCH /api/v1/coaching-materials/:id", () => {
     it("should re-embed when content is updated", async () => {
       const updatedMaterial = { id: "m1", title: "Guide", content: "New content", type: "document", userId: "test_user_id" };
-      vi.mocked(storage.coaching.updateCoachingMaterial).mockResolvedValue(updatedMaterial as any);
+      vi.mocked(storage.coaching.updateCoachingMaterial).mockResolvedValue(updatedMaterial as unknown as MaterialUpdate);
 
       const response = await request(app)
         .patch("/api/v1/coaching-materials/m1")
@@ -99,7 +103,7 @@ describe("Coaching materials routes", () => {
 
     it("should re-embed when title is updated", async () => {
       const updatedMaterial = { id: "m1", title: "New Title", content: "content", type: "document", userId: "test_user_id" };
-      vi.mocked(storage.coaching.updateCoachingMaterial).mockResolvedValue(updatedMaterial as any);
+      vi.mocked(storage.coaching.updateCoachingMaterial).mockResolvedValue(updatedMaterial as unknown as MaterialUpdate);
 
       const response = await request(app)
         .patch("/api/v1/coaching-materials/m1")
@@ -111,7 +115,7 @@ describe("Coaching materials routes", () => {
 
     it("should NOT re-embed when only type is updated", async () => {
       const updatedMaterial = { id: "m1", title: "Guide", content: "content", type: "principles", userId: "test_user_id" };
-      vi.mocked(storage.coaching.updateCoachingMaterial).mockResolvedValue(updatedMaterial as any);
+      vi.mocked(storage.coaching.updateCoachingMaterial).mockResolvedValue(updatedMaterial as unknown as MaterialUpdate);
 
       const response = await request(app)
         .patch("/api/v1/coaching-materials/m1")

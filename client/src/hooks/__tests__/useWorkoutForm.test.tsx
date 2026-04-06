@@ -311,7 +311,7 @@ describe('useWorkoutForm', () => {
           mainWorkout: 'Ran 5k in 25 mins',
           notes: 'Felt great',
           rpe: null,
-        });
+        }, expect.any(AbortSignal));
       });
     });
 
@@ -330,9 +330,9 @@ describe('useWorkoutForm', () => {
       const props = {
         ...defaultProps,
         useTextMode: false,
-        exerciseBlocks: ['block-1', 'invalid-block'] as any, // 'invalid-block' is missing from data
+        exerciseBlocks: ['block-1', 'invalid-block'], // 'invalid-block' is missing from data
         exerciseData: mockExerciseData as unknown as typeof defaultProps.exerciseData,
-      } as any;
+      } as unknown as typeof defaultProps;
 
       const { result } = renderFormHook(props);
 
@@ -361,7 +361,7 @@ describe('useWorkoutForm', () => {
           exercises: [
             { exerciseName: 'squat', sets: [{ reps: 10, weight: 100 }] }
           ]
-        });
+        }, expect.any(AbortSignal));
       });
     });
 
@@ -382,7 +382,7 @@ describe('useWorkoutForm', () => {
       await waitFor(() => {
         expect(queryClientLib.apiRequest).toHaveBeenCalledWith('POST', '/api/v1/workouts', expect.objectContaining({
           notes: null, // Should be normalized to null
-        }));
+        }), expect.any(AbortSignal));
       });
     });
   });

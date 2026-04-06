@@ -45,7 +45,7 @@ describe("WorkoutStorage.createWorkoutLog", () => {
     const updateWhereMock = vi.fn().mockResolvedValue([]);
     const updateFromMock = vi.fn().mockReturnValue({ where: updateWhereMock });
     const updateSetMock = vi.fn().mockReturnValue({ from: updateFromMock });
-    vi.mocked(db.update).mockReturnValue({ set: updateSetMock } as any);
+    vi.mocked(db.update).mockReturnValue({ set: updateSetMock } as unknown as ReturnType<typeof db.update>);
 
     const result = await storage.createWorkoutLog(createMockWorkoutLog({ date: "2026-01-02", userId: "u1", planDayId: "pd1" }));
 
@@ -86,7 +86,7 @@ describe("WorkoutStorage.createWorkoutLog", () => {
     const updateWhereMock = vi.fn().mockRejectedValue(updateError);
     const updateFromMock = vi.fn().mockReturnValue({ where: updateWhereMock });
     const updateSetMock = vi.fn().mockReturnValue({ from: updateFromMock });
-    vi.mocked(db.update).mockReturnValue({ set: updateSetMock } as any);
+    vi.mocked(db.update).mockReturnValue({ set: updateSetMock } as unknown as ReturnType<typeof db.update>);
 
     await expect(
       storage.createWorkoutLog(createMockWorkoutLog({ date: "2026-01-04", userId: "u1", planDayId: "pd2" }))
@@ -158,7 +158,7 @@ describe("WorkoutStorage.createWorkoutLogs", () => {
     const updateWhereMock = vi.fn().mockResolvedValue([]);
     const updateFromMock = vi.fn().mockReturnValue({ where: updateWhereMock });
     const updateSetMock = vi.fn().mockReturnValue({ from: updateFromMock });
-    vi.mocked(db.update).mockReturnValue({ set: updateSetMock } as any);
+    vi.mocked(db.update).mockReturnValue({ set: updateSetMock } as unknown as ReturnType<typeof db.update>);
 
     const logsToInsert = [
       createMockWorkoutLog({ date: "2026-01-03", userId: "u1", planDayId: "pd1" }),

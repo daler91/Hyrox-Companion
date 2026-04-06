@@ -29,8 +29,8 @@ vi.mock('@tanstack/react-query', async (importOriginal) => {
       invalidateQueries: queryClient.queryClient.invalidateQueries,
     })),
     useQuery: vi.fn(() => ({ data: [], isLoading: false })),
-    useMutation: vi.fn(({ mutationFn, onSuccess }: any) => ({
-      mutate: async (...args: any[]) => {
+    useMutation: vi.fn(({ mutationFn, onSuccess }: { mutationFn?: (...args: unknown[]) => Promise<unknown>; onSuccess?: () => void }) => ({
+      mutate: async (...args: unknown[]) => {
         if (mutationFn) {
           try {
             await mutationFn(...args);

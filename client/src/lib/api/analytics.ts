@@ -18,7 +18,7 @@ export const analytics = {
     typedRequest<Record<string, PersonalRecord>>("GET", `/api/v1/personal-records${dateParams || ""}`),
 
   getExerciseAnalytics: (dateParams?: string) =>
-    typedRequest<unknown>("GET", `/api/v1/exercise-analytics${dateParams || ""}`),
+    typedRequest<Record<string, unknown>>("GET", `/api/v1/exercise-analytics${dateParams || ""}`),
 
   getTrainingOverview: (dateParams?: string) =>
     typedRequest<TrainingOverview>("GET", `/api/v1/training-overview${dateParams ?? ""}`),

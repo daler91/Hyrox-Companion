@@ -2,6 +2,7 @@ import eslint from "@eslint/js";
 import tseslint from "typescript-eslint";
 import eslintConfigPrettier from "eslint-config-prettier";
 import reactHooks from "eslint-plugin-react-hooks";
+import simpleImportSort from "eslint-plugin-simple-import-sort";
 
 export default tseslint.config(
   // Global ignores
@@ -36,6 +37,18 @@ export default tseslint.config(
         project: "./tsconfig.eslint.json",
         tsconfigRootDir: import.meta.dirname,
       },
+    },
+  },
+
+  // Import sorting — enforced across all source files
+  {
+    files: ["**/*.{ts,tsx}"],
+    plugins: {
+      "simple-import-sort": simpleImportSort,
+    },
+    rules: {
+      "simple-import-sort/imports": "warn",
+      "simple-import-sort/exports": "warn",
     },
   },
 

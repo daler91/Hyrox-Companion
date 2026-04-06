@@ -2,13 +2,12 @@ import { useId, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { X, Timer, Ruler, Hash, Weight, Pencil, Plus, Minus, AlertTriangle, TriangleAlert } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Timer, Ruler, Hash, Weight, Pencil } from "lucide-react";
 import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
 import { categoryBorderColors } from "@/lib/exerciseUtils";
 import { getExerciseMissingFields } from "@/lib/exerciseWarnings";
+import { ExerciseHeader, ExerciseWarnings, MultiSetTable, SingleSetFields } from "./exercise-input";
+import type { FieldKey, FieldConfig } from "./exercise-input";
 
 export interface SetData {
   setNumber: number;
@@ -28,18 +27,7 @@ export interface StructuredExercise {
   sets: SetData[];
 }
 
-interface ExerciseInputProps {
-  readonly exercise: StructuredExercise;
-  readonly onChange: (exercise: StructuredExercise) => void;
-  readonly onRemove: () => void;
-  readonly weightUnit?: "kg" | "lbs";
-  readonly distanceUnit?: "km" | "miles";
-  readonly blockLabel?: string;
-}
-
-type FieldKey = "reps" | "weight" | "distance" | "time";
-
-const fieldConfig: Record<FieldKey, { icon: typeof Timer; getLabel: (wu: string, du: string) => string; short: string }> = {
+const fieldConfig: Record<FieldKey, FieldConfig> = {
   reps: { icon: Hash, getLabel: () => "Reps", short: "Reps" },
   weight: { icon: Weight, getLabel: (wu) => `Weight (${wu})`, short: "Wt" },
   distance: { icon: Ruler, getLabel: (_, du) => `Distance (${du === "km" ? "m" : "ft"})`, short: "Dist" },
@@ -73,11 +61,13 @@ export function createExerciseFromSets(exerciseName: ExerciseName, dbSets: Array
   };
 }
 
-
-function getConfidenceClasses(confidence: number): string {
-  if (confidence >= 80) return "bg-green-500/10 text-green-600 dark:text-green-400";
-  if (confidence >= 60) return "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400";
-  return "bg-red-500/10 text-red-600 dark:text-red-400";
+interface ExerciseInputProps {
+  readonly exercise: StructuredExercise;
+  readonly onChange: (exercise: StructuredExercise) => void;
+  readonly onRemove: () => void;
+  readonly weightUnit?: "kg" | "lbs";
+  readonly distanceUnit?: "km" | "miles";
+  readonly blockLabel?: string;
 }
 
 export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg", distanceUnit = "km", blockLabel }: Readonly<ExerciseInputProps>) {
@@ -124,41 +114,16 @@ export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg",
   return (
     <Card className={`border-l-4 ${borderColor} rounded-l-none`} data-testid={`input-exercise-${exercise.exerciseName}`}>
       <CardContent className="p-4">
-        <div className="flex items-center justify-between gap-2 mb-4">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h4 className="font-semibold">{displayLabel}{blockLabel ? ` ${blockLabel}` : ""}</h4>
-            <span className="text-xs text-muted-foreground">{sets.length} {sets.length === 1 ? "set" : "sets"}</span>
-            {exercise.confidence != null && exercise.confidence < 90 && (
-              <Badge
-                variant="secondary"
-                className={`text-[10px] ${getConfidenceClasses(exercise.confidence)}`}
-                data-testid={`badge-confidence-${exercise.exerciseName}`}
-              >
-                {exercise.confidence < 60 && <AlertTriangle className="h-3 w-3 mr-0.5" />}
-                AI {exercise.confidence}%
-              </Badge>
-            )}
-          </div>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button size="icon" variant="ghost" onClick={onRemove} data-testid={`button-remove-${exercise.exerciseName}`} aria-label={`Remove ${displayLabel}`}>
-                  <X className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Remove exercise</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </div>
+        <ExerciseHeader
+          displayLabel={displayLabel}
+          blockLabel={blockLabel}
+          setCount={sets.length}
+          exerciseName={exercise.exerciseName}
+          confidence={exercise.confidence}
+          onRemove={onRemove}
+        />
 
-        {missingFields.length > 0 && (
-          <div className="flex items-start gap-2 mb-3 p-2 rounded-md bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 text-xs" role="alert" aria-live="assertive" data-testid={`warning-missing-${exercise.exerciseName}`}>
-            <TriangleAlert className="h-3.5 w-3.5 mt-0.5 shrink-0" aria-hidden="true" />
-            <span>Missing {missingFields.join(", ").toLowerCase()} — add for better tracking</span>
-          </div>
-        )}
+        <ExerciseWarnings missingFields={missingFields} exerciseName={exercise.exerciseName} />
 
         {exercise.exerciseName === "custom" && (
           <div className="mb-4">
@@ -178,76 +143,28 @@ export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg",
         )}
 
         {showMultiSetView ? (
-          <div className="space-y-2">
-            <div className="grid gap-2" style={{ gridTemplateColumns: `2rem ${fields.map(() => "1fr").join(" ")} 2rem` }}>
-              <div className="text-xs text-muted-foreground font-medium flex items-end pb-1">#</div>
-              {fields.map((field) => {
-                const config = fieldConfig[field];
-                return (
-                  <div key={field} className="text-xs text-muted-foreground font-medium flex items-end pb-1">
-                    {config.getLabel(weightUnit, distanceUnit)}
-                  </div>
-                );
-              })}
-              <div />
-            </div>
-            {sets.map((set, idx) => (
-              <div key={set.setNumber} className="grid gap-2 items-center" style={{ gridTemplateColumns: `2rem ${fields.map(() => "1fr").join(" ")} 2rem` }} data-testid={`set-row-${exercise.exerciseName}-${idx}`}>
-                <span className="text-xs text-muted-foreground text-center">{set.setNumber}</span>
-                {fields.map((field) => (
-                  <Input
-                    key={field}
-                    type="number"
-                    placeholder="--"
-                    value={set[field] ?? ""}
-                    onChange={(e) => handleSetChange(idx, field, e.target.value)}
-                    className="h-8 text-sm"
-                    data-testid={`input-${field}-${exercise.exerciseName}-${idx}`}
-                    aria-label={`${fieldConfig[field].getLabel(weightUnit, distanceUnit)} for set ${set.setNumber}`}
-                  />
-                ))}
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button size="icon" variant="ghost" onClick={() => removeSet(idx)} disabled={sets.length <= 1} className="h-6 w-6" data-testid={`button-remove-set-${idx}`} aria-label={`Remove set ${idx + 1}`}>
-                        <Minus className="h-3 w-3" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Remove set</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </div>
-            ))}
-            <Button variant="outline" size="sm" onClick={addSet} className="w-full mt-2" data-testid={`button-add-set-${exercise.exerciseName}`}>
-              <Plus className="h-3 w-3 mr-1" /> Add Set
-            </Button>
-          </div>
+          <MultiSetTable
+            exerciseName={exercise.exerciseName}
+            fields={fields}
+            fieldConfig={fieldConfig}
+            sets={sets}
+            weightUnit={weightUnit}
+            distanceUnit={distanceUnit}
+            onSetChange={handleSetChange}
+            onAddSet={addSet}
+            onRemoveSet={removeSet}
+          />
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {fields.map((field) => {
-              const config = fieldConfig[field];
-              const Icon = config.icon;
-              const inputId = `${idPrefix}-${field}`;
-              return (
-                <div key={field} className="space-y-2">
-                  <Label htmlFor={inputId} className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <Icon className="h-3 w-3" />
-                    {config.getLabel(weightUnit, distanceUnit)}
-                  </Label>
-                  <Input
-                    id={inputId}
-                    type="number"
-                    placeholder="0"
-                    value={sets[0]?.[field] ?? ""}
-                    onChange={(e) => handleSetChange(0, field, e.target.value)}
-                    data-testid={`input-${field}-${exercise.exerciseName}`}
-                  />
-                </div>
-              );
-            })}
-          </div>
+          <SingleSetFields
+            exerciseName={exercise.exerciseName}
+            idPrefix={idPrefix}
+            fields={fields}
+            fieldConfig={fieldConfig}
+            set={sets[0]}
+            weightUnit={weightUnit}
+            distanceUnit={distanceUnit}
+            onSetChange={handleSetChange}
+          />
         )}
       </CardContent>
     </Card>

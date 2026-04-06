@@ -12,8 +12,8 @@ describe('workouts API client', () => {
   });
 
   it('create() calls typedRequest with POST and correct data', () => {
-    const data = { title: 'Test Workout', rawText: "I did something" };
-    workouts.create(data as any);
+    const data = { title: 'Test Workout', rawText: "I did something" } satisfies Parameters<typeof workouts.create>[0];
+    workouts.create(data);
     expect(typedRequest).toHaveBeenCalledWith('POST', '/api/v1/workouts', data);
   });
 
@@ -38,8 +38,8 @@ describe('workouts API client', () => {
   });
 
   it('update() calls typedRequest with PATCH and correct id and data', () => {
-    const data = { title: 'Updated Workout' };
-    workouts.update('123', data as any);
+    const data: Parameters<typeof workouts.update>[1] = { title: 'Updated Workout' };
+    workouts.update('123', data);
     expect(typedRequest).toHaveBeenCalledWith('PATCH', '/api/v1/workouts/123', data);
   });
 
