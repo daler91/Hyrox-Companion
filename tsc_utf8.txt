@@ -1,0 +1,12 @@
+﻿
+> fitai-coach@1.0.0 check
+> tsc
+
+client/src/components/ChatMessage.tsx(2,27): error TS2307: Cannot find module 'react-markdown' or its corresponding type declarations.
+server/index.ts(5,26): error TS2307: Cannot find module 'cookie-parser' or its corresponding type declarations.
+server/index.ts(6,18): error TS2307: Cannot find module 'cors' or its corresponding type declarations.
+server/index.ts(87,12): error TS7006: Parameter 'origin' implicitly has an 'any' type.
+server/index.ts(87,20): error TS7006: Parameter 'callback' implicitly has an 'any' type.
+server/middleware/csrf.ts(2,28): error TS2307: Cannot find module 'csrf-csrf' or its corresponding type declarations.
+server/middleware/csrf.ts(53,29): error TS7006: Parameter 'req' implicitly has an 'any' type.
+server/routes/tests/helpers.ts(2,26): error TS2307: Cannot find module 'cookie-parser' or its corresponding type declarations.

@@ -1,0 +1,61 @@
+﻿
+> fitai-coach@1.0.0 lint
+> eslint .
+
+node.exe : 
+At line:1 char:1
++ & "C:\Program 
+Files\nodejs/node.exe" 
+"C:\Program 
+Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo        
+      : NotSpecified: (:  
+  String) [], RemoteExc   
+ eption
+    + FullyQualifiedError 
+   Id : NativeCommandErr  
+  or
+ 
+Oops! Something went 
+wrong! :(
+
+ESLint: 9.39.4
+
+Error 
+[ERR_MODULE_NOT_FOUND]: 
+Cannot find package 'eslin
+t-plugin-simple-import-sor
+t' imported from C:\Users\
+russe\Hyrox-Companion\esli
+nt.config.js
+    at 
+Object.getPackageJSONURL (
+node:internal/modules/pack
+age_json_reader:266:9)
+    at packageResolve (nod
+e:internal/modules/esm/res
+olve:767:81)
+    at moduleResolve (node
+:internal/modules/esm/reso
+lve:853:18)
+    at defaultResolve (nod
+e:internal/modules/esm/res
+olve:983:11)
+    at 
+#cachedDefaultResolve (nod
+e:internal/modules/esm/loa
+der:731:20)
+    at 
+ModuleLoader.resolve (node
+:internal/modules/esm/load
+er:708:38)
+    at ModuleLoader.getMod
+uleJobForImport (node:inte
+rnal/modules/esm/loader:31
+0:38)
+    at ModuleJob._link (no
+de:internal/modules/esm/mo
+dule_job:183:49)

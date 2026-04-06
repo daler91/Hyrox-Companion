@@ -50,7 +50,7 @@ const { doubleCsrfProtection, generateCsrfToken } = doubleCsrf({
   // Method list intentionally excludes GET/HEAD/OPTIONS (safe methods)
   // so clients can fetch the token endpoint without first having a token.
   ignoredMethods: ["GET", "HEAD", "OPTIONS"],
-  getCsrfTokenFromRequest: (req) => req.headers["x-csrf-token"],
+  getCsrfTokenFromRequest: (req: Request) => req.headers["x-csrf-token"] as string | undefined,
 });
 
 export const csrfProtection: RequestHandler = doubleCsrfProtection;

@@ -84,7 +84,7 @@ const allowedOrigins = new Set([
 ]);
 
 app.use(cors({
-  origin: (origin, callback) => {
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
     // Allow same-origin requests (no Origin header) and allowed origins
     if (!origin || allowedOrigins.has(origin)) {
       callback(null, true);
