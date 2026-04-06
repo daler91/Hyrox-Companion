@@ -30,8 +30,8 @@ The project follows a testing pyramid with three layers:
 
 | Layer | Count | Location |
 |-------|-------|----------|
-| Unit tests (server) | ~25 files | `server/**/*.test.ts` |
-| Unit tests (client) | ~20 files | `client/src/**/*.test.{ts,tsx}` |
+| Unit tests (server) | ~35 files | `server/**/*.test.ts` |
+| Unit tests (client) | ~24 files | `client/src/**/*.test.{ts,tsx}` |
 | Unit tests (shared) | 2 files | `shared/*.test.ts` |
 | Integration tests | 2 files | `server/routes/tests/*.integration.test.ts` |
 | Cypress E2E specs | 9 files | `cypress/e2e/*.cy.ts` |
@@ -299,6 +299,45 @@ it("shows the workout form", () => {
 
 ---
 
+## Production Smoke Tests
+
+**File:** `server/routes/tests/smoke.test.ts`
+
+A dedicated suite of ~25 full-stack smoke tests that build and start the production server as a child process, then run HTTP assertions against it.
+
+### Configuration
+
+Smoke tests use a **separate Vitest config** (`vitest.smoke.config.ts`):
+
+- Excluded from the standard unit test suite
+- Runs on a dedicated port (`5111`) with `ALLOW_DEV_AUTH_BYPASS=true`
+- Uses `node` environment (no jsdom)
+- Non-blocking in CI (separate workflow step)
+
+### What's Tested
+
+- Health endpoint returns correct status during startup and after ready
+- API endpoints return expected responses under dev auth bypass
+- CSRF token flow (fetch token, attach header, verify mutating request succeeds)
+- Static file serving (SPA fallback, asset caching headers)
+- Error handling (404 for unknown API routes, validation errors)
+
+### Implementation Details
+
+- Spawns the built server (`dist/index.js`) as a child process
+- Uses a custom `CookieJar` class for native `fetch` cookie management
+- Waits for the health endpoint to return `"ok"` before running tests
+- Cleans up the child process in `afterAll`
+
+### Running Smoke Tests
+
+```bash
+pnpm run build
+pnpm exec vitest run --config vitest.smoke.config.ts
+```
+
+---
+
 ## CI/CD Test Workflows
 
 All workflows are in `.github/workflows/` and run on GitHub Actions with Ubuntu runners and Node.js 22+ (via pnpm).
@@ -342,7 +381,7 @@ All workflows are in `.github/workflows/` and run on GitHub Actions with Ubuntu 
 
 - **Name:** Build
 - **Triggers:** Push to `main`, pull request
-- **Purpose:** SonarQube analysis (currently disabled in favor of Automatic Analysis).
+- **Purpose:** Lint, type check, production build, and SonarCloud Automatic Analysis for code quality.
 
 ### 6. Other workflows
 
@@ -462,6 +501,7 @@ project-root/
   vitest.setup.ts                     # Unit test global setup
   vitest.integration.config.ts        # Integration test configuration
   vitest.integration.setup.ts         # Integration test global setup
+  vitest.smoke.config.ts              # Production smoke test configuration
   cypress.config.ts                   # Cypress E2E configuration
 
   shared/
@@ -496,6 +536,7 @@ project-root/
         helpers.ts                   # Integration test setup helper
         api.integration.test.ts
         post-migration.integration.test.ts
+        smoke.test.ts                # Production smoke tests (~25 tests)
     services/
       aiEval.test.ts                 # AI evaluation tests
       aiService.test.ts              # AI service tests

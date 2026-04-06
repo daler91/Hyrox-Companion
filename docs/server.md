@@ -12,6 +12,7 @@ The Hyrox Companion backend is an Express 4 REST API running on Node.js with Typ
 - **Clerk** -- authentication
 - **Pino** -- structured logging
 - **Helmet** -- security headers
+- **csrf-csrf** -- CSRF protection (double-submit cookie pattern)
 - **Sentry** -- error tracking
 - **Zod** -- request validation and OpenAPI schema generation
 
@@ -80,6 +81,8 @@ Middleware is applied in the following order in `server/index.ts`:
 | 9 | `express.urlencoded()` | URL-encoded body parsing (100 kb limit) |
 | 10 | Health check route | `GET /api/v1/health` (registered inline, not in routes.ts) |
 | 11 | `pino-http` | Structured request logging with request ID and user context |
+| 12 | `doubleCsrfProtection` | CSRF verification on mutating requests (POST/PUT/PATCH/DELETE) via `csrf-csrf` |
+| 13 | `idempotencyMiddleware` | Server-side idempotency enforcement via `X-Idempotency-Key` header (after auth) |
 
 ### Middleware Ordering Rationale
 
@@ -122,6 +125,8 @@ Same-origin requests (no `Origin` header) are always allowed. Credentials are en
 
 All API routes are prefixed with `/api/v1/` by convention within each router file.
 
+Route handlers follow a **thin controller** pattern -- they validate input, then delegate to a use-case or service function. For workouts, `server/services/workoutUseCases.ts` provides a use-case layer that splits route payloads into service-level arguments, keeping transport concerns in routes and orchestration in services.
+
 ---
 
 ## Security
@@ -161,6 +166,42 @@ A strict origin whitelist is enforced. Requests from unlisted origins receive a 
 ### Request ID Validation
 
 Client-supplied `X-Request-ID` headers are validated against the pattern `^[\w.:-]+$` with a 64-character maximum length to prevent log injection. Invalid or missing IDs are replaced with a `randomUUID()`.
+
+### CSRF Protection
+
+**File:** `server/middleware/csrf.ts`
+
+CSRF protection uses the **double-submit cookie pattern** via the `csrf-csrf` library. This prevents cross-site request forgery on all state-changing endpoints.
+
+**Flow:**
+
+1. Client calls `GET /api/v1/csrf-token` (safe method, exempt from verification). The server sets a signed `__Host-hyrox.x-csrf` cookie (production) or `hyrox.x-csrf` cookie (development) and returns the paired token in JSON.
+2. Client attaches the token as the `x-csrf-token` header on all mutating requests (POST/PUT/PATCH/DELETE).
+3. The `doubleCsrfProtection` middleware verifies the header matches the cookie HMAC before forwarding the request.
+
+**Session binding:** The CSRF token is bound to the Clerk `userId` when authenticated, so tokens issued pre-login are invalidated after sign-in and tokens cannot be replayed across users. Falls back to client IP for the pre-login window.
+
+**Configuration:**
+
+- Cookie: `httpOnly: true`, `sameSite: "strict"`, `secure: true` (production)
+- Secret: `CSRF_SECRET` env var (optional, falls back to `ENCRYPTION_KEY`)
+- Safe methods (GET/HEAD/OPTIONS) are exempt from verification
+
+### Idempotency Middleware
+
+**File:** `server/middleware/idempotency.ts`
+
+Server-side enforcement for the `X-Idempotency-Key` header sent by the client's offline queue on replay.
+
+**Behavior:**
+
+- Applies to mutating methods only (POST/PUT/PATCH/DELETE)
+- Requests without the header pass through untouched
+- On first request with a given `(userId, key)` pair, the response is cached in the `idempotency_keys` table with a 24-hour TTL
+- On repeat requests with the same key, the cached response (status code + body) is returned without re-executing the handler
+- Key length is capped at 255 characters (returns 400 if exceeded)
+- Must be mounted after `isAuthenticated` so `getUserId()` can resolve the caller
+- Storage failures are logged and the request proceeds without idempotency guarantees (graceful degradation)
 
 ### Dev Auth Bypass Guard
 
@@ -282,6 +323,7 @@ All environment variables are validated at startup by a Zod schema in `server/en
 | `LOG_LEVEL` | No | Pino log level (default: `"info"`) |
 | `RAG_CHUNK_SIZE` | No | Character count per RAG chunk (default: `600`) |
 | `RAG_CHUNK_OVERLAP` | No | Overlap characters between RAG chunks (default: `100`) |
+| `CSRF_SECRET` | No | Minimum 32 characters, used for CSRF token HMAC. Falls back to `ENCRYPTION_KEY` if unset. |
 
 ---
 

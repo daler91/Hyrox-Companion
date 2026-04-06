@@ -261,6 +261,50 @@ The `user_id` column has a UNIQUE constraint, enforcing one Strava connection pe
 
 ---
 
+### idempotency_keys
+
+Server-side idempotency cache for mutating API requests. Uses a composite primary key on `(user_id, key)`.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `user_id` | `varchar(255)` | NOT NULL, FK -> `users.id` ON DELETE CASCADE, composite PK |
+| `key` | `varchar(255)` | NOT NULL, composite PK |
+| `method` | `varchar(10)` | NOT NULL |
+| `path` | `text` | NOT NULL |
+| `status_code` | `integer` | NOT NULL |
+| `response_body` | `jsonb` | NOT NULL |
+| `created_at` | `timestamp` | NOT NULL, default `now()` |
+| `expires_at` | `timestamp` | NOT NULL |
+
+**Indexes:**
+- Composite primary key on (`user_id`, `key`)
+- `idx_idempotency_keys_expires_at` on (`expires_at`) -- for TTL cleanup
+
+Entries expire after 24 hours. The `idempotencyMiddleware` checks this table before executing mutating handlers and caches responses for duplicate keys.
+
+---
+
+## Drizzle Relations
+
+All tables have explicit Drizzle relation definitions in `shared/schema/tables.ts`, enabling the `db.query.<table>.findMany({ with: { ... } })` relational query pattern. This replaces several manual JOIN queries with cleaner, type-safe relation-based queries.
+
+**Defined relations:**
+
+| Relation | Type | Description |
+|---|---|---|
+| `usersRelations` | `many` | trainingPlans, workoutLogs, chatMessages, coachingMaterials, customExercises; `one` stravaConnection |
+| `trainingPlansRelations` | `one` user, `many` planDays |
+| `planDaysRelations` | `one` trainingPlan, `many` workoutLogs |
+| `workoutLogsRelations` | `one` user, planDay (optional), trainingPlan (optional); `many` exerciseSets |
+| `exerciseSetsRelations` | `one` workoutLog |
+| `customExercisesRelations` | `one` user |
+| `chatMessagesRelations` | `one` user |
+| `coachingMaterialsRelations` | `one` user, `many` documentChunks |
+| `documentChunksRelations` | `one` coachingMaterial |
+| `stravaConnectionsRelations` | `one` user |
+
+---
+
 ## Entity Relationships
 
 ```
@@ -281,6 +325,8 @@ users
   |-- 1:N --> chat_messages
   |
   |-- 1:N --> custom_exercises
+  |
+  |-- 1:N --> idempotency_keys
 ```
 
 ```mermaid
@@ -499,6 +545,7 @@ Each domain class owns a cohesive slice of functionality:
 | `TimelineStorage` | `server/storage/timeline.ts` | Unified timeline and upcoming planned days |
 | `AnalyticsStorage` | `server/storage/analytics.ts` | Weekly stats, date-range queries, missed-workout reporting |
 | `CoachingStorage` | `server/storage/coaching.ts` | Coaching materials and RAG document chunks |
+| `IdempotencyStorage` | `server/storage/idempotency.ts` | Idempotency key caching (get, set, cleanup) |
 
 Shared query logic (e.g., joining exercise sets with workout dates) is extracted into `server/storage/shared.ts`.
 
@@ -565,18 +612,28 @@ migrations/
   0002_handy_living_lightning.sql
   ...
   0015_thin_nextwave.sql
+  0016_rename_hyrox_station_to_functional.sql
+  0017_workout_logs_strava_unique.sql
+  0018_backfill_plan_dates_and_workout_links.sql
+  0019_add_idempotency_keys.sql
   meta/
     _journal.json
     0000_snapshot.json
     ...
-    0015_snapshot.json
+    0019_snapshot.json
 ```
 
-- **SQL files**: Each migration contains the raw SQL statements.
+- **SQL files**: Each migration contains the raw SQL statements (20 total).
 - **`meta/_journal.json`**: Tracks migration ordering and versions.
 - **`meta/NNNN_snapshot.json`**: Full schema snapshots at each migration point.
 
 Migrations `0008` through `0014` relating to `document_chunks` are no-ops on the main database (the vector DB schema is managed at startup). They contain only `SELECT 1;` placeholders.
+
+Notable recent migrations:
+- `0016`: Renames exercise category from "hyrox" to "functional"
+- `0017`: Adds unique constraint on `strava_activity_id` in `workout_logs`
+- `0018`: Backfills `plan_dates` and `workout-to-plan` links
+- `0019`: Creates the `idempotency_keys` table for server-side idempotency
 
 ### Startup Migration
 

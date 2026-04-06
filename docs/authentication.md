@@ -228,6 +228,28 @@ with HTTP status `401`.
 
 ---
 
+## CSRF Protection
+
+**Key file:** `server/middleware/csrf.ts`
+
+The application uses CSRF protection via the `csrf-csrf` library (double-submit cookie pattern) to prevent cross-site request forgery on all state-changing endpoints. This complements Clerk's cookie-based JWT auth.
+
+### Integration with Clerk Auth
+
+- The CSRF token is bound to the Clerk `userId` as the session identifier (via `getSessionIdentifier`). This means tokens issued before login are invalidated after sign-in, and tokens cannot be replayed across users.
+- On the client side, the cached CSRF token is reset when Clerk's `onSignIn` event fires, forcing a fresh token fetch after authentication transitions.
+- For pre-login requests (where Clerk auth hasn't run yet), the session identifier falls back to the client IP address.
+
+### Client Flow
+
+1. On app load, the API client calls `GET /api/v1/csrf-token` to obtain a CSRF token.
+2. The token is cached in memory and attached as the `x-csrf-token` header on all mutating requests.
+3. If a 403 CSRF error is received, the client automatically refetches the token and retries the request.
+
+See [Server -- CSRF Protection](server.md#csrf-protection) for full implementation details.
+
+---
+
 ## Session Management
 
 Clerk manages session lifecycle entirely. The app does not implement custom token storage or refresh logic.

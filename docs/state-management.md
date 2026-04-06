@@ -74,9 +74,13 @@ class RateLimitError extends Error {
 
 ### Base Functions
 
-- `apiRequest(method, url, data?, signal?, extraHeaders?)` -- Low-level fetch wrapper. Sets `Content-Type: application/json`, includes credentials, handles error responses.
+- `apiRequest(method, url, data?, signal?, extraHeaders?)` -- Low-level fetch wrapper. Sets `Content-Type: application/json`, includes credentials, handles error responses. Automatically attaches the `x-csrf-token` header on mutating requests (POST/PUT/PATCH/DELETE).
 - `typedRequest<TResponse>(method, url, data?)` -- Returns parsed JSON typed as `TResponse`.
 - `rawRequest(method, url, data?)` -- Returns the raw `Response` object (for streaming, file downloads).
+
+### CSRF Token Management
+
+The API client fetches a CSRF token from `GET /api/v1/csrf-token` on initialization and caches it in memory. The token is automatically attached as the `x-csrf-token` header on all mutating requests. If a 403 CSRF error is received (e.g., after a Clerk sign-in invalidates the old token), the client refetches the token and retries the request transparently.
 
 ### Domain Modules
 
@@ -199,7 +203,7 @@ A localStorage-backed mutation queue that ensures data isn't lost when the user 
 - **Max queue size:** 100 mutations (oldest evicted when full).
 - **Max age:** 7 days -- stale mutations are dropped during flush.
 - **Max retries:** 5 per mutation -- dropped after exceeding.
-- **Idempotency:** Each mutation gets a unique ID (`timestamp-uuid`), sent as `X-Idempotency-Key` header on replay.
+- **Idempotency:** Each mutation gets a unique ID (`timestamp-uuid`), sent as `X-Idempotency-Key` header on replay. The server enforces idempotency via the `idempotencyMiddleware`, which caches responses in the `idempotency_keys` database table with a 24-hour TTL. This provides end-to-end duplicate prevention: the client generates the key, and the server enforces it.
 
 ### API
 

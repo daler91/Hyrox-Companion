@@ -90,6 +90,8 @@ This repository is a fully functional monorepo containing both the React fronten
 - **Security**:
   - Helmet for HTTP security headers
   - express-rate-limit for granular API rate limiting
+  - csrf-csrf for CSRF protection (double-submit cookie pattern bound to Clerk userId)
+  - Server-side idempotency enforcement via `X-Idempotency-Key` header with database-backed cache
   - AES-256-GCM encryption for Strava token storage
   - Strava OAuth CSRF state verification
   - HTML sanitization of AI-generated content
@@ -198,8 +200,9 @@ Hyrox-Companion/
 │       └── pages/              # Route pages (Landing, Timeline, LogWorkout, Analytics, Settings)
 ├── server/                     # Express backend
 │   ├── gemini/                 # Gemini AI parsing & prompt logic
+│   ├── middleware/             # Express middleware (CSP nonce, CSRF, idempotency)
 │   ├── routes/                 # API route handlers
-│   ├── services/               # Business logic layer
+│   ├── services/               # Business logic layer (includes workoutUseCases.ts)
 │   ├── storage/                # Database access layer (Drizzle)
 │   └── utils/                  # Server utilities
 ├── shared/                     # Shared code (client + server)
@@ -207,7 +210,8 @@ Hyrox-Companion/
 ├── migrations/                 # Drizzle SQL migrations
 ├── cypress/                    # E2E test suites
 ├── .github/workflows/          # CI/CD pipelines (7 workflows)
-└── script/                     # Build & maintenance scripts
+├── scripts/                    # Build & maintenance scripts
+└── docs/                       # Documentation (10 detailed guides)
 ```
 
 ---
@@ -319,7 +323,7 @@ Every push and pull request triggers automated pipelines via GitHub Actions:
 
 | Workflow | Trigger | Purpose |
 |---|---|---|
-| **Build** | Push / PR | Lint, type check, production build |
+| **Build** | Push / PR | Lint, type check, production build, SonarCloud analysis |
 | **Test** | Push / PR | Unit & integration test suite |
 | **Cypress** | Push / PR | E2E browser tests |
 | **Migrations** | Push / PR | Database schema consistency validation |

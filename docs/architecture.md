@@ -99,7 +99,9 @@ sequenceDiagram
 7. `express.json()` -- body parsing with 100kb default limit (2mb for `/api/v1/coaching-materials`)
 8. `express.urlencoded()` -- form body parsing (100kb limit)
 9. `pino-http` -- structured request logging with Clerk userId extraction
-10. Route handlers (registered via `registerRoutes`)
+10. `doubleCsrfProtection` -- CSRF verification on mutating requests (double-submit cookie via `csrf-csrf`)
+11. `idempotencyMiddleware` -- server-side idempotency enforcement via `X-Idempotency-Key` header (after auth)
+12. Route handlers (registered via `registerRoutes`)
 
 ---
 
@@ -319,11 +321,11 @@ graph TD
 ```
 
 **Notable patterns:**
-- **Route handlers** are thin orchestrators -- they validate input, call services, and return responses.
+- **Route handlers** are thin orchestrators -- they validate input, delegate to use-case functions (e.g., `workoutUseCases.ts`), and return responses. The use-case layer separates transport concerns from business logic orchestration.
 - **coachService** is the most connected service, depending on `aiService`, `ragRetrieval`, Gemini, and the storage layer.
 - **ragRetrieval** delegates vector search to `ragService`, which queries the `pgvector` extension directly via a separate connection pool (`vectorPool`).
 - **pg-boss** uses the same PostgreSQL database for its job queue, keeping infrastructure simple.
-- **Storage** is a single abstraction layer over Drizzle ORM; all database access goes through it.
+- **Storage** is a single abstraction layer over Drizzle ORM; all database access goes through it (including idempotency key caching via `IdempotencyStorage`).
 
 ---
 
