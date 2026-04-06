@@ -50,7 +50,8 @@ async function request(urlPath: string, init?: RequestInit): Promise<Response> {
 async function checkHealth(): Promise<{ ready: boolean; status: string }> {
   const res = await fetch(`${BASE}/api/v1/health`);
   const body = (await res.json()) as { status: string; error?: string };
-  const status = `${res.status} ${body.status}${body.error ? ` (${body.error})` : ""}`;
+  const errorSuffix = body.error ? " (" + body.error + ")" : "";
+  const status = `${res.status} ${body.status}${errorSuffix}`;
   return { ready: res.ok && body.status === "ok", status };
 }
 
@@ -117,7 +118,7 @@ describe("Production Smoke Test", { timeout: 90_000 }, () => {
   });
 
   afterAll(async () => {
-    if (server === undefined || server === null || server.exitCode !== null) return;
+    if (server?.exitCode !== null) return;
 
     const exited = new Promise<number | null>((resolve) => {
       server.once("exit", (code) => resolve(code));
