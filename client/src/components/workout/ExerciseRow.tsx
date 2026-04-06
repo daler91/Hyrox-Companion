@@ -10,6 +10,7 @@ import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NumberStepper } from "@/components/ui/number-stepper";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { exerciseIcons } from "@/lib/exerciseIcons";
 import { categoryBorderColors } from "@/lib/exerciseUtils";
 import { cn } from "@/lib/utils";
@@ -190,22 +191,32 @@ interface ExerciseBlockEditorProps {
 function renderGhostIconButton(opts: {
   onClick: () => void;
   ariaLabel: string;
+  tooltip: string;
   className: string;
   testId?: string;
   icon: React.ReactNode;
 }) {
   return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon"
-      onClick={opts.onClick}
-      aria-label={opts.ariaLabel}
-      className={opts.className}
-      data-testid={opts.testId}
-    >
-      {opts.icon}
-    </Button>
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={opts.onClick}
+            aria-label={opts.ariaLabel}
+            className={opts.className}
+            data-testid={opts.testId}
+          >
+            {opts.icon}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>{opts.tooltip}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
@@ -260,6 +271,7 @@ function ExerciseBlockEditor({
           {renderGhostIconButton({
             onClick: onRemove,
             ariaLabel: `Remove block ${blockIndex + 1}`,
+            tooltip: "Remove block",
             className: "h-8 w-8",
             testId: `button-remove-block-${block.blockId}`,
             icon: <Trash2 className="h-4 w-4" />,
@@ -304,6 +316,7 @@ function ExerciseBlockEditor({
                 renderGhostIconButton({
                   onClick: () => removeSet(idx),
                   ariaLabel: `Remove set ${set.setNumber}`,
+                  tooltip: "Remove set",
                   className: "h-7 w-7",
                   testId: `button-remove-set-${block.blockId}-${idx}`,
                   icon: <X className="h-3.5 w-3.5" />,
