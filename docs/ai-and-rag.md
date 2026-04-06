@@ -109,7 +109,7 @@ See also: [API Reference -- AI Routes](api-reference.md#ai-and-chat-routes)
 
 ### Streaming Chat
 
-`streamChatWithCoach()` is an `AsyncGenerator<string>` that yields text chunks. The route handler (`POST /api/v1/chat/stream`) serves these as Server-Sent Events:
+`streamChatWithCoach()` is an `AsyncGenerator<string>` that yields text chunks. It accepts an optional `AbortSignal` parameter, allowing the caller to cancel Gemini generation mid-stream. The route handler (`POST /api/v1/chat/stream`) serves these as Server-Sent Events:
 
 ```
 data: {"ragInfo": {"source": "rag", "chunkCount": 3}}   // First event
@@ -118,7 +118,7 @@ data: {"text": " training data, I recommend..."}
 data: {"done": true}                                      // Stream complete
 ```
 
-The server detects client disconnection and stops generation early to save API costs.
+The server propagates an `AbortSignal` to the Gemini API when the SSE client disconnects. This cancels in-flight token generation immediately, preventing unnecessary API costs and compute waste. The signal is constructed from the request's `close` event and passed through the entire streaming pipeline.
 
 ### Complete Streaming Example
 
@@ -138,7 +138,7 @@ data: {"done":true}
 
 Each SSE event is separated by a double newline (`\n\n`). The first event always carries `ragInfo` metadata so the client knows which retrieval method was used. Subsequent events stream text chunks as they arrive from Gemini's `generateContentStream`. The final event carries `{"done":true}` to signal stream completion.
 
-On the client side, text chunks are buffered and rendered via `requestAnimationFrame` to avoid layout thrashing during rapid chunk delivery. On the server side, the route handler checks for client disconnection (`req.closed`) between chunks and aborts the Gemini stream early to avoid unnecessary API costs.
+On the client side, text chunks are buffered and rendered via `requestAnimationFrame` to avoid layout thrashing during rapid chunk delivery. On the server side, the route handler propagates an `AbortSignal` to cancel the Gemini stream when the client disconnects, preventing unnecessary token generation and API costs.
 
 ### Chat History
 

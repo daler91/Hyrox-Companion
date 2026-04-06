@@ -163,7 +163,7 @@ Foundational UI building blocks generated via shadcn/ui CLI. Includes: `accordio
 
 ### `coach/` -- AI Coach Panel Components
 
-- `CoachPanelHeader` -- Title, clear history, close button.
+- `CoachPanelHeader` -- Title, clear history, close button. Action buttons include descriptive tooltips for accessibility.
 - `CoachPanelStats` / `StatBadge` -- Training statistics summary.
 - `CoachPanelChatArea` -- Chat message list with suggestion cards.
 - `CoachPanelFooter` -- Quick actions and message input.
@@ -436,6 +436,14 @@ shadcn/ui CLI configuration:
 - **Base color**: `neutral`.
 - **CSS variables**: enabled.
 - **Aliases**: `@/components`, `@/lib/utils`, `@/components/ui`, `@/lib`, `@/hooks`.
+
+---
+
+### CSRF Token Handling
+
+The API client layer fetches a CSRF token from `GET /api/v1/csrf-token` on initialization and attaches it as the `x-csrf-token` header on all mutating requests (POST/PUT/PATCH/DELETE). The token is cached in memory and automatically refreshed on 403 CSRF errors or after Clerk sign-in events.
+
+See also: [Authentication -- CSRF Protection](authentication.md#csrf-protection), [State Management -- API Client Layer](state-management.md#api-client-layer)
 
 ---
 

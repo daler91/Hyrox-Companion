@@ -328,6 +328,10 @@ Errors on the queue emit to a global error handler that logs via the application
 
 Both workers receive an array of `Job[]` objects and process them concurrently with `Promise.all` or `Promise.allSettled`. Failed jobs throw errors to leverage pg-boss's built-in retry mechanism.
 
+### Queue Enqueue Reliability
+
+All `queue.send()` calls are properly `await`-ed to ensure job enqueue operations complete before reporting counts. This prevents mismatches between reported and actual enqueue counts (e.g., email scheduler reporting "2 emails queued" when the jobs haven't been committed yet).
+
 ---
 
 ## Cron Scheduling (node-cron)
@@ -373,7 +377,7 @@ This ensures emails are not missed due to server restarts. The idempotency guard
 
 **Key file:** `server/maintenance.ts`
 
-The `runStartupMaintenance(storage)` function runs a sequence of checks and migrations every time the server starts. These ensure the database is in a consistent state before the application begins serving requests.
+The `runStartupMaintenance(storage)` function runs a consolidated sequence of checks and migrations every time the server starts. These ensure the database is in a consistent state before the application begins serving requests. The maintenance logic was consolidated from multiple scattered startup functions into a single sequential pipeline.
 
 ### Execution Order
 

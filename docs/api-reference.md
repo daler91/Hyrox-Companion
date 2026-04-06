@@ -16,6 +16,8 @@ The Hyrox Companion exposes a RESTful API under the `/api/v1/` prefix. All endpo
 
 - [Error Responses](#error-responses)
 - [Rate Limiting](#rate-limiting)
+- [CSRF Protection](#csrf-protection)
+- [Idempotency](#idempotency)
 - [Request Validation](#request-validation)
 - [Auth Routes](#auth-routes)
 - [Workout Routes](#workout-routes)
@@ -110,6 +112,32 @@ Rate limits are applied per-user (keyed by Clerk userId) and namespaced by categ
 - **Headers:** Standard `RateLimit-*` headers (RFC 6585)
 
 Implementation: `server/routeUtils.ts` — `rateLimiter(category, maxRequests, windowMs)`
+
+---
+
+## CSRF Protection
+
+All mutating endpoints (POST/PUT/PATCH/DELETE) require a valid CSRF token. The token is obtained via:
+
+### GET /api/v1/csrf-token
+
+Retrieve a CSRF token for use in subsequent mutating requests.
+
+- **Auth:** Not strictly required (works pre-login, bound to IP; after login, bound to userId)
+- **Response:** `{ token: string }`
+- **Side effects:** Sets a signed `__Host-hyrox.x-csrf` cookie (production) or `hyrox.x-csrf` (development)
+
+The returned token must be sent as the `x-csrf-token` header on all mutating requests. Missing or invalid tokens result in a `403 Forbidden` response.
+
+---
+
+## Idempotency
+
+Mutating endpoints support the `X-Idempotency-Key` header for safe request replay.
+
+- **Header:** `X-Idempotency-Key` (optional, max 255 characters)
+- **Behavior:** When present on a mutating request (POST/PUT/PATCH/DELETE), the server caches the response for 24 hours keyed by `(userId, key)`. Repeat requests with the same key return the cached response without re-executing the handler.
+- **Use case:** The client's offline queue sends this header when replaying mutations that were queued while offline, preventing duplicate state changes.
 
 ---
 
@@ -757,7 +785,7 @@ Sync recent Strava activities into workout logs.
 - **Side effects:** Fetches activities from Strava API, maps to WorkoutLog format, deduplicates by `stravaActivityId`, auto-refreshes expired tokens.
 - **Response:** `{ imported: number }` or `{ message: string }`
 
-### POST /api/v1/strava/disconnect
+### DELETE /api/v1/strava/disconnect
 
 Disconnect the Strava integration.
 
