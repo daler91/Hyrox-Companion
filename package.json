@@ -17,7 +17,7 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:smoke": "vitest run --config vitest.integration.config.ts server/routes/tests/smoke.integration.test.ts",
+    "test:smoke": "vitest run --config vitest.smoke.config.ts",
     "postinstall": "node script/patch-cypress-deps.js"
   },
   "dependencies": {

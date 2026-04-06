@@ -86,7 +86,7 @@ jobs:
 
       - name: Run Smoke Test
         continue-on-error: true
-        run: pnpm exec vitest run --config vitest.integration.config.ts server/routes/tests/smoke.integration.test.ts
+        run: pnpm exec vitest run --config vitest.smoke.config.ts
         env:
           ALLOW_DEV_AUTH_BYPASS: "true"
           NODE_ENV: test
