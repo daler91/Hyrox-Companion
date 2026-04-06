@@ -32,7 +32,7 @@ type CreateCustomExercisePayload = z.infer<typeof createCustomExerciseSchema>;
 
 const router = Router();
 
-router.get("/api/v1/workouts/unstructured", isAuthenticated, asyncHandler(async (req: Request, res) => {
+router.get("/api/v1/workouts/unstructured", isAuthenticated, rateLimiter("workoutList", 60), asyncHandler(async (req: Request, res) => {
     const userId = getUserId(req);
     const workouts = await storage.workouts.getWorkoutsWithoutExerciseSets(userId);
     res.json(workouts);
@@ -65,7 +65,7 @@ router.post("/api/v1/workouts/batch-reparse", isAuthenticated, rateLimiter("batc
     res.json({ total, parsed, failed });
   }));
 
-router.get("/api/v1/custom-exercises", isAuthenticated, asyncHandler(async (req: Request, res: Response) => {
+router.get("/api/v1/custom-exercises", isAuthenticated, rateLimiter("customExercise", 60), asyncHandler(async (req: Request, res: Response) => {
     const userId = getUserId(req);
     const exercises = await storage.users.getCustomExercises(userId);
     res.json(exercises);
@@ -82,7 +82,7 @@ router.post("/api/v1/custom-exercises", isAuthenticated, rateLimiter("customExer
     res.json(exercise);
   }));
 
-router.get("/api/v1/workouts", isAuthenticated, asyncHandler(async (req: Request<Record<string, never>, Record<string, never>, Record<string, never>, { limit?: string; offset?: string }>, res: Response) => {
+router.get("/api/v1/workouts", isAuthenticated, rateLimiter("workoutList", 60), asyncHandler(async (req: Request<Record<string, never>, Record<string, never>, Record<string, never>, { limit?: string; offset?: string }>, res: Response) => {
     const userId = getUserId(req);
     const rawLimit = req.query.limit ? Number.parseInt(req.query.limit, 10) : DEFAULT_PAGE_LIMIT;
     const offset = req.query.offset ? Number.parseInt(req.query.offset, 10) : undefined;
@@ -95,7 +95,7 @@ router.get("/api/v1/workouts", isAuthenticated, asyncHandler(async (req: Request
     res.json(logs);
   }));
 
-router.get("/api/v1/workouts/:id", isAuthenticated, asyncHandler(async (req: Request<{ id: string }>, res: Response) => {
+router.get("/api/v1/workouts/:id", isAuthenticated, rateLimiter("workout", 60), asyncHandler(async (req: Request<{ id: string }>, res: Response) => {
     const userId = getUserId(req);
     const log = await storage.workouts.getWorkoutLog(req.params.id, userId);
     if (!log) {
@@ -130,13 +130,13 @@ router.delete("/api/v1/workouts/:id", isAuthenticated, rateLimiter("workout", 40
     res.json({ success: true });
   }));
 
-router.get("/api/v1/exercises/:exerciseName/history", isAuthenticated, asyncHandler(async (req: Request<{ exerciseName: string }>, res: Response) => {
+router.get("/api/v1/exercises/:exerciseName/history", isAuthenticated, rateLimiter("workoutHistory", 60), asyncHandler(async (req: Request<{ exerciseName: string }>, res: Response) => {
     const userId = getUserId(req);
     const history = await storage.workouts.getExerciseHistory(userId, req.params.exerciseName);
     res.json(history);
   }));
 
-router.get("/api/v1/timeline", isAuthenticated, asyncHandler(async (req: Request<Record<string, never>, Record<string, never>, Record<string, never>, { planId?: string; limit?: string; offset?: string }>, res: Response) => {
+router.get("/api/v1/timeline", isAuthenticated, rateLimiter("timeline", 60), asyncHandler(async (req: Request<Record<string, never>, Record<string, never>, Record<string, never>, { planId?: string; limit?: string; offset?: string }>, res: Response) => {
     const userId = getUserId(req);
     const planId = req.query.planId;
     const rawLimit = req.query.limit ? Number.parseInt(req.query.limit, 10) : DEFAULT_TIMELINE_LIMIT;
