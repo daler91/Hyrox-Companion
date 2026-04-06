@@ -8,6 +8,21 @@ import type { ChatMessage as DBChatMessage } from "@shared/schema";
 
 export type { RagInfo } from "@/lib/api";
 
+function createMessageUpdater(
+  assistantMessageId: string,
+  setMessages: React.Dispatch<React.SetStateAction<Message[]>>,
+) {
+  return (snapshot: { content: string; meta?: RagInfo }) => {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === assistantMessageId
+          ? { ...m, content: snapshot.content, ...(snapshot.meta ? { ragInfo: snapshot.meta } : {}) }
+          : m,
+      ),
+    );
+  };
+}
+
 export interface Message {
   id: string;
   role: "user" | "assistant";
@@ -161,19 +176,9 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
           throw new Error("No response body");
         }
 
-        const updateAssistantMessage = (snapshot: { content: string; meta?: RagInfo }) => {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === assistantMessageId
-                ? { ...m, content: snapshot.content, ...(snapshot.meta ? { ragInfo: snapshot.meta } : {}) }
-                : m,
-            ),
-          );
-        };
-
         const result = await consumeSSEStream<RagInfo>(reader, {
           metaKey: "ragInfo",
-          onFlush: updateAssistantMessage,
+          onFlush: createMessageUpdater(assistantMessageId, setMessages),
         });
         fullResponse = result.content;
 
