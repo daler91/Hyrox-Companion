@@ -139,8 +139,8 @@ describe("exerciseSetsToStructured", () => {
     expect(data).toEqual({});
   });
 
-  const runTest = (sets: any, assert: (names: string[], data: any) => void) => {
-    const { names, data } = exerciseSetsToStructured(sets as ExerciseSet[]);
+  const runTest = (sets: ExerciseSet[], assert: (names: string[], data: Record<string, GroupedExercise>) => void) => {
+    const { names, data } = exerciseSetsToStructured(sets);
     assert(names, data);
   };
 
@@ -175,7 +175,7 @@ describe("exerciseSetsToStructured", () => {
           notes: null,
         },
       ],
-      assert: (names: string[], data: any) => {
+      assert: (names: string[], data: Record<string, GroupedExercise>) => {
         expect(names).toEqual(["bench_press__1"]);
         expect(data["bench_press__1"]).toBeDefined();
         expect(data["bench_press__1"].exerciseName).toBe("bench_press");
@@ -221,7 +221,7 @@ describe("exerciseSetsToStructured", () => {
           reps: 3,
         },
       ],
-      assert: (names: string[], data: any) => {
+      assert: (names: string[], data: Record<string, GroupedExercise>) => {
         expect(names).toEqual(["squat__1", "deadlift__1"]);
         expect(data["squat__1"]).toBeDefined();
         expect(data["deadlift__1"]).toBeDefined();
@@ -253,7 +253,7 @@ describe("exerciseSetsToStructured", () => {
           reps: 10,
         },
       ],
-      assert: (names: string[], data: any) => {
+      assert: (names: string[], data: Record<string, GroupedExercise>) => {
         expect(names).toEqual(["custom:Bicep Curls__1"]);
         expect(data["custom:Bicep Curls__1"].exerciseName).toBe("custom");
         expect(data["custom:Bicep Curls__1"].customLabel).toBe("Bicep Curls");
@@ -291,7 +291,7 @@ describe("exerciseSetsToStructured", () => {
           reps: 8,
         },
       ],
-      assert: (names: string[], data: any) => {
+      assert: (names: string[], data: Record<string, GroupedExercise>) => {
         expect(names).toEqual(["pull_up__1", "push_up__1", "pull_up__2"]);
         expect(data["pull_up__1"].sets[0].reps).toBe(10);
         expect(data["pull_up__2"].sets[0].reps).toBe(8);
@@ -311,7 +311,7 @@ describe("exerciseSetsToStructured", () => {
           confidence: 0.95,
         },
       ],
-      assert: (_names: string[], data: any) => {
+      assert: (_names: string[], data: Record<string, GroupedExercise>) => {
         expect(data["running__1"].confidence).toBe(0.95);
       },
     },

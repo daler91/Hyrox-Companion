@@ -2,14 +2,29 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useVoiceInput } from "../useVoiceInput";
 
-const mockRecognitionInstances: any[] = [];
+const mockRecognitionInstances: MockSpeechRecognition[] = [];
+
+interface SpeechResultEvent {
+  results: SpeechResultList;
+  resultIndex: number;
+}
+
+interface SpeechResultList {
+  [index: number]: SpeechResult;
+  length: number;
+}
+
+interface SpeechResult {
+  [index: number]: { transcript: string };
+  isFinal: boolean;
+}
 
 class MockSpeechRecognition {
   continuous = false;
   interimResults = false;
   lang = "";
-  onresult: ((event: any) => void) | null = null;
-  onerror: ((event: any) => void) | null = null;
+  onresult: ((event: SpeechResultEvent) => void) | null = null;
+  onerror: ((event: { error: string }) => void) | null = null;
   onend: (() => void) | null = null;
   onstart: (() => void) | null = null;
   addEventListener = vi.fn();
@@ -32,11 +47,10 @@ function makeResultEvent(
   texts: Array<{ transcript: string; isFinal: boolean }>,
   resultIndex = 0,
 ) {
-  const results: any = texts.map((t) => {
-    const r: any = [{ transcript: t.transcript }];
-    r.isFinal = t.isFinal;
+  const results = texts.map((t) => {
+    const r = Object.assign([{ transcript: t.transcript }], { isFinal: t.isFinal }) as SpeechResult;
     return r;
-  });
+  }) as unknown as SpeechResultList;
   results.length = texts.length;
   return { results, resultIndex };
 }
@@ -59,7 +73,7 @@ async function setupVoiceInput() {
   return { onResult, hook, recognition };
 }
 
-function triggerResult(recognition: any, transcript: string, isFinal = true) {
+function triggerResult(recognition: MockSpeechRecognition, transcript: string, isFinal = true) {
   act(() => {
     recognition.onresult(makeResultEvent([{ transcript, isFinal }]));
   });

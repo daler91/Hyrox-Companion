@@ -20,7 +20,7 @@ describe('api client', () => {
 
       const result = await typedRequest('GET', '/api/test');
 
-      expect(apiRequest).toHaveBeenCalledWith('GET', '/api/test');
+      expect(apiRequest).toHaveBeenCalledWith('GET', '/api/test', undefined, expect.any(AbortSignal));
       expect(mockResponse.json).toHaveBeenCalled();
       expect(result).toEqual(mockData);
     });
@@ -33,7 +33,7 @@ describe('api client', () => {
 
       const result = await typedRequest('POST', '/api/test', requestData);
 
-      expect(apiRequest).toHaveBeenCalledWith('POST', '/api/test', requestData);
+      expect(apiRequest).toHaveBeenCalledWith('POST', '/api/test', requestData, expect.any(AbortSignal));
       expect(mockResponse.json).toHaveBeenCalled();
       expect(result).toEqual(mockData);
     });
@@ -44,6 +44,15 @@ describe('api client', () => {
 
       await expect(typedRequest('GET', '/api/test')).rejects.toThrow('Network error');
     });
+
+    it('should respect custom timeout option', async () => {
+      const mockResponse = { json: vi.fn().mockResolvedValue({ ok: true }) };
+      vi.mocked(apiRequest).mockResolvedValue(mockResponse as unknown as Response);
+
+      await typedRequest('GET', '/api/test', undefined, { timeoutMs: 5000 });
+
+      expect(apiRequest).toHaveBeenCalledWith('GET', '/api/test', undefined, expect.any(AbortSignal));
+    });
   });
 
   describe('rawRequest', () => {
@@ -53,7 +62,7 @@ describe('api client', () => {
 
       const result = await rawRequest('GET', '/api/test');
 
-      expect(apiRequest).toHaveBeenCalledWith('GET', '/api/test');
+      expect(apiRequest).toHaveBeenCalledWith('GET', '/api/test', undefined, expect.any(AbortSignal));
       expect(result).toBe(mockResponse);
     });
 
@@ -64,7 +73,7 @@ describe('api client', () => {
 
       const result = await rawRequest('POST', '/api/test', requestData);
 
-      expect(apiRequest).toHaveBeenCalledWith('POST', '/api/test', requestData);
+      expect(apiRequest).toHaveBeenCalledWith('POST', '/api/test', requestData, expect.any(AbortSignal));
       expect(result).toBe(mockResponse);
     });
 

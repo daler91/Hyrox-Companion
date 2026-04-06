@@ -459,8 +459,8 @@ describe("validateBody", () => {
   });
 
   it("should call next() and update req.body on valid input", () => {
-    const req = { body: { name: "Test", age: 30 } } as any;
-    const res = {} as any;
+    const req = { body: { name: "Test", age: 30 } } as unknown as import("express").Request;
+    const res = {} as unknown as import("express").Response;
     const next = vi.fn();
 
     const middleware = validateBody(schema);
@@ -471,8 +471,8 @@ describe("validateBody", () => {
   });
 
   it("should strip unknown properties from req.body on valid input", () => {
-    const req = { body: { name: "Test", unknownProp: true } } as any;
-    const res = {} as any;
+    const req = { body: { name: "Test", unknownProp: true } } as unknown as import("express").Request;
+    const res = {} as unknown as import("express").Response;
     const next = vi.fn();
 
     const middleware = validateBody(schema);
@@ -483,11 +483,11 @@ describe("validateBody", () => {
   });
 
   it("should return 400 on invalid input without calling next()", () => {
-    const req = { body: { age: "not a number" } } as any;
+    const req = { body: { age: "not a number" } } as unknown as import("express").Request;
     const res = {
       status: vi.fn().mockReturnThis(),
       json: vi.fn(),
-    } as any;
+    } as unknown as import("express").Response;
     const next = vi.fn();
 
     const middleware = validateBody(schema);

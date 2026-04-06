@@ -3,102 +3,24 @@ import { useQuery } from "@tanstack/react-query";
 import { api, QUERY_KEYS, type RagInfo } from "@/lib/api";
 import { useSaveMessageMutation, useClearHistoryMutation } from "./useChatMutations";
 import { getCurrentTimeString, formatTime } from "@/lib/dateUtils";
+import { consumeSSEStream } from "@/lib/sseStream";
 import type { ChatMessage as DBChatMessage } from "@shared/schema";
 
 export type { RagInfo } from "@/lib/api";
 
-function isStreamData(v: unknown): v is { ragInfo?: RagInfo; text?: string; error?: string } {
-  return typeof v === "object" && v !== null && !Array.isArray(v) && ("text" in v || "error" in v || "ragInfo" in v);
-}
-
-/** Parse SSE lines and accumulate text + ragInfo without triggering React state updates. */
-function processStreamLines(
-  lines: string[],
-  acc: { content: string; ragInfo?: RagInfo },
-): void {
-  for (const line of lines) {
-    if (!line.startsWith("data: ")) continue;
-    let data: { ragInfo?: RagInfo; text?: string; error?: string };
-    try {
-      const parsed: unknown = JSON.parse(line.slice(6));
-      if (!isStreamData(parsed)) continue;
-      data = parsed;
-    } catch {
-      continue;
-    }
-    if (data.ragInfo) {
-      acc.ragInfo = data.ragInfo;
-    }
-    if (data.text) {
-      acc.content += data.text;
-    }
-    if (data.error) {
-      throw new Error(data.error);
-    }
-  }
-}
-
-/**
- * Read the SSE stream and batch state updates via requestAnimationFrame
- * so we flush at most once per frame instead of once per chunk.
- */
-async function handleStreamResponse(
-  reader: ReadableStreamDefaultReader<Uint8Array>,
-  decoder: TextDecoder,
+function createMessageUpdater(
   assistantMessageId: string,
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>,
-): Promise<string> {
-  const acc = { content: "", ragInfo: undefined as RagInfo | undefined };
-  let buffer = "";
-  let rafId = 0;
-  let dirty = false;
-
-  const flush = () => {
-    if (!dirty) return;
-    dirty = false;
-    const snapshot = { content: acc.content, ragInfo: acc.ragInfo };
+) {
+  return (snapshot: { content: string; meta?: RagInfo }) => {
     setMessages((prev) =>
       prev.map((m) =>
         m.id === assistantMessageId
-          ? { ...m, content: snapshot.content, ...(snapshot.ragInfo ? { ragInfo: snapshot.ragInfo } : {}) }
+          ? { ...m, content: snapshot.content, ...(snapshot.meta ? { ragInfo: snapshot.meta } : {}) }
           : m,
       ),
     );
   };
-
-  const scheduleFlush = () => {
-    if (!dirty) {
-      dirty = true;
-      rafId = requestAnimationFrame(flush);
-    }
-  };
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const events = buffer.split("\n\n");
-      buffer = events.pop() || "";
-
-      for (const event of events) {
-        processStreamLines(event.split("\n"), acc);
-      }
-      scheduleFlush();
-    }
-
-    if (buffer.trim()) {
-      processStreamLines(buffer.split("\n"), acc);
-    }
-  } finally {
-    // Always flush buffered content — preserves partial output on error paths
-    cancelAnimationFrame(rafId);
-    dirty = true;
-    flush();
-  }
-
-  return acc.content;
 }
 
 export interface Message {
@@ -249,13 +171,16 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         });
 
         const reader = response.body?.getReader();
-        const decoder = new TextDecoder();
 
         if (!reader) {
           throw new Error("No response body");
         }
 
-        fullResponse = await handleStreamResponse(reader, decoder, assistantMessageId, setMessages);
+        const result = await consumeSSEStream<RagInfo>(reader, {
+          metaKey: "ragInfo",
+          onFlush: createMessageUpdater(assistantMessageId, setMessages),
+        });
+        fullResponse = result.content;
 
         if (fullResponse) {
           saveMessageMutation.mutate({ role: "assistant", content: fullResponse });

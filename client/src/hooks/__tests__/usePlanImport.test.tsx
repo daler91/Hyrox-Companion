@@ -33,7 +33,7 @@ describe('usePlanImport', () => {
 
   afterEach(() => { vi.restoreAllMocks(); qc.clear(); });
 
-  const runHook = (props?: any) => renderHook(() => usePlanImport(props), { wrapper });
+  const runHook = (props?: Parameters<typeof usePlanImport>[0]) => renderHook(() => usePlanImport(props), { wrapper });
 
   describe('Initial state', () => {
     it('initializes with default values', () => {
@@ -68,30 +68,44 @@ describe('usePlanImport', () => {
   });
 
   describe('Mutations', () => {
-    const cases = [
+    type HookResult = ReturnType<typeof renderHook<ReturnType<typeof usePlanImport>, unknown>>['result'];
+    interface MutationTestCase {
+      name: string;
+      setup: (res: HookResult) => void;
+      trigger: (res: HookResult) => void;
+      method: string;
+      endpoint: string;
+      payload: Record<string, unknown>;
+      sToast: string;
+      eToast: string;
+      inv: string[][];
+      postAssert: (res: HookResult, mockFn: ReturnType<typeof vi.fn>) => void;
+    }
+
+    const cases: MutationTestCase[] = [
       {
         name: 'confirmImport',
-        setup: (res: any) => res.current.setCsvPreview({ fileName: 'plan.csv', content: 'c', rows: [] }),
-        trigger: (res: any) => res.current.confirmImport(),
+        setup: (res) => res.current.setCsvPreview({ fileName: 'plan.csv', content: 'c', rows: [] }),
+        trigger: (res) => res.current.confirmImport(),
         method: 'POST', endpoint: '/api/v1/plans/import', payload: { csvContent: 'c', fileName: 'plan.csv' },
         sToast: "Plan imported! Now set a start date.", eToast: "Failed to import plan", inv: [["/api/v1/plans"]],
-        postAssert: (res: any) => { expect(res.current.schedulingPlanId).toBe('test-plan-id'); expect(res.current.csvPreview).toBeNull(); }
+        postAssert: (res) => { expect(res.current.schedulingPlanId).toBe('test-plan-id'); expect(res.current.csvPreview).toBeNull(); }
       },
       {
         name: 'schedulePlanMutation',
-        setup: (res: any) => res.current.setSchedulingPlanId('test-plan-id'),
-        trigger: (res: any) => res.current.schedulePlanMutation.mutate({ planId: 'test-plan-id', startDate: '2023-10-01' }),
+        setup: (res) => res.current.setSchedulingPlanId('test-plan-id'),
+        trigger: (res) => res.current.schedulePlanMutation.mutate({ planId: 'test-plan-id', startDate: '2023-10-01' }),
         method: 'POST', endpoint: '/api/v1/plans/test-plan-id/schedule', payload: { startDate: '2023-10-01' },
         sToast: "Training plan scheduled!", eToast: "Failed to schedule plan", inv: [["/api/v1/timeline", 'test-plan-id'], ["/api/v1/plans"]],
-        postAssert: (res: any, mockFn: any) => { expect(mockFn).toHaveBeenCalledWith('test-plan-id'); expect(res.current.schedulingPlanId).toBeNull(); }
+        postAssert: (res, mockFn) => { expect(mockFn).toHaveBeenCalledWith('test-plan-id'); expect(res.current.schedulingPlanId).toBeNull(); }
       },
       {
-        name: 'samplePlanMutation', setup: () => {}, trigger: (res: any) => res.current.samplePlanMutation.mutate(),
+        name: 'samplePlanMutation', setup: () => {}, trigger: (res) => res.current.samplePlanMutation.mutate(),
         method: 'POST', endpoint: '/api/v1/plans/sample', payload: {},
         sToast: "Sample plan created! Now set a start date.", eToast: "Failed to create sample plan", inv: [["/api/v1/plans"]], postAssert: () => {}
       },
       {
-        name: 'renamePlanMutation', setup: () => {}, trigger: (res: any) => res.current.renamePlanMutation.mutate({ planId: 'p1', name: 'New Name' }),
+        name: 'renamePlanMutation', setup: () => {}, trigger: (res) => res.current.renamePlanMutation.mutate({ planId: 'p1', name: 'New Name' }),
         method: 'PATCH', endpoint: '/api/v1/plans/p1', payload: { name: 'New Name' },
         sToast: "Plan renamed", eToast: "Failed to rename plan", inv: [["/api/v1/plans"], ["/api/v1/timeline"]], postAssert: () => {}
       }
@@ -103,7 +117,7 @@ describe('usePlanImport', () => {
       act(() => { setup(result); }); act(() => { trigger(result); });
 
       await waitFor(() => {
-        expect(queryClientLib.apiRequest).toHaveBeenCalledWith(method, endpoint, payload);
+        expect(queryClientLib.apiRequest).toHaveBeenCalledWith(method, endpoint, payload, expect.any(AbortSignal));
         inv.forEach(k => expect(queryClientLib.queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: k }));
         expect(mockToast).toHaveBeenCalledWith({ title: sToast });
       });

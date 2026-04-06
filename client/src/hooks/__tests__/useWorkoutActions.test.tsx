@@ -101,7 +101,7 @@ describe('useWorkoutActions', () => {
           expect(queryClientLib.apiRequest).toHaveBeenCalledWith('PATCH', '/api/v1/workouts/w-1', {
             ...updates,
             exercises: undefined,
-          });
+          }, expect.any(AbortSignal));
           expect(result.current.detailEntry).toBeNull();
         });
       });
@@ -128,7 +128,7 @@ describe('useWorkoutActions', () => {
             accessory: undefined,
             notes: undefined,
             exercises: [{ exerciseName: 'run', category: 'conditioning', sets: [] }]
-          });
+          }, expect.any(AbortSignal));
           expect(result.current.detailEntry).toBeNull();
         });
       });
@@ -147,7 +147,7 @@ describe('useWorkoutActions', () => {
         });
 
         await waitFor(() => {
-          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('PATCH', '/api/v1/plans/test-plan-id/days/pd-1', updates);
+          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('PATCH', '/api/v1/plans/test-plan-id/days/pd-1', updates, expect.any(AbortSignal));
           expect(result.current.detailEntry).toBeNull();
         });
       });
@@ -170,7 +170,7 @@ describe('useWorkoutActions', () => {
             mainWorkout: 'lift',
             accessory: 'curls',
             notes: 'good',
-          });
+          }, expect.any(AbortSignal));
         });
       });
     });
@@ -189,7 +189,7 @@ describe('useWorkoutActions', () => {
         });
 
         await waitFor(() => {
-          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('PATCH', '/api/v1/plans/days/pd-1/status', { status: 'skipped' });
+          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('PATCH', '/api/v1/plans/days/pd-1/status', { status: 'skipped' }, expect.any(AbortSignal));
           expect(result.current.skipConfirmEntry).toBeNull();
         });
       });
@@ -205,7 +205,7 @@ describe('useWorkoutActions', () => {
         });
 
         await waitFor(() => {
-          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('PATCH', '/api/v1/plans/days/pd-1/status', { status: 'completed' });
+          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('PATCH', '/api/v1/plans/days/pd-1/status', { status: 'completed' }, expect.any(AbortSignal));
         });
       });
     });
@@ -220,7 +220,7 @@ describe('useWorkoutActions', () => {
         });
 
         await waitFor(() => {
-          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('DELETE', '/api/v1/workouts/w-1');
+          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('DELETE', '/api/v1/workouts/w-1', undefined, expect.any(AbortSignal));
         });
       });
 
@@ -233,7 +233,7 @@ describe('useWorkoutActions', () => {
         });
 
         await waitFor(() => {
-          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('DELETE', '/api/v1/plans/days/pd-1');
+          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('DELETE', '/api/v1/plans/days/pd-1', undefined, expect.any(AbortSignal));
         });
       });
 
@@ -246,7 +246,7 @@ describe('useWorkoutActions', () => {
         });
 
         await waitFor(() => {
-          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('DELETE', '/api/v1/plans/days/pd-1');
+          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('DELETE', '/api/v1/plans/days/pd-1', undefined, expect.any(AbortSignal));
         });
       });
     });
