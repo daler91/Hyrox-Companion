@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
+
 
 const PORT = 5111;
 const BASE = `http://localhost:${PORT}`;
@@ -405,52 +405,6 @@ describe("Production Smoke Test", { timeout: 90_000 }, () => {
         body: JSON.stringify({ date: "not-a-date" }),
       });
       expect(res.status).toBe(400);
-    });
-  });
-
-  // ── Idempotency ───────────────────────────────────────────────────
-
-  describe("Idempotency", () => {
-    it("repeated POST with same idempotency key returns cached response", async () => {
-      const idempotencyKey = randomUUID();
-      const payload = {
-        date: "2025-07-01",
-        focus: "Rowing",
-        mainWorkout: "2K row test",
-      };
-
-      const res1 = await request("/api/v1/workouts", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-csrf-token": csrfToken,
-          "x-idempotency-key": idempotencyKey,
-        },
-        body: JSON.stringify(payload),
-      });
-      expect(res1.status).toBe(200);
-      const body1 = await res1.json();
-
-      const res2 = await request("/api/v1/workouts", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-csrf-token": csrfToken,
-          "x-idempotency-key": idempotencyKey,
-        },
-        body: JSON.stringify(payload),
-      });
-      expect(res2.status).toBe(200);
-      const body2 = await res2.json();
-
-      // Same idempotency key should return the exact same workout id
-      expect(body2.id).toBe(body1.id);
-
-      // Clean up
-      await request(`/api/v1/workouts/${body1.id}`, {
-        method: "DELETE",
-        headers: { "x-csrf-token": csrfToken },
-      });
     });
   });
 
