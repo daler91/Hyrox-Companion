@@ -129,6 +129,7 @@ app.use(
         imgSrc: ["'self'", "data:", "https://img.clerk.com", "https://*.clerk.com", "https://*.strava.com"],
         connectSrc: ["'self'"],
         frameSrc: ["'self'"],
+        frameAncestors: ["'none'"],
         workerSrc: ["'self'", "blob:"],
       },
     },
@@ -150,6 +151,7 @@ app.use((_req, res, next) => {
     `img-src 'self' data: https://img.clerk.com https://*.clerk.com https://*.strava.com`,
     `connect-src ${connectSrc.join(" ")}`,
     `frame-src 'self' ${clerkDomains}`,
+    `frame-ancestors 'none'`,
     `worker-src 'self' blob:`,
   ].join("; ");
   res.setHeader("Content-Security-Policy", policy);
