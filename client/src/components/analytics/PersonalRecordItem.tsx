@@ -1,4 +1,5 @@
 import { Ruler, Timer,Weight } from "lucide-react";
+import { memo } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { categoryChipColors, categoryLabels, getExerciseLabel } from "@/lib/exerciseUtils";
@@ -24,7 +25,11 @@ function formatDate(d: string): string {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-export function PersonalRecordItem({ pr, weightLabel, dLabel }: PersonalRecordItemProps) {
+// ⚡ Perf: Memoize to prevent unnecessary re-renders when parent re-renders
+// but this item's props haven't changed. This component is rendered in two
+// .map() loops (recent PRs + all PRs) and receives only primitives and stable
+// useMemo-cached objects, making shallow comparison effective.
+export const PersonalRecordItem = memo(function PersonalRecordItem({ pr, weightLabel, dLabel }: PersonalRecordItemProps) {
   return (
     <div className="p-4 bg-card hover:bg-muted/30 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4" data-testid={`card-pr-${pr.exerciseName}`}>
       <div className="flex-1">
@@ -81,4 +86,4 @@ export function PersonalRecordItem({ pr, weightLabel, dLabel }: PersonalRecordIt
       </div>
     </div>
   );
-}
+});
