@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { FileText, Loader2, Plus, Trash2, Upload } from "lucide-react";
 
+import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { useCoachingMaterials, useDeleteCoachingMaterial } from "@/hooks/useCoachingMaterials";
 
@@ -16,9 +18,13 @@ export function CoachingMaterialList({
 }: Readonly<CoachingMaterialListProps>) {
   const { data: materials, isLoading } = useCoachingMaterials();
   const deleteMutation = useDeleteCoachingMaterial();
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
 
-  const handleDelete = (id: string) => {
-    deleteMutation.mutate(id);
+  const handleDelete = () => {
+    if (!deleteTarget) return;
+    deleteMutation.mutate(deleteTarget.id, {
+      onSuccess: () => setDeleteTarget(null),
+    });
   };
 
   if (isLoading) {
@@ -50,7 +56,7 @@ export function CoachingMaterialList({
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => handleDelete(material.id)}
+                onClick={() => setDeleteTarget({ id: material.id, title: material.title })}
                 disabled={deleteMutation.isPending}
                 aria-label={`Delete ${material.title}`}
               >
@@ -84,6 +90,17 @@ export function CoachingMaterialList({
           onChange={handleFileUpload}
         />
       </div>
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title="Delete coaching material?"
+        description={`"${deleteTarget?.title}" will be permanently removed. This cannot be undone.`}
+        confirmText="Delete"
+        onConfirm={handleDelete}
+        isPending={deleteMutation.isPending}
+        isDestructive
+      />
     </>
   );
 }
