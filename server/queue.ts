@@ -52,9 +52,14 @@ async function runBatch<T>(
   }
 }
 
+const QUEUE_START_TIMEOUT_MS = 30_000;
+
 export async function startQueue() {
   logger.info("Starting pg-boss queue...");
-  await queue.start();
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error(`pg-boss queue.start() timed out after ${QUEUE_START_TIMEOUT_MS / 1000}s — check DATABASE_URL connectivity`)), QUEUE_START_TIMEOUT_MS),
+  );
+  await Promise.race([queue.start(), timeout]);
 
   await queue.createQueue("auto-coach");
   await queue.createQueue("embed-coaching-material");
