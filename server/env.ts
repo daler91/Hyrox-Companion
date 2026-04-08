@@ -1,6 +1,7 @@
-// Earliest possible startup signal — emitted before any validation (pino logger not yet available)
-// eslint-disable-next-line no-console
-console.log(JSON.stringify({ level: "info", msg: "Process starting — validating environment...", context: "boot", pid: process.pid, timestamp: new Date().toISOString() }));
+// Earliest possible startup signal — emitted before any validation (pino logger not yet available).
+// Uses process.stderr.write (synchronous) instead of console.log to guarantee the message is
+// flushed before any crash can kill the process.
+process.stderr.write(`[env] Validating environment pid=${process.pid} at=${new Date().toISOString()}\n`);
 
 import { z } from "zod";
 

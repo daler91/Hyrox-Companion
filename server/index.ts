@@ -187,14 +187,17 @@ app.use(cookieParser());
 
 let isReady = false;
 let startupError: string | null = null;
+let startupPhase = "initializing";
+const startupBeganAt = Date.now();
 
 app.get("/api/v1/health", (_req, res) => {
+  const uptimeMs = Date.now() - startupBeganAt;
   if (startupError) {
-    res.status(503).json({ status: "error", error: "startup_error", timestamp: Date.now() });
+    res.status(503).json({ status: "error", error: "startup_error", phase: startupPhase, uptimeMs, message: startupError, timestamp: Date.now() });
   } else if (isReady) {
-    res.json({ status: "ok", timestamp: Date.now() });
+    res.json({ status: "ok", uptimeMs, timestamp: Date.now() });
   } else {
-    res.status(503).json({ status: "starting", timestamp: Date.now() });
+    res.status(503).json({ status: "starting", phase: startupPhase, uptimeMs, timestamp: Date.now() });
   }
 });
 
@@ -256,12 +259,23 @@ await new Promise<void>((resolve, reject) => {
 logger.info({ port }, `HTTP server listening on port ${port} — running startup tasks...`);
 
 try {
+  startupPhase = "db_maintenance";
+  logger.info("Startup phase: db_maintenance");
   await runStartupMaintenance(storage);
+
+  startupPhase = "queue";
+  logger.info("Startup phase: queue");
   await startQueue();
+
+  startupPhase = "cron";
+  logger.info("Startup phase: cron");
   startCron(storage);
   if (!env.RESEND_API_KEY) {
     logger.warn({ context: "email" }, "RESEND_API_KEY is not set — email delivery is disabled");
   }
+
+  startupPhase = "routes";
+  logger.info("Startup phase: routes");
   await registerRoutes(httpServer, app);
 
   // 🛡️ Sentinel: Swagger UI is restricted to development — it exposes the full API
@@ -323,11 +337,12 @@ try {
     logger.warn({ context: "ratelimit" }, "Rate limiter uses in-memory store — limits are per-instance only. Consider rate-limit-redis for multi-instance deployments.");
   }
 
+  startupPhase = "ready";
   isReady = true;
-  logger.info({ port }, `startup complete — serving on port ${port}`);
+  logger.info({ port, uptimeMs: Date.now() - startupBeganAt }, `startup complete — serving on port ${port}`);
 } catch (err) {
   startupError = err instanceof Error ? err.message : String(err);
-  logger.fatal({ err }, "Startup failed — server is running but not ready");
+  logger.fatal({ err, phase: startupPhase }, `Startup failed during phase '${startupPhase}' — server is running but not ready`);
   Sentry.captureException(err);
 }
 
@@ -365,3 +380,22 @@ const shutdown = () => {
 
 process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);
+
+// Global error handlers — catch async errors that escape startup/request handling.
+// These log the error and set startupError so the health endpoint reports it,
+// rather than silently crashing the process.
+process.on("uncaughtException", (err) => {
+  logger.fatal({ err }, "Uncaught exception in server process");
+  if (!startupError) {
+    startupError = `uncaught_exception: ${err.message}`;
+  }
+  Sentry.captureException(err);
+});
+
+process.on("unhandledRejection", (reason) => {
+  logger.fatal({ err: reason }, "Unhandled rejection in server process");
+  if (!startupError) {
+    startupError = `unhandled_rejection: ${reason instanceof Error ? reason.message : String(reason)}`;
+  }
+  Sentry.captureException(reason);
+});
