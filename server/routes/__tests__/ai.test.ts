@@ -51,6 +51,9 @@ vi.mock("../../storage", () => ({
       hasChunksForUser: vi.fn().mockResolvedValue(false),
       getStoredEmbeddingDimension: vi.fn().mockResolvedValue(3072),
     },
+    aiUsage: {
+      getDailyTotalCents: vi.fn().mockResolvedValue(0),
+    },
   },
 }));
 
@@ -116,7 +119,7 @@ describe("POST /api/parse-exercises", () => {
     expect(response.body).toEqual(mockParsedExercises);
     expect(storage.users.getUser).toHaveBeenCalledWith("test_user_id");
     expect(storage.users.getCustomExercises).toHaveBeenCalledWith("test_user_id");
-    expect(parseExercisesFromText).toHaveBeenCalledWith("Bench press 135x10", "lbs", ["Custom Squat"]);
+    expect(parseExercisesFromText).toHaveBeenCalledWith("Bench press 135x10", "lbs", ["Custom Squat"], "test_user_id");
   });
 
   it("should return 400 if text is missing", async () => {
@@ -222,7 +225,7 @@ describe("POST /api/chat", () => {
     expect(response.body.response).toBe("Coach response");
     expect(response.body.ragInfo).toBeDefined();
     expect(buildTrainingContext).toHaveBeenCalledWith("test_user_id");
-    expect(chatWithCoach).toHaveBeenCalledWith("Hello", [], MOCK_TRAINING_CONTEXT, [], undefined);
+    expect(chatWithCoach).toHaveBeenCalledWith("Hello", [], MOCK_TRAINING_CONTEXT, [], undefined, "test_user_id");
   });
 
   it("should return 400 if message is missing", async () => {
@@ -285,7 +288,7 @@ describe("POST /api/chat/stream", () => {
     expect(chunks[3]).toContain('{"done":true}');
 
     expect(buildTrainingContext).toHaveBeenCalledWith("test_user_id");
-    expect(streamChatWithCoach).toHaveBeenCalledWith("Hello stream", [], MOCK_TRAINING_CONTEXT, [], undefined, expect.any(AbortSignal));
+    expect(streamChatWithCoach).toHaveBeenCalledWith("Hello stream", [], MOCK_TRAINING_CONTEXT, [], undefined, expect.any(AbortSignal), "test_user_id");
   });
 
   it("should handle stream errors gracefully", async () => {
@@ -469,6 +472,7 @@ describe("POST /api/timeline/ai-suggestions", () => {
       expectedUpcomingWorkouts,
       undefined,
       undefined,
+      "test_user_id",
     );
   });
 
@@ -554,6 +558,7 @@ describe("RAG pipeline in chat endpoints", () => {
       MOCK_TRAINING_CONTEXT,
       undefined,
       ["chunk about squats", "chunk about programming"],
+      "test_user_id",
     );
     // Should NOT fall back to legacy materials
     expect(storage.coaching.listCoachingMaterials).not.toHaveBeenCalled();
@@ -626,6 +631,7 @@ describe("RAG pipeline in chat endpoints", () => {
       undefined,
       ["relevant chunk"],
       expect.any(AbortSignal),
+      "test_user_id",
     );
   });
 });

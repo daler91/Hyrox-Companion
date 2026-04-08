@@ -3,7 +3,7 @@ import type { GeneratePlanInput, TrainingPlanWithDays } from "@shared/schema";
 import { z } from "zod";
 
 import { AppError, ErrorCode } from "../errors";
-import { GEMINI_SUGGESTIONS_MODEL, getAiClient, retryWithBackoff } from "../gemini/client";
+import { GEMINI_SUGGESTIONS_MODEL, getAiClient, retryWithBackoff, trackUsageFromResponse } from "../gemini/client";
 import { logger } from "../logger";
 import { PLAN_GENERATION_PROMPT } from "../prompts";
 import { storage } from "../storage";
@@ -131,6 +131,8 @@ export async function generatePlan(
       }),
     "planGeneration",
   );
+
+  trackUsageFromResponse(userId, GEMINI_SUGGESTIONS_MODEL, "plan_generation", response);
 
   const text = response.text || "[]";
   const days = parseAndValidateDays(text);

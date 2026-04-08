@@ -2,6 +2,7 @@ import type { User } from "@shared/schema";
 
 import { type MissedWorkoutData,sendMissedWorkoutReminder, sendWeeklySummary, type WeeklySummaryData } from "./email";
 import { logger } from "./logger";
+import { sendPushToUser } from "./pushNotifications";
 import { queue } from "./queue";
 import { calculateStreak } from "./routeUtils";
 import type { IStorage } from "./storage";
@@ -48,9 +49,16 @@ export async function processWeeklySummary(storage: IStorage, user: User, now: D
   const success = await sendWeeklySummary(user, summaryData);
   if (success) {
     await storage.users.updateLastWeeklySummaryAt(user.id);
-    return true;
   }
-  return false;
+
+  // Also send push notification (fire-and-forget)
+  void sendPushToUser(user.id, {
+    title: "Weekly Training Summary",
+    body: `You completed ${summaryData.completedCount} workouts this week (${summaryData.completionRate}% completion rate).`,
+    url: "/analytics",
+  });
+
+  return success;
 }
 
 export async function processMissedWorkoutReminder(storage: IStorage, user: User, now: Date): Promise<boolean> {
@@ -73,9 +81,17 @@ export async function processMissedWorkoutReminder(storage: IStorage, user: User
   const success = await sendMissedWorkoutReminder(user, missedData);
   if (success) {
     await storage.users.updateLastMissedReminderAt(user.id);
-    return true;
   }
-  return false;
+
+  // Also send push notification (fire-and-forget)
+  const missedNames = missedData.map(m => m.focus).join(", ");
+  void sendPushToUser(user.id, {
+    title: "Missed Workout Reminder",
+    body: `You missed: ${missedNames}. Get back on track today!`,
+    url: "/",
+  });
+
+  return success;
 }
 
 export async function checkAndSendEmailsForUser(storage: IStorage, user: User): Promise<string[]> {

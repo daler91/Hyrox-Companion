@@ -1,8 +1,10 @@
+import { AiUsageStorage } from "./aiUsage";
 import { AnalyticsStorage } from "./analytics";
 import { CoachingStorage } from "./coaching";
 import { IdempotencyStorage } from "./idempotency";
 import type { IStorage } from "./IStorage";
 import { PlanStorage } from "./plans";
+import { PushStorage } from "./push";
 import { TimelineStorage } from "./timeline";
 import { UserStorage } from "./users";
 import { WorkoutStorage } from "./workouts";
@@ -19,4 +21,6 @@ export const storage: IStorage = {
   analytics: new AnalyticsStorage(),
   coaching: new CoachingStorage(),
   idempotency: new IdempotencyStorage(),
+  aiUsage: new AiUsageStorage(),
+  push: new PushStorage(),
 };

@@ -1,8 +1,9 @@
-import { GoogleGenAI } from "@google/genai";
+import { type GenerateContentResponse,GoogleGenAI } from "@google/genai";
 
 import { AI_CALL_TIMEOUT_MS,AI_REQUEST_TIMEOUT_MS } from "../constants";
 import { env } from "../env";
 import { logger } from "../logger";
+import { recordAiUsage } from "../services/aiUsageService";
 import {
   assertBreakerClosed,
   CircuitBreakerOpenError,
@@ -149,4 +150,39 @@ export async function generateEmbeddings(texts: string[]): Promise<number[][]> {
     }
   }
   return results;
+}
+
+// ---------------------------------------------------------------------------
+// Usage tracking helpers — fire-and-forget recording after Gemini calls
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract token counts from a Gemini response and record usage.
+ * Safe to call fire-and-forget — never throws.
+ */
+export function trackUsageFromResponse(
+  userId: string,
+  model: string,
+  feature: string,
+  response: GenerateContentResponse,
+): void {
+  const usage = response.usageMetadata;
+  const inputTokens = usage?.promptTokenCount ?? 0;
+  const outputTokens = usage?.candidatesTokenCount ?? 0;
+  // Fire-and-forget — recordAiUsage already catches internally
+  void recordAiUsage(userId, model, feature, inputTokens, outputTokens);
+}
+
+/**
+ * Record embedding usage. Embeddings have input tokens only (no output).
+ * Estimates ~6 tokens per text for the embedding model.
+ */
+export function trackEmbeddingUsage(
+  userId: string,
+  textCount: number,
+): void {
+  // Gemini embedding-001 doesn't return usageMetadata in embedContent responses.
+  // Estimate: average coaching chunk is ~600 chars ≈ ~150 tokens.
+  const estimatedTokens = textCount * 150;
+  void recordAiUsage(userId, EMBEDDING_MODEL, "embedding", estimatedTokens, 0);
 }

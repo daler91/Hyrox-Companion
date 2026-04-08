@@ -4,7 +4,7 @@ import { z } from "zod";
 import { logger } from "../logger";
 import { SUGGESTIONS_PROMPT } from "../prompts";
 import { sanitizeHtml } from "../utils/sanitize";
-import { GEMINI_SUGGESTIONS_MODEL, getAiClient, retryWithBackoff } from "./client";
+import { GEMINI_SUGGESTIONS_MODEL, getAiClient, retryWithBackoff, trackUsageFromResponse } from "./client";
 import type { TrainingContext } from "./types";
 
 
@@ -214,6 +214,7 @@ export async function generateWorkoutSuggestions(
   upcomingWorkouts: UpcomingWorkout[],
   planGoal?: string,
   coachingMaterials?: string,
+  userId?: string,
 ): Promise<WorkoutSuggestion[]> {
   try {
     if (upcomingWorkouts.length === 0) {
@@ -235,6 +236,8 @@ export async function generateWorkoutSuggestions(
         }),
       "suggestions",
     );
+
+    if (userId) trackUsageFromResponse(userId, GEMINI_SUGGESTIONS_MODEL, "suggestions", response);
 
     const text = response.text || "[]";
 

@@ -7,6 +7,7 @@ import { CoachingSection } from "@/components/settings/CoachingSection";
 import { DataToolsSection } from "@/components/settings/DataToolsSection";
 import { PreferencesSection } from "@/components/settings/PreferencesSection";
 import { ProfileSection } from "@/components/settings/ProfileSection";
+import { PushNotificationSection } from "@/components/settings/PushNotificationSection";
 import { StravaSection } from "@/components/settings/StravaSection";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -176,6 +177,8 @@ export default function Settings() {
           markChanged();
         }}
       />
+
+      <PushNotificationSection />
 
       <CoachingSection />
 

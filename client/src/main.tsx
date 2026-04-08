@@ -42,3 +42,8 @@ registerSW({
     // The app is ready to work offline
   },
 });
+
+// Register push notification service worker (separate scope from Workbox SW)
+if ("serviceWorker" in navigator) {
+  void navigator.serviceWorker.register("/sw-push.js");
+}

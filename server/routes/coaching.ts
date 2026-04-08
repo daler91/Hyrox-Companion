@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { isAuthenticated } from "../clerkAuth";
 import { logger } from "../logger";
+import { aiBudgetCheck } from "../middleware/aibudget";
 import { queue } from "../queue";
 import { asyncHandler, rateLimiter, validateBody } from "../routeUtils";
 import { getRagStatus, reembedAllMaterials } from "../services/ragService";
@@ -28,7 +29,7 @@ router.get("/api/v1/coaching-materials", isAuthenticated, asyncHandler(async (re
   }));
 
 const createMaterialSchema = insertCoachingMaterialSchema.omit({ userId: true });
-router.post("/api/v1/coaching-materials", isAuthenticated, rateLimiter("coaching", 10), validateBody(createMaterialSchema), asyncHandler(async (req: ExpressRequest, res: Response) => {
+router.post("/api/v1/coaching-materials", isAuthenticated, rateLimiter("coaching", 10), aiBudgetCheck, validateBody(createMaterialSchema), asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const body = req.body as CreateMaterialBody;
     const material = await storage.coaching.createCoachingMaterial({ ...body, userId });
@@ -61,7 +62,7 @@ router.get("/api/v1/coaching-materials/rag-status", isAuthenticated, asyncHandle
     res.json(result);
   }));
 
-router.post("/api/v1/coaching-materials/re-embed", isAuthenticated, rateLimiter("coaching", 5), asyncHandler(async (req: ExpressRequest, res: Response) => {
+router.post("/api/v1/coaching-materials/re-embed", isAuthenticated, rateLimiter("coaching", 5), aiBudgetCheck, asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const result = await reembedAllMaterials(userId);
     res.json(result);

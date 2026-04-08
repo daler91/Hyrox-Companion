@@ -6,6 +6,7 @@ import type { IStorage } from "./storage";
 
 let task: ReturnType<typeof cron.schedule> | null = null;
 let idempotencyCleanupTask: ReturnType<typeof cron.schedule> | null = null;
+let aiUsageCleanupTask: ReturnType<typeof cron.schedule> | null = null;
 
 /** Start the internal cron scheduler. Runs email checks daily at 09:00 UTC. */
 export function startCron(storage: IStorage): void {
@@ -53,6 +54,23 @@ export function startCron(storage: IStorage): void {
   );
   logger.info({ context: "cron" }, "Idempotency cleanup scheduled: daily at 03:30 UTC");
 
+  // Prune AI usage logs older than 7 days at 04:00 UTC daily.
+  aiUsageCleanupTask = cron.schedule(
+    "0 4 * * *",
+    async () => {
+      try {
+        const deleted = await storage.aiUsage.deleteExpiredLogs(7);
+        if (deleted > 0) {
+          logger.info({ context: "cron", deleted }, `AI usage cleanup: removed ${deleted} expired row(s)`);
+        }
+      } catch (err) {
+        logger.error({ context: "cron", err }, "AI usage cleanup failed");
+      }
+    },
+    { timezone: "Etc/UTC" },
+  );
+  logger.info({ context: "cron" }, "AI usage cleanup scheduled: daily at 04:00 UTC");
+
   // Run a catch-up if the server started after 09:00 UTC (e.g. Railway restart).
   // The idempotency guards in emailScheduler prevent duplicate sends.
   const currentHour = new Date().getUTCHours();
@@ -82,5 +100,9 @@ export function stopCron(): void {
   if (idempotencyCleanupTask) {
     const _stop = idempotencyCleanupTask.stop();
     idempotencyCleanupTask = null;
+  }
+  if (aiUsageCleanupTask) {
+    const _stop = aiUsageCleanupTask.stop();
+    aiUsageCleanupTask = null;
   }
 }

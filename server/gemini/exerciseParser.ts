@@ -5,7 +5,7 @@ import { AppError, ErrorCode } from "../errors";
 import { logger } from "../logger";
 import { PARSE_EXERCISES_PROMPT, VALID_CATEGORIES,VALID_EXERCISE_NAMES } from "../prompts";
 import { sanitizeHtml, sanitizeUserInput, validateAiOutput } from "../utils/sanitize";
-import { GEMINI_MODEL, getAiClient, retryWithBackoff } from "./client";
+import { GEMINI_MODEL, getAiClient, retryWithBackoff, trackUsageFromResponse } from "./client";
 
 export const parsedExerciseSchema = z.object({
   exerciseName: z.string(),
@@ -20,6 +20,7 @@ export async function parseExercisesFromText(
   text: string,
   weightUnit: string = "kg",
   customExerciseNames?: string[],
+  userId?: string,
 ): Promise<ParsedExercise[]> {
   try {
     const unitNote =
@@ -57,6 +58,8 @@ and use the matching name as customLabel: ${customExerciseNames.join(", ")}`;
         }),
       "exercise-parse",
     );
+
+    if (userId) trackUsageFromResponse(userId, GEMINI_MODEL, "parse", response);
 
     const responseText = validateAiOutput(response.text || "[]");
 
