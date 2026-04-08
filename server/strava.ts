@@ -21,9 +21,6 @@ const STRAVA_REDIRECT_URI = env.APP_URL
   ? `${env.APP_URL}/api/v1/strava/callback`
   : "http://localhost:5000/api/v1/strava/callback";
 
-if (env.NODE_ENV === "production" && !env.STRAVA_STATE_SECRET) {
-  throw new Error("STRAVA_STATE_SECRET is required in production (min 32 chars)");
-}
 const STATE_SECRET = env.STRAVA_STATE_SECRET ?? crypto.randomBytes(32).toString("hex");
 if (!env.STRAVA_STATE_SECRET) {
   logger.warn({ context: "strava" }, "STRAVA_STATE_SECRET not configured — using random secret. Strava OAuth state will not be verifiable across multiple server instances.");
