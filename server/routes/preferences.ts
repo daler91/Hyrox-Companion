@@ -2,6 +2,7 @@ import { type UpdateUserPreferences,updateUserPreferencesSchema } from "@shared/
 import { type Request as ExpressRequest, type Response,Router } from "express";
 
 import { isAuthenticated } from "../clerkAuth";
+import { protectedMutationGuards } from "../routeGuards";
 import { asyncHandler, formatValidationErrors,rateLimiter } from "../routeUtils";
 import { storage } from "../storage";
 import { getUserId } from "../types";
@@ -23,7 +24,7 @@ router.get('/api/v1/preferences', isAuthenticated, asyncHandler(async (req: Expr
     });
   }));
 
-router.patch('/api/v1/preferences', isAuthenticated, rateLimiter("preferences", 20), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, UpdateUserPreferences>, res: Response) => {
+router.patch('/api/v1/preferences', ...protectedMutationGuards, rateLimiter("preferences", 20), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, UpdateUserPreferences>, res: Response) => {
     const userId = getUserId(req);
     const parseResult = updateUserPreferencesSchema.safeParse(req.body);
     if (!parseResult.success) {

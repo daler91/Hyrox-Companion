@@ -2,7 +2,7 @@ import { getAuth } from "@clerk/express";
 import type { NextFunction,Request, Response } from "express";
 import { afterEach,beforeEach, describe, expect, it, vi } from "vitest";
 
-import { isAuthenticated } from "./clerkAuth";
+import { clearUserSeenCache, isAuthenticated } from "./clerkAuth";
 import { storage } from "./storage";
 
 vi.mock("@clerk/express", () => ({
@@ -33,6 +33,7 @@ describe("isAuthenticated middleware", () => {
     req = { headers: {}, path: "/test" } as Request;
     res = { status: vi.fn().mockReturnThis(), json: vi.fn() } as unknown as Response;
     next = vi.fn() as unknown as NextFunction;
+    clearUserSeenCache();
     vi.clearAllMocks();
   });
 

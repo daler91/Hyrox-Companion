@@ -21,7 +21,10 @@ const STRAVA_REDIRECT_URI = env.APP_URL
   ? `${env.APP_URL}/api/v1/strava/callback`
   : "http://localhost:5000/api/v1/strava/callback";
 
-const STATE_SECRET = env.STRAVA_STATE_SECRET || crypto.randomBytes(32).toString("hex");
+if (env.NODE_ENV === "production" && !env.STRAVA_STATE_SECRET) {
+  throw new Error("STRAVA_STATE_SECRET is required in production (min 32 chars)");
+}
+const STATE_SECRET = env.STRAVA_STATE_SECRET ?? crypto.randomBytes(32).toString("hex");
 if (!env.STRAVA_STATE_SECRET) {
   logger.warn({ context: "strava" }, "STRAVA_STATE_SECRET not configured — using random secret. Strava OAuth state will not be verifiable across multiple server instances.");
 }
@@ -213,17 +216,24 @@ async function handleStravaCallback(req: Request, res: Response) {
   }
 
   try {
-    const tokenResponse = await fetch("https://www.strava.com/oauth/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        client_id: STRAVA_CLIENT_ID,
-        client_secret: STRAVA_CLIENT_SECRET,
-        code,
-        grant_type: "authorization_code",
-      }),
-      signal: AbortSignal.timeout(EXTERNAL_API_TIMEOUT_MS),
-    });
+    const tokenResponse = await retryWithJitter(async () => {
+      const r = await fetch("https://www.strava.com/oauth/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          client_id: STRAVA_CLIENT_ID,
+          client_secret: STRAVA_CLIENT_SECRET,
+          code,
+          grant_type: "authorization_code",
+        }),
+        signal: AbortSignal.timeout(EXTERNAL_API_TIMEOUT_MS),
+      });
+
+      if (r.status === 429 || r.status >= 500) {
+        throw new RetryableHttpError(r.status, parseRetryAfter(r.headers.get("retry-after")));
+      }
+      return r;
+    }, { label: "strava.oauthToken", retries: 3 });
 
     if (!tokenResponse.ok) {
       (req.log || logger).error({ err: await tokenResponse.text() }, "Token exchange failed:");

@@ -4,7 +4,6 @@ import type { Express } from "express";
 
 import { setupAuth } from "./clerkAuth";
 import { csrfProtection, csrfTokenHandler } from "./middleware/csrf";
-import { idempotencyMiddleware } from "./middleware/idempotency";
 import aiRoutes from "./routes/ai";
 import analyticsRoutes from "./routes/analytics";
 import authRoutes from "./routes/auth";
@@ -30,15 +29,6 @@ export async function registerRoutes(
   // matching x-csrf-token header. Safe methods pass through via the
   // middleware's built-in ignoredMethods list.
   app.use("/api/v1", csrfProtection);
-
-  // Server-side idempotency enforcement (CODEBASE_AUDIT.md §2). Mounted
-  // app-wide on /api/v1 so every mutating endpoint honors the
-  // `X-Idempotency-Key` header the client's offline queue already sends.
-  // The middleware is a no-op when the header is absent or the method is
-  // safe, so safe requests pay no extra cost.
-  app.use("/api/v1", (req, res, next) => {
-    void idempotencyMiddleware(req, res, next);
-  });
 
   registerStravaRoutes(app);
 

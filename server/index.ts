@@ -86,8 +86,9 @@ const allowedOrigins = new Set([
 
 app.use(cors({
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-    // Allow same-origin requests (no Origin header) and allowed origins
-    if (!origin || allowedOrigins.has(origin)) {
+    // Allow same-origin requests (no Origin header) only in non-production;
+    // in production, require an explicit allowed origin.
+    if ((!origin && isDev) || (origin && allowedOrigins.has(origin))) {
       callback(null, true);
     } else {
       callback(new Error("Not allowed by CORS"));
@@ -234,16 +235,7 @@ app.use((req, _res, next) => {
   runWithRequestContext(ctx, () => next());
 });
 
-// Listen early so the health endpoint is reachable during startup (unblocks CI wait-on)
 const port = Number.parseInt(env.PORT || "5000", 10);
-await new Promise<void>((resolve, reject) => {
-  httpServer.once("error", reject);
-  httpServer.listen({ port, host: "0.0.0.0" }, () => {
-    httpServer.removeListener("error", reject);
-    logger.info({ port }, `listening on port ${port} (startup in progress...)`);
-    resolve();
-  });
-});
 
 try {
   await runStartupMaintenance(storage);
@@ -308,6 +300,18 @@ try {
     const { setupVite } = await import("./vite");
     await setupVite(httpServer, app);
   }
+
+  if (env.NODE_ENV === "production") {
+    logger.warn({ context: "ratelimit" }, "Rate limiter uses in-memory store — limits are per-instance only. Consider rate-limit-redis for multi-instance deployments.");
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    httpServer.once("error", reject);
+    httpServer.listen({ port, host: "0.0.0.0" }, () => {
+      httpServer.removeListener("error", reject);
+      resolve();
+    });
+  });
 
   isReady = true;
   logger.info({ port }, `startup complete — serving on port ${port}`);
