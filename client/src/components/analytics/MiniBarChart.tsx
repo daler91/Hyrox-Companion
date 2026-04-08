@@ -1,3 +1,4 @@
+import { memo } from "react";
 import {
   Bar,
   BarChart,
@@ -44,7 +45,9 @@ function BarChartTooltip({ active, payload, chartLabel }: Readonly<{ active?: bo
   );
 }
 
-export function MiniBarChart({
+// ⚡ React.memo prevents expensive Recharts re-renders when parent
+// re-renders but chart props (data, color, label, etc.) haven't changed.
+export const MiniBarChart = memo(function MiniBarChart({
   data,
   valueKey,
   color,
@@ -111,6 +114,6 @@ export function MiniBarChart({
       </div>
     </div>
   );
-}
+});
 
 export type { ExerciseAnalyticDay };
