@@ -31,8 +31,8 @@ export const DEFAULT_PAGE_LIMIT = 50;
 /** Hard maximum for pagination limit to prevent unbounded reads */
 export const MAX_PAGE_LIMIT = 200;
 
-/** Main DB connection timeout */
-export const DB_CONNECTION_TIMEOUT_MS = 5_000;
+/** Main DB connection timeout (10s to handle cold-start and cross-region latency) */
+export const DB_CONNECTION_TIMEOUT_MS = 10_000;
 
 /** Vector/RAG DB connection timeout */
 export const VECTOR_DB_CONNECTION_TIMEOUT_MS = 10_000;

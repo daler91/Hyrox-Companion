@@ -94,21 +94,34 @@ async function ensureVectorSchema() {
   }
 }
 
+const DB_CONNECT_MAX_RETRIES = 4;
+const DB_CONNECT_BASE_DELAY_MS = 2_000;
+
 async function testDatabaseConnection() {
   logger.info({ context: "db" }, "Testing database connection...");
-  const timeout = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error("Database connection timed out after 15s — check DATABASE_URL and network connectivity")), 15000),
-  );
-  let client;
-  try {
-    client = await Promise.race([pool.connect(), timeout]);
-    await client.query("SELECT 1 as ok");
-    logger.info({ context: "db" }, "Database connection successful");
-  } catch (error) {
-    logger.fatal({ context: "db", err: error }, "Cannot connect to database — app cannot start");
-    throw error;
-  } finally {
-    if (client) client.release();
+
+  for (let attempt = 1; attempt <= DB_CONNECT_MAX_RETRIES; attempt++) {
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Database connection timed out after 15s — check DATABASE_URL and network connectivity")), 15000),
+    );
+    let client;
+    try {
+      client = await Promise.race([pool.connect(), timeout]);
+      await client.query("SELECT 1 as ok");
+      logger.info({ context: "db" }, "Database connection successful");
+      return;
+    } catch (error) {
+      if (attempt < DB_CONNECT_MAX_RETRIES) {
+        const delay = DB_CONNECT_BASE_DELAY_MS * 2 ** (attempt - 1);
+        logger.warn({ context: "db", attempt, maxRetries: DB_CONNECT_MAX_RETRIES, retryInMs: delay, err: error }, "Database connection failed, retrying...");
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      } else {
+        logger.fatal({ context: "db", err: error }, "Cannot connect to database after all retries — app cannot start");
+        throw error;
+      }
+    } finally {
+      if (client) client.release();
+    }
   }
 }
 

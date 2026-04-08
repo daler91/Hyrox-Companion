@@ -189,8 +189,10 @@ let startupError: string | null = null;
 app.get("/api/v1/health", (_req, res) => {
   if (startupError) {
     res.status(503).json({ status: "error", error: "startup_error", timestamp: Date.now() });
+  } else if (!isReady) {
+    res.status(503).json({ status: "starting", timestamp: Date.now() });
   } else {
-    res.json({ status: isReady ? "ok" : "starting", timestamp: Date.now() });
+    res.json({ status: "ok", timestamp: Date.now() });
   }
 });
 
@@ -236,6 +238,20 @@ app.use((req, _res, next) => {
 });
 
 const port = Number.parseInt(env.PORT || "5000", 10);
+
+// Bind the HTTP server before running startup tasks so the health endpoint
+// is always reachable by the platform healthcheck (e.g. Railway). Without
+// this, a startup failure (DB unreachable, migration error, etc.) would
+// prevent the server from ever listening, causing "service unavailable"
+// instead of a clear 503 from the health endpoint.
+await new Promise<void>((resolve, reject) => {
+  httpServer.once("error", reject);
+  httpServer.listen({ port, host: "0.0.0.0" }, () => {
+    httpServer.removeListener("error", reject);
+    resolve();
+  });
+});
+logger.info({ port }, `HTTP server listening on port ${port} — running startup tasks...`);
 
 try {
   await runStartupMaintenance(storage);
@@ -304,14 +320,6 @@ try {
   if (env.NODE_ENV === "production") {
     logger.warn({ context: "ratelimit" }, "Rate limiter uses in-memory store — limits are per-instance only. Consider rate-limit-redis for multi-instance deployments.");
   }
-
-  await new Promise<void>((resolve, reject) => {
-    httpServer.once("error", reject);
-    httpServer.listen({ port, host: "0.0.0.0" }, () => {
-      httpServer.removeListener("error", reject);
-      resolve();
-    });
-  });
 
   isReady = true;
   logger.info({ port }, `startup complete — serving on port ${port}`);
