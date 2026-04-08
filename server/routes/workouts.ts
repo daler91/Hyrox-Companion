@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { isAuthenticated } from "../clerkAuth";
 import { DEFAULT_PAGE_LIMIT, DEFAULT_TIMELINE_LIMIT, MAX_PAGE_LIMIT } from "../constants";
+import { protectedMutationGuards } from "../routeGuards";
 import { asyncHandler, rateLimiter, validateBody } from "../routeUtils";
 import { generateCSV, generateJSON } from "../services/exportService";
 import { batchReparseWorkouts,reparseWorkout } from "../services/workoutService";
@@ -38,7 +39,7 @@ router.get("/api/v1/workouts/unstructured", isAuthenticated, asyncHandler(async 
     res.json(workouts);
   }));
 
-router.post("/api/v1/workouts/:id/reparse", isAuthenticated, rateLimiter("reparse", 5), asyncHandler(async (req: Request<{ id: string }>, res: Response) => {
+router.post("/api/v1/workouts/:id/reparse", ...protectedMutationGuards, rateLimiter("reparse", 5), asyncHandler(async (req: Request<{ id: string }>, res: Response) => {
     const userId = getUserId(req);
     const workoutId = req.params.id;
     // ⚡ Perf: Parallelize independent DB queries — getWorkoutLog and getUser
@@ -59,7 +60,7 @@ router.post("/api/v1/workouts/:id/reparse", isAuthenticated, rateLimiter("repars
   }));
 
 
-router.post("/api/v1/workouts/batch-reparse", isAuthenticated, rateLimiter("batchReparse", 2), asyncHandler(async (req: Request, res: Response) => {
+router.post("/api/v1/workouts/batch-reparse", ...protectedMutationGuards, rateLimiter("batchReparse", 2), asyncHandler(async (req: Request, res: Response) => {
     const userId = getUserId(req);
     const { total, parsed, failed } = await batchReparseWorkouts(userId);
     res.json({ total, parsed, failed });
@@ -71,7 +72,7 @@ router.get("/api/v1/custom-exercises", isAuthenticated, asyncHandler(async (req:
     res.json(exercises);
   }));
 
-router.post("/api/v1/custom-exercises", isAuthenticated, rateLimiter("customExercise", 20), validateBody(createCustomExerciseSchema), asyncHandler(async (req: Request<Record<string, never>, Record<string, never>, CreateCustomExercisePayload>, res: Response) => {
+router.post("/api/v1/custom-exercises", ...protectedMutationGuards, rateLimiter("customExercise", 20), validateBody(createCustomExerciseSchema), asyncHandler(async (req: Request<Record<string, never>, Record<string, never>, CreateCustomExercisePayload>, res: Response) => {
     const userId = getUserId(req);
     const { name, category } = req.body;
     const exercise = await storage.users.upsertCustomExercise({
@@ -104,13 +105,13 @@ router.get("/api/v1/workouts/:id", isAuthenticated, asyncHandler(async (req: Req
     res.json(log);
   }));
 
-router.post("/api/v1/workouts", isAuthenticated, rateLimiter("workout", 40), validateBody(createWorkoutRouteSchema), asyncHandler(async (req: Request<Record<string, never>, Record<string, never>, CreateWorkoutRoutePayload>, res: Response) => {
+router.post("/api/v1/workouts", ...protectedMutationGuards, rateLimiter("workout", 40), validateBody(createWorkoutRouteSchema), asyncHandler(async (req: Request<Record<string, never>, Record<string, never>, CreateWorkoutRoutePayload>, res: Response) => {
     const userId = getUserId(req);
     const result = await createWorkout({ userId, payload: req.body });
     res.json(result);
   }));
 
-router.patch("/api/v1/workouts/:id", isAuthenticated, rateLimiter("workout", 40), validateBody(updateWorkoutRouteSchema), asyncHandler(async (req: Request<{ id: string }, Record<string, never>, UpdateWorkoutRoutePayload>, res: Response) => {
+router.patch("/api/v1/workouts/:id", ...protectedMutationGuards, rateLimiter("workout", 40), validateBody(updateWorkoutRouteSchema), asyncHandler(async (req: Request<{ id: string }, Record<string, never>, UpdateWorkoutRoutePayload>, res: Response) => {
     const userId = getUserId(req);
     const result = await updateWorkoutUseCase({ userId, workoutId: req.params.id, payload: req.body });
     if (!result) {
@@ -120,7 +121,7 @@ router.patch("/api/v1/workouts/:id", isAuthenticated, rateLimiter("workout", 40)
     res.json(result);
   }));
 
-router.delete("/api/v1/workouts/:id", isAuthenticated, rateLimiter("workout", 40), asyncHandler(async (req: Request<{ id: string }>, res: Response) => {
+router.delete("/api/v1/workouts/:id", ...protectedMutationGuards, rateLimiter("workout", 40), asyncHandler(async (req: Request<{ id: string }>, res: Response) => {
     const userId = getUserId(req);
     await storage.workouts.deleteExerciseSetsByWorkoutLog(req.params.id, userId);
     const deleted = await storage.workouts.deleteWorkoutLog(req.params.id, userId);

@@ -100,18 +100,32 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
   return res.status(401).json({ error: "Unauthorized", code: "UNAUTHORIZED" });
 };
 
+const userSeenCache = new Map<string, number>();
+const USER_SEEN_TTL_MS = 5 * 60_000; // 5 minutes
+
+// Exported for testing only — clears the user-seen cache so each test starts fresh.
+export function clearUserSeenCache() {
+  userSeenCache.clear();
+}
+
 async function ensureUserExists(clerkUserId: string): Promise<void> {
+  const now = Date.now();
+  const seenAt = userSeenCache.get(clerkUserId);
+  if (seenAt && now - seenAt < USER_SEEN_TTL_MS) return;
+
   const existing = await storage.users.getUser(clerkUserId);
-  if (existing) return;
+  if (!existing) {
+    const clerkUser = await clerkClient.users.getUser(clerkUserId);
+    const email = clerkUser.emailAddresses?.[0]?.emailAddress || null;
 
-  const clerkUser = await clerkClient.users.getUser(clerkUserId);
-  const email = clerkUser.emailAddresses?.[0]?.emailAddress || null;
+    await storage.users.upsertUser({
+      id: clerkUserId,
+      email,
+      firstName: clerkUser.firstName,
+      lastName: clerkUser.lastName,
+      profileImageUrl: clerkUser.imageUrl,
+    });
+  }
 
-  await storage.users.upsertUser({
-    id: clerkUserId,
-    email,
-    firstName: clerkUser.firstName,
-    lastName: clerkUser.lastName,
-    profileImageUrl: clerkUser.imageUrl,
-  });
+  userSeenCache.set(clerkUserId, now);
 }

@@ -19,7 +19,7 @@ const envSchema = z.object({
   CRON_SECRET: z.string().optional(),
   STRAVA_CLIENT_ID: z.string().optional(),
   STRAVA_CLIENT_SECRET: z.string().optional(),
-  STRAVA_STATE_SECRET: z.string().optional(),
+  STRAVA_STATE_SECRET: z.string().min(32).optional(),
   APP_URL: z.string().url().optional(),
   VECTOR_DATABASE_URL: z.string().url().optional(),
   ALLOWED_ORIGINS: z.string().optional(),

@@ -157,8 +157,17 @@ const TOP_K = 6; // Number of chunks to retrieve
 // (e.g. rapid chat messages or bulk workout creation). Invalidated per-user
 // whenever new coaching material is embedded.
 const RAG_CACHE_TTL_MS = 120_000;
+const MAX_RAG_CACHE_ENTRIES = 2_000;
 type CachedRagResult = { chunks: string[]; at: number };
 const ragCache = new Map<string, CachedRagResult>();
+
+function setRagCache(key: string, chunks: string[]) {
+  if (ragCache.size >= MAX_RAG_CACHE_ENTRIES) {
+    const oldestKey = ragCache.keys().next().value;
+    if (oldestKey) ragCache.delete(oldestKey);
+  }
+  ragCache.set(key, { chunks, at: Date.now() });
+}
 
 function ragCacheKey(userId: string, query: string, topK: number): string {
   return `${userId}::${topK}::${query}`;
@@ -197,7 +206,7 @@ export async function retrieveRelevantChunks(
   const chunks = await storage.coaching.searchChunksByEmbedding(userId, queryEmbedding, topK);
   logger.info({ userId, found: chunks.length }, "[rag] Search returned chunks");
   const content = chunks.map((c) => c.content);
-  ragCache.set(key, { chunks: content, at: Date.now() });
+  setRagCache(key, content);
   return content;
 }
 

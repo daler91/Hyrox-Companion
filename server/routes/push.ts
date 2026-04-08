@@ -4,6 +4,7 @@ import { z } from "zod";
 import { isAuthenticated } from "../clerkAuth";
 import { env } from "../env";
 import { isPushEnabled, sendPushToUser } from "../pushNotifications";
+import { protectedMutationGuards } from "../routeGuards";
 import { asyncHandler, rateLimiter, validateBody } from "../routeUtils";
 import { storage } from "../storage";
 import { getUserId } from "../types";
@@ -26,7 +27,7 @@ router.get("/api/v1/push/vapid-key", isAuthenticated, (_req: ExpressRequest, res
   res.json({ publicKey: env.VAPID_PUBLIC_KEY });
 });
 
-router.post("/api/v1/push/subscribe", isAuthenticated, rateLimiter("push", 10), validateBody(subscribeSchema), asyncHandler(async (req: ExpressRequest, res: Response) => {
+router.post("/api/v1/push/subscribe", ...protectedMutationGuards, rateLimiter("push", 10), validateBody(subscribeSchema), asyncHandler(async (req: ExpressRequest, res: Response) => {
   const userId = getUserId(req);
   const { endpoint, keys } = req.body as z.infer<typeof subscribeSchema>;
   await storage.push.saveSubscription(userId, {
@@ -37,14 +38,14 @@ router.post("/api/v1/push/subscribe", isAuthenticated, rateLimiter("push", 10), 
   res.json({ success: true });
 }));
 
-router.delete("/api/v1/push/unsubscribe", isAuthenticated, rateLimiter("push", 10), validateBody(z.object({ endpoint: z.string().url() })), asyncHandler(async (req: ExpressRequest, res: Response) => {
+router.delete("/api/v1/push/unsubscribe", ...protectedMutationGuards, rateLimiter("push", 10), validateBody(z.object({ endpoint: z.string().url() })), asyncHandler(async (req: ExpressRequest, res: Response) => {
   const userId = getUserId(req);
   const { endpoint } = req.body as { endpoint: string };
   await storage.push.removeSubscription(userId, endpoint);
   res.json({ success: true });
 }));
 
-router.post("/api/v1/push/test", isAuthenticated, rateLimiter("push", 5), asyncHandler(async (req: ExpressRequest, res: Response) => {
+router.post("/api/v1/push/test", ...protectedMutationGuards, rateLimiter("push", 5), asyncHandler(async (req: ExpressRequest, res: Response) => {
   const userId = getUserId(req);
   const sent = await sendPushToUser(userId, {
     title: "Test Notification",

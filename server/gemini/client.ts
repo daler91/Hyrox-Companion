@@ -1,3 +1,5 @@
+import { randomInt } from "node:crypto";
+
 import { type GenerateContentResponse,GoogleGenAI } from "@google/genai";
 
 import { AI_CALL_TIMEOUT_MS,AI_REQUEST_TIMEOUT_MS } from "../constants";
@@ -59,7 +61,9 @@ export function isRetryableError(error: unknown): boolean {
 
 function shouldRetry(error: unknown, attempt: number, maxRetries: number, baseDelayMs: number, deadline: number): number | false {
   if (attempt >= maxRetries || !isRetryableError(error)) return false;
-  const delay = baseDelayMs * Math.pow(2, attempt);
+  const base = baseDelayMs * Math.pow(2, attempt);
+  const jitter = randomInt(0, Math.max(1, Math.min(250, Math.ceil(base * 0.1))));
+  const delay = base + jitter;
   if (Date.now() + delay >= deadline) return false;
   return delay;
 }

@@ -6,6 +6,7 @@ import { isAuthenticated } from "../clerkAuth";
 import { chatWithCoach, parseExercisesFromText,streamChatWithCoach } from "../gemini/index";
 import { logger } from "../logger";
 import { aiBudgetCheck } from "../middleware/aibudget";
+import { protectedMutationGuards } from "../routeGuards";
 import { asyncHandler, rateLimiter, validateBody } from "../routeUtils";
 import { type AIContext, buildAIContext, type ChatInput } from "../services/aiContextService";
 import { generateTimelineAiSuggestions } from "../services/aiSuggestionService";
@@ -15,7 +16,7 @@ import { getUserId } from "../types";
 
 const router = Router();
 
-router.post("/api/v1/parse-exercises", isAuthenticated, rateLimiter("parse", 5), aiBudgetCheck, validateBody(parseExercisesRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof parseExercisesRequestSchema>>, res: Response) => {
+router.post("/api/v1/parse-exercises", ...protectedMutationGuards, rateLimiter("parse", 5), aiBudgetCheck, validateBody(parseExercisesRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof parseExercisesRequestSchema>>, res: Response) => {
     const { text } = req.body;
     const userId = getUserId(req);
     // ⚡ Perf: Parallelize independent DB queries to cut latency from
@@ -41,14 +42,14 @@ async function prepareChatContext(
   return { input: { message, history: history || [] }, aiContext };
 }
 
-router.post("/api/v1/chat", isAuthenticated, rateLimiter("chat", 10), aiBudgetCheck, validateBody(chatRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof chatRequestSchema>>, res: Response) => {
+router.post("/api/v1/chat", ...protectedMutationGuards, rateLimiter("chat", 10), aiBudgetCheck, validateBody(chatRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof chatRequestSchema>>, res: Response) => {
     const userId = getUserId(req);
     const { input, aiContext } = await prepareChatContext(req);
     const response = await chatWithCoach(input.message, input.history, aiContext.trainingContext, aiContext.coachingMaterials, aiContext.retrievedChunks, userId);
     res.json({ response, ragInfo: sanitizeRagInfo(aiContext.ragInfo) });
   }));
 
-router.post("/api/v1/chat/stream", isAuthenticated, rateLimiter("chat", 10), aiBudgetCheck, validateBody(chatRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof chatRequestSchema>>, res: Response) => {
+router.post("/api/v1/chat/stream", ...protectedMutationGuards, rateLimiter("chat", 10), aiBudgetCheck, validateBody(chatRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof chatRequestSchema>>, res: Response) => {
     const userId = getUserId(req);
     const { input, aiContext } = await prepareChatContext(req);
 
@@ -94,7 +95,7 @@ router.get("/api/v1/chat/history", isAuthenticated, asyncHandler(async (req: Exp
     res.json(messages);
   }));
 
-router.post("/api/v1/chat/message", isAuthenticated, rateLimiter("chatMessage", 20), validateBody(insertChatMessageSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, InsertChatMessage>, res: Response) => {
+router.post("/api/v1/chat/message", ...protectedMutationGuards, rateLimiter("chatMessage", 20), validateBody(insertChatMessageSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, InsertChatMessage>, res: Response) => {
     const userId = getUserId(req);
     const { role, content } = req.body;
 
@@ -102,13 +103,13 @@ router.post("/api/v1/chat/message", isAuthenticated, rateLimiter("chatMessage", 
     res.json(message);
   }));
 
-router.delete("/api/v1/chat/history", isAuthenticated, rateLimiter("chatHistoryDelete", 5), asyncHandler(async (req: ExpressRequest, res: Response) => {
+router.delete("/api/v1/chat/history", ...protectedMutationGuards, rateLimiter("chatHistoryDelete", 5), asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     await storage.users.clearChatHistory(userId);
     res.json({ success: true });
   }));
 
-router.post("/api/v1/timeline/ai-suggestions", isAuthenticated, rateLimiter("suggestions", 3), aiBudgetCheck, asyncHandler(async (req: ExpressRequest, res: Response) => {
+router.post("/api/v1/timeline/ai-suggestions", ...protectedMutationGuards, rateLimiter("suggestions", 3), aiBudgetCheck, asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const result = await generateTimelineAiSuggestions(userId, req.log || logger);
     res.json(result);
