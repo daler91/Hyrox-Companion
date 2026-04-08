@@ -69,6 +69,24 @@ app.use(compression());
 
 const isDev = env.NODE_ENV !== "production";
 
+// Health endpoint — registered BEFORE CORS so platform healthchecks
+// (server-to-server requests with no Origin header) always work.
+let isReady = false;
+let startupError: string | null = null;
+let startupPhase = "initializing";
+const startupBeganAt = Date.now();
+
+app.get("/api/v1/health", (_req, res) => {
+  const uptimeMs = Date.now() - startupBeganAt;
+  if (startupError) {
+    res.status(503).json({ status: "error", error: "startup_error", phase: startupPhase, uptimeMs, message: startupError, timestamp: Date.now() });
+  } else if (isReady) {
+    res.json({ status: "ok", uptimeMs, timestamp: Date.now() });
+  } else {
+    res.status(503).json({ status: "starting", phase: startupPhase, uptimeMs, timestamp: Date.now() });
+  }
+});
+
 // CORS — restrict cross-origin API access to known origins
 const defaultOrigins = [
   env.APP_URL,
@@ -184,24 +202,6 @@ app.use(express.urlencoded({ extended: false, limit: "100kb" })); // 🛡️ Sen
 // Cookie parser is required by the CSRF double-submit middleware mounted
 // in registerRoutes(); it must run before any route that reads cookies.
 app.use(cookieParser());
-
-let isReady = false;
-let startupError: string | null = null;
-let startupPhase = "initializing";
-const startupBeganAt = Date.now();
-
-app.get("/api/v1/health", (_req, res) => {
-  const uptimeMs = Date.now() - startupBeganAt;
-  if (startupError) {
-    res.status(503).json({ status: "error", error: "startup_error", phase: startupPhase, uptimeMs, message: startupError, timestamp: Date.now() });
-  } else if (isReady) {
-    res.json({ status: "ok", uptimeMs, timestamp: Date.now() });
-  } else {
-    res.status(503).json({ status: "starting", phase: startupPhase, uptimeMs, timestamp: Date.now() });
-  }
-});
-
-
 
 app.use(pinoHttp({
   logger,
