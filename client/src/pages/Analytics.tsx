@@ -32,7 +32,7 @@ export default function Analytics() {
         </div>
 
         <Select value={dateRange} onValueChange={setDateRange}>
-          <SelectTrigger className="w-36" data-testid="select-date-range">
+          <SelectTrigger className="w-36" data-testid="select-date-range" aria-label="Select date range">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

@@ -78,7 +78,7 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
 
       {/* Right Column */}
       <div className="md:col-span-7 lg:col-span-8 space-y-4 min-w-0">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2" role="group" aria-label="Workout input mode">
           <Button
             variant={useTextMode ? "outline" : "default"}
             size="sm"
@@ -86,6 +86,7 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
               stopAllVoice();
               setUseTextMode(false);
             }}
+            aria-pressed={!useTextMode}
             data-testid="button-mode-exercises"
           >
             <Dumbbell className="h-4 w-4 mr-1" />
@@ -98,6 +99,7 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
               stopAllVoice();
               setUseTextMode(true);
             }}
+            aria-pressed={useTextMode}
             data-testid="button-mode-freetext"
           >
             <Type className="h-4 w-4 mr-1" />

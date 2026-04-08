@@ -21,7 +21,7 @@ export const WorkoutModeSelector = ({
   stopListening,
 }: Readonly<WorkoutModeSelectorProps>) => {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2" role="group" aria-label="Workout input mode">
       <Button
         variant={useTextMode ? "outline" : "default"}
         size="sm"
@@ -29,6 +29,7 @@ export const WorkoutModeSelector = ({
           if (isListening) stopListening();
           setUseTextMode(false);
         }}
+        aria-pressed={!useTextMode}
         data-testid="button-mode-exercises"
       >
         <Dumbbell className="h-4 w-4 mr-1" />
@@ -41,6 +42,7 @@ export const WorkoutModeSelector = ({
           if (isListening) stopListening();
           setUseTextMode(true);
         }}
+        aria-pressed={useTextMode}
         data-testid="button-mode-freetext"
       >
         <Type className="h-4 w-4 mr-1" />
