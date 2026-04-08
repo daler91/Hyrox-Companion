@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { isAuthenticated } from "../clerkAuth";
 import { logger } from "../logger";
+import { aiBudgetCheck } from "../middleware/aibudget";
 import { asyncHandler, rateLimiter, validateBody } from "../routeUtils";
 import { generatePlan } from "../services/planGenerationService";
 import { createSamplePlan, importPlanFromCSV, updatePlanDayStatus,updatePlanDayWithCleanup } from "../services/planService";
@@ -71,7 +72,7 @@ router.post("/api/v1/plans/sample", isAuthenticated, rateLimiter("planSample", 5
     res.json(fullPlan);
   }));
 
-router.post("/api/v1/plans/generate", isAuthenticated, rateLimiter("planGenerate", 3), validateBody(generatePlanInputSchema), asyncHandler(async (req: ExpressRequest, res: Response) => {
+router.post("/api/v1/plans/generate", isAuthenticated, rateLimiter("planGenerate", 3), aiBudgetCheck, validateBody(generatePlanInputSchema), asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     try {
       const fullPlan = await generatePlan(req.body as GeneratePlanInput, userId);

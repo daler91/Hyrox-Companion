@@ -57,6 +57,7 @@ export async function generateTimelineAiSuggestions(
     upcomingWorkouts,
     undefined,
     coachingMaterials,
+    userId,
   );
 
   const workoutMap = new Map(upcomingWorkouts.map((w) => [w.id, w]));

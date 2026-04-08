@@ -12,6 +12,7 @@ import coachingRoutes from "./routes/coaching";
 import emailRoutes from "./routes/email";
 import planRoutes from "./routes/plans";
 import preferencesRoutes from "./routes/preferences";
+import pushRoutes from "./routes/push";
 import workoutRoutes from "./routes/workouts";
 import { registerStravaRoutes } from "./strava";
 
@@ -49,6 +50,7 @@ export async function registerRoutes(
   app.use(workoutRoutes);
   app.use(planRoutes);
   app.use(coachingRoutes);
+  app.use(pushRoutes);
 
   return httpServer;
 }

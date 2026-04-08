@@ -6,7 +6,7 @@ import { AppError, ErrorCode } from "../errors";
 import { logger } from "../logger";
 import { buildSystemPrompt, type CoachingMaterialInput } from "../prompts";
 import { sanitizeUserInput, validateAiOutput } from "../utils/sanitize";
-import { GEMINI_SUGGESTIONS_MODEL, getAiClient, withTimeout } from "./client";
+import { GEMINI_SUGGESTIONS_MODEL, getAiClient, trackUsageFromResponse, withTimeout } from "./client";
 import type { TrainingContext } from "./types";
 
 export async function chatWithCoach(
@@ -15,6 +15,7 @@ export async function chatWithCoach(
   trainingContext?: TrainingContext,
   coachingMaterials?: CoachingMaterialInput[],
   retrievedChunks?: string[],
+  userId?: string,
 ): Promise<string> {
   try {
     const messages = conversationHistory.map((msg) => ({
@@ -42,6 +43,8 @@ export async function chatWithCoach(
       "chat",
     );
 
+    if (userId) trackUsageFromResponse(userId, GEMINI_SUGGESTIONS_MODEL, "chat", response);
+
     const textOutput = response.text || "I apologize, but I couldn't generate a response. Please try again.";
     return validateAiOutput(textOutput);
   } catch (error) {
@@ -57,6 +60,7 @@ export async function* streamChatWithCoach(
   coachingMaterials?: CoachingMaterialInput[],
   retrievedChunks?: string[],
   signal?: AbortSignal,
+  userId?: string,
 ): AsyncGenerator<string> {
   try {
     const messages = conversationHistory.map((msg) => ({
@@ -91,12 +95,18 @@ export async function* streamChatWithCoach(
       "chat-stream",
     );
 
+    let lastChunk: GenerateContentResponse | undefined;
     for await (const chunk of stream) {
       if (signal?.aborted) return;
+      lastChunk = chunk;
       const text = chunk.text;
       if (text) {
         yield validateAiOutput(text);
       }
+    }
+    // Track usage from the final chunk (contains aggregate usageMetadata)
+    if (userId && lastChunk) {
+      trackUsageFromResponse(userId, GEMINI_SUGGESTIONS_MODEL, "chat_stream", lastChunk);
     }
   } catch (error) {
     logger.error({ err: error }, "Gemini streaming API error:");

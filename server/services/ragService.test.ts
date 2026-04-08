@@ -7,6 +7,7 @@ import { chunkText, embedCoachingMaterial, retrieveRelevantChunks } from "./ragS
 vi.mock("../gemini/client", () => ({
   generateEmbedding: vi.fn(),
   generateEmbeddings: vi.fn(),
+  trackEmbeddingUsage: vi.fn(),
 }));
 
 vi.mock("../storage", () => ({

@@ -25,6 +25,9 @@ vi.mock("../storage", () => ({
       getStoredEmbeddingDimension: vi.fn(),
       listCoachingMaterials: vi.fn(),
     },
+    aiUsage: {
+      getDailyTotalCents: vi.fn().mockResolvedValue(0),
+    },
   },
 }));
 

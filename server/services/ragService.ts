@@ -2,7 +2,7 @@ import type { CoachingMaterial } from "@shared/schema";
 import pLimit from "p-limit";
 
 import { env } from "../env";
-import { EMBEDDING_DIMENSIONS,generateEmbedding, generateEmbeddings } from "../gemini/client";
+import { EMBEDDING_DIMENSIONS,generateEmbedding, generateEmbeddings, trackEmbeddingUsage } from "../gemini/client";
 import { logger } from "../logger";
 import { storage } from "../storage";
 
@@ -114,6 +114,7 @@ export async function embedCoachingMaterial(material: CoachingMaterial): Promise
     );
 
     const embeddings = await generateEmbeddings(textsToEmbed);
+    trackEmbeddingUsage(material.userId, textsToEmbed.length);
 
     // Replace old chunks with new ones transactionally, so a failure
     // doesn't leave the material with zero chunks or in an inconsistent state.
@@ -191,6 +192,7 @@ export async function retrieveRelevantChunks(
   }
 
   const queryEmbedding = await generateEmbedding(query);
+  trackEmbeddingUsage(userId, 1);
   logger.info({ userId, queryDim: queryEmbedding.length, topK }, "[rag] Searching chunks by embedding");
   const chunks = await storage.coaching.searchChunksByEmbedding(userId, queryEmbedding, topK);
   logger.info({ userId, found: chunks.length }, "[rag] Search returned chunks");

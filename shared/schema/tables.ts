@@ -215,6 +215,35 @@ export const documentChunks = pgTable("document_chunks", {
   index("idx_document_chunks_user_id").on(table.userId),
 ]);
 
+// AI usage tracking — records token consumption per user per Gemini call so
+// daily spend can be capped (e.g. $2/day) and anomalies flagged.
+export const aiUsageLogs = pgTable("ai_usage_logs", {
+  id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 255 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  model: varchar("model", { length: 100 }).notNull(),
+  feature: varchar("feature", { length: 50 }).notNull(),
+  inputTokens: integer("input_tokens").notNull().default(0),
+  outputTokens: integer("output_tokens").notNull().default(0),
+  estimatedCostCents: real("estimated_cost_cents").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  index("idx_ai_usage_logs_user_created").on(table.userId, table.createdAt),
+]);
+
+// Push notification subscriptions — stores Web Push API subscription objects
+// so the server can send push notifications to opted-in browsers/devices.
+export const pushSubscriptions = pgTable("push_subscriptions", {
+  id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 255 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  endpoint: text("endpoint").notNull(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_push_subscriptions_user_id").on(table.userId),
+  uniqueIndex("idx_push_subscriptions_user_endpoint").on(table.userId, table.endpoint),
+]);
+
 // ---------------------------------------------------------------------------
 // Drizzle relations — enables `db.query.<table>.findMany({ with: { ... } })`
 // for type-safe nested queries in the storage layer.
@@ -231,6 +260,8 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   chatMessages: many(chatMessages),
   coachingMaterials: many(coachingMaterials),
   documentChunks: many(documentChunks),
+  aiUsageLogs: many(aiUsageLogs),
+  pushSubscriptions: many(pushSubscriptions),
 }));
 
 export const trainingPlansRelations = relations(trainingPlans, ({ one, many }) => ({
@@ -309,6 +340,20 @@ export const documentChunksRelations = relations(documentChunks, ({ one }) => ({
   }),
   user: one(users, {
     fields: [documentChunks.userId],
+    references: [users.id],
+  }),
+}));
+
+export const aiUsageLogsRelations = relations(aiUsageLogs, ({ one }) => ({
+  user: one(users, {
+    fields: [aiUsageLogs.userId],
+    references: [users.id],
+  }),
+}));
+
+export const pushSubscriptionsRelations = relations(pushSubscriptions, ({ one }) => ({
+  user: one(users, {
+    fields: [pushSubscriptions.userId],
     references: [users.id],
   }),
 }));

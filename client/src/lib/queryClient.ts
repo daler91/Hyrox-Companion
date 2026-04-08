@@ -10,6 +10,18 @@ export class RateLimitError extends Error {
   }
 }
 
+export class AiBudgetExceededError extends Error {
+  readonly currentCostCents: number;
+  readonly limitCents: number;
+
+  constructor(message: string, currentCostCents: number, limitCents: number) {
+    super(message);
+    this.name = "AiBudgetExceededError";
+    this.currentCostCents = currentCostCents;
+    this.limitCents = limitCents;
+  }
+}
+
 // CSRF token cache — the server issues a token via GET /api/v1/csrf-token
 // paired with a signed cookie. We fetch once, reuse, and refetch on 403 so
 // the first mutation after login (which rebinds the session id) recovers
@@ -47,6 +59,21 @@ async function throwIfResNotOk(res: Response) {
     const text = (await res.text()) || res.statusText;
 
     if (res.status === 429) {
+      // Distinguish AI budget exceeded from regular rate limiting
+      try {
+        const body = JSON.parse(text) as { code?: string; currentCostCents?: number; limitCents?: number };
+        if (body.code === "AI_BUDGET_EXCEEDED") {
+          throw new AiBudgetExceededError(
+            "Daily AI usage limit reached. Your limit resets on a rolling 24-hour basis.",
+            body.currentCostCents ?? 0,
+            body.limitCents ?? 200,
+          );
+        }
+      } catch (e) {
+        if (e instanceof AiBudgetExceededError) throw e;
+        // Not JSON or not budget error — fall through to regular rate limit
+      }
+
       const retryAfterRaw = res.headers.get("Retry-After");
       const retryAfter = retryAfterRaw ? Number.parseInt(retryAfterRaw, 10) : null;
       throw new RateLimitError(

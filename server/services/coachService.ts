@@ -1,5 +1,6 @@
 import { generateWorkoutSuggestions, type UpcomingWorkout, type WorkoutSuggestion } from "../gemini/index";
 import { logger } from "../logger";
+import { checkAiBudget } from "./aiUsageService";
 import { storage } from "../storage";
 import { toDateStr } from "../types";
 import { buildTrainingContext } from "./ai";
@@ -85,6 +86,14 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
       return { adjusted: 0 };
     }
 
+    // Skip if user is over AI budget — background jobs should not exceed the cap
+    const budget = await checkAiBudget(userId);
+    if (!budget.allowed) {
+      logger.info({ userId }, "[coach] Skipping auto-coach — user AI budget exceeded");
+      await storage.users.updateIsAutoCoaching(userId, false);
+      return { adjusted: 0 };
+    }
+
     await storage.users.updateIsAutoCoaching(userId, true);
 
     try {
@@ -132,6 +141,7 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
         upcomingWorkouts,
         activePlanGoal,
         coachingContext.text,
+        userId,
       );
 
       const results = await Promise.all(

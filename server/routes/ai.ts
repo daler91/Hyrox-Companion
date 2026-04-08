@@ -5,6 +5,7 @@ import { z } from "zod";
 import { isAuthenticated } from "../clerkAuth";
 import { chatWithCoach, parseExercisesFromText,streamChatWithCoach } from "../gemini/index";
 import { logger } from "../logger";
+import { aiBudgetCheck } from "../middleware/aibudget";
 import { asyncHandler, rateLimiter, validateBody } from "../routeUtils";
 import { type AIContext, buildAIContext, type ChatInput } from "../services/aiContextService";
 import { generateTimelineAiSuggestions } from "../services/aiSuggestionService";
@@ -14,7 +15,7 @@ import { getUserId } from "../types";
 
 const router = Router();
 
-router.post("/api/v1/parse-exercises", isAuthenticated, rateLimiter("parse", 5), validateBody(parseExercisesRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof parseExercisesRequestSchema>>, res: Response) => {
+router.post("/api/v1/parse-exercises", isAuthenticated, rateLimiter("parse", 5), aiBudgetCheck, validateBody(parseExercisesRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof parseExercisesRequestSchema>>, res: Response) => {
     const { text } = req.body;
     const userId = getUserId(req);
     // ⚡ Perf: Parallelize independent DB queries to cut latency from
@@ -25,7 +26,7 @@ router.post("/api/v1/parse-exercises", isAuthenticated, rateLimiter("parse", 5),
     ]);
     const weightUnit = user?.weightUnit || "kg";
     const customNames = userCustomExercises.map(e => e.name);
-    const exercises = await parseExercisesFromText(text.trim(), weightUnit, customNames);
+    const exercises = await parseExercisesFromText(text.trim(), weightUnit, customNames, userId);
     res.json(exercises);
   }));
 
@@ -40,13 +41,15 @@ async function prepareChatContext(
   return { input: { message, history: history || [] }, aiContext };
 }
 
-router.post("/api/v1/chat", isAuthenticated, rateLimiter("chat", 10), validateBody(chatRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof chatRequestSchema>>, res: Response) => {
+router.post("/api/v1/chat", isAuthenticated, rateLimiter("chat", 10), aiBudgetCheck, validateBody(chatRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof chatRequestSchema>>, res: Response) => {
+    const userId = getUserId(req);
     const { input, aiContext } = await prepareChatContext(req);
-    const response = await chatWithCoach(input.message, input.history, aiContext.trainingContext, aiContext.coachingMaterials, aiContext.retrievedChunks);
+    const response = await chatWithCoach(input.message, input.history, aiContext.trainingContext, aiContext.coachingMaterials, aiContext.retrievedChunks, userId);
     res.json({ response, ragInfo: sanitizeRagInfo(aiContext.ragInfo) });
   }));
 
-router.post("/api/v1/chat/stream", isAuthenticated, rateLimiter("chat", 10), validateBody(chatRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof chatRequestSchema>>, res: Response) => {
+router.post("/api/v1/chat/stream", isAuthenticated, rateLimiter("chat", 10), aiBudgetCheck, validateBody(chatRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof chatRequestSchema>>, res: Response) => {
+    const userId = getUserId(req);
     const { input, aiContext } = await prepareChatContext(req);
 
     res.setHeader("Content-Type", "text/event-stream");
@@ -63,7 +66,7 @@ router.post("/api/v1/chat/stream", isAuthenticated, rateLimiter("chat", 10), val
     try {
       res.write(`data: ${JSON.stringify({ ragInfo: sanitizeRagInfo(aiContext.ragInfo) })}\n\n`);
 
-      const stream = streamChatWithCoach(input.message, input.history, aiContext.trainingContext, aiContext.coachingMaterials, aiContext.retrievedChunks, controller.signal);
+      const stream = streamChatWithCoach(input.message, input.history, aiContext.trainingContext, aiContext.coachingMaterials, aiContext.retrievedChunks, controller.signal, userId);
 
       for await (const chunk of stream) {
         if (controller.signal.aborted) {
@@ -105,7 +108,7 @@ router.delete("/api/v1/chat/history", isAuthenticated, rateLimiter("chatHistoryD
     res.json({ success: true });
   }));
 
-router.post("/api/v1/timeline/ai-suggestions", isAuthenticated, rateLimiter("suggestions", 3), asyncHandler(async (req: ExpressRequest, res: Response) => {
+router.post("/api/v1/timeline/ai-suggestions", isAuthenticated, rateLimiter("suggestions", 3), aiBudgetCheck, asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const result = await generateTimelineAiSuggestions(userId, req.log || logger);
     res.json(result);
