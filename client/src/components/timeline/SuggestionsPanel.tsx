@@ -8,6 +8,12 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 import type { WorkoutSuggestion } from "./types";
 
@@ -40,6 +46,7 @@ export default function SuggestionsPanel({
 
   return (
     <Collapsible open={isOpen} onOpenChange={onOpenChange}>
+      <TooltipProvider>
       <Card className="border-primary/20 bg-primary/5">
         <CardHeader className="pb-2">
           <CollapsibleTrigger asChild>
@@ -71,16 +78,20 @@ export default function SuggestionsPanel({
                     <span className="text-sm font-medium">{suggestion.workoutFocus}</span>
                     <span className="text-xs text-muted-foreground">{suggestion.workoutDate}</span>
                   </div>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => onDismiss(suggestion.workoutId)}
-                    data-testid={`dismiss-suggestion-${suggestion.workoutId}`}
-                    aria-label="Dismiss suggestion"
-                    title="Dismiss suggestion"
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => onDismiss(suggestion.workoutId)}
+                        data-testid={`dismiss-suggestion-${suggestion.workoutId}`}
+                        aria-label="Dismiss suggestion"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Dismiss suggestion</TooltipContent>
+                  </Tooltip>
                 </div>
                 <p className="text-sm mb-2">{suggestion.recommendation}</p>
                 <p className="text-xs text-muted-foreground mb-3">{suggestion.rationale}</p>
@@ -96,6 +107,7 @@ export default function SuggestionsPanel({
           </CardContent>
         </CollapsibleContent>
       </Card>
+      </TooltipProvider>
     </Collapsible>
   );
 }
