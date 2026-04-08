@@ -4,11 +4,11 @@ import { apiRequest } from "@/lib/queryClient";
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const rawData = window.atob(base64);
+  const base64 = (base64String + padding).replaceAll("-", "+").replaceAll("_", "/");
+  const rawData = globalThis.atob(base64);
   const outputArray = new Uint8Array(rawData.length);
   for (let i = 0; i < rawData.length; i++) {
-    outputArray[i] = rawData.charCodeAt(i);
+    outputArray[i] = rawData.codePointAt(i) ?? 0;
   }
   return outputArray;
 }
@@ -22,15 +22,15 @@ export function usePushNotifications() {
   useEffect(() => {
     const supported =
       "serviceWorker" in navigator &&
-      "PushManager" in window &&
-      "Notification" in window;
+      "PushManager" in globalThis &&
+      "Notification" in globalThis;
     setIsSupported(supported);
 
     if (supported) {
       setPermission(Notification.permission);
       // Check if already subscribed
-      navigator.serviceWorker.ready.then((reg) => {
-        reg.pushManager.getSubscription().then((sub) => {
+      void navigator.serviceWorker.ready.then((reg) => {
+        void reg.pushManager.getSubscription().then((sub) => {
           setIsSubscribed(sub !== null);
         });
       });

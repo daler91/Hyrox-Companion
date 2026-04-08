@@ -35,24 +35,28 @@ export function PushNotificationSection() {
     );
   }
 
-  const handleToggle = async (checked: boolean) => {
-    if (checked) {
-      const success = await subscribe();
-      if (success) {
-        toast({ title: "Push notifications enabled" });
-      } else if (permission === "denied") {
-        toast({
-          title: "Notifications blocked",
-          description: "Please allow notifications in your browser settings.",
-          variant: "destructive",
-        });
-      }
-    } else {
-      const success = await unsubscribe();
-      if (success) {
-        toast({ title: "Push notifications disabled" });
-      }
+  const handleSubscribe = async () => {
+    const success = await subscribe();
+    if (success) {
+      toast({ title: "Push notifications enabled" });
+    } else if (permission === "denied") {
+      toast({
+        title: "Notifications blocked",
+        description: "Please allow notifications in your browser settings.",
+        variant: "destructive",
+      });
     }
+  };
+
+  const handleUnsubscribe = async () => {
+    const success = await unsubscribe();
+    if (success) {
+      toast({ title: "Push notifications disabled" });
+    }
+  };
+
+  const handleToggle = (checked: boolean) => {
+    void (checked ? handleSubscribe() : handleUnsubscribe());
   };
 
   const handleTest = async () => {

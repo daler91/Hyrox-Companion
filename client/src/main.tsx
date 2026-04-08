@@ -45,7 +45,5 @@ registerSW({
 
 // Register push notification service worker (separate scope from Workbox SW)
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("/sw-push.js").catch(() => {
-    // Push SW registration failed — push notifications won't work but app continues
-  });
+  void navigator.serviceWorker.register("/sw-push.js");
 }

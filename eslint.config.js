@@ -18,6 +18,7 @@ export default tseslint.config(
       "attached_assets/**",
       "vitest.setup.ts",
       "cypress/**",
+      "client/public/**",
     ],
   },
 

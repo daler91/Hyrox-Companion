@@ -1,9 +1,9 @@
 import { generateWorkoutSuggestions, type UpcomingWorkout, type WorkoutSuggestion } from "../gemini/index";
 import { logger } from "../logger";
-import { checkAiBudget } from "./aiUsageService";
 import { storage } from "../storage";
 import { toDateStr } from "../types";
 import { buildTrainingContext } from "./ai";
+import { checkAiBudget } from "./aiUsageService";
 import { retrieveCoachingText } from "./ragRetrieval";
 
 // ---------------------------------------------------------------------------

@@ -1,6 +1,5 @@
-import { and, eq } from "drizzle-orm";
-
 import { pushSubscriptions, users } from "@shared/schema";
+import { and, eq } from "drizzle-orm";
 
 import { db } from "../db";
 

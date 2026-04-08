@@ -5,8 +5,8 @@ import { storage } from "../storage";
 // Per-model pricing (USD per 1 million tokens). Update when Google changes.
 // ---------------------------------------------------------------------------
 const MODEL_PRICING: Record<string, { inputPerM: number; outputPerM: number }> = {
-  "gemini-2.5-flash-lite": { inputPerM: 0.075, outputPerM: 0.30 },
-  "gemini-3.1-pro-preview": { inputPerM: 1.25, outputPerM: 10.0 },
+  "gemini-2.5-flash-lite": { inputPerM: 0.075, outputPerM: 0.3 },
+  "gemini-3.1-pro-preview": { inputPerM: 1.25, outputPerM: 10 },
   "gemini-embedding-001":   { inputPerM: 0.01, outputPerM: 0 },
 };
 

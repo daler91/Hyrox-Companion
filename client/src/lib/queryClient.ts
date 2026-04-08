@@ -54,25 +54,29 @@ export function resetCsrfToken(): void {
   csrfTokenPromise = null;
 }
 
+function tryParseAiBudgetError(text: string): AiBudgetExceededError | null {
+  try {
+    const body = JSON.parse(text) as { code?: string; currentCostCents?: number; limitCents?: number };
+    if (body.code === "AI_BUDGET_EXCEEDED") {
+      return new AiBudgetExceededError(
+        "Daily AI usage limit reached. Your limit resets on a rolling 24-hour basis.",
+        body.currentCostCents ?? 0,
+        body.limitCents ?? 200,
+      );
+    }
+  } catch {
+    // Not JSON — fall through
+  }
+  return null;
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
 
     if (res.status === 429) {
-      // Distinguish AI budget exceeded from regular rate limiting
-      try {
-        const body = JSON.parse(text) as { code?: string; currentCostCents?: number; limitCents?: number };
-        if (body.code === "AI_BUDGET_EXCEEDED") {
-          throw new AiBudgetExceededError(
-            "Daily AI usage limit reached. Your limit resets on a rolling 24-hour basis.",
-            body.currentCostCents ?? 0,
-            body.limitCents ?? 200,
-          );
-        }
-      } catch (e) {
-        if (e instanceof AiBudgetExceededError) throw e;
-        // Not JSON or not budget error — fall through to regular rate limit
-      }
+      const budgetError = tryParseAiBudgetError(text);
+      if (budgetError) throw budgetError;
 
       const retryAfterRaw = res.headers.get("Retry-After");
       const retryAfter = retryAfterRaw ? Number.parseInt(retryAfterRaw, 10) : null;
