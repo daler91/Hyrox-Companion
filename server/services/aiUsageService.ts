@@ -11,7 +11,7 @@ const MODEL_PRICING: Record<string, { inputPerM: number; outputPerM: number }> =
 };
 
 // Fallback for unknown models — use the most expensive rate to be safe
-const DEFAULT_PRICING = { inputPerM: 1.25, outputPerM: 10.0 };
+const DEFAULT_PRICING = { inputPerM: 1.25, outputPerM: 10 };
 
 /** Daily AI spend hard cap in cents. */
 export const DAILY_LIMIT_CENTS = 200; // $2.00
