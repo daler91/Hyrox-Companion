@@ -189,10 +189,10 @@ let startupError: string | null = null;
 app.get("/api/v1/health", (_req, res) => {
   if (startupError) {
     res.status(503).json({ status: "error", error: "startup_error", timestamp: Date.now() });
-  } else if (!isReady) {
-    res.status(503).json({ status: "starting", timestamp: Date.now() });
-  } else {
+  } else if (isReady) {
     res.json({ status: "ok", timestamp: Date.now() });
+  } else {
+    res.status(503).json({ status: "starting", timestamp: Date.now() });
   }
 });
 
