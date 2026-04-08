@@ -3,7 +3,7 @@ builder = "nixpacks"
 buildCommand = "pnpm install --frozen-lockfile && pnpm run build"
 
 [deploy]
-startCommand = "bash -c 'echo \"[railway-boot] pwd=$(pwd) node=$(which node 2>&1) node_version=$(node --version 2>&1) ls_dist=$(ls -la dist/index.js 2>&1) ls_start=$(ls -la script/start.js 2>&1)\" >&2; exec node script/start.js'"
+startCommand = "node script/start.js"
 healthcheckPath = "/api/v1/health"
 healthcheckTimeout = 120
 restartPolicyType = "on_failure"
