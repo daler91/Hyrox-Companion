@@ -31,6 +31,7 @@ export const WorkoutModeSelector = ({
           setUseTextMode(false);
         }}
         data-testid="button-mode-exercises"
+        aria-pressed={!useTextMode}
       >
         <Dumbbell className="h-4 w-4 mr-1" />
         Exercises
@@ -43,6 +44,7 @@ export const WorkoutModeSelector = ({
           setUseTextMode(true);
         }}
         data-testid="button-mode-freetext"
+        aria-pressed={useTextMode}
       >
         <Type className="h-4 w-4 mr-1" />
         Free Text
