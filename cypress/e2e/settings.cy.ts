@@ -39,8 +39,8 @@ describe("Settings Page", () => {
       cy.getBySel("button-find-unstructured").should("exist");
     });
 
-    it("shows save button disabled when no changes", () => {
-      cy.getBySel("button-save-settings").should("be.disabled");
+    it("hides save button when no changes", () => {
+      cy.getBySel("button-save-settings").should("not.exist");
     });
   });
 

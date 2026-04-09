@@ -306,7 +306,7 @@ export default function Timeline() {
         isAutoCoaching={!!user?.isAutoCoaching}
       />
 
-          {!detailEntry && <FloatingActionButton coachPanelOpen={coachOpen} onCoachToggle={() => setCoachOpen(!coachOpen)} />}
+          <FloatingActionButton coachPanelOpen={coachOpen} onCoachToggle={() => setCoachOpen(!coachOpen)} />
 
           <SchedulePlanDialog
             open={!!schedulingPlanId}
