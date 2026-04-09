@@ -1,8 +1,17 @@
-import { Dumbbell, Mic,Type } from "lucide-react";
-import React from "react";
+import { Dumbbell, Type } from "lucide-react";
+import React, { useCallback, useState } from "react";
 
-import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface WorkoutModeSelectorProps {
   useTextMode: boolean;
@@ -11,61 +20,85 @@ interface WorkoutModeSelectorProps {
   isSupported: boolean;
   startListening: () => void;
   stopListening: () => void;
+  hasData?: boolean;
 }
 
 export const WorkoutModeSelector = ({
   useTextMode,
   setUseTextMode,
   isListening,
-  isSupported,
-  startListening,
   stopListening,
+  hasData,
 }: Readonly<WorkoutModeSelectorProps>) => {
+  const [pendingMode, setPendingMode] = useState<boolean | null>(null);
+
+  const switchMode = useCallback(
+    (toTextMode: boolean) => {
+      if (isListening) stopListening();
+      setUseTextMode(toTextMode);
+    },
+    [isListening, stopListening, setUseTextMode],
+  );
+
+  const handleModeChange = useCallback(
+    (value: string) => {
+      const toTextMode = value === "text";
+      if (toTextMode === useTextMode) return;
+
+      if (hasData) {
+        setPendingMode(toTextMode);
+      } else {
+        switchMode(toTextMode);
+      }
+    },
+    [useTextMode, hasData, switchMode],
+  );
+
+  const confirmSwitch = useCallback(() => {
+    if (pendingMode !== null) {
+      switchMode(pendingMode);
+      setPendingMode(null);
+    }
+  }, [pendingMode, switchMode]);
+
   return (
-    <div className="flex items-center gap-2">
-      <Button
-        variant={useTextMode ? "outline" : "default"}
-        size="sm"
-        onClick={() => {
-          if (isListening) stopListening();
-          setUseTextMode(false);
-        }}
-        data-testid="button-mode-exercises"
+    <>
+      <Tabs
+        value={useTextMode ? "text" : "exercises"}
+        onValueChange={handleModeChange}
       >
-        <Dumbbell className="h-4 w-4 mr-1" />
-        Exercises
-      </Button>
-      <Button
-        variant={useTextMode ? "default" : "outline"}
-        size="sm"
-        onClick={() => {
-          if (isListening) stopListening();
-          setUseTextMode(true);
-        }}
-        data-testid="button-mode-freetext"
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="exercises" data-testid="button-mode-exercises">
+            <Dumbbell className="h-4 w-4 mr-2" />
+            Exercises
+          </TabsTrigger>
+          <TabsTrigger value="text" data-testid="button-mode-freetext">
+            <Type className="h-4 w-4 mr-2" />
+            Free Text
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      <AlertDialog
+        open={pendingMode !== null}
+        onOpenChange={(open) => !open && setPendingMode(null)}
       >
-        <Type className="h-4 w-4 mr-1" />
-        Free Text
-      </Button>
-      {isSupported && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                if (!useTextMode) setUseTextMode(true);
-                if (!isListening) startListening();
-              }}
-              data-testid="button-mode-voice"
-            >
-              <Mic className="h-4 w-4 mr-1" />
-              Voice
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Use voice input</TooltipContent>
-        </Tooltip>
-      )}
-    </div>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Switch input mode?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have data entered in the current mode. Switching will not
+              carry it over to the other mode.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmSwitch}>
+              Switch anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 };

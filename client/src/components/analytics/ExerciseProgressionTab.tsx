@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { TrendingUp } from "lucide-react";
+import { Activity, TrendingUp } from "lucide-react";
 import { useMemo,useState } from "react";
 
 import { ExerciseProgressionCharts } from "@/components/analytics/ExerciseProgressionCharts";
@@ -55,6 +55,13 @@ export function ExerciseProgressionTab({ dateParams }: ExerciseProgressionTabPro
         </CardDescription>
       </CardHeader>
       <CardContent>
+        {availableExercises.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground" data-testid="text-no-progression">
+            <Activity className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
+            <p className="text-sm">No exercise data yet. Log workouts with structured exercises to track your progression over time.</p>
+          </div>
+        ) : (
+        <>
         <div className="mb-6">
           <Select value={selectedExercise || undefined} onValueChange={setSelectedExercise}>
             <SelectTrigger data-testid="select-exercise-progression" aria-label="Select an exercise to view progression">
@@ -77,6 +84,8 @@ export function ExerciseProgressionTab({ dateParams }: ExerciseProgressionTabPro
           weightLabel={weightLabel}
           dLabel={dLabel}
         />
+        </>
+        )}
       </CardContent>
     </Card>
   );

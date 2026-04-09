@@ -1,6 +1,6 @@
 import { useMutation,useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 
 import { CoachingSection } from "@/components/settings/CoachingSection";
@@ -105,7 +105,17 @@ export default function Settings() {
     },
   });
 
-  const handleSave = () => {
+  // Warn user before leaving with unsaved changes
+  useEffect(() => {
+    if (!hasChanges) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    globalThis.window.addEventListener("beforeunload", handler);
+    return () => globalThis.window.removeEventListener("beforeunload", handler);
+  }, [hasChanges]);
+
+  const handleSave = useCallback(() => {
     saveMutation.mutate({
       weightUnit,
       distanceUnit,
@@ -113,7 +123,7 @@ export default function Settings() {
       emailNotifications,
       aiCoachEnabled,
     });
-  };
+  }, [saveMutation, weightUnit, distanceUnit, weeklyGoal, emailNotifications, aiCoachEnabled]);
 
   const markChanged = () => setHasChanges(true);
 
@@ -184,21 +194,25 @@ export default function Settings() {
 
       <DataToolsSection />
 
-      <Button
-        onClick={handleSave}
-        className="w-full"
-        data-testid="button-save-settings"
-        disabled={!hasChanges || saveMutation.isPending}
-      >
-        {saveMutation.isPending ? (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin mr-2" />
-            Saving...
-          </>
-        ) : (
-          "Save Settings"
-        )}
-      </Button>
+      {hasChanges && (
+        <div className="sticky bottom-0 -mx-4 md:-mx-8 px-4 md:px-8 py-3 border-t bg-background/95 backdrop-blur z-40">
+          <Button
+            onClick={handleSave}
+            className="w-full"
+            data-testid="button-save-settings"
+            disabled={saveMutation.isPending}
+          >
+            {saveMutation.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                Saving...
+              </>
+            ) : (
+              "Save Settings"
+            )}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

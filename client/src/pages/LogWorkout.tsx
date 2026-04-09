@@ -69,6 +69,10 @@ export default function LogWorkout() {
     toggleListening: toggleNotesListening,
   } = notesVoiceInput;
 
+  const hasData = useTextMode
+    ? freeText.trim().length > 0
+    : exerciseBlocks.length > 0;
+
   return (
     <div className="container max-w-5xl mx-auto p-4 pb-20 md:pb-8 pt-4 md:pt-8 min-h-screen">
       <WorkoutHeader />
@@ -108,6 +112,7 @@ export default function LogWorkout() {
             isSupported={isSupported}
             startListening={startListening}
             stopListening={stopListening}
+            hasData={hasData}
           />
 
           {useTextMode ? (
