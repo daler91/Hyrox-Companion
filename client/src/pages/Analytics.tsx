@@ -1,13 +1,19 @@
 import { useQuery } from "@tanstack/react-query";
 import { format, subDays } from "date-fns";
-import { Activity, BarChart3, PieChart,Trophy } from "lucide-react";
-import { useMemo,useState } from "react";
+import { Activity, BarChart3, PieChart, Trophy } from "lucide-react";
+import { useMemo, useState } from "react";
 
 import { CategoryBreakdownTab } from "@/components/analytics/CategoryBreakdownTab";
 import { ExerciseProgressionTab } from "@/components/analytics/ExerciseProgressionTab";
 import { PersonalRecordsTab } from "@/components/analytics/PersonalRecordsTab";
 import { TrainingOverviewTab } from "@/components/analytics/TrainingOverviewTab";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { QUERY_KEYS } from "@/lib/api";
 
@@ -28,12 +34,20 @@ export default function Analytics() {
     <div className="max-w-4xl mx-auto p-4 md:p-6 space-y-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold" data-testid="text-analytics-title">Analytics</h1>
-          <p className="text-muted-foreground">Training overview, progression, and personal records</p>
+          <h1 className="text-2xl font-bold" data-testid="text-analytics-title">
+            Analytics
+          </h1>
+          <p className="text-muted-foreground">
+            Training overview, progression, and personal records
+          </p>
         </div>
 
         <Select value={dateRange} onValueChange={setDateRange}>
-          <SelectTrigger className="w-36" data-testid="select-date-range">
+          <SelectTrigger
+            className="w-36"
+            data-testid="select-date-range"
+            aria-label="Select date range"
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

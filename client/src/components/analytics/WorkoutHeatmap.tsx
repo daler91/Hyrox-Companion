@@ -76,10 +76,18 @@ export function WorkoutHeatmap({ workoutDates }: WorkoutHeatmapProps) {
     return { grid: weeks, monthLabels: months };
   }, [workoutDates]);
 
+  const workoutCount = workoutDates.length;
+
   return (
-    <div className={CHART_CARD_CLASS}>
-      <p className="text-sm font-semibold">Workout Consistency</p>
-      <div className="overflow-x-auto">
+    <div className={CHART_CARD_CLASS} role="region" aria-label="Workout consistency heatmap">
+      <p className="text-sm font-semibold" id="heatmap-title">
+        Workout Consistency
+      </p>
+      <p className="sr-only">
+        {workoutCount} {workoutCount === 1 ? "workout" : "workouts"} logged in the last{" "}
+        {WEEKS_TO_SHOW} weeks.
+      </p>
+      <div className="overflow-x-auto" aria-hidden="true">
         <div className="min-w-[400px]">
           {/* Month labels */}
           <div className="flex ml-8 mb-1 text-[10px] text-muted-foreground">
@@ -115,7 +123,10 @@ export function WorkoutHeatmap({ workoutDates }: WorkoutHeatmapProps) {
               {/* Day labels */}
               <div className="flex flex-col gap-[2px] mr-1 shrink-0">
                 {DAY_LABELS.map((day) => (
-                  <div key={day.key} className="h-[14px] w-6 text-[10px] text-muted-foreground flex items-center justify-end pr-1">
+                  <div
+                    key={day.key}
+                    className="h-[14px] w-6 text-[10px] text-muted-foreground flex items-center justify-end pr-1"
+                  >
                     {day.label}
                   </div>
                 ))}
