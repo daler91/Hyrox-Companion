@@ -93,23 +93,25 @@ const defaultOrigins = [
   "https://fitai.coach",
 ].filter(Boolean) as string[];
 
-const configuredOrigins = env.ALLOWED_ORIGINS
+const extraOrigins = env.ALLOWED_ORIGINS
   ? env.ALLOWED_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean)
-  : defaultOrigins;
+  : [];
 
 const allowedOrigins = new Set([
-  ...configuredOrigins,
+  ...defaultOrigins,
+  ...extraOrigins,
   ...(isDev ? ["http://localhost:5000", "http://localhost:5173"] : []),
 ]);
 
 app.use(cors({
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-    // Allow same-origin requests (no Origin header) only in non-production;
-    // in production, require an explicit allowed origin.
-    if ((!origin && isDev) || (origin && allowedOrigins.has(origin))) {
+    // No Origin header → same-origin or server-to-server request; allow.
+    // Known origin → add CORS headers so the browser permits the response.
+    // Unknown origin → omit CORS headers; the browser enforces the block.
+    if (!origin || allowedOrigins.has(origin)) {
       callback(null, true);
     } else {
-      callback(new Error("Not allowed by CORS"));
+      callback(null, false);
     }
   },
   credentials: true,
