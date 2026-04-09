@@ -234,19 +234,25 @@ describe('useWorkoutForm', () => {
       expect(activeNotesVoiceInput.stopListening).toHaveBeenCalled();
     });
 
-    it('requires a title', () => {
-      const { result } = renderFormHook(defaultProps);
+    it('uses fallback title "Workout" when title is empty', async () => {
+      const { result } = renderFormHook({ ...defaultProps, useTextMode: true });
+
+      act(() => {
+        result.current.setFreeText('5km run');
+      });
 
       act(() => {
         result.current.handleSave();
       });
 
-      expect(mockToast).toHaveBeenCalledWith({
-        title: 'Missing title',
-        description: 'Please enter a workout title.',
-        variant: 'destructive',
+      await waitFor(() => {
+        expect(queryClientLib.apiRequest).toHaveBeenCalledWith(
+          'POST',
+          '/api/v1/workouts',
+          expect.objectContaining({ title: 'Workout', focus: 'Workout' }),
+          expect.any(AbortSignal),
+        );
       });
-      expect(queryClientLib.apiRequest).not.toHaveBeenCalled();
     });
 
     it('requires freeText when useTextMode is true', () => {

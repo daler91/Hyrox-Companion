@@ -94,14 +94,7 @@ export function useWorkoutForm({
     if (voiceInput.isListening) voiceInput.stopListening();
     if (notesVoiceInput.isListening) notesVoiceInput.stopListening();
 
-    if (!title.trim()) {
-      toast({
-        title: "Missing title",
-        description: "Please enter a workout title.",
-        variant: "destructive",
-      });
-      return;
-    }
+    const effectiveTitle = title.trim() || "Workout";
 
     if (useTextMode) {
       if (!freeText.trim()) {
@@ -113,9 +106,9 @@ export function useWorkoutForm({
         return;
       }
       saveMutation.mutate({
-        title,
+        title: effectiveTitle,
         date,
-        focus: title,
+        focus: effectiveTitle,
         mainWorkout: freeText,
         notes: notes || null,
         rpe: rpe || null,
@@ -146,9 +139,9 @@ export function useWorkoutForm({
       const mainWorkout = generateSummary(exercises, weightLabel, distanceUnit);
 
       saveMutation.mutate({
-        title,
+        title: effectiveTitle,
         date,
-        focus: title,
+        focus: effectiveTitle,
         mainWorkout,
         notes: notes || null,
         rpe: rpe || null,
