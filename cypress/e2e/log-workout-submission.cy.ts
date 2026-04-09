@@ -43,15 +43,19 @@ describe("Log Workout Submission", () => {
     cy.contains("Workout logged").should("exist");
   });
 
-  it("shows an error when trying to save without a title", () => {
+  it("saves with fallback title when no title is provided", () => {
     // Don't enter a title
     cy.getBySel("button-mode-freetext").click();
     cy.getBySel("input-freetext").type("Some workout");
 
     cy.getBySel("button-save-workout").should("not.be.disabled").click();
 
-    // Verify toast error
-    cy.contains("Missing title").should("exist");
+    // Should save with fallback title "Workout"
+    cy.wait("@saveWorkout").then((interception) => {
+      expect(interception.request.body.title).to.eq("Workout");
+    });
+
+    cy.location("pathname").should("eq", "/");
   });
 
   it("shows an error when trying to save empty free text", () => {

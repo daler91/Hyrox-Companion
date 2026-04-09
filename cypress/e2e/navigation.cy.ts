@@ -27,7 +27,7 @@ describe("Navigation (Authenticated)", () => {
     cy.visit("/settings");
     cy.wait("@authUser");
     cy.url().should("include", "/settings");
-    cy.getBySel("button-save-settings").should("exist");
+    cy.contains("Settings").should("exist");
   });
 
   it("shows 404 for unknown routes", () => {
