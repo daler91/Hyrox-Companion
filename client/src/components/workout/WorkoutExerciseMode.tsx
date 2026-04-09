@@ -140,14 +140,14 @@ export const WorkoutExerciseMode = ({
         </TabsList>
 
         {exercisesByCategory.map(({ category, exercises }) => (
-          <TabsContent key={category} value={category} className="mt-4 space-y-2">
+          <TabsContent key={category} value={category} className="mt-4 space-y-2 min-h-[400px]">
             {exercises.map(([name, def]) =>
               renderRow(name, def.label, blocksByName.get(name) ?? []),
             )}
           </TabsContent>
         ))}
 
-        <TabsContent value="custom" className="mt-4 space-y-3">
+        <TabsContent value="custom" className="mt-4 space-y-3 min-h-[400px]">
           <Button
             type="button"
             variant="outline"
