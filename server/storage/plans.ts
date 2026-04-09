@@ -8,25 +8,19 @@ import {
   type TrainingPlanWithDays,
   type UpdatePlanDay,
 } from "@shared/schema";
-import { and, eq, inArray, isNotNull,sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { toDateStr } from "../types";
 
 export class PlanStorage {
   async createTrainingPlan(plan: InsertTrainingPlan): Promise<TrainingPlan> {
-    const [trainingPlan] = await db
-      .insert(trainingPlans)
-      .values(plan)
-      .returning();
+    const [trainingPlan] = await db.insert(trainingPlans).values(plan).returning();
     return trainingPlan;
   }
 
   async listTrainingPlans(userId: string): Promise<TrainingPlan[]> {
-    return await db
-      .select()
-      .from(trainingPlans)
-      .where(eq(trainingPlans.userId, userId));
+    return await db.select().from(trainingPlans).where(eq(trainingPlans.userId, userId));
   }
 
   async getTrainingPlan(planId: string, userId: string): Promise<TrainingPlanWithDays | undefined> {
@@ -34,13 +28,10 @@ export class PlanStorage {
       .select()
       .from(trainingPlans)
       .where(and(eq(trainingPlans.id, planId), eq(trainingPlans.userId, userId)));
-    
+
     if (!plan) return undefined;
 
-    const days = await db
-      .select()
-      .from(planDays)
-      .where(eq(planDays.planId, planId));
+    const days = await db.select().from(planDays).where(eq(planDays.planId, planId));
 
     const dayOrder = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
     days.sort((a, b) => {
@@ -56,7 +47,11 @@ export class PlanStorage {
     return { ...plan, days };
   }
 
-  async renameTrainingPlan(planId: string, name: string, userId: string): Promise<TrainingPlan | undefined> {
+  async renameTrainingPlan(
+    planId: string,
+    name: string,
+    userId: string,
+  ): Promise<TrainingPlan | undefined> {
     const [updated] = await db
       .update(trainingPlans)
       .set({ name })
@@ -65,7 +60,11 @@ export class PlanStorage {
     return updated;
   }
 
-  async updateTrainingPlanGoal(planId: string, goal: string | null, userId: string): Promise<TrainingPlan | undefined> {
+  async updateTrainingPlanGoal(
+    planId: string,
+    goal: string | null,
+    userId: string,
+  ): Promise<TrainingPlan | undefined> {
     const [updated] = await db
       .update(trainingPlans)
       .set({ goal })
@@ -79,7 +78,7 @@ export class PlanStorage {
       .select()
       .from(trainingPlans)
       .where(and(eq(trainingPlans.id, planId), eq(trainingPlans.userId, userId)));
-    
+
     if (!plan) return false;
 
     return await db.transaction(async (tx) => {
@@ -94,10 +93,14 @@ export class PlanStorage {
     return await db.insert(planDays).values(days).returning();
   }
 
-  async updatePlanDay(dayId: string, updates: UpdatePlanDay, userId: string): Promise<PlanDay | undefined> {
+  async updatePlanDay(
+    dayId: string,
+    updates: UpdatePlanDay,
+    userId: string,
+  ): Promise<PlanDay | undefined> {
     const day = await this.getPlanDay(dayId, userId);
     if (!day) return undefined;
-    
+
     const [updatedDay] = await db
       .update(planDays)
       .set(updates)
@@ -127,7 +130,7 @@ export class PlanStorage {
   async deletePlanDay(dayId: string, userId: string): Promise<boolean> {
     const existingDay = await this.getPlanDay(dayId, userId);
     if (!existingDay) return false;
-    
+
     const result = await db.delete(planDays).where(eq(planDays.id, dayId));
     return result.rowCount !== null && result.rowCount > 0;
   }
@@ -137,13 +140,13 @@ export class PlanStorage {
     if (!plan) return false;
 
     const dayNameToOffset: Record<string, number> = {
-      "Monday": 0,
-      "Tuesday": 1,
-      "Wednesday": 2,
-      "Thursday": 3,
-      "Friday": 4,
-      "Saturday": 5,
-      "Sunday": 6,
+      Monday: 0,
+      Tuesday: 1,
+      Wednesday: 2,
+      Thursday: 3,
+      Friday: 4,
+      Saturday: 5,
+      Sunday: 6,
     };
 
     const start = new Date(startDate);
@@ -153,7 +156,7 @@ export class PlanStorage {
     weekOneMonday.setDate(start.getDate() + mondayOffset);
 
     if (plan.days.length === 0) return true;
-    const weekNumbers = plan.days.map(d => d.weekNumber || 1);
+    const weekNumbers = plan.days.map((d) => d.weekNumber || 1);
     const minWeek = Math.min(...weekNumbers);
 
     const today = toDateStr();
@@ -169,15 +172,22 @@ export class PlanStorage {
       dateUpdates.push({
         id: day.id,
         scheduledDate: dateStr,
-        resetStatus: day.status === 'missed' && dateStr >= today,
+        resetStatus: day.status === "missed" && dateStr >= today,
       });
     }
 
     if (dateUpdates.length === 0) return true;
 
     // Derive plan-level start/end dates from the scheduled days
-    const scheduledDates = dateUpdates.map(u => u.scheduledDate);
-    scheduledDates.sort((a, b) => a.localeCompare(b));
+    const scheduledDates = dateUpdates.map((u) => u.scheduledDate);
+    // ⚡ Bolt Performance Optimization:
+    // Replaced localeCompare with standard string comparison for YYYY-MM-DD dates.
+    // localeCompare introduces significant unnecessary overhead when sorting large arrays.
+    scheduledDates.sort((a, b) => {
+      if (a < b) return -1;
+      if (a > b) return 1;
+      return 0;
+    });
     const planStartDate = scheduledDates[0];
     const planEndDate = scheduledDates.at(-1) ?? scheduledDates[0];
 
@@ -191,20 +201,25 @@ export class PlanStorage {
       caseChunks.push(sql`END`);
 
       const caseSql = sql.join(caseChunks, sql``);
-      const updateIds = dateUpdates.map(u => u.id);
+      const updateIds = dateUpdates.map((u) => u.id);
 
       // Perform a single batch update
-      await tx.update(planDays)
+      await tx
+        .update(planDays)
         .set({ scheduledDate: caseSql as unknown as string })
         .where(inArray(planDays.id, updateIds));
 
-      const resetUpdateIds = dateUpdates.filter(u => u.resetStatus).map(u => u.id);
+      const resetUpdateIds = dateUpdates.filter((u) => u.resetStatus).map((u) => u.id);
       if (resetUpdateIds.length > 0) {
-        await tx.update(planDays).set({ status: 'planned' }).where(inArray(planDays.id, resetUpdateIds));
+        await tx
+          .update(planDays)
+          .set({ status: "planned" })
+          .where(inArray(planDays.id, resetUpdateIds));
       }
 
       // Update plan-level start/end dates
-      await tx.update(trainingPlans)
+      await tx
+        .update(trainingPlans)
         .set({ startDate: planStartDate, endDate: planEndDate })
         .where(eq(trainingPlans.id, planId));
 
@@ -220,8 +235,8 @@ export class PlanStorage {
         and(
           eq(planDays.planId, planId),
           eq(planDays.scheduledDate, date),
-          eq(planDays.status, 'planned'),
-        )
+          eq(planDays.status, "planned"),
+        ),
       )
       .limit(1);
 
@@ -243,7 +258,7 @@ export class PlanStorage {
           eq(trainingPlans.userId, userId),
           isNotNull(trainingPlans.startDate),
           isNotNull(trainingPlans.endDate),
-        )
+        ),
       )
       .orderBy(
         sql`CASE
@@ -263,13 +278,8 @@ export class PlanStorage {
     const today = toDateStr();
     const result = await db
       .update(planDays)
-      .set({ status: 'missed' })
-      .where(
-        and(
-          eq(planDays.status, 'planned'),
-          sql`${planDays.scheduledDate} < ${today}`
-        )
-      )
+      .set({ status: "missed" })
+      .where(and(eq(planDays.status, "planned"), sql`${planDays.scheduledDate} < ${today}`))
       .returning({ id: planDays.id });
     return result.length;
   }
