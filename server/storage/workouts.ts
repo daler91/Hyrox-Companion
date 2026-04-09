@@ -117,10 +117,11 @@ export class WorkoutStorage {
     return log;
   }
 
+  // ⚡ Bolt Performance Optimization:
+  // Removed redundant pre-fetch existence check (getWorkoutLog) that duplicated
+  // the same WHERE clause used by the UPDATE. The UPDATE + RETURNING already
+  // yields undefined when no rows match, saving 1 DB round trip per call.
   async updateWorkoutLog(logId: string, updates: UpdateWorkoutLog, userId: string): Promise<WorkoutLog | undefined> {
-    const existingLog = await this.getWorkoutLog(logId, userId);
-    if (!existingLog) return undefined;
-    
     const [updatedLog] = await db
       .update(workoutLogs)
       .set(updates)
@@ -129,10 +130,11 @@ export class WorkoutStorage {
     return updatedLog;
   }
 
+  // ⚡ Bolt Performance Optimization:
+  // Removed redundant pre-fetch existence check (getWorkoutLog) that duplicated
+  // the same WHERE clause used by the DELETE. The rowCount check already returns
+  // false when no rows match, saving 1 DB round trip per call.
   async deleteWorkoutLog(logId: string, userId: string): Promise<boolean> {
-    const existingLog = await this.getWorkoutLog(logId, userId);
-    if (!existingLog) return false;
-    
     const result = await db.delete(workoutLogs).where(and(eq(workoutLogs.id, logId), eq(workoutLogs.userId, userId)));
     return result.rowCount !== null && result.rowCount > 0;
   }
@@ -198,10 +200,12 @@ export class WorkoutStorage {
       .orderBy(asc(exerciseSets.sortOrder));
   }
 
+  // ⚡ Bolt Performance Optimization:
+  // Removed redundant pre-fetch existence check (getWorkoutLog). The DELETE's
+  // subquery already includes the same userId authorization, so if the workout
+  // doesn't exist or belongs to another user, zero rows are deleted (safe no-op).
+  // Saves 1 DB round trip per call.
   async deleteExerciseSetsByWorkoutLog(workoutLogId: string, userId: string): Promise<boolean> {
-    const existingLog = await this.getWorkoutLog(workoutLogId, userId);
-    if (!existingLog) return false;
-
     await db
       .delete(exerciseSets)
       .where(
