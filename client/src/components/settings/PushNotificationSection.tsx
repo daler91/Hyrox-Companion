@@ -82,12 +82,13 @@ export function PushNotificationSection() {
       <CardContent className="space-y-4">
         <div className="flex items-center justify-between gap-4">
           <div className="space-y-1">
-            <Label>Enable Push Notifications</Label>
+            <Label htmlFor="push-notifications-switch" className="cursor-pointer">Enable Push Notifications</Label>
             <p className="text-sm text-muted-foreground">
               Receive instant alerts for missed workouts and AI coaching updates
             </p>
           </div>
           <Switch
+            id="push-notifications-switch"
             checked={isSubscribed}
             onCheckedChange={handleToggle}
             disabled={isLoading}
