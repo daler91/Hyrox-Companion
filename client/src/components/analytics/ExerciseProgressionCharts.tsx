@@ -23,22 +23,10 @@ interface ExerciseProgressionChartsProps {
   readonly dLabel: string;
 }
 
-function computeTrend(
-  data: ExerciseAnalyticDay[],
-  key: keyof ExerciseAnalyticDay,
-): "up" | "down" | "flat" {
-  if (data.length < 2) return "flat";
-  const mid = Math.floor(data.length / 2);
-  const firstHalf = data.slice(0, mid);
-  const secondHalf = data.slice(mid);
-
-  const avg = (arr: ExerciseAnalyticDay[]) =>
-    arr.reduce((s, d) => s + Number(d[key] ?? 0), 0) / arr.length;
-
-  const firstAvg = avg(firstHalf);
-  const secondAvg = avg(secondHalf);
-
-  if (firstAvg === 0 && secondAvg === 0) return "flat";
+// Derive a trend label from the averages of the first and second halves of a
+// data series. Extracted so the single-pass summarizer below can share it.
+function deriveTrend(firstAvg: number, secondAvg: number): TrendDirection {
+  if (firstAvg === 0 && secondAvg === 0) return FLAT;
   let change: number;
   if (firstAvg > 0) {
     change = (secondAvg - firstAvg) / firstAvg;
@@ -47,10 +35,10 @@ function computeTrend(
   }
   if (change > 0.05) return "up";
   if (change < -0.05) return "down";
-  return "flat";
+  return FLAT;
 }
 
-function TrendArrow({ trend }: Readonly<{ trend: "up" | "down" | "flat" }>) {
+function TrendArrow({ trend }: Readonly<{ trend: TrendDirection }>) {
   if (trend === "up") return <TrendingUp className="h-4 w-4 text-green-500 inline ml-1" />;
   if (trend === "down") return <TrendingDown className="h-4 w-4 text-red-500 inline ml-1" />;
   return <Minus className="h-4 w-4 text-muted-foreground inline ml-1" />;
@@ -66,7 +54,31 @@ function summarizeExerciseData(data: ExerciseAnalyticDay[]) {
   let totalReps = 0;
   let totalVolume = 0;
 
-  for (const d of data) {
+  // ⚡ Bolt Performance Optimization:
+  // Previously, trends for volume/weight/reps were computed by invoking
+  // computeTrend() three times — each call performed two `.slice()` (creating
+  // brand-new arrays) plus two `.reduce()` traversals. Combined with the
+  // pre-existing totals loop, that added up to 7 passes over the data and 6
+  // intermediate array allocations per render.
+  //
+  // This refactor folds all of that work into a single O(N) pass with zero
+  // intermediate allocations by accumulating first-half and second-half sums
+  // for each tracked metric inline alongside the totals. Expected impact:
+  // roughly 7x fewer iterations and no transient arrays to garbage collect
+  // when rendering exercise progression charts for long histories.
+  const sessions = data.length;
+  const mid = Math.floor(sessions / 2);
+  const secondHalfCount = sessions - mid;
+
+  let firstVolume = 0;
+  let secondVolume = 0;
+  let firstWeight = 0;
+  let secondWeight = 0;
+  let firstReps = 0;
+  let secondReps = 0;
+
+  for (let i = 0; i < sessions; i++) {
+    const d = data[i];
     totalSets += d.totalSets;
     totalReps += d.totalReps;
     totalVolume += d.totalVolume;
@@ -75,9 +87,33 @@ function summarizeExerciseData(data: ExerciseAnalyticDay[]) {
     if (d.maxWeight > 0) hasMaxWeight = true;
     if (d.totalReps > 0) hasTotalReps = true;
     if (d.totalDistance > 0) hasTotalDistance = true;
+
+    // Split-half accumulation matches the original slice-based computeTrend:
+    // first half = indices [0, mid), second half = indices [mid, sessions).
+    if (i < mid) {
+      firstVolume += d.totalVolume;
+      firstWeight += d.maxWeight;
+      firstReps += d.totalReps;
+    } else {
+      secondVolume += d.totalVolume;
+      secondWeight += d.maxWeight;
+      secondReps += d.totalReps;
+    }
   }
 
-  const sessions = data.length;
+  // computeTrend returned "flat" whenever data.length < 2. When sessions < 2,
+  // `mid` is 0 and secondHalfCount is sessions, so we short-circuit to avoid
+  // a divide-by-zero and to preserve the original behavior exactly.
+  const canTrend = sessions >= 2;
+  const volumeTrend = canTrend && hasVolume
+    ? deriveTrend(firstVolume / mid, secondVolume / secondHalfCount)
+    : FLAT;
+  const weightTrend = canTrend && hasMaxWeight
+    ? deriveTrend(firstWeight / mid, secondWeight / secondHalfCount)
+    : FLAT;
+  const repsTrend = canTrend && hasTotalReps
+    ? deriveTrend(firstReps / mid, secondReps / secondHalfCount)
+    : FLAT;
 
   return {
     data,
@@ -91,9 +127,9 @@ function summarizeExerciseData(data: ExerciseAnalyticDay[]) {
     sessions,
     avgVolume: sessions > 0 ? Math.round(totalVolume / sessions) : 0,
     avgReps: sessions > 0 ? Math.round(totalReps / sessions) : 0,
-    volumeTrend: hasVolume ? computeTrend(data, "totalVolume") : FLAT,
-    weightTrend: hasMaxWeight ? computeTrend(data, "maxWeight") : FLAT,
-    repsTrend: hasTotalReps ? computeTrend(data, "totalReps") : FLAT,
+    volumeTrend,
+    weightTrend,
+    repsTrend,
   };
 }
 
