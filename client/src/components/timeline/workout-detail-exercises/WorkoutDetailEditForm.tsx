@@ -45,9 +45,9 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
   } = useWorkoutVoiceForm(editForm, setEditForm, stopAllVoiceRef);
 
   return (
-    <div className="space-y-6">
-      {/* Focus field - always on top */}
-      <div>
+    <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+      {/* Focus field - full width, always first */}
+      <div className="md:col-span-12">
         <Label htmlFor="detail-focus">Focus</Label>
         <Input
           id="detail-focus"
@@ -58,76 +58,74 @@ export const WorkoutDetailEditForm = React.memo(function WorkoutDetailEditForm({
         />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-        {/* Left Column - secondary fields (after exercises on mobile) */}
-        <div className="order-2 md:order-1 md:col-span-5 lg:col-span-4 space-y-4 min-w-0">
-          <WorkoutAccessoryNotes
+      {/* Exercises/Free Text - appears second (right column on desktop) */}
+      <div className="md:col-span-7 lg:col-span-8 md:row-start-2 md:col-start-6 lg:col-start-5 space-y-4 min-w-0">
+        <div className="flex items-center gap-2">
+          <Button
+            variant={useTextMode ? "outline" : "default"}
+            size="sm"
+            onClick={() => {
+              stopAllVoice();
+              setUseTextMode(false);
+            }}
+            data-testid="button-mode-exercises"
+          >
+            <Dumbbell className="h-4 w-4 mr-1" />
+            Exercises
+          </Button>
+          <Button
+            variant={useTextMode ? "default" : "outline"}
+            size="sm"
+            onClick={() => {
+              stopAllVoice();
+              setUseTextMode(true);
+            }}
+            data-testid="button-mode-freetext"
+          >
+            <Type className="h-4 w-4 mr-1" />
+            Free Text
+          </Button>
+        </div>
+
+        {useTextMode ? (
+          <WorkoutTextMode
             editForm={editForm}
             setEditForm={setEditForm}
-            appendToField={appendToField}
-            stopAccessoryRef={stopAccessoryRef}
-            stopNotesRef={stopNotesRef}
+            isMainListening={isMainListening}
+            isSupported={isSupported}
+            mainInterim={mainInterim}
+            startMainListening={startMainListening}
+            stopMainListening={stopMainListening}
+            toggleMainListening={toggleMainListening}
+            onParseText={onParseText}
+            parseMutation={parseMutation}
           />
+        ) : (
+          <WorkoutExerciseMode
+            exerciseBlocks={editExercises}
+            exerciseData={editExerciseData}
+            addExercise={handleAddExercise}
+            updateBlock={updateBlock}
+            removeBlock={handleRemoveBlock}
+            weightUnit={weightUnit}
+            distanceUnit={distanceUnit}
+          />
+        )}
+      </div>
 
-          {source !== "strava" && (
-            <RpeSelector value={editRpe} onChange={setEditRpe} compact />
-          )}
-        </div>
+      {/* Secondary fields - appears third on mobile, left column on desktop */}
+      <div className="md:col-span-5 lg:col-span-4 md:row-start-2 md:col-start-1 space-y-4 min-w-0">
+        <WorkoutAccessoryNotes
+          editForm={editForm}
+          setEditForm={setEditForm}
+          appendToField={appendToField}
+          stopAccessoryRef={stopAccessoryRef}
+          stopNotesRef={stopNotesRef}
+        />
 
-        {/* Right Column - exercises (shown first on mobile) */}
-        <div className="order-1 md:order-2 md:col-span-7 lg:col-span-8 space-y-4 min-w-0">
-          <div className="flex items-center gap-2">
-            <Button
-              variant={useTextMode ? "outline" : "default"}
-              size="sm"
-              onClick={() => {
-                stopAllVoice();
-                setUseTextMode(false);
-              }}
-              data-testid="button-mode-exercises"
-            >
-              <Dumbbell className="h-4 w-4 mr-1" />
-              Exercises
-            </Button>
-            <Button
-              variant={useTextMode ? "default" : "outline"}
-              size="sm"
-              onClick={() => {
-                stopAllVoice();
-                setUseTextMode(true);
-              }}
-              data-testid="button-mode-freetext"
-            >
-              <Type className="h-4 w-4 mr-1" />
-              Free Text
-            </Button>
-          </div>
-
-          {useTextMode ? (
-            <WorkoutTextMode
-              editForm={editForm}
-              setEditForm={setEditForm}
-              isMainListening={isMainListening}
-              isSupported={isSupported}
-              mainInterim={mainInterim}
-              startMainListening={startMainListening}
-              stopMainListening={stopMainListening}
-              toggleMainListening={toggleMainListening}
-              onParseText={onParseText}
-              parseMutation={parseMutation}
-            />
-          ) : (
-            <WorkoutExerciseMode
-              exerciseBlocks={editExercises}
-              exerciseData={editExerciseData}
-              addExercise={handleAddExercise}
-              updateBlock={updateBlock}
-              removeBlock={handleRemoveBlock}
-              weightUnit={weightUnit}
-              distanceUnit={distanceUnit}
-            />
-          )}
-        </div>
+        {source !== "strava" && (
+          <RpeSelector value={editRpe} onChange={setEditRpe} compact />
+        )}
       </div>
     </div>
   );
