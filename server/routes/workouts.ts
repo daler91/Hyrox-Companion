@@ -96,6 +96,21 @@ router.get("/api/v1/workouts", isAuthenticated, rateLimiter("workoutList", 60), 
     res.json(logs);
   }));
 
+// Returns the most recent workout log for the authenticated user WITH its
+// exercise sets eagerly loaded, so the client can hydrate a "Duplicate last
+// workout" prefill on the Log Workout page without a second round-trip.
+// Deliberately registered BEFORE the :id route below so Express matches
+// "/latest" as a literal path rather than an id parameter.
+router.get("/api/v1/workouts/latest", isAuthenticated, rateLimiter("workout", 60), asyncHandler(async (req: Request, res: Response) => {
+    const userId = getUserId(req);
+    const [latest] = await storage.workouts.listWorkoutLogs(userId, 1);
+    if (!latest) {
+      return res.status(404).json({ error: "No workouts found", code: "NOT_FOUND" });
+    }
+    const exerciseSets = await storage.workouts.getExerciseSetsByWorkoutLog(latest.id);
+    res.json({ ...latest, exerciseSets });
+  }));
+
 router.get("/api/v1/workouts/:id", isAuthenticated, rateLimiter("workout", 60), asyncHandler(async (req: Request<{ id: string }>, res: Response) => {
     const userId = getUserId(req);
     const log = await storage.workouts.getWorkoutLog(req.params.id, userId);

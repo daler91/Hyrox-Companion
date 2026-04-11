@@ -1,3 +1,5 @@
+import { useMutation } from "@tanstack/react-query";
+import { format } from "date-fns";
 import { Loader2 } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
@@ -19,6 +21,8 @@ import {
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { useWorkoutEditor } from "@/hooks/useWorkoutEditor";
 import { useWorkoutForm } from "@/hooks/useWorkoutForm";
+import { api } from "@/lib/api";
+import { exerciseSetsToStructured } from "@/lib/exerciseUtils";
 
 const DRAFT_SAVE_DEBOUNCE_MS = 400;
 
@@ -67,6 +71,7 @@ function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
     removeBlock,
     updateBlock,
     parseMutation,
+    resetEditor,
   } = useWorkoutEditor({
     initialExerciseBlocks: initialDraft?.exerciseBlocks,
     initialExerciseData: initialDraft?.exerciseData,
@@ -127,6 +132,54 @@ function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
     toggleListening: toggleNotesListening,
   } = notesVoiceInput;
 
+  // Fetch the most recent workout and hydrate the form from it so the user
+  // can quickly re-log a similar session. The date is reset to today and RPE
+  // is cleared — those are per-session. Everything else (title, notes,
+  // structured exercises OR free text) carries over.
+  const duplicateLastMutation = useMutation({
+    mutationFn: () => api.workouts.latest(),
+    onSuccess: (latest) => {
+      setDate(format(new Date(), "yyyy-MM-dd"));
+      setRpe(null);
+      // The server stores the user-facing title in `focus`; the form's
+      // "title" input binds to the same field on save.
+      setTitle(latest.focus ?? "");
+      setNotes(latest.notes ?? "");
+
+      const hasStructuredExercises = latest.exerciseSets && latest.exerciseSets.length > 0;
+      if (hasStructuredExercises) {
+        const { names, data } = exerciseSetsToStructured(latest.exerciseSets);
+        resetEditor(names, data, false);
+        setFreeText("");
+      } else {
+        // Older entries / Strava imports / pure free-text logs: fall back
+        // to dropping the raw main-workout text into the text-mode editor.
+        resetEditor([], {}, true);
+        setFreeText(latest.mainWorkout ?? "");
+      }
+
+      toast({
+        title: "Duplicated last workout",
+        description: `${latest.focus ?? "Workout"} — date reset to today`,
+      });
+    },
+    onError: (err: unknown) => {
+      const isNotFound =
+        err instanceof Error && /not found|404/i.test(err.message);
+      toast({
+        title: isNotFound ? "No previous workout" : "Couldn't duplicate workout",
+        description: isNotFound
+          ? "Log your first workout to enable quick duplication."
+          : "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleDuplicateLast = React.useCallback(() => {
+    duplicateLastMutation.mutate();
+  }, [duplicateLastMutation]);
+
   // Debounced autosave of the current in-progress workout to localStorage.
   // Uses the block counter derived from the highest seen suffix so restored
   // drafts keep producing unique block IDs when the user adds more exercises.
@@ -186,7 +239,10 @@ function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
 
   return (
     <div className="container max-w-5xl mx-auto p-4 pb-20 md:pb-8 pt-4 md:pt-8 min-h-screen">
-      <WorkoutHeader />
+      <WorkoutHeader
+        onDuplicateLast={handleDuplicateLast}
+        isDuplicating={duplicateLastMutation.isPending}
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
         {/* Left Column: Basic Details & Notes */}
