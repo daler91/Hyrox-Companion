@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { useLocation } from "wouter";
 
 import { WorkoutDetailsCard } from "@/components/workout/WorkoutDetailsCard";
@@ -8,16 +8,30 @@ import { WorkoutModeSelector } from "@/components/workout/WorkoutModeSelector";
 import { WorkoutNotesCard } from "@/components/workout/WorkoutNotesCard";
 import { WorkoutSaveButton } from "@/components/workout/WorkoutSaveButton";
 import { WorkoutTextMode } from "@/components/workout/WorkoutTextMode";
+import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import {
+  clearLogWorkoutDraft,
+  loadLogWorkoutDraft,
+  saveLogWorkoutDraft,
+} from "@/hooks/useLogWorkoutDraft";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { useWorkoutEditor } from "@/hooks/useWorkoutEditor";
 import { useWorkoutForm } from "@/hooks/useWorkoutForm";
+
+const DRAFT_SAVE_DEBOUNCE_MS = 400;
 
 export default function LogWorkout() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const handleCancel = React.useCallback(() => setLocation("/"), [setLocation]);
   const { weightUnit, distanceUnit, weightLabel } = useUnitPreferences();
+  const { user } = useAuth();
+  const userKey = user?.id ?? "anon";
+
+  // Load the draft synchronously once on mount so hook initializers can hydrate from it.
+  const initialDraftRef = useRef(loadLogWorkoutDraft(userKey));
+  const initialDraft = initialDraftRef.current;
 
   const {
     exerciseBlocks,
@@ -28,7 +42,12 @@ export default function LogWorkout() {
     removeBlock,
     updateBlock,
     parseMutation,
-  } = useWorkoutEditor();
+  } = useWorkoutEditor({
+    initialExerciseBlocks: initialDraft?.exerciseBlocks,
+    initialExerciseData: initialDraft?.exerciseData,
+    initialUseTextMode: initialDraft?.useTextMode,
+    initialBlockCounter: initialDraft?.blockCounter,
+  });
 
   const {
     title,
@@ -51,6 +70,15 @@ export default function LogWorkout() {
     exerciseData,
     weightLabel,
     distanceUnit,
+    initialValues: initialDraft
+      ? {
+          title: initialDraft.title,
+          date: initialDraft.date,
+          freeText: initialDraft.freeText,
+          notes: initialDraft.notes,
+          rpe: initialDraft.rpe,
+        }
+      : undefined,
   });
 
   const {
@@ -68,6 +96,66 @@ export default function LogWorkout() {
     interimTranscript: notesInterim,
     toggleListening: toggleNotesListening,
   } = notesVoiceInput;
+
+  // Debounced autosave of the current in-progress workout to localStorage.
+  // Uses the block counter derived from the highest seen suffix so restored
+  // drafts keep producing unique block IDs when the user adds more exercises.
+  const currentBlockCounter = useMemo(() => {
+    let max = 0;
+    for (const id of exerciseBlocks) {
+      const parts = id.split("__");
+      const n = Number.parseInt(parts[parts.length - 1] ?? "", 10);
+      if (Number.isFinite(n) && n > max) max = n;
+    }
+    return max;
+  }, [exerciseBlocks]);
+
+  useEffect(() => {
+    const timerId = setTimeout(() => {
+      saveLogWorkoutDraft(userKey, {
+        title,
+        date,
+        freeText,
+        notes,
+        rpe,
+        useTextMode,
+        exerciseBlocks,
+        exerciseData,
+        blockCounter: currentBlockCounter,
+      });
+    }, DRAFT_SAVE_DEBOUNCE_MS);
+    return () => clearTimeout(timerId);
+  }, [
+    userKey,
+    title,
+    date,
+    freeText,
+    notes,
+    rpe,
+    useTextMode,
+    exerciseBlocks,
+    exerciseData,
+    currentBlockCounter,
+  ]);
+
+  // Clear the draft once the workout is successfully saved.
+  useEffect(() => {
+    if (saveMutation.isSuccess) {
+      clearLogWorkoutDraft(userKey);
+    }
+  }, [saveMutation.isSuccess, userKey]);
+
+  // One-time "Draft restored" toast so users know we resumed them from storage.
+  const hasNotifiedRestoreRef = useRef(false);
+  useEffect(() => {
+    if (initialDraft && !hasNotifiedRestoreRef.current) {
+      hasNotifiedRestoreRef.current = true;
+      toast({
+        title: "Draft restored",
+        description: "We brought back your in-progress workout.",
+      });
+    }
+  }, [initialDraft, toast]);
 
   const hasData = useTextMode
     ? freeText.trim().length > 0

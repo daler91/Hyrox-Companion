@@ -17,6 +17,13 @@ interface UseWorkoutFormProps {
   exerciseData: Record<string, StructuredExercise>;
   weightLabel: string;
   distanceUnit: string;
+  initialValues?: {
+    title?: string;
+    date?: string;
+    freeText?: string;
+    notes?: string;
+    rpe?: number | null;
+  };
 }
 
 export function useWorkoutForm({
@@ -25,15 +32,16 @@ export function useWorkoutForm({
   exerciseData,
   weightLabel,
   distanceUnit,
+  initialValues,
 }: UseWorkoutFormProps) {
   const { toast } = useToast();
   const [, navigate] = useLocation();
 
-  const [title, setTitle] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
-  const [freeText, setFreeText] = useState("");
-  const [notes, setNotes] = useState("");
-  const [rpe, setRpe] = useState<number | null>(null);
+  const [title, setTitle] = useState(initialValues?.title ?? "");
+  const [date, setDate] = useState(initialValues?.date ?? new Date().toISOString().split("T")[0]);
+  const [freeText, setFreeText] = useState(initialValues?.freeText ?? "");
+  const [notes, setNotes] = useState(initialValues?.notes ?? "");
+  const [rpe, setRpe] = useState<number | null>(initialValues?.rpe ?? null);
 
   const handleVoiceError = useCallback(
     (msg: string) => {
