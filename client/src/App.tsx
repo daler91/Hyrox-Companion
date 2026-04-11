@@ -71,6 +71,17 @@ function AuthenticatedRouter() {
   );
 }
 
+const SIDEBAR_COOKIE_NAME = "sidebar_state";
+
+function getStoredSidebarOpen(): boolean {
+  if (typeof document === "undefined") return true;
+  const match = document.cookie
+    .split("; ")
+    .find((row) => row.startsWith(`${SIDEBAR_COOKIE_NAME}=`));
+  if (!match) return true;
+  return match.split("=")[1] !== "false";
+}
+
 function AuthenticatedLayout() {
   const { isAuthenticated, isLoading } = useAuth();
   useEmailCheck(isAuthenticated);
@@ -86,7 +97,10 @@ function AuthenticatedLayout() {
   };
 
   return (
-    <SidebarProvider style={style as React.CSSProperties}>
+    <SidebarProvider
+      style={style as React.CSSProperties}
+      defaultOpen={getStoredSidebarOpen()}
+    >
       <div className="flex h-screen w-full">
         <a href="#main-content" className="skip-to-content">
           Skip to main content
