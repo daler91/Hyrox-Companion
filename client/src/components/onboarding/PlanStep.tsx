@@ -15,24 +15,6 @@ export function PlanStep({ isPending, onUseSamplePlan, onImportPlan, onGenerateP
     <div className="space-y-3">
       <Button
         className="w-full justify-start h-auto py-4"
-        onClick={onGeneratePlan}
-        disabled={isPending}
-        data-testid="button-onboarding-generate-plan"
-      >
-        <div className="flex items-center gap-3 w-full">
-          <Wand2 className="h-5 w-5" />
-          <div className="text-left flex-1">
-            <div className="font-medium">Generate AI Plan</div>
-            <div className="text-xs opacity-80 font-normal">
-              AI creates a personalized periodized plan based on your goals
-            </div>
-          </div>
-        </div>
-      </Button>
-
-      <Button
-        variant="outline"
-        className="w-full justify-start h-auto py-4"
         onClick={onUseSamplePlan}
         disabled={isPending}
         data-testid="button-onboarding-sample-plan"
@@ -44,9 +26,27 @@ export function PlanStep({ isPending, onUseSamplePlan, onImportPlan, onGenerateP
             <Sparkles className="h-5 w-5" />
           )}
           <div className="text-left flex-1">
-            <div className="font-medium">Use 8-Week Fitness Plan</div>
+            <div className="font-medium">Use 8-Week Fitness Plan (recommended)</div>
             <div className="text-xs opacity-80 font-normal">
               Structured program with running, strength, and functional exercises
+            </div>
+          </div>
+        </div>
+      </Button>
+
+      <Button
+        variant="outline"
+        className="w-full justify-start h-auto py-4"
+        onClick={onGeneratePlan}
+        disabled={isPending}
+        data-testid="button-onboarding-generate-plan"
+      >
+        <div className="flex items-center gap-3 w-full">
+          <Wand2 className="h-5 w-5" />
+          <div className="text-left flex-1">
+            <div className="font-medium">Generate AI Plan</div>
+            <div className="text-xs text-muted-foreground font-normal">
+              AI creates a personalized periodized plan based on your goals
             </div>
           </div>
         </div>
@@ -75,7 +75,7 @@ export function PlanStep({ isPending, onUseSamplePlan, onImportPlan, onGenerateP
         onClick={onSkip}
         data-testid="button-onboarding-skip"
       >
-        Skip for now - I'll log workouts manually
+        Skip for now - I&apos;ll log workouts manually
       </Button>
     </div>
   );

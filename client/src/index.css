@@ -13,6 +13,21 @@
   display: none;
 }
 
+/* Respect the user's motion preference. The fade-up / float / pulse
+ * animations across Landing, Coach thinking indicator, and the reviewing
+ * banner are purely decorative, so reduce them to near-instant transitions
+ * for users who opt in to reduced motion at the OS level. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* Skip-to-content link: hidden until focused */
 .skip-to-content {
   position: absolute;

@@ -1,4 +1,5 @@
-import React from "react";
+import { Loader2 } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 
 import { WorkoutDetailsCard } from "@/components/workout/WorkoutDetailsCard";
@@ -9,15 +10,53 @@ import { WorkoutNotesCard } from "@/components/workout/WorkoutNotesCard";
 import { WorkoutSaveButton } from "@/components/workout/WorkoutSaveButton";
 import { WorkoutTextMode } from "@/components/workout/WorkoutTextMode";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import {
+  clearLogWorkoutDraft,
+  loadLogWorkoutDraft,
+  saveLogWorkoutDraft,
+} from "@/hooks/useLogWorkoutDraft";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { useWorkoutEditor } from "@/hooks/useWorkoutEditor";
 import { useWorkoutForm } from "@/hooks/useWorkoutForm";
 
+const DRAFT_SAVE_DEBOUNCE_MS = 400;
+
+/**
+ * Top-level LogWorkout page. Gates the form on auth resolution so the
+ * inner LogWorkoutForm can load the real user's draft on its first
+ * render — without this gate, a slow Clerk hydration would initialize
+ * the draft under "anon", and the subsequent autosave effect would
+ * overwrite (and then blank-delete) the authenticated user's draft.
+ */
 export default function LogWorkout() {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full p-8">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" aria-label="Loading" />
+      </div>
+    );
+  }
+
+  return <LogWorkoutForm userKey={user?.id ?? "anon"} />;
+}
+
+interface LogWorkoutFormProps {
+  userKey: string;
+}
+
+function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const handleCancel = React.useCallback(() => setLocation("/"), [setLocation]);
   const { weightUnit, distanceUnit, weightLabel } = useUnitPreferences();
+
+  // Load the draft synchronously once on mount (lazy initializer) so hook
+  // initializers can hydrate from it without re-reading localStorage on every render.
+  // Safe because userKey is now a stable prop from the auth-gated wrapper.
+  const [initialDraft] = useState(() => loadLogWorkoutDraft(userKey));
 
   const {
     exerciseBlocks,
@@ -28,7 +67,12 @@ export default function LogWorkout() {
     removeBlock,
     updateBlock,
     parseMutation,
-  } = useWorkoutEditor();
+  } = useWorkoutEditor({
+    initialExerciseBlocks: initialDraft?.exerciseBlocks,
+    initialExerciseData: initialDraft?.exerciseData,
+    initialUseTextMode: initialDraft?.useTextMode,
+    initialBlockCounter: initialDraft?.blockCounter,
+  });
 
   const {
     title,
@@ -51,6 +95,20 @@ export default function LogWorkout() {
     exerciseData,
     weightLabel,
     distanceUnit,
+    initialValues: initialDraft
+      ? {
+          title: initialDraft.title,
+          date: initialDraft.date,
+          freeText: initialDraft.freeText,
+          notes: initialDraft.notes,
+          rpe: initialDraft.rpe,
+        }
+      : undefined,
+    // Clear the localStorage draft synchronously on save success, BEFORE
+    // useWorkoutForm navigates away. Using a useEffect on
+    // saveMutation.isSuccess races the page unmount from navigate("/"),
+    // which can leave a stale draft that reappears on the next visit.
+    onSaveSuccess: () => clearLogWorkoutDraft(userKey),
   });
 
   const {
@@ -68,6 +126,59 @@ export default function LogWorkout() {
     interimTranscript: notesInterim,
     toggleListening: toggleNotesListening,
   } = notesVoiceInput;
+
+  // Debounced autosave of the current in-progress workout to localStorage.
+  // Uses the block counter derived from the highest seen suffix so restored
+  // drafts keep producing unique block IDs when the user adds more exercises.
+  const currentBlockCounter = useMemo(() => {
+    let max = 0;
+    for (const id of exerciseBlocks) {
+      const parts = id.split("__");
+      const n = Number.parseInt(parts[parts.length - 1] ?? "", 10);
+      if (Number.isFinite(n) && n > max) max = n;
+    }
+    return max;
+  }, [exerciseBlocks]);
+
+  useEffect(() => {
+    const timerId = setTimeout(() => {
+      saveLogWorkoutDraft(userKey, {
+        title,
+        date,
+        freeText,
+        notes,
+        rpe,
+        useTextMode,
+        exerciseBlocks,
+        exerciseData,
+        blockCounter: currentBlockCounter,
+      });
+    }, DRAFT_SAVE_DEBOUNCE_MS);
+    return () => clearTimeout(timerId);
+  }, [
+    userKey,
+    title,
+    date,
+    freeText,
+    notes,
+    rpe,
+    useTextMode,
+    exerciseBlocks,
+    exerciseData,
+    currentBlockCounter,
+  ]);
+
+  // "Draft restored" toast on mount. `initialDraft` comes from a lazy useState
+  // initializer so it's stable across renders, meaning this effect runs exactly
+  // once on mount when the restored draft is non-null.
+  useEffect(() => {
+    if (initialDraft) {
+      toast({
+        title: "Draft restored",
+        description: "We brought back your in-progress workout.",
+      });
+    }
+  }, [initialDraft, toast]);
 
   const hasData = useTextMode
     ? freeText.trim().length > 0
@@ -136,6 +247,11 @@ export default function LogWorkout() {
               removeBlock={removeBlock}
               weightUnit={weightUnit}
               distanceUnit={distanceUnit}
+              // If we have non-empty free text but we're currently in exercise
+              // mode, the exercise blocks came from a Gemini parse. Show a
+              // banner and offer a path back to edit the original text.
+              parsedFromText={freeText.trim().length > 0 && exerciseBlocks.length > 0}
+              onBackToText={() => setUseTextMode(true)}
             />
           )}
         </div>

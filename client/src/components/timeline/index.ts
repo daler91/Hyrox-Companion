@@ -1,3 +1,4 @@
+export { CoachReviewingIndicator } from "./CoachReviewingIndicator";
 export { CombineWorkoutsDialog } from "./combine-workouts-dialog";
 export type { EditFormState } from "./EditWorkoutDialog";
 export { default as EditWorkoutDialog } from "./EditWorkoutDialog";
@@ -13,5 +14,6 @@ export { default as TimelineDateGroup } from "./TimelineDateGroup";
 export { default as TimelineEmptyState } from "./TimelineEmptyState";
 export { default as TimelineHeader } from "./TimelineHeader";
 export { default as TimelineSkeleton } from "./TimelineSkeleton";
+export { TimelineTodayIndicator } from "./TimelineTodayIndicator";
 export type { FilterStatus, WorkoutSuggestion } from "./types";
 export { default as WorkoutDetailDialog } from "./WorkoutDetailDialog";

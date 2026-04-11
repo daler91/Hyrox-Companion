@@ -1,9 +1,17 @@
-import { Download, Filter, Loader2, Pencil, Sparkles,Target, Upload } from "lucide-react";
+import { CalendarDays, Download, Filter, Loader2, Pencil, Settings2, Sparkles,Target, Upload } from "lucide-react";
 import { useState } from "react";
 
 import { GeneratePlanDialog } from "@/components/plans/GeneratePlanDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -40,6 +48,7 @@ export default function TimelineFilters({
   isRenaming,
   onGoalSave,
   isUpdatingGoal,
+  onScheduleClick,
 }: Readonly<TimelineFiltersProps>) {
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [renameName, setRenameName] = useState("");
@@ -106,6 +115,50 @@ export default function TimelineFilters({
           </Select>
 
           <div className="flex gap-2">
+            {selectedPlan ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    data-testid="button-manage-plan"
+                    aria-label="Manage plan"
+                  >
+                    <Settings2 className="h-4 w-4 mr-2" />
+                    Manage
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-52">
+                  <DropdownMenuLabel className="text-xs">
+                    {selectedPlan.name}
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={openRenameDialog}
+                    data-testid="menuitem-rename-plan"
+                  >
+                    <Pencil className="h-4 w-4 mr-2" />
+                    Rename plan
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={openGoalDialog}
+                    data-testid="menuitem-set-goal"
+                  >
+                    <Target className="h-4 w-4 mr-2" />
+                    {selectedPlan.goal ? "Edit goal" : "Set goal"}
+                  </DropdownMenuItem>
+                  {onScheduleClick ? (
+                    <DropdownMenuItem
+                      onClick={() => onScheduleClick(selectedPlan.id)}
+                      data-testid="menuitem-reschedule-plan"
+                    >
+                      <CalendarDays className="h-4 w-4 mr-2" />
+                      Reschedule
+                    </DropdownMenuItem>
+                  ) : null}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null}
+
             <Button
               variant="outline"
               onClick={() => setGenerateDialogOpen(true)}

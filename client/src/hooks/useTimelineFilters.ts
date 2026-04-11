@@ -3,9 +3,22 @@ import { format } from "date-fns";
 import { useMemo,useState } from "react";
 
 import type { FilterStatus } from "@/components/timeline";
+import { useUrlQueryState } from "@/hooks/useUrlQueryState";
+
+const FILTER_STATUSES: readonly FilterStatus[] = [
+  "all",
+  "completed",
+  "planned",
+  "missed",
+  "skipped",
+];
 
 export function useTimelineFilters(timelineData: TimelineEntry[]) {
-  const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
+  const [filterStatus, setFilterStatus] = useUrlQueryState<FilterStatus>(
+    "status",
+    "all",
+    FILTER_STATUSES,
+  );
   const [showAllPast, setShowAllPast] = useState(false);
   const [showAllFuture, setShowAllFuture] = useState(false);
 

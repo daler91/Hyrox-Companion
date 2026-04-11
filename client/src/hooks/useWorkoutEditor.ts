@@ -12,6 +12,9 @@ import { api } from "@/lib/api";
 
 interface UseWorkoutEditorOptions {
   initialBlockCounter?: number;
+  initialExerciseBlocks?: string[];
+  initialExerciseData?: Record<string, StructuredExercise>;
+  initialUseTextMode?: boolean;
 }
 
 export function makeBlockId(name: string, counterRef: MutableRefObject<number>) {
@@ -222,9 +225,13 @@ export function useWorkoutSensors(setExerciseBlocks: React.Dispatch<React.SetSta
 
 export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
   const blockCounterRef = useRef(options.initialBlockCounter ?? 0);
-  const [exerciseBlocks, setExerciseBlocks] = useState<string[]>([]);
-  const [exerciseData, setExerciseData] = useState<Record<string, StructuredExercise>>({});
-  const [useTextMode, setUseTextMode] = useState(false);
+  const [exerciseBlocks, setExerciseBlocks] = useState<string[]>(
+    options.initialExerciseBlocks ?? [],
+  );
+  const [exerciseData, setExerciseData] = useState<Record<string, StructuredExercise>>(
+    options.initialExerciseData ?? {},
+  );
+  const [useTextMode, setUseTextMode] = useState(options.initialUseTextMode ?? false);
 
   const { sensors, handleDragEnd } = useWorkoutSensors(setExerciseBlocks);
 

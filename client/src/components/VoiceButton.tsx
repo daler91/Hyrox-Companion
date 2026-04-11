@@ -41,7 +41,7 @@ export function VoiceButton({ isListening, isSupported, onClick, size = "icon", 
           </Button>
         </TooltipTrigger>
         <TooltipContent>
-          <p>{isListening ? "Stop recording" : "Use voice input"}</p>
+          <p>{isListening ? "Stop recording" : "Use voice input — your browser will ask for mic permission"}</p>
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>

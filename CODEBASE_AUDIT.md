@@ -58,11 +58,19 @@ export async function createWorkout(input: {
 
 ## 2) Security & Vulnerabilities
 
-### [Severity Level]: High
-**File/Location:** `client/src/lib/offlineQueue.ts` + mutation routes (no idempotency enforcement found server-side)
+### [Severity Level]: High — RESOLVED
+**File/Location:** `server/middleware/idempotency.ts` + `server/routeGuards.ts` + every mutating route
 
-**The Issue:**
-Offline replay sends `X-Idempotency-Key`, but server endpoints do not enforce idempotency. Network retries can duplicate state-changing writes.
+**Status:** Fixed. `idempotencyMiddleware` is in place, backed by a durable
+`idempotency_keys` table (`server/storage/idempotency.ts`) with a daily
+`cleanupExpired` cron. `protectedMutationGuards` composes it with
+`isAuthenticated` and is applied to every `POST`/`PUT`/`PATCH`/`DELETE` route
+across `server/routes/*.ts` and `server/strava.ts`. Retried requests with the
+same `(userId, X-Idempotency-Key)` now replay the cached 2xx response instead
+of re-executing the handler.
+
+**Original issue:**
+Offline replay sends `X-Idempotency-Key`, but server endpoints did not enforce idempotency. Network retries could duplicate state-changing writes.
 
 **Why it matters:**
 This is both a data integrity problem (duplicate workout logs/side effects) and an abuse amplification vector.
@@ -96,11 +104,18 @@ export async function idempotencyMiddleware(req: Request, res: Response, next: N
 
 ## 3) Performance & Optimization
 
-### [Severity Level]: Medium
+### [Severity Level]: Medium — RESOLVED
 **File/Location:** `server/routes/ai.ts` (`/api/v1/chat/stream`) and `server/gemini/chatService.ts`
 
-**The Issue:**
-On SSE disconnect, the API stops writing to client but does not cancel upstream Gemini generation explicitly.
+**Status:** Fixed. The `/chat/stream` handler creates an `AbortController`
+bridged to `req.on("close")` and threads `controller.signal` through to
+`streamChatWithCoach`, which forwards it to Gemini's
+`generateContentStream({ abortSignal: signal })`. The for-await loop also
+checks `controller.signal.aborted` each iteration and breaks early, so both
+the Gemini request and the local loop unwind promptly on client disconnect.
+
+**Original issue:**
+On SSE disconnect, the API stops writing to client but did not cancel upstream Gemini generation explicitly.
 
 **Why it matters:**
 Uncanceled generation can burn tokens, increase latency pressure, and waste compute under churn/disconnect scenarios.
@@ -218,8 +233,8 @@ return {
 
 ## Priority implementation order
 
-1. **High:** server-side idempotency enforcement for mutating endpoints.
-2. **Medium:** abort propagation for AI SSE streaming.
+1. ~~**High:** server-side idempotency enforcement for mutating endpoints.~~ — RESOLVED
+2. ~~**Medium:** abort propagation for AI SSE streaming.~~ — RESOLVED
 3. **Medium:** fix Strava skipped-counter bug.
 4. **Medium:** await email job enqueues and correct reporting.
 5. **Medium:** normalize custom-exercise validation contract.

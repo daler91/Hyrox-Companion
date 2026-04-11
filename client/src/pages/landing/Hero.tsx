@@ -1,5 +1,6 @@
 import { SignInButton } from "@clerk/react";
-import { ArrowRight, CheckCircle2, Sparkles } from "lucide-react";
+import { ArrowRight, CheckCircle2, Menu, Sparkles } from "lucide-react";
+import { useState } from "react";
 import { SiStrava } from "react-icons/si";
 
 import { Badge } from "@/components/ui/badge";
@@ -67,6 +68,8 @@ function TimelineMockup() {
 }
 
 export function LandingHeader() {
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
   return (
     <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-md">
       <div className="container mx-auto px-4 py-3 flex items-center justify-between gap-4">
@@ -79,11 +82,55 @@ export function LandingHeader() {
         <div className="flex items-center gap-3">
           <a href="#features" className="text-sm text-muted-foreground hover:text-foreground transition-colors hidden sm:block">Features</a>
           <a href="#how-it-works" className="text-sm text-muted-foreground hover:text-foreground transition-colors hidden sm:block">How It Works</a>
+          <a href="#faq" className="text-sm text-muted-foreground hover:text-foreground transition-colors hidden sm:block">FAQ</a>
           <SignInButton mode="modal">
             <Button data-testid="button-login-header" size="sm">Log In</Button>
           </SignInButton>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="sm:hidden"
+            onClick={() => setMobileNavOpen((prev) => !prev)}
+            aria-expanded={mobileNavOpen}
+            aria-controls="landing-mobile-nav"
+            aria-label="Toggle navigation menu"
+            data-testid="button-mobile-nav-toggle"
+          >
+            <Menu className="h-5 w-5" />
+          </Button>
         </div>
       </div>
+      {mobileNavOpen ? (
+        <nav
+          id="landing-mobile-nav"
+          className="sm:hidden border-t bg-background/95 backdrop-blur-md"
+          aria-label="Landing mobile navigation"
+        >
+          <div className="container mx-auto px-4 py-3 flex flex-col gap-3">
+            <a
+              href="#features"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              onClick={() => setMobileNavOpen(false)}
+            >
+              Features
+            </a>
+            <a
+              href="#how-it-works"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              onClick={() => setMobileNavOpen(false)}
+            >
+              How It Works
+            </a>
+            <a
+              href="#faq"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              onClick={() => setMobileNavOpen(false)}
+            >
+              FAQ
+            </a>
+          </div>
+        </nav>
+      ) : null}
     </header>
   );
 }
@@ -124,7 +171,7 @@ export function Hero() {
               </a>
             </div>
           </div>
-          <div className="fade-up float-animation hidden lg:block">
+          <div className="fade-up float-animation lg:block">
             <TimelineMockup />
           </div>
         </div>

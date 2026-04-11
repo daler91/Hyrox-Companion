@@ -1,6 +1,8 @@
+import { format, subDays } from "date-fns";
 import React from "react";
 
 import { RpeSelector } from "@/components/RpeSelector";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,6 +16,14 @@ interface WorkoutDetailsCardProps {
   setRpe: (value: number | null) => void;
 }
 
+function todayIso(): string {
+  return format(new Date(), "yyyy-MM-dd");
+}
+
+function yesterdayIso(): string {
+  return format(subDays(new Date(), 1), "yyyy-MM-dd");
+}
+
 export const WorkoutDetailsCard = ({
   title,
   setTitle,
@@ -22,6 +32,11 @@ export const WorkoutDetailsCard = ({
   rpe,
   setRpe,
 }: Readonly<WorkoutDetailsCardProps>) => {
+  const today = todayIso();
+  const yesterday = yesterdayIso();
+  const isToday = date === today;
+  const isYesterday = date === yesterday;
+
   return (
     <Card>
       <CardHeader>
@@ -50,6 +65,30 @@ export const WorkoutDetailsCard = ({
             />
           </div>
         </div>
+        <fieldset className="flex flex-wrap gap-2 border-0 p-0 m-0">
+          <legend className="sr-only">Quick-pick workout date</legend>
+          <Button
+            type="button"
+            variant={isToday ? "default" : "outline"}
+            size="sm"
+            onClick={() => setDate(today)}
+            data-testid="button-date-today"
+          >
+            Today
+          </Button>
+          <Button
+            type="button"
+            variant={isYesterday ? "default" : "outline"}
+            size="sm"
+            onClick={() => setDate(yesterday)}
+            data-testid="button-date-yesterday"
+          >
+            Yesterday
+          </Button>
+          <span className="text-xs text-muted-foreground self-center ml-1">
+            Or use the date picker above for earlier workouts
+          </span>
+        </fieldset>
         <RpeSelector value={rpe} onChange={setRpe} />
       </CardContent>
     </Card>

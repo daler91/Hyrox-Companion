@@ -9,6 +9,7 @@ import { EXTERNAL_API_TIMEOUT_MS,RATE_LIMIT_WINDOW_15M_MS, STRAVA_STATE_MAX_AGE_
 import { env } from "./env";
 import { AppError, ErrorCode } from "./errors";
 import { logger } from "./logger";
+import { protectedMutationGuards } from "./routeGuards";
 import { asyncHandler } from "./routeUtils";
 import { mapStravaActivityToWorkout, type StravaActivity } from "./services/stravaMapper";
 import { storage } from "./storage";
@@ -356,6 +357,6 @@ export function registerStravaRoutes(app: Express): void {
   app.get("/api/v1/strava/status", isAuthenticated, asyncHandler(handleStravaStatus));
   app.get("/api/v1/strava/auth", isAuthenticated, stravaAuthLimiter, asyncHandler(handleStravaAuth));
   app.get("/api/v1/strava/callback", stravaAuthLimiter, asyncHandler(handleStravaCallback));
-  app.delete("/api/v1/strava/disconnect", isAuthenticated, asyncHandler(handleStravaDisconnect));
-  app.post("/api/v1/strava/sync", isAuthenticated, stravaSyncLimiter, asyncHandler(handleStravaSync));
+  app.delete("/api/v1/strava/disconnect", ...protectedMutationGuards, asyncHandler(handleStravaDisconnect));
+  app.post("/api/v1/strava/sync", ...protectedMutationGuards, stravaSyncLimiter, asyncHandler(handleStravaSync));
 }

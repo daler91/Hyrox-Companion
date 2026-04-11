@@ -11,6 +11,7 @@ import { CoachPanel } from "@/components/CoachPanel";
 import { FeatureErrorBoundaryWrapper } from "@/components/FeatureErrorBoundaryWrapper";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 import {
+  CoachReviewingIndicator,
   CombineWorkoutsDialog,
   FloatingActionButton,
   ImportPreviewDialog,
@@ -21,6 +22,7 @@ import {
   TimelineFilters,
   TimelineHeader,
   TimelineSkeleton,
+  TimelineTodayIndicator,
   WorkoutDetailDialog,
 } from "@/components/timeline";
 import { Button } from "@/components/ui/button";
@@ -261,6 +263,8 @@ export default function Timeline() {
             onScrollToToday={handleScrollToToday}
           />
 
+          <CoachReviewingIndicator isActive={!!user?.isAutoCoaching} />
+
           <TimelineFilters
         plans={plans}
         plansLoading={plansLoading}
@@ -274,7 +278,14 @@ export default function Timeline() {
         isRenaming={renamePlanMutation.isPending}
         onGoalSave={(planId, goal) => updatePlanGoalMutation.mutate({ planId, goal })}
         isUpdatingGoal={updatePlanGoalMutation.isPending}
+        onScheduleClick={(planId) => setSchedulingPlanId(planId)}
       />
+
+          <TimelineTodayIndicator
+            todayRef={todayRef}
+            scrollRef={scrollRef}
+            onScrollToToday={handleScrollToToday}
+          />
 
       <TimelineContent
         timelineLoading={timelineLoading}
@@ -385,22 +396,28 @@ export default function Timeline() {
       )}
       
       {coachOpen && (
-        <div className="fixed inset-0 z-50 md:hidden">
-          <button
-            type="button"
-            className="absolute inset-0 bg-background/80 backdrop-blur-sm w-full h-full border-none p-0 focus:outline-none cursor-pointer"
-            onClick={() => setCoachOpen(false)}
-            aria-label="Close coach panel"
-          />
-          <div className="absolute right-0 top-0 bottom-0 w-full max-w-sm bg-background shadow-lg">
+        // Mobile coach surface: a bottom sheet at ~70vh so the user can still
+        // see the top of their timeline while chatting with the coach.
+        // Intentionally no fullscreen backdrop — that would defeat the
+        // "reference the timeline while chatting" use case (C-6 in the UX
+        // review). A small hint strip is rendered behind the rounded top so
+        // the sheet reads as a peekable surface rather than a blocking modal.
+        <div className="fixed inset-x-0 bottom-0 z-50 h-[70vh] md:hidden">
+          <div
+            data-testid="coach-panel-mobile-sheet"
+            className="relative h-full bg-background shadow-2xl rounded-t-2xl border-t border-x"
+          >
+            <div className="flex items-center justify-center pt-2" aria-hidden="true">
+              <div className="h-1 w-10 rounded-full bg-muted-foreground/40" />
+            </div>
             <FeatureErrorBoundaryWrapper featureName="Coach">
-            <CoachPanel 
-              isOpen={coachOpen} 
-              onClose={() => setCoachOpen(false)} 
-              timeline={timelineData}
-              isNewUser={isNewUser}
-            />
-          </FeatureErrorBoundaryWrapper>
+              <CoachPanel
+                isOpen={coachOpen}
+                onClose={() => setCoachOpen(false)}
+                timeline={timelineData}
+                isNewUser={isNewUser}
+              />
+            </FeatureErrorBoundaryWrapper>
           </div>
         </div>
       )}

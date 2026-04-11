@@ -1,6 +1,6 @@
 import { useMutation,useQuery } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { Loader2, RotateCw } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 
 import { CoachingSection } from "@/components/settings/CoachingSection";
@@ -10,6 +10,8 @@ import { ProfileSection } from "@/components/settings/ProfileSection";
 import { PushNotificationSection } from "@/components/settings/PushNotificationSection";
 import { StravaSection } from "@/components/settings/StravaSection";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ToastAction } from "@/components/ui/toast";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { api, QUERY_KEYS } from "@/lib/api";
@@ -29,6 +31,26 @@ interface StravaStatus {
   lastSyncedAt?: string | null;
 }
 
+interface PreferencesSnapshot {
+  weightUnit: string;
+  distanceUnit: string;
+  weeklyGoal: string;
+  emailNotifications: boolean;
+  aiCoachEnabled: boolean;
+}
+
+function preferencesToSnapshot(
+  preferences: Pick<Preferences, "weightUnit" | "distanceUnit" | "weeklyGoal" | "emailNotifications" | "aiCoachEnabled">,
+): PreferencesSnapshot {
+  return {
+    weightUnit: preferences.weightUnit || "kg",
+    distanceUnit: preferences.distanceUnit || "km",
+    weeklyGoal: String(preferences.weeklyGoal || 5),
+    emailNotifications: preferences.emailNotifications,
+    aiCoachEnabled: preferences.aiCoachEnabled ?? true,
+  };
+}
+
 export default function Settings() {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -40,6 +62,15 @@ export default function Settings() {
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [aiCoachEnabled, setAiCoachEnabled] = useState(true);
   const [hasChanges, setHasChanges] = useState(false);
+  // Snapshot of values before the most recent save, used to offer an
+  // "Undo" action on the post-save toast.
+  const undoSnapshotRef = useRef<PreferencesSnapshot | null>(null);
+  // Tracks the last values we know the server has committed. Initialized
+  // from the preferences query once it loads, and kept in sync by
+  // saveMutation.onSuccess. Reading from here for the undo snapshot avoids
+  // the stale-query race where `preferences` lags behind back-to-back saves
+  // while invalidation is still refetching.
+  const lastCommittedRef = useRef<PreferencesSnapshot | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(search);
@@ -77,6 +108,12 @@ export default function Settings() {
       setWeeklyGoal(String(preferences.weeklyGoal || 5));
       setEmailNotifications(preferences.emailNotifications);
       setAiCoachEnabled(preferences.aiCoachEnabled ?? true);
+      // Seed the committed-state tracker the first time preferences load.
+      // Subsequent updates come from saveMutation.onSuccess so we don't
+      // clobber an in-flight undo target with a query refetch.
+      if (!lastCommittedRef.current) {
+        lastCommittedRef.current = preferencesToSnapshot(preferences);
+      }
     }
   }, [preferences]);
 
@@ -88,12 +125,50 @@ export default function Settings() {
       emailNotifications: boolean;
       aiCoachEnabled: boolean;
     }) => api.preferences.update(data),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.preferences }).catch(() => {});
+      // Promote the values we just persisted to the committed-state
+      // tracker so the NEXT save's undo snapshot sees these — not
+      // whatever the (still-invalidating) preferences query happens to
+      // return in the meantime.
+      lastCommittedRef.current = {
+        weightUnit: variables.weightUnit,
+        distanceUnit: variables.distanceUnit,
+        weeklyGoal: String(variables.weeklyGoal),
+        emailNotifications: variables.emailNotifications,
+        aiCoachEnabled: variables.aiCoachEnabled,
+      };
       setHasChanges(false);
+      const previous = undoSnapshotRef.current;
       toast({
         title: "Settings saved",
         description: "Your preferences have been updated.",
+        action: previous ? (
+          <ToastAction
+            altText="Undo settings change"
+            data-testid="button-undo-settings"
+            onClick={() => {
+              // Restore the previous values in-state and persist them.
+              // Leave undoSnapshotRef in place so a second undo restores
+              // again — the mutation onSuccess will replace it after
+              // persistence completes.
+              setWeightUnit(previous.weightUnit);
+              setDistanceUnit(previous.distanceUnit);
+              setWeeklyGoal(previous.weeklyGoal);
+              setEmailNotifications(previous.emailNotifications);
+              setAiCoachEnabled(previous.aiCoachEnabled);
+              saveMutation.mutate({
+                weightUnit: previous.weightUnit,
+                distanceUnit: previous.distanceUnit,
+                weeklyGoal: Number.parseInt(previous.weeklyGoal, 10),
+                emailNotifications: previous.emailNotifications,
+                aiCoachEnabled: previous.aiCoachEnabled,
+              });
+            }}
+          >
+            Undo
+          </ToastAction>
+        ) : undefined,
       });
     },
     onError: () => {
@@ -116,6 +191,13 @@ export default function Settings() {
   }, [hasChanges]);
 
   const handleSave = useCallback(() => {
+    // Capture the pre-save values from the committed-state tracker so the
+    // post-save toast can offer Undo. Using lastCommittedRef instead of
+    // the `preferences` query means back-to-back saves don't race against
+    // a still-pending refetch.
+    undoSnapshotRef.current = lastCommittedRef.current
+      ? { ...lastCommittedRef.current }
+      : null;
     saveMutation.mutate({
       weightUnit,
       distanceUnit,
@@ -191,6 +273,28 @@ export default function Settings() {
       <PushNotificationSection />
 
       <CoachingSection />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Getting Started</CardTitle>
+          <CardDescription>
+            Run the welcome flow again if you skipped it or want to pick a different training plan.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button
+            variant="outline"
+            data-testid="button-rerun-onboarding"
+            onClick={() => {
+              localStorage.removeItem("hyrox-onboarding-complete");
+              setLocation("/?onboarding=run");
+            }}
+          >
+            <RotateCw className="h-4 w-4 mr-2" aria-hidden="true" />
+            Run setup again
+          </Button>
+        </CardContent>
+      </Card>
 
       <DataToolsSection />
 

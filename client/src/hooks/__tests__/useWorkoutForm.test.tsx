@@ -195,7 +195,7 @@ describe('useWorkoutForm', () => {
       expect(result.current.freeText).toBe('Running\nis fun');
     });
 
-    it('triggers destructive toast on voice error', () => {
+    it('triggers destructive toast with a retry action on voice error', () => {
       const handlers = setupVoiceMocks();
 
       renderFormHook(defaultProps);
@@ -204,11 +204,13 @@ describe('useWorkoutForm', () => {
         handlers.getMainHandler()!.onError!("Microphone not found");
       });
 
-      expect(mockToast).toHaveBeenCalledWith({
-        title: 'Voice Input',
-        description: 'Microphone not found',
-        variant: 'destructive',
-      });
+      expect(mockToast).toHaveBeenCalledTimes(1);
+      const call = mockToast.mock.calls[0][0];
+      expect(call.title).toBe('Voice input failed');
+      expect(call.description).toBe('Microphone not found');
+      expect(call.variant).toBe('destructive');
+      // The retry action is a JSX element; just verify it was supplied.
+      expect(call.action).toBeDefined();
     });
   });
 
