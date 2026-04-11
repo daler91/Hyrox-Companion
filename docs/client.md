@@ -339,15 +339,39 @@ Configured via `components.json` at the project root:
 - Onboarding wizard progress bar: exposes step count via both the visible "Step N of M" counter
   and the `sr-only` `<progress>` element with `aria-label`.
 
-**Known gaps requiring a running browser to verify:**
+**Automated accessibility coverage (runs in CI via `pnpm test`):**
 
-- WCAG AA color contrast audit across light and dark theme variants. The design-token-based palette
-  is intended to comply, but an automated check with a tool like axe DevTools should be run against
-  Timeline, Analytics, and Settings pages in both themes.
-- Screen reader experience of the virtualized Timeline (`@tanstack/react-virtual`). Off-viewport
-  rows are not in the DOM, so NVDA/VoiceOver may report a truncated list. Needs a manual pass.
-- Keyboard tab order on mobile with the coach bottom sheet open — verify focus returns cleanly to
-  the FAB when the sheet closes.
+- `jest-axe` matcher registered in `vitest.setup.ts` — component tests use
+  `expect(results).toHaveNoViolations()` against rendered containers.
+- Axe regression tests on:
+  - `NotFound` (404 page)
+  - `SuggestionCard` (default, applying, and RAG-citation states)
+  - `WorkoutHeader`
+  - `CoachReviewingIndicator` (inactive + active states)
+  - `TimelineWorkoutCard`
+- Keyboard activation tests on `TimelineWorkoutCard` asserting the
+  `role="button"` card responds to both Enter and Space when focused.
+- Static regression test on `prefers-reduced-motion` — fails if the global
+  override is removed from `client/src/index.css`.
+
+**Outstanding manual work (tracked in #768):**
+
+These items require a real browser, screen reader, or physical device and
+can't run headless in CI. Summary of what's still needed:
+
+- **WCAG AA contrast audit** with axe DevTools against Timeline, Log Workout,
+  Analytics, Settings, Coach panel, Onboarding wizard, and Landing — in both
+  light and dark themes.
+- **Screen reader pass** with NVDA (Windows) and VoiceOver (macOS) over the
+  virtualized Timeline (`@tanstack/react-virtual` drops off-viewport rows),
+  Onboarding wizard step transitions, Coach chat live region, and toast
+  action buttons.
+- **Mobile real-device testing** — touch-target sizes (WCAG 2.5.5), Coach
+  bottom sheet focus trap/return, reduced-motion effect at the OS level.
+- **Focus-return spot checks** after dialog close, skip-link activation,
+  and onboarding wizard close.
+
+File findings on issue #768 or open focused follow-up PRs referencing it.
 
 ---
 
