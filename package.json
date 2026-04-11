@@ -117,13 +117,18 @@
     "",
     "serialize-javascript >=7.0.3: fixes GHSA-5c6j-r48x-rmvq (RCE via unsanitized RegExp.flags).",
     "  Pulled by @rollup/plugin-terser (depends on serialize-javascript ^7.0.3).",
-    "  REMOVABLE NOW: ^7.0.3 already satisfies >=7.0.3; the parent dep has been updated."
+    "  REMOVABLE NOW: ^7.0.3 already satisfies >=7.0.3; the parent dep has been updated.",
+    "",
+    "hono >=4.12.12: fixes ipRestriction() IPv4-mapped IPv6 address bypass (hono < 4.12.12).",
+    "  Pulled by @modelcontextprotocol/sdk 1.29.0 (depends on hono 4.12.10).",
+    "  Remove when @modelcontextprotocol/sdk ships a version that depends on hono >=4.12.12."
   ],
   "overrides": {
     "esbuild": "0.27.5",
     "yauzl": "^3.2.1",
     "undici": "^7.24.3",
-    "serialize-javascript": ">=7.0.3"
+    "serialize-javascript": ">=7.0.3",
+    "hono": ">=4.12.12"
   },
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.19",
@@ -177,7 +182,8 @@
       "esbuild": "0.27.5",
       "yauzl": "^3.2.1",
       "undici": "^7.24.3",
-      "serialize-javascript": ">=7.0.3"
+      "serialize-javascript": ">=7.0.3",
+      "hono": ">=4.12.12"
     }
   },
   "packageManager": "pnpm@9.12.0",
