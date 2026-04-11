@@ -138,17 +138,61 @@ function getWorkoutLogsCoalesced(userId: string, from?: string, to?: string): Pr
   return promise;
 }
 
+/**
+ * Returns the pair of ISO dates that bound the period immediately BEFORE
+ * [from, to], with the same length. Returns null when we can't derive a
+ * meaningful previous window (e.g. the user picked "all time" so there's
+ * no lower bound to anchor the comparison).
+ */
+function computePreviousWindow(from?: string, to?: string): { from: string; to: string } | null {
+  if (!from) return null;
+  const fromDate = new Date(`${from}T00:00:00Z`);
+  // When `to` is absent (the common ?from=... flow), anchor the current
+  // window's upper bound at midnight UTC of today. Using `new Date()` with
+  // a wall-clock time component would make (to - from) include fractional
+  // days, and after truncating to YYYY-MM-DD the previous window would end
+  // up one day longer for most of the calendar day — skewing all delta
+  // percentages.
+  let toDate: Date;
+  if (to) {
+    toDate = new Date(`${to}T00:00:00Z`);
+  } else {
+    const now = new Date();
+    toDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  }
+  if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime())) return null;
+  if (toDate < fromDate) return null;
+
+  const dayMs = 24 * 60 * 60 * 1000;
+  // Previous window ends the day before the current window starts and has
+  // the same inclusive length. For an inclusive range [from, to] with N
+  // days, (to - from) is (N-1) day-spans — which is exactly the offset we
+  // need to step back from previousTo to previousFrom.
+  const previousTo = new Date(fromDate.getTime() - dayMs);
+  const previousFrom = new Date(previousTo.getTime() - (toDate.getTime() - fromDate.getTime()));
+
+  return {
+    from: previousFrom.toISOString().split("T")[0],
+    to: previousTo.toISOString().split("T")[0],
+  };
+}
+
 router.get("/api/v1/training-overview", isAuthenticated, rateLimiter("analytics", 20), asyncHandler(async (req: DateReq, res: Response) => {
     const userId = getUserId(req);
     const dates = parseDateParams(req, res);
     if (!dates) return;
 
-    const [workoutLogs, allSets] = await Promise.all([
+    const previousWindow = computePreviousWindow(dates.from, dates.to);
+
+    const [workoutLogs, allSets, previousWorkoutLogs] = await Promise.all([
       getWorkoutLogsCoalesced(userId, dates.from, dates.to),
       getExerciseSetsCoalesced(userId, dates.from, dates.to),
+      previousWindow
+        ? getWorkoutLogsCoalesced(userId, previousWindow.from, previousWindow.to)
+        : Promise.resolve(undefined),
     ]);
 
-    res.json(calculateTrainingOverview(workoutLogs, allSets));
+    res.json(calculateTrainingOverview(workoutLogs, allSets, previousWorkoutLogs));
   }));
 
 export default router;
