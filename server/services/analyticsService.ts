@@ -96,12 +96,18 @@ export function calculateExerciseAnalytics(allSets: ExerciseSetWithDate[]): Reco
   return finalAnalytics;
 }
 
+const mondayCache = new Map<string, string>();
 function getMonday(dateStr: string): string {
+  let res = mondayCache.get(dateStr);
+  if (res) return res;
+
   const d = new Date(dateStr + "T00:00:00");
   const day = d.getDay();
   const diff = day === 0 ? -6 : 1 - day;
   d.setDate(d.getDate() + diff);
-  return d.toISOString().split("T")[0];
+  res = d.toISOString().split("T")[0];
+  mondayCache.set(dateStr, res);
+  return res;
 }
 
 function buildWeeklySummaries(
@@ -173,15 +179,25 @@ function buildStationCoverage(
   const todayStr = new Date().toISOString().split("T")[0];
   const stationLastTrained = new Map<string, string>();
 
-  for (const set of exerciseSets) {
-    const normalizedKey = getExerciseKey(set).toLowerCase().replaceAll(/[\s-]/g, "_");
+  // Cache to avoid O(n^2) regex matching and string inclusions inside the loop
+  const stationMatchesCache = new Map<string, string[]>();
 
-    for (const station of HYROX_STATIONS_WITH_RUNNING) {
-      if (normalizedKey.includes(station)) {
-        const existing = stationLastTrained.get(station);
-        if (!existing || set.date > existing) {
-          stationLastTrained.set(station, set.date);
-        }
+  for (const set of exerciseSets) {
+    const key = getExerciseKey(set);
+    let matches = stationMatchesCache.get(key);
+
+    if (!matches) {
+      const normalizedKey = key.toLowerCase().replaceAll(/[\s-]/g, "_");
+      matches = HYROX_STATIONS_WITH_RUNNING.filter((station) =>
+        normalizedKey.includes(station)
+      );
+      stationMatchesCache.set(key, matches);
+    }
+
+    for (const station of matches) {
+      const existing = stationLastTrained.get(station);
+      if (!existing || set.date > existing) {
+        stationLastTrained.set(station, set.date);
       }
     }
   }
