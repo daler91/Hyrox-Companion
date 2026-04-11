@@ -98,13 +98,14 @@ export function PreferencesSection({
 
           <div className="flex items-center justify-between gap-4">
             <div className="space-y-1">
-              <Label className="flex items-center gap-2">
+              <Label htmlFor="email-notifications-switch" className="flex items-center gap-2 cursor-pointer">
                 <Mail className="h-4 w-4" />
                 Email Notifications
               </Label>
               <p className="text-sm text-muted-foreground">Receive weekly training summaries and missed workout reminders</p>
             </div>
             <Switch
+              id="email-notifications-switch"
               checked={emailNotifications}
               onCheckedChange={onEmailNotificationsChange}
               data-testid="switch-email-notifications"
@@ -124,7 +125,7 @@ export function PreferencesSection({
         <CardContent>
           <div className="flex items-center justify-between gap-4">
             <div className="space-y-1">
-              <Label className="flex items-center gap-2">
+              <Label htmlFor="ai-coach-enabled-switch" className="flex items-center gap-2 cursor-pointer">
                 Auto-Adjust Workouts
               </Label>
               <p className="text-sm text-muted-foreground">
@@ -133,6 +134,7 @@ export function PreferencesSection({
               </p>
             </div>
             <Switch
+              id="ai-coach-enabled-switch"
               checked={aiCoachEnabled}
               onCheckedChange={onAiCoachEnabledChange}
               data-testid="switch-ai-coach-enabled"
