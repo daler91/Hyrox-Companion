@@ -18,7 +18,9 @@ const SYNC_SUCCESS_DISMISS_MS = 3500;
  */
 export function OfflineIndicator() {
   const isOnline = useOnlineStatus();
-  const [pendingCount, setPendingCount] = useState(0);
+  // Lazy initializer reads the queue length once on mount so the first
+  // render already reflects reality without setState-in-effect patterns.
+  const [pendingCount, setPendingCount] = useState<number>(() => getPendingCount());
   const [recentlySynced, setRecentlySynced] = useState<number | null>(null);
 
   // Poll queue length while offline so the pill stays accurate as the user
@@ -26,7 +28,6 @@ export function OfflineIndicator() {
   // event dispatched from offlineQueue.flushQueue.
   useEffect(() => {
     if (isOnline) return;
-    setPendingCount(getPendingCount());
     const intervalId = setInterval(() => {
       setPendingCount(getPendingCount());
     }, OFFLINE_POLL_INTERVAL_MS);
