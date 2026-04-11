@@ -33,6 +33,7 @@ describe("Navigation (Authenticated)", () => {
   it("shows 404 for unknown routes", () => {
     cy.visit("/nonexistent-page");
     cy.wait("@authUser");
-    cy.contains("404").should("be.visible");
+    cy.get("[data-testid='page-not-found']").should("be.visible");
+    cy.get("[data-testid='button-back-to-training']").should("be.visible");
   });
 });
