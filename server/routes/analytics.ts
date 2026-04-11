@@ -147,7 +147,19 @@ function getWorkoutLogsCoalesced(userId: string, from?: string, to?: string): Pr
 function computePreviousWindow(from?: string, to?: string): { from: string; to: string } | null {
   if (!from) return null;
   const fromDate = new Date(`${from}T00:00:00Z`);
-  const toDate = to ? new Date(`${to}T00:00:00Z`) : new Date();
+  // When `to` is absent (the common ?from=... flow), anchor the current
+  // window's upper bound at midnight UTC of today. Using `new Date()` with
+  // a wall-clock time component would make (to - from) include fractional
+  // days, and after truncating to YYYY-MM-DD the previous window would end
+  // up one day longer for most of the calendar day — skewing all delta
+  // percentages.
+  let toDate: Date;
+  if (to) {
+    toDate = new Date(`${to}T00:00:00Z`);
+  } else {
+    const now = new Date();
+    toDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  }
   if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime())) return null;
   if (toDate < fromDate) return null;
 

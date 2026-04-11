@@ -43,6 +43,14 @@ describe("DeltaIndicator", () => {
     expect(screen.getByTestId("delta-flat-test")).toBeInTheDocument();
   });
 
+  it("treats 0.45%–0.49% as flat even though they round up to 0.5%", () => {
+    // Regression test: previously the flat check ran on the one-decimal
+    // rounded value, so raw 0.47% became 0.5% and fell through to the
+    // up-arrow branch. The cutoff should apply to the unrounded percentage.
+    render(<DeltaIndicator current={100.47} previous={100} testIdSuffix="test" />);
+    expect(screen.getByTestId("delta-flat-test")).toBeInTheDocument();
+  });
+
   it("includes unit in the tooltip (title attribute) when supplied", () => {
     render(<DeltaIndicator current={55} previous={50} unit="min" testIdSuffix="test" />);
     const el = screen.getByTestId("delta-up-test");

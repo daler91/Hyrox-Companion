@@ -58,11 +58,13 @@ export function DeltaIndicator({
   }
 
   const percent = ((current - previous) / previous) * 100;
-  const absPercent = Math.abs(Math.round(percent * 10) / 10);
+  const absRaw = Math.abs(percent);
 
   // Treat anything within 0.5 percentage points as flat — avoids noisy
-  // 0.1% changes that don't reflect meaningful user progress.
-  if (absPercent < 0.5) {
+  // 0.1% changes that don't reflect meaningful user progress. The check
+  // runs on the unrounded value so that 0.45%–0.49% aren't rounded up to
+  // 0.5% and mistakenly shown as regressions/improvements.
+  if (absRaw < 0.5) {
     return (
       <span
         className="inline-flex items-center gap-0.5 text-[10px] font-medium text-muted-foreground"
@@ -75,6 +77,7 @@ export function DeltaIndicator({
     );
   }
 
+  const absPercent = Math.round(absRaw * 10) / 10;
   const isIncrease = percent > 0;
   // An increase is "good" when higher is better, OR when lower is better but
   // the metric went down. XOR captures this succinctly.
