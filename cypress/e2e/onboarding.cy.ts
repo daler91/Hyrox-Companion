@@ -3,11 +3,7 @@ import { setupAuthIntercepts } from "../support/authIntercepts";
 // E2E coverage for the first-time onboarding flow, the new "Step N of N"
 // counter, and the re-entry point added to Settings. Covers findings
 // O-1..O-4 from the UX review.
-// TEMPORARILY SKIPPED as a diagnostic for a persistent cypress-run
-// failure on PR #765 where the shard log shows "1 failed" with no
-// spec name and Cypress Cloud is paywalled. Will un-skip once the
-// culprit is identified.
-describe.skip("Onboarding Wizard", () => {
+describe("Onboarding Wizard", () => {
   beforeEach(() => {
     setupAuthIntercepts();
     cy.intercept("PATCH", "/api/v1/preferences", { statusCode: 200, body: { ok: true } }).as(
@@ -72,6 +68,12 @@ describe.skip("Onboarding Wizard", () => {
     cy.visit("/settings");
     cy.wait("@authUser");
 
+    // The Getting Started card sits below the Profile / Strava /
+    // Preferences cards, which pushes the button below the 720px viewport
+    // on the Cypress default. scrollIntoView first so be.visible is
+    // meaningful (otherwise Cypress flags the element as "clipped by
+    // overflow: auto" on the main scroll container).
+    cy.getBySel("button-rerun-onboarding").scrollIntoView();
     cy.getBySel("button-rerun-onboarding").should("be.visible");
     cy.getBySel("button-rerun-onboarding").click();
 

@@ -4,8 +4,7 @@ import { setupAuthIntercepts } from "../support/authIntercepts";
 // fragile, so this tests the affordances rather than end-to-end stream
 // consumption: panel opens, welcome renders, send button disabled on empty
 // input, quick-action buttons visible.
-// TEMPORARILY SKIPPED — see onboarding.cy.ts for context.
-describe.skip("AI Coach Panel", () => {
+describe("AI Coach Panel", () => {
   beforeEach(() => {
     setupAuthIntercepts();
     // Mock the non-streaming chat endpoint as a fallback; the panel may
