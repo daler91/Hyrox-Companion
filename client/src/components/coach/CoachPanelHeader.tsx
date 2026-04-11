@@ -1,5 +1,7 @@
 import { Loader2, MessageSquare, Trash2, X } from "lucide-react";
+import { useState } from "react";
 
+import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -16,6 +18,13 @@ export function CoachPanelHeader({
   isClearingHistory,
   canClearHistory,
 }: Readonly<CoachPanelHeaderProps>) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  const handleConfirm = () => {
+    onClearHistory();
+    setConfirmOpen(false);
+  };
+
   return (
     <TooltipProvider>
       <div className="flex items-center justify-between gap-2 p-3 border-b flex-shrink-0">
@@ -30,7 +39,7 @@ export function CoachPanelHeader({
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={onClearHistory}
+                  onClick={() => setConfirmOpen(true)}
                   disabled={isClearingHistory}
                   aria-label="Clear chat history"
                   data-testid="button-clear-chat"
@@ -65,6 +74,19 @@ export function CoachPanelHeader({
           </Tooltip>
         </div>
       </div>
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Clear chat history?"
+        description="This will permanently delete your entire conversation with the AI coach. This action cannot be undone."
+        confirmText={isClearingHistory ? "Clearing..." : "Clear history"}
+        cancelText="Cancel"
+        onConfirm={handleConfirm}
+        isPending={isClearingHistory}
+        isDestructive
+        cancelTestId="button-cancel-clear-chat"
+        confirmTestId="button-confirm-clear-chat"
+      />
     </TooltipProvider>
   );
 }
