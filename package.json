@@ -158,7 +158,7 @@
     "jest-axe": "^10.0.0",
     "jsdom": "^28.1.0",
     "nanoid": "^5.1.7",
-    "prettier": "^3.8.1",
+    "prettier": "^3.8.2",
     "supertest": "^7.2.2",
     "tailwindcss": "^4.2.2",
     "tsx": "^4.21.0",
