@@ -1,3 +1,4 @@
+import { Loader2 } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 
@@ -21,16 +22,40 @@ import { useWorkoutForm } from "@/hooks/useWorkoutForm";
 
 const DRAFT_SAVE_DEBOUNCE_MS = 400;
 
+/**
+ * Top-level LogWorkout page. Gates the form on auth resolution so the
+ * inner LogWorkoutForm can load the real user's draft on its first
+ * render — without this gate, a slow Clerk hydration would initialize
+ * the draft under "anon", and the subsequent autosave effect would
+ * overwrite (and then blank-delete) the authenticated user's draft.
+ */
 export default function LogWorkout() {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full p-8">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" aria-label="Loading" />
+      </div>
+    );
+  }
+
+  return <LogWorkoutForm userKey={user?.id ?? "anon"} />;
+}
+
+interface LogWorkoutFormProps {
+  userKey: string;
+}
+
+function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const handleCancel = React.useCallback(() => setLocation("/"), [setLocation]);
   const { weightUnit, distanceUnit, weightLabel } = useUnitPreferences();
-  const { user } = useAuth();
-  const userKey = user?.id ?? "anon";
 
   // Load the draft synchronously once on mount (lazy initializer) so hook
   // initializers can hydrate from it without re-reading localStorage on every render.
+  // Safe because userKey is now a stable prop from the auth-gated wrapper.
   const [initialDraft] = useState(() => loadLogWorkoutDraft(userKey));
 
   const {
