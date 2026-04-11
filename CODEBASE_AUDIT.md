@@ -104,11 +104,18 @@ export async function idempotencyMiddleware(req: Request, res: Response, next: N
 
 ## 3) Performance & Optimization
 
-### [Severity Level]: Medium
+### [Severity Level]: Medium — RESOLVED
 **File/Location:** `server/routes/ai.ts` (`/api/v1/chat/stream`) and `server/gemini/chatService.ts`
 
-**The Issue:**
-On SSE disconnect, the API stops writing to client but does not cancel upstream Gemini generation explicitly.
+**Status:** Fixed. The `/chat/stream` handler creates an `AbortController`
+bridged to `req.on("close")` and threads `controller.signal` through to
+`streamChatWithCoach`, which forwards it to Gemini's
+`generateContentStream({ abortSignal: signal })`. The for-await loop also
+checks `controller.signal.aborted` each iteration and breaks early, so both
+the Gemini request and the local loop unwind promptly on client disconnect.
+
+**Original issue:**
+On SSE disconnect, the API stops writing to client but did not cancel upstream Gemini generation explicitly.
 
 **Why it matters:**
 Uncanceled generation can burn tokens, increase latency pressure, and waste compute under churn/disconnect scenarios.
@@ -227,7 +234,7 @@ return {
 ## Priority implementation order
 
 1. ~~**High:** server-side idempotency enforcement for mutating endpoints.~~ — RESOLVED
-2. **Medium:** abort propagation for AI SSE streaming.
+2. ~~**Medium:** abort propagation for AI SSE streaming.~~ — RESOLVED
 3. **Medium:** fix Strava skipped-counter bug.
 4. **Medium:** await email job enqueues and correct reporting.
 5. **Medium:** normalize custom-exercise validation contract.
