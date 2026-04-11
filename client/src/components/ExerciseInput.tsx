@@ -147,7 +147,18 @@ export function ExerciseInput({
 
   const removeSet = (idx: number) => {
     if (sets.length <= 1) return;
-    const newSets = sets.filter((_, i) => i !== idx).map((s, i) => ({ ...s, setNumber: i + 1 }));
+    // ⚡ Bolt Performance Optimization:
+    // Combine filter and map into a single pass to avoid unnecessary array allocations
+    // and multiple O(N) traversals during frequent UI state updates.
+    const newSets = sets.reduce(
+      (acc, s, i) => {
+        if (i !== idx) {
+          acc.push({ ...s, setNumber: acc.length + 1 });
+        }
+        return acc;
+      },
+      [] as typeof sets,
+    );
     onChange({ ...exercise, sets: newSets });
   };
 
