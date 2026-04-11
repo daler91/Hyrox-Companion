@@ -119,8 +119,15 @@
     "  Pulled by @rollup/plugin-terser (depends on serialize-javascript ^7.0.3).",
     "  REMOVABLE NOW: ^7.0.3 already satisfies >=7.0.3; the parent dep has been updated.",
     "",
-    "hono >=4.12.12: fixes ipRestriction() IPv4-mapped IPv6 address bypass (hono < 4.12.12).",
-    "  Pulled by @modelcontextprotocol/sdk 1.29.0 (depends on hono 4.12.10).",
+    "hono >=4.12.12: fixes two hono <4.12.12 vulnerabilities that both land in 4.12.12:",
+    "  - CVE-2026-39410 / GHSA-r5rp-j6wh-rvv4 (getCookie NBSP prefix bypass): Hono's parse()",
+    "    used String.prototype.trim() on cookie names and stripped U+00A0, collapsing",
+    "    '\\u00a0dummy-cookie' onto 'dummy-cookie' and defeating __Secure-/__Host- prefixes.",
+    "  - ipRestriction() IPv4-mapped IPv6 bypass: IPv4 clients connecting over dual-stack",
+    "    (::ffff:127.0.0.1) evaded IPv4 allow/deny rules because addresses weren't canonicalized.",
+    "  Pulled by @modelcontextprotocol/sdk 1.29.0 (depends on hono 4.12.10) and referenced",
+    "  by @google/genai via an optional peer. We don't import hono directly; this override is",
+    "  defense-in-depth so MCP SDK code paths cannot inherit the vulnerable parser / matcher.",
     "  Remove when @modelcontextprotocol/sdk ships a version that depends on hono >=4.12.12."
   ],
   "overrides": {
