@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { format, subDays } from "date-fns";
 import { Activity, BarChart3, PieChart,Trophy } from "lucide-react";
-import { useMemo,useState } from "react";
+import { useMemo } from "react";
 
 import { CategoryBreakdownTab } from "@/components/analytics/CategoryBreakdownTab";
 import { ExerciseProgressionTab } from "@/components/analytics/ExerciseProgressionTab";
@@ -9,10 +9,19 @@ import { PersonalRecordsTab } from "@/components/analytics/PersonalRecordsTab";
 import { TrainingOverviewTab } from "@/components/analytics/TrainingOverviewTab";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useUrlQueryState } from "@/hooks/useUrlQueryState";
 import { QUERY_KEYS } from "@/lib/api";
 
+type DateRange = "30" | "90" | "180" | "365" | "all";
+
+const DATE_RANGES: readonly DateRange[] = ["30", "90", "180", "365", "all"];
+
 export default function Analytics() {
-  const [dateRange, setDateRange] = useState<string>("90");
+  const [dateRange, setDateRange] = useUrlQueryState<DateRange>(
+    "range",
+    "90",
+    DATE_RANGES,
+  );
 
   const dateParams = useMemo(() => {
     if (dateRange === "all") return "";
@@ -32,7 +41,7 @@ export default function Analytics() {
           <p className="text-muted-foreground">Training overview, progression, and personal records</p>
         </div>
 
-        <Select value={dateRange} onValueChange={setDateRange}>
+        <Select value={dateRange} onValueChange={(value) => setDateRange(value as DateRange)}>
           <SelectTrigger className="w-36" data-testid="select-date-range">
             <SelectValue />
           </SelectTrigger>

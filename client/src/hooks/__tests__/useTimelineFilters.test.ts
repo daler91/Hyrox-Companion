@@ -25,6 +25,8 @@ describe("useTimelineFilters", () => {
     // Set a fixed date for deterministic testing: 2023-10-15
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2023-10-15T12:00:00Z"));
+    // Reset URL between tests since filterStatus persists to ?status=...
+    globalThis.window?.history.replaceState(null, "", "/");
   });
 
   afterEach(() => {
