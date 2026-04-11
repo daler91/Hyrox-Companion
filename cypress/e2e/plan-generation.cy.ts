@@ -10,14 +10,20 @@ describe("Plan Generation", () => {
       statusCode: 200,
       body: { id: "plan-123", name: "Mock Plan" },
     }).as("generatePlan");
-    // Bypass onboarding so the Timeline empty state renders.
-    cy.window().then((win) =>
-      win.localStorage.setItem("hyrox-onboarding-complete", "true"),
-    );
   });
 
+  // Suppress the onboarding wizard so the Timeline empty state (which hosts
+  // the Generate AI Plan button) renders unobstructed.
+  const visitTimelineWithOnboardingSkipped = () => {
+    cy.visit("/", {
+      onBeforeLoad: (win) => {
+        win.localStorage.setItem("hyrox-onboarding-complete", "true");
+      },
+    });
+  };
+
   it("opens the generate dialog from the Timeline empty state", () => {
-    cy.visit("/");
+    visitTimelineWithOnboardingSkipped();
     cy.wait("@authUser");
     cy.wait("@timeline");
     cy.wait("@plans");
@@ -28,7 +34,7 @@ describe("Plan Generation", () => {
   });
 
   it("walks forward through the wizard steps", () => {
-    cy.visit("/");
+    visitTimelineWithOnboardingSkipped();
     cy.wait("@authUser");
     cy.wait("@timeline");
     cy.wait("@plans");

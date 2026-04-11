@@ -9,11 +9,10 @@ describe("Onboarding Wizard", () => {
     cy.intercept("PATCH", "/api/v1/preferences", { statusCode: 200, body: { ok: true } }).as(
       "savePreferences",
     );
-    // Ensure the onboarding-complete localStorage flag is cleared so the
-    // wizard triggers on Timeline mount.
-    cy.window().then((win) => win.localStorage.removeItem("hyrox-onboarding-complete"));
   });
 
+  // Cypress 12+ clears localStorage per test, so the wizard triggers
+  // automatically on Timeline mount without any setup.
   it("shows the wizard on first load and walks through the first few steps", () => {
     cy.visit("/");
     cy.wait("@authUser");
@@ -50,6 +49,7 @@ describe("Onboarding Wizard", () => {
   it("can skip onboarding and close the wizard", () => {
     cy.visit("/");
     cy.wait("@authUser");
+    cy.wait("@timeline");
     cy.wait("@plans");
 
     // Walk to the Plan step
@@ -63,19 +63,16 @@ describe("Onboarding Wizard", () => {
   });
 
   it("exposes a Run setup again button on Settings", () => {
-    // Complete onboarding in storage so the wizard doesn't auto-show on visit.
-    cy.window().then((win) =>
-      win.localStorage.setItem("hyrox-onboarding-complete", "true"),
-    );
-
+    // The Settings page doesn't mount useOnboarding, so the wizard won't
+    // auto-open here regardless of localStorage state.
     cy.visit("/settings");
     cy.wait("@authUser");
 
     cy.getBySel("button-rerun-onboarding").should("be.visible");
     cy.getBySel("button-rerun-onboarding").click();
 
-    // Landing back on Timeline with onboarding forced open.
-    cy.url().should("include", "/");
+    // Landing back on Timeline with onboarding forced open via the URL param.
+    cy.url().should("match", /\/\?onboarding=run|\/$/);
     cy.wait("@timeline");
     cy.contains("Welcome to fitai.coach").should("be.visible");
   });
