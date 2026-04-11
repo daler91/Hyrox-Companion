@@ -224,6 +224,11 @@ export default function LogWorkout() {
               removeBlock={removeBlock}
               weightUnit={weightUnit}
               distanceUnit={distanceUnit}
+              // If we have non-empty free text but we're currently in exercise
+              // mode, the exercise blocks came from a Gemini parse. Show a
+              // banner and offer a path back to edit the original text.
+              parsedFromText={freeText.trim().length > 0 && exerciseBlocks.length > 0}
+              onBackToText={() => setUseTextMode(true)}
             />
           )}
         </div>

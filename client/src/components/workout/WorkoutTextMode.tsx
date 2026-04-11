@@ -98,12 +98,12 @@ export const WorkoutTextMode = ({
           ) : (
             <Sparkles className="h-4 w-4 mr-2" />
           )}
-          {parseMutation.isPending ? "Parsing with AI..." : "Parse with AI"}
+          {parseMutation.isPending ? "Parsing with AI..." : "Parse & review exercises"}
         </Button>
         <p className="text-xs text-muted-foreground">
           {isSupported
-            ? "Use the microphone to dictate your workout, or type it. AI will convert it into structured exercises."
-            : "AI will convert your text into structured exercises you can review and edit before saving."}
+            ? "Use the microphone to dictate your workout, or type it. Parsing opens a preview where you can edit each exercise before saving."
+            : "Parsing opens a preview where you can review and edit each exercise before saving."}
         </p>
       </CardContent>
     </Card>
