@@ -38,6 +38,11 @@ describe('workouts API client', () => {
     expect(typedRequest).toHaveBeenCalledWith('GET', '/api/v1/workouts/123');
   });
 
+  it('latest() calls typedRequest with GET on the /latest endpoint', () => {
+    workouts.latest();
+    expect(typedRequest).toHaveBeenCalledWith('GET', '/api/v1/workouts/latest');
+  });
+
   it('update() calls typedRequest with PATCH and correct id and data', () => {
     const data: Parameters<typeof workouts.update>[1] = { title: 'Updated Workout' };
     workouts.update('123', data);

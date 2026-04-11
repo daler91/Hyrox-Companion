@@ -24,6 +24,7 @@ vi.mock("../../storage", () => ({
   storage: {
     timelineAnnotations: {
       list: vi.fn(),
+      findById: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
       delete: vi.fn(),
@@ -162,16 +163,26 @@ describe("Timeline Annotations Routes", () => {
   });
 
   describe("PATCH /api/v1/timeline-annotations/:id", () => {
+    // Most PATCH tests route through the merge-then-validate path, which
+    // fetches the persisted row first. Tests that want to exercise the
+    // pre-fetch return shape seed it here.
+    const existingAnnotation = {
+      id: "a1",
+      userId: "test_user_id",
+      startDate: "2026-03-01",
+      endDate: "2026-03-07",
+      type: "injury" as const,
+      note: "Calf strain",
+      createdAt: new Date("2026-03-01T00:00:00Z"),
+      updatedAt: new Date("2026-03-01T00:00:00Z"),
+    };
+
     it("updates an existing annotation", async () => {
+      vi.mocked(storage.timelineAnnotations.findById).mockResolvedValue(existingAnnotation as never);
       vi.mocked(storage.timelineAnnotations.update).mockResolvedValue({
-        id: "a1",
-        userId: "test_user_id",
-        startDate: "2026-03-01",
+        ...existingAnnotation,
         endDate: "2026-03-14",
-        type: "injury",
         note: "Extended recovery",
-        createdAt: new Date(),
-        updatedAt: new Date(),
       } as never);
 
       const response = await request(app)
@@ -186,23 +197,89 @@ describe("Timeline Annotations Routes", () => {
     });
 
     it("returns 404 when the annotation doesn't exist or belongs to another user", async () => {
-      vi.mocked(storage.timelineAnnotations.update).mockResolvedValue(undefined);
+      vi.mocked(storage.timelineAnnotations.findById).mockResolvedValue(undefined);
 
       const response = await request(app)
         .patch("/api/v1/timeline-annotations/nonexistent")
         .send({ note: "Test" });
 
       expect(response.status).toBe(404);
+      expect(storage.timelineAnnotations.update).not.toHaveBeenCalled();
     });
 
-    it("rejects an update where endDate is before startDate", async () => {
+    it("rejects an update where both dates are sent and endDate is before startDate", async () => {
+      // Schema-level refine: the `.refine()` fires because both dates are
+      // present in the body, so we never even reach findById.
       const response = await request(app)
         .patch("/api/v1/timeline-annotations/a1")
         .send({ startDate: "2026-04-10", endDate: "2026-04-01" });
 
       expect(response.status).toBe(400);
       expect(response.body.code).toBe("VALIDATION_ERROR");
+      expect(storage.timelineAnnotations.findById).not.toHaveBeenCalled();
       expect(storage.timelineAnnotations.update).not.toHaveBeenCalled();
+    });
+
+    // Regression tests for Codex P2 — single-field PATCHes must be
+    // validated against the persisted row, not just against themselves.
+    it("rejects a single-field endDate PATCH that moves it before the persisted startDate", async () => {
+      vi.mocked(storage.timelineAnnotations.findById).mockResolvedValue(existingAnnotation as never);
+
+      const response = await request(app)
+        .patch("/api/v1/timeline-annotations/a1")
+        .send({ endDate: "2026-02-20" });
+
+      expect(response.status).toBe(400);
+      expect(response.body.code).toBe("VALIDATION_ERROR");
+      expect(response.body.details.endDate).toContain("endDate must be on or after startDate");
+      expect(storage.timelineAnnotations.update).not.toHaveBeenCalled();
+    });
+
+    it("rejects a single-field startDate PATCH that moves it after the persisted endDate", async () => {
+      vi.mocked(storage.timelineAnnotations.findById).mockResolvedValue(existingAnnotation as never);
+
+      const response = await request(app)
+        .patch("/api/v1/timeline-annotations/a1")
+        .send({ startDate: "2026-03-20" });
+
+      expect(response.status).toBe(400);
+      expect(response.body.code).toBe("VALIDATION_ERROR");
+      expect(response.body.details.endDate).toContain("endDate must be on or after startDate");
+      expect(storage.timelineAnnotations.update).not.toHaveBeenCalled();
+    });
+
+    it("accepts a single-field endDate PATCH that keeps the merged range valid", async () => {
+      vi.mocked(storage.timelineAnnotations.findById).mockResolvedValue(existingAnnotation as never);
+      vi.mocked(storage.timelineAnnotations.update).mockResolvedValue({
+        ...existingAnnotation,
+        endDate: "2026-03-10",
+      } as never);
+
+      const response = await request(app)
+        .patch("/api/v1/timeline-annotations/a1")
+        .send({ endDate: "2026-03-10" });
+
+      expect(response.status).toBe(200);
+      expect(storage.timelineAnnotations.update).toHaveBeenCalledWith("test_user_id", "a1", {
+        endDate: "2026-03-10",
+      });
+    });
+
+    it("accepts a note-only PATCH without revalidating dates", async () => {
+      vi.mocked(storage.timelineAnnotations.findById).mockResolvedValue(existingAnnotation as never);
+      vi.mocked(storage.timelineAnnotations.update).mockResolvedValue({
+        ...existingAnnotation,
+        note: "Updated note",
+      } as never);
+
+      const response = await request(app)
+        .patch("/api/v1/timeline-annotations/a1")
+        .send({ note: "Updated note" });
+
+      expect(response.status).toBe(200);
+      expect(storage.timelineAnnotations.update).toHaveBeenCalledWith("test_user_id", "a1", {
+        note: "Updated note",
+      });
     });
   });
 

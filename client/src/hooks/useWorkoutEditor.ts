@@ -282,6 +282,18 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
     setExerciseBlocks(blocks);
     setExerciseData(data);
     setUseTextMode(textMode);
+    // Seed the global block counter to a value higher than any suffix
+    // in the hydrated block ids, so subsequent addExercise calls don't
+    // collide with existing keys like "back-squat__1".
+    let maxSuffix = 0;
+    for (const block of blocks) {
+      const parts = block.split("__");
+      const n = Number.parseInt(parts[parts.length - 1] ?? "", 10);
+      if (Number.isFinite(n) && n > maxSuffix) maxSuffix = n;
+    }
+    if (maxSuffix > blockCounterRef.current) {
+      blockCounterRef.current = maxSuffix;
+    }
   }, []);
 
   return {

@@ -1,8 +1,21 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, renderHook } from '@testing-library/react';
+import React from 'react';
 import { describe, expect,it } from 'vitest';
 
 import type { StructuredExercise } from '@/components/ExerciseInput';
 
-import { exerciseToPayload,generateSummary, getBlockExerciseName, makeBlockId } from '../useWorkoutEditor';
+import { exerciseToPayload,generateSummary, getBlockExerciseName, makeBlockId, useWorkoutEditor } from '../useWorkoutEditor';
+
+// useWorkoutEditor internally calls useMutation (for the AI parse path),
+// which needs a QueryClientProvider around any renderHook call.
+function createQueryWrapper() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  return ({ children }: { children: React.ReactNode }) =>
+    React.createElement(QueryClientProvider, { client: queryClient }, children);
+}
 
 describe('generateSummary', () => {
   it('should handle exercises with no sets', () => {
@@ -319,5 +332,66 @@ describe('exerciseToPayload', () => {
       confidence: undefined,
       sets: []
     });
+  });
+});
+
+describe('useWorkoutEditor resetEditor', () => {
+  it('seeds block counter from the max suffix in hydrated block ids so subsequent addExercise calls do not collide', () => {
+    const { result } = renderHook(() => useWorkoutEditor(), { wrapper: createQueryWrapper() });
+
+    // Hydrate with an existing block whose suffix is 3. Without
+    // re-seeding, the default counter (0) would produce "back-squat__1"
+    // on the first addExercise call, which doesn't collide here — but
+    // with duplicated workouts having multiple blocks, the next
+    // addExercise at counter=1 would produce the same key as a hydrated
+    // one. Seed to the max suffix to avoid this.
+    const hydratedBlock = 'back-squat__3';
+    const hydratedData: Record<string, StructuredExercise> = {
+      [hydratedBlock]: {
+        exerciseName: 'back-squat' as never,
+        category: 'strength',
+        sets: [{ setNumber: 1, reps: 5, weight: 100 }],
+      },
+    };
+
+    act(() => {
+      result.current.resetEditor([hydratedBlock], hydratedData, false);
+    });
+
+    // Adding a new back-squat should produce __4, not __1 (collision).
+    act(() => {
+      result.current.addExercise('back_squat' as never);
+    });
+
+    const allBlocks = result.current.exerciseBlocks;
+    expect(allBlocks).toContain('back-squat__3');
+    const newBlock = allBlocks.find((b) => b !== 'back-squat__3');
+    expect(newBlock).toBeDefined();
+    // The suffix on the new block must be > 3.
+    const suffix = Number.parseInt(newBlock!.split('__').pop() ?? '', 10);
+    expect(suffix).toBeGreaterThan(3);
+  });
+
+  it('does not lower an already-higher counter when reset with lower-suffix blocks', () => {
+    const { result } = renderHook(() => useWorkoutEditor({ initialBlockCounter: 10 }), { wrapper: createQueryWrapper() });
+
+    act(() => {
+      result.current.resetEditor(['back-squat__2'], {
+        'back-squat__2': {
+          exerciseName: 'back-squat' as never,
+          category: 'strength',
+          sets: [{ setNumber: 1, reps: 5 }],
+        },
+      }, false);
+    });
+
+    act(() => {
+      result.current.addExercise('back_squat' as never);
+    });
+
+    const newBlock = result.current.exerciseBlocks.find((b) => b !== 'back-squat__2');
+    expect(newBlock).toBeDefined();
+    const suffix = Number.parseInt(newBlock!.split('__').pop() ?? '', 10);
+    expect(suffix).toBeGreaterThan(10);
   });
 });

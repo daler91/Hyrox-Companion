@@ -238,12 +238,20 @@ The `strava_connections` table (`shared/schema/tables.ts`):
 
 ### User Opt-In
 
-Emails are only sent to users who meet both conditions:
+Emails are only sent to users who meet all of these conditions:
 
 1. `user.email` is set (non-null)
-2. `user.emailNotifications` is `true`
+2. `user.emailNotifications` (the master toggle) is `true`
+3. The per-type toggle for the specific email is `true`:
+   - Weekly summary: `user.emailWeeklySummary` (default `true`)
+   - Missed workout reminder: `user.emailMissedReminder` (default `true`)
 
-Users can manage this preference at `/settings`. The email footer links back to the settings page.
+The per-type toggles default to `true` so existing users maintain the
+pre-migration behavior (receiving both categories) without an explicit
+opt-in. Users can manage all three toggles from `/settings` — the
+per-type switches are nested under the master toggle and are disabled
+(grayed out) when the master is off. The email footer links back to
+the settings page.
 
 ### Email Sending Pipeline
 

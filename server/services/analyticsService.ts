@@ -1,4 +1,4 @@
-import type { ExerciseSet, PersonalRecord, TrainingOverview, WeeklySummary,WorkoutLog } from "@shared/schema";
+import type { ExerciseSet, OverviewStats, PersonalRecord, TrainingOverview, WeeklySummary,WorkoutLog } from "@shared/schema";
 
 import { HYROX_STATIONS_WITH_RUNNING } from "../constants";
 
@@ -198,13 +198,55 @@ function buildStationCoverage(
   });
 }
 
+/**
+ * Aggregate the flat weekly summaries into the four card-level stats that
+ * the Analytics Overview tab renders. Kept as a pure function so it can be
+ * reused for both the current period and the previous-period comparison
+ * data without duplicating logic on the client.
+ */
+export function computeOverviewStats(weeklySummaries: WeeklySummary[]): OverviewStats {
+  if (weeklySummaries.length === 0) {
+    return { totalWorkouts: 0, avgPerWeek: 0, totalDuration: 0, avgDuration: 0, avgRpe: null };
+  }
+  const totalWorkouts = weeklySummaries.reduce((s, w) => s + w.workoutCount, 0);
+  const avgPerWeek = Math.round((totalWorkouts / weeklySummaries.length) * 10) / 10;
+  const totalDuration = weeklySummaries.reduce((s, w) => s + w.totalDuration, 0);
+  const avgDuration = totalWorkouts > 0 ? Math.round(totalDuration / totalWorkouts) : 0;
+
+  // Only average the weeks that actually recorded an RPE, matching the
+  // client's existing display logic (otherwise a week of zero-RPE logs
+  // would drag the average down).
+  const rpeWeeks = weeklySummaries.filter((w) => w.avgRpe !== null);
+  const avgRpe = rpeWeeks.length > 0
+    ? Math.round((rpeWeeks.reduce((s, w) => s + (w.avgRpe ?? 0), 0) / rpeWeeks.length) * 10) / 10
+    : null;
+
+  return { totalWorkouts, avgPerWeek, totalDuration, avgDuration, avgRpe };
+}
+
 export function calculateTrainingOverview(
   workoutLogs: WorkoutLog[],
   exerciseSets: ExerciseSetWithDate[],
+  previousWorkoutLogs?: WorkoutLog[],
 ): TrainingOverview {
   const { summaries: weeklySummaries, workoutDates } = buildWeeklySummaries(workoutLogs);
   const categoryTotals = buildCategoryTotals(exerciseSets);
   const stationCoverage = buildStationCoverage(exerciseSets);
+  const currentStats = computeOverviewStats(weeklySummaries);
 
-  return { weeklySummaries, workoutDates, categoryTotals, stationCoverage };
+  // Previous-period stats are optional — the route handler omits them
+  // when the user picked "all time" (no lower bound → no meaningful
+  // previous window).
+  const previousStats = previousWorkoutLogs
+    ? computeOverviewStats(buildWeeklySummaries(previousWorkoutLogs).summaries)
+    : undefined;
+
+  return {
+    weeklySummaries,
+    workoutDates,
+    categoryTotals,
+    stationCoverage,
+    currentStats,
+    previousStats,
+  };
 }

@@ -1,6 +1,6 @@
 {
-  "id": "9f4f36f4-96ac-48d6-b2bb-4b44bcea2a00",
-  "prevId": "e4a74919-1673-4928-8ae0-c1369640c8c5",
+  "id": "27a07502-2f90-4482-bdd3-c7037b28813f",
+  "prevId": "9f4f36f4-96ac-48d6-b2bb-4b44bcea2a00",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1168,6 +1168,136 @@
       },
       "policies": {},
       "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.timeline_annotations": {
+      "name": "timeline_annotations",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "varchar(255)",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "start_date": {
+          "name": "start_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "end_date": {
+          "name": "end_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_timeline_annotations_user_id": {
+          "name": "idx_timeline_annotations_user_id",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_timeline_annotations_user_range": {
+          "name": "idx_timeline_annotations_user_range",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "start_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "end_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "timeline_annotations_user_id_users_id_fk": {
+          "name": "timeline_annotations_user_id_users_id_fk",
+          "tableFrom": "timeline_annotations",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "timeline_annotation_type_check": {
+          "name": "timeline_annotation_type_check",
+          "value": "type IN ('injury', 'illness', 'travel', 'rest')"
+        },
+        "timeline_annotation_range_check": {
+          "name": "timeline_annotation_range_check",
+          "value": "end_date >= start_date"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.training_plans": {

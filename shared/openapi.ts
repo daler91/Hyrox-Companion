@@ -102,6 +102,8 @@ const EXAMPLE_PREFERENCES = {
   distanceUnit: "km",
   weeklyGoal: 4,
   emailNotifications: true,
+  emailWeeklySummary: true,
+  emailMissedReminder: true,
   aiCoachEnabled: true,
 };
 

@@ -69,6 +69,27 @@ router.patch(
         details: formatValidationErrors(parseResult.error),
       });
     }
+
+    // Merge-then-validate: the schema `.refine` only runs when both dates
+    // are present in the request body, so a single-field PATCH could slip
+    // an invalid range past Zod and hit the DB CHECK constraint as a 500.
+    // Fetch the persisted row, merge the partial over it, and re-check the
+    // date bounds before writing.
+    const existing = await storage.timelineAnnotations.findById(userId, req.params.id);
+    if (!existing) {
+      return res.status(404).json({ error: "Annotation not found", code: "NOT_FOUND" });
+    }
+
+    const mergedStart = parseResult.data.startDate ?? existing.startDate;
+    const mergedEnd = parseResult.data.endDate ?? existing.endDate;
+    if (mergedEnd < mergedStart) {
+      return res.status(400).json({
+        error: "Invalid annotation update",
+        code: "VALIDATION_ERROR",
+        details: { endDate: ["endDate must be on or after startDate"] },
+      });
+    }
+
     const row = await storage.timelineAnnotations.update(userId, req.params.id, parseResult.data);
     if (!row) {
       return res.status(404).json({ error: "Annotation not found", code: "NOT_FOUND" });

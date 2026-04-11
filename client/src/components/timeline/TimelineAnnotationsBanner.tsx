@@ -1,6 +1,6 @@
 import type { TimelineAnnotation, TimelineAnnotationType } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
-import { Heart, Pencil, Plane, Stethoscope } from "lucide-react";
+import { Heart, Info, Pencil, Plane, Plus, Stethoscope } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,9 +35,10 @@ function getTypeIcon(type: TimelineAnnotationType) {
 /**
  * Compact banner rendered above the Timeline filters that surfaces the
  * user's active annotations (injury / illness / travel / rest periods).
- * Hidden entirely when the user has no annotations yet — the
- * AnnotationsDialog is still reachable via the "Manage" dropdown on the
- * filter bar.
+ * When the list is empty the banner renders a one-line empty-state hint
+ * with an "Add annotation" button — otherwise `onOpenDialog` would have
+ * no entry point on a clean account, since this banner is the only
+ * caller of `setAnnotationsDialogOpen(true)` on Timeline.
  */
 export function TimelineAnnotationsBanner({ onOpenDialog }: Readonly<TimelineAnnotationsBannerProps>) {
   const { data: annotations } = useQuery<TimelineAnnotation[]>({
@@ -45,7 +46,28 @@ export function TimelineAnnotationsBanner({ onOpenDialog }: Readonly<TimelineAnn
     queryFn: () => api.timelineAnnotations.list(),
   });
 
-  if (!annotations || annotations.length === 0) return null;
+  if (!annotations || annotations.length === 0) {
+    return (
+      <div
+        className="flex items-center gap-3 rounded-lg border bg-muted/20 px-4 py-3"
+        data-testid="banner-timeline-annotations-empty"
+      >
+        <Info className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" />
+        <p className="flex-1 text-xs text-muted-foreground">
+          Track injuries, illness, travel, or rest periods to explain dips in your training volume.
+        </p>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onOpenDialog}
+          data-testid="button-add-first-annotation"
+        >
+          <Plus className="h-4 w-4 mr-1" aria-hidden="true" />
+          Add annotation
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div

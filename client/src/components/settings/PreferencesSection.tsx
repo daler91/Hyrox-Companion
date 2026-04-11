@@ -1,4 +1,4 @@
-import { BrainCircuit,Mail } from "lucide-react";
+import { BrainCircuit, Mail } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -10,11 +10,15 @@ interface PreferencesSectionProps {
   readonly distanceUnit: string;
   readonly weeklyGoal: string;
   readonly emailNotifications: boolean;
+  readonly emailWeeklySummary: boolean;
+  readonly emailMissedReminder: boolean;
   readonly aiCoachEnabled: boolean;
   readonly onWeightUnitChange: (value: string) => void;
   readonly onDistanceUnitChange: (value: string) => void;
   readonly onWeeklyGoalChange: (value: string) => void;
   readonly onEmailNotificationsChange: (checked: boolean) => void;
+  readonly onEmailWeeklySummaryChange: (checked: boolean) => void;
+  readonly onEmailMissedReminderChange: (checked: boolean) => void;
   readonly onAiCoachEnabledChange: (checked: boolean) => void;
 }
 
@@ -23,11 +27,15 @@ export function PreferencesSection({
   distanceUnit,
   weeklyGoal,
   emailNotifications,
+  emailWeeklySummary,
+  emailMissedReminder,
   aiCoachEnabled,
   onWeightUnitChange,
   onDistanceUnitChange,
   onWeeklyGoalChange,
   onEmailNotificationsChange,
+  onEmailWeeklySummaryChange,
+  onEmailMissedReminderChange,
   onAiCoachEnabledChange,
 }: Readonly<PreferencesSectionProps>) {
   return (
@@ -95,21 +103,75 @@ export function PreferencesSection({
               </SelectContent>
             </Select>
           </div>
+        </CardContent>
+      </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Mail className="h-5 w-5 text-primary" />
+            Email Notifications
+          </CardTitle>
+          <CardDescription>Choose which training emails you want to receive</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
           <div className="flex items-center justify-between gap-4">
             <div className="space-y-1">
-              <Label htmlFor="email-notifications-switch" className="flex items-center gap-2 cursor-pointer">
-                <Mail className="h-4 w-4" />
-                Email Notifications
+              <Label htmlFor="email-notifications-switch" className="cursor-pointer">
+                Receive email
               </Label>
-              <p className="text-sm text-muted-foreground">Receive weekly training summaries and missed workout reminders</p>
+              <p className="text-sm text-muted-foreground">
+                Master toggle. When off, no email of any type is sent.
+              </p>
             </div>
             <Switch
               id="email-notifications-switch"
               checked={emailNotifications}
               onCheckedChange={onEmailNotificationsChange}
               data-testid="switch-email-notifications"
+              aria-label="Master email notifications toggle"
             />
+          </div>
+
+          {/* Per-type sub-toggles. Disabled (and visually dimmed) when the
+              master toggle is off so users understand they have no effect. */}
+          <div className={`space-y-4 pl-4 border-l-2 ml-1 ${emailNotifications ? "border-primary/40" : "border-muted opacity-60"}`}>
+            <div className="flex items-center justify-between gap-4">
+              <div className="space-y-1">
+                <Label htmlFor="email-weekly-summary-switch" className="cursor-pointer">
+                  Weekly summary
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  Sent every Monday with your completion rate, streak, and total training time.
+                </p>
+              </div>
+              <Switch
+                id="email-weekly-summary-switch"
+                checked={emailWeeklySummary}
+                onCheckedChange={onEmailWeeklySummaryChange}
+                disabled={!emailNotifications}
+                data-testid="switch-email-weekly-summary"
+                aria-label="Weekly summary email toggle"
+              />
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <div className="space-y-1">
+                <Label htmlFor="email-missed-reminder-switch" className="cursor-pointer">
+                  Missed workout reminder
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  Sent the day after you miss a planned workout so you can catch up.
+                </p>
+              </div>
+              <Switch
+                id="email-missed-reminder-switch"
+                checked={emailMissedReminder}
+                onCheckedChange={onEmailMissedReminderChange}
+                disabled={!emailNotifications}
+                data-testid="switch-email-missed-reminder"
+                aria-label="Missed workout reminder toggle"
+              />
+            </div>
           </div>
         </CardContent>
       </Card>

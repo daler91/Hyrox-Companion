@@ -25,6 +25,14 @@ export const workouts = {
     return typedRequest<WorkoutLog[]>("GET", `/api/v1/workouts${qs}`);
   },
 
+  /**
+   * Fetch the most recent workout log with its exercise sets embedded so the
+   * client can hydrate a "duplicate last" prefill in one round-trip.
+   * Returns 404 when the user has no prior workouts yet.
+   */
+  latest: () =>
+    typedRequest<WorkoutLog & { exerciseSets: ExerciseSet[] }>("GET", "/api/v1/workouts/latest"),
+
   get: (id: string) => typedRequest<WorkoutLog & { exerciseSets?: ExerciseSet[] }>("GET", `/api/v1/workouts/${id}`),
 
   update: (id: string, data: UpdateWorkoutLog & { exercises?: ParsedExercise[] }) =>

@@ -6,7 +6,14 @@ export function setupAuthIntercepts(overrides?: {
   exerciseAnalytics?: any[];
   trainingOverview?: any;
   stravaStatus?: { connected: boolean; athleteId?: string; lastSyncedAt?: string | null };
-  preferences?: { weightUnit: string; distanceUnit: string; weeklyGoal: number; emailNotifications: boolean };
+  preferences?: {
+    weightUnit: string;
+    distanceUnit: string;
+    weeklyGoal: number;
+    emailNotifications: boolean;
+    emailWeeklySummary?: boolean;
+    emailMissedReminder?: boolean;
+  };
 }) {
   // The SPA fetches a CSRF token before any mutating request (see
   // client/src/lib/queryClient.ts). Stub it so the e2e harness doesn't need
@@ -35,6 +42,8 @@ export function setupAuthIntercepts(overrides?: {
       distanceUnit: "km",
       weeklyGoal: 5,
       emailNotifications: true,
+      emailWeeklySummary: true,
+      emailMissedReminder: true,
     },
   }).as("preferences");
 

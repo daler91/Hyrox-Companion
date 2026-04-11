@@ -24,6 +24,22 @@ export class TimelineAnnotationsStorage {
       .orderBy(asc(timelineAnnotations.startDate));
   }
 
+  async findById(
+    userId: string,
+    id: string,
+  ): Promise<TimelineAnnotation | undefined> {
+    const [row] = await db
+      .select()
+      .from(timelineAnnotations)
+      .where(
+        and(
+          eq(timelineAnnotations.id, id),
+          eq(timelineAnnotations.userId, userId),
+        ),
+      );
+    return row;
+  }
+
   async create(
     userId: string,
     data: InsertTimelineAnnotation,

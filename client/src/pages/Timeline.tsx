@@ -223,6 +223,15 @@ export default function Timeline() {
     return [...visiblePastGroups.slice().reverse(), ...visibleFutureGroups];
   }, [visiblePastGroups, visibleFutureGroups]);
 
+  // Whether today's date is in the currently-filtered/visible groups.
+  // Passed to TimelineTodayIndicator so the "Jump to today" pill stays
+  // hidden when the active filter excludes today — otherwise a stale
+  // observer position could surface a dead jump action.
+  const todayPresent = useMemo(() => {
+    const todayStr = format(new Date(), "yyyy-MM-dd");
+    return allVisibleGroups.some(([dateGroupStr]) => dateGroupStr === todayStr);
+  }, [allVisibleGroups]);
+
   // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual known issue
   const rowVirtualizer = useVirtualizer({
     count: allVisibleGroups.length,
@@ -290,6 +299,7 @@ export default function Timeline() {
             todayRef={todayRef}
             scrollRef={scrollRef}
             onScrollToToday={handleScrollToToday}
+            todayPresent={todayPresent}
           />
 
       <TimelineContent

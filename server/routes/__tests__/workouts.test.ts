@@ -24,6 +24,7 @@ vi.mock("../../storage", () => ({
   storage: {
     workouts: {
       listWorkoutLogs: vi.fn(),
+      getExerciseSetsByWorkoutLog: vi.fn(),
     },
   },
 }));
@@ -108,6 +109,63 @@ describe("Workouts Routes", () => {
 
       expect(response.status).toBe(500);
       expect(response.body).toEqual({ error: "Internal Server Error", code: "INTERNAL_SERVER_ERROR" });
+    });
+  });
+
+  describe("GET /api/workouts/latest", () => {
+    it("returns the most recent workout log with its exercise sets embedded", async () => {
+      const { storage } = await import("../../storage");
+
+      const mockLatest = {
+        id: "workout-1",
+        userId: "test_user_id",
+        date: "2024-03-12",
+        focus: "Leg Day",
+        mainWorkout: "",
+        notes: "Felt strong",
+      };
+      const mockSets = [
+        { id: "s1", workoutLogId: "workout-1", exerciseName: "back-squat", category: "strength", setNumber: 1, reps: 5, weight: 100 },
+      ];
+      // listWorkoutLogs is called with limit=1 from the /latest handler
+      vi.mocked(storage.workouts.listWorkoutLogs).mockResolvedValue([mockLatest as never]);
+      vi.mocked(storage.workouts.getExerciseSetsByWorkoutLog).mockResolvedValue(mockSets as never);
+
+      const response = await request(app).get("/api/v1/workouts/latest");
+
+      expect(response.status).toBe(200);
+      expect(storage.workouts.listWorkoutLogs).toHaveBeenCalledWith("test_user_id", 1);
+      expect(storage.workouts.getExerciseSetsByWorkoutLog).toHaveBeenCalledWith("workout-1");
+      expect(response.body).toMatchObject({
+        id: "workout-1",
+        focus: "Leg Day",
+        exerciseSets: mockSets,
+      });
+    });
+
+    it("returns 404 when the user has no prior workouts", async () => {
+      const { storage } = await import("../../storage");
+      vi.mocked(storage.workouts.listWorkoutLogs).mockResolvedValue([]);
+
+      const response = await request(app).get("/api/v1/workouts/latest");
+
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({ error: "No workouts found", code: "NOT_FOUND" });
+      expect(storage.workouts.getExerciseSetsByWorkoutLog).not.toHaveBeenCalled();
+    });
+
+    it("does not confuse /latest with /:id", async () => {
+      const { storage } = await import("../../storage");
+      // If the route order were wrong, this would call getWorkoutLog("latest")
+      // and hit the :id route. Confirm /latest routes to the list-backed path.
+      vi.mocked(storage.workouts.listWorkoutLogs).mockResolvedValue([]);
+
+      const response = await request(app).get("/api/v1/workouts/latest");
+
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({ error: "No workouts found", code: "NOT_FOUND" });
+      // Confirm we went through listWorkoutLogs, not a getWorkoutLog lookup.
+      expect(storage.workouts.listWorkoutLogs).toHaveBeenCalledWith("test_user_id", 1);
     });
   });
 });
