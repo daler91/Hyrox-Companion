@@ -1,5 +1,6 @@
 import { CtaSection, LandingFooter } from "./landing/CtaFooter";
 import { ExerciseShowcase } from "./landing/ExerciseShowcase";
+import { Faq } from "./landing/Faq";
 import { Features, SocialProof } from "./landing/Features";
 import { Hero, LandingHeader } from "./landing/Hero";
 import { HowItWorks } from "./landing/HowItWorks";
@@ -41,6 +42,7 @@ export default function Landing() {
         <Features />
         <HowItWorks />
         <ExerciseShowcase />
+        <Faq />
         <CtaSection />
       </main>
 
