@@ -89,13 +89,6 @@ describe("Timeline Page", () => {
       cy.getBySel("select-plan").should("exist");
     });
 
-    it("shows the jump to today button", () => {
-      cy.visit("/");
-      cy.wait("@authUser");
-      cy.wait("@timeline");
-      cy.getBySel("button-jump-to-today").should("exist");
-    });
-
     it("shows the status filter", () => {
       cy.visit("/");
       cy.wait("@authUser");

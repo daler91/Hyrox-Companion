@@ -271,9 +271,7 @@ export default function Timeline() {
     <div className="flex h-full">
       <div ref={scrollRef} className="flex-1 overflow-auto p-4 md:p-8 relative">
         <div className="max-w-5xl mx-auto space-y-6">
-          <TimelineHeader
-            onScrollToToday={handleScrollToToday}
-          />
+          <TimelineHeader />
 
           <CoachReviewingIndicator isActive={!!user?.isAutoCoaching} />
 

@@ -1,14 +1,4 @@
-import { CalendarCheck } from "lucide-react";
-
-import { Button } from "@/components/ui/button";
-
-interface TimelineHeaderProps {
-  readonly onScrollToToday: () => void;
-}
-
-export default function TimelineHeader({
-  onScrollToToday,
-}: Readonly<TimelineHeaderProps>) {
+export default function TimelineHeader() {
   return (
     <div className="flex items-center justify-between gap-4 flex-wrap">
       <div>
@@ -19,14 +9,6 @@ export default function TimelineHeader({
           Your complete training journey - past, present, and future
         </p>
       </div>
-      <Button
-        variant="outline"
-        onClick={onScrollToToday}
-        data-testid="button-jump-to-today"
-      >
-        <CalendarCheck className="h-4 w-4 mr-2" />
-        Go to Today
-      </Button>
     </div>
   );
 }
