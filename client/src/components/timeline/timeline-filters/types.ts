@@ -15,6 +15,8 @@ export interface TimelineFiltersProps {
   readonly isRenaming?: boolean;
   readonly onGoalSave?: (planId: string, goal: string | null) => void;
   readonly isUpdatingGoal?: boolean;
+  /** Open the schedule-plan dialog for the given plan id. */
+  readonly onScheduleClick?: (planId: string) => void;
 }
 
 export interface PlanSelectorProps {

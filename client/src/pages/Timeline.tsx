@@ -278,6 +278,7 @@ export default function Timeline() {
         isRenaming={renamePlanMutation.isPending}
         onGoalSave={(planId, goal) => updatePlanGoalMutation.mutate({ planId, goal })}
         isUpdatingGoal={updatePlanGoalMutation.isPending}
+        onScheduleClick={(planId) => setSchedulingPlanId(planId)}
       />
 
       <TimelineContent
