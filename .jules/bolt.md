@@ -37,3 +37,7 @@
 ## 2026-04-01 - Avoid Multiple O(N) Array Passes during Map Construction
 **Learning:** Constructing a Map using `.filter().map()` before passing it into `new Map(...)` and then calling `Array.from(map.values())` creates excessive intermediate arrays and executes multiple O(N) traversals, unnecessarily straining garbage collection and CPU.
 **Action:** Iterate manually via a `for...of` loop, directly appending items to a locally instantiated `Map` to consolidate iterations and bypass temporary array allocations.
+
+## 2026-04-08 - Module-level Caching for React Array Reference Stability
+**Learning:** In React, functions like `getFields` that map static keys to arrays and execute on every render (using `.filter()`) allocate new array references constantly. This not only burdens the garbage collector but, more importantly, breaks React memoization in child components that receive these arrays as props, causing unnecessary cascading re-renders.
+**Action:** Use a module-scoped `Map` to cache the computed arrays keyed by their static inputs (e.g., `exerciseName`). Also, ensure fallback returns (like default fields) are extracted into module-level `const` arrays. This guarantees true reference stability across all component re-renders while eliminating O(N) recalculations.

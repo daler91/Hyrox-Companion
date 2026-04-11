@@ -1,5 +1,5 @@
 import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
-import { Hash, Pencil,Ruler, Timer, Weight } from "lucide-react";
+import { Hash, Pencil, Ruler, Timer, Weight } from "lucide-react";
 import { useId, useMemo } from "react";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { categoryBorderColors } from "@/lib/exerciseUtils";
 import { getExerciseMissingFields } from "@/lib/exerciseWarnings";
 
-import type { FieldConfig,FieldKey } from "./exercise-input";
+import type { FieldConfig, FieldKey } from "./exercise-input";
 import { ExerciseHeader, ExerciseWarnings, MultiSetTable, SingleSetFields } from "./exercise-input";
 
 export interface SetData {
@@ -32,27 +32,59 @@ export interface StructuredExercise {
 const fieldConfig: Record<FieldKey, FieldConfig> = {
   reps: { icon: Hash, getLabel: () => "Reps", short: "Reps" },
   weight: { icon: Weight, getLabel: (wu) => `Weight (${wu})`, short: "Wt" },
-  distance: { icon: Ruler, getLabel: (_, du) => `Distance (${du === "km" ? "m" : "ft"})`, short: "Dist" },
+  distance: {
+    icon: Ruler,
+    getLabel: (_, du) => `Distance (${du === "km" ? "m" : "ft"})`,
+    short: "Dist",
+  },
   time: { icon: Timer, getLabel: () => "Time (min)", short: "Time" },
 };
 
+// ⚡ Bolt: Cache calculated field keys to guarantee array reference stability between renders.
+// This prevents unnecessary O(N) array allocations via `.filter()` during every component render,
+// reducing garbage collection overhead and preventing unnecessary child component updates.
+const fieldsCache = new Map<string, FieldKey[]>();
+const DEFAULT_FIELDS: FieldKey[] = ["reps", "weight", "distance", "time"];
+
 function getFields(exerciseName: ExerciseName): FieldKey[] {
+  const cached = fieldsCache.get(exerciseName);
+  if (cached) return cached;
+
   const def = EXERCISE_DEFINITIONS[exerciseName];
-  if (!def) return ["reps", "weight", "distance", "time"];
+  if (!def) return DEFAULT_FIELDS;
   const defFields = def.fields as readonly string[];
-  return defFields.filter((f): f is FieldKey => f !== "sets" && f in fieldConfig);
+
+  const result: FieldKey[] = [];
+  for (const f of defFields) {
+    if (f !== "sets" && f in fieldConfig) {
+      result.push(f as FieldKey);
+    }
+  }
+
+  fieldsCache.set(exerciseName, result);
+  return result;
 }
 
 export function createDefaultSet(setNumber: number): SetData {
   return { setNumber };
 }
 
-export function createExerciseFromSets(exerciseName: ExerciseName, dbSets: Array<{ setNumber: number; reps?: number | null; weight?: number | null; distance?: number | null; time?: number | null; notes?: string | null }>): StructuredExercise {
+export function createExerciseFromSets(
+  exerciseName: ExerciseName,
+  dbSets: Array<{
+    setNumber: number;
+    reps?: number | null;
+    weight?: number | null;
+    distance?: number | null;
+    time?: number | null;
+    notes?: string | null;
+  }>,
+): StructuredExercise {
   const def = EXERCISE_DEFINITIONS[exerciseName];
   return {
     exerciseName,
     category: def?.category || "conditioning",
-    sets: dbSets.map(s => ({
+    sets: dbSets.map((s) => ({
       setNumber: s.setNumber,
       reps: s.reps ?? undefined,
       weight: s.weight ?? undefined,
@@ -72,14 +104,22 @@ interface ExerciseInputProps {
   readonly blockLabel?: string;
 }
 
-export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg", distanceUnit = "km", blockLabel }: Readonly<ExerciseInputProps>) {
+export function ExerciseInput({
+  exercise,
+  onChange,
+  onRemove,
+  weightUnit = "kg",
+  distanceUnit = "km",
+  blockLabel,
+}: Readonly<ExerciseInputProps>) {
   const idPrefix = useId();
   const def = EXERCISE_DEFINITIONS[exercise.exerciseName];
   const fields = getFields(exercise.exerciseName);
   const borderColor = categoryBorderColors[exercise.category] || "border-l-gray-500";
-  const displayLabel = exercise.exerciseName === "custom" && exercise.customLabel
-    ? exercise.customLabel
-    : def?.label || exercise.exerciseName;
+  const displayLabel =
+    exercise.exerciseName === "custom" && exercise.customLabel
+      ? exercise.customLabel
+      : def?.label || exercise.exerciseName;
 
   const sets = exercise.sets.length > 0 ? exercise.sets : [createDefaultSet(1)];
 
@@ -114,7 +154,10 @@ export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg",
   const showMultiSetView = fields.includes("reps") || fields.includes("weight");
 
   return (
-    <Card className={`border-l-4 ${borderColor} rounded-l-none`} data-testid={`input-exercise-${exercise.exerciseName}`}>
+    <Card
+      className={`border-l-4 ${borderColor} rounded-l-none`}
+      data-testid={`input-exercise-${exercise.exerciseName}`}
+    >
       <CardContent className="p-4">
         <ExerciseHeader
           displayLabel={displayLabel}
@@ -129,7 +172,10 @@ export function ExerciseInput({ exercise, onChange, onRemove, weightUnit = "kg",
 
         {exercise.exerciseName === "custom" && (
           <div className="mb-4">
-            <Label htmlFor={`${idPrefix}-custom-name`} className="flex items-center gap-1 text-xs text-muted-foreground mb-2">
+            <Label
+              htmlFor={`${idPrefix}-custom-name`}
+              className="flex items-center gap-1 text-xs text-muted-foreground mb-2"
+            >
               <Pencil className="h-3 w-3" />
               Exercise Name
             </Label>
