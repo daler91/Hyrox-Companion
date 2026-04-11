@@ -107,13 +107,21 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
           <DialogDescription>{DESCS[step]}</DialogDescription>
         </DialogHeader>
 
+        <div className="mt-2 mb-1 flex items-center justify-between">
+          <span
+            className="text-xs font-medium uppercase tracking-wide text-muted-foreground"
+            data-testid="text-onboarding-step-count"
+          >
+            Step {idx + 1} of {total}
+          </span>
+        </div>
         <progress
           value={idx + 1}
           max={total}
           className="sr-only"
           aria-label={`Step ${idx + 1} of ${total}`}
         />
-        <div className="flex gap-1 my-2" aria-hidden="true">
+        <div className="flex gap-1 mb-2" aria-hidden="true">
           {Array.from({ length: total }).map((_, i) => (
             <div
               key={STEPS[i]}

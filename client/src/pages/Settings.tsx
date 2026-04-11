@@ -1,5 +1,5 @@
 import { useMutation,useQuery } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
+import { Loader2, RotateCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 
@@ -10,6 +10,7 @@ import { ProfileSection } from "@/components/settings/ProfileSection";
 import { PushNotificationSection } from "@/components/settings/PushNotificationSection";
 import { StravaSection } from "@/components/settings/StravaSection";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { api, QUERY_KEYS } from "@/lib/api";
@@ -191,6 +192,28 @@ export default function Settings() {
       <PushNotificationSection />
 
       <CoachingSection />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Getting Started</CardTitle>
+          <CardDescription>
+            Run the welcome flow again if you skipped it or want to pick a different training plan.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button
+            variant="outline"
+            data-testid="button-rerun-onboarding"
+            onClick={() => {
+              localStorage.removeItem("hyrox-onboarding-complete");
+              setLocation("/?onboarding=run");
+            }}
+          >
+            <RotateCw className="h-4 w-4 mr-2" aria-hidden="true" />
+            Run setup again
+          </Button>
+        </CardContent>
+      </Card>
 
       <DataToolsSection />
 
