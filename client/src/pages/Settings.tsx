@@ -22,6 +22,8 @@ interface Preferences {
   distanceUnit: string;
   weeklyGoal: number;
   emailNotifications: boolean;
+  emailWeeklySummary: boolean;
+  emailMissedReminder: boolean;
   aiCoachEnabled: boolean;
 }
 
@@ -36,17 +38,21 @@ interface PreferencesSnapshot {
   distanceUnit: string;
   weeklyGoal: string;
   emailNotifications: boolean;
+  emailWeeklySummary: boolean;
+  emailMissedReminder: boolean;
   aiCoachEnabled: boolean;
 }
 
 function preferencesToSnapshot(
-  preferences: Pick<Preferences, "weightUnit" | "distanceUnit" | "weeklyGoal" | "emailNotifications" | "aiCoachEnabled">,
+  preferences: Pick<Preferences, "weightUnit" | "distanceUnit" | "weeklyGoal" | "emailNotifications" | "emailWeeklySummary" | "emailMissedReminder" | "aiCoachEnabled">,
 ): PreferencesSnapshot {
   return {
     weightUnit: preferences.weightUnit || "kg",
     distanceUnit: preferences.distanceUnit || "km",
     weeklyGoal: String(preferences.weeklyGoal || 5),
     emailNotifications: preferences.emailNotifications,
+    emailWeeklySummary: preferences.emailWeeklySummary ?? true,
+    emailMissedReminder: preferences.emailMissedReminder ?? true,
     aiCoachEnabled: preferences.aiCoachEnabled ?? true,
   };
 }
@@ -60,6 +66,8 @@ export default function Settings() {
   const [distanceUnit, setDistanceUnit] = useState("km");
   const [weeklyGoal, setWeeklyGoal] = useState("5");
   const [emailNotifications, setEmailNotifications] = useState(true);
+  const [emailWeeklySummary, setEmailWeeklySummary] = useState(true);
+  const [emailMissedReminder, setEmailMissedReminder] = useState(true);
   const [aiCoachEnabled, setAiCoachEnabled] = useState(true);
   const [hasChanges, setHasChanges] = useState(false);
   // Snapshot of values before the most recent save, used to offer an
@@ -107,6 +115,8 @@ export default function Settings() {
       setDistanceUnit(preferences.distanceUnit || "km");
       setWeeklyGoal(String(preferences.weeklyGoal || 5));
       setEmailNotifications(preferences.emailNotifications);
+      setEmailWeeklySummary(preferences.emailWeeklySummary ?? true);
+      setEmailMissedReminder(preferences.emailMissedReminder ?? true);
       setAiCoachEnabled(preferences.aiCoachEnabled ?? true);
       // Seed the committed-state tracker the first time preferences load.
       // Subsequent updates come from saveMutation.onSuccess so we don't
@@ -123,6 +133,8 @@ export default function Settings() {
       distanceUnit: string;
       weeklyGoal: number;
       emailNotifications: boolean;
+      emailWeeklySummary: boolean;
+      emailMissedReminder: boolean;
       aiCoachEnabled: boolean;
     }) => api.preferences.update(data),
     onSuccess: (_data, variables) => {
@@ -136,6 +148,8 @@ export default function Settings() {
         distanceUnit: variables.distanceUnit,
         weeklyGoal: String(variables.weeklyGoal),
         emailNotifications: variables.emailNotifications,
+        emailWeeklySummary: variables.emailWeeklySummary,
+        emailMissedReminder: variables.emailMissedReminder,
         aiCoachEnabled: variables.aiCoachEnabled,
       };
       setHasChanges(false);
@@ -156,12 +170,16 @@ export default function Settings() {
               setDistanceUnit(previous.distanceUnit);
               setWeeklyGoal(previous.weeklyGoal);
               setEmailNotifications(previous.emailNotifications);
+              setEmailWeeklySummary(previous.emailWeeklySummary);
+              setEmailMissedReminder(previous.emailMissedReminder);
               setAiCoachEnabled(previous.aiCoachEnabled);
               saveMutation.mutate({
                 weightUnit: previous.weightUnit,
                 distanceUnit: previous.distanceUnit,
                 weeklyGoal: Number.parseInt(previous.weeklyGoal, 10),
                 emailNotifications: previous.emailNotifications,
+                emailWeeklySummary: previous.emailWeeklySummary,
+                emailMissedReminder: previous.emailMissedReminder,
                 aiCoachEnabled: previous.aiCoachEnabled,
               });
             }}
@@ -203,9 +221,11 @@ export default function Settings() {
       distanceUnit,
       weeklyGoal: Number.parseInt(weeklyGoal, 10),
       emailNotifications,
+      emailWeeklySummary,
+      emailMissedReminder,
       aiCoachEnabled,
     });
-  }, [saveMutation, weightUnit, distanceUnit, weeklyGoal, emailNotifications, aiCoachEnabled]);
+  }, [saveMutation, weightUnit, distanceUnit, weeklyGoal, emailNotifications, emailWeeklySummary, emailMissedReminder, aiCoachEnabled]);
 
   const markChanged = () => setHasChanges(true);
 
@@ -247,6 +267,8 @@ export default function Settings() {
         distanceUnit={distanceUnit}
         weeklyGoal={weeklyGoal}
         emailNotifications={emailNotifications}
+        emailWeeklySummary={emailWeeklySummary}
+        emailMissedReminder={emailMissedReminder}
         aiCoachEnabled={aiCoachEnabled}
         onWeightUnitChange={(v) => {
           setWeightUnit(v);
@@ -262,6 +284,14 @@ export default function Settings() {
         }}
         onEmailNotificationsChange={(v) => {
           setEmailNotifications(v);
+          markChanged();
+        }}
+        onEmailWeeklySummaryChange={(v) => {
+          setEmailWeeklySummary(v);
+          markChanged();
+        }}
+        onEmailMissedReminderChange={(v) => {
+          setEmailMissedReminder(v);
           markChanged();
         }}
         onAiCoachEnabledChange={(v) => {

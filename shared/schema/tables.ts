@@ -28,7 +28,12 @@ export const users = pgTable("users", {
   weightUnit: varchar("weight_unit", { length: 255 }).default("kg"),
   distanceUnit: varchar("distance_unit", { length: 255 }).default("km"),
   weeklyGoal: integer("weekly_goal").default(5),
+  // Master email toggle. When false, no email is ever sent. When true,
+  // the per-type toggles below decide which email categories actually
+  // go out. Existing users default to all-on to preserve behavior.
   emailNotifications: boolean("email_notifications").default(true),
+  emailWeeklySummary: boolean("email_weekly_summary").default(true),
+  emailMissedReminder: boolean("email_missed_reminder").default(true),
   aiCoachEnabled: boolean("ai_coach_enabled").default(true),
   isAutoCoaching: boolean("is_auto_coaching").default(false),
   lastWeeklySummaryAt: timestamp("last_weekly_summary_at"),

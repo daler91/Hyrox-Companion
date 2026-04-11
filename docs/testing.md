@@ -277,7 +277,14 @@ All intercepted endpoints return sensible defaults that can be overridden per-te
 ```ts
 setupAuthIntercepts({
   workouts: [{ id: "1", date: "2026-01-15", ... }],
-  preferences: { weightUnit: "lbs", distanceUnit: "miles", weeklyGoal: 3, emailNotifications: false },
+  preferences: {
+    weightUnit: "lbs",
+    distanceUnit: "miles",
+    weeklyGoal: 3,
+    emailNotifications: false,
+    emailWeeklySummary: true,
+    emailMissedReminder: true,
+  },
 });
 ```
 
