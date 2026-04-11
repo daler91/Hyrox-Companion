@@ -5,17 +5,20 @@ import { queryClient } from "@/lib/queryClient";
 import { COACH_AUTO_OPEN_DELAY_MS, IMPORT_INPUT_DELAY_MS, MOBILE_BREAKPOINT_PX } from "./constants";
 
 function hasOnboardingForceParam(): boolean {
-  if (typeof globalThis.window === "undefined") return false;
+  if (globalThis.window === undefined) return false;
   return new URLSearchParams(globalThis.window.location.search).get("onboarding") === "run";
 }
 
 function clearOnboardingForceParam(): void {
-  if (typeof globalThis.window === "undefined") return;
+  if (globalThis.window === undefined) return;
   const params = new URLSearchParams(globalThis.window.location.search);
   if (!params.has("onboarding")) return;
   params.delete("onboarding");
   const query = params.toString();
-  const newUrl = `${globalThis.window.location.pathname}${query ? `?${query}` : ""}${globalThis.window.location.hash}`;
+  const queryString = query.length > 0 ? `?${query}` : "";
+  const path = globalThis.window.location.pathname;
+  const hash = globalThis.window.location.hash;
+  const newUrl = `${path}${queryString}${hash}`;
   globalThis.window.history.replaceState(null, "", newUrl);
 }
 

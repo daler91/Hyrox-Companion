@@ -39,7 +39,7 @@ function isBlank(draft: LoadedDraft): boolean {
 }
 
 export function loadLogWorkoutDraft(userKey: string): LoadedDraft | null {
-  if (typeof globalThis.window === "undefined") return null;
+  if (globalThis.window === undefined) return null;
   try {
     const raw = globalThis.window.localStorage.getItem(getStorageKey(userKey));
     if (!raw) return null;

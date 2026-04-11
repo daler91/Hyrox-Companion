@@ -65,11 +65,8 @@ export const WorkoutDetailsCard = ({
             />
           </div>
         </div>
-        <div
-          className="flex flex-wrap gap-2"
-          role="group"
-          aria-label="Quick-pick workout date"
-        >
+        <fieldset className="flex flex-wrap gap-2 border-0 p-0 m-0">
+          <legend className="sr-only">Quick-pick workout date</legend>
           <Button
             type="button"
             variant={isToday ? "default" : "outline"}
@@ -91,7 +88,7 @@ export const WorkoutDetailsCard = ({
           <span className="text-xs text-muted-foreground self-center ml-1">
             Or use the date picker above for earlier workouts
           </span>
-        </div>
+        </fieldset>
         <RpeSelector value={rpe} onChange={setRpe} />
       </CardContent>
     </Card>
