@@ -104,6 +104,11 @@ function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
           rpe: initialDraft.rpe,
         }
       : undefined,
+    // Clear the localStorage draft synchronously on save success, BEFORE
+    // useWorkoutForm navigates away. Using a useEffect on
+    // saveMutation.isSuccess races the page unmount from navigate("/"),
+    // which can leave a stale draft that reappears on the next visit.
+    onSaveSuccess: () => clearLogWorkoutDraft(userKey),
   });
 
   const {
@@ -162,13 +167,6 @@ function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
     exerciseData,
     currentBlockCounter,
   ]);
-
-  // Clear the draft once the workout is successfully saved.
-  useEffect(() => {
-    if (saveMutation.isSuccess) {
-      clearLogWorkoutDraft(userKey);
-    }
-  }, [saveMutation.isSuccess, userKey]);
 
   // "Draft restored" toast on mount. `initialDraft` comes from a lazy useState
   // initializer so it's stable across renders, meaning this effect runs exactly

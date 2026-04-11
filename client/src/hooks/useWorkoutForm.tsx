@@ -25,6 +25,12 @@ interface UseWorkoutFormProps {
     notes?: string;
     rpe?: number | null;
   };
+  /**
+   * Fires synchronously on successful save, BEFORE the post-save navigation.
+   * Consumers use this to run cleanup (e.g. clearing the localStorage draft)
+   * that must complete while the LogWorkout tree is still mounted.
+   */
+  onSaveSuccess?: () => void;
 }
 
 export function useWorkoutForm({
@@ -34,6 +40,7 @@ export function useWorkoutForm({
   weightLabel,
   distanceUnit,
   initialValues,
+  onSaveSuccess,
 }: UseWorkoutFormProps) {
   const { toast } = useToast();
   const [, navigate] = useLocation();
@@ -132,6 +139,9 @@ export function useWorkoutForm({
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workouts }).catch(() => {});
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }).catch(() => {});
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.authUser }).catch(() => {});
+      // Run any consumer-supplied cleanup (e.g. clearing the draft) before
+      // we navigate away, so the unmount doesn't race with it.
+      onSaveSuccess?.();
       toast({
         title: "Workout logged",
         description: "Your workout has been saved successfully.",

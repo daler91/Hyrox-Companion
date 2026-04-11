@@ -63,7 +63,7 @@ export function loadLogWorkoutDraft(userKey: string): LoadedDraft | null {
 }
 
 export function saveLogWorkoutDraft(userKey: string, draft: LoadedDraft): void {
-  if (typeof globalThis.window === "undefined") return;
+  if (globalThis.window === undefined) return;
   // Don't persist an empty draft — that would just create noise.
   if (isBlank(draft)) {
     clearLogWorkoutDraft(userKey);
@@ -83,7 +83,7 @@ export function saveLogWorkoutDraft(userKey: string, draft: LoadedDraft): void {
 }
 
 export function clearLogWorkoutDraft(userKey: string): void {
-  if (typeof globalThis.window === "undefined") return;
+  if (globalThis.window === undefined) return;
   try {
     globalThis.window.localStorage.removeItem(getStorageKey(userKey));
   } catch {

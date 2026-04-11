@@ -72,7 +72,7 @@ describe("Onboarding Wizard", () => {
     cy.getBySel("button-rerun-onboarding").click();
 
     // Landing back on Timeline with onboarding forced open via the URL param.
-    cy.url().should("match", /\/\?onboarding=run|\/$/);
+    cy.url().should("match", /(?:\/\?onboarding=run|\/$)/);
     cy.wait("@timeline");
     cy.contains("Welcome to fitai.coach").should("be.visible");
   });

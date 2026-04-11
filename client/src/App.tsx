@@ -74,7 +74,7 @@ function AuthenticatedRouter() {
 const SIDEBAR_COOKIE_NAME = "sidebar_state";
 
 function getStoredSidebarOpen(): boolean {
-  if (typeof document === "undefined") return true;
+  if (globalThis.document === undefined) return true;
   const match = document.cookie
     .split("; ")
     .find((row) => row.startsWith(`${SIDEBAR_COOKIE_NAME}=`));
