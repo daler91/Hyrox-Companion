@@ -13,6 +13,14 @@ interface TimelineTodayIndicatorProps {
   readonly scrollRef: React.RefObject<HTMLDivElement | null>;
   /** Jump back to today. Fires when the user taps the pill. */
   readonly onScrollToToday: () => void;
+  /**
+   * Whether today appears anywhere in the currently-rendered timeline
+   * groups. When false (e.g. the user filtered to a status that excludes
+   * today), the pill stays hidden — otherwise it can leak over from a
+   * previous "virtualizer unmounted the today row" state and present a
+   * dead jump action.
+   */
+  readonly todayPresent: boolean;
 }
 
 type Position = "above" | "below" | "visible";
@@ -28,6 +36,7 @@ export function TimelineTodayIndicator({
   todayRef,
   scrollRef,
   onScrollToToday,
+  todayPresent,
 }: TimelineTodayIndicatorProps) {
   const [position, setPosition] = useState<Position>("visible");
 
@@ -95,6 +104,9 @@ export function TimelineTodayIndicator({
     };
   }, [todayRef, scrollRef]);
 
+  // If today isn't in the filtered timeline at all, the jump action
+  // would land nowhere — hide the pill entirely.
+  if (!todayPresent) return null;
   if (position === "visible") return null;
 
   const Arrow = position === "above" ? ArrowUp : ArrowDown;
