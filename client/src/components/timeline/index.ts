@@ -1,3 +1,4 @@
+export { CoachReviewingIndicator } from "./CoachReviewingIndicator";
 export { CombineWorkoutsDialog } from "./combine-workouts-dialog";
 export type { EditFormState } from "./EditWorkoutDialog";
 export { default as EditWorkoutDialog } from "./EditWorkoutDialog";

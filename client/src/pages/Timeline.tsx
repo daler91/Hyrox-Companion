@@ -11,6 +11,7 @@ import { CoachPanel } from "@/components/CoachPanel";
 import { FeatureErrorBoundaryWrapper } from "@/components/FeatureErrorBoundaryWrapper";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 import {
+  CoachReviewingIndicator,
   CombineWorkoutsDialog,
   FloatingActionButton,
   ImportPreviewDialog,
@@ -261,6 +262,8 @@ export default function Timeline() {
           <TimelineHeader
             onScrollToToday={handleScrollToToday}
           />
+
+          <CoachReviewingIndicator isActive={!!user?.isAutoCoaching} />
 
           <TimelineFilters
         plans={plans}
