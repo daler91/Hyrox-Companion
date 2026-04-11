@@ -21,6 +21,7 @@ import {
   TimelineFilters,
   TimelineHeader,
   TimelineSkeleton,
+  TimelineTodayIndicator,
   WorkoutDetailDialog,
 } from "@/components/timeline";
 import { Button } from "@/components/ui/button";
@@ -305,6 +306,12 @@ export default function Timeline() {
         personalRecords={personalRecords}
         isAutoCoaching={!!user?.isAutoCoaching}
       />
+
+          <TimelineTodayIndicator
+            todayRef={todayRef}
+            scrollRef={scrollRef}
+            onScrollToToday={handleScrollToToday}
+          />
 
           <FloatingActionButton coachPanelOpen={coachOpen} onCoachToggle={() => setCoachOpen(!coachOpen)} />
 

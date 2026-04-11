@@ -13,5 +13,6 @@ export { default as TimelineDateGroup } from "./TimelineDateGroup";
 export { default as TimelineEmptyState } from "./TimelineEmptyState";
 export { default as TimelineHeader } from "./TimelineHeader";
 export { default as TimelineSkeleton } from "./TimelineSkeleton";
+export { TimelineTodayIndicator } from "./TimelineTodayIndicator";
 export type { FilterStatus, WorkoutSuggestion } from "./types";
 export { default as WorkoutDetailDialog } from "./WorkoutDetailDialog";
