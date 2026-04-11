@@ -1,6 +1,6 @@
 import { useMutation,useQuery } from "@tanstack/react-query";
 import { Loader2, RotateCw } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 
 import { CoachingSection } from "@/components/settings/CoachingSection";
@@ -11,6 +11,7 @@ import { PushNotificationSection } from "@/components/settings/PushNotificationS
 import { StravaSection } from "@/components/settings/StravaSection";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ToastAction } from "@/components/ui/toast";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { api, QUERY_KEYS } from "@/lib/api";
@@ -30,6 +31,14 @@ interface StravaStatus {
   lastSyncedAt?: string | null;
 }
 
+interface PreferencesSnapshot {
+  weightUnit: string;
+  distanceUnit: string;
+  weeklyGoal: string;
+  emailNotifications: boolean;
+  aiCoachEnabled: boolean;
+}
+
 export default function Settings() {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -41,6 +50,9 @@ export default function Settings() {
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [aiCoachEnabled, setAiCoachEnabled] = useState(true);
   const [hasChanges, setHasChanges] = useState(false);
+  // Snapshot of values before the most recent save, used to offer an
+  // "Undo" action on the post-save toast.
+  const undoSnapshotRef = useRef<PreferencesSnapshot | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(search);
@@ -92,9 +104,36 @@ export default function Settings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.preferences }).catch(() => {});
       setHasChanges(false);
+      const previous = undoSnapshotRef.current;
       toast({
         title: "Settings saved",
         description: "Your preferences have been updated.",
+        action: previous ? (
+          <ToastAction
+            altText="Undo settings change"
+            data-testid="button-undo-settings"
+            onClick={() => {
+              // Restore the previous values in-state and persist them.
+              // Leave undoSnapshotRef in place so a second undo restores
+              // again — the mutation onSuccess will replace it after
+              // persistence completes.
+              setWeightUnit(previous.weightUnit);
+              setDistanceUnit(previous.distanceUnit);
+              setWeeklyGoal(previous.weeklyGoal);
+              setEmailNotifications(previous.emailNotifications);
+              setAiCoachEnabled(previous.aiCoachEnabled);
+              saveMutation.mutate({
+                weightUnit: previous.weightUnit,
+                distanceUnit: previous.distanceUnit,
+                weeklyGoal: Number.parseInt(previous.weeklyGoal, 10),
+                emailNotifications: previous.emailNotifications,
+                aiCoachEnabled: previous.aiCoachEnabled,
+              });
+            }}
+          >
+            Undo
+          </ToastAction>
+        ) : undefined,
       });
     },
     onError: () => {
@@ -117,6 +156,16 @@ export default function Settings() {
   }, [hasChanges]);
 
   const handleSave = useCallback(() => {
+    // Capture the pre-save values so the post-save toast can offer Undo.
+    if (preferences) {
+      undoSnapshotRef.current = {
+        weightUnit: preferences.weightUnit || "kg",
+        distanceUnit: preferences.distanceUnit || "km",
+        weeklyGoal: String(preferences.weeklyGoal || 5),
+        emailNotifications: preferences.emailNotifications,
+        aiCoachEnabled: preferences.aiCoachEnabled ?? true,
+      };
+    }
     saveMutation.mutate({
       weightUnit,
       distanceUnit,
@@ -124,7 +173,7 @@ export default function Settings() {
       emailNotifications,
       aiCoachEnabled,
     });
-  }, [saveMutation, weightUnit, distanceUnit, weeklyGoal, emailNotifications, aiCoachEnabled]);
+  }, [saveMutation, preferences, weightUnit, distanceUnit, weeklyGoal, emailNotifications, aiCoachEnabled]);
 
   const markChanged = () => setHasChanges(true);
 
