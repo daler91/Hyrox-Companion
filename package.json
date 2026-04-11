@@ -128,14 +128,24 @@
     "  Pulled by @modelcontextprotocol/sdk 1.29.0 (depends on hono 4.12.10) and referenced",
     "  by @google/genai via an optional peer. We don't import hono directly; this override is",
     "  defense-in-depth so MCP SDK code paths cannot inherit the vulnerable parser / matcher.",
-    "  Remove when @modelcontextprotocol/sdk ships a version that depends on hono >=4.12.12."
+    "  Remove when @modelcontextprotocol/sdk ships a version that depends on hono >=4.12.12.",
+    "",
+    "@hono/node-server ^1.19.13: fixes GHSA (serveStatic middleware bypass via repeated slashes).",
+    "  Path-handling inconsistency lets '//admin/secret.txt' bypass route-based middleware on",
+    "  '/admin/*' and access protected static files. Patched in 1.19.13.",
+    "  Pulled by @modelcontextprotocol/sdk 1.29.0 (depends on @hono/node-server 1.19.12).",
+    "  This repo does not use Hono directly (Express-based), but we pin the patched version to",
+    "  clear the advisory and reduce supply-chain exposure. Dependabot cannot update transitive",
+    "  deps for pnpm, so the override is required.",
+    "  Remove when @modelcontextprotocol/sdk ships a version that depends on @hono/node-server >=1.19.13."
   ],
   "overrides": {
     "esbuild": "0.27.5",
     "yauzl": "^3.2.1",
     "undici": "^7.24.3",
     "serialize-javascript": ">=7.0.3",
-    "hono": ">=4.12.12"
+    "hono": ">=4.12.12",
+    "@hono/node-server": "^1.19.13"
   },
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.19",
@@ -190,7 +200,8 @@
       "yauzl": "^3.2.1",
       "undici": "^7.24.3",
       "serialize-javascript": ">=7.0.3",
-      "hono": ">=4.12.12"
+      "hono": ">=4.12.12",
+      "@hono/node-server": "^1.19.13"
     }
   },
   "packageManager": "pnpm@9.12.0",
