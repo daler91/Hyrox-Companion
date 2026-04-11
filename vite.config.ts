@@ -26,10 +26,21 @@ export default defineConfig({
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff,woff2}"],
         cleanupOutdatedCaches: true,
+        // Exclude API paths from the SPA navigation fallback so top-level
+        // navigations to endpoints like /api/v1/export?format=csv (which
+        // return Content-Disposition: attachment) are handled by the browser
+        // directly instead of being replaced with the precached index.html —
+        // which would otherwise cause wouter to render the NotFound page.
+        navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [
           {
-            urlPattern: ({ url }: { url: URL }) =>
-              url.pathname.startsWith("/api/"),
+            // Only apply NetworkFirst to programmatic API requests (XHR/fetch
+            // from React Query, whose request.destination is ""). Top-level
+            // navigations to /api/* (destination === "document") must bypass
+            // the service worker entirely so the browser can process
+            // Content-Disposition downloads natively.
+            urlPattern: ({ url, request }: { url: URL; request: Request }) =>
+              url.pathname.startsWith("/api/") && request.destination !== "document",
             handler: "NetworkFirst",
             options: {
               cacheName: "api-cache",
