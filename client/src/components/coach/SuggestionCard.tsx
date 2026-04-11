@@ -1,4 +1,4 @@
-import { Check, Loader2, XIcon,Zap } from "lucide-react";
+import { Check, Lightbulb, Loader2, XIcon,Zap } from "lucide-react";
 
 import { RagDebugBadge } from "@/components/RagDebugBadge";
 import { Badge } from "@/components/ui/badge";
@@ -34,7 +34,16 @@ export function SuggestionCard({ suggestion, ragInfo, onApply, onDismiss, isAppl
   const priorityColor = PRIORITY_COLORS[suggestion.priority] || PRIORITY_COLORS.low;
 
   return (
-    <Card className="p-3 space-y-2" data-testid={`suggestion-card-${suggestion.workoutId}`}>
+    <Card
+      className="relative p-3 pl-4 space-y-2 border-l-4 border-l-primary bg-primary/5 dark:bg-primary/10 shadow-sm"
+      data-testid={`suggestion-card-${suggestion.workoutId}`}
+    >
+      <div className="flex items-center gap-1.5">
+        <Lightbulb className="h-3.5 w-3.5 text-primary shrink-0" aria-hidden="true" />
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-primary">
+          Coaching Suggestion
+        </span>
+      </div>
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -54,7 +63,7 @@ export function SuggestionCard({ suggestion, ragInfo, onApply, onDismiss, isAppl
           </div>
         </div>
       </div>
-      
+
       <p className="text-sm">{suggestion.recommendation}</p>
       <p className="text-xs text-muted-foreground italic">{suggestion.rationale}</p>
       {ragInfo && <RagDebugBadge ragInfo={ragInfo} />}
