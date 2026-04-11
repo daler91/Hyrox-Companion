@@ -1,5 +1,5 @@
-import { BarChart3,CalendarRange, LogOut, Settings } from "lucide-react";
-import { Link,useLocation } from "wouter";
+import { BarChart3, CalendarRange, LogOut, PlusCircle, Settings } from "lucide-react";
+import { Link, useLocation } from "wouter";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,9 @@ import { ThemeToggle } from "./ThemeToggle";
 
 const menuItems = [
   { title: "Training", url: "/", icon: CalendarRange },
+  { title: "Log Workout", url: "/log", icon: PlusCircle },
   { title: "Analytics", url: "/analytics", icon: BarChart3 },
+  { title: "Settings", url: "/settings", icon: Settings },
 ];
 
 export function AppSidebar() {
@@ -87,16 +89,6 @@ export function AppSidebar() {
             <span className="text-sm font-medium truncate" data-testid="text-user-name">{userName}</span>
           </div>
           <div className="flex items-center gap-1">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" asChild data-testid="nav-settings" aria-label="Settings">
-                  <Link href="/settings">
-                    <Settings className="h-4 w-4" />
-                  </Link>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Settings</TooltipContent>
-            </Tooltip>
             <ThemeToggle />
             <Tooltip>
               <TooltipTrigger asChild>
