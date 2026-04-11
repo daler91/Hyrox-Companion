@@ -1,12 +1,20 @@
 import { useQuery } from "@tanstack/react-query";
 import { format, subDays } from "date-fns";
-import { Activity, BarChart3, PieChart,Trophy } from "lucide-react";
+import { Activity, BarChart3, Download, FileJson, FileSpreadsheet, PieChart, Target,Trophy } from "lucide-react";
 import { useMemo } from "react";
 
 import { CategoryBreakdownTab } from "@/components/analytics/CategoryBreakdownTab";
 import { ExerciseProgressionTab } from "@/components/analytics/ExerciseProgressionTab";
 import { PersonalRecordsTab } from "@/components/analytics/PersonalRecordsTab";
 import { TrainingOverviewTab } from "@/components/analytics/TrainingOverviewTab";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useUrlQueryState } from "@/hooks/useUrlQueryState";
@@ -33,26 +41,67 @@ export default function Analytics() {
     queryKey: QUERY_KEYS.preferences,
   });
 
+  const handleExport = (exportFormat: "csv" | "json") => {
+    globalThis.location.href = `/api/v1/export?format=${exportFormat}`;
+  };
+
   return (
     <div className="max-w-4xl mx-auto p-4 md:p-6 space-y-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold" data-testid="text-analytics-title">Analytics</h1>
           <p className="text-muted-foreground">Training overview, progression, and personal records</p>
+          {preferences?.weeklyGoal ? (
+            <Badge
+              variant="outline"
+              className="mt-2 gap-1.5"
+              data-testid="badge-weekly-goal"
+            >
+              <Target className="h-3 w-3" aria-hidden="true" />
+              Weekly goal: {preferences.weeklyGoal} workout{preferences.weeklyGoal === 1 ? "" : "s"}
+            </Badge>
+          ) : null}
         </div>
 
-        <Select value={dateRange} onValueChange={(value) => setDateRange(value as DateRange)}>
-          <SelectTrigger className="w-36" data-testid="select-date-range">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="30">Last 30 days</SelectItem>
-            <SelectItem value="90">Last 90 days</SelectItem>
-            <SelectItem value="180">Last 6 months</SelectItem>
-            <SelectItem value="365">Last year</SelectItem>
-            <SelectItem value="all">All time</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Select value={dateRange} onValueChange={(value) => setDateRange(value as DateRange)}>
+            <SelectTrigger className="w-36" data-testid="select-date-range">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="30">Last 30 days</SelectItem>
+              <SelectItem value="90">Last 90 days</SelectItem>
+              <SelectItem value="180">Last 6 months</SelectItem>
+              <SelectItem value="365">Last year</SelectItem>
+              <SelectItem value="all">All time</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" data-testid="button-analytics-export">
+                <Download className="h-4 w-4 mr-2" aria-hidden="true" />
+                Export
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onClick={() => handleExport("csv")}
+                data-testid="button-export-analytics-csv"
+              >
+                <FileSpreadsheet className="h-4 w-4 mr-2" aria-hidden="true" />
+                Export as CSV
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => handleExport("json")}
+                data-testid="button-export-analytics-json"
+              >
+                <FileJson className="h-4 w-4 mr-2" aria-hidden="true" />
+                Export as JSON
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       <Tabs defaultValue="overview" className="w-full">
