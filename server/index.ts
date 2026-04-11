@@ -65,7 +65,21 @@ declare module "http" {
   }
 }
 
-app.use(compression());
+// Skip compression for Server-Sent Events — compression's internal gzip
+// buffer holds chunks indefinitely on slow producers (e.g. Gemini with
+// thinkingLevel HIGH), breaking streaming. See expressjs/compression
+// README "Handling Server-Sent Events with Compression and Flush".
+app.use(
+  compression({
+    filter: (req, res) => {
+      const contentType = res.getHeader("Content-Type");
+      if (typeof contentType === "string" && contentType.includes("text/event-stream")) {
+        return false;
+      }
+      return compression.filter(req, res);
+    },
+  }),
+);
 
 const isDev = env.NODE_ENV !== "production";
 
