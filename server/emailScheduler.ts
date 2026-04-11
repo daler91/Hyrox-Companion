@@ -94,17 +94,28 @@ export async function processMissedWorkoutReminder(storage: IStorage, user: User
   return success;
 }
 
+/**
+ * Per-type toggles default to `true` when null/undefined so existing users
+ * who predate the migration keep receiving both categories without an
+ * explicit opt-in. The master `emailNotifications` still gates everything.
+ */
+function wantsEmail(user: User, kind: "weeklySummary" | "missedReminder"): boolean {
+  if (!user.emailNotifications) return false;
+  if (kind === "weeklySummary") return user.emailWeeklySummary ?? true;
+  return user.emailMissedReminder ?? true;
+}
+
 export async function checkAndSendEmailsForUser(storage: IStorage, user: User): Promise<string[]> {
   const sent: string[] = [];
   if (!user.email || !user.emailNotifications) return sent;
 
   const now = new Date();
 
-  if (await processWeeklySummary(storage, user, now)) {
+  if (wantsEmail(user, "weeklySummary") && await processWeeklySummary(storage, user, now)) {
     sent.push("weekly_summary");
   }
 
-  if (await processMissedWorkoutReminder(storage, user, now)) {
+  if (wantsEmail(user, "missedReminder") && await processMissedWorkoutReminder(storage, user, now)) {
     sent.push("missed_reminder");
   }
 
@@ -136,13 +147,19 @@ export async function runEmailCronJob(storage: IStorage): Promise<{ usersChecked
     type EnqueueMeta = { userId: string; jobName: string };
     const ops: Promise<unknown>[] = [];
     const meta: EnqueueMeta[] = [];
+    // Respect per-type email toggles when enqueueing. Users who have
+    // opted out of weekly summaries shouldn't get a job enqueued for
+    // them at all — avoids wasted queue capacity and downstream
+    // processing for an email that would immediately short-circuit.
     for (const user of usersToCheck) {
-      if (isMonday) {
+      if (isMonday && wantsEmail(user, "weeklySummary")) {
         ops.push(queue.send("send-weekly-summary", { userId: user.id }));
         meta.push({ userId: user.id, jobName: "send-weekly-summary" });
       }
-      ops.push(queue.send("send-missed-reminder", { userId: user.id }));
-      meta.push({ userId: user.id, jobName: "send-missed-reminder" });
+      if (wantsEmail(user, "missedReminder")) {
+        ops.push(queue.send("send-missed-reminder", { userId: user.id }));
+        meta.push({ userId: user.id, jobName: "send-missed-reminder" });
+      }
     }
 
     const settled = await Promise.allSettled(ops);

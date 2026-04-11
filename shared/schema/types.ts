@@ -23,7 +23,15 @@ export const updateUserPreferencesSchema = z.object({
   weightUnit: z.enum(["kg", "lbs"]).optional(),
   distanceUnit: z.enum(["km", "miles"]).optional(),
   weeklyGoal: z.number().min(1).max(14).optional(),
+  // Master toggle — when false, no email is ever sent regardless of
+  // the per-type flags below. Kept for backward compatibility with
+  // older clients that only know about this field.
   emailNotifications: z.boolean().optional(),
+  // Per-type toggles. Take effect only when the master toggle is on.
+  // Default behavior (both true) preserves pre-migration behavior for
+  // existing users.
+  emailWeeklySummary: z.boolean().optional(),
+  emailMissedReminder: z.boolean().optional(),
   aiCoachEnabled: z.boolean().optional(),
 });
 

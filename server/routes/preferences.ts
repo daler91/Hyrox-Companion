@@ -20,6 +20,8 @@ router.get('/api/v1/preferences', isAuthenticated, asyncHandler(async (req: Expr
       distanceUnit: user.distanceUnit || "km",
       weeklyGoal: user.weeklyGoal || 5,
       emailNotifications: user.emailNotifications ?? true,
+      emailWeeklySummary: user.emailWeeklySummary ?? true,
+      emailMissedReminder: user.emailMissedReminder ?? true,
       aiCoachEnabled: user.aiCoachEnabled ?? true,
     });
   }));
@@ -40,6 +42,8 @@ router.patch('/api/v1/preferences', ...protectedMutationGuards, rateLimiter("pre
       distanceUnit: user.distanceUnit,
       weeklyGoal: user.weeklyGoal,
       emailNotifications: user.emailNotifications ?? true,
+      emailWeeklySummary: user.emailWeeklySummary ?? true,
+      emailMissedReminder: user.emailMissedReminder ?? true,
       aiCoachEnabled: user.aiCoachEnabled ?? true,
     });
   }));

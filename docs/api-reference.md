@@ -710,7 +710,7 @@ Re-embed all coaching materials for the current user.
 Get the current user's preferences.
 
 - **Auth:** Required
-- **Response:** `{ weightUnit, distanceUnit, weeklyGoal, emailNotifications, aiCoachEnabled }`
+- **Response:** `{ weightUnit, distanceUnit, weeklyGoal, emailNotifications, emailWeeklySummary, emailMissedReminder, aiCoachEnabled }`
 
 ### PATCH /api/v1/preferences
 
@@ -718,9 +718,10 @@ Update user preferences.
 
 - **Auth:** Required
 - **Rate limit:** `preferences` category, 20/min
-- **Body:** Partial `{ weightUnit?: "kg" | "lbs", distanceUnit?: "km" | "miles", weeklyGoal?: 1-14, emailNotifications?: boolean, aiCoachEnabled?: boolean }`
+- **Body:** Partial `{ weightUnit?: "kg" | "lbs", distanceUnit?: "km" | "miles", weeklyGoal?: 1-14, emailNotifications?: boolean, emailWeeklySummary?: boolean, emailMissedReminder?: boolean, aiCoachEnabled?: boolean }`
 - **Validation:** `updateUserPreferencesSchema`
 - **Response:** Updated preferences object
+- **Email toggle semantics:** `emailNotifications` is the master switch — when `false`, no email is sent regardless of the per-type flags. `emailWeeklySummary` and `emailMissedReminder` default to `true` (preserving pre-migration behavior) and only take effect when the master is on.
 
 ---
 

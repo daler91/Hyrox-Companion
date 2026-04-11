@@ -105,4 +105,68 @@ describe('runEmailCronJob', () => {
     expect(result.emailsSent).toBe(0);
     expect(result.details).toContain('No users with email notifications enabled');
   });
+
+  it('skips the weekly summary when the user has opted out via emailWeeklySummary=false', async () => {
+    const { queue } = await import('./queue');
+    mockStorage.users.getUsersWithEmailNotifications = vi.fn().mockResolvedValue([
+      {
+        id: 'user-weekly-off',
+        email: 'weekly-off@example.com',
+        emailNotifications: true,
+        emailWeeklySummary: false,
+        emailMissedReminder: true,
+        lastWeeklySummaryAt: null,
+        lastMissedReminderAt: null,
+      } as unknown as User,
+    ]);
+
+    const result = await runEmailCronJob(mockStorage);
+
+    // Monday, but the weekly summary is opted out → only 1 job enqueued.
+    expect(result.usersChecked).toBe(1);
+    expect(result.emailsSent).toBe(1);
+    expect(queue.send).toHaveBeenCalledWith('send-missed-reminder', { userId: 'user-weekly-off' });
+    expect(queue.send).not.toHaveBeenCalledWith('send-weekly-summary', expect.anything());
+  });
+
+  it('skips the missed reminder when the user has opted out via emailMissedReminder=false', async () => {
+    const { queue } = await import('./queue');
+    mockStorage.users.getUsersWithEmailNotifications = vi.fn().mockResolvedValue([
+      {
+        id: 'user-missed-off',
+        email: 'missed-off@example.com',
+        emailNotifications: true,
+        emailWeeklySummary: true,
+        emailMissedReminder: false,
+        lastWeeklySummaryAt: null,
+        lastMissedReminderAt: null,
+      } as unknown as User,
+    ]);
+
+    const result = await runEmailCronJob(mockStorage);
+
+    expect(result.usersChecked).toBe(1);
+    expect(result.emailsSent).toBe(1);
+    expect(queue.send).toHaveBeenCalledWith('send-weekly-summary', { userId: 'user-missed-off' });
+    expect(queue.send).not.toHaveBeenCalledWith('send-missed-reminder', expect.anything());
+  });
+
+  it('enqueues nothing for a user with both per-type flags off even if master is on', async () => {
+    mockStorage.users.getUsersWithEmailNotifications = vi.fn().mockResolvedValue([
+      {
+        id: 'user-both-off',
+        email: 'both-off@example.com',
+        emailNotifications: true,
+        emailWeeklySummary: false,
+        emailMissedReminder: false,
+        lastWeeklySummaryAt: null,
+        lastMissedReminderAt: null,
+      } as unknown as User,
+    ]);
+
+    const result = await runEmailCronJob(mockStorage);
+
+    expect(result.usersChecked).toBe(1);
+    expect(result.emailsSent).toBe(0);
+  });
 });
