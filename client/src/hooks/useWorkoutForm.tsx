@@ -1,9 +1,10 @@
 import type { InsertWorkoutLog, ParsedExercise } from "@shared/schema";
 import { useMutation } from "@tanstack/react-query";
-import { useCallback,useState } from "react";
+import { useCallback, useEffect, useRef,useState } from "react";
 import { useLocation } from "wouter";
 
 import type { StructuredExercise } from "@/components/ExerciseInput";
+import { ToastAction } from "@/components/ui/toast";
 import { useToast } from "@/hooks/use-toast";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
 import { exerciseToPayload,generateSummary } from "@/hooks/useWorkoutEditor";
@@ -43,13 +44,6 @@ export function useWorkoutForm({
   const [notes, setNotes] = useState(initialValues?.notes ?? "");
   const [rpe, setRpe] = useState<number | null>(initialValues?.rpe ?? null);
 
-  const handleVoiceError = useCallback(
-    (msg: string) => {
-      toast({ title: "Voice Input", description: msg, variant: "destructive" });
-    },
-    [toast]
-  );
-
   const handleVoiceResult = useCallback((transcript: string) => {
     setFreeText((prev) => {
       const separator =
@@ -66,6 +60,56 @@ export function useWorkoutForm({
     });
   }, []);
 
+  // Refs let the error handlers reference each hook's startListening function
+  // without creating a chicken-and-egg with the hook return value. The refs
+  // are populated right after the hooks are initialized below.
+  const startVoiceRef = useRef<() => Promise<void>>(() => Promise.resolve());
+  const startNotesVoiceRef = useRef<() => Promise<void>>(() => Promise.resolve());
+
+  const handleVoiceError = useCallback(
+    (msg: string) => {
+      toast({
+        title: "Voice input failed",
+        description: msg,
+        variant: "destructive",
+        action: (
+          <ToastAction
+            altText="Retry voice input"
+            data-testid="button-voice-retry"
+            onClick={() => {
+              startVoiceRef.current().catch(() => {});
+            }}
+          >
+            Try again
+          </ToastAction>
+        ),
+      });
+    },
+    [toast],
+  );
+
+  const handleNotesVoiceError = useCallback(
+    (msg: string) => {
+      toast({
+        title: "Voice input failed",
+        description: msg,
+        variant: "destructive",
+        action: (
+          <ToastAction
+            altText="Retry notes voice input"
+            data-testid="button-voice-retry-notes"
+            onClick={() => {
+              startNotesVoiceRef.current().catch(() => {});
+            }}
+          >
+            Try again
+          </ToastAction>
+        ),
+      });
+    },
+    [toast],
+  );
+
   const voiceInput = useVoiceInput({
     onResult: handleVoiceResult,
     onError: handleVoiceError,
@@ -73,8 +117,13 @@ export function useWorkoutForm({
 
   const notesVoiceInput = useVoiceInput({
     onResult: handleNotesVoiceResult,
-    onError: handleVoiceError,
+    onError: handleNotesVoiceError,
   });
+
+  useEffect(() => {
+    startVoiceRef.current = voiceInput.startListening;
+    startNotesVoiceRef.current = notesVoiceInput.startListening;
+  }, [voiceInput.startListening, notesVoiceInput.startListening]);
 
   const saveMutation = useMutation({
     mutationFn: (workoutData: Omit<InsertWorkoutLog, "userId"> & { title?: string, exercises?: ParsedExercise[] }) =>
