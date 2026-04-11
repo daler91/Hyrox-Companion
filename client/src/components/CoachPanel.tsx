@@ -13,12 +13,29 @@ import { calculateStats } from "@/lib/statsUtils";
 
 const WELCOME_TEXT = "Welcome to fitai.coach! I'm your AI training coach, here to help you reach your fitness goals.\n\nTo get started, you can:\n- **Use our 8-week fitness plan** - a structured program covering running, strength, and functional exercises\n- **Import your own plan** - if you have a CSV training plan\n- **Log individual workouts** - track sessions as you complete them\n\nOnce you have some training data, I can analyze your progress, suggest improvements, and help optimize your training. What are you working towards?";
 
-const QUICK_ACTIONS = [
+const BASE_QUICK_ACTIONS = [
   { id: "suggestions", label: "Get workout suggestions" },
   { id: "analyze", label: "Analyze my training" },
   { id: "pacing", label: "Pacing tips" },
   { id: "form", label: "Exercise form tips" },
 ];
+
+const PLAN_AWARE_ACTIONS = [
+  { id: "tomorrow", label: "What should I do tomorrow?" },
+  { id: "weekly-review", label: "How did last week go?" },
+  { id: "on-track", label: "Am I on track for my goal?" },
+];
+
+/**
+ * Pick a set of quick actions appropriate for the user's current state:
+ * first-time users get the generic prompts; athletes with at least one
+ * completed workout get plan-aware prompts that the coach can answer
+ * with context.
+ */
+function selectQuickActions(hasHistory: boolean): { id: string; label: string }[] {
+  if (!hasHistory) return BASE_QUICK_ACTIONS;
+  return [...PLAN_AWARE_ACTIONS, ...BASE_QUICK_ACTIONS.slice(0, 2)];
+}
 
 interface CoachPanelProps {
   readonly isOpen: boolean;
@@ -132,7 +149,9 @@ export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }
         onDismissSuggestion={handleDismissSuggestion}
       />
       <CoachPanelFooter
-        quickActions={QUICK_ACTIONS}
+        quickActions={selectQuickActions(
+          timeline.some((entry) => entry.status === "completed"),
+        )}
         onQuickAction={handleQuickAction}
         onSendMessage={sendMessage}
         isProcessing={isProcessing}
