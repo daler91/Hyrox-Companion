@@ -40,7 +40,13 @@ export default function LogWorkout() {
     );
   }
 
-  return <LogWorkoutForm userKey={user?.id ?? "anon"} />;
+  const userKey = user?.id ?? "anon";
+  // Key by userKey so an in-place account switch (Clerk signing a
+  // different user in without a full reload) fully remounts
+  // LogWorkoutForm. The remount re-runs the lazy draft loader with the
+  // new userKey, preventing the previous user's in-memory draft from
+  // being autosaved under the new user's storage key.
+  return <LogWorkoutForm key={userKey} userKey={userKey} />;
 }
 
 interface LogWorkoutFormProps {
