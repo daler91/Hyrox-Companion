@@ -35,20 +35,32 @@ export function OfflineIndicator() {
   }, [isOnline]);
 
   useEffect(() => {
+    // Track the pending dismiss timer in effect scope so back-to-back
+    // sync events don't leave stale timers that clear recentlySynced
+    // before the latest success badge has been shown for its full duration.
+    let dismissTimerId: ReturnType<typeof setTimeout> | null = null;
+
     const handleSyncComplete = (event: Event) => {
       const detail = (event as CustomEvent<{ synced: number }>).detail;
-      if (detail && detail.synced > 0) {
-        setRecentlySynced(detail.synced);
-        setPendingCount(0);
-        const timeoutId = setTimeout(() => {
-          setRecentlySynced(null);
-        }, SYNC_SUCCESS_DISMISS_MS);
-        return () => clearTimeout(timeoutId);
+      if (!detail || detail.synced <= 0) return;
+      setRecentlySynced(detail.synced);
+      setPendingCount(0);
+      if (dismissTimerId !== null) {
+        clearTimeout(dismissTimerId);
       }
-      return undefined;
+      dismissTimerId = setTimeout(() => {
+        setRecentlySynced(null);
+        dismissTimerId = null;
+      }, SYNC_SUCCESS_DISMISS_MS);
     };
+
     globalThis.addEventListener("offline-sync-complete", handleSyncComplete);
-    return () => globalThis.removeEventListener("offline-sync-complete", handleSyncComplete);
+    return () => {
+      if (dismissTimerId !== null) {
+        clearTimeout(dismissTimerId);
+      }
+      globalThis.removeEventListener("offline-sync-complete", handleSyncComplete);
+    };
   }, []);
 
   if (isOnline && recentlySynced !== null) {

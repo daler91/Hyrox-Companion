@@ -61,9 +61,13 @@ export function TimelineTodayIndicator({
       if (!intersectionObserver) return;
       intersectionObserver.disconnect();
       intersectionObserver = null;
-      // Treat "no today row rendered" as visible so the pill disappears —
-      // there's nothing meaningful to jump back to.
-      setPosition("visible");
+      // Deliberately do NOT reset `position` here. When the virtualizer
+      // unmounts the today row (user scrolled far away), we want the pill
+      // to remain visible pointing in whichever direction the
+      // IntersectionObserver last reported. Losing it in that exact
+      // scenario would defeat the "return to now" purpose. The pill is
+      // naturally hidden if position was "visible" when the row unmounted
+      // (i.e., today scrolled off-screen while the page was idle).
     };
 
     // Attempt initial attach. If the today row is already mounted this
