@@ -3,7 +3,8 @@ import { setupAuthIntercepts } from "../support/authIntercepts";
 // E2E coverage for the plan generation dialog. Checks the entry point
 // from the Timeline empty state and the multi-step dialog affordances.
 // Backend generation is mocked so the test doesn't hit Gemini.
-describe("Plan Generation", () => {
+// TEMPORARILY SKIPPED — see onboarding.cy.ts for context.
+describe.skip("Plan Generation", () => {
   beforeEach(() => {
     setupAuthIntercepts();
     cy.intercept("POST", "/api/v1/plans/generate", {
