@@ -8,7 +8,7 @@ import { db } from "../db";
 import { logger } from "../logger";
 import { samplePlanDays } from "../samplePlan";
 import { storage } from "../storage";
-import { createSamplePlan, importPlanFromCSV, updatePlanDayWithCleanup,validateAndMapCSVRows } from "./planService";
+import { createSamplePlan, importPlanFromCSV, updatePlanDayStatus, updatePlanDayWithCleanup,validateAndMapCSVRows } from "./planService";
 
 vi.mock("csv-parse/sync", () => {
   return {
@@ -34,7 +34,19 @@ vi.mock("../storage", () => {
       getTrainingPlan: vi.fn(),
       updatePlanDay: vi.fn(),
     },
+    workouts: {
+      getWorkoutLogByPlanDayId: vi.fn(),
+      deleteWorkoutLogByPlanDayId: vi.fn(),
+    },
   },
+  };
+});
+
+vi.mock("../queue", () => {
+  return {
+    queue: {
+      send: vi.fn().mockResolvedValue(undefined),
+    },
   };
 });
 
@@ -318,6 +330,86 @@ describe("planService", () => {
       expect(db.transaction).toHaveBeenCalledTimes(1);
       expect(mockTx.update).not.toHaveBeenCalled();
       expect(result).toBeUndefined();
+    });
+  });
+
+  describe("updatePlanDayStatus", () => {
+    const dayId = "test-day-id";
+    const userId = "test-user-id";
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it("should preserve workout log edits on the plan day when switching from completed to planned", async () => {
+      // Simulate a workout log that contains the user's edits made while the
+      // workout was marked "completed". When the status flips back to "planned"
+      // these edits must persist on the plan day instead of being discarded.
+      const editedLog = {
+        id: "log-id",
+        userId,
+        planDayId: dayId,
+        focus: "Edited Focus",
+        mainWorkout: "Edited Main Workout",
+        accessory: "Edited Accessory",
+        notes: "Edited Notes",
+      };
+      vi.mocked(storage.workouts.getWorkoutLogByPlanDayId).mockResolvedValue(
+        editedLog as unknown as Awaited<ReturnType<typeof storage.workouts.getWorkoutLogByPlanDayId>>,
+      );
+      vi.mocked(storage.workouts.deleteWorkoutLogByPlanDayId).mockResolvedValue(true);
+      vi.mocked(storage.plans.updatePlanDay).mockResolvedValue(
+        createMockPlanDay({ id: dayId, status: "planned", focus: "Edited Focus" }),
+      );
+
+      await updatePlanDayStatus(dayId, { status: "planned" }, userId);
+
+      expect(storage.workouts.getWorkoutLogByPlanDayId).toHaveBeenCalledWith(dayId, userId);
+      expect(storage.workouts.deleteWorkoutLogByPlanDayId).toHaveBeenCalledWith(dayId, userId);
+      expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
+        dayId,
+        {
+          status: "planned",
+          focus: "Edited Focus",
+          mainWorkout: "Edited Main Workout",
+          accessory: "Edited Accessory",
+          notes: "Edited Notes",
+        },
+        userId,
+      );
+    });
+
+    it("should still update the plan day when switching to planned with no linked workout log", async () => {
+      vi.mocked(storage.workouts.getWorkoutLogByPlanDayId).mockResolvedValue(undefined);
+      vi.mocked(storage.workouts.deleteWorkoutLogByPlanDayId).mockResolvedValue(false);
+      vi.mocked(storage.plans.updatePlanDay).mockResolvedValue(
+        createMockPlanDay({ id: dayId, status: "planned" }),
+      );
+
+      await updatePlanDayStatus(dayId, { status: "planned" }, userId);
+
+      expect(storage.workouts.getWorkoutLogByPlanDayId).toHaveBeenCalledWith(dayId, userId);
+      expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
+        dayId,
+        { status: "planned" },
+        userId,
+      );
+    });
+
+    it("should not touch workout logs when switching to completed", async () => {
+      vi.mocked(storage.plans.updatePlanDay).mockResolvedValue(
+        createMockPlanDay({ id: dayId, status: "completed" }),
+      );
+
+      await updatePlanDayStatus(dayId, { status: "completed" }, userId);
+
+      expect(storage.workouts.getWorkoutLogByPlanDayId).not.toHaveBeenCalled();
+      expect(storage.workouts.deleteWorkoutLogByPlanDayId).not.toHaveBeenCalled();
+      expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
+        dayId,
+        { status: "completed" },
+        userId,
+      );
     });
   });
 });
