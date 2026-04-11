@@ -281,6 +281,12 @@ export default function Timeline() {
         onScheduleClick={(planId) => setSchedulingPlanId(planId)}
       />
 
+          <TimelineTodayIndicator
+            todayRef={todayRef}
+            scrollRef={scrollRef}
+            onScrollToToday={handleScrollToToday}
+          />
+
       <TimelineContent
         timelineLoading={timelineLoading}
         filteredTimeline={filteredTimeline}
@@ -310,12 +316,6 @@ export default function Timeline() {
         personalRecords={personalRecords}
         isAutoCoaching={!!user?.isAutoCoaching}
       />
-
-          <TimelineTodayIndicator
-            todayRef={todayRef}
-            scrollRef={scrollRef}
-            onScrollToToday={handleScrollToToday}
-          />
 
           <FloatingActionButton coachPanelOpen={coachOpen} onCoachToggle={() => setCoachOpen(!coachOpen)} />
 
