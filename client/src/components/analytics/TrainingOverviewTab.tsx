@@ -1,4 +1,4 @@
-import type { TrainingOverview } from "@shared/schema";
+import type { TimelineAnnotation, TimelineAnnotationType, TrainingOverview } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
 import { BarChart3, Clock, Flame, Loader2, Zap } from "lucide-react";
 import { useMemo } from "react";
@@ -7,6 +7,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  ReferenceArea,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -14,11 +15,48 @@ import {
   YAxis,
 } from "recharts";
 
-import { api } from "@/lib/api";
+import { api, QUERY_KEYS } from "@/lib/api";
 
 import { CHART_CARD_CLASS, COLOR_GREEN, COLOR_PRIMARY, formatChartDate,GRID_BORDER, GRID_DASH, MUTED_CURSOR, MUTED_FG } from "./chartConstants";
 import { MiniLineChart } from "./MiniLineChart";
 import { WorkoutHeatmap } from "./WorkoutHeatmap";
+
+// Tailwind-matched fills for the Analytics chart bands. Each type uses
+// a translucent version of the banner color so injury, illness, etc.
+// are visually consistent across Timeline and Analytics.
+const ANNOTATION_FILL: Record<TimelineAnnotationType, string> = {
+  injury: "rgba(239, 68, 68, 0.18)", // red-500 @ 18%
+  illness: "rgba(245, 158, 11, 0.18)", // amber-500 @ 18%
+  travel: "rgba(14, 165, 233, 0.18)", // sky-500 @ 18%
+  rest: "rgba(16, 185, 129, 0.18)", // emerald-500 @ 18%
+};
+
+/**
+ * Given an annotation's [startDate, endDate] and the set of week-start
+ * dates visible on the Weekly Workouts chart, find the earliest week that
+ * overlaps the annotation and the latest week that overlaps. Used as the
+ * x1/x2 bounds for a Recharts ReferenceArea.
+ */
+function annotationToWeekBounds(
+  annotation: Pick<TimelineAnnotation, "startDate" | "endDate">,
+  weekStarts: string[],
+): { x1: string; x2: string } | null {
+  if (weekStarts.length === 0) return null;
+  // A week-bar on the chart represents a range [weekStart, weekStart+6d].
+  // We want to include any bar whose range overlaps the annotation range,
+  // which is: weekStart <= endDate && weekStart + 6 >= startDate.
+  const dayMs = 24 * 60 * 60 * 1000;
+  const annStart = new Date(`${annotation.startDate}T00:00:00Z`).getTime();
+  const annEnd = new Date(`${annotation.endDate}T00:00:00Z`).getTime();
+  const overlapping = weekStarts.filter((ws) => {
+    const wsMs = new Date(`${ws}T00:00:00Z`).getTime();
+    const weekEndMs = wsMs + 6 * dayMs;
+    return wsMs <= annEnd && weekEndMs >= annStart;
+  });
+  if (overlapping.length === 0) return null;
+  overlapping.sort();
+  return { x1: overlapping[0], x2: overlapping[overlapping.length - 1] };
+}
 
 interface TrainingOverviewTabProps {
   readonly dateParams: string;
@@ -44,6 +82,15 @@ export function TrainingOverviewTab({ dateParams, weeklyGoal }: TrainingOverview
   const { data: overview, isLoading } = useQuery<TrainingOverview>({
     queryKey: ["/api/v1/training-overview", dateParams],
     queryFn: () => api.analytics.getTrainingOverview(dateParams),
+  });
+
+  // Optional user-authored annotations (injury / illness / travel / rest)
+  // rendered as shaded bands on the Weekly Workouts chart so volume dips
+  // have visible context. Failure to load is treated as "no annotations"
+  // — this is decorative, not load-bearing.
+  const { data: annotations } = useQuery<TimelineAnnotation[]>({
+    queryKey: QUERY_KEYS.timelineAnnotations,
+    queryFn: () => api.timelineAnnotations.list(),
   });
 
   const stats = useMemo(() => {
@@ -82,6 +129,25 @@ export function TrainingOverviewTab({ dateParams, weeklyGoal }: TrainingOverview
     }
     return { rpeData: rpe, durationData: duration };
   }, [overview]);
+
+  // Pre-compute annotation bands so the BarChart render stays stable.
+  // Each band is the set of x-axis week starts the annotation overlaps;
+  // annotations that don't overlap any visible week are dropped.
+  const annotationBands = useMemo(() => {
+    if (!overview || !annotations || annotations.length === 0) return [];
+    const weekStarts = overview.weeklySummaries.map((w) => w.weekStart);
+    return annotations
+      .map((annotation) => {
+        const bounds = annotationToWeekBounds(annotation, weekStarts);
+        if (!bounds) return null;
+        return {
+          id: annotation.id,
+          type: annotation.type as TimelineAnnotationType,
+          ...bounds,
+        };
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null);
+  }, [overview, annotations]);
 
   if (isLoading) {
     return (
@@ -167,6 +233,19 @@ export function TrainingOverviewTab({ dateParams, weeklyGoal }: TrainingOverview
                 cursor={{ fill: MUTED_CURSOR }}
                 content={<WeeklyTooltip />}
               />
+              {/* Shade each annotation band behind the bars so injury /
+                  illness / travel / rest periods are visually correlated
+                  with volume dips. Order matters: reference areas are
+                  rendered first so the bars sit on top. */}
+              {annotationBands.map((band) => (
+                <ReferenceArea
+                  key={band.id}
+                  x1={band.x1}
+                  x2={band.x2}
+                  fill={ANNOTATION_FILL[band.type]}
+                  ifOverflow="extendDomain"
+                />
+              ))}
               {weeklyGoal && (
                 <ReferenceLine
                   y={weeklyGoal}

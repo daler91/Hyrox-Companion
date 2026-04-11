@@ -6,6 +6,7 @@ import type { IStorage } from "./IStorage";
 import { PlanStorage } from "./plans";
 import { PushStorage } from "./push";
 import { TimelineStorage } from "./timeline";
+import { TimelineAnnotationsStorage } from "./timelineAnnotations";
 import { UserStorage } from "./users";
 import { WorkoutStorage } from "./workouts";
 
@@ -18,6 +19,7 @@ export const storage: IStorage = {
   workouts,
   plans: new PlanStorage(),
   timeline: new TimelineStorage(workouts),
+  timelineAnnotations: new TimelineAnnotationsStorage(),
   analytics: new AnalyticsStorage(),
   coaching: new CoachingStorage(),
   idempotency: new IdempotencyStorage(),

@@ -5,6 +5,7 @@ import type { IdempotencyStorage } from "./idempotency";
 import type { PlanStorage } from "./plans";
 import type { PushStorage } from "./push";
 import type { TimelineStorage } from "./timeline";
+import type { TimelineAnnotationsStorage } from "./timelineAnnotations";
 import type { UserStorage } from "./users";
 import type { WorkoutStorage } from "./workouts";
 
@@ -14,6 +15,7 @@ import type { WorkoutStorage } from "./workouts";
  *   storage.workouts.createWorkoutLog(...)
  *   storage.plans.getActivePlan(...)
  *   storage.timeline.getTimeline(...)
+ *   storage.timelineAnnotations.list(...)
  *   storage.analytics.getWeeklyStats(...)
  *   storage.coaching.listCoachingMaterials(...)
  *   storage.aiUsage.getDailyTotalCents(...)
@@ -24,6 +26,7 @@ export interface IStorage {
   workouts: WorkoutStorage;
   plans: PlanStorage;
   timeline: TimelineStorage;
+  timelineAnnotations: TimelineAnnotationsStorage;
   analytics: AnalyticsStorage;
   coaching: CoachingStorage;
   idempotency: IdempotencyStorage;
