@@ -1,6 +1,6 @@
 import { describe, expect,it } from "vitest";
 
-import { calculateExerciseAnalytics, calculatePersonalRecords, calculateTrainingOverview } from "./analyticsService";
+import { calculateExerciseAnalytics, calculatePersonalRecords, calculateTrainingOverview, computeOverviewStats } from "./analyticsService";
 
 function makeSet(overrides: Record<string, unknown> = {}) {
   return {
@@ -282,5 +282,95 @@ describe("calculateTrainingOverview", () => {
     const weekStarts = result.weeklySummaries.map((w) => w.weekStart);
     const sorted = [...weekStarts].sort((a, b) => a.localeCompare(b));
     expect(weekStarts).toEqual(sorted);
+  });
+
+  it("includes currentStats aggregated from the weekly summaries", () => {
+    const logs = [
+      makeWorkoutLog({ id: "w1", date: "2026-01-13", duration: 60, rpe: 7 }),
+      makeWorkoutLog({ id: "w2", date: "2026-01-14", duration: 40, rpe: 5 }),
+      makeWorkoutLog({ id: "w3", date: "2026-01-20", duration: 50, rpe: 8 }),
+    ];
+    const result = calculateTrainingOverview(logs, []);
+
+    expect(result.currentStats).toEqual({
+      totalWorkouts: 3,
+      avgPerWeek: 1.5, // 3 workouts / 2 weeks
+      totalDuration: 150,
+      avgDuration: 50, // 150 / 3
+      avgRpe: 7, // week1 avg=6, week2 avg=8 → (6+8)/2
+    });
+  });
+
+  it("omits previousStats when previousWorkoutLogs is not supplied", () => {
+    const logs = [makeWorkoutLog({ id: "w1", date: "2026-01-13", duration: 60, rpe: 7 })];
+    const result = calculateTrainingOverview(logs, []);
+    expect(result.previousStats).toBeUndefined();
+  });
+
+  it("computes previousStats from the supplied previous-period logs", () => {
+    const currentLogs = [
+      makeWorkoutLog({ id: "c1", date: "2026-02-02", duration: 60, rpe: 7 }),
+      makeWorkoutLog({ id: "c2", date: "2026-02-04", duration: 50, rpe: 6 }),
+    ];
+    const previousLogs = [
+      makeWorkoutLog({ id: "p1", date: "2026-01-26", duration: 40, rpe: 5 }),
+    ];
+    const result = calculateTrainingOverview(currentLogs, [], previousLogs);
+
+    expect(result.currentStats.totalWorkouts).toBe(2);
+    expect(result.previousStats).toBeDefined();
+    expect(result.previousStats?.totalWorkouts).toBe(1);
+    expect(result.previousStats?.totalDuration).toBe(40);
+    expect(result.previousStats?.avgRpe).toBe(5);
+  });
+
+  it("treats an empty previous period as all-zeroes (not undefined)", () => {
+    const result = calculateTrainingOverview([], [], []);
+    expect(result.previousStats).toEqual({
+      totalWorkouts: 0,
+      avgPerWeek: 0,
+      totalDuration: 0,
+      avgDuration: 0,
+      avgRpe: null,
+    });
+  });
+});
+
+describe("computeOverviewStats", () => {
+  it("returns zeroes for an empty input", () => {
+    expect(computeOverviewStats([])).toEqual({
+      totalWorkouts: 0,
+      avgPerWeek: 0,
+      totalDuration: 0,
+      avgDuration: 0,
+      avgRpe: null,
+    });
+  });
+
+  it("rounds avgPerWeek to one decimal place", () => {
+    const weeks = [
+      { weekStart: "2026-01-05", workoutCount: 4, totalDuration: 0, avgRpe: null, categoryBreakdown: {} },
+      { weekStart: "2026-01-12", workoutCount: 3, totalDuration: 0, avgRpe: null, categoryBreakdown: {} },
+      { weekStart: "2026-01-19", workoutCount: 3, totalDuration: 0, avgRpe: null, categoryBreakdown: {} },
+    ];
+    // 10 / 3 = 3.333... → rounded to 3.3
+    expect(computeOverviewStats(weeks).avgPerWeek).toBe(3.3);
+  });
+
+  it("only averages weeks that had at least one RPE entry", () => {
+    const weeks = [
+      { weekStart: "2026-01-05", workoutCount: 2, totalDuration: 0, avgRpe: 8, categoryBreakdown: {} },
+      { weekStart: "2026-01-12", workoutCount: 2, totalDuration: 0, avgRpe: null, categoryBreakdown: {} },
+      { weekStart: "2026-01-19", workoutCount: 2, totalDuration: 0, avgRpe: 6, categoryBreakdown: {} },
+    ];
+    // avg over the 2 weeks with RPE, not all 3
+    expect(computeOverviewStats(weeks).avgRpe).toBe(7);
+  });
+
+  it("returns avgDuration of 0 when no workouts were logged", () => {
+    const weeks = [
+      { weekStart: "2026-01-05", workoutCount: 0, totalDuration: 0, avgRpe: null, categoryBreakdown: {} },
+    ];
+    expect(computeOverviewStats(weeks).avgDuration).toBe(0);
   });
 });

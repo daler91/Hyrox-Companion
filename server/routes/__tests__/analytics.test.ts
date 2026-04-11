@@ -208,22 +208,32 @@ describe("Analytics Routes", () => {
   });
 
   describe("GET /api/v1/training-overview", () => {
+    const zeroStats = {
+      totalWorkouts: 0,
+      avgPerWeek: 0,
+      totalDuration: 0,
+      avgDuration: 0,
+      avgRpe: null,
+    } as const;
+
     it("should return training overview data", async () => {
       const mockOverview = {
         weeklySummaries: [{ weekStart: "2026-01-12", workoutCount: 3 }],
         workoutDates: ["2026-01-13"],
         categoryTotals: {},
         stationCoverage: [],
+        currentStats: { ...zeroStats, totalWorkouts: 3, avgPerWeek: 3 },
       };
 
       vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([]);
       vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([]);
-      vi.mocked(calculateTrainingOverview).mockReturnValue(mockOverview);
+      vi.mocked(calculateTrainingOverview).mockReturnValue(mockOverview as never);
 
       const response = await request(app).get("/api/v1/training-overview");
 
       expect(response.status).toBe(200);
       expect(response.body).toEqual(mockOverview);
+      // No `from` query param → no previous-window fetch.
       expect(storage.analytics.getWorkoutLogsByDateRange).toHaveBeenCalledWith("test_user_id", undefined, undefined);
       expect(storage.analytics.getAllExerciseSetsWithDates).toHaveBeenCalledWith("test_user_id", undefined, undefined);
       expect(calculateTrainingOverview).toHaveBeenCalled();
@@ -233,13 +243,60 @@ describe("Analytics Routes", () => {
       vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([]);
       vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([]);
       vi.mocked(calculateTrainingOverview).mockReturnValue({
-        weeklySummaries: [], workoutDates: [], categoryTotals: {}, stationCoverage: [],
-      });
+        weeklySummaries: [],
+        workoutDates: [],
+        categoryTotals: {},
+        stationCoverage: [],
+        currentStats: zeroStats,
+      } as never);
 
       const response = await request(app).get("/api/v1/training-overview?from=2026-01-01&to=2026-03-31");
 
       expect(response.status).toBe(200);
       expect(storage.analytics.getWorkoutLogsByDateRange).toHaveBeenCalledWith("test_user_id", "2026-01-01", "2026-03-31");
+    });
+
+    it("fetches a same-length previous window when `from` is set", async () => {
+      vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([]);
+      vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([]);
+      vi.mocked(calculateTrainingOverview).mockReturnValue({
+        weeklySummaries: [],
+        workoutDates: [],
+        categoryTotals: {},
+        stationCoverage: [],
+        currentStats: zeroStats,
+        previousStats: zeroStats,
+      } as never);
+
+      await request(app).get("/api/v1/training-overview?from=2026-02-01&to=2026-02-28");
+
+      // Current window: 2026-02-01 → 2026-02-28 (28 days).
+      // Previous window must end one day before 2026-02-01 and be 28 days long.
+      // That gives 2026-01-04 → 2026-01-31.
+      const calls = vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mock.calls;
+      expect(calls).toContainEqual(["test_user_id", "2026-02-01", "2026-02-28"]);
+      expect(calls).toContainEqual(["test_user_id", "2026-01-04", "2026-01-31"]);
+      // calculateTrainingOverview is invoked with the previous logs as the 3rd arg.
+      expect(vi.mocked(calculateTrainingOverview).mock.calls[0][2]).toEqual([]);
+    });
+
+    it("skips the previous-window fetch when `from` is absent", async () => {
+      vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([]);
+      vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([]);
+      vi.mocked(calculateTrainingOverview).mockReturnValue({
+        weeklySummaries: [],
+        workoutDates: [],
+        categoryTotals: {},
+        stationCoverage: [],
+        currentStats: zeroStats,
+      } as never);
+
+      await request(app).get("/api/v1/training-overview");
+
+      // Only the current window fetch happens.
+      expect(storage.analytics.getWorkoutLogsByDateRange).toHaveBeenCalledTimes(1);
+      // calculateTrainingOverview invoked with `undefined` for the previous logs arg.
+      expect(vi.mocked(calculateTrainingOverview).mock.calls[0][2]).toBeUndefined();
     });
 
     testInvalidDates("/api/v1/training-overview");
