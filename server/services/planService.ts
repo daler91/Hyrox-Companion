@@ -210,16 +210,10 @@ export async function updatePlanDayStatus(
   if (scheduledDate !== undefined) updates.scheduledDate = scheduledDate ?? null;
 
   if (status && status !== "completed") {
-    // Preserve any edits the user made on the workout log before deleting it,
-    // otherwise switching the status back to "planned"/"skipped"/"missed" would
-    // revert the plan day to its original pre-completion content.
-    const existingLog = await storage.workouts.getWorkoutLogByPlanDayId(dayId, userId);
-    if (existingLog) {
-      updates.focus = existingLog.focus;
-      updates.mainWorkout = existingLog.mainWorkout;
-      updates.accessory = existingLog.accessory;
-      updates.notes = existingLog.notes;
-    }
+    // Drop the workout log that represented the completed state. Any edits
+    // the user made while the workout was completed have already been mirrored
+    // onto the plan day by workoutService.updateWorkout / createWorkoutInTx,
+    // so the plan day retains them after the log is deleted.
     await storage.workouts.deleteWorkoutLogByPlanDayId(dayId, userId);
   }
 

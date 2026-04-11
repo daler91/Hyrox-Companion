@@ -35,7 +35,6 @@ vi.mock("../storage", () => {
       updatePlanDay: vi.fn(),
     },
     workouts: {
-      getWorkoutLogByPlanDayId: vi.fn(),
       deleteWorkoutLogByPlanDayId: vi.fn(),
     },
   },
@@ -341,59 +340,35 @@ describe("planService", () => {
       vi.clearAllMocks();
     });
 
-    it("should preserve workout log edits on the plan day when switching from completed to planned", async () => {
-      // Simulate a workout log that contains the user's edits made while the
-      // workout was marked "completed". When the status flips back to "planned"
-      // these edits must persist on the plan day instead of being discarded.
-      const editedLog = {
-        id: "log-id",
-        userId,
-        planDayId: dayId,
-        focus: "Edited Focus",
-        mainWorkout: "Edited Main Workout",
-        accessory: "Edited Accessory",
-        notes: "Edited Notes",
-      };
-      vi.mocked(storage.workouts.getWorkoutLogByPlanDayId).mockResolvedValue(
-        editedLog as unknown as Awaited<ReturnType<typeof storage.workouts.getWorkoutLogByPlanDayId>>,
-      );
+    it("should delete the linked workout log when switching away from completed", async () => {
+      // The write-through in workoutService.updateWorkout / createWorkoutInTx
+      // already keeps the plan day's content in sync with the log, so on
+      // revert we only need to delete the log. The plan day update itself
+      // should only carry the status change.
       vi.mocked(storage.workouts.deleteWorkoutLogByPlanDayId).mockResolvedValue(true);
-      vi.mocked(storage.plans.updatePlanDay).mockResolvedValue(
-        createMockPlanDay({ id: dayId, status: "planned", focus: "Edited Focus" }),
-      );
-
-      await updatePlanDayStatus(dayId, { status: "planned" }, userId);
-
-      expect(storage.workouts.getWorkoutLogByPlanDayId).toHaveBeenCalledWith(dayId, userId);
-      expect(storage.workouts.deleteWorkoutLogByPlanDayId).toHaveBeenCalledWith(dayId, userId);
-      expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
-        dayId,
-        {
-          status: "planned",
-          focus: "Edited Focus",
-          mainWorkout: "Edited Main Workout",
-          accessory: "Edited Accessory",
-          notes: "Edited Notes",
-        },
-        userId,
-      );
-    });
-
-    it("should still update the plan day when switching to planned with no linked workout log", async () => {
-      vi.mocked(storage.workouts.getWorkoutLogByPlanDayId).mockResolvedValue(undefined);
-      vi.mocked(storage.workouts.deleteWorkoutLogByPlanDayId).mockResolvedValue(false);
       vi.mocked(storage.plans.updatePlanDay).mockResolvedValue(
         createMockPlanDay({ id: dayId, status: "planned" }),
       );
 
       await updatePlanDayStatus(dayId, { status: "planned" }, userId);
 
-      expect(storage.workouts.getWorkoutLogByPlanDayId).toHaveBeenCalledWith(dayId, userId);
+      expect(storage.workouts.deleteWorkoutLogByPlanDayId).toHaveBeenCalledWith(dayId, userId);
       expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
         dayId,
         { status: "planned" },
         userId,
       );
+    });
+
+    it("should also delete the log when switching to skipped or missed", async () => {
+      vi.mocked(storage.workouts.deleteWorkoutLogByPlanDayId).mockResolvedValue(true);
+      vi.mocked(storage.plans.updatePlanDay).mockResolvedValue(
+        createMockPlanDay({ id: dayId, status: "skipped" }),
+      );
+
+      await updatePlanDayStatus(dayId, { status: "skipped" }, userId);
+
+      expect(storage.workouts.deleteWorkoutLogByPlanDayId).toHaveBeenCalledWith(dayId, userId);
     });
 
     it("should not touch workout logs when switching to completed", async () => {
@@ -403,7 +378,6 @@ describe("planService", () => {
 
       await updatePlanDayStatus(dayId, { status: "completed" }, userId);
 
-      expect(storage.workouts.getWorkoutLogByPlanDayId).not.toHaveBeenCalled();
       expect(storage.workouts.deleteWorkoutLogByPlanDayId).not.toHaveBeenCalled();
       expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
         dayId,

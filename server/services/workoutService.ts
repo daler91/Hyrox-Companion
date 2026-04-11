@@ -166,9 +166,18 @@ async function createWorkoutInTx(
     .returning();
 
   if (enrichedData.planDayId) {
+    // Sync the plan day with the log's content so it stays the source of truth
+    // for this day. Without this, reverting status back to "planned" later would
+    // surface the stale pre-completion content from plan_days.
     await tx
       .update(planDays)
-      .set({ status: "completed" })
+      .set({
+        status: "completed",
+        focus: log.focus,
+        mainWorkout: log.mainWorkout,
+        accessory: log.accessory,
+        notes: log.notes,
+      })
       .from(trainingPlans)
       .where(
         and(
@@ -300,6 +309,8 @@ export async function updateWorkout(
         .where(eq(workoutLogs.id, workoutId))
         .returning();
 
+      await syncLinkedPlanDayContent(tx, log, userId);
+
       await tx.delete(exerciseSets).where(eq(exerciseSets.workoutLogId, log.id));
 
       if (exercises.length > 0) {
@@ -324,7 +335,35 @@ export async function updateWorkout(
 
   const log = await storage.workouts.updateWorkoutLog(workoutId, updateData, userId);
   if (!log) return null;
+  await syncLinkedPlanDayContent(db, log, userId);
   return log;
+}
+
+// Mirrors the workout log's content fields onto its linked plan day so the
+// plan day remains the authoritative source when the status is later reverted
+// from "completed" and the log is deleted.
+async function syncLinkedPlanDayContent(
+  executor: WorkoutTx | typeof db,
+  log: WorkoutLog,
+  userId: string,
+): Promise<void> {
+  if (!log.planDayId) return;
+  await executor
+    .update(planDays)
+    .set({
+      focus: log.focus,
+      mainWorkout: log.mainWorkout,
+      accessory: log.accessory,
+      notes: log.notes,
+    })
+    .from(trainingPlans)
+    .where(
+      and(
+        eq(planDays.id, log.planDayId),
+        eq(planDays.planId, trainingPlans.id),
+        eq(trainingPlans.userId, userId),
+      ),
+    );
 }
 
 export async function processBatchChunk(
