@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 
 import { WorkoutDetailsCard } from "@/components/workout/WorkoutDetailsCard";
@@ -8,8 +8,8 @@ import { WorkoutModeSelector } from "@/components/workout/WorkoutModeSelector";
 import { WorkoutNotesCard } from "@/components/workout/WorkoutNotesCard";
 import { WorkoutSaveButton } from "@/components/workout/WorkoutSaveButton";
 import { WorkoutTextMode } from "@/components/workout/WorkoutTextMode";
-import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import {
   clearLogWorkoutDraft,
   loadLogWorkoutDraft,
@@ -29,9 +29,9 @@ export default function LogWorkout() {
   const { user } = useAuth();
   const userKey = user?.id ?? "anon";
 
-  // Load the draft synchronously once on mount so hook initializers can hydrate from it.
-  const initialDraftRef = useRef(loadLogWorkoutDraft(userKey));
-  const initialDraft = initialDraftRef.current;
+  // Load the draft synchronously once on mount (lazy initializer) so hook
+  // initializers can hydrate from it without re-reading localStorage on every render.
+  const [initialDraft] = useState(() => loadLogWorkoutDraft(userKey));
 
   const {
     exerciseBlocks,
@@ -145,11 +145,11 @@ export default function LogWorkout() {
     }
   }, [saveMutation.isSuccess, userKey]);
 
-  // One-time "Draft restored" toast so users know we resumed them from storage.
-  const hasNotifiedRestoreRef = useRef(false);
+  // "Draft restored" toast on mount. `initialDraft` comes from a lazy useState
+  // initializer so it's stable across renders, meaning this effect runs exactly
+  // once on mount when the restored draft is non-null.
   useEffect(() => {
-    if (initialDraft && !hasNotifiedRestoreRef.current) {
-      hasNotifiedRestoreRef.current = true;
+    if (initialDraft) {
       toast({
         title: "Draft restored",
         description: "We brought back your in-progress workout.",
