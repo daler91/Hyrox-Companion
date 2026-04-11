@@ -112,6 +112,67 @@ export function AnnotationsDialog({ open, onOpenChange }: Readonly<AnnotationsDi
     });
   };
 
+  // Render-helper computed up front instead of nested inside JSX — keeps
+  // the list section readable and avoids a Sonar nested-ternary flag.
+  const renderExistingAnnotationsList = () => {
+    if (isLoading) {
+      return (
+        <div className="flex items-center justify-center py-6" data-testid="annotations-loading">
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        </div>
+      );
+    }
+    if (!annotations || annotations.length === 0) {
+      return (
+        <p className="text-sm text-muted-foreground text-center py-6" data-testid="annotations-empty">
+          No annotations yet.
+        </p>
+      );
+    }
+    return (
+      <ul className="space-y-2" data-testid="annotations-list">
+        {annotations.map((annotation) => {
+          const Icon = getTypeIcon(annotation.type as TimelineAnnotationType);
+          return (
+            <li
+              key={annotation.id}
+              className="flex items-start gap-3 rounded border p-3"
+              data-testid={`annotation-item-${annotation.id}`}
+            >
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Badge
+                    variant="outline"
+                    className={`text-[10px] ${TYPE_COLORS[annotation.type as TimelineAnnotationType]}`}
+                  >
+                    <Icon className="h-3 w-3 mr-1" aria-hidden="true" />
+                    {TYPE_LABELS[annotation.type as TimelineAnnotationType]}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">
+                    {annotation.startDate} — {annotation.endDate}
+                  </span>
+                </div>
+                {annotation.note ? (
+                  <p className="mt-1 text-sm text-foreground">{annotation.note}</p>
+                ) : null}
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => deleteMutation.mutate(annotation.id)}
+                disabled={deleteMutation.isPending}
+                data-testid={`button-delete-annotation-${annotation.id}`}
+                aria-label={`Delete ${TYPE_LABELS[annotation.type as TimelineAnnotationType]} annotation`}
+              >
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            </li>
+          );
+        })}
+      </ul>
+    );
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto" data-testid="dialog-annotations">
@@ -194,56 +255,7 @@ export function AnnotationsDialog({ open, onOpenChange }: Readonly<AnnotationsDi
           {/* Existing annotations list */}
           <div className="space-y-2">
             <h3 className="text-sm font-semibold">Existing annotations</h3>
-            {isLoading ? (
-              <div className="flex items-center justify-center py-6" data-testid="annotations-loading">
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-              </div>
-            ) : !annotations || annotations.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-6" data-testid="annotations-empty">
-                No annotations yet.
-              </p>
-            ) : (
-              <ul className="space-y-2" data-testid="annotations-list">
-                {annotations.map((annotation) => {
-                  const Icon = getTypeIcon(annotation.type as TimelineAnnotationType);
-                  return (
-                    <li
-                      key={annotation.id}
-                      className="flex items-start gap-3 rounded border p-3"
-                      data-testid={`annotation-item-${annotation.id}`}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Badge
-                            variant="outline"
-                            className={`text-[10px] ${TYPE_COLORS[annotation.type as TimelineAnnotationType]}`}
-                          >
-                            <Icon className="h-3 w-3 mr-1" aria-hidden="true" />
-                            {TYPE_LABELS[annotation.type as TimelineAnnotationType]}
-                          </Badge>
-                          <span className="text-xs text-muted-foreground">
-                            {annotation.startDate} — {annotation.endDate}
-                          </span>
-                        </div>
-                        {annotation.note ? (
-                          <p className="mt-1 text-sm text-foreground">{annotation.note}</p>
-                        ) : null}
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => deleteMutation.mutate(annotation.id)}
-                        disabled={deleteMutation.isPending}
-                        data-testid={`button-delete-annotation-${annotation.id}`}
-                        aria-label={`Delete ${TYPE_LABELS[annotation.type as TimelineAnnotationType]} annotation`}
-                      >
-                        <Trash2 className="h-4 w-4" aria-hidden="true" />
-                      </Button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
+            {renderExistingAnnotationsList()}
           </div>
         </div>
       </DialogContent>

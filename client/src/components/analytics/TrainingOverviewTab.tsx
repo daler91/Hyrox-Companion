@@ -55,8 +55,13 @@ function annotationToWeekBounds(
     return wsMs <= annEnd && weekEndMs >= annStart;
   });
   if (overlapping.length === 0) return null;
-  overlapping.sort();
-  return { x1: overlapping[0], x2: overlapping[overlapping.length - 1] };
+  // YYYY-MM-DD strings sort correctly lexicographically, but passing an
+  // explicit comparator avoids relying on Array.prototype.sort's implicit
+  // string coercion (Sonar `useSortCompare` rule) and makes the intent
+  // clear. `overlapping.at(-1)` is guaranteed defined because we just
+  // checked `length === 0` above.
+  overlapping.sort((a, b) => a.localeCompare(b));
+  return { x1: overlapping[0], x2: overlapping.at(-1) ?? overlapping[0] };
 }
 
 interface TrainingOverviewTabProps {
