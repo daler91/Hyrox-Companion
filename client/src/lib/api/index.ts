@@ -4,6 +4,7 @@ export type { RagInfo, RagStatus } from "./coaching";
 export { chat, coaching } from "./coaching";
 export { exercises } from "./exercises";
 export { plans } from "./plans";
+export { timelineAnnotations } from "./timelineAnnotations";
 export type { StravaSyncResponse } from "./user";
 export { auth, email,preferences, strava } from "./user";
 export type { BatchReparseResponse } from "./workouts";
@@ -16,6 +17,7 @@ import { analytics, timeline } from "./analytics";
 import { chat, coaching } from "./coaching";
 import { exercises } from "./exercises";
 import { plans } from "./plans";
+import { timelineAnnotations } from "./timelineAnnotations";
 import { auth, email,preferences, strava } from "./user";
 import { workouts } from "./workouts";
 
@@ -28,6 +30,7 @@ export const api = {
   preferences,
   exercises,
   timeline,
+  timelineAnnotations,
   analytics,
   strava,
   email,
@@ -41,6 +44,7 @@ export const QUERY_KEYS = {
   preferences: ["/api/v1/preferences"] as const,
   plans: ["/api/v1/plans"] as const,
   timeline: ["/api/v1/timeline"] as const,
+  timelineAnnotations: ["/api/v1/timeline-annotations"] as const,
   workouts: ["/api/v1/workouts"] as const,
   personalRecords: ["/api/v1/personal-records"] as const,
   exerciseAnalytics: ["/api/v1/exercise-analytics"] as const,

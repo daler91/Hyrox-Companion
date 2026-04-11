@@ -151,6 +151,28 @@ export const exerciseSets = pgTable("exercise_sets", {
   check("set_number_check", sql`set_number > 0`),
 ]);
 
+// User-authored annotations on date ranges in their training timeline —
+// typically injuries, illness, or travel periods that explain volume dips
+// when a user looks back at their history or shares Analytics with a
+// coach. Stored as inclusive [startDate, endDate] date strings so they
+// can be rendered as shaded bands on Analytics charts and as a banner
+// above the Timeline filters.
+export const timelineAnnotations = pgTable("timeline_annotations", {
+  id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 255 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  startDate: date("start_date").notNull(),
+  endDate: date("end_date").notNull(),
+  type: varchar("type", { length: 50 }).notNull(),
+  note: text("note"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  check("timeline_annotation_type_check", sql`type IN ('injury', 'illness', 'travel', 'rest')`),
+  check("timeline_annotation_range_check", sql`end_date >= start_date`),
+  index("idx_timeline_annotations_user_id").on(table.userId),
+  index("idx_timeline_annotations_user_range").on(table.userId, table.startDate, table.endDate),
+]);
+
 // Custom exercises saved by users for AI recognition
 export const customExercises = pgTable("custom_exercises", {
   id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),

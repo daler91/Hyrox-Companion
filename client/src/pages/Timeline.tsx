@@ -5,18 +5,20 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
-import { useCallback,useMemo, useRef } from "react";
+import { useCallback,useMemo, useRef, useState } from "react";
 
 import { CoachPanel } from "@/components/CoachPanel";
 import { FeatureErrorBoundaryWrapper } from "@/components/FeatureErrorBoundaryWrapper";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 import {
+  AnnotationsDialog,
   CoachReviewingIndicator,
   CombineWorkoutsDialog,
   FloatingActionButton,
   ImportPreviewDialog,
   SchedulePlanDialog,
   SkipConfirmDialog,
+  TimelineAnnotationsBanner,
   TimelineDateGroup,
   TimelineEmptyState,
   TimelineFilters,
@@ -215,6 +217,7 @@ export default function Timeline() {
   const { combiningEntry, setCombiningEntry, combineSecondEntry, setCombineSecondEntry, showCombineDialog, setShowCombineDialog, handleCombine, handleConfirmCombine, combineWorkoutsMutation } = combine;
   const { user } = useAuth();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [annotationsDialogOpen, setAnnotationsDialogOpen] = useState(false);
 
   const allVisibleGroups = useMemo(() => {
     return [...visiblePastGroups.slice().reverse(), ...visibleFutureGroups];
@@ -273,6 +276,8 @@ export default function Timeline() {
           />
 
           <CoachReviewingIndicator isActive={!!user?.isAutoCoaching} />
+
+          <TimelineAnnotationsBanner onOpenDialog={() => setAnnotationsDialogOpen(true)} />
 
           <TimelineFilters
         plans={plans}
@@ -388,6 +393,11 @@ export default function Timeline() {
             entry2={combineSecondEntry}
             onConfirm={handleConfirmCombine}
             isPending={combineWorkoutsMutation.isPending}
+          />
+
+          <AnnotationsDialog
+            open={annotationsDialogOpen}
+            onOpenChange={setAnnotationsDialogOpen}
           />
         </div>
       </div>
