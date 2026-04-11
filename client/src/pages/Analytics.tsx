@@ -105,20 +105,20 @@ export default function Analytics() {
       </div>
 
       <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="grid w-full grid-cols-4 mb-6">
-          <TabsTrigger value="overview" data-testid="tab-overview">
+        <TabsList className="mb-6 flex h-auto w-full gap-1 overflow-x-auto scrollbar-none justify-start sm:grid sm:grid-cols-4 sm:gap-0 sm:overflow-visible">
+          <TabsTrigger value="overview" className="shrink-0 sm:shrink" data-testid="tab-overview">
             <BarChart3 className="h-4 w-4 mr-2 hidden sm:block" />
             Overview
           </TabsTrigger>
-          <TabsTrigger value="trends" data-testid="tab-trends">
+          <TabsTrigger value="trends" className="shrink-0 sm:shrink" data-testid="tab-trends">
             <Activity className="h-4 w-4 mr-2 hidden sm:block" />
             Progression
           </TabsTrigger>
-          <TabsTrigger value="prs" data-testid="tab-prs">
+          <TabsTrigger value="prs" className="shrink-0 sm:shrink" data-testid="tab-prs">
             <Trophy className="h-4 w-4 mr-2 hidden sm:block" />
             Records
           </TabsTrigger>
-          <TabsTrigger value="breakdown" data-testid="tab-breakdown">
+          <TabsTrigger value="breakdown" className="shrink-0 sm:shrink" data-testid="tab-breakdown">
             <PieChart className="h-4 w-4 mr-2 hidden sm:block" />
             Breakdown
           </TabsTrigger>
