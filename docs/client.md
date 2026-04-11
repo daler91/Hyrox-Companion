@@ -327,9 +327,27 @@ Configured via `components.json` at the project root:
 
 - Skip-to-content link in `AuthenticatedLayout` (`<a href="#main-content" className="skip-to-content">`)
 - ARIA roles on chat panel: `role="log"`, `aria-live="polite"` for screen reader updates
-- Keyboard navigation: All interactive elements are focusable, dialog components trap focus
+- ARIA live region on Timeline coach-reviewing banner: `role="status"` with `aria-live="polite"` announces
+  background auto-coach activity
+- Keyboard navigation: All interactive elements are focusable; dialog components trap focus via Radix
 - Semantic HTML: `<main>`, `<header>`, `<nav>` landmark elements
 - Color contrast: HSL-based theme with light/dark variants designed for WCAG compliance
+- `prefers-reduced-motion`: Global CSS override in `client/src/index.css` reduces animation duration,
+  transition duration, and scroll-behavior to near-instant for users who opt in at the OS level.
+  Covers the Landing fade-up / float animations, coach thinking dots, pulsing voice indicator,
+  and sidebar transitions.
+- Onboarding wizard progress bar: exposes step count via both the visible "Step N of M" counter
+  and the `sr-only` `<progress>` element with `aria-label`.
+
+**Known gaps requiring a running browser to verify:**
+
+- WCAG AA color contrast audit across light and dark theme variants. The design-token-based palette
+  is intended to comply, but an automated check with a tool like axe DevTools should be run against
+  Timeline, Analytics, and Settings pages in both themes.
+- Screen reader experience of the virtualized Timeline (`@tanstack/react-virtual`). Off-viewport
+  rows are not in the DOM, so NVDA/VoiceOver may report a truncated list. Needs a manual pass.
+- Keyboard tab order on mobile with the coach bottom sheet open — verify focus returns cleanly to
+  the FAB when the sheet closes.
 
 ---
 
