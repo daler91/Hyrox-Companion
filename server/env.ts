@@ -42,6 +42,12 @@ const envSchema = z.object({
 }).refine((data) => !(data.NODE_ENV === "production" && data.ALLOW_DEV_AUTH_BYPASS === "true"), {
   message: "❌ FATAL: ALLOW_DEV_AUTH_BYPASS cannot be enabled in production environment",
   path: ["ALLOW_DEV_AUTH_BYPASS"],
+}).refine((data) => data.NODE_ENV !== "production" || !!data.CSRF_SECRET, {
+  message: "❌ FATAL: CSRF_SECRET is required in production",
+  path: ["CSRF_SECRET"],
+}).refine((data) => data.NODE_ENV !== "production" || !data.CSRF_SECRET || data.CSRF_SECRET !== data.ENCRYPTION_KEY, {
+  message: "❌ FATAL: CSRF_SECRET must differ from ENCRYPTION_KEY for proper key separation",
+  path: ["CSRF_SECRET"],
 });
 
 const parsed = envSchema.safeParse(process.env);

@@ -1,9 +1,11 @@
-import { exercisesPayloadSchema,insertCustomExerciseSchema, insertWorkoutLogSchema, updateWorkoutLogSchema } from "@shared/schema";
+import { exercisesPayloadSchema,insertCustomExerciseSchema, insertWorkoutLogSchema, planDays, trainingPlans, updateWorkoutLogSchema, workoutLogs } from "@shared/schema";
+import { and,eq, inArray } from "drizzle-orm";
 import { type Request, type Response,Router } from "express";
 import { z } from "zod";
 
 import { isAuthenticated } from "../clerkAuth";
 import { DEFAULT_PAGE_LIMIT, DEFAULT_TIMELINE_LIMIT, MAX_PAGE_LIMIT } from "../constants";
+import { db } from "../db";
 import { protectedMutationGuards } from "../routeGuards";
 import { asyncHandler, rateLimiter, validateBody } from "../routeUtils";
 import { generateCSV, generateJSON } from "../services/exportService";
@@ -138,12 +140,60 @@ router.patch("/api/v1/workouts/:id", ...protectedMutationGuards, rateLimiter("wo
 
 router.delete("/api/v1/workouts/:id", ...protectedMutationGuards, rateLimiter("workout", 40), asyncHandler(async (req: Request<{ id: string }>, res: Response) => {
     const userId = getUserId(req);
-    await storage.workouts.deleteExerciseSetsByWorkoutLog(req.params.id, userId);
+    // exercise_sets are cleaned up by FK ON DELETE CASCADE — no need to
+    // delete them explicitly (avoids a non-atomic two-step delete).
     const deleted = await storage.workouts.deleteWorkoutLog(req.params.id, userId);
     if (!deleted) {
       return res.status(404).json({ error: "Workout not found", code: "NOT_FOUND" });
     }
     res.json({ success: true });
+  }));
+
+// Combine two workouts into one atomically: creates a new workout and
+// deletes the originals in a single DB transaction so partial failures
+// cannot leave duplicate data (code review finding QA-C1).
+const combineWorkoutsSchema = z.object({
+  newWorkout: insertWorkoutLogSchema,
+  deleteWorkoutIds: z.array(z.string().min(1)).min(1).max(10),
+  skipPlanDayIds: z.array(z.string().min(1)).max(10).optional(),
+});
+
+router.post("/api/v1/workouts/combine", ...protectedMutationGuards, rateLimiter("workout", 10), validateBody(combineWorkoutsSchema), asyncHandler(async (req: Request, res: Response) => {
+    const userId = getUserId(req);
+    const { newWorkout, deleteWorkoutIds, skipPlanDayIds } = req.body as z.infer<typeof combineWorkoutsSchema>;
+
+    const result = await db.transaction(async (tx) => {
+      // Create the combined workout
+      const [created] = await tx.insert(workoutLogs).values({
+        ...newWorkout,
+        userId,
+      }).returning();
+
+      // Delete the original workouts (FK cascade removes exercise_sets)
+      for (const id of deleteWorkoutIds) {
+        await tx.delete(workoutLogs).where(and(eq(workoutLogs.id, id), eq(workoutLogs.userId, userId)));
+      }
+
+      // Mark associated plan days as skipped — scoped to plans owned by
+      // the requesting user to prevent IDOR writes on other tenants' data.
+      if (skipPlanDayIds?.length) {
+        const userPlanIds = tx
+          .select({ id: trainingPlans.id })
+          .from(trainingPlans)
+          .where(eq(trainingPlans.userId, userId));
+
+        await tx.update(planDays)
+          .set({ status: "skipped" })
+          .where(and(
+            inArray(planDays.id, skipPlanDayIds),
+            inArray(planDays.planId, userPlanIds),
+          ));
+      }
+
+      return created;
+    });
+
+    res.status(201).json(result);
   }));
 
 router.get("/api/v1/exercises/:exerciseName/history", isAuthenticated, rateLimiter("workoutHistory", 60), asyncHandler(async (req: Request<{ exerciseName: string }>, res: Response) => {

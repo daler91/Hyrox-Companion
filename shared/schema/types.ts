@@ -97,6 +97,8 @@ export type GarminConnection = typeof garminConnections.$inferSelect;
 export const insertWorkoutLogSchema = createInsertSchema(workoutLogs).omit({
   id: true,
   userId: true,
+}).extend({
+  rpe: z.number().int().min(1, "RPE must be at least 1").max(10, "RPE must be at most 10").optional().nullable(),
 });
 
 export const updateWorkoutLogSchema = insertWorkoutLogSchema.partial();
@@ -202,7 +204,7 @@ export const exerciseSetSchema = z.object({
   distance: z.number().optional().nullable(),
   time: z.number().optional().nullable(),
   notes: z.string().max(1000).optional().nullable(),
-}).passthrough();
+}).strip();
 
 export const incomingExerciseSchema = z.object({
   exerciseName: z.string().min(1).max(255),
@@ -216,7 +218,7 @@ export const incomingExerciseSchema = z.object({
   confidence: z.number().min(0).max(100).optional().nullable(),
   notes: z.string().max(1000).optional().nullable(),
   sets: z.array(exerciseSetSchema).max(50).optional().nullable(),
-}).passthrough();
+}).strip();
 
 export const exercisesPayloadSchema = z.array(incomingExerciseSchema).max(200);
 

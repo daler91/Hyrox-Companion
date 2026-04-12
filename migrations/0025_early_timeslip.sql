@@ -1,0 +1,1 @@
+ALTER TABLE "workout_logs" ADD CONSTRAINT "rpe_range_check" CHECK ("workout_logs"."rpe" IS NULL OR ("workout_logs"."rpe" >= 1 AND "workout_logs"."rpe" <= 10));

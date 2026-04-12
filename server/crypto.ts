@@ -32,6 +32,9 @@ const getKey = () => {
   return cachedKey;
 };
 
+/** Current encryption version tag. */
+const CURRENT_VERSION = "v1";
+
 export function encryptToken(text: string): string {
   if (!text) return text;
 
@@ -44,23 +47,39 @@ export function encryptToken(text: string): string {
 
   const authTag = cipher.getAuthTag().toString("hex");
 
-  // Format: iv:authTag:encryptedText
-  return `${iv.toString("hex")}:${authTag}:${encrypted}`;
+  // Format: v1:iv:authTag:encryptedText
+  return `${CURRENT_VERSION}:${iv.toString("hex")}:${authTag}:${encrypted}`;
 }
 
+/**
+ * Decrypt a ciphertext produced by encryptToken.
+ *
+ * Supports both the current versioned format (v1:iv:authTag:ciphertext) and
+ * the legacy unversioned format (iv:authTag:ciphertext) for backward
+ * compatibility during the migration window. Plaintext fallback has been
+ * removed — malformed data now throws.
+ */
 export function decryptToken(encryptedData: string): string {
   if (!encryptedData) return encryptedData;
 
-  // If the data doesn't match our format (e.g., legacy plain text), return as is
-  // This allows for a graceful migration
   const parts = encryptedData.split(":");
-  if (parts.length !== 3) {
-    return encryptedData;
+
+  let ivHex: string;
+  let authTagHex: string;
+  let encryptedText: string;
+
+  if (parts.length === 4 && parts[0] === CURRENT_VERSION) {
+    // Versioned format: v1:iv:authTag:ciphertext
+    [, ivHex, authTagHex, encryptedText] = parts;
+  } else if (parts.length === 3) {
+    // Legacy unversioned format: iv:authTag:ciphertext
+    [ivHex, authTagHex, encryptedText] = parts;
+  } else {
+    throw new Error("Malformed encrypted data — expected v1:iv:authTag:ciphertext or iv:authTag:ciphertext");
   }
 
   try {
     const key = getKey();
-    const [ivHex, authTagHex, encryptedText] = parts;
     const iv = Buffer.from(ivHex, "hex");
     const authTag = Buffer.from(authTagHex, "hex");
 
@@ -73,9 +92,6 @@ export function decryptToken(encryptedData: string): string {
     return decrypted;
   } catch (error) {
     logger.error({ err: error }, "Failed to decrypt token");
-    // If decryption fails, it might be corrupted or we lost the key
-    // For safety, return empty string or throw depending on requirements
-    // Returning the original string might be dangerous if it's partially matched
     throw new Error("Failed to decrypt token");
   }
 }

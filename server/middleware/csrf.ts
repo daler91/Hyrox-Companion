@@ -26,8 +26,8 @@ import { env } from "../env";
  * pre-login window (login flow itself does not hit mutating endpoints).
  */
 
-// Reuse ENCRYPTION_KEY as a fallback to avoid adding a new required env var.
-// Operators may set CSRF_SECRET explicitly to rotate it independently.
+// CSRF_SECRET is required in production (see env.ts refine). In development
+// we fall back to ENCRYPTION_KEY for convenience.
 const csrfSecret = env.CSRF_SECRET ?? env.ENCRYPTION_KEY;
 
 const { doubleCsrfProtection, generateCsrfToken } = doubleCsrf({
