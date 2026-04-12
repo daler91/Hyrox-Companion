@@ -79,6 +79,20 @@ async function ensureVectorSchema() {
       logger.info({ context: "db" }, "Created document_chunks table on vector DB");
     }
 
+    // Create HNSW index for fast cosine similarity search on embeddings.
+    // Uses IF NOT EXISTS so it's idempotent across restarts.
+    const hnswIdx = await client.query(`
+      SELECT 1 FROM pg_indexes WHERE indexname = 'idx_document_chunks_embedding_hnsw'
+    `);
+    if (hnswIdx.rowCount === 0) {
+      await client.query(`
+        CREATE INDEX idx_document_chunks_embedding_hnsw
+        ON document_chunks USING hnsw (embedding vector_cosine_ops)
+        WITH (m = 16, ef_construction = 64)
+      `);
+      logger.info({ context: "db" }, "Created HNSW index on document_chunks.embedding");
+    }
+
     // Ensure the embedding column uses native vector type (not text)
     const embCol = await client.query(
       `SELECT data_type FROM information_schema.columns WHERE table_name = 'document_chunks' AND column_name = 'embedding'`,

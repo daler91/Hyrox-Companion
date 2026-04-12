@@ -1,7 +1,7 @@
 import { format } from "date-fns";
 import { BookOpen, CheckCircle2, Circle, Database, FileText,Loader2 } from "lucide-react";
 import React, { useMemo } from "react";
-import { SiStrava } from "react-icons/si";
+import { StravaIcon } from "@/components/icons/StravaIcon";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -139,7 +139,7 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
               )}
               {entry.source === "strava" && (
                 <Badge className="bg-[#FC4C02]/10 text-[#FC4C02]">
-                  <SiStrava className="h-3 w-3 mr-1" />
+                  <StravaIcon className="h-3 w-3 mr-1" />
                   Strava
                 </Badge>
               )}

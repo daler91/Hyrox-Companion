@@ -5,8 +5,11 @@ import { computeCurrentWeek,computeExerciseGaps, computePlanPhase, computeProgre
 import { calculateTrainingStats, collectRecentWorkouts, getExerciseBreakdown, getStructuredExerciseStats } from "./trainingStats";
 
 export async function buildTrainingContext(userId: string): Promise<TrainingContext> {
+  // Limit timeline to 60 recent entries — sufficient for stats, streak
+  // calculation, and the 10 most recent workouts shown to the AI. Avoids
+  // fetching the full 500-entry default for heavy users.
   const [timeline, activePlanRecord, user, upcomingDays] = await Promise.all([
-    storage.timeline.getTimeline(userId),
+    storage.timeline.getTimeline(userId, undefined, 60),
     storage.plans.getActivePlan(userId),
     storage.users.getUser(userId),
     storage.timeline.getUpcomingPlannedDays(userId, 7),

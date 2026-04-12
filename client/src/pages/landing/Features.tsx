@@ -1,5 +1,5 @@
 import { Activity, BarChart3, Brain, Calendar, CheckCircle2, Sparkles, TrendingUp } from "lucide-react";
-import { SiStrava } from "react-icons/si";
+import { StravaIcon } from "@/components/icons/StravaIcon";
 
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -87,7 +87,7 @@ export function Features() {
             <CardContent className="p-6">
               <div className="flex items-start gap-4">
                 <div className="w-12 h-12 rounded-lg bg-orange-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-orange-500/20 transition-colors">
-                  <SiStrava className="h-6 w-6 text-orange-500" />
+                  <StravaIcon className="h-6 w-6 text-orange-500" />
                 </div>
                 <div>
                   <h3 className="font-semibold text-lg mb-2">Strava Integration</h3>

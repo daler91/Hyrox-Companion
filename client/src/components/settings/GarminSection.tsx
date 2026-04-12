@@ -1,7 +1,7 @@
 import { formatDistanceToNow } from "date-fns";
 import { AlertTriangle,Loader2, RefreshCw, Unlink } from "lucide-react";
 import { useState } from "react";
-import { SiGarmin } from "react-icons/si";
+import { GarminIcon } from "@/components/icons/GarminIcon";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -70,7 +70,7 @@ export function GarminSection({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <SiGarmin className="h-5 w-5 text-[#007CC3]" />
+          <GarminIcon className="h-5 w-5 text-[#007CC3]" />
           Garmin Connect
         </CardTitle>
         <CardDescription>
@@ -81,7 +81,7 @@ export function GarminSection({
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="flex items-center justify-center w-10 h-10 rounded-md bg-[#007CC3]/10">
-              <SiGarmin className="h-5 w-5 text-[#007CC3]" />
+              <GarminIcon className="h-5 w-5 text-[#007CC3]" />
             </div>
             <div className="space-y-1">
               <div className="flex items-center gap-2">
@@ -206,7 +206,7 @@ export function GarminSection({
               {connectGarminMutation.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
               ) : (
-                <SiGarmin className="h-4 w-4 mr-1.5 text-[#007CC3]" />
+                <GarminIcon className="h-4 w-4 mr-1.5 text-[#007CC3]" />
               )}
               Connect Garmin
             </Button>
