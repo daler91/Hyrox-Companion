@@ -100,14 +100,29 @@ const HEALTH_PROBE_TIMEOUT_MS = 3000;
  * pool's own connectionTimeoutMillis — defeats the fast-fail intent.
  */
 async function probeDatabase(): Promise<boolean> {
-  let client: PoolClient | undefined;
+  // Track the client through a shared reference so the timeout path can
+  // still release it if pool.connect() resolves AFTER the race rejects.
+  // Without this, a slow pool under saturation leaks a connection per
+  // timed-out probe (P1 from PR review).
+  const clientRef: { current: PoolClient | undefined } = { current: undefined };
   let timedOut = false;
+
+  const connectAndQuery = (async () => {
+    const c = await pool.connect();
+    clientRef.current = c;
+    // If the race already timed out by the time we got a connection,
+    // release it immediately so it returns to the pool (or is destroyed).
+    if (timedOut) {
+      c.release(new Error("health check timeout"));
+      clientRef.current = undefined;
+      throw new Error("timeout");
+    }
+    await c.query("SELECT 1");
+  })();
+
   try {
     await Promise.race([
-      (async () => {
-        client = await pool.connect();
-        await client.query("SELECT 1");
-      })(),
+      connectAndQuery,
       new Promise((_, reject) => setTimeout(() => {
         timedOut = true;
         reject(new Error("timeout"));
@@ -117,9 +132,9 @@ async function probeDatabase(): Promise<boolean> {
   } catch {
     return false;
   } finally {
-    // Destroy the connection on timeout so a hung query is not returned
-    // to the pool with work still pending.
-    client?.release(timedOut ? new Error("health check timeout") : undefined);
+    // Release whichever path left the client checked out. On timeout we
+    // destroy the connection so any hung SELECT 1 is discarded.
+    clientRef.current?.release(timedOut ? new Error("health check timeout") : undefined);
   }
 }
 
