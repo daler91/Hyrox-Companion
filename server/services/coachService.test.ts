@@ -153,6 +153,28 @@ describe("coachService", () => {
       expect(storage.users.updateIsAutoCoaching).toHaveBeenCalledWith("user-1", false);
     });
 
+    // Regression: triggerAutoCoach's caller (workoutService) pre-sets the flag
+    // to true inside the workout-creation transaction before enqueuing the job.
+    // If any code runs before the inner body throws (getUser, checkAiBudget, or
+    // the updateIsAutoCoaching(true) call itself), the outer finally MUST still
+    // reset the flag or the frontend will poll /api/user forever.
+    it("resets isAutoCoaching flag when getUser throws (caller pre-set scenario)", async () => {
+      vi.mocked(storage.users.getUser).mockRejectedValue(new Error("DB down"));
+      vi.mocked(storage.users.updateIsAutoCoaching).mockResolvedValue(undefined);
+
+      await expect(triggerAutoCoach("user-1")).rejects.toThrow("DB down");
+      expect(storage.users.updateIsAutoCoaching).toHaveBeenCalledWith("user-1", false);
+    });
+
+    it("resets isAutoCoaching flag when checkAiBudget throws", async () => {
+      vi.mocked(storage.users.getUser).mockResolvedValue({ aiCoachEnabled: true } as never);
+      vi.mocked(storage.users.updateIsAutoCoaching).mockResolvedValue(undefined);
+      vi.mocked(storage.aiUsage.getDailyTotalCents).mockRejectedValueOnce(new Error("budget svc down"));
+
+      await expect(triggerAutoCoach("user-1")).rejects.toThrow("budget svc down");
+      expect(storage.users.updateIsAutoCoaching).toHaveBeenCalledWith("user-1", false);
+    });
+
     it("skips suggestions with missing workoutId or recommendation", async () => {
       mockBaseAutoCoachDeps([makeTimelineEntry({ focus: "Running", mainWorkout: "5km" })]);
       vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
