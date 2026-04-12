@@ -5,6 +5,7 @@ import { useLocation, useSearch } from "wouter";
 
 import { CoachingSection } from "@/components/settings/CoachingSection";
 import { DataToolsSection } from "@/components/settings/DataToolsSection";
+import { GarminSection } from "@/components/settings/GarminSection";
 import { PreferencesSection } from "@/components/settings/PreferencesSection";
 import { ProfileSection } from "@/components/settings/ProfileSection";
 import { PushNotificationSection } from "@/components/settings/PushNotificationSection";
@@ -31,6 +32,13 @@ interface StravaStatus {
   connected: boolean;
   athleteId?: string;
   lastSyncedAt?: string | null;
+}
+
+interface GarminStatus {
+  connected: boolean;
+  garminDisplayName?: string | null;
+  lastSyncedAt?: string | null;
+  lastError?: string | null;
 }
 
 interface PreferencesSnapshot {
@@ -106,6 +114,11 @@ export default function Settings() {
   const { data: stravaStatus, isLoading: stravaLoading } =
     useQuery<StravaStatus>({
       queryKey: QUERY_KEYS.stravaStatus,
+    });
+
+  const { data: garminStatus, isLoading: garminLoading } =
+    useQuery<GarminStatus>({
+      queryKey: QUERY_KEYS.garminStatus,
     });
 
   useEffect(() => {
@@ -260,6 +273,11 @@ export default function Settings() {
       <StravaSection
         stravaStatus={stravaStatus}
         stravaLoading={stravaLoading}
+      />
+
+      <GarminSection
+        garminStatus={garminStatus}
+        garminLoading={garminLoading}
       />
 
       <PreferencesSection

@@ -3,6 +3,7 @@ import type { Server } from "node:http";
 import type { Express } from "express";
 
 import { setupAuth } from "./clerkAuth";
+import { registerGarminRoutes } from "./garmin";
 import { csrfProtection, csrfTokenHandler } from "./middleware/csrf";
 import aiRoutes from "./routes/ai";
 import analyticsRoutes from "./routes/analytics";
@@ -32,6 +33,7 @@ export async function registerRoutes(
   app.use("/api/v1", csrfProtection);
 
   registerStravaRoutes(app);
+  registerGarminRoutes(app);
 
   app.use(authRoutes);
   app.use(preferencesRoutes);

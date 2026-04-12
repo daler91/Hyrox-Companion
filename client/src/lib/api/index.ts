@@ -5,8 +5,8 @@ export { chat, coaching } from "./coaching";
 export { exercises } from "./exercises";
 export { plans } from "./plans";
 export { timelineAnnotations } from "./timelineAnnotations";
-export type { StravaSyncResponse } from "./user";
-export { auth, email,preferences, strava } from "./user";
+export type { GarminStatus, GarminSyncResponse,StravaSyncResponse } from "./user";
+export { auth, email,garmin, preferences, strava } from "./user";
 export type { BatchReparseResponse } from "./workouts";
 export { workouts } from "./workouts";
 
@@ -18,7 +18,7 @@ import { chat, coaching } from "./coaching";
 import { exercises } from "./exercises";
 import { plans } from "./plans";
 import { timelineAnnotations } from "./timelineAnnotations";
-import { auth, email,preferences, strava } from "./user";
+import { auth, email,garmin, preferences, strava } from "./user";
 import { workouts } from "./workouts";
 
 export const api = {
@@ -33,6 +33,7 @@ export const api = {
   timelineAnnotations,
   analytics,
   strava,
+  garmin,
   email,
 } as const;
 
@@ -54,4 +55,5 @@ export const QUERY_KEYS = {
   ragStatus: ["/api/v1/coaching-materials/rag-status"] as const,
   customExercises: ["/api/v1/custom-exercises"] as const,
   stravaStatus: ["/api/v1/strava/status"] as const,
+  garminStatus: ["/api/v1/garmin/status"] as const,
 } as const;
