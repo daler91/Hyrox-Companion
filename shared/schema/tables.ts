@@ -90,6 +90,7 @@ export const workoutLogs = pgTable("workout_logs", {
   planId: varchar("plan_id", { length: 255 }).references(() => trainingPlans.id, { onDelete: "set null" }),
   source: varchar("source", { length: 255 }).default("manual"),
   stravaActivityId: varchar("strava_activity_id", { length: 255 }),
+  garminActivityId: varchar("garmin_activity_id", { length: 255 }),
   calories: integer("calories"),
   distanceMeters: real("distance_meters"),
   elevationGain: real("elevation_gain"),
@@ -107,6 +108,7 @@ export const workoutLogs = pgTable("workout_logs", {
   index("idx_workout_logs_plan_day_id").on(table.planDayId),
   index("idx_workout_logs_plan_id").on(table.planId),
   index("idx_workout_logs_strava_activity_id").on(table.stravaActivityId),
+  index("idx_workout_logs_garmin_activity_id").on(table.garminActivityId),
   index("idx_workout_logs_source").on(table.source),
   // Enforce Strava activity uniqueness per user at the DB layer so concurrent
   // sync requests cannot create duplicate workouts for the same activity
@@ -114,6 +116,10 @@ export const workoutLogs = pgTable("workout_logs", {
   uniqueIndex("idx_workout_logs_user_strava_unique")
     .on(table.userId, table.stravaActivityId)
     .where(sql`${table.stravaActivityId} IS NOT NULL`),
+  // Same dedupe guarantee for Garmin imports.
+  uniqueIndex("idx_workout_logs_user_garmin_unique")
+    .on(table.userId, table.garminActivityId)
+    .where(sql`${table.garminActivityId} IS NOT NULL`),
 ]);
 
 // Strava OAuth connection storage
@@ -126,6 +132,37 @@ export const stravaConnections = pgTable("strava_connections", {
   expiresAt: timestamp("expires_at").notNull(),
   scope: text("scope"),
   lastSyncedAt: timestamp("last_synced_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Garmin Connect session storage. Unlike Strava, Garmin has no public OAuth
+// for end users — we authenticate with the user's email + password against the
+// reverse-engineered SSO flow used by @flow-js/garmin-connect. We store the
+// credentials encrypted-at-rest (AES-256-GCM via server/crypto.ts) so we can
+// re-login when the cached OAuth tokens expire (~1 year). The OAuth1/OAuth2
+// token blobs are JSON, also encrypted at rest.
+//
+// IMPORTANT: this approach does NOT support Garmin two-step verification.
+// Users with 2SV enabled will fail at login and must temporarily disable it.
+export const garminConnections = pgTable("garmin_connections", {
+  id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 255 }).notNull().unique().references(() => users.id, { onDelete: "cascade" }),
+  // displayName from getUserProfile() — opaque hash, not the email.
+  garminDisplayName: varchar("garmin_display_name", { length: 255 }),
+  encryptedEmail: text("encrypted_email").notNull(),
+  encryptedPassword: text("encrypted_password").notNull(),
+  // JSON.stringify(IOauth1Token) and JSON.stringify(IOauth2Token), each
+  // encrypted with encryptToken(). Null until the first successful login.
+  encryptedOauth1Token: text("encrypted_oauth1_token"),
+  encryptedOauth2Token: text("encrypted_oauth2_token"),
+  // expires_at from the OAuth2 token (seconds since epoch → JS Date). We
+  // re-login when current time passes this value, since the lib's refresh
+  // path is unreliable.
+  tokenExpiresAt: timestamp("token_expires_at"),
+  lastSyncedAt: timestamp("last_synced_at"),
+  // Surfaced to the UI as a "reconnect needed" banner. Cleared on successful
+  // sync. Stored as plain text since it's a generated message, not a secret.
+  lastError: text("last_error"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -283,6 +320,10 @@ export const usersRelations = relations(users, ({ many, one }) => ({
     fields: [users.id],
     references: [stravaConnections.userId],
   }),
+  garminConnection: one(garminConnections, {
+    fields: [users.id],
+    references: [garminConnections.userId],
+  }),
   customExercises: many(customExercises),
   chatMessages: many(chatMessages),
   coachingMaterials: many(coachingMaterials),
@@ -327,6 +368,13 @@ export const workoutLogsRelations = relations(workoutLogs, ({ one, many }) => ({
 export const stravaConnectionsRelations = relations(stravaConnections, ({ one }) => ({
   user: one(users, {
     fields: [stravaConnections.userId],
+    references: [users.id],
+  }),
+}));
+
+export const garminConnectionsRelations = relations(garminConnections, ({ one }) => ({
+  user: one(users, {
+    fields: [garminConnections.userId],
     references: [users.id],
   }),
 }));

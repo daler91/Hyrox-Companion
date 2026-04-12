@@ -178,6 +178,42 @@ export class WorkoutStorage {
     return rows.map((r) => r.stravaActivityId as string);
   }
 
+  /**
+   * Garmin-specific bulk insert. Mirrors createWorkoutLogs but targets the
+   * (user_id, garmin_activity_id) partial unique index so concurrent Garmin
+   * syncs can't double-import the same activity. Routes still pre-dedupe via
+   * getExistingGarminActivityIds; this is the concurrent-safety backstop.
+   */
+  async createGarminWorkoutLogs(logs: (InsertWorkoutLog & { userId: string })[]): Promise<WorkoutLog[]> {
+    if (logs.length === 0) return [];
+
+    const createdLogs = await db
+      .insert(workoutLogs)
+      .values(logs)
+      .onConflictDoNothing({
+        target: [workoutLogs.userId, workoutLogs.garminActivityId],
+        where: sql`${workoutLogs.garminActivityId} IS NOT NULL`,
+      })
+      .returning();
+
+    return createdLogs;
+  }
+
+  async getExistingGarminActivityIds(userId: string, garminActivityIds: string[]): Promise<string[]> {
+    if (garminActivityIds.length === 0) return [];
+    const rows = await db
+      .select({ garminActivityId: workoutLogs.garminActivityId })
+      .from(workoutLogs)
+      .where(
+        and(
+          eq(workoutLogs.userId, userId),
+          inArray(workoutLogs.garminActivityId, garminActivityIds),
+          isNotNull(workoutLogs.garminActivityId)
+        )
+      );
+    return rows.map((r) => r.garminActivityId as string);
+  }
+
   async createExerciseSets(sets: InsertExerciseSet[]): Promise<ExerciseSet[]> {
     if (sets.length === 0) return [];
     return await db.insert(exerciseSets).values(sets).returning();

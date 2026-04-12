@@ -8,6 +8,7 @@ import {
   customExercises,
   documentChunks,
   exerciseSets,
+  garminConnections,
   planDays,
   stravaConnections,
   timelineAnnotations,
@@ -81,6 +82,17 @@ export const insertStravaConnectionSchema = createInsertSchema(stravaConnections
 export type InsertStravaConnection = z.infer<typeof insertStravaConnectionSchema>;
 export type StravaConnection = typeof stravaConnections.$inferSelect;
 
+// Garmin connection types and schemas. The insert schema validates the
+// pre-encryption inputs (raw email/password/token JSON) — encryption happens
+// inside the storage layer just like Strava.
+export const insertGarminConnectionSchema = createInsertSchema(garminConnections).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertGarminConnection = z.infer<typeof insertGarminConnectionSchema>;
+export type GarminConnection = typeof garminConnections.$inferSelect;
+
 // Workout log types and schemas
 export const insertWorkoutLogSchema = createInsertSchema(workoutLogs).omit({
   id: true,
@@ -118,7 +130,7 @@ export type TimelineEntry = {
   dayName?: string;
   planName?: string | null;
   planId?: string | null;
-  source?: "manual" | "strava";
+  source?: "manual" | "strava" | "garmin";
   aiSource?: "rag" | "legacy" | null;
   exerciseSets?: ExerciseSet[];
   calories?: number | null;

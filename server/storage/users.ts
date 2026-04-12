@@ -3,8 +3,11 @@ import {
   chatMessages,
   type CustomExercise,
   customExercises,
+  type GarminConnection,
+  garminConnections,
   type InsertChatMessage,
   type InsertCustomExercise,
+  type InsertGarminConnection,
   type InsertStravaConnection,
   type StravaConnection,
   stravaConnections,
@@ -158,6 +161,134 @@ export class UserStorage {
       .update(stravaConnections)
       .set({ lastSyncedAt: new Date() })
       .where(eq(stravaConnections.userId, userId));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Garmin Connect — credential-based session storage.
+  //
+  // Unlike Strava (which uses OAuth), Garmin requires us to store the user's
+  // email + password so we can re-login when the cached OAuth1/OAuth2 tokens
+  // expire (~1 year). All four secrets are encrypted at rest with the same
+  // AES-256-GCM helper used for Strava tokens (server/crypto.ts).
+  //
+  // Token JSON blobs are stringified before encryption and parsed after
+  // decryption — the storage layer is responsible for this so the routes
+  // module never sees the wire format.
+  // ---------------------------------------------------------------------------
+
+  async getGarminConnection(
+    userId: string,
+  ): Promise<GarminConnection | undefined> {
+    const [connection] = await db
+      .select()
+      .from(garminConnections)
+      .where(eq(garminConnections.userId, userId));
+
+    if (!connection) return connection;
+
+    return {
+      ...connection,
+      encryptedEmail: decryptToken(connection.encryptedEmail),
+      encryptedPassword: decryptToken(connection.encryptedPassword),
+      encryptedOauth1Token: connection.encryptedOauth1Token
+        ? decryptToken(connection.encryptedOauth1Token)
+        : null,
+      encryptedOauth2Token: connection.encryptedOauth2Token
+        ? decryptToken(connection.encryptedOauth2Token)
+        : null,
+    };
+  }
+
+  async upsertGarminConnection(
+    data: InsertGarminConnection,
+  ): Promise<GarminConnection> {
+    const encryptedData = {
+      ...data,
+      encryptedEmail: encryptToken(data.encryptedEmail),
+      encryptedPassword: encryptToken(data.encryptedPassword),
+      encryptedOauth1Token: data.encryptedOauth1Token
+        ? encryptToken(data.encryptedOauth1Token)
+        : null,
+      encryptedOauth2Token: data.encryptedOauth2Token
+        ? encryptToken(data.encryptedOauth2Token)
+        : null,
+    };
+
+    const [connection] = await db
+      .insert(garminConnections)
+      .values(encryptedData)
+      .onConflictDoUpdate({
+        target: garminConnections.userId,
+        set: {
+          garminDisplayName: encryptedData.garminDisplayName,
+          encryptedEmail: encryptedData.encryptedEmail,
+          encryptedPassword: encryptedData.encryptedPassword,
+          encryptedOauth1Token: encryptedData.encryptedOauth1Token,
+          encryptedOauth2Token: encryptedData.encryptedOauth2Token,
+          tokenExpiresAt: encryptedData.tokenExpiresAt,
+          lastError: encryptedData.lastError,
+        },
+      })
+      .returning();
+
+    return {
+      ...connection,
+      encryptedEmail: decryptToken(connection.encryptedEmail),
+      encryptedPassword: decryptToken(connection.encryptedPassword),
+      encryptedOauth1Token: connection.encryptedOauth1Token
+        ? decryptToken(connection.encryptedOauth1Token)
+        : null,
+      encryptedOauth2Token: connection.encryptedOauth2Token
+        ? decryptToken(connection.encryptedOauth2Token)
+        : null,
+    };
+  }
+
+  /**
+   * Updates only the cached OAuth tokens after a successful login or refresh.
+   * Skips touching the email/password ciphertexts so we don't re-encrypt them
+   * (which would generate new IVs and waste DB churn).
+   */
+  async updateGarminTokens(
+    userId: string,
+    oauth1Json: string,
+    oauth2Json: string,
+    tokenExpiresAt: Date | null,
+  ): Promise<void> {
+    await db
+      .update(garminConnections)
+      .set({
+        encryptedOauth1Token: encryptToken(oauth1Json),
+        encryptedOauth2Token: encryptToken(oauth2Json),
+        tokenExpiresAt,
+        lastError: null,
+      })
+      .where(eq(garminConnections.userId, userId));
+  }
+
+  async deleteGarminConnection(userId: string): Promise<boolean> {
+    const result = await db
+      .delete(garminConnections)
+      .where(eq(garminConnections.userId, userId));
+    return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  async updateGarminLastSync(userId: string): Promise<void> {
+    await db
+      .update(garminConnections)
+      .set({ lastSyncedAt: new Date(), lastError: null })
+      .where(eq(garminConnections.userId, userId));
+  }
+
+  /**
+   * Persists a friendly error message so the UI can show "Reconnect to Garmin"
+   * without exposing internals. Called from the routes module on auth failure.
+   */
+  async setGarminError(userId: string, error: string): Promise<void> {
+    await db
+      .update(garminConnections)
+      .set({ lastError: error })
+      .where(eq(garminConnections.userId, userId));
   }
 
   async getCustomExercises(userId: string): Promise<CustomExercise[]> {
