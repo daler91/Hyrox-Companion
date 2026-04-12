@@ -15,7 +15,9 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import {
   clearLogWorkoutDraft,
+  hasAnnouncedDraftRestore,
   loadLogWorkoutDraft,
+  markAnnouncedDraftRestore,
   saveLogWorkoutDraft,
 } from "@/hooks/useLogWorkoutDraft";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
@@ -227,17 +229,22 @@ function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
     currentBlockCounter,
   ]);
 
-  // "Draft restored" toast on mount. `initialDraft` comes from a lazy useState
-  // initializer so it's stable across renders, meaning this effect runs exactly
-  // once on mount when the restored draft is non-null.
+  // "Draft restored" toast — announced once per draft, per session.
+  // LogWorkoutForm remounts on every navigation to /log, so a bare
+  // mount-time toast re-fired every revisit while a draft was still present,
+  // visibly overlaying other pages via the globally-mounted <Toaster />. The
+  // sessionStorage guard scopes the announcement to one firing per browser
+  // session; `clearLogWorkoutDraft` (called on save) resets it so the next
+  // draft the user creates is announced fresh.
   useEffect(() => {
-    if (initialDraft) {
+    if (initialDraft && !hasAnnouncedDraftRestore(userKey)) {
       toast({
         title: "Draft restored",
         description: "We brought back your in-progress workout.",
       });
+      markAnnouncedDraftRestore(userKey);
     }
-  }, [initialDraft, toast]);
+  }, [initialDraft, toast, userKey]);
 
   const hasData = useTextMode
     ? freeText.trim().length > 0

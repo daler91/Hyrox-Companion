@@ -1,6 +1,7 @@
 import type { StructuredExercise } from "@/components/ExerciseInput";
 
 const DRAFT_STORAGE_KEY = "hyrox-log-workout-draft";
+const DRAFT_ANNOUNCED_KEY = "hyrox-log-workout-draft-announced";
 const DRAFT_VERSION = 1;
 
 /**
@@ -26,6 +27,10 @@ export type LoadedDraft = Omit<LogWorkoutDraft, "version" | "userKey" | "savedAt
 
 function getStorageKey(userKey: string): string {
   return `${DRAFT_STORAGE_KEY}:${userKey}`;
+}
+
+function getAnnouncedKey(userKey: string): string {
+  return `${DRAFT_ANNOUNCED_KEY}:${userKey}`;
 }
 
 function isBlank(draft: LoadedDraft): boolean {
@@ -88,5 +93,42 @@ export function clearLogWorkoutDraft(userKey: string): void {
     globalThis.window.localStorage.removeItem(getStorageKey(userKey));
   } catch {
     // ignore
+  }
+  // Reset the session-scoped "already announced" flag so the next draft the
+  // user creates will be announced again when it's restored.
+  try {
+    globalThis.window.sessionStorage.removeItem(getAnnouncedKey(userKey));
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Returns true if the "Draft restored" toast has already been shown for this
+ * user in the current browser session. Scoped to sessionStorage so it
+ * survives in-app navigation and tab reloads but resets on tab close.
+ */
+export function hasAnnouncedDraftRestore(userKey: string): boolean {
+  if (globalThis.window === undefined) return false;
+  try {
+    return (
+      globalThis.window.sessionStorage.getItem(getAnnouncedKey(userKey)) !==
+      null
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Marks the draft-restore toast as shown for this user in the current session
+ * so repeated mounts of LogWorkoutForm don't re-announce the same draft.
+ */
+export function markAnnouncedDraftRestore(userKey: string): void {
+  if (globalThis.window === undefined) return;
+  try {
+    globalThis.window.sessionStorage.setItem(getAnnouncedKey(userKey), "1");
+  } catch {
+    // Session storage disabled / quota exceeded — best-effort only.
   }
 }
