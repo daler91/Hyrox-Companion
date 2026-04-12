@@ -79,8 +79,19 @@ async function ensureVectorSchema() {
       logger.info({ context: "db" }, "Created document_chunks table on vector DB");
     }
 
+    // Ensure the embedding column uses native vector type (not text).
+    // This must run BEFORE the HNSW index creation — hnsw(embedding
+    // vector_cosine_ops) requires a vector column, not text.
+    const embCol = await client.query(
+      `SELECT data_type FROM information_schema.columns WHERE table_name = 'document_chunks' AND column_name = 'embedding'`,
+    );
+    if (embCol.rows.length > 0 && (embCol.rows[0] as { data_type: string }).data_type === "text") {
+      await client.query(`ALTER TABLE document_chunks ALTER COLUMN embedding TYPE vector(${EMBEDDING_DIMENSIONS}) USING embedding::vector(${EMBEDDING_DIMENSIONS})`);
+      logger.info({ context: "db", dimensions: EMBEDDING_DIMENSIONS }, "Converted embedding column from text to vector type");
+    }
+
     // Create HNSW index for fast cosine similarity search on embeddings.
-    // Uses IF NOT EXISTS so it's idempotent across restarts.
+    // Idempotent — checks pg_indexes first.
     const hnswIdx = await client.query(`
       SELECT 1 FROM pg_indexes WHERE indexname = 'idx_document_chunks_embedding_hnsw'
     `);
@@ -91,15 +102,6 @@ async function ensureVectorSchema() {
         WITH (m = 16, ef_construction = 64)
       `);
       logger.info({ context: "db" }, "Created HNSW index on document_chunks.embedding");
-    }
-
-    // Ensure the embedding column uses native vector type (not text)
-    const embCol = await client.query(
-      `SELECT data_type FROM information_schema.columns WHERE table_name = 'document_chunks' AND column_name = 'embedding'`,
-    );
-    if (embCol.rows.length > 0 && (embCol.rows[0] as { data_type: string }).data_type === "text") {
-      await client.query(`ALTER TABLE document_chunks ALTER COLUMN embedding TYPE vector(${EMBEDDING_DIMENSIONS}) USING embedding::vector(${EMBEDDING_DIMENSIONS})`);
-      logger.info({ context: "db", dimensions: EMBEDDING_DIMENSIONS }, "Converted embedding column from text to vector type");
     }
   } catch (error) {
     logger.error({ context: "db", err: error }, "Vector schema setup failed");
