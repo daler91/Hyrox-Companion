@@ -1,7 +1,7 @@
 import { clerkClient } from "@clerk/express";
 import { type Request as ExpressRequest, type Response, Router } from "express";
 
-import { isAuthenticated } from "../clerkAuth";
+import { evictUserFromSeenCache, isAuthenticated } from "../clerkAuth";
 import { env } from "../env";
 import { logger } from "../logger";
 import { asyncHandler, rateLimiter } from "../routeUtils";
@@ -20,8 +20,12 @@ const router = Router();
  * garmin_connections, custom_exercises, push_subscriptions,
  * ai_usage_logs, idempotency_keys, and timeline_annotations.
  *
- * Also attempts to deauthorize the Strava connection (if any) and delete
- * the Clerk user record.
+ * Order of operations:
+ * 1. Delete Clerk identity first (hard fail if this fails, since
+ *    ensureUserExists would re-provision the DB row on next request).
+ * 2. Best-effort Strava deauthorization.
+ * 3. Delete DB user row (cascades all child rows).
+ * 4. Evict user from auth seen-cache to prevent stale session use.
  */
 router.delete(
   "/api/v1/account",
@@ -30,8 +34,15 @@ router.delete(
   asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
 
-    // Best-effort Strava deauthorization before deleting the DB record
-    // (which cascades and removes the stored token).
+    // Step 1: Delete Clerk identity first. If this fails the DB row must
+    // stay intact — otherwise ensureUserExists re-creates it on the next
+    // authenticated request, silently "undeleting" the account.
+    if (env.CLERK_SECRET_KEY) {
+      await clerkClient.users.deleteUser(userId);
+    }
+
+    // Step 2: Best-effort Strava deauthorization before deleting the DB
+    // record (which cascades and removes the stored token).
     try {
       const stravaConn = await storage.users.getStravaConnection(userId);
       if (stravaConn) {
@@ -46,21 +57,15 @@ router.delete(
       logger.warn({ err, userId }, "Strava deauthorization failed during account deletion");
     }
 
-    // Delete the user row — all child rows cascade.
+    // Step 3: Delete the user row — all child rows cascade.
     const deleted = await storage.users.deleteUser(userId);
     if (!deleted) {
       return res.status(404).json({ error: "User not found", code: "NOT_FOUND" });
     }
 
-    // Best-effort Clerk user deletion. If Clerk keys are not configured
-    // (dev bypass mode), skip this step.
-    if (env.CLERK_SECRET_KEY) {
-      try {
-        await clerkClient.users.deleteUser(userId);
-      } catch (err) {
-        logger.warn({ err, userId }, "Clerk user deletion failed during account deletion");
-      }
-    }
+    // Step 4: Evict from the auth seen-cache so stale sessions can't
+    // trigger ensureUserExists within the 5-minute TTL window.
+    evictUserFromSeenCache(userId);
 
     res.json({ success: true });
   }),
