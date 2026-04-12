@@ -122,6 +122,7 @@ export const workoutLogs = pgTable("workout_logs", {
   uniqueIndex("idx_workout_logs_user_garmin_unique")
     .on(table.userId, table.garminActivityId)
     .where(sql`${table.garminActivityId} IS NOT NULL`),
+  check("rpe_range_check", sql`${table.rpe} IS NULL OR (${table.rpe} >= 1 AND ${table.rpe} <= 10)`),
 ]);
 
 // Strava OAuth connection storage

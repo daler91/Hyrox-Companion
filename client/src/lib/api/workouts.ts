@@ -40,6 +40,9 @@ export const workouts = {
 
   delete: (id: string) => typedRequest<{ success: boolean }>("DELETE", `/api/v1/workouts/${id}`),
 
+  combine: (data: { newWorkout: Record<string, unknown>; deleteWorkoutIds: string[]; skipPlanDayIds?: string[] }) =>
+    typedRequest<WorkoutLog>("POST", "/api/v1/workouts/combine", data),
+
   getUnstructured: () => typedRequest<WorkoutLog[]>("GET", "/api/v1/workouts/unstructured"),
 
   reparse: (id: string) => typedRequest<WorkoutLog>("POST", `/api/v1/workouts/${id}/reparse`),

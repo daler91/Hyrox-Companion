@@ -14,20 +14,18 @@ export function useCombineWorkouts() {
 
   const combineWorkoutsMutation = useMutation({
     mutationFn: async ({ newWorkout, entriesToDelete }: { newWorkout: { date: string; focus: string; mainWorkout: string; duration?: number; calories?: number; notes?: string }; entriesToDelete: TimelineEntry[] }) => {
-      const created = await api.workouts.create(newWorkout);
+      const deleteWorkoutIds = entriesToDelete
+        .map((e) => e.workoutLogId)
+        .filter((id): id is string => !!id);
+      const skipPlanDayIds = entriesToDelete
+        .map((e) => e.planDayId)
+        .filter((id): id is string => !!id);
 
-      const deletePromises = [];
-      for (const entry of entriesToDelete) {
-        if (entry.workoutLogId) {
-          deletePromises.push(api.workouts.delete(entry.workoutLogId));
-        }
-        if (entry.planDayId) {
-          deletePromises.push(api.plans.updateDayStatus(entry.planDayId, "skipped"));
-        }
-      }
-      await Promise.all(deletePromises);
-
-      return created;
+      return api.workouts.combine({
+        newWorkout,
+        deleteWorkoutIds,
+        skipPlanDayIds: skipPlanDayIds.length > 0 ? skipPlanDayIds : undefined,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }).catch(() => {});

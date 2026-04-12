@@ -20,6 +20,7 @@ export const pool = new Pool({
   idleTimeoutMillis: DB_IDLE_TIMEOUT_MS,
   connectionTimeoutMillis: DB_CONNECTION_TIMEOUT_MS,
   statement_timeout: DB_STATEMENT_TIMEOUT_MS,
+  ssl: env.NODE_ENV === "production" ? { rejectUnauthorized: true } : false,
 });
 
 pool.on("error", (err) => {

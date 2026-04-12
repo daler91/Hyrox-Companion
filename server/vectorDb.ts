@@ -19,6 +19,7 @@ export const vectorPool = new Pool({
   idleTimeoutMillis: DB_IDLE_TIMEOUT_MS,
   connectionTimeoutMillis: VECTOR_DB_CONNECTION_TIMEOUT_MS,
   statement_timeout: DB_STATEMENT_TIMEOUT_MS,
+  ssl: env.NODE_ENV === "production" ? { rejectUnauthorized: true } : false,
 });
 
 vectorPool.on("error", (err) => {
