@@ -1,6 +1,6 @@
 import { Activity, BarChart3, Brain, Calendar, CheckCircle2, Sparkles, TrendingUp } from "lucide-react";
-import { StravaIcon } from "@/components/icons/StravaIcon";
 
+import { StravaIcon } from "@/components/icons/StravaIcon";
 import { Card, CardContent } from "@/components/ui/card";
 
 export function SocialProof() {

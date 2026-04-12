@@ -11,7 +11,6 @@ import { useCallback,useMemo, useRef, useState } from "react";
 
 import { AIConsentDialog } from "@/components/coach/AIConsentDialog";
 import { CoachPanel } from "@/components/CoachPanel";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { FeatureErrorBoundaryWrapper } from "@/components/FeatureErrorBoundaryWrapper";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 import {
@@ -32,6 +31,7 @@ import {
 } from "@/components/timeline";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useTimelineState } from "@/hooks/useTimelineState";

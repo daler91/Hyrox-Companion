@@ -1,8 +1,8 @@
 import { SignInButton } from "@clerk/react";
 import { ArrowRight, CheckCircle2, Menu, Sparkles } from "lucide-react";
 import { useState } from "react";
-import { StravaIcon } from "@/components/icons/StravaIcon";
 
+import { StravaIcon } from "@/components/icons/StravaIcon";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 

@@ -1,7 +1,7 @@
 import { formatDistanceToNow } from "date-fns";
 import { Link2, Loader2, RefreshCw, Unlink } from "lucide-react";
-import { StravaIcon } from "@/components/icons/StravaIcon";
 
+import { StravaIcon } from "@/components/icons/StravaIcon";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {

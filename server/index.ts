@@ -8,11 +8,11 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import express, { NextFunction,type Request, Response } from "express";
 import helmet from "helmet";
+import type { PoolClient } from "pg";
 import pinoHttp from "pino-http";
+
 import { generateOpenApiDocument } from "../shared/openapi";
 import { startCron, stopCron } from "./cron";
-import type { PoolClient } from "pg";
-
 import { pool } from "./db";
 import { env } from "./env";
 import { AppError } from "./errors";
@@ -91,41 +91,65 @@ let startupError: string | null = null;
 let startupPhase = "initializing";
 const startupBeganAt = Date.now();
 
-app.get("/api/v1/health", async (_req, res) => {
-  const uptimeMs = Date.now() - startupBeganAt;
-  if (startupError) {
-    return res.status(503).json({ status: "error", error: "startup_error", phase: startupPhase, uptimeMs, message: startupError, timestamp: Date.now() });
-  }
-  if (!isReady) {
-    return res.status(503).json({ status: "starting", phase: startupPhase, uptimeMs, timestamp: Date.now() });
-  }
-  // Lightweight DB probe — detects post-startup connectivity loss.
-  // Acquire a dedicated client so a hung query can be abandoned by
-  // destroying the connection (release(true)) rather than leaving the
-  // query in-flight tying up a pool slot.
-  let dbOk = true;
+const HEALTH_PROBE_TIMEOUT_MS = 3000;
+
+/**
+ * Probe DB connectivity within a single 3s budget covering BOTH pool
+ * acquisition and the SELECT 1 query. Under pool saturation, waiting only
+ * on the query would let /api/v1/health block on pool.connect() until the
+ * pool's own connectionTimeoutMillis — defeats the fast-fail intent.
+ */
+async function probeDatabase(): Promise<boolean> {
   let client: PoolClient | undefined;
   let timedOut = false;
   try {
-    client = await pool.connect();
     await Promise.race([
-      client.query("SELECT 1"),
+      (async () => {
+        client = await pool.connect();
+        await client.query("SELECT 1");
+      })(),
       new Promise((_, reject) => setTimeout(() => {
         timedOut = true;
         reject(new Error("timeout"));
-      }, 3000)),
+      }, HEALTH_PROBE_TIMEOUT_MS)),
     ]);
+    return true;
   } catch {
-    dbOk = false;
+    return false;
   } finally {
-    // If we timed out, destroy the connection so the hung query is
-    // discarded rather than returned to the pool with work pending.
+    // Destroy the connection on timeout so a hung query is not returned
+    // to the pool with work still pending.
     client?.release(timedOut ? new Error("health check timeout") : undefined);
   }
-  if (!dbOk) {
-    return res.status(503).json({ status: "degraded", db: false, uptimeMs, timestamp: Date.now() });
+}
+
+// Health endpoint — intentionally unthrottled because platform probes
+// (Railway, load balancers) poll frequently and must never be rejected.
+// The handler is O(1) and short-circuits before any DB call while not
+// ready; the probe itself has a 3s total budget (see probeDatabase).
+// lgtm[js/missing-rate-limiting]
+app.get("/api/v1/health", (_req, res) => {
+  const uptimeMs = Date.now() - startupBeganAt;
+  if (startupError) {
+    res.status(503).json({ status: "error", error: "startup_error", phase: startupPhase, uptimeMs, message: startupError, timestamp: Date.now() });
+    return;
   }
-  res.json({ status: "ok", uptimeMs, timestamp: Date.now() });
+  if (!isReady) {
+    res.status(503).json({ status: "starting", phase: startupPhase, uptimeMs, timestamp: Date.now() });
+    return;
+  }
+  probeDatabase()
+    .then((dbOk) => {
+      if (!dbOk) {
+        res.status(503).json({ status: "degraded", db: false, uptimeMs, timestamp: Date.now() });
+        return;
+      }
+      res.json({ status: "ok", uptimeMs, timestamp: Date.now() });
+    })
+    .catch((err) => {
+      logger.error({ err }, "Health check probe failed unexpectedly");
+      res.status(503).json({ status: "error", uptimeMs, timestamp: Date.now() });
+    });
 });
 
 // CORS — restrict cross-origin API access to known origins

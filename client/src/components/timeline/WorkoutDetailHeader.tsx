@@ -1,6 +1,6 @@
 import { CheckCircle2, Clock, SkipForward,XCircle } from "lucide-react";
-import { StravaIcon } from "@/components/icons/StravaIcon";
 
+import { StravaIcon } from "@/components/icons/StravaIcon";
 import { Badge } from "@/components/ui/badge";
 import { DialogDescription,DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
