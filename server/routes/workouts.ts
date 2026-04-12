@@ -1,5 +1,5 @@
-import { exercisesPayloadSchema,insertCustomExerciseSchema, insertWorkoutLogSchema, planDays, updateWorkoutLogSchema, workoutLogs } from "@shared/schema";
-import { and,eq } from "drizzle-orm";
+import { exercisesPayloadSchema,insertCustomExerciseSchema, insertWorkoutLogSchema, planDays, trainingPlans, updateWorkoutLogSchema, workoutLogs } from "@shared/schema";
+import { and,eq, inArray, sql } from "drizzle-orm";
 import { type Request, type Response,Router } from "express";
 import { z } from "zod";
 
@@ -174,11 +174,20 @@ router.post("/api/v1/workouts/combine", ...protectedMutationGuards, rateLimiter(
         await tx.delete(workoutLogs).where(and(eq(workoutLogs.id, id), eq(workoutLogs.userId, userId)));
       }
 
-      // Mark associated plan days as skipped
+      // Mark associated plan days as skipped — scoped to plans owned by
+      // the requesting user to prevent IDOR writes on other tenants' data.
       if (skipPlanDayIds?.length) {
-        for (const dayId of skipPlanDayIds) {
-          await tx.update(planDays).set({ status: "skipped" }).where(eq(planDays.id, dayId));
-        }
+        const userPlanIds = tx
+          .select({ id: trainingPlans.id })
+          .from(trainingPlans)
+          .where(eq(trainingPlans.userId, userId));
+
+        await tx.update(planDays)
+          .set({ status: "skipped" })
+          .where(and(
+            inArray(planDays.id, skipPlanDayIds),
+            inArray(planDays.planId, userPlanIds),
+          ));
       }
 
       return created;
