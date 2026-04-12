@@ -16,7 +16,13 @@ if (!env.DATABASE_URL) {
 
 // Railway's internal Postgres (*.railway.internal) does not support SSL — traffic
 // stays within Railway's private IPv6 network. Force SSL only for external hosts.
-const isInternalHost = /\.railway\.internal(:|$|\/)/.test(env.DATABASE_URL);
+const isInternalHost = (() => {
+  try {
+    return new URL(env.DATABASE_URL).hostname.endsWith(".railway.internal");
+  } catch {
+    return false;
+  }
+})();
 
 export const pool = new Pool({
   connectionString: env.DATABASE_URL,
