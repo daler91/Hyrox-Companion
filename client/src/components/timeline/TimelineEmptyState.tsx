@@ -166,11 +166,13 @@ function WelcomeEmptyState({
 interface ReadyEmptyStateProps {
   readonly selectedPlanId: string;
   readonly setSchedulingPlanId: (id: string) => void;
+  readonly onLogNote?: () => void;
 }
 
 function ReadyEmptyState({
   selectedPlanId,
   setSchedulingPlanId,
+  onLogNote,
 }: Readonly<ReadyEmptyStateProps>) {
   return (
     <div className="text-center space-y-4">
@@ -184,13 +186,25 @@ function ReadyEmptyState({
           calendar.
         </p>
       </div>
-      <Button
-        onClick={() => setSchedulingPlanId(selectedPlanId)}
-        data-testid="button-set-start-date"
-      >
-        <Calendar className="h-4 w-4 mr-2" />
-        Set Start Date
-      </Button>
+      <div className="flex flex-col sm:flex-row gap-2 justify-center">
+        <Button
+          onClick={() => setSchedulingPlanId(selectedPlanId)}
+          data-testid="button-set-start-date"
+        >
+          <Calendar className="h-4 w-4 mr-2" />
+          Set Start Date
+        </Button>
+        {onLogNote ? (
+          <Button
+            variant="ghost"
+            onClick={onLogNote}
+            data-testid="button-log-note-empty"
+          >
+            <StickyNote className="h-4 w-4 mr-2" />
+            Log a note
+          </Button>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -198,11 +212,13 @@ function ReadyEmptyState({
 interface NoWorkoutsEmptyStateProps {
   readonly filterStatus: FilterStatus;
   readonly setFilterStatus: (status: FilterStatus) => void;
+  readonly onLogNote?: () => void;
 }
 
 function NoWorkoutsEmptyState({
   filterStatus,
   setFilterStatus,
+  onLogNote,
 }: Readonly<NoWorkoutsEmptyStateProps>) {
   return (
     <div className="text-center space-y-4">
@@ -216,13 +232,25 @@ function NoWorkoutsEmptyState({
           them here.
         </p>
       </div>
-      <Button
-        variant="outline"
-        onClick={() => setFilterStatus("all")}
-        data-testid="button-clear-filter"
-      >
-        Show All
-      </Button>
+      <div className="flex flex-col sm:flex-row gap-2 justify-center">
+        <Button
+          variant="outline"
+          onClick={() => setFilterStatus("all")}
+          data-testid="button-clear-filter"
+        >
+          Show All
+        </Button>
+        {onLogNote ? (
+          <Button
+            variant="ghost"
+            onClick={onLogNote}
+            data-testid="button-log-note-empty"
+          >
+            <StickyNote className="h-4 w-4 mr-2" />
+            Log a note
+          </Button>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -254,6 +282,7 @@ export default function TimelineEmptyState({
       <ReadyEmptyState
         selectedPlanId={selectedPlanId}
         setSchedulingPlanId={setSchedulingPlanId}
+        onLogNote={onLogNote}
       />
     );
   } else {
@@ -261,6 +290,7 @@ export default function TimelineEmptyState({
       <NoWorkoutsEmptyState
         filterStatus={filterStatus}
         setFilterStatus={setFilterStatus}
+        onLogNote={onLogNote}
       />
     );
   }

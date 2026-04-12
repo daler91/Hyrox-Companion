@@ -44,8 +44,7 @@ export function TimelineAnnotationCard({
       : `${annotation.startDate} → ${annotation.endDate} · ${dayLabel}`;
 
   return (
-    <div
-      role="article"
+    <article
       aria-label={`${label} annotation, ${rangeLabel}`}
       className={`flex items-start gap-3 rounded-md border border-l-4 bg-muted/20 p-3 ${TYPE_BORDER_COLORS[type]}`}
       data-testid={`annotation-card-${annotation.id}`}
@@ -85,6 +84,6 @@ export function TimelineAnnotationCard({
           <Trash2 className="h-4 w-4" aria-hidden="true" />
         </Button>
       </div>
-    </div>
+    </article>
   );
 }

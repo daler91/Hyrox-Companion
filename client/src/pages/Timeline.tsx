@@ -43,7 +43,6 @@ type PlanImportState = TimelineState["planImport"];
 
 interface TimelineContentProps {
   timelineLoading: TimelineData["timelineLoading"];
-  filteredTimeline: TimelineFiltersState["filteredTimeline"];
   filterStatus: TimelineFiltersState["filterStatus"];
   selectedPlanId: TimelineState["selectedPlanId"];
   plans: TimelineData["plans"];
@@ -78,7 +77,6 @@ interface TimelineContentProps {
 
 function TimelineContent({
   timelineLoading,
-  filteredTimeline,
   filterStatus,
   selectedPlanId,
   plans,
@@ -114,7 +112,14 @@ function TimelineContent({
     return <TimelineSkeleton />;
   }
 
-  if (filteredTimeline.length === 0) {
+  // Short-circuit to the empty state only when there is literally nothing
+  // to render. `allVisibleGroups` already includes annotation-only rows
+  // (see `useTimelineFilters`), so a user with notes but no matching
+  // workouts — or with a status filter that removes all workouts — still
+  // sees their annotation cards instead of being shunted to the empty
+  // state. `filteredTimeline.length === 0` is not sufficient on its own
+  // because it only reflects workout entries.
+  if (allVisibleGroups.length === 0) {
     return (
       <TimelineEmptyState
         filterStatus={filterStatus}
@@ -230,7 +235,7 @@ export default function Timeline() {
   const { data, filters, onboarding, planImport, workoutActions, combine, selectedPlanId, setSelectedPlanId } = useTimelineState();
 
   const { plans, plansLoading, personalRecords, timelineData, timelineLoading, annotations, isNewUser, todayRef, scrollToToday } = data;
-  const { filterStatus, setFilterStatus, showAllPast, setShowAllPast, showAllFuture, setShowAllFuture, filteredTimeline, pastGroups, futureGroups, visiblePastGroups, visibleFutureGroups, hiddenPastCount, hiddenFutureCount } = filters;
+  const { filterStatus, setFilterStatus, showAllPast, setShowAllPast, showAllFuture, setShowAllFuture, pastGroups, futureGroups, visiblePastGroups, visibleFutureGroups, hiddenPastCount, hiddenFutureCount } = filters;
   const { showOnboarding, coachOpen, setCoachOpen, handleOnboardingComplete } = onboarding;
   const { csvPreview, setCsvPreview, schedulingPlanId, setSchedulingPlanId, startDate, setStartDate, fileInputRef, handleFileUpload, confirmImport, importMutation, samplePlanMutation, renamePlanMutation, schedulePlanMutation, updatePlanGoalMutation } = planImport;
   const { detailEntry, setDetailEntry, skipConfirmEntry, setSkipConfirmEntry, openDetailDialog, handleSaveFromDetail, handleMarkComplete, handleChangeStatus, handleDelete, confirmSkip, updateDayMutation, logWorkoutMutation, updateWorkoutMutation, deleteWorkoutMutation, deletePlanDayMutation } = workoutActions;
@@ -369,7 +374,6 @@ export default function Timeline() {
 
       <TimelineContent
         timelineLoading={timelineLoading}
-        filteredTimeline={filteredTimeline}
         filterStatus={filterStatus}
         selectedPlanId={selectedPlanId}
         plans={plans}
