@@ -5,6 +5,7 @@ import {
   FileText,
   Loader2,
   Sparkles,
+  StickyNote,
   Target,
   Wand2,
   Zap,
@@ -29,18 +30,21 @@ interface TimelineEmptyStateProps {
   handleFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   setSchedulingPlanId: (id: string) => void;
   setFilterStatus: (status: FilterStatus) => void;
+  onLogNote?: () => void;
 }
 
 interface WelcomeEmptyStateProps {
   readonly samplePlanMutation: { mutate: () => void; isPending: boolean };
   readonly importMutation: { isPending: boolean };
   readonly handleFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  readonly onLogNote?: () => void;
 }
 
 function WelcomeEmptyState({
   samplePlanMutation,
   importMutation,
   handleFileUpload,
+  onLogNote,
 }: Readonly<WelcomeEmptyStateProps>) {
   const [showGenerateDialog, setShowGenerateDialog] = useState(false);
 
@@ -125,7 +129,7 @@ function WelcomeEmptyState({
         </div>
       </div>
 
-      <div className="flex justify-center pt-2">
+      <div className="flex flex-col sm:flex-row gap-2 justify-center pt-2">
         <Link href="/log">
           <Button
             variant="ghost"
@@ -135,6 +139,16 @@ function WelcomeEmptyState({
             Or just log a workout
           </Button>
         </Link>
+        {onLogNote ? (
+          <Button
+            variant="ghost"
+            onClick={onLogNote}
+            data-testid="button-log-note-empty"
+          >
+            <StickyNote className="h-4 w-4 mr-2" />
+            Log a note
+          </Button>
+        ) : null}
       </div>
 
       <p className="text-xs text-muted-foreground pt-2">
@@ -152,11 +166,13 @@ function WelcomeEmptyState({
 interface ReadyEmptyStateProps {
   readonly selectedPlanId: string;
   readonly setSchedulingPlanId: (id: string) => void;
+  readonly onLogNote?: () => void;
 }
 
 function ReadyEmptyState({
   selectedPlanId,
   setSchedulingPlanId,
+  onLogNote,
 }: Readonly<ReadyEmptyStateProps>) {
   return (
     <div className="text-center space-y-4">
@@ -170,13 +186,25 @@ function ReadyEmptyState({
           calendar.
         </p>
       </div>
-      <Button
-        onClick={() => setSchedulingPlanId(selectedPlanId)}
-        data-testid="button-set-start-date"
-      >
-        <Calendar className="h-4 w-4 mr-2" />
-        Set Start Date
-      </Button>
+      <div className="flex flex-col sm:flex-row gap-2 justify-center">
+        <Button
+          onClick={() => setSchedulingPlanId(selectedPlanId)}
+          data-testid="button-set-start-date"
+        >
+          <Calendar className="h-4 w-4 mr-2" />
+          Set Start Date
+        </Button>
+        {onLogNote ? (
+          <Button
+            variant="ghost"
+            onClick={onLogNote}
+            data-testid="button-log-note-empty"
+          >
+            <StickyNote className="h-4 w-4 mr-2" />
+            Log a note
+          </Button>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -184,11 +212,13 @@ function ReadyEmptyState({
 interface NoWorkoutsEmptyStateProps {
   readonly filterStatus: FilterStatus;
   readonly setFilterStatus: (status: FilterStatus) => void;
+  readonly onLogNote?: () => void;
 }
 
 function NoWorkoutsEmptyState({
   filterStatus,
   setFilterStatus,
+  onLogNote,
 }: Readonly<NoWorkoutsEmptyStateProps>) {
   return (
     <div className="text-center space-y-4">
@@ -202,13 +232,25 @@ function NoWorkoutsEmptyState({
           them here.
         </p>
       </div>
-      <Button
-        variant="outline"
-        onClick={() => setFilterStatus("all")}
-        data-testid="button-clear-filter"
-      >
-        Show All
-      </Button>
+      <div className="flex flex-col sm:flex-row gap-2 justify-center">
+        <Button
+          variant="outline"
+          onClick={() => setFilterStatus("all")}
+          data-testid="button-clear-filter"
+        >
+          Show All
+        </Button>
+        {onLogNote ? (
+          <Button
+            variant="ghost"
+            onClick={onLogNote}
+            data-testid="button-log-note-empty"
+          >
+            <StickyNote className="h-4 w-4 mr-2" />
+            Log a note
+          </Button>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -222,6 +264,7 @@ export default function TimelineEmptyState({
   handleFileUpload,
   setSchedulingPlanId,
   setFilterStatus,
+  onLogNote,
 }: Readonly<TimelineEmptyStateProps>) {
   let emptyStateContent = null;
 
@@ -231,6 +274,7 @@ export default function TimelineEmptyState({
         samplePlanMutation={samplePlanMutation}
         importMutation={importMutation}
         handleFileUpload={handleFileUpload}
+        onLogNote={onLogNote}
       />
     );
   } else if (filterStatus === "all" && selectedPlanId) {
@@ -238,6 +282,7 @@ export default function TimelineEmptyState({
       <ReadyEmptyState
         selectedPlanId={selectedPlanId}
         setSchedulingPlanId={setSchedulingPlanId}
+        onLogNote={onLogNote}
       />
     );
   } else {
@@ -245,6 +290,7 @@ export default function TimelineEmptyState({
       <NoWorkoutsEmptyState
         filterStatus={filterStatus}
         setFilterStatus={setFilterStatus}
+        onLogNote={onLogNote}
       />
     );
   }

@@ -1,4 +1,4 @@
-import type { TimelineEntry } from "@shared/schema";
+import type { TimelineAnnotation, TimelineEntry } from "@shared/schema";
 import { act,renderHook } from "@testing-library/react";
 import { addDays, format, subDays } from "date-fns";
 import { afterEach,beforeEach, describe, expect, it, vi } from "vitest";
@@ -18,6 +18,20 @@ function createMockEntry(overrides: Partial<TimelineEntry>): TimelineEntry {
     notes: null,
     ...overrides,
   };
+}
+
+function createMockAnnotation(overrides: Partial<TimelineAnnotation>): TimelineAnnotation {
+  return {
+    id: "annotation-id",
+    userId: "user-1",
+    startDate: "2023-10-15",
+    endDate: "2023-10-15",
+    type: "injury",
+    note: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ...overrides,
+  } as TimelineAnnotation;
 }
 
 describe("useTimelineFilters", () => {
@@ -141,5 +155,56 @@ describe("useTimelineFilters", () => {
     });
     expect(result.current.visibleFutureGroups).toHaveLength(10);
     expect(result.current.hiddenFutureCount).toBe(0);
+  });
+
+  it("creates an empty group for annotation-only start dates so they appear in the virtualized timeline", () => {
+    // Regression guard: if useTimelineFilters ever stops adding empty groups
+    // for annotation start dates, annotations whose date has no workouts
+    // would be silently dropped from the timeline.
+    const entryDate = "2023-10-15";
+    const annotationOnlyDate = "2023-10-12"; // no workout on this day
+
+    const mockData = [createMockEntry({ id: "w1", date: entryDate })];
+    const annotations = [
+      createMockAnnotation({
+        id: "a1",
+        startDate: annotationOnlyDate,
+        endDate: annotationOnlyDate,
+        type: "injury",
+      }),
+    ];
+
+    const { result } = renderHook(() => useTimelineFilters(mockData, annotations));
+
+    // The annotation-only date should be present in pastGroups with an empty
+    // entries array; the workout on today's date stays in futureGroups.
+    const pastDates = result.current.pastGroups.map(([date]) => date);
+    expect(pastDates).toContain(annotationOnlyDate);
+    const pastAnnotationGroup = result.current.pastGroups.find(
+      ([date]) => date === annotationOnlyDate,
+    );
+    expect(pastAnnotationGroup?.[1]).toEqual([]);
+
+    const futureDates = result.current.futureGroups.map(([date]) => date);
+    expect(futureDates).toContain(entryDate);
+  });
+
+  it("does not duplicate a date when an annotation shares a day with an existing workout", () => {
+    const sharedDate = "2023-10-14";
+    const mockData = [createMockEntry({ id: "w1", date: sharedDate, focus: "Leg day" })];
+    const annotations = [
+      createMockAnnotation({ id: "a1", startDate: sharedDate, endDate: sharedDate }),
+    ];
+
+    const { result } = renderHook(() => useTimelineFilters(mockData, annotations));
+
+    const datesAppearingInPast = result.current.pastGroups
+      .map(([date]) => date)
+      .filter((date) => date === sharedDate);
+    expect(datesAppearingInPast).toHaveLength(1);
+
+    const sharedGroup = result.current.pastGroups.find(([date]) => date === sharedDate);
+    expect(sharedGroup?.[1]).toHaveLength(1);
+    expect(sharedGroup?.[1][0].id).toBe("w1");
   });
 });

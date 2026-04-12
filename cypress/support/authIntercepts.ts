@@ -1,5 +1,6 @@
 export function setupAuthIntercepts(overrides?: {
   timeline?: any[];
+  timelineAnnotations?: any[];
   plans?: any[];
   workouts?: any[];
   personalRecords?: any[];
@@ -51,6 +52,11 @@ export function setupAuthIntercepts(overrides?: {
     statusCode: 200,
     body: overrides?.timeline ?? [],
   }).as("timeline");
+
+  cy.intercept("GET", "/api/v1/timeline-annotations*", {
+    statusCode: 200,
+    body: overrides?.timelineAnnotations ?? [],
+  }).as("timelineAnnotations");
 
   cy.intercept("GET", "/api/v1/plans", {
     statusCode: 200,

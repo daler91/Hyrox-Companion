@@ -1,3 +1,5 @@
+import type { TimelineAnnotation } from "@shared/schema";
+import { useMutation } from "@tanstack/react-query";
 import type { Virtualizer } from "@tanstack/react-virtual";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { format,isToday, parseISO } from "date-fns";
@@ -18,7 +20,6 @@ import {
   ImportPreviewDialog,
   SchedulePlanDialog,
   SkipConfirmDialog,
-  TimelineAnnotationsBanner,
   TimelineDateGroup,
   TimelineEmptyState,
   TimelineFilters,
@@ -29,8 +30,11 @@ import {
 } from "@/components/timeline";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useTimelineState } from "@/hooks/useTimelineState";
+import { api, QUERY_KEYS } from "@/lib/api";
+import { queryClient } from "@/lib/queryClient";
 
 type TimelineState = ReturnType<typeof useTimelineState>;
 type TimelineData = TimelineState["data"];
@@ -39,7 +43,6 @@ type PlanImportState = TimelineState["planImport"];
 
 interface TimelineContentProps {
   timelineLoading: TimelineData["timelineLoading"];
-  filteredTimeline: TimelineFiltersState["filteredTimeline"];
   filterStatus: TimelineFiltersState["filterStatus"];
   selectedPlanId: TimelineState["selectedPlanId"];
   plans: TimelineData["plans"];
@@ -65,11 +68,15 @@ interface TimelineContentProps {
   combiningEntry: ReturnType<typeof useTimelineState>["combine"]["combiningEntry"];
   personalRecords: TimelineData["personalRecords"];
   isAutoCoaching: boolean;
+  annotationsByDate: Record<string, TimelineAnnotation[]>;
+  onAddAnnotation: (date: string) => void;
+  onEditAnnotation: (annotation: TimelineAnnotation) => void;
+  onDeleteAnnotation: (id: string) => void;
+  isAnnotationDeleting: boolean;
 }
 
 function TimelineContent({
   timelineLoading,
-  filteredTimeline,
   filterStatus,
   selectedPlanId,
   plans,
@@ -95,12 +102,24 @@ function TimelineContent({
   combiningEntry,
   personalRecords,
   isAutoCoaching,
+  annotationsByDate,
+  onAddAnnotation,
+  onEditAnnotation,
+  onDeleteAnnotation,
+  isAnnotationDeleting,
 }: Readonly<TimelineContentProps>) {
   if (timelineLoading) {
     return <TimelineSkeleton />;
   }
 
-  if (filteredTimeline.length === 0) {
+  // Short-circuit to the empty state only when there is literally nothing
+  // to render. `allVisibleGroups` already includes annotation-only rows
+  // (see `useTimelineFilters`), so a user with notes but no matching
+  // workouts — or with a status filter that removes all workouts — still
+  // sees their annotation cards instead of being shunted to the empty
+  // state. `filteredTimeline.length === 0` is not sufficient on its own
+  // because it only reflects workout entries.
+  if (allVisibleGroups.length === 0) {
     return (
       <TimelineEmptyState
         filterStatus={filterStatus}
@@ -111,6 +130,7 @@ function TimelineContent({
         handleFileUpload={handleFileUpload}
         setSchedulingPlanId={setSchedulingPlanId}
         setFilterStatus={setFilterStatus}
+        onLogNote={() => onAddAnnotation(format(new Date(), "yyyy-MM-dd"))}
       />
     );
   }
@@ -163,6 +183,7 @@ function TimelineContent({
                   ref={isToday(parseISO(date)) ? todayRef : undefined}
                   date={date}
                   entries={entries}
+                  annotations={annotationsByDate[date]}
                   onMarkComplete={handleMarkComplete}
                   onClick={openDetailDialog}
                   onCombineSelect={handleCombine}
@@ -171,6 +192,10 @@ function TimelineContent({
                   combiningEntryDate={combiningEntry?.date || null}
                   personalRecords={personalRecords}
                   isAutoCoaching={isAutoCoaching}
+                  onAddAnnotation={onAddAnnotation}
+                  onEditAnnotation={onEditAnnotation}
+                  onDeleteAnnotation={onDeleteAnnotation}
+                  isAnnotationDeleting={isAnnotationDeleting}
                 />
               </div>
             );
@@ -209,15 +234,64 @@ function TimelineContent({
 export default function Timeline() {
   const { data, filters, onboarding, planImport, workoutActions, combine, selectedPlanId, setSelectedPlanId } = useTimelineState();
 
-  const { plans, plansLoading, personalRecords, timelineData, timelineLoading, isNewUser, todayRef, scrollToToday } = data;
-  const { filterStatus, setFilterStatus, showAllPast, setShowAllPast, showAllFuture, setShowAllFuture, filteredTimeline, pastGroups, futureGroups, visiblePastGroups, visibleFutureGroups, hiddenPastCount, hiddenFutureCount } = filters;
+  const { plans, plansLoading, personalRecords, timelineData, timelineLoading, annotations, isNewUser, todayRef, scrollToToday } = data;
+  const { filterStatus, setFilterStatus, showAllPast, setShowAllPast, showAllFuture, setShowAllFuture, pastGroups, futureGroups, visiblePastGroups, visibleFutureGroups, hiddenPastCount, hiddenFutureCount } = filters;
   const { showOnboarding, coachOpen, setCoachOpen, handleOnboardingComplete } = onboarding;
   const { csvPreview, setCsvPreview, schedulingPlanId, setSchedulingPlanId, startDate, setStartDate, fileInputRef, handleFileUpload, confirmImport, importMutation, samplePlanMutation, renamePlanMutation, schedulePlanMutation, updatePlanGoalMutation } = planImport;
   const { detailEntry, setDetailEntry, skipConfirmEntry, setSkipConfirmEntry, openDetailDialog, handleSaveFromDetail, handleMarkComplete, handleChangeStatus, handleDelete, confirmSkip, updateDayMutation, logWorkoutMutation, updateWorkoutMutation, deleteWorkoutMutation, deletePlanDayMutation } = workoutActions;
   const { combiningEntry, setCombiningEntry, combineSecondEntry, setCombineSecondEntry, showCombineDialog, setShowCombineDialog, handleCombine, handleConfirmCombine, combineWorkoutsMutation } = combine;
   const { user } = useAuth();
+  const { toast } = useToast();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [annotationsDialogOpen, setAnnotationsDialogOpen] = useState(false);
+  // Seeds the create form in AnnotationsDialog when the user clicks a row's
+  // inline "+ Note" chip, so they don't have to re-pick the date.
+  const [annotationInitialDate, setAnnotationInitialDate] = useState<string | undefined>(undefined);
+
+  // O(1) lookup by start date for the virtualized row renderer. Rebuilds
+  // only when the annotations array itself changes.
+  const annotationsByDate = useMemo(() => {
+    return annotations.reduce<Record<string, TimelineAnnotation[]>>((acc, annotation) => {
+      if (!acc[annotation.startDate]) {
+        acc[annotation.startDate] = [];
+      }
+      acc[annotation.startDate].push(annotation);
+      return acc;
+    }, {});
+  }, [annotations]);
+
+  // Inline-delete mutation for annotation cards. Mirrors the invalidation
+  // set in AnnotationsDialog so the Analytics chart bands stay in sync.
+  const deleteAnnotationMutation = useMutation({
+    mutationFn: (id: string) => api.timelineAnnotations.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timelineAnnotations }).catch(() => {});
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.trainingOverview }).catch(() => {});
+      toast({ title: "Annotation removed" });
+    },
+    onError: () =>
+      toast({
+        title: "Couldn't delete annotation",
+        description: "Please try again.",
+        variant: "destructive",
+      }),
+  });
+
+  const handleAddAnnotation = useCallback((date: string) => {
+    setAnnotationInitialDate(date);
+    setAnnotationsDialogOpen(true);
+  }, []);
+
+  // Edit just opens the dialog (scoped to the existing list). The dialog
+  // does not yet support per-entry edit mode — users delete and re-create.
+  const handleEditAnnotation = useCallback((_annotation: TimelineAnnotation) => {
+    setAnnotationInitialDate(undefined);
+    setAnnotationsDialogOpen(true);
+  }, []);
+
+  const handleDeleteAnnotation = useCallback((id: string) => {
+    deleteAnnotationMutation.mutate(id);
+  }, [deleteAnnotationMutation]);
 
   const allVisibleGroups = useMemo(() => {
     return [...visiblePastGroups.slice().reverse(), ...visibleFutureGroups];
@@ -275,8 +349,6 @@ export default function Timeline() {
 
           <CoachReviewingIndicator isActive={!!user?.isAutoCoaching} />
 
-          <TimelineAnnotationsBanner onOpenDialog={() => setAnnotationsDialogOpen(true)} />
-
           <TimelineFilters
         plans={plans}
         plansLoading={plansLoading}
@@ -302,7 +374,6 @@ export default function Timeline() {
 
       <TimelineContent
         timelineLoading={timelineLoading}
-        filteredTimeline={filteredTimeline}
         filterStatus={filterStatus}
         selectedPlanId={selectedPlanId}
         plans={plans}
@@ -328,6 +399,11 @@ export default function Timeline() {
         combiningEntry={combiningEntry}
         personalRecords={personalRecords}
         isAutoCoaching={!!user?.isAutoCoaching}
+        annotationsByDate={annotationsByDate}
+        onAddAnnotation={handleAddAnnotation}
+        onEditAnnotation={handleEditAnnotation}
+        onDeleteAnnotation={handleDeleteAnnotation}
+        isAnnotationDeleting={deleteAnnotationMutation.isPending}
       />
 
           <FloatingActionButton coachPanelOpen={coachOpen} onCoachToggle={() => setCoachOpen(!coachOpen)} />
@@ -395,7 +471,13 @@ export default function Timeline() {
 
           <AnnotationsDialog
             open={annotationsDialogOpen}
-            onOpenChange={setAnnotationsDialogOpen}
+            onOpenChange={(open) => {
+              setAnnotationsDialogOpen(open);
+              if (!open) {
+                setAnnotationInitialDate(undefined);
+              }
+            }}
+            initialDate={annotationInitialDate}
           />
         </div>
       </div>
