@@ -469,7 +469,10 @@ async function fetchAndImportGarminActivities(
   );
 
   if (!Array.isArray(rawActivities)) {
-    throw new Error("Garmin returned an unexpected response");
+    // TypeError (not Error) because the failure mode is "wrong shape", not
+    // a Garmin-side failure. translateGarminError still produces a sane
+    // user-facing message because the catch in handleGarminSync runs it.
+    throw new TypeError("Garmin returned an unexpected response");
   }
 
   const user = await storage.users.getUser(userId);
