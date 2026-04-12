@@ -83,6 +83,7 @@ export function DeltaIndicator({
   // the metric went down. XOR captures this succinctly.
   const isImprovement = isIncrease !== lowerIsBetter;
   const Arrow = isIncrease ? ArrowUp : ArrowDown;
+  const direction = isImprovement ? "up" : "down";
 
   return (
     <span
@@ -90,7 +91,7 @@ export function DeltaIndicator({
         "inline-flex items-center gap-0.5 text-[10px] font-medium",
         isImprovement ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400",
       )}
-      data-testid={testIdSuffix ? `delta-${isImprovement ? "up" : "down"}-${testIdSuffix}` : undefined}
+      data-testid={testIdSuffix ? `delta-${direction}-${testIdSuffix}` : undefined}
       title={`Previous period: ${previous}${unit} → Current: ${current}${unit}`}
       aria-label={`${isImprovement ? "Improved" : "Regressed"} by ${absPercent}% vs previous period`}
     >

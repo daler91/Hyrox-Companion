@@ -288,7 +288,7 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
     let maxSuffix = 0;
     for (const block of blocks) {
       const parts = block.split("__");
-      const n = Number.parseInt(parts[parts.length - 1] ?? "", 10);
+      const n = Number.parseInt(parts.at(-1) ?? "", 10);
       if (Number.isFinite(n) && n > maxSuffix) maxSuffix = n;
     }
     if (maxSuffix > blockCounterRef.current) {

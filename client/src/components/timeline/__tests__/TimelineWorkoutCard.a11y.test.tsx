@@ -72,16 +72,16 @@ describe("TimelineWorkoutCard a11y", () => {
   it("fires onClick when the Enter key is pressed on a focused card", () => {
     const { onClick } = renderCard();
     const card = screen.getAllByRole("button").find((el) => el.getAttribute("tabindex") === "0");
-    expect(card).toBeDefined();
-    fireEvent.keyDown(card!, { key: "Enter" });
+    if (!card) throw new Error("Expected a focusable card with tabindex=0");
+    fireEvent.keyDown(card, { key: "Enter" });
     expect(onClick).toHaveBeenCalledWith(mockEntry);
   });
 
   it("fires onClick when the Space key is pressed on a focused card", () => {
     const { onClick } = renderCard();
     const card = screen.getAllByRole("button").find((el) => el.getAttribute("tabindex") === "0");
-    expect(card).toBeDefined();
-    fireEvent.keyDown(card!, { key: " " });
+    if (!card) throw new Error("Expected a focusable card with tabindex=0");
+    fireEvent.keyDown(card, { key: " " });
     expect(onClick).toHaveBeenCalledWith(mockEntry);
   });
 });
