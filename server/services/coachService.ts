@@ -80,84 +80,89 @@ async function getCoachingMaterialsString(
 export async function triggerAutoCoach(userId: string): Promise<{ adjusted: number }> {
   try {
     const user = await storage.users.getUser(userId);
-    if (!user?.aiCoachEnabled) {
-      // Reset in case caller pre-set the flag
-      await storage.users.updateIsAutoCoaching(userId, false);
-      return { adjusted: 0 };
-    }
+    if (!user?.aiCoachEnabled) return { adjusted: 0 };
 
     // Skip if user is over AI budget — background jobs should not exceed the cap
     const budget = await checkAiBudget(userId);
     if (!budget.allowed) {
       logger.info({ userId }, "[coach] Skipping auto-coach — user AI budget exceeded");
-      await storage.users.updateIsAutoCoaching(userId, false);
       return { adjusted: 0 };
     }
 
     await storage.users.updateIsAutoCoaching(userId, true);
 
-    try {
-      // ⚡ Parallelize all three independent data fetches into a single await
-      // instead of running getTimeline sequentially after the first two.
-      // Saves ~50-100ms of DB round-trip latency per auto-coach trigger.
-      const [trainingContext, activePlanRecord, timeline] = await Promise.all([
-        buildTrainingContext(userId),
-        storage.plans.getActivePlan(userId),
-        storage.timeline.getTimeline(userId),
-      ]);
+    // ⚡ Parallelize all three independent data fetches into a single await
+    // instead of running getTimeline sequentially after the first two.
+    // Saves ~50-100ms of DB round-trip latency per auto-coach trigger.
+    const [trainingContext, activePlanRecord, timeline] = await Promise.all([
+      buildTrainingContext(userId),
+      storage.plans.getActivePlan(userId),
+      storage.timeline.getTimeline(userId),
+    ]);
 
-      const activePlanGoal = activePlanRecord?.goal ?? undefined;
-      const today = toDateStr();
+    const activePlanGoal = activePlanRecord?.goal ?? undefined;
+    const today = toDateStr();
 
-      const upcomingWorkouts: UpcomingWorkout[] = timeline
-        .filter(
-          (entry) =>
-            entry.status === "planned" &&
-            entry.date >= today &&
-            entry.planDayId !== null,
-        )
-        // Fast string comparison for YYYY-MM-DD dates instead of localeCompare
-        .sort((a, b) => {
-          if (b.date < a.date) return 1;
-          if (b.date > a.date) return -1;
-          return 0;
-        })
-        .slice(0, 7)
-        .map((entry) => ({
-          id: entry.planDayId || "",
-          date: entry.date,
-          focus: entry.focus || "",
-          mainWorkout: entry.mainWorkout || "",
-          accessory: entry.accessory || undefined,
-          notes: entry.notes || undefined,
-        }));
+    const upcomingWorkouts: UpcomingWorkout[] = timeline
+      .filter(
+        (entry) =>
+          entry.status === "planned" &&
+          entry.date >= today &&
+          entry.planDayId !== null,
+      )
+      // Fast string comparison for YYYY-MM-DD dates instead of localeCompare
+      .sort((a, b) => {
+        if (b.date < a.date) return 1;
+        if (b.date > a.date) return -1;
+        return 0;
+      })
+      .slice(0, 7)
+      .map((entry) => ({
+        id: entry.planDayId || "",
+        date: entry.date,
+        focus: entry.focus || "",
+        mainWorkout: entry.mainWorkout || "",
+        accessory: entry.accessory || undefined,
+        notes: entry.notes || undefined,
+      }));
 
-      if (upcomingWorkouts.length === 0) return { adjusted: 0 };
+    if (upcomingWorkouts.length === 0) return { adjusted: 0 };
 
-      const coachingContext = await getCoachingMaterialsString(userId, upcomingWorkouts);
+    const coachingContext = await getCoachingMaterialsString(userId, upcomingWorkouts);
 
-      const suggestions = await generateWorkoutSuggestions(
-        trainingContext,
-        upcomingWorkouts,
-        activePlanGoal,
-        coachingContext.text,
-        userId,
-      );
+    const suggestions = await generateWorkoutSuggestions(
+      trainingContext,
+      upcomingWorkouts,
+      activePlanGoal,
+      coachingContext.text,
+      userId,
+    );
 
-      const results = await Promise.all(
-        suggestions.map((s) => applySuggestion(s, upcomingWorkouts, userId, coachingContext.source)),
-      );
-      const adjusted = results.filter(Boolean).length;
+    const results = await Promise.all(
+      suggestions.map((s) => applySuggestion(s, upcomingWorkouts, userId, coachingContext.source)),
+    );
+    const adjusted = results.filter(Boolean).length;
 
-      if (adjusted > 0) {
-        logger.info({ userId, adjusted }, "[coach] Auto-coach applied adjustments");
-      }
-      return { adjusted };
-    } finally {
-      await storage.users.updateIsAutoCoaching(userId, false);
+    if (adjusted > 0) {
+      logger.info({ userId, adjusted }, "[coach] Auto-coach applied adjustments");
     }
+    return { adjusted };
   } catch (error) {
     logger.error({ err: error, userId }, "[coach] Auto-coach error:");
     throw error; // Let the queue handle retries
+  } finally {
+    // Always reset the flag, regardless of success / error / early return.
+    // The caller (workoutService.createWorkoutAndScheduleCoaching) pre-sets
+    // isAutoCoaching=true inside the workout-creation transaction, so even
+    // early-return paths and pre-flag errors must clear it here. Wrap in a
+    // nested try so a failure to reset doesn't mask the original error.
+    try {
+      await storage.users.updateIsAutoCoaching(userId, false);
+    } catch (resetErr) {
+      logger.error(
+        { err: resetErr, userId },
+        "[coach] Failed to reset isAutoCoaching flag",
+      );
+    }
   }
 }

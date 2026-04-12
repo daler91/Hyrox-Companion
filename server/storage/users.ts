@@ -61,6 +61,21 @@ export class UserStorage {
       .where(eq(users.id, userId));
   }
 
+  /**
+   * Clears any users stuck with isAutoCoaching=true. Invoked on server startup
+   * as a safety net for flags orphaned by a crashed worker, an unhandled error
+   * in triggerAutoCoach, or a pg-boss singleton-coalesced enqueue that dropped
+   * the job. Returns the number of rows reset.
+   */
+  async resetStaleAutoCoaching(): Promise<number> {
+    const rows = await db
+      .update(users)
+      .set({ isAutoCoaching: false, updatedAt: new Date() })
+      .where(eq(users.isAutoCoaching, true))
+      .returning({ id: users.id });
+    return rows.length;
+  }
+
   async getChatMessages(userId: string): Promise<ChatMessage[]> {
     return await db
       .select()

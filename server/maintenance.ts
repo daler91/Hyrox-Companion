@@ -137,4 +137,10 @@ export async function runStartupMaintenance(storage: IStorage): Promise<void> {
   } catch (error) {
     logger.warn({ context: "db", err: error }, "Mark missed days skipped");
   }
+  try {
+    const reset = await storage.users.resetStaleAutoCoaching();
+    if (reset > 0) logger.info({ context: "db", reset }, "Reset stale isAutoCoaching flags on startup");
+  } catch (error) {
+    logger.warn({ context: "db", err: error }, "Reset stale isAutoCoaching skipped");
+  }
 }
