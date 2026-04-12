@@ -11,6 +11,8 @@ import helmet from "helmet";
 import pinoHttp from "pino-http";
 import { generateOpenApiDocument } from "../shared/openapi";
 import { startCron, stopCron } from "./cron";
+import type { PoolClient } from "pg";
+
 import { pool } from "./db";
 import { env } from "./env";
 import { AppError } from "./errors";
@@ -39,7 +41,7 @@ if (env.SENTRY_DSN) {
     dsn: env.SENTRY_DSN,
     environment: env.NODE_ENV || "development",
     sendDefaultPii: false,
-    tracesSampleRate: env.NODE_ENV === "production" ? 0.1 : 1.0,
+    tracesSampleRate: env.NODE_ENV === "production" ? 0.1 : 1,
   });
 }
 
@@ -98,14 +100,27 @@ app.get("/api/v1/health", async (_req, res) => {
     return res.status(503).json({ status: "starting", phase: startupPhase, uptimeMs, timestamp: Date.now() });
   }
   // Lightweight DB probe — detects post-startup connectivity loss.
+  // Acquire a dedicated client so a hung query can be abandoned by
+  // destroying the connection (release(true)) rather than leaving the
+  // query in-flight tying up a pool slot.
   let dbOk = true;
+  let client: PoolClient | undefined;
+  let timedOut = false;
   try {
+    client = await pool.connect();
     await Promise.race([
-      pool.query("SELECT 1"),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 3000)),
+      client.query("SELECT 1"),
+      new Promise((_, reject) => setTimeout(() => {
+        timedOut = true;
+        reject(new Error("timeout"));
+      }, 3000)),
     ]);
   } catch {
     dbOk = false;
+  } finally {
+    // If we timed out, destroy the connection so the hung query is
+    // discarded rather than returned to the pool with work pending.
+    client?.release(timedOut ? new Error("health check timeout") : undefined);
   }
   if (!dbOk) {
     return res.status(503).json({ status: "degraded", db: false, uptimeMs, timestamp: Date.now() });

@@ -3,7 +3,7 @@ import type { User } from "@shared/schema";
 import { type MissedWorkoutData,sendMissedWorkoutReminder, sendWeeklySummary, type WeeklySummaryData } from "./email";
 import { logger } from "./logger";
 import { sendPushToUser } from "./pushNotifications";
-import { sendJob } from "./queue";
+import { sendJobNoRetry } from "./queue";
 import { calculateStreak } from "./routeUtils";
 import type { IStorage } from "./storage";
 import { toDateStr } from "./types";
@@ -153,11 +153,11 @@ export async function runEmailCronJob(storage: IStorage): Promise<{ usersChecked
     // processing for an email that would immediately short-circuit.
     for (const user of usersToCheck) {
       if (isMonday && wantsEmail(user, "weeklySummary")) {
-        ops.push(sendJob("send-weekly-summary", { userId: user.id }));
+        ops.push(sendJobNoRetry("send-weekly-summary", { userId: user.id }));
         meta.push({ userId: user.id, jobName: "send-weekly-summary" });
       }
       if (wantsEmail(user, "missedReminder")) {
-        ops.push(sendJob("send-missed-reminder", { userId: user.id }));
+        ops.push(sendJobNoRetry("send-missed-reminder", { userId: user.id }));
         meta.push({ userId: user.id, jobName: "send-missed-reminder" });
       }
     }
