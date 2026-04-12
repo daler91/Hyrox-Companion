@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import {
   clearLogWorkoutDraft,
+  hasAnnouncedDraftRestore,
   loadLogWorkoutDraft,
+  markAnnouncedDraftRestore,
   saveLogWorkoutDraft,
 } from "../useLogWorkoutDraft";
 
@@ -11,6 +13,7 @@ describe("useLogWorkoutDraft", () => {
 
   beforeEach(() => {
     globalThis.window.localStorage.clear();
+    globalThis.window.sessionStorage.clear();
   });
 
   it("returns null when no draft is stored", () => {
@@ -104,5 +107,25 @@ describe("useLogWorkoutDraft", () => {
     });
     clearLogWorkoutDraft(userKey);
     expect(loadLogWorkoutDraft(userKey)).toBeNull();
+  });
+
+  describe("draft-restore announce flag", () => {
+    it("reports not-yet-announced by default", () => {
+      expect(hasAnnouncedDraftRestore(userKey)).toBe(false);
+    });
+
+    it("reports announced after marking, isolated per userKey", () => {
+      markAnnouncedDraftRestore(userKey);
+      expect(hasAnnouncedDraftRestore(userKey)).toBe(true);
+      expect(hasAnnouncedDraftRestore("other-user")).toBe(false);
+    });
+
+    it("resets the announced flag when the draft is cleared so the next draft re-announces", () => {
+      markAnnouncedDraftRestore(userKey);
+      expect(hasAnnouncedDraftRestore(userKey)).toBe(true);
+
+      clearLogWorkoutDraft(userKey);
+      expect(hasAnnouncedDraftRestore(userKey)).toBe(false);
+    });
   });
 });
