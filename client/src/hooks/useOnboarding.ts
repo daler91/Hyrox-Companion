@@ -25,6 +25,7 @@ function clearOnboardingForceParam(): void {
 export function useOnboarding(
   isNewUser: boolean,
   fileInputRef: React.RefObject<HTMLInputElement>,
+  aiCoachEnabled = true,
 ) {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingTriggered, setOnboardingTriggered] = useState(false);
@@ -53,7 +54,7 @@ export function useOnboarding(
       setHasAutoOpenedCoach(true);
       const timerId = setTimeout(() => {
         const isCurrentlyMobile = globalThis.innerWidth < MOBILE_BREAKPOINT_PX;
-        if (!isCurrentlyMobile) {
+        if (!isCurrentlyMobile && aiCoachEnabled) {
           setCoachOpen(true);
         }
       }, COACH_AUTO_OPEN_DELAY_MS);

@@ -40,9 +40,10 @@ export function LandingFooter() {
             </div>
             <span className="font-semibold text-sm">fitai.coach</span>
           </div>
-          <p className="text-sm text-muted-foreground">
-            Train smarter with AI
-          </p>
+          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+            <span>Train smarter with AI</span>
+            <a href="/privacy" className="underline hover:text-foreground">Privacy Policy</a>
+          </div>
         </div>
       </div>
     </footer>

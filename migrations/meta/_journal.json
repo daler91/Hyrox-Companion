@@ -169,6 +169,13 @@
       "when": 1775956908939,
       "tag": "0023_cultured_ben_parker",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1776005481731,
+      "tag": "0024_hot_sue_storm",
+      "breakpoints": true
     }
   ]
 }

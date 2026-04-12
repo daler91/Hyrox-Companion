@@ -27,6 +27,12 @@ export class UserStorage {
     return user;
   }
 
+  /** Delete a user and all associated data (FK cascades handle child rows). */
+  async deleteUser(id: string): Promise<boolean> {
+    const result = await db.delete(users).where(eq(users.id, id));
+    return result.rowCount !== null && result.rowCount > 0;
+  }
+
   async upsertUser(userData: UpsertUser): Promise<User> {
     const [user] = await db
       .insert(users)
