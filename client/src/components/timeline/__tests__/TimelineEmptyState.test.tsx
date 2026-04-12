@@ -13,10 +13,24 @@ import type { FilterStatus } from "../types";
 // this PR, that entry point was the banner; now it's the "Log a note"
 // button rendered inside every empty-state variant.
 
+function makePlan(overrides: Partial<TrainingPlan> = {}): TrainingPlan {
+  return {
+    id: "plan-1",
+    userId: "u-1",
+    name: "Test Plan",
+    sourceFileName: null,
+    totalWeeks: 8,
+    goal: null,
+    startDate: null,
+    endDate: null,
+    ...overrides,
+  };
+}
+
 interface RenderProps {
   readonly filterStatus?: FilterStatus;
   readonly selectedPlanId?: string | null;
-  readonly plans?: Partial<TrainingPlan>[];
+  readonly plans?: TrainingPlan[];
   readonly onLogNote?: () => void;
 }
 
@@ -36,7 +50,7 @@ function renderEmptyState({
       <TimelineEmptyState
         filterStatus={filterStatus}
         selectedPlanId={selectedPlanId}
-        plans={plans as TrainingPlan[]}
+        plans={plans}
         samplePlanMutation={{ mutate: vi.fn(), isPending: false }}
         importMutation={{ isPending: false }}
         handleFileUpload={vi.fn()}
@@ -74,7 +88,7 @@ describe("TimelineEmptyState", () => {
       renderEmptyState({
         filterStatus: "all",
         selectedPlanId: "plan-1",
-        plans: [{ id: "plan-1", name: "8 Week Plan", userId: "u-1" }],
+        plans: [makePlan({ id: "plan-1", name: "8 Week Plan" })],
         onLogNote,
       });
 
