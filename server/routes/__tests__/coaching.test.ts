@@ -2,7 +2,7 @@ import express from "express";
 import request from "supertest";
 import { beforeEach,describe, expect, it, vi } from "vitest";
 
-import { queue } from "../../queue";
+import { sendJob } from "../../queue";
 import { storage } from "../../storage";
 import coachingRouter from "../coaching";
 import { createTestApp } from "./testUtils";
@@ -34,6 +34,8 @@ vi.mock("../../queue", () => ({
   queue: {
     send: vi.fn().mockResolvedValue(undefined),
   },
+  sendJob: vi.fn().mockResolvedValue(undefined),
+  sendJobNoRetry: vi.fn().mockResolvedValue(undefined),
 }));
 
 type MaterialRecord = Awaited<ReturnType<typeof storage.coaching.createCoachingMaterial>>;
@@ -76,7 +78,7 @@ describe("Coaching materials routes", () => {
 
       expect(response.status).toBe(201);
       expect(storage.coaching.createCoachingMaterial).toHaveBeenCalled();
-      expect(queue.send).toHaveBeenCalledWith("embed-coaching-material", { materialId: createdMaterial.id, userId: "test_user_id" });
+      expect(sendJob).toHaveBeenCalledWith("embed-coaching-material", { materialId: createdMaterial.id, userId: "test_user_id" });
     });
 
     it("should return 400 for invalid data", async () => {
@@ -85,7 +87,7 @@ describe("Coaching materials routes", () => {
         .send({ title: "" });
 
       expect(response.status).toBe(400);
-      expect(queue.send).not.toHaveBeenCalled();
+      expect(sendJob).not.toHaveBeenCalled();
     });
   });
 
@@ -99,7 +101,7 @@ describe("Coaching materials routes", () => {
         .send({ content: "New content" });
 
       expect(response.status).toBe(200);
-      expect(queue.send).toHaveBeenCalledWith("embed-coaching-material", { materialId: updatedMaterial.id, userId: "test_user_id" });
+      expect(sendJob).toHaveBeenCalledWith("embed-coaching-material", { materialId: updatedMaterial.id, userId: "test_user_id" });
     });
 
     it("should re-embed when title is updated", async () => {
@@ -111,7 +113,7 @@ describe("Coaching materials routes", () => {
         .send({ title: "New Title" });
 
       expect(response.status).toBe(200);
-      expect(queue.send).toHaveBeenCalledWith("embed-coaching-material", { materialId: updatedMaterial.id, userId: "test_user_id" });
+      expect(sendJob).toHaveBeenCalledWith("embed-coaching-material", { materialId: updatedMaterial.id, userId: "test_user_id" });
     });
 
     it("should NOT re-embed when only type is updated", async () => {
@@ -123,7 +125,7 @@ describe("Coaching materials routes", () => {
         .send({ type: "principles" });
 
       expect(response.status).toBe(200);
-      expect(queue.send).not.toHaveBeenCalled();
+      expect(sendJob).not.toHaveBeenCalled();
     });
 
     it("should return 404 when material not found", async () => {
@@ -134,7 +136,7 @@ describe("Coaching materials routes", () => {
         .send({ title: "Updated" });
 
       expect(response.status).toBe(404);
-      expect(queue.send).not.toHaveBeenCalled();
+      expect(sendJob).not.toHaveBeenCalled();
     });
   });
 

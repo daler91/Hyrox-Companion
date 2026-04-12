@@ -14,6 +14,39 @@ if (!env.DATABASE_URL) {
 
 export const queue = new PgBoss(env.DATABASE_URL);
 
+/**
+ * Default job options for idempotent handlers: retry up to 3 times with
+ * exponential backoff, expire after 60 min. Handlers must tolerate being
+ * invoked multiple times for the same job (e.g. pure DB reads/writes by
+ * materialId, or operations protected by DB-level uniqueness).
+ */
+export const DEFAULT_JOB_OPTIONS = {
+  retryLimit: 3,
+  retryBackoff: true,
+  expireInMinutes: 60,
+} as const;
+
+/**
+ * Options for non-idempotent jobs: no retries. Use this for handlers
+ * with side effects that cannot be safely replayed (e.g. sending email,
+ * where the "sent" marker is persisted after the send and a retry after
+ * a post-send DB failure would deliver a duplicate).
+ */
+export const NO_RETRY_JOB_OPTIONS = {
+  retryLimit: 0,
+  expireInMinutes: 60,
+} as const;
+
+/** Send a job with default retry/expiry options (idempotent handlers). */
+export function sendJob(name: string, data: Record<string, unknown>) {
+  return queue.send(name, data, DEFAULT_JOB_OPTIONS);
+}
+
+/** Send a non-idempotent job (no retries). Use for email-send-like jobs. */
+export function sendJobNoRetry(name: string, data: Record<string, unknown>) {
+  return queue.send(name, data, NO_RETRY_JOB_OPTIONS);
+}
+
 queue.on("error", (error: Error) => {
   logger.error(error, "[pg-boss] error");
 });

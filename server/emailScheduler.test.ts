@@ -8,6 +8,8 @@ vi.mock('./queue', () => ({
   queue: {
     send: vi.fn().mockResolvedValue(undefined),
   },
+  sendJob: vi.fn().mockResolvedValue(undefined),
+  sendJobNoRetry: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('./logger', () => ({
@@ -44,18 +46,18 @@ describe('runEmailCronJob', () => {
   });
 
   it('should enqueue email jobs for users with notifications', async () => {
-    const { queue } = await import('./queue');
+    const { sendJobNoRetry } = await import('./queue');
     const result = await runEmailCronJob(mockStorage);
 
     expect(result.usersChecked).toBe(1);
     // On Monday: 1 weekly summary + 1 missed reminder = 2 jobs
     expect(result.emailsSent).toBe(2);
-    expect(queue.send).toHaveBeenCalledWith('send-weekly-summary', { userId: 1 });
-    expect(queue.send).toHaveBeenCalledWith('send-missed-reminder', { userId: 1 });
+    expect(sendJobNoRetry).toHaveBeenCalledWith('send-weekly-summary', { userId: 1 });
+    expect(sendJobNoRetry).toHaveBeenCalledWith('send-missed-reminder', { userId: 1 });
   });
 
   it('should enqueue jobs for multiple users independently', async () => {
-    const { queue } = await import('./queue');
+    const { sendJobNoRetry } = await import('./queue');
 
     mockStorage.users.getUsersWithEmailNotifications = vi.fn().mockResolvedValue([
       {
@@ -79,11 +81,11 @@ describe('runEmailCronJob', () => {
     expect(result.usersChecked).toBe(2);
     // On Monday: 2 weekly summary + 2 missed reminder = 4 jobs
     expect(result.emailsSent).toBe(4);
-    expect(queue.send).toHaveBeenCalledTimes(4);
+    expect(sendJobNoRetry).toHaveBeenCalledTimes(4);
   });
 
   it('should only enqueue missed-reminder jobs on non-Monday', async () => {
-    const { queue } = await import('./queue');
+    const { sendJobNoRetry } = await import('./queue');
     // Set to a Tuesday
     vi.setSystemTime(new Date('2023-10-17T12:00:00Z'));
 
@@ -92,8 +94,8 @@ describe('runEmailCronJob', () => {
     expect(result.usersChecked).toBe(1);
     // Not Monday: only 1 missed reminder
     expect(result.emailsSent).toBe(1);
-    expect(queue.send).toHaveBeenCalledWith('send-missed-reminder', { userId: 1 });
-    expect(queue.send).not.toHaveBeenCalledWith('send-weekly-summary', expect.anything());
+    expect(sendJobNoRetry).toHaveBeenCalledWith('send-missed-reminder', { userId: 1 });
+    expect(sendJobNoRetry).not.toHaveBeenCalledWith('send-weekly-summary', expect.anything());
   });
 
   it('should return early when no users have notifications', async () => {
@@ -107,7 +109,7 @@ describe('runEmailCronJob', () => {
   });
 
   it('skips the weekly summary when the user has opted out via emailWeeklySummary=false', async () => {
-    const { queue } = await import('./queue');
+    const { sendJobNoRetry } = await import('./queue');
     mockStorage.users.getUsersWithEmailNotifications = vi.fn().mockResolvedValue([
       {
         id: 'user-weekly-off',
@@ -125,12 +127,12 @@ describe('runEmailCronJob', () => {
     // Monday, but the weekly summary is opted out → only 1 job enqueued.
     expect(result.usersChecked).toBe(1);
     expect(result.emailsSent).toBe(1);
-    expect(queue.send).toHaveBeenCalledWith('send-missed-reminder', { userId: 'user-weekly-off' });
-    expect(queue.send).not.toHaveBeenCalledWith('send-weekly-summary', expect.anything());
+    expect(sendJobNoRetry).toHaveBeenCalledWith('send-missed-reminder', { userId: 'user-weekly-off' });
+    expect(sendJobNoRetry).not.toHaveBeenCalledWith('send-weekly-summary', expect.anything());
   });
 
   it('skips the missed reminder when the user has opted out via emailMissedReminder=false', async () => {
-    const { queue } = await import('./queue');
+    const { sendJobNoRetry } = await import('./queue');
     mockStorage.users.getUsersWithEmailNotifications = vi.fn().mockResolvedValue([
       {
         id: 'user-missed-off',
@@ -147,8 +149,8 @@ describe('runEmailCronJob', () => {
 
     expect(result.usersChecked).toBe(1);
     expect(result.emailsSent).toBe(1);
-    expect(queue.send).toHaveBeenCalledWith('send-weekly-summary', { userId: 'user-missed-off' });
-    expect(queue.send).not.toHaveBeenCalledWith('send-missed-reminder', expect.anything());
+    expect(sendJobNoRetry).toHaveBeenCalledWith('send-weekly-summary', { userId: 'user-missed-off' });
+    expect(sendJobNoRetry).not.toHaveBeenCalledWith('send-missed-reminder', expect.anything());
   });
 
   it('enqueues nothing for a user with both per-type flags off even if master is on', async () => {

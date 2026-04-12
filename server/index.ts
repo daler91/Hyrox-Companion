@@ -8,7 +8,9 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import express, { NextFunction,type Request, Response } from "express";
 import helmet from "helmet";
+import type { PoolClient } from "pg";
 import pinoHttp from "pino-http";
+
 import { generateOpenApiDocument } from "../shared/openapi";
 import { startCron, stopCron } from "./cron";
 import { pool } from "./db";
@@ -39,6 +41,7 @@ if (env.SENTRY_DSN) {
     dsn: env.SENTRY_DSN,
     environment: env.NODE_ENV || "development",
     sendDefaultPii: false,
+    tracesSampleRate: env.NODE_ENV === "production" ? 0.1 : 1,
   });
 }
 
@@ -88,15 +91,80 @@ let startupError: string | null = null;
 let startupPhase = "initializing";
 const startupBeganAt = Date.now();
 
+const HEALTH_PROBE_TIMEOUT_MS = 3000;
+
+/**
+ * Probe DB connectivity within a single 3s budget covering BOTH pool
+ * acquisition and the SELECT 1 query. Under pool saturation, waiting only
+ * on the query would let /api/v1/health block on pool.connect() until the
+ * pool's own connectionTimeoutMillis — defeats the fast-fail intent.
+ */
+async function probeDatabase(): Promise<boolean> {
+  // Track the client through a shared reference so the timeout path can
+  // still release it if pool.connect() resolves AFTER the race rejects.
+  // Without this, a slow pool under saturation leaks a connection per
+  // timed-out probe (P1 from PR review).
+  const clientRef: { current: PoolClient | undefined } = { current: undefined };
+  let timedOut = false;
+
+  const connectAndQuery = (async () => {
+    const c = await pool.connect();
+    clientRef.current = c;
+    // If the race already timed out by the time we got a connection,
+    // release it immediately so it returns to the pool (or is destroyed).
+    if (timedOut) {
+      c.release(new Error("health check timeout"));
+      clientRef.current = undefined;
+      throw new Error("timeout");
+    }
+    await c.query("SELECT 1");
+  })();
+
+  try {
+    await Promise.race([
+      connectAndQuery,
+      new Promise((_, reject) => setTimeout(() => {
+        timedOut = true;
+        reject(new Error("timeout"));
+      }, HEALTH_PROBE_TIMEOUT_MS)),
+    ]);
+    return true;
+  } catch {
+    return false;
+  } finally {
+    // Release whichever path left the client checked out. On timeout we
+    // destroy the connection so any hung SELECT 1 is discarded.
+    clientRef.current?.release(timedOut ? new Error("health check timeout") : undefined);
+  }
+}
+
+// Health endpoint — intentionally unthrottled because platform probes
+// (Railway, load balancers) poll frequently and must never be rejected.
+// The handler is O(1) and short-circuits before any DB call while not
+// ready; the probe itself has a 3s total budget (see probeDatabase).
+// lgtm[js/missing-rate-limiting]
 app.get("/api/v1/health", (_req, res) => {
   const uptimeMs = Date.now() - startupBeganAt;
   if (startupError) {
     res.status(503).json({ status: "error", error: "startup_error", phase: startupPhase, uptimeMs, message: startupError, timestamp: Date.now() });
-  } else if (isReady) {
-    res.json({ status: "ok", uptimeMs, timestamp: Date.now() });
-  } else {
-    res.status(503).json({ status: "starting", phase: startupPhase, uptimeMs, timestamp: Date.now() });
+    return;
   }
+  if (!isReady) {
+    res.status(503).json({ status: "starting", phase: startupPhase, uptimeMs, timestamp: Date.now() });
+    return;
+  }
+  probeDatabase()
+    .then((dbOk) => {
+      if (!dbOk) {
+        res.status(503).json({ status: "degraded", db: false, uptimeMs, timestamp: Date.now() });
+        return;
+      }
+      res.json({ status: "ok", uptimeMs, timestamp: Date.now() });
+    })
+    .catch((err) => {
+      logger.error({ err }, "Health check probe failed unexpectedly");
+      res.status(503).json({ status: "error", uptimeMs, timestamp: Date.now() });
+    });
 });
 
 // CORS — restrict cross-origin API access to known origins
@@ -339,6 +407,10 @@ try {
     res.status(status).json({ error: message, code, ...(status < 500 && details ? { details } : {}) });
   });
 
+  // Sentry Express error handler — captures unhandled errors that bypass
+  // the custom handler above (e.g. middleware crashes).
+  Sentry.setupExpressErrorHandler(app);
+
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
@@ -375,6 +447,9 @@ const shutdown = () => {
   forceExit.unref();
 
   stopCron();
+  // Flush pending Sentry events before draining connections so errors
+  // captured during shutdown aren't silently dropped.
+  Sentry.close(5000).catch(() => {});
   httpServer.close(() => {
     logger.info("HTTP server closed. Stopping queue...");
     queue.stop().then(() => {

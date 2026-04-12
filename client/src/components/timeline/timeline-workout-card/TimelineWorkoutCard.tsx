@@ -1,8 +1,8 @@
 import { format } from "date-fns";
 import { BookOpen, CheckCircle2, Circle, Database, FileText,Loader2 } from "lucide-react";
 import React, { useMemo } from "react";
-import { StravaIcon } from "@/components/icons/StravaIcon";
 
+import { StravaIcon } from "@/components/icons/StravaIcon";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";

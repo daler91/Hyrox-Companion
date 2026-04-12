@@ -1,8 +1,8 @@
 import { formatDistanceToNow } from "date-fns";
 import { AlertTriangle,Loader2, RefreshCw, Unlink } from "lucide-react";
 import { useState } from "react";
-import { GarminIcon } from "@/components/icons/GarminIcon";
 
+import { GarminIcon } from "@/components/icons/GarminIcon";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
