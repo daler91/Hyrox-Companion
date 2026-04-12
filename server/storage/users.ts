@@ -226,6 +226,7 @@ export class UserStorage {
           encryptedOauth1Token: encryptedData.encryptedOauth1Token,
           encryptedOauth2Token: encryptedData.encryptedOauth2Token,
           tokenExpiresAt: encryptedData.tokenExpiresAt,
+          lastSyncedAt: encryptedData.lastSyncedAt,
           lastError: encryptedData.lastError,
         },
       })
