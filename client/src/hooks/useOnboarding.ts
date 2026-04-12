@@ -60,7 +60,7 @@ export function useOnboarding(
       }, COACH_AUTO_OPEN_DELAY_MS);
       return () => clearTimeout(timerId);
     }
-  }, [showOnboarding, onboardingTriggered, hasAutoOpenedCoach]);
+  }, [showOnboarding, onboardingTriggered, hasAutoOpenedCoach, aiCoachEnabled]);
 
   const handleOnboardingComplete = useCallback((choice: "sample" | "import" | "skip") => {
     setShowOnboarding(false);
