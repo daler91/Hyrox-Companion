@@ -108,9 +108,11 @@ describe("useCombineWorkouts", () => {
       });
 
       if (isSuccess) {
-        expect(queryClientLib.apiRequest).toHaveBeenCalledWith("POST", "/api/v1/workouts", combinedWorkout, expect.any(AbortSignal));
-        expect(queryClientLib.apiRequest).toHaveBeenCalledWith("DELETE", "/api/v1/workouts/log-1", undefined, expect.any(AbortSignal));
-        expect(queryClientLib.apiRequest).toHaveBeenCalledWith("PATCH", "/api/v1/plans/days/plan-1/status", { status: "skipped" }, expect.any(AbortSignal));
+        expect(queryClientLib.apiRequest).toHaveBeenCalledWith("POST", "/api/v1/workouts/combine", {
+          newWorkout: combinedWorkout,
+          deleteWorkoutIds: ["log-1"],
+          skipPlanDayIds: ["plan-1"],
+        }, expect.any(AbortSignal));
         expect(queryClientLib.queryClient.invalidateQueries).toHaveBeenCalledTimes(2);
       }
     });

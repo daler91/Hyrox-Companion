@@ -17,14 +17,15 @@ describe('crypto utilities', () => {
       expect(encryptToken('')).toBe('');
     });
 
-    it('should correctly format encrypted string as iv:authTag:encryptedText', () => {
+    it('should correctly format encrypted string as v1:iv:authTag:encryptedText', () => {
       const text = 'my-secret-token';
       const encrypted = encryptToken(text);
 
       const parts = encrypted.split(':');
-      expect(parts.length).toBe(3);
+      expect(parts.length).toBe(4);
 
-      const [iv, authTag, encryptedText] = parts;
+      const [version, iv, authTag, encryptedText] = parts;
+      expect(version).toBe('v1');
       expect(iv.length).toBe(24); // 12 bytes in hex = 24 chars
       expect(authTag.length).toBe(32); // 16 bytes in hex = 32 chars
       expect(encryptedText.length).toBeGreaterThan(0);
@@ -36,9 +37,9 @@ describe('crypto utilities', () => {
       expect(decryptToken('')).toBe('');
     });
 
-    it('should return legacy plain text as is (graceful migration)', () => {
+    it('should throw on malformed data (plaintext fallback removed)', () => {
       const legacyText = 'some-legacy-token-without-colons';
-      expect(decryptToken(legacyText)).toBe(legacyText);
+      expect(() => decryptToken(legacyText)).toThrow('Malformed encrypted data');
     });
 
     it('should successfully decrypt valid encrypted text', () => {
@@ -53,9 +54,9 @@ describe('crypto utilities', () => {
       const text = 'my-secret-token';
       const encrypted = encryptToken(text);
 
-      // Corrupt the encrypted text
+      // Corrupt the encrypted text (index 3 in v1:iv:authTag:ciphertext)
       const parts = encrypted.split(':');
-      parts[2] = '0000000000000000'; // Replace actual encrypted text with invalid data
+      parts[3] = '0000000000000000';
       const corrupted = parts.join(':');
 
       expect(() => decryptToken(corrupted)).toThrow('Failed to decrypt token');
@@ -65,9 +66,9 @@ describe('crypto utilities', () => {
       const text = 'my-secret-token';
       const encrypted = encryptToken(text);
 
-      // Corrupt the auth tag
+      // Corrupt the auth tag (index 2 in v1:iv:authTag:ciphertext)
       const parts = encrypted.split(':');
-      parts[1] = '00000000000000000000000000000000'; // 16 bytes
+      parts[2] = '00000000000000000000000000000000'; // 16 bytes
       const corrupted = parts.join(':');
 
       expect(() => decryptToken(corrupted)).toThrow('Failed to decrypt token');
