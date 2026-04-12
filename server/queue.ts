@@ -14,6 +14,18 @@ if (!env.DATABASE_URL) {
 
 export const queue = new PgBoss(env.DATABASE_URL);
 
+/** Default job options: retry up to 3 times with exponential backoff, expire after 60 min. */
+export const DEFAULT_JOB_OPTIONS = {
+  retryLimit: 3,
+  retryBackoff: true,
+  expireInMinutes: 60,
+} as const;
+
+/** Send a job with default retry/expiry options. */
+export function sendJob(name: string, data: Record<string, unknown>) {
+  return queue.send(name, data, DEFAULT_JOB_OPTIONS);
+}
+
 queue.on("error", (error: Error) => {
   logger.error(error, "[pg-boss] error");
 });

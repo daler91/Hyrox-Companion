@@ -3,7 +3,7 @@ import { and,eq } from "drizzle-orm";
 
 import { db } from "../db";
 import { logger } from "../logger";
-import { queue } from "../queue";
+import { DEFAULT_JOB_OPTIONS, queue } from "../queue";
 import { storage } from "../storage";
 
 // Drizzle transaction type — any method chain valid on `db` is also valid on `tx`.
@@ -267,7 +267,7 @@ export async function createWorkoutAndScheduleCoaching(
       .send(
         "auto-coach",
         { userId },
-        { singletonKey: `auto-coach:${userId}`, singletonSeconds: 60 },
+        { ...DEFAULT_JOB_OPTIONS, singletonKey: `auto-coach:${userId}`, singletonSeconds: 60 },
       )
       .catch((err) => {
         logger.error({ err }, "Failed to queue auto-coach job after workout creation");

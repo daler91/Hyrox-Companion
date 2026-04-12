@@ -25,6 +25,7 @@ type State = "closed" | "open" | "half-open";
 let state: State = "closed";
 let consecutiveFailures = 0;
 let openedAt = 0;
+let probeInFlight = false;
 
 export class CircuitBreakerOpenError extends Error {
   constructor() {
@@ -36,8 +37,9 @@ export class CircuitBreakerOpenError extends Error {
 /** Called before a request. Throws if the breaker is currently open. */
 export function assertBreakerClosed(): void {
   if (state === "open") {
-    if (Date.now() - openedAt >= COOLDOWN_MS) {
+    if (Date.now() - openedAt >= COOLDOWN_MS && !probeInFlight) {
       state = "half-open";
+      probeInFlight = true;
       logger.info("[gemini] circuit breaker → half-open (probe)");
       return;
     }
@@ -52,6 +54,7 @@ export function recordBreakerSuccess(): void {
   }
   state = "closed";
   consecutiveFailures = 0;
+  probeInFlight = false;
 }
 
 /** Called after a failed request. */
@@ -59,6 +62,7 @@ export function recordBreakerFailure(): void {
   if (state === "half-open") {
     state = "open";
     openedAt = Date.now();
+    probeInFlight = false;
     logger.warn("[gemini] circuit breaker → open (probe failed)");
     return;
   }
@@ -78,4 +82,5 @@ export function __resetCircuitBreakerForTests(): void {
   state = "closed";
   consecutiveFailures = 0;
   openedAt = 0;
+  probeInFlight = false;
 }

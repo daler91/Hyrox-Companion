@@ -5,7 +5,7 @@ import { z } from "zod";
 import { isAuthenticated } from "../clerkAuth";
 import { logger } from "../logger";
 import { aiBudgetCheck } from "../middleware/aibudget";
-import { queue } from "../queue";
+import { sendJob } from "../queue";
 import { protectedMutationGuards } from "../routeGuards";
 import { asyncHandler, rateLimiter, validateBody } from "../routeUtils";
 import { getRagStatus, reembedAllMaterials } from "../services/ragService";
@@ -36,7 +36,7 @@ router.post("/api/v1/coaching-materials", ...protectedMutationGuards, rateLimite
     const material = await storage.coaching.createCoachingMaterial({ ...body, userId });
 
     // Fire-and-forget: chunk and embed in background (send only ID to avoid pg-boss payload limits)
-    queue.send("embed-coaching-material", { materialId: material.id, userId }).catch(err => (req.log || logger).error({ err }, "Failed to queue coaching material embedding"));
+    sendJob("embed-coaching-material", { materialId: material.id, userId }).catch(err => (req.log || logger).error({ err }, "Failed to queue coaching material embedding"));
 
     res.status(201).json(material);
   }));
@@ -51,7 +51,7 @@ router.patch("/api/v1/coaching-materials/:id", ...protectedMutationGuards, rateL
 
     // Re-embed if content or title changed
     if (body.content || body.title) {
-      queue.send("embed-coaching-material", { materialId: material.id, userId }).catch(err => (req.log || logger).error({ err }, "Failed to queue coaching material embedding"));
+      sendJob("embed-coaching-material", { materialId: material.id, userId }).catch(err => (req.log || logger).error({ err }, "Failed to queue coaching material embedding"));
     }
 
     res.json(material);

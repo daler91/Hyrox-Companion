@@ -39,6 +39,7 @@ if (env.SENTRY_DSN) {
     dsn: env.SENTRY_DSN,
     environment: env.NODE_ENV || "development",
     sendDefaultPii: false,
+    tracesSampleRate: env.NODE_ENV === "production" ? 0.1 : 1.0,
   });
 }
 
@@ -88,15 +89,28 @@ let startupError: string | null = null;
 let startupPhase = "initializing";
 const startupBeganAt = Date.now();
 
-app.get("/api/v1/health", (_req, res) => {
+app.get("/api/v1/health", async (_req, res) => {
   const uptimeMs = Date.now() - startupBeganAt;
   if (startupError) {
-    res.status(503).json({ status: "error", error: "startup_error", phase: startupPhase, uptimeMs, message: startupError, timestamp: Date.now() });
-  } else if (isReady) {
-    res.json({ status: "ok", uptimeMs, timestamp: Date.now() });
-  } else {
-    res.status(503).json({ status: "starting", phase: startupPhase, uptimeMs, timestamp: Date.now() });
+    return res.status(503).json({ status: "error", error: "startup_error", phase: startupPhase, uptimeMs, message: startupError, timestamp: Date.now() });
   }
+  if (!isReady) {
+    return res.status(503).json({ status: "starting", phase: startupPhase, uptimeMs, timestamp: Date.now() });
+  }
+  // Lightweight DB probe — detects post-startup connectivity loss.
+  let dbOk = true;
+  try {
+    await Promise.race([
+      pool.query("SELECT 1"),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 3000)),
+    ]);
+  } catch {
+    dbOk = false;
+  }
+  if (!dbOk) {
+    return res.status(503).json({ status: "degraded", db: false, uptimeMs, timestamp: Date.now() });
+  }
+  res.json({ status: "ok", uptimeMs, timestamp: Date.now() });
 });
 
 // CORS — restrict cross-origin API access to known origins
@@ -339,6 +353,10 @@ try {
     res.status(status).json({ error: message, code, ...(status < 500 && details ? { details } : {}) });
   });
 
+  // Sentry Express error handler — captures unhandled errors that bypass
+  // the custom handler above (e.g. middleware crashes).
+  Sentry.setupExpressErrorHandler(app);
+
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
@@ -375,6 +393,9 @@ const shutdown = () => {
   forceExit.unref();
 
   stopCron();
+  // Flush pending Sentry events before draining connections so errors
+  // captured during shutdown aren't silently dropped.
+  Sentry.close(5000).catch(() => {});
   httpServer.close(() => {
     logger.info("HTTP server closed. Stopping queue...");
     queue.stop().then(() => {
