@@ -1,14 +1,33 @@
-import { GarminConnect, type IOauth1Token, type IOauth2Token } from "@flow-js/garmin-connect";
+import { createRequire } from "node:module";
+
+import type {
+  GarminConnect as GarminConnectType,
+  IOauth1Token,
+  IOauth2Token,
+} from "@flow-js/garmin-connect";
 import { type DistanceUnit } from "@shared/unitConversion";
 import type { Express, Request, Response } from "express";
-import rateLimit from "express-rate-limit";
 import { z } from "zod";
+
+// @flow-js/garmin-connect ships as a CommonJS bundle that exposes its class
+// via `Object.defineProperty(exports, "GarminConnect", { get: ... })`. Node's
+// ESM-to-CJS static analyser (cjs-module-lexer) cannot detect that pattern, so
+// `import { GarminConnect } from "@flow-js/garmin-connect"` blows up at
+// runtime with "Named export 'GarminConnect' not found" once the bundled
+// dist/index.js is executed under ESM. Loading the module through
+// createRequire bypasses the lexer and gets us the real exports object.
+const requireFromHere = createRequire(import.meta.url);
+const garminConnectModule = requireFromHere("@flow-js/garmin-connect") as {
+  GarminConnect: typeof GarminConnectType;
+};
+const { GarminConnect } = garminConnectModule;
+type GarminConnect = GarminConnectType;
 
 import { isAuthenticated } from "./clerkAuth";
 import { RATE_LIMIT_WINDOW_15M_MS } from "./constants";
 import { logger } from "./logger";
 import { protectedMutationGuards } from "./routeGuards";
-import { asyncHandler } from "./routeUtils";
+import { asyncHandler, rateLimiter } from "./routeUtils";
 import { type GarminActivity,mapGarminActivityToWorkout } from "./services/garminMapper";
 import { storage } from "./storage";
 import { getUserId } from "./types";
@@ -76,6 +95,9 @@ const MIN_SYNC_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 // the boundary mid-call.
 const TOKEN_EXPIRY_BUFFER_MS = 5 * 60 * 1000; // 5 minutes
 
+// Logger context tag — keep all Garmin log lines under one searchable bucket.
+const LOG_CTX = "garmin" as const;
+
 // Reject obviously-bad inputs at the boundary so we never round-trip them
 // to Garmin's auth flow (which is the most rate-limited surface).
 const garminConnectBodySchema = z.object({
@@ -85,18 +107,12 @@ const garminConnectBodySchema = z.object({
 
 // Layer 1 — Stricter than the Strava limiter because every login is a real
 // Garmin SSO call: a few too many of these from our shared server IP can
-// earn us a 429 ban for ALL users.
-const garminConnectLimiter = rateLimit({
-  windowMs: RATE_LIMIT_WINDOW_15M_MS,
-  max: 5,
-  message: "Too many Garmin connect attempts, please try again after 15 minutes",
-});
-
-const garminSyncLimiter = rateLimit({
-  windowMs: RATE_LIMIT_WINDOW_15M_MS,
-  max: 5,
-  message: "Too many Garmin sync requests, please try again after 15 minutes",
-});
+// earn us a 429 ban for ALL users. We use the project's `rateLimiter` helper
+// (not bare express-rate-limit) so the bucket key is namespaced by
+// authenticated userId — otherwise users on the same NAT/VPN would throttle
+// each other.
+const garminConnectLimiter = rateLimiter("garmin-connect", 5, RATE_LIMIT_WINDOW_15M_MS);
+const garminSyncLimiter = rateLimiter("garmin-sync", 5, RATE_LIMIT_WINDOW_15M_MS);
 
 // =============================================================================
 // Layer 5 — Global 429 circuit breaker
@@ -109,7 +125,7 @@ const garminCircuitBreaker = {
   trip(reason: string): void {
     this.blockedUntil = Date.now() + GLOBAL_429_COOLDOWN_MS;
     logger.error(
-      { context: "garmin", reason, until: new Date(this.blockedUntil).toISOString() },
+      { context: LOG_CTX, reason, until: new Date(this.blockedUntil).toISOString() },
       "Garmin circuit breaker tripped — freezing all Garmin operations",
     );
   },
@@ -258,24 +274,24 @@ async function getGarminClient(userId: string, reqLog: typeof logger): Promise<G
       const oauth1 = JSON.parse(conn.encryptedOauth1Token) as IOauth1Token;
       const oauth2 = JSON.parse(conn.encryptedOauth2Token) as IOauth2Token;
       client.loadToken(oauth1, oauth2);
-      reqLog.info({ userId, context: "garmin" }, "Using cached Garmin tokens");
+      reqLog.info({ userId, context: LOG_CTX }, "Using cached Garmin tokens");
       return client;
     } catch (err) {
       // Corrupted JSON in DB — fall through to fresh login.
-      reqLog.warn({ err, userId, context: "garmin" }, "Failed to parse cached Garmin tokens, will re-login");
+      reqLog.warn({ err, userId, context: LOG_CTX }, "Failed to parse cached Garmin tokens, will re-login");
     }
   }
 
   // Slow path: full SSO login. This is the expensive call we want to avoid
   // at all costs. Wrapped in the circuit breaker because login failures are
   // the most common path to a 429.
-  reqLog.info({ userId, context: "garmin" }, "Performing fresh Garmin login");
+  reqLog.info({ userId, context: LOG_CTX }, "Performing fresh Garmin login");
   try {
     await withCircuitBreaker("login", () => client.login(email, password));
   } catch (err) {
     const friendly = translateGarminError(err);
     await storage.users.setGarminError(userId, friendly);
-    reqLog.error({ err, userId, context: "garmin" }, "Garmin login failed");
+    reqLog.error({ err, userId, context: LOG_CTX }, "Garmin login failed");
     throw new Error(friendly);
   }
 
@@ -292,12 +308,12 @@ async function getGarminClient(userId: string, reqLog: typeof logger): Promise<G
       tokenExpiresAtMs > 0 ? new Date(tokenExpiresAtMs) : null,
     );
     reqLog.info(
-      { userId, context: "garmin", expiresAt: new Date(tokenExpiresAtMs).toISOString() },
+      { userId, context: LOG_CTX, expiresAt: new Date(tokenExpiresAtMs).toISOString() },
       "Persisted fresh Garmin tokens",
     );
   } catch (err) {
     // Non-fatal — we'll just re-login on the next sync.
-    reqLog.warn({ err, userId, context: "garmin" }, "Failed to persist Garmin tokens after login");
+    reqLog.warn({ err, userId, context: LOG_CTX }, "Failed to persist Garmin tokens after login");
   }
 
   return client;
@@ -355,12 +371,12 @@ async function handleGarminConnect(req: Request, res: Response) {
       // for a failed connection attempt.
       const client = new GarminConnect({ username: email, password });
 
-      reqLog.info({ userId, context: "garmin" }, "Garmin /connect: starting fresh login");
+      reqLog.info({ userId, context: LOG_CTX }, "Garmin /connect: starting fresh login");
       try {
         await withCircuitBreaker("connect.login", () => client.login(email, password));
       } catch (err) {
         const friendly = translateGarminError(err);
-        reqLog.warn({ err, userId, context: "garmin" }, "Initial Garmin connect failed");
+        reqLog.warn({ err, userId, context: LOG_CTX }, "Initial Garmin connect failed");
         res.status(401).json({ error: friendly, code: "GARMIN_AUTH_FAILED" });
         return;
       }
@@ -371,7 +387,7 @@ async function handleGarminConnect(req: Request, res: Response) {
         displayName = profile?.displayName ?? null;
       } catch (err) {
         // Profile lookup is optional — if it fails the connection is still valid.
-        reqLog.warn({ err, userId, context: "garmin" }, "Garmin getUserProfile failed");
+        reqLog.warn({ err, userId, context: LOG_CTX }, "Garmin getUserProfile failed");
       }
 
       let oauth1Json: string | null = null;
@@ -384,7 +400,7 @@ async function handleGarminConnect(req: Request, res: Response) {
         const expiresAtMs = (tokens.oauth2?.expires_at ?? 0) * 1000;
         if (expiresAtMs > 0) tokenExpiresAt = new Date(expiresAtMs);
       } catch (err) {
-        reqLog.warn({ err, userId, context: "garmin" }, "Garmin exportToken failed after login");
+        reqLog.warn({ err, userId, context: LOG_CTX }, "Garmin exportToken failed after login");
       }
 
       await storage.users.upsertGarminConnection({
@@ -401,7 +417,7 @@ async function handleGarminConnect(req: Request, res: Response) {
       });
 
       reqLog.info(
-        { userId, context: "garmin", displayName, hasTokens: Boolean(oauth1Json) },
+        { userId, context: LOG_CTX, displayName, hasTokens: Boolean(oauth1Json) },
         "Garmin /connect succeeded",
       );
 
@@ -426,41 +442,131 @@ async function handleGarminDisconnect(req: Request, res: Response) {
   }
 }
 
-async function handleGarminSync(req: Request, res: Response) {
-  // Layer 5 — global circuit breaker check (cheapest possible reject path).
-  if (garminCircuitBreaker.isOpen()) {
-    return res.status(503).json({
-      error: `Garmin temporarily blocked us due to rate limits. Please try again in about ${Math.ceil(garminCircuitBreaker.remainingMs() / 60_000)} minutes.`,
-      code: "GARMIN_CIRCUIT_OPEN",
-    });
+interface SyncResult {
+  imported: number;
+  skipped: number;
+  total: number;
+}
+
+/**
+ * Performs the actual fetch + dedupe + insert for one /sync request. Split
+ * out from the route handler to keep the handler's cognitive complexity low
+ * and the safety preflight logic readable.
+ */
+async function fetchAndImportGarminActivities(
+  client: GarminConnect,
+  userId: string,
+  reqLog: typeof logger,
+): Promise<SyncResult> {
+  reqLog.info({ userId, context: LOG_CTX, limit: GARMIN_ACTIVITIES_PER_SYNC }, "Garmin getActivities");
+
+  // The library types getActivities() as Promise<IActivity[]>. GarminActivity
+  // is a structurally compatible subset (all our required fields exist on
+  // IActivity with compatible types), so the assignment is safe without a
+  // cast.
+  const rawActivities: GarminActivity[] = await withCircuitBreaker("getActivities", () =>
+    client.getActivities(0, GARMIN_ACTIVITIES_PER_SYNC),
+  );
+
+  if (!Array.isArray(rawActivities)) {
+    throw new Error("Garmin returned an unexpected response");
   }
 
-  const userId = getUserId(req);
-  const reqLog = req.log || logger;
+  const user = await storage.users.getUser(userId);
+  const distanceUnit = (user?.distanceUnit || "km") as DistanceUnit;
 
-  // Layer 3 — minimum sync interval. Read the connection once up front so we
-  // can enforce the cooldown without paying for any Garmin call.
-  const existing = await storage.users.getGarminConnection(userId);
+  const activityIds = rawActivities.map((a) => String(a.activityId));
+  const existingIds = await storage.workouts.getExistingGarminActivityIds(userId, activityIds);
+  const existingSet = new Set(existingIds);
+
+  let skipped = 0;
+  const workoutsToImport = [];
+
+  for (const activity of rawActivities) {
+    if (existingSet.has(String(activity.activityId))) {
+      skipped++;
+      continue;
+    }
+    workoutsToImport.push(mapGarminActivityToWorkout(activity, userId, distanceUnit));
+  }
+
+  // Compute imported from the rows actually inserted, not the rows we tried
+  // to insert. createGarminWorkoutLogs uses onConflictDoNothing against the
+  // (user_id, garmin_activity_id) partial unique index, so a race with
+  // another insert path could swallow some rows. The per-user mutex makes a
+  // same-user race impossible in practice, but reporting the true insert
+  // count keeps imported+skipped == attempted regardless.
+  let inserted = 0;
+  if (workoutsToImport.length > 0) {
+    const created = await storage.workouts.createGarminWorkoutLogs(workoutsToImport);
+    inserted = created.length;
+  }
+  const dedupedByConflict = workoutsToImport.length - inserted;
+
+  return {
+    imported: inserted,
+    // Treat anything that fell through the unique-index dedupe as "skipped"
+    // from the user's POV — it's still a duplicate, just caught at a
+    // different layer.
+    skipped: skipped + dedupedByConflict,
+    total: rawActivities.length,
+  };
+}
+
+/**
+ * Returns a 503 if the global circuit breaker is open. Returns null if the
+ * caller should proceed. Extracted for reuse between /connect and /sync.
+ */
+function rejectIfCircuitOpen(res: Response): boolean {
+  if (!garminCircuitBreaker.isOpen()) return false;
+  res.status(503).json({
+    error: `Garmin temporarily blocked us due to rate limits. Please try again in about ${Math.ceil(garminCircuitBreaker.remainingMs() / 60_000)} minutes.`,
+    code: "GARMIN_CIRCUIT_OPEN",
+  });
+  return true;
+}
+
+/**
+ * Pre-flight checks for /sync. Returns true if the request was rejected
+ * (response already sent), false if the caller should continue.
+ */
+function rejectSyncPreflight(
+  res: Response,
+  existing: Awaited<ReturnType<typeof storage.users.getGarminConnection>>,
+): boolean {
   if (!existing) {
-    return res.status(404).json({ error: "Garmin not connected", code: "GARMIN_NOT_CONNECTED" });
+    res.status(404).json({ error: "Garmin not connected", code: "GARMIN_NOT_CONNECTED" });
+    return true;
   }
   if (existing.lastSyncedAt) {
     const sinceLastMs = Date.now() - existing.lastSyncedAt.getTime();
     if (sinceLastMs < MIN_SYNC_INTERVAL_MS) {
       const waitMin = Math.ceil((MIN_SYNC_INTERVAL_MS - sinceLastMs) / 60_000);
-      return res.status(429).json({
+      res.status(429).json({
         error: `Please wait ${waitMin} more minute${waitMin === 1 ? "" : "s"} before syncing again.`,
         code: "GARMIN_SYNC_TOO_SOON",
       });
+      return true;
     }
   }
-  // Layer 4 — fail-fast on broken connection. Don't even try to log in.
   if (existing.lastError) {
-    return res.status(401).json({
+    res.status(401).json({
       error: `${existing.lastError} (Disconnect and reconnect to retry.)`,
       code: "GARMIN_RECONNECT_REQUIRED",
     });
+    return true;
   }
+  return false;
+}
+
+async function handleGarminSync(req: Request, res: Response) {
+  if (rejectIfCircuitOpen(res)) return;
+
+  const userId = getUserId(req);
+  const reqLog = req.log || logger;
+
+  const existing = await storage.users.getGarminConnection(userId);
+  if (rejectSyncPreflight(res, existing)) return;
 
   try {
     await withUserLock(userId, async () => {
@@ -473,64 +579,22 @@ async function handleGarminSync(req: Request, res: Response) {
         return;
       }
 
-      let activities: GarminActivity[];
+      let result: SyncResult;
       try {
-        reqLog.info({ userId, context: "garmin", limit: GARMIN_ACTIVITIES_PER_SYNC }, "Garmin getActivities");
-        // The library types getActivities() as Promise<IActivity[]> with ~150
-        // fields, most typed as `unknown`. We narrow to our GarminActivity
-        // subset at the boundary.
-        activities = (await withCircuitBreaker("getActivities", () =>
-          client.getActivities(0, GARMIN_ACTIVITIES_PER_SYNC),
-        )) as unknown as GarminActivity[];
+        result = await fetchAndImportGarminActivities(client, userId, reqLog);
       } catch (err) {
         const friendly = translateGarminError(err);
         await storage.users.setGarminError(userId, friendly);
-        reqLog.error({ err, userId, context: "garmin" }, "Garmin getActivities failed");
+        reqLog.error({ err, userId, context: LOG_CTX }, "Garmin sync failed");
         res.status(502).json({ error: friendly, code: "GARMIN_API_ERROR" });
         return;
       }
 
-      if (!Array.isArray(activities)) {
-        res.status(502).json({ error: "Garmin returned an unexpected response", code: "GARMIN_API_ERROR" });
-        return;
-      }
-
-      const user = await storage.users.getUser(userId);
-      const distanceUnit = (user?.distanceUnit || "km") as DistanceUnit;
-
-      const activityIds = activities.map((a) => String(a.activityId));
-      const existingIds = await storage.workouts.getExistingGarminActivityIds(userId, activityIds);
-      const existingSet = new Set(existingIds);
-
-      let skipped = 0;
-      const workoutsToImport = [];
-
-      for (const activity of activities) {
-        if (existingSet.has(String(activity.activityId))) {
-          skipped++;
-          continue;
-        }
-        workoutsToImport.push(mapGarminActivityToWorkout(activity, userId, distanceUnit));
-      }
-
-      if (workoutsToImport.length > 0) {
-        await storage.workouts.createGarminWorkoutLogs(workoutsToImport);
-      }
-      const imported = workoutsToImport.length;
-
       await storage.users.updateGarminLastSync(userId);
 
-      reqLog.info(
-        { userId, context: "garmin", imported, skipped, total: activities.length },
-        "Garmin /sync succeeded",
-      );
+      reqLog.info({ userId, context: LOG_CTX, ...result }, "Garmin /sync succeeded");
 
-      res.json({
-        success: true,
-        imported,
-        skipped,
-        total: activities.length,
-      });
+      res.json({ success: true, ...result });
     });
   } catch (err) {
     if (err instanceof Error && err.message.includes("already in progress")) {

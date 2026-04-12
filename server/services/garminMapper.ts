@@ -31,9 +31,11 @@ export interface GarminActivity {
   maxHR?: number; // bpm
   averageRunningCadenceInStepsPerMinute?: number;
   calories?: number;
-  // avgPower is typed as `unknown` upstream because it can be missing for
-  // non-power activities; we widen to number | null at the boundary.
-  avgPower?: number | null;
+  // Upstream IActivity types this as `unknown` because it can be missing for
+  // non-power activities. We mirror that here so callers can pass IActivity
+  // instances directly without an `as unknown` cast — the runtime type check
+  // in the mapper handles the narrowing.
+  avgPower?: unknown;
 }
 
 function formatGarminDistance(meters: number, distanceUnit: DistanceUnit): string {
@@ -65,6 +67,58 @@ function extractDate(startTimeLocal: string): string {
   return startTimeLocal.split(/[ T]/)[0];
 }
 
+function buildMainWorkout(
+  movingSec: number,
+  distance: number,
+  isDistanceActivity: boolean,
+  distanceUnit: DistanceUnit,
+): string {
+  if (isDistanceActivity) {
+    return `${formatGarminDistance(distance, distanceUnit)}, ${formatDuration(movingSec)}`;
+  }
+  return `${formatDuration(movingSec)} session`;
+}
+
+function buildAccessory(
+  activity: GarminActivity,
+  isDistanceActivity: boolean,
+  distanceUnit: DistanceUnit,
+): string | null {
+  const parts: string[] = [];
+  const elevation = activity.elevationGain ?? 0;
+  if (elevation > 0) {
+    parts.push(`Elevation: ${formatElevation(elevation, distanceUnit)}`);
+  }
+  const speed = activity.averageSpeed ?? 0;
+  if (isDistanceActivity && speed > 0) {
+    parts.push(`Pace: ${formatGarminPace(speed, distanceUnit)}`);
+  }
+  return parts.length > 0 ? parts.join(" | ") : null;
+}
+
+function buildHeartRateText(averageHR: number, maxHR?: number): string {
+  const avg = Math.round(averageHR);
+  if (maxHR) {
+    return `Avg HR: ${avg} bpm (max ${Math.round(maxHR)})`;
+  }
+  return `Avg HR: ${avg} bpm`;
+}
+
+function buildNotes(activity: GarminActivity): string | null {
+  const parts: string[] = [];
+  if (activity.activityName) {
+    parts.push(activity.activityName);
+  }
+  if (activity.averageHR) {
+    parts.push(buildHeartRateText(activity.averageHR, activity.maxHR));
+  }
+  return parts.length > 0 ? parts.join(" | ") : null;
+}
+
+function roundOrNull(value: number | null | undefined): number | null {
+  return value ? Math.round(value) : null;
+}
+
 /**
  * Maps a Garmin Connect activity into the same workoutLogs row shape Strava
  * uses. Source is set to "garmin" and garminActivityId is populated instead
@@ -76,38 +130,8 @@ export function mapGarminActivityToWorkout(
   distanceUnit: DistanceUnit = "km",
 ) {
   const movingSec = activity.movingDuration ?? activity.duration ?? 0;
-  const durationMinutes = Math.round(movingSec / 60);
   const distance = activity.distance ?? 0;
   const isDistanceActivity = distance > 100;
-
-  let mainWorkout: string;
-  if (isDistanceActivity) {
-    mainWorkout = `${formatGarminDistance(distance, distanceUnit)}, ${formatDuration(movingSec)}`;
-  } else {
-    mainWorkout = `${formatDuration(movingSec)} session`;
-  }
-
-  const accessoryParts: string[] = [];
-  if ((activity.elevationGain ?? 0) > 0) {
-    accessoryParts.push(`Elevation: ${formatElevation(activity.elevationGain as number, distanceUnit)}`);
-  }
-  if (isDistanceActivity && (activity.averageSpeed ?? 0) > 0) {
-    accessoryParts.push(`Pace: ${formatGarminPace(activity.averageSpeed as number, distanceUnit)}`);
-  }
-  const accessory = accessoryParts.length > 0 ? accessoryParts.join(" | ") : null;
-
-  const notesParts: string[] = [];
-  if (activity.activityName) {
-    notesParts.push(activity.activityName);
-  }
-  if (activity.averageHR) {
-    const avg = Math.round(activity.averageHR);
-    const hrText = activity.maxHR
-      ? `Avg HR: ${avg} bpm (max ${Math.round(activity.maxHR)})`
-      : `Avg HR: ${avg} bpm`;
-    notesParts.push(hrText);
-  }
-  const notes = notesParts.length > 0 ? notesParts.join(" | ") : null;
 
   // typeKey examples: "running", "indoor_running", "trail_running",
   // "strength_training", "indoor_cardio", "cycling", "lap_swimming". We
@@ -119,19 +143,19 @@ export function mapGarminActivityToWorkout(
     userId,
     date: extractDate(activity.startTimeLocal),
     focus,
-    mainWorkout,
-    accessory,
-    notes,
-    duration: durationMinutes,
+    mainWorkout: buildMainWorkout(movingSec, distance, isDistanceActivity, distanceUnit),
+    accessory: buildAccessory(activity, isDistanceActivity, distanceUnit),
+    notes: buildNotes(activity),
+    duration: Math.round(movingSec / 60),
     rpe: null,
     planDayId: null,
     source: "garmin" as const,
     garminActivityId: String(activity.activityId),
-    calories: activity.calories ? Math.round(activity.calories) : null,
+    calories: roundOrNull(activity.calories),
     distanceMeters: distance > 0 ? distance : null,
     elevationGain: activity.elevationGain ?? null,
-    avgHeartrate: activity.averageHR ? Math.round(activity.averageHR) : null,
-    maxHeartrate: activity.maxHR ? Math.round(activity.maxHR) : null,
+    avgHeartrate: roundOrNull(activity.averageHR),
+    maxHeartrate: roundOrNull(activity.maxHR),
     avgSpeed: activity.averageSpeed ?? null,
     maxSpeed: activity.maxSpeed ?? null,
     avgCadence: activity.averageRunningCadenceInStepsPerMinute ?? null,
