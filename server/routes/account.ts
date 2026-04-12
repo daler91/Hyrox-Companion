@@ -37,8 +37,17 @@ router.delete(
     // Step 1: Delete Clerk identity first. If this fails the DB row must
     // stay intact — otherwise ensureUserExists re-creates it on the next
     // authenticated request, silently "undeleting" the account.
+    // A 404 from Clerk means the identity was already removed (e.g. a
+    // previous attempt succeeded at Clerk but failed at the DB step), so
+    // treat it as success to keep the operation idempotent.
     if (env.CLERK_SECRET_KEY) {
-      await clerkClient.users.deleteUser(userId);
+      try {
+        await clerkClient.users.deleteUser(userId);
+      } catch (err: unknown) {
+        const status = (err as { status?: number }).status;
+        if (status !== 404) throw err;
+        logger.info({ userId }, "Clerk user already deleted, continuing with DB cleanup");
+      }
     }
 
     // Step 2: Best-effort Strava deauthorization before deleting the DB
