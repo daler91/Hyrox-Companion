@@ -33,6 +33,7 @@ export function setupAuthIntercepts(overrides?: {
       lastName: "Athlete",
       profileImageUrl: null,
       email: "test@example.com",
+      aiCoachEnabled: true,
     },
   }).as("authUser");
 
