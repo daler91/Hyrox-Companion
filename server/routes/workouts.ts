@@ -1,5 +1,5 @@
 import { exercisesPayloadSchema,insertCustomExerciseSchema, insertWorkoutLogSchema, planDays, trainingPlans, updateWorkoutLogSchema, workoutLogs } from "@shared/schema";
-import { and,eq, inArray, sql } from "drizzle-orm";
+import { and,eq, inArray } from "drizzle-orm";
 import { type Request, type Response,Router } from "express";
 import { z } from "zod";
 
