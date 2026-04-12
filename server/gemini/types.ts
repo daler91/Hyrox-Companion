@@ -24,6 +24,7 @@ export interface TrainingContext {
     }>;
   }>;
   upcomingWorkouts?: Array<{
+    planDayId?: string;
     date: string;
     focus: string;
     mainWorkout: string;

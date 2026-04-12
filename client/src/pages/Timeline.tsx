@@ -11,6 +11,7 @@ import { useCallback,useMemo, useRef, useState } from "react";
 
 import { AIConsentDialog } from "@/components/coach/AIConsentDialog";
 import { CoachPanel } from "@/components/CoachPanel";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { FeatureErrorBoundaryWrapper } from "@/components/FeatureErrorBoundaryWrapper";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 import {
@@ -235,6 +236,7 @@ function TimelineContent({
 export default function Timeline() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   const { data, filters, onboarding, planImport, workoutActions, combine, selectedPlanId, setSelectedPlanId } = useTimelineState({ aiCoachEnabled: !!user?.aiCoachEnabled });
 
   const { plans, plansLoading, personalRecords, timelineData, timelineLoading, annotations, isNewUser, todayRef, scrollToToday } = data;
@@ -506,8 +508,8 @@ export default function Timeline() {
         </div>
       </div>
       
-      {coachOpen && (
-        <div className="w-80 lg:w-96 flex-shrink-0 hidden md:block">
+      {coachOpen && !isMobile && (
+        <div className="w-80 lg:w-96 flex-shrink-0">
           <FeatureErrorBoundaryWrapper featureName="Coach">
             <CoachPanel
               isOpen={coachOpen}
@@ -518,15 +520,11 @@ export default function Timeline() {
           </FeatureErrorBoundaryWrapper>
         </div>
       )}
-      
-      {coachOpen && (
+
+      {coachOpen && isMobile && (
         // Mobile coach surface: a bottom sheet at ~70vh so the user can still
         // see the top of their timeline while chatting with the coach.
-        // Intentionally no fullscreen backdrop — that would defeat the
-        // "reference the timeline while chatting" use case (C-6 in the UX
-        // review). A small hint strip is rendered behind the rounded top so
-        // the sheet reads as a peekable surface rather than a blocking modal.
-        <div className="fixed inset-x-0 bottom-0 z-50 h-[70vh] md:hidden">
+        <div className="fixed inset-x-0 bottom-0 z-50 h-[70vh]">
           <div
             data-testid="coach-panel-mobile-sheet"
             className="relative h-full bg-background shadow-2xl rounded-t-2xl border-t border-x"

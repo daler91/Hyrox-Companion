@@ -1,5 +1,5 @@
 import { CheckCircle2, Clock, SkipForward,XCircle } from "lucide-react";
-import { SiStrava } from "react-icons/si";
+import { StravaIcon } from "@/components/icons/StravaIcon";
 
 import { Badge } from "@/components/ui/badge";
 import { DialogDescription,DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -54,7 +54,7 @@ export function WorkoutDetailHeader({ status, source, dayName, focus, isEditing 
         {getStatusBadge(status)}
         {source === "strava" && (
           <Badge className="bg-[#FC4C02]/10 text-[#FC4C02]">
-            <SiStrava className="h-3 w-3 mr-1" />
+            <StravaIcon className="h-3 w-3 mr-1" />
             Strava
           </Badge>
         )}

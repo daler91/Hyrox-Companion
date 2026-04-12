@@ -9,8 +9,6 @@ import cors from "cors";
 import express, { NextFunction,type Request, Response } from "express";
 import helmet from "helmet";
 import pinoHttp from "pino-http";
-import swaggerUi from "swagger-ui-express";
-
 import { generateOpenApiDocument } from "../shared/openapi";
 import { startCron, stopCron } from "./cron";
 import { pool } from "./db";
@@ -297,6 +295,8 @@ try {
   // 🛡️ Sentinel: Swagger UI is restricted to development — it exposes the full API
   // schema and requires a relaxed CSP (unsafe-inline) which widens the attack surface.
   if (isDev) {
+    // Dynamic import keeps swagger-ui-express out of the production bundle.
+    const swaggerUi = await import("swagger-ui-express");
     app.use("/api/docs", (_req, res, next) => {
       res.setHeader(
         "Content-Security-Policy",

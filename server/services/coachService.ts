@@ -1,7 +1,6 @@
 import { generateWorkoutSuggestions, type UpcomingWorkout, type WorkoutSuggestion } from "../gemini/index";
 import { logger } from "../logger";
 import { storage } from "../storage";
-import { toDateStr } from "../types";
 import { buildTrainingContext } from "./ai";
 import { checkAiBudget } from "./aiUsageService";
 import { retrieveCoachingText } from "./ragRetrieval";
@@ -91,39 +90,24 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
 
     await storage.users.updateIsAutoCoaching(userId, true);
 
-    // ⚡ Parallelize all three independent data fetches into a single await
-    // instead of running getTimeline sequentially after the first two.
-    // Saves ~50-100ms of DB round-trip latency per auto-coach trigger.
-    const [trainingContext, activePlanRecord, timeline] = await Promise.all([
-      buildTrainingContext(userId),
-      storage.plans.getActivePlan(userId),
-      storage.timeline.getTimeline(userId),
-    ]);
+    // buildTrainingContext already fetches the active plan, upcoming
+    // planned days, and recent timeline — reuse its results instead of
+    // issuing duplicate getTimeline + getActivePlan calls.
+    const trainingContext = await buildTrainingContext(userId);
 
-    const activePlanGoal = activePlanRecord?.goal ?? undefined;
-    const today = toDateStr();
+    const activePlanGoal = trainingContext.activePlan?.goal ?? undefined;
 
-    const upcomingWorkouts: UpcomingWorkout[] = timeline
-      .filter(
-        (entry) =>
-          entry.status === "planned" &&
-          entry.date >= today &&
-          entry.planDayId !== null,
-      )
-      // Fast string comparison for YYYY-MM-DD dates instead of localeCompare
-      .sort((a, b) => {
-        if (b.date < a.date) return 1;
-        if (b.date > a.date) return -1;
-        return 0;
-      })
-      .slice(0, 7)
-      .map((entry) => ({
-        id: entry.planDayId || "",
-        date: entry.date,
-        focus: entry.focus || "",
-        mainWorkout: entry.mainWorkout || "",
-        accessory: entry.accessory || undefined,
-        notes: entry.notes || undefined,
+    // Map the training context's upcoming workouts to the shape expected
+    // by the suggestion generator.
+    const upcomingWorkouts: UpcomingWorkout[] = (trainingContext.upcomingWorkouts ?? [])
+      .filter((w) => w.planDayId)
+      .map((w) => ({
+        id: w.planDayId!,
+        date: w.date,
+        focus: w.focus,
+        mainWorkout: w.mainWorkout,
+        accessory: w.accessory || undefined,
+        notes: w.notes || undefined,
       }));
 
     if (upcomingWorkouts.length === 0) return { adjusted: 0 };

@@ -50,9 +50,19 @@ function makeTimelineEntry(overrides: Record<string, unknown> = {}) {
 
 function mockBaseAutoCoachDeps(timeline: Record<string, unknown>[] = [makeTimelineEntry()]) {
   mockEnabledUser();
-  vi.mocked(buildTrainingContext).mockResolvedValue({} as never);
-  vi.mocked(storage.plans.getActivePlan).mockResolvedValue(undefined);
-  vi.mocked(storage.timeline.getTimeline).mockResolvedValue(timeline as never);
+  // buildTrainingContext now provides upcoming workouts (with planDayId)
+  // that triggerAutoCoach maps into the suggestion generator's format.
+  const upcomingWorkouts = timeline
+    .filter((e) => e.status === "planned" && e.planDayId)
+    .map((e) => ({
+      planDayId: e.planDayId as string,
+      date: e.date as string,
+      focus: e.focus as string,
+      mainWorkout: e.mainWorkout as string,
+      accessory: e.accessory as string | null,
+      notes: e.notes as string | null,
+    }));
+  vi.mocked(buildTrainingContext).mockResolvedValue({ upcomingWorkouts } as never);
   vi.mocked(storage.coaching.hasChunksForUser).mockResolvedValue(false);
   vi.mocked(storage.coaching.listCoachingMaterials).mockResolvedValue([]);
 }

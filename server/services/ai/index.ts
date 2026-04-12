@@ -52,6 +52,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     weeklyGoal: user?.weeklyGoal ?? undefined,
     recentWorkouts: recentWorkouts.slice(0, 10),
     upcomingWorkouts: upcomingDays.map(d => ({
+      planDayId: d.planDayId,
       date: d.date,
       focus: d.focus,
       mainWorkout: d.mainWorkout,

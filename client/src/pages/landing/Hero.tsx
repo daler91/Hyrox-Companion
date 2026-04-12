@@ -1,7 +1,7 @@
 import { SignInButton } from "@clerk/react";
 import { ArrowRight, CheckCircle2, Menu, Sparkles } from "lucide-react";
 import { useState } from "react";
-import { SiStrava } from "react-icons/si";
+import { StravaIcon } from "@/components/icons/StravaIcon";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,7 +32,7 @@ function TimelineMockup() {
             <p className="text-xs text-muted-foreground pl-6">Sled Push 4x50m, Wall Balls 4x15, Farmers Carry 3x100m</p>
             <div className="flex gap-1.5 pl-6">
               <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20">
-                <SiStrava className="h-2.5 w-2.5 mr-0.5" /> Strava
+                <StravaIcon className="h-2.5 w-2.5 mr-0.5" /> Strava
               </Badge>
               <Badge variant="outline" className="text-[10px] px-1.5 py-0">RPE 7</Badge>
               <Badge variant="outline" className="text-[10px] px-1.5 py-0">52 min</Badge>
