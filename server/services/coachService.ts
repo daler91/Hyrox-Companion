@@ -98,10 +98,11 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
     const activePlanGoal = trainingContext.activePlan?.goal ?? undefined;
 
     // Map the training context's upcoming workouts to the shape expected
-    // by the suggestion generator (adds a placeholder id field).
+    // by the suggestion generator.
     const upcomingWorkouts: UpcomingWorkout[] = (trainingContext.upcomingWorkouts ?? [])
+      .filter((w) => w.planDayId)
       .map((w) => ({
-        id: "",
+        id: w.planDayId!,
         date: w.date,
         focus: w.focus,
         mainWorkout: w.mainWorkout,
