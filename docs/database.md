@@ -32,8 +32,10 @@ User accounts and preferences.
 | `weight_unit` | `varchar(255)` | default `'kg'` |
 | `distance_unit` | `varchar(255)` | default `'km'` |
 | `weekly_goal` | `integer` | default `5` |
-| `email_notifications` | `boolean` | default `true` |
-| `ai_coach_enabled` | `boolean` | default `true` |
+| `email_notifications` | `boolean` | default `false` — **master** email toggle (GDPR opt-in) |
+| `email_weekly_summary` | `boolean` | default `false` — per-type toggle for the weekly training summary |
+| `email_missed_reminder` | `boolean` | default `false` — per-type toggle for the missed-workout reminder |
+| `ai_coach_enabled` | `boolean` | default `false` — **AI consent gate**; no workout data is sent to Gemini while this is `false` |
 | `is_auto_coaching` | `boolean` | default `false` |
 | `last_weekly_summary_at` | `timestamp` | nullable |
 | `last_missed_reminder_at` | `timestamp` | nullable |
@@ -41,6 +43,11 @@ User accounts and preferences.
 | `updated_at` | `timestamp` | default `now()` |
 
 No additional indexes (queries are by PK).
+
+**Consent columns.** The four boolean columns above default to `false` at the DB layer so new accounts are opted-out of every third-party data flow by default. The application reads them as follows:
+
+- No email is ever sent unless `email_notifications = true` **and** the per-type toggle for the category is `true`. The scheduler in `server/emailScheduler.ts` enforces both checks.
+- No Gemini call is issued unless `ai_coach_enabled = true`. The auto-coach service short-circuits (`server/services/coachService.ts`) and the chat / parsing routes check the flag before composing a prompt.
 
 ---
 
@@ -113,6 +120,7 @@ Logged workouts, either entered manually or synced from Strava.
 | `plan_id` | `varchar(255)` | FK -> `training_plans.id` ON DELETE SET NULL |
 | `source` | `varchar(255)` | default `'manual'` |
 | `strava_activity_id` | `varchar(255)` | nullable |
+| `garmin_activity_id` | `varchar(255)` | nullable |
 | `calories` | `integer` | nullable |
 | `distance_meters` | `real` | nullable |
 | `elevation_gain` | `real` | nullable |
@@ -131,7 +139,13 @@ Logged workouts, either entered manually or synced from Strava.
 - `idx_workout_logs_plan_day_id` on (`plan_day_id`)
 - `idx_workout_logs_plan_id` on (`plan_id`)
 - `idx_workout_logs_strava_activity_id` on (`strava_activity_id`)
+- `idx_workout_logs_garmin_activity_id` on (`garmin_activity_id`)
 - `idx_workout_logs_source` on (`source`)
+- `idx_workout_logs_user_strava_unique` on (`user_id`, `strava_activity_id`) -- partial unique where `strava_activity_id IS NOT NULL`, guarantees per-user dedupe of Strava imports
+- `idx_workout_logs_user_garmin_unique` on (`user_id`, `garmin_activity_id`) -- partial unique where `garmin_activity_id IS NOT NULL`, same guarantee for Garmin imports
+
+**Check constraints:**
+- `rpe_range_check`: `rpe IS NULL OR (rpe >= 1 AND rpe <= 10)`
 
 ---
 
@@ -261,6 +275,53 @@ The `user_id` column has a UNIQUE constraint, enforcing one Strava connection pe
 
 ---
 
+### garmin_connections
+
+Garmin Connect session storage. Unlike Strava, Garmin has no public OAuth — authentication uses email/password against the reverse-engineered SSO flow ([@flow-js/garmin-connect](https://www.npmjs.com/package/@flow-js/garmin-connect)). Credentials and OAuth token blobs are encrypted at rest with the shared `encryptToken`/`decryptToken` helpers (AES-256-GCM). The `lastError` column is plaintext (generated message, non-secret) and is surfaced to the UI as a reconnect banner.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `varchar(255)` | PK, default `gen_random_uuid()` |
+| `user_id` | `varchar(255)` | NOT NULL, UNIQUE, FK -> `users.id` ON DELETE CASCADE |
+| `garmin_display_name` | `varchar(255)` | nullable (hashed/opaque display name from `getUserProfile()`) |
+| `encrypted_email` | `text` | NOT NULL (encrypted AES-256-GCM) |
+| `encrypted_password` | `text` | NOT NULL (encrypted AES-256-GCM) |
+| `encrypted_oauth1_token` | `text` | nullable, `JSON.stringify(IOauth1Token)` encrypted |
+| `encrypted_oauth2_token` | `text` | nullable, `JSON.stringify(IOauth2Token)` encrypted |
+| `token_expires_at` | `timestamp` | nullable — derived from `oauth2.expires_at` |
+| `last_synced_at` | `timestamp` | nullable |
+| `last_error` | `text` | nullable — plaintext reconnect-needed message; cleared on success |
+| `created_at` | `timestamp` | default `now()` |
+
+One Garmin connection per user (UNIQUE on `user_id`). **Important:** This approach does not support Garmin two-step verification; users with 2SV must disable it to connect. See [Integrations → Garmin Connect](integrations.md#garmin-connect-integration).
+
+---
+
+### timeline_annotations
+
+User-authored bands that mark date ranges as injury, illness, travel, or rest so volume dips remain legible when looking back at Timeline history or sharing Analytics. Stored as inclusive `[start_date, end_date]` date strings and rendered as shaded bands on Analytics charts and as a banner above the Timeline filters.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `varchar(255)` | PK, default `gen_random_uuid()` |
+| `user_id` | `varchar(255)` | NOT NULL, FK -> `users.id` ON DELETE CASCADE |
+| `start_date` | `date` | NOT NULL |
+| `end_date` | `date` | NOT NULL |
+| `type` | `varchar(50)` | NOT NULL |
+| `note` | `text` | nullable (max 500 chars, enforced in Zod) |
+| `created_at` | `timestamp` | default `now()` |
+| `updated_at` | `timestamp` | default `now()` |
+
+**Check constraints:**
+- `timeline_annotation_type_check`: `type IN ('injury', 'illness', 'travel', 'rest')`
+- `timeline_annotation_range_check`: `end_date >= start_date`
+
+**Indexes:**
+- `idx_timeline_annotations_user_id` on (`user_id`)
+- `idx_timeline_annotations_user_range` on (`user_id`, `start_date`, `end_date`) -- composite, used for overlap queries against the visible timeline window
+
+---
+
 ### idempotency_keys
 
 Server-side idempotency cache for mutating API requests. Uses a composite primary key on `(user_id, key)`.
@@ -292,7 +353,7 @@ All tables have explicit Drizzle relation definitions in `shared/schema/tables.t
 
 | Relation | Type | Description |
 |---|---|---|
-| `usersRelations` | `many` | trainingPlans, workoutLogs, chatMessages, coachingMaterials, customExercises; `one` stravaConnection |
+| `usersRelations` | `many` | trainingPlans, workoutLogs, chatMessages, coachingMaterials, customExercises, timelineAnnotations; `one` stravaConnection, garminConnection |
 | `trainingPlansRelations` | `one` user, `many` planDays |
 | `planDaysRelations` | `one` trainingPlan, `many` workoutLogs |
 | `workoutLogsRelations` | `one` user, planDay (optional), trainingPlan (optional); `many` exerciseSets |
@@ -302,6 +363,8 @@ All tables have explicit Drizzle relation definitions in `shared/schema/tables.t
 | `coachingMaterialsRelations` | `one` user, `many` documentChunks |
 | `documentChunksRelations` | `one` coachingMaterial |
 | `stravaConnectionsRelations` | `one` user |
+| `garminConnectionsRelations` | `one` user |
+| `timelineAnnotationsRelations` | `one` user |
 
 ---
 
@@ -321,10 +384,13 @@ users
   |             |-- 1:N --> document_chunks
   |
   |-- 1:1 --> strava_connections
+  |-- 1:1 --> garmin_connections
   |
   |-- 1:N --> chat_messages
   |
   |-- 1:N --> custom_exercises
+  |
+  |-- 1:N --> timeline_annotations
   |
   |-- 1:N --> idempotency_keys
 ```
@@ -707,9 +773,9 @@ for (const ex of exercises) {
 - Single-column: `user_id`
 - Composite: `(user_id, timestamp)` for chronological retrieval per user
 
-**document_chunks** (2 indexes):
+**document_chunks** (3 indexes):
 - Single-column: `material_id`, `user_id`
-- Vector similarity is handled by pgvector's `<=>` operator with sequential scan (no HNSW/IVFFlat index currently configured)
+- `idx_document_chunks_embedding_hnsw` — HNSW index on `embedding vector_cosine_ops` for fast approximate cosine similarity search. Created on boot by `server/maintenance.ts` after the `vector` extension is confirmed, so the index lives on the vector database regardless of migration history.
 
 **training_plans**, **coaching_materials**, **custom_exercises** (1 index each):
 - All indexed on `user_id`
@@ -722,7 +788,8 @@ for (const ex of exercises) {
 ## Performance Considerations
 
 **Coalesced Analytics Cache:**
-The analytics routes (`server/routes/analytics.ts`) use an in-memory promise cache to prevent redundant DB queries:
+The analytics routes (`server/routes/analytics.ts`) use two in-memory promise caches — one for exercise sets (`getExerciseSetsCoalesced`) and one for workout logs (`getWorkoutLogsCoalesced`) — to prevent redundant DB queries. The cache entry stores the *pending* promise, so concurrent callers share the same in-flight query.
+
 ```typescript
 // Multiple concurrent requests for the same user's analytics data
 // share a single database query via a cached Promise
@@ -732,7 +799,15 @@ if (entry && (now - entry.timestamp < CACHE_TTL_MS)) {
   return entry.promise; // Return the same Promise to all callers
 }
 ```
-This coalescing pattern means 3 concurrent analytics requests result in 1 DB query, not 3.
+
+| Knob | Value | Source |
+|---|---|---|
+| TTL | 5 minutes (`ANALYTICS_CACHE_TTL_MS`) | `server/constants.ts` |
+| Max entries per cache | 500 (`MAX_CACHE_SIZE`) | `server/routes/analytics.ts` |
+| Eviction | Expired entries first, then oldest-by-timestamp once over the size cap | `evictStale()` |
+| Failure handling | Rejected promises are removed from the cache so the next caller retries immediately | `.catch` in the coalescer |
+
+This coalescing pattern means three concurrent `/training-overview` requests for the same user/window result in one DB query, not three — and the week-over-week delta computation (which fetches both the current and previous windows in parallel via `Promise.all`) reuses the cached promise for the prior window on subsequent requests within the TTL.
 
 **N+1 Avoidance:**
 - `getExerciseSetsByWorkoutLogs(ids[])`: Batch-fetches exercise sets for multiple workouts in a single query, avoiding per-workout queries on the timeline.

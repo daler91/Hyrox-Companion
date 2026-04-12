@@ -29,12 +29,13 @@
 
 <br />
 
-Plan structured training programs, log complex workouts with voice or free-text using Gemini LLMs to parse sets & reps, automatically sync activities from Strava, and get real-time prescriptive AI coaching to adjust your volume based on your completed results.
+Plan structured training programs, log complex workouts with voice or free-text using Gemini LLMs to parse sets & reps, automatically sync activities from Strava and Garmin Connect, and get real-time prescriptive AI coaching to adjust your volume based on your completed results.
 
 ## Features
 
 ### Unified Training Experience
 - **Interactive Timeline** — Drag-and-drop view spanning past, present, and future workouts with status indicators (completed, planned, missed).
+- **Timeline Annotations** — Mark date ranges as injury / illness / travel / rest so dips in volume are visible in context on the Timeline and as shaded bands on Analytics charts.
 - **Training Plans** — Import CSV, DOCX, or PDF training blocks, use the built-in 8-week Hyrox program, or generate a fully custom plan via AI.
 - **Custom Exercises** — Log non-standard movements (sled pushes, sandbag lunges) alongside standard lifts.
 - **Guided Onboarding** — Configure profile, units, weekly goals, and AI coach personality on first launch.
@@ -48,14 +49,21 @@ Plan structured training programs, log complex workouts with voice or free-text 
 - **Document Uploads** — Upload coaching materials (CSV, DOCX, PDF) to enrich the AI coach's knowledge base.
 - **Vector Search** — Documents are chunked and embedded via pgvector for semantic retrieval-augmented generation.
 
-### Strava Integration
-- **OAuth Sync** — Link your Strava account; activities automatically appear on your timeline with encrypted token storage.
+### Activity Sync
+- **Strava** — OAuth link with HMAC-signed state; activities auto-appear on the timeline with encrypted token storage and per-user dedupe.
+- **Garmin Connect** — Email/password link against the reverse-engineered Garmin SSO, protected by a global 429 circuit breaker, a per-user in-flight mutex, and a 5-minute minimum sync interval. Credentials and OAuth tokens are encrypted at rest. *(Note: Garmin 2-step verification must be disabled for the current SSO library to authenticate.)*
 
 ### Analytics & Export
 - **Personal Records** — 1RM estimation, lifetime PRs, and progression charts.
+- **Week-over-Week Deltas** — The Analytics overview shows percentage-change indicators against the equal-length prior period for total workouts, avg/week, total duration, and avg duration.
 - **Filtering** — Drill down by exercise category, date range, or micro-cycle.
 - **Data Export** — Download workout timeline and exercise sets as CSV or JSON.
-- **Weekly Emails** — Automated training summaries and missed-day reminders via pg-boss + Resend.
+- **Email Notifications** — Opt-in weekly training summaries and missed-day reminders via pg-boss + Resend, with a master toggle plus independent per-type switches (`emailWeeklySummary`, `emailMissedReminder`).
+
+### Privacy & Data Control
+- **GDPR Account Deletion** — `DELETE /api/v1/account` removes your Clerk identity, best-effort deauthorizes Strava, and cascade-deletes every row owned by the user across `workout_logs`, `exercise_sets`, `training_plans`, `plan_days`, `chat_messages`, `coaching_materials`, `document_chunks`, `strava_connections`, `garmin_connections`, `custom_exercises`, `push_subscriptions`, `ai_usage_logs`, `idempotency_keys`, and `timeline_annotations`.
+- **AI Consent Gate** — The AI coach is opt-in (`aiCoachEnabled`, defaults `false`); no workout data is sent to Google Gemini until the user explicitly enables it.
+- **Privacy Policy** — First-party Privacy page (`client/src/pages/Privacy.tsx`) listing every third-party processor (Clerk, Gemini, Strava, Garmin, Resend, Sentry) and the data they receive.
 
 ### PWA & Offline
 - **Installable** — Progressive Web App with Workbox service worker for offline caching and native-like mobile experience.
@@ -90,10 +98,12 @@ This repository is a fully functional monorepo containing both the React fronten
 - **Security**:
   - Helmet for HTTP security headers
   - express-rate-limit for granular API rate limiting
-  - csrf-csrf for CSRF protection (double-submit cookie pattern bound to Clerk userId)
-  - Server-side idempotency enforcement via `X-Idempotency-Key` header with database-backed cache
-  - AES-256-GCM encryption for Strava token storage
+  - csrf-csrf for CSRF protection (double-submit cookie pattern bound to Clerk userId); in production `CSRF_SECRET` is required and **must differ** from `ENCRYPTION_KEY` (key separation is enforced at startup)
+  - Server-side idempotency enforcement via `X-Idempotency-Key` header with database-backed cache; pg-boss job retries are scoped to idempotent handlers only (`sendJobNoRetry` for side-effectful handlers like email send)
+  - Compression middleware skips `text/event-stream` responses to unblock Gemini streaming chat
+  - AES-256-GCM encryption for Strava and Garmin credentials / tokens at rest
   - Strava OAuth CSRF state verification
+  - Garmin 7-layer safety stack: per-route rate limiter, per-user mutex, 5-minute min-sync interval, fail-fast on prior `lastError`, global 30-minute 429 circuit breaker, no silent re-login on stale tokens, audit logging on every Garmin call
   - HTML sanitization of AI-generated content
 
 ### Shared
@@ -127,6 +137,7 @@ flowchart TB
     subgraph External["External Services"]
         Clerk[Clerk Auth]
         Strava[Strava OAuth]
+        Garmin[Garmin Connect SSO]
         Resend[Resend Email]
         GeminiAPI[Google Gemini API]
     end
@@ -138,6 +149,7 @@ flowchart TB
     Services --> Gemini --> GeminiAPI
     API --> Clerk
     Services --> Strava
+    Services --> Garmin
     Queue --> Resend
     Queue --> PG
     SW -.->|offline cache| UI
@@ -211,7 +223,8 @@ Hyrox-Companion/
 ├── cypress/                    # E2E test suites
 ├── .github/workflows/          # CI/CD pipelines (7 workflows)
 ├── scripts/                    # Build & maintenance scripts
-└── docs/                       # Documentation (10 detailed guides)
+├── .claude/commands/review/    # Code-review skill profiles (security, privacy, ux, performance, business, qa, devops, all)
+└── docs/                       # Documentation (11 living guides + dated snapshots)
 ```
 
 ---
@@ -230,8 +243,9 @@ Detailed documentation for each subsystem is available in the [`docs/`](docs/) d
 | [State Management](docs/state-management.md) | TanStack Query, custom hooks, offline queue, utility functions |
 | [API Reference](docs/api-reference.md) | All API endpoints with request/response shapes and rate limits |
 | [Authentication](docs/authentication.md) | Clerk setup, user sync, dev auth bypass, route protection |
-| [Integrations](docs/integrations.md) | Strava OAuth, email system, pg-boss queue, cron scheduling |
-| [Testing](docs/testing.md) | Vitest, Cypress E2E, CI workflows, test patterns |
+| [Integrations](docs/integrations.md) | Strava OAuth, Garmin Connect, email system, pg-boss queue, cron scheduling |
+| [Testing](docs/testing.md) | Vitest, Cypress E2E, jest-axe accessibility tests, code-review skill profiles, CI workflows |
+| [Native Mobile](docs/native-mobile.md) | Capacitor vs. React Native comparison, packaging phases, cost trade-offs |
 
 ---
 
@@ -312,8 +326,11 @@ This fires up the Vite frontend with HMR and the Express backend on port `5000`.
 |---|---|---|---|
 | Unit & Integration | Vitest | 750+ tests across 60+ files (80% threshold) | `pnpm test` |
 | End-to-End | Cypress | 120+ tests across 9 suites | `pnpm exec cypress open` |
+| Accessibility | jest-axe (via Vitest + jsdom) | Automated a11y assertions on interactive components (`*.a11y.test.tsx`) | `pnpm test` |
 | Type Safety | TypeScript 5.9 (strict) | Full codebase | `pnpm check` |
 | Lint & Format | ESLint + Prettier | Full codebase | `pnpm lint` / `pnpm format:check` |
+
+Opinionated **code-review skill profiles** live under `.claude/commands/review/` and can be invoked as `/review:<profile>` (`security`, `privacy`, `ux`, `performance`, `business`, `qa`, `devops`, or `all`) for structured, role-based audits of the codebase.
 
 ---
 

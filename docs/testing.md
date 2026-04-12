@@ -171,6 +171,29 @@ The `@testing-library/user-event` package is available for simulating user inter
 
 Custom hooks are tested in files under `client/src/hooks/__tests__/`. These test files use `.test.tsx` extensions when they need JSX for wrapper providers.
 
+### Accessibility tests (jest-axe)
+
+Automated accessibility assertions live alongside the component they cover, using the filename convention **`*.a11y.test.tsx`** inside `__tests__/` directories. Each test renders the component, runs `axe()` against the markup, and asserts `toHaveNoViolations()`.
+
+```ts
+import { axe, toHaveNoViolations } from "jest-axe";
+expect.extend(toHaveNoViolations);
+
+it("has no detectable a11y violations", async () => {
+  const { container } = render(<WorkoutHeader title="Log Workout" />);
+  expect(await axe(container)).toHaveNoViolations();
+});
+```
+
+Current a11y coverage includes:
+
+- `client/src/pages/__tests__/not-found.a11y.test.tsx`
+- `client/src/components/workout/__tests__/WorkoutHeader.a11y.test.tsx`
+- `client/src/components/timeline/__tests__/TimelineWorkoutCard.a11y.test.tsx`
+- `client/src/components/coach/__tests__/SuggestionCard.a11y.test.tsx`
+
+Adding a new a11y test is part of the PR checklist for any user-facing component change. The tests run as part of the normal `pnpm test` Vitest pool — there is no separate command or workflow.
+
 ---
 
 ## Route and Integration Tests
@@ -394,6 +417,25 @@ All workflows are in `.github/workflows/` and run on GitHub Actions with Ubuntu 
 
 - **Trivy** (`trivy.yml`) -- Security vulnerability scanning
 - **Dependency Review** (`dependency-review.yml`) -- Reviews dependency changes in PRs
+
+---
+
+## Code Review Skill Profiles
+
+The `.claude/commands/review/` directory contains structured code-review prompts ("skill profiles") that frame a walkthrough of the codebase from a specific role's perspective. They complement automated tests by surfacing issues that linters and unit tests miss — architectural drift, UX regressions, privacy gaps, and so on.
+
+| Profile | File | Role |
+|---|---|---|
+| `security` | `.claude/commands/review/security.md` | Senior security auditor — vulnerabilities, exposed secrets, auth gaps |
+| `privacy` | `.claude/commands/review/privacy.md` | Data privacy officer — collection, storage, transmission, retention, compliance |
+| `ux` | `.claude/commands/review/ux.md` | UX / accessibility expert — usability, flow, responsiveness, WCAG compliance |
+| `performance` | `.claude/commands/review/performance.md` | Performance engineer — bottlenecks, memory leaks, optimization opportunities |
+| `business` | `.claude/commands/review/business.md` | Business analyst — requirements, logic, business-value alignment |
+| `qa` | `.claude/commands/review/qa.md` | QA engineer — edge cases, race conditions, failure modes |
+| `devops` | `.claude/commands/review/devops.md` | DevOps engineer — deployment readiness, error handling, logging, infra |
+| `all` | `.claude/commands/review/all.md` | Runs every profile and produces a unified report |
+
+Invoke a profile inside Claude Code with `/review:<profile>` (for example, `/review:security` or `/review:all`). Each profile defines the review scope, the output format, and the severity bands — so repeated runs produce comparable reports.
 
 ---
 

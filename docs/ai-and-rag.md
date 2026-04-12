@@ -6,6 +6,8 @@
 
 The Hyrox Companion integrates Google's Gemini API for three core AI capabilities: workout parsing, coaching chat, and training plan generation. A Retrieval-Augmented Generation (RAG) pipeline enriches AI responses with user-uploaded coaching materials stored as vector embeddings in pgvector.
 
+**AI consent gate.** Every outbound Gemini call — workout parsing, chat (regular + streaming), auto-coach, suggestions, plan generation — is gated on `user.aiCoachEnabled` (defaults `false` for new users). When the flag is `false`, the coach service short-circuits (`triggerAutoCoach` returns `{ adjusted: 0 }` at `server/services/coachService.ts:82`) and the chat/parsing routes refuse to compose a prompt. The UI hides or disables the AI features until the user flips the toggle in Settings → Preferences, and flipping it back to `false` stops new Gemini requests immediately.
+
 **Key dependencies:**
 - `@google/genai` -- Google Gemini API client
 - pgvector -- PostgreSQL vector extension for semantic search
@@ -523,12 +525,14 @@ Calculated from the earliest plan entry date to today: `max(1, ceil((daysSinceSt
 
 ## Security
 
+- **Consent gate:** `user.aiCoachEnabled` must be `true` before any Gemini call runs on the user's behalf. See [Overview](#overview).
 - **Input sanitization:** `sanitizeUserInput()` wraps all user text in XML tags and strips potential injection patterns before sending to Gemini.
 - **Output validation:** `validateAiOutput()` checks Gemini responses for safety.
 - **HTML sanitization:** `sanitizeHtml()` strips HTML from all AI-generated content before database storage.
 - **Content length limits:** Chat messages max 1,000 chars (request) / 50,000 chars (storage). Coaching materials max 1,500,000 chars.
 - **RAG injection prevention:** Retrieved chunks are wrapped in `<coaching_data>` tags with instructions to treat content as data only.
 - **Prompt protection:** System prompts include instructions refusing to reveal their own content.
+- **Streaming transport:** The `compression` middleware is configured to skip `text/event-stream` responses so the streaming-chat output is delivered without being held in a gzip buffer (see [Server → Middleware Ordering Rationale](server.md#middleware-ordering-rationale)).
 
 ---
 

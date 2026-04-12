@@ -1,6 +1,6 @@
 # External Integrations
 
-This document covers the external service integrations used by the Hyrox Companion application: Strava activity syncing, Resend transactional email, pg-boss job queue, and node-cron scheduling.
+This document covers the external service integrations used by the Hyrox Companion application: Strava and Garmin activity syncing, Resend transactional email, pg-boss job queue, and node-cron scheduling.
 
 ---
 
@@ -8,20 +8,22 @@ This document covers the external service integrations used by the Hyrox Compani
 
 1. [Overview](#overview)
 2. [Strava Integration](#strava-integration)
-3. [Email System (Resend)](#email-system-resend)
-4. [Job Queue (pg-boss)](#job-queue-pg-boss)
-5. [Cron Scheduling (node-cron)](#cron-scheduling-node-cron)
-6. [Startup Maintenance](#startup-maintenance)
+3. [Garmin Connect Integration](#garmin-connect-integration)
+4. [Email System (Resend)](#email-system-resend)
+5. [Job Queue (pg-boss)](#job-queue-pg-boss)
+6. [Cron Scheduling (node-cron)](#cron-scheduling-node-cron)
+7. [Startup Maintenance](#startup-maintenance)
 
 ---
 
 ## Overview
 
-The application relies on four external integration layers:
+The application relies on five external integration layers:
 
 - **Strava** -- OAuth 2.0 integration for importing workout activities from athletes' Strava accounts.
+- **Garmin Connect** -- Email/password sign-in against Garmin's reverse-engineered SSO (no public OAuth) to import activities. Wrapped in a strict safety stack because every request goes out through the same shared server IP.
 - **Resend** -- Transactional email delivery for weekly training summaries and missed workout reminders.
-- **pg-boss** -- PostgreSQL-backed persistent job queue for background processing (auto-coaching, embedding generation).
+- **pg-boss** -- PostgreSQL-backed persistent job queue for background processing (auto-coaching, embedding generation). Retries are scoped to idempotent handlers only.
 - **node-cron** -- In-process cron scheduler that triggers the daily email pipeline.
 
 All integrations are configured through environment variables and initialized during server startup.
@@ -201,6 +203,75 @@ The `strava_connections` table (`shared/schema/tables.ts`):
 
 ---
 
+## Garmin Connect Integration
+
+**Key files:**
+
+- `server/garmin.ts` -- Route handlers, safety layers, circuit breaker, per-user mutex
+- `server/services/garminMapper.ts` -- Maps a Garmin activity payload to the internal `WorkoutLog` shape
+- `server/crypto.ts` -- AES-256-GCM encryption/decryption (shared with Strava; see [Encryption at Rest](#encryption-at-rest))
+- `shared/schema/tables.ts` -- `garminConnections` table definition
+
+### Why This Is Different From Strava
+
+Garmin does not offer a public OAuth application flow for end users. The only way the application can fetch a user's activities is to log into Garmin Connect on their behalf using their email and password, via the reverse-engineered SSO flow implemented by the [`@flow-js/garmin-connect`](https://www.npmjs.com/package/@flow-js/garmin-connect) library. This has three important consequences:
+
+1. **Credentials are stored at rest** (encrypted with AES-256-GCM) so the server can re-login after the cached OAuth2 token expires (~1 year).
+2. **Every outbound call shares the same server IP.** A single misbehaving user or buggy code path could earn the application's IP a Garmin-side ban that affects *every* user. The safety stack below is intentionally strict to prevent that.
+3. **2-step verification is not supported.** The SSO library cannot pass Garmin's 2FA challenge; users with 2SV enabled must temporarily disable it to connect.
+
+No server-side Garmin client/secret is needed -- there is nothing to configure in `.env` for this integration.
+
+### HTTP Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/v1/garmin/status` | Returns `{ connected, garminDisplayName?, lastSyncedAt?, lastError? }` for the authenticated user. |
+| POST | `/api/v1/garmin/connect` | Body `{ email, password }`. Attempts a fresh login *before* persisting credentials; stores the row only on success. Rate-limited to 5 per 15-minute window per user. |
+| DELETE | `/api/v1/garmin/disconnect` | Removes the user's `garmin_connections` row (tokens, credentials, display name). |
+| POST | `/api/v1/garmin/sync` | Imports the 20 most recent activities via `getActivities()`, dedupes against `(user_id, garmin_activity_id)`, and returns `{ success, imported, skipped, total }`. Rate-limited to 5 per 15-minute window per user. |
+
+All mutating routes go through `protectedMutationGuards` (authentication + CSRF + idempotency).
+
+### Safety Stack
+
+The order matters: each layer is designed to short-circuit requests before they cost the application a Garmin round-trip.
+
+| Layer | Mechanism | File location |
+|---|---|---|
+| 1. Per-route rate limiter | 5 requests per 15 minutes per authenticated user on `/connect` and `/sync` | `garminConnectLimiter`, `garminSyncLimiter` in `server/garmin.ts` |
+| 2. Per-user in-flight mutex | Rejects overlapping `/connect` or `/sync` calls for the same user with HTTP 409 `GARMIN_BUSY`. Catches the gap between the rate limiter and completion. | `withUserLock()` + `inFlightUsers: Set<string>` |
+| 3. Minimum sync interval | Rejects `/sync` with HTTP 429 `GARMIN_SYNC_TOO_SOON` if `lastSyncedAt` is under 5 minutes old. | `MIN_SYNC_INTERVAL_MS = 5 * 60 * 1000` |
+| 4. Fail-fast on `lastError` | If a previous sync left `lastError` set, refuse to retry automatically. The user must disconnect + reconnect, which caps the cost of a broken connection to one failed login attempt. | `handleGarminSync` preflight + `getGarminClient` |
+| 5. Global 429 circuit breaker | On *any* Garmin response that looks like a 429 ("429", "too many", "rate limit"), trip the breaker for 30 minutes. While tripped, every Garmin route returns HTTP 503 `GARMIN_CIRCUIT_OPEN` -- across all users on the instance. | `garminCircuitBreaker`, `GLOBAL_429_COOLDOWN_MS` |
+| 6. No silent re-login | Cached OAuth tokens live ~1 year. If a fresh-looking token unexpectedly 401s, the error surfaces to the user instead of auto-triggering a new login. | `getGarminClient()` does not fall through from the cached-token path back to login |
+| 7. Audit logging | Every Garmin API call and login is logged at `info` level with the user ID and a `context: "garmin"` tag so bans are traceable. | `logger.info({ userId, context: LOG_CTX }, ...)` throughout `server/garmin.ts` |
+
+### Error Translation
+
+`translateGarminError()` converts the library's stringly-typed errors into user-facing messages. Notable mappings:
+
+- "429" / "too many" / "rate limit" → circuit breaker tripped, surface the 30-minute cooldown message.
+- "401" / "unauthor" → invalid credentials, suggest disconnect + reconnect.
+- "ticket" / "csrf" / "mfa" / "2fa" / "verification" → 2SV is enabled on the Garmin account; library cannot continue.
+
+### Token Storage
+
+The `garmin_connections` row stores four encrypted fields. All four are encrypted with `encryptToken()`/`decryptToken()` and share the same AES-256-GCM scheme used for Strava -- see [Encryption at Rest](#encryption-at-rest).
+
+| Column | Purpose |
+|---|---|
+| `encrypted_email` | The user's Garmin login email, needed for forced re-login after token expiry. |
+| `encrypted_password` | The user's Garmin password (same reason). |
+| `encrypted_oauth1_token` | `JSON.stringify(IOauth1Token)` returned by `client.exportToken()` after login. |
+| `encrypted_oauth2_token` | `JSON.stringify(IOauth2Token)` returned by `client.exportToken()` after login. |
+| `token_expires_at` | UNIX-seconds-to-Date of `oauth2.expires_at`. When `now + 5 min >= token_expires_at`, the next request performs a fresh login. |
+| `last_error` | Plaintext (non-secret) error message. Surfaced to the UI as a "reconnect needed" banner. Cleared on successful sync. |
+
+A partial unique index on `workout_logs(user_id, garmin_activity_id) WHERE garmin_activity_id IS NOT NULL` guarantees dedupe at the DB layer even under concurrent imports. `createGarminWorkoutLogs()` uses `onConflictDoNothing`, and the route reports the true insert count (`imported`) plus anything swallowed by the partial index as `skipped`.
+
+---
+
 ## Email System (Resend)
 
 **Key files:**
@@ -334,7 +405,16 @@ Errors on the queue emit to a global error handler that logs via the application
 
 ### Job Processing Pattern
 
-Both workers receive an array of `Job[]` objects and process them concurrently with `Promise.all` or `Promise.allSettled`. Failed jobs throw errors to leverage pg-boss's built-in retry mechanism.
+Both workers receive an array of `Job[]` objects and process them concurrently with a bounded `p-limit` pool (`IN_BATCH_CONCURRENCY = 2`) and `Promise.allSettled` semantics so a single poison job does not discard the whole batch. Failed jobs still aggregate into a thrown summary error so pg-boss sees the batch as failed and can retry only the failed ones on the next poll.
+
+### Scoped Retries (Idempotent vs. Side-Effectful Jobs)
+
+`server/queue.ts` exposes two enqueue helpers with different retry policies. **Use the matching helper for your handler's idempotency guarantees** -- this is the project's contract for what "safe to retry" means:
+
+| Helper | Retries | Use for |
+|---|---|---|
+| `sendJob(name, data)` | `retryLimit: 3`, `retryBackoff: true`, `expireInMinutes: 60` (`DEFAULT_JOB_OPTIONS`) | Handlers that are safe to invoke multiple times for the same payload: pure DB reads/writes keyed by an ID, operations protected by DB-level uniqueness, embedding generation. |
+| `sendJobNoRetry(name, data)` | `retryLimit: 0`, `expireInMinutes: 60` (`NO_RETRY_JOB_OPTIONS`) | Handlers with side effects that cannot be safely replayed. The canonical case is email sending: the "sent" marker is persisted *after* the external send, so a retry after a post-send DB failure would deliver a duplicate. |
 
 ### Queue Enqueue Reliability
 

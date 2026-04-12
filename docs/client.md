@@ -66,6 +66,7 @@ Routing uses **wouter** (`Switch` and `Route` components). There are four authen
 | `/log` | `LogWorkout` | Log Workout | Lazy (`React.lazy`) |
 | `/analytics` | `Analytics` | Analytics | Lazy (`React.lazy`) |
 | `/settings` | `Settings` | Settings | Lazy (`React.lazy`) |
+| `/privacy` | `Privacy` | Privacy | Lazy (`React.lazy`) — accessible signed-out |
 | `*` | `NotFound` | -- | Eagerly loaded |
 
 All routes except the 404 are wrapped in `FeatureErrorBoundaryWrapper` with a descriptive `featureName` prop. Lazy-loaded routes are wrapped in a shared `Suspense` boundary that renders a `Loader2` spinner as the fallback.
@@ -105,7 +106,7 @@ Uses `useWorkoutEditor` and `useWorkoutForm` custom hooks. Respects user unit pr
 
 Displays training data analysis across four tabs:
 
-- **Overview** (`TrainingOverviewTab`) -- Training volume summary, completion rates, streaks, weekly goal tracking, and workout heatmap.
+- **Overview** (`TrainingOverviewTab`) -- Training volume summary, completion rates, streaks, weekly goal tracking, and workout heatmap. Four summary cards (total workouts, avg/week, total duration, avg duration) render a `DeltaIndicator` showing the percentage change versus the equal-length prior period (derived server-side — see [`previousStats` in `/training-overview`](api-reference.md#get-apiv1training-overview)). The weekly workout chart overlays shaded bands for any timeline annotations that intersect the visible window.
 - **Progression** (`ExerciseProgressionTab`) -- Exercise-level progression charts over time.
 - **Records** (`PersonalRecordsTab`) -- Personal records across all exercises.
 - **Breakdown** (`CategoryBreakdownTab`) -- Category-level training distribution (functional, running, strength, conditioning).
@@ -118,11 +119,16 @@ User preferences and account management. Organized into sections:
 
 - **ProfileSection** -- Displays user name and avatar.
 - **StravaSection** -- Connect/disconnect Strava, view sync status. Handles OAuth callback query parameters (`?strava=connected` or `?strava=error`).
-- **PreferencesSection** -- Weight unit (kg/lb), distance unit (km/mi), weekly workout goal, email notifications toggle, AI coach toggle.
+- **GarminSection** -- Email/password credential form for the Garmin Connect link, status/last-sync badge, and a manual "Sync now" button. Surfaces the `lastError` banner when a prior sync left the connection in a broken state and disables sync buttons when the global 429 circuit breaker is tripped.
+- **PreferencesSection** -- Weight unit (kg/lb), distance unit (km/mi), weekly workout goal. Email toggles are now split: a master `emailNotifications` switch plus nested per-type toggles for the weekly summary and the missed-workout reminder (the nested pair is disabled and grayed out when the master is off). The AI-coach toggle is the **consent gate** for all Gemini calls — it defaults off for new users, and the AI features in the app are hidden or disabled until the user flips it on.
 - **CoachingSection** -- AI coaching configuration and materials management.
-- **DataToolsSection** -- Data export and management utilities.
+- **DataToolsSection** -- Data export and account deletion. The "Delete account" flow confirms with a hold-to-delete button, then calls `DELETE /api/v1/account` and hard-redirects to the landing page after Clerk sign-out.
 
 Changes are tracked locally and saved via a single "Save Settings" button.
+
+### Privacy (`client/src/pages/Privacy.tsx`)
+
+First-party privacy policy page. Lists each third-party processor the app sends data to (Clerk for auth, Google Gemini for AI features when `aiCoachEnabled`, Strava for activity sync when connected, Garmin for activity sync when connected, Resend for email when `emailNotifications`, Sentry for error telemetry) with a plain-language description of what data each receives. The Landing page footer and the Settings page both link here. The route is accessible while signed out so prospective users can read it before sign-up.
 
 ### Landing (`client/src/pages/Landing.tsx`)
 
@@ -154,6 +160,7 @@ Foundational UI building blocks generated via shadcn/ui CLI. Includes: `accordio
 ### `analytics/` -- Analytics Tab Components
 
 - `TrainingOverviewTab` -- Summary cards, completion rates, workout heatmap.
+- `DeltaIndicator` -- Arrow + percentage chip rendered on each of the four overview stat cards. Consumes `currentStats` / `previousStats` from `GET /api/v1/training-overview` and handles the "no prior data" case by rendering nothing.
 - `ExerciseProgressionTab` -- Per-exercise charts.
 - `PersonalRecordsTab` / `PersonalRecordItem` -- PR listings.
 - `CategoryBreakdownTab` -- Training distribution by category.
@@ -186,8 +193,9 @@ Foundational UI building blocks generated via shadcn/ui CLI. Includes: `accordio
 
 - `ProfileSection` -- User profile display.
 - `StravaSection` -- Strava connection management.
-- `PreferencesSection` -- Unit and notification preferences.
-- `DataToolsSection` -- Data export utilities.
+- `GarminSection` -- Garmin Connect credential form, status display, manual sync button.
+- `PreferencesSection` -- Unit preferences, weekly goal, master email toggle + nested per-type email toggles (`emailWeeklySummary`, `emailMissedReminder`), AI consent toggle (`aiCoachEnabled`).
+- `DataToolsSection` -- Data export + account deletion (hold-to-confirm → `DELETE /api/v1/account`).
 - `CoachingSection` -- AI coaching configuration.
 - `coaching/CoachingMaterialList` -- Uploaded coaching materials list.
 - `coaching/CoachingUploadDialog` -- Upload dialog for coaching materials.
@@ -198,7 +206,8 @@ Foundational UI building blocks generated via shadcn/ui CLI. Includes: `accordio
 
 The largest component group, further subdivided:
 
-- **Top-level**: `TimelineHeader`, `TimelineSkeleton`, `TimelineEmptyState`, `TimelineDateGroup`, `FloatingActionButton`.
+- **Top-level**: `TimelineHeader`, `TimelineSkeleton`, `TimelineEmptyState`, `TimelineDateGroup`, `FloatingActionButton`, `TimelineTodayIndicator` (jump-to-today pill; hidden when today is filtered out of the current view).
+- **Annotations**: `AnnotationsDialog`, `AnnotationsList`, inline annotation rows rendered as first-class log entries on the Timeline for injury / illness / travel / rest periods.
 - **Dialogs**: `WorkoutDetailDialog`, `SchedulePlanDialog`, `SkipConfirmDialog`, `ImportPreviewDialog`, `EditWorkoutDialog`, `ConfirmDialog`.
 - **Workout detail**: `WorkoutDetailHeader`, `WorkoutDetailViewMode`, `WorkoutDetailEditMode`, `WorkoutDetailActions`.
 - **`timeline-filters/`**: `TimelineFilters`, `PlanSelector`, `RenamePlanDialog`, `GoalDialog`, `csv-utils.ts`.

@@ -91,9 +91,10 @@ Each API domain has a dedicated module in `client/src/lib/api/`:
 | Workouts | `workouts.ts` | `create()`, `list()`, `get()`, `update()`, `delete()`, `getUnstructured()`, `reparse()`, `batchReparse()` |
 | Plans | `plans.ts` | CRUD, `import()`, `sample()`, `generate()`, `schedule()`, `updateDay()`, `updateDayStatus()` |
 | Coaching | `coaching.ts` | Chat (`send()`, `sendStream()`, `saveMessage()`), materials CRUD, `getRagStatus()`, `reEmbed()` |
-| Analytics | `analytics.ts` | `getPersonalRecords()`, `getExerciseAnalytics()`, `getTrainingOverview()`, timeline, suggestions |
-| User | `user.ts` | `auth.getUser()`, `preferences.get/update()`, `strava.*`, `email.check()` |
+| Analytics | `analytics.ts` | `getPersonalRecords()`, `getExerciseAnalytics()`, `getTrainingOverview()` (returns `currentStats` + optional `previousStats` for week-over-week deltas), timeline, suggestions |
+| User | `user.ts` | `auth.getUser()`, `preferences.get/update()` (includes `emailNotifications`, `emailWeeklySummary`, `emailMissedReminder`, `aiCoachEnabled`), `strava.*`, `garmin.*` (`status/connect/disconnect/sync`), `email.check()`, `account.delete()` |
 | Exercises | `exercises.ts` | `listCustom()`, `create()`, `getHistory()` |
+| Timeline Annotations | `timelineAnnotations.ts` | `list()`, `create()`, `update()`, `delete()` for injury / illness / travel / rest bands |
 
 ---
 
@@ -125,7 +126,10 @@ All hooks are in `client/src/hooks/`.
 | `useWorkoutActions` | `useWorkoutActions.ts` | Workout CRUD mutations (create, update, delete, combine). |
 | `useChatMutations` | `useChatMutations.ts` | Save chat message, clear chat history mutations. |
 | `useStravaMutations` | `useStravaMutations.ts` | Strava sync and disconnect mutations. |
+| `useGarminMutations` | `useGarminMutations.ts` | Garmin connect (email/password), disconnect, and manual sync mutations. Surfaces the `GARMIN_BUSY`, `GARMIN_SYNC_TOO_SOON`, and `GARMIN_CIRCUIT_OPEN` error codes as user-friendly toasts. |
 | `useCoachingMaterials` | `useCoachingMaterials.ts` | Coaching material CRUD with re-embed triggers. |
+
+Timeline annotation queries and mutations are composed directly from the `client/src/lib/api/timelineAnnotations.ts` module inside `useTimelineData` (read) and the `AnnotationsDialog` component (write), rather than via a dedicated hook — the annotations list is small and refetches cheaply on mutation. Account deletion is invoked from `client/src/components/settings/AccountDangerZone.tsx`, which calls the `DELETE /api/v1/account` endpoint behind a hold-to-confirm gesture, clears the React Query cache on success, and hands off to Clerk's sign-out flow.
 
 ### Forms and Editors
 

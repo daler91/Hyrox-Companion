@@ -20,15 +20,18 @@ The Hyrox Companion exposes a RESTful API under the `/api/v1/` prefix. All endpo
 - [Idempotency](#idempotency)
 - [Request Validation](#request-validation)
 - [Auth Routes](#auth-routes)
+- [Account Routes](#account-routes)
 - [Workout Routes](#workout-routes)
 - [Custom Exercise Routes](#custom-exercise-routes)
 - [Training Plan Routes](#training-plan-routes)
+- [Timeline Annotation Routes](#timeline-annotation-routes)
 - [Analytics Routes](#analytics-routes)
 - [AI and Chat Routes](#ai-and-chat-routes)
 - [Coaching Material Routes](#coaching-material-routes)
 - [Preferences Routes](#preferences-routes)
 - [Email Routes](#email-routes)
 - [Strava Routes](#strava-routes)
+- [Garmin Routes](#garmin-routes)
 - [Timeline and Export Routes](#timeline-and-export-routes)
 
 ---
@@ -175,6 +178,26 @@ Returns the current authenticated user's profile. Creates the user in the databa
 - **Auth:** Required
 - **Rate limit:** `auth` category, 20/min
 - **Response:** `User` object (id, email, firstName, lastName, profileImageUrl, preferences)
+
+---
+
+## Account Routes
+
+**File:** `server/routes/account.ts`
+
+### DELETE /api/v1/account
+
+Permanently delete the authenticated user's account and all associated data (GDPR "right to erasure").
+
+- **Auth:** Required
+- **Rate limit:** `accountDelete` category, 3/min
+- **Body:** none
+- **Response:** `{ "success": true }` (or `404 { "error": "User not found", "code": "NOT_FOUND" }`)
+- **Side effects, in order:**
+  1. **Clerk identity is deleted first.** If Clerk returns HTTP 404, the identity is treated as already-deleted (idempotent retry); any other error aborts the request so the DB row is not orphaned. Without this ordering, `ensureUserExists` on the next authenticated request would silently re-provision the account.
+  2. **Best-effort Strava deauthorization** — `POST https://www.strava.com/oauth/deauthorize` is called with the stored access token. Failures are logged and ignored (non-fatal).
+  3. **DB user row is deleted.** FK `ON DELETE CASCADE` cleans up: `workout_logs`, `exercise_sets`, `training_plans`, `plan_days`, `chat_messages`, `coaching_materials`, `document_chunks`, `strava_connections`, `garmin_connections`, `custom_exercises`, `push_subscriptions`, `ai_usage_logs`, `idempotency_keys`, and `timeline_annotations`.
+  4. **Auth seen-cache eviction** — `evictUserFromSeenCache(userId)` prevents any in-flight session from triggering `ensureUserExists` within the 5-minute cache TTL.
 
 ---
 
@@ -467,11 +490,64 @@ Schedule a plan by assigning dates to all days starting from a given date.
 
 ---
 
+## Timeline Annotation Routes
+
+**File:** `server/routes/timelineAnnotations.ts`
+
+User-authored bands spanning `[startDate, endDate]` that annotate injury, illness, travel, or rest periods on the Timeline and as shaded bands on Analytics charts. The DB layer (`timeline_annotations` table) enforces `type IN ('injury','illness','travel','rest')` and `end_date >= start_date`. Per-user ownership is enforced at the storage layer — mismatched IDs silently return 404 to avoid leaking existence.
+
+### GET /api/v1/timeline-annotations
+
+List all annotations for the authenticated user, ordered by `startDate` ASC.
+
+- **Auth:** Required
+- **Rate limit:** `annotations` category, 60/min
+- **Response:** `TimelineAnnotation[]`
+
+### POST /api/v1/timeline-annotations
+
+Create a new annotation.
+
+- **Auth:** Required
+- **Rate limit:** `annotations` category, 20/min
+- **Body:** `{ startDate: "YYYY-MM-DD", endDate: "YYYY-MM-DD", type: "injury" | "illness" | "travel" | "rest", note?: string }` (`note` max 500 chars)
+- **Validation:** `insertTimelineAnnotationSchema` (Zod), with a `.refine` that `endDate >= startDate` when both dates are present
+- **Response:** `201 TimelineAnnotation`
+
+### PATCH /api/v1/timeline-annotations/:id
+
+Partially update an annotation. The handler fetches the existing row, merges the partial over it, and re-checks the date bounds before writing so a single-field PATCH cannot slip an invalid range past Zod.
+
+- **Auth:** Required
+- **Rate limit:** `annotations` category, 20/min
+- **Body:** Partial `{ startDate?, endDate?, type?, note? }`
+- **Validation:** `updateTimelineAnnotationSchema`
+- **Response:** `TimelineAnnotation` (or 404 when the id doesn't belong to the user)
+
+### DELETE /api/v1/timeline-annotations/:id
+
+Delete an annotation.
+
+- **Auth:** Required
+- **Rate limit:** `annotations` category, 20/min
+- **Response:** `{ success: true }` (or 404 when the id doesn't belong to the user)
+
+---
+
 ## Analytics Routes
 
 **File:** `server/routes/analytics.ts`
 
-All analytics endpoints support optional date filtering via query parameters: `?from=YYYY-MM-DD&to=YYYY-MM-DD`. Results are cached per-user with a configurable TTL to avoid redundant database queries.
+All analytics endpoints support optional date filtering via query parameters: `?from=YYYY-MM-DD&to=YYYY-MM-DD`.
+
+**Coalesced request cache.** Exercise sets and workout logs used by these routes pass through two in-memory promise caches (`getExerciseSetsCoalesced` and `getWorkoutLogsCoalesced`) keyed by `userId + from + to`. The cache holds the *pending* promise, so three concurrent requests for the same user/window trigger a single database query. Parameters:
+
+| Knob | Value | Source |
+|---|---|---|
+| TTL | 5 minutes (`ANALYTICS_CACHE_TTL_MS`) | `server/constants.ts` |
+| Max entries per cache | 500 (`MAX_CACHE_SIZE`) | `server/routes/analytics.ts` |
+| Eviction | Expired entries first, then oldest-by-timestamp once over the size cap | `evictStale()` |
+| Failure behavior | The rejected promise is evicted so the next caller retries immediately | `.catch` in `getExerciseSetsCoalesced` / `getWorkoutLogsCoalesced` |
 
 ### GET /api/v1/personal-records
 
@@ -493,12 +569,40 @@ Calculate per-exercise analytics (volume, intensity trends).
 
 ### GET /api/v1/training-overview
 
-Calculate weekly training summaries, category totals, and station coverage.
+Calculate weekly training summaries, category totals, station coverage, and week-over-week deltas.
 
 - **Auth:** Required
 - **Rate limit:** `analytics` category, 20/min
 - **Query:** `from?`, `to?`
-- **Response:** `TrainingOverview` — `{ weeklySummaries, workoutDates, categoryTotals, stationCoverage }`
+- **Response shape:**
+
+  ```ts
+  {
+    weeklySummaries: WeeklySummary[],
+    workoutDates: string[],
+    categoryTotals: { /* per-category totals */ },
+    stationCoverage: { /* Hyrox station coverage */ },
+    currentStats: {
+      totalWorkouts: number,
+      avgPerWeek: number,
+      totalDuration: number,
+      avgDuration: number,
+      avgRpe: number | null,
+    },
+    // Omitted when no meaningful previous window exists — e.g. the user
+    // picked "all time" so `from` is absent.
+    previousStats?: {
+      totalWorkouts: number,
+      avgPerWeek: number,
+      totalDuration: number,
+      avgDuration: number,
+      avgRpe: number | null,
+    },
+  }
+  ```
+
+- **Previous-window derivation (`computePreviousWindow`):** The previous period is the equal-length, non-overlapping range ending the day before `from`. If `to` is omitted, the current window's upper bound is pinned to midnight UTC of today (not wall-clock `now`) so the previous window doesn't drift across the day. Returns `null` when `from` is absent, and the route responds without `previousStats`.
+- The client's `DeltaIndicator` component renders the percentage change between `currentStats` and `previousStats` for each of the four stat cards.
 
 ---
 
@@ -721,7 +825,8 @@ Update user preferences.
 - **Body:** Partial `{ weightUnit?: "kg" | "lbs", distanceUnit?: "km" | "miles", weeklyGoal?: 1-14, emailNotifications?: boolean, emailWeeklySummary?: boolean, emailMissedReminder?: boolean, aiCoachEnabled?: boolean }`
 - **Validation:** `updateUserPreferencesSchema`
 - **Response:** Updated preferences object
-- **Email toggle semantics:** `emailNotifications` is the master switch — when `false`, no email is sent regardless of the per-type flags. `emailWeeklySummary` and `emailMissedReminder` default to `true` (preserving pre-migration behavior) and only take effect when the master is on.
+- **Email toggle semantics:** `emailNotifications` is the master switch — when `false`, no email is sent regardless of the per-type flags. `emailWeeklySummary` and `emailMissedReminder` gate the individual categories and take effect only when the master is on. All three default to `false` at the database level for new users (GDPR-compliant opt-in).
+- **AI consent semantics:** `aiCoachEnabled` gates every outbound call to Google Gemini (workout parsing, chat, auto-coach). It defaults to `false` for new users; the AI features are hidden or disabled in the UI until the user explicitly opts in. Flipping it to `false` immediately stops new Gemini requests; already-persisted chat history and plan AI artifacts remain until the user deletes them.
 
 ---
 
@@ -792,6 +897,60 @@ Disconnect the Strava integration.
 
 - **Auth:** Required
 - **Response:** `{ success: true }`
+
+---
+
+## Garmin Routes
+
+**File:** `server/garmin.ts`
+
+Garmin Connect sync uses a reverse-engineered SSO flow (email + password), not a public OAuth application. See [Integrations → Garmin Connect](integrations.md#garmin-connect-integration) for the rationale, safety stack, and storage model.
+
+All mutating routes apply `protectedMutationGuards` (auth + CSRF + idempotency). Every route short-circuits with HTTP 503 `GARMIN_CIRCUIT_OPEN` when the global 429 circuit breaker is tripped.
+
+### GET /api/v1/garmin/status
+
+Returns the Garmin connection state for the authenticated user.
+
+- **Auth:** Required
+- **Response:** `{ connected: false }` or `{ connected: true, garminDisplayName: string | null, lastSyncedAt: string | null, lastError: string | null }`
+
+### POST /api/v1/garmin/connect
+
+Authenticate with Garmin using email + password and persist the encrypted credentials / OAuth tokens.
+
+- **Auth:** Required
+- **Rate limit:** `garmin-connect` category, 5 per 15-minute window per user
+- **Body:** `{ email: string (valid email, max 254), password: string (1-256) }`
+- **Behavior:** Logs into Garmin *before* writing any DB row — nothing is stored on failure. Fetches `getUserProfile()` to capture the display name (optional; non-fatal if it fails).
+- **Responses:**
+  - `200 { success: true, garminDisplayName: string | null }`
+  - `400 { code: "BAD_REQUEST" }` — invalid email / empty password
+  - `401 { code: "GARMIN_AUTH_FAILED" }` — invalid credentials or 2SV enabled (see error translation in `server/garmin.ts`)
+  - `409 { code: "GARMIN_BUSY" }` — another Garmin op for the same user is in progress (per-user mutex)
+  - `503 { code: "GARMIN_CIRCUIT_OPEN" }` — global 429 breaker is tripped
+
+### DELETE /api/v1/garmin/disconnect
+
+Removes the `garmin_connections` row for the user (credentials, tokens, display name).
+
+- **Auth:** Required
+- **Response:** `{ success: true }`
+
+### POST /api/v1/garmin/sync
+
+Imports the most recent activities from Garmin into `workout_logs`.
+
+- **Auth:** Required
+- **Rate limit:** `garmin-sync` category, 5 per 15-minute window per user
+- **Preflight rejections (checked before login):**
+  - `404 { code: "GARMIN_NOT_CONNECTED" }`
+  - `429 { code: "GARMIN_SYNC_TOO_SOON" }` — less than 5 minutes since `lastSyncedAt`
+  - `401 { code: "GARMIN_RECONNECT_REQUIRED" }` — prior `lastError` is set; user must disconnect + reconnect
+  - `503 { code: "GARMIN_CIRCUIT_OPEN" }` — global 429 breaker tripped
+- **Behavior:** Calls `client.getActivities(0, 20)`, dedupes against the partial unique index `(user_id, garmin_activity_id) WHERE garmin_activity_id IS NOT NULL`, and inserts the new rows via `onConflictDoNothing`.
+- **Success response:** `{ success: true, imported: number, skipped: number, total: number }` — `imported` is the true insert count; anything caught by the partial index is rolled into `skipped`.
+- **Error responses:** `401 GARMIN_AUTH_FAILED`, `502 GARMIN_API_ERROR` (with `lastError` persisted), `409 GARMIN_BUSY`.
 
 ---
 

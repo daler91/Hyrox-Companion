@@ -70,7 +70,7 @@ Middleware is applied in the following order in `server/index.ts`:
 
 | Order | Middleware | Description |
 |-------|-----------|-------------|
-| 1 | `compression()` | Gzip/Brotli response compression |
+| 1 | `compression({ filter })` | Gzip/Brotli response compression. **Skipped for `text/event-stream` responses** so Gemini streaming chat is not held in the compression buffer. |
 | 2 | `cors()` | CORS with origin whitelist (see below) |
 | 3 | `cspNonceMiddleware` | Per-request CSP nonce generation (production only) |
 | 4 | `helmet()` | Security headers (CSP baseline, referrer policy, etc.) |
@@ -87,7 +87,7 @@ Middleware is applied in the following order in `server/index.ts`:
 ### Middleware Ordering Rationale
 
 Middleware is ordered intentionally:
-1. **compression** first -- compresses all responses including error pages
+1. **compression** first -- compresses all responses including error pages, **except** `text/event-stream` responses. `compression`'s internal gzip buffer holds chunks indefinitely when the producer is slow (e.g. Gemini with `thinkingLevel: HIGH`), which breaks SSE. The filter in `server/index.ts` checks `res.getHeader("Content-Type")` for `text/event-stream` and falls through to `compression.filter` for everything else.
 2. **CORS** early -- rejects disallowed origins before any processing
 3. **CSP nonce + Helmet** before route handlers -- security headers on every response
 4. **Custom CSP override** -- refines Helmet defaults with Clerk domains and nonce
@@ -184,7 +184,7 @@ CSRF protection uses the **double-submit cookie pattern** via the `csrf-csrf` li
 **Configuration:**
 
 - Cookie: `httpOnly: true`, `sameSite: "strict"`, `secure: true` (production)
-- Secret: `CSRF_SECRET` env var (optional, falls back to `ENCRYPTION_KEY`)
+- Secret: `CSRF_SECRET` env var. **Required in production** and **must differ from `ENCRYPTION_KEY`** — both invariants are enforced at startup by `server/env.ts` Zod `.refine()` guards that abort boot with `❌ FATAL:` messages. Falls back to `ENCRYPTION_KEY` only in dev/test. See [Authentication → Key Separation](authentication.md#key-separation-csrf_secret-vs-encryption_key).
 - Safe methods (GET/HEAD/OPTIONS) are exempt from verification
 
 ### Idempotency Middleware
@@ -323,7 +323,7 @@ All environment variables are validated at startup by a Zod schema in `server/en
 | `LOG_LEVEL` | No | Pino log level (default: `"info"`) |
 | `RAG_CHUNK_SIZE` | No | Character count per RAG chunk (default: `600`) |
 | `RAG_CHUNK_OVERLAP` | No | Overlap characters between RAG chunks (default: `100`) |
-| `CSRF_SECRET` | No | Minimum 32 characters, used for CSRF token HMAC. Falls back to `ENCRYPTION_KEY` if unset. |
+| `CSRF_SECRET` | Yes (production) | Minimum 32 characters, used for CSRF token HMAC. In production it is **required** and **must differ** from `ENCRYPTION_KEY`. Falls back to `ENCRYPTION_KEY` in dev/test only. |
 
 ---
 
@@ -337,6 +337,7 @@ All environment variables are validated at startup by a Zod schema in `server/en
 - Idle timeout: 30 s (`DB_IDLE_TIMEOUT_MS`)
 - Connection timeout: 5 s (`DB_CONNECTION_TIMEOUT_MS`)
 - Statement timeout: 30 s (`DB_STATEMENT_TIMEOUT_MS`)
+- **SSL selection:** Enabled in production (`rejectUnauthorized: true`) **unless** the `DATABASE_URL` hostname ends in `.railway.internal`. Railway's internal Postgres network stays on private IPv6 and does not speak SSL, so forcing TLS on an internal-host URL breaks connections. The hostname is parsed via `new URL(env.DATABASE_URL)` with a try/catch fallback.
 - Drizzle ORM wraps the pool with the shared schema
 
 **Vector pool** (`server/vectorDb.ts`):

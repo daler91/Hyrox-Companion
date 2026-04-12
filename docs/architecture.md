@@ -2,7 +2,7 @@
 
 # Architecture Guide
 
-This document describes the high-level architecture of the Hyrox Companion (fitai.coach) project -- a full-stack TypeScript monorepo combining a React frontend, an Express API server, PostgreSQL with pgvector, Google Gemini AI, Clerk authentication, and Strava integration.
+This document describes the high-level architecture of the Hyrox Companion (fitai.coach) project -- a full-stack TypeScript monorepo combining a React frontend, an Express API server, PostgreSQL with pgvector, Google Gemini AI, Clerk authentication, Strava and Garmin Connect activity sync, and a GDPR-compliant opt-in consent model for every outbound data flow.
 
 ---
 
@@ -31,9 +31,10 @@ graph TD
 
     SERVER -- "Drizzle ORM" --> PG["PostgreSQL"]
     SERVER -- "pgvector queries" --> PGVEC["PostgreSQL + pgvector"]
-    SERVER -- "Gemini API" --> GEMINI["Google Gemini"]
+    SERVER -- "Gemini API (gated on aiCoachEnabled)" --> GEMINI["Google Gemini"]
     SERVER -- "JWT verification" --> CLERK["Clerk"]
     SERVER -- "OAuth + webhooks" --> STRAVA["Strava API"]
+    SERVER -- "Reverse-engineered SSO" --> GARMIN["Garmin Connect"]
     SERVER -- "pg-boss" --> PGBOSS["pg-boss queue\n(PostgreSQL-backed)"]
 ```
 
