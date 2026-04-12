@@ -240,6 +240,15 @@ The application uses CSRF protection via the `csrf-csrf` library (double-submit 
 - On the client side, the cached CSRF token is reset when Clerk's `onSignIn` event fires, forcing a fresh token fetch after authentication transitions.
 - For pre-login requests (where Clerk auth hasn't run yet), the session identifier falls back to the client IP address.
 
+### Key Separation (CSRF_SECRET vs. ENCRYPTION_KEY)
+
+In production, `CSRF_SECRET` is **required** and **must be distinct** from `ENCRYPTION_KEY`. Both constraints are enforced at startup in `server/env.ts` via Zod `.refine()` checks that hard-fail boot with explicit messages:
+
+- `"❌ FATAL: CSRF_SECRET is required in production"`
+- `"❌ FATAL: CSRF_SECRET must differ from ENCRYPTION_KEY for proper key separation"`
+
+Mixing the two keys would tie the HMAC used for CSRF token signing to the same secret that decrypts Strava/Garmin credentials; rotating one would force the other. In development/test, `CSRF_SECRET` may be omitted and the middleware falls back to `ENCRYPTION_KEY` for convenience.
+
 ### Client Flow
 
 1. On app load, the API client calls `GET /api/v1/csrf-token` to obtain a CSRF token.
@@ -247,6 +256,28 @@ The application uses CSRF protection via the `csrf-csrf` library (double-submit 
 3. If a 403 CSRF error is received, the client automatically refetches the token and retries the request.
 
 See [Server -- CSRF Protection](server.md#csrf-protection) for full implementation details.
+
+---
+
+## Account Deletion
+
+**Key file:** `server/routes/account.ts`
+
+The `DELETE /api/v1/account` endpoint is the GDPR "right to erasure" entry point. It deliberately sequences Clerk identity removal, Strava deauthorization, DB cascade delete, and auth-cache eviction so that no ordering can leave the user's data partially alive.
+
+### Order of Operations
+
+1. **Delete the Clerk identity first.** If the DB row were deleted before the Clerk identity, the user's next authenticated request would hit `ensureUserExists` and silently re-provision a fresh DB row ("undeleting" the account). By deleting Clerk first, subsequent requests are rejected at the auth middleware.
+
+2. **Clerk 404 is treated as success.** If `clerkClient.users.deleteUser(userId)` throws with `status === 404`, the handler logs `"Clerk user already deleted, continuing with DB cleanup"` and proceeds. This makes the endpoint idempotent for retries where a previous attempt succeeded at Clerk but failed at a later step. Any other Clerk error aborts the request so the DB row is left intact.
+
+3. **Best-effort Strava deauthorization.** `POST https://www.strava.com/oauth/deauthorize` is called with the stored Strava access token. Failures are logged at `warn` and swallowed — the user's data is still deleted. (Garmin requires no equivalent call: `@flow-js/garmin-connect` has no server-side revocation; discarding the tokens is sufficient.)
+
+4. **Delete the DB user row.** FK `ON DELETE CASCADE` removes every child row: workouts, sets, plans, plan days, chat messages, coaching materials and their embeddings, Strava and Garmin connections, custom exercises, push subscriptions, AI usage logs, idempotency keys, and timeline annotations.
+
+5. **Evict the auth seen-cache.** `evictUserFromSeenCache(userId)` clears the 5-minute `ensureUserExists` cache so a stale Clerk session held by another tab cannot re-provision the user within the TTL window.
+
+Rate-limited to 3 per minute under the `accountDelete` category — enough to retry a transient failure, not enough to mass-delete.
 
 ---
 
@@ -267,11 +298,14 @@ The server sets `trust proxy` to `1` in `setupAuth` to ensure correct client IP 
 | Variable | Required | Side | Description |
 |---|---|---|---|
 | `CLERK_PUBLISHABLE_KEY` | Optional* | Server | Clerk publishable key. Passed to Clerk middleware on the server. |
-| `CLERK_SECRET_KEY` | Optional* | Server | Clerk secret key. Used by `@clerk/express` to validate JWTs and by `clerkClient` to call the Clerk API. |
+| `CLERK_SECRET_KEY` | Optional* | Server | Clerk secret key. Used by `@clerk/express` to validate JWTs and by `clerkClient` to call the Clerk API (including `users.deleteUser` in `/api/v1/account`). |
 | `VITE_CLERK_PUBLISHABLE_KEY` | Optional* | Client | Clerk publishable key for the React client. Vite exposes this to the browser bundle. |
+| `CSRF_SECRET` | Required in production** | Server | 32+ char secret for CSRF token HMAC. Must differ from `ENCRYPTION_KEY` in production (see [Key Separation](#key-separation-csrf_secret-vs-encryption_key)). Falls back to `ENCRYPTION_KEY` in dev/test only. |
 | `ALLOW_DEV_AUTH_BYPASS` | Optional | Both | Set to `"true"` to enable the dev auth bypass. Only permitted in `development` and `test` environments. Fatal in production. |
 
 *The Clerk keys are optional in the Zod schema but are effectively required for production. If they are absent and `ALLOW_DEV_AUTH_BYPASS` is not `"true"`, the server will throw an error on startup.
+
+**Enforced at boot by `server/env.ts` `.refine()` guards; missing or `=== ENCRYPTION_KEY` in production aborts startup with an `❌ FATAL:` message.
 
 ---
 
