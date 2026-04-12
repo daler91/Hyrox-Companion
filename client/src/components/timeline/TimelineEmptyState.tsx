@@ -5,6 +5,7 @@ import {
   FileText,
   Loader2,
   Sparkles,
+  StickyNote,
   Target,
   Wand2,
   Zap,
@@ -29,18 +30,21 @@ interface TimelineEmptyStateProps {
   handleFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   setSchedulingPlanId: (id: string) => void;
   setFilterStatus: (status: FilterStatus) => void;
+  onLogNote?: () => void;
 }
 
 interface WelcomeEmptyStateProps {
   readonly samplePlanMutation: { mutate: () => void; isPending: boolean };
   readonly importMutation: { isPending: boolean };
   readonly handleFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  readonly onLogNote?: () => void;
 }
 
 function WelcomeEmptyState({
   samplePlanMutation,
   importMutation,
   handleFileUpload,
+  onLogNote,
 }: Readonly<WelcomeEmptyStateProps>) {
   const [showGenerateDialog, setShowGenerateDialog] = useState(false);
 
@@ -125,7 +129,7 @@ function WelcomeEmptyState({
         </div>
       </div>
 
-      <div className="flex justify-center pt-2">
+      <div className="flex flex-col sm:flex-row gap-2 justify-center pt-2">
         <Link href="/log">
           <Button
             variant="ghost"
@@ -135,6 +139,16 @@ function WelcomeEmptyState({
             Or just log a workout
           </Button>
         </Link>
+        {onLogNote ? (
+          <Button
+            variant="ghost"
+            onClick={onLogNote}
+            data-testid="button-log-note-empty"
+          >
+            <StickyNote className="h-4 w-4 mr-2" />
+            Log a note
+          </Button>
+        ) : null}
       </div>
 
       <p className="text-xs text-muted-foreground pt-2">
@@ -222,6 +236,7 @@ export default function TimelineEmptyState({
   handleFileUpload,
   setSchedulingPlanId,
   setFilterStatus,
+  onLogNote,
 }: Readonly<TimelineEmptyStateProps>) {
   let emptyStateContent = null;
 
@@ -231,6 +246,7 @@ export default function TimelineEmptyState({
         samplePlanMutation={samplePlanMutation}
         importMutation={importMutation}
         handleFileUpload={handleFileUpload}
+        onLogNote={onLogNote}
       />
     );
   } else if (filterStatus === "all" && selectedPlanId) {

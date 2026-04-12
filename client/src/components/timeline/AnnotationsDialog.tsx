@@ -1,7 +1,7 @@
 import type { InsertTimelineAnnotation, TimelineAnnotation, TimelineAnnotationType } from "@shared/schema";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Heart, Loader2, Plane, Stethoscope, Trash2 } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -15,33 +15,17 @@ import { useToast } from "@/hooks/use-toast";
 import { api, QUERY_KEYS } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
 
+import { TYPE_COLORS, TYPE_LABELS } from "./annotation-style";
+import { AnnotationTypeIcon } from "./AnnotationTypeIcon";
+
 interface AnnotationsDialogProps {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
-}
-
-const TYPE_LABELS: Record<TimelineAnnotationType, string> = {
-  injury: "Injury",
-  illness: "Illness",
-  travel: "Travel",
-  rest: "Rest block",
-};
-
-// Matches the Tailwind color ramp used on the Timeline banner (see
-// TimelineAnnotationsBanner) so the dialog, banner, and Analytics chart
-// render the same types in the same colors.
-const TYPE_COLORS: Record<TimelineAnnotationType, string> = {
-  injury: "bg-red-500/10 text-red-700 border-red-500/30 dark:text-red-400",
-  illness: "bg-amber-500/10 text-amber-700 border-amber-500/30 dark:text-amber-400",
-  travel: "bg-sky-500/10 text-sky-700 border-sky-500/30 dark:text-sky-400",
-  rest: "bg-emerald-500/10 text-emerald-700 border-emerald-500/30 dark:text-emerald-400",
-};
-
-function getTypeIcon(type: TimelineAnnotationType) {
-  if (type === "injury") return Heart;
-  if (type === "illness") return Stethoscope;
-  if (type === "travel") return Plane;
-  return Heart; // rest → reuse Heart for now
+  /** When provided, seeds both `startDate` and `endDate` for the create
+   * form on the closed→open transition — used by the inline "Log a note"
+   * buttons on each `TimelineDateGroup` header so the user doesn't have to
+   * re-pick the date they just clicked on. */
+  readonly initialDate?: string;
 }
 
 /**
@@ -50,13 +34,29 @@ function getTypeIcon(type: TimelineAnnotationType) {
  * the list below shows existing entries with a delete button each. Edit
  * isn't wired in this first pass — users can delete and re-create.
  */
-export function AnnotationsDialog({ open, onOpenChange }: Readonly<AnnotationsDialogProps>) {
+export function AnnotationsDialog({ open, onOpenChange, initialDate }: Readonly<AnnotationsDialogProps>) {
   const { toast } = useToast();
 
   const [type, setType] = useState<TimelineAnnotationType>("injury");
-  const [startDate, setStartDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
-  const [endDate, setEndDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
+  const [startDate, setStartDate] = useState(() => initialDate ?? format(new Date(), "yyyy-MM-dd"));
+  const [endDate, setEndDate] = useState(() => initialDate ?? format(new Date(), "yyyy-MM-dd"));
   const [note, setNote] = useState("");
+
+  // React's "store info from previous renders" pattern: when the parent
+  // hands us a fresh `initialDate` (the user clicked a different day's
+  // inline + Note chip), we reseed the create form's dates on the next
+  // render. Setting state during render — as opposed to inside a
+  // useEffect — is the idiomatic way to derive state from a prop change
+  // without cascading re-renders.
+  // https://react.dev/reference/react/useState#storing-information-from-previous-renders
+  const [prevInitialDate, setPrevInitialDate] = useState(initialDate);
+  if (initialDate !== prevInitialDate) {
+    setPrevInitialDate(initialDate);
+    if (initialDate) {
+      setStartDate(initialDate);
+      setEndDate(initialDate);
+    }
+  }
 
   const { data: annotations, isLoading } = useQuery<TimelineAnnotation[]>({
     queryKey: QUERY_KEYS.timelineAnnotations,
@@ -132,7 +132,7 @@ export function AnnotationsDialog({ open, onOpenChange }: Readonly<AnnotationsDi
     return (
       <ul className="space-y-2" data-testid="annotations-list">
         {annotations.map((annotation) => {
-          const Icon = getTypeIcon(annotation.type as TimelineAnnotationType);
+          const annotationType = annotation.type as TimelineAnnotationType;
           return (
             <li
               key={annotation.id}
@@ -143,10 +143,10 @@ export function AnnotationsDialog({ open, onOpenChange }: Readonly<AnnotationsDi
                 <div className="flex items-center gap-2 flex-wrap">
                   <Badge
                     variant="outline"
-                    className={`text-[10px] ${TYPE_COLORS[annotation.type as TimelineAnnotationType]}`}
+                    className={`text-[10px] ${TYPE_COLORS[annotationType]}`}
                   >
-                    <Icon className="h-3 w-3 mr-1" aria-hidden="true" />
-                    {TYPE_LABELS[annotation.type as TimelineAnnotationType]}
+                    <AnnotationTypeIcon type={annotationType} className="h-3 w-3 mr-1" />
+                    {TYPE_LABELS[annotationType]}
                   </Badge>
                   <span className="text-xs text-muted-foreground">
                     {annotation.startDate} — {annotation.endDate}
@@ -162,7 +162,7 @@ export function AnnotationsDialog({ open, onOpenChange }: Readonly<AnnotationsDi
                 onClick={() => deleteMutation.mutate(annotation.id)}
                 disabled={deleteMutation.isPending}
                 data-testid={`button-delete-annotation-${annotation.id}`}
-                aria-label={`Delete ${TYPE_LABELS[annotation.type as TimelineAnnotationType]} annotation`}
+                aria-label={`Delete ${TYPE_LABELS[annotationType]} annotation`}
               >
                 <Trash2 className="h-4 w-4" aria-hidden="true" />
               </Button>

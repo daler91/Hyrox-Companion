@@ -11,7 +11,7 @@ export { default as SkipConfirmDialog } from "./SkipConfirmDialog";
 export { default as SuggestionsPanel } from "./SuggestionsPanel";
 export { default as TimelineFilters } from "./timeline-filters";
 export { default as TimelineWorkoutCard } from "./timeline-workout-card";
-export { TimelineAnnotationsBanner } from "./TimelineAnnotationsBanner";
+export { TimelineAnnotationCard } from "./TimelineAnnotationCard";
 export { default as TimelineDateGroup } from "./TimelineDateGroup";
 export { default as TimelineEmptyState } from "./TimelineEmptyState";
 export { default as TimelineHeader } from "./TimelineHeader";

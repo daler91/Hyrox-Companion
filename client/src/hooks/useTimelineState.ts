@@ -11,7 +11,7 @@ export function useTimelineState() {
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
 
   const data = useTimelineData(selectedPlanId);
-  const filters = useTimelineFilters(data.timelineData);
+  const filters = useTimelineFilters(data.timelineData, data.annotations);
 
   const planImport = usePlanImport({
     onPlanScheduled: (planId) => setSelectedPlanId(planId),

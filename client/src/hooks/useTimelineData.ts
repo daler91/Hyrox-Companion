@@ -1,4 +1,4 @@
-import type { PersonalRecord,TimelineEntry, TrainingPlan } from "@shared/schema";
+import type { PersonalRecord,TimelineAnnotation, TimelineEntry, TrainingPlan } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback,useEffect, useRef } from "react";
 
@@ -26,6 +26,15 @@ export function useTimelineData(selectedPlanId: string | null) {
     queryFn: () => api.timeline.get(selectedPlanId),
   });
 
+  // Annotations are user-scoped (not plan-scoped), so this query has no
+  // selectedPlanId in its key. Mutations in `AnnotationsDialog` and the
+  // page-level delete mutation invalidate `QUERY_KEYS.timelineAnnotations`,
+  // keeping this list fresh on create/delete.
+  const { data: annotations = [] } = useQuery<TimelineAnnotation[]>({
+    queryKey: QUERY_KEYS.timelineAnnotations,
+    queryFn: () => api.timelineAnnotations.list(),
+  });
+
   useEffect(() => {
     if (!timelineLoading && todayRef.current) {
       const timerId = setTimeout(() => {
@@ -43,6 +52,7 @@ export function useTimelineData(selectedPlanId: string | null) {
     personalRecords,
     timelineData,
     timelineLoading,
+    annotations,
     isNewUser,
     todayRef,
     scrollToToday,

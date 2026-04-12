@@ -1,4 +1,4 @@
-import type { TimelineEntry } from "@shared/schema";
+import type { TimelineAnnotation,TimelineEntry } from "@shared/schema";
 import { format } from "date-fns";
 import { useMemo,useState } from "react";
 
@@ -13,7 +13,10 @@ const FILTER_STATUSES: readonly FilterStatus[] = [
   "skipped",
 ];
 
-export function useTimelineFilters(timelineData: TimelineEntry[]) {
+export function useTimelineFilters(
+  timelineData: TimelineEntry[],
+  annotations: TimelineAnnotation[] = [],
+) {
   const [filterStatus, setFilterStatus] = useUrlQueryState<FilterStatus>(
     "status",
     "all",
@@ -22,6 +25,10 @@ export function useTimelineFilters(timelineData: TimelineEntry[]) {
   const [showAllPast, setShowAllPast] = useState(false);
   const [showAllFuture, setShowAllFuture] = useState(false);
 
+  // Note: the status filter only applies to TimelineEntry.status. Annotations
+  // have no status, so they render regardless of the current filter — an
+  // injury that explains a "missed" workout should still be visible when the
+  // user narrows to Missed. Do not "fix" this by filtering annotations too.
   const filteredTimeline = useMemo(() =>
     timelineData.filter((entry) => {
       if (filterStatus === "all") return true;
@@ -38,6 +45,16 @@ export function useTimelineFilters(timelineData: TimelineEntry[]) {
       }
       groups[entry.date].push(entry);
     });
+
+    // Ensure annotation-only start dates still get a row, so the virtualizer
+    // has something to render. Without this, an annotation whose startDate
+    // has no matching workout would be silently dropped from the timeline.
+    annotations.forEach((annotation) => {
+      if (!groups[annotation.startDate]) {
+        groups[annotation.startDate] = [];
+      }
+    });
+
     // Fast string comparison for YYYY-MM-DD dates instead of localeCompare
     const allGroups = Object.entries(groups).sort(([a], [b]) => {
       if (b < a) return -1;
@@ -71,7 +88,7 @@ export function useTimelineFilters(timelineData: TimelineEntry[]) {
       hiddenPastCount: past.length - visPast.length,
       hiddenFutureCount: future.length - visFuture.length,
     };
-  }, [filteredTimeline, showAllPast, showAllFuture]);
+  }, [filteredTimeline, annotations, showAllPast, showAllFuture]);
 
   return {
     filterStatus,
