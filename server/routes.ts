@@ -5,6 +5,7 @@ import type { Express } from "express";
 import { setupAuth } from "./clerkAuth";
 import { registerGarminRoutes } from "./garmin";
 import { csrfProtection, csrfTokenHandler } from "./middleware/csrf";
+import accountRoutes from "./routes/account";
 import aiRoutes from "./routes/ai";
 import analyticsRoutes from "./routes/analytics";
 import authRoutes from "./routes/auth";
@@ -35,6 +36,7 @@ export async function registerRoutes(
   registerStravaRoutes(app);
   registerGarminRoutes(app);
 
+  app.use(accountRoutes);
   app.use(authRoutes);
   app.use(preferencesRoutes);
   app.use(emailRoutes);

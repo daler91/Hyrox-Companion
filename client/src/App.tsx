@@ -23,6 +23,7 @@ const LogWorkout = lazy(() => import("@/pages/LogWorkout"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const Analytics = lazy(() => import("@/pages/Analytics"));
 const Landing = lazy(() => import("@/pages/Landing"));
+const Privacy = lazy(() => import("@/pages/Privacy"));
 
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string | undefined;
 
@@ -65,6 +66,7 @@ function AuthenticatedRouter() {
         <Route path="/log"><FeatureErrorBoundaryWrapper featureName="Log Workout"><LogWorkout /></FeatureErrorBoundaryWrapper></Route>
         <Route path="/analytics"><FeatureErrorBoundaryWrapper featureName="Analytics"><Analytics /></FeatureErrorBoundaryWrapper></Route>
         <Route path="/settings"><FeatureErrorBoundaryWrapper featureName="Settings"><Settings /></FeatureErrorBoundaryWrapper></Route>
+        <Route path="/privacy"><Privacy /></Route>
         <Route component={NotFound} />
       </Switch>
     </Suspense>
@@ -130,7 +132,10 @@ function AppContent() {
       when="signed-in"
       fallback={
         <Suspense fallback={<LazyFallback />}>
-          <Landing />
+          <Switch>
+            <Route path="/privacy"><Privacy /></Route>
+            <Route><Landing /></Route>
+          </Switch>
         </Suspense>
       }
     >

@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { useCallback,useMemo, useRef, useState } from "react";
 
+import { AIConsentDialog } from "@/components/coach/AIConsentDialog";
 import { CoachPanel } from "@/components/CoachPanel";
 import { FeatureErrorBoundaryWrapper } from "@/components/FeatureErrorBoundaryWrapper";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
@@ -232,7 +233,9 @@ function TimelineContent({
 
 
 export default function Timeline() {
-  const { data, filters, onboarding, planImport, workoutActions, combine, selectedPlanId, setSelectedPlanId } = useTimelineState();
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const { data, filters, onboarding, planImport, workoutActions, combine, selectedPlanId, setSelectedPlanId } = useTimelineState({ aiCoachEnabled: !!user?.aiCoachEnabled });
 
   const { plans, plansLoading, personalRecords, timelineData, timelineLoading, annotations, isNewUser, todayRef, scrollToToday } = data;
   const { filterStatus, setFilterStatus, showAllPast, setShowAllPast, showAllFuture, setShowAllFuture, pastGroups, futureGroups, visiblePastGroups, visibleFutureGroups, hiddenPastCount, hiddenFutureCount } = filters;
@@ -240,13 +243,34 @@ export default function Timeline() {
   const { csvPreview, setCsvPreview, schedulingPlanId, setSchedulingPlanId, startDate, setStartDate, fileInputRef, handleFileUpload, confirmImport, importMutation, samplePlanMutation, renamePlanMutation, schedulePlanMutation, updatePlanGoalMutation } = planImport;
   const { detailEntry, setDetailEntry, skipConfirmEntry, setSkipConfirmEntry, openDetailDialog, handleSaveFromDetail, handleMarkComplete, handleChangeStatus, handleDelete, confirmSkip, updateDayMutation, logWorkoutMutation, updateWorkoutMutation, deleteWorkoutMutation, deletePlanDayMutation } = workoutActions;
   const { combiningEntry, setCombiningEntry, combineSecondEntry, setCombineSecondEntry, showCombineDialog, setShowCombineDialog, handleCombine, handleConfirmCombine, combineWorkoutsMutation } = combine;
-  const { user } = useAuth();
-  const { toast } = useToast();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [showAIConsent, setShowAIConsent] = useState(false);
   const [annotationsDialogOpen, setAnnotationsDialogOpen] = useState(false);
   // Seeds the create form in AnnotationsDialog when the user clicks a row's
   // inline "+ Note" chip, so they don't have to re-pick the date.
   const [annotationInitialDate, setAnnotationInitialDate] = useState<string | undefined>(undefined);
+
+  // Gate the AI Coach behind an explicit consent prompt when the user has
+  // not yet opted in (aiCoachEnabled defaults to false for new users).
+  const handleCoachToggle = useCallback((open: boolean) => {
+    if (open && user && !user.aiCoachEnabled) {
+      setShowAIConsent(true);
+      return;
+    }
+    setCoachOpen(open);
+  }, [user, setCoachOpen]);
+
+  const handleAIConsentAccept = useCallback(() => {
+    setShowAIConsent(false);
+    api.preferences.update({ aiCoachEnabled: true })
+      .then(() => {
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.authUser }).catch(() => {});
+        setCoachOpen(true);
+      })
+      .catch(() => {
+        toast({ title: "Could not enable AI Coach", description: "Please try again." });
+      });
+  }, [setCoachOpen, toast]);
 
   // O(1) lookup by start date for the virtualized row renderer. Rebuilds
   // only when the annotations array itself changes.
@@ -406,7 +430,7 @@ export default function Timeline() {
         isAnnotationDeleting={deleteAnnotationMutation.isPending}
       />
 
-          <FloatingActionButton coachPanelOpen={coachOpen} onCoachToggle={() => setCoachOpen(!coachOpen)} />
+          <FloatingActionButton coachPanelOpen={coachOpen} onCoachToggle={() => handleCoachToggle(!coachOpen)} />
 
           <SchedulePlanDialog
             open={!!schedulingPlanId}
@@ -521,6 +545,12 @@ export default function Timeline() {
           </div>
         </div>
       )}
+
+      <AIConsentDialog
+        open={showAIConsent}
+        onAccept={handleAIConsentAccept}
+        onDecline={() => setShowAIConsent(false)}
+      />
     </div>
     </>
   );

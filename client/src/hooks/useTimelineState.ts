@@ -7,7 +7,7 @@ import { useTimelineData } from "./useTimelineData";
 import { useTimelineFilters } from "./useTimelineFilters";
 import { useWorkoutActions } from "./useWorkoutActions";
 
-export function useTimelineState() {
+export function useTimelineState(options?: { aiCoachEnabled?: boolean }) {
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
 
   const data = useTimelineData(selectedPlanId);
@@ -17,7 +17,7 @@ export function useTimelineState() {
     onPlanScheduled: (planId) => setSelectedPlanId(planId),
   });
 
-  const onboarding = useOnboarding(data.isNewUser, planImport.fileInputRef);
+  const onboarding = useOnboarding(data.isNewUser, planImport.fileInputRef, options?.aiCoachEnabled);
   const workoutActions = useWorkoutActions(selectedPlanId);
   const combine = useCombineWorkouts();
 

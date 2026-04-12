@@ -3,6 +3,7 @@ import { Loader2, RotateCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 
+import { AccountDangerZone } from "@/components/settings/AccountDangerZone";
 import { CoachingSection } from "@/components/settings/CoachingSection";
 import { DataToolsSection } from "@/components/settings/DataToolsSection";
 import { GarminSection } from "@/components/settings/GarminSection";
@@ -345,6 +346,8 @@ export default function Settings() {
       </Card>
 
       <DataToolsSection />
+
+      <AccountDangerZone />
 
       {hasChanges && (
         <div className="sticky bottom-0 -mx-4 md:-mx-8 px-4 md:px-8 py-3 border-t bg-background/95 backdrop-blur z-40">

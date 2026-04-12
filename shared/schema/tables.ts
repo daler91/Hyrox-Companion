@@ -30,11 +30,13 @@ export const users = pgTable("users", {
   weeklyGoal: integer("weekly_goal").default(5),
   // Master email toggle. When false, no email is ever sent. When true,
   // the per-type toggles below decide which email categories actually
-  // go out. Existing users default to all-on to preserve behavior.
-  emailNotifications: boolean("email_notifications").default(true),
-  emailWeeklySummary: boolean("email_weekly_summary").default(true),
-  emailMissedReminder: boolean("email_missed_reminder").default(true),
-  aiCoachEnabled: boolean("ai_coach_enabled").default(true),
+  // go out. New users must explicitly opt in (GDPR compliance).
+  emailNotifications: boolean("email_notifications").default(false),
+  emailWeeklySummary: boolean("email_weekly_summary").default(false),
+  emailMissedReminder: boolean("email_missed_reminder").default(false),
+  // AI coach requires explicit consent before first use because workout
+  // data is sent to Google Gemini for processing.
+  aiCoachEnabled: boolean("ai_coach_enabled").default(false),
   isAutoCoaching: boolean("is_auto_coaching").default(false),
   lastWeeklySummaryAt: timestamp("last_weekly_summary_at"),
   lastMissedReminderAt: timestamp("last_missed_reminder_at"),

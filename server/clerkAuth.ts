@@ -108,6 +108,11 @@ export function clearUserSeenCache() {
   userSeenCache.clear();
 }
 
+/** Evict a single user from the seen-cache (e.g. after account deletion). */
+export function evictUserFromSeenCache(userId: string) {
+  userSeenCache.delete(userId);
+}
+
 async function ensureUserExists(clerkUserId: string): Promise<void> {
   const now = Date.now();
   const seenAt = userSeenCache.get(clerkUserId);
