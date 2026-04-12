@@ -46,6 +46,18 @@ if (env.SENTRY_DSN) {
 }
 
 const app = express();
+
+// Drive "trust proxy" from validated env config so req.ip is not derived
+// from attacker-controlled forwarded headers in misconfigured deployments
+// (CODEBASE_AUDIT.md §2).
+let trustProxy: boolean | string | number = 1;
+if (env.TRUST_PROXY === "0") {
+  trustProxy = false;
+} else if (env.TRUST_PROXY === "loopback") {
+  trustProxy = "loopback";
+}
+app.set("trust proxy", trustProxy);
+
 app.disable("x-powered-by");
 const httpServer = createServer(app);
 
