@@ -27,6 +27,10 @@ export function ExerciseProgressionTab({ dateParams }: ExerciseProgressionTabPro
   const { data: rawPRs } = useQuery<Record<string, RawPREntry>>({
     queryKey: ["/api/v1/personal-records", dateParams],
     queryFn: () => api.analytics.getPersonalRecords(dateParams),
+    // ⚡ Perf: stay fresh until a workout mutation invalidates us. Prior
+    // 5-min default still fired on every tab toggle that remounted the
+    // component and exceeded the window. (CODEBASE_REVIEW_2026-04-12.md #27)
+    staleTime: Infinity,
   });
 
   const availableExercises = useMemo(() => {
@@ -41,6 +45,8 @@ export function ExerciseProgressionTab({ dateParams }: ExerciseProgressionTabPro
   const { data: allAnalytics, isLoading: analyticsLoading } = useQuery<Record<string, ExerciseAnalyticDay[]>>({
     queryKey: ["/api/v1/exercise-analytics", dateParams],
     queryFn: () => api.analytics.getExerciseAnalytics(dateParams) as Promise<Record<string, ExerciseAnalyticDay[]>>,
+    // ⚡ Perf: see note above on personal-records query.
+    staleTime: Infinity,
   });
 
   return (

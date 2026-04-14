@@ -139,6 +139,10 @@ export function useWorkoutForm({
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workouts }).catch(() => {});
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }).catch(() => {});
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.authUser }).catch(() => {});
+      // Paired with staleTime: Infinity on analytics queries — see
+      // CODEBASE_REVIEW_2026-04-12.md #27.
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.personalRecords }).catch(() => {});
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.exerciseAnalytics }).catch(() => {});
       // Run any consumer-supplied cleanup (e.g. clearing the draft) before
       // we navigate away, so the unmount doesn't race with it.
       onSaveSuccess?.();

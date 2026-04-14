@@ -37,6 +37,10 @@ export function PersonalRecordsTab({ dateParams }: PersonalRecordsTabProps) {
   const { data: rawPRs, isLoading } = useQuery<Record<string, RawPREntry>>({
     queryKey: ["/api/v1/personal-records", dateParams],
     queryFn: () => api.analytics.getPersonalRecords(dateParams),
+    // ⚡ Perf: mutation-driven invalidation (workout create/update/delete
+    // invalidate QUERY_KEYS.personalRecords); avoids tab-toggle refetch.
+    // (CODEBASE_REVIEW_2026-04-12.md #27)
+    staleTime: Infinity,
   });
 
   const { filteredPRs, recentPRs } = useMemo(() => {

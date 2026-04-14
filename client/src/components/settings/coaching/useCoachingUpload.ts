@@ -1,12 +1,24 @@
-import mammoth from "mammoth";
-import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
-import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { useRef,useState } from "react";
 
 import { useToast } from "@/hooks/use-toast";
 import { useCreateCoachingMaterial } from "@/hooks/useCoachingMaterials";
 
-GlobalWorkerOptions.workerSrc = pdfjsWorker;
+// ⚡ Perf: pdfjs-dist (~2.5 MB) + mammoth (~300 KB) are lazy-loaded inside
+// the extractors so the hook itself stays lightweight for users who never
+// upload a PDF/DOCX (CODEBASE_REVIEW_2026-04-12.md #11). The pdfjs worker
+// source is also resolved lazily and cached on the first PDF upload.
+let pdfjsWorkerConfigured = false;
+async function ensurePdfjs() {
+  const [{ getDocument, GlobalWorkerOptions }, workerModule] = await Promise.all([
+    import("pdfjs-dist"),
+    import("pdfjs-dist/build/pdf.worker.min.mjs?url"),
+  ]);
+  if (!pdfjsWorkerConfigured) {
+    GlobalWorkerOptions.workerSrc = (workerModule as { default: string }).default;
+    pdfjsWorkerConfigured = true;
+  }
+  return { getDocument };
+}
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
@@ -17,6 +29,7 @@ function sanitizeText(text: string): string {
 }
 
 async function extractPdfText(file: File): Promise<string> {
+  const { getDocument } = await ensurePdfjs();
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await getDocument({ data: arrayBuffer }).promise;
   const pages: string[] = [];
@@ -29,6 +42,7 @@ async function extractPdfText(file: File): Promise<string> {
 }
 
 async function extractDocxText(file: File): Promise<string> {
+  const { default: mammoth } = await import("mammoth");
   const arrayBuffer = await file.arrayBuffer();
   const result = await mammoth.extractRawText({ arrayBuffer });
   return sanitizeText(result.value);

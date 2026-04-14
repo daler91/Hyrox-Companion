@@ -1,10 +1,17 @@
 import { customExercises, type ExerciseSet,exerciseSets, type InsertExerciseSet, type InsertWorkoutLog, type ParsedExercise, planDays, trainingPlans, type UpdateWorkoutLog, users, type WorkoutLog, workoutLogs } from "@shared/schema";
 import { and,eq } from "drizzle-orm";
+import pLimit from "p-limit";
 
 import { db } from "../db";
 import { logger } from "../logger";
 import { DEFAULT_JOB_OPTIONS, queue } from "../queue";
 import { storage } from "../storage";
+
+// ⚡ Perf: cap concurrent Gemini parse calls per chunk to protect the
+// quota & circuit breaker (CODEBASE_REVIEW_2026-04-12.md #12). Prior code
+// chunked at 5 but fired all 5 in parallel; p-limit(3) makes the cap
+// explicit and decouples it from chunk size.
+const GEMINI_PARSE_CONCURRENCY = 3;
 
 // Drizzle transaction type — any method chain valid on `db` is also valid on `tx`.
 type WorkoutTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -334,9 +341,12 @@ export async function processBatchChunk(
   let parsed = 0;
   let failed = 0;
 
-  // Parse workouts concurrently in chunks to optimize AI service usage
+  // Parse workouts concurrently in chunks to optimize AI service usage,
+  // bounded by p-limit so Gemini never sees more than
+  // GEMINI_PARSE_CONCURRENCY in-flight calls regardless of chunk size.
+  const limit = pLimit(GEMINI_PARSE_CONCURRENCY);
   const chunkResults = await Promise.allSettled(
-    chunk.map(workout => prepareParsedWorkout(workout, weightUnit))
+    chunk.map(workout => limit(() => prepareParsedWorkout(workout, weightUnit)))
   );
 
   // Save each successfully parsed workout sequentially to prevent DB connection strain
