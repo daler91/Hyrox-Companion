@@ -29,23 +29,70 @@ No finding is a shipping catastrophe, but several items should be closed before 
 
 ---
 
+## Addressed in Quick-Wins Pass (branch `claude/quick-wins-codebase-review-OyDhP`)
+
+A follow-up pass landed ten high-leverage, low-risk fixes targeting findings that
+were one-to-ten-line diffs with no data-model, infrastructure, or product-scope
+impact. Status column uses:
+
+- **Fixed** — change shipped on the quick-wins branch; verified by existing tests.
+- **Already correct** — verification showed the finding was a false positive or the
+  recommended fix was already in place; no code change needed.
+- **Deferred** — out of scope for this pass; still tracked in the tables below.
+
+| # | Area | Status | Summary of change |
+|---|------|--------|-------------------|
+| 2 | Privacy | **Fixed** | Added `beforeSend` Sentry hook (`server/index.ts`) that strips `request.data`, `request.query_string`, `request.cookies`, sensitive headers (`authorization`, `cookie`, `x-csrf-token`, `x-idempotency-key`), and `user.{email,username,ip_address}` before transmission. |
+| 9 | UX / a11y | **Fixed** | `OnboardingWizard` now routes Esc key to `handleSkip` via `onOpenChange` (`client/src/components/OnboardingWizard.tsx`). Backdrop click remains intentionally blocked to prevent accidental dismissal mid-wizard. Closes WCAG 2.1 A keyboard trap. |
+| 11 | Performance | **Fixed** | `useCoachingUpload` (`client/src/components/settings/coaching/useCoachingUpload.ts`) now dynamic-imports `pdfjs-dist` + `mammoth` + the pdfjs worker URL inside `extractPdfText` / `extractDocxText`. Users who never upload a coaching doc no longer pay the ~2.8 MB FCP cost. |
+| 12 | Performance | **Fixed** | Per-chunk Gemini parse in `processBatchChunk` (`server/services/workoutService.ts`) wrapped with `pLimit(3)` so concurrency is explicitly bounded regardless of chunk size. Uses existing `p-limit@^7.3.0` dep. |
+| 13 | QA | **Fixed** | `parseExercisesFromText` (`server/gemini/exerciseParser.ts`) now early-returns `[]` on empty/whitespace input (skipping the Gemini call) and throws `AI_ERROR` when `response.text` is empty instead of silently defaulting to `"[]"`. |
+| 19 | Privacy | **Fixed** | Explicit HSTS in Helmet config (`server/index.ts`): `maxAge: 31536000`, `includeSubDomains: true`, `preload: true`. Was relying on Helmet's shorter default with no preload. |
+| 27 | Performance | **Fixed** | `ExerciseProgressionTab` + `PersonalRecordsTab` analytics queries set `staleTime: Infinity`. `useWorkoutActions` (log/update/delete) and `useWorkoutForm` now invalidate `QUERY_KEYS.personalRecords` / `QUERY_KEYS.exerciseAnalytics` so the stricter cache still refreshes after user actions. |
+| 33 | QA | **Fixed** | `exerciseSetSchema` + `incomingExerciseSchema` (`shared/schema/types.ts`) now bound `setNumber` / `reps` / `weight` / `distance` / `time` with realistic min/max. Two schemas diverge intentionally: `exerciseSetSchema.reps` uses `.min(0)` (AI output may emit failed-attempt rows) while `incomingExerciseSchema.reps` uses `.min(1)` (user-submitted zero-rep log is meaningless). |
+| 40 | Security | **Fixed** | Request-ID regex in `pinoHttp` (`server/index.ts`) tightened from `/^[\w.:-]+$/` (length ≤64) to `/^[A-Za-z0-9._-]{1,36}$/` — drops colon and caps length. |
+| 42 | Security | **Fixed** | `CSRF_SECRET !== ENCRYPTION_KEY` refine in `server/env.ts` now fires in all environments, not just production. Dev/test reuse of the same key will now fail fast. |
+| 45 | Performance | **Already correct** | Verification showed `client/src/lib/queryClient.ts` already promise-caches the CSRF token (`csrfTokenPromise`) and only re-fetches on 403 via `getCsrfToken(true)`. The review's recommended fix was already implemented; the finding is a false positive. |
+
+### Non-goals for this pass (still open)
+
+All Critical and Warning rows NOT in the table above remain open — they require
+DB migrations (#1, #20), policy/DPA work (#4), schema redesign (#7, #8), infra
+refactors (#14, #28), cross-cutting UI passes (#10, #22–26), or product-scope
+decisions (#3, #6, #21, #30). They are tracked in the **Critical Findings** and
+**Warnings** tables below with their original status.
+
+### Verification
+
+- `pnpm run check` (tsc): clean.
+- `pnpm run lint`: clean.
+- `pnpm run test`: 785 tests pass, 6 skipped (unchanged from baseline).
+
+### Score delta
+
+No scores are updated yet — the closed findings are a minority of each category's
+total. A revised score would be premature until the heavier data-privacy and
+business-scope items ship.
+
+---
+
 ## Critical Findings (must fix before shipping)
 
 | # | Category | Finding | File(s) | Recommended Fix |
 |---|----------|---------|---------|-----------------|
 | 1 | Privacy | PII stored plaintext at rest: email, name, heart rate, power, workout notes. Only Strava/Garmin tokens encrypted. | `shared/schema/tables.ts:24-126` | Column-level AES-256-GCM on email/name/biometrics, or DB-level TDE. |
-| 2 | Privacy | No `beforeSend` Sentry hook to scrub PII from error payloads (bodies, query, user emails in validation errors). | `server/index.ts:40-45` | Add `beforeSend` that strips `req.body` / `req.query` / PII-bearing headers. |
+| 2 | Privacy | **[Fixed]** No `beforeSend` Sentry hook to scrub PII from error payloads (bodies, query, user emails in validation errors). | `server/index.ts:40-45` | Add `beforeSend` that strips `req.body` / `req.query` / PII-bearing headers. |
 | 3 | Privacy | Data export omits chat messages, coaching materials, AI usage logs, custom exercises, biometrics — violates GDPR Art. 15. | `server/services/exportService.ts:38-64` | Extend export to include all user-owned tables. |
 | 4 | Privacy | Gemini calls lack opt-out of model training / retention for user prompts containing training history. | `server/gemini/chatService.ts`, `server/gemini/exerciseParser.ts` | Use enterprise Gemini keys (no-train), or document DPA, or add retention disclosure. |
 | 5 | Security | CSP `connectSrc` declared but not merged into initial Helmet directive — override middleware creates a window where the restrictive CSP is served. | `server/index.ts:201-253` | Merge `connectSrc` directly into Helmet's initial directive object; remove override. |
 | 6 | Security | Coaching material content allows 1.5 M chars × 2 MB JSON body — DoS vector via RAG chunking/embedding. | `server/routes/coaching.ts:19-20`, `server/index.ts:271` | Lower max; rate-limit by size + per-user quota before enqueueing `embed-coaching-material`. |
 | 7 | Business | README claims "built-in 8-week **Hyrox** program" but `samplePlan.ts` is generic functional fitness; schema has no Hyrox-station modelling. | `server/samplePlan.ts:1-65`, `shared/schema/enums.ts` | Redesign sample plan around the 8 stations; add `HyroxStation` enum and optional `station` field on `ExerciseSet`. |
 | 8 | Business | Garmin Connect integration (`server/garmin.ts`, `server/services/garminMapper.ts`, `garminConnections` table) is undocumented — not in README, no public routes. | `server/garmin.ts`, `shared/schema/tables.ts:150-170` | Either finish + document or delete. |
-| 9 | UX / a11y | Onboarding dialog has `onOpenChange={() => {}}` — cannot be dismissed by Esc or backdrop; traps keyboard users (WCAG 2.1 A). | `client/src/components/OnboardingWizard.tsx:99` | Allow Esc/backdrop to dismiss or treat as "skip". |
+| 9 | UX / a11y | **[Fixed]** Onboarding dialog has `onOpenChange={() => {}}` — cannot be dismissed by Esc or backdrop; traps keyboard users (WCAG 2.1 A). | `client/src/components/OnboardingWizard.tsx:99` | Allow Esc/backdrop to dismiss or treat as "skip". |
 | 10 | UX / a11y | Charts (Recharts) lack `role="img"` / `aria-label`; `MiniLineChart` returns `null` with no empty/loading state; no field-level `required` markers. | `client/src/components/analytics/MiniLineChart.tsx:62`, `GeneratePlanDialog`, `LogWorkout` | Add aria-labels, chart skeleton component, `*` markers on required inputs. |
-| 11 | Performance | `pdfjs-dist` (~2.5 MB) + `mammoth` (~300 KB) eagerly imported in coaching settings — blocks FCP/LCP for all users. | `client/src/components/settings/coaching/useCoachingUpload.ts:1-2` | Dynamic `import()` only inside the upload handler; lazy-load hook via `React.lazy`. |
-| 12 | Performance | Unbounded Gemini parallelism on bulk workout parse — large imports fan out 100+ concurrent calls, exhausting quota. | `server/services/workoutService.ts:84`, `server/gemini/exerciseParser.ts` | Wrap in `pLimit(3)` (dep already present). |
-| 13 | QA | AI parse accepts empty string (returns `[]` silently) and defaults `response.text || "[]"` — swallows Gemini failures as empty success. | `server/gemini/exerciseParser.ts:19,64`, `server/routes/ai.ts:20` | Early-return on empty input; throw on falsy `response.text`. |
+| 11 | Performance | **[Fixed]** `pdfjs-dist` (~2.5 MB) + `mammoth` (~300 KB) eagerly imported in coaching settings — blocks FCP/LCP for all users. | `client/src/components/settings/coaching/useCoachingUpload.ts:1-2` | Dynamic `import()` only inside the upload handler; lazy-load hook via `React.lazy`. |
+| 12 | Performance | **[Fixed]** Unbounded Gemini parallelism on bulk workout parse — large imports fan out 100+ concurrent calls, exhausting quota. | `server/services/workoutService.ts:84`, `server/gemini/exerciseParser.ts` | Wrap in `pLimit(3)` (dep already present). |
+| 13 | QA | **[Fixed]** AI parse accepts empty string (returns `[]` silently) and defaults `response.text || "[]"` — swallows Gemini failures as empty success. | `server/gemini/exerciseParser.ts:19,64`, `server/routes/ai.ts:20` | Early-return on empty input; throw on falsy `response.text`. |
 | 14 | DevOps | In-memory rate limiter (`express-rate-limit` `MemoryStore`) — correct per-instance, breaks globally as soon as Railway scales beyond one replica. | `server/index.ts:425` | Swap to `rate-limit-redis` before horizontal scaling. |
 
 ## Warnings (should fix soon)
@@ -56,7 +103,7 @@ No finding is a shipping catastrophe, but several items should be closed before 
 | 16 | Security | `STRAVA_STATE_SECRET` falls back to random at boot — multi-instance breaks OAuth CSRF state verification. | `server/strava.ts:25-27` | Require in prod via env schema `refine`. |
 | 17 | Security | Dev-auth bypass header `x-test-no-bypass` is guessable; should be gated on `NODE_ENV==="test"`. | `server/clerkAuth.ts:90` | Gate strictly on `NODE_ENV==="test"`. |
 | 18 | Security | AI output validation is regex-based — entity-encoding / Unicode evasion trivially bypasses. | `server/utils/sanitize.ts:40-45` | Replace with library-based sanitiser (DOMPurify-equivalent on server) + content moderation. |
-| 19 | Privacy | No HSTS header (Helmet defaults don't set it). | `server/index.ts:222-240` | `hsts: { maxAge: 31536000, includeSubDomains: true, preload: true }`. |
+| 19 | Privacy | **[Fixed]** No HSTS header (Helmet defaults don't set it). | `server/index.ts:222-240` | `hsts: { maxAge: 31536000, includeSubDomains: true, preload: true }`. |
 | 20 | Privacy | Push subscription endpoints/keys stored plaintext. | `shared/schema/tables.ts:302-312` | Encrypt `endpoint` / `p256dh` / `auth` or rotate on logout. |
 | 21 | Privacy | No data-retention jobs for chat messages, coaching materials, plans — indefinite storage. | `server/cron.ts:38-72` | Add N-day purge jobs + user-controlled settings. |
 | 22 | Privacy | Onboarding has no privacy/ToS acceptance step and no cookie consent banner. | `client/src/components/onboarding/*`, `client/src/pages/Privacy.tsx` | Add consent step + banner. |
@@ -64,13 +111,13 @@ No finding is a shipping catastrophe, but several items should be closed before 
 | 24 | UX / a11y | `text-muted-foreground` on light backgrounds near WCAG AA contrast floor. | Multiple (`OfflineIndicator`, `RagDebugBadge`, skeletons) | Audit with WebAIM; prefer `text-gray-600` for secondary text. |
 | 25 | UX / a11y | Modal focus restoration unverified on `GeneratePlanDialog` / `EditWorkoutDialog`. | `client/src/components/plans/*`, `client/src/components/timeline/*` | Explicit focus return via Radix `onCloseAutoFocus`. |
 | 26 | UX / a11y | Touch targets on some icon buttons are <44 px. | FAB + small icon buttons | Bump to `p-2.5` / `p-3`. |
-| 27 | Performance | Analytics queries have no per-query `staleTime` — every tab toggle re-fetches 3 endpoints. | `client/src/lib/queryClient.ts:162`, `ExerciseProgressionTab.tsx:28-43` | Add `staleTime: Infinity` with mutation-driven invalidation. |
+| 27 | Performance | **[Fixed]** Analytics queries have no per-query `staleTime` — every tab toggle re-fetches 3 endpoints. | `client/src/lib/queryClient.ts:162`, `ExerciseProgressionTab.tsx:28-43` | Add `staleTime: Infinity` with mutation-driven invalidation. |
 | 28 | Performance | SSE consumer lacks backpressure; relies on `rAF` flush, which couples to refresh rate. | `client/src/lib/sseStream.ts:83-102` | Fixed ~100 ms flush interval; pause reader when buffer exceeds threshold. |
 | 29 | Performance | Batch dedup missing in `embed-coaching-material` / `auto-coach` workers — N+1 per duplicate `materialId`. | `server/queue.ts:72-75` | Dedup by `materialId` before batch dispatch. |
 | 30 | QA | CSV plan import silent on malformed rows; no size/row-count guard. | `server/services/planService.ts:70-78` | Hard cap on content length + explicit non-empty validation after parse. |
 | 31 | QA | No client `isPending` disable on mutation submits — rapid double-clicks rely entirely on server idempotency. | `useWorkoutActions.ts`, `usePlanImport.ts` | Disable buttons while `mutation.isPending`. |
 | 32 | QA | Workouts stored UTC; client renders without user TZ preference — midnight boundary bugs. | Routes returning `createdAt` | Add `timezone` user pref; render in local TZ. |
-| 33 | QA | Exercise set schema allows `reps: 0`, negative weight; only RPE bounded. | `shared/schema/types.ts` | Add `.min(0)` (or `.min(1)` on reps) to exercise set schema. |
+| 33 | QA | **[Fixed]** Exercise set schema allows `reps: 0`, negative weight; only RPE bounded. | `shared/schema/types.ts` | Add `.min(0)` (or `.min(1)` on reps) to exercise set schema. |
 | 34 | DevOps | `post-migration.yml` hardcodes dummy 32-char `ENCRYPTION_KEY` in workflow — brittle, leaks in logs. | `.github/workflows/post-migration.yml:35,41` | Load from a separate CI-only secret; reject hardcoded keys in linter. |
 | 35 | DevOps | Graceful shutdown runs `queue.stop` + `pool.end` under a single 30 s timeout — no per-stage budget. | `server/index.ts:455-461` | Budget: queue 10 s → HTTP 5 s → pool 8 s. |
 | 36 | DevOps | `RESEND_API_KEY` missing → emails silent no-op while API returns 200. | `server/index.ts:355-357` + email routes | Fail fast at boot or surface 503 on email-dependent routes in prod. |
@@ -82,12 +129,12 @@ No finding is a shipping catastrophe, but several items should be closed before 
 |---|----------|---------|---------|-----------------|
 | 38 | Business | No monetisation or per-user usage quotas — unclear sustainability. | — | Define freemium tier; add `usageCounts` tracking AI/plan imports. |
 | 39 | Business | Weekly email summary not rich (no 1RM trends, missed-by-station, RPE trend). | `server/emailTemplates.ts`, `emailScheduler.ts` | Enrich with analytics payload. |
-| 40 | Security | Request-ID regex permits colons — log-injection adjacency. | `server/index.ts:291-296` | Restrict to `/^[a-zA-Z0-9._-]{1,36}$/`. |
+| 40 | Security | **[Fixed]** Request-ID regex permits colons — log-injection adjacency. | `server/index.ts:291-296` | Restrict to `/^[a-zA-Z0-9._-]{1,36}$/`. |
 | 41 | Security | No SSRF guard on user-influenced URLs (e.g. links inside coaching docs fetched server-side). | — | Validate against private IP ranges before any server fetch. |
-| 42 | Security | `CSRF_SECRET !== ENCRYPTION_KEY` only checked in prod. | `server/env.ts:45-50` | Enforce in all environments. |
+| 42 | Security | **[Fixed]** `CSRF_SECRET !== ENCRYPTION_KEY` only checked in prod. | `server/env.ts:45-50` | Enforce in all environments. |
 | 43 | UX / a11y | Breadcrumbs/page hierarchy indicator absent across pages. | `client/src/pages/*` | Small breadcrumb component on non-landing pages. |
 | 44 | UX / a11y | Charts render all 52 weeks even when 10 visible — virtualise with `@tanstack/react-virtual` (already a dep). | `TrainingOverviewTab.tsx` | Virtualise bar/line series. |
-| 45 | Performance | Cache CSRF token per session rather than re-fetch on 403. | `client/src/lib/csrf.ts` (or equiv) | TTL cache; single 403 retry triggers refresh. |
+| 45 | Performance | **[Already correct]** Cache CSRF token per session rather than re-fetch on 403. | `client/src/lib/csrf.ts` (or equiv) | TTL cache; single 403 retry triggers refresh. Verification showed `client/src/lib/queryClient.ts` already implements promise-cache + single 403 retry; no change needed. |
 | 46 | Performance | Add `Cache-Control: public, max-age=300` on analytics endpoints (complement Workbox NetworkFirst). | `server/routes/analytics.ts`, `personal-records` | Set headers. |
 | 47 | QA | Test coverage thin for Strava sync, email queuing, CSV import integration. | `test/`, `server/__tests__` | Add integration tests. |
 | 48 | QA | Voice input (`useVoiceInput.ts`) silently disabled on iOS Safari — no capability warning. | `client/src/hooks/useVoiceInput.ts` | Surface message when `!isSupported`. |
