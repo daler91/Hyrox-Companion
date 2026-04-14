@@ -96,8 +96,19 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
     return null;
   };
 
+  // ♿ A11y: Esc must dismiss the onboarding dialog — a WCAG 2.1 A keyboard
+  // trap otherwise. Closing via Esc is treated as "skip" so the user's
+  // progress through earlier steps is preserved. Backdrop click remains
+  // blocked (onPointerDownOutside preventDefault below) because it's easy
+  // to trigger accidentally mid-wizard. (CODEBASE_REVIEW_2026-04-12.md #9)
+  const handleDialogOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      handleSkip();
+    }
+  };
+
   return (
-    <Dialog open={open} onOpenChange={() => {}}>
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
       <DialogContent
         className="sm:max-w-lg"
         onPointerDownOutside={(e) => e.preventDefault()}
