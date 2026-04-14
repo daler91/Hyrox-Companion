@@ -41,6 +41,10 @@ export function DataToolsSection() {
       setParseResults({ success: data.parsed, failed: data.failed });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }).catch(() => {});
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workouts }).catch(() => {});
+      // AI parse writes structured exercise sets that feed PRs and analytics;
+      // invalidate so the progression/PR tabs pick up the new rows.
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.personalRecords }).catch(() => {});
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.exerciseAnalytics }).catch(() => {});
       toast({
         title: "Parsing Complete",
         description: `Parsed ${data.parsed} workouts successfully. ${data.failed} could not be parsed.`,

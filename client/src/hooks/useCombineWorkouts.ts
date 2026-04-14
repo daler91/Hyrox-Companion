@@ -30,6 +30,10 @@ export function useCombineWorkouts() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }).catch(() => {});
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workouts }).catch(() => {});
+      // Combining workouts deletes/re-creates exercise sets — PRs and analytics
+      // derived from those sets must refresh.
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.personalRecords }).catch(() => {});
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.exerciseAnalytics }).catch(() => {});
       setCombiningEntry(null);
       setCombineSecondEntry(null);
       setShowCombineDialog(false);
