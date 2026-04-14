@@ -119,6 +119,20 @@ describe("AnnotationsDialog", () => {
     });
   });
 
+  it("shows a live character counter for the note field", async () => {
+    mockApi.list.mockResolvedValue([]);
+    renderDialog();
+    await screen.findByTestId("annotations-empty");
+
+    const counter = screen.getByTestId("text-annotation-note-counter");
+    expect(counter).toHaveTextContent("0/500");
+    expect(counter).toHaveAttribute("aria-live", "polite");
+
+    const user = userEvent.setup();
+    await user.type(screen.getByTestId("input-annotation-note"), "hello");
+    expect(counter).toHaveTextContent("5/500");
+  });
+
   it("calls delete() when the user clicks a trash button", async () => {
     const annotations: TimelineAnnotation[] = [
       {

@@ -41,6 +41,9 @@ export function AnnotationsDialog({ open, onOpenChange, initialDate }: Readonly<
   const [startDate, setStartDate] = useState(() => initialDate ?? format(new Date(), "yyyy-MM-dd"));
   const [endDate, setEndDate] = useState(() => initialDate ?? format(new Date(), "yyyy-MM-dd"));
   const [note, setNote] = useState("");
+  const NOTE_MAX_LENGTH = 500;
+  const noteLength = note.length;
+  const noteNearLimit = NOTE_MAX_LENGTH - noteLength <= 50;
 
   // React's "store info from previous renders" pattern: when the parent
   // hands us a fresh `initialDate` (the user clicked a different day's
@@ -224,14 +227,27 @@ export function AnnotationsDialog({ open, onOpenChange, initialDate }: Readonly<
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="annotation-note">Note (optional)</Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="annotation-note">Note (optional)</Label>
+                <span
+                  id="annotation-note-counter"
+                  aria-live="polite"
+                  className={`text-xs tabular-nums ${
+                    noteNearLimit ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"
+                  }`}
+                  data-testid="text-annotation-note-counter"
+                >
+                  {noteLength}/{NOTE_MAX_LENGTH}
+                </span>
+              </div>
               <Textarea
                 id="annotation-note"
                 placeholder="Calf strain during sled push"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                maxLength={500}
+                maxLength={NOTE_MAX_LENGTH}
                 rows={2}
+                aria-describedby="annotation-note-counter"
                 data-testid="input-annotation-note"
               />
             </div>
