@@ -42,6 +42,30 @@ if (env.SENTRY_DSN) {
     environment: env.NODE_ENV || "development",
     sendDefaultPii: false,
     tracesSampleRate: env.NODE_ENV === "production" ? 0.1 : 1,
+    // 🛡️ Sentinel: Strip PII-bearing fields from error payloads before
+    // transmission (CODEBASE_REVIEW_2026-04-12.md #2). Even with
+    // sendDefaultPii=false, manually captured errors can carry request
+    // bodies, query strings, cookies, or auth headers that contain user
+    // email/name/biometrics.
+    beforeSend(event) {
+      if (event.request) {
+        delete event.request.data;
+        delete event.request.query_string;
+        delete event.request.cookies;
+        if (event.request.headers) {
+          delete event.request.headers.authorization;
+          delete event.request.headers.cookie;
+          delete event.request.headers["x-csrf-token"];
+          delete event.request.headers["x-idempotency-key"];
+        }
+      }
+      if (event.user) {
+        delete event.user.email;
+        delete event.user.username;
+        delete event.user.ip_address;
+      }
+      return event;
+    },
   });
 }
 
@@ -248,6 +272,14 @@ app.use(
     },
     crossOriginEmbedderPolicy: false,
     referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+    // 🛡️ Sentinel: Explicit HSTS with preload (CODEBASE_REVIEW_2026-04-12.md
+    // #19). Helmet's default is 180 days without preload; we want the full
+    // one-year preload-list policy.
+    strictTransportSecurity: {
+      maxAge: 31536000,
+      includeSubDomains: true,
+      preload: true,
+    },
   }),
 );
 
@@ -302,7 +334,10 @@ app.use(pinoHttp({
   genReqId: (req) => {
     const clientId = req.headers['x-request-id'];
     // 🛡️ Sentinel: Validate client-supplied request IDs to prevent log injection
-    if (typeof clientId === 'string' && clientId.length <= 64 && /^[\w.:-]+$/.test(clientId)) {
+    // (CODEBASE_REVIEW_2026-04-12.md #40). Colon was previously allowed and is
+    // adjacent to log-parser delimiters; restrict to alphanumerics + `._-` and
+    // cap length at 36 (fits UUID/ULID without room for padding).
+    if (typeof clientId === 'string' && /^[A-Za-z0-9._-]{1,36}$/.test(clientId)) {
       return clientId;
     }
     return randomUUID();
