@@ -45,7 +45,11 @@ const envSchema = z.object({
 }).refine((data) => data.NODE_ENV !== "production" || !!data.CSRF_SECRET, {
   message: "❌ FATAL: CSRF_SECRET is required in production",
   path: ["CSRF_SECRET"],
-}).refine((data) => data.NODE_ENV !== "production" || !data.CSRF_SECRET || data.CSRF_SECRET !== data.ENCRYPTION_KEY, {
+}).refine((data) => !data.CSRF_SECRET || data.CSRF_SECRET !== data.ENCRYPTION_KEY, {
+  // 🛡️ Sentinel: key separation must hold in all environments, not just
+  // production (CODEBASE_REVIEW_2026-04-12.md #42). Dev/test defaults that
+  // reuse ENCRYPTION_KEY as CSRF_SECRET would otherwise mask the mistake
+  // locally and only blow up in prod.
   message: "❌ FATAL: CSRF_SECRET must differ from ENCRYPTION_KEY for proper key separation",
   path: ["CSRF_SECRET"],
 });

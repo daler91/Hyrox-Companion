@@ -62,7 +62,10 @@ export function useWorkoutActions(selectedPlanId: string | null) {
   const logWorkoutMutation = useApiMutation({
     mutationFn: (data: { planDayId: string; date: string; focus: string; mainWorkout: string; accessory?: string; notes?: string; rpe?: number; exercises?: ParsedExercise[] }) =>
       api.workouts.create(data),
-    invalidateQueries: [QUERY_KEYS.timeline],
+    // 🧠 New workouts can set new PRs / extend analytics series — invalidate
+    // so ExerciseProgressionTab + PersonalRecordsTab (staleTime: Infinity)
+    // refresh. (CODEBASE_REVIEW_2026-04-12.md #27)
+    invalidateQueries: [QUERY_KEYS.timeline, QUERY_KEYS.personalRecords, QUERY_KEYS.exerciseAnalytics],
     successToast: "Workout logged!",
     errorToast: "Failed to log workout",
     onMutate: async (variables) => {
@@ -99,7 +102,7 @@ export function useWorkoutActions(selectedPlanId: string | null) {
   const updateWorkoutMutation = useApiMutation({
     mutationFn: ({ workoutId, updates }: { workoutId: string; updates: UpdateWorkoutLog & { exercises?: ParsedExercise[] } }) =>
       api.workouts.update(workoutId, updates),
-    invalidateQueries: [QUERY_KEYS.timeline, QUERY_KEYS.workouts],
+    invalidateQueries: [QUERY_KEYS.timeline, QUERY_KEYS.workouts, QUERY_KEYS.personalRecords, QUERY_KEYS.exerciseAnalytics],
     successToast: "Workout updated",
     errorToast: "Failed to update workout",
     onMutate: async ({ workoutId, updates }) => {
@@ -138,7 +141,7 @@ export function useWorkoutActions(selectedPlanId: string | null) {
 
   const deleteWorkoutMutation = useApiMutation({
     mutationFn: (workoutId: string) => api.workouts.delete(workoutId),
-    invalidateQueries: [QUERY_KEYS.timeline, QUERY_KEYS.workouts],
+    invalidateQueries: [QUERY_KEYS.timeline, QUERY_KEYS.workouts, QUERY_KEYS.personalRecords, QUERY_KEYS.exerciseAnalytics],
     successToast: "Workout deleted",
     errorToast: "Failed to delete workout",
     onMutate: async (workoutId) => {
