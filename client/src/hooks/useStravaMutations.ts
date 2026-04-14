@@ -27,6 +27,9 @@ export function useStravaMutations() {
       QUERY_KEYS.stravaStatus,
       QUERY_KEYS.timeline,
       QUERY_KEYS.workouts,
+      // New Strava activities can set PRs and shift analytics — invalidate both.
+      QUERY_KEYS.personalRecords,
+      QUERY_KEYS.exerciseAnalytics,
     ],
     successToast: (data) => ({
       title: "Sync Complete",

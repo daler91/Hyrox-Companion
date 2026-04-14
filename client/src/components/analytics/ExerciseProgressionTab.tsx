@@ -27,10 +27,12 @@ export function ExerciseProgressionTab({ dateParams }: ExerciseProgressionTabPro
   const { data: rawPRs } = useQuery<Record<string, RawPREntry>>({
     queryKey: ["/api/v1/personal-records", dateParams],
     queryFn: () => api.analytics.getPersonalRecords(dateParams),
-    // ⚡ Perf: stay fresh until a workout mutation invalidates us. Prior
-    // 5-min default still fired on every tab toggle that remounted the
-    // component and exceeded the window. (CODEBASE_REVIEW_2026-04-12.md #27)
-    staleTime: Infinity,
+    // ⚡ Perf: kill rapid tab-toggle refetches but auto-heal after 5 min in
+    // case an ingestion flow (Strava/Garmin sync, combine, batch reparse)
+    // forgets to invalidate QUERY_KEYS.personalRecords.
+    // (CODEBASE_REVIEW_2026-04-12.md #27; belt-and-braces with mutation-side
+    // invalidations in useStrava/Garmin/Combine/DataTools.)
+    staleTime: 5 * 60 * 1000,
   });
 
   const availableExercises = useMemo(() => {
@@ -46,7 +48,7 @@ export function ExerciseProgressionTab({ dateParams }: ExerciseProgressionTabPro
     queryKey: ["/api/v1/exercise-analytics", dateParams],
     queryFn: () => api.analytics.getExerciseAnalytics(dateParams) as Promise<Record<string, ExerciseAnalyticDay[]>>,
     // ⚡ Perf: see note above on personal-records query.
-    staleTime: Infinity,
+    staleTime: 5 * 60 * 1000,
   });
 
   return (

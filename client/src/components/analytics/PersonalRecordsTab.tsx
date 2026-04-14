@@ -37,10 +37,11 @@ export function PersonalRecordsTab({ dateParams }: PersonalRecordsTabProps) {
   const { data: rawPRs, isLoading } = useQuery<Record<string, RawPREntry>>({
     queryKey: ["/api/v1/personal-records", dateParams],
     queryFn: () => api.analytics.getPersonalRecords(dateParams),
-    // ⚡ Perf: mutation-driven invalidation (workout create/update/delete
-    // invalidate QUERY_KEYS.personalRecords); avoids tab-toggle refetch.
-    // (CODEBASE_REVIEW_2026-04-12.md #27)
-    staleTime: Infinity,
+    // ⚡ Perf: kill rapid tab-toggle refetches but auto-heal after 5 min if
+    // an ingestion flow forgets to invalidate QUERY_KEYS.personalRecords.
+    // (CODEBASE_REVIEW_2026-04-12.md #27; belt-and-braces with mutation-side
+    // invalidations in useStrava/Garmin/Combine/DataTools.)
+    staleTime: 5 * 60 * 1000,
   });
 
   const { filteredPRs, recentPRs } = useMemo(() => {

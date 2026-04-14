@@ -40,6 +40,9 @@ export function useGarminMutations() {
       QUERY_KEYS.garminStatus,
       QUERY_KEYS.timeline,
       QUERY_KEYS.workouts,
+      // New Garmin activities can set PRs and shift analytics — invalidate both.
+      QUERY_KEYS.personalRecords,
+      QUERY_KEYS.exerciseAnalytics,
     ],
     successToast: (data) => ({
       title: "Sync Complete",
