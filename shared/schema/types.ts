@@ -197,12 +197,19 @@ export const schedulePlanRequestSchema = z.object({
   startDate: dateStringSchema,
 });
 
+// 🛡️ Sentinel: numeric bounds on measurable fields
+// (CODEBASE_REVIEW_2026-04-12.md #33). Prevents negative weights from stray
+// minus signs in voice input and unreasonable distances/times that would
+// break analytics aggregates downstream. exerciseSetSchema is reused for
+// AI-parsed output so reps uses .min(0) (Gemini may legitimately emit a
+// zero-rep "failed attempt" row); incomingExerciseSchema is user-submitted
+// and uses .min(1) on reps since a zero-rep user log is meaningless.
 export const exerciseSetSchema = z.object({
-  setNumber: z.number().optional().nullable(),
-  reps: z.number().optional().nullable(),
-  weight: z.number().optional().nullable(),
-  distance: z.number().optional().nullable(),
-  time: z.number().optional().nullable(),
+  setNumber: z.number().min(1).max(100).optional().nullable(),
+  reps: z.number().min(0).max(10_000).optional().nullable(),
+  weight: z.number().min(0).max(2_000).optional().nullable(),
+  distance: z.number().min(0).max(1_000_000).optional().nullable(),
+  time: z.number().min(0).max(86_400).optional().nullable(),
   notes: z.string().max(1000).optional().nullable(),
 }).strip();
 
@@ -211,10 +218,10 @@ export const incomingExerciseSchema = z.object({
   customLabel: z.string().max(255).optional().nullable(),
   category: z.string().max(50).optional().nullable(),
   numSets: z.number().min(1).max(50).optional().nullable(),
-  reps: z.number().optional().nullable(),
-  weight: z.number().optional().nullable(),
-  distance: z.number().optional().nullable(),
-  time: z.number().optional().nullable(),
+  reps: z.number().min(1).max(10_000).optional().nullable(),
+  weight: z.number().min(0).max(2_000).optional().nullable(),
+  distance: z.number().min(0).max(1_000_000).optional().nullable(),
+  time: z.number().min(0).max(86_400).optional().nullable(),
   confidence: z.number().min(0).max(100).optional().nullable(),
   notes: z.string().max(1000).optional().nullable(),
   sets: z.array(exerciseSetSchema).max(50).optional().nullable(),

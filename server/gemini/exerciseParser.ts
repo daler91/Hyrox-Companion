@@ -22,6 +22,13 @@ export async function parseExercisesFromText(
   customExerciseNames?: string[],
   userId?: string,
 ): Promise<ParsedExercise[]> {
+  // 🛡️ Sentinel: empty input is always "no exercises", short-circuit before
+  // burning a Gemini call. Route validation already rejects empty strings,
+  // but programmatic callers (batch reparse, imports) can reach here with
+  // whitespace-only data. (CODEBASE_REVIEW_2026-04-12.md #13)
+  if (!text || text.trim().length === 0) {
+    return [];
+  }
   try {
     const unitNote =
       weightUnit === "lbs"
@@ -61,7 +68,15 @@ and use the matching name as customLabel: ${customExerciseNames.join(", ")}`;
 
     if (userId) trackUsageFromResponse(userId, GEMINI_MODEL, "parse", response);
 
-    const responseText = validateAiOutput(response.text || "[]");
+    // A missing or empty response.text is a Gemini failure, not a successful
+    // empty parse — surface it instead of silently returning []. Previously
+    // the `|| "[]"` fallback masked every null response as a valid zero-row
+    // result. (CODEBASE_REVIEW_2026-04-12.md #13)
+    if (!response.text || response.text.length === 0) {
+      logger.error({ response }, "[gemini] exercise-parse returned empty response");
+      throw new AppError(ErrorCode.AI_ERROR, "AI returned empty response for exercise parsing", 502);
+    }
+    const responseText = validateAiOutput(response.text);
 
     let raw: unknown;
     try {
