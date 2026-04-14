@@ -209,7 +209,12 @@ export class PlanStorage {
         .set({ scheduledDate: caseSql as unknown as string })
         .where(inArray(planDays.id, updateIds));
 
-      const resetUpdateIds = dateUpdates.filter((u) => u.resetStatus).map((u) => u.id);
+      // Combine array filter and map into a single reduction to avoid intermediate allocations
+      const resetUpdateIds = dateUpdates.reduce<string[]>((acc, u) => {
+        if (u.resetStatus) acc.push(u.id);
+        return acc;
+      }, []);
+
       if (resetUpdateIds.length > 0) {
         await tx
           .update(planDays)

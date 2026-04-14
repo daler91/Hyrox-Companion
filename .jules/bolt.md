@@ -41,3 +41,7 @@
 ## 2026-04-08 - Module-level Caching for React Array Reference Stability
 **Learning:** In React, functions like `getFields` that map static keys to arrays and execute on every render (using `.filter()`) allocate new array references constantly. This not only burdens the garbage collector but, more importantly, breaks React memoization in child components that receive these arrays as props, causing unnecessary cascading re-renders.
 **Action:** Use a module-scoped `Map` to cache the computed arrays keyed by their static inputs (e.g., `exerciseName`). Also, ensure fallback returns (like default fields) are extracted into module-level `const` arrays. This guarantees true reference stability across all component re-renders while eliminating O(N) recalculations.
+
+## 2026-04-14 - Optimize array aggregations and prevent intermediate array allocations
+**Learning:** Performing `Array.prototype.filter()` followed by `Array.prototype.map()` results in two O(N) traversals of the array and allocates an intermediate array object that is immediately garbage collected. This is an inefficient pattern, especially when executed frequently or over large arrays.
+**Action:** Combine sequential mapping and filtering operations into a single O(N) `Array.prototype.reduce()` traversal or a `for...of` loop. This avoids redundant memory allocations and improves runtime performance.
