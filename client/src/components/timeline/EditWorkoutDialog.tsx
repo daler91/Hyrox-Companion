@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -84,6 +85,9 @@ export default function EditWorkoutDialog({
           <DialogTitle>
             Edit {entry?.dayName} - Week {entry?.weekNumber}
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Edit your workout details
+          </DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Left Column: Metadata & Notes */}

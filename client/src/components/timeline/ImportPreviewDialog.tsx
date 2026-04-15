@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -44,6 +45,9 @@ export default function ImportPreviewDialog({
             <FileText className="h-5 w-5" />
             Import Preview: {preview?.fileName}
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Preview of imported file
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
