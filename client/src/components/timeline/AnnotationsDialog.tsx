@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CharacterCount } from "@/components/ui/character-count";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -232,8 +233,10 @@ export function AnnotationsDialog({ open, onOpenChange, initialDate }: Readonly<
                 onChange={(e) => setNote(e.target.value)}
                 maxLength={500}
                 rows={2}
+                aria-describedby="annotation-note-count"
                 data-testid="input-annotation-note"
               />
+              <CharacterCount id="annotation-note-count" value={note} max={500} />
             </div>
             <Button
               onClick={handleCreate}
