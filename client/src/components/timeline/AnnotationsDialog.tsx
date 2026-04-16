@@ -18,6 +18,9 @@ import { queryClient } from "@/lib/queryClient";
 import { TYPE_COLORS, TYPE_LABELS } from "./annotation-style";
 import { AnnotationTypeIcon } from "./AnnotationTypeIcon";
 
+const NOTE_MAX_LENGTH = 500;
+const NOTE_WARN_THRESHOLD = NOTE_MAX_LENGTH - 50;
+
 interface AnnotationsDialogProps {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
@@ -230,10 +233,27 @@ export function AnnotationsDialog({ open, onOpenChange, initialDate }: Readonly<
                 placeholder="Calf strain during sled push"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                maxLength={500}
+                maxLength={NOTE_MAX_LENGTH}
                 rows={2}
+                aria-describedby="annotation-note-counter"
                 data-testid="input-annotation-note"
               />
+              <p
+                id="annotation-note-counter"
+                aria-live="polite"
+                className={`text-xs text-right tabular-nums ${
+                  note.length >= NOTE_MAX_LENGTH
+                    ? "text-destructive font-medium"
+                    : note.length >= NOTE_WARN_THRESHOLD
+                      ? "text-amber-600 dark:text-amber-400"
+                      : "text-muted-foreground"
+                }`}
+                data-testid="annotation-note-counter"
+              >
+                {note.length >= NOTE_MAX_LENGTH
+                  ? `Character limit reached (${note.length}/${NOTE_MAX_LENGTH})`
+                  : `${note.length}/${NOTE_MAX_LENGTH}`}
+              </p>
             </div>
             <Button
               onClick={handleCreate}
