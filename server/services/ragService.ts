@@ -11,6 +11,12 @@ import { storage } from "../storage";
 // (CODEBASE_AUDIT.md §3).
 const REEMBED_CONCURRENCY = 3;
 
+// Hard cap on chunks per material so an unusually large document cannot
+// spike memory (embedding vectors are 1536–3072 floats each) or burn the
+// user's Gemini budget in one request (W7). At CHUNK_SIZE=600 this still
+// covers ~1.5MB source documents comfortably.
+const MAX_CHUNKS_PER_MATERIAL = 3000;
+
 // Cache the embedding-provider health probe so UI polling of getRagStatus
 // does not issue a live generateEmbedding("test") call on every request
 // (CODEBASE_AUDIT.md §3).
@@ -99,6 +105,12 @@ export async function embedCoachingMaterial(material: CoachingMaterial): Promise
   try {
     const chunks = chunkText(material.content);
     if (chunks.length === 0) return;
+
+    if (chunks.length > MAX_CHUNKS_PER_MATERIAL) {
+      const message = `Coaching material "${material.title}" produced ${chunks.length} chunks (limit ${MAX_CHUNKS_PER_MATERIAL}). Split the document into smaller files or increase RAG_CHUNK_SIZE.`;
+      logger.error({ materialId: material.id, chunkCount: chunks.length }, message);
+      throw new Error(message);
+    }
 
     logger.info(
       { materialId: material.id, chunkCount: chunks.length },

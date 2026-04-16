@@ -57,6 +57,29 @@ queue.on("error", (error: Error) => {
 // (CODEBASE_AUDIT.md §3).
 const IN_BATCH_CONCURRENCY = 2;
 
+// Per-job wall-clock timeout. expireInMinutes only expunges the queue row —
+// it does not kill the worker, so a hung Gemini / HTTP call would leak a
+// worker slot forever (W6). We reject the job promise shortly before the
+// 60min expire so pg-boss still sees it as failed and can retry.
+const JOB_TIMEOUT_MS = 55 * 60 * 1000;
+
+async function runWithTimeout<T>(label: string, fn: () => Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race<T>([
+      fn(),
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`[pg-boss] ${label} job exceeded ${JOB_TIMEOUT_MS / 60_000}min timeout`)),
+          JOB_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 /**
  * Runs `processJob` against every job in the batch with bounded parallelism
  * and `Promise.allSettled` semantics so a single poison job does not throw
@@ -102,7 +125,7 @@ export async function startQueue() {
       logger.info({ jobId: job.id, data: job.data }, "[pg-boss] Processing auto-coach job");
       try {
         const { userId } = job.data as { userId: string };
-        const result = await triggerAutoCoach(userId);
+        const result = await runWithTimeout("auto-coach", () => triggerAutoCoach(userId));
         logger.info({ jobId: job.id, adjusted: result.adjusted }, "[pg-boss] Completed auto-coach job");
       } catch (error) {
         logger.error({ err: error, jobId: job.id }, "[pg-boss] Failed auto-coach job");
@@ -123,7 +146,7 @@ export async function startQueue() {
           logger.warn({ jobId: job.id, materialId }, "[pg-boss] Material not found, skipping embed job");
           return;
         }
-        await embedCoachingMaterial(material);
+        await runWithTimeout("embed-coaching-material", () => embedCoachingMaterial(material));
         logger.info({ jobId: job.id, materialId }, "[pg-boss] Completed embed-coaching-material job");
       } catch (error) {
         logger.error({ err: error, jobId: job.id }, "[pg-boss] Failed embed-coaching-material job");
@@ -144,7 +167,10 @@ export async function startQueue() {
           logger.warn({ jobId: job.id, userId }, "[pg-boss] User not found, skipping send-weekly-summary job");
           return;
         }
-        const sent = await processWeeklySummary(storage, user, new Date());
+        const sent = await runWithTimeout(
+          "send-weekly-summary",
+          () => processWeeklySummary(storage, user, new Date()),
+        );
         logger.info({ jobId: job.id, userId, sent }, "[pg-boss] Completed send-weekly-summary job");
       } catch (error) {
         logger.error({ err: error, jobId: job.id, userId }, "[pg-boss] Failed send-weekly-summary job");
@@ -165,7 +191,10 @@ export async function startQueue() {
           logger.warn({ jobId: job.id, userId }, "[pg-boss] User not found, skipping send-missed-reminder job");
           return;
         }
-        const sent = await processMissedWorkoutReminder(storage, user, new Date());
+        const sent = await runWithTimeout(
+          "send-missed-reminder",
+          () => processMissedWorkoutReminder(storage, user, new Date()),
+        );
         logger.info({ jobId: job.id, userId, sent }, "[pg-boss] Completed send-missed-reminder job");
       } catch (error) {
         logger.error({ err: error, jobId: job.id, userId }, "[pg-boss] Failed send-missed-reminder job");
