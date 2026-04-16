@@ -1,40 +1,47 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { db } from "../../db";
 import { syncPlanDayStatusFromWorkouts } from "../planDayStatus";
 
 vi.mock("../../db", () => ({
-  db: {
-    query: {
-      planDays: {
-        findFirst: vi.fn(),
-      },
-    },
-    select: vi.fn(),
-    update: vi.fn(),
-  },
+  db: {},
 }));
 
-function mockPlanDay(overrides: Record<string, unknown> = {}) {
+/**
+ * Builds a minimal Drizzle-like executor stub whose methods return thenable
+ * chains for the two SELECTs (locked plan_day + workout count) and the final
+ * UPDATE. Each call returns the value supplied via the `rows` / `count` args.
+ */
+function makeTxStub(opts: {
+  planDayRow?: { status: string; ownerId: string } | undefined;
+  workoutCount?: number;
+}) {
+  const updateWhere = vi.fn().mockResolvedValue([]);
+  const updateSet = vi.fn().mockReturnValue({ where: updateWhere });
+  const update = vi.fn().mockReturnValue({ set: updateSet });
+
+  // First select(): locked plan_day lookup — chain .from().innerJoin().where().for()
+  // Second select(): workout count — chain .from().where()
+  let call = 0;
+  const select = vi.fn().mockImplementation(() => {
+    call++;
+    if (call === 1) {
+      const rows = opts.planDayRow ? [opts.planDayRow] : [];
+      const forFn = vi.fn().mockResolvedValue(rows);
+      const where = vi.fn().mockReturnValue({ for: forFn });
+      const innerJoin = vi.fn().mockReturnValue({ where });
+      const from = vi.fn().mockReturnValue({ innerJoin });
+      return { from };
+    }
+    const where = vi.fn().mockResolvedValue([{ count: opts.workoutCount ?? 0 }]);
+    const from = vi.fn().mockReturnValue({ where });
+    return { from };
+  });
+
   return {
-    id: "pd1",
-    status: "completed",
-    plan: { userId: "u1" },
-    ...overrides,
+    tx: { select, update } as unknown as Parameters<typeof syncPlanDayStatusFromWorkouts>[2],
+    updateSet,
+    update,
   };
-}
-
-function mockCountQuery(count: number) {
-  const whereMock = vi.fn().mockResolvedValue([{ count }]);
-  const fromMock = vi.fn().mockReturnValue({ where: whereMock });
-  vi.mocked(db.select).mockReturnValue({ from: fromMock } as unknown as ReturnType<typeof db.select>);
-}
-
-function mockUpdateSpy() {
-  const whereMock = vi.fn().mockResolvedValue([]);
-  const setMock = vi.fn().mockReturnValue({ where: whereMock });
-  vi.mocked(db.update).mockReturnValue({ set: setMock } as unknown as ReturnType<typeof db.update>);
-  return { whereMock, setMock };
 }
 
 describe("syncPlanDayStatusFromWorkouts", () => {
@@ -43,66 +50,59 @@ describe("syncPlanDayStatusFromWorkouts", () => {
   });
 
   it("is a no-op when the plan_day doesn't exist", async () => {
-    vi.mocked(db.query.planDays.findFirst).mockResolvedValue(undefined);
-    await syncPlanDayStatusFromWorkouts("pd1", "u1");
-    expect(db.update).not.toHaveBeenCalled();
+    const { tx, update } = makeTxStub({ planDayRow: undefined });
+    await syncPlanDayStatusFromWorkouts("pd1", "u1", tx);
+    expect(update).not.toHaveBeenCalled();
   });
 
   it("is a no-op when the plan_day belongs to a different user", async () => {
-    vi.mocked(db.query.planDays.findFirst).mockResolvedValue(
-      mockPlanDay({ plan: { userId: "other-user" } }) as never,
-    );
-    await syncPlanDayStatusFromWorkouts("pd1", "u1");
-    expect(db.update).not.toHaveBeenCalled();
+    const { tx, update } = makeTxStub({
+      planDayRow: { status: "completed", ownerId: "other-user" },
+    });
+    await syncPlanDayStatusFromWorkouts("pd1", "u1", tx);
+    expect(update).not.toHaveBeenCalled();
   });
 
   it("preserves 'skipped' status (explicit user intent)", async () => {
-    vi.mocked(db.query.planDays.findFirst).mockResolvedValue(
-      mockPlanDay({ status: "skipped" }) as never,
-    );
-    await syncPlanDayStatusFromWorkouts("pd1", "u1");
-    expect(db.select).not.toHaveBeenCalled();
-    expect(db.update).not.toHaveBeenCalled();
+    const { tx, update } = makeTxStub({
+      planDayRow: { status: "skipped", ownerId: "u1" },
+    });
+    await syncPlanDayStatusFromWorkouts("pd1", "u1", tx);
+    expect(update).not.toHaveBeenCalled();
   });
 
   it("preserves 'missed' status (cron intent)", async () => {
-    vi.mocked(db.query.planDays.findFirst).mockResolvedValue(
-      mockPlanDay({ status: "missed" }) as never,
-    );
-    await syncPlanDayStatusFromWorkouts("pd1", "u1");
-    expect(db.update).not.toHaveBeenCalled();
+    const { tx, update } = makeTxStub({
+      planDayRow: { status: "missed", ownerId: "u1" },
+    });
+    await syncPlanDayStatusFromWorkouts("pd1", "u1", tx);
+    expect(update).not.toHaveBeenCalled();
   });
 
   it("reverts stale 'completed' to 'planned' when no workouts remain (S6)", async () => {
-    vi.mocked(db.query.planDays.findFirst).mockResolvedValue(
-      mockPlanDay({ status: "completed" }) as never,
-    );
-    mockCountQuery(0);
-    const { setMock } = mockUpdateSpy();
-
-    await syncPlanDayStatusFromWorkouts("pd1", "u1");
-
-    expect(setMock).toHaveBeenCalledWith({ status: "planned" });
+    const { tx, updateSet } = makeTxStub({
+      planDayRow: { status: "completed", ownerId: "u1" },
+      workoutCount: 0,
+    });
+    await syncPlanDayStatusFromWorkouts("pd1", "u1", tx);
+    expect(updateSet).toHaveBeenCalledWith({ status: "planned" });
   });
 
   it("promotes 'planned' to 'completed' when a workout exists", async () => {
-    vi.mocked(db.query.planDays.findFirst).mockResolvedValue(
-      mockPlanDay({ status: "planned" }) as never,
-    );
-    mockCountQuery(1);
-    const { setMock } = mockUpdateSpy();
-
-    await syncPlanDayStatusFromWorkouts("pd1", "u1");
-
-    expect(setMock).toHaveBeenCalledWith({ status: "completed" });
+    const { tx, updateSet } = makeTxStub({
+      planDayRow: { status: "planned", ownerId: "u1" },
+      workoutCount: 1,
+    });
+    await syncPlanDayStatusFromWorkouts("pd1", "u1", tx);
+    expect(updateSet).toHaveBeenCalledWith({ status: "completed" });
   });
 
   it("is a no-op when the derived status matches the current status", async () => {
-    vi.mocked(db.query.planDays.findFirst).mockResolvedValue(
-      mockPlanDay({ status: "completed" }) as never,
-    );
-    mockCountQuery(3);
-    await syncPlanDayStatusFromWorkouts("pd1", "u1");
-    expect(db.update).not.toHaveBeenCalled();
+    const { tx, update } = makeTxStub({
+      planDayRow: { status: "completed", ownerId: "u1" },
+      workoutCount: 3,
+    });
+    await syncPlanDayStatusFromWorkouts("pd1", "u1", tx);
+    expect(update).not.toHaveBeenCalled();
   });
 });

@@ -1,4 +1,4 @@
-import { planDays, workoutLogs } from "@shared/schema";
+import { planDays, trainingPlans, workoutLogs } from "@shared/schema";
 import { and, eq, sql } from "drizzle-orm";
 
 import { db, type DbExecutor } from "../db";
@@ -19,22 +19,48 @@ import { db, type DbExecutor } from "../db";
  *
  * Ownership is enforced by joining the plan_day's parent plan; the function
  * is a no-op if the plan_day doesn't belong to `userId`.
+ *
+ * Concurrency: takes SELECT FOR UPDATE on the plan_day row to serialize
+ * with concurrent createWorkoutLog paths that update the same row. Without
+ * the lock, a concurrent INSERT could commit between our count query and
+ * our UPDATE, causing us to overwrite a freshly-"completed" plan_day back
+ * to "planned". When called outside an existing transaction we open our
+ * own so the row lock actually holds across statements.
  */
 export async function syncPlanDayStatusFromWorkouts(
   planDayId: string,
   userId: string,
   tx?: DbExecutor,
 ): Promise<void> {
-  const executor = tx ?? db;
+  if (tx) {
+    await syncInTransaction(planDayId, userId, tx);
+    return;
+  }
+  await db.transaction((newTx) => syncInTransaction(planDayId, userId, newTx));
+}
 
-  const day = await executor.query.planDays.findFirst({
-    where: eq(planDays.id, planDayId),
-    with: { plan: { columns: { userId: true } } },
-  });
-  if (!day || day.plan?.userId !== userId) return;
-  if (day.status === "skipped" || day.status === "missed") return;
+async function syncInTransaction(
+  planDayId: string,
+  userId: string,
+  tx: DbExecutor,
+): Promise<void> {
+  // SELECT FOR UPDATE on plan_days only (not training_plans) — locks the
+  // single row whose status we may update. createWorkoutLog's subsequent
+  // UPDATE on this row will block until our transaction commits.
+  const [row] = await tx
+    .select({
+      status: planDays.status,
+      ownerId: trainingPlans.userId,
+    })
+    .from(planDays)
+    .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
+    .where(eq(planDays.id, planDayId))
+    .for("update", { of: planDays });
 
-  const [row] = await executor
+  if (!row || row.ownerId !== userId) return;
+  if (row.status === "skipped" || row.status === "missed") return;
+
+  const [counted] = await tx
     .select({ count: sql<number>`cast(count(*) as int)` })
     .from(workoutLogs)
     .where(
@@ -44,10 +70,10 @@ export async function syncPlanDayStatusFromWorkouts(
       ),
     );
 
-  const nextStatus: "planned" | "completed" = (row?.count ?? 0) > 0 ? "completed" : "planned";
-  if (day.status === nextStatus) return;
+  const nextStatus: "planned" | "completed" = (counted?.count ?? 0) > 0 ? "completed" : "planned";
+  if (row.status === nextStatus) return;
 
-  await executor
+  await tx
     .update(planDays)
     .set({ status: nextStatus })
     .where(eq(planDays.id, planDayId));
