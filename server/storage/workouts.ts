@@ -12,6 +12,7 @@ import {
 import { and, asc, desc, eq, inArray,isNotNull, isNull, or, sql } from "drizzle-orm";
 
 import { db } from "../db";
+import { syncPlanDayStatusFromWorkouts } from "./planDayStatus";
 import { queryExerciseSetsWithDates } from "./shared";
 
 export class WorkoutStorage {
@@ -130,20 +131,43 @@ export class WorkoutStorage {
     return updatedLog;
   }
 
-  // ⚡ Bolt Performance Optimization:
-  // Removed redundant pre-fetch existence check (getWorkoutLog) that duplicated
-  // the same WHERE clause used by the DELETE. The rowCount check already returns
-  // false when no rows match, saving 1 DB round trip per call.
+  // Deletes a single workout log AND re-syncs its linked plan_day status from
+  // the remaining workout count. Prior to this fix (S6), the plan_day kept a
+  // stale "completed" status after its only workout was deleted, which broke
+  // analytics and the "Log workout" CTA on the Timeline.
   async deleteWorkoutLog(logId: string, userId: string): Promise<boolean> {
-    const result = await db.delete(workoutLogs).where(and(eq(workoutLogs.id, logId), eq(workoutLogs.userId, userId)));
-    return result.rowCount !== null && result.rowCount > 0;
+    return await db.transaction(async (tx) => {
+      const [log] = await tx
+        .select({ planDayId: workoutLogs.planDayId })
+        .from(workoutLogs)
+        .where(and(eq(workoutLogs.id, logId), eq(workoutLogs.userId, userId)))
+        .limit(1);
+      if (!log) return false;
+
+      const result = await tx
+        .delete(workoutLogs)
+        .where(and(eq(workoutLogs.id, logId), eq(workoutLogs.userId, userId)));
+      const deleted = result.rowCount !== null && result.rowCount > 0;
+      if (!deleted) return false;
+
+      if (log.planDayId) {
+        await syncPlanDayStatusFromWorkouts(log.planDayId, userId, tx);
+      }
+      return true;
+    });
   }
 
   async deleteWorkoutLogByPlanDayId(planDayId: string, userId: string): Promise<boolean> {
-    const result = await db
-      .delete(workoutLogs)
-      .where(and(eq(workoutLogs.planDayId, planDayId), eq(workoutLogs.userId, userId)));
-    return result.rowCount !== null && result.rowCount > 0;
+    return await db.transaction(async (tx) => {
+      const result = await tx
+        .delete(workoutLogs)
+        .where(and(eq(workoutLogs.planDayId, planDayId), eq(workoutLogs.userId, userId)));
+      const deleted = result.rowCount !== null && result.rowCount > 0;
+      if (!deleted) return false;
+
+      await syncPlanDayStatusFromWorkouts(planDayId, userId, tx);
+      return true;
+    });
   }
 
   async getWorkoutLogByPlanDayId(planDayId: string, userId: string): Promise<WorkoutLog | undefined> {

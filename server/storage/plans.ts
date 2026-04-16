@@ -12,6 +12,10 @@ import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
 import { db, type DbExecutor } from "../db";
 import { toDateStr } from "../types";
+import { syncPlanDayStatusFromWorkouts } from "./planDayStatus";
+
+// Re-export for callers that already reach for it via PlanStorage's neighbours.
+export { syncPlanDayStatusFromWorkouts } from "./planDayStatus";
 
 export class PlanStorage {
   async createTrainingPlan(plan: InsertTrainingPlan): Promise<TrainingPlan> {
@@ -119,6 +123,11 @@ export class PlanStorage {
     const totalWeeks = row?.totalWeeks ?? 0;
     if (totalWeeks <= 0) return undefined;
     return Math.ceil(row.planDayCount / totalWeeks);
+  }
+
+  /** Class-method wrapper for the standalone syncPlanDayStatusFromWorkouts (S6). */
+  syncPlanDayStatusFromWorkouts(planDayId: string, userId: string, tx?: DbExecutor): Promise<void> {
+    return syncPlanDayStatusFromWorkouts(planDayId, userId, tx);
   }
 
   async updatePlanDay(
