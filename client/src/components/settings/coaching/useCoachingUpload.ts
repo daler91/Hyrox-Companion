@@ -28,7 +28,32 @@ function sanitizeText(text: string): string {
   return text.replaceAll(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "");
 }
 
+/**
+ * Verify a file's magic bytes match the declared type before handing it to
+ * the parser. mammoth/pdfjs will usually refuse malformed input on their
+ * own, but an upfront check gives a clear error and avoids loading the
+ * heavy parser chunks for files that cannot possibly be valid (W11).
+ */
+async function readMagicBytes(file: File, n: number): Promise<Uint8Array> {
+  const slice = file.slice(0, n);
+  const buf = await slice.arrayBuffer();
+  return new Uint8Array(buf);
+}
+
+function startsWith(bytes: Uint8Array, prefix: readonly number[]): boolean {
+  if (bytes.length < prefix.length) return false;
+  for (let i = 0; i < prefix.length; i++) {
+    if (bytes[i] !== prefix[i]) return false;
+  }
+  return true;
+}
+
 async function extractPdfText(file: File): Promise<string> {
+  const magic = await readMagicBytes(file, 5);
+  // "%PDF-"
+  if (!startsWith(magic, [0x25, 0x50, 0x44, 0x46, 0x2d])) {
+    throw new Error(`${file.name}: not a valid PDF (magic bytes don't match)`);
+  }
   const { getDocument } = await ensurePdfjs();
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await getDocument({ data: arrayBuffer }).promise;
@@ -42,6 +67,11 @@ async function extractPdfText(file: File): Promise<string> {
 }
 
 async function extractDocxText(file: File): Promise<string> {
+  const magic = await readMagicBytes(file, 4);
+  // DOCX is a ZIP; "PK\x03\x04"
+  if (!startsWith(magic, [0x50, 0x4b, 0x03, 0x04])) {
+    throw new Error(`${file.name}: not a valid DOCX (magic bytes don't match)`);
+  }
   const { default: mammoth } = await import("mammoth");
   const arrayBuffer = await file.arrayBuffer();
   const result = await mammoth.extractRawText({ arrayBuffer });

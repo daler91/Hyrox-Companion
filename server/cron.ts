@@ -7,6 +7,12 @@ import type { IStorage } from "./storage";
 let task: ReturnType<typeof cron.schedule> | null = null;
 let idempotencyCleanupTask: ReturnType<typeof cron.schedule> | null = null;
 let aiUsageCleanupTask: ReturnType<typeof cron.schedule> | null = null;
+let staleAutoCoachTask: ReturnType<typeof cron.schedule> | null = null;
+
+// Flags older than this are considered orphaned (worker crashed mid-job).
+// 15min gives a comfortable margin above the longest expected auto-coach
+// run and well below user-perceived "stuck" thresholds (W5).
+const STALE_AUTO_COACHING_THRESHOLD_MS = 15 * 60 * 1000;
 
 /** Start the internal cron scheduler. Runs email checks daily at 09:00 UTC. */
 export function startCron(storage: IStorage): void {
@@ -71,6 +77,25 @@ export function startCron(storage: IStorage): void {
   );
   logger.info({ context: "cron" }, "AI usage cleanup scheduled: daily at 04:00 UTC");
 
+  // Recover orphaned isAutoCoaching flags every 10 minutes. Without this,
+  // a worker crashing mid-job would leave users stuck seeing "AI Coach
+  // thinking…" until the next server restart (W5).
+  staleAutoCoachTask = cron.schedule(
+    "*/10 * * * *",
+    async () => {
+      try {
+        const reset = await storage.users.resetStaleAutoCoaching(STALE_AUTO_COACHING_THRESHOLD_MS);
+        if (reset > 0) {
+          logger.warn({ context: "cron", reset }, `Reset ${reset} orphaned isAutoCoaching flag(s)`);
+        }
+      } catch (err) {
+        logger.error({ context: "cron", err }, "Stale isAutoCoaching recovery failed");
+      }
+    },
+    { timezone: "Etc/UTC" },
+  );
+  logger.info({ context: "cron" }, "Stale isAutoCoaching recovery scheduled: every 10 minutes");
+
   // Run a catch-up if the server started after 09:00 UTC (e.g. Railway restart).
   // The idempotency guards in emailScheduler prevent duplicate sends.
   const currentHour = new Date().getUTCHours();
@@ -104,5 +129,9 @@ export function stopCron(): void {
   if (aiUsageCleanupTask) {
     const _stop = aiUsageCleanupTask.stop();
     aiUsageCleanupTask = null;
+  }
+  if (staleAutoCoachTask) {
+    const _stop = staleAutoCoachTask.stop();
+    staleAutoCoachTask = null;
   }
 }

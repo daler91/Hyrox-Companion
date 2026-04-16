@@ -6,6 +6,7 @@ import { Route,Switch } from "wouter";
 
 import { AppSidebar } from "@/components/AppSidebar";
 import { FeatureErrorBoundaryWrapper } from "@/components/FeatureErrorBoundaryWrapper";
+import { PrivacyConsentBanner } from "@/components/PrivacyConsentBanner";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { OfflineIndicator } from "@/components/ui/OfflineIndicator";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -118,6 +119,7 @@ function AuthenticatedLayout() {
           </main>
         </div>
       </div>
+      <PrivacyConsentBanner />
     </SidebarProvider>
   );
 }

@@ -114,6 +114,18 @@ export async function importPlanFromCSV(
     return acc;
   }, []);
 
+  if (days.length === 0) {
+    // Clean up the plan row we just created so a retry starts from scratch,
+    // then surface a clear validation error instead of silently creating a
+    // zero-day plan that auto-coach and analytics would skip (W3).
+    await storage.plans.deleteTrainingPlan(plan.id, userId);
+    throw new AppError(
+      ErrorCode.VALIDATION_ERROR,
+      "CSV has no rows with both a Week and a Day — plan must have at least one day.",
+      400,
+    );
+  }
+
   await storage.plans.createPlanDays(days);
 
   const fullPlan = await storage.plans.getTrainingPlan(plan.id, userId);

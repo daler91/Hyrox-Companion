@@ -92,8 +92,17 @@ router.get("/api/v1/workouts", isAuthenticated, rateLimiter("workoutList", 60), 
 
     if (Number.isNaN(rawLimit) || rawLimit < 1) return res.status(400).json({ error: "Invalid limit", code: "BAD_REQUEST" });
     if (offset !== undefined && (Number.isNaN(offset) || offset < 0)) return res.status(400).json({ error: "Invalid offset", code: "BAD_REQUEST" });
+    // Reject rather than silently clamp so clients that rely on the full page
+    // size don't render incomplete results without noticing (S1).
+    if (rawLimit > MAX_PAGE_LIMIT) {
+      return res.status(412).json({
+        error: `limit exceeds maximum of ${MAX_PAGE_LIMIT}`,
+        code: "PRECONDITION_FAILED",
+        maxLimit: MAX_PAGE_LIMIT,
+      });
+    }
 
-    const limit = Math.min(rawLimit, MAX_PAGE_LIMIT);
+    const limit = rawLimit;
     const logs = await storage.workouts.listWorkoutLogs(userId, limit, offset);
     res.json(logs);
   }));

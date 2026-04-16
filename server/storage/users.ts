@@ -16,7 +16,7 @@ import {
   type User,
   users,
 } from "@shared/schema";
-import { and, eq, isNotNull } from "drizzle-orm";
+import { and, eq, isNotNull, lt } from "drizzle-orm";
 
 import { decryptToken,encryptToken } from "../crypto";
 import { db } from "../db";
@@ -71,16 +71,21 @@ export class UserStorage {
   }
 
   /**
-   * Clears any users stuck with isAutoCoaching=true. Invoked on server startup
-   * as a safety net for flags orphaned by a crashed worker, an unhandled error
-   * in triggerAutoCoach, or a pg-boss singleton-coalesced enqueue that dropped
-   * the job. Returns the number of rows reset.
+   * Clears users stuck with isAutoCoaching=true. Called on server startup
+   * (no threshold → wipes all stuck flags) and on an interval at runtime
+   * (threshold → only flags whose updatedAt is older than the threshold,
+   * so legitimate in-flight jobs are left alone — W5).
    */
-  async resetStaleAutoCoaching(): Promise<number> {
+  async resetStaleAutoCoaching(olderThanMs?: number): Promise<number> {
+    const conditions = [eq(users.isAutoCoaching, true)];
+    if (olderThanMs !== undefined) {
+      const cutoff = new Date(Date.now() - olderThanMs);
+      conditions.push(lt(users.updatedAt, cutoff));
+    }
     const rows = await db
       .update(users)
       .set({ isAutoCoaching: false, updatedAt: new Date() })
-      .where(eq(users.isAutoCoaching, true))
+      .where(conditions.length === 1 ? conditions[0] : and(...conditions))
       .returning({ id: users.id });
     return rows.length;
   }

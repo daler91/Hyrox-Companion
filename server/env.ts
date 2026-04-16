@@ -5,6 +5,17 @@ process.stderr.write(`[env] Validating environment pid=${process.pid} at=${new D
 
 import { z } from "zod";
 
+// Reject deterministic strings that appear in docs, CI, or tests. If a real
+// secret ever matches one of these it would be compromised anyway — they
+// leak in public CI logs and example configs (W10).
+const WEAK_ENCRYPTION_KEYS = new Set<string>([
+  "01234567890123456789012345678901",
+  "0123456789abcdef0123456789abcdef",
+  "00000000000000000000000000000000",
+  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "changeme_changeme_changeme_change",
+]);
+
 const envSchema = z.object({
   DATABASE_URL: z.string().url(),
   CLERK_PUBLISHABLE_KEY: z.string().min(1).optional(),
@@ -52,6 +63,12 @@ const envSchema = z.object({
   // locally and only blow up in prod.
   message: "❌ FATAL: CSRF_SECRET must differ from ENCRYPTION_KEY for proper key separation",
   path: ["CSRF_SECRET"],
+}).refine((data) => data.NODE_ENV !== "production" || !WEAK_ENCRYPTION_KEYS.has(data.ENCRYPTION_KEY), {
+  // W10 — reject the CI/test placeholder and any other known-weak keys if
+  // they ever make it into a production deploy. A real production secret
+  // has ~128 bits of entropy; these patterns have effectively none.
+  message: "❌ FATAL: ENCRYPTION_KEY is a known weak/test placeholder; generate a real 32-byte random key",
+  path: ["ENCRYPTION_KEY"],
 });
 
 const parsed = envSchema.safeParse(process.env);

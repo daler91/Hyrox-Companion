@@ -12,11 +12,21 @@ interface MetricCardProps {
   icon: LucideIcon;
 }
 
+// Screen-reader description for trend direction so the information isn't
+// conveyed by color alone (WCAG 1.4.1, W8).
+function trendLabelFor(trend: MetricCardProps["trend"]): string {
+  if (trend === "up") return "trending up";
+  if (trend === "down") return "trending down";
+  return "no change";
+}
+
 export function MetricCard({ title, value, unit, trend, trendValue, icon: Icon }: Readonly<MetricCardProps>) {
+  const trendLabel = trendLabelFor(trend);
+
   const getTrendIcon = () => {
-    if (trend === "up") return <TrendingUp className="h-4 w-4 text-green-500" />;
-    if (trend === "down") return <TrendingDown className="h-4 w-4 text-red-500" />;
-    return <Minus className="h-4 w-4 text-muted-foreground" />;
+    if (trend === "up") return <TrendingUp aria-hidden="true" className="h-4 w-4 text-green-500" />;
+    if (trend === "down") return <TrendingDown aria-hidden="true" className="h-4 w-4 text-red-500" />;
+    return <Minus aria-hidden="true" className="h-4 w-4 text-muted-foreground" />;
   };
 
   const getTrendColor = () => {
@@ -38,7 +48,10 @@ export function MetricCard({ title, value, unit, trend, trendValue, icon: Icon }
               {unit && <span className="text-sm text-muted-foreground">{unit}</span>}
             </div>
             {trend && trendValue && (
-              <div className="flex items-center gap-1 mt-2">
+              <div
+                className="flex items-center gap-1 mt-2"
+                aria-label={`${trendLabel}, ${trendValue}`}
+              >
                 {getTrendIcon()}
                 <span className={`text-sm ${getTrendColor()}`}>{trendValue}</span>
               </div>

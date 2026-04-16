@@ -46,7 +46,12 @@ export const ChatMessage = memo(function ChatMessage({ role, content, timestamp,
           )}
         </div>
         {timestamp && (
-          <span className="text-xs text-muted-foreground mt-1">{timestamp}</span>
+          <span
+            className="text-xs text-muted-foreground mt-1"
+            aria-label={`sent ${timestamp}`}
+          >
+            {timestamp}
+          </span>
         )}
         {!isUser && ragInfo && <RagDebugBadge ragInfo={ragInfo} />}
       </div>

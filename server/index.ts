@@ -450,6 +450,17 @@ try {
         ? "Internal Server Error"
         : err.message || "An error occurred";
 
+    // S3 — body-parser's default 413 message is just "request entity too large"
+    // which gives the user no hint about the per-route limit (100kb default,
+    // 2mb for coaching materials). Rewrite to something actionable.
+    if (status === 413) {
+      Sentry.captureException(err);
+      return res.status(413).json({
+        error: "Request body too large for this endpoint — try a smaller payload or split the upload.",
+        code: "PAYLOAD_TOO_LARGE",
+      });
+    }
+
     Sentry.captureException(err);
     res.status(status).json({ error: message, code, ...(status < 500 && details ? { details } : {}) });
   });

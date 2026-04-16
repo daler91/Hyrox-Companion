@@ -117,11 +117,40 @@ const EMBEDDING_MODEL = "gemini-embedding-001";
 /** Expected dimension count for the current embedding model. */
 export const EMBEDDING_DIMENSIONS = 3072;
 
+// Tiny in-process LRU cache for identical embedding lookups. Prevents the
+// rag-retrieval health probe, repeated chat queries, and re-embed passes from
+// re-billing the same string (S8). Size is bounded so the worst case is a few
+// MB of floats per process.
+const EMBEDDING_CACHE_MAX_ENTRIES = 256;
+const embeddingCache = new Map<string, number[]>();
+
+function cacheKey(text: string): string {
+  // Trim whitespace so leading/trailing padding doesn't partition the cache.
+  return text.trim();
+}
+
+function touchEmbeddingCache(key: string, value: number[]): void {
+  // Re-insert to move to the tail (Map iteration order == insertion order).
+  embeddingCache.delete(key);
+  embeddingCache.set(key, value);
+  if (embeddingCache.size > EMBEDDING_CACHE_MAX_ENTRIES) {
+    const firstKey = embeddingCache.keys().next().value;
+    if (firstKey !== undefined) embeddingCache.delete(firstKey);
+  }
+}
+
 /**
  * Generate an embedding vector for a text string using Gemini's embedding model.
  * Returns a 3072-dimensional float array.
  */
 export async function generateEmbedding(text: string): Promise<number[]> {
+  const key = cacheKey(text);
+  const cached = embeddingCache.get(key);
+  if (cached) {
+    touchEmbeddingCache(key, cached);
+    return cached;
+  }
+
   const response = await retryWithBackoff(
     () =>
       getAiClient().models.embedContent({
@@ -134,6 +163,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
   if (!values || values.length === 0) {
     throw new Error("Empty embedding returned from Gemini");
   }
+  touchEmbeddingCache(key, values);
   return values;
 }
 

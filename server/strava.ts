@@ -123,12 +123,16 @@ async function refreshStravaToken(refreshToken: string): Promise<StravaTokenResp
   }
 }
 
+// Refresh 60s before the token would actually expire so an in-flight request
+// never uses a token that flips to expired between our check and Strava's.
+const STRAVA_REFRESH_SAFETY_WINDOW_MS = 60_000;
+
 async function getValidAccessToken(userId: string): Promise<string | null> {
   const connection = await storage.users.getStravaConnection(userId);
   if (!connection) return null;
 
-  const now = new Date();
-  if (connection.expiresAt > now) {
+  const refreshAt = new Date(Date.now() + STRAVA_REFRESH_SAFETY_WINDOW_MS);
+  if (connection.expiresAt > refreshAt) {
     return connection.accessToken;
   }
 
@@ -334,17 +338,28 @@ async function handleStravaSync(req: Request, res: Response) {
       workoutsToImport.push(mapStravaActivityToWorkout(activity, userId, distanceUnit));
     }
 
-    if (workoutsToImport.length > 0) {
-      await storage.workouts.createWorkoutLogs(workoutsToImport);
-    }
-    const imported = workoutsToImport.length;
+    const createdLogs = workoutsToImport.length > 0
+      ? await storage.workouts.createWorkoutLogs(workoutsToImport)
+      : [];
+    // onConflictDoNothing returns only the rows this insert actually
+    // created; concurrent Strava syncs can drop rows here and we want the
+    // response to reflect the truth, not the optimistic pre-insert count
+    // (S2). `skipped` sums the pre-dedup hits plus any race-condition
+    // duplicates the DB rejected.
+    const imported = createdLogs.length;
+    const raceSkipped = workoutsToImport.length - createdLogs.length;
 
     await storage.users.updateStravaLastSync(userId);
+
+    (req.log || logger).info(
+      { context: "strava", userId, imported, skipped: skipped + raceSkipped, total: activities.length },
+      "strava.sync.ok",
+    );
 
     res.json({
       success: true,
       imported,
-      skipped,
+      skipped: skipped + raceSkipped,
       total: activities.length,
     });
   } catch (error) {

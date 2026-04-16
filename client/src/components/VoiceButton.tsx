@@ -32,6 +32,7 @@ export function VoiceButton({ isListening, isSupported, onClick, size = "icon", 
             )}
             data-testid={dataTestId || "button-voice-input"}
             aria-label={isListening ? "Stop voice input" : "Start voice input"}
+            aria-pressed={isListening}
           >
             {isListening ? (
               <MicOff className="h-4 w-4" />
