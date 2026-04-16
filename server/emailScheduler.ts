@@ -9,6 +9,12 @@ import type { IStorage } from "./storage";
 import { toDateStr } from "./types";
 
 export async function processWeeklySummary(storage: IStorage, user: User, now: Date): Promise<boolean> {
+  // Re-fetch the user so an opt-out that happened between enqueue and this
+  // worker run is respected (W4 — race between cron scan and job execution).
+  const fresh = await storage.users.getUser(user.id);
+  if (!fresh?.email || !wantsEmail(fresh, "weeklySummary")) return false;
+  user = fresh;
+
   const dayOfWeek = now.getDay();
   if (dayOfWeek !== 1) return false;
 
@@ -62,6 +68,11 @@ export async function processWeeklySummary(storage: IStorage, user: User, now: D
 }
 
 export async function processMissedWorkoutReminder(storage: IStorage, user: User, now: Date): Promise<boolean> {
+  // See W4 — re-check preferences at send time.
+  const fresh = await storage.users.getUser(user.id);
+  if (!fresh?.email || !wantsEmail(fresh, "missedReminder")) return false;
+  user = fresh;
+
   const lastMissedSent = user.lastMissedReminderAt;
   const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   if (lastMissedSent && lastMissedSent >= oneDayAgo) return false;
