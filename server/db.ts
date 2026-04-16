@@ -38,3 +38,11 @@ pool.on("error", (err) => {
 });
 
 export const db = drizzle(pool, { schema });
+
+// Drizzle transaction type — any method chain valid on `db` is also valid on `tx`.
+export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+// Either a committed `db` handle or an open transaction. Storage methods
+// that accept this can participate in a caller-owned transaction when one
+// is passed, falling back to `db` otherwise.
+export type DbExecutor = typeof db | Tx;

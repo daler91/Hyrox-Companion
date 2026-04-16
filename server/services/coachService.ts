@@ -1,3 +1,4 @@
+import { db, type DbExecutor } from "../db";
 import { generateWorkoutSuggestions, type UpcomingWorkout, type WorkoutSuggestion } from "../gemini/index";
 import { logger } from "../logger";
 import { storage } from "../storage";
@@ -33,27 +34,23 @@ async function applySuggestion(
   suggestion: WorkoutSuggestion,
   upcomingWorkouts: UpcomingWorkout[],
   userId: string,
-  aiSource?: "rag" | "legacy" | null,
+  aiSource: "rag" | "legacy" | null | undefined,
+  tx: DbExecutor,
 ): Promise<boolean> {
   if (!suggestion.workoutId || !suggestion.recommendation) return false;
   const entry = upcomingWorkouts.find((w) => w.id === suggestion.workoutId);
   if (!entry) return false;
 
-  try {
-    const updateValue = buildUpdateValue(suggestion, entry);
-    await storage.plans.updatePlanDay(
-      suggestion.workoutId,
-      { [suggestion.targetField]: updateValue, aiSource: aiSource ?? null },
-      userId,
-    );
-    return true;
-  } catch (applyErr) {
-    logger.warn(
-      { err: applyErr, workoutId: suggestion.workoutId },
-      "[coach] Failed to apply suggestion to plan day:",
-    );
-    return false;
-  }
+  // Let errors propagate so the enclosing transaction rolls back — we want
+  // all-or-nothing semantics for the auto-coach apply loop (C2).
+  const updateValue = buildUpdateValue(suggestion, entry);
+  await storage.plans.updatePlanDay(
+    suggestion.workoutId,
+    { [suggestion.targetField]: updateValue, aiSource: aiSource ?? null },
+    userId,
+    tx,
+  );
+  return true;
 }
 
 /**
@@ -110,7 +107,16 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
         notes: w.notes || undefined,
       }));
 
-    if (upcomingWorkouts.length === 0) return { adjusted: 0 };
+    if (upcomingWorkouts.length === 0) {
+      // Legitimate no-op: user has no active plan or the plan has no future
+      // planned days. Log so support can distinguish this from an AI/API
+      // failure (W3).
+      logger.info(
+        { userId, planId: trainingContext.activePlan?.id },
+        "[coach] Auto-coach skipped — no upcoming planned workouts",
+      );
+      return { adjusted: 0 };
+    }
 
     const coachingContext = await getCoachingMaterialsString(userId, upcomingWorkouts);
 
@@ -122,10 +128,16 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
       userId,
     );
 
-    const results = await Promise.all(
-      suggestions.map((s) => applySuggestion(s, upcomingWorkouts, userId, coachingContext.source)),
-    );
-    const adjusted = results.filter(Boolean).length;
+    // Apply all suggestions atomically: a failure mid-loop rolls back every
+    // earlier apply so the plan never ends up partially mutated (C2).
+    const adjusted = await db.transaction(async (tx) => {
+      const results = await Promise.all(
+        suggestions.map((s) =>
+          applySuggestion(s, upcomingWorkouts, userId, coachingContext.source, tx),
+        ),
+      );
+      return results.filter(Boolean).length;
+    });
 
     if (adjusted > 0) {
       logger.info({ userId, adjusted }, "[coach] Auto-coach applied adjustments");

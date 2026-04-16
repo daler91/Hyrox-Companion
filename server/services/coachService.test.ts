@@ -31,6 +31,14 @@ vi.mock("../storage", () => ({
   },
 }));
 
+// db.transaction is a thin wrapper; invoke the callback with a sentinel tx
+// so tests don't need a live Postgres to exercise the C2 atomic apply path.
+vi.mock("../db", () => ({
+  db: {
+    transaction: vi.fn(<T,>(fn: (tx: unknown) => Promise<T>) => fn({} as unknown)),
+  },
+}));
+
 vi.mock("./ai", () => ({ buildTrainingContext: vi.fn() }));
 vi.mock("../gemini/index", () => ({ generateWorkoutSuggestions: vi.fn(), EMBEDDING_DIMENSIONS: 3072 }));
 vi.mock("./ragService", () => ({ retrieveRelevantChunks: vi.fn() }));
@@ -117,7 +125,7 @@ describe("coachService", () => {
       vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({} as never);
 
       expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 1 });
-      expect(storage.plans.updatePlanDay).toHaveBeenCalledWith("day-1", { mainWorkout: "4x5 Squats @ 80%", aiSource: null }, "user-1");
+      expect(storage.plans.updatePlanDay).toHaveBeenCalledWith("day-1", { mainWorkout: "4x5 Squats @ 80%", aiSource: null }, "user-1", expect.anything());
     });
 
     it("uses RAG when chunks are available and dimensions match", async () => {
@@ -130,7 +138,7 @@ describe("coachService", () => {
 
       expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 1 });
       expect(retrieveRelevantChunks).toHaveBeenCalled();
-      expect(storage.plans.updatePlanDay).toHaveBeenCalledWith("day-1", { notes: "Focus on form", aiSource: "rag" }, "user-1");
+      expect(storage.plans.updatePlanDay).toHaveBeenCalledWith("day-1", { notes: "Focus on form", aiSource: "rag" }, "user-1", expect.anything());
     });
 
     it("falls back to legacy when RAG dimension mismatch occurs", async () => {
@@ -151,7 +159,7 @@ describe("coachService", () => {
       vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({} as never);
 
       expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 1 });
-      expect(storage.plans.updatePlanDay).toHaveBeenCalledWith("day-1", { accessory: "Leg Press\n[AI Coach] Add 3x10 calf raises", aiSource: null }, "user-1");
+      expect(storage.plans.updatePlanDay).toHaveBeenCalledWith("day-1", { accessory: "Leg Press\n[AI Coach] Add 3x10 calf raises", aiSource: null }, "user-1", expect.anything());
     });
 
     it("resets isAutoCoaching flag even when an error occurs", async () => {

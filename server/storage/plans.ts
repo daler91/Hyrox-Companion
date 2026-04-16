@@ -10,7 +10,7 @@ import {
 } from "@shared/schema";
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
-import { db } from "../db";
+import { db, type DbExecutor } from "../db";
 import { toDateStr } from "../types";
 
 export class PlanStorage {
@@ -97,11 +97,13 @@ export class PlanStorage {
     dayId: string,
     updates: UpdatePlanDay,
     userId: string,
+    tx?: DbExecutor,
   ): Promise<PlanDay | undefined> {
-    const day = await this.getPlanDay(dayId, userId);
+    const executor = tx ?? db;
+    const day = await this.getPlanDay(dayId, userId, executor);
     if (!day) return undefined;
 
-    const [updatedDay] = await db
+    const [updatedDay] = await executor
       .update(planDays)
       .set(updates)
       .where(eq(planDays.id, dayId))
@@ -109,11 +111,16 @@ export class PlanStorage {
     return updatedDay;
   }
 
-  async getPlanDay(dayId: string, userId: string): Promise<PlanDay | undefined> {
+  async getPlanDay(
+    dayId: string,
+    userId: string,
+    tx?: DbExecutor,
+  ): Promise<PlanDay | undefined> {
+    const executor = tx ?? db;
     // Uses the relational query API: fetch the plan day and filter via its
     // parent plan's owner in-memory. Equivalent to an inner join with an auth
     // guard on training_plans.user_id.
-    const day = await db.query.planDays.findFirst({
+    const day = await executor.query.planDays.findFirst({
       where: eq(planDays.id, dayId),
       with: {
         plan: {
