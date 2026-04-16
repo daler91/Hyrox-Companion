@@ -3,6 +3,7 @@ import { and,eq } from "drizzle-orm";
 import pLimit from "p-limit";
 
 import { db } from "../db";
+import { AppError, ErrorCode } from "../errors";
 import { logger } from "../logger";
 import { DEFAULT_JOB_OPTIONS, queue } from "../queue";
 import { storage } from "../storage";
@@ -87,8 +88,14 @@ export function expandExercisesToSetRows(exercises: ParsedExercise[], workoutLog
     }
   }
   if (rows.length > MAX_SET_ROWS_PER_WORKOUT) {
-    throw new Error(
+    // Valid Zod payloads can still reach this cap (200 exercises × 50 sets),
+    // so surface it as a structured 400 rather than letting the generic
+    // handler turn it into a 500.
+    throw new AppError(
+      ErrorCode.VALIDATION_ERROR,
       `Workout expanded to ${rows.length} set rows (limit ${MAX_SET_ROWS_PER_WORKOUT}). Split into multiple workouts.`,
+      400,
+      { setRows: rows.length, limit: MAX_SET_ROWS_PER_WORKOUT },
     );
   }
   return rows;
