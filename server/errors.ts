@@ -20,7 +20,15 @@ export enum ErrorCode {
  * to a generic AI_ERROR when the message doesn't match any known pattern.
  */
 export function classifyAiError(err: unknown): { code: ErrorCode; status: number; message: string } {
-  const raw = err instanceof Error ? err.message : String(err ?? "");
+  let raw = "";
+  if (err instanceof Error) {
+    raw = err.message;
+  } else if (typeof err === "string") {
+    raw = err;
+  } else if (err != null) {
+    // Avoid the default [object Object] stringification for arbitrary throws.
+    try { raw = JSON.stringify(err); } catch { raw = ""; }
+  }
   const lower = raw.toLowerCase();
   if (/quota|rate.?limit|resource.?exhausted|429/.test(lower)) {
     return { code: ErrorCode.AI_QUOTA_EXCEEDED, status: 429, message: "AI quota exceeded — try again in a few minutes." };

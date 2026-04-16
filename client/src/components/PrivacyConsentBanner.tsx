@@ -1,5 +1,5 @@
 import { X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "wouter";
 
 import { Button } from "@/components/ui/button";
@@ -34,11 +34,10 @@ function recordConsent(): void {
  * is persisted in localStorage.
  */
 export function PrivacyConsentBanner() {
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    if (!hasStoredConsent()) setVisible(true);
-  }, []);
+  // Lazy initializer reads localStorage once on mount rather than triggering
+  // a cascading setState inside useEffect. hasStoredConsent() already guards
+  // against missing window / denied storage.
+  const [visible, setVisible] = useState<boolean>(() => !hasStoredConsent());
 
   if (!visible) return null;
 
@@ -48,8 +47,7 @@ export function PrivacyConsentBanner() {
   };
 
   return (
-    <div
-      role="region"
+    <section
       aria-label="Privacy notice"
       className="fixed inset-x-0 bottom-0 z-[60] border-t bg-background/95 backdrop-blur-sm shadow-lg"
     >
@@ -76,6 +74,6 @@ export function PrivacyConsentBanner() {
           </button>
         </div>
       </div>
-    </div>
+    </section>
   );
 }

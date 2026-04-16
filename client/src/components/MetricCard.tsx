@@ -12,11 +12,16 @@ interface MetricCardProps {
   icon: LucideIcon;
 }
 
+// Screen-reader description for trend direction so the information isn't
+// conveyed by color alone (WCAG 1.4.1, W8).
+function trendLabelFor(trend: MetricCardProps["trend"]): string {
+  if (trend === "up") return "trending up";
+  if (trend === "down") return "trending down";
+  return "no change";
+}
+
 export function MetricCard({ title, value, unit, trend, trendValue, icon: Icon }: Readonly<MetricCardProps>) {
-  // Screen-reader description for trend direction so the information isn't
-  // conveyed by color alone (WCAG 1.4.1, W8).
-  const trendLabel =
-    trend === "up" ? "trending up" : trend === "down" ? "trending down" : "no change";
+  const trendLabel = trendLabelFor(trend);
 
   const getTrendIcon = () => {
     if (trend === "up") return <TrendingUp aria-hidden="true" className="h-4 w-4 text-green-500" />;
