@@ -37,8 +37,8 @@ router.get('/api/v1/preferences', isAuthenticated, asyncHandler(async (req: Expr
         : undefined;
 
     res.json({
-      weightUnit: user.weightUnit || "kg",
-      distanceUnit: user.distanceUnit || "km",
+      weightUnit: user.weightUnit ?? "kg",
+      distanceUnit: user.distanceUnit ?? "km",
       weeklyGoal,
       planWeeklyDensity: planWeeklyDensity ?? null,
       weeklyGoalExceedsPlan:
