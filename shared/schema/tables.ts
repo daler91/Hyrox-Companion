@@ -189,6 +189,9 @@ export const exerciseSets = pgTable("exercise_sets", {
   index("idx_exercise_sets_workout_sort").on(table.workoutLogId, table.sortOrder),
   index("idx_exercise_sets_workout_exercise").on(table.workoutLogId, table.exerciseName),
   check("set_number_check", sql`set_number > 0`),
+  check("weight_non_negative_check", sql`weight IS NULL OR weight >= 0`),
+  check("distance_non_negative_check", sql`distance IS NULL OR distance >= 0`),
+  check("time_non_negative_check", sql`time IS NULL OR time >= 0`),
 ]);
 
 // User-authored annotations on date ranges in their training timeline —
