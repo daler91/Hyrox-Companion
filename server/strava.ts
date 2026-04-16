@@ -351,6 +351,11 @@ async function handleStravaSync(req: Request, res: Response) {
 
     await storage.users.updateStravaLastSync(userId);
 
+    (req.log || logger).info(
+      { context: "strava", userId, imported, skipped: skipped + raceSkipped, total: activities.length },
+      "strava.sync.ok",
+    );
+
     res.json({
       success: true,
       imported,

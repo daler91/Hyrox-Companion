@@ -39,6 +39,12 @@ export function extractAndDeduplicateCustomExercises(exercises: ParsedExercise[]
 
 
 
+// Hard cap on expanded set rows per workout submit. Zod already bounds per-
+// exercise numSets and the exercises array, but their product can still reach
+// 10k rows. Ten-thousand rows would bloat a single DB write, stall the client,
+// and has no legitimate training use (S13).
+const MAX_SET_ROWS_PER_WORKOUT = 1000;
+
 export function expandExercisesToSetRows(exercises: ParsedExercise[], workoutLogId: string): InsertExerciseSet[] {
   const rows: InsertExerciseSet[] = [];
   let sortOrder = 0;
@@ -79,6 +85,11 @@ export function expandExercisesToSetRows(exercises: ParsedExercise[], workoutLog
         });
       }
     }
+  }
+  if (rows.length > MAX_SET_ROWS_PER_WORKOUT) {
+    throw new Error(
+      `Workout expanded to ${rows.length} set rows (limit ${MAX_SET_ROWS_PER_WORKOUT}). Split into multiple workouts.`,
+    );
   }
   return rows;
 }
