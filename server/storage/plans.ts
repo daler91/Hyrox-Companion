@@ -93,6 +93,34 @@ export class PlanStorage {
     return await db.insert(planDays).values(days).returning();
   }
 
+  /**
+   * Returns how many plan_days the plan schedules per week, on average. Used
+   * to sanity-check a user's weeklyGoal against their plan density (S4) —
+   * a 2-day plan + goal of 7 will show 0% completion unless the user logs
+   * extra ad-hoc workouts, so the UI surfaces a gentle warning.
+   */
+  async getPlanWeeklyDensity(planId: string): Promise<number | undefined> {
+    // Start FROM training_plans + LEFT JOIN plan_days so a plan with zero
+    // days still returns a row (count = 0, density = 0) instead of the
+    // "plan not found" shape. Codex flagged this: a user who deletes every
+    // plan_day on an active plan would otherwise look like "no active plan"
+    // and the weeklyGoalExceedsPlan hint would silently go false.
+    const [row] = await db
+      .select({
+        planDayCount: sql<number>`cast(count(${planDays.id}) as int)`,
+        totalWeeks: trainingPlans.totalWeeks,
+      })
+      .from(trainingPlans)
+      .leftJoin(planDays, eq(planDays.planId, trainingPlans.id))
+      .where(eq(trainingPlans.id, planId))
+      .groupBy(trainingPlans.totalWeeks);
+
+    // totalWeeks is nullable on the schema; bail if the plan never had one set.
+    const totalWeeks = row?.totalWeeks ?? 0;
+    if (totalWeeks <= 0) return undefined;
+    return Math.ceil(row.planDayCount / totalWeeks);
+  }
+
   async updatePlanDay(
     dayId: string,
     updates: UpdatePlanDay,
