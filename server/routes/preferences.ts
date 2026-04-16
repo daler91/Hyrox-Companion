@@ -27,14 +27,14 @@ router.get('/api/v1/preferences', isAuthenticated, asyncHandler(async (req: Expr
     const weeklyGoal = user.weeklyGoal ?? 5;
     const activePlan = await storage.plans.getActivePlan(userId);
     const today = new Date().toISOString().split("T")[0];
-    const planWeeklyDensity =
-      activePlan &&
-      activePlan.startDate &&
-      activePlan.endDate &&
+    const planCoversToday =
+      activePlan?.startDate != null &&
+      activePlan.endDate != null &&
       activePlan.startDate <= today &&
-      activePlan.endDate >= today
-        ? await storage.plans.getPlanWeeklyDensity(activePlan.id)
-        : undefined;
+      activePlan.endDate >= today;
+    const planWeeklyDensity = planCoversToday
+      ? await storage.plans.getPlanWeeklyDensity(activePlan.id)
+      : undefined;
 
     res.json({
       weightUnit: user.weightUnit ?? "kg",

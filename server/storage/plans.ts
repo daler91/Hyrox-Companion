@@ -100,18 +100,25 @@ export class PlanStorage {
    * extra ad-hoc workouts, so the UI surfaces a gentle warning.
    */
   async getPlanWeeklyDensity(planId: string): Promise<number | undefined> {
+    // Start FROM training_plans + LEFT JOIN plan_days so a plan with zero
+    // days still returns a row (count = 0, density = 0) instead of the
+    // "plan not found" shape. Codex flagged this: a user who deletes every
+    // plan_day on an active plan would otherwise look like "no active plan"
+    // and the weeklyGoalExceedsPlan hint would silently go false.
     const [row] = await db
       .select({
         planDayCount: sql<number>`cast(count(${planDays.id}) as int)`,
         totalWeeks: trainingPlans.totalWeeks,
       })
-      .from(planDays)
-      .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
-      .where(eq(planDays.planId, planId))
+      .from(trainingPlans)
+      .leftJoin(planDays, eq(planDays.planId, trainingPlans.id))
+      .where(eq(trainingPlans.id, planId))
       .groupBy(trainingPlans.totalWeeks);
 
-    if (!row || !row.totalWeeks || row.totalWeeks <= 0) return undefined;
-    return Math.ceil(row.planDayCount / row.totalWeeks);
+    // totalWeeks is nullable on the schema; bail if the plan never had one set.
+    const totalWeeks = row?.totalWeeks ?? 0;
+    if (totalWeeks <= 0) return undefined;
+    return Math.ceil(row.planDayCount / totalWeeks);
   }
 
   async updatePlanDay(
