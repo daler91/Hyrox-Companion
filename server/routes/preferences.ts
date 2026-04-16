@@ -20,11 +20,21 @@ router.get('/api/v1/preferences', isAuthenticated, asyncHandler(async (req: Expr
     // surface a non-blocking hint so the UI can warn them that they'll
     // need to log ad-hoc workouts on top of the plan to hit the goal.
     // Non-blocking by design: some users legitimately log extra cardio.
-    const weeklyGoal = user.weeklyGoal || 5;
+    //
+    // storage.plans.getActivePlan falls back to recently-ended / next-upcoming
+    // plans, so we gate the hint on the returned plan actually covering today
+    // — users between plans should see the "no active plan" shape (null/false).
+    const weeklyGoal = user.weeklyGoal ?? 5;
     const activePlan = await storage.plans.getActivePlan(userId);
-    const planWeeklyDensity = activePlan
-      ? await storage.plans.getPlanWeeklyDensity(activePlan.id)
-      : undefined;
+    const today = new Date().toISOString().split("T")[0];
+    const planWeeklyDensity =
+      activePlan &&
+      activePlan.startDate &&
+      activePlan.endDate &&
+      activePlan.startDate <= today &&
+      activePlan.endDate >= today
+        ? await storage.plans.getPlanWeeklyDensity(activePlan.id)
+        : undefined;
 
     res.json({
       weightUnit: user.weightUnit || "kg",
