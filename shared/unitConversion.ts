@@ -1,6 +1,30 @@
 export type WeightUnit = "kg" | "lbs";
 export type DistanceUnit = "km" | "miles";
 
+/**
+ * 🛡️ Sentinel: unit-storage invariant (S5).
+ *
+ * Weights and distances in `workout_logs` / `exercise_sets` are stored in the
+ * USER'S CURRENT preferred unit at the time of writing — not a canonical SI
+ * unit. The Gemini parser and the manual log form both convert incoming text
+ * to the user's current `weightUnit` / `distanceUnit` before insert.
+ *
+ * Consequences:
+ *   1. Round-tripping a stored value through convert*() back to itself will
+ *      exhibit floating-point drift (100 kg → 220.462 lbs → 99.99997 kg).
+ *      Never read-convert-write a stored weight/distance.
+ *   2. Changing a user's unit preference does NOT migrate historical rows.
+ *      Analytics stacks the raw numbers, so a user who switches from kg to
+ *      lbs mid-history will see an apparent ~2.2x jump. We accept this
+ *      trade-off today; a canonicalization migration is tracked as future
+ *      work (see docs/state-management.md).
+ *
+ * The `kgToUserWeight` / `userWeightToKg` helpers below are provided for
+ * integration code that receives canonical units from third parties (e.g.
+ * Strava/Garmin expose metric data); do NOT use them on values already
+ * sourced from our own DB.
+ */
+
 const KG_TO_LBS = 2.20462;
 const KM_TO_MILES = 0.621371;
 const M_TO_FT = 3.28084;

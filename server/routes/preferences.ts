@@ -15,10 +15,24 @@ router.get('/api/v1/preferences', isAuthenticated, asyncHandler(async (req: Expr
     if (!user) {
       return res.status(404).json({ error: "User not found", code: "NOT_FOUND" });
     }
+
+    // S4 — if the user's weeklyGoal exceeds their active plan's density,
+    // surface a non-blocking hint so the UI can warn them that they'll
+    // need to log ad-hoc workouts on top of the plan to hit the goal.
+    // Non-blocking by design: some users legitimately log extra cardio.
+    const weeklyGoal = user.weeklyGoal || 5;
+    const activePlan = await storage.plans.getActivePlan(userId);
+    const planWeeklyDensity = activePlan
+      ? await storage.plans.getPlanWeeklyDensity(activePlan.id)
+      : undefined;
+
     res.json({
       weightUnit: user.weightUnit || "kg",
       distanceUnit: user.distanceUnit || "km",
-      weeklyGoal: user.weeklyGoal || 5,
+      weeklyGoal,
+      planWeeklyDensity: planWeeklyDensity ?? null,
+      weeklyGoalExceedsPlan:
+        planWeeklyDensity !== undefined && weeklyGoal > planWeeklyDensity,
       emailNotifications: user.emailNotifications ?? true,
       emailWeeklySummary: user.emailWeeklySummary ?? true,
       emailMissedReminder: user.emailMissedReminder ?? true,
