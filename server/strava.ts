@@ -123,12 +123,16 @@ async function refreshStravaToken(refreshToken: string): Promise<StravaTokenResp
   }
 }
 
+// Refresh 60s before the token would actually expire so an in-flight request
+// never uses a token that flips to expired between our check and Strava's.
+const STRAVA_REFRESH_SAFETY_WINDOW_MS = 60_000;
+
 async function getValidAccessToken(userId: string): Promise<string | null> {
   const connection = await storage.users.getStravaConnection(userId);
   if (!connection) return null;
 
-  const now = new Date();
-  if (connection.expiresAt > now) {
+  const refreshAt = new Date(Date.now() + STRAVA_REFRESH_SAFETY_WINDOW_MS);
+  if (connection.expiresAt > refreshAt) {
     return connection.accessToken;
   }
 
