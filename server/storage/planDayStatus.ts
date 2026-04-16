@@ -27,16 +27,13 @@ import { db, type DbExecutor } from "../db";
  * to "planned". When called outside an existing transaction we open our
  * own so the row lock actually holds across statements.
  */
-export async function syncPlanDayStatusFromWorkouts(
+export function syncPlanDayStatusFromWorkouts(
   planDayId: string,
   userId: string,
   tx?: DbExecutor,
 ): Promise<void> {
-  if (tx) {
-    await syncInTransaction(planDayId, userId, tx);
-    return;
-  }
-  await db.transaction((newTx) => syncInTransaction(planDayId, userId, newTx));
+  if (tx) return syncInTransaction(planDayId, userId, tx);
+  return db.transaction((newTx) => syncInTransaction(planDayId, userId, newTx));
 }
 
 async function syncInTransaction(

@@ -38,11 +38,12 @@ function makeTxStub(opts: {
     };
   });
 
-  return {
-    tx: { select, update } as unknown as Parameters<typeof syncPlanDayStatusFromWorkouts>[2],
-    updateSet,
-    update,
-  };
+  // The helper's tx param is a Drizzle executor; the test only needs .select
+  // and .update to return the stubbed chains. Narrow to the minimal shape to
+  // avoid stacking double casts.
+  type MinimalTx = Parameters<typeof syncPlanDayStatusFromWorkouts>[2];
+  const tx = { select, update } as unknown as MinimalTx;
+  return { tx, updateSet, update };
 }
 
 describe("syncPlanDayStatusFromWorkouts", () => {
