@@ -112,7 +112,7 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
       // planned days. Log so support can distinguish this from an AI/API
       // failure (W3).
       logger.info(
-        { userId, planId: trainingContext.activePlan?.id },
+        { userId, planName: trainingContext.activePlan?.name },
         "[coach] Auto-coach skipped — no upcoming planned workouts",
       );
       return { adjusted: 0 };
