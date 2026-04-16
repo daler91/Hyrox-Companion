@@ -338,17 +338,23 @@ async function handleStravaSync(req: Request, res: Response) {
       workoutsToImport.push(mapStravaActivityToWorkout(activity, userId, distanceUnit));
     }
 
-    if (workoutsToImport.length > 0) {
-      await storage.workouts.createWorkoutLogs(workoutsToImport);
-    }
-    const imported = workoutsToImport.length;
+    const createdLogs = workoutsToImport.length > 0
+      ? await storage.workouts.createWorkoutLogs(workoutsToImport)
+      : [];
+    // onConflictDoNothing returns only the rows this insert actually
+    // created; concurrent Strava syncs can drop rows here and we want the
+    // response to reflect the truth, not the optimistic pre-insert count
+    // (S2). `skipped` sums the pre-dedup hits plus any race-condition
+    // duplicates the DB rejected.
+    const imported = createdLogs.length;
+    const raceSkipped = workoutsToImport.length - createdLogs.length;
 
     await storage.users.updateStravaLastSync(userId);
 
     res.json({
       success: true,
       imported,
-      skipped,
+      skipped: skipped + raceSkipped,
       total: activities.length,
     });
   } catch (error) {

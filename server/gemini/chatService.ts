@@ -2,7 +2,7 @@ import { type GenerateContentResponse,ThinkingLevel } from "@google/genai";
 import type { ChatMessage } from "@shared/schema";
 
 import { AI_REQUEST_TIMEOUT_MS } from "../constants";
-import { AppError, ErrorCode } from "../errors";
+import { AppError, classifyAiError } from "../errors";
 import { logger } from "../logger";
 import { buildSystemPrompt, type CoachingMaterialInput } from "../prompts";
 import { sanitizeUserInput, validateAiOutput } from "../utils/sanitize";
@@ -48,8 +48,9 @@ export async function chatWithCoach(
     const textOutput = response.text || "I apologize, but I couldn't generate a response. Please try again.";
     return validateAiOutput(textOutput);
   } catch (error) {
-    logger.error({ err: error }, "Gemini API error:");
-    throw new AppError(ErrorCode.AI_ERROR, "Failed to get response from AI coach", 502);
+    const classified = classifyAiError(error);
+    logger.error({ err: error, code: classified.code }, "Gemini API error:");
+    throw new AppError(classified.code, classified.message, classified.status);
   }
 }
 
@@ -109,7 +110,8 @@ export async function* streamChatWithCoach(
       trackUsageFromResponse(userId, GEMINI_SUGGESTIONS_MODEL, "chat_stream", lastChunk);
     }
   } catch (error) {
-    logger.error({ err: error }, "Gemini streaming API error:");
-    throw new AppError(ErrorCode.AI_ERROR, "Failed to get streaming response from AI coach", 502);
+    const classified = classifyAiError(error);
+    logger.error({ err: error, code: classified.code }, "Gemini streaming API error:");
+    throw new AppError(classified.code, classified.message, classified.status);
   }
 }
