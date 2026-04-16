@@ -17,7 +17,16 @@ import {
 
 import { api, QUERY_KEYS } from "@/lib/api";
 
-import { CHART_CARD_CLASS, COLOR_GREEN, COLOR_PRIMARY, formatChartDate,GRID_BORDER, GRID_DASH, MUTED_CURSOR, MUTED_FG } from "./chartConstants";
+import {
+  CHART_CARD_CLASS,
+  COLOR_GREEN,
+  COLOR_PRIMARY,
+  formatChartDate,
+  GRID_BORDER,
+  GRID_DASH,
+  MUTED_CURSOR,
+  MUTED_FG,
+} from "./chartConstants";
 import { DeltaIndicator } from "./DeltaIndicator";
 import { MiniLineChart } from "./MiniLineChart";
 import { WorkoutHeatmap } from "./WorkoutHeatmap";
@@ -60,7 +69,12 @@ function annotationToWeekBounds(
   // string coercion (Sonar `useSortCompare` rule) and makes the intent
   // clear. `overlapping.at(-1)` is guaranteed defined because we just
   // checked `length === 0` above.
-  overlapping.sort((a, b) => a.localeCompare(b));
+  overlapping.sort((a, b) => {
+    // Fast string comparison for YYYY-MM-DD dates instead of localeCompare
+    if (a < b) return -1;
+    if (a > b) return 1;
+    return 0;
+  });
   return { x1: overlapping[0], x2: overlapping.at(-1) ?? overlapping[0] };
 }
 
@@ -69,12 +83,19 @@ interface TrainingOverviewTabProps {
   readonly weeklyGoal?: number;
 }
 
-function WeeklyTooltip({ active, payload }: Readonly<{ active?: boolean; payload?: Array<{ value: number; payload?: { weekStart: string } }> }>) {
+function WeeklyTooltip({
+  active,
+  payload,
+}: Readonly<{
+  active?: boolean;
+  payload?: Array<{ value: number; payload?: { weekStart: string } }>;
+}>) {
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-popover text-popover-foreground border px-3 py-2 rounded shadow-md text-sm">
       <p className="font-semibold mb-1">
-        Week of {payload[0]?.payload?.weekStart ? formatChartDate(payload[0].payload.weekStart) : ""}
+        Week of{" "}
+        {payload[0]?.payload?.weekStart ? formatChartDate(payload[0].payload.weekStart) : ""}
       </p>
       <p>
         <span className="text-muted-foreground mr-2">Workouts:</span>
@@ -110,7 +131,11 @@ export function TrainingOverviewTab({ dateParams, weeklyGoal }: TrainingOverview
   // .filter().map() chains (4 array traversals → 1). This also stabilises
   // array references so MiniLineChart can skip re-renders via React.memo.
   const { rpeData, durationData } = useMemo(() => {
-    if (!overview) return { rpeData: [] as Array<{ weekStart: string; avgRpe: number | null }>, durationData: [] as Array<{ weekStart: string; avgDuration: number }> };
+    if (!overview)
+      return {
+        rpeData: [] as Array<{ weekStart: string; avgRpe: number | null }>,
+        durationData: [] as Array<{ weekStart: string; avgDuration: number }>,
+      };
     const rpe: Array<{ weekStart: string; avgRpe: number | null }> = [];
     const duration: Array<{ weekStart: string; avgDuration: number }> = [];
     for (const w of overview.weeklySummaries) {
@@ -174,7 +199,9 @@ export function TrainingOverviewTab({ dateParams, weeklyGoal }: TrainingOverview
             <BarChart3 className="h-5 w-5 text-primary mt-0.5 shrink-0" />
             <div className="flex-1">
               <div className="flex items-baseline gap-2">
-                <p className="text-2xl font-bold" data-testid="text-avg-workouts">{stats.avgPerWeek}</p>
+                <p className="text-2xl font-bold" data-testid="text-avg-workouts">
+                  {stats.avgPerWeek}
+                </p>
                 {previousStats ? (
                   <DeltaIndicator
                     current={stats.avgPerWeek}
@@ -183,14 +210,18 @@ export function TrainingOverviewTab({ dateParams, weeklyGoal }: TrainingOverview
                   />
                 ) : null}
               </div>
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Avg / Week</p>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Avg / Week
+              </p>
             </div>
           </div>
           <div className="bg-muted/50 p-4 rounded-lg flex items-start gap-3">
             <Zap className="h-5 w-5 text-yellow-500 mt-0.5 shrink-0" />
             <div className="flex-1">
               <div className="flex items-baseline gap-2">
-                <p className="text-2xl font-bold" data-testid="text-total-workouts">{stats.totalWorkouts}</p>
+                <p className="text-2xl font-bold" data-testid="text-total-workouts">
+                  {stats.totalWorkouts}
+                </p>
                 {previousStats ? (
                   <DeltaIndicator
                     current={stats.totalWorkouts}
@@ -199,14 +230,19 @@ export function TrainingOverviewTab({ dateParams, weeklyGoal }: TrainingOverview
                   />
                 ) : null}
               </div>
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Workouts</p>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Total Workouts
+              </p>
             </div>
           </div>
           <div className="bg-muted/50 p-4 rounded-lg flex items-start gap-3">
             <Clock className="h-5 w-5 text-blue-500 mt-0.5 shrink-0" />
             <div className="flex-1">
               <div className="flex items-baseline gap-2">
-                <p className="text-2xl font-bold" data-testid="text-avg-duration">{stats.avgDuration}<span className="text-sm font-normal text-muted-foreground">min</span></p>
+                <p className="text-2xl font-bold" data-testid="text-avg-duration">
+                  {stats.avgDuration}
+                  <span className="text-sm font-normal text-muted-foreground">min</span>
+                </p>
                 {previousStats ? (
                   <DeltaIndicator
                     current={stats.avgDuration}
@@ -216,14 +252,18 @@ export function TrainingOverviewTab({ dateParams, weeklyGoal }: TrainingOverview
                   />
                 ) : null}
               </div>
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Avg Duration</p>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Avg Duration
+              </p>
             </div>
           </div>
           <div className="bg-muted/50 p-4 rounded-lg flex items-start gap-3">
             <Flame className="h-5 w-5 text-red-500 mt-0.5 shrink-0" />
             <div className="flex-1">
               <div className="flex items-baseline gap-2">
-                <p className="text-2xl font-bold" data-testid="text-avg-rpe">{stats.avgRpe ?? "—"}</p>
+                <p className="text-2xl font-bold" data-testid="text-avg-rpe">
+                  {stats.avgRpe ?? "—"}
+                </p>
                 {previousStats && stats.avgRpe !== null && previousStats.avgRpe !== null ? (
                   <DeltaIndicator
                     current={stats.avgRpe}
@@ -233,7 +273,9 @@ export function TrainingOverviewTab({ dateParams, weeklyGoal }: TrainingOverview
                   />
                 ) : null}
               </div>
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Avg RPE</p>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Avg RPE
+              </p>
             </div>
           </div>
         </div>
@@ -269,10 +311,7 @@ export function TrainingOverviewTab({ dateParams, weeklyGoal }: TrainingOverview
                 tick={{ fill: MUTED_FG }}
                 allowDecimals={false}
               />
-              <Tooltip
-                cursor={{ fill: MUTED_CURSOR }}
-                content={<WeeklyTooltip />}
-              />
+              <Tooltip cursor={{ fill: MUTED_CURSOR }} content={<WeeklyTooltip />} />
               {/* Shade each annotation band behind the bars so injury /
                   illness / travel / rest periods are visually correlated
                   with volume dips. Order matters: reference areas are
@@ -303,7 +342,9 @@ export function TrainingOverviewTab({ dateParams, weeklyGoal }: TrainingOverview
                 {overview.weeklySummaries.map((entry) => (
                   <Cell
                     key={entry.weekStart}
-                    fill={weeklyGoal && entry.workoutCount >= weeklyGoal ? COLOR_GREEN : COLOR_PRIMARY}
+                    fill={
+                      weeklyGoal && entry.workoutCount >= weeklyGoal ? COLOR_GREEN : COLOR_PRIMARY
+                    }
                     fillOpacity={0.8}
                   />
                 ))}
