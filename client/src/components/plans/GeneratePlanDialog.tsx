@@ -3,6 +3,7 @@ import { ChevronLeft,ChevronRight, Loader2, Sparkles } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { CharacterCount } from "@/components/ui/character-count";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -188,7 +189,9 @@ export function GeneratePlanDialog({ open, onOpenChange }: GeneratePlanDialogPro
                 onChange={(e) => form.setGoal(e.target.value)}
                 maxLength={500}
                 rows={3}
+                aria-describedby="goal-count"
               />
+              <CharacterCount id="goal-count" value={form.goal} max={500} />
             </div>
             <div className="flex justify-end">
               <Button onClick={() => form.setStep(1)} disabled={!form.canProceedStep0}>
@@ -323,7 +326,9 @@ export function GeneratePlanDialog({ open, onOpenChange }: GeneratePlanDialogPro
                 onChange={(e) => form.setInjuries(e.target.value)}
                 maxLength={500}
                 rows={2}
+                aria-describedby="injuries-count"
               />
+              <CharacterCount id="injuries-count" value={form.injuries} max={500} />
             </div>
 
             <div className="flex justify-between">
