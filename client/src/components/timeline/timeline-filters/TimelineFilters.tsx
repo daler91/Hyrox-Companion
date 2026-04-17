@@ -210,10 +210,10 @@ export default function TimelineFilters({
             <Target className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
             <button
               type="button"
-              className="flex-1 text-left text-sm text-muted-foreground hover:text-foreground truncate transition-colors"
+              className="flex-1 text-left text-sm text-muted-foreground hover:text-foreground truncate transition-colors rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
               onClick={openGoalDialog}
               data-testid="button-plan-goal"
-              title="Set plan goal"
+              aria-label="Edit plan goal"
             >
               {selectedPlan.goal ? selectedPlan.goal : <span className="italic">Add a goal, e.g. Complete Hyrox in under 90 min…</span>}
             </button>
