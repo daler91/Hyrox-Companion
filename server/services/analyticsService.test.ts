@@ -280,7 +280,11 @@ describe("calculateTrainingOverview", () => {
     ];
     const result = calculateTrainingOverview(logs, []);
     const weekStarts = result.weeklySummaries.map((w) => w.weekStart);
-    const sorted = [...weekStarts].sort((a, b) => a.localeCompare(b));
+    const sorted = [...weekStarts].sort((a, b) => {
+      if (a < b) return -1;
+      if (a > b) return 1;
+      return 0;
+    });
     expect(weekStarts).toEqual(sorted);
   });
 

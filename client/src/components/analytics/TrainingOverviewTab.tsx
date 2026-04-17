@@ -60,7 +60,13 @@ function annotationToWeekBounds(
   // string coercion (Sonar `useSortCompare` rule) and makes the intent
   // clear. `overlapping.at(-1)` is guaranteed defined because we just
   // checked `length === 0` above.
-  overlapping.sort((a, b) => a.localeCompare(b));
+  // ⚡ Bolt Performance Optimization: Replace `localeCompare` with standard string comparison
+  // for YYYY-MM-DD dates to avoid slow Internationalization API lookups.
+  overlapping.sort((a, b) => {
+    if (a < b) return -1;
+    if (a > b) return 1;
+    return 0;
+  });
   return { x1: overlapping[0], x2: overlapping.at(-1) ?? overlapping[0] };
 }
 
