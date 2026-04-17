@@ -54,7 +54,7 @@ async function syncInTransaction(
     .where(eq(planDays.id, planDayId))
     .for("update", { of: planDays });
 
-  if (!row || row.ownerId !== userId) return;
+  if (row?.ownerId !== userId) return;
   if (row.status === "skipped" || row.status === "missed") return;
 
   const [counted] = await tx
