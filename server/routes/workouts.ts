@@ -6,6 +6,7 @@ import { z } from "zod";
 import { isAuthenticated } from "../clerkAuth";
 import { DEFAULT_PAGE_LIMIT, DEFAULT_TIMELINE_LIMIT, MAX_PAGE_LIMIT } from "../constants";
 import { db } from "../db";
+import { AppError, ErrorCode } from "../errors";
 import { protectedMutationGuards } from "../routeGuards";
 import { asyncHandler, rateLimiter, validateBody } from "../routeUtils";
 import { generateCSV, generateJSON } from "../services/exportService";
@@ -172,6 +173,52 @@ router.post("/api/v1/workouts/combine", ...protectedMutationGuards, rateLimiter(
     const { newWorkout, deleteWorkoutIds, skipPlanDayIds } = req.body as z.infer<typeof combineWorkoutsSchema>;
 
     const result = await db.transaction(async (tx) => {
+      // Guard against combining unrelated plan-day workouts: any source
+      // workout's planDayId must either match the new combined workout's
+      // planDayId OR appear in skipPlanDayIds. Prevents silently detaching
+      // a workout from its plan day by merging it into a different one.
+      const sourceWorkouts = await tx
+        .select({ id: workoutLogs.id, planDayId: workoutLogs.planDayId })
+        .from(workoutLogs)
+        .where(and(inArray(workoutLogs.id, deleteWorkoutIds), eq(workoutLogs.userId, userId)));
+
+      if (sourceWorkouts.length !== deleteWorkoutIds.length) {
+        throw new AppError(ErrorCode.NOT_FOUND, "One or more source workouts not found", 404);
+      }
+
+      const keptPlanDayId = newWorkout.planDayId ?? null;
+
+      // Ownership check on the kept plan day — without this, a caller can
+      // pin the combined row to another tenant's planDayId (IDOR).
+      if (keptPlanDayId) {
+        const ownedKeptDay = await tx
+          .select({ id: planDays.id })
+          .from(planDays)
+          .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
+          .where(and(eq(planDays.id, keptPlanDayId), eq(trainingPlans.userId, userId)))
+          .limit(1);
+        if (ownedKeptDay.length === 0) {
+          throw new AppError(ErrorCode.NOT_FOUND, "Plan day not found", 404);
+        }
+      }
+
+      // Drop the kept plan day from the skip list — otherwise the combined
+      // workout's own plan day would immediately be marked skipped below.
+      const skipIds = (skipPlanDayIds ?? []).filter((id) => id !== keptPlanDayId);
+
+      const allowedPlanDayIds = new Set<string>(skipIds);
+      if (keptPlanDayId) allowedPlanDayIds.add(keptPlanDayId);
+
+      for (const src of sourceWorkouts) {
+        if (src.planDayId && !allowedPlanDayIds.has(src.planDayId)) {
+          throw new AppError(
+            ErrorCode.VALIDATION_ERROR,
+            `Cannot combine: source workout ${src.id} is linked to plan day ${src.planDayId}, which isn't the kept plan day or in skipPlanDayIds.`,
+            400,
+          );
+        }
+      }
+
       // Create the combined workout
       const [created] = await tx.insert(workoutLogs).values({
         ...newWorkout,
@@ -185,7 +232,7 @@ router.post("/api/v1/workouts/combine", ...protectedMutationGuards, rateLimiter(
 
       // Mark associated plan days as skipped — scoped to plans owned by
       // the requesting user to prevent IDOR writes on other tenants' data.
-      if (skipPlanDayIds?.length) {
+      if (skipIds.length) {
         const userPlanIds = tx
           .select({ id: trainingPlans.id })
           .from(trainingPlans)
@@ -194,7 +241,7 @@ router.post("/api/v1/workouts/combine", ...protectedMutationGuards, rateLimiter(
         await tx.update(planDays)
           .set({ status: "skipped" })
           .where(and(
-            inArray(planDays.id, skipPlanDayIds),
+            inArray(planDays.id, skipIds),
             inArray(planDays.planId, userPlanIds),
           ));
       }

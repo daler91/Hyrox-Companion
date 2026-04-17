@@ -32,7 +32,9 @@ vi.mock("../storage", () => {
       createTrainingPlan: vi.fn(),
       createPlanDays: vi.fn(),
       getTrainingPlan: vi.fn(),
+      getPlanDay: vi.fn(),
       updatePlanDay: vi.fn(),
+      deleteTrainingPlan: vi.fn(),
     },
     workouts: {
       getWorkoutLogByPlanDayId: vi.fn(),
@@ -73,6 +75,51 @@ describe("planService", () => {
 
       expect(csvParse.parse).toHaveBeenCalledWith(invalidCSV, expect.any(Object));
       expect(loggerErrorSpy).toHaveBeenCalledWith({ err: mockError }, "CSV parse error:");
+    });
+
+    it("rejects CSVs containing unrecognized day names before touching the database", async () => {
+      vi.mocked(csvParse.parse).mockReturnValue([
+        { Week: "1", Day: "Mondy", Focus: "Strength", "Main Workout": "Squats" },
+      ]);
+
+      await expect(importPlanFromCSV("x", "u1")).rejects.toThrow(
+        /unrecognized Day values.*Mondy/i,
+      );
+
+      expect(storage.plans.createTrainingPlan).not.toHaveBeenCalled();
+      expect(storage.plans.createPlanDays).not.toHaveBeenCalled();
+    });
+
+    it("rejects CSVs whose week span exceeds the 52-week cap before touching the database", async () => {
+      vi.mocked(csvParse.parse).mockReturnValue([
+        { Week: "1", Day: "Monday", Focus: "F", "Main Workout": "W" },
+        { Week: "2024", Day: "Monday", Focus: "F", "Main Workout": "W" },
+      ]);
+
+      await expect(importPlanFromCSV("x", "u1")).rejects.toThrow(
+        /exceeds the 52-week maximum/i,
+      );
+
+      expect(storage.plans.createTrainingPlan).not.toHaveBeenCalled();
+    });
+
+    it("canonicalizes mixed-case day names to title case on import", async () => {
+      vi.mocked(csvParse.parse).mockReturnValue([
+        { Week: "1", Day: "monday", Focus: "F", "Main Workout": "W" },
+        { Week: "1", Day: "TUESDAY", Focus: "F", "Main Workout": "W" },
+      ]);
+      vi.mocked(storage.plans.createTrainingPlan).mockResolvedValue(
+        createMockTrainingPlan({ id: "plan-1", userId: "u1" }),
+      );
+      vi.mocked(storage.plans.createPlanDays).mockResolvedValue([] as PlanDay[]);
+      vi.mocked(storage.plans.getTrainingPlan).mockResolvedValue(
+        createMockTrainingPlanWithDays({ id: "plan-1", userId: "u1" }),
+      );
+
+      await importPlanFromCSV("x", "u1");
+
+      const call = vi.mocked(storage.plans.createPlanDays).mock.calls[0][0];
+      expect(call.map((d) => d.dayName)).toEqual(["Monday", "Tuesday"]);
     });
   });
 
@@ -341,73 +388,144 @@ describe("planService", () => {
       vi.clearAllMocks();
     });
 
-    it("should preserve workout log edits on the plan day when switching from completed to planned", async () => {
-      // Simulate a workout log that contains the user's edits made while the
-      // workout was marked "completed". When the status flips back to "planned"
-      // these edits must persist on the plan day instead of being discarded.
-      const editedLog = {
-        id: "log-id",
-        userId,
-        planDayId: dayId,
-        focus: "Edited Focus",
-        mainWorkout: "Edited Main Workout",
-        accessory: "Edited Accessory",
-        notes: "Edited Notes",
+    type MockTx = {
+      select: ReturnType<typeof vi.fn>;
+      delete: ReturnType<typeof vi.fn>;
+      update: ReturnType<typeof vi.fn>;
+      deleteWhere: ReturnType<typeof vi.fn>;
+      updateSet: ReturnType<typeof vi.fn>;
+      updateWhere: ReturnType<typeof vi.fn>;
+      updateReturning: ReturnType<typeof vi.fn>;
+    };
+
+    // Wire up a tx that supports the two shapes planService uses:
+    //   1. select({...}).from(planDays).innerJoin(trainingPlans, ...).where(...).for("update")
+    //   2. select().from(workoutLogs).where(...).limit(1)
+    // plus delete(workoutLogs).where(...) and update(planDays).set(...).where(...).returning().
+    const setupTx = (
+      statusLookup: Array<{ status: string }>,
+      existingLog: Array<Record<string, unknown>> = [],
+      updateReturning: Array<Record<string, unknown>> = [],
+    ): MockTx => {
+      const mockTx: MockTx = {
+        select: vi.fn(),
+        delete: vi.fn().mockReturnThis(),
+        update: vi.fn().mockReturnThis(),
+        deleteWhere: vi.fn().mockResolvedValue(undefined),
+        updateSet: vi.fn().mockReturnThis(),
+        updateWhere: vi.fn().mockReturnThis(),
+        updateReturning: vi.fn().mockResolvedValue(updateReturning),
       };
-      vi.mocked(storage.workouts.getWorkoutLogByPlanDayId).mockResolvedValue(
-        editedLog as unknown as Awaited<ReturnType<typeof storage.workouts.getWorkoutLogByPlanDayId>>,
+
+      mockTx.select = vi.fn()
+        // first call: status lookup (with innerJoin + for("update"))
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnValueOnce({
+            innerJoin: vi.fn().mockReturnValueOnce({
+              where: vi.fn().mockReturnValueOnce({
+                for: vi.fn().mockResolvedValue(statusLookup),
+              }),
+            }),
+          }),
+        })
+        // second call: existing log lookup (with limit)
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnValueOnce({
+            where: vi.fn().mockReturnValueOnce({
+              limit: vi.fn().mockResolvedValue(existingLog),
+            }),
+          }),
+        });
+
+      mockTx.delete = vi.fn().mockReturnValue({ where: mockTx.deleteWhere });
+      mockTx.update = vi.fn().mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({ returning: mockTx.updateReturning }),
+        }),
+      });
+
+      vi.mocked(db.transaction).mockImplementation(async (callback) =>
+        callback(mockTx as unknown as Parameters<Parameters<typeof db.transaction>[0]>[0]),
       );
-      vi.mocked(storage.workouts.deleteWorkoutLogByPlanDayId).mockResolvedValue(true);
-      vi.mocked(storage.plans.updatePlanDay).mockResolvedValue(
-        createMockPlanDay({ id: dayId, status: "planned", focus: "Edited Focus" }),
+
+      return mockTx;
+    };
+
+    it("preserves workout log edits on the plan day when switching from completed to planned", async () => {
+      const returned = createMockPlanDay({ id: dayId, status: "planned", focus: "Edited Focus" });
+      const tx = setupTx(
+        [{ status: "completed" }],
+        [{ id: "log-id", focus: "Edited Focus", mainWorkout: "Edited Main Workout", accessory: "Edited Accessory", notes: "Edited Notes" }],
+        [returned],
       );
+
+      const result = await updatePlanDayStatus(dayId, { status: "planned" }, userId);
+
+      expect(tx.deleteWhere).toHaveBeenCalled(); // workout log deleted
+      expect(tx.updateReturning).toHaveBeenCalled(); // plan day updated
+      expect(result).toEqual(returned);
+    });
+
+    it("updates the plan day without touching logs when transitioning between non-completed states", async () => {
+      const returned = createMockPlanDay({ id: dayId, status: "planned" });
+      const tx = setupTx([{ status: "missed" }], [], [returned]);
 
       await updatePlanDayStatus(dayId, { status: "planned" }, userId);
 
-      expect(storage.workouts.getWorkoutLogByPlanDayId).toHaveBeenCalledWith(dayId, userId);
-      expect(storage.workouts.deleteWorkoutLogByPlanDayId).toHaveBeenCalledWith(dayId, userId);
-      expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
-        dayId,
-        {
-          status: "planned",
-          focus: "Edited Focus",
-          mainWorkout: "Edited Main Workout",
-          accessory: "Edited Accessory",
-          notes: "Edited Notes",
-        },
-        userId,
-      );
+      expect(tx.deleteWhere).not.toHaveBeenCalled();
+      expect(tx.updateReturning).toHaveBeenCalled();
     });
 
-    it("should still update the plan day when switching to planned with no linked workout log", async () => {
-      vi.mocked(storage.workouts.getWorkoutLogByPlanDayId).mockResolvedValue(undefined);
-      vi.mocked(storage.workouts.deleteWorkoutLogByPlanDayId).mockResolvedValue(false);
-      vi.mocked(storage.plans.updatePlanDay).mockResolvedValue(
-        createMockPlanDay({ id: dayId, status: "planned" }),
-      );
-
-      await updatePlanDayStatus(dayId, { status: "planned" }, userId);
-
-      expect(storage.workouts.getWorkoutLogByPlanDayId).toHaveBeenCalledWith(dayId, userId);
-      expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
-        dayId,
-        { status: "planned" },
-        userId,
-      );
-    });
-
-    it("should not touch workout logs when switching to completed", async () => {
-      vi.mocked(storage.plans.updatePlanDay).mockResolvedValue(
-        createMockPlanDay({ id: dayId, status: "completed" }),
-      );
+    it("does not touch workout logs when switching to completed", async () => {
+      const returned = createMockPlanDay({ id: dayId, status: "completed" });
+      const tx = setupTx([{ status: "planned" }], [], [returned]);
 
       await updatePlanDayStatus(dayId, { status: "completed" }, userId);
 
-      expect(storage.workouts.getWorkoutLogByPlanDayId).not.toHaveBeenCalled();
-      expect(storage.workouts.deleteWorkoutLogByPlanDayId).not.toHaveBeenCalled();
+      expect(tx.deleteWhere).not.toHaveBeenCalled();
+      expect(tx.updateReturning).toHaveBeenCalled();
+    });
+
+    it("rejects an invalid transition (skipped → missed)", async () => {
+      const tx = setupTx([{ status: "skipped" }]);
+
+      await expect(
+        updatePlanDayStatus(dayId, { status: "missed" }, userId),
+      ).rejects.toThrow(/Invalid plan-day status transition/);
+
+      expect(tx.updateReturning).not.toHaveBeenCalled();
+    });
+
+    it("allows idempotent same-state transitions without touching workout logs", async () => {
+      // R8: even when from === status === 'planned', cleanup must not fire.
+      const returned = createMockPlanDay({ id: dayId, status: "planned" });
+      const tx = setupTx([{ status: "planned" }], [{ id: "stray-log" }], [returned]);
+
+      await updatePlanDayStatus(dayId, { status: "planned" }, userId);
+
+      expect(tx.deleteWhere).not.toHaveBeenCalled();
+      expect(tx.updateReturning).toHaveBeenCalled();
+    });
+
+    it("throws NOT_FOUND when plan day doesn't exist", async () => {
+      setupTx([]); // empty status lookup
+
+      await expect(
+        updatePlanDayStatus(dayId, { status: "completed" }, userId),
+      ).rejects.toThrow(/Plan day not found/);
+    });
+
+    it("skips transition check when only scheduledDate changes", async () => {
+      vi.mocked(storage.plans.updatePlanDay).mockResolvedValue(
+        createMockPlanDay({ id: dayId }),
+      );
+
+      await updatePlanDayStatus(dayId, { scheduledDate: "2026-05-01" }, userId);
+
+      expect(db.transaction).not.toHaveBeenCalled();
       expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
         dayId,
-        { status: "completed" },
+        { scheduledDate: "2026-05-01" },
         userId,
       );
     });

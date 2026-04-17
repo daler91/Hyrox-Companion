@@ -10,6 +10,16 @@ function getExerciseKey(set: ExerciseSetWithDate): string {
     : set.exerciseName;
 }
 
+// Epley formula — reliable up to ~10 reps; above that the estimate degrades
+// quickly and reps tend to be capacity/endurance rather than strength.
+// 1-rep sets are intentionally excluded: the heavy single already appears as
+// maxWeight, and rendering an identical "e1RM" chip next to it is noise.
+const EPLEY_MIN_REPS = 2;
+const EPLEY_MAX_REPS = 10;
+function estimateOneRepMax(weight: number, reps: number): number {
+  return Math.round(weight * (1 + reps / 30) * 10) / 10;
+}
+
 export function calculatePersonalRecords(allSets: ExerciseSetWithDate[]): Record<string, PersonalRecord> {
   const prs: Record<string, PersonalRecord> = {};
 
@@ -25,6 +35,18 @@ export function calculatePersonalRecords(allSets: ExerciseSetWithDate[]): Record
     }
     if (set.time && set.time > 0 && (!pr.bestTime || set.time < pr.bestTime.value)) {
       pr.bestTime = { value: set.time, date: set.date, workoutLogId: set.workoutLogId };
+    }
+    if (
+      set.category === "strength" &&
+      set.weight &&
+      set.reps &&
+      set.reps >= EPLEY_MIN_REPS &&
+      set.reps <= EPLEY_MAX_REPS
+    ) {
+      const e1rm = estimateOneRepMax(set.weight, set.reps);
+      if (!pr.estimated1RM || e1rm > pr.estimated1RM.value) {
+        pr.estimated1RM = { value: e1rm, date: set.date, workoutLogId: set.workoutLogId };
+      }
     }
   }
 

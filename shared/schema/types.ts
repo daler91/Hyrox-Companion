@@ -263,6 +263,7 @@ export interface PersonalRecord {
   maxWeight?: PersonalRecordValue;
   maxDistance?: PersonalRecordValue;
   bestTime?: PersonalRecordValue;
+  estimated1RM?: PersonalRecordValue;
 }
 
 // Coaching material types and schemas
