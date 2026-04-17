@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -36,6 +37,9 @@ export function GoalDialog({
             <Target className="h-4 w-4" />
             Plan Goal
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Set or update your training plan goal
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-2">
           <Label htmlFor="plan-goal-input">What are you training towards?</Label>

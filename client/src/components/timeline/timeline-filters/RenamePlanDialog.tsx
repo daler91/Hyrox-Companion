@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -32,6 +33,9 @@ export function RenamePlanDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Rename Training Plan</DialogTitle>
+          <DialogDescription className="sr-only">
+            Enter a new name for your training plan
+          </DialogDescription>
         </DialogHeader>
         <Input
           value={renameName}

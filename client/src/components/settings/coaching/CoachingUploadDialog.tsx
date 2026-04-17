@@ -1,7 +1,7 @@
 import { Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -36,6 +36,9 @@ export function CoachingUploadDialog({
           <DialogTitle>
             {dialogType === "principles" ? "Add Training Principles" : "Upload Document"}
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            {dialogType === "principles" ? "Enter your training principles" : "Upload your coaching document"}
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">

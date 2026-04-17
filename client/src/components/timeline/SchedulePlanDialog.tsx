@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -33,6 +34,9 @@ export default function SchedulePlanDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Schedule Your Training Plan</DialogTitle>
+          <DialogDescription className="sr-only">
+            Schedule your training plan start date
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
