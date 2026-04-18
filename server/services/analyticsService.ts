@@ -38,7 +38,9 @@ function updateBestTime(pr: PersonalRecord, set: ExerciseSetWithDate): void {
   }
 }
 
-function isE1RMCandidate(set: ExerciseSetWithDate): boolean {
+type E1RMCandidate = ExerciseSetWithDate & { weight: number; reps: number };
+
+function isE1RMCandidate(set: ExerciseSetWithDate): set is E1RMCandidate {
   return (
     set.category === "strength" &&
     !!set.weight &&
@@ -50,7 +52,7 @@ function isE1RMCandidate(set: ExerciseSetWithDate): boolean {
 
 function updateE1RM(pr: PersonalRecord, set: ExerciseSetWithDate): void {
   if (!isE1RMCandidate(set)) return;
-  const e1rm = estimateOneRepMax(set.weight!, set.reps!);
+  const e1rm = estimateOneRepMax(set.weight, set.reps);
   if (!pr.estimated1RM || e1rm > pr.estimated1RM.value) {
     pr.estimated1RM = { value: e1rm, date: set.date, workoutLogId: set.workoutLogId };
   }
