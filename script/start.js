@@ -19,7 +19,7 @@ function startFallbackServer(message) {
   const fallback = createServer((req, res) => {
     if (req.url?.startsWith("/api/v1/health")) {
       res.writeHead(503, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ status: "error", error: "startup_failed", message, timestamp: Date.now() }));
+      res.end(JSON.stringify({ status: "error", error: "startup_failed", timestamp: Date.now() }));
     } else {
       res.writeHead(503, { "Content-Type": "text/plain" });
       res.end("Service unavailable — startup failed");
