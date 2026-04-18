@@ -152,7 +152,17 @@
     "  but we pin the patched version to clear the advisory and reduce",
     "  supply-chain exposure. Dependabot cannot update transitive deps for pnpm,",
     "  so the override is required.",
-    "  Remove when @google/genai ships a version that depends on protobufjs >=7.5.5."
+    "  Remove when @google/genai ships a version that depends on protobufjs >=7.5.5.",
+    "",
+    "@clerk/shared ^4.8.1: fixes GHSA (createRouteMatcher / createPathMatcher middleware bypass).",
+    "  Crafted requests could skip middleware-level route gating in @clerk/nextjs, @clerk/nuxt,",
+    "  and @clerk/astro. Patched in @clerk/shared 4.8.1.",
+    "  Pulled transitively by @clerk/react 6.1.4 (depends on @clerk/shared 4.4.0). @clerk/express",
+    "  2.1.5 and @clerk/backend 3.2.13 already resolve to 4.8.2, so they are unaffected.",
+    "  This repo does not use createRouteMatcher/createPathMatcher and is not functionally",
+    "  exposed, but Dependabot cannot update transitive pnpm deps, so the override is required",
+    "  to clear the advisory.",
+    "  Remove when @clerk/react ships a version that depends on @clerk/shared >=4.8.1."
   ],
   "overrides": {
     "esbuild": "0.27.5",
@@ -161,7 +171,8 @@
     "serialize-javascript": ">=7.0.3",
     "hono": ">=4.12.14",
     "@hono/node-server": "^1.19.13",
-    "protobufjs": "^7.5.5"
+    "protobufjs": "^7.5.5",
+    "@clerk/shared": "^4.8.1"
   },
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.19",
@@ -219,7 +230,8 @@
       "serialize-javascript": ">=7.0.3",
       "hono": ">=4.12.14",
       "@hono/node-server": "^1.19.13",
-      "protobufjs": "^7.5.5"
+      "protobufjs": "^7.5.5",
+      "@clerk/shared": "^4.8.1"
     }
   },
   "packageManager": "pnpm@9.12.0",
