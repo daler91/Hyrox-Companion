@@ -100,6 +100,44 @@ describe("calculatePersonalRecords", () => {
     expect(prs["back_squat"].maxWeight?.value).toBe(100);
     expect(prs["bench_press"].maxWeight?.value).toBe(80);
   });
+
+  it("estimates 1RM for strength sets using Epley and picks the best across history", () => {
+    const sets = [
+      // 5x120 => 120 * (1 + 5/30) = 140
+      makeSet({ weight: 120, reps: 5, date: "2026-01-15", workoutLogId: "w2" }),
+      // 3x135 => 135 * (1 + 3/30) = 148.5 -> new best
+      makeSet({ weight: 135, reps: 3, date: "2026-01-20", workoutLogId: "w3" }),
+    ];
+    const prs = calculatePersonalRecords(sets);
+    expect(prs["back_squat"].estimated1RM).toEqual({
+      value: 148.5,
+      date: "2026-01-20",
+      workoutLogId: "w3",
+    });
+  });
+
+  it("skips e1RM for 1-rep sets (already captured as maxWeight) to avoid duplicate chips", () => {
+    // A heavy single renders as maxWeight = 140; emitting an identical 140 kg
+    // e1RM chip right next to it is noise (reviewer finding #9).
+    const sets = [
+      makeSet({ weight: 140, reps: 1, date: "2026-01-10", workoutLogId: "w1" }),
+    ];
+    const prs = calculatePersonalRecords(sets);
+    expect(prs["back_squat"].maxWeight?.value).toBe(140);
+    expect(prs["back_squat"].estimated1RM).toBeUndefined();
+  });
+
+  it("skips e1RM for non-strength sets and for reps above the reliable Epley range", () => {
+    const sets = [
+      // Running/functional categories should not produce e1RM
+      makeSet({ exerciseName: "skierg", category: "functional", weight: 50, reps: 10 }),
+      // Rep-count above cap (15 reps) should be excluded from e1RM
+      makeSet({ exerciseName: "back_squat", weight: 100, reps: 15 }),
+    ];
+    const prs = calculatePersonalRecords(sets);
+    expect(prs["skierg"].estimated1RM).toBeUndefined();
+    expect(prs["back_squat"].estimated1RM).toBeUndefined();
+  });
 });
 
 describe("calculateExerciseAnalytics", () => {

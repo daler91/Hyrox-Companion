@@ -67,6 +67,29 @@ function parseCSV(csvText: string): CSVRow[] {
   return validateAndMapCSVRows(records);
 }
 
+const VALID_DAY_NAMES = new Set([
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+  "sunday",
+]);
+
+// Canonicalize to title case so downstream scheduling (which now compares
+// case-insensitively) and any UI that renders day names see a consistent value.
+function canonicalizeDayName(raw: string): string {
+  const lower = raw.trim().toLowerCase();
+  return lower.charAt(0).toUpperCase() + lower.slice(1);
+}
+
+// Any plan that claims to span more than a year is almost certainly the
+// result of a typo (someone put "2024" or "52" in the Week column by
+// accident). Capping pre-insert keeps `totalWeeks` sane for downstream
+// analytics like getPlanWeeklyDensity and the plan header.
+const MAX_PLAN_WEEKS = 52;
+
 export async function importPlanFromCSV(
   csvContent: string,
   userId: string,
@@ -77,17 +100,60 @@ export async function importPlanFromCSV(
     throw new AppError(ErrorCode.VALIDATION_ERROR, "No valid rows found in CSV", 400);
   }
 
-  // ⚡ Bolt Performance Optimization: Combine map and filter into a single O(N) reduction to prevent intermediate array allocations.
-  const weekNumbers = rows.reduce<number[]>((acc, r) => {
-    const n = Number.parseInt(r.Week, 10);
-    if (!Number.isNaN(n) && n > 0) acc.push(n);
-    return acc;
-  }, []);
+  // Validate everything against the parsed rows BEFORE touching the database.
+  // Previously a failed rollback (deleteTrainingPlan) could leave an orphaned
+  // empty plan on the user's account.
+  const weekNumbers: number[] = [];
+  const invalidDayNames: string[] = [];
+  const validRows: { weekNumber: number; dayName: string; row: CSVRow }[] = [];
+  for (const row of rows) {
+    const n = Number.parseInt(row.Week, 10);
+    if (!Number.isNaN(n) && n > 0) weekNumbers.push(n);
+    if (row.Week && row.Day) {
+      const lowered = row.Day.trim().toLowerCase();
+      if (!VALID_DAY_NAMES.has(lowered)) {
+        invalidDayNames.push(row.Day);
+        continue;
+      }
+      validRows.push({
+        weekNumber: Number.parseInt(row.Week, 10) || 1,
+        dayName: canonicalizeDayName(row.Day),
+        row,
+      });
+    }
+  }
+
   if (weekNumbers.length === 0) {
     throw new AppError(ErrorCode.VALIDATION_ERROR, "No valid week numbers found in CSV", 400);
   }
-  const uniqueWeeks = new Set(weekNumbers);
-  const totalWeeks = uniqueWeeks.size;
+  if (invalidDayNames.length > 0) {
+    const sample = [...new Set(invalidDayNames)].slice(0, 5).join(", ");
+    throw new AppError(
+      ErrorCode.VALIDATION_ERROR,
+      `CSV contains ${invalidDayNames.length} row(s) with unrecognized Day values (e.g., ${sample}). Use Monday–Sunday.`,
+      400,
+    );
+  }
+  if (validRows.length === 0) {
+    throw new AppError(
+      ErrorCode.VALIDATION_ERROR,
+      "CSV has no rows with both a Week and a Day — plan must have at least one day.",
+      400,
+    );
+  }
+
+  // Use the actual span (max - min + 1) rather than the count of unique weeks
+  // so non-contiguous imports (e.g. weeks 1, 3, 5) don't under-report duration
+  // and make analytics like workouts-per-week over-estimate.
+  const rawSpan = Math.max(...weekNumbers) - Math.min(...weekNumbers) + 1;
+  if (rawSpan > MAX_PLAN_WEEKS) {
+    throw new AppError(
+      ErrorCode.VALIDATION_ERROR,
+      `Plan span is ${rawSpan} weeks, which exceeds the ${MAX_PLAN_WEEKS}-week maximum. Check the Week column for typos (e.g., years or extra digits).`,
+      400,
+    );
+  }
+  const totalWeeks = rawSpan;
 
   const plan = await storage.plans.createTrainingPlan({
     userId,
@@ -96,35 +162,16 @@ export async function importPlanFromCSV(
     totalWeeks,
   });
 
-  // ⚡ Bolt Performance Optimization: Combine filter and map into a single O(N) reduction to prevent intermediate array allocations.
-  const days: InsertPlanDay[] = rows.reduce<InsertPlanDay[]>((acc, row) => {
-    if (row.Week && row.Day) {
-      const accessory = row.Accessory || row["Accessory/Engine Work"] || null;
-      acc.push({
-        planId: plan.id,
-        weekNumber: Number.parseInt(row.Week, 10) || 1,
-        dayName: row.Day,
-        focus: row.Focus || "",
-        mainWorkout: row["Main Workout"] || "",
-        accessory,
-        notes: row.Notes || null,
-        status: "planned",
-      });
-    }
-    return acc;
-  }, []);
-
-  if (days.length === 0) {
-    // Clean up the plan row we just created so a retry starts from scratch,
-    // then surface a clear validation error instead of silently creating a
-    // zero-day plan that auto-coach and analytics would skip (W3).
-    await storage.plans.deleteTrainingPlan(plan.id, userId);
-    throw new AppError(
-      ErrorCode.VALIDATION_ERROR,
-      "CSV has no rows with both a Week and a Day — plan must have at least one day.",
-      400,
-    );
-  }
+  const days: InsertPlanDay[] = validRows.map(({ weekNumber, dayName, row }) => ({
+    planId: plan.id,
+    weekNumber,
+    dayName,
+    focus: row.Focus || "",
+    mainWorkout: row["Main Workout"] || "",
+    accessory: row.Accessory || row["Accessory/Engine Work"] || null,
+    notes: row.Notes || null,
+    status: "planned",
+  }));
 
   await storage.plans.createPlanDays(days);
 
@@ -209,33 +256,93 @@ export async function updatePlanDayWithCleanup(
   return await storage.plans.updatePlanDay(dayId, updates, userId);
 }
 
+type PlanDayStatus = "planned" | "completed" | "skipped" | "missed";
+
+// Allowed transitions for user-driven status changes. Same-state transitions
+// are idempotent (always allowed). The "missed" state is primarily written by
+// the nightly cron, but users can correct it (log late = completed, reschedule
+// = planned). "skipped → missed" and "missed → skipped" are disallowed to keep
+// analytics unambiguous (skipped = user choice; missed = system-detected).
+const ALLOWED_TRANSITIONS: Record<PlanDayStatus, readonly PlanDayStatus[]> = {
+  planned: ["completed", "skipped", "missed"],
+  completed: ["planned", "skipped"],
+  missed: ["completed", "planned"],
+  skipped: ["planned", "completed"],
+};
+
 export async function updatePlanDayStatus(
   dayId: string,
   {
     status,
     scheduledDate,
-  }: { status?: "planned" | "completed" | "skipped" | "missed"; scheduledDate?: string | null },
+  }: { status?: PlanDayStatus; scheduledDate?: string | null },
   userId: string,
 ) {
-  const updates: Record<string, string | null> = {};
-  if (status) updates.status = status;
-  if (scheduledDate !== undefined) updates.scheduledDate = scheduledDate ?? null;
-
-  if (status && status !== "completed") {
-    // Preserve any edits the user made on the workout log before deleting it,
-    // otherwise switching the status back to "planned"/"skipped"/"missed" would
-    // revert the plan day to its original pre-completion content.
-    const existingLog = await storage.workouts.getWorkoutLogByPlanDayId(dayId, userId);
-    if (existingLog) {
-      updates.focus = existingLog.focus;
-      updates.mainWorkout = existingLog.mainWorkout;
-      updates.accessory = existingLog.accessory;
-      updates.notes = existingLog.notes;
-    }
-    await storage.workouts.deleteWorkoutLogByPlanDayId(dayId, userId);
+  // Date-only update: no transition check needed.
+  if (!status) {
+    const updates: Record<string, string | null> = {};
+    if (scheduledDate !== undefined) updates.scheduledDate = scheduledDate ?? null;
+    return await storage.plans.updatePlanDay(dayId, updates, userId);
   }
 
-  const updatedDay = await storage.plans.updatePlanDay(dayId, updates, userId);
+  // Transition path: do the read, transition check, optional log cleanup,
+  // and write inside a single transaction so a concurrent cron or workout
+  // mutation can't race the check and sneak through a forbidden from-state.
+  const updatedDay = await db.transaction(async (tx) => {
+    const [current] = await tx
+      .select({ status: planDays.status })
+      .from(planDays)
+      .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
+      .where(and(eq(planDays.id, dayId), eq(trainingPlans.userId, userId)))
+      .for("update");
+
+    if (!current) {
+      throw new AppError(ErrorCode.NOT_FOUND, "Plan day not found", 404);
+    }
+
+    const from = current.status as PlanDayStatus;
+    if (from !== status && !ALLOWED_TRANSITIONS[from].includes(status)) {
+      throw new AppError(
+        ErrorCode.VALIDATION_ERROR,
+        `Invalid plan-day status transition: ${from} → ${status}`,
+        400,
+      );
+    }
+
+    const updates: Record<string, string | null> = { status };
+    if (scheduledDate !== undefined) updates.scheduledDate = scheduledDate ?? null;
+
+    // Only clean up the linked workout log when actually leaving "completed".
+    // Running this on same-state idempotent writes (e.g. planned → planned)
+    // or transitions that don't involve "completed" would silently destroy
+    // user data (R8).
+    if (from === "completed" && status !== "completed") {
+      const [existingLog] = await tx
+        .select()
+        .from(workoutLogs)
+        .where(and(eq(workoutLogs.planDayId, dayId), eq(workoutLogs.userId, userId)))
+        .limit(1);
+      if (existingLog) {
+        // Preserve edits made on the workout log back onto the plan day so
+        // the un-completed day reflects the user's last-known content.
+        updates.focus = existingLog.focus;
+        updates.mainWorkout = existingLog.mainWorkout;
+        updates.accessory = existingLog.accessory;
+        updates.notes = existingLog.notes;
+        await tx
+          .delete(workoutLogs)
+          .where(and(eq(workoutLogs.planDayId, dayId), eq(workoutLogs.userId, userId)));
+      }
+    }
+
+    const [row] = await tx
+      .update(planDays)
+      .set(updates)
+      .where(eq(planDays.id, dayId))
+      .returning();
+
+    return row;
+  });
 
   if (updatedDay && status === "completed") {
     queue

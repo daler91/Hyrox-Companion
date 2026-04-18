@@ -11,6 +11,7 @@ import {
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
 import { db, type DbExecutor } from "../db";
+import { logger } from "../logger";
 import { toDateStr } from "../types";
 import { syncPlanDayStatusFromWorkouts } from "./planDayStatus";
 
@@ -37,11 +38,16 @@ export class PlanStorage {
 
     const days = await db.select().from(planDays).where(eq(planDays.planId, planId));
 
-    const dayOrder = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+    // Case-insensitive day ordering matches the tolerant lookup used in
+    // schedulePlan(), so legacy rows with non-title-case dayName values
+    // (e.g. "monday" from older imports) still sort Mon→Sun instead of
+    // falling back to insertion order.
+    const dayOrder = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+    const dayIndex = (name: string) => dayOrder.indexOf((name ?? "").trim().toLowerCase());
     days.sort((a, b) => {
       if (a.weekNumber !== b.weekNumber) return a.weekNumber - b.weekNumber;
-      const aIndex = dayOrder.indexOf(a.dayName);
-      const bIndex = dayOrder.indexOf(b.dayName);
+      const aIndex = dayIndex(a.dayName);
+      const bIndex = dayIndex(b.dayName);
       if (aIndex === -1 && bIndex === -1) return 0;
       if (aIndex === -1) return 1;
       if (bIndex === -1) return -1;
@@ -184,14 +190,16 @@ export class PlanStorage {
     if (!plan) return false;
 
     const dayNameToOffset: Record<string, number> = {
-      Monday: 0,
-      Tuesday: 1,
-      Wednesday: 2,
-      Thursday: 3,
-      Friday: 4,
-      Saturday: 5,
-      Sunday: 6,
+      monday: 0,
+      tuesday: 1,
+      wednesday: 2,
+      thursday: 3,
+      friday: 4,
+      saturday: 5,
+      sunday: 6,
     };
+    const normalizeDayName = (raw: string | null | undefined): string =>
+      (raw ?? "").trim().toLowerCase();
 
     const start = new Date(startDate);
     const startDayOfWeek = start.getDay();
@@ -209,14 +217,32 @@ export class PlanStorage {
     for (const day of plan.days) {
       const normalizedWeek = (day.weekNumber || 1) - minWeek + 1;
       const weekOffset = (normalizedWeek - 1) * 7;
-      const dayOffset = dayNameToOffset[day.dayName || "Monday"] || 0;
+      const normalized = normalizeDayName(day.dayName);
+      const dayOffset = normalized in dayNameToOffset ? dayNameToOffset[normalized] : 0;
+      if (!(normalized in dayNameToOffset)) {
+        logger.warn(
+          { dayId: day.id, rawDayName: day.dayName, planId },
+          "Unrecognized plan-day dayName; scheduling as Monday",
+        );
+      }
       const scheduledDate = new Date(weekOneMonday);
       scheduledDate.setDate(weekOneMonday.getDate() + weekOffset + dayOffset);
       const dateStr = toDateStr(scheduledDate);
+      // Only reset status when the day actually moves to a new date. Without
+      // this guard, calling schedulePlan with the same startDate (or any
+      // reschedule that happens to leave a specific day on its existing
+      // calendar slot) would silently revert that day's explicit "skipped"
+      // choice back to "planned". We reset both "missed" (system-assigned)
+      // and "skipped" (user choice) because a genuine date change semantically
+      // gives the day a fresh planned status (S18).
+      const dateChanged = dateStr !== day.scheduledDate;
       dateUpdates.push({
         id: day.id,
         scheduledDate: dateStr,
-        resetStatus: day.status === "missed" && dateStr >= today,
+        resetStatus:
+          dateChanged &&
+          (day.status === "missed" || day.status === "skipped") &&
+          dateStr >= today,
       });
     }
 

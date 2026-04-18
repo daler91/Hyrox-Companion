@@ -21,6 +21,7 @@ interface RawPREntry {
   maxWeight?: PRValue;
   maxDistance?: PRValue;
   bestTime?: PRValue;
+  estimated1RM?: PRValue;
   category: string;
   customLabel?: string | null;
 }
@@ -65,6 +66,8 @@ export function PersonalRecordsTab({ dateParams }: PersonalRecordsTabProps) {
         maxDistanceDate: pr.maxDistance?.date ?? null,
         bestTime: pr.bestTime?.value ?? null,
         bestTimeDate: pr.bestTime?.date ?? null,
+        estimated1RM: pr.estimated1RM?.value ?? null,
+        estimated1RMDate: pr.estimated1RM?.date ?? null,
       };
 
       if (categoryFilter !== "all" && pr.category !== categoryFilter) {
@@ -76,7 +79,8 @@ export function PersonalRecordsTab({ dateParams }: PersonalRecordsTabProps) {
       const hasRecentPR =
         (pr.maxWeight?.date && pr.maxWeight.date >= cutoff) ||
         (pr.maxDistance?.date && pr.maxDistance.date >= cutoff) ||
-        (pr.bestTime?.date && pr.bestTime.date >= cutoff);
+        (pr.bestTime?.date && pr.bestTime.date >= cutoff) ||
+        (pr.estimated1RM?.date && pr.estimated1RM.date >= cutoff);
 
       if (hasRecentPR) {
         recent.push(mapped);
