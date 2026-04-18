@@ -90,6 +90,34 @@ function canonicalizeDayName(raw: string): string {
 // analytics like getPlanWeeklyDensity and the plan header.
 const MAX_PLAN_WEEKS = 52;
 
+interface ParsedCSVRows {
+  weekNumbers: number[];
+  invalidDayNames: string[];
+  validRows: { weekNumber: number; dayName: string; row: CSVRow }[];
+}
+
+function collectCSVRows(rows: CSVRow[]): ParsedCSVRows {
+  const weekNumbers: number[] = [];
+  const invalidDayNames: string[] = [];
+  const validRows: ParsedCSVRows["validRows"] = [];
+  for (const row of rows) {
+    const n = Number.parseInt(row.Week, 10);
+    if (!Number.isNaN(n) && n > 0) weekNumbers.push(n);
+    if (!row.Week || !row.Day) continue;
+    const lowered = row.Day.trim().toLowerCase();
+    if (!VALID_DAY_NAMES.has(lowered)) {
+      invalidDayNames.push(row.Day);
+      continue;
+    }
+    validRows.push({
+      weekNumber: Number.parseInt(row.Week, 10) || 1,
+      dayName: canonicalizeDayName(row.Day),
+      row,
+    });
+  }
+  return { weekNumbers, invalidDayNames, validRows };
+}
+
 export async function importPlanFromCSV(
   csvContent: string,
   userId: string,
@@ -103,25 +131,7 @@ export async function importPlanFromCSV(
   // Validate everything against the parsed rows BEFORE touching the database.
   // Previously a failed rollback (deleteTrainingPlan) could leave an orphaned
   // empty plan on the user's account.
-  const weekNumbers: number[] = [];
-  const invalidDayNames: string[] = [];
-  const validRows: { weekNumber: number; dayName: string; row: CSVRow }[] = [];
-  for (const row of rows) {
-    const n = Number.parseInt(row.Week, 10);
-    if (!Number.isNaN(n) && n > 0) weekNumbers.push(n);
-    if (row.Week && row.Day) {
-      const lowered = row.Day.trim().toLowerCase();
-      if (!VALID_DAY_NAMES.has(lowered)) {
-        invalidDayNames.push(row.Day);
-        continue;
-      }
-      validRows.push({
-        weekNumber: Number.parseInt(row.Week, 10) || 1,
-        dayName: canonicalizeDayName(row.Day),
-        row,
-      });
-    }
-  }
+  const { weekNumbers, invalidDayNames, validRows } = collectCSVRows(rows);
 
   if (weekNumbers.length === 0) {
     throw new AppError(ErrorCode.VALIDATION_ERROR, "No valid week numbers found in CSV", 400);

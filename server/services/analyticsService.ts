@@ -20,6 +20,42 @@ function estimateOneRepMax(weight: number, reps: number): number {
   return Math.round(weight * (1 + reps / 30) * 10) / 10;
 }
 
+function updateMaxWeight(pr: PersonalRecord, set: ExerciseSetWithDate): void {
+  if (set.weight && (!pr.maxWeight || set.weight > pr.maxWeight.value)) {
+    pr.maxWeight = { value: set.weight, date: set.date, workoutLogId: set.workoutLogId };
+  }
+}
+
+function updateMaxDistance(pr: PersonalRecord, set: ExerciseSetWithDate): void {
+  if (set.distance && (!pr.maxDistance || set.distance > pr.maxDistance.value)) {
+    pr.maxDistance = { value: set.distance, date: set.date, workoutLogId: set.workoutLogId };
+  }
+}
+
+function updateBestTime(pr: PersonalRecord, set: ExerciseSetWithDate): void {
+  if (set.time && set.time > 0 && (!pr.bestTime || set.time < pr.bestTime.value)) {
+    pr.bestTime = { value: set.time, date: set.date, workoutLogId: set.workoutLogId };
+  }
+}
+
+function isE1RMCandidate(set: ExerciseSetWithDate): boolean {
+  return (
+    set.category === "strength" &&
+    !!set.weight &&
+    !!set.reps &&
+    set.reps >= EPLEY_MIN_REPS &&
+    set.reps <= EPLEY_MAX_REPS
+  );
+}
+
+function updateE1RM(pr: PersonalRecord, set: ExerciseSetWithDate): void {
+  if (!isE1RMCandidate(set)) return;
+  const e1rm = estimateOneRepMax(set.weight!, set.reps!);
+  if (!pr.estimated1RM || e1rm > pr.estimated1RM.value) {
+    pr.estimated1RM = { value: e1rm, date: set.date, workoutLogId: set.workoutLogId };
+  }
+}
+
 export function calculatePersonalRecords(allSets: ExerciseSetWithDate[]): Record<string, PersonalRecord> {
   const prs: Record<string, PersonalRecord> = {};
 
@@ -27,27 +63,10 @@ export function calculatePersonalRecords(allSets: ExerciseSetWithDate[]): Record
     const prKey = getExerciseKey(set);
     if (!prs[prKey]) prs[prKey] = { category: set.category, customLabel: set.customLabel };
     const pr = prs[prKey];
-    if (set.weight && (!pr.maxWeight || set.weight > pr.maxWeight.value)) {
-      pr.maxWeight = { value: set.weight, date: set.date, workoutLogId: set.workoutLogId };
-    }
-    if (set.distance && (!pr.maxDistance || set.distance > pr.maxDistance.value)) {
-      pr.maxDistance = { value: set.distance, date: set.date, workoutLogId: set.workoutLogId };
-    }
-    if (set.time && set.time > 0 && (!pr.bestTime || set.time < pr.bestTime.value)) {
-      pr.bestTime = { value: set.time, date: set.date, workoutLogId: set.workoutLogId };
-    }
-    if (
-      set.category === "strength" &&
-      set.weight &&
-      set.reps &&
-      set.reps >= EPLEY_MIN_REPS &&
-      set.reps <= EPLEY_MAX_REPS
-    ) {
-      const e1rm = estimateOneRepMax(set.weight, set.reps);
-      if (!pr.estimated1RM || e1rm > pr.estimated1RM.value) {
-        pr.estimated1RM = { value: e1rm, date: set.date, workoutLogId: set.workoutLogId };
-      }
-    }
+    updateMaxWeight(pr, set);
+    updateMaxDistance(pr, set);
+    updateBestTime(pr, set);
+    updateE1RM(pr, set);
   }
 
   return prs;
