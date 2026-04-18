@@ -1,5 +1,17 @@
-import { createInsertSchema } from "drizzle-zod";
+import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
+import { createSchemaFactory } from "drizzle-zod";
 import { z } from "zod";
+
+// Zod v4 does not propagate late prototype patches to already-instantiated
+// schemas, so the `.openapi()` extension must run before any schema is
+// created. Performing it here — the earliest module in the schema graph —
+// guarantees every drizzle-zod and plain `z.object()` schema gets the method.
+extendZodWithOpenApi(z);
+
+// Bind drizzle-zod to our `z` instance so the schemas it emits share our
+// ZodObject constructor, which is required for the `.openapi()` prototype
+// patch above to apply.
+const { createInsertSchema } = createSchemaFactory({ zodInstance: z });
 
 import type { WorkoutStatus } from "./enums";
 import {
