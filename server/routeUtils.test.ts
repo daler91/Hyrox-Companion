@@ -498,7 +498,7 @@ describe("validateBody", () => {
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
-        error: "Required",
+        error: expect.stringMatching(/expected string, received undefined/),
         details: expect.any(Object),
       })
     );

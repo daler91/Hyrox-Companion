@@ -113,22 +113,22 @@ import { z } from "zod";
 /** Project safe validation issues from a Zod error — never leak raw internals. */
 export function formatValidationErrors(error: z.ZodError): { issues: Array<{ path: string; message: string }> } {
   return {
-    issues: error.errors.map((e) => ({
+    issues: error.issues.map((e) => ({
       path: e.path.join("."),
       message: e.message,
     })),
   };
 }
 
-export function validateBody(schema: z.ZodTypeAny) {
+export function validateBody(schema: z.ZodType) {
   return (req: Request, res: Response, next: NextFunction) => {
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) {
-      const errorMessage = parsed.error.errors[0]?.message || "Invalid request data";
+      const errorMessage = parsed.error.issues[0]?.message || "Invalid request data";
       res.status(400).json({ error: errorMessage, code: "VALIDATION_ERROR", details: formatValidationErrors(parsed.error) });
       return;
     }
-    req.body = parsed.data; // eslint-disable-line @typescript-eslint/no-unsafe-assignment
+    req.body = parsed.data;
     next();
   };
 }

@@ -128,7 +128,7 @@ describe("POST /api/parse-exercises", () => {
       .send({});
 
     expect(response.status).toBe(400);
-    expect(response.body).toHaveProperty("error", "Required"); // Changed from "Text is required" because of validateBody middleware
+    expect(response.body.error).toMatch(/expected string, received undefined/);
   });
 
 
@@ -376,7 +376,7 @@ describe("Chat History and Messages Routes", () => {
       .send({ role: "user" });
 
     expect(response.status).toBe(400);
-    expect(response.body).toHaveProperty("error", "Required");
+    expect(response.body.error).toMatch(/expected string, received undefined/);
   });
 
   it("should clear chat history", async () => {

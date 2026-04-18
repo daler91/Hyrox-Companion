@@ -12,7 +12,7 @@ import { getUserId } from "../types";
 const router = Router();
 
 const subscribeSchema = z.object({
-  endpoint: z.string().url(),
+  endpoint: z.url(),
   keys: z.object({
     p256dh: z.string().min(1),
     auth: z.string().min(1),
@@ -38,7 +38,7 @@ router.post("/api/v1/push/subscribe", ...protectedMutationGuards, rateLimiter("p
   res.json({ success: true });
 }));
 
-router.delete("/api/v1/push/unsubscribe", ...protectedMutationGuards, rateLimiter("push", 10), validateBody(z.object({ endpoint: z.string().url() })), asyncHandler(async (req: ExpressRequest, res: Response) => {
+router.delete("/api/v1/push/unsubscribe", ...protectedMutationGuards, rateLimiter("push", 10), validateBody(z.object({ endpoint: z.url() })), asyncHandler(async (req: ExpressRequest, res: Response) => {
   const userId = getUserId(req);
   const { endpoint } = req.body as { endpoint: string };
   await storage.push.removeSubscription(userId, endpoint);
