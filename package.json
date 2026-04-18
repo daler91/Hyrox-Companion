@@ -175,7 +175,7 @@
     "eslint": "^9.39.4",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react-hooks": "^7.0.1",
-    "eslint-plugin-simple-import-sort": "^12.1.1",
+    "eslint-plugin-simple-import-sort": "^13.0.0",
     "jest-axe": "^10.0.0",
     "jsdom": "^28.1.0",
     "nanoid": "^5.1.7",
