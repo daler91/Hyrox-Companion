@@ -14,7 +14,7 @@ describe("importPlanRequestSchema validation", () => {
     const result = importPlanRequestSchema.safeParse(payload);
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.errors[0].message).toBe("CSV content must be 100,000 characters or less");
+      expect(result.error.issues[0].message).toBe("CSV content must be 100,000 characters or less");
     }
   });
 

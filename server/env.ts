@@ -17,7 +17,7 @@ const WEAK_ENCRYPTION_KEYS = new Set<string>([
 ]);
 
 const envSchema = z.object({
-  DATABASE_URL: z.string().url(),
+  DATABASE_URL: z.url(),
   CLERK_PUBLISHABLE_KEY: z.string().min(1).optional(),
   CLERK_SECRET_KEY: z.string().min(1).optional(),
   ENCRYPTION_KEY: z.string().min(32, "Encryption key must be at least 32 characters long"),
@@ -32,8 +32,8 @@ const envSchema = z.object({
   STRAVA_CLIENT_ID: z.string().optional(),
   STRAVA_CLIENT_SECRET: z.string().optional(),
   STRAVA_STATE_SECRET: z.string().min(32).optional(),
-  APP_URL: z.string().url().optional(),
-  VECTOR_DATABASE_URL: z.string().url().optional(),
+  APP_URL: z.url().optional(),
+  VECTOR_DATABASE_URL: z.url().optional(),
   ALLOWED_ORIGINS: z.string().optional(),
   ALLOW_DEV_AUTH_BYPASS: z.string().optional(),
   LOG_LEVEL: z.string().default("info"),
@@ -49,7 +49,7 @@ const envSchema = z.object({
   GEMINI_SUGGESTIONS_MODEL: z.string().default("gemini-3.1-pro-preview"),
   VAPID_PUBLIC_KEY: z.string().optional(),
   VAPID_PRIVATE_KEY: z.string().optional(),
-  VAPID_EMAIL: z.string().email().optional(),
+  VAPID_EMAIL: z.email().optional(),
 }).refine((data) => !(data.NODE_ENV === "production" && data.ALLOW_DEV_AUTH_BYPASS === "true"), {
   message: "❌ FATAL: ALLOW_DEV_AUTH_BYPASS cannot be enabled in production environment",
   path: ["ALLOW_DEV_AUTH_BYPASS"],
