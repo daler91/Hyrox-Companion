@@ -162,7 +162,20 @@
     "  This repo does not use createRouteMatcher/createPathMatcher and is not functionally",
     "  exposed, but Dependabot cannot update transitive pnpm deps, so the override is required",
     "  to clear the advisory.",
-    "  Remove when @clerk/react ships a version that depends on @clerk/shared >=4.8.1."
+    "  Remove when @clerk/react ships a version that depends on @clerk/shared >=4.8.1.",
+    "",
+    "follow-redirects ^1.16.0: fixes custom auth header leak on cross-domain redirect",
+    "  (Dependabot issue #35). In follow-redirects <=1.15.11, the cross-domain header",
+    "  scrubber at index.js:469-476 only matches /^(?:(?:proxy-)?authorization|cookie)$/i,",
+    "  so custom auth headers (X-API-Key, X-Auth-Token, Api-Key, etc.) are forwarded",
+    "  verbatim to the redirect target. Patched in 1.16.0.",
+    "  Pulled transitively by @flow-js/garmin-connect 1.6.16 -> axios -> follow-redirects.",
+    "  Garmin is the only axios consumer in this repo (server/garmin.ts); all other",
+    "  outbound HTTP uses native fetch. The Garmin SDK carries encrypted OAuth1/OAuth2",
+    "  tokens and email/password credentials, so a malicious redirect from the Garmin",
+    "  API hostname could exfiltrate them. Dependabot cannot update transitive pnpm",
+    "  deps, so the override is required.",
+    "  Remove when @flow-js/garmin-connect ships a release whose axios pulls follow-redirects >=1.16.0."
   ],
   "overrides": {
     "esbuild": "0.27.5",
@@ -172,7 +185,8 @@
     "hono": ">=4.12.14",
     "@hono/node-server": "^1.19.13",
     "protobufjs": "^7.5.5",
-    "@clerk/shared": "^4.8.1"
+    "@clerk/shared": "^4.8.1",
+    "follow-redirects": "^1.16.0"
   },
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.19",
@@ -231,7 +245,8 @@
       "hono": ">=4.12.14",
       "@hono/node-server": "^1.19.13",
       "protobufjs": "^7.5.5",
-      "@clerk/shared": "^4.8.1"
+      "@clerk/shared": "^4.8.1",
+      "follow-redirects": "^1.16.0"
     }
   },
   "packageManager": "pnpm@9.12.0",
