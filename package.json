@@ -32,7 +32,7 @@
     "@fontsource/geist-sans": "^5.2.5",
     "@fontsource/open-sans": "^5.2.7",
     "@fontsource/space-grotesk": "^5.2.10",
-    "@google/genai": "^1.48.0",
+    "@google/genai": "^1.50.1",
     "@modelcontextprotocol/sdk": "^1.25.2",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
