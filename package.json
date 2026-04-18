@@ -138,6 +138,17 @@
     "  deps for pnpm, so the override is required.",
     "  Remove when @modelcontextprotocol/sdk ships a version that depends on @hono/node-server >=1.19.13.",
     "",
+    "protobufjs ^7.5.5: fixes GHSA (arbitrary code execution via crafted 'type'",
+    "  fields in protobuf definitions; attacker-controlled descriptors inject JS",
+    "  that runs during decode()). Pulled by @google/genai 1.50.1 (depends on",
+    "  protobufjs 7.5.4). Constrained to the 7.x major line because @google/genai",
+    "  declares compatibility with protobufjs 7.x; a bare >=7.5.5 resolves to 8.x",
+    "  and risks API drift. We do not import protobufjs or @google/genai directly,",
+    "  but we pin the patched version to clear the advisory and reduce",
+    "  supply-chain exposure. Dependabot cannot update transitive deps for pnpm,",
+    "  so the override is required.",
+    "  Remove when @google/genai ships a version that depends on protobufjs >=7.5.5.",
+    "",
     "@clerk/shared ^4.8.1: fixes GHSA (createRouteMatcher / createPathMatcher middleware bypass).",
     "  Crafted requests could skip middleware-level route gating in @clerk/nextjs, @clerk/nuxt,",
     "  and @clerk/astro. Patched in @clerk/shared 4.8.1.",
@@ -155,6 +166,7 @@
     "serialize-javascript": ">=7.0.3",
     "hono": ">=4.12.12",
     "@hono/node-server": "^1.19.13",
+    "protobufjs": "^7.5.5",
     "@clerk/shared": "^4.8.1"
   },
   "devDependencies": {
@@ -213,6 +225,7 @@
       "serialize-javascript": ">=7.0.3",
       "hono": ">=4.12.12",
       "@hono/node-server": "^1.19.13",
+      "protobufjs": "^7.5.5",
       "@clerk/shared": "^4.8.1"
     }
   },
