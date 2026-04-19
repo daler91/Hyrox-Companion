@@ -31,11 +31,13 @@ import {
 } from "@/components/timeline";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { WorkoutDetailDialogV2 } from "@/components/workout-detail/WorkoutDetailDialogV2";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useTimelineState } from "@/hooks/useTimelineState";
 import { api, QUERY_KEYS } from "@/lib/api";
+import { useFeatureFlag } from "@/lib/featureFlags";
 import { queryClient } from "@/lib/queryClient";
 
 type TimelineState = ReturnType<typeof useTimelineState>;
@@ -245,6 +247,7 @@ export default function Timeline() {
   const { csvPreview, setCsvPreview, schedulingPlanId, setSchedulingPlanId, startDate, setStartDate, fileInputRef, handleFileUpload, confirmImport, importMutation, samplePlanMutation, renamePlanMutation, schedulePlanMutation, updatePlanGoalMutation } = planImport;
   const { detailEntry, setDetailEntry, skipConfirmEntry, setSkipConfirmEntry, openDetailDialog, handleSaveFromDetail, handleMarkComplete, handleChangeStatus, handleDelete, confirmSkip, updateDayMutation, logWorkoutMutation, updateWorkoutMutation, deleteWorkoutMutation, deletePlanDayMutation } = workoutActions;
   const { combiningEntry, setCombiningEntry, combineSecondEntry, setCombineSecondEntry, showCombineDialog, setShowCombineDialog, handleCombine, handleConfirmCombine, combineWorkoutsMutation } = combine;
+  const workoutDetailV2 = useFeatureFlag("workoutDetailV2");
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showAIConsent, setShowAIConsent] = useState(false);
   const [annotationsDialogOpen, setAnnotationsDialogOpen] = useState(false);
@@ -446,26 +449,38 @@ export default function Timeline() {
             isPending={schedulePlanMutation.isPending}
           />
 
-          <WorkoutDetailDialog
-            entry={detailEntry}
-            onClose={() => setDetailEntry(null)}
-            onMarkComplete={(entry) => {
-              handleMarkComplete(entry);
-              setDetailEntry(null);
-            }}
-            onChangeStatus={(entry, status) => {
-              handleChangeStatus(entry, status);
-              setDetailEntry(null);
-            }}
-            onSave={handleSaveFromDetail}
-            onDelete={handleDelete}
-            onCombine={(entry) => {
-              setDetailEntry(null);
-              handleCombine(entry);
-            }}
-            isSaving={updateDayMutation.isPending || updateWorkoutMutation.isPending || logWorkoutMutation.isPending}
-            isDeleting={deleteWorkoutMutation.isPending || deletePlanDayMutation.isPending}
-          />
+          {workoutDetailV2 && detailEntry?.workoutLogId ? (
+            <WorkoutDetailDialogV2
+              entry={detailEntry}
+              onClose={() => setDetailEntry(null)}
+              onSaveNote={(workoutId, note) => {
+                updateWorkoutMutation.mutate({ workoutId, updates: { notes: note } });
+              }}
+              onAskCoach={() => handleCoachToggle(true)}
+              weightUnit={user?.weightUnit === "lbs" ? "lb" : "kg"}
+            />
+          ) : (
+            <WorkoutDetailDialog
+              entry={detailEntry}
+              onClose={() => setDetailEntry(null)}
+              onMarkComplete={(entry) => {
+                handleMarkComplete(entry);
+                setDetailEntry(null);
+              }}
+              onChangeStatus={(entry, status) => {
+                handleChangeStatus(entry, status);
+                setDetailEntry(null);
+              }}
+              onSave={handleSaveFromDetail}
+              onDelete={handleDelete}
+              onCombine={(entry) => {
+                setDetailEntry(null);
+                handleCombine(entry);
+              }}
+              isSaving={updateDayMutation.isPending || updateWorkoutMutation.isPending || logWorkoutMutation.isPending}
+              isDeleting={deleteWorkoutMutation.isPending || deletePlanDayMutation.isPending}
+            />
+          )}
 
           <SkipConfirmDialog
             entry={skipConfirmEntry}

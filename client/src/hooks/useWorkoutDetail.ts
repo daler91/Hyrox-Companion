@@ -7,7 +7,6 @@ import {
   api,
   type PatchExerciseSetPayload,
   QUERY_KEYS,
-  type WorkoutHistoryStats,
 } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
 
@@ -106,8 +105,8 @@ export function useWorkoutDetail(workoutId: string | null) {
   });
 
   return {
-    workout: workoutQuery.data as WorkoutWithSets | undefined,
-    history: historyQuery.data as WorkoutHistoryStats | undefined,
+    workout: workoutQuery.data,
+    history: historyQuery.data,
     isLoading: workoutQuery.isLoading,
     isError: workoutQuery.isError,
     updateSet,

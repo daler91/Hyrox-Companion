@@ -27,7 +27,7 @@ function readOverrides(): Partial<FeatureFlags> {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return {};
-    const parsed = JSON.parse(raw);
+    const parsed: unknown = JSON.parse(raw);
     return typeof parsed === "object" && parsed !== null ? (parsed as Partial<FeatureFlags>) : {};
   } catch {
     // localStorage blocked (private mode, etc.) — fall back to defaults.
