@@ -14,6 +14,17 @@ export interface BatchReparseResponse {
   failed: number;
 }
 
+/**
+ * Response from POST /api/v1/workouts/:id/reparse. `saved` is false when
+ * the server couldn't extract any exercises from the free text — callers
+ * should fall back to the empty-state UX in that case.
+ */
+export interface ReparseResponse {
+  exercises: unknown[];
+  saved: boolean;
+  setCount?: number;
+}
+
 export interface WorkoutHistoryStats {
   lastSameFocus: { date: string; focus: string } | null;
   prSetCount: number;
@@ -77,7 +88,8 @@ export const workouts = {
 
   getUnstructured: () => typedRequest<WorkoutLog[]>("GET", "/api/v1/workouts/unstructured"),
 
-  reparse: (id: string) => typedRequest<WorkoutLog>("POST", `/api/v1/workouts/${id}/reparse`),
+  reparse: (id: string) =>
+    typedRequest<ReparseResponse>("POST", `/api/v1/workouts/${id}/reparse`),
 
   batchReparse: () => typedRequest<BatchReparseResponse>("POST", "/api/v1/workouts/batch-reparse"),
 
