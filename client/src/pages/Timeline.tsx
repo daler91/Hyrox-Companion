@@ -469,6 +469,10 @@ export default function Timeline() {
               onClose={() => setDetailEntry(null)}
               onAskCoach={askCoachFromDetail}
               onDelete={handleDelete}
+              onChangeStatus={(entry, status) => {
+                handleChangeStatus(entry, status);
+                setDetailEntry(null);
+              }}
               weightUnit={user?.weightUnit === "lbs" ? "lb" : "kg"}
             />
           ) : (

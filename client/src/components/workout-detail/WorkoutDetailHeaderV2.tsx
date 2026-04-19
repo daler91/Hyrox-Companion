@@ -1,6 +1,6 @@
-import type { TimelineEntry } from "@shared/schema";
+import type { TimelineEntry, WorkoutStatus } from "@shared/schema";
 import { format, parseISO } from "date-fns";
-import { MoreVertical, Sparkles, Trash2, X } from "lucide-react";
+import { CheckCircle2, Clock, MoreVertical, SkipForward, Sparkles, Trash2, X,XCircle } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
@@ -15,6 +16,13 @@ interface WorkoutDetailHeaderV2Props {
   readonly entry: TimelineEntry;
   readonly onClose: () => void;
   readonly onDelete?: () => void;
+  /**
+   * Invoked when the user picks a different status from the ⋮ menu. Only
+   * relevant for entries linked to a plan day — the current status is
+   * filtered out of the menu so the user never sees "Mark as completed"
+   * while the workout is already completed.
+   */
+  readonly onChangeStatus?: (status: WorkoutStatus) => void;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -25,15 +33,41 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 /**
- * Top bar of the v2 dialog — date strip, status chip, "AI modified"
- * affordance when the plan day's coach rationale has been applied, and a
- * close button. Deliberately minimal: the old header stacked status +
- * source + day name; the mockup keeps it to just the date + two chips.
+ * Ordered once so the menu shows the same items in the same place no
+ * matter what the current status is; the current status gets filtered
+ * out at render time.
  */
-export function WorkoutDetailHeaderV2({ entry, onClose, onDelete }: WorkoutDetailHeaderV2Props) {
+const STATUS_MENU_ITEMS: ReadonlyArray<{
+  status: WorkoutStatus;
+  label: string;
+  Icon: typeof CheckCircle2;
+  colorClass: string;
+}> = [
+  { status: "completed", label: "Mark as completed", Icon: CheckCircle2, colorClass: "text-green-600 dark:text-green-400" },
+  { status: "planned", label: "Mark as planned", Icon: Clock, colorClass: "text-blue-600 dark:text-blue-400" },
+  { status: "skipped", label: "Mark as skipped", Icon: SkipForward, colorClass: "text-yellow-600 dark:text-yellow-400" },
+  { status: "missed", label: "Mark as missed", Icon: XCircle, colorClass: "text-red-600 dark:text-red-400" },
+];
+
+/**
+ * Top bar of the v2 dialog — date strip, status chip, "AI modified"
+ * affordance when the plan day's coach rationale has been applied, an
+ * overflow menu (status change + delete), and a close button.
+ */
+export function WorkoutDetailHeaderV2({ entry, onClose, onDelete, onChangeStatus }: WorkoutDetailHeaderV2Props) {
   const dateLabel = formatDateHeader(entry.date);
   const statusLabel = STATUS_LABEL[entry.status] ?? entry.status;
   const aiModified = !!entry.aiSource || !!entry.aiNoteUpdatedAt;
+
+  // Status change is only available for entries linked to a plan day —
+  // the underlying updateStatusMutation writes to plan_days, so an
+  // ad-hoc logged workout has nothing to flip.
+  const canChangeStatus = !!onChangeStatus && !!entry.planDayId;
+  const statusItems = canChangeStatus
+    ? STATUS_MENU_ITEMS.filter((item) => item.status !== entry.status)
+    : [];
+
+  const hasMenu = canChangeStatus || !!onDelete;
 
   return (
     <div className="flex items-start justify-between gap-4 pb-2">
@@ -57,7 +91,7 @@ export function WorkoutDetailHeaderV2({ entry, onClose, onDelete }: WorkoutDetai
         <h2 className="text-2xl font-semibold leading-tight">{entry.focus || "Workout"}</h2>
       </div>
       <div className="flex shrink-0 items-center gap-1">
-        {onDelete && (
+        {hasMenu && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -70,13 +104,26 @@ export function WorkoutDetailHeaderV2({ entry, onClose, onDelete }: WorkoutDetai
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                onSelect={onDelete}
-                className="text-destructive"
-                data-testid="workout-detail-delete"
-              >
-                <Trash2 className="mr-2 size-4" aria-hidden /> Delete workout
-              </DropdownMenuItem>
+              {statusItems.map(({ status, label, Icon, colorClass }) => (
+                <DropdownMenuItem
+                  key={status}
+                  onSelect={() => onChangeStatus?.(status)}
+                  className={colorClass}
+                  data-testid={`workout-detail-status-${status}`}
+                >
+                  <Icon className="mr-2 size-4" aria-hidden /> {label}
+                </DropdownMenuItem>
+              ))}
+              {statusItems.length > 0 && onDelete && <DropdownMenuSeparator />}
+              {onDelete && (
+                <DropdownMenuItem
+                  onSelect={onDelete}
+                  className="text-destructive"
+                  data-testid="workout-detail-delete"
+                >
+                  <Trash2 className="mr-2 size-4" aria-hidden /> Delete workout
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         )}

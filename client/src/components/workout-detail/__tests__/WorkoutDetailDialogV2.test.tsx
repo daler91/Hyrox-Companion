@@ -304,4 +304,67 @@ describe("WorkoutDetailDialogV2", () => {
     expect(mockWorkouts.reparse).not.toHaveBeenCalled();
     expect(mockWorkouts.seedFromPlan).not.toHaveBeenCalled();
   });
+
+  // ---- Status change ---------------------------------------------------
+
+  it("offers status-change items in the overflow menu and fires onChangeStatus", async () => {
+    const onChangeStatus = vi.fn();
+    mockWorkouts.get.mockResolvedValue(
+      makeWorkout({ exerciseSets: [makeSet()], planDayId: "plan-day-1" }),
+    );
+    mockWorkouts.history.mockResolvedValue({
+      lastSameFocus: null,
+      prSetCount: 0,
+      blockAvgRpe: null,
+    });
+
+    renderDialog({
+      entry: makeEntry({ planDayId: "plan-day-1", status: "completed" }),
+      onChangeStatus,
+    });
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByTestId("workout-detail-actions-trigger"));
+
+    // The current status (completed) should NOT appear; all others should.
+    expect(screen.queryByTestId("workout-detail-status-completed")).not.toBeInTheDocument();
+    expect(screen.getByTestId("workout-detail-status-planned")).toBeInTheDocument();
+    expect(screen.getByTestId("workout-detail-status-skipped")).toBeInTheDocument();
+    expect(screen.getByTestId("workout-detail-status-missed")).toBeInTheDocument();
+
+    await user.click(screen.getByTestId("workout-detail-status-skipped"));
+
+    await waitFor(() => {
+      expect(onChangeStatus).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "log-1", planDayId: "plan-day-1" }),
+        "skipped",
+      );
+    });
+  });
+
+  it("hides status-change items for ad-hoc logged workouts with no plan day", async () => {
+    mockWorkouts.get.mockResolvedValue(
+      makeWorkout({ exerciseSets: [makeSet()], planDayId: null }),
+    );
+    mockWorkouts.history.mockResolvedValue({
+      lastSameFocus: null,
+      prSetCount: 0,
+      blockAvgRpe: null,
+    });
+
+    renderDialog({
+      entry: makeEntry({ planDayId: null }),
+      onChangeStatus: vi.fn(),
+      onDelete: vi.fn(),
+    });
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByTestId("workout-detail-actions-trigger"));
+
+    // Without a plan day the status flow has nothing to write to, but
+    // Delete still lives in the same menu.
+    expect(screen.queryByTestId("workout-detail-status-planned")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("workout-detail-status-skipped")).not.toBeInTheDocument();
+    expect(screen.getByTestId("workout-detail-delete")).toBeInTheDocument();
+  });
 });

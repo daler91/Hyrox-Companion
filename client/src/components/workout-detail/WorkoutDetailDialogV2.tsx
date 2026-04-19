@@ -1,4 +1,4 @@
-import type { ExerciseSet, TimelineEntry } from "@shared/schema";
+import type { ExerciseSet, TimelineEntry, WorkoutStatus } from "@shared/schema";
 import { format, parseISO } from "date-fns";
 import { Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -37,6 +37,13 @@ interface WorkoutDetailDialogV2Props {
   readonly onAskCoach?: (seedMessage: string) => void;
   /** Called from the ⋮ menu → Delete. Parent is responsible for the confirm UX. */
   readonly onDelete?: (entry: TimelineEntry) => void;
+  /**
+   * Called from the ⋮ menu → Mark as planned/skipped/missed/completed.
+   * The dialog filters out the current status so this is always a
+   * transition. Requires entry.planDayId — the underlying mutation
+   * writes to plan_days, so ad-hoc logged workouts don't get the menu.
+   */
+  readonly onChangeStatus?: (entry: TimelineEntry, status: WorkoutStatus) => void;
   readonly weightUnit?: "kg" | "lb";
 }
 
@@ -56,6 +63,7 @@ export function WorkoutDetailDialogV2({
   onClose,
   onAskCoach,
   onDelete,
+  onChangeStatus,
   weightUnit = "kg",
 }: WorkoutDetailDialogV2Props) {
   const workoutId = entry?.workoutLogId ?? null;
@@ -140,6 +148,7 @@ export function WorkoutDetailDialogV2({
             entry={entry}
             onClose={onClose}
             onDelete={onDelete ? () => setConfirmingDelete(true) : undefined}
+            onChangeStatus={onChangeStatus ? (status) => onChangeStatus(entry, status) : undefined}
           />
           {workout && <WorkoutStatsRow workout={workout} exerciseSets={exerciseSets} />}
         </div>
