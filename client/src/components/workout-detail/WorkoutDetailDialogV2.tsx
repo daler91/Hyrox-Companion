@@ -53,6 +53,12 @@ interface WorkoutDetailDialogV2Props {
    */
   readonly onMarkComplete?: (entry: TimelineEntry) => void;
   /**
+   * When true, the Mark complete CTA shows a spinner and disables clicks.
+   * The dialog stays mounted until the logWorkoutMutation resolves, so
+   * without this the user can double-click and queue duplicate workouts.
+   */
+  readonly isMarkingComplete?: boolean;
+  /**
    * ⋮ menu → Combine workouts. Parent closes the detail dialog and opens
    * the combine picker; only surfaces on logged workouts (no second
    * workout to merge with when nothing's logged yet).
@@ -78,6 +84,7 @@ export function WorkoutDetailDialogV2({
   onDelete,
   onChangeStatus,
   onMarkComplete,
+  isMarkingComplete = false,
   onCombine,
   weightUnit = "kg",
 }: WorkoutDetailDialogV2Props) {
@@ -140,7 +147,11 @@ export function WorkoutDetailDialogV2({
         <div className="grid grid-cols-1 gap-4 px-6 py-4 md:grid-cols-[1fr_280px]">
           <div className="flex flex-col gap-3">
             {isPlanned ? (
-              <PlannedCallToAction entry={entry} onMarkComplete={onMarkComplete} />
+              <PlannedCallToAction
+                entry={entry}
+                onMarkComplete={onMarkComplete}
+                isMarkingComplete={isMarkingComplete}
+              />
             ) : (
               <>
                 {isHydrating && exerciseSets.length === 0 && (
@@ -344,9 +355,10 @@ function runReparseOnly(args: {
 interface PlannedCallToActionProps {
   readonly entry: TimelineEntry;
   readonly onMarkComplete?: (entry: TimelineEntry) => void;
+  readonly isMarkingComplete?: boolean;
 }
 
-function PlannedCallToAction({ entry, onMarkComplete }: Readonly<PlannedCallToActionProps>) {
+function PlannedCallToAction({ entry, onMarkComplete, isMarkingComplete }: Readonly<PlannedCallToActionProps>) {
   return (
     <div
       className="flex flex-col gap-3 rounded-lg border border-border bg-muted/20 px-4 py-5 text-center"
@@ -362,10 +374,19 @@ function PlannedCallToAction({ entry, onMarkComplete }: Readonly<PlannedCallToAc
             onClick={() => onMarkComplete(entry)}
             size="lg"
             className="gap-2"
+            // Disable while logWorkoutMutation is in flight. The dialog
+            // stays open until the mutation settles, so without this
+            // guard repeat clicks queue duplicate workoutLogs for the
+            // same plan day before the Timeline closes the dialog.
+            disabled={isMarkingComplete}
             data-testid="workout-detail-mark-complete"
           >
-            <CheckCircle2 className="size-4" aria-hidden />
-            Mark complete
+            {isMarkingComplete ? (
+              <Loader2 className="size-4 animate-spin" aria-hidden />
+            ) : (
+              <CheckCircle2 className="size-4" aria-hidden />
+            )}
+            {isMarkingComplete ? "Logging…" : "Mark complete"}
           </Button>
         </div>
       )}

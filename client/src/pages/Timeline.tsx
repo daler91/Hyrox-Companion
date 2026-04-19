@@ -243,7 +243,7 @@ export default function Timeline() {
   const { filterStatus, setFilterStatus, showAllPast, setShowAllPast, showAllFuture, setShowAllFuture, pastGroups, futureGroups, visiblePastGroups, visibleFutureGroups, hiddenPastCount, hiddenFutureCount } = filters;
   const { showOnboarding, coachOpen, setCoachOpen, handleOnboardingComplete } = onboarding;
   const { csvPreview, setCsvPreview, schedulingPlanId, setSchedulingPlanId, startDate, setStartDate, fileInputRef, handleFileUpload, confirmImport, importMutation, samplePlanMutation, renamePlanMutation, schedulePlanMutation, updatePlanGoalMutation } = planImport;
-  const { detailEntry, setDetailEntry, skipConfirmEntry, setSkipConfirmEntry, openDetailDialog, handleMarkComplete, handleChangeStatus, handleDelete, confirmSkip } = workoutActions;
+  const { detailEntry, setDetailEntry, skipConfirmEntry, setSkipConfirmEntry, openDetailDialog, handleMarkComplete, handleChangeStatus, handleDelete, confirmSkip, logWorkoutMutation } = workoutActions;
   const { combiningEntry, setCombiningEntry, combineSecondEntry, setCombineSecondEntry, showCombineDialog, setShowCombineDialog, handleCombine, handleConfirmCombine, combineWorkoutsMutation } = combine;
   const scrollRef = useRef<HTMLDivElement>(null);
   // Carries a prefilled message into the CoachPanel's chat input when the
@@ -470,6 +470,7 @@ export default function Timeline() {
               setDetailEntry(null);
             }}
             onMarkComplete={handleMarkComplete}
+            isMarkingComplete={logWorkoutMutation.isPending}
             onCombine={(entry) => {
               setDetailEntry(null);
               handleCombine(entry);

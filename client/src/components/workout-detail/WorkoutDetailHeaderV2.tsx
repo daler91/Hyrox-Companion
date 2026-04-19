@@ -63,10 +63,19 @@ export function WorkoutDetailHeaderV2({ entry, onClose, onDelete, onChangeStatus
 
   // Status change is only available for entries linked to a plan day —
   // the underlying updateStatusMutation writes to plan_days, so an
-  // ad-hoc logged workout has nothing to flip.
+  // ad-hoc logged workout has nothing to flip. We also drop "Mark as
+  // completed" for entries that haven't been logged yet: flipping the
+  // plan_day status alone would leave status="completed" with no
+  // workoutLog, breaking metrics + history. Planned entries take the
+  // Mark-complete CTA path instead, which fires logWorkoutMutation to
+  // actually create the workoutLog.
   const canChangeStatus = !!onChangeStatus && !!entry.planDayId;
   const statusItems = canChangeStatus
-    ? STATUS_MENU_ITEMS.filter((item) => item.status !== entry.status)
+    ? STATUS_MENU_ITEMS.filter((item) => {
+        if (item.status === entry.status) return false;
+        if (item.status === "completed" && !entry.workoutLogId) return false;
+        return true;
+      })
     : [];
 
   const hasMenu = canChangeStatus || !!onDelete || !!onCombine;
