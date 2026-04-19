@@ -11,6 +11,7 @@ export type {
   AddExerciseSetPayload,
   BatchReparseResponse,
   PatchExerciseSetPayload,
+  ReparseResponse,
   WorkoutHistoryStats,
 } from "./workouts";
 export { workouts } from "./workouts";

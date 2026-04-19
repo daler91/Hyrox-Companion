@@ -1,5 +1,6 @@
 import type { ExerciseSet, TimelineEntry } from "@shared/schema";
 import { format, parseISO } from "date-fns";
+import { Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import {
@@ -63,33 +64,60 @@ export function WorkoutDetailDialogV2({
     workout,
     history,
     isLoading,
+    isHydrating,
     updateSet,
     addSet,
     deleteSet,
     seedFromPlan,
+    reparseFreeText,
     updateNote,
   } = useWorkoutDetail(workoutId);
 
-  // Lazy seed: if the workout is linked to a plan day but has no sets yet
-  // (legacy rows from before structured plan generation shipped), copy the
-  // prescribed sets across on first open. The server-side mutation is
-  // idempotent — see seedExerciseSetsFromPlanDay in
-  // server/storage/workouts.ts — so a retry after an error would still be
-  // safe, but we deliberately attempt at most once per workoutId to avoid
-  // looping on a 5xx: on failure `isSuccess` stays false forever and the
-  // effect would re-fire on every re-render. The ref is keyed by the
-  // workout being viewed so reopening the dialog on a different workout
-  // still allows one fresh attempt.
+  // Hydration pipeline for workouts that open with no structured sets:
+  //   1. If the workout is linked to a plan day, call /seed-from-plan
+  //      first. On a plan generated after #834 shipped it copies the
+  //      prescribed rows; on a legacy plan day it's a no-op.
+  //   2. Once that settles and the workout still has no sets AND the
+  //      free-text prescription has content, call /reparse so Gemini
+  //      parses `mainWorkout + accessory` into structured rows.
+  //   3. If the workout has no plan day at all (ad-hoc logged workout),
+  //      skip step 1 and go straight to step 2.
+  // Each attempt fires at most once per workoutId — seed/reparse are
+  // safe to retry but if either fails we don't want to loop on a 5xx,
+  // and if reparse returned zero exercises we don't want to burn
+  // another Gemini call on re-render.
   const seedAttemptedRef = useRef<string | null>(null);
+  const reparseAttemptedRef = useRef<string | null>(null);
   useEffect(() => {
     if (!workoutId || isLoading || !workout) return;
-    if (seedAttemptedRef.current === workoutId) return;
     const hasSets = (workout.exerciseSets?.length ?? 0) > 0;
-    if (!hasSets && workout.planDayId) {
+    if (hasSets) return;
+
+    const hasFreeText = hasMeaningfulText(entry?.mainWorkout) || hasMeaningfulText(entry?.accessory);
+
+    // Step 1: seed-from-plan (only if the workout has a plan day link).
+    if (workout.planDayId && seedAttemptedRef.current !== workoutId && !seedFromPlan.isPending) {
       seedAttemptedRef.current = workoutId;
-      seedFromPlan.mutate();
+      seedFromPlan.mutate(undefined, {
+        // Chain reparse only AFTER the seed call finishes, whether it
+        // succeeded or not, to avoid two in-flight Gemini calls at once.
+        onSettled: () => {
+          if (reparseAttemptedRef.current === workoutId) return;
+          if (!hasFreeText) return;
+          reparseAttemptedRef.current = workoutId;
+          reparseFreeText.mutate();
+        },
+      });
+      return;
     }
-  }, [workoutId, workout, isLoading, seedFromPlan]);
+
+    // Step 2 (direct): no plan day — go straight to reparse.
+    if (!workout.planDayId && reparseAttemptedRef.current !== workoutId && !reparseFreeText.isPending) {
+      if (!hasFreeText) return;
+      reparseAttemptedRef.current = workoutId;
+      reparseFreeText.mutate();
+    }
+  }, [workoutId, workout, isLoading, entry?.mainWorkout, entry?.accessory, seedFromPlan, reparseFreeText]);
 
   if (!entry) return null;
 
@@ -118,6 +146,17 @@ export function WorkoutDetailDialogV2({
 
         <div className="grid grid-cols-1 gap-4 px-6 py-4 md:grid-cols-[1fr_280px]">
           <div className="flex flex-col gap-3">
+            {isHydrating && exerciseSets.length === 0 && (
+              <div
+                className="flex items-center gap-2 rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground"
+                role="status"
+                aria-live="polite"
+                data-testid="workout-detail-hydrating"
+              >
+                <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                Parsing coach's prescription…
+              </div>
+            )}
             {workoutId ? (
               <ExerciseTable
                 workoutId={workoutId}
@@ -201,6 +240,10 @@ export function WorkoutDetailDialogV2({
  */
 function pluralize(count: number, singular: string, plural: string): string {
   return count === 1 ? singular : plural;
+}
+
+function hasMeaningfulText(v: string | null | undefined): boolean {
+  return !!v && v.trim().length > 0;
 }
 
 function buildCoachSeedMessage(entry: TimelineEntry, sets: ExerciseSet[]): string {

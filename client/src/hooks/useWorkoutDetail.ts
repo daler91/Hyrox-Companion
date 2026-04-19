@@ -104,6 +104,24 @@ export function useWorkoutDetail(workoutId: string | null) {
       : undefined,
   });
 
+  // Lazy parse for legacy free-text workouts: if seed-from-plan returned
+  // nothing (or there's no plan day linked) but the workout has free
+  // text in mainWorkout/accessory, call /reparse to hydrate the table
+  // via the existing Gemini parse pipeline. Fires at most once per
+  // workoutId, coordinated from WorkoutDetailDialogV2's hydration
+  // useEffect. Errors surface through the `useApiMutation` toast layer.
+  const reparseFreeText = useApiMutation({
+    mutationFn: () => api.workouts.reparse(workoutId!),
+    invalidateQueries: workoutId
+      ? [QUERY_KEYS.workout(workoutId), QUERY_KEYS.workoutHistory(workoutId)]
+      : undefined,
+    // No error toast — reparse failure is a best-effort fallback, not a
+    // user-initiated action. Empty state + coach's prescription remain
+    // visible, which is the graceful degradation path.
+  });
+
+  const isHydrating = seedFromPlan.isPending || reparseFreeText.isPending;
+
   // Debounced note autosave lives here (and NOT on the global
   // updateWorkoutMutation in useWorkoutActions) so saving doesn't trigger
   // that mutation's onSuccess → setDetailEntry(null) side-effect, which
@@ -133,10 +151,12 @@ export function useWorkoutDetail(workoutId: string | null) {
     history: historyQuery.data,
     isLoading: workoutQuery.isLoading,
     isError: workoutQuery.isError,
+    isHydrating,
     updateSet,
     addSet,
     deleteSet,
     seedFromPlan,
+    reparseFreeText,
     updateNote,
   };
 }

@@ -25,6 +25,7 @@ vi.mock("@/lib/api", async () => {
         addSet: vi.fn(),
         deleteSet: vi.fn(),
         seedFromPlan: vi.fn(),
+        reparse: vi.fn(),
       },
     },
   };
@@ -37,6 +38,7 @@ const mockWorkouts = api.workouts as unknown as {
   addSet: ReturnType<typeof vi.fn>;
   deleteSet: ReturnType<typeof vi.fn>;
   seedFromPlan: ReturnType<typeof vi.fn>;
+  reparse: ReturnType<typeof vi.fn>;
 };
 
 function makeEntry(overrides: Partial<TimelineEntry> = {}): TimelineEntry {
@@ -198,5 +200,108 @@ describe("WorkoutDetailDialogV2", () => {
     });
 
     expect(await screen.findByTestId("ai-modified-chip")).toBeInTheDocument();
+  });
+
+  // ---- Lazy-parse hydration ---------------------------------------------
+
+  it("calls seed-from-plan then reparse when a plan-linked workout opens with no sets", async () => {
+    mockWorkouts.get.mockResolvedValue(
+      makeWorkout({ exerciseSets: [], planDayId: "plan-day-1" }),
+    );
+    mockWorkouts.history.mockResolvedValue({
+      lastSameFocus: null,
+      prSetCount: 0,
+      blockAvgRpe: null,
+    });
+    mockWorkouts.seedFromPlan.mockResolvedValue({ seededCount: 0 });
+    mockWorkouts.reparse.mockResolvedValue({
+      exercises: [],
+      saved: false,
+      setCount: 0,
+    });
+
+    renderDialog({
+      entry: makeEntry({ mainWorkout: "4 rounds: 1000m SkiErg, 20 wall balls" }),
+    });
+
+    // Seed-from-plan fires first; when its promise settles, the onSettled
+    // chain calls reparse. We don't assert on the transient hydrating
+    // banner because mocked mutations resolve synchronously and the
+    // isHydrating window collapses faster than React renders.
+    await waitFor(() => {
+      expect(mockWorkouts.seedFromPlan).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(mockWorkouts.reparse).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("skips seed-from-plan and calls reparse directly for ad-hoc logged workouts", async () => {
+    mockWorkouts.get.mockResolvedValue(
+      makeWorkout({ exerciseSets: [], planDayId: null }),
+    );
+    mockWorkouts.history.mockResolvedValue({
+      lastSameFocus: null,
+      prSetCount: 0,
+      blockAvgRpe: null,
+    });
+    mockWorkouts.reparse.mockResolvedValue({
+      exercises: [],
+      saved: false,
+      setCount: 0,
+    });
+
+    renderDialog({
+      entry: makeEntry({ planDayId: null, mainWorkout: "5x5 bench press at 80kg" }),
+    });
+
+    await waitFor(() => {
+      expect(mockWorkouts.reparse).toHaveBeenCalledTimes(1);
+    });
+    expect(mockWorkouts.seedFromPlan).not.toHaveBeenCalled();
+  });
+
+  it("does not hydrate when the workout already has structured sets", async () => {
+    mockWorkouts.get.mockResolvedValue(
+      makeWorkout({ exerciseSets: [makeSet()] }),
+    );
+    mockWorkouts.history.mockResolvedValue({
+      lastSameFocus: null,
+      prSetCount: 0,
+      blockAvgRpe: null,
+    });
+
+    renderDialog();
+
+    // Wait for the initial workout query to resolve. No hydration banner
+    // should ever render because the exercise table has rows.
+    await screen.findByTestId("exercise-table");
+    expect(screen.queryByTestId("workout-detail-hydrating")).not.toBeInTheDocument();
+    expect(mockWorkouts.seedFromPlan).not.toHaveBeenCalled();
+    expect(mockWorkouts.reparse).not.toHaveBeenCalled();
+  });
+
+  it("skips reparse when the workout has no free text to parse", async () => {
+    mockWorkouts.get.mockResolvedValue(
+      makeWorkout({ exerciseSets: [], planDayId: null }),
+    );
+    mockWorkouts.history.mockResolvedValue({
+      lastSameFocus: null,
+      prSetCount: 0,
+      blockAvgRpe: null,
+    });
+
+    renderDialog({
+      entry: makeEntry({ planDayId: null, mainWorkout: "", accessory: null }),
+    });
+
+    // The hydration useEffect should bail early — there's nothing to
+    // feed to parseExercisesFromText.
+    await waitFor(() => {
+      // Wait a tick so the effect has a chance to fire.
+      expect(mockWorkouts.get).toHaveBeenCalled();
+    });
+    expect(mockWorkouts.reparse).not.toHaveBeenCalled();
+    expect(mockWorkouts.seedFromPlan).not.toHaveBeenCalled();
   });
 });
