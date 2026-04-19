@@ -92,7 +92,7 @@ const STOPWORDS = new Set([
 function tokenize(text: string): string[] {
   return text
     .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
+    .replaceAll(/[^a-z0-9\s]/g, " ")
     .split(/\s+/)
     .filter(t => t.length > 1 && !STOPWORDS.has(t));
 }
@@ -163,7 +163,7 @@ const WEIGHTS = {
   rationaleDrift: 0.25,
   keywordRatio: 0.25,
   priorityShift: 0.15,
-  actionShift: 0.10,
+  actionShift: 0.1,
 };
 
 /**

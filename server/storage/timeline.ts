@@ -58,7 +58,7 @@ function createLinkedWorkoutEntry(day: PlanDay, linkedLog: WorkoutLog, row: { pl
     aiSource: day.aiSource as TimelineEntry["aiSource"],
     aiRationale: day.aiRationale,
     aiNoteUpdatedAt: day.aiNoteUpdatedAt,
-    aiInputsUsed: day.aiInputsUsed as TimelineEntry["aiInputsUsed"],
+    aiInputsUsed: day.aiInputsUsed,
     ...mapWorkoutLogToTimelineFields(linkedLog),
   };
 }
@@ -82,7 +82,7 @@ function createPlannedDayEntry(day: PlanDay, scheduledDate: string, row: { planN
     aiSource: day.aiSource as TimelineEntry["aiSource"],
     aiRationale: day.aiRationale,
     aiNoteUpdatedAt: day.aiNoteUpdatedAt,
-    aiInputsUsed: day.aiInputsUsed as TimelineEntry["aiInputsUsed"],
+    aiInputsUsed: day.aiInputsUsed,
   };
 }
 

@@ -35,26 +35,42 @@ function sourceBadgeClasses(source: CoachNoteSource): string {
   }
 }
 
+function phaseChip(phase: CoachNoteInputs["planPhase"]): string | null {
+  if (!phase) return null;
+  return `${phase.charAt(0).toUpperCase()}${phase.slice(1)} phase`;
+}
+
+function rpeChip(inputs: CoachNoteInputs): string | null {
+  if (!inputs.rpeTrend || inputs.rpeTrend === "insufficient_data") return null;
+  return inputs.fatigueFlag ? "Fatigue flag" : `RPE ${inputs.rpeTrend}`;
+}
+
+function stationGapsChip(gaps: string[] | undefined): string | null {
+  if (!gaps || gaps.length === 0) return null;
+  const suffix = gaps.length > 2 ? "…" : "";
+  return `Gaps: ${gaps.slice(0, 2).join(", ")}${suffix}`;
+}
+
+function progressionChip(flags: string[] | undefined): string | null {
+  if (!flags || flags.length === 0) return null;
+  return `Progression: ${flags.length} flag${flags.length > 1 ? "s" : ""}`;
+}
+
 function basedOnChips(inputs: CoachNoteInputs | null | undefined): string[] {
   if (!inputs) return [];
-  const chips: string[] = [];
-  if (inputs.planGoalPresent) chips.push("Plan goal");
-  if (inputs.planPhase) chips.push(`${inputs.planPhase.charAt(0).toUpperCase()}${inputs.planPhase.slice(1)} phase`);
-  if (inputs.rpeTrend && inputs.rpeTrend !== "insufficient_data") {
-    chips.push(inputs.fatigueFlag ? "Fatigue flag" : `RPE ${inputs.rpeTrend}`);
-  }
-  if (inputs.weeklyVolumeTrend) chips.push(`Volume ${inputs.weeklyVolumeTrend}`);
-  if (inputs.stationGaps && inputs.stationGaps.length > 0) {
-    chips.push(`Gaps: ${inputs.stationGaps.slice(0, 2).join(", ")}${inputs.stationGaps.length > 2 ? "…" : ""}`);
-  }
-  if (inputs.progressionFlags && inputs.progressionFlags.length > 0) {
-    chips.push(`Progression: ${inputs.progressionFlags.length} flag${inputs.progressionFlags.length > 1 ? "s" : ""}`);
-  }
-  if (inputs.recentWorkoutCount && inputs.recentWorkoutCount > 0) {
-    chips.push(`${inputs.recentWorkoutCount} recent workouts`);
-  }
-  if (inputs.ragUsed) chips.push("Coaching docs");
-  return chips;
+  const candidates: Array<string | null | undefined> = [
+    inputs.planGoalPresent ? "Plan goal" : null,
+    phaseChip(inputs.planPhase),
+    rpeChip(inputs),
+    inputs.weeklyVolumeTrend ? `Volume ${inputs.weeklyVolumeTrend}` : null,
+    stationGapsChip(inputs.stationGaps),
+    progressionChip(inputs.progressionFlags),
+    inputs.recentWorkoutCount && inputs.recentWorkoutCount > 0
+      ? `${inputs.recentWorkoutCount} recent workouts`
+      : null,
+    inputs.ragUsed ? "Coaching docs" : null,
+  ];
+  return candidates.filter((c): c is string => typeof c === "string");
 }
 
 export function CoachNote({

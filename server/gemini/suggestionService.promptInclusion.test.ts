@@ -164,7 +164,6 @@ describe("buildSuggestionsPrompt — input inclusion regression guard", () => {
       ctx,
       [createMockUpcomingWorkout()],
       "goal",
-      undefined,
     );
 
     expect(prompt).toContain("RPE TREND: Insufficient data");
@@ -189,8 +188,6 @@ describe("buildSuggestionsPrompt — input inclusion regression guard", () => {
     const prompt = buildSuggestionsPrompt(
       ctx,
       [createMockUpcomingWorkout()],
-      undefined,
-      undefined,
     );
 
     expect(prompt).not.toContain("PLAN PHASE:");
@@ -203,7 +200,6 @@ describe("buildSuggestionsPrompt — input inclusion regression guard", () => {
       createMockTrainingContext(),
       [createMockUpcomingWorkout()],
       "goal",
-      undefined,
     );
 
     expect(prompt).not.toContain("FINGERPRINT_RAG_CHUNK");

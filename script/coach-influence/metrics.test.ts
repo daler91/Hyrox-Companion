@@ -109,7 +109,7 @@ describe("metrics", () => {
   it("verdict labels IGNORED at noise floor and STRONG well above it", () => {
     expect(verdict(0.05, 0.05)).toBe("IGNORED");
     expect(verdict(0.08, 0.05)).toBe("IGNORED");
-    expect(verdict(0.20, 0.05)).toBe("WEAK");
+    expect(verdict(0.2, 0.05)).toBe("WEAK");
     expect(verdict(0.45, 0.05)).toBe("MODERATE");
     expect(verdict(0.75, 0.05)).toBe("STRONG");
   });

@@ -108,14 +108,16 @@ function renderMarkdown(scores: ScenarioScore[], noiseFloor: number): string {
     "| Input | Influence | TargetΔ | RationaleΔ | PriorityΔ | Keywords | Verdict |",
     "| --- | ---: | ---: | ---: | ---: | --- | --- |",
   ];
+  const renderKeywords = (score: ScenarioScore): string => {
+    if (score.keywordMatched.length > 0) {
+      return score.keywordMatched.map(w => `\`${w}\``).join(" ");
+    }
+    return score.keywordRatio === 0 ? "—" : "none";
+  };
+
   for (const s of scores) {
     const v = verdict(s.influence, noiseFloor);
-    const kw =
-      s.keywordMatched.length > 0
-        ? s.keywordMatched.map(w => `\`${w}\``).join(" ")
-        : s.keywordRatio === 0
-          ? "—"
-          : "none";
+    const kw = renderKeywords(s);
     lines.push(
       `| ${s.input} | ${s.influence.toFixed(3)} | ${s.targetOverlap.toFixed(2)} | ${s.rationaleDrift.toFixed(2)} | ${s.priorityShift.toFixed(2)} | ${kw} | ${v} |`,
     );
@@ -199,7 +201,9 @@ async function main() {
   log(`Wrote ${mdPath}`);
 }
 
-main().catch(err => {
+try {
+  await main();
+} catch (err) {
   console.error(err);
   process.exit(1);
-});
+}
