@@ -27,6 +27,13 @@ vi.mock("@/lib/api", async () => {
         seedFromPlan: vi.fn(),
         reparse: vi.fn(),
       },
+      plans: {
+        ...actual.api.plans,
+        getDayExercises: vi.fn().mockResolvedValue([]),
+        addDayExercise: vi.fn(),
+        updateDayExercise: vi.fn(),
+        deleteDayExercise: vi.fn(),
+      },
     },
   };
 });
@@ -153,7 +160,7 @@ describe("WorkoutDetailDialogV2", () => {
     });
   });
 
-  it("renders a placeholder when the workout hasn't been logged yet", () => {
+  it("renders Mark complete CTA and the plan-day exercise table when the workout hasn't been logged yet", async () => {
     mockWorkouts.get.mockResolvedValue(makeWorkout());
     mockWorkouts.history.mockResolvedValue({
       lastSameFocus: null,
@@ -163,9 +170,14 @@ describe("WorkoutDetailDialogV2", () => {
 
     renderDialog({
       entry: makeEntry({ workoutLogId: null, planDayId: "plan-1" }),
+      onMarkComplete: vi.fn(),
     });
 
-    expect(screen.getByText(/mark it complete/i)).toBeInTheDocument();
+    expect(screen.getByTestId("workout-detail-mark-complete")).toBeInTheDocument();
+    expect(screen.getByText(/tweak the sets above/i)).toBeInTheDocument();
+    // Exercise table renders with plan-day-backed mutations — see the
+    // +Add button used to append prescribed sets pre-log.
+    expect(await screen.findByTestId("exercise-table")).toBeInTheDocument();
   });
 
   it("invokes onAskCoach when the Ask coach button is clicked", async () => {

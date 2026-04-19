@@ -379,6 +379,86 @@ export class WorkoutStorage {
     return created;
   }
 
+  // -------------------------------------------------------------------
+  // Plan-day prescribed exerciseSets — mirrors the workoutLog CRUD above
+  // but writes to rows owned by a planDay instead. Used by the v2 dialog
+  // when a planned entry is open: the user can edit the prescribed sets
+  // before hitting Mark complete, and those edits get copied into the
+  // new workoutLog by createWorkoutInTx's copy-from-plan path.
+  // -------------------------------------------------------------------
+
+  /**
+   * Confirms the plan day belongs to a training plan owned by the user.
+   * Used as an IDOR guard on every plan-day set mutation so a caller
+   * can't write to another tenant's plan.
+   */
+  private async ownsPlanDay(planDayId: string, userId: string): Promise<boolean> {
+    const [row] = await db
+      .select({ id: planDays.id })
+      .from(planDays)
+      .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
+      .where(and(eq(planDays.id, planDayId), eq(trainingPlans.userId, userId)))
+      .limit(1);
+    return !!row;
+  }
+
+  async getExerciseSetsByPlanDay(planDayId: string, userId: string): Promise<ExerciseSet[] | null> {
+    // Distinguish "unauthorized / missing plan day" (null → 404 at the
+    // route) from "owned but prescription is empty" ([]). Returning []
+    // in both cases would let a foreign or bogus dayId look like a
+    // valid empty plan, weakening IDOR on this read path.
+    if (!(await this.ownsPlanDay(planDayId, userId))) return null;
+    return await db
+      .select()
+      .from(exerciseSets)
+      .where(eq(exerciseSets.planDayId, planDayId))
+      .orderBy(asc(exerciseSets.sortOrder));
+  }
+
+  async addExerciseSetToPlanDay(
+    planDayId: string,
+    set: Omit<InsertExerciseSet, "id" | "workoutLogId" | "planDayId" | "sortOrder">,
+    userId: string,
+  ): Promise<ExerciseSet | undefined> {
+    if (!(await this.ownsPlanDay(planDayId, userId))) return undefined;
+    const [max] = await db
+      .select({ maxOrder: sql<number | null>`max(${exerciseSets.sortOrder})` })
+      .from(exerciseSets)
+      .where(eq(exerciseSets.planDayId, planDayId));
+    const nextOrder = (max?.maxOrder ?? -1) + 1;
+    const [created] = await db
+      .insert(exerciseSets)
+      .values({ ...set, planDayId, workoutLogId: null, sortOrder: nextOrder })
+      .returning();
+    return created;
+  }
+
+  async updateExerciseSetForPlanDay(
+    planDayId: string,
+    setId: string,
+    updates: Partial<Omit<InsertExerciseSet, "id" | "workoutLogId" | "planDayId">>,
+    userId: string,
+  ): Promise<ExerciseSet | undefined> {
+    const owned = await this.getExerciseSetOwned(setId, userId);
+    // Same IDOR guard pattern as updateExerciseSet: reject when the set
+    // doesn't exist, belongs to someone else, or belongs to a different
+    // plan day than the nested-route segment.
+    if (owned?.planDayId !== planDayId) return undefined;
+    const [updated] = await db
+      .update(exerciseSets)
+      .set(updates)
+      .where(eq(exerciseSets.id, setId))
+      .returning();
+    return updated;
+  }
+
+  async deleteExerciseSetForPlanDay(planDayId: string, setId: string, userId: string): Promise<boolean> {
+    const owned = await this.getExerciseSetOwned(setId, userId);
+    if (owned?.planDayId !== planDayId) return false;
+    const result = await db.delete(exerciseSets).where(eq(exerciseSets.id, setId));
+    return (result.rowCount ?? 0) > 0;
+  }
+
   private async fetchLastSameFocus(
     currentDate: string,
     focus: string | null | undefined,

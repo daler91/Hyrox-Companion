@@ -262,6 +262,38 @@ export const incomingExerciseSchema = z.object({
 
 export const exercisesPayloadSchema = z.array(incomingExerciseSchema).max(200);
 
+// Request bodies for the set-level CRUD routes. Shared between the
+// workout-log routes (server/routes/workouts.ts) and the plan-day routes
+// (server/routes/plans.ts) so a single numeric-bounds contract covers
+// both paths — one schema, one Sonar-visible definition.
+export const patchExerciseSetBodySchema = z.object({
+  exerciseName: z.string().min(1).max(255).optional(),
+  customLabel: z.string().max(255).nullable().optional(),
+  category: z.string().max(50).optional(),
+  setNumber: z.number().int().min(1).max(100).optional(),
+  reps: z.number().int().min(0).max(10_000).nullable().optional(),
+  weight: z.number().min(0).max(2_000).nullable().optional(),
+  distance: z.number().min(0).max(1_000_000).nullable().optional(),
+  time: z.number().min(0).max(86_400).nullable().optional(),
+  notes: z.string().max(1000).nullable().optional(),
+  sortOrder: z.number().int().nullable().optional(),
+});
+export type PatchExerciseSetBody = z.infer<typeof patchExerciseSetBodySchema>;
+
+export const addExerciseSetBodySchema = z.object({
+  exerciseName: z.string().min(1).max(255),
+  customLabel: z.string().max(255).nullable().optional(),
+  category: z.string().max(50),
+  setNumber: z.number().int().min(1).max(100).default(1),
+  reps: z.number().int().min(0).max(10_000).nullable().optional(),
+  weight: z.number().min(0).max(2_000).nullable().optional(),
+  distance: z.number().min(0).max(1_000_000).nullable().optional(),
+  time: z.number().min(0).max(86_400).nullable().optional(),
+  notes: z.string().max(1000).nullable().optional(),
+  confidence: z.number().int().min(0).max(100).nullable().optional(),
+});
+export type AddExerciseSetBody = z.infer<typeof addExerciseSetBodySchema>;
+
 export interface ParsedExercise {
   exerciseName: string;
   category: string;

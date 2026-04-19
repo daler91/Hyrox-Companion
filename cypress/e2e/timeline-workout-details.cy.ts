@@ -21,6 +21,14 @@ describe("Timeline Workout Details Interactions", () => {
       body: { success: true },
     }).as("deleteWorkout");
 
+    // V2 planned-state renders an editable ExerciseTable for the plan
+    // day — stub the new endpoint so the dialog doesn't 404 when it
+    // opens on a planned entry.
+    cy.intercept("GET", `/api/v1/plans/days/${planDayId}/sets`, {
+      statusCode: 200,
+      body: [],
+    }).as("getPlanDaySets");
+
     setupAuthIntercepts({
       timeline: [
         {
