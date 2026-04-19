@@ -6,24 +6,16 @@ describe("Timeline Workout Details Interactions", () => {
   const planDayId = "plan-day-1";
 
   beforeEach(() => {
-    // Intercept PATCH for plan days marking complete
     cy.intercept("PATCH", `/api/v1/plans/days/${planDayId}/status`, {
       statusCode: 200,
       body: { id: planDayId, status: "completed" },
     }).as("updatePlanDay");
 
-    cy.intercept("PATCH", `/api/v1/plans/*/days/${planDayId}`, {
-      statusCode: 200,
-      body: { id: planDayId, focus: "Updated Upper Body Focus" },
-    }).as("updateDayDetails");
-
-    // Intercept POST for saving updated details
     cy.intercept("POST", "/api/v1/workouts", {
       statusCode: 200,
       body: { id: "logged-workout-from-plan", title: "Upper Body Strength" },
     }).as("logWorkoutFromPlan");
 
-    // Intercept DELETE for deleting a workout
     cy.intercept("DELETE", `/api/v1/plans/days/${planDayId}`, {
       statusCode: 200,
       body: { success: true },
@@ -54,34 +46,39 @@ describe("Timeline Workout Details Interactions", () => {
     cy.wait("@timeline");
   });
 
-  it("opens the detail dialog when clicking a workout card", () => {
+  it("opens the v2 detail dialog when clicking a workout card", () => {
     cy.getBySel(`card-timeline-entry-${workoutId}`).click();
 
-    // Verify dialog contents
+    cy.getBySel("workout-detail-dialog-v2").should("exist");
     cy.contains("Upper Body Strength").should("exist");
+    // Coach's Prescription accordion opens by default on planned entries,
+    // so the free-text content is visible without a toggle.
     cy.contains("4x8 bench press at 60kg").should("exist");
     cy.contains("3x12 lateral raises").should("exist");
     cy.contains("Focus on form").should("exist");
   });
 
   it("can mark a planned workout as complete from the card directly", () => {
-    // The "Complete" button should be visible on the card
     cy.getBySel(`button-complete-${workoutId}`).click();
 
-    // Verify the API was called with the "completed" status
     cy.wait("@logWorkoutFromPlan");
-
-    // It should also show a toast
     cy.contains("Workout logged").should("exist");
   });
 
-  it("can mark a workout as missed from the detail dialog", () => {
+  it("can mark a planned workout as complete from the dialog's CTA", () => {
+    cy.getBySel(`card-timeline-entry-${workoutId}`).click();
+    cy.getBySel("workout-detail-mark-complete").click();
+
+    cy.wait("@logWorkoutFromPlan");
+    cy.contains("Workout logged").should("exist");
+  });
+
+  it("can mark a workout as missed from the v2 overflow menu", () => {
     cy.getBySel(`card-timeline-entry-${workoutId}`).click();
 
-    // The dialog actions has a 'Mark Missed' button
-    cy.getBySel("button-detail-missed").click();
+    cy.getBySel("workout-detail-actions-trigger").click();
+    cy.getBySel("workout-detail-status-missed").click();
 
-    // Verify API call
     cy.wait("@updatePlanDay").then((interception) => {
       expect(interception.request.body).to.include({ status: "missed" });
     });
@@ -89,41 +86,23 @@ describe("Timeline Workout Details Interactions", () => {
     cy.contains("Status updated").should("exist");
   });
 
-  it("can save edited details from the detail dialog", () => {
+  it("can delete a planned workout from the v2 overflow menu", () => {
     cy.getBySel(`card-timeline-entry-${workoutId}`).click();
 
-    // Switch to editing mode
-    cy.getBySel("button-detail-edit").click();
+    cy.getBySel("workout-detail-actions-trigger").click();
+    cy.getBySel("workout-detail-delete").click();
 
-    // Change some details
-    cy.getBySel("input-detail-focus").clear().type("Updated Upper Body Focus");
-    cy.getBySel("input-detail-main").clear().type("New main workout content");
+    // v2 confirm step lives on the AlertDialog we mount alongside the
+    // main Dialog; "Delete" is the confirm action on that overlay.
+    cy.getBySel("workout-detail-delete-confirm").click({ force: true });
 
-    // Save changes
-    cy.getBySel("button-detail-save").click();
-
-    cy.wait("@updateDayDetails").then((interception) => {
-      expect(interception.request.body).to.include({
-        focus: "Updated Upper Body Focus",
-        mainWorkout: "New main workout content",
-      });
-    });
-
-    cy.contains("Entry updated").should("exist");
-  });
-
-  it("can delete a workout from the detail dialog", () => {
-    cy.getBySel(`card-timeline-entry-${workoutId}`).click();
-
-    // The dialog actions has a 'Delete' button
-    cy.getBySel("button-detail-delete").click();
-
-    // A confirmation dialog should appear
-    cy.getBySel("button-confirm-delete").should("be.visible").click({ force: true });
-
-    // Verify DELETE API was called
     cy.wait("@deleteWorkout");
-
     cy.contains("Workout removed from plan").should("exist");
   });
+
+  // NOTE: the legacy "can save edited details from the detail dialog"
+  // suite is intentionally dropped. V2 renders focus/mainWorkout/
+  // accessory/notes read-only in the CoachPrescriptionCollapsible;
+  // inline editing of those free-text fields is tracked as a follow-up
+  // (see PR #839 body → "Follow-ups").
 });
