@@ -96,51 +96,14 @@ export function WorkoutDetailDialogV2({
     updateNote,
   } = useWorkoutDetail(workoutId);
 
-  // Hydration pipeline for workouts that open with no structured sets:
-  //   1. If the workout is linked to a plan day, call /seed-from-plan
-  //      first. On a plan generated after #834 shipped it copies the
-  //      prescribed rows; on a legacy plan day it's a no-op.
-  //   2. Once that settles and the workout still has no sets AND the
-  //      free-text prescription has content, call /reparse so Gemini
-  //      parses `mainWorkout + accessory` into structured rows.
-  //   3. If the workout has no plan day at all (ad-hoc logged workout),
-  //      skip step 1 and go straight to step 2.
-  // Each attempt fires at most once per workoutId — seed/reparse are
-  // safe to retry but if either fails we don't want to loop on a 5xx,
-  // and if reparse returned zero exercises we don't want to burn
-  // another Gemini call on re-render.
-  const seedAttemptedRef = useRef<string | null>(null);
-  const reparseAttemptedRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!workoutId || isLoading || !workout) return;
-    const hasSets = (workout.exerciseSets?.length ?? 0) > 0;
-    if (hasSets) return;
-
-    const hasFreeText = hasMeaningfulText(entry?.mainWorkout) || hasMeaningfulText(entry?.accessory);
-
-    // Step 1: seed-from-plan (only if the workout has a plan day link).
-    if (workout.planDayId && seedAttemptedRef.current !== workoutId && !seedFromPlan.isPending) {
-      seedAttemptedRef.current = workoutId;
-      seedFromPlan.mutate(undefined, {
-        // Chain reparse only AFTER the seed call finishes, whether it
-        // succeeded or not, to avoid two in-flight Gemini calls at once.
-        onSettled: () => {
-          if (reparseAttemptedRef.current === workoutId) return;
-          if (!hasFreeText) return;
-          reparseAttemptedRef.current = workoutId;
-          reparseFreeText.mutate();
-        },
-      });
-      return;
-    }
-
-    // Step 2 (direct): no plan day — go straight to reparse.
-    if (!workout.planDayId && reparseAttemptedRef.current !== workoutId && !reparseFreeText.isPending) {
-      if (!hasFreeText) return;
-      reparseAttemptedRef.current = workoutId;
-      reparseFreeText.mutate();
-    }
-  }, [workoutId, workout, isLoading, entry?.mainWorkout, entry?.accessory, seedFromPlan, reparseFreeText]);
+  useHydrateWorkoutDetail({
+    workoutId,
+    workout,
+    isLoading,
+    hasFreeText: hasMeaningfulText(entry?.mainWorkout) || hasMeaningfulText(entry?.accessory),
+    seedFromPlan,
+    reparseFreeText,
+  });
 
   if (!entry) return null;
 
@@ -273,6 +236,111 @@ export function WorkoutDetailDialogV2({
  * the full training context via the standard RAG pipeline, so this only
  * needs to point the conversation at the specific workout.
  */
+interface HydrationTrigger {
+  isPending: boolean;
+  mutate: (
+    variables?: void,
+    options?: { onSettled?: () => void },
+  ) => void;
+}
+
+interface HydrateParams {
+  workoutId: string | null;
+  workout: { planDayId: string | null; exerciseSets?: unknown[] } | undefined;
+  isLoading: boolean;
+  hasFreeText: boolean;
+  seedFromPlan: HydrationTrigger;
+  reparseFreeText: HydrationTrigger;
+}
+
+/**
+ * Two-step hydration for workouts that open with no structured sets:
+ *   1. If the workout is linked to a plan day, call /seed-from-plan. On
+ *      a plan generated after #834 shipped it copies the prescribed rows;
+ *      on a legacy plan day it's a no-op.
+ *   2. Once that settles and the workout still has no sets AND the
+ *      free-text prescription has content, call /reparse so Gemini
+ *      parses `mainWorkout + accessory` into structured rows.
+ *   3. If there's no plan day link, skip step 1 and go straight to step 2.
+ * Each attempt fires at most once per workoutId (refs) so a 5xx or a
+ * zero-parse doesn't loop across re-renders.
+ *
+ * Extracted into its own hook so WorkoutDetailDialogV2 stays below
+ * Sonar's cognitive-complexity ceiling; the component now just composes
+ * data + callbacks and this hook owns the control flow.
+ */
+function useHydrateWorkoutDetail({
+  workoutId,
+  workout,
+  isLoading,
+  hasFreeText,
+  seedFromPlan,
+  reparseFreeText,
+}: HydrateParams): void {
+  const seedAttemptedRef = useRef<string | null>(null);
+  const reparseAttemptedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!workoutId || isLoading || !workout) return;
+    const hasSets = (workout.exerciseSets?.length ?? 0) > 0;
+    if (hasSets) return;
+
+    if (workout.planDayId) {
+      runSeedThenReparse({
+        workoutId,
+        hasFreeText,
+        seedFromPlan,
+        reparseFreeText,
+        seedAttemptedRef,
+        reparseAttemptedRef,
+      });
+      return;
+    }
+    runReparseOnly({
+      workoutId,
+      hasFreeText,
+      reparseFreeText,
+      reparseAttemptedRef,
+    });
+  }, [workoutId, workout, isLoading, hasFreeText, seedFromPlan, reparseFreeText]);
+}
+
+function runSeedThenReparse(args: {
+  workoutId: string;
+  hasFreeText: boolean;
+  seedFromPlan: HydrationTrigger;
+  reparseFreeText: HydrationTrigger;
+  seedAttemptedRef: React.MutableRefObject<string | null>;
+  reparseAttemptedRef: React.MutableRefObject<string | null>;
+}) {
+  const { workoutId, hasFreeText, seedFromPlan, reparseFreeText, seedAttemptedRef, reparseAttemptedRef } = args;
+  if (seedAttemptedRef.current === workoutId || seedFromPlan.isPending) return;
+  seedAttemptedRef.current = workoutId;
+  seedFromPlan.mutate(undefined, {
+    // Chain reparse only AFTER the seed call finishes, whether it
+    // succeeded or not, to avoid two in-flight Gemini calls at once.
+    onSettled: () => {
+      if (!hasFreeText) return;
+      if (reparseAttemptedRef.current === workoutId) return;
+      reparseAttemptedRef.current = workoutId;
+      reparseFreeText.mutate();
+    },
+  });
+}
+
+function runReparseOnly(args: {
+  workoutId: string;
+  hasFreeText: boolean;
+  reparseFreeText: HydrationTrigger;
+  reparseAttemptedRef: React.MutableRefObject<string | null>;
+}) {
+  const { workoutId, hasFreeText, reparseFreeText, reparseAttemptedRef } = args;
+  if (!hasFreeText) return;
+  if (reparseAttemptedRef.current === workoutId || reparseFreeText.isPending) return;
+  reparseAttemptedRef.current = workoutId;
+  reparseFreeText.mutate();
+}
+
 interface PlannedCallToActionProps {
   readonly entry: TimelineEntry;
   readonly onMarkComplete?: (entry: TimelineEntry) => void;
