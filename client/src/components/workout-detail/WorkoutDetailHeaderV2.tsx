@@ -99,7 +99,7 @@ export function WorkoutDetailHeaderV2({ entry, onDelete, onChangeStatus, onCombi
   const hasOverflowMenu = !!onDelete || !!onCombine;
 
   return (
-    <div className="flex items-start justify-between gap-4 pb-2">
+    <div className="flex items-start justify-between gap-4 pb-2 pr-20">
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground" data-testid="workout-detail-date">
           <span className="inline-flex items-center gap-1">
@@ -123,7 +123,11 @@ export function WorkoutDetailHeaderV2({ entry, onDelete, onChangeStatus, onCombi
         <h2 className="text-2xl font-semibold leading-tight">{entry.focus || "Workout"}</h2>
       </div>
       {hasOverflowMenu && (
-        <div className="flex shrink-0 items-center gap-1">
+        // Pin the ⋮ trigger to the top-right cluster where shadcn's
+        // DialogContent renders its own absolute close X. Without this
+        // the ⋮ sits lower than the X (inside the flex row) and the
+        // two controls stack vertically instead of aligning as a pair.
+        <div className="absolute right-12 top-3">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
