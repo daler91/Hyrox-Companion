@@ -126,11 +126,21 @@ export function WorkoutDetailDialogV2({
   // which Sonar counts toward the component's cognitive complexity;
   // lifting them out keeps the main render readable without exceeding
   // the complexity ceiling.
-  const handleMenuDelete = onDelete ? () => setConfirmingDelete(true) : undefined;
-  const handleMenuChangeStatus = onChangeStatus
+  //
+  // We also suppress every overflow-menu action while the mark-complete
+  // logWorkoutMutation is in flight. Without this gate, the user could
+  // click Mark complete (POST /workouts) and then immediately Skip /
+  // Missed / Delete (PATCH plan_days.status or DELETE) from the same
+  // dialog — the two requests race on the same plan day and can leave
+  // a workoutLog with a conflicting plan_day status.
+  const actionsLocked = isMarkingComplete;
+  const handleMenuDelete = onDelete && !actionsLocked ? () => setConfirmingDelete(true) : undefined;
+  const handleMenuChangeStatus = onChangeStatus && !actionsLocked
     ? (status: WorkoutStatus) => onChangeStatus(entry, status)
     : undefined;
-  const handleMenuCombine = !isPlanned && onCombine ? () => onCombine(entry) : undefined;
+  const handleMenuCombine = !isPlanned && onCombine && !actionsLocked
+    ? () => onCombine(entry)
+    : undefined;
   const handleAskCoach = onAskCoach
     ? () => onAskCoach(buildCoachSeedMessage(entry, exerciseSets))
     : undefined;
