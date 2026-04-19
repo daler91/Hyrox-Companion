@@ -245,7 +245,13 @@ router.get("/api/v1/workouts/:id", isAuthenticated, rateLimiter("workout", 60), 
     if (!log) {
       return res.status(404).json({ error: "Workout not found", code: "NOT_FOUND" });
     }
-    res.json(log);
+    // Eagerly attach exerciseSets so the workout-detail dialog can render
+    // the structured table without a second round trip. Previously this
+    // endpoint returned just the workoutLog row; the v2 dialog then saw
+    // `exerciseSets: undefined`, rendered "No exercises yet", and fired
+    // the lazy-parse fallback even when the DB already had rows.
+    const exerciseSets = await storage.workouts.getExerciseSetsByWorkoutLog(log.id);
+    res.json({ ...log, exerciseSets });
   }));
 
 router.post("/api/v1/workouts", ...protectedMutationGuards, rateLimiter("workout", 40), validateBody(createWorkoutRouteSchema), asyncHandler(async (req: Request<Record<string, never>, Record<string, never>, CreateWorkoutRoutePayload>, res: Response) => {
