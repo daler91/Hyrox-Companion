@@ -169,63 +169,24 @@ export function WorkoutDetailDialogV2({
           {showStatsRow && workout && <WorkoutStatsRow workout={workout} exerciseSets={exerciseSets} />}
         </div>
 
-        <div className="grid grid-cols-1 gap-4 px-6 py-4 md:grid-cols-[1fr_280px]">
-          <div className="flex flex-col gap-3">
-            {isPlanned ? (
-              <PlannedCallToAction
-                entry={entry}
-                onMarkComplete={onMarkComplete}
-                isMarkingComplete={isMarkingComplete}
-              />
-            ) : (
-              <>
-                {isHydrating && exerciseSets.length === 0 && (
-                  <div
-                    className="flex items-center gap-2 rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground"
-                    role="status"
-                    aria-live="polite"
-                    data-testid="workout-detail-hydrating"
-                  >
-                    <Loader2 className="size-3.5 animate-spin" aria-hidden />
-                    Parsing coach's prescription…
-                  </div>
-                )}
-                {workoutId && (
-                  <ExerciseTable
-                    workoutId={workoutId}
-                    exerciseSets={exerciseSets}
-                    weightUnit={weightUnit}
-                    onUpdateSet={(setId, data) => updateSet.mutate({ setId, data })}
-                    onAddSet={(data) => addSet.mutate(data)}
-                    onDeleteSet={(setId) => deleteSet.mutate(setId)}
-                  />
-                )}
-              </>
-            )}
-
-            <CoachPrescriptionCollapsible
-              mainWorkout={entry.mainWorkout}
-              accessory={entry.accessory}
-              notes={entry.notes}
-              defaultOpen={isPlanned}
-            />
-          </div>
-
-          <aside className="flex flex-col gap-3">
-            <CoachTakePanel rationale={entry.aiRationale} onAskCoach={handleAskCoach} />
-            {!isPlanned && <HistoryPanel stats={history} isLoading={isLoading} />}
-          </aside>
-        </div>
-
-        {!isPlanned && (
-          <div className="border-t border-border px-6 py-4">
-            <AthleteNoteInput
-              value={workout?.notes}
-              onSave={(note) => workoutId && updateNote.mutate(note)}
-              disabled={!workoutId}
-            />
-          </div>
-        )}
+        <DialogBody
+          entry={entry}
+          workout={workout}
+          workoutId={workoutId}
+          exerciseSets={exerciseSets}
+          isPlanned={isPlanned}
+          isHydrating={isHydrating}
+          isLoading={isLoading}
+          weightUnit={weightUnit}
+          history={history}
+          onMarkComplete={onMarkComplete}
+          isMarkingComplete={isMarkingComplete}
+          onUpdateSet={(setId, data) => updateSet.mutate({ setId, data })}
+          onAddSet={(data) => addSet.mutate(data)}
+          onDeleteSet={(setId) => deleteSet.mutate(setId)}
+          onSaveNote={(note) => workoutId && updateNote.mutate(note)}
+          onAskCoach={handleAskCoach}
+        />
       </DialogContent>
 
       {/* Explicit confirm step before firing onDelete — the v2 menu's ⋮ is
@@ -265,6 +226,147 @@ export function WorkoutDetailDialogV2({
  * the full training context via the standard RAG pipeline, so this only
  * needs to point the conversation at the specific workout.
  */
+interface DialogBodyProps {
+  readonly entry: TimelineEntry;
+  readonly workout: (import("@shared/schema").WorkoutLog & { exerciseSets?: ExerciseSet[]; notes?: string | null }) | undefined;
+  readonly workoutId: string | null;
+  readonly exerciseSets: ExerciseSet[];
+  readonly isPlanned: boolean;
+  readonly isHydrating: boolean;
+  readonly isLoading: boolean;
+  readonly weightUnit: "kg" | "lb";
+  readonly history: import("@/lib/api").WorkoutHistoryStats | undefined;
+  readonly onMarkComplete?: (entry: TimelineEntry) => void;
+  readonly isMarkingComplete: boolean;
+  readonly onUpdateSet: (setId: string, data: import("@/lib/api").PatchExerciseSetPayload) => void;
+  readonly onAddSet: (data: import("@/lib/api").AddExerciseSetPayload) => void;
+  readonly onDeleteSet: (setId: string) => void;
+  readonly onSaveNote: (note: string | null) => void;
+  readonly onAskCoach?: () => void;
+}
+
+/**
+ * The dialog's main content grid + athlete-note footer, split out so
+ * WorkoutDetailDialogV2 stays below Sonar's cognitive-complexity
+ * ceiling. Renders the planned-entry CTA or the structured exercise
+ * table + side panels, plus the athlete-note section for logged
+ * workouts.
+ */
+function DialogBody(props: Readonly<DialogBodyProps>) {
+  const {
+    entry,
+    workout,
+    workoutId,
+    exerciseSets,
+    isPlanned,
+    isHydrating,
+    isLoading,
+    weightUnit,
+    history,
+    onMarkComplete,
+    isMarkingComplete,
+    onUpdateSet,
+    onAddSet,
+    onDeleteSet,
+    onSaveNote,
+    onAskCoach,
+  } = props;
+
+  return (
+    <>
+      <div className="grid grid-cols-1 gap-4 px-6 py-4 md:grid-cols-[1fr_280px]">
+        <div className="flex flex-col gap-3">
+          {isPlanned ? (
+            <PlannedCallToAction
+              entry={entry}
+              onMarkComplete={onMarkComplete}
+              isMarkingComplete={isMarkingComplete}
+            />
+          ) : (
+            <LoggedExerciseSection
+              workoutId={workoutId}
+              exerciseSets={exerciseSets}
+              isHydrating={isHydrating}
+              weightUnit={weightUnit}
+              onUpdateSet={onUpdateSet}
+              onAddSet={onAddSet}
+              onDeleteSet={onDeleteSet}
+            />
+          )}
+
+          <CoachPrescriptionCollapsible
+            mainWorkout={entry.mainWorkout}
+            accessory={entry.accessory}
+            notes={entry.notes}
+            defaultOpen={isPlanned}
+          />
+        </div>
+
+        <aside className="flex flex-col gap-3">
+          <CoachTakePanel rationale={entry.aiRationale} onAskCoach={onAskCoach} />
+          {!isPlanned && <HistoryPanel stats={history} isLoading={isLoading} />}
+        </aside>
+      </div>
+
+      {!isPlanned && (
+        <div className="border-t border-border px-6 py-4">
+          <AthleteNoteInput
+            value={workout?.notes}
+            onSave={onSaveNote}
+            disabled={!workoutId}
+          />
+        </div>
+      )}
+    </>
+  );
+}
+
+interface LoggedExerciseSectionProps {
+  readonly workoutId: string | null;
+  readonly exerciseSets: ExerciseSet[];
+  readonly isHydrating: boolean;
+  readonly weightUnit: "kg" | "lb";
+  readonly onUpdateSet: (setId: string, data: import("@/lib/api").PatchExerciseSetPayload) => void;
+  readonly onAddSet: (data: import("@/lib/api").AddExerciseSetPayload) => void;
+  readonly onDeleteSet: (setId: string) => void;
+}
+
+function LoggedExerciseSection({
+  workoutId,
+  exerciseSets,
+  isHydrating,
+  weightUnit,
+  onUpdateSet,
+  onAddSet,
+  onDeleteSet,
+}: Readonly<LoggedExerciseSectionProps>) {
+  if (!workoutId) return null;
+  const showHydratingBanner = isHydrating && exerciseSets.length === 0;
+  return (
+    <>
+      {showHydratingBanner && (
+        <div
+          className="flex items-center gap-2 rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground"
+          role="status"
+          aria-live="polite"
+          data-testid="workout-detail-hydrating"
+        >
+          <Loader2 className="size-3.5 animate-spin" aria-hidden />
+          Parsing coach's prescription…
+        </div>
+      )}
+      <ExerciseTable
+        workoutId={workoutId}
+        exerciseSets={exerciseSets}
+        weightUnit={weightUnit}
+        onUpdateSet={onUpdateSet}
+        onAddSet={onAddSet}
+        onDeleteSet={onDeleteSet}
+      />
+    </>
+  );
+}
+
 interface HydrationTrigger {
   isPending: boolean;
   mutate: (
