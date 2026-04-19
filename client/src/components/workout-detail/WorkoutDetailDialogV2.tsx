@@ -493,9 +493,11 @@ function PlannedCallToAction({ entry, onMarkComplete, isMarkingComplete, weightU
   // Debounced-but-not-yet-fired cell edits still narrowly race, but
   // this catches the common "edit + click" sequence once the debounce
   // has fired its mutation.
-  const ctaDisabled = isMarkingComplete || planSets.isSaving;
-  const ctaLabel = isMarkingComplete ? "Logging…" : planSets.isSaving ? "Saving edits…" : "Mark complete";
   const ctaBusy = isMarkingComplete || planSets.isSaving;
+  const ctaDisabled = ctaBusy;
+  let ctaLabel = "Mark complete";
+  if (isMarkingComplete) ctaLabel = "Logging…";
+  else if (planSets.isSaving) ctaLabel = "Saving edits…";
 
   return (
     <div className="flex flex-col gap-4" data-testid="workout-detail-planned-cta">
