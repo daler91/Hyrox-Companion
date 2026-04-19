@@ -146,27 +146,30 @@ export function useWorkoutDetail(workoutId: string | null) {
     errorToast: "Couldn't save that note",
   });
 
-  // Inline RPE edit from the stats row. Deliberately non-optimistic:
-  // RPE edits are fast and concurrent (user typing a single digit, then
-  // another) — restoring a snapshot captured in onMutate can overwrite
-  // a newer successful edit when a late error arrives from an older
-  // one. Letting invalidation refetch the server state on both success
-  // paths keeps the cache consistent without a race window.
-  //   - success → invalidate workout, workoutHistory (Block avg RPE),
-  //     and timeline (card shows entry.rpe).
-  //   - error → `errorToast` surfaces the failure; the next render
-  //     reads whatever the server committed.
-  // The RpeEditableCell's useEffect syncs the draft string to the
-  // backing `value` prop, so the cache catching up after the PATCH
-  // resolves is seamless for the user.
+  // Inline RPE edit from the stats row. Deliberately non-optimistic —
+  // concurrent edits (7 → 8 → 9 while the first PATCH is still in
+  // flight) mean a rollback snapshot can overwrite a newer successful
+  // edit. We also avoid invalidating the whole workout query on
+  // success: that would refetch and clobber other in-flight optimistic
+  // edits in the same cache entry (e.g. a pending note save has
+  // already patched cache.notes via its own onMutate but hasn't
+  // reached the server yet — an RPE refetch would restore the stale
+  // server-side notes).
+  //
+  // Instead, on success we surgically patch just cache.rpe to the
+  // value the server returned, leaving every other field untouched.
+  // workoutHistory + timeline are invalidated so the sidebar's Block
+  // avg RPE and the timeline card's RPE number refresh.
   const updateRpe = useApiMutation({
     mutationFn: (rpe: number | null) => api.workouts.update(workoutId!, { rpe }),
+    onSuccess: (serverWorkout) => {
+      if (!workoutId) return;
+      queryClient.setQueryData<WorkoutWithSets>(QUERY_KEYS.workout(workoutId), (p) =>
+        p ? { ...p, rpe: serverWorkout.rpe } : p,
+      );
+    },
     invalidateQueries: workoutId
-      ? [
-          QUERY_KEYS.workout(workoutId),
-          QUERY_KEYS.workoutHistory(workoutId),
-          QUERY_KEYS.timeline,
-        ]
+      ? [QUERY_KEYS.workoutHistory(workoutId), QUERY_KEYS.timeline]
       : undefined,
     errorToast: "Couldn't save that RPE",
   });
