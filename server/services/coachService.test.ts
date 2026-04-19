@@ -227,6 +227,26 @@ describe("coachService", () => {
       expect(storage.users.updateIsAutoCoaching).toHaveBeenCalledWith("user-1", false);
     });
 
+    it("drops review notes whose workoutId was modified or is not upcoming", async () => {
+      mockBaseAutoCoachDeps([
+        makeTimelineEntry({ planDayId: "day-1" }),
+        makeTimelineEntry({ planDayId: "day-2", date: "2026-01-17" }),
+      ]);
+      vi.mocked(generateWorkoutSuggestions).mockResolvedValue([makeSuggestion({ workoutId: "day-1" })]);
+      vi.mocked(generateReviewNotes).mockResolvedValue([
+        { workoutId: "day-1", note: "should be discarded — already modified" },
+        { workoutId: "day-2", note: "legit — untouched day" },
+        { workoutId: "ghost-id", note: "should be discarded — hallucinated id" },
+      ]);
+      vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({} as never);
+
+      expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 1 });
+      const applyCalls = vi.mocked(storage.plans.updatePlanDay).mock.calls;
+      const reviewCalls = applyCalls.filter(c => (c[1] as { aiSource?: string }).aiSource === "review");
+      expect(reviewCalls).toHaveLength(1);
+      expect(reviewCalls[0][0]).toBe("day-2");
+    });
+
     it("writes review notes on upcoming days the coach did NOT modify", async () => {
       mockBaseAutoCoachDeps([
         makeTimelineEntry({ planDayId: "day-1" }),

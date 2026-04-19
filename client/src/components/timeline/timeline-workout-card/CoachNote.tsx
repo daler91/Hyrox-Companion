@@ -11,7 +11,7 @@ type CoachNoteSource = NonNullable<TimelineEntry["aiSource"]>;
 interface CoachNoteProps {
   readonly entryId: string;
   readonly rationale: string;
-  readonly source: CoachNoteSource;
+  readonly source: CoachNoteSource | null;
   readonly updatedAt: string | Date | null | undefined;
   readonly inputsUsed: CoachNoteInputs | null | undefined;
 }
@@ -34,6 +34,9 @@ function sourceBadgeClasses(source: CoachNoteSource): string {
       return "text-sky-600 border-sky-200 bg-sky-50 dark:text-sky-400 dark:border-sky-800 dark:bg-sky-950";
   }
 }
+
+const DEFAULT_SOURCE_BADGE_CLASSES =
+  "text-muted-foreground border-border bg-muted/40";
 
 function phaseChip(phase: CoachNoteInputs["planPhase"]): string | null {
   if (!phase) return null;
@@ -133,10 +136,10 @@ export function CoachNote({
           <div className="flex flex-wrap items-center gap-1.5">
             <Badge
               variant="outline"
-              className={`text-[10px] ${sourceBadgeClasses(source)}`}
+              className={`text-[10px] ${source ? sourceBadgeClasses(source) : DEFAULT_SOURCE_BADGE_CLASSES}`}
               data-testid={`coach-note-source-${entryId}`}
             >
-              {sourceLabel(source)}
+              {source ? sourceLabel(source) : "Coach"}
             </Badge>
             {chips.length > 0 && (
               <>

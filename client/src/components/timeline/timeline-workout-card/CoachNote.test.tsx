@@ -68,6 +68,13 @@ describe("CoachNote", () => {
     expect(screen.queryByText("RPE rising")).toBeNull();
   });
 
+  it("still renders the note with a generic 'Coach' badge when source is null", () => {
+    render(<CoachNote {...baseProps} source={null} />);
+    fireEvent.click(screen.getByTestId("coach-note-toggle-plan-day-1"));
+    expect(screen.getByTestId("coach-note-rationale-plan-day-1")).toBeInTheDocument();
+    expect(screen.getByTestId("coach-note-source-plan-day-1")).toHaveTextContent("Coach");
+  });
+
   it("hides based-on chips when inputsUsed is null", () => {
     render(<CoachNote {...baseProps} source="legacy" inputsUsed={null} />);
     fireEvent.click(screen.getByTestId("coach-note-toggle-plan-day-1"));

@@ -202,11 +202,11 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
               </p>
             )}
             <WorkoutStravaStats entry={entry} distanceUnit={distanceUnit} />
-            {entry.aiRationale && entry.aiSource && (
+            {entry.aiRationale && (
               <CoachNote
                 entryId={entry.id}
                 rationale={entry.aiRationale}
-                source={entry.aiSource}
+                source={entry.aiSource ?? null}
                 updatedAt={entry.aiNoteUpdatedAt}
                 inputsUsed={entry.aiInputsUsed}
               />

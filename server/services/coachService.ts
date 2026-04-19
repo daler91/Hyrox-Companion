@@ -105,7 +105,10 @@ async function applyReviewNote(
   tx: DbExecutor,
 ): Promise<boolean> {
   if (!workoutId || !note) return false;
-  await storage.plans.updatePlanDay(
+  // updatePlanDay returns undefined when the ID doesn't resolve to a row
+  // owned by the user; propagate that as a failed apply so a hallucinated
+  // workoutId doesn't inflate the "noted" count.
+  const result = await storage.plans.updatePlanDay(
     workoutId,
     {
       aiSource: "review",
@@ -116,7 +119,7 @@ async function applyReviewNote(
     userId,
     tx,
   );
-  return true;
+  return Boolean(result);
 }
 
 /**
@@ -204,7 +207,8 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
     // Without this, "no suggestions" looks identical to "coach never ran".
     const modifiedIds = new Set(suggestions.map(s => s.workoutId));
     const unchangedWorkouts = upcomingWorkouts.filter(w => !modifiedIds.has(w.id));
-    const reviewNotes = unchangedWorkouts.length > 0
+    const unchangedIds = new Set(unchangedWorkouts.map(w => w.id));
+    const rawReviewNotes = unchangedWorkouts.length > 0
       ? await generateReviewNotes(
           trainingContext,
           unchangedWorkouts,
@@ -213,6 +217,20 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
           userId,
         )
       : [];
+    // Drop any review note whose workoutId isn't actually an unchanged day:
+    // Gemini occasionally hallucinates IDs, and a review-note write against
+    // a modified day would overwrite its aiSource/aiRationale and mislabel
+    // it as unchanged. Dedupe on workoutId so the last write doesn't clobber
+    // a legitimate note either.
+    const reviewNotes = Array.from(
+      rawReviewNotes
+        .filter(n => unchangedIds.has(n.workoutId))
+        .reduce<Map<string, typeof rawReviewNotes[number]>>((acc, n) => {
+          acc.set(n.workoutId, n);
+          return acc;
+        }, new Map())
+        .values(),
+    );
 
     // Apply all modifications and review notes atomically: a failure mid-loop
     // rolls back every earlier apply so the plan never ends up partially
