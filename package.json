@@ -18,6 +18,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:smoke": "vitest run --config vitest.smoke.config.ts",
+    "coach:influence": "tsx --env-file=.env script/coach-influence/harness.ts",
     "postinstall": "node script/patch-cypress-deps.js"
   },
   "dependencies": {

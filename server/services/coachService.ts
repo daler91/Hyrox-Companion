@@ -1,5 +1,13 @@
+import type { CoachNoteInputs } from "@shared/schema";
+
 import { db, type DbExecutor } from "../db";
-import { generateWorkoutSuggestions, type UpcomingWorkout, type WorkoutSuggestion } from "../gemini/index";
+import {
+  generateReviewNotes,
+  generateWorkoutSuggestions,
+  type TrainingContext,
+  type UpcomingWorkout,
+  type WorkoutSuggestion,
+} from "../gemini/index";
 import { logger } from "../logger";
 import { storage } from "../storage";
 import { buildTrainingContext } from "./ai";
@@ -30,27 +38,112 @@ function buildUpdateValue(
     : `[AI Coach] ${suggestion.recommendation}`;
 }
 
+/**
+ * Capture a compact audit of which inputs were present when the coach
+ * produced the note for a plan day. Persisted as `plan_days.ai_inputs_used`
+ * so the athlete sees "Based on: RPE trend · plan phase · coaching docs"
+ * on the workout card.
+ */
+function buildCoachNoteInputs(
+  ctx: TrainingContext,
+  ragUsed: boolean,
+  planGoalPresent: boolean,
+): CoachNoteInputs {
+  const insights = ctx.coachingInsights;
+  return {
+    rpeTrend: insights?.rpeTrend,
+    fatigueFlag: insights?.fatigueFlag,
+    planPhase: insights?.planPhase?.phaseLabel,
+    weeklyVolumeTrend: insights?.weeklyVolume?.trend,
+    stationGaps: insights?.stationGaps
+      ?.filter(g => g.daysSinceLastTrained === null || g.daysSinceLastTrained >= 10)
+      .map(g => g.station),
+    progressionFlags: insights?.progressionFlags
+      ?.filter(f => f.flag === "plateau" || f.flag === "regressing")
+      .map(f => `${f.exercise}:${f.flag}`),
+    ragUsed,
+    recentWorkoutCount: ctx.recentWorkouts?.length ?? 0,
+    planGoalPresent,
+  };
+}
+
+/**
+ * Predicate for whether a suggestion will actually apply to one of the
+ * upcoming workouts. Kept separate from `applySuggestion` so the caller
+ * can pre-compute which upcoming days are "modified" for review-note
+ * routing; if we built the modified set from the raw Gemini output, a
+ * malformed suggestion would silently cause its day to be skipped in
+ * both the modification pass and the review-note pass.
+ */
+function suggestionWillApply(
+  suggestion: WorkoutSuggestion,
+  upcomingWorkouts: UpcomingWorkout[],
+): boolean {
+  // Rationale is also required: applySuggestion persists it as the
+  // day's aiRationale, and the TimelineWorkoutCard only renders the
+  // coach note when aiRationale is truthy. A suggestion with an empty
+  // rationale would leave the athlete looking at a silently-modified
+  // workout, which is exactly the trust regression this feature
+  // exists to prevent. Kick such suggestions over to the review-note
+  // pass so the day still gets a visible note.
+  if (!suggestion.workoutId || !suggestion.recommendation || !suggestion.rationale) {
+    return false;
+  }
+  return upcomingWorkouts.some(w => w.id === suggestion.workoutId);
+}
+
 async function applySuggestion(
   suggestion: WorkoutSuggestion,
   upcomingWorkouts: UpcomingWorkout[],
   userId: string,
   aiSource: "rag" | "legacy" | null | undefined,
+  inputsUsed: CoachNoteInputs,
   tx: DbExecutor,
 ): Promise<boolean> {
-  if (!suggestion.workoutId || !suggestion.recommendation) return false;
-  const entry = upcomingWorkouts.find((w) => w.id === suggestion.workoutId);
-  if (!entry) return false;
+  if (!suggestionWillApply(suggestion, upcomingWorkouts)) return false;
+  const entry = upcomingWorkouts.find((w) => w.id === suggestion.workoutId)!;
 
   // Let errors propagate so the enclosing transaction rolls back — we want
   // all-or-nothing semantics for the auto-coach apply loop (C2).
   const updateValue = buildUpdateValue(suggestion, entry);
   await storage.plans.updatePlanDay(
     suggestion.workoutId,
-    { [suggestion.targetField]: updateValue, aiSource: aiSource ?? null },
+    {
+      [suggestion.targetField]: updateValue,
+      aiSource: aiSource ?? null,
+      aiRationale: suggestion.rationale.slice(0, 400),
+      aiNoteUpdatedAt: new Date(),
+      aiInputsUsed: inputsUsed,
+    },
     userId,
     tx,
   );
   return true;
+}
+
+async function applyReviewNote(
+  workoutId: string,
+  note: string,
+  userId: string,
+  inputsUsed: CoachNoteInputs,
+  tx: DbExecutor,
+): Promise<boolean> {
+  if (!workoutId || !note) return false;
+  // updatePlanDay returns undefined when the ID doesn't resolve to a row
+  // owned by the user; propagate that as a failed apply so a hallucinated
+  // workoutId doesn't inflate the "noted" count.
+  const result = await storage.plans.updatePlanDay(
+    workoutId,
+    {
+      aiSource: "review",
+      aiRationale: note.slice(0, 400),
+      aiNoteUpdatedAt: new Date(),
+      aiInputsUsed: inputsUsed,
+    },
+    userId,
+    tx,
+  );
+  return Boolean(result);
 }
 
 /**
@@ -119,6 +212,11 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
     }
 
     const coachingContext = await getCoachingMaterialsString(userId, upcomingWorkouts);
+    const inputsUsed = buildCoachNoteInputs(
+      trainingContext,
+      coachingContext.source === "rag",
+      Boolean(activePlanGoal),
+    );
 
     const suggestions = await generateWorkoutSuggestions(
       trainingContext,
@@ -128,19 +226,69 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
       userId,
     );
 
-    // Apply all suggestions atomically: a failure mid-loop rolls back every
-    // earlier apply so the plan never ends up partially mutated (C2).
-    const adjusted = await db.transaction(async (tx) => {
-      const results = await Promise.all(
+    // For any upcoming day the coach did NOT modify, request a short review
+    // note so the athlete can still see the coach's thinking on that day.
+    // Without this, "no suggestions" looks identical to "coach never ran".
+    //
+    // Build the modified set from suggestions that actually pass the
+    // apply-time validation, not from every model output. A malformed
+    // suggestion (missing workoutId/recommendation, or targeting an id
+    // not in the upcoming slate) would otherwise be dropped in both the
+    // modification pass AND the review-note pass, leaving that day with
+    // no note at all (C-NOTE-1).
+    const modifiedIds = new Set(
+      suggestions
+        .filter(s => suggestionWillApply(s, upcomingWorkouts))
+        .map(s => s.workoutId),
+    );
+    const unchangedWorkouts = upcomingWorkouts.filter(w => !modifiedIds.has(w.id));
+    const unchangedIds = new Set(unchangedWorkouts.map(w => w.id));
+    const rawReviewNotes = unchangedWorkouts.length > 0
+      ? await generateReviewNotes(
+          trainingContext,
+          unchangedWorkouts,
+          activePlanGoal,
+          coachingContext.text,
+          userId,
+        )
+      : [];
+    // Drop any review note whose workoutId isn't actually an unchanged day:
+    // Gemini occasionally hallucinates IDs, and a review-note write against
+    // a modified day would overwrite its aiSource/aiRationale and mislabel
+    // it as unchanged. Dedupe on workoutId so the last write doesn't clobber
+    // a legitimate note either.
+    const reviewNotes = Array.from(
+      rawReviewNotes
+        .filter(n => unchangedIds.has(n.workoutId))
+        .reduce<Map<string, typeof rawReviewNotes[number]>>((acc, n) => {
+          acc.set(n.workoutId, n);
+          return acc;
+        }, new Map())
+        .values(),
+    );
+
+    // Apply all modifications and review notes atomically: a failure mid-loop
+    // rolls back every earlier apply so the plan never ends up partially
+    // mutated (C2).
+    const { adjusted, noted } = await db.transaction(async (tx) => {
+      const modResults = await Promise.all(
         suggestions.map((s) =>
-          applySuggestion(s, upcomingWorkouts, userId, coachingContext.source, tx),
+          applySuggestion(s, upcomingWorkouts, userId, coachingContext.source, inputsUsed, tx),
         ),
       );
-      return results.filter(Boolean).length;
+      const noteResults = await Promise.all(
+        reviewNotes.map((n) =>
+          applyReviewNote(n.workoutId, n.note, userId, inputsUsed, tx),
+        ),
+      );
+      return {
+        adjusted: modResults.filter(Boolean).length,
+        noted: noteResults.filter(Boolean).length,
+      };
     });
 
-    if (adjusted > 0) {
-      logger.info({ userId, adjusted }, "[coach] Auto-coach applied adjustments");
+    if (adjusted > 0 || noted > 0) {
+      logger.info({ userId, adjusted, noted }, "[coach] Auto-coach applied adjustments and notes");
     }
     return { adjusted };
   } catch (error) {

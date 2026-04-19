@@ -1,6 +1,8 @@
 import { relations, sql } from "drizzle-orm";
 import { boolean, check, customType, date, index, integer, jsonb, pgTable, primaryKey,real, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 
+import type { CoachNoteInputs } from "./types";
+
 // pgvector custom type: maps PostgreSQL vector(N) ↔ TypeScript number[]
 const vector = customType<{
   data: number[];
@@ -69,6 +71,9 @@ export const planDays = pgTable("plan_days", {
   scheduledDate: date("scheduled_date"),
   status: text("status").default("planned"),
   aiSource: text("ai_source"),
+  aiRationale: text("ai_rationale"),
+  aiNoteUpdatedAt: timestamp("ai_note_updated_at", { withTimezone: true }),
+  aiInputsUsed: jsonb("ai_inputs_used").$type<CoachNoteInputs>(),
 }, (table) => [
   check("status_check", sql`status IN ('planned', 'completed', 'missed', 'skipped')`),
   index("idx_plan_days_plan_id").on(table.planId),

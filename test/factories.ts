@@ -1,3 +1,5 @@
+import type { UpcomingWorkout } from "../server/gemini/suggestionService";
+import type { TrainingContext } from "../server/gemini/types";
 import type { InsertWorkoutLog, PlanDay,TimelineEntry, TrainingPlan, TrainingPlanWithDays } from "@shared/schema";
 
 export function createMockTimelineEntry(overrides: Partial<TimelineEntry> = {}): TimelineEntry {
@@ -85,6 +87,53 @@ export function createMockPlanDay(overrides: Partial<PlanDay> = {}): PlanDay {
     scheduledDate: null,
     status: "planned",
     aiSource: null,
+    aiRationale: null,
+    aiNoteUpdatedAt: null,
+    aiInputsUsed: null,
+    ...overrides,
+  };
+}
+
+export function createMockUpcomingWorkout(
+  overrides: Partial<UpcomingWorkout> = {},
+): UpcomingWorkout {
+  return {
+    id: "upcoming-day-1",
+    date: "2026-04-20",
+    focus: "strength",
+    mainWorkout: "Back squat 5x5",
+    accessory: undefined,
+    notes: undefined,
+    ...overrides,
+  };
+}
+
+export function createMockTrainingContext(
+  overrides: Partial<TrainingContext> = {},
+): TrainingContext {
+  return {
+    totalWorkouts: 40,
+    completedWorkouts: 30,
+    plannedWorkouts: 7,
+    missedWorkouts: 2,
+    skippedWorkouts: 1,
+    completionRate: 75,
+    currentStreak: 4,
+    weeklyGoal: 5,
+    recentWorkouts: [],
+    upcomingWorkouts: [],
+    exerciseBreakdown: {},
+    structuredExerciseStats: {},
+    activePlan: undefined,
+    coachingInsights: {
+      rpeTrend: "insufficient_data",
+      fatigueFlag: false,
+      undertrainingFlag: false,
+      stationGaps: [],
+      planPhase: undefined,
+      weeklyVolume: undefined,
+      progressionFlags: [],
+    },
     ...overrides,
   };
 }
