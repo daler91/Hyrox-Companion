@@ -339,7 +339,7 @@ export class WorkoutStorage {
     // to a different workoutLog than the nested route's :id segment. Without
     // the parent-id check, /workouts/<A>/sets/<setId-from-B> could silently
     // mutate B's set when the caller owns both (Codex P2).
-    if (!owned || owned.workoutLogId !== workoutLogId) return undefined;
+    if (owned?.workoutLogId !== workoutLogId) return undefined;
     const [updated] = await db
       .update(exerciseSets)
       .set(updates)
@@ -350,7 +350,7 @@ export class WorkoutStorage {
 
   async deleteExerciseSet(workoutLogId: string, setId: string, userId: string): Promise<boolean> {
     const owned = await this.getExerciseSetOwned(setId, userId);
-    if (!owned || owned.workoutLogId !== workoutLogId) return false;
+    if (owned?.workoutLogId !== workoutLogId) return false;
     const result = await db.delete(exerciseSets).where(eq(exerciseSets.id, setId));
     return (result.rowCount ?? 0) > 0;
   }

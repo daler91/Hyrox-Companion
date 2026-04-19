@@ -162,6 +162,14 @@ const addExerciseSetSchema = z.object({
 });
 type AddExerciseSetPayload = z.infer<typeof addExerciseSetSchema>;
 
+const NOT_FOUND_CODE = "NOT_FOUND";
+const WORKOUT_NOT_FOUND = "Workout not found";
+const EXERCISE_SET_NOT_FOUND = "Exercise set not found";
+
+function respond404(res: Response, message: string): Response {
+  return res.status(404).json({ error: message, code: NOT_FOUND_CODE });
+}
+
 router.patch(
   "/api/v1/workouts/:id/sets/:setId",
   ...protectedMutationGuards,
@@ -171,7 +179,7 @@ router.patch(
     const userId = getUserId(req);
     const updated = await storage.workouts.updateExerciseSet(req.params.id, req.params.setId, req.body, userId);
     if (!updated) {
-      return res.status(404).json({ error: "Exercise set not found", code: "NOT_FOUND" });
+      return respond404(res, EXERCISE_SET_NOT_FOUND);
     }
     res.json(updated);
   }),
@@ -186,7 +194,7 @@ router.post(
     const userId = getUserId(req);
     const created = await storage.workouts.addExerciseSetToWorkoutLog(req.params.id, req.body, userId);
     if (!created) {
-      return res.status(404).json({ error: "Workout not found", code: "NOT_FOUND" });
+      return respond404(res, WORKOUT_NOT_FOUND);
     }
     res.status(201).json(created);
   }),
@@ -200,7 +208,7 @@ router.delete(
     const userId = getUserId(req);
     const deleted = await storage.workouts.deleteExerciseSet(req.params.id, req.params.setId, userId);
     if (!deleted) {
-      return res.status(404).json({ error: "Exercise set not found", code: "NOT_FOUND" });
+      return respond404(res, EXERCISE_SET_NOT_FOUND);
     }
     res.json({ success: true });
   }),
@@ -214,7 +222,7 @@ router.get(
     const userId = getUserId(req);
     const stats = await storage.workouts.getWorkoutHistoryStats(req.params.id, userId);
     if (!stats) {
-      return res.status(404).json({ error: "Workout not found", code: "NOT_FOUND" });
+      return respond404(res, WORKOUT_NOT_FOUND);
     }
     res.json(stats);
   }),
