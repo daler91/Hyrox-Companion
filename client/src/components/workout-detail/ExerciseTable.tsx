@@ -1,6 +1,6 @@
 import type { ExerciseSet } from "@shared/schema";
 import { MoreVertical, Plus, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -204,10 +204,20 @@ interface NumberCellProps {
 }
 
 function NumberCell({ value, ariaLabel, min = 0, max, suffix, overrideDisplay, onChange }: NumberCellProps) {
-  const [draft, setDraft] = useState<string>(() => formatInitial(overrideDisplay ?? value));
-
-  // Keep in sync when the prop changes (e.g. optimistic rollback).
   const currentValue = overrideDisplay ?? value;
+  const [draft, setDraft] = useState<string>(() => formatInitial(currentValue));
+
+  // Resync the draft whenever the backing value changes — server-driven
+  // updates and optimistic rollback after a failed save should both
+  // reflect in the input. The effect only fires when `currentValue`
+  // actually changes, so keystrokes within the debounce window (during
+  // which currentValue is stable) don't get overwritten. When the
+  // debounced save lands and the parent patches the cache to the same
+  // value the user typed, the setDraft call below is a no-op.
+  useEffect(() => {
+    setDraft(formatInitial(currentValue));
+  }, [currentValue]);
+
   const parsed = parseDraft(draft);
   const hasUnsavedEdit = parsed !== currentValue;
   const displayValue = hasUnsavedEdit ? draft : formatInitial(currentValue);

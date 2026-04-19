@@ -15,7 +15,6 @@ import { WorkoutStatsRow } from "./WorkoutStatsRow";
 interface WorkoutDetailDialogV2Props {
   readonly entry: TimelineEntry | null;
   readonly onClose: () => void;
-  readonly onSaveNote: (workoutId: string, note: string | null) => void;
   readonly onAskCoach?: () => void;
   readonly weightUnit?: "kg" | "lb";
 }
@@ -34,7 +33,6 @@ interface WorkoutDetailDialogV2Props {
 export function WorkoutDetailDialogV2({
   entry,
   onClose,
-  onSaveNote,
   onAskCoach,
   weightUnit = "kg",
 }: WorkoutDetailDialogV2Props) {
@@ -47,6 +45,7 @@ export function WorkoutDetailDialogV2({
     addSet,
     deleteSet,
     seedFromPlan,
+    updateNote,
   } = useWorkoutDetail(workoutId);
 
   // Lazy seed: if the workout is linked to a plan day but has no sets yet
@@ -124,7 +123,7 @@ export function WorkoutDetailDialogV2({
         <div className="border-t border-border px-6 py-4">
           <AthleteNoteInput
             value={workout?.notes}
-            onSave={(note) => workoutId && onSaveNote(workoutId, note)}
+            onSave={(note) => workoutId && updateNote.mutate(note)}
             disabled={!workoutId}
           />
         </div>

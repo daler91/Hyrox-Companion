@@ -117,7 +117,6 @@ function renderDialog(props: Partial<React.ComponentProps<typeof WorkoutDetailDi
       <WorkoutDetailDialogV2
         entry={makeEntry()}
         onClose={vi.fn()}
-        onSaveNote={vi.fn()}
         onAskCoach={vi.fn()}
         {...props}
       />

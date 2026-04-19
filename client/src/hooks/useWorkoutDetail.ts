@@ -104,6 +104,30 @@ export function useWorkoutDetail(workoutId: string | null) {
       : undefined,
   });
 
+  // Debounced note autosave lives here (and NOT on the global
+  // updateWorkoutMutation in useWorkoutActions) so saving doesn't trigger
+  // that mutation's onSuccess → setDetailEntry(null) side-effect, which
+  // would dismiss the dialog after the first keystroke lands.
+  const updateNote = useApiMutation({
+    mutationFn: (notes: string | null) => api.workouts.update(workoutId!, { notes }),
+    onMutate: async (notes) => {
+      if (!workoutId) return undefined;
+      await queryClient.cancelQueries({ queryKey: QUERY_KEYS.workout(workoutId) });
+      const prev = queryClient.getQueryData<WorkoutWithSets>(QUERY_KEYS.workout(workoutId));
+      queryClient.setQueryData<WorkoutWithSets>(QUERY_KEYS.workout(workoutId), (p) =>
+        p ? { ...p, notes } : p,
+      );
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      const prev = (ctx as { prev?: WorkoutWithSets } | undefined)?.prev;
+      if (workoutId && prev) {
+        queryClient.setQueryData(QUERY_KEYS.workout(workoutId), prev);
+      }
+    },
+    errorToast: "Couldn't save that note",
+  });
+
   return {
     workout: workoutQuery.data,
     history: historyQuery.data,
@@ -113,5 +137,6 @@ export function useWorkoutDetail(workoutId: string | null) {
     addSet,
     deleteSet,
     seedFromPlan,
+    updateNote,
   };
 }

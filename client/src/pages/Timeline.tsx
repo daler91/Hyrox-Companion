@@ -453,9 +453,6 @@ export default function Timeline() {
             <WorkoutDetailDialogV2
               entry={detailEntry}
               onClose={() => setDetailEntry(null)}
-              onSaveNote={(workoutId, note) => {
-                updateWorkoutMutation.mutate({ workoutId, updates: { notes: note } });
-              }}
               onAskCoach={() => handleCoachToggle(true)}
               weightUnit={user?.weightUnit === "lbs" ? "lb" : "kg"}
             />
