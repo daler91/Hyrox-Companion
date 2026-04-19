@@ -46,14 +46,28 @@ export function extractAndDeduplicateCustomExercises(exercises: ParsedExercise[]
 // and has no legitimate training use (S13).
 const MAX_SET_ROWS_PER_WORKOUT = 1000;
 
-export function expandExercisesToSetRows(exercises: ParsedExercise[], workoutLogId: string): InsertExerciseSet[] {
+// Owner discriminator: an exercise set row lives under either a workoutLog
+// (logged) or a planDay (prescribed). Exactly one id is set per row, enforced
+// by the exercise_set_single_owner_check DB constraint.
+type SetOwner = { workoutLogId: string } | { planDayId: string };
+
+function expandExercisesToRows(
+  exercises: ParsedExercise[],
+  owner: SetOwner,
+  context: "workout" | "plan",
+): InsertExerciseSet[] {
   const rows: InsertExerciseSet[] = [];
   let sortOrder = 0;
+  const ownerCols: Partial<InsertExerciseSet> =
+    "workoutLogId" in owner
+      ? { workoutLogId: owner.workoutLogId, planDayId: null }
+      : { workoutLogId: null, planDayId: owner.planDayId };
+
   for (const ex of exercises) {
     if (ex.sets && Array.isArray(ex.sets)) {
       for (const set of ex.sets) {
         rows.push({
-          workoutLogId,
+          ...ownerCols,
           exerciseName: ex.exerciseName,
           customLabel: ex.customLabel || null,
           category: ex.category,
@@ -65,13 +79,13 @@ export function expandExercisesToSetRows(exercises: ParsedExercise[], workoutLog
           confidence: ex.confidence ?? null,
           notes: set.notes || null,
           sortOrder: sortOrder++,
-        });
+        } as InsertExerciseSet);
       }
     } else {
       const numSets = ex.numSets || 1;
       for (let s = 1; s <= numSets; s++) {
         rows.push({
-          workoutLogId,
+          ...ownerCols,
           exerciseName: ex.exerciseName,
           customLabel: ex.customLabel || null,
           category: ex.category,
@@ -83,7 +97,7 @@ export function expandExercisesToSetRows(exercises: ParsedExercise[], workoutLog
           confidence: ex.confidence ?? null,
           notes: ex.notes || null,
           sortOrder: sortOrder++,
-        });
+        } as InsertExerciseSet);
       }
     }
   }
@@ -93,12 +107,26 @@ export function expandExercisesToSetRows(exercises: ParsedExercise[], workoutLog
     // handler turn it into a 500.
     throw new AppError(
       ErrorCode.VALIDATION_ERROR,
-      `Workout expanded to ${rows.length} set rows (limit ${MAX_SET_ROWS_PER_WORKOUT}). Split into multiple workouts.`,
+      `${context === "plan" ? "Plan day" : "Workout"} expanded to ${rows.length} set rows (limit ${MAX_SET_ROWS_PER_WORKOUT}). Split into multiple ${context === "plan" ? "days" : "workouts"}.`,
       400,
       { setRows: rows.length, limit: MAX_SET_ROWS_PER_WORKOUT },
     );
   }
   return rows;
+}
+
+export function expandExercisesToSetRows(exercises: ParsedExercise[], workoutLogId: string): InsertExerciseSet[] {
+  return expandExercisesToRows(exercises, { workoutLogId }, "workout");
+}
+
+// Prescribed rows for a plan day. Same shape as logged rows but owned by
+// planDayId instead of workoutLogId — when the user logs the plan day, these
+// rows get copied into a new workoutLog as starter sets.
+export function expandExercisesToPlanDaySetRows(
+  exercises: ParsedExercise[],
+  planDayId: string,
+): InsertExerciseSet[] {
+  return expandExercisesToRows(exercises, { planDayId }, "plan");
 }
 
 

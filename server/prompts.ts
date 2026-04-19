@@ -140,6 +140,14 @@ You MUST use your best judgment to determine the standard, correctly spelled nam
 (e.g., fix "bicep culrs" to "Bicep Curls", or "push ups" to "Push-ups") \
 and put that cleaned name in the customLabel field.
 
+HARD REQUIREMENT: exerciseName must NEVER be empty. customLabel must NEVER be empty or missing when exerciseName is "custom". \
+If you cannot confidently map a token to a known key and cannot produce a clear customLabel either, \
+DROP that exercise from the output entirely — do NOT emit a row with a blank name. \
+Examples of correct handling:
+- "did 3x10 bicep curlz" → {"exerciseName": "custom", "customLabel": "Bicep Curls", ...}
+- "4x8 turkish get-ups at 20kg" → {"exerciseName": "custom", "customLabel": "Turkish Get-Up", ...}
+- "some random movement" (unclear) → omit entirely rather than emit a blank row.
+
 Return ONLY a valid JSON array with no markdown formatting. Each element should be:
 {
   "exerciseName": "<key from list above or 'custom'>",
@@ -212,10 +220,28 @@ RETURN FORMAT: Return ONLY a valid JSON array. Each element:
   "weekNumber": <number>,
   "dayName": "<Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday>",
   "focus": "<short focus label, e.g. 'Running Base', 'Strength', 'SkiErg + Sled'>",
-  "mainWorkout": "<specific workout with sets, reps, weights, distances, times>",
+  "mainWorkout": "<human-readable summary of the workout — sets, reps, weights, distances, times>",
   "accessory": "<supplementary exercises or null>",
-  "notes": "<coaching cues, pacing targets, or null>"
+  "notes": "<coaching cues, pacing targets, or null>",
+  "exercises": [
+    {
+      "exerciseName": "<key from the EXERCISE KEYS list above, or 'custom' if none match>",
+      "category": "<functional|running|strength|conditioning>",
+      "customLabel": "<clean human-readable name — required when exerciseName is 'custom', omit otherwise>",
+      "sets": [
+        { "setNumber": 1, "reps": <number or null>, "weight": <kg or null>, "distance": <meters or null>, "time": <minutes or null> }
+      ]
+    }
+  ]
 }
+
+STRUCTURED EXERCISES REQUIREMENTS:
+- ALWAYS populate the "exercises" array with one entry per distinct exercise prescribed for that day. The array mirrors what appears in mainWorkout and accessory so the app can render an editable exercises table.
+- Use the EXERCISE KEYS list exactly. If none fits, use "custom" with a clear customLabel (e.g., "Turkish Get-Up").
+- Expand sets explicitly: "4x8 back squat at 60kg" produces 4 set objects each with reps=8, weight=60.
+- For running prescriptions include distance (meters) or time (minutes). "5km easy run in 30min" → one set with distance=5000, time=30.
+- For rest days, return an empty "exercises": [] array.
+- exerciseName and customLabel must never be empty. If you cannot confidently name an exercise, omit it from the exercises array (keep it in the free-text mainWorkout summary only).
 
 FORMATTING:
 - Always write "and" instead of "&". Never use ampersands in any output.

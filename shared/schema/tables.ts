@@ -174,9 +174,16 @@ export const garminConnections = pgTable("garmin_connections", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Exercise sets are either "prescribed" (owned by a planDay — the AI-generated
+// plan rows the user will see in the workout detail modal) or "logged" (owned
+// by a workoutLog — what the user actually did). Exactly one owner column is
+// set per row; when a user logs a planned day we copy prescribed rows into a
+// new workoutLog as starter rows so the plan stays pristine and the log is
+// a snapshot.
 export const exerciseSets = pgTable("exercise_sets", {
   id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
-  workoutLogId: varchar("workout_log_id", { length: 255 }).notNull().references(() => workoutLogs.id, { onDelete: "cascade" }),
+  workoutLogId: varchar("workout_log_id", { length: 255 }).references(() => workoutLogs.id, { onDelete: "cascade" }),
+  planDayId: varchar("plan_day_id", { length: 255 }).references(() => planDays.id, { onDelete: "cascade" }),
   exerciseName: varchar("exercise_name", { length: 255 }).notNull(),
   customLabel: text("custom_label"),
   category: varchar("category", { length: 255 }).notNull(),
@@ -190,6 +197,8 @@ export const exerciseSets = pgTable("exercise_sets", {
   sortOrder: integer("sort_order").default(0),
 }, (table) => [
   index("idx_exercise_sets_workout_log_id").on(table.workoutLogId),
+  index("idx_exercise_sets_plan_day_id").on(table.planDayId),
+  index("idx_exercise_sets_plan_day_sort").on(table.planDayId, table.sortOrder),
   index("idx_exercise_sets_exercise_name").on(table.exerciseName),
   index("idx_exercise_sets_workout_sort").on(table.workoutLogId, table.sortOrder),
   index("idx_exercise_sets_workout_exercise").on(table.workoutLogId, table.exerciseName),
@@ -197,6 +206,11 @@ export const exerciseSets = pgTable("exercise_sets", {
   check("weight_non_negative_check", sql`weight IS NULL OR weight >= 0`),
   check("distance_non_negative_check", sql`distance IS NULL OR distance >= 0`),
   check("time_non_negative_check", sql`time IS NULL OR time >= 0`),
+  // Exactly one owner — prescribed (planDay) xor logged (workoutLog).
+  check(
+    "exercise_set_single_owner_check",
+    sql`(workout_log_id IS NULL) <> (plan_day_id IS NULL)`,
+  ),
 ]);
 
 // User-authored annotations on date ranges in their training timeline —
@@ -358,6 +372,7 @@ export const planDaysRelations = relations(planDays, ({ one, many }) => ({
     references: [trainingPlans.id],
   }),
   workoutLogs: many(workoutLogs),
+  exerciseSets: many(exerciseSets),
 }));
 
 export const workoutLogsRelations = relations(workoutLogs, ({ one, many }) => ({
@@ -394,6 +409,10 @@ export const exerciseSetsRelations = relations(exerciseSets, ({ one }) => ({
   workoutLog: one(workoutLogs, {
     fields: [exerciseSets.workoutLogId],
     references: [workoutLogs.id],
+  }),
+  planDay: one(planDays, {
+    fields: [exerciseSets.planDayId],
+    references: [planDays.id],
   }),
 }));
 

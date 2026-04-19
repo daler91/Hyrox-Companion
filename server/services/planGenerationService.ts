@@ -1,13 +1,33 @@
 import { ThinkingLevel } from "@google/genai";
-import type { GeneratePlanInput, TrainingPlanWithDays } from "@shared/schema";
+import {
+  exerciseSets,
+  exerciseSetSchema,
+  type GeneratePlanInput,
+  type InsertExerciseSet,
+  type ParsedExercise,
+  type TrainingPlanWithDays,
+} from "@shared/schema";
 import { z } from "zod";
 
+import { db } from "../db";
 import { AppError, ErrorCode } from "../errors";
 import { GEMINI_SUGGESTIONS_MODEL, getAiClient, retryWithBackoff, trackUsageFromResponse } from "../gemini/client";
 import { logger } from "../logger";
-import { PLAN_GENERATION_PROMPT } from "../prompts";
+import { PLAN_GENERATION_PROMPT, VALID_CATEGORIES, VALID_EXERCISE_NAMES } from "../prompts";
 import { storage } from "../storage";
 import { sanitizeHtml } from "../utils/sanitize";
+
+import { expandExercisesToPlanDaySetRows } from "./workoutService";
+
+// Structured exercises the model may include per plan day. Optional so we
+// degrade gracefully when the model returns the old free-text-only shape.
+const generatedExerciseSchema = z.object({
+  exerciseName: z.string().min(1),
+  category: z.string(),
+  customLabel: z.string().optional().nullable(),
+  confidence: z.number().min(0).max(100).optional().nullable(),
+  sets: z.array(exerciseSetSchema).min(1).max(50),
+});
 
 const generatedDaySchema = z.object({
   weekNumber: z.number().min(1),
@@ -16,9 +36,11 @@ const generatedDaySchema = z.object({
   mainWorkout: z.string().max(5000),
   accessory: z.string().max(5000).nullable().optional(),
   notes: z.string().max(2000).nullable().optional(),
+  exercises: z.array(generatedExerciseSchema).max(50).optional().nullable(),
 });
 
 type GeneratedDay = z.infer<typeof generatedDaySchema>;
+type GeneratedExercise = z.infer<typeof generatedExerciseSchema>;
 
 function buildGenerationPrompt(input: GeneratePlanInput): string {
   const lines: string[] = [
@@ -58,6 +80,49 @@ function buildGenerationPrompt(input: GeneratePlanInput): string {
   return lines.join("\n");
 }
 
+// Normalize a single AI-returned exercise into the ParsedExercise shape the
+// rest of the backend already consumes. Mirrors the hardening in
+// `exerciseParser.ts`: unknown exerciseName collapses to "custom" + a
+// customLabel, an empty label triggers low-confidence so the UI can prompt
+// for review.
+function normalizeGeneratedExercise(raw: GeneratedExercise): ParsedExercise {
+  const isKnown = VALID_EXERCISE_NAMES.has(raw.exerciseName) && raw.exerciseName !== "custom";
+  const validCategory = VALID_CATEGORIES.has(raw.category);
+  let confidence = typeof raw.confidence === "number"
+    ? Math.min(100, Math.max(0, Math.round(raw.confidence)))
+    : isKnown ? 95 : 50;
+
+  let customLabel: string | undefined;
+  if (isKnown) {
+    customLabel = raw.customLabel
+      ? sanitizeHtml(raw.customLabel.replaceAll("&", "and"))
+      : undefined;
+  } else {
+    const label =
+      (raw.customLabel && raw.customLabel.trim().length > 0 && raw.customLabel) ||
+      (raw.exerciseName !== "custom" && raw.exerciseName.trim().length > 0 && raw.exerciseName) ||
+      "Unknown exercise";
+    customLabel = sanitizeHtml(label.replaceAll("&", "and"));
+    if (!raw.customLabel || raw.customLabel.trim().length === 0) {
+      confidence = Math.min(confidence, 40);
+    }
+  }
+
+  return {
+    exerciseName: isKnown ? sanitizeHtml(raw.exerciseName.replaceAll("&", "and")) : "custom",
+    category: validCategory ? sanitizeHtml(raw.category.replaceAll("&", "and")) : "conditioning",
+    customLabel,
+    confidence,
+    sets: raw.sets.map((s, i) => ({
+      setNumber: s.setNumber ?? i + 1,
+      ...(s.reps != null && { reps: s.reps }),
+      ...(s.weight != null && { weight: s.weight }),
+      ...(s.distance != null && { distance: s.distance }),
+      ...(s.time != null && { time: s.time }),
+    })),
+  };
+}
+
 function parseAndValidateDays(text: string): GeneratedDay[] {
   let raw: unknown;
   try {
@@ -81,6 +146,7 @@ function parseAndValidateDays(text: string): GeneratedDay[] {
         mainWorkout: sanitizeHtml(result.data.mainWorkout.replaceAll("&", "and")),
         accessory: result.data.accessory ? sanitizeHtml(result.data.accessory.replaceAll("&", "and")) : null,
         notes: result.data.notes ? sanitizeHtml(result.data.notes.replaceAll("&", "and")) : null,
+        exercises: result.data.exercises ?? null,
       });
     } else {
       logger.warn(
@@ -152,7 +218,7 @@ export async function generatePlan(
   });
 
   // Create plan days
-  const planDays = days.map((day) => ({
+  const planDaysPayload = days.map((day) => ({
     planId: plan.id,
     weekNumber: day.weekNumber,
     dayName: day.dayName,
@@ -164,7 +230,49 @@ export async function generatePlan(
     aiSource: "generated" as const,
   }));
 
-  await storage.plans.createPlanDays(planDays);
+  const createdPlanDays = await storage.plans.createPlanDays(planDaysPayload);
+
+  // Persist structured exercises under each plan day so the workout detail
+  // UI can render a real editable table out of the gate instead of parsing
+  // free text on first open. The AI may omit the exercises array for some
+  // days (rest days, or a flaky generation); those days keep their free text
+  // and fall back to lazy-parse later.
+  const planDayKeyed = new Map<string, (typeof createdPlanDays)[number]>();
+  for (const pd of createdPlanDays) {
+    planDayKeyed.set(`${pd.weekNumber}:${pd.dayName}`, pd);
+  }
+
+  const allSetRows: InsertExerciseSet[] = [];
+  let daysWithExercises = 0;
+  for (const day of days) {
+    if (!day.exercises || day.exercises.length === 0) continue;
+    const pd = planDayKeyed.get(`${day.weekNumber}:${day.dayName}`);
+    if (!pd) {
+      logger.warn(
+        { weekNumber: day.weekNumber, dayName: day.dayName },
+        "[planGen] Could not match generated exercises to a persisted plan day",
+      );
+      continue;
+    }
+    const normalised = day.exercises.map(normalizeGeneratedExercise);
+    try {
+      allSetRows.push(...expandExercisesToPlanDaySetRows(normalised, pd.id));
+      daysWithExercises++;
+    } catch (err) {
+      logger.warn(
+        { err, planDayId: pd.id },
+        "[planGen] Failed to expand generated exercises into set rows",
+      );
+    }
+  }
+
+  if (allSetRows.length > 0) {
+    await db.insert(exerciseSets).values(allSetRows);
+  }
+  logger.info(
+    { userId, planId: plan.id, daysWithExercises, totalSetRows: allSetRows.length, totalDays: days.length },
+    "[planGen] Persisted structured plan-day exercises",
+  );
 
   // Auto-schedule the plan if a start date is provided or can be derived from race date
   let resolvedStartDate: string | undefined;

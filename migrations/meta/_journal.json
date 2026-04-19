@@ -197,6 +197,13 @@
       "when": 1776558888647,
       "tag": "0027_add_coach_notes",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1776614669614,
+      "tag": "0028_plan_day_exercise_sets",
+      "breakpoints": true
     }
   ]
 }

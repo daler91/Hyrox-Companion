@@ -1,8 +1,12 @@
-import type { ExerciseSet, OverviewStats, PersonalRecord, TrainingOverview, WeeklySummary,WorkoutLog } from "@shared/schema";
+import type { OverviewStats, PersonalRecord, TrainingOverview, WeeklySummary,WorkoutLog } from "@shared/schema";
 
 import { HYROX_STATIONS_WITH_RUNNING } from "../constants";
+import type { LoggedExerciseSetWithDate } from "../storage/shared";
 
-export type ExerciseSetWithDate = ExerciseSet & { date: string };
+// Analytics always operates on logged sets, so workoutLogId is guaranteed
+// non-null here. Use the narrowed LoggedExerciseSetWithDate from the
+// storage layer rather than the base ExerciseSet which allows null owners.
+export type ExerciseSetWithDate = LoggedExerciseSetWithDate;
 
 function getExerciseKey(set: ExerciseSetWithDate): string {
   return set.exerciseName === "custom" && set.customLabel

@@ -8,10 +8,10 @@ import {
 import { and, desc, eq, gte, lte, type SQL,sql } from "drizzle-orm";
 
 import { db } from "../db";
-import { queryExerciseSetsWithDates } from "./shared";
+import { type LoggedExerciseSetWithDate, queryExerciseSetsWithDates } from "./shared";
 
 export class AnalyticsStorage {
-  async getAllExerciseSetsWithDates(userId: string, from?: string, to?: string): Promise<(ExerciseSet & { date: string })[]> {
+  async getAllExerciseSetsWithDates(userId: string, from?: string, to?: string): Promise<LoggedExerciseSetWithDate[]> {
     return await queryExerciseSetsWithDates(userId, { from, to });
   }
 
