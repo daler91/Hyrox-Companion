@@ -1,7 +1,17 @@
 import type { ExerciseSet, TimelineEntry } from "@shared/schema";
 import { format, parseISO } from "date-fns";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { useWorkoutDetail } from "@/hooks/useWorkoutDetail";
 import { groupExerciseSets } from "@/lib/exerciseUtils";
@@ -48,6 +58,7 @@ export function WorkoutDetailDialogV2({
   weightUnit = "kg",
 }: WorkoutDetailDialogV2Props) {
   const workoutId = entry?.workoutLogId ?? null;
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const {
     workout,
     history,
@@ -100,7 +111,7 @@ export function WorkoutDetailDialogV2({
           <WorkoutDetailHeaderV2
             entry={entry}
             onClose={onClose}
-            onDelete={onDelete ? () => onDelete(entry) : undefined}
+            onDelete={onDelete ? () => setConfirmingDelete(true) : undefined}
           />
           {workout && <WorkoutStatsRow workout={workout} exerciseSets={exerciseSets} />}
         </div>
@@ -150,6 +161,33 @@ export function WorkoutDetailDialogV2({
           />
         </div>
       </DialogContent>
+
+      {/* Explicit confirm step before firing onDelete — the v2 menu's ⋮ is
+          close to the close button, and a single mis-click shouldn't destroy
+          a logged workout. Matches the legacy dialog's DeleteConfirmDialog
+          guard. */}
+      <AlertDialog open={confirmingDelete} onOpenChange={setConfirmingDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this workout?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the logged workout and all of its exercise sets. You can't undo it.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (onDelete) onDelete(entry);
+                setConfirmingDelete(false);
+              }}
+              data-testid="workout-detail-delete-confirm"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }
@@ -161,15 +199,24 @@ export function WorkoutDetailDialogV2({
  * the full training context via the standard RAG pipeline, so this only
  * needs to point the conversation at the specific workout.
  */
+function pluralize(count: number, singular: string, plural: string): string {
+  return count === 1 ? singular : plural;
+}
+
 function buildCoachSeedMessage(entry: TimelineEntry, sets: ExerciseSet[]): string {
   const focus = entry.focus?.trim() || "this workout";
   const dateLabel = formatCoachDate(entry.date);
   const groups = groupExerciseSets(sets);
   const exerciseCount = groups.length;
   const setCount = sets.length;
-  const stats = exerciseCount > 0
-    ? ` (${exerciseCount} ${exerciseCount === 1 ? "exercise" : "exercises"}, ${setCount} ${setCount === 1 ? "set" : "sets"})`
-    : "";
+
+  let stats = "";
+  if (exerciseCount > 0) {
+    const exerciseLabel = pluralize(exerciseCount, "exercise", "exercises");
+    const setLabel = pluralize(setCount, "set", "sets");
+    stats = ` (${exerciseCount} ${exerciseLabel}, ${setCount} ${setLabel})`;
+  }
+
   return `Help me think about my ${focus} workout on ${dateLabel}${stats}. What would you adjust?`;
 }
 

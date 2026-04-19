@@ -540,7 +540,10 @@ export default function Timeline() {
           <FeatureErrorBoundaryWrapper featureName="Coach">
             <CoachPanel
               isOpen={coachOpen}
-              onClose={() => setCoachOpen(false)}
+              onClose={() => {
+                setCoachOpen(false);
+                setCoachInputSeed(null);
+              }}
               timeline={timelineData}
               isNewUser={isNewUser}
               inputSeed={coachInputSeed}
@@ -563,7 +566,10 @@ export default function Timeline() {
             <FeatureErrorBoundaryWrapper featureName="Coach">
               <CoachPanel
                 isOpen={coachOpen}
-                onClose={() => setCoachOpen(false)}
+                onClose={() => {
+                  setCoachOpen(false);
+                  setCoachInputSeed(null);
+                }}
                 timeline={timelineData}
                 isNewUser={isNewUser}
                 inputSeed={coachInputSeed}
