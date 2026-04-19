@@ -9,8 +9,8 @@
  *
  * Each row's mainWorkout + accessory is fed through parseExercisesFromText()
  * (the same Gemini parser used by the app's /reparse endpoint) and the
- * resulting sets are inserted. Every row is processed in its own transaction
- * so a single parse failure doesn't block the rest of the run.
+ * resulting sets are inserted. Every row is processed independently so a
+ * single parse failure doesn't block the rest of the run.
  *
  * Usage:
  *   pnpm tsx script/backfill-structured-exercises.ts [flags]
@@ -19,17 +19,22 @@
  *   --dry-run          Parse but skip DB writes. Logs what would be written.
  *   --user-id <id>     Restrict to one user.
  *   --batch-size <n>   Process N rows per pass, defaults to 500.
- *   --since <date>     Only rows with date/createdAt ≥ YYYY-MM-DD.
+ *   --since <date>     Only rows with date ≥ YYYY-MM-DD (workout_logs only).
  *   --plan-days-only   Skip the workout_logs pass.
  *   --workouts-only    Skip the plan_days pass.
  *
  * The script is idempotent — rows that already have sets are skipped — so
  * it can be re-run safely. Rate-limited by the existing Gemini client
- * retry/backoff logic; concurrency is intentionally low (serial per-row)
- * to protect the quota during the initial migration.
+ * retry/backoff logic; serial per-row to protect the quota during the
+ * initial migration.
  */
 
-import { exerciseSets, planDays, users, workoutLogs } from "@shared/schema";
+import {
+  exerciseSets,
+  type InsertExerciseSet,
+  users,
+  workoutLogs,
+} from "@shared/schema";
 import { and, eq, gte, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { db } from "../server/db";
@@ -40,6 +45,8 @@ import {
   expandExercisesToSetRows,
 } from "../server/services/workoutService";
 
+const DEFAULT_WEIGHT_UNIT = "kg";
+
 interface Flags {
   dryRun: boolean;
   userId?: string;
@@ -47,6 +54,27 @@ interface Flags {
   since?: string;
   planDaysOnly: boolean;
   workoutsOnly: boolean;
+}
+
+interface PassResult {
+  scanned: number;
+  parsed: number;
+  written: number;
+  skipped: number;
+  failed: number;
+}
+
+function emptyResult(): PassResult {
+  return { scanned: 0, parsed: 0, written: 0, skipped: 0, failed: 0 };
+}
+
+function parseFlagValue(args: string[], index: number, name: string): string {
+  const value = args[index];
+  if (!value) {
+    console.error(`Missing value for ${name}`);
+    process.exit(1);
+  }
+  return value;
 }
 
 function parseFlags(): Flags {
@@ -59,15 +87,28 @@ function parseFlags(): Flags {
   };
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
-    if (arg === "--dry-run") flags.dryRun = true;
-    else if (arg === "--user-id") flags.userId = args[++i];
-    else if (arg === "--batch-size") flags.batchSize = Number.parseInt(args[++i], 10);
-    else if (arg === "--since") flags.since = args[++i];
-    else if (arg === "--plan-days-only") flags.planDaysOnly = true;
-    else if (arg === "--workouts-only") flags.workoutsOnly = true;
-    else {
-      console.error(`Unknown flag: ${arg}`);
-      process.exit(1);
+    switch (arg) {
+      case "--dry-run":
+        flags.dryRun = true;
+        break;
+      case "--user-id":
+        flags.userId = parseFlagValue(args, ++i, arg);
+        break;
+      case "--batch-size":
+        flags.batchSize = Number.parseInt(parseFlagValue(args, ++i, arg), 10);
+        break;
+      case "--since":
+        flags.since = parseFlagValue(args, ++i, arg);
+        break;
+      case "--plan-days-only":
+        flags.planDaysOnly = true;
+        break;
+      case "--workouts-only":
+        flags.workoutsOnly = true;
+        break;
+      default:
+        console.error(`Unknown flag: ${arg}`);
+        process.exit(1);
     }
   }
   if (Number.isNaN(flags.batchSize) || flags.batchSize < 1) {
@@ -77,31 +118,84 @@ function parseFlags(): Flags {
   return flags;
 }
 
-interface PassResult {
-  scanned: number;
-  parsed: number;
-  written: number;
-  skipped: number;
-  failed: number;
-}
-
-async function userWeightUnit(userId: string | null): Promise<string> {
-  if (!userId) return "kg";
+async function userWeightUnit(userId: string | null | undefined): Promise<string> {
+  if (!userId) return DEFAULT_WEIGHT_UNIT;
   const [row] = await db.select({ unit: users.weightUnit }).from(users).where(eq(users.id, userId)).limit(1);
-  return row?.unit || "kg";
+  return row?.unit || DEFAULT_WEIGHT_UNIT;
 }
 
-async function backfillPlanDays(flags: Flags): Promise<PassResult> {
-  const result: PassResult = { scanned: 0, parsed: 0, written: 0, skipped: 0, failed: 0 };
+/**
+ * Describes a free-text row that needs structured sets. The adapter keeps
+ * both backfill passes using the same execution loop, which avoids a pair
+ * of near-duplicate functions and lets Sonar's cognitive-complexity budget
+ * stay comfortably under its ceiling.
+ */
+interface BackfillCandidate {
+  label: string;             // log tag — "planDays" | "workoutLogs"
+  ownerId: string;           // planDayId or workoutLogId
+  logKey: string;            // "planDayId" | "workoutLogId" for log context
+  userId: string | null;
+  mainWorkout: string | null;
+  accessory: string | null;
+  expand: (exercises: Awaited<ReturnType<typeof parseExercisesFromText>>) => InsertExerciseSet[];
+}
 
-  // planDays joined to their owning plan → userId so we can pick a weight unit.
-  // Filter: no exerciseSets, mainWorkout non-empty.
+async function processCandidate(
+  cand: BackfillCandidate,
+  flags: Flags,
+  result: PassResult,
+): Promise<void> {
+  const text = [cand.mainWorkout, cand.accessory].filter(Boolean).join("\n").trim();
+  if (!text) {
+    result.skipped++;
+    return;
+  }
+  try {
+    const unit = await userWeightUnit(cand.userId);
+    const exercises = await parseExercisesFromText(text, unit);
+    if (exercises.length === 0) {
+      result.skipped++;
+      return;
+    }
+    const setRows = cand.expand(exercises);
+    result.parsed++;
+    if (flags.dryRun) {
+      logger.info(
+        { [cand.logKey]: cand.ownerId, setCount: setRows.length },
+        `[backfill:${cand.label}] would insert (dry-run)`,
+      );
+      return;
+    }
+    await db.insert(exerciseSets).values(setRows);
+    result.written += setRows.length;
+  } catch (err) {
+    result.failed++;
+    logger.error(
+      { err, [cand.logKey]: cand.ownerId },
+      `[backfill:${cand.label}] parse/insert failed`,
+    );
+  }
+}
+
+async function runPass(
+  label: string,
+  loader: () => Promise<BackfillCandidate[]>,
+  flags: Flags,
+): Promise<PassResult> {
+  const result = emptyResult();
+  const candidates = await loader();
+  for (const cand of candidates) {
+    result.scanned++;
+    await processCandidate(cand, flags, result);
+  }
+  logger.info({ pass: label, ...result }, "[backfill] pass complete");
+  return result;
+}
+
+async function loadPlanDayCandidates(flags: Flags): Promise<BackfillCandidate[]> {
   const rows = await db.query.planDays.findMany({
     where: (pd, { and: andOp, isNotNull: isNotNullOp, sql: sqlOp }) =>
-      andOp(
-        isNotNullOp(pd.mainWorkout),
-        sqlOp`TRIM(${pd.mainWorkout}) <> ''`,
-      ),
+      andOp(isNotNullOp(pd.mainWorkout), sqlOp`TRIM(${pd.mainWorkout}) <> ''`),
     with: {
       plan: { columns: { userId: true } },
       exerciseSets: { columns: { id: true }, limit: 1 },
@@ -109,45 +203,21 @@ async function backfillPlanDays(flags: Flags): Promise<PassResult> {
     limit: flags.batchSize,
   });
 
-  for (const pd of rows) {
-    if (flags.userId && pd.plan.userId !== flags.userId) continue;
-    if (pd.exerciseSets.length > 0) {
-      result.skipped++;
-      continue;
-    }
-    result.scanned++;
-    const text = [pd.mainWorkout, pd.accessory].filter(Boolean).join("\n").trim();
-    if (!text) {
-      result.skipped++;
-      continue;
-    }
-    try {
-      const unit = await userWeightUnit(pd.plan.userId);
-      const exercises = await parseExercisesFromText(text, unit);
-      if (exercises.length === 0) {
-        result.skipped++;
-        continue;
-      }
-      const setRows = expandExercisesToPlanDaySetRows(exercises, pd.id);
-      result.parsed++;
-      if (flags.dryRun) {
-        logger.info({ planDayId: pd.id, setCount: setRows.length }, "[backfill:planDays] would insert (dry-run)");
-        continue;
-      }
-      await db.insert(exerciseSets).values(setRows);
-      result.written += setRows.length;
-    } catch (err) {
-      result.failed++;
-      logger.error({ err, planDayId: pd.id }, "[backfill:planDays] parse/insert failed");
-    }
-  }
-
-  return result;
+  return rows
+    .filter((pd) => pd.exerciseSets.length === 0)
+    .filter((pd) => !flags.userId || pd.plan.userId === flags.userId)
+    .map((pd) => ({
+      label: "planDays",
+      ownerId: pd.id,
+      logKey: "planDayId",
+      userId: pd.plan.userId,
+      mainWorkout: pd.mainWorkout,
+      accessory: pd.accessory,
+      expand: (exercises) => expandExercisesToPlanDaySetRows(exercises, pd.id),
+    }));
 }
 
-async function backfillWorkoutLogs(flags: Flags): Promise<PassResult> {
-  const result: PassResult = { scanned: 0, parsed: 0, written: 0, skipped: 0, failed: 0 };
-
+async function loadWorkoutLogCandidates(flags: Flags): Promise<BackfillCandidate[]> {
   const whereClauses = [
     isNotNull(workoutLogs.mainWorkout),
     sql`TRIM(${workoutLogs.mainWorkout}) <> ''`,
@@ -155,43 +225,22 @@ async function backfillWorkoutLogs(flags: Flags): Promise<PassResult> {
   if (flags.userId) whereClauses.push(eq(workoutLogs.userId, flags.userId));
   if (flags.since) whereClauses.push(gte(workoutLogs.date, flags.since));
 
-  // Left-join exercise_sets and pick logs where the join produced no row.
-  const candidates = await db
+  const rows = await db
     .select({ log: workoutLogs })
     .from(workoutLogs)
     .leftJoin(exerciseSets, eq(workoutLogs.id, exerciseSets.workoutLogId))
     .where(and(...whereClauses, isNull(exerciseSets.id)))
     .limit(flags.batchSize);
 
-  for (const { log } of candidates) {
-    result.scanned++;
-    const text = [log.mainWorkout, log.accessory].filter(Boolean).join("\n").trim();
-    if (!text) {
-      result.skipped++;
-      continue;
-    }
-    try {
-      const unit = await userWeightUnit(log.userId);
-      const exercises = await parseExercisesFromText(text, unit);
-      if (exercises.length === 0) {
-        result.skipped++;
-        continue;
-      }
-      const setRows = expandExercisesToSetRows(exercises, log.id);
-      result.parsed++;
-      if (flags.dryRun) {
-        logger.info({ workoutLogId: log.id, setCount: setRows.length }, "[backfill:workoutLogs] would insert (dry-run)");
-        continue;
-      }
-      await db.insert(exerciseSets).values(setRows);
-      result.written += setRows.length;
-    } catch (err) {
-      result.failed++;
-      logger.error({ err, workoutLogId: log.id }, "[backfill:workoutLogs] parse/insert failed");
-    }
-  }
-
-  return result;
+  return rows.map(({ log }) => ({
+    label: "workoutLogs",
+    ownerId: log.id,
+    logKey: "workoutLogId",
+    userId: log.userId,
+    mainWorkout: log.mainWorkout,
+    accessory: log.accessory,
+    expand: (exercises) => expandExercisesToSetRows(exercises, log.id),
+  }));
 }
 
 async function main(): Promise<void> {
@@ -199,22 +248,14 @@ async function main(): Promise<void> {
   logger.info({ flags }, "[backfill] starting structured-exercise backfill");
 
   if (!flags.workoutsOnly) {
-    const planResult = await backfillPlanDays(flags);
-    logger.info({ pass: "planDays", ...planResult }, "[backfill] pass complete");
+    await runPass("planDays", () => loadPlanDayCandidates(flags), flags);
   }
-
   if (!flags.planDaysOnly) {
-    const logResult = await backfillWorkoutLogs(flags);
-    logger.info({ pass: "workoutLogs", ...logResult }, "[backfill] pass complete");
+    await runPass("workoutLogs", () => loadWorkoutLogCandidates(flags), flags);
   }
-
-  // Avoid process.exit(0) — let the default shutdown flush stdout.
 }
 
 main().catch((err) => {
   logger.error({ err }, "[backfill] fatal error");
   process.exit(1);
 });
-
-// Planned drizzle imports re-used above; referenced here so bundlers keep them.
-void planDays;
