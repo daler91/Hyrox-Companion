@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { usePlanDayExercises } from "@/hooks/usePlanDayExercises";
 import { useWorkoutDetail } from "@/hooks/useWorkoutDetail";
 import { groupExerciseSets } from "@/lib/exerciseUtils";
 
@@ -280,6 +281,7 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
               entry={entry}
               onMarkComplete={onMarkComplete}
               isMarkingComplete={isMarkingComplete}
+              weightUnit={weightUnit}
             />
           ) : (
             <LoggedExerciseSection
@@ -475,20 +477,40 @@ interface PlannedCallToActionProps {
   readonly entry: TimelineEntry;
   readonly onMarkComplete?: (entry: TimelineEntry) => void;
   readonly isMarkingComplete?: boolean;
+  readonly weightUnit: "kg" | "lb";
 }
 
-function PlannedCallToAction({ entry, onMarkComplete, isMarkingComplete }: Readonly<PlannedCallToActionProps>) {
+function PlannedCallToAction({ entry, onMarkComplete, isMarkingComplete, weightUnit }: Readonly<PlannedCallToActionProps>) {
+  // Plan-day-backed exercise edits. Writes go to plan_day-owned
+  // exerciseSets; Mark complete's phase-6 server copy copies whatever
+  // this hook has persisted into the new workoutLog at log time.
+  const planDayId = entry.planDayId ?? null;
+  const planSets = usePlanDayExercises(planDayId);
+
   return (
-    <div
-      className="flex flex-col gap-3 rounded-lg border border-border bg-muted/20 px-4 py-5 text-center"
-      data-testid="workout-detail-planned-cta"
-    >
-      <p className="text-sm text-muted-foreground">
-        This workout hasn't been logged yet. Mark it complete to copy the coach's
-        prescription into an editable log.
-      </p>
-      {onMarkComplete && (
-        <div className="flex justify-center">
+    <div className="flex flex-col gap-4" data-testid="workout-detail-planned-cta">
+      {planDayId ? (
+        <ExerciseTable
+          workoutId={planDayId}
+          exerciseSets={planSets.exerciseSets}
+          weightUnit={weightUnit}
+          onUpdateSet={(setId, data) => planSets.updateSet.mutate({ setId, data })}
+          onAddSet={(data) => planSets.addSet.mutate(data)}
+          onDeleteSet={(setId) => planSets.deleteSet.mutate(setId)}
+        />
+      ) : (
+        <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+          This entry isn't linked to a plan day, so there's nothing to prescribe yet.
+        </div>
+      )}
+
+      <div
+        className="flex flex-col items-center gap-2 rounded-lg border border-border bg-muted/20 px-4 py-4 text-center"
+      >
+        <p className="text-sm text-muted-foreground">
+          Tweak the sets above if needed, then mark the workout complete to log it.
+        </p>
+        {onMarkComplete && (
           <Button
             onClick={() => onMarkComplete(entry)}
             size="lg"
@@ -507,8 +529,8 @@ function PlannedCallToAction({ entry, onMarkComplete, isMarkingComplete }: Reado
             )}
             {isMarkingComplete ? "Logging…" : "Mark complete"}
           </Button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

@@ -1,6 +1,7 @@
-import type { GeneratePlanInput, PlanDay, TrainingPlan, TrainingPlanWithDays } from "@shared/schema";
+import type { ExerciseSet, GeneratePlanInput, PlanDay, TrainingPlan, TrainingPlanWithDays } from "@shared/schema";
 
 import { rawRequest,typedRequest } from "./client";
+import type { AddExerciseSetPayload, PatchExerciseSetPayload } from "./workouts";
 
 export const plans = {
   list: () => typedRequest<TrainingPlan[]>("GET", "/api/v1/plans"),
@@ -34,4 +35,21 @@ export const plans = {
 
   generate: (input: GeneratePlanInput) =>
     typedRequest<TrainingPlanWithDays>("POST", "/api/v1/plans/generate", input),
+
+  // Plan-day prescribed exerciseSets — used by the v2 dialog when a
+  // planned entry is open so the athlete can tweak the coach's
+  // prescription before marking complete. Edits write back to the
+  // plan day; Mark complete's phase-6 server copy picks up whatever
+  // the plan day has at mutation time.
+  getDayExercises: (dayId: string) =>
+    typedRequest<ExerciseSet[]>("GET", `/api/v1/plans/days/${dayId}/sets`),
+
+  addDayExercise: (dayId: string, data: AddExerciseSetPayload) =>
+    typedRequest<ExerciseSet>("POST", `/api/v1/plans/days/${dayId}/sets`, data),
+
+  updateDayExercise: (dayId: string, setId: string, data: PatchExerciseSetPayload) =>
+    typedRequest<ExerciseSet>("PATCH", `/api/v1/plans/days/${dayId}/sets/${setId}`, data),
+
+  deleteDayExercise: (dayId: string, setId: string) =>
+    typedRequest<{ success: boolean }>("DELETE", `/api/v1/plans/days/${dayId}/sets/${setId}`),
 } as const;

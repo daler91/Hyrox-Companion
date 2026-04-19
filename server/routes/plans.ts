@@ -154,4 +154,106 @@ router.delete("/api/v1/plans/days/:dayId", ...protectedMutationGuards, rateLimit
     res.json({ success: true });
   }));
 
+// -----------------------------------------------------------------------------
+// Plan-day exercise-set CRUD — used by the v2 workout detail dialog when a
+// planned entry is open. Mirrors the workout-log routes in server/routes/workouts.ts
+// but writes to exercise_sets owned by a planDay. Ownership is enforced per-row
+// through storage.workouts.ownsPlanDay + getExerciseSetOwned.
+// -----------------------------------------------------------------------------
+
+const PLAN_DAY_NOT_FOUND = "Plan day not found";
+const PLAN_DAY_SET_NOT_FOUND = "Exercise set not found";
+
+const patchPlanDaySetSchema = z.object({
+  exerciseName: z.string().min(1).max(255).optional(),
+  customLabel: z.string().max(255).nullable().optional(),
+  category: z.string().max(50).optional(),
+  setNumber: z.number().int().min(1).max(100).optional(),
+  reps: z.number().int().min(0).max(10_000).nullable().optional(),
+  weight: z.number().min(0).max(2_000).nullable().optional(),
+  distance: z.number().min(0).max(1_000_000).nullable().optional(),
+  time: z.number().min(0).max(86_400).nullable().optional(),
+  notes: z.string().max(1000).nullable().optional(),
+  sortOrder: z.number().int().nullable().optional(),
+});
+type PatchPlanDaySetPayload = z.infer<typeof patchPlanDaySetSchema>;
+
+const addPlanDaySetSchema = z.object({
+  exerciseName: z.string().min(1).max(255),
+  customLabel: z.string().max(255).nullable().optional(),
+  category: z.string().max(50),
+  setNumber: z.number().int().min(1).max(100).default(1),
+  reps: z.number().int().min(0).max(10_000).nullable().optional(),
+  weight: z.number().min(0).max(2_000).nullable().optional(),
+  distance: z.number().min(0).max(1_000_000).nullable().optional(),
+  time: z.number().min(0).max(86_400).nullable().optional(),
+  notes: z.string().max(1000).nullable().optional(),
+  confidence: z.number().int().min(0).max(100).nullable().optional(),
+});
+type AddPlanDaySetPayload = z.infer<typeof addPlanDaySetSchema>;
+
+router.get(
+  "/api/v1/plans/days/:dayId/sets",
+  isAuthenticated,
+  rateLimiter("planDaySet", 60),
+  asyncHandler(async (req: ExpressRequest<{ dayId: string }>, res: Response) => {
+    const userId = getUserId(req);
+    const sets = await storage.workouts.getExerciseSetsByPlanDay(req.params.dayId, userId);
+    res.json(sets);
+  }),
+);
+
+router.post(
+  "/api/v1/plans/days/:dayId/sets",
+  ...protectedMutationGuards,
+  rateLimiter("planDaySet", 60),
+  validateBody(addPlanDaySetSchema),
+  asyncHandler(async (req: ExpressRequest<{ dayId: string }, Record<string, never>, AddPlanDaySetPayload>, res: Response) => {
+    const userId = getUserId(req);
+    const created = await storage.workouts.addExerciseSetToPlanDay(req.params.dayId, req.body, userId);
+    if (!created) {
+      return res.status(404).json({ error: PLAN_DAY_NOT_FOUND, code: "NOT_FOUND" });
+    }
+    res.status(201).json(created);
+  }),
+);
+
+router.patch(
+  "/api/v1/plans/days/:dayId/sets/:setId",
+  ...protectedMutationGuards,
+  rateLimiter("planDaySet", 120),
+  validateBody(patchPlanDaySetSchema),
+  asyncHandler(async (req: ExpressRequest<{ dayId: string; setId: string }, Record<string, never>, PatchPlanDaySetPayload>, res: Response) => {
+    const userId = getUserId(req);
+    const updated = await storage.workouts.updateExerciseSetForPlanDay(
+      req.params.dayId,
+      req.params.setId,
+      req.body,
+      userId,
+    );
+    if (!updated) {
+      return res.status(404).json({ error: PLAN_DAY_SET_NOT_FOUND, code: "NOT_FOUND" });
+    }
+    res.json(updated);
+  }),
+);
+
+router.delete(
+  "/api/v1/plans/days/:dayId/sets/:setId",
+  ...protectedMutationGuards,
+  rateLimiter("planDaySet", 60),
+  asyncHandler(async (req: ExpressRequest<{ dayId: string; setId: string }>, res: Response) => {
+    const userId = getUserId(req);
+    const deleted = await storage.workouts.deleteExerciseSetForPlanDay(
+      req.params.dayId,
+      req.params.setId,
+      userId,
+    );
+    if (!deleted) {
+      return res.status(404).json({ error: PLAN_DAY_SET_NOT_FOUND, code: "NOT_FOUND" });
+    }
+    res.json({ success: true });
+  }),
+);
+
 export default router;
