@@ -79,7 +79,16 @@ function suggestionWillApply(
   suggestion: WorkoutSuggestion,
   upcomingWorkouts: UpcomingWorkout[],
 ): boolean {
-  if (!suggestion.workoutId || !suggestion.recommendation) return false;
+  // Rationale is also required: applySuggestion persists it as the
+  // day's aiRationale, and the TimelineWorkoutCard only renders the
+  // coach note when aiRationale is truthy. A suggestion with an empty
+  // rationale would leave the athlete looking at a silently-modified
+  // workout, which is exactly the trust regression this feature
+  // exists to prevent. Kick such suggestions over to the review-note
+  // pass so the day still gets a visible note.
+  if (!suggestion.workoutId || !suggestion.recommendation || !suggestion.rationale) {
+    return false;
+  }
   return upcomingWorkouts.some(w => w.id === suggestion.workoutId);
 }
 

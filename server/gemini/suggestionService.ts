@@ -172,12 +172,20 @@ function formatCoachingAnalysis(insights: NonNullable<TrainingContext["coachingI
   return lines.join("\n");
 }
 
-export function buildSuggestionsPrompt(
+/**
+ * Assemble the shared athlete/plan data sections used by both the
+ * modification and review-note prompts. Kept separate from the
+ * trailing closing instruction so each flow can steer the model
+ * toward its own output schema without conflicting guidance
+ * (review-note prompt kept getting zero-suggestion hints before
+ * this was split out).
+ */
+function buildPromptDataSections(
   trainingContext: TrainingContext,
   upcomingWorkouts: UpcomingWorkout[],
   planGoal?: string,
   coachingMaterials?: string,
-): string {
+): string[] {
   const header = [
     `--- ATHLETE'S TRAINING DATA ---`,
     ...(planGoal ? [`Athlete's goal: ${planGoal}`] : []),
@@ -194,7 +202,6 @@ export function buildSuggestionsPrompt(
     formatRecentWorkouts(trainingContext.recentWorkouts),
   ];
 
-  // Add coaching analysis if available
   if (trainingContext.coachingInsights) {
     sections.push(formatCoachingAnalysis(trainingContext.coachingInsights, planGoal));
   }
@@ -203,9 +210,44 @@ export function buildSuggestionsPrompt(
     `--- UPCOMING WORKOUTS ---`,
     upcomingWorkouts.map(formatUpcomingWorkout).join("\n"),
     ...(coachingMaterials ? [coachingMaterials] : []),
-    `Analyze the coaching analysis and athlete data above. Make modifications that actively improve this athlete's training. Return [] ONLY if the plan genuinely needs zero adjustments.`,
   );
 
+  return sections;
+}
+
+export function buildSuggestionsPrompt(
+  trainingContext: TrainingContext,
+  upcomingWorkouts: UpcomingWorkout[],
+  planGoal?: string,
+  coachingMaterials?: string,
+): string {
+  const sections = buildPromptDataSections(
+    trainingContext,
+    upcomingWorkouts,
+    planGoal,
+    coachingMaterials,
+  );
+  sections.push(
+    `Analyze the coaching analysis and athlete data above. Make modifications that actively improve this athlete's training. Return [] ONLY if the plan genuinely needs zero adjustments.`,
+  );
+  return sections.filter(Boolean).join("\n");
+}
+
+function buildReviewNotesPrompt(
+  trainingContext: TrainingContext,
+  upcomingWorkouts: UpcomingWorkout[],
+  planGoal?: string,
+  coachingMaterials?: string,
+): string {
+  const sections = buildPromptDataSections(
+    trainingContext,
+    upcomingWorkouts,
+    planGoal,
+    coachingMaterials,
+  );
+  sections.push(
+    `Write exactly one review note per upcoming workout ID listed above. Do NOT propose a modification, do NOT return suggestions, and do NOT return an empty array. Return a JSON array of objects with exactly two fields: { "workoutId": string, "note": string }.`,
+  );
   return sections.filter(Boolean).join("\n");
 }
 
@@ -264,13 +306,12 @@ export async function generateReviewNotes(
   try {
     if (upcomingWorkouts.length === 0) return [];
 
-    const basePrompt = buildSuggestionsPrompt(
+    const prompt = buildReviewNotesPrompt(
       trainingContext,
       upcomingWorkouts,
       planGoal,
       coachingMaterials,
     );
-    const prompt = `${basePrompt}\n\nReturn one review note per upcoming workout ID above. Do NOT propose modifications — these notes go alongside the plan as-is.`;
 
     const response = await retryWithBackoff(
       () =>
