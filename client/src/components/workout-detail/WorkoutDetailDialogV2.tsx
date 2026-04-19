@@ -121,6 +121,21 @@ export function WorkoutDetailDialogV2({
   // workoutLog to back them.
   const isPlanned = !workoutId;
 
+  // Derive all conditional prop handlers up here so the JSX below stays
+  // declarative. Each of these used to be an inline ternary in props,
+  // which Sonar counts toward the component's cognitive complexity;
+  // lifting them out keeps the main render readable without exceeding
+  // the complexity ceiling.
+  const handleMenuDelete = onDelete ? () => setConfirmingDelete(true) : undefined;
+  const handleMenuChangeStatus = onChangeStatus
+    ? (status: WorkoutStatus) => onChangeStatus(entry, status)
+    : undefined;
+  const handleMenuCombine = !isPlanned && onCombine ? () => onCombine(entry) : undefined;
+  const handleAskCoach = onAskCoach
+    ? () => onAskCoach(buildCoachSeedMessage(entry, exerciseSets))
+    : undefined;
+  const showStatsRow = !isPlanned && !!workout;
+
   return (
     <Dialog open={!!entry} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-h-[90vh] max-w-6xl overflow-y-auto p-0" data-testid="workout-detail-dialog-v2">
@@ -137,11 +152,11 @@ export function WorkoutDetailDialogV2({
           <WorkoutDetailHeaderV2
             entry={entry}
             onClose={onClose}
-            onDelete={onDelete ? () => setConfirmingDelete(true) : undefined}
-            onChangeStatus={onChangeStatus ? (status) => onChangeStatus(entry, status) : undefined}
-            onCombine={!isPlanned && onCombine ? () => onCombine(entry) : undefined}
+            onDelete={handleMenuDelete}
+            onChangeStatus={handleMenuChangeStatus}
+            onCombine={handleMenuCombine}
           />
-          {!isPlanned && workout && <WorkoutStatsRow workout={workout} exerciseSets={exerciseSets} />}
+          {showStatsRow && workout && <WorkoutStatsRow workout={workout} exerciseSets={exerciseSets} />}
         </div>
 
         <div className="grid grid-cols-1 gap-4 px-6 py-4 md:grid-cols-[1fr_280px]">
@@ -187,14 +202,7 @@ export function WorkoutDetailDialogV2({
           </div>
 
           <aside className="flex flex-col gap-3">
-            <CoachTakePanel
-              rationale={entry.aiRationale}
-              onAskCoach={
-                onAskCoach
-                  ? () => onAskCoach(buildCoachSeedMessage(entry, exerciseSets))
-                  : undefined
-              }
-            />
+            <CoachTakePanel rationale={entry.aiRationale} onAskCoach={handleAskCoach} />
             {!isPlanned && <HistoryPanel stats={history} isLoading={isLoading} />}
           </aside>
         </div>
