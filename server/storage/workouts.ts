@@ -329,12 +329,17 @@ export class WorkoutStorage {
   }
 
   async updateExerciseSet(
+    workoutLogId: string,
     setId: string,
     updates: Partial<Omit<InsertExerciseSet, "id" | "workoutLogId" | "planDayId">>,
     userId: string,
   ): Promise<ExerciseSet | undefined> {
     const owned = await this.getExerciseSetOwned(setId, userId);
-    if (!owned) return undefined;
+    // Reject when the set doesn't exist, belongs to someone else, or belongs
+    // to a different workoutLog than the nested route's :id segment. Without
+    // the parent-id check, /workouts/<A>/sets/<setId-from-B> could silently
+    // mutate B's set when the caller owns both (Codex P2).
+    if (!owned || owned.workoutLogId !== workoutLogId) return undefined;
     const [updated] = await db
       .update(exerciseSets)
       .set(updates)
@@ -343,9 +348,9 @@ export class WorkoutStorage {
     return updated;
   }
 
-  async deleteExerciseSet(setId: string, userId: string): Promise<boolean> {
+  async deleteExerciseSet(workoutLogId: string, setId: string, userId: string): Promise<boolean> {
     const owned = await this.getExerciseSetOwned(setId, userId);
-    if (!owned) return false;
+    if (!owned || owned.workoutLogId !== workoutLogId) return false;
     const result = await db.delete(exerciseSets).where(eq(exerciseSets.id, setId));
     return (result.rowCount ?? 0) > 0;
   }
@@ -438,7 +443,7 @@ export class WorkoutStorage {
           sql`${workoutLogs.date} <= (${currentDate}::date + INTERVAL '14 days')`,
         ),
       );
-    return rpe?.avg != null ? Math.round(Number(rpe.avg) * 10) / 10 : null;
+    return rpe?.avg == null ? null : Math.round(Number(rpe.avg) * 10) / 10;
   }
 
   /**

@@ -169,7 +169,7 @@ router.patch(
   validateBody(patchExerciseSetSchema),
   asyncHandler(async (req: Request<{ id: string; setId: string }, Record<string, never>, PatchExerciseSetPayload>, res: Response) => {
     const userId = getUserId(req);
-    const updated = await storage.workouts.updateExerciseSet(req.params.setId, req.body, userId);
+    const updated = await storage.workouts.updateExerciseSet(req.params.id, req.params.setId, req.body, userId);
     if (!updated) {
       return res.status(404).json({ error: "Exercise set not found", code: "NOT_FOUND" });
     }
@@ -198,7 +198,7 @@ router.delete(
   rateLimiter("workoutSet", 60),
   asyncHandler(async (req: Request<{ id: string; setId: string }>, res: Response) => {
     const userId = getUserId(req);
-    const deleted = await storage.workouts.deleteExerciseSet(req.params.setId, userId);
+    const deleted = await storage.workouts.deleteExerciseSet(req.params.id, req.params.setId, userId);
     if (!deleted) {
       return res.status(404).json({ error: "Exercise set not found", code: "NOT_FOUND" });
     }

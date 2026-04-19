@@ -32,6 +32,8 @@
 import {
   exerciseSets,
   type InsertExerciseSet,
+  planDays,
+  trainingPlans,
   users,
   workoutLogs,
 } from "@shared/schema";
@@ -193,28 +195,40 @@ async function runPass(
 }
 
 async function loadPlanDayCandidates(flags: Flags): Promise<BackfillCandidate[]> {
-  const rows = await db.query.planDays.findMany({
-    where: (pd, { and: andOp, isNotNull: isNotNullOp, sql: sqlOp }) =>
-      andOp(isNotNullOp(pd.mainWorkout), sqlOp`TRIM(${pd.mainWorkout}) <> ''`),
-    with: {
-      plan: { columns: { userId: true } },
-      exerciseSets: { columns: { id: true }, limit: 1 },
-    },
-    limit: flags.batchSize,
-  });
+  // Filters (exerciseSets empty, optional userId) are applied IN the SQL
+  // query so the batch limit counts only rows that actually need backfilling.
+  // Doing the filtering in JS after `limit()` used to produce empty batches
+  // as soon as the first page of plan_days happened to already have sets,
+  // and the backfill would stop making progress on large datasets.
+  const whereClauses = [
+    isNotNull(planDays.mainWorkout),
+    sql`TRIM(${planDays.mainWorkout}) <> ''`,
+    isNull(exerciseSets.id),
+  ];
+  if (flags.userId) whereClauses.push(eq(trainingPlans.userId, flags.userId));
 
-  return rows
-    .filter((pd) => pd.exerciseSets.length === 0)
-    .filter((pd) => !flags.userId || pd.plan.userId === flags.userId)
-    .map((pd) => ({
-      label: "planDays",
-      ownerId: pd.id,
-      logKey: "planDayId",
-      userId: pd.plan.userId,
-      mainWorkout: pd.mainWorkout,
-      accessory: pd.accessory,
-      expand: (exercises) => expandExercisesToPlanDaySetRows(exercises, pd.id),
-    }));
+  const rows = await db
+    .select({
+      id: planDays.id,
+      mainWorkout: planDays.mainWorkout,
+      accessory: planDays.accessory,
+      userId: trainingPlans.userId,
+    })
+    .from(planDays)
+    .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
+    .leftJoin(exerciseSets, eq(exerciseSets.planDayId, planDays.id))
+    .where(and(...whereClauses))
+    .limit(flags.batchSize);
+
+  return rows.map((pd) => ({
+    label: "planDays",
+    ownerId: pd.id,
+    logKey: "planDayId",
+    userId: pd.userId,
+    mainWorkout: pd.mainWorkout,
+    accessory: pd.accessory,
+    expand: (exercises) => expandExercisesToPlanDaySetRows(exercises, pd.id),
+  }));
 }
 
 async function loadWorkoutLogCandidates(flags: Flags): Promise<BackfillCandidate[]> {
@@ -255,7 +269,9 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((err) => {
+try {
+  await main();
+} catch (err) {
   logger.error({ err }, "[backfill] fatal error");
   process.exit(1);
-});
+}

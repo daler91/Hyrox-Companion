@@ -58,9 +58,22 @@ function ownerColumns(owner: SetOwner): Partial<InsertExerciseSet> {
   return { workoutLogId: null, planDayId: owner.planDayId };
 }
 
-function buildRowFromExplicitSet(
+// Per-set measurements. An explicit set has its own reps/weight/…; an
+// aggregate (numSets fallback) reuses the exercise-level values. Collapsing
+// the two "build row" shapes into this single adapter removes the duplicate
+// block Sonar flagged.
+interface SetMeasurements {
+  setNumber: number;
+  reps: number | null;
+  weight: number | null;
+  distance: number | null;
+  time: number | null;
+  notes: string | null;
+}
+
+function buildExerciseSetRow(
   ex: ParsedExercise,
-  set: ParsedExercise["sets"][number],
+  measurements: SetMeasurements,
   ownerCols: Partial<InsertExerciseSet>,
   sortOrder: number,
 ): InsertExerciseSet {
@@ -69,37 +82,37 @@ function buildRowFromExplicitSet(
     exerciseName: ex.exerciseName,
     customLabel: ex.customLabel || null,
     category: ex.category,
+    setNumber: measurements.setNumber,
+    reps: measurements.reps,
+    weight: measurements.weight,
+    distance: measurements.distance,
+    time: measurements.time,
+    confidence: ex.confidence ?? null,
+    notes: measurements.notes,
+    sortOrder,
+  } as InsertExerciseSet;
+}
+
+function measurementsFromExplicit(set: ParsedExercise["sets"][number]): SetMeasurements {
+  return {
     setNumber: set.setNumber || 1,
     reps: set.reps ?? null,
     weight: set.weight ?? null,
     distance: set.distance ?? null,
     time: set.time ?? null,
-    confidence: ex.confidence ?? null,
     notes: set.notes || null,
-    sortOrder,
-  } as InsertExerciseSet;
+  };
 }
 
-function buildRowFromAggregate(
-  ex: ParsedExercise,
-  setNumber: number,
-  ownerCols: Partial<InsertExerciseSet>,
-  sortOrder: number,
-): InsertExerciseSet {
+function measurementsFromAggregate(ex: ParsedExercise, setNumber: number): SetMeasurements {
   return {
-    ...ownerCols,
-    exerciseName: ex.exerciseName,
-    customLabel: ex.customLabel || null,
-    category: ex.category,
     setNumber,
     reps: ex.reps ?? null,
     weight: ex.weight ?? null,
     distance: ex.distance ?? null,
     time: ex.time ?? null,
-    confidence: ex.confidence ?? null,
     notes: ex.notes || null,
-    sortOrder,
-  } as InsertExerciseSet;
+  };
 }
 
 function appendRowsForExercise(
@@ -111,13 +124,13 @@ function appendRowsForExercise(
   let sortOrder = startOrder;
   if (ex.sets && Array.isArray(ex.sets)) {
     for (const set of ex.sets) {
-      rows.push(buildRowFromExplicitSet(ex, set, ownerCols, sortOrder++));
+      rows.push(buildExerciseSetRow(ex, measurementsFromExplicit(set), ownerCols, sortOrder++));
     }
     return sortOrder;
   }
   const numSets = ex.numSets || 1;
   for (let s = 1; s <= numSets; s++) {
-    rows.push(buildRowFromAggregate(ex, s, ownerCols, sortOrder++));
+    rows.push(buildExerciseSetRow(ex, measurementsFromAggregate(ex, s), ownerCols, sortOrder++));
   }
   return sortOrder;
 }
