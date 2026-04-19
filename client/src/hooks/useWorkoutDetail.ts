@@ -161,22 +161,29 @@ export function useWorkoutDetail(workoutId: string | null) {
   // hasn't reached the server yet — an RPE refetch would restore the
   // stale server-side notes).
   //
-  // Each mutate() bumps rpeSeqRef and stashes the value as context;
-  // onSuccess ignores any response whose seq isn't the latest, so an
-  // older request resolving after a newer one can't overwrite the
-  // newer cache value. workoutHistory + timeline are invalidated so
-  // the sidebar's Block avg RPE and the timeline card's RPE number
+  // Each mutate() records the submitted value in latestRpeRef before
+  // the request fires. onSuccess only patches the cache if its own
+  // variable still matches the latest submitted value, so an older
+  // response arriving after a newer one can't overwrite the newer
+  // cache value. workoutHistory + timeline are invalidated so the
+  // sidebar's Block avg RPE and the timeline card's RPE number
   // refresh.
-  const rpeSeqRef = useRef(0);
+  //
+  // Tradeoff: if a newer save fails and an older one succeeds after
+  // it, the older success is discarded, so the cache doesn't
+  // reflect the server's actual state until the user closes and
+  // reopens the dialog (the useQuery refetch on reopen corrects
+  // it). We accept this narrow race rather than invalidate the
+  // workout query, which would clobber concurrent optimistic edits
+  // to other fields in the same cache entry (notes in particular).
+  const latestRpeRef = useRef<number | null | undefined>(undefined);
   const updateRpe = useApiMutation({
-    mutationFn: (rpe: number | null) => api.workouts.update(workoutId!, { rpe }),
-    onMutate: () => {
-      rpeSeqRef.current += 1;
-      return { seq: rpeSeqRef.current };
+    mutationFn: (rpe: number | null) => {
+      latestRpeRef.current = rpe;
+      return api.workouts.update(workoutId!, { rpe });
     },
-    onSuccess: (serverWorkout, _rpe, ctx) => {
-      const seq = (ctx as { seq?: number } | undefined)?.seq;
-      if (seq !== rpeSeqRef.current) return;
+    onSuccess: (serverWorkout, rpe) => {
+      if (rpe !== latestRpeRef.current) return;
       patchCachedWorkout({ rpe: serverWorkout.rpe });
     },
     invalidateQueries: workoutId

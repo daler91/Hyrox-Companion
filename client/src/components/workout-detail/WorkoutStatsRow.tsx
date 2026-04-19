@@ -91,12 +91,15 @@ interface RpeEditableCellProps {
  * keeps the input in step with optimistic rollback if the server
  * rejects the update.
  */
+function formatRpeDraft(value: number | null | undefined): string {
+  return value == null ? "" : String(value);
+}
+
 function RpeEditableCell({ value, onChange }: Readonly<RpeEditableCellProps>) {
-  const [draft, setDraft] = useState<string>(() => (value == null ? "" : String(value)));
+  const [draft, setDraft] = useState<string>(() => formatRpeDraft(value));
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setDraft(value == null ? "" : String(value));
+    setDraft(formatRpeDraft(value));
   }, [value]);
 
   const debouncedSave = useDebouncedCallback((next: string) => {
