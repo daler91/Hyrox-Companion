@@ -51,6 +51,57 @@ const MAX_SET_ROWS_PER_WORKOUT = 1000;
 // by the exercise_set_single_owner_check DB constraint.
 type SetOwner = { workoutLogId: string } | { planDayId: string };
 
+function ownerColumns(owner: SetOwner): Partial<InsertExerciseSet> {
+  if ("workoutLogId" in owner) {
+    return { workoutLogId: owner.workoutLogId, planDayId: null };
+  }
+  return { workoutLogId: null, planDayId: owner.planDayId };
+}
+
+function buildRowFromExplicitSet(
+  ex: ParsedExercise,
+  set: ParsedExercise["sets"][number],
+  ownerCols: Partial<InsertExerciseSet>,
+  sortOrder: number,
+): InsertExerciseSet {
+  return {
+    ...ownerCols,
+    exerciseName: ex.exerciseName,
+    customLabel: ex.customLabel || null,
+    category: ex.category,
+    setNumber: set.setNumber || 1,
+    reps: set.reps ?? null,
+    weight: set.weight ?? null,
+    distance: set.distance ?? null,
+    time: set.time ?? null,
+    confidence: ex.confidence ?? null,
+    notes: set.notes || null,
+    sortOrder,
+  } as InsertExerciseSet;
+}
+
+function buildRowFromAggregate(
+  ex: ParsedExercise,
+  setNumber: number,
+  ownerCols: Partial<InsertExerciseSet>,
+  sortOrder: number,
+): InsertExerciseSet {
+  return {
+    ...ownerCols,
+    exerciseName: ex.exerciseName,
+    customLabel: ex.customLabel || null,
+    category: ex.category,
+    setNumber,
+    reps: ex.reps ?? null,
+    weight: ex.weight ?? null,
+    distance: ex.distance ?? null,
+    time: ex.time ?? null,
+    confidence: ex.confidence ?? null,
+    notes: ex.notes || null,
+    sortOrder,
+  } as InsertExerciseSet;
+}
+
 function expandExercisesToRows(
   exercises: ParsedExercise[],
   owner: SetOwner,
@@ -58,46 +109,17 @@ function expandExercisesToRows(
 ): InsertExerciseSet[] {
   const rows: InsertExerciseSet[] = [];
   let sortOrder = 0;
-  const ownerCols: Partial<InsertExerciseSet> =
-    "workoutLogId" in owner
-      ? { workoutLogId: owner.workoutLogId, planDayId: null }
-      : { workoutLogId: null, planDayId: owner.planDayId };
+  const ownerCols = ownerColumns(owner);
 
   for (const ex of exercises) {
     if (ex.sets && Array.isArray(ex.sets)) {
       for (const set of ex.sets) {
-        rows.push({
-          ...ownerCols,
-          exerciseName: ex.exerciseName,
-          customLabel: ex.customLabel || null,
-          category: ex.category,
-          setNumber: set.setNumber || 1,
-          reps: set.reps ?? null,
-          weight: set.weight ?? null,
-          distance: set.distance ?? null,
-          time: set.time ?? null,
-          confidence: ex.confidence ?? null,
-          notes: set.notes || null,
-          sortOrder: sortOrder++,
-        } as InsertExerciseSet);
+        rows.push(buildRowFromExplicitSet(ex, set, ownerCols, sortOrder++));
       }
     } else {
       const numSets = ex.numSets || 1;
       for (let s = 1; s <= numSets; s++) {
-        rows.push({
-          ...ownerCols,
-          exerciseName: ex.exerciseName,
-          customLabel: ex.customLabel || null,
-          category: ex.category,
-          setNumber: s,
-          reps: ex.reps ?? null,
-          weight: ex.weight ?? null,
-          distance: ex.distance ?? null,
-          time: ex.time ?? null,
-          confidence: ex.confidence ?? null,
-          notes: ex.notes || null,
-          sortOrder: sortOrder++,
-        } as InsertExerciseSet);
+        rows.push(buildRowFromAggregate(ex, s, ownerCols, sortOrder++));
       }
     }
   }

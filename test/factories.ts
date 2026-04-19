@@ -1,6 +1,7 @@
+import type { InsertWorkoutLog, PlanDay,TimelineEntry, TrainingPlan, TrainingPlanWithDays } from "@shared/schema";
+
 import type { UpcomingWorkout } from "../server/gemini/suggestionService";
 import type { TrainingContext } from "../server/gemini/types";
-import type { InsertWorkoutLog, PlanDay,TimelineEntry, TrainingPlan, TrainingPlanWithDays } from "@shared/schema";
 
 export function createMockTimelineEntry(overrides: Partial<TimelineEntry> = {}): TimelineEntry {
   return {

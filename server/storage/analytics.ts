@@ -1,5 +1,4 @@
 import {
-  type ExerciseSet,
   planDays,
   trainingPlans,
   type WorkoutLog,
