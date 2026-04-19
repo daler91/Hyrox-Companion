@@ -40,7 +40,7 @@ export function WorkoutStatsRow({ workout, exerciseSets }: WorkoutStatsRowProps)
   );
 }
 
-function StatCell({ label, value, unit }: { label: string; value: number | null | undefined; unit?: string }) {
+function StatCell({ label, value, unit }: Readonly<{ label: string; value: number | null | undefined; unit?: string }>) {
   const displayValue = value == null ? "—" : String(value);
   return (
     <div className="flex flex-col gap-1">

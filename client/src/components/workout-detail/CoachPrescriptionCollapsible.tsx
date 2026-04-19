@@ -51,7 +51,7 @@ export function CoachPrescriptionCollapsible({
   );
 }
 
-function Prescription({ label, text }: { label: string; text: string }) {
+function Prescription({ label, text }: Readonly<{ label: string; text: string }>) {
   return (
     <div className="flex flex-col gap-1">
       <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</span>

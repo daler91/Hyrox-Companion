@@ -1,5 +1,5 @@
 import type { TimelineEntry } from "@shared/schema";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { useWorkoutDetail } from "@/hooks/useWorkoutDetail";
@@ -53,11 +53,19 @@ export function WorkoutDetailDialogV2({
   // (legacy rows from before structured plan generation shipped), copy the
   // prescribed sets across on first open. The server-side mutation is
   // idempotent — see seedExerciseSetsFromPlanDay in
-  // server/storage/workouts.ts — so re-opening the dialog is safe.
+  // server/storage/workouts.ts — so a retry after an error would still be
+  // safe, but we deliberately attempt at most once per workoutId to avoid
+  // looping on a 5xx: on failure `isSuccess` stays false forever and the
+  // effect would re-fire on every re-render. The ref is keyed by the
+  // workout being viewed so reopening the dialog on a different workout
+  // still allows one fresh attempt.
+  const seedAttemptedRef = useRef<string | null>(null);
   useEffect(() => {
     if (!workoutId || isLoading || !workout) return;
+    if (seedAttemptedRef.current === workoutId) return;
     const hasSets = (workout.exerciseSets?.length ?? 0) > 0;
-    if (!hasSets && workout.planDayId && !seedFromPlan.isPending && !seedFromPlan.isSuccess) {
+    if (!hasSets && workout.planDayId) {
+      seedAttemptedRef.current = workoutId;
       seedFromPlan.mutate();
     }
   }, [workoutId, workout, isLoading, seedFromPlan]);

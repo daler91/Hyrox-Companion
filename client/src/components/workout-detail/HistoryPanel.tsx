@@ -38,7 +38,7 @@ export function HistoryPanel({ stats, isLoading }: HistoryPanelProps) {
   );
 }
 
-function HistoryRow({ label, value, loading }: { label: string; value: string | null; loading?: boolean }) {
+function HistoryRow({ label, value, loading }: Readonly<{ label: string; value: string | null; loading?: boolean }>) {
   return (
     <div className="flex items-baseline justify-between gap-4">
       <dt className="text-muted-foreground">{label}</dt>

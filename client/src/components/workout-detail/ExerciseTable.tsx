@@ -17,6 +17,7 @@ import { getExerciseLabel, groupExerciseSets } from "@/lib/exerciseUtils";
 import { cn } from "@/lib/utils";
 
 const CELL_SAVE_DEBOUNCE_MS = 350;
+const GRID_TEMPLATE = "grid grid-cols-[1fr_70px_90px_120px_40px] items-center gap-2 px-3 py-2";
 
 interface ExerciseTableProps {
   readonly workoutId: string;
@@ -85,7 +86,7 @@ export function ExerciseTable({
 
 function HeaderRow() {
   return (
-    <div className="grid grid-cols-[1fr_70px_90px_120px_40px] items-center gap-2 border-b border-border bg-muted/40 px-3 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+    <div className={cn(GRID_TEMPLATE, "border-b border-border bg-muted/40 text-xs font-medium uppercase tracking-wide text-muted-foreground")}>
       <span>Exercise</span>
       <span className="text-right">Sets</span>
       <span className="text-right">Reps</span>
@@ -111,59 +112,59 @@ interface ExerciseRowProps {
   readonly onDeleteSet: (setId: string) => void;
 }
 
+interface RepsDisplay {
+  value: number | null;
+  suffix?: string;
+  overrideDisplay?: number;
+  /** Which column the cell's onChange should persist to. */
+  field: "reps" | "distance";
+}
+
+// A row's reps column falls back to distance (meters) for running/distance
+// exercises where no rep count makes sense. The returned `field` tells the
+// caller which ExerciseSet column to write on edit so distance-based rows
+// don't accidentally round-trip through the reps column.
+function resolveRepsDisplay(reps: number | null, distance: number | null): RepsDisplay {
+  if (reps == null && distance != null) {
+    return { value: null, suffix: "m", overrideDisplay: distance, field: "distance" };
+  }
+  return { value: reps, field: "reps" };
+}
+
 function ExerciseRow({ group, weightUnit, onUpdateSet, onAddSet, onDeleteSet }: ExerciseRowProps) {
   const firstSet = group.sets[0];
   const setCount = group.sets.length;
-  const sharedReps = firstSet?.reps ?? null;
-  // Prefer weight if recorded; otherwise surface distance (meters) so the
-  // column isn't blank for running/distance-based exercises.
-  const sharedLoad = firstSet?.weight ?? null;
-  const sharedDistance = firstSet?.distance ?? null;
   const label = getExerciseLabel(group.exerciseName, group.customLabel);
   const color = categoryColor(group.category);
+  const lowConfidence = typeof group.confidence === "number" && group.confidence < 60;
+  const repsDisplay = resolveRepsDisplay(firstSet?.reps ?? null, firstSet?.distance ?? null);
+  const sharedLoad = firstSet?.weight ?? null;
 
   const debouncedUpdateAll = useDebouncedCallback((data: PatchExerciseSetPayload) => {
     for (const s of group.sets) onUpdateSet(s.id, data);
   }, CELL_SAVE_DEBOUNCE_MS);
 
-  const lowConfidence = typeof group.confidence === "number" && group.confidence < 60;
+  const handleSetCountChange = (next: number | null) => {
+    if (next == null || next === setCount || next < 1) return;
+    applySetCountChange(group, Math.round(next), firstSet, onAddSet, onDeleteSet);
+  };
+
+  const handleDeleteRow = () => {
+    for (const s of group.sets) onDeleteSet(s.id);
+  };
 
   return (
-    <div
-      className="grid grid-cols-[1fr_70px_90px_120px_40px] items-center gap-2 px-3 py-2 text-sm"
-      data-testid="exercise-row"
-    >
-      <div className="flex min-w-0 items-center gap-2">
-        <span
-          aria-hidden
-          className="inline-block size-2 shrink-0 rounded-full"
-          style={{ backgroundColor: color }}
-        />
-        <span
-          className={cn("truncate font-medium", lowConfidence && "text-muted-foreground")}
-          title={lowConfidence ? "Low-confidence parse — tap to review" : label}
-        >
-          {label}
-        </span>
-      </div>
+    <div className={cn(GRID_TEMPLATE, "text-sm")} data-testid="exercise-row">
+      <ExerciseLabel label={label} color={color} lowConfidence={lowConfidence} />
+
+      <NumberCell value={setCount} min={1} max={50} ariaLabel={`Sets for ${label}`} onChange={handleSetCountChange} />
 
       <NumberCell
-        value={setCount}
-        min={1}
-        max={50}
-        ariaLabel={`Sets for ${label}`}
-        onChange={(next) => {
-          if (next == null || next === setCount || next < 1) return;
-          applySetCountChange(group, Math.round(next), firstSet, onAddSet, onDeleteSet);
-        }}
-      />
-
-      <NumberCell
-        value={sharedReps}
-        ariaLabel={`Reps for ${label}`}
-        suffix={sharedDistance != null && sharedReps == null ? "m" : undefined}
-        overrideDisplay={sharedDistance != null && sharedReps == null ? sharedDistance : undefined}
-        onChange={(next) => debouncedUpdateAll({ reps: next })}
+        value={repsDisplay.value}
+        ariaLabel={`${repsDisplay.field === "distance" ? "Distance" : "Reps"} for ${label}`}
+        suffix={repsDisplay.suffix}
+        overrideDisplay={repsDisplay.overrideDisplay}
+        onChange={(next) => debouncedUpdateAll({ [repsDisplay.field]: next })}
       />
 
       <NumberCell
@@ -173,11 +174,21 @@ function ExerciseRow({ group, weightUnit, onUpdateSet, onAddSet, onDeleteSet }: 
         onChange={(next) => debouncedUpdateAll({ weight: next })}
       />
 
-      <RowActions
-        onDelete={() => {
-          for (const s of group.sets) onDeleteSet(s.id);
-        }}
-      />
+      <RowActions onDelete={handleDeleteRow} />
+    </div>
+  );
+}
+
+function ExerciseLabel({ label, color, lowConfidence }: Readonly<{ label: string; color: string; lowConfidence: boolean }>) {
+  return (
+    <div className="flex min-w-0 items-center gap-2">
+      <span aria-hidden className="inline-block size-2 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+      <span
+        className={cn("truncate font-medium", lowConfidence && "text-muted-foreground")}
+        title={lowConfidence ? "Low-confidence parse — tap to review" : label}
+      >
+        {label}
+      </span>
     </div>
   );
 }
@@ -224,7 +235,7 @@ function NumberCell({ value, ariaLabel, min = 0, max, suffix, overrideDisplay, o
   );
 }
 
-function RowActions({ onDelete }: { onDelete: () => void }) {
+function RowActions({ onDelete }: Readonly<{ onDelete: () => void }>) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
