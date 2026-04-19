@@ -1,5 +1,5 @@
 import { customExercises, type ExerciseSet,exerciseSets, type InsertExerciseSet, type InsertWorkoutLog, type ParsedExercise, planDays, trainingPlans, type UpdateWorkoutLog, users, type WorkoutLog, workoutLogs } from "@shared/schema";
-import { and,eq } from "drizzle-orm";
+import { and,asc, eq } from "drizzle-orm";
 import pLimit from "p-limit";
 
 import { db } from "../db";
@@ -295,6 +295,42 @@ async function createWorkoutInTx(
     }
 
     return { ...log, exerciseSets: savedSets };
+  }
+
+  // No client-supplied exercises — if this workout is being logged against
+  // a plan day, copy the prescribed exerciseSets from the plan day into
+  // the new workoutLog so the v2 detail dialog opens onto a pre-filled
+  // editable table. Previously the user would see an empty exercises
+  // table and have to tap +Add for every exercise, defeating the point of
+  // structured plan generation. Inline rather than calling
+  // storage.workouts.seedExerciseSetsFromPlanDay — that opens its own
+  // transaction and can't nest inside `tx`.
+  if (enrichedData.planDayId) {
+    const prescribed = await tx
+      .select()
+      .from(exerciseSets)
+      .where(eq(exerciseSets.planDayId, enrichedData.planDayId))
+      .orderBy(asc(exerciseSets.sortOrder));
+
+    if (prescribed.length > 0) {
+      const copyRows: InsertExerciseSet[] = prescribed.map((p) => ({
+        workoutLogId: log.id,
+        planDayId: null,
+        exerciseName: p.exerciseName,
+        customLabel: p.customLabel,
+        category: p.category,
+        setNumber: p.setNumber,
+        reps: p.reps,
+        weight: p.weight,
+        distance: p.distance,
+        time: p.time,
+        notes: p.notes,
+        confidence: p.confidence,
+        sortOrder: p.sortOrder,
+      }));
+      const savedSets = await tx.insert(exerciseSets).values(copyRows).returning();
+      return { ...log, exerciseSets: savedSets };
+    }
   }
 
   return log;

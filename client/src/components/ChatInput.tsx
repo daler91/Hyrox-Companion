@@ -1,5 +1,5 @@
 import { Loader2,Send } from "lucide-react";
-import { useCallback,useState } from "react";
+import { useCallback,useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -7,15 +7,35 @@ import { VoiceButton } from "@/components/VoiceButton";
 import { useToast } from "@/hooks/use-toast";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
 
+/**
+ * Carrier for an externally-seeded prefill. The `nonce` field lets callers
+ * re-seed the input with the same `text` on a subsequent click — if we
+ * depended on `text` alone, clicking "Ask coach" twice in a row with the
+ * same workout wouldn't re-populate after the user cleared the textarea.
+ */
+export interface ChatInputSeed {
+  text: string;
+  nonce: number;
+}
+
 interface ChatInputProps {
   readonly onSend: (message: string) => void;
   readonly isLoading?: boolean;
   readonly placeholder?: string;
+  readonly seed?: ChatInputSeed | null;
 }
 
-export function ChatInput({ onSend, isLoading, placeholder = "Ask about your training..." }: Readonly<ChatInputProps>) {
+export function ChatInput({ onSend, isLoading, placeholder = "Ask about your training...", seed }: Readonly<ChatInputProps>) {
   const [message, setMessage] = useState("");
   const { toast } = useToast();
+
+  // Re-seed the textarea whenever the caller bumps the nonce, so clicking
+  // "Ask coach" repeatedly pre-fills each time even when the text matches
+  // the last seed.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (seed?.text) setMessage(seed.text);
+  }, [seed?.nonce, seed?.text]);
 
   const handleVoiceResult = useCallback((transcript: string) => {
     setMessage(prev => {

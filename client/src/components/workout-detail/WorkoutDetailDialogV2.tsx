@@ -1,8 +1,10 @@
-import type { TimelineEntry } from "@shared/schema";
+import type { ExerciseSet, TimelineEntry } from "@shared/schema";
+import { format, parseISO } from "date-fns";
 import { useEffect, useRef } from "react";
 
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { useWorkoutDetail } from "@/hooks/useWorkoutDetail";
+import { groupExerciseSets } from "@/lib/exerciseUtils";
 
 import { AthleteNoteInput } from "./AthleteNoteInput";
 import { CoachPrescriptionCollapsible } from "./CoachPrescriptionCollapsible";
@@ -15,7 +17,15 @@ import { WorkoutStatsRow } from "./WorkoutStatsRow";
 interface WorkoutDetailDialogV2Props {
   readonly entry: TimelineEntry | null;
   readonly onClose: () => void;
-  readonly onAskCoach?: () => void;
+  /**
+   * Called when the user clicks "Ask coach". Receives a pre-built message
+   * summarising the current workout so the parent can open CoachPanel with
+   * that text seeded into the input. The parent decides how the message
+   * gets to the chat (see Timeline.tsx's coach seed wiring).
+   */
+  readonly onAskCoach?: (seedMessage: string) => void;
+  /** Called from the ⋮ menu → Delete. Parent is responsible for the confirm UX. */
+  readonly onDelete?: (entry: TimelineEntry) => void;
   readonly weightUnit?: "kg" | "lb";
 }
 
@@ -34,6 +44,7 @@ export function WorkoutDetailDialogV2({
   entry,
   onClose,
   onAskCoach,
+  onDelete,
   weightUnit = "kg",
 }: WorkoutDetailDialogV2Props) {
   const workoutId = entry?.workoutLogId ?? null;
@@ -86,7 +97,11 @@ export function WorkoutDetailDialogV2({
         </DialogDescription>
 
         <div className="flex flex-col gap-4 px-6 pt-4">
-          <WorkoutDetailHeaderV2 entry={entry} onClose={onClose} />
+          <WorkoutDetailHeaderV2
+            entry={entry}
+            onClose={onClose}
+            onDelete={onDelete ? () => onDelete(entry) : undefined}
+          />
           {workout && <WorkoutStatsRow workout={workout} exerciseSets={exerciseSets} />}
         </div>
 
@@ -115,7 +130,14 @@ export function WorkoutDetailDialogV2({
           </div>
 
           <aside className="flex flex-col gap-3">
-            <CoachTakePanel rationale={entry.aiRationale} onAskCoach={onAskCoach} />
+            <CoachTakePanel
+              rationale={entry.aiRationale}
+              onAskCoach={
+                onAskCoach
+                  ? () => onAskCoach(buildCoachSeedMessage(entry, exerciseSets))
+                  : undefined
+              }
+            />
             <HistoryPanel stats={history} isLoading={isLoading} />
           </aside>
         </div>
@@ -130,4 +152,31 @@ export function WorkoutDetailDialogV2({
       </DialogContent>
     </Dialog>
   );
+}
+
+/**
+ * Build the prefill text the coach chat input gets when the user clicks
+ * "Ask coach" on this workout. Short + concrete so the user can either
+ * send it as-is or edit before submitting. The coach service already has
+ * the full training context via the standard RAG pipeline, so this only
+ * needs to point the conversation at the specific workout.
+ */
+function buildCoachSeedMessage(entry: TimelineEntry, sets: ExerciseSet[]): string {
+  const focus = entry.focus?.trim() || "this workout";
+  const dateLabel = formatCoachDate(entry.date);
+  const groups = groupExerciseSets(sets);
+  const exerciseCount = groups.length;
+  const setCount = sets.length;
+  const stats = exerciseCount > 0
+    ? ` (${exerciseCount} ${exerciseCount === 1 ? "exercise" : "exercises"}, ${setCount} ${setCount === 1 ? "set" : "sets"})`
+    : "";
+  return `Help me think about my ${focus} workout on ${dateLabel}${stats}. What would you adjust?`;
+}
+
+function formatCoachDate(iso: string): string {
+  try {
+    return format(parseISO(iso), "EEE MMM d");
+  } catch {
+    return iso;
+  }
 }
