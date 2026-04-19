@@ -1,9 +1,16 @@
 import type { ExerciseSet } from "@shared/schema";
-import { useQuery } from "@tanstack/react-query";
+import { useIsMutating,useQuery } from "@tanstack/react-query";
 
 import { useApiMutation } from "@/hooks/useApiMutation";
 import { type AddExerciseSetPayload, api, type PatchExerciseSetPayload, QUERY_KEYS } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
+
+// Tag every plan-day set mutation with this key family so useIsMutating
+// can count ALL in-flight writes for the current plan day — not just
+// the most recent one. useMutation.isPending only reflects the latest
+// mutate() call, which would hide concurrent PATCHes when a row edit
+// fans out to multiple set ids.
+const planDaySetsMutationKey = (planDayId: string) => ["plan-day-sets", planDayId] as const;
 
 /**
  * Mutation + query bundle for a plan day's prescribed exercise sets.
@@ -35,6 +42,7 @@ export function usePlanDayExercises(planDayId: string | null) {
   };
 
   const updateSet = useApiMutation({
+    mutationKey: planDayId ? planDaySetsMutationKey(planDayId) : undefined,
     mutationFn: ({ setId, data }: { setId: string; data: PatchExerciseSetPayload }) =>
       api.plans.updateDayExercise(planDayId!, setId, data),
     onMutate: async ({ setId, data }) => {
@@ -57,6 +65,7 @@ export function usePlanDayExercises(planDayId: string | null) {
   });
 
   const addSet = useApiMutation({
+    mutationKey: planDayId ? planDaySetsMutationKey(planDayId) : undefined,
     mutationFn: (data: AddExerciseSetPayload) => api.plans.addDayExercise(planDayId!, data),
     onSuccess: (serverSet) => {
       patchCachedSets((sets) => [...sets, serverSet]);
@@ -65,6 +74,7 @@ export function usePlanDayExercises(planDayId: string | null) {
   });
 
   const deleteSet = useApiMutation({
+    mutationKey: planDayId ? planDaySetsMutationKey(planDayId) : undefined,
     mutationFn: (setId: string) =>
       api.plans.deleteDayExercise(planDayId!, setId).then(() => setId),
     onMutate: async (setId: string) => {
@@ -83,12 +93,19 @@ export function usePlanDayExercises(planDayId: string | null) {
     errorToast: "Couldn't remove that set",
   });
 
-  // True while any set-level write is in flight. Consumers gate the
-  // "Mark complete" CTA on this so we don't fire logWorkoutMutation
-  // while a debounced cell save is still posting; otherwise
-  // createWorkoutInTx's plan-day copy can race with the PATCH and
-  // snapshot pre-edit values.
-  const isSaving = updateSet.isPending || addSet.isPending || deleteSet.isPending;
+  // Count every in-flight mutation tagged with this plan day's key,
+  // not just the most recent mutate() call on a single observer.
+  // Row-level edits fan out to one PATCH per set in the group, so
+  // `updateSet.isPending` alone would read false as soon as the last
+  // call settled — even if earlier calls were still pending — and
+  // Mark complete could fire with partially stale rows on the server.
+  const pendingMutationCount = useIsMutating({
+    mutationKey: planDayId ? planDaySetsMutationKey(planDayId) : ["plan-day-sets-disabled"],
+    // Scope to exact match of this plan day; other plan days' edits
+    // shouldn't block this dialog.
+    exact: true,
+  });
+  const isSaving = pendingMutationCount > 0;
 
   return {
     exerciseSets: exercisesQuery.data ?? [],
