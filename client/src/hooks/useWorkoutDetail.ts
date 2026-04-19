@@ -34,6 +34,13 @@ export function useWorkoutDetail(workoutId: string | null) {
     enabled: !!workoutId,
   });
 
+  const patchCachedWorkout = (patch: Partial<WorkoutWithSets>) => {
+    if (!workoutId) return;
+    queryClient.setQueryData<WorkoutWithSets>(QUERY_KEYS.workout(workoutId), (prev) =>
+      prev ? { ...prev, ...patch } : prev,
+    );
+  };
+
   const patchCachedSets = (updater: (sets: ExerciseSet[]) => ExerciseSet[]) => {
     if (!workoutId) return;
     queryClient.setQueryData<WorkoutWithSets>(QUERY_KEYS.workout(workoutId), (prev) => {
@@ -132,9 +139,7 @@ export function useWorkoutDetail(workoutId: string | null) {
       if (!workoutId) return undefined;
       await queryClient.cancelQueries({ queryKey: QUERY_KEYS.workout(workoutId) });
       const prev = queryClient.getQueryData<WorkoutWithSets>(QUERY_KEYS.workout(workoutId));
-      queryClient.setQueryData<WorkoutWithSets>(QUERY_KEYS.workout(workoutId), (p) =>
-        p ? { ...p, notes } : p,
-      );
+      patchCachedWorkout({ notes });
       return { prev };
     },
     onError: (_err, _vars, ctx) => {
@@ -163,10 +168,7 @@ export function useWorkoutDetail(workoutId: string | null) {
   const updateRpe = useApiMutation({
     mutationFn: (rpe: number | null) => api.workouts.update(workoutId!, { rpe }),
     onSuccess: (serverWorkout) => {
-      if (!workoutId) return;
-      queryClient.setQueryData<WorkoutWithSets>(QUERY_KEYS.workout(workoutId), (p) =>
-        p ? { ...p, rpe: serverWorkout.rpe } : p,
-      );
+      patchCachedWorkout({ rpe: serverWorkout.rpe });
     },
     invalidateQueries: workoutId
       ? [QUERY_KEYS.workoutHistory(workoutId), QUERY_KEYS.timeline]
