@@ -69,6 +69,9 @@ export const planDays = pgTable("plan_days", {
   scheduledDate: date("scheduled_date"),
   status: text("status").default("planned"),
   aiSource: text("ai_source"),
+  aiRationale: text("ai_rationale"),
+  aiNoteUpdatedAt: timestamp("ai_note_updated_at", { withTimezone: true }),
+  aiInputsUsed: jsonb("ai_inputs_used"),
 }, (table) => [
   check("status_check", sql`status IN ('planned', 'completed', 'missed', 'skipped')`),
   index("idx_plan_days_plan_id").on(table.planId),

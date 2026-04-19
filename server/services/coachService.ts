@@ -1,5 +1,13 @@
+import type { CoachNoteInputs } from "@shared/schema";
+
 import { db, type DbExecutor } from "../db";
-import { generateWorkoutSuggestions, type UpcomingWorkout, type WorkoutSuggestion } from "../gemini/index";
+import {
+  generateReviewNotes,
+  generateWorkoutSuggestions,
+  type TrainingContext,
+  type UpcomingWorkout,
+  type WorkoutSuggestion,
+} from "../gemini/index";
 import { logger } from "../logger";
 import { storage } from "../storage";
 import { buildTrainingContext } from "./ai";
@@ -30,11 +38,41 @@ function buildUpdateValue(
     : `[AI Coach] ${suggestion.recommendation}`;
 }
 
+/**
+ * Capture a compact audit of which inputs were present when the coach
+ * produced the note for a plan day. Persisted as `plan_days.ai_inputs_used`
+ * so the athlete sees "Based on: RPE trend · plan phase · coaching docs"
+ * on the workout card.
+ */
+function buildCoachNoteInputs(
+  ctx: TrainingContext,
+  ragUsed: boolean,
+  planGoalPresent: boolean,
+): CoachNoteInputs {
+  const insights = ctx.coachingInsights;
+  return {
+    rpeTrend: insights?.rpeTrend,
+    fatigueFlag: insights?.fatigueFlag,
+    planPhase: insights?.planPhase?.phaseLabel,
+    weeklyVolumeTrend: insights?.weeklyVolume?.trend,
+    stationGaps: insights?.stationGaps
+      ?.filter(g => g.daysSinceLastTrained === null || g.daysSinceLastTrained >= 10)
+      .map(g => g.station),
+    progressionFlags: insights?.progressionFlags
+      ?.filter(f => f.flag === "plateau" || f.flag === "regressing")
+      .map(f => `${f.exercise}:${f.flag}`),
+    ragUsed,
+    recentWorkoutCount: ctx.recentWorkouts?.length ?? 0,
+    planGoalPresent,
+  };
+}
+
 async function applySuggestion(
   suggestion: WorkoutSuggestion,
   upcomingWorkouts: UpcomingWorkout[],
   userId: string,
   aiSource: "rag" | "legacy" | null | undefined,
+  inputsUsed: CoachNoteInputs,
   tx: DbExecutor,
 ): Promise<boolean> {
   if (!suggestion.workoutId || !suggestion.recommendation) return false;
@@ -46,7 +84,35 @@ async function applySuggestion(
   const updateValue = buildUpdateValue(suggestion, entry);
   await storage.plans.updatePlanDay(
     suggestion.workoutId,
-    { [suggestion.targetField]: updateValue, aiSource: aiSource ?? null },
+    {
+      [suggestion.targetField]: updateValue,
+      aiSource: aiSource ?? null,
+      aiRationale: suggestion.rationale.slice(0, 400),
+      aiNoteUpdatedAt: new Date(),
+      aiInputsUsed: inputsUsed,
+    },
+    userId,
+    tx,
+  );
+  return true;
+}
+
+async function applyReviewNote(
+  workoutId: string,
+  note: string,
+  userId: string,
+  inputsUsed: CoachNoteInputs,
+  tx: DbExecutor,
+): Promise<boolean> {
+  if (!workoutId || !note) return false;
+  await storage.plans.updatePlanDay(
+    workoutId,
+    {
+      aiSource: "review",
+      aiRationale: note.slice(0, 400),
+      aiNoteUpdatedAt: new Date(),
+      aiInputsUsed: inputsUsed,
+    },
     userId,
     tx,
   );
@@ -119,6 +185,11 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
     }
 
     const coachingContext = await getCoachingMaterialsString(userId, upcomingWorkouts);
+    const inputsUsed = buildCoachNoteInputs(
+      trainingContext,
+      coachingContext.source === "rag",
+      Boolean(activePlanGoal),
+    );
 
     const suggestions = await generateWorkoutSuggestions(
       trainingContext,
@@ -128,19 +199,43 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
       userId,
     );
 
-    // Apply all suggestions atomically: a failure mid-loop rolls back every
-    // earlier apply so the plan never ends up partially mutated (C2).
-    const adjusted = await db.transaction(async (tx) => {
-      const results = await Promise.all(
+    // For any upcoming day the coach did NOT modify, request a short review
+    // note so the athlete can still see the coach's thinking on that day.
+    // Without this, "no suggestions" looks identical to "coach never ran".
+    const modifiedIds = new Set(suggestions.map(s => s.workoutId));
+    const unchangedWorkouts = upcomingWorkouts.filter(w => !modifiedIds.has(w.id));
+    const reviewNotes = unchangedWorkouts.length > 0
+      ? await generateReviewNotes(
+          trainingContext,
+          unchangedWorkouts,
+          activePlanGoal,
+          coachingContext.text,
+          userId,
+        )
+      : [];
+
+    // Apply all modifications and review notes atomically: a failure mid-loop
+    // rolls back every earlier apply so the plan never ends up partially
+    // mutated (C2).
+    const { adjusted, noted } = await db.transaction(async (tx) => {
+      const modResults = await Promise.all(
         suggestions.map((s) =>
-          applySuggestion(s, upcomingWorkouts, userId, coachingContext.source, tx),
+          applySuggestion(s, upcomingWorkouts, userId, coachingContext.source, inputsUsed, tx),
         ),
       );
-      return results.filter(Boolean).length;
+      const noteResults = await Promise.all(
+        reviewNotes.map((n) =>
+          applyReviewNote(n.workoutId, n.note, userId, inputsUsed, tx),
+        ),
+      );
+      return {
+        adjusted: modResults.filter(Boolean).length,
+        noted: noteResults.filter(Boolean).length,
+      };
     });
 
-    if (adjusted > 0) {
-      logger.info({ userId, adjusted }, "[coach] Auto-coach applied adjustments");
+    if (adjusted > 0 || noted > 0) {
+      logger.info({ userId, adjusted, noted }, "[coach] Auto-coach applied adjustments and notes");
     }
     return { adjusted };
   } catch (error) {

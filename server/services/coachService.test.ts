@@ -1,6 +1,6 @@
 import { afterEach,beforeEach, describe, expect, it, vi } from "vitest";
 
-import { generateWorkoutSuggestions } from "../gemini/index";
+import { generateReviewNotes, generateWorkoutSuggestions } from "../gemini/index";
 import { storage } from "../storage";
 import { buildTrainingContext } from "./ai";
 import { triggerAutoCoach } from "./coachService";
@@ -40,7 +40,11 @@ vi.mock("../db", () => ({
 }));
 
 vi.mock("./ai", () => ({ buildTrainingContext: vi.fn() }));
-vi.mock("../gemini/index", () => ({ generateWorkoutSuggestions: vi.fn(), EMBEDDING_DIMENSIONS: 3072 }));
+vi.mock("../gemini/index", () => ({
+  generateWorkoutSuggestions: vi.fn(),
+  generateReviewNotes: vi.fn().mockResolvedValue([]),
+  EMBEDDING_DIMENSIONS: 3072,
+}));
 vi.mock("./ragService", () => ({ retrieveRelevantChunks: vi.fn() }));
 vi.mock("../prompts", () => ({ buildCoachingMaterialsSection: vi.fn().mockReturnValue(""), buildRetrievedChunksSection: vi.fn().mockReturnValue("[RAG chunks]"), FUNCTIONAL_EXERCISES: ["skierg", "sled_push", "sled_pull", "burpee_broad_jump", "rowing", "farmers_carry", "sandbag_lunges", "wall_balls"] }));
 vi.mock("../logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
@@ -125,7 +129,18 @@ describe("coachService", () => {
       vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({} as never);
 
       expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 1 });
-      expect(storage.plans.updatePlanDay).toHaveBeenCalledWith("day-1", { mainWorkout: "4x5 Squats @ 80%", aiSource: null }, "user-1", expect.anything());
+      expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
+        "day-1",
+        expect.objectContaining({
+          mainWorkout: "4x5 Squats @ 80%",
+          aiSource: null,
+          aiRationale: "Progressive overload",
+          aiNoteUpdatedAt: new Date("2026-01-15T12:00:00Z"),
+          aiInputsUsed: expect.objectContaining({ ragUsed: false }),
+        }),
+        "user-1",
+        expect.anything(),
+      );
     });
 
     it("uses RAG when chunks are available and dimensions match", async () => {
@@ -138,7 +153,17 @@ describe("coachService", () => {
 
       expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 1 });
       expect(retrieveRelevantChunks).toHaveBeenCalled();
-      expect(storage.plans.updatePlanDay).toHaveBeenCalledWith("day-1", { notes: "Focus on form", aiSource: "rag" }, "user-1", expect.anything());
+      expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
+        "day-1",
+        expect.objectContaining({
+          notes: "Focus on form",
+          aiSource: "rag",
+          aiRationale: "Progressive overload",
+          aiInputsUsed: expect.objectContaining({ ragUsed: true }),
+        }),
+        "user-1",
+        expect.anything(),
+      );
     });
 
     it("falls back to legacy when RAG dimension mismatch occurs", async () => {
@@ -159,7 +184,16 @@ describe("coachService", () => {
       vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({} as never);
 
       expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 1 });
-      expect(storage.plans.updatePlanDay).toHaveBeenCalledWith("day-1", { accessory: "Leg Press\n[AI Coach] Add 3x10 calf raises", aiSource: null }, "user-1", expect.anything());
+      expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
+        "day-1",
+        expect.objectContaining({
+          accessory: "Leg Press\n[AI Coach] Add 3x10 calf raises",
+          aiSource: null,
+          aiRationale: "Progressive overload",
+        }),
+        "user-1",
+        expect.anything(),
+      );
     });
 
     it("resets isAutoCoaching flag even when an error occurs", async () => {
@@ -191,6 +225,38 @@ describe("coachService", () => {
 
       await expect(triggerAutoCoach("user-1")).rejects.toThrow("budget svc down");
       expect(storage.users.updateIsAutoCoaching).toHaveBeenCalledWith("user-1", false);
+    });
+
+    it("writes review notes on upcoming days the coach did NOT modify", async () => {
+      mockBaseAutoCoachDeps([
+        makeTimelineEntry({ planDayId: "day-1" }),
+        makeTimelineEntry({ planDayId: "day-2", date: "2026-01-17" }),
+      ]);
+      vi.mocked(generateWorkoutSuggestions).mockResolvedValue([makeSuggestion({ workoutId: "day-1" })]);
+      vi.mocked(generateReviewNotes).mockResolvedValue([
+        { workoutId: "day-2", note: "On track — building-phase volume looks appropriate." },
+      ]);
+      vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({} as never);
+
+      expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 1 });
+      expect(generateReviewNotes).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.arrayContaining([expect.objectContaining({ id: "day-2" })]),
+        undefined,
+        undefined,
+        "user-1",
+      );
+      expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
+        "day-2",
+        expect.objectContaining({
+          aiSource: "review",
+          aiRationale: "On track — building-phase volume looks appropriate.",
+          aiNoteUpdatedAt: new Date("2026-01-15T12:00:00Z"),
+          aiInputsUsed: expect.objectContaining({ ragUsed: false }),
+        }),
+        "user-1",
+        expect.anything(),
+      );
     });
 
     it("skips suggestions with missing workoutId or recommendation", async () => {

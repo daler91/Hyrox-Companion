@@ -10,6 +10,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { groupExerciseSets } from "@/lib/exerciseUtils";
 
+import { CoachNote } from "./CoachNote";
 import { ExerciseChips } from "./ExerciseChips";
 import type { TimelineWorkoutCardProps } from "./types";
 import { getCardClasses,getStatusBadge } from "./utils";
@@ -201,6 +202,15 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
               </p>
             )}
             <WorkoutStravaStats entry={entry} distanceUnit={distanceUnit} />
+            {entry.aiRationale && entry.aiSource && (
+              <CoachNote
+                entryId={entry.id}
+                rationale={entry.aiRationale}
+                source={entry.aiSource}
+                updatedAt={entry.aiNoteUpdatedAt}
+                inputsUsed={entry.aiInputsUsed}
+              />
+            )}
           </div>
         </div>
       </CardContent>

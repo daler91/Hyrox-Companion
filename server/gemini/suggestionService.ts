@@ -172,7 +172,7 @@ function formatCoachingAnalysis(insights: NonNullable<TrainingContext["coachingI
   return lines.join("\n");
 }
 
-function buildSuggestionsPrompt(
+export function buildSuggestionsPrompt(
   trainingContext: TrainingContext,
   upcomingWorkouts: UpcomingWorkout[],
   planGoal?: string,
@@ -207,6 +207,92 @@ function buildSuggestionsPrompt(
   );
 
   return sections.filter(Boolean).join("\n");
+}
+
+// ---------------------------------------------------------------------------
+// Review notes — "why the coach left this day alone"
+// ---------------------------------------------------------------------------
+
+export const reviewNoteSchema = z.object({
+  workoutId: z.string(),
+  note: z.string(),
+});
+
+export type ReviewNote = z.infer<typeof reviewNoteSchema>;
+
+const REVIEW_NOTES_SYSTEM_PROMPT = `You are an elite Hyrox coach writing short reassurance notes to the athlete for upcoming workouts you reviewed but decided to leave as-is.
+
+Your job is to write one note per upcoming workout ID, explaining in 1-2 sentences why the current plan still fits them given their data. Reference at least one specific signal you were given (RPE trend, plan phase, station gaps, recent workouts, plan goal, or coaching materials). Do not prescribe a new workout — these are review notes only.
+
+Return a JSON array of objects: [{ "workoutId": string, "note": string }, ...]. One entry per upcoming workout ID supplied. Keep each note under 280 characters. Do not include any other fields.`;
+
+export function parseAndValidateReviewNotes(text: string): ReviewNote[] {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch (parseErr) {
+    logger.error({ err: parseErr, responseLength: text.length }, "[gemini] review-notes JSON.parse failed.");
+    return [];
+  }
+  const rawArray = Array.isArray(raw) ? raw : [];
+  const validated: ReviewNote[] = [];
+  for (const item of rawArray) {
+    const result = reviewNoteSchema.safeParse(item);
+    if (result.success) {
+      const note = result.data;
+      validated.push({
+        workoutId: note.workoutId,
+        note: sanitizeHtml(note.note.replaceAll("&", "and")).slice(0, 400),
+      });
+    } else {
+      logger.warn(
+        { issues: result.error.issues, item: JSON.stringify(item).slice(0, 200) },
+        "[gemini] Dropping invalid review note:",
+      );
+    }
+  }
+  return validated;
+}
+
+export async function generateReviewNotes(
+  trainingContext: TrainingContext,
+  upcomingWorkouts: UpcomingWorkout[],
+  planGoal?: string,
+  coachingMaterials?: string,
+  userId?: string,
+): Promise<ReviewNote[]> {
+  try {
+    if (upcomingWorkouts.length === 0) return [];
+
+    const basePrompt = buildSuggestionsPrompt(
+      trainingContext,
+      upcomingWorkouts,
+      planGoal,
+      coachingMaterials,
+    );
+    const prompt = `${basePrompt}\n\nReturn one review note per upcoming workout ID above. Do NOT propose modifications — these notes go alongside the plan as-is.`;
+
+    const response = await retryWithBackoff(
+      () =>
+        getAiClient().models.generateContent({
+          model: GEMINI_SUGGESTIONS_MODEL,
+          config: {
+            systemInstruction: REVIEW_NOTES_SYSTEM_PROMPT,
+            responseMimeType: "application/json",
+            thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
+          },
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+        }),
+      "review-notes",
+    );
+
+    if (userId) trackUsageFromResponse(userId, GEMINI_SUGGESTIONS_MODEL, "review-notes", response);
+
+    return parseAndValidateReviewNotes(response.text || "[]");
+  } catch (error) {
+    logger.error({ err: error }, "[gemini] review-notes error:");
+    return [];
+  }
 }
 
 export async function generateWorkoutSuggestions(

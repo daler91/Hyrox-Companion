@@ -81,6 +81,24 @@ export type InsertPlanDay = z.infer<typeof insertPlanDaySchema>;
 export type UpdatePlanDay = z.infer<typeof updatePlanDaySchema>;
 export type PlanDay = typeof planDays.$inferSelect;
 
+/**
+ * Compact audit of which inputs drove the coach's note for a plan day.
+ * Persisted as `plan_days.ai_inputs_used` (jsonb) and shown on the
+ * workout card so the athlete can see what the coach was weighing.
+ */
+export const coachNoteInputsSchema = z.object({
+  rpeTrend: z.enum(["rising", "stable", "falling", "insufficient_data"]).optional(),
+  fatigueFlag: z.boolean().optional(),
+  planPhase: z.enum(["early", "build", "peak", "taper", "race_week"]).optional(),
+  weeklyVolumeTrend: z.enum(["increasing", "stable", "decreasing"]).optional(),
+  stationGaps: z.array(z.string()).optional(),
+  progressionFlags: z.array(z.string()).optional(),
+  ragUsed: z.boolean().optional(),
+  recentWorkoutCount: z.number().int().nonnegative().optional(),
+  planGoalPresent: z.boolean().optional(),
+});
+export type CoachNoteInputs = z.infer<typeof coachNoteInputsSchema>;
+
 export type TrainingPlanWithDays = TrainingPlan & {
   days: PlanDay[];
 };
@@ -145,7 +163,10 @@ export type TimelineEntry = {
   planName?: string | null;
   planId?: string | null;
   source?: "manual" | "strava" | "garmin";
-  aiSource?: "rag" | "legacy" | null;
+  aiSource?: "rag" | "legacy" | "review" | null;
+  aiRationale?: string | null;
+  aiNoteUpdatedAt?: string | Date | null;
+  aiInputsUsed?: CoachNoteInputs | null;
   exerciseSets?: ExerciseSet[];
   calories?: number | null;
   distanceMeters?: number | null;
