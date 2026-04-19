@@ -1,5 +1,6 @@
 import type { ExerciseSet, WorkoutLog } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
+import { useRef } from "react";
 
 import { useApiMutation } from "@/hooks/useApiMutation";
 import {
@@ -151,23 +152,31 @@ export function useWorkoutDetail(workoutId: string | null) {
     errorToast: "Couldn't save that note",
   });
 
-  // Inline RPE edit from the stats row. Deliberately non-optimistic —
-  // concurrent edits (7 → 8 → 9 while the first PATCH is still in
-  // flight) mean a rollback snapshot can overwrite a newer successful
-  // edit. We also avoid invalidating the whole workout query on
-  // success: that would refetch and clobber other in-flight optimistic
-  // edits in the same cache entry (e.g. a pending note save has
-  // already patched cache.notes via its own onMutate but hasn't
-  // reached the server yet — an RPE refetch would restore the stale
-  // server-side notes).
+  // Inline RPE edit from the stats row. Non-optimistic on purpose —
+  // rollback snapshots from concurrent edits can stomp newer
+  // successful values. We also avoid invalidating the whole workout
+  // query on success: that would refetch and clobber other in-flight
+  // optimistic edits in the same cache entry (e.g. a pending note
+  // save has already patched cache.notes via its own onMutate but
+  // hasn't reached the server yet — an RPE refetch would restore the
+  // stale server-side notes).
   //
-  // Instead, on success we surgically patch just cache.rpe to the
-  // value the server returned, leaving every other field untouched.
-  // workoutHistory + timeline are invalidated so the sidebar's Block
-  // avg RPE and the timeline card's RPE number refresh.
+  // Each mutate() bumps rpeSeqRef and stashes the value as context;
+  // onSuccess ignores any response whose seq isn't the latest, so an
+  // older request resolving after a newer one can't overwrite the
+  // newer cache value. workoutHistory + timeline are invalidated so
+  // the sidebar's Block avg RPE and the timeline card's RPE number
+  // refresh.
+  const rpeSeqRef = useRef(0);
   const updateRpe = useApiMutation({
     mutationFn: (rpe: number | null) => api.workouts.update(workoutId!, { rpe }),
-    onSuccess: (serverWorkout) => {
+    onMutate: () => {
+      rpeSeqRef.current += 1;
+      return { seq: rpeSeqRef.current };
+    },
+    onSuccess: (serverWorkout, _rpe, ctx) => {
+      const seq = (ctx as { seq?: number } | undefined)?.seq;
+      if (seq !== rpeSeqRef.current) return;
       patchCachedWorkout({ rpe: serverWorkout.rpe });
     },
     invalidateQueries: workoutId

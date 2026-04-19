@@ -1,5 +1,5 @@
 import type { ExerciseSet, WorkoutLog } from "@shared/schema";
-import { useEffect,useMemo, useState } from "react";
+import { type ReactNode, useEffect,useMemo, useState } from "react";
 
 import { Input } from "@/components/ui/input";
 import { useDebouncedCallback } from "@/hooks/useDebouncedCallback";
@@ -55,16 +55,28 @@ export function WorkoutStatsRow({ workout, exerciseSets, onChangeRpe }: WorkoutS
   );
 }
 
+function StatCellShell({
+  label,
+  testId,
+  children,
+}: Readonly<{ label: string; testId?: string; children: ReactNode }>) {
+  return (
+    <div className="flex flex-col gap-1" data-testid={testId}>
+      <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
+      {children}
+    </div>
+  );
+}
+
 function StatCell({ label, value, unit }: Readonly<{ label: string; value: number | null | undefined; unit?: string }>) {
   const displayValue = value == null ? "—" : String(value);
   return (
-    <div className="flex flex-col gap-1">
-      <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
+    <StatCellShell label={label}>
       <div className="flex items-baseline gap-1">
         <span className="text-2xl font-semibold tabular-nums">{displayValue}</span>
         {unit && value != null && <span className="text-xs text-muted-foreground">{unit}</span>}
       </div>
-    </div>
+    </StatCellShell>
   );
 }
 
@@ -99,8 +111,7 @@ function RpeEditableCell({ value, onChange }: Readonly<RpeEditableCellProps>) {
   }, RPE_SAVE_DEBOUNCE_MS);
 
   return (
-    <div className="flex flex-col gap-1" data-testid="workout-stats-rpe-cell">
-      <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">RPE</span>
+    <StatCellShell label="RPE" testId="workout-stats-rpe-cell">
       <Input
         type="number"
         inputMode="numeric"
@@ -117,6 +128,6 @@ function RpeEditableCell({ value, onChange }: Readonly<RpeEditableCellProps>) {
         className="h-9 w-20 text-2xl font-semibold tabular-nums"
         data-testid="workout-stats-rpe-input"
       />
-    </div>
+    </StatCellShell>
   );
 }
