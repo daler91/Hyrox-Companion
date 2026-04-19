@@ -7,7 +7,12 @@ export { plans } from "./plans";
 export { timelineAnnotations } from "./timelineAnnotations";
 export type { GarminStatus, GarminSyncResponse,StravaSyncResponse } from "./user";
 export { auth, email,garmin, preferences, strava } from "./user";
-export type { BatchReparseResponse } from "./workouts";
+export type {
+  AddExerciseSetPayload,
+  BatchReparseResponse,
+  PatchExerciseSetPayload,
+  WorkoutHistoryStats,
+} from "./workouts";
 export { workouts } from "./workouts";
 
 // ---------------------------------------------------------------------------
@@ -47,6 +52,8 @@ export const QUERY_KEYS = {
   timeline: ["/api/v1/timeline"] as const,
   timelineAnnotations: ["/api/v1/timeline-annotations"] as const,
   workouts: ["/api/v1/workouts"] as const,
+  workout: (id: string) => ["/api/v1/workouts", id] as const,
+  workoutHistory: (id: string) => ["/api/v1/workouts", id, "history"] as const,
   personalRecords: ["/api/v1/personal-records"] as const,
   exerciseAnalytics: ["/api/v1/exercise-analytics"] as const,
   trainingOverview: ["/api/v1/training-overview"] as const,

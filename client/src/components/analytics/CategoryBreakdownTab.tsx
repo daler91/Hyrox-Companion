@@ -6,15 +6,8 @@ import { Cell, Legend,Pie, PieChart, ResponsiveContainer, Tooltip } from "rechar
 
 import { Card, CardContent, CardDescription,CardHeader, CardTitle } from "@/components/ui/card";
 import { api } from "@/lib/api";
+import { CATEGORY_COLORS } from "@/lib/categoryColors";
 import { categoryLabels } from "@/lib/exerciseUtils";
-
-const CATEGORY_COLORS: Record<string, string> = {
-  functional: "#f97316",
-  running: "#3b82f6",
-  strength: "#a855f7",
-  conditioning: "#ef4444",
-  other: "#64748b",
-};
 
 const STATION_LABELS: Record<string, string> = {
   skierg: "SkiErg",
