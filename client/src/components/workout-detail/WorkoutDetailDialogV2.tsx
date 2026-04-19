@@ -146,6 +146,7 @@ export function WorkoutDetailDialogV2({
   const handleAskCoach = onAskCoach
     ? () => onAskCoach(buildCoachSeedMessage(entry, exerciseSets))
     : undefined;
+  const handleChangeRpe = workoutId ? (rpe: number | null) => updateRpe.mutate(rpe) : undefined;
   const showStatsRow = !isPlanned && !!workout;
 
   return (
@@ -171,7 +172,7 @@ export function WorkoutDetailDialogV2({
             <WorkoutStatsRow
               workout={workout}
               exerciseSets={exerciseSets}
-              onChangeRpe={workoutId ? (rpe) => updateRpe.mutate(rpe) : undefined}
+              onChangeRpe={handleChangeRpe}
             />
           )}
         </div>
