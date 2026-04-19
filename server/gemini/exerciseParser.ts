@@ -25,17 +25,31 @@ export const parsedExerciseSchema = z.object({
  * that look like an exercise name (letters + hyphens + spaces), title-case
  * them. Falls back to "Unknown exercise" so nothing ever renders blank.
  */
+// Unit/measure tokens that cling to exercise names in free text ("3x10 reps
+// bench press at 60kg"). Each regex pass above is linear on its own — the
+// previous `\d+\s*(alt|alt|...)` combo caused CodeQL to flag polynomial
+// backtracking on long digit runs, so we strip numbers first, then drop
+// these tokens via a lowercase set lookup in the word loop below.
+const EXERCISE_UNIT_TOKENS = new Set([
+  "x", "kg", "lb", "lbs", "m", "km", "min", "sec", "s",
+  "rep", "reps", "set", "sets",
+]);
+
 function synthesizeCustomLabel(sourceText: string): string {
-  // Strip quantity tokens (numbers + reps/sets/units) so "3x10 bicep curls"
-  // collapses to "bicep curls". Then drop anything that isn't a letter,
-  // hyphen, or space. No HTML-tag regex — input is already sanitized
-  // upstream, and `[^>]+` backtracks polynomially on a CodeQL ReDoS input.
+  // Strip digits first (linear), then anything that isn't a letter, hyphen,
+  // or space. The unit tokens ("reps", "kg", …) survive the regex passes but
+  // are dropped in the word filter below. No HTML-tag regex — input is
+  // sanitized upstream, and `[^>]+` would backtrack polynomially on ReDoS
+  // input.
   const cleaned = sourceText
-    .replaceAll(/\d+\s*(x|×|reps?|sets?|kg|lbs?|m|km|min|sec|s)\b/gi, " ")
+    .replaceAll(/\d+/g, " ")
     .replaceAll(/[^a-zA-Z\- ]/g, " ")
     .replaceAll(/\s+/g, " ")
     .trim();
-  const words = cleaned.split(" ").filter((w) => w.length > 1).slice(0, 4);
+  const words = cleaned
+    .split(" ")
+    .filter((w) => w.length > 1 && !EXERCISE_UNIT_TOKENS.has(w.toLowerCase()))
+    .slice(0, 4);
   if (words.length === 0) return "Unknown exercise";
   return words
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
