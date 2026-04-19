@@ -27,7 +27,6 @@ import {
   TimelineHeader,
   TimelineSkeleton,
   TimelineTodayIndicator,
-  WorkoutDetailDialog,
 } from "@/components/timeline";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,7 +36,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useTimelineState } from "@/hooks/useTimelineState";
 import { api, QUERY_KEYS } from "@/lib/api";
-import { useFeatureFlag } from "@/lib/featureFlags";
 import { queryClient } from "@/lib/queryClient";
 
 type TimelineState = ReturnType<typeof useTimelineState>;
@@ -245,9 +243,8 @@ export default function Timeline() {
   const { filterStatus, setFilterStatus, showAllPast, setShowAllPast, showAllFuture, setShowAllFuture, pastGroups, futureGroups, visiblePastGroups, visibleFutureGroups, hiddenPastCount, hiddenFutureCount } = filters;
   const { showOnboarding, coachOpen, setCoachOpen, handleOnboardingComplete } = onboarding;
   const { csvPreview, setCsvPreview, schedulingPlanId, setSchedulingPlanId, startDate, setStartDate, fileInputRef, handleFileUpload, confirmImport, importMutation, samplePlanMutation, renamePlanMutation, schedulePlanMutation, updatePlanGoalMutation } = planImport;
-  const { detailEntry, setDetailEntry, skipConfirmEntry, setSkipConfirmEntry, openDetailDialog, handleSaveFromDetail, handleMarkComplete, handleChangeStatus, handleDelete, confirmSkip, updateDayMutation, logWorkoutMutation, updateWorkoutMutation, deleteWorkoutMutation, deletePlanDayMutation } = workoutActions;
+  const { detailEntry, setDetailEntry, skipConfirmEntry, setSkipConfirmEntry, openDetailDialog, handleMarkComplete, handleChangeStatus, handleDelete, confirmSkip } = workoutActions;
   const { combiningEntry, setCombiningEntry, combineSecondEntry, setCombineSecondEntry, showCombineDialog, setShowCombineDialog, handleCombine, handleConfirmCombine, combineWorkoutsMutation } = combine;
-  const workoutDetailV2 = useFeatureFlag("workoutDetailV2");
   const scrollRef = useRef<HTMLDivElement>(null);
   // Carries a prefilled message into the CoachPanel's chat input when the
   // user clicks "Ask coach" on the v2 workout detail dialog. The nonce
@@ -463,40 +460,22 @@ export default function Timeline() {
             isPending={schedulePlanMutation.isPending}
           />
 
-          {workoutDetailV2 && detailEntry?.workoutLogId ? (
-            <WorkoutDetailDialogV2
-              entry={detailEntry}
-              onClose={() => setDetailEntry(null)}
-              onAskCoach={askCoachFromDetail}
-              onDelete={handleDelete}
-              onChangeStatus={(entry, status) => {
-                handleChangeStatus(entry, status);
-                setDetailEntry(null);
-              }}
-              weightUnit={user?.weightUnit === "lbs" ? "lb" : "kg"}
-            />
-          ) : (
-            <WorkoutDetailDialog
-              entry={detailEntry}
-              onClose={() => setDetailEntry(null)}
-              onMarkComplete={(entry) => {
-                handleMarkComplete(entry);
-                setDetailEntry(null);
-              }}
-              onChangeStatus={(entry, status) => {
-                handleChangeStatus(entry, status);
-                setDetailEntry(null);
-              }}
-              onSave={handleSaveFromDetail}
-              onDelete={handleDelete}
-              onCombine={(entry) => {
-                setDetailEntry(null);
-                handleCombine(entry);
-              }}
-              isSaving={updateDayMutation.isPending || updateWorkoutMutation.isPending || logWorkoutMutation.isPending}
-              isDeleting={deleteWorkoutMutation.isPending || deletePlanDayMutation.isPending}
-            />
-          )}
+          <WorkoutDetailDialogV2
+            entry={detailEntry}
+            onClose={() => setDetailEntry(null)}
+            onAskCoach={askCoachFromDetail}
+            onDelete={handleDelete}
+            onChangeStatus={(entry, status) => {
+              handleChangeStatus(entry, status);
+              setDetailEntry(null);
+            }}
+            onMarkComplete={handleMarkComplete}
+            onCombine={(entry) => {
+              setDetailEntry(null);
+              handleCombine(entry);
+            }}
+            weightUnit={user?.weightUnit === "lbs" ? "lb" : "kg"}
+          />
 
           <SkipConfirmDialog
             entry={skipConfirmEntry}

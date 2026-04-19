@@ -11,6 +11,12 @@ interface CoachPrescriptionCollapsibleProps {
   readonly mainWorkout: string | null | undefined;
   readonly accessory: string | null | undefined;
   readonly notes: string | null | undefined;
+  /**
+   * Open on mount when `true`. Planned entries pass `true` because the
+   * prescription is all they have — there's no structured table yet.
+   * Logged workouts keep it collapsed so the structured table dominates.
+   */
+  readonly defaultOpen?: boolean;
 }
 
 /**
@@ -26,12 +32,13 @@ export function CoachPrescriptionCollapsible({
   mainWorkout,
   accessory,
   notes,
+  defaultOpen = false,
 }: CoachPrescriptionCollapsibleProps) {
   const hasContent = hasText(mainWorkout) || hasText(accessory) || hasText(notes);
   if (!hasContent) return null;
 
   return (
-    <Collapsible className="rounded-lg border border-border" data-testid="coach-prescription-collapsible">
+    <Collapsible defaultOpen={defaultOpen} className="rounded-lg border border-border" data-testid="coach-prescription-collapsible">
       <CollapsibleTrigger className="group flex w-full items-center justify-between gap-2 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground hover:bg-muted/50">
         <span>Coach's prescription</span>
         <ChevronDown

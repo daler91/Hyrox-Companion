@@ -1,6 +1,6 @@
 import type { ExerciseSet, TimelineEntry, WorkoutStatus } from "@shared/schema";
 import { format, parseISO } from "date-fns";
-import { Loader2 } from "lucide-react";
+import { CheckCircle2, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import {
@@ -13,6 +13,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { useWorkoutDetail } from "@/hooks/useWorkoutDetail";
 import { groupExerciseSets } from "@/lib/exerciseUtils";
@@ -44,19 +45,31 @@ interface WorkoutDetailDialogV2Props {
    * writes to plan_days, so ad-hoc logged workouts don't get the menu.
    */
   readonly onChangeStatus?: (entry: TimelineEntry, status: WorkoutStatus) => void;
+  /**
+   * Primary CTA for planned entries. Creates a new workoutLog seeded from
+   * the plan day's prescribed exerciseSets (or free text) — the Timeline
+   * closes the dialog on the mutation's onSuccess so the user sees the
+   * newly-logged workout in their list.
+   */
+  readonly onMarkComplete?: (entry: TimelineEntry) => void;
+  /**
+   * ⋮ menu → Combine workouts. Parent closes the detail dialog and opens
+   * the combine picker; only surfaces on logged workouts (no second
+   * workout to merge with when nothing's logged yet).
+   */
+  readonly onCombine?: (entry: TimelineEntry) => void;
   readonly weightUnit?: "kg" | "lb";
 }
 
 /**
- * V2 workout detail dialog. Opens from the Timeline when a logged workout
- * is clicked; renders a wide landscape layout with an always-editable
- * structured exercise table plus a sidebar (coach take + history) and a
- * collapsible free-text prescription as a fallback.
- *
- * Currently only handles logged workouts (entry.workoutLogId != null); a
- * planned-day rendering mode is deferred to phase 6 when we wire the
- * "log this planned day" flow. The legacy dialog still handles planned
- * entries so we don't block the common click-a-logged-workout flow.
+ * V2 workout detail dialog. Renders both states:
+ *   - **Logged**: structured exercise table with inline edit, stats row,
+ *     athlete note, coach take + history sidebar.
+ *   - **Planned** (entry.workoutLogId == null): a "Mark complete" primary
+ *     CTA that turns the plan day into a workoutLog (with prescribed
+ *     sets copied across by the phase-6 server path), plus the coach's
+ *     prescription and coach take — no stats/history/athlete-note since
+ *     there's no log to measure or annotate yet.
  */
 export function WorkoutDetailDialogV2({
   entry,
@@ -64,6 +77,8 @@ export function WorkoutDetailDialogV2({
   onAskCoach,
   onDelete,
   onChangeStatus,
+  onMarkComplete,
+  onCombine,
   weightUnit = "kg",
 }: WorkoutDetailDialogV2Props) {
   const workoutId = entry?.workoutLogId ?? null;
@@ -130,6 +145,11 @@ export function WorkoutDetailDialogV2({
   if (!entry) return null;
 
   const exerciseSets = workout?.exerciseSets ?? [];
+  // Planned-state = this entry has never been logged. We render a
+  // slimmer layout focused on the "Mark complete" primary action; the
+  // stats/history/athlete-note sections only make sense once there's a
+  // workoutLog to back them.
+  const isPlanned = !workoutId;
 
   return (
     <Dialog open={!!entry} onOpenChange={(open) => !open && onClose()}>
@@ -149,42 +169,46 @@ export function WorkoutDetailDialogV2({
             onClose={onClose}
             onDelete={onDelete ? () => setConfirmingDelete(true) : undefined}
             onChangeStatus={onChangeStatus ? (status) => onChangeStatus(entry, status) : undefined}
+            onCombine={!isPlanned && onCombine ? () => onCombine(entry) : undefined}
           />
-          {workout && <WorkoutStatsRow workout={workout} exerciseSets={exerciseSets} />}
+          {!isPlanned && workout && <WorkoutStatsRow workout={workout} exerciseSets={exerciseSets} />}
         </div>
 
         <div className="grid grid-cols-1 gap-4 px-6 py-4 md:grid-cols-[1fr_280px]">
           <div className="flex flex-col gap-3">
-            {isHydrating && exerciseSets.length === 0 && (
-              <div
-                className="flex items-center gap-2 rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground"
-                role="status"
-                aria-live="polite"
-                data-testid="workout-detail-hydrating"
-              >
-                <Loader2 className="size-3.5 animate-spin" aria-hidden />
-                Parsing coach's prescription…
-              </div>
-            )}
-            {workoutId ? (
-              <ExerciseTable
-                workoutId={workoutId}
-                exerciseSets={exerciseSets}
-                weightUnit={weightUnit}
-                onUpdateSet={(setId, data) => updateSet.mutate({ setId, data })}
-                onAddSet={(data) => addSet.mutate(data)}
-                onDeleteSet={(setId) => deleteSet.mutate(setId)}
-              />
+            {isPlanned ? (
+              <PlannedCallToAction entry={entry} onMarkComplete={onMarkComplete} />
             ) : (
-              <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
-                This workout hasn't been logged yet. Mark it complete to start logging sets.
-              </div>
+              <>
+                {isHydrating && exerciseSets.length === 0 && (
+                  <div
+                    className="flex items-center gap-2 rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground"
+                    role="status"
+                    aria-live="polite"
+                    data-testid="workout-detail-hydrating"
+                  >
+                    <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                    Parsing coach's prescription…
+                  </div>
+                )}
+                {workoutId && (
+                  <ExerciseTable
+                    workoutId={workoutId}
+                    exerciseSets={exerciseSets}
+                    weightUnit={weightUnit}
+                    onUpdateSet={(setId, data) => updateSet.mutate({ setId, data })}
+                    onAddSet={(data) => addSet.mutate(data)}
+                    onDeleteSet={(setId) => deleteSet.mutate(setId)}
+                  />
+                )}
+              </>
             )}
 
             <CoachPrescriptionCollapsible
               mainWorkout={entry.mainWorkout}
               accessory={entry.accessory}
               notes={entry.notes}
+              defaultOpen={isPlanned}
             />
           </div>
 
@@ -197,17 +221,19 @@ export function WorkoutDetailDialogV2({
                   : undefined
               }
             />
-            <HistoryPanel stats={history} isLoading={isLoading} />
+            {!isPlanned && <HistoryPanel stats={history} isLoading={isLoading} />}
           </aside>
         </div>
 
-        <div className="border-t border-border px-6 py-4">
-          <AthleteNoteInput
-            value={workout?.notes}
-            onSave={(note) => workoutId && updateNote.mutate(note)}
-            disabled={!workoutId}
-          />
-        </div>
+        {!isPlanned && (
+          <div className="border-t border-border px-6 py-4">
+            <AthleteNoteInput
+              value={workout?.notes}
+              onSave={(note) => workoutId && updateNote.mutate(note)}
+              disabled={!workoutId}
+            />
+          </div>
+        )}
       </DialogContent>
 
       {/* Explicit confirm step before firing onDelete — the v2 menu's ⋮ is
@@ -247,6 +273,38 @@ export function WorkoutDetailDialogV2({
  * the full training context via the standard RAG pipeline, so this only
  * needs to point the conversation at the specific workout.
  */
+interface PlannedCallToActionProps {
+  readonly entry: TimelineEntry;
+  readonly onMarkComplete?: (entry: TimelineEntry) => void;
+}
+
+function PlannedCallToAction({ entry, onMarkComplete }: Readonly<PlannedCallToActionProps>) {
+  return (
+    <div
+      className="flex flex-col gap-3 rounded-lg border border-border bg-muted/20 px-4 py-5 text-center"
+      data-testid="workout-detail-planned-cta"
+    >
+      <p className="text-sm text-muted-foreground">
+        This workout hasn't been logged yet. Mark it complete to copy the coach's
+        prescription into an editable log.
+      </p>
+      {onMarkComplete && (
+        <div className="flex justify-center">
+          <Button
+            onClick={() => onMarkComplete(entry)}
+            size="lg"
+            className="gap-2"
+            data-testid="workout-detail-mark-complete"
+          >
+            <CheckCircle2 className="size-4" aria-hidden />
+            Mark complete
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function pluralize(count: number, singular: string, plural: string): string {
   return count === 1 ? singular : plural;
 }

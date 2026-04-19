@@ -1,6 +1,6 @@
 import type { TimelineEntry, WorkoutStatus } from "@shared/schema";
 import { format, parseISO } from "date-fns";
-import { CheckCircle2, Clock, MoreVertical, SkipForward, Sparkles, Trash2, X,XCircle } from "lucide-react";
+import { CheckCircle2, Clock, Layers, MoreVertical, SkipForward, Sparkles, Trash2, X,XCircle } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,8 @@ interface WorkoutDetailHeaderV2Props {
    * while the workout is already completed.
    */
   readonly onChangeStatus?: (status: WorkoutStatus) => void;
+  /** Opens the combine-workouts picker. Only available on logged entries. */
+  readonly onCombine?: () => void;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -54,7 +56,7 @@ const STATUS_MENU_ITEMS: ReadonlyArray<{
  * affordance when the plan day's coach rationale has been applied, an
  * overflow menu (status change + delete), and a close button.
  */
-export function WorkoutDetailHeaderV2({ entry, onClose, onDelete, onChangeStatus }: WorkoutDetailHeaderV2Props) {
+export function WorkoutDetailHeaderV2({ entry, onClose, onDelete, onChangeStatus, onCombine }: WorkoutDetailHeaderV2Props) {
   const dateLabel = formatDateHeader(entry.date);
   const statusLabel = STATUS_LABEL[entry.status] ?? entry.status;
   const aiModified = !!entry.aiSource || !!entry.aiNoteUpdatedAt;
@@ -67,7 +69,7 @@ export function WorkoutDetailHeaderV2({ entry, onClose, onDelete, onChangeStatus
     ? STATUS_MENU_ITEMS.filter((item) => item.status !== entry.status)
     : [];
 
-  const hasMenu = canChangeStatus || !!onDelete;
+  const hasMenu = canChangeStatus || !!onDelete || !!onCombine;
 
   return (
     <div className="flex items-start justify-between gap-4 pb-2">
@@ -114,15 +116,28 @@ export function WorkoutDetailHeaderV2({ entry, onClose, onDelete, onChangeStatus
                   <Icon className="mr-2 size-4" aria-hidden /> {label}
                 </DropdownMenuItem>
               ))}
-              {statusItems.length > 0 && onDelete && <DropdownMenuSeparator />}
+              {onCombine && (
+                <>
+                  {statusItems.length > 0 && <DropdownMenuSeparator />}
+                  <DropdownMenuItem
+                    onSelect={onCombine}
+                    data-testid="workout-detail-combine"
+                  >
+                    <Layers className="mr-2 size-4" aria-hidden /> Combine workouts
+                  </DropdownMenuItem>
+                </>
+              )}
               {onDelete && (
-                <DropdownMenuItem
-                  onSelect={onDelete}
-                  className="text-destructive"
-                  data-testid="workout-detail-delete"
-                >
-                  <Trash2 className="mr-2 size-4" aria-hidden /> Delete workout
-                </DropdownMenuItem>
+                <>
+                  {(statusItems.length > 0 || onCombine) && <DropdownMenuSeparator />}
+                  <DropdownMenuItem
+                    onSelect={onDelete}
+                    className="text-destructive"
+                    data-testid="workout-detail-delete"
+                  >
+                    <Trash2 className="mr-2 size-4" aria-hidden /> Delete workout
+                  </DropdownMenuItem>
+                </>
               )}
             </DropdownMenuContent>
           </DropdownMenu>

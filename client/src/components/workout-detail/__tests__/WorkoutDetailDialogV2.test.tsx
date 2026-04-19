@@ -367,4 +367,70 @@ describe("WorkoutDetailDialogV2", () => {
     expect(screen.queryByTestId("workout-detail-status-skipped")).not.toBeInTheDocument();
     expect(screen.getByTestId("workout-detail-delete")).toBeInTheDocument();
   });
+
+  // ---- Planned-entry state --------------------------------------------
+
+  it("renders the Mark complete CTA for planned entries and hides stats + history", () => {
+    const onMarkComplete = vi.fn();
+
+    renderDialog({
+      entry: makeEntry({
+        workoutLogId: null,
+        status: "planned",
+        planDayId: "plan-day-1",
+      }),
+      onMarkComplete,
+    });
+
+    expect(screen.getByTestId("workout-detail-planned-cta")).toBeInTheDocument();
+    expect(screen.getByTestId("workout-detail-mark-complete")).toBeInTheDocument();
+    // Stats/history/athlete-note are workout-log-backed; they shouldn't
+    // surface for a planned entry with nothing logged yet.
+    expect(screen.queryByTestId("workout-stats-row")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("history-panel")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("athlete-note-input")).not.toBeInTheDocument();
+    // Planned entries open the prescription accordion by default.
+    expect(screen.getByTestId("coach-prescription-collapsible")).toBeInTheDocument();
+    // The workout query should not even have been issued — there's no
+    // workoutId to fetch.
+    expect(mockWorkouts.get).not.toHaveBeenCalled();
+  });
+
+  it("fires onMarkComplete when the CTA is clicked", async () => {
+    const onMarkComplete = vi.fn();
+    renderDialog({
+      entry: makeEntry({
+        workoutLogId: null,
+        status: "planned",
+        planDayId: "plan-day-1",
+      }),
+      onMarkComplete,
+    });
+
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId("workout-detail-mark-complete"));
+
+    expect(onMarkComplete).toHaveBeenCalledWith(
+      expect.objectContaining({ workoutLogId: null, planDayId: "plan-day-1" }),
+    );
+  });
+
+  it("offers Combine in the ⋮ menu for logged workouts only", async () => {
+    const onCombine = vi.fn();
+    mockWorkouts.get.mockResolvedValue(
+      makeWorkout({ exerciseSets: [makeSet()] }),
+    );
+    mockWorkouts.history.mockResolvedValue({
+      lastSameFocus: null,
+      prSetCount: 0,
+      blockAvgRpe: null,
+    });
+
+    renderDialog({ onCombine });
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByTestId("workout-detail-actions-trigger"));
+    await user.click(screen.getByTestId("workout-detail-combine"));
+    expect(onCombine).toHaveBeenCalledTimes(1);
+  });
 });
