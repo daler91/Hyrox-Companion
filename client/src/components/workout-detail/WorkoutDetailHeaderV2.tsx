@@ -1,8 +1,7 @@
 import type { TimelineEntry, WorkoutStatus } from "@shared/schema";
 import { format, parseISO } from "date-fns";
-import { CheckCircle2, Clock, Layers, MoreVertical, SkipForward, Sparkles, Trash2, X,XCircle } from "lucide-react";
+import { CheckCircle2, ChevronDown,Clock, Layers, MoreVertical, SkipForward, Sparkles, Trash2,XCircle } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -11,54 +10,73 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 
 interface WorkoutDetailHeaderV2Props {
   readonly entry: TimelineEntry;
-  readonly onClose: () => void;
   readonly onDelete?: () => void;
   /**
-   * Invoked when the user picks a different status from the ⋮ menu. Only
+   * Invoked when the user picks a different status from either the status
+   * chip dropdown (primary entry point) or the ⋮ overflow menu. Only
    * relevant for entries linked to a plan day — the current status is
-   * filtered out of the menu so the user never sees "Mark as completed"
-   * while the workout is already completed.
+   * filtered out so the user never sees a no-op transition.
    */
   readonly onChangeStatus?: (status: WorkoutStatus) => void;
   /** Opens the combine-workouts picker. Only available on logged entries. */
   readonly onCombine?: () => void;
 }
 
-const STATUS_LABEL: Record<string, string> = {
-  planned: "Planned",
-  completed: "Completed",
-  missed: "Missed",
-  skipped: "Skipped",
-};
-
-/**
- * Ordered once so the menu shows the same items in the same place no
- * matter what the current status is; the current status gets filtered
- * out at render time.
- */
-const STATUS_MENU_ITEMS: ReadonlyArray<{
-  status: WorkoutStatus;
+interface StatusStyle {
   label: string;
   Icon: typeof CheckCircle2;
+  chipClass: string;
   colorClass: string;
-}> = [
-  { status: "completed", label: "Mark as completed", Icon: CheckCircle2, colorClass: "text-green-600 dark:text-green-400" },
-  { status: "planned", label: "Mark as planned", Icon: Clock, colorClass: "text-blue-600 dark:text-blue-400" },
-  { status: "skipped", label: "Mark as skipped", Icon: SkipForward, colorClass: "text-yellow-600 dark:text-yellow-400" },
-  { status: "missed", label: "Mark as missed", Icon: XCircle, colorClass: "text-red-600 dark:text-red-400" },
-];
+}
+
+const STATUS_STYLES: Record<string, StatusStyle> = {
+  planned: {
+    label: "Planned",
+    Icon: Clock,
+    chipClass: "border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-400",
+    colorClass: "text-blue-600 dark:text-blue-400",
+  },
+  completed: {
+    label: "Completed",
+    Icon: CheckCircle2,
+    chipClass: "border-green-500/40 bg-green-500/10 text-green-700 dark:text-green-400",
+    colorClass: "text-green-600 dark:text-green-400",
+  },
+  missed: {
+    label: "Missed",
+    Icon: XCircle,
+    chipClass: "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-400",
+    colorClass: "text-red-600 dark:text-red-400",
+  },
+  skipped: {
+    label: "Skipped",
+    Icon: SkipForward,
+    chipClass: "border-yellow-500/40 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400",
+    colorClass: "text-yellow-600 dark:text-yellow-400",
+  },
+};
+
+const STATUS_ORDER: readonly WorkoutStatus[] = ["completed", "planned", "skipped", "missed"];
 
 /**
- * Top bar of the v2 dialog — date strip, status chip, "AI modified"
- * affordance when the plan day's coach rationale has been applied, an
- * overflow menu (status change + delete), and a close button.
+ * Top bar of the v2 dialog — date strip, clickable status chip, "AI
+ * modified" affordance when the plan day's coach rationale has been
+ * applied, and an overflow menu (combine + delete). The shadcn
+ * DialogContent wrapper already renders its own close X, so this header
+ * intentionally omits one.
  */
-export function WorkoutDetailHeaderV2({ entry, onClose, onDelete, onChangeStatus, onCombine }: WorkoutDetailHeaderV2Props) {
+export function WorkoutDetailHeaderV2({ entry, onDelete, onChangeStatus, onCombine }: WorkoutDetailHeaderV2Props) {
   const dateLabel = formatDateHeader(entry.date);
-  const statusLabel = STATUS_LABEL[entry.status] ?? entry.status;
+  const style = STATUS_STYLES[entry.status] ?? {
+    label: entry.status,
+    Icon: Clock,
+    chipClass: "",
+    colorClass: "",
+  };
   const aiModified = !!entry.aiSource || !!entry.aiNoteUpdatedAt;
 
   // Status change is only available for entries linked to a plan day —
@@ -70,15 +88,15 @@ export function WorkoutDetailHeaderV2({ entry, onClose, onDelete, onChangeStatus
   // Mark-complete CTA path instead, which fires logWorkoutMutation to
   // actually create the workoutLog.
   const canChangeStatus = !!onChangeStatus && !!entry.planDayId;
-  const statusItems = canChangeStatus
-    ? STATUS_MENU_ITEMS.filter((item) => {
-        if (item.status === entry.status) return false;
-        if (item.status === "completed" && !entry.workoutLogId) return false;
+  const statusOptions: WorkoutStatus[] = canChangeStatus
+    ? STATUS_ORDER.filter((status) => {
+        if (status === entry.status) return false;
+        if (status === "completed" && !entry.workoutLogId) return false;
         return true;
       })
     : [];
 
-  const hasMenu = canChangeStatus || !!onDelete || !!onCombine;
+  const hasOverflowMenu = !!onDelete || !!onCombine;
 
   return (
     <div className="flex items-start justify-between gap-4 pb-2">
@@ -87,22 +105,25 @@ export function WorkoutDetailHeaderV2({ entry, onClose, onDelete, onChangeStatus
           <span className="inline-flex items-center gap-1">
             <span>{dateLabel}</span>
           </span>
-          <Badge variant="outline" className="font-normal">{statusLabel}</Badge>
+          <StatusChip
+            style={style}
+            options={statusOptions}
+            onChangeStatus={onChangeStatus}
+          />
           {aiModified && (
-            <Badge
-              variant="outline"
-              className="border-green-500/40 bg-green-500/10 font-normal text-green-700 dark:text-green-400"
+            <span
+              className="inline-flex items-center gap-1 rounded-md border border-green-500/40 bg-green-500/10 px-2 py-0.5 text-xs font-normal text-green-700 dark:text-green-400"
               data-testid="ai-modified-chip"
             >
-              <Sparkles className="mr-1 size-3" aria-hidden />
+              <Sparkles className="size-3" aria-hidden />
               AI modified
-            </Badge>
+            </span>
           )}
         </div>
         <h2 className="text-2xl font-semibold leading-tight">{entry.focus || "Workout"}</h2>
       </div>
-      <div className="flex shrink-0 items-center gap-1">
-        {hasMenu && (
+      {hasOverflowMenu && (
+        <div className="flex shrink-0 items-center gap-1">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -115,30 +136,14 @@ export function WorkoutDetailHeaderV2({ entry, onClose, onDelete, onChangeStatus
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {statusItems.map(({ status, label, Icon, colorClass }) => (
-                <DropdownMenuItem
-                  key={status}
-                  onSelect={() => onChangeStatus?.(status)}
-                  className={colorClass}
-                  data-testid={`workout-detail-status-${status}`}
-                >
-                  <Icon className="mr-2 size-4" aria-hidden /> {label}
-                </DropdownMenuItem>
-              ))}
               {onCombine && (
-                <>
-                  {statusItems.length > 0 && <DropdownMenuSeparator />}
-                  <DropdownMenuItem
-                    onSelect={onCombine}
-                    data-testid="workout-detail-combine"
-                  >
-                    <Layers className="mr-2 size-4" aria-hidden /> Combine workouts
-                  </DropdownMenuItem>
-                </>
+                <DropdownMenuItem onSelect={onCombine} data-testid="workout-detail-combine">
+                  <Layers className="mr-2 size-4" aria-hidden /> Combine workouts
+                </DropdownMenuItem>
               )}
               {onDelete && (
                 <>
-                  {(statusItems.length > 0 || onCombine) && <DropdownMenuSeparator />}
+                  {onCombine && <DropdownMenuSeparator />}
                   <DropdownMenuItem
                     onSelect={onDelete}
                     className="text-destructive"
@@ -150,17 +155,72 @@ export function WorkoutDetailHeaderV2({ entry, onClose, onDelete, onChangeStatus
               )}
             </DropdownMenuContent>
           </DropdownMenu>
-        )}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onClose}
-          aria-label="Close workout details"
-        >
-          <X className="size-4" />
-        </Button>
-      </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+interface StatusChipProps {
+  readonly style: StatusStyle;
+  readonly options: WorkoutStatus[];
+  readonly onChangeStatus?: (status: WorkoutStatus) => void;
+}
+
+/**
+ * Clickable status chip — the primary entry point for flipping a plan
+ * day's status. For entries that can't change status (no plan day
+ * linked, or no handler wired) this falls back to a non-interactive
+ * pill so the status label is still visible.
+ */
+function StatusChip({ style, options, onChangeStatus }: Readonly<StatusChipProps>) {
+  const canChange = !!onChangeStatus && options.length > 0;
+  const baseClass = cn(
+    "inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-normal",
+    style.chipClass,
+  );
+
+  if (!canChange) {
+    return (
+      <span className={baseClass} data-testid="workout-detail-status-chip">
+        <style.Icon className="size-3" aria-hidden />
+        {style.label}
+      </span>
+    );
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className={cn(baseClass, "cursor-pointer hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring")}
+          aria-label={`Change status from ${style.label}`}
+          data-testid="workout-detail-status-chip"
+        >
+          <style.Icon className="size-3" aria-hidden />
+          {style.label}
+          <ChevronDown className="size-3" aria-hidden />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start">
+        {options.map((status) => {
+          const opt = STATUS_STYLES[status];
+          if (!opt) return null;
+          const Icon = opt.Icon;
+          return (
+            <DropdownMenuItem
+              key={status}
+              onSelect={() => onChangeStatus?.(status)}
+              className={opt.colorClass}
+              data-testid={`workout-detail-status-${status}`}
+            >
+              <Icon className="mr-2 size-4" aria-hidden /> {opt.label.startsWith("Mark") ? opt.label : `Mark as ${opt.label.toLowerCase()}`}
+            </DropdownMenuItem>
+          );
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

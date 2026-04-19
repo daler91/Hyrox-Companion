@@ -161,7 +161,6 @@ export function WorkoutDetailDialogV2({
         <div className="flex flex-col gap-4 px-6 pt-4">
           <WorkoutDetailHeaderV2
             entry={entry}
-            onClose={onClose}
             onDelete={handleMenuDelete}
             onChangeStatus={handleMenuChangeStatus}
             onCombine={handleMenuCombine}
