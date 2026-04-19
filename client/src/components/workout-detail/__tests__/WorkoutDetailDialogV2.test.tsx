@@ -21,6 +21,7 @@ vi.mock("@/lib/api", async () => {
         ...actual.api.workouts,
         get: vi.fn(),
         history: vi.fn(),
+        update: vi.fn(),
         updateSet: vi.fn(),
         addSet: vi.fn(),
         deleteSet: vi.fn(),
@@ -41,6 +42,7 @@ vi.mock("@/lib/api", async () => {
 const mockWorkouts = api.workouts as unknown as {
   get: ReturnType<typeof vi.fn>;
   history: ReturnType<typeof vi.fn>;
+  update: ReturnType<typeof vi.fn>;
   updateSet: ReturnType<typeof vi.fn>;
   addSet: ReturnType<typeof vi.fn>;
   deleteSet: ReturnType<typeof vi.fn>;
@@ -448,5 +450,49 @@ describe("WorkoutDetailDialogV2", () => {
     await user.click(await screen.findByTestId("workout-detail-actions-trigger"));
     await user.click(screen.getByTestId("workout-detail-combine"));
     expect(onCombine).toHaveBeenCalledTimes(1);
+  });
+
+  // ---- RPE inline edit -----------------------------------------------
+
+  it("surfaces an editable RPE input for logged workouts and persists edits", async () => {
+    mockWorkouts.get.mockResolvedValue(
+      makeWorkout({ exerciseSets: [makeSet()], rpe: 7 }),
+    );
+    mockWorkouts.history.mockResolvedValue({
+      lastSameFocus: null,
+      prSetCount: 0,
+      blockAvgRpe: null,
+    });
+    mockWorkouts.update.mockResolvedValue(makeWorkout({ rpe: 8 }));
+
+    renderDialog();
+
+    const input = await screen.findByTestId("workout-stats-rpe-input");
+    // Initial value reflects the server state.
+    expect(input).toHaveValue(7);
+
+    const user = userEvent.setup();
+    await user.clear(input);
+    await user.type(input, "8");
+
+    // Debounced save (500ms) eventually calls api.workouts.update with the new RPE.
+    await waitFor(() => {
+      expect(mockWorkouts.update).toHaveBeenCalledWith("log-1", { rpe: 8 });
+    }, { timeout: 2000 });
+  });
+
+  it("keeps the RPE cell read-only for planned entries", () => {
+    renderDialog({
+      entry: makeEntry({
+        workoutLogId: null,
+        status: "planned",
+        planDayId: "plan-day-1",
+      }),
+      onMarkComplete: vi.fn(),
+    });
+
+    // Planned entries don't have a workoutLog to save to — the stats
+    // row isn't rendered at all, so the editable input is absent.
+    expect(screen.queryByTestId("workout-stats-rpe-input")).not.toBeInTheDocument();
   });
 });

@@ -1,9 +1,20 @@
 import type { ExerciseSet, WorkoutLog } from "@shared/schema";
-import { useMemo } from "react";
+import { useEffect,useMemo, useState } from "react";
+
+import { Input } from "@/components/ui/input";
+import { useDebouncedCallback } from "@/hooks/useDebouncedCallback";
+
+const RPE_SAVE_DEBOUNCE_MS = 500;
 
 interface WorkoutStatsRowProps {
   readonly workout: WorkoutLog;
   readonly exerciseSets: ExerciseSet[];
+  /**
+   * When provided, the RPE cell renders as an editable input with a
+   * debounced save. Omit to keep the cell read-only (planned entries or
+   * anywhere we don't want the edit affordance).
+   */
+  readonly onChangeRpe?: (rpe: number | null) => void;
 }
 
 /**
@@ -12,7 +23,7 @@ interface WorkoutStatsRowProps {
  * denormalise these counts — cheap aggregates over the already-loaded
  * exerciseSets array.
  */
-export function WorkoutStatsRow({ workout, exerciseSets }: WorkoutStatsRowProps) {
+export function WorkoutStatsRow({ workout, exerciseSets, onChangeRpe }: WorkoutStatsRowProps) {
   const stats = useMemo(() => {
     const uniqueExercises = new Set<string>();
     for (const s of exerciseSets) {
@@ -34,7 +45,11 @@ export function WorkoutStatsRow({ workout, exerciseSets }: WorkoutStatsRowProps)
     >
       <StatCell label="Duration" value={workout.duration} unit="min" />
       <StatCell label="Exercises" value={stats.exerciseCount} />
-      <StatCell label="RPE" value={workout.rpe} />
+      {onChangeRpe ? (
+        <RpeEditableCell value={workout.rpe} onChange={onChangeRpe} />
+      ) : (
+        <StatCell label="RPE" value={workout.rpe} />
+      )}
       <StatCell label="Volume" value={stats.setCount} unit={stats.setCount === 1 ? "set" : "sets"} />
     </div>
   );
@@ -49,6 +64,59 @@ function StatCell({ label, value, unit }: Readonly<{ label: string; value: numbe
         <span className="text-2xl font-semibold tabular-nums">{displayValue}</span>
         {unit && value != null && <span className="text-xs text-muted-foreground">{unit}</span>}
       </div>
+    </div>
+  );
+}
+
+interface RpeEditableCellProps {
+  readonly value: number | null | undefined;
+  readonly onChange: (rpe: number | null) => void;
+}
+
+/**
+ * Editable RPE stat cell. Keystrokes update local state immediately; the
+ * persisted save fires 500ms after the last edit. Sync-on-prop-change
+ * keeps the input in step with optimistic rollback if the server
+ * rejects the update.
+ */
+function RpeEditableCell({ value, onChange }: Readonly<RpeEditableCellProps>) {
+  const [draft, setDraft] = useState<string>(() => (value == null ? "" : String(value)));
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setDraft(value == null ? "" : String(value));
+  }, [value]);
+
+  const debouncedSave = useDebouncedCallback((next: string) => {
+    if (next.trim() === "") {
+      onChange(null);
+      return;
+    }
+    const parsed = Number.parseInt(next, 10);
+    if (Number.isNaN(parsed)) return;
+    const clamped = Math.min(10, Math.max(1, parsed));
+    onChange(clamped);
+  }, RPE_SAVE_DEBOUNCE_MS);
+
+  return (
+    <div className="flex flex-col gap-1" data-testid="workout-stats-rpe-cell">
+      <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">RPE</span>
+      <Input
+        type="number"
+        inputMode="numeric"
+        min={1}
+        max={10}
+        step={1}
+        value={draft}
+        onChange={(e) => {
+          setDraft(e.target.value);
+          debouncedSave(e.target.value);
+        }}
+        aria-label="Rate of perceived exertion"
+        placeholder="—"
+        className="h-9 w-20 text-2xl font-semibold tabular-nums"
+        data-testid="workout-stats-rpe-input"
+      />
     </div>
   );
 }

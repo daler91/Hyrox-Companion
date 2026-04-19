@@ -102,6 +102,7 @@ export function WorkoutDetailDialogV2({
     seedFromPlan,
     reparseFreeText,
     updateNote,
+    updateRpe,
   } = useWorkoutDetail(workoutId);
 
   useHydrateWorkoutDetail({
@@ -166,7 +167,13 @@ export function WorkoutDetailDialogV2({
             onChangeStatus={handleMenuChangeStatus}
             onCombine={handleMenuCombine}
           />
-          {showStatsRow && workout && <WorkoutStatsRow workout={workout} exerciseSets={exerciseSets} />}
+          {showStatsRow && workout && (
+            <WorkoutStatsRow
+              workout={workout}
+              exerciseSets={exerciseSets}
+              onChangeRpe={workoutId ? (rpe) => updateRpe.mutate(rpe) : undefined}
+            />
+          )}
         </div>
 
         <DialogBody
