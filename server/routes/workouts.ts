@@ -1,4 +1,4 @@
-import { exercisesPayloadSchema,insertCustomExerciseSchema, insertWorkoutLogSchema, planDays, trainingPlans, updateWorkoutLogSchema, workoutLogs } from "@shared/schema";
+import { type AddExerciseSetBody, addExerciseSetBodySchema, exercisesPayloadSchema,insertCustomExerciseSchema, insertWorkoutLogSchema, type PatchExerciseSetBody,patchExerciseSetBodySchema, planDays, trainingPlans, updateWorkoutLogSchema, workoutLogs } from "@shared/schema";
 import { and,eq, inArray } from "drizzle-orm";
 import { type Request, type Response,Router } from "express";
 import { z } from "zod";
@@ -134,33 +134,13 @@ router.get("/api/v1/workouts/latest", isAuthenticated, rateLimiter("workout", 60
 // storage layer.
 // -----------------------------------------------------------------------------
 
-const patchExerciseSetSchema = z.object({
-  exerciseName: z.string().min(1).max(255).optional(),
-  customLabel: z.string().max(255).nullable().optional(),
-  category: z.string().max(50).optional(),
-  setNumber: z.number().int().min(1).max(100).optional(),
-  reps: z.number().int().min(0).max(10_000).nullable().optional(),
-  weight: z.number().min(0).max(2_000).nullable().optional(),
-  distance: z.number().min(0).max(1_000_000).nullable().optional(),
-  time: z.number().min(0).max(86_400).nullable().optional(),
-  notes: z.string().max(1000).nullable().optional(),
-  sortOrder: z.number().int().nullable().optional(),
-});
-type PatchExerciseSetPayload = z.infer<typeof patchExerciseSetSchema>;
+// Shared with server/routes/plans.ts for the plan-day set CRUD —
+// see shared/schema/types.ts.
+const patchExerciseSetSchema = patchExerciseSetBodySchema;
+type PatchExerciseSetPayload = PatchExerciseSetBody;
 
-const addExerciseSetSchema = z.object({
-  exerciseName: z.string().min(1).max(255),
-  customLabel: z.string().max(255).nullable().optional(),
-  category: z.string().max(50),
-  setNumber: z.number().int().min(1).max(100).default(1),
-  reps: z.number().int().min(0).max(10_000).nullable().optional(),
-  weight: z.number().min(0).max(2_000).nullable().optional(),
-  distance: z.number().min(0).max(1_000_000).nullable().optional(),
-  time: z.number().min(0).max(86_400).nullable().optional(),
-  notes: z.string().max(1000).nullable().optional(),
-  confidence: z.number().int().min(0).max(100).nullable().optional(),
-});
-type AddExerciseSetPayload = z.infer<typeof addExerciseSetSchema>;
+const addExerciseSetSchema = addExerciseSetBodySchema;
+type AddExerciseSetPayload = AddExerciseSetBody;
 
 const NOT_FOUND_CODE = "NOT_FOUND";
 const WORKOUT_NOT_FOUND = "Workout not found";

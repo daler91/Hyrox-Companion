@@ -402,8 +402,12 @@ export class WorkoutStorage {
     return !!row;
   }
 
-  async getExerciseSetsByPlanDay(planDayId: string, userId: string): Promise<ExerciseSet[]> {
-    if (!(await this.ownsPlanDay(planDayId, userId))) return [];
+  async getExerciseSetsByPlanDay(planDayId: string, userId: string): Promise<ExerciseSet[] | null> {
+    // Distinguish "unauthorized / missing plan day" (null → 404 at the
+    // route) from "owned but prescription is empty" ([]). Returning []
+    // in both cases would let a foreign or bogus dayId look like a
+    // valid empty plan, weakening IDOR on this read path.
+    if (!(await this.ownsPlanDay(planDayId, userId))) return null;
     return await db
       .select()
       .from(exerciseSets)

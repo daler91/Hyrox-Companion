@@ -487,6 +487,16 @@ function PlannedCallToAction({ entry, onMarkComplete, isMarkingComplete, weightU
   const planDayId = entry.planDayId ?? null;
   const planSets = usePlanDayExercises(planDayId);
 
+  // Block Mark complete while any plan-day set mutation is still in
+  // flight — otherwise createWorkoutInTx can race the mutation and
+  // snapshot pre-edit plan_day rows before the PATCH commits.
+  // Debounced-but-not-yet-fired cell edits still narrowly race, but
+  // this catches the common "edit + click" sequence once the debounce
+  // has fired its mutation.
+  const ctaDisabled = isMarkingComplete || planSets.isSaving;
+  const ctaLabel = isMarkingComplete ? "Logging…" : planSets.isSaving ? "Saving edits…" : "Mark complete";
+  const ctaBusy = isMarkingComplete || planSets.isSaving;
+
   return (
     <div className="flex flex-col gap-4" data-testid="workout-detail-planned-cta">
       {planDayId ? (
@@ -515,19 +525,15 @@ function PlannedCallToAction({ entry, onMarkComplete, isMarkingComplete, weightU
             onClick={() => onMarkComplete(entry)}
             size="lg"
             className="gap-2"
-            // Disable while logWorkoutMutation is in flight. The dialog
-            // stays open until the mutation settles, so without this
-            // guard repeat clicks queue duplicate workoutLogs for the
-            // same plan day before the Timeline closes the dialog.
-            disabled={isMarkingComplete}
+            disabled={ctaDisabled}
             data-testid="workout-detail-mark-complete"
           >
-            {isMarkingComplete ? (
+            {ctaBusy ? (
               <Loader2 className="size-4 animate-spin" aria-hidden />
             ) : (
               <CheckCircle2 className="size-4" aria-hidden />
             )}
-            {isMarkingComplete ? "Logging…" : "Mark complete"}
+            {ctaLabel}
           </Button>
         )}
       </div>

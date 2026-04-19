@@ -83,9 +83,17 @@ export function usePlanDayExercises(planDayId: string | null) {
     errorToast: "Couldn't remove that set",
   });
 
+  // True while any set-level write is in flight. Consumers gate the
+  // "Mark complete" CTA on this so we don't fire logWorkoutMutation
+  // while a debounced cell save is still posting; otherwise
+  // createWorkoutInTx's plan-day copy can race with the PATCH and
+  // snapshot pre-edit values.
+  const isSaving = updateSet.isPending || addSet.isPending || deleteSet.isPending;
+
   return {
     exerciseSets: exercisesQuery.data ?? [],
     isLoading: exercisesQuery.isLoading,
+    isSaving,
     updateSet,
     addSet,
     deleteSet,

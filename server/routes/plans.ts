@@ -1,4 +1,4 @@
-import { dateStringSchema, type GeneratePlanInput,generatePlanInputSchema, importPlanRequestSchema, type PlanDay, schedulePlanRequestSchema, type UpdatePlanDay, updatePlanDaySchema, type UpdateTrainingPlanGoal, updateTrainingPlanGoalSchema, workoutStatusEnum } from "@shared/schema";
+import { type AddExerciseSetBody, addExerciseSetBodySchema, dateStringSchema, type GeneratePlanInput,generatePlanInputSchema, importPlanRequestSchema, type PatchExerciseSetBody,patchExerciseSetBodySchema, type PlanDay, schedulePlanRequestSchema, type UpdatePlanDay, updatePlanDaySchema, type UpdateTrainingPlanGoal, updateTrainingPlanGoalSchema, workoutStatusEnum } from "@shared/schema";
 import { type Request as ExpressRequest,type Response, Router } from "express";
 import { z } from "zod";
 
@@ -164,33 +164,10 @@ router.delete("/api/v1/plans/days/:dayId", ...protectedMutationGuards, rateLimit
 const PLAN_DAY_NOT_FOUND = "Plan day not found";
 const PLAN_DAY_SET_NOT_FOUND = "Exercise set not found";
 
-const patchPlanDaySetSchema = z.object({
-  exerciseName: z.string().min(1).max(255).optional(),
-  customLabel: z.string().max(255).nullable().optional(),
-  category: z.string().max(50).optional(),
-  setNumber: z.number().int().min(1).max(100).optional(),
-  reps: z.number().int().min(0).max(10_000).nullable().optional(),
-  weight: z.number().min(0).max(2_000).nullable().optional(),
-  distance: z.number().min(0).max(1_000_000).nullable().optional(),
-  time: z.number().min(0).max(86_400).nullable().optional(),
-  notes: z.string().max(1000).nullable().optional(),
-  sortOrder: z.number().int().nullable().optional(),
-});
-type PatchPlanDaySetPayload = z.infer<typeof patchPlanDaySetSchema>;
-
-const addPlanDaySetSchema = z.object({
-  exerciseName: z.string().min(1).max(255),
-  customLabel: z.string().max(255).nullable().optional(),
-  category: z.string().max(50),
-  setNumber: z.number().int().min(1).max(100).default(1),
-  reps: z.number().int().min(0).max(10_000).nullable().optional(),
-  weight: z.number().min(0).max(2_000).nullable().optional(),
-  distance: z.number().min(0).max(1_000_000).nullable().optional(),
-  time: z.number().min(0).max(86_400).nullable().optional(),
-  notes: z.string().max(1000).nullable().optional(),
-  confidence: z.number().int().min(0).max(100).nullable().optional(),
-});
-type AddPlanDaySetPayload = z.infer<typeof addPlanDaySetSchema>;
+// Same body contracts as the workout-log set routes — shared in
+// shared/schema/types.ts so the two URL families stay in lockstep.
+type PatchPlanDaySetPayload = PatchExerciseSetBody;
+type AddPlanDaySetPayload = AddExerciseSetBody;
 
 router.get(
   "/api/v1/plans/days/:dayId/sets",
@@ -199,6 +176,9 @@ router.get(
   asyncHandler(async (req: ExpressRequest<{ dayId: string }>, res: Response) => {
     const userId = getUserId(req);
     const sets = await storage.workouts.getExerciseSetsByPlanDay(req.params.dayId, userId);
+    if (sets === null) {
+      return res.status(404).json({ error: PLAN_DAY_NOT_FOUND, code: "NOT_FOUND" });
+    }
     res.json(sets);
   }),
 );
@@ -207,7 +187,7 @@ router.post(
   "/api/v1/plans/days/:dayId/sets",
   ...protectedMutationGuards,
   rateLimiter("planDaySet", 60),
-  validateBody(addPlanDaySetSchema),
+  validateBody(addExerciseSetBodySchema),
   asyncHandler(async (req: ExpressRequest<{ dayId: string }, Record<string, never>, AddPlanDaySetPayload>, res: Response) => {
     const userId = getUserId(req);
     const created = await storage.workouts.addExerciseSetToPlanDay(req.params.dayId, req.body, userId);
@@ -222,7 +202,7 @@ router.patch(
   "/api/v1/plans/days/:dayId/sets/:setId",
   ...protectedMutationGuards,
   rateLimiter("planDaySet", 120),
-  validateBody(patchPlanDaySetSchema),
+  validateBody(patchExerciseSetBodySchema),
   asyncHandler(async (req: ExpressRequest<{ dayId: string; setId: string }, Record<string, never>, PatchPlanDaySetPayload>, res: Response) => {
     const userId = getUserId(req);
     const updated = await storage.workouts.updateExerciseSetForPlanDay(
