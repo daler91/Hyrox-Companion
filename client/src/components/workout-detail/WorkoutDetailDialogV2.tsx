@@ -173,6 +173,7 @@ export function WorkoutDetailDialogV2({
               workout={workout}
               exerciseSets={exerciseSets}
               onChangeRpe={handleChangeRpe}
+              rpeResetSignal={updateRpe.failureCount}
             />
           )}
         </div>

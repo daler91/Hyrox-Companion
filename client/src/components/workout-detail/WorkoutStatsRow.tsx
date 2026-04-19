@@ -1,5 +1,5 @@
 import type { ExerciseSet, WorkoutLog } from "@shared/schema";
-import { type ReactNode, useEffect,useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 
 import { Input } from "@/components/ui/input";
 import { useDebouncedCallback } from "@/hooks/useDebouncedCallback";
@@ -15,6 +15,15 @@ interface WorkoutStatsRowProps {
    * anywhere we don't want the edit affordance).
    */
   readonly onChangeRpe?: (rpe: number | null) => void;
+  /**
+   * Bumped whenever the caller's updateRpe mutation fails so the
+   * editable cell remounts and its local draft resets to the
+   * server-authoritative value. workout.rpe alone isn't enough — the
+   * mutation is non-optimistic, so a failure leaves workout.rpe
+   * unchanged and the input would otherwise stay stuck on the
+   * unsaved draft.
+   */
+  readonly rpeResetSignal?: number;
 }
 
 /**
@@ -23,7 +32,7 @@ interface WorkoutStatsRowProps {
  * denormalise these counts — cheap aggregates over the already-loaded
  * exerciseSets array.
  */
-export function WorkoutStatsRow({ workout, exerciseSets, onChangeRpe }: WorkoutStatsRowProps) {
+export function WorkoutStatsRow({ workout, exerciseSets, onChangeRpe, rpeResetSignal = 0 }: WorkoutStatsRowProps) {
   const stats = useMemo(() => {
     const uniqueExercises = new Set<string>();
     for (const s of exerciseSets) {
@@ -46,7 +55,14 @@ export function WorkoutStatsRow({ workout, exerciseSets, onChangeRpe }: WorkoutS
       <StatCell label="Duration" value={workout.duration} unit="min" />
       <StatCell label="Exercises" value={stats.exerciseCount} />
       {onChangeRpe ? (
-        <RpeEditableCell value={workout.rpe} onChange={onChangeRpe} />
+        // Key includes rpeResetSignal so a failed save remounts the
+        // input and drops the unsaved draft, even though workout.rpe
+        // itself didn't change (updateRpe is non-optimistic).
+        <RpeEditableCell
+          key={`${workout.rpe ?? "null"}:${rpeResetSignal}`}
+          value={workout.rpe}
+          onChange={onChangeRpe}
+        />
       ) : (
         <StatCell label="RPE" value={workout.rpe} />
       )}
@@ -85,22 +101,18 @@ interface RpeEditableCellProps {
   readonly onChange: (rpe: number | null) => void;
 }
 
-/**
- * Editable RPE stat cell. Keystrokes update local state immediately; the
- * persisted save fires 500ms after the last edit. Sync-on-prop-change
- * keeps the input in step with optimistic rollback if the server
- * rejects the update.
- */
 function formatRpeDraft(value: number | null | undefined): string {
   return value == null ? "" : String(value);
 }
 
+/**
+ * Editable RPE stat cell. Keystrokes update local state immediately; the
+ * persisted save fires 500ms after the last edit. Parent remounts this
+ * cell with a `key={value}` so prop changes reset the draft instead of
+ * fighting local typing via a useEffect state sync.
+ */
 function RpeEditableCell({ value, onChange }: Readonly<RpeEditableCellProps>) {
   const [draft, setDraft] = useState<string>(() => formatRpeDraft(value));
-
-  useEffect(() => {
-    setDraft(formatRpeDraft(value));
-  }, [value]);
 
   const debouncedSave = useDebouncedCallback((next: string) => {
     if (next.trim() === "") {
