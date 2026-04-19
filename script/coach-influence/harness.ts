@@ -15,7 +15,9 @@ import {
   type ScenarioScore,
   type SuggestionBundle,
 } from "./metrics";
-import type { Scenario } from "./scenarios";
+import type { ConditionInputs,Scenario } from "./scenarios";
+
+import type { TrainingContext } from "../../server/gemini/types";
 
 // NOTE: `generateWorkoutSuggestions` and `SCENARIOS` are dynamically
 // imported inside `main()` so that importing the harness does not
@@ -46,7 +48,7 @@ function log(...args: unknown[]) {
 }
 
 type GenerateFn = (
-  ctx: Scenario["baseline"],
+  ctx: TrainingContext,
   upcoming: Scenario["upcoming"],
   goal?: string,
   rag?: string,
@@ -57,14 +59,14 @@ async function runCondition(
   which: "baseline" | "variant",
   generate: GenerateFn,
 ): Promise<SuggestionBundle[]> {
-  const ctx = which === "baseline" ? scenario.baseline : scenario.variant;
+  const inputs: ConditionInputs = which === "baseline" ? scenario.baseline : scenario.variant;
   const bundles: SuggestionBundle[] = [];
   for (let i = 0; i < RUNS_PER_CONDITION; i++) {
     const suggestions = await generate(
-      ctx,
+      inputs.ctx,
       scenario.upcoming,
-      scenario.goal,
-      scenario.rag,
+      inputs.goal,
+      inputs.rag,
     );
     bundles.push(suggestions);
     log(`  ${scenario.key} [${which} ${i + 1}/${RUNS_PER_CONDITION}] ${suggestions.length} suggestions`);

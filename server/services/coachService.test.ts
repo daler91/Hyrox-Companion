@@ -227,6 +227,33 @@ describe("coachService", () => {
       expect(storage.users.updateIsAutoCoaching).toHaveBeenCalledWith("user-1", false);
     });
 
+    it("still requests a review note for days whose modification suggestion is malformed", async () => {
+      mockBaseAutoCoachDeps([
+        makeTimelineEntry({ planDayId: "day-1" }),
+        makeTimelineEntry({ planDayId: "day-2", date: "2026-01-17" }),
+      ]);
+      // Gemini returns a suggestion for day-1 with empty recommendation —
+      // applySuggestion will reject it. Without treating that suggestion as
+      // invalid at the routing step, day-1 would also be excluded from the
+      // review-note pass, leaving it silent on the timeline.
+      vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
+        makeSuggestion({ workoutId: "day-1", recommendation: "" }),
+      ]);
+      vi.mocked(generateReviewNotes).mockResolvedValue([
+        { workoutId: "day-1", note: "Good as-is — light intro day." },
+        { workoutId: "day-2", note: "Good as-is — build-phase volume." },
+      ]);
+      vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({} as never);
+
+      expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 0 });
+      const calls = vi.mocked(storage.plans.updatePlanDay).mock.calls;
+      const reviewIds = calls
+        .filter(c => (c[1] as { aiSource?: string }).aiSource === "review")
+        .map(c => c[0])
+        .sort();
+      expect(reviewIds).toEqual(["day-1", "day-2"]);
+    });
+
     it("drops review notes whose workoutId was modified or is not upcoming", async () => {
       mockBaseAutoCoachDeps([
         makeTimelineEntry({ planDayId: "day-1" }),

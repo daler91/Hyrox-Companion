@@ -67,6 +67,22 @@ function buildCoachNoteInputs(
   };
 }
 
+/**
+ * Predicate for whether a suggestion will actually apply to one of the
+ * upcoming workouts. Kept separate from `applySuggestion` so the caller
+ * can pre-compute which upcoming days are "modified" for review-note
+ * routing; if we built the modified set from the raw Gemini output, a
+ * malformed suggestion would silently cause its day to be skipped in
+ * both the modification pass and the review-note pass.
+ */
+function suggestionWillApply(
+  suggestion: WorkoutSuggestion,
+  upcomingWorkouts: UpcomingWorkout[],
+): boolean {
+  if (!suggestion.workoutId || !suggestion.recommendation) return false;
+  return upcomingWorkouts.some(w => w.id === suggestion.workoutId);
+}
+
 async function applySuggestion(
   suggestion: WorkoutSuggestion,
   upcomingWorkouts: UpcomingWorkout[],
@@ -75,9 +91,8 @@ async function applySuggestion(
   inputsUsed: CoachNoteInputs,
   tx: DbExecutor,
 ): Promise<boolean> {
-  if (!suggestion.workoutId || !suggestion.recommendation) return false;
-  const entry = upcomingWorkouts.find((w) => w.id === suggestion.workoutId);
-  if (!entry) return false;
+  if (!suggestionWillApply(suggestion, upcomingWorkouts)) return false;
+  const entry = upcomingWorkouts.find((w) => w.id === suggestion.workoutId)!;
 
   // Let errors propagate so the enclosing transaction rolls back — we want
   // all-or-nothing semantics for the auto-coach apply loop (C2).
@@ -205,7 +220,18 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
     // For any upcoming day the coach did NOT modify, request a short review
     // note so the athlete can still see the coach's thinking on that day.
     // Without this, "no suggestions" looks identical to "coach never ran".
-    const modifiedIds = new Set(suggestions.map(s => s.workoutId));
+    //
+    // Build the modified set from suggestions that actually pass the
+    // apply-time validation, not from every model output. A malformed
+    // suggestion (missing workoutId/recommendation, or targeting an id
+    // not in the upcoming slate) would otherwise be dropped in both the
+    // modification pass AND the review-note pass, leaving that day with
+    // no note at all (C-NOTE-1).
+    const modifiedIds = new Set(
+      suggestions
+        .filter(s => suggestionWillApply(s, upcomingWorkouts))
+        .map(s => s.workoutId),
+    );
     const unchangedWorkouts = upcomingWorkouts.filter(w => !modifiedIds.has(w.id));
     const unchangedIds = new Set(unchangedWorkouts.map(w => w.id));
     const rawReviewNotes = unchangedWorkouts.length > 0
