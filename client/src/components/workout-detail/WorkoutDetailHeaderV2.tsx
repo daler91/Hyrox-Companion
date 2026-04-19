@@ -1,13 +1,20 @@
 import type { TimelineEntry } from "@shared/schema";
 import { format, parseISO } from "date-fns";
-import { Sparkles, X } from "lucide-react";
+import { MoreVertical, Sparkles, Trash2, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface WorkoutDetailHeaderV2Props {
   readonly entry: TimelineEntry;
   readonly onClose: () => void;
+  readonly onDelete?: () => void;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -23,7 +30,7 @@ const STATUS_LABEL: Record<string, string> = {
  * close button. Deliberately minimal: the old header stacked status +
  * source + day name; the mockup keeps it to just the date + two chips.
  */
-export function WorkoutDetailHeaderV2({ entry, onClose }: WorkoutDetailHeaderV2Props) {
+export function WorkoutDetailHeaderV2({ entry, onClose, onDelete }: WorkoutDetailHeaderV2Props) {
   const dateLabel = formatDateHeader(entry.date);
   const statusLabel = STATUS_LABEL[entry.status] ?? entry.status;
   const aiModified = !!entry.aiSource || !!entry.aiNoteUpdatedAt;
@@ -49,15 +56,39 @@ export function WorkoutDetailHeaderV2({ entry, onClose }: WorkoutDetailHeaderV2P
         </div>
         <h2 className="text-2xl font-semibold leading-tight">{entry.focus || "Workout"}</h2>
       </div>
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={onClose}
-        aria-label="Close workout details"
-        className="shrink-0"
-      >
-        <X className="size-4" />
-      </Button>
+      <div className="flex shrink-0 items-center gap-1">
+        {onDelete && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Workout actions"
+                data-testid="workout-detail-actions-trigger"
+              >
+                <MoreVertical className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onSelect={onDelete}
+                className="text-destructive"
+                data-testid="workout-detail-delete"
+              >
+                <Trash2 className="mr-2 size-4" aria-hidden /> Delete workout
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onClose}
+          aria-label="Close workout details"
+        >
+          <X className="size-4" />
+        </Button>
+      </div>
     </div>
   );
 }

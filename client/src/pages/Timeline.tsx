@@ -249,6 +249,12 @@ export default function Timeline() {
   const { combiningEntry, setCombiningEntry, combineSecondEntry, setCombineSecondEntry, showCombineDialog, setShowCombineDialog, handleCombine, handleConfirmCombine, combineWorkoutsMutation } = combine;
   const workoutDetailV2 = useFeatureFlag("workoutDetailV2");
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Carries a prefilled message into the CoachPanel's chat input when the
+  // user clicks "Ask coach" on the v2 workout detail dialog. The nonce
+  // lets repeat clicks re-seed the input after the user clears it — see
+  // ChatInput's useEffect-on-nonce for the reasoning.
+  const [coachInputSeed, setCoachInputSeed] = useState<{ text: string; nonce: number } | null>(null);
+  const coachSeedCounterRef = useRef(0);
   const [showAIConsent, setShowAIConsent] = useState(false);
   const [annotationsDialogOpen, setAnnotationsDialogOpen] = useState(false);
   // Seeds the create form in AnnotationsDialog when the user clicks a row's
@@ -264,6 +270,14 @@ export default function Timeline() {
     }
     setCoachOpen(open);
   }, [user, setCoachOpen]);
+
+  // Opens the coach with a workout-specific prompt pre-filled into the chat
+  // input. Defined after handleCoachToggle because it wraps it.
+  const askCoachFromDetail = useCallback((seedMessage: string) => {
+    coachSeedCounterRef.current += 1;
+    setCoachInputSeed({ text: seedMessage, nonce: coachSeedCounterRef.current });
+    handleCoachToggle(true);
+  }, [handleCoachToggle]);
 
   const handleAIConsentAccept = useCallback(() => {
     setShowAIConsent(false);
@@ -453,7 +467,8 @@ export default function Timeline() {
             <WorkoutDetailDialogV2
               entry={detailEntry}
               onClose={() => setDetailEntry(null)}
-              onAskCoach={() => handleCoachToggle(true)}
+              onAskCoach={askCoachFromDetail}
+              onDelete={handleDelete}
               weightUnit={user?.weightUnit === "lbs" ? "lb" : "kg"}
             />
           ) : (
@@ -525,9 +540,13 @@ export default function Timeline() {
           <FeatureErrorBoundaryWrapper featureName="Coach">
             <CoachPanel
               isOpen={coachOpen}
-              onClose={() => setCoachOpen(false)}
+              onClose={() => {
+                setCoachOpen(false);
+                setCoachInputSeed(null);
+              }}
               timeline={timelineData}
               isNewUser={isNewUser}
+              inputSeed={coachInputSeed}
             />
           </FeatureErrorBoundaryWrapper>
         </div>
@@ -547,9 +566,13 @@ export default function Timeline() {
             <FeatureErrorBoundaryWrapper featureName="Coach">
               <CoachPanel
                 isOpen={coachOpen}
-                onClose={() => setCoachOpen(false)}
+                onClose={() => {
+                  setCoachOpen(false);
+                  setCoachInputSeed(null);
+                }}
                 timeline={timelineData}
                 isNewUser={isNewUser}
+                inputSeed={coachInputSeed}
               />
             </FeatureErrorBoundaryWrapper>
           </div>

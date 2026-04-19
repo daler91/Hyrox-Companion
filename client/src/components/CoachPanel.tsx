@@ -1,6 +1,7 @@
 import type { TimelineEntry } from "@shared/schema";
 import { useCallback,useEffect, useMemo, useState } from "react";
 
+import { type ChatInputSeed } from "@/components/ChatInput";
 import { CoachPanelChatArea } from "@/components/coach/CoachPanelChatArea";
 import { CoachPanelFooter } from "@/components/coach/CoachPanelFooter";
 import { CoachPanelHeader } from "@/components/coach/CoachPanelHeader";
@@ -42,9 +43,15 @@ interface CoachPanelProps {
   readonly onClose: () => void;
   readonly timeline?: TimelineEntry[];
   readonly isNewUser?: boolean;
+  /**
+   * Optional prefilled message for the chat input — used by the workout
+   * detail dialog's "Ask coach" button to seed a workout-specific prompt.
+   * The consumer bumps `nonce` on each trigger so repeat clicks re-seed.
+   */
+  readonly inputSeed?: ChatInputSeed | null;
 }
 
-export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }: Readonly<CoachPanelProps>) {
+export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false, inputSeed }: Readonly<CoachPanelProps>) {
   const [localMessages, setLocalMessages] = useState<Message[]>([]);
   const [hasShownWelcome, setHasShownWelcome] = useState(false);
 
@@ -155,6 +162,7 @@ export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }
         onQuickAction={handleQuickAction}
         onSendMessage={sendMessage}
         isProcessing={isProcessing}
+        inputSeed={inputSeed}
       />
     </div>
   );

@@ -1,5 +1,5 @@
 import { customExercises, type ExerciseSet,exerciseSets, type InsertExerciseSet, type InsertWorkoutLog, type ParsedExercise, planDays, trainingPlans, type UpdateWorkoutLog, users, type WorkoutLog, workoutLogs } from "@shared/schema";
-import { and,eq } from "drizzle-orm";
+import { and,asc, eq } from "drizzle-orm";
 import pLimit from "p-limit";
 
 import { db } from "../db";
@@ -257,6 +257,79 @@ async function resolveActivePlanLinks(
 
 // Insert a workout (+ optional exercise sets + plan-day completion + custom exercises)
 // inside a caller-provided transaction. All writes are atomic with the caller's tx.
+async function markPlanDayCompleted(
+  tx: WorkoutTx,
+  planDayId: string,
+  userId: string,
+): Promise<void> {
+  await tx
+    .update(planDays)
+    .set({ status: "completed" })
+    .from(trainingPlans)
+    .where(
+      and(
+        eq(planDays.id, planDayId),
+        eq(planDays.planId, trainingPlans.id),
+        eq(trainingPlans.userId, userId),
+      ),
+    );
+}
+
+async function insertClientSuppliedExercises(
+  tx: WorkoutTx,
+  exercises: ParsedExercise[],
+  workoutLogId: string,
+  userId: string,
+): Promise<ExerciseSet[]> {
+  const rows = expandExercisesToSetRows(exercises, workoutLogId);
+  const savedSets = await tx.insert(exerciseSets).values(rows).returning();
+
+  const uniqueCustomExs = extractAndDeduplicateCustomExercises(exercises, userId);
+  if (uniqueCustomExs.length > 0) {
+    await tx.insert(customExercises).values(uniqueCustomExs).onConflictDoNothing();
+  }
+  return savedSets;
+}
+
+/**
+ * When a workout is logged against a plan day and the client didn't supply
+ * exercises, copy the plan day's prescribed exerciseSets into the new log
+ * as starter rows. Inline rather than delegating to
+ * storage.workouts.seedExerciseSetsFromPlanDay because that method opens
+ * its own transaction and can't nest inside `tx`. Returns an empty array
+ * when the plan day has no prescribed rows (e.g., rest days, or a plan
+ * generated before structured exercises shipped).
+ */
+async function copyPrescribedSetsIntoLog(
+  tx: WorkoutTx,
+  planDayId: string,
+  workoutLogId: string,
+): Promise<ExerciseSet[]> {
+  const prescribed = await tx
+    .select()
+    .from(exerciseSets)
+    .where(eq(exerciseSets.planDayId, planDayId))
+    .orderBy(asc(exerciseSets.sortOrder));
+  if (prescribed.length === 0) return [];
+
+  const copyRows: InsertExerciseSet[] = prescribed.map((p) => ({
+    workoutLogId,
+    planDayId: null,
+    exerciseName: p.exerciseName,
+    customLabel: p.customLabel,
+    category: p.category,
+    setNumber: p.setNumber,
+    reps: p.reps,
+    weight: p.weight,
+    distance: p.distance,
+    time: p.time,
+    notes: p.notes,
+    confidence: p.confidence,
+    sortOrder: p.sortOrder,
+  }));
+  return tx.insert(exerciseSets).values(copyRows).returning();
+}
+
 async function createWorkoutInTx(
   tx: WorkoutTx,
   enrichedData: InsertWorkoutLog,
@@ -269,32 +342,17 @@ async function createWorkoutInTx(
     .returning();
 
   if (enrichedData.planDayId) {
-    await tx
-      .update(planDays)
-      .set({ status: "completed" })
-      .from(trainingPlans)
-      .where(
-        and(
-          eq(planDays.id, enrichedData.planDayId),
-          eq(planDays.planId, trainingPlans.id),
-          eq(trainingPlans.userId, userId)
-        )
-      );
+    await markPlanDayCompleted(tx, enrichedData.planDayId, userId);
   }
 
   if (exercises && Array.isArray(exercises) && exercises.length > 0) {
-    const exerciseSetData = expandExercisesToSetRows(exercises, log.id);
-    const savedSets = await tx.insert(exerciseSets).values(exerciseSetData).returning();
-
-    const uniqueCustomExs = extractAndDeduplicateCustomExercises(exercises, userId);
-    if (uniqueCustomExs.length > 0) {
-      await tx
-        .insert(customExercises)
-        .values(uniqueCustomExs)
-        .onConflictDoNothing();
-    }
-
+    const savedSets = await insertClientSuppliedExercises(tx, exercises, log.id, userId);
     return { ...log, exerciseSets: savedSets };
+  }
+
+  if (enrichedData.planDayId) {
+    const savedSets = await copyPrescribedSetsIntoLog(tx, enrichedData.planDayId, log.id);
+    if (savedSets.length > 0) return { ...log, exerciseSets: savedSets };
   }
 
   return log;

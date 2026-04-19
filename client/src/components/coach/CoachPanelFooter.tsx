@@ -1,4 +1,4 @@
-import { ChatInput } from "@/components/ChatInput";
+import { ChatInput, type ChatInputSeed } from "@/components/ChatInput";
 import { type QuickAction,QuickActions } from "@/components/QuickActions";
 
 interface CoachPanelFooterProps {
@@ -6,6 +6,7 @@ interface CoachPanelFooterProps {
   readonly onQuickAction: (action: QuickAction) => void;
   readonly onSendMessage: (message: string) => void;
   readonly isProcessing: boolean;
+  readonly inputSeed?: ChatInputSeed | null;
 }
 
 export function CoachPanelFooter({
@@ -13,11 +14,12 @@ export function CoachPanelFooter({
   onQuickAction,
   onSendMessage,
   isProcessing,
+  inputSeed,
 }: Readonly<CoachPanelFooterProps>) {
   return (
     <div className="flex-shrink-0 p-2 border-t space-y-2">
       <QuickActions actions={quickActions} onSelect={onQuickAction} disabled={isProcessing} />
-      <ChatInput onSend={onSendMessage} isLoading={isProcessing} />
+      <ChatInput onSend={onSendMessage} isLoading={isProcessing} seed={inputSeed} />
     </div>
   );
 }

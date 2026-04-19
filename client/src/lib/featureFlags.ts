@@ -17,7 +17,11 @@ export interface FeatureFlags {
 }
 
 export const DEFAULT_FEATURE_FLAGS: FeatureFlags = {
-  workoutDetailV2: false,
+  // v2 is the default for logged workouts after phases 6-7 shipped. The
+  // legacy dialog still handles planned entries until v2 grows a
+  // mark-complete / change-status flow; see Timeline.tsx's branching
+  // condition (workoutDetailV2 && entry.workoutLogId != null).
+  workoutDetailV2: true,
 };
 
 const STORAGE_KEY = "featureFlags";
