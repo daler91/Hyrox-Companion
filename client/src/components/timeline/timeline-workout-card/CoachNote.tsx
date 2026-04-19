@@ -1,8 +1,7 @@
+import type { CoachNoteInputs, TimelineEntry } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 import { ChevronDown, ChevronRight, Sparkles } from "lucide-react";
 import { useState } from "react";
-
-import type { CoachNoteInputs, TimelineEntry } from "@shared/schema";
 
 import { Badge } from "@/components/ui/badge";
 

@@ -116,6 +116,9 @@ export class TimelineStorage {
     const allSets = await this.workoutStorage.getExerciseSetsByWorkoutLogs(workoutLogIds);
     const setsByWorkoutId = new Map<string, typeof allSets>();
     for (const s of allSets) {
+      // workoutLogId is nullable since prescribed sets can live on planDays,
+      // but this path queries logged sets only so null shouldn't appear.
+      if (!s.workoutLogId) continue;
       const existing = setsByWorkoutId.get(s.workoutLogId);
       if (existing) existing.push(s);
       else setsByWorkoutId.set(s.workoutLogId, [s]);

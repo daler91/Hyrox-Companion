@@ -123,6 +123,122 @@ router.get("/api/v1/workouts/latest", isAuthenticated, rateLimiter("workout", 60
     res.json({ ...latest, exerciseSets });
   }));
 
+// -----------------------------------------------------------------------------
+// Set-level CRUD + history — used by the v2 workout detail UI's always-editable
+// exercise table. Each cell edit fires a PATCH to /sets/:setId; +Add hits
+// /sets (POST); ⋮ → delete hits DELETE; the sidebar's History panel reads
+// /history; and /seed-from-plan lazily copies prescribed sets into legacy
+// logged workouts that were created before structured plan generation shipped.
+// All endpoints verify ownership through either the parent workoutLog or the
+// planDay via its trainingPlan, so cross-tenant IDOR is blocked at the
+// storage layer.
+// -----------------------------------------------------------------------------
+
+const patchExerciseSetSchema = z.object({
+  exerciseName: z.string().min(1).max(255).optional(),
+  customLabel: z.string().max(255).nullable().optional(),
+  category: z.string().max(50).optional(),
+  setNumber: z.number().int().min(1).max(100).optional(),
+  reps: z.number().int().min(0).max(10_000).nullable().optional(),
+  weight: z.number().min(0).max(2_000).nullable().optional(),
+  distance: z.number().min(0).max(1_000_000).nullable().optional(),
+  time: z.number().min(0).max(86_400).nullable().optional(),
+  notes: z.string().max(1000).nullable().optional(),
+  sortOrder: z.number().int().nullable().optional(),
+});
+type PatchExerciseSetPayload = z.infer<typeof patchExerciseSetSchema>;
+
+const addExerciseSetSchema = z.object({
+  exerciseName: z.string().min(1).max(255),
+  customLabel: z.string().max(255).nullable().optional(),
+  category: z.string().max(50),
+  setNumber: z.number().int().min(1).max(100).default(1),
+  reps: z.number().int().min(0).max(10_000).nullable().optional(),
+  weight: z.number().min(0).max(2_000).nullable().optional(),
+  distance: z.number().min(0).max(1_000_000).nullable().optional(),
+  time: z.number().min(0).max(86_400).nullable().optional(),
+  notes: z.string().max(1000).nullable().optional(),
+  confidence: z.number().int().min(0).max(100).nullable().optional(),
+});
+type AddExerciseSetPayload = z.infer<typeof addExerciseSetSchema>;
+
+const NOT_FOUND_CODE = "NOT_FOUND";
+const WORKOUT_NOT_FOUND = "Workout not found";
+const EXERCISE_SET_NOT_FOUND = "Exercise set not found";
+
+function respond404(res: Response, message: string): Response {
+  return res.status(404).json({ error: message, code: NOT_FOUND_CODE });
+}
+
+router.patch(
+  "/api/v1/workouts/:id/sets/:setId",
+  ...protectedMutationGuards,
+  rateLimiter("workoutSet", 120),
+  validateBody(patchExerciseSetSchema),
+  asyncHandler(async (req: Request<{ id: string; setId: string }, Record<string, never>, PatchExerciseSetPayload>, res: Response) => {
+    const userId = getUserId(req);
+    const updated = await storage.workouts.updateExerciseSet(req.params.id, req.params.setId, req.body, userId);
+    if (!updated) {
+      return respond404(res, EXERCISE_SET_NOT_FOUND);
+    }
+    res.json(updated);
+  }),
+);
+
+router.post(
+  "/api/v1/workouts/:id/sets",
+  ...protectedMutationGuards,
+  rateLimiter("workoutSet", 60),
+  validateBody(addExerciseSetSchema),
+  asyncHandler(async (req: Request<{ id: string }, Record<string, never>, AddExerciseSetPayload>, res: Response) => {
+    const userId = getUserId(req);
+    const created = await storage.workouts.addExerciseSetToWorkoutLog(req.params.id, req.body, userId);
+    if (!created) {
+      return respond404(res, WORKOUT_NOT_FOUND);
+    }
+    res.status(201).json(created);
+  }),
+);
+
+router.delete(
+  "/api/v1/workouts/:id/sets/:setId",
+  ...protectedMutationGuards,
+  rateLimiter("workoutSet", 60),
+  asyncHandler(async (req: Request<{ id: string; setId: string }>, res: Response) => {
+    const userId = getUserId(req);
+    const deleted = await storage.workouts.deleteExerciseSet(req.params.id, req.params.setId, userId);
+    if (!deleted) {
+      return respond404(res, EXERCISE_SET_NOT_FOUND);
+    }
+    res.json({ success: true });
+  }),
+);
+
+router.get(
+  "/api/v1/workouts/:id/history",
+  isAuthenticated,
+  rateLimiter("workoutHistory", 60),
+  asyncHandler(async (req: Request<{ id: string }>, res: Response) => {
+    const userId = getUserId(req);
+    const stats = await storage.workouts.getWorkoutHistoryStats(req.params.id, userId);
+    if (!stats) {
+      return respond404(res, WORKOUT_NOT_FOUND);
+    }
+    res.json(stats);
+  }),
+);
+
+router.post(
+  "/api/v1/workouts/:id/seed-from-plan",
+  ...protectedMutationGuards,
+  rateLimiter("workoutSet", 20),
+  asyncHandler(async (req: Request<{ id: string }>, res: Response) => {
+    const userId = getUserId(req);
+    const seeded = await storage.workouts.seedExerciseSetsFromPlanDay(req.params.id, userId);
+    res.json({ seededCount: seeded });
+  }),
+);
+
 router.get("/api/v1/workouts/:id", isAuthenticated, rateLimiter("workout", 60), asyncHandler(async (req: Request<{ id: string }>, res: Response) => {
     const userId = getUserId(req);
     const log = await storage.workouts.getWorkoutLog(req.params.id, userId);

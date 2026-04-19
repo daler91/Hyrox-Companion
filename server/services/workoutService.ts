@@ -46,59 +46,137 @@ export function extractAndDeduplicateCustomExercises(exercises: ParsedExercise[]
 // and has no legitimate training use (S13).
 const MAX_SET_ROWS_PER_WORKOUT = 1000;
 
-export function expandExercisesToSetRows(exercises: ParsedExercise[], workoutLogId: string): InsertExerciseSet[] {
+// Owner discriminator: an exercise set row lives under either a workoutLog
+// (logged) or a planDay (prescribed). Exactly one id is set per row, enforced
+// by the exercise_set_single_owner_check DB constraint.
+type SetOwner = { workoutLogId: string } | { planDayId: string };
+
+function ownerColumns(owner: SetOwner): Partial<InsertExerciseSet> {
+  if ("workoutLogId" in owner) {
+    return { workoutLogId: owner.workoutLogId, planDayId: null };
+  }
+  return { workoutLogId: null, planDayId: owner.planDayId };
+}
+
+// Per-set measurements. An explicit set has its own reps/weight/…; an
+// aggregate (numSets fallback) reuses the exercise-level values. Collapsing
+// the two "build row" shapes into this single adapter removes the duplicate
+// block Sonar flagged.
+interface SetMeasurements {
+  setNumber: number;
+  reps: number | null;
+  weight: number | null;
+  distance: number | null;
+  time: number | null;
+  notes: string | null;
+}
+
+function buildExerciseSetRow(
+  ex: ParsedExercise,
+  measurements: SetMeasurements,
+  ownerCols: Partial<InsertExerciseSet>,
+  sortOrder: number,
+): InsertExerciseSet {
+  return {
+    ...ownerCols,
+    exerciseName: ex.exerciseName,
+    customLabel: ex.customLabel || null,
+    category: ex.category,
+    setNumber: measurements.setNumber,
+    reps: measurements.reps,
+    weight: measurements.weight,
+    distance: measurements.distance,
+    time: measurements.time,
+    confidence: ex.confidence ?? null,
+    notes: measurements.notes,
+    sortOrder,
+  } as InsertExerciseSet;
+}
+
+function measurementsFromExplicit(set: ParsedExercise["sets"][number]): SetMeasurements {
+  return {
+    setNumber: set.setNumber || 1,
+    reps: set.reps ?? null,
+    weight: set.weight ?? null,
+    distance: set.distance ?? null,
+    time: set.time ?? null,
+    notes: set.notes || null,
+  };
+}
+
+function measurementsFromAggregate(ex: ParsedExercise, setNumber: number): SetMeasurements {
+  return {
+    setNumber,
+    reps: ex.reps ?? null,
+    weight: ex.weight ?? null,
+    distance: ex.distance ?? null,
+    time: ex.time ?? null,
+    notes: ex.notes || null,
+  };
+}
+
+function appendRowsForExercise(
+  ex: ParsedExercise,
+  ownerCols: Partial<InsertExerciseSet>,
+  rows: InsertExerciseSet[],
+  startOrder: number,
+): number {
+  let sortOrder = startOrder;
+  if (ex.sets && Array.isArray(ex.sets)) {
+    for (const set of ex.sets) {
+      rows.push(buildExerciseSetRow(ex, measurementsFromExplicit(set), ownerCols, sortOrder++));
+    }
+    return sortOrder;
+  }
+  const numSets = ex.numSets || 1;
+  for (let s = 1; s <= numSets; s++) {
+    rows.push(buildExerciseSetRow(ex, measurementsFromAggregate(ex, s), ownerCols, sortOrder++));
+  }
+  return sortOrder;
+}
+
+function assertRowCapacity(rowCount: number, context: "workout" | "plan"): void {
+  if (rowCount <= MAX_SET_ROWS_PER_WORKOUT) return;
+  // Valid Zod payloads can still reach this cap (200 exercises × 50 sets),
+  // so surface it as a structured 400 rather than letting the generic
+  // handler turn it into a 500.
+  const label = context === "plan" ? "Plan day" : "Workout";
+  const unit = context === "plan" ? "days" : "workouts";
+  throw new AppError(
+    ErrorCode.VALIDATION_ERROR,
+    `${label} expanded to ${rowCount} set rows (limit ${MAX_SET_ROWS_PER_WORKOUT}). Split into multiple ${unit}.`,
+    400,
+    { setRows: rowCount, limit: MAX_SET_ROWS_PER_WORKOUT },
+  );
+}
+
+function expandExercisesToRows(
+  exercises: ParsedExercise[],
+  owner: SetOwner,
+  context: "workout" | "plan",
+): InsertExerciseSet[] {
   const rows: InsertExerciseSet[] = [];
+  const ownerCols = ownerColumns(owner);
   let sortOrder = 0;
   for (const ex of exercises) {
-    if (ex.sets && Array.isArray(ex.sets)) {
-      for (const set of ex.sets) {
-        rows.push({
-          workoutLogId,
-          exerciseName: ex.exerciseName,
-          customLabel: ex.customLabel || null,
-          category: ex.category,
-          setNumber: set.setNumber || 1,
-          reps: set.reps ?? null,
-          weight: set.weight ?? null,
-          distance: set.distance ?? null,
-          time: set.time ?? null,
-          confidence: ex.confidence ?? null,
-          notes: set.notes || null,
-          sortOrder: sortOrder++,
-        });
-      }
-    } else {
-      const numSets = ex.numSets || 1;
-      for (let s = 1; s <= numSets; s++) {
-        rows.push({
-          workoutLogId,
-          exerciseName: ex.exerciseName,
-          customLabel: ex.customLabel || null,
-          category: ex.category,
-          setNumber: s,
-          reps: ex.reps ?? null,
-          weight: ex.weight ?? null,
-          distance: ex.distance ?? null,
-          time: ex.time ?? null,
-          confidence: ex.confidence ?? null,
-          notes: ex.notes || null,
-          sortOrder: sortOrder++,
-        });
-      }
-    }
+    sortOrder = appendRowsForExercise(ex, ownerCols, rows, sortOrder);
   }
-  if (rows.length > MAX_SET_ROWS_PER_WORKOUT) {
-    // Valid Zod payloads can still reach this cap (200 exercises × 50 sets),
-    // so surface it as a structured 400 rather than letting the generic
-    // handler turn it into a 500.
-    throw new AppError(
-      ErrorCode.VALIDATION_ERROR,
-      `Workout expanded to ${rows.length} set rows (limit ${MAX_SET_ROWS_PER_WORKOUT}). Split into multiple workouts.`,
-      400,
-      { setRows: rows.length, limit: MAX_SET_ROWS_PER_WORKOUT },
-    );
-  }
+  assertRowCapacity(rows.length, context);
   return rows;
+}
+
+export function expandExercisesToSetRows(exercises: ParsedExercise[], workoutLogId: string): InsertExerciseSet[] {
+  return expandExercisesToRows(exercises, { workoutLogId }, "workout");
+}
+
+// Prescribed rows for a plan day. Same shape as logged rows but owned by
+// planDayId instead of workoutLogId — when the user logs the plan day, these
+// rows get copied into a new workoutLog as starter sets.
+export function expandExercisesToPlanDaySetRows(
+  exercises: ParsedExercise[],
+  planDayId: string,
+): InsertExerciseSet[] {
+  return expandExercisesToRows(exercises, { planDayId }, "plan");
 }
 
 

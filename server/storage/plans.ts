@@ -19,8 +19,9 @@ import { syncPlanDayStatusFromWorkouts } from "./planDayStatus";
 export { syncPlanDayStatusFromWorkouts } from "./planDayStatus";
 
 export class PlanStorage {
-  async createTrainingPlan(plan: InsertTrainingPlan): Promise<TrainingPlan> {
-    const [trainingPlan] = await db.insert(trainingPlans).values(plan).returning();
+  async createTrainingPlan(plan: InsertTrainingPlan, tx?: DbExecutor): Promise<TrainingPlan> {
+    const executor = tx ?? db;
+    const [trainingPlan] = await executor.insert(trainingPlans).values(plan).returning();
     return trainingPlan;
   }
 
@@ -98,9 +99,10 @@ export class PlanStorage {
     });
   }
 
-  async createPlanDays(days: InsertPlanDay[]): Promise<PlanDay[]> {
+  async createPlanDays(days: InsertPlanDay[], tx?: DbExecutor): Promise<PlanDay[]> {
     if (days.length === 0) return [];
-    return await db.insert(planDays).values(days).returning();
+    const executor = tx ?? db;
+    return await executor.insert(planDays).values(days).returning();
   }
 
   /**
