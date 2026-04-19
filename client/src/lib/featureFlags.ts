@@ -23,7 +23,7 @@ export const DEFAULT_FEATURE_FLAGS: FeatureFlags = {
 const STORAGE_KEY = "featureFlags";
 
 function readOverrides(): Partial<FeatureFlags> {
-  if (typeof globalThis.window === "undefined") return {};
+  if (globalThis.window === undefined) return {};
   try {
     const raw = globalThis.window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return {};
