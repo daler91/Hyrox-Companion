@@ -32,6 +32,16 @@ export default function Landing() {
         .float-animation {
           animation: float 4s ease-in-out infinite;
         }
+        @media (prefers-reduced-motion: reduce) {
+          .fade-up {
+            opacity: 1;
+            transform: none;
+            transition: none;
+          }
+          .float-animation {
+            animation: none;
+          }
+        }
       `}</style>
 
       <LandingHeader />

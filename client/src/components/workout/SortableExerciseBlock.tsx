@@ -1,5 +1,6 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { EXERCISE_DEFINITIONS } from "@shared/schema";
 import { GripVertical } from "lucide-react";
 import React from "react";
 
@@ -32,10 +33,15 @@ export function SortableExerciseBlock({ blockId, exData, blockLabel, weightUnit,
     position: "relative" as const,
   };
 
+  const exerciseLabel =
+    exData.exerciseName === "custom" && exData.customLabel
+      ? exData.customLabel
+      : EXERCISE_DEFINITIONS[exData.exerciseName]?.label || exData.exerciseName;
+
   return (
     <div ref={setNodeRef} style={style}>
-      <div className="absolute left-0 top-3 z-10 cursor-grab active:cursor-grabbing touch-none p-1" {...attributes} {...listeners} data-testid={`drag-handle-${blockId}`}>
-        <GripVertical className="h-4 w-4 text-muted-foreground" />
+      <div className="absolute left-0 top-3 z-10 cursor-grab active:cursor-grabbing touch-none p-1" {...attributes} {...listeners} aria-label={`Reorder ${exerciseLabel}`} data-testid={`drag-handle-${blockId}`}>
+        <GripVertical className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
       </div>
       <div className="pl-6">
         <ExerciseInput
