@@ -76,7 +76,8 @@ describe("Timeline Workout Details Interactions", () => {
   it("can mark a workout as missed from the v2 overflow menu", () => {
     cy.getBySel(`card-timeline-entry-${workoutId}`).click();
 
-    cy.getBySel("workout-detail-actions-trigger").click();
+    // Status change moved from the ⋮ menu to the clickable status chip.
+    cy.getBySel("workout-detail-status-chip").click();
     cy.getBySel("workout-detail-status-missed").click();
 
     cy.wait("@updatePlanDay").then((interception) => {

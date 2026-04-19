@@ -307,7 +307,7 @@ describe("WorkoutDetailDialogV2", () => {
 
   // ---- Status change ---------------------------------------------------
 
-  it("offers status-change items in the overflow menu and fires onChangeStatus", async () => {
+  it("offers status-change items on the status chip dropdown and fires onChangeStatus", async () => {
     const onChangeStatus = vi.fn();
     mockWorkouts.get.mockResolvedValue(
       makeWorkout({ exerciseSets: [makeSet()], planDayId: "plan-day-1" }),
@@ -324,7 +324,8 @@ describe("WorkoutDetailDialogV2", () => {
     });
 
     const user = userEvent.setup();
-    await user.click(await screen.findByTestId("workout-detail-actions-trigger"));
+    // The chip is now the primary entry point — no need to open ⋮ first.
+    await user.click(await screen.findByTestId("workout-detail-status-chip"));
 
     // The current status (completed) should NOT appear; all others should.
     expect(screen.queryByTestId("workout-detail-status-completed")).not.toBeInTheDocument();
@@ -342,7 +343,7 @@ describe("WorkoutDetailDialogV2", () => {
     });
   });
 
-  it("hides status-change items for ad-hoc logged workouts with no plan day", async () => {
+  it("renders status chip as a non-interactive pill for ad-hoc logged workouts", async () => {
     mockWorkouts.get.mockResolvedValue(
       makeWorkout({ exerciseSets: [makeSet()], planDayId: null }),
     );
@@ -359,10 +360,13 @@ describe("WorkoutDetailDialogV2", () => {
     });
 
     const user = userEvent.setup();
-    await user.click(await screen.findByTestId("workout-detail-actions-trigger"));
+    // Chip renders but isn't a dropdown trigger for ad-hoc workouts.
+    const chip = await screen.findByTestId("workout-detail-status-chip");
+    expect(chip.tagName).toBe("SPAN");
 
-    // Without a plan day the status flow has nothing to write to, but
-    // Delete still lives in the same menu.
+    // Delete still lives in the ⋮ menu (which no longer carries status
+    // items but does carry Delete for ad-hoc logged workouts).
+    await user.click(screen.getByTestId("workout-detail-actions-trigger"));
     expect(screen.queryByTestId("workout-detail-status-planned")).not.toBeInTheDocument();
     expect(screen.queryByTestId("workout-detail-status-skipped")).not.toBeInTheDocument();
     expect(screen.getByTestId("workout-detail-delete")).toBeInTheDocument();
