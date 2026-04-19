@@ -272,28 +272,27 @@ export async function generatePlan(
 
     const createdPlanDays = await storage.plans.createPlanDays(planDaysPayload, tx);
 
-    // Expand structured exercises under each plan day so the workout detail
-    // UI can render a real editable table out of the gate instead of parsing
-    // free text on first open. The AI may omit the exercises array for some
-    // days (rest days, or a flaky generation); those days keep their free
-    // text and fall back to lazy-parse later.
-    const planDayKeyed = new Map<string, (typeof createdPlanDays)[number]>();
-    for (const pd of createdPlanDays) {
-      planDayKeyed.set(`${pd.weekNumber}:${pd.dayName}`, pd);
+    // Expand structured exercises under each plan day. We pair generated
+    // days with persisted plan days positionally rather than by
+    // (weekNumber, dayName) because Gemini can (rarely) return duplicate
+    // day entries in a week, which would collide in a map and silently
+    // attach one day's prescribed sets to another's plan_day row.
+    // createPlanDays preserves input order via RETURNING, so index mapping
+    // is 1:1.
+    if (createdPlanDays.length !== planDaysPayload.length) {
+      throw new AppError(
+        ErrorCode.INTERNAL_ERROR,
+        "createPlanDays returned unexpected row count",
+        500,
+      );
     }
 
     const allSetRows: InsertExerciseSet[] = [];
     let dwe = 0;
-    for (const day of days) {
+    for (let i = 0; i < days.length; i++) {
+      const day = days[i];
       if (!day.exercises || day.exercises.length === 0) continue;
-      const pd = planDayKeyed.get(`${day.weekNumber}:${day.dayName}`);
-      if (!pd) {
-        logger.warn(
-          { weekNumber: day.weekNumber, dayName: day.dayName },
-          "[planGen] Could not match generated exercises to a persisted plan day",
-        );
-        continue;
-      }
+      const pd = createdPlanDays[i];
       const normalised = day.exercises.map(normalizeGeneratedExercise);
       try {
         allSetRows.push(...expandExercisesToPlanDaySetRows(normalised, pd.id));

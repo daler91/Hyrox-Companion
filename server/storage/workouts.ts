@@ -15,6 +15,28 @@ import { db } from "../db";
 import { syncPlanDayStatusFromWorkouts } from "./planDayStatus";
 import { queryExerciseSetsWithDates } from "./shared";
 
+// Count distinct exercises in a logged workout whose best weight matches the
+// user's all-time max for that exercise. "Conservative PR" — we only credit
+// exercises that include a weighted set; running/time/distance PRs are not
+// counted here. Extracted as a pure function so the storage method stays
+// within Sonar's cognitive-complexity ceiling.
+function countPrSets(
+  workoutSets: Array<{ exerciseName: string; weight: number | null }>,
+  maxByExercise: Map<string, number | null>,
+): number {
+  const counted = new Set<string>();
+  let prs = 0;
+  for (const s of workoutSets) {
+    if (s.weight == null || counted.has(s.exerciseName)) continue;
+    const max = maxByExercise.get(s.exerciseName);
+    if (max != null && s.weight >= max) {
+      prs++;
+      counted.add(s.exerciseName);
+    }
+  }
+  return prs;
+}
+
 export class WorkoutStorage {
   private getPlanDayCompletionCondition(planDayIds: string | string[], userId: string) {
     const ids = Array.isArray(planDayIds) ? planDayIds : [planDayIds];
@@ -325,7 +347,7 @@ export class WorkoutStorage {
     const owned = await this.getExerciseSetOwned(setId, userId);
     if (!owned) return false;
     const result = await db.delete(exerciseSets).where(eq(exerciseSets.id, setId));
-    return result.rowCount !== null && result.rowCount > 0;
+    return (result.rowCount ?? 0) > 0;
   }
 
   /**
@@ -352,6 +374,73 @@ export class WorkoutStorage {
     return created;
   }
 
+  private async fetchLastSameFocus(
+    currentDate: string,
+    focus: string | null | undefined,
+    userId: string,
+  ): Promise<{ date: string; focus: string } | null> {
+    if (!focus) return null;
+    const [prev] = await db
+      .select({ date: workoutLogs.date, focus: workoutLogs.focus })
+      .from(workoutLogs)
+      .where(
+        and(
+          eq(workoutLogs.userId, userId),
+          eq(workoutLogs.focus, focus),
+          sql`${workoutLogs.date} < ${currentDate}`,
+        ),
+      )
+      .orderBy(desc(workoutLogs.date))
+      .limit(1);
+    return prev ? { date: prev.date, focus: prev.focus } : null;
+  }
+
+  private async fetchPrSetCount(workoutLogId: string, userId: string): Promise<number> {
+    const thisWorkoutSets = await db
+      .select({
+        exerciseName: exerciseSets.exerciseName,
+        weight: exerciseSets.weight,
+      })
+      .from(exerciseSets)
+      .where(eq(exerciseSets.workoutLogId, workoutLogId));
+
+    const exerciseNames = [...new Set(thisWorkoutSets.map((s) => s.exerciseName))];
+    if (exerciseNames.length === 0) return 0;
+
+    const userMaxes = await db
+      .select({
+        exerciseName: exerciseSets.exerciseName,
+        maxWeight: sql<number | null>`max(${exerciseSets.weight})`,
+      })
+      .from(exerciseSets)
+      .innerJoin(workoutLogs, eq(exerciseSets.workoutLogId, workoutLogs.id))
+      .where(
+        and(
+          eq(workoutLogs.userId, userId),
+          inArray(exerciseSets.exerciseName, exerciseNames),
+        ),
+      )
+      .groupBy(exerciseSets.exerciseName);
+    const maxByExercise = new Map(userMaxes.map((m) => [m.exerciseName, m.maxWeight]));
+
+    return countPrSets(thisWorkoutSets, maxByExercise);
+  }
+
+  private async fetchBlockAvgRpe(currentDate: string, userId: string): Promise<number | null> {
+    const [rpe] = await db
+      .select({ avg: sql<number | null>`avg(${workoutLogs.rpe})` })
+      .from(workoutLogs)
+      .where(
+        and(
+          eq(workoutLogs.userId, userId),
+          isNotNull(workoutLogs.rpe),
+          sql`${workoutLogs.date} >= (${currentDate}::date - INTERVAL '14 days')`,
+          sql`${workoutLogs.date} <= (${currentDate}::date + INTERVAL '14 days')`,
+        ),
+      );
+    return rpe?.avg != null ? Math.round(Number(rpe.avg) * 10) / 10 : null;
+  }
+
   /**
    * History stats shown on the workout-detail sidebar: when the athlete last
    * trained the same focus, how many PR sets this workout contains, and the
@@ -369,83 +458,11 @@ export class WorkoutStorage {
     const log = await this.getWorkoutLog(workoutLogId, userId);
     if (!log) return undefined;
 
-    // Last workout with matching focus before this one.
-    let lastSameFocus: { date: string; focus: string } | null = null;
-    if (log.focus) {
-      const [prev] = await db
-        .select({ date: workoutLogs.date, focus: workoutLogs.focus })
-        .from(workoutLogs)
-        .where(
-          and(
-            eq(workoutLogs.userId, userId),
-            eq(workoutLogs.focus, log.focus),
-            sql`${workoutLogs.date} < ${log.date}`,
-          ),
-        )
-        .orderBy(desc(workoutLogs.date))
-        .limit(1);
-      if (prev) lastSameFocus = { date: prev.date, focus: prev.focus };
-    }
-
-    // PR sets: for each exercise in this workout, if any of its sets matches
-    // the user's all-time max weight for that exercise, count it. Scoped to
-    // strength-like sets (weight IS NOT NULL). This is a conservative
-    // definition; it catches the main case the UI surfaces. Refine later if
-    // the analytics service grows a canonical PR computation.
-    const thisWorkoutSets = await db
-      .select({
-        exerciseName: exerciseSets.exerciseName,
-        customLabel: exerciseSets.customLabel,
-        weight: exerciseSets.weight,
-      })
-      .from(exerciseSets)
-      .where(eq(exerciseSets.workoutLogId, workoutLogId));
-
-    let prSetCount = 0;
-    const exerciseNames = [...new Set(thisWorkoutSets.map((s) => s.exerciseName))];
-    if (exerciseNames.length > 0) {
-      const userMaxes = await db
-        .select({
-          exerciseName: exerciseSets.exerciseName,
-          maxWeight: sql<number | null>`max(${exerciseSets.weight})`,
-        })
-        .from(exerciseSets)
-        .innerJoin(workoutLogs, eq(exerciseSets.workoutLogId, workoutLogs.id))
-        .where(
-          and(
-            eq(workoutLogs.userId, userId),
-            inArray(exerciseSets.exerciseName, exerciseNames),
-          ),
-        )
-        .groupBy(exerciseSets.exerciseName);
-      const maxByExercise = new Map(userMaxes.map((m) => [m.exerciseName, m.maxWeight]));
-      const countedExercises = new Set<string>();
-      for (const s of thisWorkoutSets) {
-        if (s.weight == null) continue;
-        const max = maxByExercise.get(s.exerciseName);
-        if (max != null && s.weight >= max && !countedExercises.has(s.exerciseName)) {
-          prSetCount++;
-          countedExercises.add(s.exerciseName);
-        }
-      }
-    }
-
-    // Surrounding 4-week block — avg RPE from workouts within ±14 days of
-    // this workout's date. Null when no RPE was recorded in the window.
-    const [rpe] = await db
-      .select({
-        avg: sql<number | null>`avg(${workoutLogs.rpe})`,
-      })
-      .from(workoutLogs)
-      .where(
-        and(
-          eq(workoutLogs.userId, userId),
-          isNotNull(workoutLogs.rpe),
-          sql`${workoutLogs.date} >= (${log.date}::date - INTERVAL '14 days')`,
-          sql`${workoutLogs.date} <= (${log.date}::date + INTERVAL '14 days')`,
-        ),
-      );
-    const blockAvgRpe = rpe?.avg != null ? Math.round(Number(rpe.avg) * 10) / 10 : null;
+    const [lastSameFocus, prSetCount, blockAvgRpe] = await Promise.all([
+      this.fetchLastSameFocus(log.date, log.focus, userId),
+      this.fetchPrSetCount(workoutLogId, userId),
+      this.fetchBlockAvgRpe(log.date, userId),
+    ]);
 
     return { lastSameFocus, prSetCount, blockAvgRpe };
   }
@@ -459,12 +476,17 @@ export class WorkoutStorage {
    */
   async seedExerciseSetsFromPlanDay(workoutLogId: string, userId: string): Promise<number> {
     return await db.transaction(async (tx) => {
+      // Row-lock the parent workout so two concurrent seed calls serialize
+      // through Postgres. Without this, both requests could observe an
+      // empty exerciseSets table and each insert a full copy, producing
+      // duplicate rows with colliding sortOrder values.
       const [log] = await tx
         .select({ id: workoutLogs.id, planDayId: workoutLogs.planDayId })
         .from(workoutLogs)
         .where(and(eq(workoutLogs.id, workoutLogId), eq(workoutLogs.userId, userId)))
+        .for("update")
         .limit(1);
-      if (!log || !log.planDayId) return 0;
+      if (log?.planDayId == null) return 0;
 
       const existing = await tx
         .select({ id: exerciseSets.id })
