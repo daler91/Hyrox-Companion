@@ -14,6 +14,38 @@ export interface BatchReparseResponse {
   failed: number;
 }
 
+export interface WorkoutHistoryStats {
+  lastSameFocus: { date: string; focus: string } | null;
+  prSetCount: number;
+  blockAvgRpe: number | null;
+}
+
+export type PatchExerciseSetPayload = Partial<{
+  exerciseName: string;
+  customLabel: string | null;
+  category: string;
+  setNumber: number;
+  reps: number | null;
+  weight: number | null;
+  distance: number | null;
+  time: number | null;
+  notes: string | null;
+  sortOrder: number | null;
+}>;
+
+export interface AddExerciseSetPayload {
+  exerciseName: string;
+  customLabel?: string | null;
+  category: string;
+  setNumber?: number;
+  reps?: number | null;
+  weight?: number | null;
+  distance?: number | null;
+  time?: number | null;
+  notes?: string | null;
+  confidence?: number | null;
+}
+
 export const workouts = {
   create: (data: Omit<InsertWorkoutLog, "userId"> & { title?: string; exercises?: ParsedExercise[] }) =>
     typedRequest<{ message: string; workout: WorkoutLog }>("POST", "/api/v1/workouts", data),
@@ -48,4 +80,21 @@ export const workouts = {
   reparse: (id: string) => typedRequest<WorkoutLog>("POST", `/api/v1/workouts/${id}/reparse`),
 
   batchReparse: () => typedRequest<BatchReparseResponse>("POST", "/api/v1/workouts/batch-reparse"),
+
+  // --- Set-level CRUD used by the structured exercises table in the v2
+  // workout-detail dialog. Each cell edit fires an updateSet; +Add hits
+  // addSet; row ⋮ → delete hits deleteSet.
+  history: (id: string) => typedRequest<WorkoutHistoryStats>("GET", `/api/v1/workouts/${id}/history`),
+
+  seedFromPlan: (id: string) =>
+    typedRequest<{ seededCount: number }>("POST", `/api/v1/workouts/${id}/seed-from-plan`),
+
+  updateSet: (workoutId: string, setId: string, data: PatchExerciseSetPayload) =>
+    typedRequest<ExerciseSet>("PATCH", `/api/v1/workouts/${workoutId}/sets/${setId}`, data),
+
+  addSet: (workoutId: string, data: AddExerciseSetPayload) =>
+    typedRequest<ExerciseSet>("POST", `/api/v1/workouts/${workoutId}/sets`, data),
+
+  deleteSet: (workoutId: string, setId: string) =>
+    typedRequest<{ success: boolean }>("DELETE", `/api/v1/workouts/${workoutId}/sets/${setId}`),
 } as const;
