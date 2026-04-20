@@ -2,6 +2,7 @@ import type { ExerciseSet } from "@shared/schema";
 import { ChevronDown, MoreVertical, Plus, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
+import { type FieldKey, getFields } from "@/components/exercise-row/fieldMeta";
 import { InlineSetEditor } from "@/components/exercise-row/InlineSetEditor";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,7 +19,13 @@ import { getExerciseLabel, type GroupedExercise,groupExerciseSets } from "@/lib/
 import { cn } from "@/lib/utils";
 
 const AGG_DEBOUNCE_MS = 350;
-// Grid columns: label | sets | reps/dist | load | chevron | menu.
+// Debounce window for set-count changes. Longer than cell writes so a
+// mid-typed "10" isn't interpreted as "1" first (which would fire
+// one-set deletes before the intended value lands).
+const SET_COUNT_DEBOUNCE_MS = 500;
+const MIN_SETS = 1;
+const MAX_SETS = 50;
+// Grid columns: label | sets | primary metric (reps/dist/time) | load | chevron | menu.
 const GRID_TEMPLATE =
   "grid grid-cols-[1fr_60px_90px_110px_32px_32px] items-center gap-2 px-3 py-2";
 
@@ -167,12 +174,14 @@ function GroupRow({
   const firstSet = group.sets[0];
   const setCount = group.sets.length;
 
-  const repsField: "reps" | "distance" =
-    uniformity.reps == null && uniformity.distance != null ? "distance" : "reps";
-  const repsValue =
-    repsField === "distance" ? uniformity.distance : uniformity.reps;
-  const repsVaries =
-    repsField === "distance" ? uniformity.distanceVaries : uniformity.repsVaries;
+  // Pick the primary metric from the exercise definition, not from
+  // value presence. Time-only exercises (e.g. battle_ropes) would
+  // otherwise fall back to "reps" and silently misroute every edit
+  // through the wrong column. Priority: reps > distance > time.
+  const primaryField = pickPrimaryMetric(group.exerciseName);
+  const primaryValue = pickUniformValue(uniformity, primaryField);
+  const primaryVaries = pickVariance(uniformity, primaryField);
+  const primarySuffix = primaryField === "distance" ? "m" : primaryField === "time" ? "min" : undefined;
   const loadVaries = uniformity.weightVaries;
 
   // Fan-out writes: an aggregate edit only fires when the prescription
@@ -182,18 +191,25 @@ function GroupRow({
     for (const s of group.sets) onUpdateSet(s.id, patch);
   }, AGG_DEBOUNCE_MS);
 
+  // Set-count changes mutate the group structurally (add/delete set
+  // rows), so an unbounded/unthrottled write would loop onAddSet many
+  // times as the user types "25" (firing "2" then "25") and can hit
+  // backend rate limits. Clamp to [MIN,MAX] and debounce so only the
+  // final typed value triggers the diff.
+  const debouncedSetCountApply = useDebouncedCallback((target: number) => {
+    applySetCountChange(group, target, firstSet, onAddSet, onDeleteSet);
+  }, SET_COUNT_DEBOUNCE_MS);
+
   const handleSetCountChange = (next: number | null) => {
-    if (next == null || next === setCount || next < 1) return;
-    applySetCountChange(group, Math.round(next), firstSet, onAddSet, onDeleteSet);
+    if (next == null) return;
+    const clamped = Math.min(MAX_SETS, Math.max(MIN_SETS, Math.round(next)));
+    if (clamped === setCount) return;
+    debouncedSetCountApply(clamped);
   };
 
   const handleDeleteRow = () => {
     for (const s of group.sets) onDeleteSet(s.id);
   };
-
-  // Suffix shown next to the reps/distance cell. Weight column gets
-  // the unit via its own suffix.
-  const repsSuffix = repsField === "distance" ? "m" : undefined;
 
   return (
     <div className="flex flex-col" data-testid="exercise-row" data-row-key={group.sets[0]?.id}>
@@ -202,19 +218,19 @@ function GroupRow({
 
         <AggregateCell
           value={setCount}
-          min={1}
-          max={50}
+          min={MIN_SETS}
+          max={MAX_SETS}
           ariaLabel={`Sets for ${label}`}
           onChange={handleSetCountChange}
         />
 
         <AggregateCell
-          value={repsValue}
-          ariaLabel={`${repsField === "distance" ? "Distance" : "Reps"} for ${label}`}
-          suffix={repsSuffix}
-          varies={repsVaries}
+          value={primaryValue}
+          ariaLabel={`${metricLabel(primaryField)} for ${label}`}
+          suffix={primarySuffix}
+          varies={primaryVaries}
           onExpandForVariable={onToggle}
-          onChange={(next) => debouncedFanout({ [repsField]: next } as PatchExerciseSetPayload)}
+          onChange={(next) => debouncedFanout({ [primaryField]: next } as PatchExerciseSetPayload)}
         />
 
         <AggregateCell
@@ -417,6 +433,8 @@ interface UniformitySummary {
   readonly weightVaries: boolean;
   readonly distance: number | null;
   readonly distanceVaries: boolean;
+  readonly time: number | null;
+  readonly timeVaries: boolean;
 }
 
 function computeUniformity(sets: readonly ExerciseSet[]): UniformitySummary {
@@ -428,17 +446,21 @@ function computeUniformity(sets: readonly ExerciseSet[]): UniformitySummary {
       weightVaries: false,
       distance: null,
       distanceVaries: false,
+      time: null,
+      timeVaries: false,
     };
   }
   const first = sets[0];
   let repsVaries = false;
   let weightVaries = false;
   let distanceVaries = false;
+  let timeVaries = false;
   for (let i = 1; i < sets.length; i++) {
     if (!repsVaries && sets[i].reps !== first.reps) repsVaries = true;
     if (!weightVaries && sets[i].weight !== first.weight) weightVaries = true;
     if (!distanceVaries && sets[i].distance !== first.distance) distanceVaries = true;
-    if (repsVaries && weightVaries && distanceVaries) break;
+    if (!timeVaries && sets[i].time !== first.time) timeVaries = true;
+    if (repsVaries && weightVaries && distanceVaries && timeVaries) break;
   }
   return {
     reps: first.reps ?? null,
@@ -447,7 +469,42 @@ function computeUniformity(sets: readonly ExerciseSet[]): UniformitySummary {
     weightVaries,
     distance: first.distance ?? null,
     distanceVaries,
+    time: first.time ?? null,
+    timeVaries,
   };
+}
+
+/**
+ * The exercise's definition is the source of truth for which metric
+ * shows in the "Reps" column. Priority: reps > distance > time > reps
+ * (fallback if somehow none of the three are in the definition).
+ * Deriving from value-presence would silently miswire time-only
+ * exercises (battle_ropes, etc.) into reps edits.
+ */
+function pickPrimaryMetric(exerciseName: string): "reps" | "distance" | "time" {
+  const fields: readonly FieldKey[] = getFields(exerciseName);
+  if (fields.includes("reps")) return "reps";
+  if (fields.includes("distance")) return "distance";
+  if (fields.includes("time")) return "time";
+  return "reps";
+}
+
+function pickUniformValue(u: UniformitySummary, field: "reps" | "distance" | "time"): number | null {
+  if (field === "distance") return u.distance;
+  if (field === "time") return u.time;
+  return u.reps;
+}
+
+function pickVariance(u: UniformitySummary, field: "reps" | "distance" | "time"): boolean {
+  if (field === "distance") return u.distanceVaries;
+  if (field === "time") return u.timeVaries;
+  return u.repsVaries;
+}
+
+function metricLabel(field: "reps" | "distance" | "time"): string {
+  if (field === "distance") return "Distance";
+  if (field === "time") return "Time";
+  return "Reps";
 }
 
 function applySetCountChange(
