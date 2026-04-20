@@ -466,6 +466,12 @@ export default function Timeline() {
             // independent session state (see the comment in the
             // dialog's onOpenChat handler).
             onAskCoachOpen={() => setCoachOpen(false)}
+            // Gate Ask-coach on the same AI-coach consent that the
+            // global FAB flow runs through `handleCoachToggle`.
+            // Users who haven't opted in get the AIConsentDialog
+            // instead of the chat auto-opening.
+            aiCoachEnabled={!!user?.aiCoachEnabled}
+            onRequestCoachConsent={() => setShowAIConsent(true)}
           />
 
           <SkipConfirmDialog

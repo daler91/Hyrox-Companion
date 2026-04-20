@@ -67,6 +67,20 @@ interface WorkoutDetailDialogV2Props {
    * sync, so sending from one would leave the other stale.
    */
   readonly onAskCoachOpen?: () => void;
+  /**
+   * Whether the AI coach is enabled for this user. When false, the
+   * Ask-coach click delegates to `onRequestCoachConsent` instead of
+   * opening the in-dialog chat — the global-rail flow already gates
+   * on consent via `handleCoachToggle` in Timeline; without this
+   * prop, the in-dialog path would silently bypass that gate.
+   */
+  readonly aiCoachEnabled?: boolean;
+  /**
+   * Invoked when the user clicks Ask coach but consent hasn't been
+   * granted yet. Parent shows `AIConsentDialog`; on accept, the user
+   * clicks Ask coach again to actually open the chat.
+   */
+  readonly onRequestCoachConsent?: () => void;
 }
 
 /**
@@ -89,6 +103,8 @@ export function WorkoutDetailDialogV2({
   onCombine,
   weightUnit = "kg",
   onAskCoachOpen,
+  aiCoachEnabled = true,
+  onRequestCoachConsent,
 }: WorkoutDetailDialogV2Props) {
   const workoutId = entry?.workoutLogId ?? null;
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -243,6 +259,15 @@ export function WorkoutDetailDialogV2({
           onSaveNote={(note) => workoutId && updateNote.mutate(note)}
           chatOpen={chatOpen}
           onOpenChat={() => {
+            // Gate on consent first: the global-rail flow enforces
+            // AIConsentDialog via handleCoachToggle in Timeline;
+            // the in-dialog path needs the same guard or a
+            // non-consented user could bypass it just by clicking
+            // Ask coach from a workout detail.
+            if (!aiCoachEnabled) {
+              onRequestCoachConsent?.();
+              return;
+            }
             // Tell the parent to close the global coach rail before
             // we mount the in-dialog chat: both surfaces would spin
             // up their own `useChatSession` with independent local
