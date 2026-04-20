@@ -203,14 +203,17 @@ export function WorkoutDetailDialogV2({
         className={cn(
           "max-h-[90vh] overflow-y-auto p-0",
           coexistWithSideChat
-            // Gate the left-shift + width shrink to `lg:` (1024px+).
-            // Below that, shifting by ~200px on a dialog that's
-            // still 640-900px wide would push content off the left
-            // viewport edge (see Codex P2). Narrower coexist widths
-            // keep the centered layout but drop the overlay — the
-            // coach rail is still interactable even if the dialog
-            // visually overlaps it.
-            ? "max-w-6xl lg:max-w-4xl lg:translate-x-[calc(-50%-192px)]"
+            // Shift + width shrink gated to `xl:` (1280px+) where
+            // the geometry actually fits: viewport 1280 − coach
+            // 384 = 896 available, which matches max-w-4xl exactly
+            // with a −192px shift (half the coach column).
+            //
+            // Below xl the dialog stays centered at max-w-6xl and
+            // just drops its overlay — clipping would be worse
+            // than a visual overlap with the coach rail, and the
+            // non-modal + onInteractOutside handling keeps both
+            // panels interactable.
+            ? "max-w-6xl xl:max-w-4xl xl:translate-x-[calc(-50%-192px)]"
             : "max-w-6xl",
         )}
         onPointerDownOutside={preventOutsideDismiss}
