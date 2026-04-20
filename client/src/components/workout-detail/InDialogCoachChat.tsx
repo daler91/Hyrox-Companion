@@ -70,13 +70,19 @@ export function InDialogCoachChat({ focusLabel, seedText, onBack }: InDialogCoac
         pendingSuggestions={[]}
         applyingId={null}
         isProcessing={isLoading}
-        onApplySuggestion={noopSuggestion}
-        onDismissSuggestion={noopId}
+        onApplySuggestion={discardSuggestionEvent}
+        onDismissSuggestion={discardSuggestionEvent}
       />
 
       <div className="border-t border-border p-2">
         <ChatInput
-          onSend={(m) => void sendMessage(m).catch(() => {})}
+          onSend={(m) => {
+            sendMessage(m).catch(() => {
+              // Surface errors via the toast that useChatSession's
+              // mutation layer already owns — just swallow here so
+              // the unhandled rejection doesn't bubble.
+            });
+          }}
           isLoading={isLoading}
           seed={seed}
         />
@@ -85,9 +91,9 @@ export function InDialogCoachChat({ focusLabel, seedText, onBack }: InDialogCoac
   );
 }
 
-function noopSuggestion(): void {
-  // Suggestions are not wired inside the dialog surface.
-}
-function noopId(_id: string): void {
-  void _id;
-}
+// Suggestion callbacks required by `CoachPanelChatArea` but never
+// actually fired here — we always pass `pendingSuggestions={[]}` so
+// `SuggestionsList` doesn't render any interactable items. Arrow
+// expression returning `undefined` keeps the body non-empty without
+// using the `void` operator.
+const discardSuggestionEvent = (): undefined => undefined;
