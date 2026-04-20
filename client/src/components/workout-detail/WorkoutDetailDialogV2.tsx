@@ -136,17 +136,19 @@ export function WorkoutDetailDialogV2({
   // dialog — the two requests race on the same plan day and can leave
   // a workoutLog with a conflicting plan_day status.
   const actionsLocked = isMarkingComplete;
-  const handleMenuDelete = onDelete && !actionsLocked ? () => setConfirmingDelete(true) : undefined;
-  const handleMenuChangeStatus = onChangeStatus && !actionsLocked
-    ? (status: WorkoutStatus) => onChangeStatus(entry, status)
-    : undefined;
-  const handleMenuCombine = !isPlanned && onCombine && !actionsLocked
-    ? () => onCombine(entry)
-    : undefined;
-  const handleAskCoach = onAskCoach
-    ? () => onAskCoach(buildCoachSeedMessage(entry, exerciseSets))
-    : undefined;
-  const handleChangeRpe = workoutId ? (rpe: number | null) => updateRpe.mutate(rpe) : undefined;
+  const handlers = buildDialogHandlers({
+    entry,
+    exerciseSets,
+    workoutId,
+    isPlanned,
+    actionsLocked,
+    onDelete,
+    onChangeStatus,
+    onCombine,
+    onAskCoach,
+    updateRpe,
+    openDeleteConfirm: () => setConfirmingDelete(true),
+  });
   const showStatsRow = !isPlanned && !!workout;
 
   return (
@@ -164,15 +166,15 @@ export function WorkoutDetailDialogV2({
         <div className="flex flex-col gap-4 px-6 pt-4">
           <WorkoutDetailHeaderV2
             entry={entry}
-            onDelete={handleMenuDelete}
-            onChangeStatus={handleMenuChangeStatus}
-            onCombine={handleMenuCombine}
+            onDelete={handlers.menuDelete}
+            onChangeStatus={handlers.menuChangeStatus}
+            onCombine={handlers.menuCombine}
           />
           {showStatsRow && workout && (
             <WorkoutStatsRow
               workout={workout}
               exerciseSets={exerciseSets}
-              onChangeRpe={handleChangeRpe}
+              onChangeRpe={handlers.changeRpe}
               rpeResetSignal={updateRpe.failureCount}
             />
           )}
@@ -194,7 +196,7 @@ export function WorkoutDetailDialogV2({
           onAddSet={(data) => addSet.mutate(data)}
           onDeleteSet={(setId) => deleteSet.mutate(setId)}
           onSaveNote={(note) => workoutId && updateNote.mutate(note)}
-          onAskCoach={handleAskCoach}
+          onAskCoach={handlers.askCoach}
         />
       </DialogContent>
 
@@ -558,6 +560,47 @@ function pluralize(count: number, singular: string, plural: string): string {
 
 function hasMeaningfulText(v: string | null | undefined): boolean {
   return !!v && v.trim().length > 0;
+}
+
+interface BuildDialogHandlersArgs {
+  entry: TimelineEntry;
+  exerciseSets: ExerciseSet[];
+  workoutId: string | null;
+  isPlanned: boolean;
+  actionsLocked: boolean;
+  onDelete: WorkoutDetailDialogV2Props["onDelete"];
+  onChangeStatus: WorkoutDetailDialogV2Props["onChangeStatus"];
+  onCombine: WorkoutDetailDialogV2Props["onCombine"];
+  onAskCoach: WorkoutDetailDialogV2Props["onAskCoach"];
+  updateRpe: { mutate: (rpe: number | null) => void };
+  openDeleteConfirm: () => void;
+}
+
+// Derive each conditional handler from the props + local state so the
+// main component body stays below Sonar's cognitive-complexity ceiling.
+// Every ternary/guard that used to live inline in the component lives
+// here instead — same logic, different function boundary.
+function buildDialogHandlers(args: BuildDialogHandlersArgs) {
+  const {
+    entry, exerciseSets, workoutId, isPlanned, actionsLocked,
+    onDelete, onChangeStatus, onCombine, onAskCoach, updateRpe, openDeleteConfirm,
+  } = args;
+  const menuUnlocked = !actionsLocked;
+  return {
+    menuDelete: onDelete && menuUnlocked ? openDeleteConfirm : undefined,
+    menuChangeStatus:
+      onChangeStatus && menuUnlocked
+        ? (status: WorkoutStatus) => onChangeStatus(entry, status)
+        : undefined,
+    menuCombine:
+      !isPlanned && onCombine && menuUnlocked ? () => onCombine(entry) : undefined,
+    askCoach: onAskCoach
+      ? () => onAskCoach(buildCoachSeedMessage(entry, exerciseSets))
+      : undefined,
+    changeRpe: workoutId
+      ? (rpe: number | null) => updateRpe.mutate(rpe)
+      : undefined,
+  };
 }
 
 function buildCoachSeedMessage(entry: TimelineEntry, sets: ExerciseSet[]): string {
