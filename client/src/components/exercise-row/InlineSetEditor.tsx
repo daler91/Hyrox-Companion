@@ -1,0 +1,342 @@
+import type { ExerciseSet } from "@shared/schema";
+import { MessageSquarePlus, Pencil, Plus, X } from "lucide-react";
+import { useMemo, useState } from "react";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { useDebouncedCallback } from "@/hooks/useDebouncedCallback";
+import type { AddExerciseSetPayload, PatchExerciseSetPayload } from "@/lib/api";
+import { cn } from "@/lib/utils";
+
+import { type FieldKey, fieldMeta, getFields } from "./fieldMeta";
+
+const CELL_SAVE_DEBOUNCE_MS = 350;
+
+interface InlineSetEditorProps {
+  readonly sets: ExerciseSet[];
+  readonly exerciseName: string;
+  readonly customLabel: string | null | undefined;
+  readonly category: string;
+  readonly weightUnit: string;
+  readonly distanceUnit?: string;
+  readonly onUpdateSet: (setId: string, data: PatchExerciseSetPayload) => void;
+  readonly onAddSet: (data: AddExerciseSetPayload) => void;
+  readonly onDeleteSet: (setId: string) => void;
+}
+
+/**
+ * Tabular per-set editor that renders inline under a `GroupRow` when
+ * the row is expanded. One row per set, columns derived from the
+ * exercise definition (reps / weight / distance / time). Each cell
+ * debounces its write (350ms) through the group's per-set mutation
+ * callbacks, so edits on different sets don't clobber each other.
+ *
+ * Keeps the compact tabular aesthetic of the log-workout MultiSetTable
+ * rather than the large-card stepper pattern. A per-set notes toggle
+ * is tucked on the right so the row stays narrow by default.
+ */
+export function InlineSetEditor({
+  sets,
+  exerciseName,
+  customLabel,
+  category,
+  weightUnit,
+  distanceUnit = "km",
+  onUpdateSet,
+  onAddSet,
+  onDeleteSet,
+}: InlineSetEditorProps) {
+  const fields = useMemo(() => getFields(exerciseName), [exerciseName]);
+  const orderedSets = useMemo(
+    () => [...sets].sort((a, b) => (a.setNumber ?? 0) - (b.setNumber ?? 0)),
+    [sets],
+  );
+  const lastSet = orderedSets.at(-1);
+
+  // Grid: # | field-1 | field-2 ... | note-toggle | remove
+  // Each field column shares width; note/remove are fixed-width icons.
+  const colTemplate = `28px ${fields.map(() => "minmax(80px, 1fr)").join(" ")} 28px 28px`;
+
+  const handleAddSet = () => {
+    onAddSet({
+      exerciseName,
+      customLabel: customLabel ?? null,
+      category,
+      setNumber: (lastSet?.setNumber ?? orderedSets.length) + 1,
+      reps: lastSet?.reps ?? undefined,
+      weight: lastSet?.weight ?? undefined,
+      distance: lastSet?.distance ?? undefined,
+      time: lastSet?.time ?? undefined,
+    });
+  };
+
+  // Custom-label is fanned out across every set in the group — the
+  // grouping key depends on `exerciseName + customLabel`, so editing
+  // one set would split the row.
+  const debouncedLabelFanout = useDebouncedCallback((next: string | null) => {
+    for (const s of orderedSets) onUpdateSet(s.id, { customLabel: next });
+  }, CELL_SAVE_DEBOUNCE_MS);
+
+  return (
+    <div className="space-y-3">
+      {exerciseName === "custom" && (
+        <CustomLabelField
+          initial={customLabel ?? ""}
+          onChange={(next) => debouncedLabelFanout(next.trim() === "" ? null : next)}
+        />
+      )}
+
+      <div className="space-y-1">
+        <HeaderRow fields={fields} weightUnit={weightUnit} distanceUnit={distanceUnit} colTemplate={colTemplate} />
+        {orderedSets.map((set) => (
+          <SetRow
+            key={set.id}
+            set={set}
+            fields={fields}
+            weightUnit={weightUnit}
+            distanceUnit={distanceUnit}
+            canDelete={orderedSets.length > 1}
+            colTemplate={colTemplate}
+            onUpdate={(patch) => onUpdateSet(set.id, patch)}
+            onDelete={() => onDeleteSet(set.id)}
+          />
+        ))}
+      </div>
+
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={handleAddSet}
+        className="h-7 w-full text-xs"
+        data-testid="button-add-set"
+      >
+        <Plus className="h-3.5 w-3.5 mr-1" aria-hidden />
+        Add set
+      </Button>
+    </div>
+  );
+}
+
+interface HeaderRowProps {
+  readonly fields: readonly FieldKey[];
+  readonly weightUnit: string;
+  readonly distanceUnit: string;
+  readonly colTemplate: string;
+}
+
+function HeaderRow({ fields, weightUnit, distanceUnit, colTemplate }: HeaderRowProps) {
+  return (
+    <div
+      className="grid items-end gap-2 pb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+      style={{ gridTemplateColumns: colTemplate }}
+    >
+      <span className="text-center">#</span>
+      {fields.map((field) => (
+        <span key={field}>{fieldMeta[field].label(weightUnit, distanceUnit)}</span>
+      ))}
+      <span className="sr-only">Note</span>
+      <span className="sr-only">Remove</span>
+    </div>
+  );
+}
+
+interface CustomLabelFieldProps {
+  readonly initial: string;
+  readonly onChange: (next: string) => void;
+}
+
+function CustomLabelField({ initial, onChange }: CustomLabelFieldProps) {
+  const [draft, setDraft] = useState(initial);
+  const [lastExternal, setLastExternal] = useState(initial);
+  if (initial !== lastExternal) {
+    setLastExternal(initial);
+    setDraft(initial);
+  }
+
+  return (
+    <div className="space-y-1">
+      <Label className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-muted-foreground">
+        <Pencil className="h-3 w-3" aria-hidden /> Exercise name
+      </Label>
+      <Input
+        type="text"
+        placeholder="Enter exercise name"
+        value={draft}
+        onChange={(e) => {
+          setDraft(e.target.value);
+          onChange(e.target.value);
+        }}
+        className="h-8 text-sm"
+        data-testid="input-custom-exercise-name"
+      />
+    </div>
+  );
+}
+
+interface SetRowProps {
+  readonly set: ExerciseSet;
+  readonly fields: readonly FieldKey[];
+  readonly weightUnit: string;
+  readonly distanceUnit: string;
+  readonly canDelete: boolean;
+  readonly colTemplate: string;
+  readonly onUpdate: (patch: PatchExerciseSetPayload) => void;
+  readonly onDelete: () => void;
+}
+
+function SetRow({
+  set,
+  fields,
+  weightUnit,
+  distanceUnit,
+  canDelete,
+  colTemplate,
+  onUpdate,
+  onDelete,
+}: SetRowProps) {
+  const [notesOpen, setNotesOpen] = useState(() => (set.notes ?? "").length > 0);
+
+  return (
+    <div className="space-y-1" data-testid={`set-row-${set.id}`}>
+      <div className="grid items-center gap-2" style={{ gridTemplateColumns: colTemplate }}>
+        <span className="text-center text-xs tabular-nums text-muted-foreground">
+          {set.setNumber}
+        </span>
+        {fields.map((field) => (
+          <FieldInput
+            key={field}
+            field={field}
+            set={set}
+            weightUnit={weightUnit}
+            distanceUnit={distanceUnit}
+            onUpdate={onUpdate}
+          />
+        ))}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={() => setNotesOpen((v) => !v)}
+          aria-label={notesOpen ? "Hide note" : "Add note"}
+          aria-pressed={notesOpen}
+          className={cn("size-7 text-muted-foreground", notesOpen && "text-foreground")}
+          data-testid={`button-toggle-note-${set.id}`}
+        >
+          <MessageSquarePlus className="h-3.5 w-3.5" aria-hidden />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={onDelete}
+          disabled={!canDelete}
+          aria-label={`Remove set ${set.setNumber}`}
+          className="size-7 text-muted-foreground disabled:opacity-40"
+          data-testid={`button-remove-set-${set.id}`}
+        >
+          <X className="h-3.5 w-3.5" aria-hidden />
+        </Button>
+      </div>
+
+      {notesOpen && <NotesField set={set} onUpdate={onUpdate} />}
+    </div>
+  );
+}
+
+interface FieldInputProps {
+  readonly field: FieldKey;
+  readonly set: ExerciseSet;
+  readonly weightUnit: string;
+  readonly distanceUnit: string;
+  readonly onUpdate: (patch: PatchExerciseSetPayload) => void;
+}
+
+function FieldInput({ field, set, weightUnit, distanceUnit, onUpdate }: FieldInputProps) {
+  const meta = fieldMeta[field];
+  const label = meta.label(weightUnit, distanceUnit);
+  const current = set[field] ?? undefined;
+
+  // Local draft + "last saved" snapshot so incoming server / optimistic
+  // updates at the same value don't overwrite an in-progress edit. A
+  // genuine external change (rollback, server push) DOES propagate.
+  const [draft, setDraft] = useState<string>(() => formatInitial(current));
+  const [lastSaved, setLastSaved] = useState<number | undefined>(current);
+  if (current !== lastSaved) {
+    setLastSaved(current);
+    setDraft(formatInitial(current));
+  }
+
+  const debouncedPatch = useDebouncedCallback((next: number | undefined) => {
+    setLastSaved(next);
+    onUpdate({ [field]: next ?? null } as PatchExerciseSetPayload);
+  }, CELL_SAVE_DEBOUNCE_MS);
+
+  return (
+    <Input
+      type="number"
+      inputMode="decimal"
+      value={draft}
+      onChange={(e) => {
+        const raw = e.target.value;
+        setDraft(raw);
+        const parsed = parseDraft(raw);
+        if (parsed == null || !Number.isNaN(parsed)) {
+          debouncedPatch(parsed ?? undefined);
+        }
+      }}
+      placeholder="--"
+      className="h-8 text-center text-sm tabular-nums"
+      aria-label={`${label} for set ${set.setNumber}`}
+      data-testid={`input-${field}-${set.id}`}
+    />
+  );
+}
+
+interface NotesFieldProps {
+  readonly set: ExerciseSet;
+  readonly onUpdate: (patch: PatchExerciseSetPayload) => void;
+}
+
+function NotesField({ set, onUpdate }: NotesFieldProps) {
+  const initial = set.notes ?? "";
+  const [draft, setDraft] = useState(initial);
+  const [lastSaved, setLastSaved] = useState(initial);
+  if (initial !== lastSaved) {
+    setLastSaved(initial);
+    setDraft(initial);
+  }
+
+  const debouncedPatch = useDebouncedCallback((next: string) => {
+    const stored = next.trim() === "" ? null : next;
+    setLastSaved(stored ?? "");
+    onUpdate({ notes: stored });
+  }, CELL_SAVE_DEBOUNCE_MS);
+
+  return (
+    <Textarea
+      value={draft}
+      onChange={(e) => {
+        setDraft(e.target.value);
+        debouncedPatch(e.target.value);
+      }}
+      placeholder="Note for this set"
+      className="min-h-[48px] text-sm"
+      aria-label={`Notes for set ${set.setNumber}`}
+      data-testid={`input-notes-${set.id}`}
+    />
+  );
+}
+
+function formatInitial(v: number | null | undefined): string {
+  if (v == null) return "";
+  return String(v);
+}
+
+function parseDraft(raw: string): number | null {
+  if (raw.trim() === "") return null;
+  const n = Number.parseFloat(raw);
+  return Number.isNaN(n) ? null : n;
+}
