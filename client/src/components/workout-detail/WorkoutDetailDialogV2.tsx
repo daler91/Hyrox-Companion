@@ -23,19 +23,13 @@ import { CoachPrescriptionCollapsible } from "./CoachPrescriptionCollapsible";
 import { CoachTakePanel } from "./CoachTakePanel";
 import { ExerciseTable } from "./ExerciseTable";
 import { HistoryPanel } from "./HistoryPanel";
+import { InDialogCoachChat } from "./InDialogCoachChat";
 import { WorkoutDetailHeaderV2 } from "./WorkoutDetailHeaderV2";
 import { WorkoutStatsRow } from "./WorkoutStatsRow";
 
 interface WorkoutDetailDialogV2Props {
   readonly entry: TimelineEntry | null;
   readonly onClose: () => void;
-  /**
-   * Called when the user clicks "Ask coach". Receives a pre-built message
-   * summarising the current workout so the parent can open CoachPanel with
-   * that text seeded into the input. The parent decides how the message
-   * gets to the chat (see Timeline.tsx's coach seed wiring).
-   */
-  readonly onAskCoach?: (seedMessage: string) => void;
   /** Called from the ⋮ menu → Delete. Parent is responsible for the confirm UX. */
   readonly onDelete?: (entry: TimelineEntry) => void;
   /**
@@ -66,13 +60,27 @@ interface WorkoutDetailDialogV2Props {
   readonly onCombine?: (entry: TimelineEntry) => void;
   readonly weightUnit?: "kg" | "lb";
   /**
-   * When true, the dialog shifts left and drops its modal overlay so the
-   * right-side coach panel remains visible and interactable alongside
-   * it. The parent flips this on whenever CoachPanel is open in the
-   * desktop column layout — Ask coach then brings the chat into view
-   * without closing the workout detail.
+   * Fires the moment the user opens the in-dialog coach chat. Parent
+   * uses this to close the global coach rail so the two chat surfaces
+   * don't render side-by-side with independent `useChatSession`
+   * instances — local message state between those two hooks doesn't
+   * sync, so sending from one would leave the other stale.
    */
-  readonly coexistWithSideChat?: boolean;
+  readonly onAskCoachOpen?: () => void;
+  /**
+   * Whether the AI coach is enabled for this user. When false, the
+   * Ask-coach click delegates to `onRequestCoachConsent` instead of
+   * opening the in-dialog chat — the global-rail flow already gates
+   * on consent via `handleCoachToggle` in Timeline; without this
+   * prop, the in-dialog path would silently bypass that gate.
+   */
+  readonly aiCoachEnabled?: boolean;
+  /**
+   * Invoked when the user clicks Ask coach but consent hasn't been
+   * granted yet. Parent shows `AIConsentDialog`; on accept, the user
+   * clicks Ask coach again to actually open the chat.
+   */
+  readonly onRequestCoachConsent?: () => void;
 }
 
 /**
@@ -88,17 +96,29 @@ interface WorkoutDetailDialogV2Props {
 export function WorkoutDetailDialogV2({
   entry,
   onClose,
-  onAskCoach,
   onDelete,
   onChangeStatus,
   onMarkComplete,
   isMarkingComplete = false,
   onCombine,
   weightUnit = "kg",
-  coexistWithSideChat = false,
+  onAskCoachOpen,
+  aiCoachEnabled = true,
+  onRequestCoachConsent,
 }: WorkoutDetailDialogV2Props) {
   const workoutId = entry?.workoutLogId ?? null;
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  // When true, the dialog's right sidebar swaps from CoachTake +
+  // History to the in-dialog coach chat. Click "Ask coach" to open,
+  // back button in the chat to restore the default sidebar. Kept
+  // local to the dialog — no Timeline-side seed wiring — so the
+  // global coach panel (FAB) stays independent.
+  const [chatOpen, setChatOpen] = useState(false);
+  // Reset the chat when the dialog is closed or the entry changes,
+  // so reopening a workout starts fresh on Coach Take + History.
+  useEffect(() => {
+    setChatOpen(false);
+  }, [entry?.id]);
   // Monotonic counter bumped whenever an RPE save errors on the
   // currently-displayed workout. Passed to WorkoutStatsRow as the
   // reset signal so the editable input remounts with the
@@ -174,7 +194,6 @@ export function WorkoutDetailDialogV2({
     onDelete,
     onChangeStatus,
     onCombine,
-    onAskCoach,
     updateRpe,
     openDeleteConfirm: () => setConfirmingDelete(true),
     displayedWorkoutIdRef,
@@ -182,51 +201,18 @@ export function WorkoutDetailDialogV2({
   });
   const showStatsRow = !isPlanned && !!workout;
 
-  // When the coach rail is open, block Radix's "outside click dismiss"
-  // path so clicking inside the chat doesn't collapse the workout
-  // detail. Esc still closes via the default onEscapeKeyDown path.
-  const preventOutsideDismiss = coexistWithSideChat
-    ? (e: Event) => e.preventDefault()
-    : undefined;
-
   return (
-    <Dialog
-      open={!!entry}
-      onOpenChange={(open) => !open && onClose()}
-      // When the right-rail coach panel is open the dialog drops its
-      // modal overlay so the user can click into the chat; otherwise
-      // the standard focus-trap + backdrop behaviour wins.
-      modal={!coexistWithSideChat}
-    >
+    <Dialog open={!!entry} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
         className={cn(
-          "max-h-[90vh] overflow-y-auto p-0 transition-opacity",
-          coexistWithSideChat
-            // Responsive width + shift so dialog_right ≤ coach_left
-            // at every breakpoint where the coach rail actually
-            // renders. Timeline gates the rail on `!isMobile`
-            // (≥768px) and widens it from w-80 (320px) to lg:w-96
-            // (384px), so the shift is half the coach-column width
-            // at the matching breakpoint.
-            //
-            //   md (≥768):  coach=320, available=448+  → max-w-md + shift -160
-            //   lg (≥1024): coach=384, available=640+  → max-w-xl + shift -192
-            //   xl (≥1280): coach=384, available=896+  → max-w-4xl + shift -192
-            //
-            // Also de-emphasise visually (subtle opacity + ring +
-            // shadow) so the dialog reads as secondary while the
-            // user's attention is in the chat. Without this the two
-            // panels compete for focus and the screen feels busy.
-            ? cn(
-                "max-w-md md:translate-x-[calc(-50%-160px)]",
-                "lg:max-w-xl lg:translate-x-[calc(-50%-192px)]",
-                "xl:max-w-4xl",
-                "opacity-95 shadow-2xl ring-1 ring-border",
-              )
-            : "max-w-6xl",
+          "max-h-[90vh] overflow-y-auto p-0",
+          // Widen the dialog a touch when the in-dialog chat is
+          // open so the right sidebar has room for the thread +
+          // input without squeezing the exercise table on the
+          // left. Default max-w-6xl is comfortable for the
+          // summary-only view.
+          chatOpen ? "max-w-7xl" : "max-w-6xl",
         )}
-        onPointerDownOutside={preventOutsideDismiss}
-        onInteractOutside={preventOutsideDismiss}
         data-testid="workout-detail-dialog-v2"
       >
         {/* Radix requires a DialogTitle + Description for screen readers.
@@ -271,8 +257,27 @@ export function WorkoutDetailDialogV2({
           onAddSet={(data) => addSet.mutate(data)}
           onDeleteSet={(setId) => deleteSet.mutate(setId)}
           onSaveNote={(note) => workoutId && updateNote.mutate(note)}
-          onAskCoach={handlers.askCoach}
-          coexistWithSideChat={coexistWithSideChat}
+          chatOpen={chatOpen}
+          onOpenChat={() => {
+            // Gate on consent first: the global-rail flow enforces
+            // AIConsentDialog via handleCoachToggle in Timeline;
+            // the in-dialog path needs the same guard or a
+            // non-consented user could bypass it just by clicking
+            // Ask coach from a workout detail.
+            if (!aiCoachEnabled) {
+              onRequestCoachConsent?.();
+              return;
+            }
+            // Tell the parent to close the global coach rail before
+            // we mount the in-dialog chat: both surfaces would spin
+            // up their own `useChatSession` with independent local
+            // state, so a message sent in one wouldn't reach the
+            // other. One surface at a time keeps them consistent
+            // until we hoist the session into a shared context.
+            onAskCoachOpen?.();
+            setChatOpen(true);
+          }}
+          onCloseChat={() => setChatOpen(false)}
         />
       </DialogContent>
 
@@ -329,13 +334,13 @@ interface DialogBodyProps {
   readonly onAddSet: (data: import("@/lib/api").AddExerciseSetPayload) => void;
   readonly onDeleteSet: (setId: string) => void;
   readonly onSaveNote: (note: string | null) => void;
-  readonly onAskCoach?: () => void;
   /**
-   * Mirrors the top-level `coexistWithSideChat` so the body can
-   * force-collapse secondary sections (e.g. the Coach's Prescription
-   * accordion) when the user is in a chat-focused context.
+   * Whether the in-dialog coach chat is visible. When true the
+   * sidebar swaps from CoachTake + History to the chat surface.
    */
-  readonly coexistWithSideChat: boolean;
+  readonly chatOpen: boolean;
+  readonly onOpenChat: () => void;
+  readonly onCloseChat: () => void;
 }
 
 /**
@@ -362,13 +367,22 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     onAddSet,
     onDeleteSet,
     onSaveNote,
-    onAskCoach,
-    coexistWithSideChat,
+    chatOpen,
+    onOpenChat,
+    onCloseChat,
   } = props;
+
+  const focusLabel = entry.focus?.trim() || "this workout";
+  const chatSeed = `Can you walk me through your take on my ${focusLabel} workout?`;
+  // Widen the right column when the chat surface is active so the
+  // thread + input have room without squeezing the exercise table.
+  const gridClasses = chatOpen
+    ? "grid grid-cols-1 gap-4 px-6 py-4 md:grid-cols-[1fr_380px] lg:grid-cols-[1fr_420px]"
+    : "grid grid-cols-1 gap-4 px-6 py-4 md:grid-cols-[1fr_280px]";
 
   return (
     <>
-      <div className="grid grid-cols-1 gap-4 px-6 py-4 md:grid-cols-[1fr_280px]">
+      <div className={gridClasses}>
         <div className="flex flex-col gap-3">
           {isPlanned ? (
             <PlannedCallToAction
@@ -393,17 +407,23 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
             mainWorkout={entry.mainWorkout}
             accessory={entry.accessory}
             notes={entry.notes}
-            // Planned entries normally open the prescription by
-            // default (it's all they have), but when the chat is
-            // coexisting we compress non-essential sections to
-            // reduce visual load.
-            defaultOpen={isPlanned && !coexistWithSideChat}
+            defaultOpen={isPlanned}
           />
         </div>
 
         <aside className="flex flex-col gap-3">
-          <CoachTakePanel rationale={entry.aiRationale} onAskCoach={onAskCoach} />
-          {!isPlanned && <HistoryPanel stats={history} isLoading={isLoading} />}
+          {chatOpen ? (
+            <InDialogCoachChat
+              focusLabel={focusLabel}
+              seedText={chatSeed}
+              onBack={onCloseChat}
+            />
+          ) : (
+            <>
+              <CoachTakePanel rationale={entry.aiRationale} onAskCoach={onOpenChat} />
+              {!isPlanned && <HistoryPanel stats={history} isLoading={isLoading} />}
+            </>
+          )}
         </aside>
       </div>
 
@@ -653,7 +673,6 @@ interface BuildDialogHandlersArgs {
   onDelete: WorkoutDetailDialogV2Props["onDelete"];
   onChangeStatus: WorkoutDetailDialogV2Props["onChangeStatus"];
   onCombine: WorkoutDetailDialogV2Props["onCombine"];
-  onAskCoach: WorkoutDetailDialogV2Props["onAskCoach"];
   updateRpe: {
     mutate: (
       vars: { rpe: number | null; forWorkoutId: string },
@@ -677,7 +696,7 @@ interface BuildDialogHandlersArgs {
 function buildDialogHandlers(args: BuildDialogHandlersArgs) {
   const {
     entry, workoutId, isPlanned, actionsLocked,
-    onDelete, onChangeStatus, onCombine, onAskCoach,
+    onDelete, onChangeStatus, onCombine,
     updateRpe, openDeleteConfirm, displayedWorkoutIdRef, bumpRpeErrorToken,
   } = args;
   const menuUnlocked = !actionsLocked;
@@ -711,23 +730,7 @@ function buildDialogHandlers(args: BuildDialogHandlersArgs) {
         : undefined,
     menuCombine:
       !isPlanned && onCombine && menuUnlocked ? () => onCombine(entry) : undefined,
-    askCoach: onAskCoach
-      ? () => onAskCoach(buildCoachSeedMessage(entry))
-      : undefined,
     changeRpe,
   };
-}
-
-/**
- * Seed text dropped into the coach chat input when the user clicks
- * "Ask coach" on the CoachTakePanel. The dialog stays open next to
- * the chat (see coexistWithSideChat), so the rationale is already
- * visible to the user — the seed just needs to reference it
- * concisely and invite the follow-up, not re-quote the full
- * paragraph into the textarea.
- */
-function buildCoachSeedMessage(entry: TimelineEntry): string {
-  const focus = entry.focus?.trim() || "this workout";
-  return `Can you walk me through your take on my ${focus} workout?`;
 }
 

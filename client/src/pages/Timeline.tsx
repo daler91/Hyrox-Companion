@@ -246,12 +246,6 @@ export default function Timeline() {
   const { detailEntry, setDetailEntry, skipConfirmEntry, setSkipConfirmEntry, openDetailDialog, handleMarkComplete, handleChangeStatus, handleDelete, confirmSkip, logWorkoutMutation } = workoutActions;
   const { combiningEntry, setCombiningEntry, combineSecondEntry, setCombineSecondEntry, showCombineDialog, setShowCombineDialog, handleCombine, handleConfirmCombine, combineWorkoutsMutation } = combine;
   const scrollRef = useRef<HTMLDivElement>(null);
-  // Carries a prefilled message into the CoachPanel's chat input when the
-  // user clicks "Ask coach" on the v2 workout detail dialog. The nonce
-  // lets repeat clicks re-seed the input after the user clears it — see
-  // ChatInput's useEffect-on-nonce for the reasoning.
-  const [coachInputSeed, setCoachInputSeed] = useState<{ text: string; nonce: number } | null>(null);
-  const coachSeedCounterRef = useRef(0);
   const [showAIConsent, setShowAIConsent] = useState(false);
   const [annotationsDialogOpen, setAnnotationsDialogOpen] = useState(false);
   // Seeds the create form in AnnotationsDialog when the user clicks a row's
@@ -267,14 +261,6 @@ export default function Timeline() {
     }
     setCoachOpen(open);
   }, [user, setCoachOpen]);
-
-  // Opens the coach with a workout-specific prompt pre-filled into the chat
-  // input. Defined after handleCoachToggle because it wraps it.
-  const askCoachFromDetail = useCallback((seedMessage: string) => {
-    coachSeedCounterRef.current += 1;
-    setCoachInputSeed({ text: seedMessage, nonce: coachSeedCounterRef.current });
-    handleCoachToggle(true);
-  }, [handleCoachToggle]);
 
   const handleAIConsentAccept = useCallback(() => {
     setShowAIConsent(false);
@@ -463,7 +449,6 @@ export default function Timeline() {
           <WorkoutDetailDialogV2
             entry={detailEntry}
             onClose={() => setDetailEntry(null)}
-            onAskCoach={askCoachFromDetail}
             onDelete={handleDelete}
             onChangeStatus={(entry, status) => {
               handleChangeStatus(entry, status);
@@ -476,11 +461,17 @@ export default function Timeline() {
               handleCombine(entry);
             }}
             weightUnit={user?.weightUnit === "lbs" ? "lb" : "kg"}
-            // Coexist with the right-rail coach column on desktop —
-            // "Ask coach" opens the chat alongside the dialog instead
-            // of behind it. Mobile's bottom-sheet chat handles its
-            // own layering so it doesn't need the shift.
-            coexistWithSideChat={coachOpen && !isMobile}
+            // Close the global coach rail when the in-dialog chat
+            // opens so the two chat surfaces never coexist with
+            // independent session state (see the comment in the
+            // dialog's onOpenChat handler).
+            onAskCoachOpen={() => setCoachOpen(false)}
+            // Gate Ask-coach on the same AI-coach consent that the
+            // global FAB flow runs through `handleCoachToggle`.
+            // Users who haven't opted in get the AIConsentDialog
+            // instead of the chat auto-opening.
+            aiCoachEnabled={!!user?.aiCoachEnabled}
+            onRequestCoachConsent={() => setShowAIConsent(true)}
           />
 
           <SkipConfirmDialog
@@ -529,13 +520,9 @@ export default function Timeline() {
           <FeatureErrorBoundaryWrapper featureName="Coach">
             <CoachPanel
               isOpen={coachOpen}
-              onClose={() => {
-                setCoachOpen(false);
-                setCoachInputSeed(null);
-              }}
+              onClose={() => setCoachOpen(false)}
               timeline={timelineData}
               isNewUser={isNewUser}
-              inputSeed={coachInputSeed}
             />
           </FeatureErrorBoundaryWrapper>
         </div>
@@ -555,13 +542,9 @@ export default function Timeline() {
             <FeatureErrorBoundaryWrapper featureName="Coach">
               <CoachPanel
                 isOpen={coachOpen}
-                onClose={() => {
-                  setCoachOpen(false);
-                  setCoachInputSeed(null);
-                }}
+                onClose={() => setCoachOpen(false)}
                 timeline={timelineData}
                 isNewUser={isNewUser}
-                inputSeed={coachInputSeed}
               />
             </FeatureErrorBoundaryWrapper>
           </div>
