@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { usePlanDayExercises } from "@/hooks/usePlanDayExercises";
 import { useWorkoutDetail } from "@/hooks/useWorkoutDetail";
+import { cn } from "@/lib/utils";
 
 import { AthleteNoteInput } from "./AthleteNoteInput";
 import { CoachPrescriptionCollapsible } from "./CoachPrescriptionCollapsible";
@@ -65,6 +66,14 @@ interface WorkoutDetailDialogV2Props {
    */
   readonly onCombine?: (entry: TimelineEntry) => void;
   readonly weightUnit?: "kg" | "lb";
+  /**
+   * When true, the dialog shifts left and drops its modal overlay so the
+   * right-side coach panel remains visible and interactable alongside
+   * it. The parent flips this on whenever CoachPanel is open in the
+   * desktop column layout — Ask coach then brings the chat into view
+   * without closing the workout detail.
+   */
+  readonly coexistWithSideChat?: boolean;
 }
 
 /**
@@ -87,6 +96,7 @@ export function WorkoutDetailDialogV2({
   isMarkingComplete = false,
   onCombine,
   weightUnit = "kg",
+  coexistWithSideChat = false,
 }: WorkoutDetailDialogV2Props) {
   const workoutId = entry?.workoutLogId ?? null;
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -173,9 +183,53 @@ export function WorkoutDetailDialogV2({
   });
   const showStatsRow = !isPlanned && !!workout;
 
+  // When the coach rail is open, block Radix's "outside click dismiss"
+  // path so clicking inside the chat doesn't collapse the workout
+  // detail. Esc still closes via the default onEscapeKeyDown path.
+  const preventOutsideDismiss = coexistWithSideChat
+    ? (e: Event) => e.preventDefault()
+    : undefined;
+
   return (
-    <Dialog open={!!entry} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[90vh] max-w-6xl overflow-y-auto p-0" data-testid="workout-detail-dialog-v2">
+    <Dialog
+      open={!!entry}
+      onOpenChange={(open) => !open && onClose()}
+      // When the right-rail coach panel is open the dialog drops its
+      // modal overlay so the user can click into the chat; otherwise
+      // the standard focus-trap + backdrop behaviour wins.
+      modal={!coexistWithSideChat}
+    >
+      <DialogContent
+        className={cn(
+          "max-h-[90vh] overflow-y-auto p-0",
+          coexistWithSideChat
+            // Responsive width + shift so dialog_right ≤ coach_left
+            // at every breakpoint where the coach rail actually
+            // renders. Timeline gates the rail on `!isMobile`
+            // (≥768px) and widens it from w-80 (320px) to lg:w-96
+            // (384px), so the shift is half the coach-column width
+            // at the matching breakpoint.
+            //
+            //   md (≥768):  coach=320, available=448+  → max-w-md + shift -160
+            //   lg (≥1024): coach=384, available=640+  → max-w-xl + shift -192
+            //   xl (≥1280): coach=384, available=896+  → max-w-4xl + shift -192
+            //
+            // Earlier iterations stayed at max-w-6xl below xl, but
+            // DialogContent is w-full so that filled the viewport
+            // and covered the coach entirely. Dropping to max-w-md
+            // at the base of coexist mode keeps the rail visible
+            // and clickable.
+            ? cn(
+                "max-w-md md:translate-x-[calc(-50%-160px)]",
+                "lg:max-w-xl lg:translate-x-[calc(-50%-192px)]",
+                "xl:max-w-4xl",
+              )
+            : "max-w-6xl",
+        )}
+        onPointerDownOutside={preventOutsideDismiss}
+        onInteractOutside={preventOutsideDismiss}
+        data-testid="workout-detail-dialog-v2"
+      >
         {/* Radix requires a DialogTitle + Description for screen readers.
             The visible page title lives inside WorkoutDetailHeaderV2; this
             sr-only title describes the dialog itself, so screen readers
