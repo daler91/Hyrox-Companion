@@ -16,9 +16,17 @@ export function CoachPanelFooter({
   isProcessing,
   inputSeed,
 }: Readonly<CoachPanelFooterProps>) {
+  // Hide the generic quick-action grid while a seeded prompt is
+  // active — the user just clicked "Ask coach" with a specific
+  // topic in mind, so the generic "Analyze my training" /
+  // "Pacing tips" buttons compete with their follow-up and make
+  // the chat footer feel cluttered.
+  const showQuickActions = !inputSeed;
   return (
     <div className="flex-shrink-0 p-2 border-t space-y-2">
-      <QuickActions actions={quickActions} onSelect={onQuickAction} disabled={isProcessing} />
+      {showQuickActions && (
+        <QuickActions actions={quickActions} onSelect={onQuickAction} disabled={isProcessing} />
+      )}
       <ChatInput onSend={onSendMessage} isLoading={isProcessing} seed={inputSeed} />
     </div>
   );

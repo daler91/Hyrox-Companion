@@ -199,13 +199,14 @@ describe("WorkoutDetailDialogV2", () => {
     const button = await screen.findByTestId("ask-coach-button");
     await user.click(button);
     expect(onAskCoach).toHaveBeenCalledTimes(1);
-    // The seed should reference what the coach already said so the
-    // follow-up reads as a natural continuation, not a generic
-    // "what would you adjust?" prompt that ignores the rationale.
+    // The seed is a concise follow-up that references the workout's
+    // focus so the chat reads as a natural continuation. The full
+    // rationale stays visible in the CoachTakePanel next to the
+    // chat (coexistWithSideChat), so the input doesn't need to
+    // re-quote it.
     const seed = onAskCoach.mock.calls[0][0] as string;
     expect(seed).toContain("Upper Body Strength");
-    expect(seed).toContain("Softened 15% from your Sunday sim");
-    expect(seed).toMatch(/walk me through your reasoning/i);
+    expect(seed).toMatch(/walk me through your take/i);
   });
 
   it("surfaces the AI-modified chip when the plan day has a rationale", async () => {
