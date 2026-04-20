@@ -203,17 +203,27 @@ export function WorkoutDetailDialogV2({
         className={cn(
           "max-h-[90vh] overflow-y-auto p-0",
           coexistWithSideChat
-            // Shift + width shrink gated to `xl:` (1280px+) where
-            // the geometry actually fits: viewport 1280 − coach
-            // 384 = 896 available, which matches max-w-4xl exactly
-            // with a −192px shift (half the coach column).
+            // Responsive width + shift so dialog_right ≤ coach_left
+            // at every breakpoint where the coach rail actually
+            // renders. Timeline gates the rail on `!isMobile`
+            // (≥768px) and widens it from w-80 (320px) to lg:w-96
+            // (384px), so the shift is half the coach-column width
+            // at the matching breakpoint.
             //
-            // Below xl the dialog stays centered at max-w-6xl and
-            // just drops its overlay — clipping would be worse
-            // than a visual overlap with the coach rail, and the
-            // non-modal + onInteractOutside handling keeps both
-            // panels interactable.
-            ? "max-w-6xl xl:max-w-4xl xl:translate-x-[calc(-50%-192px)]"
+            //   md (≥768):  coach=320, available=448+  → max-w-md + shift -160
+            //   lg (≥1024): coach=384, available=640+  → max-w-xl + shift -192
+            //   xl (≥1280): coach=384, available=896+  → max-w-4xl + shift -192
+            //
+            // Earlier iterations stayed at max-w-6xl below xl, but
+            // DialogContent is w-full so that filled the viewport
+            // and covered the coach entirely. Dropping to max-w-md
+            // at the base of coexist mode keeps the rail visible
+            // and clickable.
+            ? cn(
+                "max-w-md md:translate-x-[calc(-50%-160px)]",
+                "lg:max-w-xl lg:translate-x-[calc(-50%-192px)]",
+                "xl:max-w-4xl",
+              )
             : "max-w-6xl",
         )}
         onPointerDownOutside={preventOutsideDismiss}
