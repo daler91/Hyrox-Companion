@@ -113,6 +113,20 @@ export function WorkoutComposer({
     [cancelAutoParse, addExercise],
   );
 
+  // Collapsing the panel hides the dictation controls (stop button +
+  // listening indicator live inside CollapsibleContent), so if voice
+  // capture is active when the user hides the panel we'd keep
+  // recording invisibly and silently pipe transcripts into freeText.
+  // Stop the recognition when the panel closes so the user always sees
+  // the state that's actually running.
+  const handlePanelOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open && isListening) stopListening();
+      setPanelOpen(open);
+    },
+    [isListening, stopListening],
+  );
+
   return (
     <div className="space-y-4" data-testid="workout-composer">
       <ParseStatusStrip
@@ -121,7 +135,7 @@ export function WorkoutComposer({
         hasText={freeText.trim().length > 0}
       />
 
-      <Collapsible open={panelOpen} onOpenChange={setPanelOpen}>
+      <Collapsible open={panelOpen} onOpenChange={handlePanelOpenChange}>
         <CollapsibleTrigger asChild>
           <Button
             type="button"

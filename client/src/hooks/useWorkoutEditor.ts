@@ -430,7 +430,14 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
       const isAbort = err instanceof DOMException && err.name === "AbortError";
       if (!isAbort) setAutoParseError(true);
     } finally {
-      if (!controller.signal.aborted) setAutoParsing(false);
+      // Always clear the spinner. Earlier this was gated on
+      // `!controller.signal.aborted`, but that left the state stuck
+      // true when a parse was aborted AND the subsequent debounced
+      // call short-circuited (empty text, under-length, etc.) —
+      // nothing in that fast-path resets the flag. A fresh parse will
+      // immediately setAutoParsing(true) again; React batches these
+      // so there's no visible flicker.
+      setAutoParsing(false);
     }
   }, []);
 

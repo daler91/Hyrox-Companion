@@ -107,7 +107,6 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
           ? formatTime(new Date(msg.timestamp))
           : "",
       }));
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot hydration of mutable `messages` state from the chat-history query; the hook needs to OWN messages so user+assistant turns can be appended as the conversation grows, and a pure derived-state (useMemo) rewrite would require splitting the state into `appended` + `historyMessages` slices across every caller of setMessages.
       setMessages([welcomeMessageObj, ...loadedMessages]);
       setHistoryLoaded(true);
     } else if (!historyLoading && chatHistory.length === 0 && !historyLoaded) {

@@ -1,6 +1,6 @@
 import type { ExerciseSet } from "@shared/schema";
 import { MessageSquarePlus, Pencil, Plus, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -123,18 +123,18 @@ interface CustomLabelFieldProps {
 }
 
 function CustomLabelField({ initial, onChange }: CustomLabelFieldProps) {
+  // React's "adjust state when props change" pattern: pair the draft
+  // with a snapshot of the last prop value we synced from, then
+  // reconcile during render when the incoming prop diverges. Lets the
+  // field stay responsive to external rewrites (draft restore, server
+  // echo) without clobbering in-progress user edits — and avoids the
+  // `react-hooks/set-state-in-effect` rule's setState-in-effect trap.
   const [draft, setDraft] = useState(initial);
-  const lastExternalRef = useRef(initial);
-  useEffect(() => {
-    // Only resync local draft when the incoming prop differs from the
-    // last external value we observed — this keeps the field from
-    // fighting in-progress edits while still propagating outside
-    // rewrites (draft restore, server echoing a different value).
-    if (initial !== lastExternalRef.current) {
-      lastExternalRef.current = initial;
-      setDraft(initial);
-    }
-  }, [initial]);
+  const [lastExternal, setLastExternal] = useState(initial);
+  if (initial !== lastExternal) {
+    setLastExternal(initial);
+    setDraft(initial);
+  }
 
   return (
     <div className="space-y-1.5">
@@ -244,22 +244,22 @@ function FieldStepper({ field, set, weightUnit, distanceUnit, onUpdate }: FieldS
   const label = meta.label(weightUnit, distanceUnit);
   const current = (set[field] as number | null | undefined) ?? undefined;
 
-  // Local draft so the stepper feels immediate; debounced callback fires
-  // the PATCH. `lastSavedRef` tracks what we asked the server to store so
-  // incoming optimistic/server updates with the same value don't clobber
-  // an in-progress edit. External changes (error rollback, a server push
-  // with a different value) DO resync the draft.
+  // Local draft so the stepper feels immediate; debounced callback
+  // fires the PATCH. `lastSaved` tracks what we asked the server to
+  // store so incoming optimistic/server updates with the same value
+  // don't clobber an in-progress edit. External changes (error
+  // rollback, a server push with a different value) DO resync the
+  // draft — reconciled in render (React's "adjust state when props
+  // change" pattern).
   const [draft, setDraft] = useState<number | undefined>(current);
-  const lastSavedRef = useRef<number | undefined>(current);
-  useEffect(() => {
-    if (current !== lastSavedRef.current) {
-      lastSavedRef.current = current;
-      setDraft(current);
-    }
-  }, [current]);
+  const [lastSaved, setLastSaved] = useState<number | undefined>(current);
+  if (current !== lastSaved) {
+    setLastSaved(current);
+    setDraft(current);
+  }
 
   const debouncedPatch = useDebouncedCallback((next: number | undefined) => {
-    lastSavedRef.current = next;
+    setLastSaved(next);
     onUpdate({ [field]: next ?? null } as PatchExerciseSetPayload);
   }, CELL_SAVE_DEBOUNCE_MS);
 
@@ -289,17 +289,15 @@ interface NotesFieldProps {
 function NotesField({ set, onUpdate }: NotesFieldProps) {
   const initial = set.notes ?? "";
   const [draft, setDraft] = useState(initial);
-  const lastSavedRef = useRef(initial);
-  useEffect(() => {
-    if (initial !== lastSavedRef.current) {
-      lastSavedRef.current = initial;
-      setDraft(initial);
-    }
-  }, [initial]);
+  const [lastSaved, setLastSaved] = useState(initial);
+  if (initial !== lastSaved) {
+    setLastSaved(initial);
+    setDraft(initial);
+  }
 
   const debouncedPatch = useDebouncedCallback((next: string) => {
     const stored = next.trim() === "" ? null : next;
-    lastSavedRef.current = stored ?? "";
+    setLastSaved(stored ?? "");
     onUpdate({ notes: stored });
   }, CELL_SAVE_DEBOUNCE_MS);
 
