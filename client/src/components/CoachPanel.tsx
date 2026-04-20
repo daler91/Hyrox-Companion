@@ -1,7 +1,6 @@
 import type { TimelineEntry } from "@shared/schema";
 import { useCallback,useEffect, useMemo, useState } from "react";
 
-import { type ChatInputSeed } from "@/components/ChatInput";
 import { CoachPanelChatArea } from "@/components/coach/CoachPanelChatArea";
 import { CoachPanelFooter } from "@/components/coach/CoachPanelFooter";
 import { CoachPanelHeader } from "@/components/coach/CoachPanelHeader";
@@ -43,15 +42,9 @@ interface CoachPanelProps {
   readonly onClose: () => void;
   readonly timeline?: TimelineEntry[];
   readonly isNewUser?: boolean;
-  /**
-   * Optional prefilled message for the chat input — used by the workout
-   * detail dialog's "Ask coach" button to seed a workout-specific prompt.
-   * The consumer bumps `nonce` on each trigger so repeat clicks re-seed.
-   */
-  readonly inputSeed?: ChatInputSeed | null;
 }
 
-export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false, inputSeed }: Readonly<CoachPanelProps>) {
+export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }: Readonly<CoachPanelProps>) {
   const [localMessages, setLocalMessages] = useState<Message[]>([]);
   const [hasShownWelcome, setHasShownWelcome] = useState(false);
 
@@ -111,17 +104,12 @@ export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false, 
   }, [isOpen, scrollToBottom]);
 
   useEffect(() => {
-    // Skip the generic new-user welcome when the user is opening
-    // the coach via "Ask coach" on a workout — their intent is a
-    // specific follow-up, and a multi-paragraph welcome message
-    // immediately above the seeded input reads as noise.
-    const hasWorkoutSeed = !!inputSeed;
-    if (isOpen && isNewUser && !hasShownWelcome && messages.length === 0 && !hasWorkoutSeed) {
+    if (isOpen && isNewUser && !hasShownWelcome && messages.length === 0) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setHasShownWelcome(true);
       setLocalMessages([{ id: "new-user-welcome", role: "assistant", content: WELCOME_TEXT, timestamp: getCurrentTimeString() }]);
     }
-  }, [isOpen, isNewUser, hasShownWelcome, messages.length, inputSeed]);
+  }, [isOpen, isNewUser, hasShownWelcome, messages.length]);
 
   useEffect(() => { scrollToBottom(); }, [messages, scrollToBottom]);
 
@@ -167,7 +155,6 @@ export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false, 
         onQuickAction={handleQuickAction}
         onSendMessage={sendMessage}
         isProcessing={isProcessing}
-        inputSeed={inputSeed}
       />
     </div>
   );

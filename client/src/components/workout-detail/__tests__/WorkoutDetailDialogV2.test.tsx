@@ -128,7 +128,6 @@ function renderDialog(props: Partial<React.ComponentProps<typeof WorkoutDetailDi
       <WorkoutDetailDialogV2
         entry={makeEntry()}
         onClose={vi.fn()}
-        onAskCoach={vi.fn()}
         {...props}
       />
     </QueryClientProvider>,
@@ -182,8 +181,7 @@ describe("WorkoutDetailDialogV2", () => {
     expect(await screen.findByTestId("exercise-table")).toBeInTheDocument();
   });
 
-  it("seeds the coach chat with a follow-up that quotes the rationale", async () => {
-    const onAskCoach = vi.fn();
+  it("swaps the sidebar to the in-dialog coach chat when Ask coach is clicked", async () => {
     mockWorkouts.get.mockResolvedValue(
       makeWorkout({ exerciseSets: [makeSet()] }),
     );
@@ -193,20 +191,25 @@ describe("WorkoutDetailDialogV2", () => {
       blockAvgRpe: null,
     });
 
-    renderDialog({ onAskCoach });
+    renderDialog();
 
     const user = userEvent.setup();
-    const button = await screen.findByTestId("ask-coach-button");
-    await user.click(button);
-    expect(onAskCoach).toHaveBeenCalledTimes(1);
-    // The seed is a concise follow-up that references the workout's
-    // focus so the chat reads as a natural continuation. The full
-    // rationale stays visible in the CoachTakePanel next to the
-    // chat (coexistWithSideChat), so the input doesn't need to
-    // re-quote it.
-    const seed = onAskCoach.mock.calls[0][0] as string;
-    expect(seed).toContain("Upper Body Strength");
-    expect(seed).toMatch(/walk me through your take/i);
+    // Coach Take panel visible by default.
+    expect(await screen.findByTestId("coach-take-panel")).toBeInTheDocument();
+    expect(screen.queryByTestId("in-dialog-coach-chat")).not.toBeInTheDocument();
+
+    await user.click(await screen.findByTestId("ask-coach-button"));
+
+    // Sidebar now shows the in-dialog chat; Coach Take + History
+    // panels yield the space to the thread + input.
+    expect(await screen.findByTestId("in-dialog-coach-chat")).toBeInTheDocument();
+    expect(screen.queryByTestId("coach-take-panel")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("history-panel")).not.toBeInTheDocument();
+
+    // Back button restores Coach Take + History.
+    await user.click(screen.getByTestId("in-dialog-coach-chat-back"));
+    expect(await screen.findByTestId("coach-take-panel")).toBeInTheDocument();
+    expect(screen.queryByTestId("in-dialog-coach-chat")).not.toBeInTheDocument();
   });
 
   it("surfaces the AI-modified chip when the plan day has a rationale", async () => {
