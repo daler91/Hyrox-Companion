@@ -1,6 +1,6 @@
 import type { ExerciseSet } from "@shared/schema";
 import { ChevronDown, MoreVertical, Plus, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { type FieldKey, getFields } from "@/components/exercise-row/fieldMeta";
 import { InlineSetEditor } from "@/components/exercise-row/InlineSetEditor";
@@ -174,14 +174,14 @@ function GroupRow({
   const firstSet = group.sets[0];
   const setCount = group.sets.length;
 
-  // Pick the primary metric from the exercise definition, not from
-  // value presence. Time-only exercises (e.g. battle_ropes) would
-  // otherwise fall back to "reps" and silently misroute every edit
-  // through the wrong column. Priority: reps > distance > time.
-  const primaryField = pickPrimaryMetric(group.exerciseName);
-  const primaryValue = pickUniformValue(uniformity, primaryField);
-  const primaryVaries = pickVariance(uniformity, primaryField);
-  const primarySuffix = primaryField === "distance" ? "m" : primaryField === "time" ? "min" : undefined;
+  // Resolve the primary metric (reps / distance / time) from the
+  // exercise definition — NOT from value presence. Time-only exercises
+  // (e.g. battle_ropes) would otherwise fall back to "reps" and
+  // silently misroute every edit through the wrong column.
+  const metric = useMemo(
+    () => resolvePrimaryMetric(group.exerciseName, uniformity),
+    [group.exerciseName, uniformity],
+  );
   const loadVaries = uniformity.weightVaries;
 
   // Fan-out writes: an aggregate edit only fires when the prescription
@@ -192,22 +192,35 @@ function GroupRow({
   }, AGG_DEBOUNCE_MS);
 
   // Set-count changes mutate the group structurally (add/delete set
-  // rows), so an unbounded/unthrottled write would loop onAddSet many
-  // times as the user types "25" (firing "2" then "25") and can hit
-  // backend rate limits. Clamp to [MIN,MAX] and debounce so only the
-  // final typed value triggers the diff.
-  const debouncedSetCountApply = useDebouncedCallback((target: number) => {
-    applySetCountChange(group, target, firstSet, onAddSet, onDeleteSet);
-  }, SET_COUNT_DEBOUNCE_MS);
+  // rows). `useDebouncedCallback` flushes on unmount, which would race
+  // a row-delete: if the user types a new count and then clicks ⋮ →
+  // Delete within the debounce window, the unmount flush would
+  // recreate sets after the delete mutation started. Use a raw
+  // ref-based timer so we can cancel without flushing.
+  const setCountTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelPendingSetCount = useCallback(() => {
+    if (setCountTimerRef.current !== null) {
+      clearTimeout(setCountTimerRef.current);
+      setCountTimerRef.current = null;
+    }
+  }, []);
+  useEffect(() => cancelPendingSetCount, [cancelPendingSetCount]);
 
   const handleSetCountChange = (next: number | null) => {
     if (next == null) return;
     const clamped = Math.min(MAX_SETS, Math.max(MIN_SETS, Math.round(next)));
     if (clamped === setCount) return;
-    debouncedSetCountApply(clamped);
+    cancelPendingSetCount();
+    setCountTimerRef.current = setTimeout(() => {
+      setCountTimerRef.current = null;
+      applySetCountChange(group, clamped, firstSet, onAddSet, onDeleteSet);
+    }, SET_COUNT_DEBOUNCE_MS);
   };
 
   const handleDeleteRow = () => {
+    // Kill any queued set-count change before we tear the group down
+    // so a pending add doesn't recreate sets after the delete.
+    cancelPendingSetCount();
     for (const s of group.sets) onDeleteSet(s.id);
   };
 
@@ -225,12 +238,12 @@ function GroupRow({
         />
 
         <AggregateCell
-          value={primaryValue}
-          ariaLabel={`${metricLabel(primaryField)} for ${label}`}
-          suffix={primarySuffix}
-          varies={primaryVaries}
+          value={metric.value}
+          ariaLabel={`${metric.label} for ${label}`}
+          suffix={metric.suffix}
+          varies={metric.varies}
           onExpandForVariable={onToggle}
-          onChange={(next) => debouncedFanout({ [primaryField]: next } as PatchExerciseSetPayload)}
+          onChange={(next) => debouncedFanout({ [metric.field]: next } as PatchExerciseSetPayload)}
         />
 
         <AggregateCell
@@ -474,37 +487,45 @@ function computeUniformity(sets: readonly ExerciseSet[]): UniformitySummary {
   };
 }
 
+type PrimaryField = "reps" | "distance" | "time";
+
+interface PrimaryMetric {
+  readonly field: PrimaryField;
+  readonly value: number | null;
+  readonly varies: boolean;
+  readonly label: string;
+  readonly suffix?: string;
+}
+
+// Table-driven: avoids nested ternaries, centralises the per-field
+// display metadata, and lets `resolvePrimaryMetric` stay a single
+// lookup instead of branching on every caller.
+const METRIC_META: Readonly<Record<PrimaryField, { readonly label: string; readonly suffix?: string }>> = {
+  reps: { label: "Reps" },
+  distance: { label: "Distance", suffix: "m" },
+  time: { label: "Time", suffix: "min" },
+};
+
+const METRIC_PRIORITY: readonly PrimaryField[] = ["reps", "distance", "time"];
+
 /**
  * The exercise's definition is the source of truth for which metric
- * shows in the "Reps" column. Priority: reps > distance > time > reps
- * (fallback if somehow none of the three are in the definition).
+ * shows in the middle column. Priority: reps > distance > time >
+ * reps (fallback if none of the three are in the definition).
  * Deriving from value-presence would silently miswire time-only
  * exercises (battle_ropes, etc.) into reps edits.
  */
-function pickPrimaryMetric(exerciseName: string): "reps" | "distance" | "time" {
+function resolvePrimaryMetric(exerciseName: string, u: UniformitySummary): PrimaryMetric {
   const fields: readonly FieldKey[] = getFields(exerciseName);
-  if (fields.includes("reps")) return "reps";
-  if (fields.includes("distance")) return "distance";
-  if (fields.includes("time")) return "time";
-  return "reps";
-}
-
-function pickUniformValue(u: UniformitySummary, field: "reps" | "distance" | "time"): number | null {
-  if (field === "distance") return u.distance;
-  if (field === "time") return u.time;
-  return u.reps;
-}
-
-function pickVariance(u: UniformitySummary, field: "reps" | "distance" | "time"): boolean {
-  if (field === "distance") return u.distanceVaries;
-  if (field === "time") return u.timeVaries;
-  return u.repsVaries;
-}
-
-function metricLabel(field: "reps" | "distance" | "time"): string {
-  if (field === "distance") return "Distance";
-  if (field === "time") return "Time";
-  return "Reps";
+  const field: PrimaryField = METRIC_PRIORITY.find((m) => fields.includes(m)) ?? "reps";
+  const meta = METRIC_META[field];
+  return {
+    field,
+    value: u[field],
+    varies: u[`${field}Varies`],
+    label: meta.label,
+    suffix: meta.suffix,
+  };
 }
 
 function applySetCountChange(
@@ -516,12 +537,24 @@ function applySetCountChange(
 ) {
   const current = group.sets.length;
   if (next > current && firstSet) {
+    // Seed new setNumbers from the highest existing setNumber rather
+    // than from array length — after a middle-set delete (e.g. sets
+    // ended up as [1, 3]), `length + 1` would collide with an
+    // existing set and the inline editor's sort-by-setNumber would
+    // render duplicates with ambiguous ordering.
+    let nextSetNumber = 0;
+    for (const s of group.sets) {
+      if (typeof s.setNumber === "number" && s.setNumber > nextSetNumber) {
+        nextSetNumber = s.setNumber;
+      }
+    }
     for (let i = 0; i < next - current; i++) {
+      nextSetNumber += 1;
       onAddSet({
         exerciseName: firstSet.exerciseName,
         customLabel: firstSet.customLabel,
         category: firstSet.category,
-        setNumber: current + i + 1,
+        setNumber: nextSetNumber,
         reps: firstSet.reps,
         weight: firstSet.weight,
         distance: firstSet.distance,
@@ -529,7 +562,10 @@ function applySetCountChange(
       });
     }
   } else if (next < current) {
-    const toRemove = group.sets.slice(next);
+    // Trim from the end (highest setNumber first) — preserves existing
+    // set identity for rows the user hasn't asked to remove.
+    const ordered = [...group.sets].sort((a, b) => (a.setNumber ?? 0) - (b.setNumber ?? 0));
+    const toRemove = ordered.slice(next);
     for (const s of toRemove) onDeleteSet(s.id);
   }
 }
