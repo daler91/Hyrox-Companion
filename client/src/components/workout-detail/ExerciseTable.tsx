@@ -238,12 +238,10 @@ function GroupRow({
       // or per-set delete between typing and the 500ms flush would
       // otherwise produce a diff against a stale `sets.length`.
       const latestGroup = groupRef.current;
-      const latestFirst = latestGroup.sets[0];
-      if (!latestFirst) return;
+      if (latestGroup.sets.length === 0) return;
       applySetCountChange(
         latestGroup,
         clamped,
-        latestFirst,
         onAddSetRef.current,
         onDeleteSetRef.current,
       );
@@ -493,40 +491,35 @@ interface UniformitySummary {
 }
 
 function computeUniformity(sets: readonly ExerciseSet[]): UniformitySummary {
-  if (sets.length === 0) {
-    return {
-      reps: null,
-      repsVaries: false,
-      weight: null,
-      weightVaries: false,
-      distance: null,
-      distanceVaries: false,
-      time: null,
-      timeVaries: false,
-    };
-  }
-  const first = sets[0];
-  let repsVaries = false;
-  let weightVaries = false;
-  let distanceVaries = false;
-  let timeVaries = false;
-  for (let i = 1; i < sets.length; i++) {
-    if (!repsVaries && sets[i].reps !== first.reps) repsVaries = true;
-    if (!weightVaries && sets[i].weight !== first.weight) weightVaries = true;
-    if (!distanceVaries && sets[i].distance !== first.distance) distanceVaries = true;
-    if (!timeVaries && sets[i].time !== first.time) timeVaries = true;
-    if (repsVaries && weightVaries && distanceVaries && timeVaries) break;
-  }
+  const first: ExerciseSet | undefined = sets[0];
   return {
-    reps: first.reps ?? null,
-    repsVaries,
-    weight: first.weight ?? null,
-    weightVaries,
-    distance: first.distance ?? null,
-    distanceVaries,
-    time: first.time ?? null,
-    timeVaries,
+    reps: first?.reps ?? null,
+    repsVaries: hasVariance(sets, "reps"),
+    weight: first?.weight ?? null,
+    weightVaries: hasVariance(sets, "weight"),
+    distance: first?.distance ?? null,
+    distanceVaries: hasVariance(sets, "distance"),
+    time: first?.time ?? null,
+    timeVaries: hasVariance(sets, "time"),
   };
+}
+
+/**
+ * True when any set in the group disagrees with the first on this
+ * field. Extracted so `computeUniformity` stays under Sonar's
+ * cognitive-complexity ceiling — the old in-lined version with four
+ * ifs in the loop plus the combined break guard scored 17.
+ */
+function hasVariance(
+  sets: readonly ExerciseSet[],
+  field: "reps" | "weight" | "distance" | "time",
+): boolean {
+  if (sets.length <= 1) return false;
+  const baseline = sets[0][field];
+  for (let i = 1; i < sets.length; i++) {
+    if (sets[i][field] !== baseline) return true;
+  }
+  return false;
 }
 
 type PrimaryField = "reps" | "distance" | "time";
@@ -581,13 +574,12 @@ function resolvePrimaryMetric(exerciseName: string, u: UniformitySummary): Prima
 function applySetCountChange(
   group: GroupedExercise,
   next: number,
-  firstSet: ExerciseSet | undefined,
   onAddSet: (data: AddExerciseSetPayload) => void,
   onDeleteSet: (setId: string) => void,
 ) {
   const current = group.sets.length;
-  if (next > current && firstSet) {
-    addCopiedSets(group, firstSet, next - current, onAddSet);
+  if (next > current) {
+    addCopiedSets(group, next - current, onAddSet);
     return;
   }
   if (next < current) {
@@ -605,7 +597,12 @@ function highestSetNumber(sets: readonly ExerciseSet[]): number {
 }
 
 /**
- * Seed new setNumbers from `max(existing setNumber) + 1` rather than
+ * Seed new rows from the *trailing* set (highest setNumber) so pyramid
+ * / ramp prescriptions keep progressing instead of cloning the first
+ * warm-up set. Matches the inline per-set "Add set" button's
+ * behaviour.
+ *
+ * setNumbers advance from `max(existing setNumber) + 1` rather than
  * array length. After a middle-set delete that left sets [1, 3],
  * `length + 1` would collide with an existing set and the inline
  * editor's sort-by-setNumber would render duplicates with ambiguous
@@ -613,10 +610,12 @@ function highestSetNumber(sets: readonly ExerciseSet[]): number {
  */
 function addCopiedSets(
   group: GroupedExercise,
-  template: ExerciseSet,
   count: number,
   onAddSet: (data: AddExerciseSetPayload) => void,
 ) {
+  const ordered = [...group.sets].sort(bySetNumber);
+  const template = ordered.at(-1);
+  if (!template) return;
   let nextSetNumber = highestSetNumber(group.sets);
   for (let i = 0; i < count; i++) {
     nextSetNumber += 1;
