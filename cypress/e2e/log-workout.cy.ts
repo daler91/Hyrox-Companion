@@ -23,15 +23,14 @@ describe("Log Workout Page", () => {
     cy.getBySel("exercise-selector").should("exist");
   });
 
-  it("shows mode toggle buttons for exercises and free text", () => {
-    cy.getBySel("button-mode-exercises").should("exist");
-    cy.getBySel("button-mode-freetext").should("exist");
+  it("shows the composer with a describe/dictate panel toggle", () => {
+    cy.getBySel("workout-composer").should("exist");
+    cy.getBySel("workout-composer-toggle-text").should("exist");
   });
 
-  it("shows free text area when free text mode is selected", () => {
-    cy.getBySel("button-mode-freetext").click();
+  it("reveals the free-text area when the describe/dictate panel is expanded", () => {
+    cy.getBySel("workout-composer-toggle-text").click();
     cy.getBySel("input-freetext").should("exist");
-    cy.getBySel("button-parse-ai").should("exist");
   });
 
   it("shows save workout button", () => {

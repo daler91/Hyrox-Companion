@@ -10,13 +10,22 @@ describe("Log Workout Submission", () => {
       body: { id: "new-workout-1", title: "My New Workout", date: new Date().toISOString() }
     }).as("saveWorkout");
 
+    // Stub auto-parse to return no structured rows so the composer
+    // stays in "text-only" mode for these submission tests. Without
+    // this, a successful Gemini parse would populate exerciseBlocks
+    // and flip the save path to structured.
+    cy.intercept("POST", "/api/v1/parse-exercises", {
+      statusCode: 200,
+      body: [],
+    }).as("parseExercises");
+
     cy.visit("/log");
     cy.wait("@authUser");
   });
 
-  it("successfully logs a workout in free text mode", () => {
-    // Switch to free text mode
-    cy.getBySel("button-mode-freetext").click();
+  it("successfully logs a workout via free text", () => {
+    // Open the describe/dictate panel
+    cy.getBySel("workout-composer-toggle-text").click();
 
     // Fill out the basic details
     cy.getBySel("input-workout-title").type("Morning Training Run");
@@ -45,7 +54,7 @@ describe("Log Workout Submission", () => {
 
   it("saves with fallback title when no title is provided", () => {
     // Don't enter a title
-    cy.getBySel("button-mode-freetext").click();
+    cy.getBySel("workout-composer-toggle-text").click();
     cy.getBySel("input-freetext").type("Some workout");
 
     cy.getBySel("button-save-workout").should("not.be.disabled").click();
@@ -58,9 +67,8 @@ describe("Log Workout Submission", () => {
     cy.location("pathname").should("eq", "/");
   });
 
-  it("shows an error when trying to save empty free text", () => {
+  it("shows an error when trying to save with no exercises and no free text", () => {
     cy.getBySel("input-workout-title").type("Title Only");
-    cy.getBySel("button-mode-freetext").click();
 
     cy.getBySel("button-save-workout").should("not.be.disabled").click();
 
@@ -75,6 +83,10 @@ describe("Log Workout Exercise Mode Submission", () => {
       statusCode: 200,
       body: { id: "new-workout-2", title: "Exercise Mode Workout", date: new Date().toISOString() }
     }).as("saveWorkout");
+    cy.intercept("POST", "/api/v1/parse-exercises", {
+      statusCode: 200,
+      body: [],
+    }).as("parseExercises");
 
     cy.visit("/log");
     cy.wait("@authUser");
@@ -108,12 +120,12 @@ describe("Log Workout Exercise Mode Submission", () => {
     cy.contains("Workout logged").should("exist");
   });
 
-  it("shows an error when trying to save without any exercises", () => {
+  it("shows an error when trying to save without any exercises or free text", () => {
     cy.getBySel("input-workout-title").type("Leg Day");
 
     // Do not select any exercises
     cy.getBySel("button-save-workout").click();
 
-    cy.contains("No exercises").should("exist");
+    cy.contains("Missing workout details").should("exist");
   });
 });

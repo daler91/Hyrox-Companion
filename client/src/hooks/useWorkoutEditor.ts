@@ -158,26 +158,28 @@ function mergeKey(name: string, customLabel: string | null | undefined): string 
  * is skipped — the user's version wins.
  *
  * This is the "live typing" path. Semantics:
- *   - kept edited blocks come first (preserving their order)
- *   - parsed blocks that don't match any kept edit get appended
+ *   - EVERY edited block is preserved (including multiple blocks that
+ *     share the same exerciseName + customLabel — the UI supports
+ *     repeated "log as separate block" additions and we must not drop
+ *     the duplicates on re-parse)
+ *   - parsed blocks that match any preserved edit's key get skipped
+ *     (the user's blocks represent that exercise already)
  *   - unedited existing blocks are dropped (the text is their source
  *     of truth, so the latest parse supersedes them)
  */
-function mergeParsedWithEdits(
+export function mergeParsedWithEdits(
   parsed: ParsedExercise[],
   counterRef: MutableRefObject<number>,
   existingBlocks: readonly string[],
   existingData: Readonly<Record<string, StructuredExercise>>,
 ) {
-  const editedByKey = new Map<string, string>();
+  const editedKeys = new Set<string>();
   const preservedIds: string[] = [];
   for (const id of existingBlocks) {
     const d = existingData[id];
     if (!d?.hasUserEdits) continue;
-    const key = mergeKey(d.exerciseName, d.customLabel);
-    if (editedByKey.has(key)) continue;
-    editedByKey.set(key, id);
     preservedIds.push(id);
+    editedKeys.add(mergeKey(d.exerciseName, d.customLabel));
   }
 
   const newBlocks: string[] = [...preservedIds];
@@ -187,7 +189,7 @@ function mergeParsedWithEdits(
   for (const ex of parsed) {
     const built = buildBlockFromParsed(ex);
     const key = mergeKey(built.data.exerciseName, built.data.customLabel);
-    if (editedByKey.has(key)) continue;
+    if (editedKeys.has(key)) continue;
     const blockId = makeBlockId(built.blockKey, counterRef);
     newBlocks.push(blockId);
     newData[blockId] = built.data;

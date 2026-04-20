@@ -301,7 +301,13 @@ function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
             toggleListening={toggleListening}
             stopListening={stopListening}
             toast={toast}
-            defaultPanelOpen={initialDraft?.useTextMode ?? false}
+            // Only force the describe/dictate panel open when the
+            // restored draft was explicitly in text mode. Leaving this
+            // `undefined` otherwise lets the composer fall back to
+            // "open when freeText is non-empty", so a draft that has
+            // saved text but no useTextMode flag still reveals its
+            // content instead of hiding it behind a collapsed panel.
+            defaultPanelOpen={initialDraft?.useTextMode ? true : undefined}
           />
         </div>
       </div>
