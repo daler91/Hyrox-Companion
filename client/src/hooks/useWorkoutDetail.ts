@@ -152,43 +152,43 @@ export function useWorkoutDetail(workoutId: string | null) {
     errorToast: "Couldn't save that note",
   });
 
-  // Inline RPE edit from the stats row. Non-optimistic on purpose —
-  // rollback snapshots from concurrent edits can stomp newer
-  // successful values. We also avoid invalidating the whole workout
-  // query on success: that would refetch and clobber other in-flight
-  // optimistic edits in the same cache entry (e.g. a pending note
-  // save has already patched cache.notes via its own onMutate but
-  // hasn't reached the server yet — an RPE refetch would restore the
-  // stale server-side notes).
+  // Inline RPE edit from the stats row. Non-optimistic — rollback
+  // snapshots from concurrent edits can stomp newer successful
+  // values, and invalidating the whole workout query on success
+  // would clobber other in-flight optimistic edits in the same cache
+  // entry (notes in particular).
   //
-  // Each mutate() records the submitted value in latestRpeRef before
-  // the request fires. onSuccess only patches the cache if its own
-  // variable still matches the latest submitted value, so an older
-  // response arriving after a newer one can't overwrite the newer
-  // cache value. workoutHistory + timeline are invalidated so the
-  // sidebar's Block avg RPE and the timeline card's RPE number
-  // refresh.
+  // The callers pass `forWorkoutId` as part of the mutation variable
+  // rather than relying on the hook's closure `workoutId`: the dialog
+  // stays mounted while the user navigates between entries, so a
+  // save started for workout A can resolve after the hook has
+  // re-rendered for workout B. Keying everything to `forWorkoutId`
+  // makes cache writes land on the correct workout regardless.
+  //
+  // latestRpePerWorkoutRef tracks the most recently submitted value
+  // per workout id — onSuccess skips patching unless the response's
+  // variable still matches, so an older response can't overwrite a
+  // newer one. This guard is per-workout so saves on a second
+  // workout don't silently discard successful saves on the first.
   //
   // Tradeoff: if a newer save fails and an older one succeeds after
-  // it, the older success is discarded, so the cache doesn't
-  // reflect the server's actual state until the user closes and
-  // reopens the dialog (the useQuery refetch on reopen corrects
-  // it). We accept this narrow race rather than invalidate the
-  // workout query, which would clobber concurrent optimistic edits
-  // to other fields in the same cache entry (notes in particular).
-  const latestRpeRef = useRef<number | null | undefined>(undefined);
+  // it, the older success is discarded and cache lags until reopen.
+  // We accept that over invalidating the workout and clobbering
+  // in-flight note edits.
+  const latestRpePerWorkoutRef = useRef(new Map<string, number | null>());
   const updateRpe = useApiMutation({
-    mutationFn: (rpe: number | null) => {
-      latestRpeRef.current = rpe;
-      return api.workouts.update(workoutId!, { rpe });
+    mutationFn: ({ rpe, forWorkoutId }: { rpe: number | null; forWorkoutId: string }) => {
+      latestRpePerWorkoutRef.current.set(forWorkoutId, rpe);
+      return api.workouts.update(forWorkoutId, { rpe });
     },
-    onSuccess: (serverWorkout, rpe) => {
-      if (rpe !== latestRpeRef.current) return;
-      patchCachedWorkout({ rpe: serverWorkout.rpe });
+    onSuccess: (serverWorkout, { rpe, forWorkoutId }) => {
+      if (rpe !== latestRpePerWorkoutRef.current.get(forWorkoutId)) return;
+      queryClient.setQueryData<WorkoutWithSets>(QUERY_KEYS.workout(forWorkoutId), (p) =>
+        p ? { ...p, rpe: serverWorkout.rpe } : p,
+      );
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workoutHistory(forWorkoutId) });
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
     },
-    invalidateQueries: workoutId
-      ? [QUERY_KEYS.workoutHistory(workoutId), QUERY_KEYS.timeline]
-      : undefined,
     errorToast: "Couldn't save that RPE",
   });
 

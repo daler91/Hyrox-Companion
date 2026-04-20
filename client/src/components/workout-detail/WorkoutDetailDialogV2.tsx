@@ -91,6 +91,13 @@ export function WorkoutDetailDialogV2({
 }: WorkoutDetailDialogV2Props) {
   const workoutId = entry?.workoutLogId ?? null;
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  // Monotonic counter bumped whenever an RPE save errors. Passed to
+  // WorkoutStatsRow as the reset signal so the editable input
+  // remounts with the server-authoritative value after a failure.
+  // updateRpe.failureCount can't be used here: TanStack Query resets
+  // failureCount to 0 when the next retry enters pending, which
+  // would remount the input mid-retry and drop the user's draft.
+  const [rpeErrorToken, setRpeErrorToken] = useState(0);
   const {
     workout,
     history,
@@ -148,6 +155,7 @@ export function WorkoutDetailDialogV2({
     onAskCoach,
     updateRpe,
     openDeleteConfirm: () => setConfirmingDelete(true),
+    onRpeSaveError: () => setRpeErrorToken((n) => n + 1),
   });
   const showStatsRow = !isPlanned && !!workout;
 
@@ -175,7 +183,7 @@ export function WorkoutDetailDialogV2({
               workout={workout}
               exerciseSets={exerciseSets}
               onChangeRpe={handlers.changeRpe}
-              rpeResetSignal={updateRpe.failureCount}
+              rpeResetSignal={rpeErrorToken}
             />
           )}
         </div>
@@ -572,8 +580,14 @@ interface BuildDialogHandlersArgs {
   onChangeStatus: WorkoutDetailDialogV2Props["onChangeStatus"];
   onCombine: WorkoutDetailDialogV2Props["onCombine"];
   onAskCoach: WorkoutDetailDialogV2Props["onAskCoach"];
-  updateRpe: { mutate: (rpe: number | null) => void };
+  updateRpe: {
+    mutate: (
+      vars: { rpe: number | null; forWorkoutId: string },
+      options?: { onError?: () => void },
+    ) => void;
+  };
   openDeleteConfirm: () => void;
+  onRpeSaveError: () => void;
 }
 
 // Derive each conditional handler from the props + local state so the
@@ -583,9 +597,18 @@ interface BuildDialogHandlersArgs {
 function buildDialogHandlers(args: BuildDialogHandlersArgs) {
   const {
     entry, exerciseSets, workoutId, isPlanned, actionsLocked,
-    onDelete, onChangeStatus, onCombine, onAskCoach, updateRpe, openDeleteConfirm,
+    onDelete, onChangeStatus, onCombine, onAskCoach,
+    updateRpe, openDeleteConfirm, onRpeSaveError,
   } = args;
   const menuUnlocked = !actionsLocked;
+  // Capture workoutId in the mutation variable (forWorkoutId) so the
+  // mutation's onSuccess can scope cache writes to the workout that
+  // originated this save, even if the dialog has re-rendered for a
+  // different entry by the time the server responds.
+  const changeRpe = workoutId
+    ? (rpe: number | null) =>
+        updateRpe.mutate({ rpe, forWorkoutId: workoutId }, { onError: onRpeSaveError })
+    : undefined;
   return {
     menuDelete: onDelete && menuUnlocked ? openDeleteConfirm : undefined,
     menuChangeStatus:
@@ -597,9 +620,7 @@ function buildDialogHandlers(args: BuildDialogHandlersArgs) {
     askCoach: onAskCoach
       ? () => onAskCoach(buildCoachSeedMessage(entry, exerciseSets))
       : undefined,
-    changeRpe: workoutId
-      ? (rpe: number | null) => updateRpe.mutate(rpe)
-      : undefined,
+    changeRpe,
   };
 }
 
