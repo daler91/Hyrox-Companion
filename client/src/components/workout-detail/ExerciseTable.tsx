@@ -181,10 +181,7 @@ function GroupRow({
     () => resolvePrimaryMetric(group.exerciseName, uniformity),
     [group.exerciseName, uniformity],
   );
-  const hasWeight = useMemo(
-    () => getFields(group.exerciseName).includes("weight"),
-    [group.exerciseName],
-  );
+  const hasWeight = useMemo(() => shouldShowLoad(group), [group]);
   const loadVaries = uniformity.weightVaries;
 
   // Refs mirroring the latest props so the debounced set-count timer
@@ -557,10 +554,15 @@ const METRIC_PRIORITY: readonly PrimaryField[] = ["reps", "distance", "time"];
  * reps (fallback if none of the three are in the definition).
  * Deriving from value-presence would silently miswire time-only
  * exercises (battle_ropes, etc.) into reps edits.
+ *
+ * EXCEPT for custom exercises — those declare every field, so the
+ * definition can't tell us which metric is actually meaningful.
+ * Fall back to value-presence there (distance > time > reps) so a
+ * custom "Interval Run" with reps=1 + distance=5000 rolls up the
+ * distance instead of the reps placeholder.
  */
 function resolvePrimaryMetric(exerciseName: string, u: UniformitySummary): PrimaryMetric {
-  const fields: readonly FieldKey[] = getFields(exerciseName);
-  const field: PrimaryField = METRIC_PRIORITY.find((m) => fields.includes(m)) ?? "reps";
+  const field = pickPrimaryField(exerciseName, u);
   const meta = METRIC_META[field];
   return {
     field,
@@ -569,6 +571,30 @@ function resolvePrimaryMetric(exerciseName: string, u: UniformitySummary): Prima
     label: meta.label,
     suffix: meta.suffix,
   };
+}
+
+function pickPrimaryField(exerciseName: string, u: UniformitySummary): PrimaryField {
+  if (exerciseName === "custom") {
+    if (u.distance != null) return "distance";
+    if (u.time != null) return "time";
+    return "reps";
+  }
+  const fields: readonly FieldKey[] = getFields(exerciseName);
+  return METRIC_PRIORITY.find((m) => fields.includes(m)) ?? "reps";
+}
+
+/**
+ * Whether the aggregate Load cell should render. Non-custom
+ * exercises key off the definition's field list. Custom exercises
+ * declare every field, so additionally require that at least one
+ * set has an actual weight — otherwise a custom running exercise
+ * would surface a misleading empty Load input.
+ */
+function shouldShowLoad(group: GroupedExercise): boolean {
+  const fields = getFields(group.exerciseName);
+  if (!fields.includes("weight")) return false;
+  if (group.exerciseName !== "custom") return true;
+  return group.sets.some((s) => s.weight != null);
 }
 
 function applySetCountChange(
