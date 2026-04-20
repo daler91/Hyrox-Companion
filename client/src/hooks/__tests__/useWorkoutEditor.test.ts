@@ -5,7 +5,7 @@ import { describe, expect,it } from 'vitest';
 
 import type { StructuredExercise } from '@/components/ExerciseInput';
 
-import { exerciseToPayload,generateSummary, getBlockExerciseName, makeBlockId, useWorkoutEditor } from '../useWorkoutEditor';
+import { exerciseToPayload,generateSummary, getBlockExerciseName, makeBlockId, mergeParsedWithEdits, useWorkoutEditor } from '../useWorkoutEditor';
 
 // useWorkoutEditor internally calls useMutation (for the AI parse path),
 // which needs a QueryClientProvider around any renderHook call.
@@ -332,6 +332,87 @@ describe('exerciseToPayload', () => {
       confidence: undefined,
       sets: []
     });
+  });
+});
+
+describe('mergeParsedWithEdits', () => {
+  it('preserves every edited block even when two share the same exerciseName + customLabel', () => {
+    // UI supports "log as separate block" — a user can end up with two
+    // back-squat blocks that both have hasUserEdits set. The merge
+    // MUST keep both; earlier versions deduped by key and silently
+    // dropped the second block on re-parse.
+    const counterRef = { current: 10 };
+    const existingBlocks = ['back_squat__1', 'back_squat__2', 'rowing__3'];
+    const existingData: Record<string, StructuredExercise> = {
+      back_squat__1: {
+        exerciseName: 'back_squat' as never,
+        category: 'strength',
+        sets: [{ setNumber: 1, reps: 5, weight: 100 }],
+        hasUserEdits: true,
+      },
+      back_squat__2: {
+        exerciseName: 'back_squat' as never,
+        category: 'strength',
+        sets: [{ setNumber: 1, reps: 3, weight: 120 }],
+        hasUserEdits: true,
+      },
+      // Unedited block — the parse result should replace it.
+      rowing__3: {
+        exerciseName: 'rowing' as never,
+        category: 'functional',
+        sets: [{ setNumber: 1, distance: 500 }],
+      },
+    };
+
+    const parsed = [
+      // Parser saw a single back_squat; the two edited duplicates stay put.
+      { exerciseName: 'back_squat', category: 'strength', sets: [{ setNumber: 1, reps: 5, weight: 80 }] },
+      // New exercise the user didn't have — should be appended.
+      { exerciseName: 'bench_press', category: 'strength', sets: [{ setNumber: 1, reps: 5, weight: 60 }] },
+    ] as unknown as Parameters<typeof mergeParsedWithEdits>[0];
+
+    const { newBlocks, newData } = mergeParsedWithEdits(parsed, counterRef, existingBlocks, existingData);
+
+    expect(newBlocks).toContain('back_squat__1');
+    expect(newBlocks).toContain('back_squat__2');
+    // Parsed back_squat was skipped because an edited block already covers that key.
+    const parsedBackSquatBlock = newBlocks.find((id) => id.startsWith('back_squat__') && id !== 'back_squat__1' && id !== 'back_squat__2');
+    expect(parsedBackSquatBlock).toBeUndefined();
+    // bench_press appended from the parse.
+    const benchBlock = newBlocks.find((id) => id.startsWith('bench_press__'));
+    expect(benchBlock).toBeDefined();
+    // The unedited rowing block is dropped — the parse is the source of
+    // truth for unedited content.
+    expect(newBlocks).not.toContain('rowing__3');
+    // Both user edits preserved with their original weights.
+    expect(newData['back_squat__1'].sets[0].weight).toBe(100);
+    expect(newData['back_squat__2'].sets[0].weight).toBe(120);
+  });
+});
+
+describe('useWorkoutEditor initialExerciseData', () => {
+  it('marks every restored block as user-edited so legacy drafts survive the first auto-parse', () => {
+    // Drafts saved before the `hasUserEdits` flag existed don't carry
+    // it. When the editor rehydrates from such a draft and the user's
+    // free text triggers auto-parse, the merge MUST preserve those
+    // blocks — otherwise the first debounced parse silently wipes
+    // structured rows the user had already built.
+    const initialData: Record<string, StructuredExercise> = {
+      back_squat__1: {
+        exerciseName: 'back_squat' as never,
+        category: 'strength',
+        sets: [{ setNumber: 1, reps: 5, weight: 100 }],
+        // NB: no hasUserEdits — the draft pre-dates the field.
+      },
+    };
+    const { result } = renderHook(
+      () => useWorkoutEditor({
+        initialExerciseBlocks: ['back_squat__1'],
+        initialExerciseData: initialData,
+      }),
+      { wrapper: createQueryWrapper() },
+    );
+    expect(result.current.exerciseData.back_squat__1.hasUserEdits).toBe(true);
   });
 });
 

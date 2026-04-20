@@ -223,9 +223,9 @@ Barrel exports via `index.ts` files in each subdirectory.
 - `WorkoutDetailsCard` -- Title, date, RPE inputs.
 - `WorkoutNotesCard` -- Notes textarea with voice input.
 - `WorkoutSaveButton` -- Save action button.
-- `WorkoutModeSelector` -- Toggle between text and exercise modes.
-- `WorkoutTextMode` -- Free-text workout entry with voice and AI parsing.
-- `WorkoutExerciseMode` -- Structured exercise block editor.
+- `WorkoutComposer` -- Unified log-workout surface: structured exercise list with a collapsible "Describe / dictate" panel. Auto-parses the text panel's contents into the exercise list via Gemini on a debounce, preserving cells the user has already edited.
+- `WorkoutTextMode` -- Textarea + voice dictation used inside the composer's collapsible panel. No longer owns a manual parse button.
+- `WorkoutExerciseMode` -- Structured exercise block editor / picker.
 
 ### Root-level Components
 

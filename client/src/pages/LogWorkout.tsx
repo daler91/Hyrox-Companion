@@ -4,13 +4,11 @@ import { Loader2 } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 
+import { WorkoutComposer } from "@/components/workout/WorkoutComposer";
 import { WorkoutDetailsCard } from "@/components/workout/WorkoutDetailsCard";
-import { WorkoutExerciseMode } from "@/components/workout/WorkoutExerciseMode";
 import { WorkoutHeader } from "@/components/workout/WorkoutHeader";
-import { WorkoutModeSelector } from "@/components/workout/WorkoutModeSelector";
 import { WorkoutNotesCard } from "@/components/workout/WorkoutNotesCard";
 import { WorkoutSaveButton } from "@/components/workout/WorkoutSaveButton";
-import { WorkoutTextMode } from "@/components/workout/WorkoutTextMode";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -74,12 +72,14 @@ function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
     exerciseBlocks,
     exerciseData,
     useTextMode,
-    setUseTextMode,
     addExercise,
     removeBlock,
     updateBlock,
-    parseMutation,
     resetEditor,
+    autoParsing,
+    autoParseError,
+    scheduleAutoParse,
+    cancelAutoParse,
   } = useWorkoutEditor({
     initialExerciseBlocks: initialDraft?.exerciseBlocks,
     initialExerciseData: initialDraft?.exerciseData,
@@ -128,7 +128,6 @@ function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
     isListening,
     isSupported,
     interimTranscript,
-    startListening,
     stopListening,
     toggleListening,
   } = voiceInput;
@@ -246,9 +245,6 @@ function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
     }
   }, [initialDraft, toast, userKey]);
 
-  const hasData = useTextMode
-    ? freeText.trim().length > 0
-    : exerciseBlocks.length > 0;
 
   return (
     <div className="container max-w-5xl mx-auto p-4 pb-20 md:pb-8 pt-4 md:pt-8 min-h-screen">
@@ -285,44 +281,34 @@ function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
 
         {/* Right Column: Workout Content */}
         <div className="md:col-span-7 lg:col-span-8 space-y-6">
-          <WorkoutModeSelector
-            useTextMode={useTextMode}
-            setUseTextMode={setUseTextMode}
+          <WorkoutComposer
+            freeText={freeText}
+            setFreeText={setFreeText}
+            exerciseBlocks={exerciseBlocks}
+            exerciseData={exerciseData}
+            addExercise={addExercise}
+            updateBlock={updateBlock}
+            removeBlock={removeBlock}
+            weightUnit={weightUnit}
+            distanceUnit={distanceUnit}
+            autoParsing={autoParsing}
+            autoParseError={autoParseError}
+            scheduleAutoParse={scheduleAutoParse}
+            cancelAutoParse={cancelAutoParse}
             isListening={isListening}
             isSupported={isSupported}
-            startListening={startListening}
+            interimTranscript={interimTranscript}
+            toggleListening={toggleListening}
             stopListening={stopListening}
-            hasData={hasData}
+            toast={toast}
+            // Only force the describe/dictate panel open when the
+            // restored draft was explicitly in text mode. Leaving this
+            // `undefined` otherwise lets the composer fall back to
+            // "open when freeText is non-empty", so a draft that has
+            // saved text but no useTextMode flag still reveals its
+            // content instead of hiding it behind a collapsed panel.
+            defaultPanelOpen={initialDraft?.useTextMode ? true : undefined}
           />
-
-          {useTextMode ? (
-            <WorkoutTextMode
-              freeText={freeText}
-              setFreeText={setFreeText}
-              isListening={isListening}
-              isSupported={isSupported}
-              toggleListening={toggleListening}
-              stopListening={stopListening}
-              interimTranscript={interimTranscript}
-              parseMutation={parseMutation}
-              toast={toast}
-            />
-          ) : (
-            <WorkoutExerciseMode
-              exerciseBlocks={exerciseBlocks}
-              exerciseData={exerciseData}
-              addExercise={addExercise}
-              updateBlock={updateBlock}
-              removeBlock={removeBlock}
-              weightUnit={weightUnit}
-              distanceUnit={distanceUnit}
-              // If we have non-empty free text but we're currently in exercise
-              // mode, the exercise blocks came from a Gemini parse. Show a
-              // banner and offer a path back to edit the original text.
-              parsedFromText={freeText.trim().length > 0 && exerciseBlocks.length > 0}
-              onBackToText={() => setUseTextMode(true)}
-            />
-          )}
         </div>
       </div>
     </div>

@@ -3,7 +3,7 @@ import { arrayMove,sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { EXERCISE_DEFINITIONS, type ExerciseName,type ParsedExercise } from "@shared/schema";
 import { useMutation } from "@tanstack/react-query";
 import type { MutableRefObject } from "react";
-import { useCallback,useRef, useState } from "react";
+import { useCallback,useEffect, useRef, useState } from "react";
 
 import { createDefaultSet,type StructuredExercise } from "@/components/ExerciseInput";
 import { useToast } from "@/hooks/use-toast";
@@ -100,21 +100,26 @@ export function generateSummary(exercises: StructuredExercise[], weightUnit: str
 }
 
 
-function processParsedExercises(parsed: ParsedExercise[], counterRef: MutableRefObject<number>) {
-  const newBlocks: string[] = [];
-  const newData: Record<string, StructuredExercise> = {};
+interface ParsedBlockBuild {
+  readonly exerciseName: ExerciseName;
+  readonly blockKey: string;
+  readonly data: StructuredExercise;
+}
 
-  for (const ex of parsed) {
-    const rawName = ex.exerciseName as ExerciseName;
-    const isKnown = rawName in EXERCISE_DEFINITIONS;
-    const exName = isKnown ? rawName : ("custom" as ExerciseName);
-    const blockId = makeBlockId(exName === "custom" ? `custom:${ex.customLabel || ex.exerciseName}` : exName, counterRef);
+function buildBlockFromParsed(ex: ParsedExercise): ParsedBlockBuild {
+  const rawName = ex.exerciseName as ExerciseName;
+  const isKnown = rawName in EXERCISE_DEFINITIONS;
+  const exName = isKnown ? rawName : ("custom" as ExerciseName);
+  const customLabel = isKnown ? undefined : (ex.customLabel || ex.exerciseName);
+  const blockKey = exName === "custom" ? `custom:${customLabel ?? ""}` : exName;
 
-    newBlocks.push(blockId);
-    newData[blockId] = {
+  return {
+    exerciseName: exName,
+    blockKey,
+    data: {
       exerciseName: exName,
       category: isKnown ? EXERCISE_DEFINITIONS[rawName].category : ex.category,
-      customLabel: isKnown ? undefined : (ex.customLabel || ex.exerciseName),
+      customLabel,
       confidence: ex.confidence,
       missingFields: ex.missingFields,
       sets: ex.sets.map((s, i) => ({
@@ -124,7 +129,70 @@ function processParsedExercises(parsed: ParsedExercise[], counterRef: MutableRef
         distance: s.distance,
         time: s.time,
       })),
-    };
+    },
+  };
+}
+
+function processParsedExercises(parsed: ParsedExercise[], counterRef: MutableRefObject<number>) {
+  const newBlocks: string[] = [];
+  const newData: Record<string, StructuredExercise> = {};
+
+  for (const ex of parsed) {
+    const built = buildBlockFromParsed(ex);
+    const blockId = makeBlockId(built.blockKey, counterRef);
+    newBlocks.push(blockId);
+    newData[blockId] = built.data;
+  }
+
+  return { newBlocks, newData };
+}
+
+function mergeKey(name: string, customLabel: string | null | undefined): string {
+  return `${name}|${customLabel ?? ""}`;
+}
+
+/**
+ * Auto-parse merge: user-edited blocks survive across re-parses, unedited
+ * blocks from prior parses get replaced by the latest result. A parsed
+ * block that matches an edited block (same exerciseName + customLabel)
+ * is skipped — the user's version wins.
+ *
+ * This is the "live typing" path. Semantics:
+ *   - EVERY edited block is preserved (including multiple blocks that
+ *     share the same exerciseName + customLabel — the UI supports
+ *     repeated "log as separate block" additions and we must not drop
+ *     the duplicates on re-parse)
+ *   - parsed blocks that match any preserved edit's key get skipped
+ *     (the user's blocks represent that exercise already)
+ *   - unedited existing blocks are dropped (the text is their source
+ *     of truth, so the latest parse supersedes them)
+ */
+export function mergeParsedWithEdits(
+  parsed: ParsedExercise[],
+  counterRef: MutableRefObject<number>,
+  existingBlocks: readonly string[],
+  existingData: Readonly<Record<string, StructuredExercise>>,
+) {
+  const editedKeys = new Set<string>();
+  const preservedIds: string[] = [];
+  for (const id of existingBlocks) {
+    const d = existingData[id];
+    if (!d?.hasUserEdits) continue;
+    preservedIds.push(id);
+    editedKeys.add(mergeKey(d.exerciseName, d.customLabel));
+  }
+
+  const newBlocks: string[] = [...preservedIds];
+  const newData: Record<string, StructuredExercise> = {};
+  for (const id of preservedIds) newData[id] = existingData[id]!;
+
+  for (const ex of parsed) {
+    const built = buildBlockFromParsed(ex);
+    const key = mergeKey(built.data.exerciseName, built.data.customLabel);
+    if (editedKeys.has(key)) continue;
+    const blockId = makeBlockId(built.blockKey, counterRef);
+    newBlocks.push(blockId);
+    newData[blockId] = built.data;
   }
 
   return { newBlocks, newData };
@@ -223,15 +291,51 @@ export function useWorkoutSensors(setExerciseBlocks: React.Dispatch<React.SetSta
   return { sensors, handleDragEnd };
 }
 
+const AUTO_PARSE_DEBOUNCE_MS = 1200;
+const AUTO_PARSE_MIN_CHARS = 8;
+// Cheap gate so the auto-parse pipeline doesn't burn Gemini calls on
+// free-form notes like "felt great". Needs at least one digit or an
+// `x`/`×` (set-count separator) before we even consider parsing.
+const AUTO_PARSE_SIGNAL_RE = /\d|[xX×]/;
+
+// Draft blocks restored from localStorage (or the server) pre-date the
+// `hasUserEdits` flag on StructuredExercise. Without this migration,
+// the first auto-parse would treat them as "unedited = replaceable" and
+// silently wipe structured rows a user had already built up. Mark every
+// restored block as edited so the merge preserves them until the user
+// explicitly deletes one.
+function markInitialDataAsEdited(
+  data: Record<string, StructuredExercise>,
+): Record<string, StructuredExercise> {
+  const marked: Record<string, StructuredExercise> = {};
+  for (const key of Object.keys(data)) {
+    marked[key] = { ...data[key], hasUserEdits: true };
+  }
+  return marked;
+}
+
 export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
   const blockCounterRef = useRef(options.initialBlockCounter ?? 0);
   const [exerciseBlocks, setExerciseBlocks] = useState<string[]>(
     options.initialExerciseBlocks ?? [],
   );
   const [exerciseData, setExerciseData] = useState<Record<string, StructuredExercise>>(
-    options.initialExerciseData ?? {},
+    () => markInitialDataAsEdited(options.initialExerciseData ?? {}),
   );
   const [useTextMode, setUseTextMode] = useState(options.initialUseTextMode ?? false);
+
+  // Live refs so the auto-parse callback stays stable across renders but
+  // still sees the latest merge inputs when it fires. Without these the
+  // debounce timer would close over a stale snapshot and keep overwriting
+  // a freshly-edited block with parsed data.
+  const blocksRef = useRef(exerciseBlocks);
+  const dataRef = useRef(exerciseData);
+  useEffect(() => {
+    blocksRef.current = exerciseBlocks;
+  }, [exerciseBlocks]);
+  useEffect(() => {
+    dataRef.current = exerciseData;
+  }, [exerciseData]);
 
   const { sensors, handleDragEnd } = useWorkoutSensors(setExerciseBlocks);
 
@@ -245,6 +349,9 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
         exerciseName: name,
         category: def.category,
         sets: [createDefaultSet(1)],
+        // Manually adding an exercise counts as an edit — the user
+        // asked for this row, auto-parse shouldn't replace it.
+        hasUserEdits: true,
       },
     }));
   }, []);
@@ -261,7 +368,10 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
   const updateBlock = useCallback((blockId: string, exercise: StructuredExercise) => {
     setExerciseData(prev => ({
       ...prev,
-      [blockId]: exercise,
+      // Any in-app edit flips `hasUserEdits` so subsequent auto-parses
+      // preserve this block. Callers don't need to track this; passing
+      // the updated exercise through here is enough.
+      [blockId]: { ...exercise, hasUserEdits: true },
     }));
   }, []);
 
@@ -278,10 +388,122 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
     onError: () => {},
   });
 
+  // --- Auto-parse --------------------------------------------------------
+  // A single AbortController follows the most recent auto-parse request.
+  // Typing during an in-flight request aborts it and the trailing debounce
+  // fires a fresh call once the user pauses for `AUTO_PARSE_DEBOUNCE_MS`.
+  const abortRef = useRef<AbortController | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastParsedTextRef = useRef<string>("");
+  const [autoParsing, setAutoParsing] = useState(false);
+  const [autoParseError, setAutoParseError] = useState(false);
+  const [lastParsedAt, setLastParsedAt] = useState<number | null>(null);
+
+  const runAutoParse = useCallback(async (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    if (trimmed === lastParsedTextRef.current) return;
+    if (trimmed.length < AUTO_PARSE_MIN_CHARS) return;
+    if (!AUTO_PARSE_SIGNAL_RE.test(trimmed)) return;
+
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setAutoParsing(true);
+    setAutoParseError(false);
+
+    try {
+      const parsed = await api.exercises.parse(trimmed, { signal: controller.signal });
+      if (controller.signal.aborted) return;
+      lastParsedTextRef.current = trimmed;
+      const { newBlocks, newData } = mergeParsedWithEdits(
+        parsed,
+        blockCounterRef,
+        blocksRef.current,
+        dataRef.current,
+      );
+      setExerciseBlocks(newBlocks);
+      setExerciseData(newData);
+      setLastParsedAt(Date.now());
+    } catch (err) {
+      if (controller.signal.aborted) return;
+      const isAbort = err instanceof DOMException && err.name === "AbortError";
+      if (!isAbort) setAutoParseError(true);
+    } finally {
+      // Always clear the spinner. Earlier this was gated on
+      // `!controller.signal.aborted`, but that left the state stuck
+      // true when a parse was aborted AND the subsequent debounced
+      // call short-circuited (empty text, under-length, etc.) —
+      // nothing in that fast-path resets the flag. A fresh parse will
+      // immediately setAutoParsing(true) again; React batches these
+      // so there's no visible flicker.
+      setAutoParsing(false);
+    }
+  }, []);
+
+  // Schedule a trailing-debounced auto-parse whenever the free-text
+  // changes. Any pending parse gets cancelled on the next call so only
+  // the latest text flows through — AND any IN-FLIGHT request is
+  // aborted synchronously here so a slow response from outdated text
+  // can't land after the user has already moved on and overwrite the
+  // composer's state with stale blocks.
+  const scheduleAutoParse = useCallback(
+    (text: string) => {
+      if (debounceRef.current !== null) clearTimeout(debounceRef.current);
+      abortRef.current?.abort();
+      debounceRef.current = setTimeout(() => {
+        debounceRef.current = null;
+        runAutoParse(text).catch(() => {
+          /* errors surface via autoParseError state inside runAutoParse */
+        });
+      }, AUTO_PARSE_DEBOUNCE_MS);
+    },
+    [runAutoParse],
+  );
+
+  // Stops any in-flight auto-parse plus the scheduled trailing call.
+  // The composer invokes this when the user touches an exercise row so
+  // a fresh parse doesn't yank their edit out from under them. Next
+  // free-text change re-primes the debounce.
+  const cancelAutoParse = useCallback(() => {
+    if (debounceRef.current !== null) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+    abortRef.current?.abort();
+    if (autoParsing) setAutoParsing(false);
+  }, [autoParsing]);
+
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current !== null) clearTimeout(debounceRef.current);
+      abortRef.current?.abort();
+    };
+  }, []);
+
   const resetEditor = useCallback((blocks: string[], data: Record<string, StructuredExercise>, textMode: boolean) => {
+    // Reseeded blocks came from the server or a duplicate-last flow;
+    // treat them as user-confirmed content so a subsequent auto-parse
+    // doesn't erase them.
+    const markedData: Record<string, StructuredExercise> = {};
+    for (const id of blocks) {
+      const d = data[id];
+      if (d) markedData[id] = { ...d, hasUserEdits: true };
+    }
     setExerciseBlocks(blocks);
-    setExerciseData(data);
+    setExerciseData(markedData);
     setUseTextMode(textMode);
+    // Clear any in-flight auto-parse state so the freshly reset content
+    // isn't overwritten by a debounced call from the previous session.
+    lastParsedTextRef.current = "";
+    abortRef.current?.abort();
+    if (debounceRef.current !== null) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+    setAutoParsing(false);
+    setAutoParseError(false);
+
     // Seed the global block counter to a value higher than any suffix
     // in the hydrated block ids, so subsequent addExercise calls don't
     // collide with existing keys like "back-squat__1".
@@ -309,5 +531,11 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
     getSelectedExerciseNames,
     parseMutation,
     resetEditor,
+    // Auto-parse surface for the composer.
+    autoParsing,
+    autoParseError,
+    lastParsedAt,
+    scheduleAutoParse,
+    cancelAutoParse,
   };
 }

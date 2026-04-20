@@ -9,7 +9,9 @@
       "Bash(git stash *)",
       "Bash(pnpm lint *)",
       "WebFetch(domain:claude.ai)",
-      "Bash(pnpm check *)"
+      "Bash(pnpm check *)",
+      "Bash(mkdir -p /root/.claude/plans)",
+      "Read(//root/.claude/plans/**)"
     ]
   }
 }

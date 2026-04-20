@@ -13,29 +13,37 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
   return outputArray;
 }
 
+function detectPushSupport(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return (
+    "serviceWorker" in navigator &&
+    "PushManager" in globalThis &&
+    "Notification" in globalThis
+  );
+}
+
 export function usePushNotifications() {
-  const [isSupported, setIsSupported] = useState(false);
+  // Feature detection is synchronous and deterministic — run it during
+  // the lazy initializer so we never have to `setIsSupported` from an
+  // effect body (flagged by react-hooks/set-state-in-effect).
+  const [isSupported] = useState(detectPushSupport);
   const [isSubscribed, setIsSubscribed] = useState(false);
-  const [permission, setPermission] = useState<NotificationPermission>("default");
+  const [permission, setPermission] = useState<NotificationPermission>(() =>
+    detectPushSupport() ? Notification.permission : "default",
+  );
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    const supported =
-      "serviceWorker" in navigator &&
-      "PushManager" in globalThis &&
-      "Notification" in globalThis;
-    setIsSupported(supported);
-
-    if (supported) {
-      setPermission(Notification.permission);
-      // Check if already subscribed
-      void navigator.serviceWorker.ready.then((reg) => {
-        void reg.pushManager.getSubscription().then((sub) => {
-          setIsSubscribed(sub !== null);
-        });
+    if (!isSupported) return;
+    // Check if already subscribed. permission is already seeded from
+    // the lazy initializer above; nothing else here needs a sync
+    // setState in the effect body.
+    void navigator.serviceWorker.ready.then((reg) => {
+      void reg.pushManager.getSubscription().then((sub) => {
+        setIsSubscribed(sub !== null);
       });
-    }
-  }, []);
+    });
+  }, [isSupported]);
 
   const subscribe = useCallback(async () => {
     if (!isSupported) return false;

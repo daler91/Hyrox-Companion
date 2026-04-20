@@ -27,6 +27,14 @@ export interface StructuredExercise {
   confidence?: number;
   missingFields?: string[];
   sets: SetData[];
+  /**
+   * Flipped to true when the user touches any field on this block via
+   * the editor. Auto-parse uses this as a merge guard: a matching block
+   * with `hasUserEdits` is preserved across re-parses so the user's
+   * edits don't get clobbered as they keep typing in the text field.
+   * Client-side only — never round-trips to the server.
+   */
+  hasUserEdits?: boolean;
 }
 
 const fieldConfig: Record<FieldKey, FieldConfig> = {
