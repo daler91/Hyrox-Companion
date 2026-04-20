@@ -141,9 +141,13 @@ function HeaderRow() {
        * actual metric (Reps / Distance / Time) varies per row
        * depending on the exercise definition, so a static label
        * would be wrong for some rows. Each cell's unit suffix
-       * ("m", "min", "reps") carries the meaning.
+       * ("m", "min", "reps") carries the meaning. `aria-hidden`
+       * with a nbsp keeps the span in grid flow so the Load
+       * header below stays in column 4; `sr-only` would pull
+       * this element out of flow (position: absolute) and
+       * auto-placement would shift Load into column 3.
        */}
-      <span className="sr-only">Primary metric</span>
+      <span aria-hidden className="text-right">&nbsp;</span>
       <span className="text-right">Load</span>
       <span className="sr-only">Expand</span>
       <span className="sr-only">Actions</span>
