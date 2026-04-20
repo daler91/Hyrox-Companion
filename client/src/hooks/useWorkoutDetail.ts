@@ -1,5 +1,6 @@
 import type { ExerciseSet, WorkoutLog } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
+import { useRef } from "react";
 
 import { useApiMutation } from "@/hooks/useApiMutation";
 import {
@@ -33,6 +34,13 @@ export function useWorkoutDetail(workoutId: string | null) {
     queryFn: () => api.workouts.history(workoutId!),
     enabled: !!workoutId,
   });
+
+  const patchCachedWorkout = (patch: Partial<WorkoutWithSets>) => {
+    if (!workoutId) return;
+    queryClient.setQueryData<WorkoutWithSets>(QUERY_KEYS.workout(workoutId), (prev) =>
+      prev ? { ...prev, ...patch } : prev,
+    );
+  };
 
   const patchCachedSets = (updater: (sets: ExerciseSet[]) => ExerciseSet[]) => {
     if (!workoutId) return;
@@ -132,9 +140,7 @@ export function useWorkoutDetail(workoutId: string | null) {
       if (!workoutId) return undefined;
       await queryClient.cancelQueries({ queryKey: QUERY_KEYS.workout(workoutId) });
       const prev = queryClient.getQueryData<WorkoutWithSets>(QUERY_KEYS.workout(workoutId));
-      queryClient.setQueryData<WorkoutWithSets>(QUERY_KEYS.workout(workoutId), (p) =>
-        p ? { ...p, notes } : p,
-      );
+      patchCachedWorkout({ notes });
       return { prev };
     },
     onError: (_err, _vars, ctx) => {
@@ -144,6 +150,55 @@ export function useWorkoutDetail(workoutId: string | null) {
       }
     },
     errorToast: "Couldn't save that note",
+  });
+
+  // Inline RPE edit from the stats row. Non-optimistic — rollback
+  // snapshots from concurrent edits can stomp newer successful
+  // values, and invalidating the whole workout query on success
+  // would clobber other in-flight optimistic edits in the same cache
+  // entry (notes in particular).
+  //
+  // Callers pass `forWorkoutId` as part of the mutation variable so
+  // cache writes land on the workout that originated the save, even
+  // if the dialog has re-rendered for a different entry by the time
+  // the server responds.
+  //
+  // `rpeSeqPerWorkoutRef` tracks the latest submitted sequence per
+  // workout id. onMutate bumps a monotonic counter and stashes the
+  // seq in the mutation context; onSuccess only patches if the
+  // context seq is still the latest for that workout. A sequence is
+  // stricter than value equality — `8 → 9 → 8` races can't alias.
+  //
+  // Tradeoff: if a newer save fails and an older one succeeds after
+  // it, the older success is discarded and cache lags until reopen.
+  // We accept that over invalidating the workout and clobbering
+  // in-flight note edits.
+  const rpeSeqPerWorkoutRef = useRef(new Map<string, number>());
+  const rpeSeqCounterRef = useRef(0);
+  const updateRpe = useApiMutation<
+    WorkoutLog,
+    Error,
+    { rpe: number | null; forWorkoutId: string },
+    { seq: number }
+  >({
+    mutationFn: ({ rpe, forWorkoutId }) => api.workouts.update(forWorkoutId, { rpe }),
+    onMutate: ({ forWorkoutId }) => {
+      rpeSeqCounterRef.current += 1;
+      const seq = rpeSeqCounterRef.current;
+      rpeSeqPerWorkoutRef.current.set(forWorkoutId, seq);
+      return { seq };
+    },
+    onSuccess: async (serverWorkout, { forWorkoutId }, ctx) => {
+      if (ctx.seq !== rpeSeqPerWorkoutRef.current.get(forWorkoutId)) return;
+      queryClient.setQueryData<WorkoutWithSets>(QUERY_KEYS.workout(forWorkoutId), (p) =>
+        p ? { ...p, rpe: serverWorkout.rpe } : p,
+      );
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workoutHistory(forWorkoutId) }),
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }),
+      ]);
+    },
+    errorToast: "Couldn't save that RPE",
   });
 
   return {
@@ -158,5 +213,6 @@ export function useWorkoutDetail(workoutId: string | null) {
     seedFromPlan,
     reparseFreeText,
     updateNote,
+    updateRpe,
   };
 }
