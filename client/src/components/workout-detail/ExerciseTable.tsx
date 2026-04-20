@@ -171,7 +171,6 @@ function GroupRow({
   const color = categoryColor(group.category);
   const lowConfidence = typeof group.confidence === "number" && group.confidence < 60;
   const uniformity = useMemo(() => computeUniformity(group.sets), [group.sets]);
-  const firstSet = group.sets[0];
   const setCount = group.sets.length;
 
   // Resolve the primary metric (reps / distance / time) from the
@@ -182,7 +181,26 @@ function GroupRow({
     () => resolvePrimaryMetric(group.exerciseName, uniformity),
     [group.exerciseName, uniformity],
   );
+  const hasWeight = useMemo(
+    () => getFields(group.exerciseName).includes("weight"),
+    [group.exerciseName],
+  );
   const loadVaries = uniformity.weightVaries;
+
+  // Refs mirroring the latest props so the debounced set-count timer
+  // reads live state when it fires — see Codex P1. Without these, a
+  // user who typed a new set count and then used the inline "Add
+  // set" button before the 500ms timer landed would get a wrong diff
+  // (stale snapshot's `sets.length` ≠ current length). React's
+  // refs-during-render rule means we sync inside an effect.
+  const groupRef = useRef(group);
+  const onAddSetRef = useRef(onAddSet);
+  const onDeleteSetRef = useRef(onDeleteSet);
+  useEffect(() => {
+    groupRef.current = group;
+    onAddSetRef.current = onAddSet;
+    onDeleteSetRef.current = onDeleteSet;
+  }, [group, onAddSet, onDeleteSet]);
 
   // Fan-out writes: an aggregate edit only fires when the prescription
   // is uniform, so writing the same value to every set keeps them in
@@ -216,7 +234,19 @@ function GroupRow({
     if (clamped === setCount) return;
     setCountTimerRef.current = setTimeout(() => {
       setCountTimerRef.current = null;
-      applySetCountChange(group, clamped, firstSet, onAddSet, onDeleteSet);
+      // Read latest group/handlers at fire time — an inline "Add set"
+      // or per-set delete between typing and the 500ms flush would
+      // otherwise produce a diff against a stale `sets.length`.
+      const latestGroup = groupRef.current;
+      const latestFirst = latestGroup.sets[0];
+      if (!latestFirst) return;
+      applySetCountChange(
+        latestGroup,
+        clamped,
+        latestFirst,
+        onAddSetRef.current,
+        onDeleteSetRef.current,
+      );
     }, SET_COUNT_DEBOUNCE_MS);
   };
 
@@ -249,14 +279,23 @@ function GroupRow({
           onChange={(next) => debouncedFanout({ [metric.field]: next } as PatchExerciseSetPayload)}
         />
 
-        <AggregateCell
-          value={uniformity.weight}
-          ariaLabel={`Load for ${label}`}
-          suffix={weightUnit}
-          varies={loadVaries}
-          onExpandForVariable={onToggle}
-          onChange={(next) => debouncedFanout({ weight: next })}
-        />
+        {hasWeight ? (
+          <AggregateCell
+            value={uniformity.weight}
+            ariaLabel={`Load for ${label}`}
+            suffix={weightUnit}
+            varies={loadVaries}
+            onExpandForVariable={onToggle}
+            onChange={(next) => debouncedFanout({ weight: next })}
+          />
+        ) : (
+          <span
+            className="text-right text-xs text-muted-foreground"
+            aria-label={`${label} has no load`}
+          >
+            —
+          </span>
+        )}
 
         <Button
           type="button"
