@@ -1,5 +1,5 @@
 import { customExercises, type ExerciseSet,exerciseSets, type InsertExerciseSet, type InsertWorkoutLog, type ParsedExercise, planDays, trainingPlans, type UpdateWorkoutLog, users, type WorkoutLog, workoutLogs } from "@shared/schema";
-import { and,asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import pLimit from "p-limit";
 
 import { db } from "../db";
@@ -208,6 +208,27 @@ export async function saveParsedWorkout(
   });
 
   return setRows.length;
+}
+
+
+export async function saveParsedWorkoutsBatch(
+  batch: { workoutId: string; setRows: InsertExerciseSet[] }[]
+): Promise<number> {
+  if (batch.length === 0) return 0;
+
+  let totalSets = 0;
+  await db.transaction(async (tx) => {
+    const workoutIds = batch.map((b) => b.workoutId);
+    await tx.delete(exerciseSets).where(inArray(exerciseSets.workoutLogId, workoutIds));
+
+    const allSetRows = batch.flatMap((b) => b.setRows);
+    if (allSetRows.length > 0) {
+      await tx.insert(exerciseSets).values(allSetRows);
+    }
+    totalSets = allSetRows.length;
+  });
+
+  return totalSets;
 }
 
 export async function reparseWorkout(
@@ -503,7 +524,8 @@ export async function processBatchChunk(
     chunk.map(workout => limit(() => prepareParsedWorkout(workout, weightUnit)))
   );
 
-  // Save each successfully parsed workout sequentially to prevent DB connection strain
+  const batchToSave: { workoutId: string; setRows: InsertExerciseSet[] }[] = [];
+
   for (let j = 0; j < chunkResults.length; j++) {
     const result = chunkResults[j];
     const workout = chunk[j];
@@ -519,12 +541,17 @@ export async function processBatchChunk(
       continue;
     }
 
+    batchToSave.push({ workoutId: workout.id, setRows: result.value.setRows });
+  }
+
+  if (batchToSave.length > 0) {
     try {
-      await saveParsedWorkout(workout.id, result.value.setRows);
-      parsed++;
+      // ⚡ Perf: use saveParsedWorkoutsBatch to eliminate N+1 query patterns
+      await saveParsedWorkoutsBatch(batchToSave);
+      parsed += batchToSave.length;
     } catch (dbError) {
-      logger.error({ err: dbError }, `Failed to save re-parsed workout ${workout.id}:`);
-      failed++;
+      logger.error({ err: dbError }, "Failed to save parsed workouts batch:");
+      failed += batchToSave.length;
     }
   }
 

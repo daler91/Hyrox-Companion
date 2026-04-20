@@ -41,3 +41,7 @@
 ## 2026-04-08 - Module-level Caching for React Array Reference Stability
 **Learning:** In React, functions like `getFields` that map static keys to arrays and execute on every render (using `.filter()`) allocate new array references constantly. This not only burdens the garbage collector but, more importantly, breaks React memoization in child components that receive these arrays as props, causing unnecessary cascading re-renders.
 **Action:** Use a module-scoped `Map` to cache the computed arrays keyed by their static inputs (e.g., `exerciseName`). Also, ensure fallback returns (like default fields) are extracted into module-level `const` arrays. This guarantees true reference stability across all component re-renders while eliminating O(N) recalculations.
+
+## 2026-04-20 - Eliminate N+1 DB Inserts during Batch Reparse
+**Learning:** The `processBatchChunk` function inside `server/services/workoutService.ts` was executing sequentially nested `saveParsedWorkout` inside a loop, which does a delete then insert per workout ID causing multiple transactions/queries per parsed workout instead of executing a bulk batch query.
+**Action:** Created `saveParsedWorkoutsBatch` to execute a single `DELETE` with `inArray` and bulk `INSERT` using `flatMap`, effectively resolving the N+1 pattern and wrapping it in a single transaction. This significantly reduces database round-trips when chunk processing.
