@@ -26,8 +26,12 @@ const SET_COUNT_DEBOUNCE_MS = 500;
 const MIN_SETS = 1;
 const MAX_SETS = 50;
 // Grid columns: label | sets | primary metric (reps/dist/time) | load | chevron | menu.
+// The metric + load columns are wide enough for 4-digit inputs (e.g.
+// "5000 m" for an interval run) plus the unit suffix without
+// clipping. The NumberCell input fills its cell via flex-1 so it
+// expands with the column.
 const GRID_TEMPLATE =
-  "grid grid-cols-[1fr_60px_90px_110px_32px_32px] items-center gap-2 px-3 py-2";
+  "grid grid-cols-[1fr_60px_120px_120px_32px_32px] items-center gap-2 px-3 py-2";
 
 interface ExerciseTableProps {
   readonly workoutId: string;
@@ -132,7 +136,14 @@ function HeaderRow() {
     >
       <span>Exercise</span>
       <span className="text-right">Sets</span>
-      <span className="text-right">Reps</span>
+      {/*
+       * Primary-metric column header intentionally blank — the
+       * actual metric (Reps / Distance / Time) varies per row
+       * depending on the exercise definition, so a static label
+       * would be wrong for some rows. Each cell's unit suffix
+       * ("m", "min", "reps") carries the meaning.
+       */}
+      <span className="sr-only">Primary metric</span>
       <span className="text-right">Load</span>
       <span className="sr-only">Expand</span>
       <span className="sr-only">Actions</span>
@@ -458,7 +469,7 @@ function NumberCell({ value, ariaLabel, min = 0, max, suffix, onChange }: Number
           }
         }}
         aria-label={ariaLabel}
-        className="h-8 w-16 text-right tabular-nums"
+        className="h-8 flex-1 min-w-0 text-right tabular-nums"
       />
       {suffix && <span className="shrink-0 text-xs text-muted-foreground">{suffix}</span>}
     </div>
@@ -541,7 +552,7 @@ interface MetricMeta {
 // lookup. Static property keys (rather than computed template
 // literals) keep the indexing both type-safe and lint-clean.
 const METRIC_META: Readonly<Record<PrimaryField, MetricMeta>> = {
-  reps: { label: "Reps", valueKey: "reps", variesKey: "repsVaries" },
+  reps: { label: "Reps", suffix: "reps", valueKey: "reps", variesKey: "repsVaries" },
   distance: { label: "Distance", suffix: "m", valueKey: "distance", variesKey: "distanceVaries" },
   time: { label: "Time", suffix: "min", valueKey: "time", variesKey: "timeVaries" },
 };
