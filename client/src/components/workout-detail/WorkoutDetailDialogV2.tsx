@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { usePlanDayExercises } from "@/hooks/usePlanDayExercises";
 import { useWorkoutDetail } from "@/hooks/useWorkoutDetail";
+import { cn } from "@/lib/utils";
 
 import { AthleteNoteInput } from "./AthleteNoteInput";
 import { CoachPrescriptionCollapsible } from "./CoachPrescriptionCollapsible";
@@ -65,6 +66,14 @@ interface WorkoutDetailDialogV2Props {
    */
   readonly onCombine?: (entry: TimelineEntry) => void;
   readonly weightUnit?: "kg" | "lb";
+  /**
+   * When true, the dialog shifts left and drops its modal overlay so the
+   * right-side coach panel remains visible and interactable alongside
+   * it. The parent flips this on whenever CoachPanel is open in the
+   * desktop column layout — Ask coach then brings the chat into view
+   * without closing the workout detail.
+   */
+  readonly coexistWithSideChat?: boolean;
 }
 
 /**
@@ -87,6 +96,7 @@ export function WorkoutDetailDialogV2({
   isMarkingComplete = false,
   onCombine,
   weightUnit = "kg",
+  coexistWithSideChat = false,
 }: WorkoutDetailDialogV2Props) {
   const workoutId = entry?.workoutLogId ?? null;
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -174,8 +184,26 @@ export function WorkoutDetailDialogV2({
   const showStatsRow = !isPlanned && !!workout;
 
   return (
-    <Dialog open={!!entry} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[90vh] max-w-6xl overflow-y-auto p-0" data-testid="workout-detail-dialog-v2">
+    <Dialog
+      open={!!entry}
+      onOpenChange={(open) => !open && onClose()}
+      // When the right-rail coach panel is open the dialog drops its
+      // modal overlay so the user can click into the chat; otherwise
+      // the standard focus-trap + backdrop behaviour wins.
+      modal={!coexistWithSideChat}
+    >
+      <DialogContent
+        className={cn(
+          "max-h-[90vh] overflow-y-auto p-0",
+          coexistWithSideChat
+            // Shift the centered dialog left by half the coach
+            // column (~384px) and shrink to max-w-5xl so its right
+            // edge clears the coach panel instead of covering it.
+            ? "max-w-5xl sm:translate-x-[calc(-50%-200px)]"
+            : "max-w-6xl",
+        )}
+        data-testid="workout-detail-dialog-v2"
+      >
         {/* Radix requires a DialogTitle + Description for screen readers.
             The visible page title lives inside WorkoutDetailHeaderV2; this
             sr-only title describes the dialog itself, so screen readers

@@ -476,6 +476,11 @@ export default function Timeline() {
               handleCombine(entry);
             }}
             weightUnit={user?.weightUnit === "lbs" ? "lb" : "kg"}
+            // Coexist with the right-rail coach column on desktop —
+            // "Ask coach" opens the chat alongside the dialog instead
+            // of behind it. Mobile's bottom-sheet chat handles its
+            // own layering so it doesn't need the shift.
+            coexistWithSideChat={coachOpen && !isMobile}
           />
 
           <SkipConfirmDialog
