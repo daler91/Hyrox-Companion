@@ -182,7 +182,7 @@ describe("WorkoutDetailDialogV2", () => {
     expect(await screen.findByTestId("exercise-table")).toBeInTheDocument();
   });
 
-  it("invokes onAskCoach when the Ask coach button is clicked", async () => {
+  it("seeds the coach chat with a follow-up that quotes the rationale", async () => {
     const onAskCoach = vi.fn();
     mockWorkouts.get.mockResolvedValue(
       makeWorkout({ exerciseSets: [makeSet()] }),
@@ -199,6 +199,13 @@ describe("WorkoutDetailDialogV2", () => {
     const button = await screen.findByTestId("ask-coach-button");
     await user.click(button);
     expect(onAskCoach).toHaveBeenCalledTimes(1);
+    // The seed should reference what the coach already said so the
+    // follow-up reads as a natural continuation, not a generic
+    // "what would you adjust?" prompt that ignores the rationale.
+    const seed = onAskCoach.mock.calls[0][0] as string;
+    expect(seed).toContain("Upper Body Strength");
+    expect(seed).toContain("Softened 15% from your Sunday sim");
+    expect(seed).toMatch(/walk me through your reasoning/i);
   });
 
   it("surfaces the AI-modified chip when the plan day has a rationale", async () => {

@@ -17,7 +17,6 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { usePlanDayExercises } from "@/hooks/usePlanDayExercises";
 import { useWorkoutDetail } from "@/hooks/useWorkoutDetail";
-import { groupExerciseSets } from "@/lib/exerciseUtils";
 
 import { AthleteNoteInput } from "./AthleteNoteInput";
 import { CoachPrescriptionCollapsible } from "./CoachPrescriptionCollapsible";
@@ -160,7 +159,6 @@ export function WorkoutDetailDialogV2({
   // eslint-disable-next-line react-hooks/refs
   const handlers = buildDialogHandlers({
     entry,
-    exerciseSets,
     workoutId,
     isPlanned,
     actionsLocked,
@@ -578,17 +576,12 @@ function PlannedCallToAction({ entry, onMarkComplete, isMarkingComplete, weightU
   );
 }
 
-function pluralize(count: number, singular: string, plural: string): string {
-  return count === 1 ? singular : plural;
-}
-
 function hasMeaningfulText(v: string | null | undefined): boolean {
   return !!v && v.trim().length > 0;
 }
 
 interface BuildDialogHandlersArgs {
   entry: TimelineEntry;
-  exerciseSets: ExerciseSet[];
   workoutId: string | null;
   isPlanned: boolean;
   actionsLocked: boolean;
@@ -618,7 +611,7 @@ interface BuildDialogHandlersArgs {
 // here instead — same logic, different function boundary.
 function buildDialogHandlers(args: BuildDialogHandlersArgs) {
   const {
-    entry, exerciseSets, workoutId, isPlanned, actionsLocked,
+    entry, workoutId, isPlanned, actionsLocked,
     onDelete, onChangeStatus, onCombine, onAskCoach,
     updateRpe, openDeleteConfirm, displayedWorkoutIdRef, bumpRpeErrorToken,
   } = args;
@@ -654,27 +647,32 @@ function buildDialogHandlers(args: BuildDialogHandlersArgs) {
     menuCombine:
       !isPlanned && onCombine && menuUnlocked ? () => onCombine(entry) : undefined,
     askCoach: onAskCoach
-      ? () => onAskCoach(buildCoachSeedMessage(entry, exerciseSets))
+      ? () => onAskCoach(buildCoachSeedMessage(entry))
       : undefined,
     changeRpe,
   };
 }
 
-function buildCoachSeedMessage(entry: TimelineEntry, sets: ExerciseSet[]): string {
+/**
+ * Seed text dropped into the coach chat input when the user clicks
+ * "Ask coach" on the CoachTakePanel. The panel only renders when the
+ * workout has an `aiRationale`, so we always have the coach's take to
+ * reference — seed a follow-up that quotes the rationale and invites
+ * the user to continue the thread, rather than the previous generic
+ * "what would you adjust?" which ignored what the coach had already
+ * said.
+ */
+function buildCoachSeedMessage(entry: TimelineEntry): string {
   const focus = entry.focus?.trim() || "this workout";
   const dateLabel = formatCoachDate(entry.date);
-  const groups = groupExerciseSets(sets);
-  const exerciseCount = groups.length;
-  const setCount = sets.length;
+  const rationale = entry.aiRationale?.trim();
 
-  let stats = "";
-  if (exerciseCount > 0) {
-    const exerciseLabel = pluralize(exerciseCount, "exercise", "exercises");
-    const setLabel = pluralize(setCount, "set", "sets");
-    stats = ` (${exerciseCount} ${exerciseLabel}, ${setCount} ${setLabel})`;
+  if (rationale) {
+    return `About my ${focus} workout on ${dateLabel}, you said:\n\n"${rationale}"\n\nCan you walk me through your reasoning?`;
   }
-
-  return `Help me think about my ${focus} workout on ${dateLabel}${stats}. What would you adjust?`;
+  // Safety net for callers that wire the button without a rationale;
+  // the current CoachTakePanel won't render the button in that case.
+  return `Help me think about my ${focus} workout on ${dateLabel}. What would you adjust?`;
 }
 
 function formatCoachDate(iso: string): string {
