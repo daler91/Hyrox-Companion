@@ -207,10 +207,13 @@ function GroupRow({
   useEffect(() => cancelPendingSetCount, [cancelPendingSetCount]);
 
   const handleSetCountChange = (next: number | null) => {
+    // Cancel any in-flight timer up front so a revert ("1" → "10" → "1")
+    // or a cleared input discards the queued mutation that no longer
+    // reflects the user's intent.
+    cancelPendingSetCount();
     if (next == null) return;
     const clamped = Math.min(MAX_SETS, Math.max(MIN_SETS, Math.round(next)));
     if (clamped === setCount) return;
-    cancelPendingSetCount();
     setCountTimerRef.current = setTimeout(() => {
       setCountTimerRef.current = null;
       applySetCountChange(group, clamped, firstSet, onAddSet, onDeleteSet);
@@ -537,35 +540,66 @@ function applySetCountChange(
 ) {
   const current = group.sets.length;
   if (next > current && firstSet) {
-    // Seed new setNumbers from the highest existing setNumber rather
-    // than from array length — after a middle-set delete (e.g. sets
-    // ended up as [1, 3]), `length + 1` would collide with an
-    // existing set and the inline editor's sort-by-setNumber would
-    // render duplicates with ambiguous ordering.
-    let nextSetNumber = 0;
-    for (const s of group.sets) {
-      if (typeof s.setNumber === "number" && s.setNumber > nextSetNumber) {
-        nextSetNumber = s.setNumber;
-      }
-    }
-    for (let i = 0; i < next - current; i++) {
-      nextSetNumber += 1;
-      onAddSet({
-        exerciseName: firstSet.exerciseName,
-        customLabel: firstSet.customLabel,
-        category: firstSet.category,
-        setNumber: nextSetNumber,
-        reps: firstSet.reps,
-        weight: firstSet.weight,
-        distance: firstSet.distance,
-        time: firstSet.time,
-      });
-    }
-  } else if (next < current) {
-    // Trim from the end (highest setNumber first) — preserves existing
-    // set identity for rows the user hasn't asked to remove.
-    const ordered = [...group.sets].sort((a, b) => (a.setNumber ?? 0) - (b.setNumber ?? 0));
-    const toRemove = ordered.slice(next);
-    for (const s of toRemove) onDeleteSet(s.id);
+    addCopiedSets(group, firstSet, next - current, onAddSet);
+    return;
   }
+  if (next < current) {
+    trimTrailingSets(group, next, onDeleteSet);
+  }
+}
+
+function highestSetNumber(sets: readonly ExerciseSet[]): number {
+  let max = 0;
+  for (const s of sets) {
+    const n = s.setNumber;
+    if (typeof n === "number" && n > max) max = n;
+  }
+  return max;
+}
+
+/**
+ * Seed new setNumbers from `max(existing setNumber) + 1` rather than
+ * array length. After a middle-set delete that left sets [1, 3],
+ * `length + 1` would collide with an existing set and the inline
+ * editor's sort-by-setNumber would render duplicates with ambiguous
+ * ordering.
+ */
+function addCopiedSets(
+  group: GroupedExercise,
+  template: ExerciseSet,
+  count: number,
+  onAddSet: (data: AddExerciseSetPayload) => void,
+) {
+  let nextSetNumber = highestSetNumber(group.sets);
+  for (let i = 0; i < count; i++) {
+    nextSetNumber += 1;
+    onAddSet({
+      exerciseName: template.exerciseName,
+      customLabel: template.customLabel,
+      category: template.category,
+      setNumber: nextSetNumber,
+      reps: template.reps,
+      weight: template.weight,
+      distance: template.distance,
+      time: template.time,
+    });
+  }
+}
+
+/**
+ * Trim from the highest-setNumber end so set identity is preserved for
+ * rows the user didn't ask to remove.
+ */
+function trimTrailingSets(
+  group: GroupedExercise,
+  keep: number,
+  onDeleteSet: (setId: string) => void,
+) {
+  const ordered = [...group.sets].sort(bySetNumber);
+  const toRemove = ordered.slice(keep);
+  for (const s of toRemove) onDeleteSet(s.id);
+}
+
+function bySetNumber(a: ExerciseSet, b: ExerciseSet): number {
+  return (a.setNumber ?? 0) - (b.setNumber ?? 0);
 }
