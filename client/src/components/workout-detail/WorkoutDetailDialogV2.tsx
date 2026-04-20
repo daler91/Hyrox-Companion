@@ -59,6 +59,14 @@ interface WorkoutDetailDialogV2Props {
    */
   readonly onCombine?: (entry: TimelineEntry) => void;
   readonly weightUnit?: "kg" | "lb";
+  /**
+   * Fires the moment the user opens the in-dialog coach chat. Parent
+   * uses this to close the global coach rail so the two chat surfaces
+   * don't render side-by-side with independent `useChatSession`
+   * instances — local message state between those two hooks doesn't
+   * sync, so sending from one would leave the other stale.
+   */
+  readonly onAskCoachOpen?: () => void;
 }
 
 /**
@@ -80,6 +88,7 @@ export function WorkoutDetailDialogV2({
   isMarkingComplete = false,
   onCombine,
   weightUnit = "kg",
+  onAskCoachOpen,
 }: WorkoutDetailDialogV2Props) {
   const workoutId = entry?.workoutLogId ?? null;
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -233,7 +242,16 @@ export function WorkoutDetailDialogV2({
           onDeleteSet={(setId) => deleteSet.mutate(setId)}
           onSaveNote={(note) => workoutId && updateNote.mutate(note)}
           chatOpen={chatOpen}
-          onOpenChat={() => setChatOpen(true)}
+          onOpenChat={() => {
+            // Tell the parent to close the global coach rail before
+            // we mount the in-dialog chat: both surfaces would spin
+            // up their own `useChatSession` with independent local
+            // state, so a message sent in one wouldn't reach the
+            // other. One surface at a time keeps them consistent
+            // until we hoist the session into a shared context.
+            onAskCoachOpen?.();
+            setChatOpen(true);
+          }}
           onCloseChat={() => setChatOpen(false)}
         />
       </DialogContent>

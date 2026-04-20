@@ -461,6 +461,11 @@ export default function Timeline() {
               handleCombine(entry);
             }}
             weightUnit={user?.weightUnit === "lbs" ? "lb" : "kg"}
+            // Close the global coach rail when the in-dialog chat
+            // opens so the two chat surfaces never coexist with
+            // independent session state (see the comment in the
+            // dialog's onOpenChat handler).
+            onAskCoachOpen={() => setCoachOpen(false)}
           />
 
           <SkipConfirmDialog
