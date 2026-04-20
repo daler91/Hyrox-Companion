@@ -79,7 +79,7 @@ export function ChatInput({ onSend, isLoading, placeholder = "Ask about your tra
           placeholder={isListening ? "Listening..." : placeholder}
           className="min-h-[44px] max-h-32 resize-none"
           disabled={isLoading}
-          aria-label="Chat message"
+          aria-label={isListening ? "Chat message – recording" : "Chat message"}
           data-testid="input-chat-message"
         />
         {isListening && interimTranscript && (
@@ -99,13 +99,14 @@ export function ChatInput({ onSend, isLoading, placeholder = "Ask about your tra
           size="icon"
           disabled={message.trim() === "" || isLoading}
           data-testid="button-send-message"
-          aria-label="Send message"
+          aria-label={isLoading ? "Sending message" : "Send message"}
+          aria-busy={isLoading}
           title={message.trim() ? "Send message" : "Type a message to send"}
         >
           {isLoading ? (
-            <Loader2 className="h-4 w-4 animate-spin" aria-label="Sending message..." />
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
           ) : (
-            <Send className="h-4 w-4" />
+            <Send className="h-4 w-4" aria-hidden="true" />
           )}
         </Button>
       </div>
