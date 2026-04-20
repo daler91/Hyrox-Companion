@@ -52,7 +52,14 @@ export function InDialogCoachChat({ focusLabel, seedText, onBack }: InDialogCoac
           size="icon"
           className="size-7 text-muted-foreground"
           onClick={onBack}
-          aria-label="Back to coach take"
+          // Block back while a send/stream is still pending. Unmount
+          // mid-flight would lose the in-progress turn's local state
+          // before `useSaveMessageMutation`'s onSuccess invalidates
+          // chat-history, so the next mount would rehydrate without
+          // the message the user just sent.
+          disabled={isLoading}
+          aria-label={isLoading ? "Waiting for coach to finish responding" : "Back to coach take"}
+          title={isLoading ? "Waiting for coach to finish…" : undefined}
           data-testid="in-dialog-coach-chat-back"
         >
           <ArrowLeft className="size-4" aria-hidden />
