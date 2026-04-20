@@ -78,6 +78,21 @@ export function WorkoutComposer({
   const [panelOpen, setPanelOpen] = useState(
     () => defaultPanelOpen ?? freeText.trim().length > 0,
   );
+  // Reconcile panel visibility with external changes to `freeText`.
+  // The panel can only receive typed input while it's open — anything
+  // that mutates `freeText` while we're collapsed is necessarily an
+  // external injection (duplicate-last's "mainWorkout" fallback path,
+  // voice start from a stashed state, etc.). Expand so the user sees
+  // where their input landed instead of leaving a silent textarea
+  // behind a closed panel. Using render-time reconciliation avoids a
+  // setState-in-effect the hook rule would flag.
+  const [lastSeenText, setLastSeenText] = useState(freeText);
+  if (freeText !== lastSeenText) {
+    setLastSeenText(freeText);
+    if (!panelOpen && freeText.trim().length > 0) {
+      setPanelOpen(true);
+    }
+  }
 
   // Whenever the free-text changes, re-prime the auto-parse debounce.
   // The editor hook handles dedup (skips unchanged text) and abort on
