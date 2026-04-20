@@ -111,12 +111,17 @@ export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false, 
   }, [isOpen, scrollToBottom]);
 
   useEffect(() => {
-    if (isOpen && isNewUser && !hasShownWelcome && messages.length === 0) {
+    // Skip the generic new-user welcome when the user is opening
+    // the coach via "Ask coach" on a workout — their intent is a
+    // specific follow-up, and a multi-paragraph welcome message
+    // immediately above the seeded input reads as noise.
+    const hasWorkoutSeed = !!inputSeed;
+    if (isOpen && isNewUser && !hasShownWelcome && messages.length === 0 && !hasWorkoutSeed) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setHasShownWelcome(true);
       setLocalMessages([{ id: "new-user-welcome", role: "assistant", content: WELCOME_TEXT, timestamp: getCurrentTimeString() }]);
     }
-  }, [isOpen, isNewUser, hasShownWelcome, messages.length]);
+  }, [isOpen, isNewUser, hasShownWelcome, messages.length, inputSeed]);
 
   useEffect(() => { scrollToBottom(); }, [messages, scrollToBottom]);
 

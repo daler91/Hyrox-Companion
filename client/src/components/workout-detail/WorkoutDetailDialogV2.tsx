@@ -1,5 +1,4 @@
 import type { ExerciseSet, TimelineEntry, WorkoutStatus } from "@shared/schema";
-import { format, parseISO } from "date-fns";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { type MutableRefObject,useEffect, useRef, useState } from "react";
 
@@ -201,7 +200,7 @@ export function WorkoutDetailDialogV2({
     >
       <DialogContent
         className={cn(
-          "max-h-[90vh] overflow-y-auto p-0",
+          "max-h-[90vh] overflow-y-auto p-0 transition-opacity",
           coexistWithSideChat
             // Responsive width + shift so dialog_right ≤ coach_left
             // at every breakpoint where the coach rail actually
@@ -214,15 +213,15 @@ export function WorkoutDetailDialogV2({
             //   lg (≥1024): coach=384, available=640+  → max-w-xl + shift -192
             //   xl (≥1280): coach=384, available=896+  → max-w-4xl + shift -192
             //
-            // Earlier iterations stayed at max-w-6xl below xl, but
-            // DialogContent is w-full so that filled the viewport
-            // and covered the coach entirely. Dropping to max-w-md
-            // at the base of coexist mode keeps the rail visible
-            // and clickable.
+            // Also de-emphasise visually (subtle opacity + ring +
+            // shadow) so the dialog reads as secondary while the
+            // user's attention is in the chat. Without this the two
+            // panels compete for focus and the screen feels busy.
             ? cn(
                 "max-w-md md:translate-x-[calc(-50%-160px)]",
                 "lg:max-w-xl lg:translate-x-[calc(-50%-192px)]",
                 "xl:max-w-4xl",
+                "opacity-95 shadow-2xl ring-1 ring-border",
               )
             : "max-w-6xl",
         )}
@@ -273,6 +272,7 @@ export function WorkoutDetailDialogV2({
           onDeleteSet={(setId) => deleteSet.mutate(setId)}
           onSaveNote={(note) => workoutId && updateNote.mutate(note)}
           onAskCoach={handlers.askCoach}
+          coexistWithSideChat={coexistWithSideChat}
         />
       </DialogContent>
 
@@ -330,6 +330,12 @@ interface DialogBodyProps {
   readonly onDeleteSet: (setId: string) => void;
   readonly onSaveNote: (note: string | null) => void;
   readonly onAskCoach?: () => void;
+  /**
+   * Mirrors the top-level `coexistWithSideChat` so the body can
+   * force-collapse secondary sections (e.g. the Coach's Prescription
+   * accordion) when the user is in a chat-focused context.
+   */
+  readonly coexistWithSideChat: boolean;
 }
 
 /**
@@ -357,6 +363,7 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     onDeleteSet,
     onSaveNote,
     onAskCoach,
+    coexistWithSideChat,
   } = props;
 
   return (
@@ -386,7 +393,11 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
             mainWorkout={entry.mainWorkout}
             accessory={entry.accessory}
             notes={entry.notes}
-            defaultOpen={isPlanned}
+            // Planned entries normally open the prescription by
+            // default (it's all they have), but when the chat is
+            // coexisting we compress non-essential sections to
+            // reduce visual load.
+            defaultOpen={isPlanned && !coexistWithSideChat}
           />
         </div>
 
@@ -709,30 +720,14 @@ function buildDialogHandlers(args: BuildDialogHandlersArgs) {
 
 /**
  * Seed text dropped into the coach chat input when the user clicks
- * "Ask coach" on the CoachTakePanel. The panel only renders when the
- * workout has an `aiRationale`, so we always have the coach's take to
- * reference — seed a follow-up that quotes the rationale and invites
- * the user to continue the thread, rather than the previous generic
- * "what would you adjust?" which ignored what the coach had already
- * said.
+ * "Ask coach" on the CoachTakePanel. The dialog stays open next to
+ * the chat (see coexistWithSideChat), so the rationale is already
+ * visible to the user — the seed just needs to reference it
+ * concisely and invite the follow-up, not re-quote the full
+ * paragraph into the textarea.
  */
 function buildCoachSeedMessage(entry: TimelineEntry): string {
   const focus = entry.focus?.trim() || "this workout";
-  const dateLabel = formatCoachDate(entry.date);
-  const rationale = entry.aiRationale?.trim();
-
-  if (rationale) {
-    return `About my ${focus} workout on ${dateLabel}, you said:\n\n"${rationale}"\n\nCan you walk me through your reasoning?`;
-  }
-  // Safety net for callers that wire the button without a rationale;
-  // the current CoachTakePanel won't render the button in that case.
-  return `Help me think about my ${focus} workout on ${dateLabel}. What would you adjust?`;
+  return `Can you walk me through your take on my ${focus} workout?`;
 }
 
-function formatCoachDate(iso: string): string {
-  try {
-    return format(parseISO(iso), "EEE MMM d");
-  } catch {
-    return iso;
-  }
-}
