@@ -296,7 +296,23 @@ const AUTO_PARSE_MIN_CHARS = 8;
 // Cheap gate so the auto-parse pipeline doesn't burn Gemini calls on
 // free-form notes like "felt great". Needs at least one digit or an
 // `x`/`×` (set-count separator) before we even consider parsing.
-const AUTO_PARSE_SIGNAL_RE = /[0-9]|[xX×]/;
+const AUTO_PARSE_SIGNAL_RE = /\d|[xX×]/;
+
+// Draft blocks restored from localStorage (or the server) pre-date the
+// `hasUserEdits` flag on StructuredExercise. Without this migration,
+// the first auto-parse would treat them as "unedited = replaceable" and
+// silently wipe structured rows a user had already built up. Mark every
+// restored block as edited so the merge preserves them until the user
+// explicitly deletes one.
+function markInitialDataAsEdited(
+  data: Record<string, StructuredExercise>,
+): Record<string, StructuredExercise> {
+  const marked: Record<string, StructuredExercise> = {};
+  for (const key of Object.keys(data)) {
+    marked[key] = { ...data[key], hasUserEdits: true };
+  }
+  return marked;
+}
 
 export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
   const blockCounterRef = useRef(options.initialBlockCounter ?? 0);
@@ -304,7 +320,7 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
     options.initialExerciseBlocks ?? [],
   );
   const [exerciseData, setExerciseData] = useState<Record<string, StructuredExercise>>(
-    options.initialExerciseData ?? {},
+    () => markInitialDataAsEdited(options.initialExerciseData ?? {}),
   );
   const [useTextMode, setUseTextMode] = useState(options.initialUseTextMode ?? false);
 
@@ -420,13 +436,19 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
 
   // Schedule a trailing-debounced auto-parse whenever the free-text
   // changes. Any pending parse gets cancelled on the next call so only
-  // the latest text flows through.
+  // the latest text flows through — AND any IN-FLIGHT request is
+  // aborted synchronously here so a slow response from outdated text
+  // can't land after the user has already moved on and overwrite the
+  // composer's state with stale blocks.
   const scheduleAutoParse = useCallback(
     (text: string) => {
       if (debounceRef.current !== null) clearTimeout(debounceRef.current);
+      abortRef.current?.abort();
       debounceRef.current = setTimeout(() => {
         debounceRef.current = null;
-        void runAutoParse(text);
+        runAutoParse(text).catch(() => {
+          /* errors surface via autoParseError state inside runAutoParse */
+        });
       }, AUTO_PARSE_DEBOUNCE_MS);
     },
     [runAutoParse],

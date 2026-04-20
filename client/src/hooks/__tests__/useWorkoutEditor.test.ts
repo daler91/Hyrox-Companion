@@ -390,6 +390,32 @@ describe('mergeParsedWithEdits', () => {
   });
 });
 
+describe('useWorkoutEditor initialExerciseData', () => {
+  it('marks every restored block as user-edited so legacy drafts survive the first auto-parse', () => {
+    // Drafts saved before the `hasUserEdits` flag existed don't carry
+    // it. When the editor rehydrates from such a draft and the user's
+    // free text triggers auto-parse, the merge MUST preserve those
+    // blocks — otherwise the first debounced parse silently wipes
+    // structured rows the user had already built.
+    const initialData: Record<string, StructuredExercise> = {
+      back_squat__1: {
+        exerciseName: 'back_squat' as never,
+        category: 'strength',
+        sets: [{ setNumber: 1, reps: 5, weight: 100 }],
+        // NB: no hasUserEdits — the draft pre-dates the field.
+      },
+    };
+    const { result } = renderHook(
+      () => useWorkoutEditor({
+        initialExerciseBlocks: ['back_squat__1'],
+        initialExerciseData: initialData,
+      }),
+      { wrapper: createQueryWrapper() },
+    );
+    expect(result.current.exerciseData.back_squat__1.hasUserEdits).toBe(true);
+  });
+});
+
 describe('useWorkoutEditor resetEditor', () => {
   it('seeds block counter from the max suffix in hydrated block ids so subsequent addExercise calls do not collide', () => {
     const { result } = renderHook(() => useWorkoutEditor(), { wrapper: createQueryWrapper() });
