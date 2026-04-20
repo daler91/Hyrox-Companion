@@ -55,11 +55,15 @@ export function WorkoutStatsRow({ workout, exerciseSets, onChangeRpe, rpeResetSi
       <StatCell label="Duration" value={workout.duration} unit="min" />
       <StatCell label="Exercises" value={stats.exerciseCount} />
       {onChangeRpe ? (
-        // Key includes rpeResetSignal so a failed save remounts the
-        // input and drops the unsaved draft, even though workout.rpe
-        // itself didn't change (updateRpe is non-optimistic).
+        // Key includes workout.id so switching dialogs between two
+        // workouts with the same RPE still remounts the cell — otherwise
+        // a debounced save queued on workout A could fire after
+        // navigation and write A's draft value into workout B via the
+        // new onChange handler. rpeResetSignal covers the same-workout
+        // case where a failed save needs to drop the unsaved draft
+        // even though workout.rpe itself didn't change.
         <RpeEditableCell
-          key={`${workout.rpe ?? "null"}:${rpeResetSignal}`}
+          key={`${workout.id}:${workout.rpe ?? "null"}:${rpeResetSignal}`}
           value={workout.rpe}
           onChange={onChangeRpe}
         />
