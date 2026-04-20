@@ -1,7 +1,7 @@
 import type { ExerciseSet, TimelineEntry, WorkoutStatus } from "@shared/schema";
 import { format, parseISO } from "date-fns";
 import { CheckCircle2, Loader2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { type MutableRefObject,useEffect, useRef, useState } from "react";
 
 import {
   AlertDialog,
@@ -91,13 +91,22 @@ export function WorkoutDetailDialogV2({
 }: WorkoutDetailDialogV2Props) {
   const workoutId = entry?.workoutLogId ?? null;
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  // Monotonic counter bumped whenever an RPE save errors. Passed to
-  // WorkoutStatsRow as the reset signal so the editable input
-  // remounts with the server-authoritative value after a failure.
+  // Monotonic counter bumped whenever an RPE save errors on the
+  // currently-displayed workout. Passed to WorkoutStatsRow as the
+  // reset signal so the editable input remounts with the
+  // server-authoritative value after a failure.
   // updateRpe.failureCount can't be used here: TanStack Query resets
   // failureCount to 0 when the next retry enters pending, which
   // would remount the input mid-retry and drop the user's draft.
   const [rpeErrorToken, setRpeErrorToken] = useState(0);
+  // Track the currently displayed workout id in a ref so a mutation
+  // error firing after the dialog navigated away only bumps the
+  // error token when the failed save belongs to the workout the
+  // user is still looking at.
+  const displayedWorkoutIdRef = useRef<string | null>(workoutId);
+  useEffect(() => {
+    displayedWorkoutIdRef.current = workoutId;
+  }, [workoutId]);
   const {
     workout,
     history,
@@ -143,6 +152,12 @@ export function WorkoutDetailDialogV2({
   // dialog — the two requests race on the same plan day and can leave
   // a workoutLog with a conflicting plan_day status.
   const actionsLocked = isMarkingComplete;
+  // displayedWorkoutIdRef is only dereferenced inside the `onError`
+  // callback that buildDialogHandlers attaches to updateRpe.mutate(),
+  // i.e. at mutation-error time. The compiler flags the call
+  // defensively because it can't trace the ref through the helper,
+  // so we suppress the rule here.
+  // eslint-disable-next-line react-hooks/refs
   const handlers = buildDialogHandlers({
     entry,
     exerciseSets,
@@ -155,7 +170,8 @@ export function WorkoutDetailDialogV2({
     onAskCoach,
     updateRpe,
     openDeleteConfirm: () => setConfirmingDelete(true),
-    onRpeSaveError: () => setRpeErrorToken((n) => n + 1),
+    displayedWorkoutIdRef,
+    bumpRpeErrorToken: setRpeErrorToken,
   });
   const showStatsRow = !isPlanned && !!workout;
 
@@ -583,11 +599,17 @@ interface BuildDialogHandlersArgs {
   updateRpe: {
     mutate: (
       vars: { rpe: number | null; forWorkoutId: string },
-      options?: { onError?: () => void },
+      options?: {
+        onError?: (
+          error: unknown,
+          variables: { rpe: number | null; forWorkoutId: string },
+        ) => void;
+      },
     ) => void;
   };
   openDeleteConfirm: () => void;
-  onRpeSaveError: () => void;
+  displayedWorkoutIdRef: MutableRefObject<string | null>;
+  bumpRpeErrorToken: (updater: (n: number) => number) => void;
 }
 
 // Derive each conditional handler from the props + local state so the
@@ -598,16 +620,30 @@ function buildDialogHandlers(args: BuildDialogHandlersArgs) {
   const {
     entry, exerciseSets, workoutId, isPlanned, actionsLocked,
     onDelete, onChangeStatus, onCombine, onAskCoach,
-    updateRpe, openDeleteConfirm, onRpeSaveError,
+    updateRpe, openDeleteConfirm, displayedWorkoutIdRef, bumpRpeErrorToken,
   } = args;
   const menuUnlocked = !actionsLocked;
   // Capture workoutId in the mutation variable (forWorkoutId) so the
   // mutation's onSuccess can scope cache writes to the workout that
   // originated this save, even if the dialog has re-rendered for a
-  // different entry by the time the server responds.
+  // different entry by the time the server responds. The onError
+  // callback runs at mutation-error time (event-handler context), so
+  // reading displayedWorkoutIdRef.current there is safe — we only
+  // bump the reset token if the failed save still belongs to the
+  // workout the dialog is currently showing, otherwise a stale
+  // error would clear a draft on a different entry.
   const changeRpe = workoutId
     ? (rpe: number | null) =>
-        updateRpe.mutate({ rpe, forWorkoutId: workoutId }, { onError: onRpeSaveError })
+        updateRpe.mutate(
+          { rpe, forWorkoutId: workoutId },
+          {
+            onError: (_err, vars) => {
+              if (vars.forWorkoutId === displayedWorkoutIdRef.current) {
+                bumpRpeErrorToken((n) => n + 1);
+              }
+            },
+          },
+        )
     : undefined;
   return {
     menuDelete: onDelete && menuUnlocked ? openDeleteConfirm : undefined,

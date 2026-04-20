@@ -158,31 +158,38 @@ export function useWorkoutDetail(workoutId: string | null) {
   // would clobber other in-flight optimistic edits in the same cache
   // entry (notes in particular).
   //
-  // The callers pass `forWorkoutId` as part of the mutation variable
-  // rather than relying on the hook's closure `workoutId`: the dialog
-  // stays mounted while the user navigates between entries, so a
-  // save started for workout A can resolve after the hook has
-  // re-rendered for workout B. Keying everything to `forWorkoutId`
-  // makes cache writes land on the correct workout regardless.
+  // Callers pass `forWorkoutId` as part of the mutation variable so
+  // cache writes land on the workout that originated the save, even
+  // if the dialog has re-rendered for a different entry by the time
+  // the server responds.
   //
-  // latestRpePerWorkoutRef tracks the most recently submitted value
-  // per workout id — onSuccess skips patching unless the response's
-  // variable still matches, so an older response can't overwrite a
-  // newer one. This guard is per-workout so saves on a second
-  // workout don't silently discard successful saves on the first.
+  // `rpeSeqPerWorkoutRef` tracks the latest submitted sequence per
+  // workout id. onMutate bumps a monotonic counter and stashes the
+  // seq in the mutation context; onSuccess only patches if the
+  // context seq is still the latest for that workout. A sequence is
+  // stricter than value equality — `8 → 9 → 8` races can't alias.
   //
   // Tradeoff: if a newer save fails and an older one succeeds after
   // it, the older success is discarded and cache lags until reopen.
   // We accept that over invalidating the workout and clobbering
   // in-flight note edits.
-  const latestRpePerWorkoutRef = useRef(new Map<string, number | null>());
-  const updateRpe = useApiMutation({
-    mutationFn: ({ rpe, forWorkoutId }: { rpe: number | null; forWorkoutId: string }) => {
-      latestRpePerWorkoutRef.current.set(forWorkoutId, rpe);
-      return api.workouts.update(forWorkoutId, { rpe });
+  const rpeSeqPerWorkoutRef = useRef(new Map<string, number>());
+  const rpeSeqCounterRef = useRef(0);
+  const updateRpe = useApiMutation<
+    WorkoutLog,
+    Error,
+    { rpe: number | null; forWorkoutId: string },
+    { seq: number }
+  >({
+    mutationFn: ({ rpe, forWorkoutId }) => api.workouts.update(forWorkoutId, { rpe }),
+    onMutate: ({ forWorkoutId }) => {
+      rpeSeqCounterRef.current += 1;
+      const seq = rpeSeqCounterRef.current;
+      rpeSeqPerWorkoutRef.current.set(forWorkoutId, seq);
+      return { seq };
     },
-    onSuccess: async (serverWorkout, { rpe, forWorkoutId }) => {
-      if (rpe !== latestRpePerWorkoutRef.current.get(forWorkoutId)) return;
+    onSuccess: async (serverWorkout, { forWorkoutId }, ctx) => {
+      if (ctx.seq !== rpeSeqPerWorkoutRef.current.get(forWorkoutId)) return;
       queryClient.setQueryData<WorkoutWithSets>(QUERY_KEYS.workout(forWorkoutId), (p) =>
         p ? { ...p, rpe: serverWorkout.rpe } : p,
       );
