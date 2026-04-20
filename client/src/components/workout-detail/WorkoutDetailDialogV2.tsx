@@ -183,6 +183,13 @@ export function WorkoutDetailDialogV2({
   });
   const showStatsRow = !isPlanned && !!workout;
 
+  // When the coach rail is open, block Radix's "outside click dismiss"
+  // path so clicking inside the chat doesn't collapse the workout
+  // detail. Esc still closes via the default onEscapeKeyDown path.
+  const preventOutsideDismiss = coexistWithSideChat
+    ? (e: Event) => e.preventDefault()
+    : undefined;
+
   return (
     <Dialog
       open={!!entry}
@@ -196,12 +203,18 @@ export function WorkoutDetailDialogV2({
         className={cn(
           "max-h-[90vh] overflow-y-auto p-0",
           coexistWithSideChat
-            // Shift the centered dialog left by half the coach
-            // column (~384px) and shrink to max-w-5xl so its right
-            // edge clears the coach panel instead of covering it.
-            ? "max-w-5xl sm:translate-x-[calc(-50%-200px)]"
+            // Gate the left-shift + width shrink to `lg:` (1024px+).
+            // Below that, shifting by ~200px on a dialog that's
+            // still 640-900px wide would push content off the left
+            // viewport edge (see Codex P2). Narrower coexist widths
+            // keep the centered layout but drop the overlay — the
+            // coach rail is still interactable even if the dialog
+            // visually overlaps it.
+            ? "max-w-6xl lg:max-w-4xl lg:translate-x-[calc(-50%-192px)]"
             : "max-w-6xl",
         )}
+        onPointerDownOutside={preventOutsideDismiss}
+        onInteractOutside={preventOutsideDismiss}
         data-testid="workout-detail-dialog-v2"
       >
         {/* Radix requires a DialogTitle + Description for screen readers.
