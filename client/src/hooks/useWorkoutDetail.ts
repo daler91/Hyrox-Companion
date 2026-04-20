@@ -181,13 +181,15 @@ export function useWorkoutDetail(workoutId: string | null) {
       latestRpePerWorkoutRef.current.set(forWorkoutId, rpe);
       return api.workouts.update(forWorkoutId, { rpe });
     },
-    onSuccess: (serverWorkout, { rpe, forWorkoutId }) => {
+    onSuccess: async (serverWorkout, { rpe, forWorkoutId }) => {
       if (rpe !== latestRpePerWorkoutRef.current.get(forWorkoutId)) return;
       queryClient.setQueryData<WorkoutWithSets>(QUERY_KEYS.workout(forWorkoutId), (p) =>
         p ? { ...p, rpe: serverWorkout.rpe } : p,
       );
-      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workoutHistory(forWorkoutId) });
-      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workoutHistory(forWorkoutId) }),
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }),
+      ]);
     },
     errorToast: "Couldn't save that RPE",
   });
