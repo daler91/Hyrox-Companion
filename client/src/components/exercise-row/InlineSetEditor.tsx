@@ -257,7 +257,7 @@ interface FieldInputProps {
 function FieldInput({ field, set, weightUnit, distanceUnit, onUpdate }: FieldInputProps) {
   const meta = fieldMeta[field];
   const label = meta.label(weightUnit, distanceUnit);
-  const current = (set[field] as number | null | undefined) ?? undefined;
+  const current = set[field] ?? undefined;
 
   // Local draft + "last saved" snapshot so incoming server / optimistic
   // updates at the same value don't overwrite an in-progress edit. A

@@ -500,13 +500,21 @@ interface PrimaryMetric {
   readonly suffix?: string;
 }
 
+interface MetricMeta {
+  readonly label: string;
+  readonly suffix?: string;
+  readonly valueKey: "reps" | "distance" | "time";
+  readonly variesKey: "repsVaries" | "distanceVaries" | "timeVaries";
+}
+
 // Table-driven: avoids nested ternaries, centralises the per-field
-// display metadata, and lets `resolvePrimaryMetric` stay a single
-// lookup instead of branching on every caller.
-const METRIC_META: Readonly<Record<PrimaryField, { readonly label: string; readonly suffix?: string }>> = {
-  reps: { label: "Reps" },
-  distance: { label: "Distance", suffix: "m" },
-  time: { label: "Time", suffix: "min" },
+// display metadata, and keeps `resolvePrimaryMetric` as a single
+// lookup. Static property keys (rather than computed template
+// literals) keep the indexing both type-safe and lint-clean.
+const METRIC_META: Readonly<Record<PrimaryField, MetricMeta>> = {
+  reps: { label: "Reps", valueKey: "reps", variesKey: "repsVaries" },
+  distance: { label: "Distance", suffix: "m", valueKey: "distance", variesKey: "distanceVaries" },
+  time: { label: "Time", suffix: "min", valueKey: "time", variesKey: "timeVaries" },
 };
 
 const METRIC_PRIORITY: readonly PrimaryField[] = ["reps", "distance", "time"];
@@ -524,8 +532,8 @@ function resolvePrimaryMetric(exerciseName: string, u: UniformitySummary): Prima
   const meta = METRIC_META[field];
   return {
     field,
-    value: u[field],
-    varies: u[`${field}Varies`],
+    value: u[meta.valueKey],
+    varies: u[meta.variesKey],
     label: meta.label,
     suffix: meta.suffix,
   };
