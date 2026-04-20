@@ -3,7 +3,7 @@ import {
   type ExerciseCategory,
   type ExerciseName,
 } from "@shared/schema";
-import { ArrowLeft, Plus, Sparkles } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import type { StructuredExercise } from "@/components/ExerciseInput";
@@ -30,10 +30,6 @@ interface WorkoutExerciseModeProps {
   removeBlock: (blockId: string) => void;
   weightUnit: "kg" | "lbs";
   distanceUnit: "km" | "miles";
-  /** Whether the current exercise blocks were just parsed from free text. */
-  parsedFromText?: boolean;
-  /** Return the user to the text editor with their original input. */
-  onBackToText?: () => void;
 }
 
 const categoryOrder: ExerciseCategory[] = [
@@ -68,8 +64,6 @@ export const WorkoutExerciseMode = ({
   removeBlock,
   weightUnit,
   distanceUnit,
-  parsedFromText,
-  onBackToText,
 }: Readonly<WorkoutExerciseModeProps>) => {
   const [activeTab, setActiveTab] = useState<TabValue>("strength");
   const [expanded, setExpanded] = useState<Set<ExerciseName>>(new Set());
@@ -131,34 +125,6 @@ export const WorkoutExerciseMode = ({
 
   return (
     <div className="space-y-4" data-testid="exercise-selector">
-      {parsedFromText ? (
-        <div
-          className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-lg border border-primary/30 bg-primary/5 px-4 py-3"
-          data-testid="banner-parsed-from-text"
-        >
-          <div className="flex items-start gap-2 min-w-0">
-            <Sparkles className="h-4 w-4 text-primary shrink-0 mt-0.5" aria-hidden="true" />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-foreground">Parsed from your text</p>
-              <p className="text-xs text-muted-foreground">
-                Review and edit the exercises below, then save. Or go back to tweak your text.
-              </p>
-            </div>
-          </div>
-          {onBackToText ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onBackToText}
-              data-testid="button-back-to-text"
-              className="shrink-0"
-            >
-              <ArrowLeft className="h-4 w-4 mr-1.5" aria-hidden="true" />
-              Back to text
-            </Button>
-          ) : null}
-        </div>
-      ) : null}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabValue)}>
         <TabsList className={TAB_LIST_CLASS}>
           {(categoryOrder as TabValue[]).concat("custom").map((cat) => (

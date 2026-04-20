@@ -257,7 +257,7 @@ describe('useWorkoutForm', () => {
       });
     });
 
-    it('requires freeText when useTextMode is true', () => {
+    it('requires content when the composer has no exercises and no free text', () => {
       const { result } = renderFormHook({ ...defaultProps, useTextMode: true });
 
       act(() => {
@@ -271,13 +271,13 @@ describe('useWorkoutForm', () => {
 
       expect(mockToast).toHaveBeenCalledWith({
         title: 'Missing workout details',
-        description: 'Please describe your workout.',
+        description: 'Please add an exercise or describe your workout.',
         variant: 'destructive',
       });
       expect(queryClientLib.apiRequest).not.toHaveBeenCalled();
     });
 
-    it('requires at least one exercise block when useTextMode is false', () => {
+    it('also errors when structured mode has no blocks and no free text', () => {
       const { result } = renderFormHook({ ...defaultProps, useTextMode: false, exerciseBlocks: [] });
 
       act(() => {
@@ -289,8 +289,8 @@ describe('useWorkoutForm', () => {
       });
 
       expect(mockToast).toHaveBeenCalledWith({
-        title: 'No exercises',
-        description: 'Please add at least one exercise.',
+        title: 'Missing workout details',
+        description: 'Please add an exercise or describe your workout.',
         variant: 'destructive',
       });
       expect(queryClientLib.apiRequest).not.toHaveBeenCalled();

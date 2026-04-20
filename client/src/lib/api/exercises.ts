@@ -8,8 +8,8 @@ import type {
 import { typedRequest } from "./client";
 
 export const exercises = {
-  parse: (text: string) =>
-    typedRequest<ParsedExercise[]>("POST", "/api/v1/parse-exercises", { text }),
+  parse: (text: string, options?: { signal?: AbortSignal }) =>
+    typedRequest<ParsedExercise[]>("POST", "/api/v1/parse-exercises", { text }, options),
 
   getHistory: (exerciseName: string) =>
     typedRequest<ExerciseSet[]>("GET", `/api/v1/exercises/${exerciseName}/history`),

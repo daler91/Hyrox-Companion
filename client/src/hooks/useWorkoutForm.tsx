@@ -13,6 +13,11 @@ import { getMissingFieldWarnings } from "@/lib/exerciseWarnings";
 import { queryClient } from "@/lib/queryClient";
 
 interface UseWorkoutFormProps {
+  /**
+   * Retained only for draft persistence; save branching keys off
+   * `exerciseBlocks.length` so a workout with parsed rows saves as
+   * structured regardless of how the text panel is currently toggled.
+   */
   useTextMode: boolean;
   exerciseBlocks: string[];
   exerciseData: Record<string, StructuredExercise>;
@@ -34,7 +39,9 @@ interface UseWorkoutFormProps {
 }
 
 export function useWorkoutForm({
-  useTextMode,
+  // Kept in the contract for draft callers; save branches on
+  // exerciseBlocks.length so the old "force text mode" branch is gone.
+  useTextMode: _useTextMode,
   exerciseBlocks,
   exerciseData,
   weightLabel,
@@ -166,16 +173,21 @@ export function useWorkoutForm({
     if (notesVoiceInput.isListening) notesVoiceInput.stopListening();
 
     const effectiveTitle = title.trim() || "Workout";
+    const hasStructured = exerciseBlocks.length > 0;
 
-    if (useTextMode) {
+    if (!hasStructured) {
       if (!freeText.trim()) {
         toast({
           title: "Missing workout details",
-          description: "Please describe your workout.",
+          description: "Please add an exercise or describe your workout.",
           variant: "destructive",
         });
         return;
       }
+      // Text-only fallback: the auto-parse couldn't produce structured
+      // rows (or the user bypassed it). Save the raw free-text and let
+      // the reparse pipeline hydrate the table next time the detail
+      // dialog opens.
       saveMutation.mutate({
         title: effectiveTitle,
         date,
@@ -184,41 +196,39 @@ export function useWorkoutForm({
         notes: notes || null,
         rpe: rpe || null,
       });
-    } else {
-      if (exerciseBlocks.length === 0) {
-        toast({
-          title: "No exercises",
-          description: "Please add at least one exercise.",
-          variant: "destructive",
-        });
-        return;
-      }
+      return;
+    }
 
-      const exercises = exerciseBlocks
-        .map((id) => exerciseData[id])
-        .filter(Boolean);
+    const exercises = exerciseBlocks
+      .map((id) => exerciseData[id])
+      .filter(Boolean);
 
-      const allWarnings = exercises.flatMap((ex) => getMissingFieldWarnings(ex));
-      if (allWarnings.length > 0) {
-        const uniqueWarnings = [...new Set(allWarnings)];
-        toast({
-          title: "Some data is missing",
-          description: uniqueWarnings.slice(0, 3).join(". ") + (uniqueWarnings.length > 3 ? ` (+${uniqueWarnings.length - 3} more)` : "") + ". Saving anyway — you can edit later.",
-        });
-      }
-
-      const mainWorkout = generateSummary(exercises, weightLabel, distanceUnit);
-
-      saveMutation.mutate({
-        title: effectiveTitle,
-        date,
-        focus: effectiveTitle,
-        mainWorkout,
-        notes: notes || null,
-        rpe: rpe || null,
-        exercises: exercises.map(exerciseToPayload),
+    const allWarnings = exercises.flatMap((ex) => getMissingFieldWarnings(ex));
+    if (allWarnings.length > 0) {
+      const uniqueWarnings = [...new Set(allWarnings)];
+      toast({
+        title: "Some data is missing",
+        description: uniqueWarnings.slice(0, 3).join(". ") + (uniqueWarnings.length > 3 ? ` (+${uniqueWarnings.length - 3} more)` : "") + ". Saving anyway — you can edit later.",
       });
     }
+
+    // Prefer the user's raw description when they typed one so the
+    // saved workout keeps their voice — otherwise synthesise from the
+    // structured rows. Summary is used by list/timeline views that
+    // don't load exerciseSets.
+    const mainWorkout = freeText.trim()
+      ? freeText
+      : generateSummary(exercises, weightLabel, distanceUnit);
+
+    saveMutation.mutate({
+      title: effectiveTitle,
+      date,
+      focus: effectiveTitle,
+      mainWorkout,
+      notes: notes || null,
+      rpe: rpe || null,
+      exercises: exercises.map(exerciseToPayload),
+    });
   };
 
   return {
