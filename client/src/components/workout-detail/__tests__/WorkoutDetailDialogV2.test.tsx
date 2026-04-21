@@ -228,8 +228,16 @@ describe("WorkoutDetailDialogV2", () => {
   });
 
   // ---- Lazy-parse hydration ---------------------------------------------
+  //
+  // The auto-hydration path (seed-from-plan + reparse on first open) was
+  // removed when exercise_sets became the source of truth: plans generated
+  // after the structured-exercises refactor always have prescribed rows on
+  // the plan_day, and Mark Complete seeds the workout_log at log time. The
+  // Parse button in CoachPrescriptionCollapsible is the explicit path for
+  // legacy free-text-only rows. These tests lock in the "no silent fetch"
+  // invariant so the silent-parse never comes back.
 
-  it("calls seed-from-plan then reparse when a plan-linked workout opens with no sets", async () => {
+  it("never auto-fires seed-from-plan or reparse on open (plan-linked, no sets)", async () => {
     mockWorkouts.get.mockResolvedValue(
       makeWorkout({ exerciseSets: [], planDayId: "plan-day-1" }),
     );
@@ -238,30 +246,20 @@ describe("WorkoutDetailDialogV2", () => {
       prSetCount: 0,
       blockAvgRpe: null,
     });
-    mockWorkouts.seedFromPlan.mockResolvedValue({ seededCount: 0 });
-    mockWorkouts.reparse.mockResolvedValue({
-      exercises: [],
-      saved: false,
-      setCount: 0,
-    });
 
     renderDialog({
       entry: makeEntry({ mainWorkout: "4 rounds: 1000m SkiErg, 20 wall balls" }),
     });
 
-    // Seed-from-plan fires first; when its promise settles, the onSettled
-    // chain calls reparse. We don't assert on the transient hydrating
-    // banner because mocked mutations resolve synchronously and the
-    // isHydrating window collapses faster than React renders.
     await waitFor(() => {
-      expect(mockWorkouts.seedFromPlan).toHaveBeenCalledTimes(1);
+      expect(mockWorkouts.get).toHaveBeenCalled();
     });
-    await waitFor(() => {
-      expect(mockWorkouts.reparse).toHaveBeenCalledTimes(1);
-    });
+    expect(mockWorkouts.seedFromPlan).not.toHaveBeenCalled();
+    expect(mockWorkouts.reparse).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("workout-detail-hydrating")).not.toBeInTheDocument();
   });
 
-  it("skips seed-from-plan and calls reparse directly for ad-hoc logged workouts", async () => {
+  it("never auto-fires reparse on open (ad-hoc workout, no sets)", async () => {
     mockWorkouts.get.mockResolvedValue(
       makeWorkout({ exerciseSets: [], planDayId: null }),
     );
@@ -270,19 +268,15 @@ describe("WorkoutDetailDialogV2", () => {
       prSetCount: 0,
       blockAvgRpe: null,
     });
-    mockWorkouts.reparse.mockResolvedValue({
-      exercises: [],
-      saved: false,
-      setCount: 0,
-    });
 
     renderDialog({
       entry: makeEntry({ planDayId: null, mainWorkout: "5x5 bench press at 80kg" }),
     });
 
     await waitFor(() => {
-      expect(mockWorkouts.reparse).toHaveBeenCalledTimes(1);
+      expect(mockWorkouts.get).toHaveBeenCalled();
     });
+    expect(mockWorkouts.reparse).not.toHaveBeenCalled();
     expect(mockWorkouts.seedFromPlan).not.toHaveBeenCalled();
   });
 

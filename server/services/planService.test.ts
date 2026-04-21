@@ -291,43 +291,16 @@ describe("planService", () => {
       vi.clearAllMocks();
     });
 
-    const setupMockTransaction = (linkedLogs: Record<string, unknown>[], dayExistenceResult: Record<string, unknown>[], expectedResult: Record<string, unknown>[]) => {
-      const mockTx = {
-        select: vi.fn(),
-        delete: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        update: vi.fn().mockReturnThis(),
-        set: vi.fn().mockReturnThis(),
-        returning: vi.fn().mockResolvedValue(expectedResult),
-      };
+    // In the structured-exercise-first model, exercise_sets are an owned
+    // entity independent of the free-text prescription. Updating mainWorkout
+    // no longer cascades to delete the linked log's exercise_sets; the
+    // helper now just delegates to storage.plans.updatePlanDay for every
+    // field (including mainWorkout). The /reparse endpoint is the explicit
+    // path when the athlete wants structured rows regenerated from text.
 
-      mockTx.select = vi.fn()
-        .mockReturnValueOnce({
-          from: vi.fn().mockReturnValueOnce({
-            where: vi.fn().mockReturnValueOnce({
-              limit: vi.fn().mockResolvedValue(linkedLogs),
-            })
-          })
-        })
-        .mockReturnValueOnce({
-          from: vi.fn().mockReturnValueOnce({
-            innerJoin: vi.fn().mockReturnValueOnce({
-              where: vi.fn().mockResolvedValue(dayExistenceResult)
-            })
-          })
-        });
-
-      vi.mocked(db.transaction).mockImplementation(async (callback) => {
-        return await callback(mockTx as unknown as Parameters<Parameters<typeof db.transaction>[0]>[0]);
-      });
-
-      return mockTx;
-    };
-
-    it("should call storage.plans.updatePlanDay when mainWorkout is not updated", async () => {
+    it("delegates to storage.plans.updatePlanDay when only non-prescription fields change", async () => {
       const updates = { focus: "New Focus" };
       const expectedResult = createMockPlanDay({ id: dayId, focus: "New Focus" });
-
       vi.mocked(storage.plans.updatePlanDay).mockResolvedValue(expectedResult);
 
       const result = await updatePlanDayWithCleanup(dayId, updates, userId);
@@ -338,44 +311,26 @@ describe("planService", () => {
       expect(result).toEqual(expectedResult);
     });
 
-    it("should handle mainWorkout update when no linked log exists", async () => {
+    it("does not delete exercise_sets when mainWorkout is updated", async () => {
       const updates = { mainWorkout: "New Workout" };
-      const expectedResult = { id: dayId, mainWorkout: "New Workout" };
-
-      const mockTx = setupMockTransaction([], [{ planDay: { id: dayId } }], [expectedResult]);
+      const expectedResult = createMockPlanDay({ id: dayId, mainWorkout: "New Workout" });
+      vi.mocked(storage.plans.updatePlanDay).mockResolvedValue(expectedResult);
 
       const result = await updatePlanDayWithCleanup(dayId, updates, userId);
 
-      expect(db.transaction).toHaveBeenCalledTimes(1);
-      expect(mockTx.delete).not.toHaveBeenCalled();
-      expect(mockTx.update).toHaveBeenCalledWith(planDays);
+      expect(storage.plans.updatePlanDay).toHaveBeenCalledTimes(1);
+      expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(dayId, updates, userId);
+      expect(db.transaction).not.toHaveBeenCalled();
       expect(result).toEqual(expectedResult);
     });
 
-    it("should delete exercise sets when mainWorkout is updated and linked log exists", async () => {
+    it("returns undefined when storage reports the plan day doesn't exist", async () => {
       const updates = { mainWorkout: "New Workout" };
-      const expectedResult = { id: dayId, mainWorkout: "New Workout" };
-      const mockLinkedLog = { id: "log-id" };
-
-      const mockTx = setupMockTransaction([mockLinkedLog], [{ planDay: { id: dayId } }], [expectedResult]);
+      vi.mocked(storage.plans.updatePlanDay).mockResolvedValue(undefined);
 
       const result = await updatePlanDayWithCleanup(dayId, updates, userId);
 
-      expect(db.transaction).toHaveBeenCalledTimes(1);
-      expect(mockTx.delete).toHaveBeenCalledWith(exerciseSets);
-      expect(mockTx.update).toHaveBeenCalledWith(planDays);
-      expect(result).toEqual(expectedResult);
-    });
-
-    it("should return undefined if planDay does not exist or does not belong to user", async () => {
-      const updates = { mainWorkout: "New Workout" };
-
-      const mockTx = setupMockTransaction([], [], []);
-
-      const result = await updatePlanDayWithCleanup(dayId, updates, userId);
-
-      expect(db.transaction).toHaveBeenCalledTimes(1);
-      expect(mockTx.update).not.toHaveBeenCalled();
+      expect(storage.plans.updatePlanDay).toHaveBeenCalledTimes(1);
       expect(result).toBeUndefined();
     });
   });
@@ -398,14 +353,17 @@ describe("planService", () => {
       updateReturning: ReturnType<typeof vi.fn>;
     };
 
-    // Wire up a tx that supports the two shapes planService uses:
+    // Wire up a tx that supports the shapes planService uses:
     //   1. select({...}).from(planDays).innerJoin(trainingPlans, ...).where(...).for("update")
     //   2. select().from(workoutLogs).where(...).limit(1)
-    // plus delete(workoutLogs).where(...) and update(planDays).set(...).where(...).returning().
+    //   3. select().from(exerciseSets).where(...).orderBy(...)   ← copy-back
+    // plus delete(workoutLogs).where(...), delete(exerciseSets).where(...),
+    // insert(exerciseSets).values(...), and update(planDays).set(...).where(...).returning().
     const setupTx = (
       statusLookup: Array<{ status: string }>,
       existingLog: Array<Record<string, unknown>> = [],
       updateReturning: Array<Record<string, unknown>> = [],
+      loggedSetsSnapshot: Array<Record<string, unknown>> = [],
     ): MockTx => {
       const mockTx: MockTx = {
         select: vi.fn(),
@@ -435,6 +393,14 @@ describe("planService", () => {
               limit: vi.fn().mockResolvedValue(existingLog),
             }),
           }),
+        })
+        // third call (only fires on completed→planned path): logged sets snapshot
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnValueOnce({
+            where: vi.fn().mockReturnValueOnce({
+              orderBy: vi.fn().mockResolvedValue(loggedSetsSnapshot),
+            }),
+          }),
         });
 
       mockTx.delete = vi.fn().mockReturnValue({ where: mockTx.deleteWhere });
@@ -442,6 +408,10 @@ describe("planService", () => {
         set: vi.fn().mockReturnValue({
           where: vi.fn().mockReturnValue({ returning: mockTx.updateReturning }),
         }),
+      });
+      // Insert (used for copy-back of logged sets onto the plan day).
+      (mockTx as unknown as { insert: ReturnType<typeof vi.fn> }).insert = vi.fn().mockReturnValue({
+        values: vi.fn().mockResolvedValue(undefined),
       });
 
       vi.mocked(db.transaction).mockImplementation(async (callback) =>

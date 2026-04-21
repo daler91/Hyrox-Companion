@@ -10,6 +10,7 @@ import { asyncHandler, rateLimiter, validateBody } from "../routeUtils";
 import { regenerateCoachNoteForPlanDay } from "../services/coachService";
 import { generatePlan } from "../services/planGenerationService";
 import { createSamplePlan, importPlanFromCSV, updatePlanDayStatus,updatePlanDayWithCleanup } from "../services/planService";
+import { reparsePlanDay } from "../services/workoutService";
 import { storage } from "../storage";
 import { getUserId } from "../types";
 
@@ -234,6 +235,33 @@ router.delete(
       return res.status(404).json({ error: PLAN_DAY_SET_NOT_FOUND, code: "NOT_FOUND" });
     }
     res.json({ success: true });
+  }),
+);
+
+// Parse the plan day's mainWorkout/accessory free text into structured
+// exercise_sets via Gemini. Replaces the plan day's existing prescribed
+// rows so repeated Parse presses don't accumulate duplicates. Guarded by
+// aiBudgetCheck because each call is a Gemini roundtrip.
+router.post(
+  "/api/v1/plans/days/:dayId/reparse",
+  ...protectedMutationGuards,
+  rateLimiter("planDayReparse", 5),
+  aiBudgetCheck,
+  asyncHandler(async (req: ExpressRequest<{ dayId: string }>, res: Response) => {
+    const userId = getUserId(req);
+    const [planDay, user] = await Promise.all([
+      storage.plans.getPlanDay(req.params.dayId, userId),
+      storage.users.getUser(userId),
+    ]);
+    if (!planDay) {
+      return res.status(404).json({ error: PLAN_DAY_NOT_FOUND, code: "NOT_FOUND" });
+    }
+    const weightUnit = user?.weightUnit || "kg";
+    const result = await reparsePlanDay(planDay, weightUnit);
+    if (!result) {
+      return res.json({ exercises: [], saved: false, setCount: 0 });
+    }
+    res.json({ exercises: result.exercises, saved: true, setCount: result.setCount });
   }),
 );
 

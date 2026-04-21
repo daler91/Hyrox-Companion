@@ -64,4 +64,14 @@ export const plans = {
       `/api/v1/plans/days/${dayId}/coach-note/regenerate`,
       {},
     ),
+
+  // Parse the plan day's free-text mainWorkout/accessory into structured
+  // exercise_sets. Replaces the existing prescription. Used by the Parse
+  // button in the workout detail dialog on planned entries.
+  reparseDay: (dayId: string) =>
+    typedRequest<{ exercises: unknown[]; saved: boolean; setCount: number }>(
+      "POST",
+      `/api/v1/plans/days/${dayId}/reparse`,
+      {},
+    ),
 } as const;

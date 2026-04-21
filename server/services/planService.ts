@@ -1,7 +1,7 @@
 import type { InsertPlanDay, TrainingPlanWithDays, UpdatePlanDay } from "@shared/schema";
 import { exerciseSets, planDays, trainingPlans, workoutLogs } from "@shared/schema";
 import { parse } from "csv-parse/sync";
-import { and,eq } from "drizzle-orm";
+import { and,asc, eq } from "drizzle-orm";
 
 import { db } from "../db";
 import { AppError, ErrorCode } from "../errors";
@@ -233,36 +233,15 @@ export async function updatePlanDayWithCleanup(
   updates: UpdatePlanDay,
   userId: string,
 ) {
-  if (updates.mainWorkout !== undefined) {
-    return await db.transaction(async (tx) => {
-      const [linkedLog] = await tx
-        .select()
-        .from(workoutLogs)
-        .where(and(eq(workoutLogs.planDayId, dayId), eq(workoutLogs.userId, userId)))
-        .limit(1);
-
-      if (linkedLog) {
-        await tx.delete(exerciseSets).where(eq(exerciseSets.workoutLogId, linkedLog.id));
-      }
-
-      const day = await tx
-        .select({ planDay: planDays })
-        .from(planDays)
-        .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
-        .where(and(eq(planDays.id, dayId), eq(trainingPlans.userId, userId)));
-
-      if (day.length === 0) return undefined;
-
-      const [updatedDay] = await tx
-        .update(planDays)
-        .set(updates)
-        .where(eq(planDays.id, dayId))
-        .returning();
-
-      return updatedDay;
-    });
-  }
-
+  // Note: previously this path wiped the linked workout_log's exercise_sets
+  // whenever mainWorkout changed — a leftover from the free-text-primary
+  // model where the sets were derived from the text. In the structured-
+  // exercise model, exercise_sets are the source of truth and are owned
+  // independently (by the athlete's edits). Keeping the athletes' sets
+  // through a prescription-text edit is the whole point of letting them
+  // tweak the free text alongside the structured rows. Use the /reparse
+  // endpoint when the athlete explicitly wants the text converted into
+  // new structured rows.
   return await storage.plans.updatePlanDay(dayId, updates, userId);
 }
 
@@ -334,11 +313,51 @@ export async function updatePlanDayStatus(
         .limit(1);
       if (existingLog) {
         // Preserve edits made on the workout log back onto the plan day so
-        // the un-completed day reflects the user's last-known content.
+        // the un-completed day reflects the user's last-known content —
+        // both the free-text fields AND the structured exercise_sets.
+        // Previously only the text survived; the athlete's actual logged
+        // sets got wiped when they toggled status back to planned, which
+        // made re-completing restart from the coach's original prescription
+        // instead of their edits.
         updates.focus = existingLog.focus;
         updates.mainWorkout = existingLog.mainWorkout;
         updates.accessory = existingLog.accessory;
         updates.notes = existingLog.notes;
+
+        // Snapshot the logged sets, then replace the plan day's prescribed
+        // sets with them. We re-map the rows from workoutLogId-owned to
+        // planDayId-owned by inserting fresh rows (the exercise_set_single_
+        // owner_check constraint makes in-place ownership swaps illegal).
+        const loggedSets = await tx
+          .select()
+          .from(exerciseSets)
+          .where(eq(exerciseSets.workoutLogId, existingLog.id))
+          .orderBy(asc(exerciseSets.sortOrder));
+
+        await tx.delete(exerciseSets).where(eq(exerciseSets.planDayId, dayId));
+
+        if (loggedSets.length > 0) {
+          await tx.insert(exerciseSets).values(
+            loggedSets.map((s) => ({
+              workoutLogId: null,
+              planDayId: dayId,
+              exerciseName: s.exerciseName,
+              customLabel: s.customLabel,
+              category: s.category,
+              setNumber: s.setNumber,
+              reps: s.reps,
+              weight: s.weight,
+              distance: s.distance,
+              time: s.time,
+              notes: s.notes,
+              confidence: s.confidence,
+              sortOrder: s.sortOrder,
+            })),
+          );
+        }
+
+        // Delete the log last — its exercise_sets cascade, but we've
+        // already copied them to the plan day above.
         await tx
           .delete(workoutLogs)
           .where(and(eq(workoutLogs.planDayId, dayId), eq(workoutLogs.userId, userId)));

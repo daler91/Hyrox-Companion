@@ -221,6 +221,40 @@ export async function reparseWorkout(
   return { exercises: prepared.exercises, setCount };
 }
 
+/**
+ * Plan-day equivalent of reparseWorkout: parse the plan day's mainWorkout +
+ * accessory free text via Gemini and REPLACE the day's prescribed
+ * exerciseSets with the structured rows. Used by the Parse button in the
+ * workout detail dialog on planned entries so the athlete can type a
+ * workout description and get a structured, editable prescription back.
+ *
+ * Returns null when the combined free text is empty or Gemini produces
+ * zero exercises. The replace semantics match the workout-log path so
+ * repeated Parse presses don't accumulate duplicate rows.
+ */
+export async function reparsePlanDay(
+  planDay: { id: string; mainWorkout?: string | null; accessory?: string | null },
+  weightUnit: string,
+): Promise<{ exercises: ParsedExercise[]; setCount: number } | null> {
+  const { parseExercisesFromText } = await import("../gemini");
+  const textToParse = [planDay.mainWorkout, planDay.accessory].filter(Boolean).join("\n");
+  if (!textToParse.trim()) return null;
+
+  const exercises = await parseExercisesFromText(textToParse.trim(), weightUnit);
+  if (exercises.length === 0) return null;
+
+  const setRows = expandExercisesToPlanDaySetRows(exercises, planDay.id);
+
+  await db.transaction(async (tx) => {
+    await tx.delete(exerciseSets).where(eq(exerciseSets.planDayId, planDay.id));
+    if (setRows.length > 0) {
+      await tx.insert(exerciseSets).values(setRows);
+    }
+  });
+
+  return { exercises, setCount: setRows.length };
+}
+
 export type CreateWorkoutResult = WorkoutLog & { exerciseSets?: ExerciseSet[] };
 export type UpdateWorkoutResult = WorkoutLog & { exerciseSets?: ExerciseSet[] };
 
