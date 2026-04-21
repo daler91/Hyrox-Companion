@@ -175,10 +175,7 @@ export function WorkoutDetailDialogV2({
   // isSaving toggle — one regenerate per Save click. Resets when
   // saveInFlight returns to false at the end of the cycle.
   const saveRegenerateFiredRef = useRef(false);
-  // React Query's mutate function is stable, but the mutation object
-  // ref isn't. Hold a ref so the drain watcher's deps stay primitive.
-  const regenerateMutateRef = useRef(planCoachNote.regenerate.mutate);
-  regenerateMutateRef.current = planCoachNote.regenerate.mutate;
+  const regenerateMutate = planCoachNote.regenerate.mutate;
 
   // Drain watcher: once every set mutation the flush kicked off has
   // settled, fire the coach-note regenerate (planned entries) or just
@@ -198,11 +195,11 @@ export function WorkoutDetailDialogV2({
       setSaveClickedAt(Date.now());
     };
     if (entry?.planDayId) {
-      regenerateMutateRef.current(undefined, { onSettled: finalize });
+      regenerateMutate(undefined, { onSettled: finalize });
     } else {
       finalize();
     }
-  }, [saveInFlight, planSets.isSaving, isSavingLoggedSets, entry?.planDayId]);
+  }, [saveInFlight, planSets.isSaving, isSavingLoggedSets, entry?.planDayId, regenerateMutate]);
 
   // Tracks the most recent focus value submitted from the header. The
   // timeline query owns `entry.focus` and is only invalidated on save
