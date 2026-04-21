@@ -43,24 +43,7 @@ export function CoachTakePanel({
         <Sparkles className="size-3.5" aria-hidden />
         Coach take
       </div>
-      {isRefreshing ? (
-        <p
-          className="flex items-center gap-1.5 text-xs text-muted-foreground"
-          data-testid="coach-take-stale-hint"
-          aria-live="polite"
-        >
-          <Loader2 className="size-3 animate-spin" aria-hidden />
-          Refreshing coach take…
-        </p>
-      ) : isStale ? (
-        <p
-          className="text-xs text-muted-foreground"
-          data-testid="coach-take-stale-hint"
-          aria-live="polite"
-        >
-          Exercises changed — the coach take will refresh when you close this.
-        </p>
-      ) : null}
+      <StaleHint isRefreshing={isRefreshing} isStale={isStale} />
       <p className="text-sm leading-relaxed">{rationale}</p>
       {onAskCoach && (
         <Button
@@ -76,4 +59,31 @@ export function CoachTakePanel({
       )}
     </section>
   );
+}
+
+function StaleHint({ isRefreshing, isStale }: Readonly<{ isRefreshing?: boolean; isStale?: boolean }>) {
+  if (isRefreshing) {
+    return (
+      <p
+        className="flex items-center gap-1.5 text-xs text-muted-foreground"
+        data-testid="coach-take-stale-hint"
+        aria-live="polite"
+      >
+        <Loader2 className="size-3 animate-spin" aria-hidden />
+        Refreshing coach take…
+      </p>
+    );
+  }
+  if (isStale) {
+    return (
+      <p
+        className="text-xs text-muted-foreground"
+        data-testid="coach-take-stale-hint"
+        aria-live="polite"
+      >
+        Exercises changed — the coach take will refresh when you close this.
+      </p>
+    );
+  }
+  return null;
 }

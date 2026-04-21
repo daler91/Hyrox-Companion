@@ -1,5 +1,4 @@
 import type { PlanDay } from "@shared/schema";
-import { exerciseSets, planDays } from "@shared/schema";
 import * as csvParse from "csv-parse/sync";
 import { beforeEach,describe, expect, it, vi } from "vitest";
 
