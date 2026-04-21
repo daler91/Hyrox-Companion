@@ -108,6 +108,29 @@ export function usePlanDayExercises(planDayId: string | null) {
     errorToast: "Couldn't remove that set",
   });
 
+  // Plan-day Parse: POST /reparse → Gemini parses mainWorkout/accessory into
+  // structured rows, replacing this day's prescription. React Query's server
+  // state is refreshed via an explicit query invalidation rather than
+  // reconciling in-hand because the response shape (`exercises[]`) is the
+  // parsed-exercise DTO, not ExerciseSet rows.
+  const reparseFreeText = useApiMutation({
+    mutationFn: () => api.plans.reparseDay(planDayId!),
+    invalidateQueries: planDayId ? [QUERY_KEYS.planDayExercises(planDayId)] : undefined,
+    errorToast: "Parse failed — try rewording and retry.",
+  });
+
+  // Debounced PATCH of free-text fields (mainWorkout / accessory / notes) on
+  // the plan day. Intentionally not optimistic-cached — the timeline query
+  // owns these fields and we rely on invalidation to refresh `entry.*` in
+  // the dialog. A silent error toast would hide data loss, so we keep the
+  // explicit toast.
+  const updatePrescription = useApiMutation({
+    mutationFn: (patch: { mainWorkout?: string | null; accessory?: string | null; notes?: string | null }) =>
+      api.plans.updateDayWithoutPlan(planDayId!, patch),
+    invalidateQueries: [QUERY_KEYS.timeline, QUERY_KEYS.plans],
+    errorToast: "Couldn't save prescription",
+  });
+
   // Count every in-flight mutation tagged with this plan day's key,
   // not just the most recent mutate() call on a single observer.
   // Row-level edits fan out to one PATCH per set in the group, so
@@ -130,5 +153,7 @@ export function usePlanDayExercises(planDayId: string | null) {
     updateSet,
     addSet,
     deleteSet,
+    reparseFreeText,
+    updatePrescription,
   };
 }

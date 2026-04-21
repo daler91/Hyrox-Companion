@@ -140,27 +140,24 @@ export function WorkoutDetailDialogV2({
     workout,
     history,
     isLoading,
-    isHydrating,
     isSaving: isSavingLoggedSets,
     lastSavedAt: loggedLastSavedAt,
     updateSet,
     addSet,
     deleteSet,
-    seedFromPlan,
     reparseFreeText,
     updateNote,
+    updatePrescription,
     updateRpe,
   } = useWorkoutDetail(workoutId);
   const loggedSaveState = { isSaving: isSavingLoggedSets, lastSavedAt: loggedLastSavedAt };
 
-  useHydrateWorkoutDetail({
-    workoutId,
-    workout,
-    isLoading,
-    hasFreeText: hasMeaningfulText(entry?.mainWorkout) || hasMeaningfulText(entry?.accessory),
-    seedFromPlan,
-    reparseFreeText,
-  });
+  // Hydration (auto-seed + auto-reparse on first open) was removed: plans
+  // generated after the structured-exercises refactor always have prescribed
+  // rows on the plan_day, and the Mark Complete path seeds the workout_log
+  // from those rows at log-creation time. Legacy free-text-only rows are
+  // handled explicitly by the Parse button on the free-text editor, not
+  // silently on dialog open.
 
   if (!entry) return null;
 
@@ -251,7 +248,6 @@ export function WorkoutDetailDialogV2({
           workoutId={workoutId}
           exerciseSets={exerciseSets}
           isPlanned={isPlanned}
-          isHydrating={isHydrating}
           isLoading={isLoading}
           weightUnit={weightUnit}
           history={history}
@@ -262,6 +258,9 @@ export function WorkoutDetailDialogV2({
           onDeleteSet={(setId) => deleteSet.mutate(setId)}
           loggedSaveState={loggedSaveState}
           onSaveNote={(note) => workoutId && updateNote.mutate(note)}
+          onSaveLoggedPrescription={(patch) => workoutId && updatePrescription.mutate(patch)}
+          onParseLoggedFreeText={() => workoutId && reparseFreeText.mutate()}
+          isParsingLogged={reparseFreeText.isPending}
           chatOpen={chatOpen}
           onOpenChat={() => {
             // Gate on consent first: the global-rail flow enforces
@@ -329,7 +328,6 @@ interface DialogBodyProps {
   readonly workoutId: string | null;
   readonly exerciseSets: ExerciseSet[];
   readonly isPlanned: boolean;
-  readonly isHydrating: boolean;
   readonly isLoading: boolean;
   readonly weightUnit: "kg" | "lb";
   readonly history: import("@/lib/api").WorkoutHistoryStats | undefined;
@@ -341,6 +339,13 @@ interface DialogBodyProps {
   /** Save-state signal passed to ExerciseTable on the logged-workout branch. */
   readonly loggedSaveState: { isSaving: boolean; lastSavedAt: number | null };
   readonly onSaveNote: (note: string | null) => void;
+  /**
+   * Save handlers + Parse trigger for the logged-workout free-text editor.
+   * On the planned branch these are handled in-hook via usePlanDayExercises.
+   */
+  readonly onSaveLoggedPrescription: (patch: { mainWorkout?: string | null; accessory?: string | null; notes?: string | null }) => void;
+  readonly onParseLoggedFreeText: () => void;
+  readonly isParsingLogged: boolean;
   /**
    * Whether the in-dialog coach chat is visible. When true the
    * sidebar swaps from CoachTake + History to the chat surface.
@@ -374,7 +379,6 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     workoutId,
     exerciseSets,
     isPlanned,
-    isHydrating,
     isLoading,
     weightUnit,
     history,
@@ -385,6 +389,9 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     onDeleteSet,
     loggedSaveState,
     onSaveNote,
+    onSaveLoggedPrescription,
+    onParseLoggedFreeText,
+    isParsingLogged,
     chatOpen,
     onOpenChat,
     onCloseChat,
@@ -413,6 +420,64 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     displayNoteUpdatedAt != null &&
     planSets.lastSavedAt > displayNoteUpdatedAt.getTime();
 
+  // Auto-regenerate coach take on dialog close when exercises were edited
+  // during this session. Fire-and-forget — the cooldown + aiBudgetCheck on
+  // the server make repeat calls cheap and safe. We mirror the relevant
+  // state into a ref inside an effect (not during render, per react-hooks/
+  // refs) and the deps-empty cleanup reads it once on unmount.
+  const autoRegenRef = useRef<{ trigger: () => void; shouldFire: () => boolean }>({
+    trigger: () => {},
+    shouldFire: () => false,
+  });
+  const shouldFireAutoRegen =
+    isPlanned &&
+    planDayId != null &&
+    planSets.lastSavedAt != null &&
+    (displayNoteUpdatedAt == null || planSets.lastSavedAt > displayNoteUpdatedAt.getTime());
+  useEffect(() => {
+    autoRegenRef.current = {
+      trigger: () => planCoachNote.regenerate.mutate(),
+      shouldFire: () => shouldFireAutoRegen,
+    };
+  }, [planCoachNote.regenerate, shouldFireAutoRegen]);
+  useEffect(() => {
+    return () => {
+      if (autoRegenRef.current.shouldFire()) {
+        autoRegenRef.current.trigger();
+      }
+    };
+  }, []);
+
+  // Route free-text edits to the right mutation based on which branch is open.
+  const onSavePrescriptionField = (field: "mainWorkout" | "accessory" | "notes", value: string) => {
+    const normalized = value.trim().length === 0 ? null : value;
+    if (isPlanned && planDayId) {
+      planSets.updatePrescription.mutate({ [field]: normalized });
+    } else if (!isPlanned && workoutId) {
+      onSaveLoggedPrescription({ [field]: normalized });
+    }
+  };
+  const parseReady =
+    (isPlanned && planDayId != null) || (!isPlanned && workoutId != null);
+  const isParsing = isPlanned ? planSets.reparseFreeText.isPending : isParsingLogged;
+
+  // Confirm before Parse replaces existing structured rows. If there are no
+  // sets yet, fire straight away. Dialog state is hoisted here so the Parse
+  // button in the collapsible just triggers the ask, not the mutation.
+  const [confirmingParse, setConfirmingParse] = useState(false);
+  const triggerParse = () => {
+    if (isPlanned) planSets.reparseFreeText.mutate();
+    else onParseLoggedFreeText();
+  };
+  const onParseClicked = () => {
+    const currentSets = isPlanned ? planSets.exerciseSets : exerciseSets;
+    if (currentSets.length === 0) {
+      triggerParse();
+      return;
+    }
+    setConfirmingParse(true);
+  };
+
   const focusLabel = entry.focus?.trim() || "this workout";
   const chatSeed = `Can you walk me through your take on my ${focusLabel} workout?`;
   // Widen the right column when the chat surface is active so the
@@ -437,7 +502,6 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
             <LoggedExerciseSection
               workoutId={workoutId}
               exerciseSets={exerciseSets}
-              isHydrating={isHydrating}
               weightUnit={weightUnit}
               onUpdateSet={onUpdateSet}
               onAddSet={onAddSet}
@@ -451,7 +515,32 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
             accessory={entry.accessory}
             notes={entry.notes}
             defaultOpen={isPlanned}
+            onSaveField={onSavePrescriptionField}
+            onParse={parseReady ? onParseClicked : undefined}
+            isParsing={isParsing}
           />
+          <AlertDialog open={confirmingParse} onOpenChange={setConfirmingParse}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Replace existing exercises?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Parsing the coach's text will replace the current structured exercises for this workout. Any manual edits you've made to the rows will be lost.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => {
+                    setConfirmingParse(false);
+                    triggerParse();
+                  }}
+                  data-testid="coach-prescription-parse-confirm"
+                >
+                  Replace
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
 
         <aside className="flex flex-col gap-3">
@@ -467,9 +556,7 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
                 rationale={displayRationale}
                 onAskCoach={onOpenChat}
                 isStale={isCoachNoteStale}
-                onRefresh={isPlanned && planDayId ? () => planCoachNote.regenerate.mutate() : undefined}
                 isRefreshing={planCoachNote.isRegenerating}
-                isCoolingDown={planCoachNote.isCoolingDown}
               />
               {!isPlanned && <HistoryPanel stats={history} isLoading={isLoading} />}
             </>
@@ -493,7 +580,6 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
 interface LoggedExerciseSectionProps {
   readonly workoutId: string | null;
   readonly exerciseSets: ExerciseSet[];
-  readonly isHydrating: boolean;
   readonly weightUnit: "kg" | "lb";
   readonly onUpdateSet: (setId: string, data: import("@/lib/api").PatchExerciseSetPayload) => void;
   readonly onAddSet: (data: import("@/lib/api").AddExerciseSetPayload) => void;
@@ -504,7 +590,6 @@ interface LoggedExerciseSectionProps {
 function LoggedExerciseSection({
   workoutId,
   exerciseSets,
-  isHydrating,
   weightUnit,
   onUpdateSet,
   onAddSet,
@@ -512,136 +597,17 @@ function LoggedExerciseSection({
   saveState,
 }: Readonly<LoggedExerciseSectionProps>) {
   if (!workoutId) return null;
-  const showHydratingBanner = isHydrating && exerciseSets.length === 0;
   return (
-    <>
-      {showHydratingBanner && (
-        <div
-          className="flex items-center gap-2 rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground"
-          role="status"
-          aria-live="polite"
-          data-testid="workout-detail-hydrating"
-        >
-          <Loader2 className="size-3.5 animate-spin" aria-hidden />
-          Parsing coach's prescription…
-        </div>
-      )}
-      <ExerciseTable
-        workoutId={workoutId}
-        exerciseSets={exerciseSets}
-        weightUnit={weightUnit}
-        onUpdateSet={onUpdateSet}
-        onAddSet={onAddSet}
-        onDeleteSet={onDeleteSet}
-        saveState={saveState}
-      />
-    </>
+    <ExerciseTable
+      workoutId={workoutId}
+      exerciseSets={exerciseSets}
+      weightUnit={weightUnit}
+      onUpdateSet={onUpdateSet}
+      onAddSet={onAddSet}
+      onDeleteSet={onDeleteSet}
+      saveState={saveState}
+    />
   );
-}
-
-interface HydrationTrigger {
-  isPending: boolean;
-  mutate: (
-    variables?: void,
-    options?: { onSettled?: () => void },
-  ) => void;
-}
-
-interface HydrateParams {
-  workoutId: string | null;
-  workout: { planDayId: string | null; exerciseSets?: unknown[] } | undefined;
-  isLoading: boolean;
-  hasFreeText: boolean;
-  seedFromPlan: HydrationTrigger;
-  reparseFreeText: HydrationTrigger;
-}
-
-/**
- * Two-step hydration for workouts that open with no structured sets:
- *   1. If the workout is linked to a plan day, call /seed-from-plan. On
- *      a plan generated after #834 shipped it copies the prescribed rows;
- *      on a legacy plan day it's a no-op.
- *   2. Once that settles and the workout still has no sets AND the
- *      free-text prescription has content, call /reparse so Gemini
- *      parses `mainWorkout + accessory` into structured rows.
- *   3. If there's no plan day link, skip step 1 and go straight to step 2.
- * Each attempt fires at most once per workoutId (refs) so a 5xx or a
- * zero-parse doesn't loop across re-renders.
- *
- * Extracted into its own hook so WorkoutDetailDialogV2 stays below
- * Sonar's cognitive-complexity ceiling; the component now just composes
- * data + callbacks and this hook owns the control flow.
- */
-function useHydrateWorkoutDetail({
-  workoutId,
-  workout,
-  isLoading,
-  hasFreeText,
-  seedFromPlan,
-  reparseFreeText,
-}: HydrateParams): void {
-  const seedAttemptedRef = useRef<string | null>(null);
-  const reparseAttemptedRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (!workoutId || isLoading || !workout) return;
-    const hasSets = (workout.exerciseSets?.length ?? 0) > 0;
-    if (hasSets) return;
-
-    if (workout.planDayId) {
-      runSeedThenReparse({
-        workoutId,
-        hasFreeText,
-        seedFromPlan,
-        reparseFreeText,
-        seedAttemptedRef,
-        reparseAttemptedRef,
-      });
-      return;
-    }
-    runReparseOnly({
-      workoutId,
-      hasFreeText,
-      reparseFreeText,
-      reparseAttemptedRef,
-    });
-  }, [workoutId, workout, isLoading, hasFreeText, seedFromPlan, reparseFreeText]);
-}
-
-function runSeedThenReparse(args: {
-  workoutId: string;
-  hasFreeText: boolean;
-  seedFromPlan: HydrationTrigger;
-  reparseFreeText: HydrationTrigger;
-  seedAttemptedRef: React.MutableRefObject<string | null>;
-  reparseAttemptedRef: React.MutableRefObject<string | null>;
-}) {
-  const { workoutId, hasFreeText, seedFromPlan, reparseFreeText, seedAttemptedRef, reparseAttemptedRef } = args;
-  if (seedAttemptedRef.current === workoutId || seedFromPlan.isPending) return;
-  seedAttemptedRef.current = workoutId;
-  seedFromPlan.mutate(undefined, {
-    // Chain reparse only AFTER the seed call finishes, whether it
-    // succeeded or not, to avoid two in-flight Gemini calls at once.
-    onSettled: () => {
-      if (!hasFreeText) return;
-      if (reparseAttemptedRef.current === workoutId) return;
-      reparseAttemptedRef.current = workoutId;
-      reparseFreeText.mutate();
-    },
-  });
-}
-
-function runReparseOnly(args: {
-  workoutId: string;
-  hasFreeText: boolean;
-  reparseFreeText: HydrationTrigger;
-  reparseAttemptedRef: React.MutableRefObject<string | null>;
-}) {
-  const { workoutId, hasFreeText, reparseFreeText, reparseAttemptedRef } = args;
-  if (!hasFreeText) return;
-  if (reparseAttemptedRef.current === workoutId || reparseFreeText.isPending) return;
-  reparseAttemptedRef.current = workoutId;
-  reparseFreeText.mutate();
 }
 
 interface PlannedCallToActionProps {
@@ -715,10 +681,6 @@ function PlannedCallToAction({ entry, onMarkComplete, isMarkingComplete, weightU
       </div>
     </div>
   );
-}
-
-function hasMeaningfulText(v: string | null | undefined): boolean {
-  return !!v && v.trim().length > 0;
 }
 
 interface BuildDialogHandlersArgs {

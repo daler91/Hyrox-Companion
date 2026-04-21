@@ -180,6 +180,38 @@ export function useWorkoutDetail(workoutId: string | null) {
     errorToast: "Couldn't save that note",
   });
 
+  // Generic PATCH for the free-text fields on a workout log. `mainWorkout`
+  // is non-null on the schema (an empty string means "no prescription"),
+  // while accessory/notes are nullable. We normalise the caller's patch so
+  // mainWorkout-null collapses to "" before hitting the API.
+  const updatePrescription = useApiMutation({
+    mutationFn: (patch: { mainWorkout?: string | null; accessory?: string | null; notes?: string | null }) => {
+      const normalized: { mainWorkout?: string; accessory?: string | null; notes?: string | null } = {};
+      if (patch.mainWorkout !== undefined) normalized.mainWorkout = patch.mainWorkout ?? "";
+      if (patch.accessory !== undefined) normalized.accessory = patch.accessory;
+      if (patch.notes !== undefined) normalized.notes = patch.notes;
+      return api.workouts.update(workoutId!, normalized);
+    },
+    onMutate: async (patch) => {
+      if (!workoutId) return undefined;
+      await queryClient.cancelQueries({ queryKey: QUERY_KEYS.workout(workoutId) });
+      const prev = queryClient.getQueryData<WorkoutWithSets>(QUERY_KEYS.workout(workoutId));
+      const optimistic: Partial<WorkoutWithSets> = {};
+      if (patch.mainWorkout !== undefined) optimistic.mainWorkout = patch.mainWorkout ?? "";
+      if (patch.accessory !== undefined) optimistic.accessory = patch.accessory;
+      if (patch.notes !== undefined) optimistic.notes = patch.notes;
+      patchCachedWorkout(optimistic);
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      const prev = (ctx as { prev?: WorkoutWithSets } | undefined)?.prev;
+      if (workoutId && prev) {
+        queryClient.setQueryData(QUERY_KEYS.workout(workoutId), prev);
+      }
+    },
+    errorToast: "Couldn't save prescription",
+  });
+
   // Inline RPE edit from the stats row. Non-optimistic — rollback
   // snapshots from concurrent edits can stomp newer successful
   // values, and invalidating the whole workout query on success
@@ -243,6 +275,7 @@ export function useWorkoutDetail(workoutId: string | null) {
     seedFromPlan,
     reparseFreeText,
     updateNote,
+    updatePrescription,
     updateRpe,
   };
 }
