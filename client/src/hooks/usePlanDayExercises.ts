@@ -61,10 +61,6 @@ export function usePlanDayExercises(planDayId: string | null) {
   // satisfies react-hooks/set-state-in-effect.
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const [ownerId, setOwnerId] = useState(planDayId);
-  if (planDayId !== ownerId) {
-    setOwnerId(planDayId);
-    setLastSavedAt(null);
-  }
   const markSaved = () => setLastSavedAt(Date.now());
 
   const updateSet = useApiMutation({
@@ -94,10 +90,20 @@ export function usePlanDayExercises(planDayId: string | null) {
   // Per-set debounce coordinator. Cells call `patchSetDebounced`; Save
   // calls `flushPendingSetPatches` before firing the coach-note
   // regenerate so the server snapshots the just-edited prescription.
-  const { patchSetDebounced, flushPendingSetPatches } = useDebouncedSetPatches<PatchExerciseSetPayload>(
+  const { patchSetDebounced, flushPendingSetPatches, cancelPending } = useDebouncedSetPatches<PatchExerciseSetPayload>(
     updateSet.mutate,
     CELL_SAVE_DEBOUNCE_MS,
   );
+
+  // Sentinel runs after the debounce coordinator so it can cancel
+  // patches queued against the prior plan day — `updateSet.mutate`
+  // already closes over the new `planDayId`, so firing them would
+  // PATCH the wrong owner.
+  if (planDayId !== ownerId) {
+    setOwnerId(planDayId);
+    setLastSavedAt(null);
+    cancelPending();
+  }
 
   const addSet = useApiMutation({
     mutationKey: planDayId ? planDaySetsMutationKey(planDayId) : undefined,

@@ -171,6 +171,12 @@ export function WorkoutDetailDialogV2({
   // SaveWorkoutButton can flash "Saved ✓" once per click.
   const [saveClickedAt, setSaveClickedAt] = useState<number | null>(null);
   const [saveInFlight, setSaveInFlight] = useState(false);
+  // Frozen at click time so the drain watcher regenerates the entry
+  // the user actually clicked Save on — even if they navigate to a
+  // different entry while the per-set PATCHes are still draining.
+  // null means "no plan day — ad-hoc logged workout" so we skip the
+  // regenerate altogether.
+  const [saveTargetPlanDayId, setSaveTargetPlanDayId] = useState<string | null>(null);
   // Guards against the drain watcher re-firing regenerate on every
   // isSaving toggle — one regenerate per Save click. Resets when
   // saveInFlight returns to false at the end of the cycle.
@@ -190,16 +196,29 @@ export function WorkoutDetailDialogV2({
     if (planSets.isSaving || isSavingLoggedSets) return;
     if (saveRegenerateFiredRef.current) return;
     saveRegenerateFiredRef.current = true;
-    const finalize = () => {
+    // "Saved ✓" is the success signal — only flash it when the
+    // regenerate actually succeeded (or when the entry had no plan
+    // day and the save is trivially done). Error paths still clear
+    // saveInFlight + saveTargetPlanDayId so the button unlocks; the
+    // `errorToast` on the hook's mutation surfaces the failure.
+    const finalizeSuccess = () => {
       setSaveInFlight(false);
       setSaveClickedAt(Date.now());
+      setSaveTargetPlanDayId(null);
     };
-    if (entry?.planDayId) {
-      regenerateMutate(undefined, { onSettled: finalize });
+    const finalizeFailure = () => {
+      setSaveInFlight(false);
+      setSaveTargetPlanDayId(null);
+    };
+    if (saveTargetPlanDayId) {
+      regenerateMutate(saveTargetPlanDayId, {
+        onSuccess: finalizeSuccess,
+        onError: finalizeFailure,
+      });
     } else {
-      finalize();
+      finalizeSuccess();
     }
-  }, [saveInFlight, planSets.isSaving, isSavingLoggedSets, entry?.planDayId, regenerateMutate]);
+  }, [saveInFlight, planSets.isSaving, isSavingLoggedSets, saveTargetPlanDayId, regenerateMutate]);
 
   // Tracks the most recent focus value submitted from the header. The
   // timeline query owns `entry.focus` and is only invalidated on save
@@ -372,9 +391,10 @@ export function WorkoutDetailDialogV2({
             showCoachNoteHint={entry.planDayId != null}
             disabled={planCoachNote.isCoolingDown}
             onClick={() => {
-              // Blur so EditableFocus's onBlur-flush commits any pending
-              // title edit. Cell debounces live in the hook below, not in
-              // the input — so they don't need the blur to flush.
+              // Blur so EditableFocus + CoachPrescriptionCollapsible's
+              // onBlur-flushes commit pending edits. Cell debounces live
+              // in the hook below, so per-set PATCHes are driven by the
+              // explicit flush calls rather than the blur.
               const active = document.activeElement;
               if (active instanceof HTMLElement) active.blur();
               // Commit any pending per-set PATCHes synchronously before
@@ -383,6 +403,10 @@ export function WorkoutDetailDialogV2({
               // `planSets.flushPendingSetPatches` no-ops for ad-hoc workouts.
               planSets.flushPendingSetPatches();
               flushLoggedSetPatches();
+              // Freeze the target plan day BEFORE setSaveInFlight so
+              // the drain watcher reads a stable id even if the user
+              // navigates to a different entry while mutations drain.
+              setSaveTargetPlanDayId(entry.planDayId ?? null);
               setSaveInFlight(true);
             }}
           />

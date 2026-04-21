@@ -55,6 +55,19 @@ export function useDebouncedSetPatches<TPatch extends object>(
     for (const setId of ids) fireRef.current(setId);
   };
 
+  // Drop every pending timer without firing. Callers use this when the
+  // owning entity changes (e.g. the dialog switches from workout A to
+  // workout B) — by that time `mutate` already closes over the new
+  // owner, so firing the queued patches would PATCH the wrong owner.
+  // The edits that didn't make the debounce window are lost, which is
+  // the same outcome as navigating away before typing finished.
+  const cancelPending = () => {
+    for (const entry of pendingRef.current.values()) {
+      clearTimeout(entry.timer);
+    }
+    pendingRef.current.clear();
+  };
+
   useEffect(() => {
     const pending = pendingRef.current;
     const fire = fireRef;
@@ -64,5 +77,5 @@ export function useDebouncedSetPatches<TPatch extends object>(
     };
   }, []);
 
-  return { patchSetDebounced, flushPendingSetPatches };
+  return { patchSetDebounced, flushPendingSetPatches, cancelPending };
 }

@@ -73,10 +73,6 @@ export function useWorkoutDetail(workoutId: string | null) {
   // setState-in-effect satisfies react-hooks/set-state-in-effect.
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const [ownerId, setOwnerId] = useState(workoutId);
-  if (workoutId !== ownerId) {
-    setOwnerId(workoutId);
-    setLastSavedAt(null);
-  }
   const markSaved = () => setLastSavedAt(Date.now());
 
   const updateSet = useApiMutation({
@@ -109,10 +105,20 @@ export function useWorkoutDetail(workoutId: string | null) {
   // Per-set debounce coordinator. Cells call `patchSetDebounced`; the
   // Save button flushes pending patches synchronously via
   // `flushPendingSetPatches` before any downstream drain-waiters settle.
-  const { patchSetDebounced, flushPendingSetPatches } = useDebouncedSetPatches<PatchExerciseSetPayload>(
+  const { patchSetDebounced, flushPendingSetPatches, cancelPending } = useDebouncedSetPatches<PatchExerciseSetPayload>(
     updateSet.mutate,
     CELL_SAVE_DEBOUNCE_MS,
   );
+
+  // Sentinel runs after the debounce coordinator so it can cancel
+  // patches queued against the prior workout — `updateSet.mutate`
+  // already closes over the new `workoutId`, so firing them would
+  // PATCH the wrong owner.
+  if (workoutId !== ownerId) {
+    setOwnerId(workoutId);
+    setLastSavedAt(null);
+    cancelPending();
+  }
 
   const addSet = useApiMutation({
     mutationKey: workoutId ? workoutSetsMutationKey(workoutId) : undefined,
