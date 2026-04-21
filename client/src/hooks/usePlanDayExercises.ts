@@ -47,8 +47,17 @@ export function usePlanDayExercises(planDayId: string | null) {
   // after each debounced PATCH lands, so the athlete has visible proof the
   // edit persisted — otherwise the only feedback today is an optimistic
   // cache update that looks identical whether the server saw the change or
-  // not.
+  // not. `ownerId` is a render-time sentinel that resets the timestamp
+  // when the owning plan day changes, so signals from a prior entry (used
+  // by CoachTakePanel staleness + auto-regenerate-on-close) don't bleed
+  // into the next one. Using this pattern instead of a setState-in-effect
+  // satisfies react-hooks/set-state-in-effect.
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
+  const [ownerId, setOwnerId] = useState(planDayId);
+  if (planDayId !== ownerId) {
+    setOwnerId(planDayId);
+    setLastSavedAt(null);
+  }
   const markSaved = () => setLastSavedAt(Date.now());
 
   const updateSet = useApiMutation({
