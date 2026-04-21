@@ -34,6 +34,7 @@ vi.mock("@/lib/api", async () => {
         addDayExercise: vi.fn(),
         updateDayExercise: vi.fn(),
         deleteDayExercise: vi.fn(),
+        regenerateCoachNote: vi.fn(),
       },
     },
   };
@@ -48,6 +49,10 @@ const mockWorkouts = api.workouts as unknown as {
   deleteSet: ReturnType<typeof vi.fn>;
   seedFromPlan: ReturnType<typeof vi.fn>;
   reparse: ReturnType<typeof vi.fn>;
+};
+
+const mockPlans = api.plans as unknown as {
+  regenerateCoachNote: ReturnType<typeof vi.fn>;
 };
 
 function makeEntry(overrides: Partial<TimelineEntry> = {}): TimelineEntry {
@@ -499,5 +504,61 @@ describe("WorkoutDetailDialogV2", () => {
     // Planned entries don't have a workoutLog to save to — the stats
     // row isn't rendered at all, so the editable input is absent.
     expect(screen.queryByTestId("workout-stats-rpe-input")).not.toBeInTheDocument();
+  });
+
+  // ---- Save button ---------------------------------------------------
+
+  it("triggers a coach-take regenerate when Save is clicked on a plan-day entry", async () => {
+    mockWorkouts.get.mockResolvedValue(makeWorkout());
+    mockWorkouts.history.mockResolvedValue({
+      lastSameFocus: null,
+      prSetCount: 0,
+      blockAvgRpe: null,
+    });
+    mockPlans.regenerateCoachNote.mockResolvedValue({
+      planDayId: "plan-day-1",
+      aiRationale: "Updated take.",
+      aiNoteUpdatedAt: new Date().toISOString(),
+    });
+
+    renderDialog({
+      entry: makeEntry({
+        workoutLogId: null,
+        status: "planned",
+        planDayId: "plan-day-1",
+      }),
+      onMarkComplete: vi.fn(),
+    });
+
+    const saveBtn = await screen.findByTestId("workout-detail-save-button");
+    expect(saveBtn).toHaveAccessibleName(/save/i);
+
+    const user = userEvent.setup();
+    await user.click(saveBtn);
+
+    await waitFor(() => {
+      expect(mockPlans.regenerateCoachNote).toHaveBeenCalledWith("plan-day-1");
+    });
+  });
+
+  it("flashes a Saved confirmation without calling regenerate for ad-hoc logged workouts", async () => {
+    mockWorkouts.get.mockResolvedValue(
+      makeWorkout({ exerciseSets: [makeSet()] }),
+    );
+    mockWorkouts.history.mockResolvedValue({
+      lastSameFocus: null,
+      prSetCount: 0,
+      blockAvgRpe: null,
+    });
+
+    // Ad-hoc entry has no planDayId — regenerate has nothing to update.
+    renderDialog({ entry: makeEntry({ planDayId: null }) });
+
+    const saveBtn = await screen.findByTestId("workout-detail-save-button");
+    const user = userEvent.setup();
+    await user.click(saveBtn);
+
+    await screen.findByTestId("workout-detail-save-flash");
+    expect(mockPlans.regenerateCoachNote).not.toHaveBeenCalled();
   });
 });

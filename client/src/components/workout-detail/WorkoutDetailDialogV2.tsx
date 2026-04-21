@@ -25,6 +25,7 @@ import { CoachTakePanel } from "./CoachTakePanel";
 import { ExerciseTable } from "./ExerciseTable";
 import { HistoryPanel } from "./HistoryPanel";
 import { InDialogCoachChat } from "./InDialogCoachChat";
+import { SaveWorkoutButton } from "./SaveWorkoutButton";
 import { WorkoutDetailHeaderV2 } from "./WorkoutDetailHeaderV2";
 import { WorkoutStatsRow } from "./WorkoutStatsRow";
 
@@ -159,6 +160,16 @@ export function WorkoutDetailDialogV2({
   // way. When the entry isn't planned, planDayId is null and every
   // mutation no-ops, which is the same behaviour DialogBody had before.
   const planSets = usePlanDayExercises(entry?.planDayId ?? null);
+  // Hoisted for the same reason — the Save button lives in the dialog
+  // footer and needs `regenerate.mutate()` + `isRegenerating`. DialogBody
+  // receives the hook as a prop so CoachTakePanel wiring stays identical.
+  const planCoachNote = usePlanDayCoachNote(entry?.planDayId ?? null);
+
+  // Local stamp of the most recent successful Save click. Bumped after the
+  // blur-flush and (when applicable) coach-note regenerate resolve, so
+  // SaveWorkoutButton can flash "Saved ✓" once per click.
+  const [saveClickedAt, setSaveClickedAt] = useState<number | null>(null);
+  const [saveInFlight, setSaveInFlight] = useState(false);
 
   // Tracks the most recent focus value submitted from the header. The
   // timeline query owns `entry.focus` and is only invalidated on save
@@ -295,6 +306,7 @@ export function WorkoutDetailDialogV2({
           onDeleteSet={(setId) => deleteSet.mutate(setId)}
           loggedSaveState={loggedSaveState}
           planSets={planSets}
+          planCoachNote={planCoachNote}
           latestFocusRef={latestFocusRef}
           onSaveNote={(note) => workoutId && updateNote.mutate(note)}
           onSaveLoggedPrescription={(patch) => workoutId && updatePrescription.mutate(patch)}
@@ -322,6 +334,39 @@ export function WorkoutDetailDialogV2({
           }}
           onCloseChat={() => setChatOpen(false)}
         />
+
+        <div className="flex items-center justify-end gap-3 border-t border-border px-6 py-3">
+          <SaveWorkoutButton
+            isBusy={saveInFlight || planCoachNote.isRegenerating}
+            savedAt={saveClickedAt}
+            showCoachNoteHint={entry.planDayId != null}
+            disabled={planCoachNote.isCoolingDown}
+            onClick={() => {
+              // Flush any pending debounced edits first by blurring the
+              // focused input — our EditableFocus + cell inputs fire their
+              // save on blur, so this lets those PATCHes hit the network
+              // before we regenerate the coach take (which snapshots the
+              // plan day server-side).
+              const active = document.activeElement;
+              if (active instanceof HTMLElement) active.blur();
+              setSaveInFlight(true);
+              const finalize = () => {
+                setSaveInFlight(false);
+                setSaveClickedAt(Date.now());
+              };
+              if (entry.planDayId) {
+                planCoachNote.regenerate.mutate(undefined, {
+                  onSettled: finalize,
+                });
+              } else {
+                // Ad-hoc logged workout — no coach take to regenerate.
+                // Still flash "Saved ✓" so the click has visible
+                // confirmation that any in-flight debounces flushed.
+                finalize();
+              }
+            }}
+          />
+        </div>
       </DialogContent>
 
       {/* Explicit confirm step before firing onDelete — the v2 menu's ⋮ is
@@ -385,6 +430,14 @@ interface DialogBodyProps {
    */
   readonly planSets: ReturnType<typeof usePlanDayExercises>;
   /**
+   * Coach-note regenerate hook hoisted up to the dialog so the Save
+   * button in the footer and CoachTakePanel in the sidebar share one
+   * instance. Passing it down here keeps CoachTakePanel's wiring
+   * identical — it still reads `localRationale`, `localUpdatedAt`, and
+   * `isRegenerating` from this bundle.
+   */
+  readonly planCoachNote: ReturnType<typeof usePlanDayCoachNote>;
+  /**
    * Ref tracking the most recent focus submitted from the header input,
    * read by PlannedCallToAction so Mark complete uses the just-typed
    * value instead of the `entry.focus` prop, which lags the save.
@@ -441,6 +494,7 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     onDeleteSet,
     loggedSaveState,
     planSets,
+    planCoachNote,
     latestFocusRef,
     onSaveNote,
     onSaveLoggedPrescription,
@@ -451,12 +505,7 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     onCloseChat,
   } = props;
 
-  // Hoisted out of PlannedCallToAction so the same lastSavedAt / rationale
-  // refresh state can feed the CoachTakePanel on the right rail. planSets
-  // is passed in from the parent (shared with the header's focus save);
-  // planCoachNote stays local since only DialogBody uses it.
   const planDayId = entry.planDayId ?? null;
-  const planCoachNote = usePlanDayCoachNote(planDayId);
 
   // Prefer the locally-regenerated rationale when present so the UI updates
   // the moment the refresh mutation resolves — without waiting for the
@@ -473,34 +522,6 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     planSets.lastSavedAt != null &&
     displayNoteUpdatedAt != null &&
     planSets.lastSavedAt > displayNoteUpdatedAt.getTime();
-
-  // Auto-regenerate coach take on dialog close when exercises were edited
-  // during this session. Fire-and-forget — the cooldown + aiBudgetCheck on
-  // the server make repeat calls cheap and safe. We mirror the relevant
-  // state into a ref inside an effect (not during render, per react-hooks/
-  // refs) and the deps-empty cleanup reads it once on unmount.
-  const autoRegenRef = useRef<{ trigger: () => void; shouldFire: () => boolean }>({
-    trigger: () => {},
-    shouldFire: () => false,
-  });
-  const shouldFireAutoRegen =
-    isPlanned &&
-    planDayId != null &&
-    planSets.lastSavedAt != null &&
-    (displayNoteUpdatedAt == null || planSets.lastSavedAt > displayNoteUpdatedAt.getTime());
-  useEffect(() => {
-    autoRegenRef.current = {
-      trigger: () => planCoachNote.regenerate.mutate(),
-      shouldFire: () => shouldFireAutoRegen,
-    };
-  }, [planCoachNote.regenerate, shouldFireAutoRegen]);
-  useEffect(() => {
-    return () => {
-      if (autoRegenRef.current.shouldFire()) {
-        autoRegenRef.current.trigger();
-      }
-    };
-  }, []);
 
   // Route free-text edits to the right mutation based on which branch is open.
   const onSavePrescriptionField = (field: "mainWorkout" | "accessory" | "notes", value: string) => {
