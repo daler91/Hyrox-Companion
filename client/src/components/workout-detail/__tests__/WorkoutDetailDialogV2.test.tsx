@@ -152,7 +152,7 @@ describe("WorkoutDetailDialogV2", () => {
     renderDialog();
 
     expect(await screen.findByTestId("workout-detail-dialog-v2")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /upper body strength/i })).toBeInTheDocument();
+    expect(screen.getByTestId("workout-detail-focus-input")).toHaveValue("Upper Body Strength");
     expect(await screen.findByTestId("workout-stats-row")).toHaveTextContent("52");
     expect(await screen.findByTestId("exercise-table")).toBeInTheDocument();
     expect(screen.getByTestId("coach-take-panel")).toHaveTextContent(/softened 15%/i);

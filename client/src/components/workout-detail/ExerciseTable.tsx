@@ -1,14 +1,23 @@
-import type { ExerciseSet } from "@shared/schema";
-import { Check, ChevronDown, Loader2, MoreVertical, Plus, Trash2 } from "lucide-react";
+import { EXERCISE_DEFINITIONS, type ExerciseName, type ExerciseSet } from "@shared/schema";
+import { ChevronDown, MoreVertical, Plus, Repeat, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { type FieldKey, getFields } from "@/components/exercise-row/fieldMeta";
 import { InlineSetEditor } from "@/components/exercise-row/InlineSetEditor";
+import { ExerciseSelector } from "@/components/ExerciseSelector";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -17,6 +26,8 @@ import type { AddExerciseSetPayload, PatchExerciseSetPayload } from "@/lib/api";
 import { categoryColor } from "@/lib/categoryColors";
 import { getExerciseLabel, type GroupedExercise,groupExerciseSets } from "@/lib/exerciseUtils";
 import { cn } from "@/lib/utils";
+
+import { SaveFlashBadge, type SaveState, SaveStatePill } from "./SaveStatePill";
 
 const AGG_DEBOUNCE_MS = 350;
 // Debounce window for set-count changes. Longer than cell writes so a
@@ -32,17 +43,6 @@ const MAX_SETS = 50;
 // expands with the column.
 const GRID_TEMPLATE =
   "grid grid-cols-[1fr_60px_120px_120px_32px_32px] items-center gap-2 px-3 py-2";
-
-interface SaveState {
-  /** True while any set mutation is in flight for this owner (plan day / workout). */
-  readonly isSaving: boolean;
-  /**
-   * Epoch-ms of the most recent successful set mutation, or null if no save
-   * has landed since the hook mounted. Drives the "Saved ✓" badge that
-   * fades out after a short window.
-   */
-  readonly lastSavedAt: number | null;
-}
 
 interface ExerciseTableProps {
   readonly workoutId: string;
@@ -82,14 +82,49 @@ export function ExerciseTable({
 }: ExerciseTableProps) {
   const groups = useMemo(() => groupExerciseSets(exerciseSets), [exerciseSets]);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const [addPickerOpen, setAddPickerOpen] = useState(false);
 
-  const handleAddPlaceholder = () => {
+  // Track the timestamp of the most recent successful mutation per row so
+  // GroupRow can flash its own "Saved" badge — per-row feedback is the only
+  // way a user knows *which* cell just persisted when several are edited in
+  // quick succession. Keyed on the first set's id, matching `expandedKey`.
+  const [savedAtByRow, setSavedAtByRow] = useState<Record<string, number>>({});
+  const markRowSaved = useCallback((rowKey: string | undefined) => {
+    if (!rowKey) return;
+    setSavedAtByRow((prev) => ({ ...prev, [rowKey]: Date.now() }));
+  }, []);
+
+  const pickRowKeyForSet = useCallback(
+    (setId: string): string | undefined => {
+      for (const g of groups) {
+        const first = g.sets[0];
+        if (!first) continue;
+        if (g.sets.some((s) => s.id === setId)) return first.id;
+      }
+      return undefined;
+    },
+    [groups],
+  );
+
+  const handlePickFromCatalog = (name: ExerciseName) => {
+    const def = EXERCISE_DEFINITIONS[name];
+    onAddSet({
+      exerciseName: name,
+      category: def.category,
+      customLabel: null,
+      setNumber: 1,
+    });
+    setAddPickerOpen(false);
+  };
+
+  const handleAddCustomPlaceholder = () => {
     onAddSet({
       exerciseName: "custom",
       customLabel: "New exercise",
       category: "conditioning",
       setNumber: 1,
     });
+    setAddPickerOpen(false);
   };
 
   return (
@@ -110,7 +145,7 @@ export function ExerciseTable({
           variant="ghost"
           size="sm"
           className="h-7 gap-1 text-muted-foreground"
-          onClick={handleAddPlaceholder}
+          onClick={() => setAddPickerOpen(true)}
           data-testid="exercise-table-add"
         >
           <Plus className="size-3.5" aria-hidden />
@@ -119,7 +154,7 @@ export function ExerciseTable({
       </div>
 
       {groups.length === 0 ? (
-        <EmptyExerciseState />
+        <EmptyExerciseState onAdd={() => setAddPickerOpen(true)} />
       ) : (
         <div className="divide-y divide-border rounded-lg border border-border">
           <HeaderRow />
@@ -133,16 +168,76 @@ export function ExerciseTable({
                 group={group}
                 weightUnit={weightUnit}
                 isExpanded={isExpanded}
+                rowSavedAt={savedAtByRow[rowKey] ?? null}
                 onToggle={() => setExpandedKey((prev) => (prev === rowKey ? null : rowKey))}
-                onUpdateSet={onUpdateSet}
-                onAddSet={onAddSet}
-                onDeleteSet={onDeleteSet}
+                onUpdateSet={(setId, data) => {
+                  onUpdateSet(setId, data);
+                  markRowSaved(pickRowKeyForSet(setId) ?? rowKey);
+                }}
+                onAddSet={(data) => {
+                  onAddSet(data);
+                  markRowSaved(rowKey);
+                }}
+                onDeleteSet={(setId) => {
+                  onDeleteSet(setId);
+                  markRowSaved(pickRowKeyForSet(setId) ?? rowKey);
+                }}
               />
             );
           })}
         </div>
       )}
+
+      <AddExerciseDialog
+        open={addPickerOpen}
+        onOpenChange={setAddPickerOpen}
+        onPick={handlePickFromCatalog}
+        onAddCustom={handleAddCustomPlaceholder}
+      />
     </section>
+  );
+}
+
+function AddExerciseDialog({
+  open,
+  onOpenChange,
+  onPick,
+  onAddCustom,
+}: Readonly<{
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onPick: (name: ExerciseName) => void;
+  onAddCustom: () => void;
+}>) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg" data-testid="exercise-add-dialog">
+        <DialogHeader>
+          <DialogTitle>Add exercise</DialogTitle>
+          <DialogDescription>
+            Pick an exercise from the catalog, or add a custom one.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="max-h-[60vh] overflow-y-auto pr-1">
+          <ExerciseSelector selectedExercises={[]} onToggle={onPick} />
+        </div>
+        <div className="flex items-center justify-between border-t border-border pt-3">
+          <span className="text-xs text-muted-foreground">
+            Can't find it? Add a custom one.
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onAddCustom}
+            data-testid="exercise-add-custom"
+          >
+            <Plus className="mr-1 size-3.5" aria-hidden />
+            Add custom exercise
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -175,62 +270,21 @@ function HeaderRow() {
   );
 }
 
-function EmptyExerciseState() {
+function EmptyExerciseState({ onAdd }: Readonly<{ onAdd: () => void }>) {
   return (
-    <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
-      No exercises yet. Tap <span className="font-medium">+ Add</span> to log one.
-    </div>
-  );
-}
-
-// Visible how-long-saved window for the "Saved ✓" badge. Long enough that an
-// athlete glancing at the table after a quick edit will still see
-// confirmation; short enough that the badge doesn't linger once attention
-// moves on. Also the floor for the setInterval that recomputes `isFresh` —
-// the badge drops exactly once per edit instead of ticking every render.
-const SAVE_FLASH_MS = 1500;
-
-function SaveStatePill({ state }: Readonly<{ state: SaveState }>) {
-  if (state.isSaving) {
-    return (
-      <span
-        className="inline-flex items-center gap-1 text-xs text-muted-foreground"
-        aria-live="polite"
-        role="status"
-        data-testid="exercise-table-save-state"
-        data-state="saving"
+    <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+      <span>No exercises yet.</span>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={onAdd}
+        data-testid="exercise-table-empty-add"
       >
-        <Loader2 className="size-3 animate-spin" aria-hidden />
-        Saving…
-      </span>
-    );
-  }
-  if (state.lastSavedAt == null) return null;
-  // The child is keyed on `lastSavedAt` so each new save remounts it with a
-  // fresh `visible=true`. Its timer then flips visibility to false, which is
-  // a timer-callback setState (legal) rather than a synchronous setState
-  // inside an effect body (flagged by react-hooks/set-state-in-effect).
-  return <SaveFlashBadge key={state.lastSavedAt} />;
-}
-
-function SaveFlashBadge() {
-  const [visible, setVisible] = useState(true);
-  useEffect(() => {
-    const id = setTimeout(() => setVisible(false), SAVE_FLASH_MS);
-    return () => clearTimeout(id);
-  }, []);
-  if (!visible) return null;
-  return (
-    <span
-      className="inline-flex items-center gap-1 text-xs text-green-700 dark:text-green-400"
-      aria-live="polite"
-      role="status"
-      data-testid="exercise-table-save-state"
-      data-state="saved"
-    >
-      <Check className="size-3" aria-hidden />
-      Saved
-    </span>
+        <Plus className="mr-1 size-3.5" aria-hidden />
+        Add exercise
+      </Button>
+    </div>
   );
 }
 
@@ -238,6 +292,8 @@ interface GroupRowProps {
   readonly group: GroupedExercise;
   readonly weightUnit: "kg" | "lb";
   readonly isExpanded: boolean;
+  /** Epoch-ms of the latest successful mutation targeting this row, or null. */
+  readonly rowSavedAt: number | null;
   readonly onToggle: () => void;
   readonly onUpdateSet: (setId: string, data: PatchExerciseSetPayload) => void;
   readonly onAddSet: (data: AddExerciseSetPayload) => void;
@@ -248,6 +304,7 @@ function GroupRow({
   group,
   weightUnit,
   isExpanded,
+  rowSavedAt,
   onToggle,
   onUpdateSet,
   onAddSet,
@@ -256,6 +313,7 @@ function GroupRow({
   const label = getExerciseLabel(group.exerciseName, group.customLabel);
   const color = categoryColor(group.category);
   const lowConfidence = typeof group.confidence === "number" && group.confidence < 60;
+  const [changeExerciseOpen, setChangeExerciseOpen] = useState(false);
   const uniformity = useMemo(() => computeUniformity(group.sets), [group.sets]);
   const setCount = group.sets.length;
 
@@ -338,10 +396,30 @@ function GroupRow({
     for (const s of group.sets) onDeleteSet(s.id);
   };
 
+  const handlePickExercise = (name: ExerciseName) => {
+    const def = EXERCISE_DEFINITIONS[name];
+    // Fan-out the swap across every set in the group so they stay grouped.
+    // `customLabel: null` clears any override from a prior rename so the new
+    // exercise's canonical label shows.
+    for (const s of group.sets) {
+      onUpdateSet(s.id, {
+        exerciseName: name,
+        category: def.category,
+        customLabel: null,
+      });
+    }
+    setChangeExerciseOpen(false);
+  };
+
   return (
     <div className="flex flex-col" data-testid="exercise-row" data-row-key={group.sets[0]?.id}>
       <div className={cn(GRID_TEMPLATE, "text-sm")}>
-        <ExerciseLabel label={label} color={color} lowConfidence={lowConfidence} />
+        <ExerciseLabel
+          label={label}
+          color={color}
+          lowConfidence={lowConfidence}
+          rowSavedAt={rowSavedAt}
+        />
 
         <AggregateCell
           value={setCount}
@@ -407,6 +485,13 @@ function GroupRow({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              onSelect={() => setChangeExerciseOpen(true)}
+              data-testid="exercise-row-change"
+            >
+              <Repeat className="mr-2 size-4" aria-hidden /> Change exercise
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={handleDeleteRow} className="text-destructive">
               <Trash2 className="mr-2 size-4" aria-hidden /> Delete
             </DropdownMenuItem>
@@ -428,6 +513,21 @@ function GroupRow({
           />
         </div>
       )}
+
+      <Dialog open={changeExerciseOpen} onOpenChange={setChangeExerciseOpen}>
+        <DialogContent className="max-w-lg" data-testid="exercise-change-dialog">
+          <DialogHeader>
+            <DialogTitle>Change exercise</DialogTitle>
+            <DialogDescription>
+              Replace {label} with another exercise. Your reps, weight, and other set
+              values stay the same.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-y-auto pr-1">
+            <ExerciseSelector selectedExercises={[]} onToggle={handlePickExercise} />
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -436,7 +536,8 @@ function ExerciseLabel({
   label,
   color,
   lowConfidence,
-}: Readonly<{ label: string; color: string; lowConfidence: boolean }>) {
+  rowSavedAt,
+}: Readonly<{ label: string; color: string; lowConfidence: boolean; rowSavedAt: number | null }>) {
   return (
     <div className="flex min-w-0 items-center gap-2">
       <span
@@ -450,6 +551,9 @@ function ExerciseLabel({
       >
         {label}
       </span>
+      {rowSavedAt != null && (
+        <SaveFlashBadge key={rowSavedAt} testId="exercise-row-saved" />
+      )}
     </div>
   );
 }

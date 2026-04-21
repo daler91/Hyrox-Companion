@@ -24,8 +24,12 @@ export const categoryLabels: Record<string, string> = {
 };
 
 export function getExerciseLabel(name: string, customLabel?: string | null): string {
+  // `customLabel` acts as a display override for any exercise — a user-renamed
+  // "Assault Bike" → "Echo Bike" shows "Echo Bike" in the UI while the
+  // underlying `exerciseName` + `category` stay intact so PR/analytics
+  // aggregation continues to work against the canonical name.
+  if (customLabel && customLabel.trim().length > 0) return customLabel;
   if (name.startsWith("custom:")) return name.slice(7);
-  if (name === "custom" && customLabel) return customLabel;
   const def = EXERCISE_DEFINITIONS[name as ExerciseName];
   return def?.label || name;
 }

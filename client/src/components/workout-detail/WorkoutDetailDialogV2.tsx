@@ -148,9 +148,17 @@ export function WorkoutDetailDialogV2({
     reparseFreeText,
     updateNote,
     updatePrescription,
+    updateFocus,
     updateRpe,
   } = useWorkoutDetail(workoutId);
   const loggedSaveState = { isSaving: isSavingLoggedSets, lastSavedAt: loggedLastSavedAt };
+
+  // Hoisted to top-level so both the header's onChangeFocus handler and the
+  // DialogBody's PlannedCallToAction can share the same hook instance —
+  // React Query dedups by queryKey so this is just one subscription either
+  // way. When the entry isn't planned, planDayId is null and every
+  // mutation no-ops, which is the same behaviour DialogBody had before.
+  const planSets = usePlanDayExercises(entry?.planDayId ?? null);
 
   // Hydration (auto-seed + auto-reparse on first open) was removed: plans
   // generated after the structured-exercises refactor always have prescribed
@@ -231,6 +239,20 @@ export function WorkoutDetailDialogV2({
             onDelete={handlers.menuDelete}
             onChangeStatus={handlers.menuChangeStatus}
             onCombine={handlers.menuCombine}
+            onChangeFocus={
+              isPlanned
+                ? entry.planDayId
+                  ? (focus) => planSets.updatePrescription.mutate({ focus })
+                  : undefined
+                : workoutId
+                  ? (focus) => updateFocus.mutate(focus)
+                  : undefined
+            }
+            saveState={
+              isPlanned
+                ? { isSaving: planSets.isSaving, lastSavedAt: planSets.lastSavedAt }
+                : loggedSaveState
+            }
           />
           {showStatsRow && workout && (
             <WorkoutStatsRow
@@ -257,6 +279,7 @@ export function WorkoutDetailDialogV2({
           onAddSet={(data) => addSet.mutate(data)}
           onDeleteSet={(setId) => deleteSet.mutate(setId)}
           loggedSaveState={loggedSaveState}
+          planSets={planSets}
           onSaveNote={(note) => workoutId && updateNote.mutate(note)}
           onSaveLoggedPrescription={(patch) => workoutId && updatePrescription.mutate(patch)}
           onParseLoggedFreeText={() => workoutId && reparseFreeText.mutate()}
@@ -338,6 +361,13 @@ interface DialogBodyProps {
   readonly onDeleteSet: (setId: string) => void;
   /** Save-state signal passed to ExerciseTable on the logged-workout branch. */
   readonly loggedSaveState: { isSaving: boolean; lastSavedAt: number | null };
+  /**
+   * Plan-day mutation bundle hoisted from the top-level dialog so the
+   * header's onChangeFocus handler and the planned-entry CTA share the
+   * same hook instance. React Query dedupes by queryKey so passing it
+   * through doesn't create a second subscription.
+   */
+  readonly planSets: ReturnType<typeof usePlanDayExercises>;
   readonly onSaveNote: (note: string | null) => void;
   /**
    * Save handlers + Parse trigger for the logged-workout free-text editor.
@@ -388,6 +418,7 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     onAddSet,
     onDeleteSet,
     loggedSaveState,
+    planSets,
     onSaveNote,
     onSaveLoggedPrescription,
     onParseLoggedFreeText,
@@ -398,10 +429,10 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
   } = props;
 
   // Hoisted out of PlannedCallToAction so the same lastSavedAt / rationale
-  // refresh state can feed the CoachTakePanel on the right rail. Both hooks
-  // no-op when planDayId is null (logged-only ad-hoc workouts).
+  // refresh state can feed the CoachTakePanel on the right rail. planSets
+  // is passed in from the parent (shared with the header's focus save);
+  // planCoachNote stays local since only DialogBody uses it.
   const planDayId = entry.planDayId ?? null;
-  const planSets = usePlanDayExercises(planDayId);
   const planCoachNote = usePlanDayCoachNote(planDayId);
 
   // Prefer the locally-regenerated rationale when present so the UI updates

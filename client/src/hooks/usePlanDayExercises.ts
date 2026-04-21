@@ -119,15 +119,23 @@ export function usePlanDayExercises(planDayId: string | null) {
     errorToast: "Parse failed — try rewording and retry.",
   });
 
-  // Debounced PATCH of free-text fields (mainWorkout / accessory / notes) on
-  // the plan day. Intentionally not optimistic-cached — the timeline query
-  // owns these fields and we rely on invalidation to refresh `entry.*` in
-  // the dialog. A silent error toast would hide data loss, so we keep the
-  // explicit toast.
+  // Debounced PATCH of free-text fields (focus / mainWorkout / accessory /
+  // notes) on the plan day. Intentionally not optimistic-cached — the
+  // timeline query owns these fields and we rely on invalidation to refresh
+  // `entry.*` in the dialog. A silent error toast would hide data loss, so
+  // we keep the explicit toast.
+  //
+  // Tagged with planDaySetsMutationKey so the ExerciseTable's save pill (and
+  // the dialog header's pill) reflect in-flight title/prescription edits —
+  // otherwise the user would only see feedback for per-set cell writes.
   const updatePrescription = useApiMutation({
-    mutationFn: (patch: { mainWorkout?: string | null; accessory?: string | null; notes?: string | null }) =>
+    mutationKey: planDayId ? planDaySetsMutationKey(planDayId) : undefined,
+    mutationFn: (patch: { focus?: string; mainWorkout?: string | null; accessory?: string | null; notes?: string | null }) =>
       api.plans.updateDayWithoutPlan(planDayId!, patch),
     invalidateQueries: [QUERY_KEYS.timeline, QUERY_KEYS.plans],
+    onSuccess: () => {
+      markSaved();
+    },
     errorToast: "Couldn't save prescription",
   });
 
