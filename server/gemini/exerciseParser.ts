@@ -4,7 +4,7 @@ import { z } from "zod";
 import { AppError, ErrorCode } from "../errors";
 import { logger } from "../logger";
 import { PARSE_EXERCISES_PROMPT, VALID_CATEGORIES,VALID_EXERCISE_NAMES } from "../prompts";
-import { sanitizeHtml, sanitizeUserInput, validateAiOutput } from "../utils/sanitize";
+import { sanitizeUserInput, validateAiOutput } from "../utils/sanitize";
 import { GEMINI_MODEL, getAiClient, retryWithBackoff, trackUsageFromResponse } from "./client";
 
 // 🛡️ exerciseName must be non-empty. customLabel must accompany any "custom"
@@ -56,8 +56,12 @@ function synthesizeCustomLabel(sourceText: string): string {
     .join(" ");
 }
 
+// Exercise labels, category names, and customLabels are rendered as React
+// text in ExerciseTable / ExerciseRow. React already escapes text content,
+// so HTML-encoding here would leak `&#39;` into the UI. We still swap `&`
+// for "and" to keep free-text prescriptions readable ("A & B" → "A and B").
 function sanitizeLabel(v: string): string {
-  return sanitizeHtml(v.replaceAll("&", "and"));
+  return v.replaceAll("&", "and");
 }
 
 function resolveConfidence(raw: z.infer<typeof parsedExerciseSchema>, isKnown: boolean): number {

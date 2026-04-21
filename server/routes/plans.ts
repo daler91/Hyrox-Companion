@@ -7,6 +7,7 @@ import { logger } from "../logger";
 import { aiBudgetCheck } from "../middleware/aibudget";
 import { protectedMutationGuards } from "../routeGuards";
 import { asyncHandler, rateLimiter, validateBody } from "../routeUtils";
+import { regenerateCoachNoteForPlanDay } from "../services/coachService";
 import { generatePlan } from "../services/planGenerationService";
 import { createSamplePlan, importPlanFromCSV, updatePlanDayStatus,updatePlanDayWithCleanup } from "../services/planService";
 import { storage } from "../storage";
@@ -233,6 +234,33 @@ router.delete(
       return res.status(404).json({ error: PLAN_DAY_SET_NOT_FOUND, code: "NOT_FOUND" });
     }
     res.json({ success: true });
+  }),
+);
+
+// Manual coach-note refresh for a planned day. Triggered from the workout
+// detail dialog after an athlete edits the prescribed exercises so the
+// static `ai_rationale` doesn't go stale. Guarded by aiBudgetCheck because
+// it burns a Gemini call per invocation; the service itself enforces a
+// 30-second cooldown to prevent Refresh-mashing. Low per-IP/user rate
+// limit stacks on top of that.
+router.post(
+  "/api/v1/plans/days/:dayId/coach-note/regenerate",
+  ...protectedMutationGuards,
+  rateLimiter("coachNoteRegenerate", 10),
+  aiBudgetCheck,
+  asyncHandler(async (req: ExpressRequest<{ dayId: string }>, res: Response) => {
+    const userId = getUserId(req);
+    const result = await regenerateCoachNoteForPlanDay(req.params.dayId, userId);
+    if ("retryAfterMs" in result) {
+      const retryAfterSeconds = Math.max(1, Math.ceil(result.retryAfterMs / 1000));
+      res.setHeader("Retry-After", String(retryAfterSeconds));
+      return res.status(429).json({
+        error: "Coach note was just refreshed — try again in a moment.",
+        code: "COOLDOWN",
+        retryAfterMs: result.retryAfterMs,
+      });
+    }
+    res.json(result);
   }),
 );
 

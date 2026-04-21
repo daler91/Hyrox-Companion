@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { usePlanDayCoachNote } from "@/hooks/usePlanDayCoachNote";
 import { usePlanDayExercises } from "@/hooks/usePlanDayExercises";
 import { useWorkoutDetail } from "@/hooks/useWorkoutDetail";
 import { cn } from "@/lib/utils";
@@ -140,6 +141,8 @@ export function WorkoutDetailDialogV2({
     history,
     isLoading,
     isHydrating,
+    isSaving: isSavingLoggedSets,
+    lastSavedAt: loggedLastSavedAt,
     updateSet,
     addSet,
     deleteSet,
@@ -148,6 +151,7 @@ export function WorkoutDetailDialogV2({
     updateNote,
     updateRpe,
   } = useWorkoutDetail(workoutId);
+  const loggedSaveState = { isSaving: isSavingLoggedSets, lastSavedAt: loggedLastSavedAt };
 
   useHydrateWorkoutDetail({
     workoutId,
@@ -256,6 +260,7 @@ export function WorkoutDetailDialogV2({
           onUpdateSet={(setId, data) => updateSet.mutate({ setId, data })}
           onAddSet={(data) => addSet.mutate(data)}
           onDeleteSet={(setId) => deleteSet.mutate(setId)}
+          loggedSaveState={loggedSaveState}
           onSaveNote={(note) => workoutId && updateNote.mutate(note)}
           chatOpen={chatOpen}
           onOpenChat={() => {
@@ -333,6 +338,8 @@ interface DialogBodyProps {
   readonly onUpdateSet: (setId: string, data: import("@/lib/api").PatchExerciseSetPayload) => void;
   readonly onAddSet: (data: import("@/lib/api").AddExerciseSetPayload) => void;
   readonly onDeleteSet: (setId: string) => void;
+  /** Save-state signal passed to ExerciseTable on the logged-workout branch. */
+  readonly loggedSaveState: { isSaving: boolean; lastSavedAt: number | null };
   readonly onSaveNote: (note: string | null) => void;
   /**
    * Whether the in-dialog coach chat is visible. When true the
@@ -350,6 +357,16 @@ interface DialogBodyProps {
  * table + side panels, plus the athlete-note section for logged
  * workouts.
  */
+// TimelineEntry.aiNoteUpdatedAt is typed as `string | Date | null` because it
+// round-trips through JSON. Normalize to Date for the staleness comparison
+// below; invalid strings degrade to `null` (treated as "no note yet").
+function toDate(value: string | Date | null | undefined): Date | null {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 function DialogBody(props: Readonly<DialogBodyProps>) {
   const {
     entry,
@@ -366,11 +383,35 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     onUpdateSet,
     onAddSet,
     onDeleteSet,
+    loggedSaveState,
     onSaveNote,
     chatOpen,
     onOpenChat,
     onCloseChat,
   } = props;
+
+  // Hoisted out of PlannedCallToAction so the same lastSavedAt / rationale
+  // refresh state can feed the CoachTakePanel on the right rail. Both hooks
+  // no-op when planDayId is null (logged-only ad-hoc workouts).
+  const planDayId = entry.planDayId ?? null;
+  const planSets = usePlanDayExercises(planDayId);
+  const planCoachNote = usePlanDayCoachNote(planDayId);
+
+  // Prefer the locally-regenerated rationale when present so the UI updates
+  // the moment the refresh mutation resolves — without waiting for the
+  // timeline invalidation to round-trip through the server.
+  const displayRationale = planCoachNote.localRationale ?? entry.aiRationale;
+  const displayNoteUpdatedAt = planCoachNote.localUpdatedAt ?? toDate(entry.aiNoteUpdatedAt);
+
+  // Stale = at least one exercise edit landed after the rationale was last
+  // generated. Session-bounded (lastSavedAt resets on dialog close), which
+  // is acceptable — the point is immediate feedback in the session where
+  // the user makes edits.
+  const isCoachNoteStale =
+    isPlanned &&
+    planSets.lastSavedAt != null &&
+    displayNoteUpdatedAt != null &&
+    planSets.lastSavedAt > displayNoteUpdatedAt.getTime();
 
   const focusLabel = entry.focus?.trim() || "this workout";
   const chatSeed = `Can you walk me through your take on my ${focusLabel} workout?`;
@@ -390,6 +431,7 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
               onMarkComplete={onMarkComplete}
               isMarkingComplete={isMarkingComplete}
               weightUnit={weightUnit}
+              planSets={planSets}
             />
           ) : (
             <LoggedExerciseSection
@@ -400,6 +442,7 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
               onUpdateSet={onUpdateSet}
               onAddSet={onAddSet}
               onDeleteSet={onDeleteSet}
+              saveState={loggedSaveState}
             />
           )}
 
@@ -420,7 +463,14 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
             />
           ) : (
             <>
-              <CoachTakePanel rationale={entry.aiRationale} onAskCoach={onOpenChat} />
+              <CoachTakePanel
+                rationale={displayRationale}
+                onAskCoach={onOpenChat}
+                isStale={isCoachNoteStale}
+                onRefresh={isPlanned && planDayId ? () => planCoachNote.regenerate.mutate() : undefined}
+                isRefreshing={planCoachNote.isRegenerating}
+                isCoolingDown={planCoachNote.isCoolingDown}
+              />
               {!isPlanned && <HistoryPanel stats={history} isLoading={isLoading} />}
             </>
           )}
@@ -448,6 +498,7 @@ interface LoggedExerciseSectionProps {
   readonly onUpdateSet: (setId: string, data: import("@/lib/api").PatchExerciseSetPayload) => void;
   readonly onAddSet: (data: import("@/lib/api").AddExerciseSetPayload) => void;
   readonly onDeleteSet: (setId: string) => void;
+  readonly saveState: { isSaving: boolean; lastSavedAt: number | null };
 }
 
 function LoggedExerciseSection({
@@ -458,6 +509,7 @@ function LoggedExerciseSection({
   onUpdateSet,
   onAddSet,
   onDeleteSet,
+  saveState,
 }: Readonly<LoggedExerciseSectionProps>) {
   if (!workoutId) return null;
   const showHydratingBanner = isHydrating && exerciseSets.length === 0;
@@ -481,6 +533,7 @@ function LoggedExerciseSection({
         onUpdateSet={onUpdateSet}
         onAddSet={onAddSet}
         onDeleteSet={onDeleteSet}
+        saveState={saveState}
       />
     </>
   );
@@ -596,14 +649,16 @@ interface PlannedCallToActionProps {
   readonly onMarkComplete?: (entry: TimelineEntry) => void;
   readonly isMarkingComplete?: boolean;
   readonly weightUnit: "kg" | "lb";
+  readonly planSets: ReturnType<typeof usePlanDayExercises>;
 }
 
-function PlannedCallToAction({ entry, onMarkComplete, isMarkingComplete, weightUnit }: Readonly<PlannedCallToActionProps>) {
-  // Plan-day-backed exercise edits. Writes go to plan_day-owned
-  // exerciseSets; Mark complete's phase-6 server copy copies whatever
-  // this hook has persisted into the new workoutLog at log time.
+function PlannedCallToAction({ entry, onMarkComplete, isMarkingComplete, weightUnit, planSets }: Readonly<PlannedCallToActionProps>) {
+  // Plan-day-backed exercise edits. `planSets` is hoisted up to DialogBody
+  // so the same hook instance feeds both this CTA and the CoachTakePanel's
+  // staleness comparison. Writes go to plan_day-owned exerciseSets; Mark
+  // complete's phase-6 server copy copies whatever this hook has persisted
+  // into the new workoutLog at log time.
   const planDayId = entry.planDayId ?? null;
-  const planSets = usePlanDayExercises(planDayId);
 
   // Block Mark complete while any plan-day set mutation is still in
   // flight — otherwise createWorkoutInTx can race the mutation and
@@ -627,6 +682,7 @@ function PlannedCallToAction({ entry, onMarkComplete, isMarkingComplete, weightU
           onUpdateSet={(setId, data) => planSets.updateSet.mutate({ setId, data })}
           onAddSet={(data) => planSets.addSet.mutate(data)}
           onDeleteSet={(setId) => planSets.deleteSet.mutate(setId)}
+          saveState={{ isSaving: planSets.isSaving, lastSavedAt: planSets.lastSavedAt }}
         />
       ) : (
         <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">

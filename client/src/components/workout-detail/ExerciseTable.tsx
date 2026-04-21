@@ -1,5 +1,5 @@
 import type { ExerciseSet } from "@shared/schema";
-import { ChevronDown, MoreVertical, Plus, Trash2 } from "lucide-react";
+import { Check, ChevronDown, Loader2, MoreVertical, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { type FieldKey, getFields } from "@/components/exercise-row/fieldMeta";
@@ -33,6 +33,17 @@ const MAX_SETS = 50;
 const GRID_TEMPLATE =
   "grid grid-cols-[1fr_60px_120px_120px_32px_32px] items-center gap-2 px-3 py-2";
 
+interface SaveState {
+  /** True while any set mutation is in flight for this owner (plan day / workout). */
+  readonly isSaving: boolean;
+  /**
+   * Epoch-ms of the most recent successful set mutation, or null if no save
+   * has landed since the hook mounted. Drives the "Saved ✓" badge that
+   * fades out after a short window.
+   */
+  readonly lastSavedAt: number | null;
+}
+
 interface ExerciseTableProps {
   readonly workoutId: string;
   readonly exerciseSets: ExerciseSet[];
@@ -40,6 +51,11 @@ interface ExerciseTableProps {
   readonly onUpdateSet: (setId: string, data: PatchExerciseSetPayload) => void;
   readonly onAddSet: (data: AddExerciseSetPayload) => void;
   readonly onDeleteSet: (setId: string) => void;
+  /**
+   * Optional save-feedback signal shown next to the Exercises header.
+   * Omit for surfaces that don't persist edits (nothing renders).
+   */
+  readonly saveState?: SaveState;
 }
 
 /**
@@ -62,6 +78,7 @@ export function ExerciseTable({
   onUpdateSet,
   onAddSet,
   onDeleteSet,
+  saveState,
 }: ExerciseTableProps) {
   const groups = useMemo(() => groupExerciseSets(exerciseSets), [exerciseSets]);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
@@ -83,9 +100,12 @@ export function ExerciseTable({
       data-workout-id={workoutId}
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Exercises
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Exercises
+          </span>
+          {saveState && <SaveStatePill state={saveState} />}
+        </div>
         <Button
           variant="ghost"
           size="sm"
@@ -160,6 +180,57 @@ function EmptyExerciseState() {
     <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
       No exercises yet. Tap <span className="font-medium">+ Add</span> to log one.
     </div>
+  );
+}
+
+// Visible how-long-saved window for the "Saved ✓" badge. Long enough that an
+// athlete glancing at the table after a quick edit will still see
+// confirmation; short enough that the badge doesn't linger once attention
+// moves on. Also the floor for the setInterval that recomputes `isFresh` —
+// the badge drops exactly once per edit instead of ticking every render.
+const SAVE_FLASH_MS = 1500;
+
+function SaveStatePill({ state }: Readonly<{ state: SaveState }>) {
+  if (state.isSaving) {
+    return (
+      <span
+        className="inline-flex items-center gap-1 text-xs text-muted-foreground"
+        aria-live="polite"
+        role="status"
+        data-testid="exercise-table-save-state"
+        data-state="saving"
+      >
+        <Loader2 className="size-3 animate-spin" aria-hidden />
+        Saving…
+      </span>
+    );
+  }
+  if (state.lastSavedAt == null) return null;
+  // The child is keyed on `lastSavedAt` so each new save remounts it with a
+  // fresh `visible=true`. Its timer then flips visibility to false, which is
+  // a timer-callback setState (legal) rather than a synchronous setState
+  // inside an effect body (flagged by react-hooks/set-state-in-effect).
+  return <SaveFlashBadge key={state.lastSavedAt} />;
+}
+
+function SaveFlashBadge() {
+  const [visible, setVisible] = useState(true);
+  useEffect(() => {
+    const id = setTimeout(() => setVisible(false), SAVE_FLASH_MS);
+    return () => clearTimeout(id);
+  }, []);
+  if (!visible) return null;
+  return (
+    <span
+      className="inline-flex items-center gap-1 text-xs text-green-700 dark:text-green-400"
+      aria-live="polite"
+      role="status"
+      data-testid="exercise-table-save-state"
+      data-state="saved"
+    >
+      <Check className="size-3" aria-hidden />
+      Saved
+    </span>
   );
 }
 
@@ -473,7 +544,10 @@ function NumberCell({ value, ariaLabel, min = 0, max, suffix, onChange }: Number
           }
         }}
         aria-label={ariaLabel}
-        className="h-8 flex-1 min-w-0 text-right tabular-nums"
+        // Explicit border + hover ring so the cell reads as an input even
+        // at idle — previously the flat default made athletes think the
+        // numbers were static. Focus ring comes from the base Input.
+        className="h-8 flex-1 min-w-0 text-right tabular-nums border border-input hover:border-ring/60 transition-colors"
       />
       {suffix && <span className="shrink-0 text-xs text-muted-foreground">{suffix}</span>}
     </div>

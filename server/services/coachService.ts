@@ -1,6 +1,7 @@
-import type { CoachNoteInputs } from "@shared/schema";
+import type { CoachNoteInputs,PlanDay } from "@shared/schema";
 
 import { db, type DbExecutor } from "../db";
+import { AppError, ErrorCode } from "../errors";
 import {
   generateReviewNotes,
   generateWorkoutSuggestions,
@@ -309,4 +310,110 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
       );
     }
   }
+}
+
+// Minimum gap between successive manual regenerations per plan day. Same
+// feature burns one Gemini call; without this a frustrated athlete mashing
+// Refresh could rack up cost without the note meaningfully changing.
+const REGENERATE_COOLDOWN_MS = 30_000;
+
+export interface RegeneratedCoachNote {
+  readonly planDayId: string;
+  readonly aiRationale: string;
+  readonly aiNoteUpdatedAt: Date;
+}
+
+export interface RegenerateCooldown {
+  readonly retryAfterMs: number;
+}
+
+/**
+ * Rebuild `plan_days.ai_rationale` on demand for a single planned day after
+ * the athlete has edited the day's exercises. Uses the same `generateReviewNotes`
+ * pipeline that the auto-coach uses for unchanged upcoming days — "write a
+ * short note about why this prescription fits the athlete" — so the tone
+ * matches what's already in the UI. Intentionally NOT `generateWorkoutSuggestions`:
+ * we don't want the model proposing a modification when the athlete just
+ * nudged some numbers.
+ *
+ * Ownership, AI-consent, and budget guards are enforced by the caller (the
+ * route layer) so we can throw typed AppErrors cleanly.
+ */
+export async function regenerateCoachNoteForPlanDay(
+  planDayId: string,
+  userId: string,
+): Promise<RegeneratedCoachNote | RegenerateCooldown> {
+  const day: PlanDay | undefined = await storage.plans.getPlanDay(planDayId, userId);
+  if (!day) {
+    throw new AppError(ErrorCode.NOT_FOUND, "Plan day not found", 404);
+  }
+
+  // Cooldown: if the note was just regenerated, bounce the caller with a
+  // retry-after hint. Uses aiNoteUpdatedAt as the canonical "last refresh"
+  // timestamp — auto-coach writes it on its own apply path, so a manual
+  // refresh can't immediately follow an auto-coach regeneration either.
+  if (day.aiNoteUpdatedAt) {
+    const elapsed = Date.now() - new Date(day.aiNoteUpdatedAt).getTime();
+    if (elapsed < REGENERATE_COOLDOWN_MS) {
+      return { retryAfterMs: REGENERATE_COOLDOWN_MS - elapsed };
+    }
+  }
+
+  const trainingContext = await buildTrainingContext(userId);
+  const activePlanGoal = trainingContext.activePlan?.goal ?? undefined;
+
+  const workoutInput: UpcomingWorkout = {
+    id: day.id,
+    date: day.scheduledDate ?? new Date().toISOString().slice(0, 10),
+    focus: day.focus,
+    mainWorkout: day.mainWorkout,
+    accessory: day.accessory || undefined,
+    notes: day.notes || undefined,
+  };
+
+  const coachingContext = await getCoachingMaterialsString(userId, [workoutInput]);
+  const inputsUsed = buildCoachNoteInputs(
+    trainingContext,
+    coachingContext.source === "rag",
+    Boolean(activePlanGoal),
+  );
+
+  const notes = await generateReviewNotes(
+    trainingContext,
+    [workoutInput],
+    activePlanGoal,
+    coachingContext.text,
+    userId,
+  );
+  const note = notes.find((n) => n.workoutId === day.id);
+  if (!note?.note) {
+    throw new AppError(
+      ErrorCode.AI_ERROR,
+      "Coach couldn't produce a note right now — try again in a minute.",
+      502,
+    );
+  }
+
+  const aiNoteUpdatedAt = new Date();
+  const updated = await storage.plans.updatePlanDay(
+    day.id,
+    {
+      aiSource: "review",
+      aiRationale: note.note.slice(0, 400),
+      aiNoteUpdatedAt,
+      aiInputsUsed: inputsUsed,
+    },
+    userId,
+  );
+  if (!updated) {
+    // Shouldn't happen — we just confirmed ownership above — but guard
+    // anyway so a race on plan-day deletion produces a clear error.
+    throw new AppError(ErrorCode.NOT_FOUND, "Plan day not found", 404);
+  }
+
+  return {
+    planDayId: day.id,
+    aiRationale: updated.aiRationale ?? note.note.slice(0, 400),
+    aiNoteUpdatedAt,
+  };
 }

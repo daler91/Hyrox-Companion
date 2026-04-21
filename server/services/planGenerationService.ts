@@ -15,7 +15,6 @@ import { GEMINI_SUGGESTIONS_MODEL, getAiClient, retryWithBackoff, trackUsageFrom
 import { logger } from "../logger";
 import { PLAN_GENERATION_PROMPT, VALID_CATEGORIES, VALID_EXERCISE_NAMES } from "../prompts";
 import { storage } from "../storage";
-import { sanitizeHtml } from "../utils/sanitize";
 import { expandExercisesToPlanDaySetRows } from "./workoutService";
 
 // Structured exercises the model may include per plan day. Optional so we
@@ -88,8 +87,10 @@ function buildGenerationPrompt(input: GeneratePlanInput): string {
 // `exerciseParser.ts`: unknown exerciseName collapses to "custom" + a
 // customLabel, an empty label triggers low-confidence so the UI can prompt
 // for review.
+// Plain text rendered via React — no HTML encoding needed. See
+// exerciseParser.ts sanitizeLabel for the rationale.
 function sanitizeLabel(v: string): string {
-  return sanitizeHtml(v.replaceAll("&", "and"));
+  return v.replaceAll("&", "and");
 }
 
 function defaultConfidence(isKnown: boolean): number {
@@ -179,10 +180,10 @@ function parseAndValidateDays(text: string): GeneratedDay[] {
       const exercises = validateDayExercises(item as Record<string, unknown>);
       validated.push({
         ...result.data,
-        focus: sanitizeHtml(result.data.focus.replaceAll("&", "and")),
-        mainWorkout: sanitizeHtml(result.data.mainWorkout.replaceAll("&", "and")),
-        accessory: result.data.accessory ? sanitizeHtml(result.data.accessory.replaceAll("&", "and")) : null,
-        notes: result.data.notes ? sanitizeHtml(result.data.notes.replaceAll("&", "and")) : null,
+        focus: result.data.focus.replaceAll("&", "and"),
+        mainWorkout: result.data.mainWorkout.replaceAll("&", "and"),
+        accessory: result.data.accessory ? result.data.accessory.replaceAll("&", "and") : null,
+        notes: result.data.notes ? result.data.notes.replaceAll("&", "and") : null,
         exercises,
       });
     } else {
