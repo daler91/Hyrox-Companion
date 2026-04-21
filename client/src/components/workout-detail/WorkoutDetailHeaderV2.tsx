@@ -1,7 +1,7 @@
 import type { TimelineEntry, WorkoutStatus } from "@shared/schema";
 import { format, parseISO } from "date-fns";
 import { CheckCircle2, ChevronDown,Clock, Layers, MoreVertical, SkipForward, Sparkles, Trash2,XCircle } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -284,22 +284,45 @@ interface EditableFocusProps {
 function EditableFocus({ focus, onChange, saveState }: Readonly<EditableFocusProps>) {
   const [draft, setDraft] = useState(focus);
   const [lastExternal, setLastExternal] = useState(focus);
+  // Track the latest value we've submitted to the server. Comparing against
+  // this rather than the `focus` prop matters because the prop can lag
+  // behind recent edits (the timeline query is invalidated, not optimistic):
+  // typing A → blur → revert to the original value → prop still shows A,
+  // but the revert is a legitimate change the server should see. The ref is
+  // synced from a post-commit effect so the next render's handlers see the
+  // updated baseline; updating it during render would violate react-hooks.
+  const lastSubmittedRef = useRef(focus);
   if (focus !== lastExternal) {
     setLastExternal(focus);
     setDraft(focus);
   }
+  useEffect(() => {
+    lastSubmittedRef.current = focus;
+  }, [focus]);
+
+  const submit = (raw: string) => {
+    const trimmed = raw.trim();
+    if (trimmed.length === 0) return;
+    if (trimmed === lastSubmittedRef.current) return;
+    lastSubmittedRef.current = trimmed;
+    onChange?.(trimmed);
+  };
 
   const debouncedSave = useDebouncedCallback((next: string) => {
-    const trimmed = next.trim();
-    if (trimmed.length === 0) return;
-    if (trimmed === focus) return;
-    onChange?.(trimmed);
+    submit(next);
   }, TITLE_DEBOUNCE_MS);
 
   const handleBlur = () => {
-    // If the user left the field empty, revert to the last saved value so
-    // the heading never persists as blank after a stray keystroke.
-    if (draft.trim().length === 0 && focus.length > 0) setDraft(focus);
+    // Blur fires synchronously before click events, so flushing here closes
+    // the 350ms debounce gap for a user who types a new title and
+    // immediately clicks Mark complete / Save / any other action. The
+    // submitted PATCH then updates plan_day.focus before the completion
+    // mutation snapshots it server-side.
+    if (draft.trim().length === 0 && focus.length > 0) {
+      setDraft(focus);
+      return;
+    }
+    submit(draft);
   };
 
   const readOnly = !onChange;

@@ -160,6 +160,16 @@ export function WorkoutDetailDialogV2({
   // mutation no-ops, which is the same behaviour DialogBody had before.
   const planSets = usePlanDayExercises(entry?.planDayId ?? null);
 
+  // Tracks the most recent focus value submitted from the header. The
+  // timeline query owns `entry.focus` and is only invalidated on save
+  // success, so right after blur-flush the entry prop can still show the
+  // pre-edit value for a few hundred ms. Mark complete reads this ref at
+  // click time to avoid posting a stale focus to logWorkoutMutation.
+  const latestFocusRef = useRef<string>(entry?.focus || "");
+  useEffect(() => {
+    latestFocusRef.current = entry?.focus || "";
+  }, [entry?.focus]);
+
   // Hydration (auto-seed + auto-reparse on first open) was removed: plans
   // generated after the structured-exercises refactor always have prescribed
   // rows on the plan_day, and the Mark Complete path seeds the workout_log
@@ -210,13 +220,19 @@ export function WorkoutDetailDialogV2({
   });
   const showStatsRow = !isPlanned && !!workout;
 
-  const onChangeFocus = buildFocusHandler({
+  const baseFocusHandler = buildFocusHandler({
     isPlanned,
     planDayId: entry.planDayId ?? null,
     workoutId,
     planSets,
     updateFocus,
   });
+  const onChangeFocus = baseFocusHandler
+    ? (focus: string) => {
+        latestFocusRef.current = focus;
+        baseFocusHandler(focus);
+      }
+    : undefined;
   const headerSaveState = isPlanned
     ? { isSaving: planSets.isSaving, lastSavedAt: planSets.lastSavedAt }
     : loggedSaveState;
@@ -279,6 +295,7 @@ export function WorkoutDetailDialogV2({
           onDeleteSet={(setId) => deleteSet.mutate(setId)}
           loggedSaveState={loggedSaveState}
           planSets={planSets}
+          latestFocusRef={latestFocusRef}
           onSaveNote={(note) => workoutId && updateNote.mutate(note)}
           onSaveLoggedPrescription={(patch) => workoutId && updatePrescription.mutate(patch)}
           onParseLoggedFreeText={() => workoutId && reparseFreeText.mutate()}
@@ -367,6 +384,12 @@ interface DialogBodyProps {
    * through doesn't create a second subscription.
    */
   readonly planSets: ReturnType<typeof usePlanDayExercises>;
+  /**
+   * Ref tracking the most recent focus submitted from the header input,
+   * read by PlannedCallToAction so Mark complete uses the just-typed
+   * value instead of the `entry.focus` prop, which lags the save.
+   */
+  readonly latestFocusRef: MutableRefObject<string>;
   readonly onSaveNote: (note: string | null) => void;
   /**
    * Save handlers + Parse trigger for the logged-workout free-text editor.
@@ -418,6 +441,7 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     onDeleteSet,
     loggedSaveState,
     planSets,
+    latestFocusRef,
     onSaveNote,
     onSaveLoggedPrescription,
     onParseLoggedFreeText,
@@ -527,6 +551,7 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
               isMarkingComplete={isMarkingComplete}
               weightUnit={weightUnit}
               planSets={planSets}
+              latestFocusRef={latestFocusRef}
             />
           ) : (
             <LoggedExerciseSection
@@ -646,9 +671,12 @@ interface PlannedCallToActionProps {
   readonly isMarkingComplete?: boolean;
   readonly weightUnit: "kg" | "lb";
   readonly planSets: ReturnType<typeof usePlanDayExercises>;
+  /** Latest-submitted focus from the header input; used to override a
+   *  potentially-stale `entry.focus` on Mark complete. */
+  readonly latestFocusRef: MutableRefObject<string>;
 }
 
-function PlannedCallToAction({ entry, onMarkComplete, isMarkingComplete, weightUnit, planSets }: Readonly<PlannedCallToActionProps>) {
+function PlannedCallToAction({ entry, onMarkComplete, isMarkingComplete, weightUnit, planSets, latestFocusRef }: Readonly<PlannedCallToActionProps>) {
   // Plan-day-backed exercise edits. `planSets` is hoisted up to DialogBody
   // so the same hook instance feeds both this CTA and the CoachTakePanel's
   // staleness comparison. Writes go to plan_day-owned exerciseSets; Mark
@@ -694,7 +722,18 @@ function PlannedCallToAction({ entry, onMarkComplete, isMarkingComplete, weightU
         </p>
         {onMarkComplete && (
           <Button
-            onClick={() => onMarkComplete(entry)}
+            onClick={() => {
+              // Blur whatever input is focused so EditableFocus's onBlur
+              // flush fires synchronously before Mark complete posts. The
+              // flush updates latestFocusRef via the dialog's wrapped
+              // onChangeFocus, so reading the ref below gives us the
+              // just-typed title even if the timeline query hasn't
+              // invalidated yet.
+              const active = document.activeElement;
+              if (active instanceof HTMLElement) active.blur();
+              const focus = latestFocusRef.current || entry.focus;
+              onMarkComplete(focus === entry.focus ? entry : { ...entry, focus });
+            }}
             size="lg"
             className="gap-2"
             disabled={ctaDisabled}
