@@ -1,4 +1,4 @@
-import type { ExerciseSet } from "@shared/schema";
+import { EXERCISE_DEFINITIONS, type ExerciseName,type ExerciseSet } from "@shared/schema";
 import { MessageSquarePlus, Pencil, Plus, X } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -79,14 +79,16 @@ export function InlineSetEditor({
     for (const s of orderedSets) onUpdateSet(s.id, { customLabel: next });
   }, CELL_SAVE_DEBOUNCE_MS);
 
+  const canonicalLabel =
+    EXERCISE_DEFINITIONS[exerciseName as ExerciseName]?.label ?? "Exercise name";
+
   return (
     <div className="space-y-3">
-      {exerciseName === "custom" && (
-        <CustomLabelField
-          initial={customLabel ?? ""}
-          onChange={(next) => debouncedLabelFanout(next.trim() === "" ? null : next)}
-        />
-      )}
+      <CustomLabelField
+        initial={customLabel ?? ""}
+        placeholder={canonicalLabel}
+        onChange={(next) => debouncedLabelFanout(next.trim() === "" ? null : next)}
+      />
 
       <div className="space-y-1">
         <HeaderRow fields={fields} weightUnit={weightUnit} distanceUnit={distanceUnit} colTemplate={colTemplate} />
@@ -145,10 +147,11 @@ function HeaderRow({ fields, weightUnit, distanceUnit, colTemplate }: HeaderRowP
 
 interface CustomLabelFieldProps {
   readonly initial: string;
+  readonly placeholder?: string;
   readonly onChange: (next: string) => void;
 }
 
-function CustomLabelField({ initial, onChange }: CustomLabelFieldProps) {
+function CustomLabelField({ initial, placeholder, onChange }: CustomLabelFieldProps) {
   const [draft, setDraft] = useState(initial);
   const [lastExternal, setLastExternal] = useState(initial);
   if (initial !== lastExternal) {
@@ -163,7 +166,7 @@ function CustomLabelField({ initial, onChange }: CustomLabelFieldProps) {
       </Label>
       <Input
         type="text"
-        placeholder="Enter exercise name"
+        placeholder={placeholder ?? "Enter exercise name"}
         value={draft}
         onChange={(e) => {
           setDraft(e.target.value);

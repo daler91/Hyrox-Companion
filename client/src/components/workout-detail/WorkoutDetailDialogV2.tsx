@@ -148,9 +148,27 @@ export function WorkoutDetailDialogV2({
     reparseFreeText,
     updateNote,
     updatePrescription,
+    updateFocus,
     updateRpe,
   } = useWorkoutDetail(workoutId);
   const loggedSaveState = { isSaving: isSavingLoggedSets, lastSavedAt: loggedLastSavedAt };
+
+  // Hoisted to top-level so both the header's onChangeFocus handler and the
+  // DialogBody's PlannedCallToAction can share the same hook instance —
+  // React Query dedups by queryKey so this is just one subscription either
+  // way. When the entry isn't planned, planDayId is null and every
+  // mutation no-ops, which is the same behaviour DialogBody had before.
+  const planSets = usePlanDayExercises(entry?.planDayId ?? null);
+
+  // Tracks the most recent focus value submitted from the header. The
+  // timeline query owns `entry.focus` and is only invalidated on save
+  // success, so right after blur-flush the entry prop can still show the
+  // pre-edit value for a few hundred ms. Mark complete reads this ref at
+  // click time to avoid posting a stale focus to logWorkoutMutation.
+  const latestFocusRef = useRef<string>(entry?.focus || "");
+  useEffect(() => {
+    latestFocusRef.current = entry?.focus || "";
+  }, [entry?.focus]);
 
   // Hydration (auto-seed + auto-reparse on first open) was removed: plans
   // generated after the structured-exercises refactor always have prescribed
@@ -202,6 +220,23 @@ export function WorkoutDetailDialogV2({
   });
   const showStatsRow = !isPlanned && !!workout;
 
+  const baseFocusHandler = buildFocusHandler({
+    isPlanned,
+    planDayId: entry.planDayId ?? null,
+    workoutId,
+    planSets,
+    updateFocus,
+  });
+  const onChangeFocus = baseFocusHandler
+    ? (focus: string) => {
+        latestFocusRef.current = focus;
+        baseFocusHandler(focus);
+      }
+    : undefined;
+  const headerSaveState = isPlanned
+    ? { isSaving: planSets.isSaving, lastSavedAt: planSets.lastSavedAt }
+    : loggedSaveState;
+
   return (
     <Dialog open={!!entry} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
@@ -231,6 +266,8 @@ export function WorkoutDetailDialogV2({
             onDelete={handlers.menuDelete}
             onChangeStatus={handlers.menuChangeStatus}
             onCombine={handlers.menuCombine}
+            onChangeFocus={onChangeFocus}
+            saveState={headerSaveState}
           />
           {showStatsRow && workout && (
             <WorkoutStatsRow
@@ -257,6 +294,8 @@ export function WorkoutDetailDialogV2({
           onAddSet={(data) => addSet.mutate(data)}
           onDeleteSet={(setId) => deleteSet.mutate(setId)}
           loggedSaveState={loggedSaveState}
+          planSets={planSets}
+          latestFocusRef={latestFocusRef}
           onSaveNote={(note) => workoutId && updateNote.mutate(note)}
           onSaveLoggedPrescription={(patch) => workoutId && updatePrescription.mutate(patch)}
           onParseLoggedFreeText={() => workoutId && reparseFreeText.mutate()}
@@ -338,6 +377,19 @@ interface DialogBodyProps {
   readonly onDeleteSet: (setId: string) => void;
   /** Save-state signal passed to ExerciseTable on the logged-workout branch. */
   readonly loggedSaveState: { isSaving: boolean; lastSavedAt: number | null };
+  /**
+   * Plan-day mutation bundle hoisted from the top-level dialog so the
+   * header's onChangeFocus handler and the planned-entry CTA share the
+   * same hook instance. React Query dedupes by queryKey so passing it
+   * through doesn't create a second subscription.
+   */
+  readonly planSets: ReturnType<typeof usePlanDayExercises>;
+  /**
+   * Ref tracking the most recent focus submitted from the header input,
+   * read by PlannedCallToAction so Mark complete uses the just-typed
+   * value instead of the `entry.focus` prop, which lags the save.
+   */
+  readonly latestFocusRef: MutableRefObject<string>;
   readonly onSaveNote: (note: string | null) => void;
   /**
    * Save handlers + Parse trigger for the logged-workout free-text editor.
@@ -388,6 +440,8 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     onAddSet,
     onDeleteSet,
     loggedSaveState,
+    planSets,
+    latestFocusRef,
     onSaveNote,
     onSaveLoggedPrescription,
     onParseLoggedFreeText,
@@ -398,10 +452,10 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
   } = props;
 
   // Hoisted out of PlannedCallToAction so the same lastSavedAt / rationale
-  // refresh state can feed the CoachTakePanel on the right rail. Both hooks
-  // no-op when planDayId is null (logged-only ad-hoc workouts).
+  // refresh state can feed the CoachTakePanel on the right rail. planSets
+  // is passed in from the parent (shared with the header's focus save);
+  // planCoachNote stays local since only DialogBody uses it.
   const planDayId = entry.planDayId ?? null;
-  const planSets = usePlanDayExercises(planDayId);
   const planCoachNote = usePlanDayCoachNote(planDayId);
 
   // Prefer the locally-regenerated rationale when present so the UI updates
@@ -497,6 +551,7 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
               isMarkingComplete={isMarkingComplete}
               weightUnit={weightUnit}
               planSets={planSets}
+              latestFocusRef={latestFocusRef}
             />
           ) : (
             <LoggedExerciseSection
@@ -616,9 +671,12 @@ interface PlannedCallToActionProps {
   readonly isMarkingComplete?: boolean;
   readonly weightUnit: "kg" | "lb";
   readonly planSets: ReturnType<typeof usePlanDayExercises>;
+  /** Latest-submitted focus from the header input; used to override a
+   *  potentially-stale `entry.focus` on Mark complete. */
+  readonly latestFocusRef: MutableRefObject<string>;
 }
 
-function PlannedCallToAction({ entry, onMarkComplete, isMarkingComplete, weightUnit, planSets }: Readonly<PlannedCallToActionProps>) {
+function PlannedCallToAction({ entry, onMarkComplete, isMarkingComplete, weightUnit, planSets, latestFocusRef }: Readonly<PlannedCallToActionProps>) {
   // Plan-day-backed exercise edits. `planSets` is hoisted up to DialogBody
   // so the same hook instance feeds both this CTA and the CoachTakePanel's
   // staleness comparison. Writes go to plan_day-owned exerciseSets; Mark
@@ -664,7 +722,18 @@ function PlannedCallToAction({ entry, onMarkComplete, isMarkingComplete, weightU
         </p>
         {onMarkComplete && (
           <Button
-            onClick={() => onMarkComplete(entry)}
+            onClick={() => {
+              // Blur whatever input is focused so EditableFocus's onBlur
+              // flush fires synchronously before Mark complete posts. The
+              // flush updates latestFocusRef via the dialog's wrapped
+              // onChangeFocus, so reading the ref below gives us the
+              // just-typed title even if the timeline query hasn't
+              // invalidated yet.
+              const active = document.activeElement;
+              if (active instanceof HTMLElement) active.blur();
+              const focus = latestFocusRef.current || entry.focus;
+              onMarkComplete(focus === entry.focus ? entry : { ...entry, focus });
+            }}
             size="lg"
             className="gap-2"
             disabled={ctaDisabled}
@@ -681,6 +750,29 @@ function PlannedCallToAction({ entry, onMarkComplete, isMarkingComplete, weightU
       </div>
     </div>
   );
+}
+
+/**
+ * Resolve the focus-save handler for the header title input. Branches on
+ * planned-vs-logged state, then guards on the owning id (planDayId /
+ * workoutId). Returning undefined on either guard drops the header into
+ * its read-only fallback. Extracted so the JSX site stays free of nested
+ * ternaries.
+ */
+function buildFocusHandler(args: {
+  readonly isPlanned: boolean;
+  readonly planDayId: string | null;
+  readonly workoutId: string | null;
+  readonly planSets: ReturnType<typeof usePlanDayExercises>;
+  readonly updateFocus: ReturnType<typeof useWorkoutDetail>["updateFocus"];
+}): ((focus: string) => void) | undefined {
+  const { isPlanned, planDayId, workoutId, planSets, updateFocus } = args;
+  if (isPlanned) {
+    if (!planDayId) return undefined;
+    return (focus) => planSets.updatePrescription.mutate({ focus });
+  }
+  if (!workoutId) return undefined;
+  return (focus) => updateFocus.mutate(focus);
 }
 
 interface BuildDialogHandlersArgs {

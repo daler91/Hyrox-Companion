@@ -1,6 +1,7 @@
 import type { TimelineEntry, WorkoutStatus } from "@shared/schema";
 import { format, parseISO } from "date-fns";
 import { CheckCircle2, ChevronDown,Clock, Layers, MoreVertical, SkipForward, Sparkles, Trash2,XCircle } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -10,7 +11,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { useDebouncedCallback } from "@/hooks/useDebouncedCallback";
 import { cn } from "@/lib/utils";
+
+import { type SaveState, SaveStatePill } from "./SaveStatePill";
+
+const TITLE_DEBOUNCE_MS = 350;
+const TITLE_MAX_LENGTH = 120;
 
 interface WorkoutDetailHeaderV2Props {
   readonly entry: TimelineEntry;
@@ -24,6 +32,14 @@ interface WorkoutDetailHeaderV2Props {
   readonly onChangeStatus?: (status: WorkoutStatus) => void;
   /** Opens the combine-workouts picker. Only available on logged entries. */
   readonly onCombine?: () => void;
+  /**
+   * Debounced autosave handler for the workout's title (focus). When
+   * omitted the title renders as read-only text. The parent picks the
+   * right branch (logged workout vs plan day) and wires the mutation.
+   */
+  readonly onChangeFocus?: (focus: string) => void;
+  /** Drives the "Saving…/Saved" pill shown next to the title. */
+  readonly saveState?: SaveState;
 }
 
 interface StatusStyle {
@@ -69,7 +85,14 @@ const STATUS_ORDER: readonly WorkoutStatus[] = ["completed", "planned", "skipped
  * DialogContent wrapper already renders its own close X, so this header
  * intentionally omits one.
  */
-export function WorkoutDetailHeaderV2({ entry, onDelete, onChangeStatus, onCombine }: WorkoutDetailHeaderV2Props) {
+export function WorkoutDetailHeaderV2({
+  entry,
+  onDelete,
+  onChangeStatus,
+  onCombine,
+  onChangeFocus,
+  saveState,
+}: WorkoutDetailHeaderV2Props) {
   const dateLabel = formatDateHeader(entry.date);
   const style = STATUS_STYLES[entry.status] ?? {
     label: entry.status,
@@ -120,7 +143,11 @@ export function WorkoutDetailHeaderV2({ entry, onDelete, onChangeStatus, onCombi
             </span>
           )}
         </div>
-        <h2 className="text-2xl font-semibold leading-tight">{entry.focus || "Workout"}</h2>
+        <EditableFocus
+          focus={entry.focus || ""}
+          onChange={onChangeFocus}
+          saveState={saveState}
+        />
       </div>
       {hasOverflowMenu && (
         // Pin the ⋮ trigger to the top-right cluster where shadcn's
@@ -235,4 +262,100 @@ function formatDateHeader(dateStr: string): string {
   } catch {
     return dateStr;
   }
+}
+
+interface EditableFocusProps {
+  readonly focus: string;
+  readonly onChange?: (next: string) => void;
+  readonly saveState?: SaveState;
+}
+
+/**
+ * Heading-styled inline input for the workout title. Draft state feels
+ * immediate; the debounced autosave propagates to the server. `lastExternal`
+ * sync lets a timeline refetch overwrite the local draft when the field is
+ * genuinely different (e.g. another device updated focus), but suppresses
+ * echoes of the user's own just-saved value.
+ *
+ * Empty/whitespace-only drafts are NOT sent — `plan_days.focus` and
+ * `workout_logs.focus` are NOT NULL columns, and the server would reject.
+ * The user still sees an empty input; blurring restores the last saved value.
+ */
+function EditableFocus({ focus, onChange, saveState }: Readonly<EditableFocusProps>) {
+  const [draft, setDraft] = useState(focus);
+  const [lastExternal, setLastExternal] = useState(focus);
+  // Track the latest value we've submitted to the server. Comparing against
+  // this rather than the `focus` prop matters because the prop can lag
+  // behind recent edits (the timeline query is invalidated, not optimistic):
+  // typing A → blur → revert to the original value → prop still shows A,
+  // but the revert is a legitimate change the server should see. The ref is
+  // synced from a post-commit effect so the next render's handlers see the
+  // updated baseline; updating it during render would violate react-hooks.
+  const lastSubmittedRef = useRef(focus);
+  if (focus !== lastExternal) {
+    setLastExternal(focus);
+    setDraft(focus);
+  }
+  useEffect(() => {
+    lastSubmittedRef.current = focus;
+  }, [focus]);
+
+  const submit = (raw: string) => {
+    const trimmed = raw.trim();
+    if (trimmed.length === 0) return;
+    if (trimmed === lastSubmittedRef.current) return;
+    lastSubmittedRef.current = trimmed;
+    onChange?.(trimmed);
+  };
+
+  const debouncedSave = useDebouncedCallback((next: string) => {
+    submit(next);
+  }, TITLE_DEBOUNCE_MS);
+
+  const handleBlur = () => {
+    // Blur fires synchronously before click events, so flushing here closes
+    // the 350ms debounce gap for a user who types a new title and
+    // immediately clicks Mark complete / Save / any other action. The
+    // submitted PATCH then updates plan_day.focus before the completion
+    // mutation snapshots it server-side.
+    if (draft.trim().length === 0 && focus.length > 0) {
+      setDraft(focus);
+      return;
+    }
+    submit(draft);
+  };
+
+  const readOnly = !onChange;
+  if (readOnly) {
+    return (
+      <h2 className="text-2xl font-semibold leading-tight" data-testid="workout-detail-focus">
+        {focus || "Workout"}
+      </h2>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <Input
+        type="text"
+        value={draft}
+        maxLength={TITLE_MAX_LENGTH}
+        placeholder="Workout"
+        aria-label="Workout title"
+        onChange={(e) => {
+          setDraft(e.target.value);
+          debouncedSave(e.target.value);
+        }}
+        onBlur={handleBlur}
+        className={cn(
+          "h-auto border-transparent bg-transparent px-2 py-0.5 text-2xl font-semibold leading-tight",
+          "shadow-none hover:border-input focus-visible:border-input",
+        )}
+        data-testid="workout-detail-focus-input"
+      />
+      {saveState && (
+        <SaveStatePill state={saveState} testId="workout-detail-focus-save-state" />
+      )}
+    </div>
+  );
 }

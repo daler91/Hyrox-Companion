@@ -180,6 +180,38 @@ export function useWorkoutDetail(workoutId: string | null) {
     errorToast: "Couldn't save that note",
   });
 
+  // Debounced PATCH for the workout's focus (displayed title). Tagged with
+  // workoutSetsMutationKey so the ExerciseTable's save pill reflects title
+  // edits too — one unified "Saving…/Saved" signal across the whole dialog.
+  // Optimistic: patches the cached workout so the heading updates without a
+  // round-trip; rollback restores the snapshot on error. Timeline is
+  // invalidated in onSuccess so card copy reflects the new title within a
+  // refetch (we don't have selectedPlanId here, so optimistic timeline
+  // patching would have to traverse every cached variant — invalidate is
+  // simpler and the staleness window is ~100ms).
+  const updateFocus = useApiMutation({
+    mutationKey: workoutId ? workoutSetsMutationKey(workoutId) : undefined,
+    mutationFn: (focus: string) => api.workouts.update(workoutId!, { focus }),
+    onMutate: async (focus) => {
+      if (!workoutId) return undefined;
+      await queryClient.cancelQueries({ queryKey: QUERY_KEYS.workout(workoutId) });
+      const prev = queryClient.getQueryData<WorkoutWithSets>(QUERY_KEYS.workout(workoutId));
+      patchCachedWorkout({ focus });
+      return { prev };
+    },
+    onSuccess: async () => {
+      markSaved();
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
+    },
+    onError: (_err, _vars, ctx) => {
+      const prev = (ctx as { prev?: WorkoutWithSets } | undefined)?.prev;
+      if (workoutId && prev) {
+        queryClient.setQueryData(QUERY_KEYS.workout(workoutId), prev);
+      }
+    },
+    errorToast: "Couldn't save title",
+  });
+
   // Generic PATCH for the free-text fields on a workout log. `mainWorkout`
   // is non-null on the schema (an empty string means "no prescription"),
   // while accessory/notes are nullable. We normalise the caller's patch so
@@ -276,6 +308,7 @@ export function useWorkoutDetail(workoutId: string | null) {
     reparseFreeText,
     updateNote,
     updatePrescription,
+    updateFocus,
     updateRpe,
   };
 }
