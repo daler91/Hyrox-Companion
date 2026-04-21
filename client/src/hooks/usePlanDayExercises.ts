@@ -1,5 +1,6 @@
 import type { ExerciseSet } from "@shared/schema";
 import { useIsMutating,useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 
 import { useApiMutation } from "@/hooks/useApiMutation";
 import { type AddExerciseSetPayload, api, type PatchExerciseSetPayload, QUERY_KEYS } from "@/lib/api";
@@ -41,6 +42,15 @@ export function usePlanDayExercises(planDayId: string | null) {
     });
   };
 
+  // Epoch-ms timestamp of the most recent successful set mutation. The
+  // ExerciseTable's SaveStatePill uses this to show a fading "Saved" badge
+  // after each debounced PATCH lands, so the athlete has visible proof the
+  // edit persisted — otherwise the only feedback today is an optimistic
+  // cache update that looks identical whether the server saw the change or
+  // not.
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
+  const markSaved = () => setLastSavedAt(Date.now());
+
   const updateSet = useApiMutation({
     mutationKey: planDayId ? planDaySetsMutationKey(planDayId) : undefined,
     mutationFn: ({ setId, data }: { setId: string; data: PatchExerciseSetPayload }) =>
@@ -54,6 +64,7 @@ export function usePlanDayExercises(planDayId: string | null) {
     },
     onSuccess: (serverSet) => {
       patchCachedSets((sets) => sets.map((s) => (s.id === serverSet.id ? serverSet : s)));
+      markSaved();
     },
     onError: (_err, _vars, ctx) => {
       const prev = (ctx as { prev?: ExerciseSet[] } | undefined)?.prev;
@@ -69,6 +80,7 @@ export function usePlanDayExercises(planDayId: string | null) {
     mutationFn: (data: AddExerciseSetPayload) => api.plans.addDayExercise(planDayId!, data),
     onSuccess: (serverSet) => {
       patchCachedSets((sets) => [...sets, serverSet]);
+      markSaved();
     },
     errorToast: "Couldn't add that exercise",
   });
@@ -83,6 +95,9 @@ export function usePlanDayExercises(planDayId: string | null) {
       const prev = queryClient.getQueryData<ExerciseSet[]>(QUERY_KEYS.planDayExercises(planDayId));
       patchCachedSets((sets) => sets.filter((s) => s.id !== setId));
       return { prev };
+    },
+    onSuccess: () => {
+      markSaved();
     },
     onError: (_err, _vars, ctx) => {
       const prev = (ctx as { prev?: ExerciseSet[] } | undefined)?.prev;
@@ -111,6 +126,7 @@ export function usePlanDayExercises(planDayId: string | null) {
     exerciseSets: exercisesQuery.data ?? [],
     isLoading: exercisesQuery.isLoading,
     isSaving,
+    lastSavedAt,
     updateSet,
     addSet,
     deleteSet,

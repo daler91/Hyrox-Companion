@@ -3,7 +3,6 @@ import { z } from "zod";
 
 import { logger } from "../logger";
 import { SUGGESTIONS_PROMPT } from "../prompts";
-import { sanitizeHtml } from "../utils/sanitize";
 import { GEMINI_SUGGESTIONS_MODEL, getAiClient, retryWithBackoff, trackUsageFromResponse } from "./client";
 import type { TrainingContext } from "./types";
 
@@ -46,11 +45,15 @@ export function parseAndValidateSuggestions(text: string): WorkoutSuggestion[] {
     const result = workoutSuggestionSchema.safeParse(item);
     if (result.success) {
       const item = result.data;
+      // Swap `&` for "and" so "A & B" renders as "A and B". We intentionally
+      // do NOT HTML-encode — these strings are rendered as React text (e.g.
+      // CoachTakePanel's `{rationale}`), which already escapes HTML safely.
+      // Pre-encoding here was leaking `&#39;` into the UI as literal chars.
       validated.push({
         ...item,
-        recommendation: sanitizeHtml(item.recommendation.replaceAll("&", "and")),
-        rationale: sanitizeHtml(item.rationale.replaceAll("&", "and")),
-        workoutFocus: sanitizeHtml(item.workoutFocus.replaceAll("&", "and"))
+        recommendation: item.recommendation.replaceAll("&", "and"),
+        rationale: item.rationale.replaceAll("&", "and"),
+        workoutFocus: item.workoutFocus.replaceAll("&", "and")
       });
     } else {
       logger.warn({ issues: result.error.issues, item: JSON.stringify(item).slice(0, 200) }, "[gemini] Dropping invalid suggestion:");
@@ -284,7 +287,8 @@ export function parseAndValidateReviewNotes(text: string): ReviewNote[] {
       const note = result.data;
       validated.push({
         workoutId: note.workoutId,
-        note: sanitizeHtml(note.note.replaceAll("&", "and")).slice(0, 400),
+        // Plain text — rendered via React, no HTML encoding needed.
+        note: note.note.replaceAll("&", "and").slice(0, 400),
       });
     } else {
       logger.warn(

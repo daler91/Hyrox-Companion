@@ -1,6 +1,6 @@
 import type { ExerciseSet, WorkoutLog } from "@shared/schema";
-import { useQuery } from "@tanstack/react-query";
-import { useRef } from "react";
+import { useIsMutating,useQuery } from "@tanstack/react-query";
+import { useRef, useState } from "react";
 
 import { useApiMutation } from "@/hooks/useApiMutation";
 import {
@@ -12,6 +12,14 @@ import {
 import { queryClient } from "@/lib/queryClient";
 
 type WorkoutWithSets = WorkoutLog & { exerciseSets?: ExerciseSet[] };
+
+// Tag every logged-workout set mutation so useIsMutating can count all
+// in-flight writes for the current workout — useMutation.isPending only
+// reflects the latest mutate() call, which would hide concurrent PATCHes
+// when a row edit fans out to multiple set ids. Mirrors the family-key
+// pattern in usePlanDayExercises.
+const workoutSetsMutationKey = (workoutId: string) =>
+  ["workout-sets", workoutId] as const;
 
 /**
  * Data + mutation bundle used by the v2 workout detail dialog. Keeps the
@@ -50,7 +58,14 @@ export function useWorkoutDetail(workoutId: string | null) {
     });
   };
 
+  // See usePlanDayExercises.ts for the rationale — tracked here so the
+  // logged-workout variant of the ExerciseTable can show the same
+  // "Saving… / Saved" feedback the planned variant gets.
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
+  const markSaved = () => setLastSavedAt(Date.now());
+
   const updateSet = useApiMutation({
+    mutationKey: workoutId ? workoutSetsMutationKey(workoutId) : undefined,
     mutationFn: ({ setId, data }: { setId: string; data: PatchExerciseSetPayload }) =>
       api.workouts.updateSet(workoutId!, setId, data),
     // Optimistic patch: merge the payload into the cached row so the table
@@ -65,6 +80,7 @@ export function useWorkoutDetail(workoutId: string | null) {
     },
     onSuccess: (serverSet) => {
       patchCachedSets((sets) => sets.map((s) => (s.id === serverSet.id ? serverSet : s)));
+      markSaved();
     },
     onError: (_err, _vars, ctx) => {
       const prev = (ctx as { prev?: WorkoutWithSets } | undefined)?.prev;
@@ -76,15 +92,18 @@ export function useWorkoutDetail(workoutId: string | null) {
   });
 
   const addSet = useApiMutation({
+    mutationKey: workoutId ? workoutSetsMutationKey(workoutId) : undefined,
     mutationFn: (data: AddExerciseSetPayload) => api.workouts.addSet(workoutId!, data),
     onSuccess: (serverSet) => {
       patchCachedSets((sets) => [...sets, serverSet]);
+      markSaved();
     },
     errorToast: "Couldn't add that exercise",
     invalidateQueries: workoutId ? [QUERY_KEYS.workoutHistory(workoutId)] : undefined,
   });
 
   const deleteSet = useApiMutation({
+    mutationKey: workoutId ? workoutSetsMutationKey(workoutId) : undefined,
     mutationFn: (setId: string) => api.workouts.deleteSet(workoutId!, setId).then(() => setId),
     onMutate: async (setId: string) => {
       if (!workoutId) return undefined;
@@ -92,6 +111,9 @@ export function useWorkoutDetail(workoutId: string | null) {
       const prev = queryClient.getQueryData<WorkoutWithSets>(QUERY_KEYS.workout(workoutId));
       patchCachedSets((sets) => sets.filter((s) => s.id !== setId));
       return { prev };
+    },
+    onSuccess: () => {
+      markSaved();
     },
     onError: (_err, _vars, ctx) => {
       const prev = (ctx as { prev?: WorkoutWithSets } | undefined)?.prev;
@@ -102,6 +124,12 @@ export function useWorkoutDetail(workoutId: string | null) {
     errorToast: "Couldn't remove that set",
     invalidateQueries: workoutId ? [QUERY_KEYS.workoutHistory(workoutId)] : undefined,
   });
+
+  const pendingSetMutations = useIsMutating({
+    mutationKey: workoutId ? workoutSetsMutationKey(workoutId) : ["workout-sets-disabled"],
+    exact: true,
+  });
+  const isSaving = pendingSetMutations > 0;
 
   const seedFromPlan = useApiMutation({
     mutationFn: () => api.workouts.seedFromPlan(workoutId!),
@@ -207,6 +235,8 @@ export function useWorkoutDetail(workoutId: string | null) {
     isLoading: workoutQuery.isLoading,
     isError: workoutQuery.isError,
     isHydrating,
+    isSaving,
+    lastSavedAt,
     updateSet,
     addSet,
     deleteSet,

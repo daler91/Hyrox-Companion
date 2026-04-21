@@ -52,4 +52,16 @@ export const plans = {
 
   deleteDayExercise: (dayId: string, setId: string) =>
     typedRequest<{ success: boolean }>("DELETE", `/api/v1/plans/days/${dayId}/sets/${setId}`),
+
+  // Manual coach-note refresh for a planned day. Triggered from CoachTakePanel
+  // after the athlete edited the day's exercises so the static rationale
+  // reflects the new prescription. Returns the new rationale + its timestamp;
+  // the server enforces a 30s cooldown (429 with Retry-After) to prevent
+  // Refresh-mashing.
+  regenerateCoachNote: (dayId: string) =>
+    typedRequest<{ planDayId: string; aiRationale: string; aiNoteUpdatedAt: string }>(
+      "POST",
+      `/api/v1/plans/days/${dayId}/coach-note/regenerate`,
+      {},
+    ),
 } as const;
