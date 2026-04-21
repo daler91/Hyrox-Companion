@@ -41,16 +41,42 @@ export function usePlanDayCoachNote(planDayId: string | null) {
   }, [cooldownUntil]);
   const isCoolingDown = cooldownUntil != null;
 
+  // The hook is called at the always-mounted WorkoutDetailDialogV2 level
+  // (Radix Dialog keeps children mounted while closed), so its local
+  // state would bleed across entries without a reset. `ownerId` is a
+  // render-time sentinel — using this pattern instead of a
+  // setState-in-effect satisfies react-hooks/set-state-in-effect, and
+  // mirrors the ownerId pattern in usePlanDayExercises.
+  const [ownerId, setOwnerId] = useState<string | null>(planDayId);
+  if (planDayId !== ownerId) {
+    setOwnerId(planDayId);
+    setLocalRationale(null);
+    setLocalUpdatedAt(null);
+    setCooldownUntil(null);
+  }
+
   const regenerate = useApiMutation<
     { planDayId: string; aiRationale: string; aiNoteUpdatedAt: string },
     Error,
-    void
+    // Callers can pass a frozen plan-day id to target a refresh at the
+    // entry they clicked Save on — needed by WorkoutDetailDialogV2's
+    // drain watcher, which must not retarget when the athlete navigates
+    // to a different entry mid-save. Omit to use the hook's own planDayId.
+    string | void
   >({
-    mutationFn: () => api.plans.regenerateCoachNote(planDayId!),
+    mutationFn: (override) =>
+      api.plans.regenerateCoachNote(typeof override === "string" ? override : planDayId!),
     onSuccess: async (result) => {
-      setLocalRationale(result.aiRationale);
-      setLocalUpdatedAt(new Date(result.aiNoteUpdatedAt));
-      setCooldownUntil(null);
+      // Only update the local override when the current hook instance is
+      // still looking at the plan day that just refreshed. If the user
+      // navigated away mid-save the local rationale belongs to a
+      // different entry — the timeline invalidation below covers that
+      // case on next open.
+      if (result.planDayId === planDayId) {
+        setLocalRationale(result.aiRationale);
+        setLocalUpdatedAt(new Date(result.aiNoteUpdatedAt));
+        setCooldownUntil(null);
+      }
       // Refresh the timeline so next render reads the server's new rationale
       // and the dialog stays consistent even after the local state resets
       // (e.g. reopen).

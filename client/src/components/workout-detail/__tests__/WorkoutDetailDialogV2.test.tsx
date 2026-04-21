@@ -34,6 +34,7 @@ vi.mock("@/lib/api", async () => {
         addDayExercise: vi.fn(),
         updateDayExercise: vi.fn(),
         deleteDayExercise: vi.fn(),
+        regenerateCoachNote: vi.fn(),
       },
     },
   };
@@ -48,6 +49,12 @@ const mockWorkouts = api.workouts as unknown as {
   deleteSet: ReturnType<typeof vi.fn>;
   seedFromPlan: ReturnType<typeof vi.fn>;
   reparse: ReturnType<typeof vi.fn>;
+};
+
+const mockPlans = api.plans as unknown as {
+  regenerateCoachNote: ReturnType<typeof vi.fn>;
+  getDayExercises: ReturnType<typeof vi.fn>;
+  updateDayExercise: ReturnType<typeof vi.fn>;
 };
 
 function makeEntry(overrides: Partial<TimelineEntry> = {}): TimelineEntry {
@@ -499,5 +506,191 @@ describe("WorkoutDetailDialogV2", () => {
     // Planned entries don't have a workoutLog to save to — the stats
     // row isn't rendered at all, so the editable input is absent.
     expect(screen.queryByTestId("workout-stats-rpe-input")).not.toBeInTheDocument();
+  });
+
+  // ---- Save button ---------------------------------------------------
+
+  it("triggers a coach-take regenerate when Save is clicked on a plan-day entry", async () => {
+    mockWorkouts.get.mockResolvedValue(makeWorkout());
+    mockWorkouts.history.mockResolvedValue({
+      lastSameFocus: null,
+      prSetCount: 0,
+      blockAvgRpe: null,
+    });
+    mockPlans.regenerateCoachNote.mockResolvedValue({
+      planDayId: "plan-day-1",
+      aiRationale: "Updated take.",
+      aiNoteUpdatedAt: new Date().toISOString(),
+    });
+
+    renderDialog({
+      entry: makeEntry({
+        workoutLogId: null,
+        status: "planned",
+        planDayId: "plan-day-1",
+      }),
+      onMarkComplete: vi.fn(),
+    });
+
+    const saveBtn = await screen.findByTestId("workout-detail-save-button");
+    expect(saveBtn).toHaveAccessibleName(/save/i);
+
+    const user = userEvent.setup();
+    await user.click(saveBtn);
+
+    await waitFor(() => {
+      expect(mockPlans.regenerateCoachNote).toHaveBeenCalledWith("plan-day-1");
+    });
+  });
+
+  it("flashes a Saved confirmation without calling regenerate for ad-hoc logged workouts", async () => {
+    mockWorkouts.get.mockResolvedValue(
+      makeWorkout({ exerciseSets: [makeSet()] }),
+    );
+    mockWorkouts.history.mockResolvedValue({
+      lastSameFocus: null,
+      prSetCount: 0,
+      blockAvgRpe: null,
+    });
+
+    // Ad-hoc entry has no planDayId — regenerate has nothing to update.
+    renderDialog({ entry: makeEntry({ planDayId: null }) });
+
+    const saveBtn = await screen.findByTestId("workout-detail-save-button");
+    const user = userEvent.setup();
+    await user.click(saveBtn);
+
+    await screen.findByTestId("workout-detail-save-flash");
+    expect(mockPlans.regenerateCoachNote).not.toHaveBeenCalled();
+  });
+
+  it("flushes pending cell PATCHes before firing the coach-note regenerate on Save", async () => {
+    mockWorkouts.history.mockResolvedValue({
+      lastSameFocus: null,
+      prSetCount: 0,
+      blockAvgRpe: null,
+    });
+    // Plan-day-backed set used by the inline editor.
+    mockPlans.getDayExercises.mockResolvedValue([
+      makeSet({ id: "plan-set-1", planDayId: "plan-day-1", workoutLogId: null, weight: 60 }),
+    ]);
+    mockPlans.updateDayExercise.mockResolvedValue(
+      makeSet({ id: "plan-set-1", planDayId: "plan-day-1", workoutLogId: null, weight: 65 }),
+    );
+    mockPlans.regenerateCoachNote.mockResolvedValue({
+      planDayId: "plan-day-1",
+      aiRationale: "Updated take.",
+      aiNoteUpdatedAt: new Date().toISOString(),
+    });
+
+    renderDialog({
+      entry: makeEntry({
+        workoutLogId: null,
+        status: "planned",
+        planDayId: "plan-day-1",
+      }),
+      onMarkComplete: vi.fn(),
+    });
+
+    // Wait for the plan-day exercise row then expand it so the
+    // InlineSetEditor (and its per-field inputs) render.
+    const toggle = await screen.findByTestId("exercise-row-toggle");
+    const user = userEvent.setup();
+    await user.click(toggle);
+    const weightInput = await screen.findByTestId("input-weight-plan-set-1");
+
+    // Drives the hook's debounced patch queue.
+    await user.clear(weightInput);
+    await user.type(weightInput, "65");
+
+    // Click Save BEFORE the 350ms debounce fires — the pending patch is
+    // still in the hook's ref map. `flushPendingSetPatches` has to fire
+    // the PATCH synchronously, and the drain watcher has to wait for it
+    // before firing regenerate.
+    const saveBtn = screen.getByTestId("workout-detail-save-button");
+    await user.click(saveBtn);
+
+    // Both mutations land; asserting call order guards against a
+    // regression where regenerate fires before the PATCH is even
+    // enqueued (pre-fix behaviour — the cell's useDebouncedCallback
+    // had no flush seam).
+    await waitFor(() => {
+      expect(mockPlans.updateDayExercise).toHaveBeenCalled();
+      expect(mockPlans.regenerateCoachNote).toHaveBeenCalledWith("plan-day-1");
+    });
+    const patchOrder = mockPlans.updateDayExercise.mock.invocationCallOrder[0];
+    const regenerateOrder = mockPlans.regenerateCoachNote.mock.invocationCallOrder[0];
+    expect(patchOrder).toBeLessThan(regenerateOrder);
+  });
+
+  it("does not regenerate the coach note for a logged workout that happens to be plan-linked", async () => {
+    // Guards the P1 fix: edits on a LOGGED workout (even one linked to
+    // a plan day) go through api.workouts.*, not plan_days, so firing
+    // regenerateCoachNote on Save would burn AI budget / cooldown for
+    // a plan day whose content didn't change.
+    mockWorkouts.get.mockResolvedValue(
+      makeWorkout({ exerciseSets: [makeSet()], planDayId: "plan-day-1" }),
+    );
+    mockWorkouts.history.mockResolvedValue({
+      lastSameFocus: null,
+      prSetCount: 0,
+      blockAvgRpe: null,
+    });
+
+    renderDialog({
+      entry: makeEntry({ planDayId: "plan-day-1" }),
+    });
+
+    const saveBtn = await screen.findByTestId("workout-detail-save-button");
+    const user = userEvent.setup();
+    await user.click(saveBtn);
+
+    await screen.findByTestId("workout-detail-save-flash");
+    expect(mockPlans.regenerateCoachNote).not.toHaveBeenCalled();
+  });
+
+  it("clears the Saved confirmation when the dialog switches to a different entry", async () => {
+    // Guards the P2 fix: `saveClickedAt` is dialog-level state. The
+    // dialog stays mounted across entry switches, so without the
+    // entry-id sentinel a prior save's "Saved ✓" confirmation bleeds
+    // onto the next entry the athlete opens.
+    mockWorkouts.get.mockResolvedValue(
+      makeWorkout({ exerciseSets: [makeSet()] }),
+    );
+    mockWorkouts.history.mockResolvedValue({
+      lastSameFocus: null,
+      prSetCount: 0,
+      blockAvgRpe: null,
+    });
+
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const { rerender } = render(
+      <QueryClientProvider client={queryClient}>
+        <WorkoutDetailDialogV2
+          entry={makeEntry({ id: "log-A", planDayId: null })}
+          onClose={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+
+    const user = userEvent.setup();
+    const saveBtn = await screen.findByTestId("workout-detail-save-button");
+    await user.click(saveBtn);
+    await screen.findByTestId("workout-detail-save-flash");
+
+    // Simulate the Timeline swapping in a different entry while the
+    // dialog stays mounted.
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <WorkoutDetailDialogV2
+          entry={makeEntry({ id: "log-B", planDayId: null })}
+          onClose={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.queryByTestId("workout-detail-save-flash")).not.toBeInTheDocument();
   });
 });

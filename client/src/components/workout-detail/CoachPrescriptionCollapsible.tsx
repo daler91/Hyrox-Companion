@@ -199,6 +199,17 @@ function EditablePrescription({ field, label, value, onSave }: Readonly<Editable
           setDraft(e.target.value);
           debouncedSave(e.target.value);
         }}
+        onBlur={() => {
+          // The dialog's Save handler calls `active.blur()` to drive a
+          // synchronous flush before regenerating the coach note. Without
+          // this onBlur save the 600ms debounce keeps pending text off
+          // the server and regenerate runs against a stale plan day.
+          // Mirrors the unmount-flush predicate above.
+          if (draft !== lastExternal) {
+            setLastExternal(draft);
+            onSave(field, draft);
+          }
+        }}
         data-testid={`prescription-textarea-${field}`}
       />
     </label>

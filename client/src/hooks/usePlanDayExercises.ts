@@ -3,6 +3,7 @@ import { useIsMutating,useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { useApiMutation } from "@/hooks/useApiMutation";
+import { useDebouncedSetPatches } from "@/hooks/useDebouncedSetPatches";
 import { type AddExerciseSetPayload, api, type PatchExerciseSetPayload, QUERY_KEYS } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
 
@@ -12,6 +13,12 @@ import { queryClient } from "@/lib/queryClient";
 // mutate() call, which would hide concurrent PATCHes when a row edit
 // fans out to multiple set ids.
 const planDaySetsMutationKey = (planDayId: string) => ["plan-day-sets", planDayId] as const;
+
+// Same debounce window the cell inputs used to own. Lifted to the hook
+// because the Save button needs to flush pending cell edits
+// synchronously before regenerating the coach note; a per-component
+// debounce has no flush seam.
+const CELL_SAVE_DEBOUNCE_MS = 350;
 
 /**
  * Mutation + query bundle for a plan day's prescribed exercise sets.
@@ -47,8 +54,13 @@ export function usePlanDayExercises(planDayId: string | null) {
   // after each debounced PATCH lands, so the athlete has visible proof the
   // edit persisted — otherwise the only feedback today is an optimistic
   // cache update that looks identical whether the server saw the change or
-  // not.
+  // not. `ownerId` is a render-time sentinel that resets the timestamp
+  // when the owning plan day changes, so signals from a prior entry (used
+  // by CoachTakePanel staleness + auto-regenerate-on-close) don't bleed
+  // into the next one. Using this pattern instead of a setState-in-effect
+  // satisfies react-hooks/set-state-in-effect.
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
+  const [ownerId, setOwnerId] = useState(planDayId);
   const markSaved = () => setLastSavedAt(Date.now());
 
   const updateSet = useApiMutation({
@@ -74,6 +86,24 @@ export function usePlanDayExercises(planDayId: string | null) {
     },
     errorToast: "Couldn't save that change",
   });
+
+  // Per-set debounce coordinator. Cells call `patchSetDebounced`; Save
+  // calls `flushPendingSetPatches` before firing the coach-note
+  // regenerate so the server snapshots the just-edited prescription.
+  const { patchSetDebounced, flushPendingSetPatches, cancelPending } = useDebouncedSetPatches<PatchExerciseSetPayload>(
+    updateSet.mutate,
+    CELL_SAVE_DEBOUNCE_MS,
+  );
+
+  // Sentinel runs after the debounce coordinator so it can cancel
+  // patches queued against the prior plan day — `updateSet.mutate`
+  // already closes over the new `planDayId`, so firing them would
+  // PATCH the wrong owner.
+  if (planDayId !== ownerId) {
+    setOwnerId(planDayId);
+    setLastSavedAt(null);
+    cancelPending();
+  }
 
   const addSet = useApiMutation({
     mutationKey: planDayId ? planDaySetsMutationKey(planDayId) : undefined,
@@ -159,6 +189,8 @@ export function usePlanDayExercises(planDayId: string | null) {
     isSaving,
     lastSavedAt,
     updateSet,
+    patchSetDebounced,
+    flushPendingSetPatches,
     addSet,
     deleteSet,
     reparseFreeText,

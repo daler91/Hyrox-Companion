@@ -3,6 +3,7 @@ import { useIsMutating,useQuery } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 
 import { useApiMutation } from "@/hooks/useApiMutation";
+import { useDebouncedSetPatches } from "@/hooks/useDebouncedSetPatches";
 import {
   type AddExerciseSetPayload,
   api,
@@ -20,6 +21,11 @@ type WorkoutWithSets = WorkoutLog & { exerciseSets?: ExerciseSet[] };
 // pattern in usePlanDayExercises.
 const workoutSetsMutationKey = (workoutId: string) =>
   ["workout-sets", workoutId] as const;
+
+// Debounce window the cell inputs used to own. Lifted here for the same
+// reason as usePlanDayExercises — the Save button needs a flush seam the
+// per-component debounce couldn't provide.
+const CELL_SAVE_DEBOUNCE_MS = 350;
 
 /**
  * Data + mutation bundle used by the v2 workout detail dialog. Keeps the
@@ -60,8 +66,13 @@ export function useWorkoutDetail(workoutId: string | null) {
 
   // See usePlanDayExercises.ts for the rationale — tracked here so the
   // logged-workout variant of the ExerciseTable can show the same
-  // "Saving… / Saved" feedback the planned variant gets.
+  // "Saving… / Saved" feedback the planned variant gets. `ownerId` is a
+  // render-time sentinel that resets the Saved timestamp when the hook's
+  // workoutId changes, so the flash from a previous entry doesn't bleed
+  // into the next dialog open. Using this pattern instead of a
+  // setState-in-effect satisfies react-hooks/set-state-in-effect.
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
+  const [ownerId, setOwnerId] = useState(workoutId);
   const markSaved = () => setLastSavedAt(Date.now());
 
   const updateSet = useApiMutation({
@@ -90,6 +101,24 @@ export function useWorkoutDetail(workoutId: string | null) {
     },
     errorToast: "Couldn't save that change",
   });
+
+  // Per-set debounce coordinator. Cells call `patchSetDebounced`; the
+  // Save button flushes pending patches synchronously via
+  // `flushPendingSetPatches` before any downstream drain-waiters settle.
+  const { patchSetDebounced, flushPendingSetPatches, cancelPending } = useDebouncedSetPatches<PatchExerciseSetPayload>(
+    updateSet.mutate,
+    CELL_SAVE_DEBOUNCE_MS,
+  );
+
+  // Sentinel runs after the debounce coordinator so it can cancel
+  // patches queued against the prior workout — `updateSet.mutate`
+  // already closes over the new `workoutId`, so firing them would
+  // PATCH the wrong owner.
+  if (workoutId !== ownerId) {
+    setOwnerId(workoutId);
+    setLastSavedAt(null);
+    cancelPending();
+  }
 
   const addSet = useApiMutation({
     mutationKey: workoutId ? workoutSetsMutationKey(workoutId) : undefined,
@@ -184,29 +213,36 @@ export function useWorkoutDetail(workoutId: string | null) {
   // workoutSetsMutationKey so the ExerciseTable's save pill reflects title
   // edits too — one unified "Saving…/Saved" signal across the whole dialog.
   // Optimistic: patches the cached workout so the heading updates without a
-  // round-trip; rollback restores the snapshot on error. Timeline is
-  // invalidated in onSuccess so card copy reflects the new title within a
-  // refetch (we don't have selectedPlanId here, so optimistic timeline
-  // patching would have to traverse every cached variant — invalidate is
-  // simpler and the staleness window is ~100ms).
+  // round-trip; rollback restores ONLY the focus field on error. We
+  // deliberately don't snapshot the whole workout here — if a set-level
+  // mutation succeeded concurrently, restoring the full prior snapshot
+  // would clobber those newer successful changes. Timeline is invalidated
+  // in onSuccess so card copy reflects the new title within a refetch (we
+  // don't have selectedPlanId here, so optimistic timeline patching would
+  // have to traverse every cached variant — invalidate is simpler and the
+  // staleness window is ~100ms).
   const updateFocus = useApiMutation({
     mutationKey: workoutId ? workoutSetsMutationKey(workoutId) : undefined,
     mutationFn: (focus: string) => api.workouts.update(workoutId!, { focus }),
     onMutate: async (focus) => {
       if (!workoutId) return undefined;
       await queryClient.cancelQueries({ queryKey: QUERY_KEYS.workout(workoutId) });
-      const prev = queryClient.getQueryData<WorkoutWithSets>(QUERY_KEYS.workout(workoutId));
+      const prevFocus = queryClient.getQueryData<WorkoutWithSets>(
+        QUERY_KEYS.workout(workoutId),
+      )?.focus;
       patchCachedWorkout({ focus });
-      return { prev };
+      return { prevFocus };
     },
     onSuccess: async () => {
       markSaved();
       await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
     },
     onError: (_err, _vars, ctx) => {
-      const prev = (ctx as { prev?: WorkoutWithSets } | undefined)?.prev;
-      if (workoutId && prev) {
-        queryClient.setQueryData(QUERY_KEYS.workout(workoutId), prev);
+      const prevFocus = (ctx as { prevFocus?: string } | undefined)?.prevFocus;
+      if (workoutId && prevFocus !== undefined) {
+        queryClient.setQueryData<WorkoutWithSets>(QUERY_KEYS.workout(workoutId), (curr) =>
+          curr ? { ...curr, focus: prevFocus } : curr,
+        );
       }
     },
     errorToast: "Couldn't save title",
@@ -302,6 +338,8 @@ export function useWorkoutDetail(workoutId: string | null) {
     isSaving,
     lastSavedAt,
     updateSet,
+    patchSetDebounced,
+    flushPendingSetPatches,
     addSet,
     deleteSet,
     seedFromPlan,

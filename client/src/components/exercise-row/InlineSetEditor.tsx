@@ -6,13 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { useDebouncedCallback } from "@/hooks/useDebouncedCallback";
 import type { AddExerciseSetPayload, PatchExerciseSetPayload } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 import { type FieldKey, fieldMeta, getFields } from "./fieldMeta";
-
-const CELL_SAVE_DEBOUNCE_MS = 350;
 
 interface InlineSetEditorProps {
   readonly sets: ExerciseSet[];
@@ -29,9 +26,11 @@ interface InlineSetEditorProps {
 /**
  * Tabular per-set editor that renders inline under a `GroupRow` when
  * the row is expanded. One row per set, columns derived from the
- * exercise definition (reps / weight / distance / time). Each cell
- * debounces its write (350ms) through the group's per-set mutation
- * callbacks, so edits on different sets don't clobber each other.
+ * exercise definition (reps / weight / distance / time). Cells call
+ * `onUpdate(patch)` synchronously on each keystroke; debouncing +
+ * merging happens one level up in `usePlanDayExercises` /
+ * `useWorkoutDetail` so the Save button can flush pending edits before
+ * firing the coach-note regenerate.
  *
  * Keeps the compact tabular aesthetic of the log-workout MultiSetTable
  * rather than the large-card stepper pattern. A per-set notes toggle
@@ -74,10 +73,12 @@ export function InlineSetEditor({
 
   // Custom-label is fanned out across every set in the group — the
   // grouping key depends on `exerciseName + customLabel`, so editing
-  // one set would split the row.
-  const debouncedLabelFanout = useDebouncedCallback((next: string | null) => {
+  // one set would split the row. Each fanout call hits the hook's
+  // per-set debounce, so concurrent edits on separate set rows don't
+  // race.
+  const labelFanout = (next: string | null) => {
     for (const s of orderedSets) onUpdateSet(s.id, { customLabel: next });
-  }, CELL_SAVE_DEBOUNCE_MS);
+  };
 
   const canonicalLabel =
     EXERCISE_DEFINITIONS[exerciseName as ExerciseName]?.label ?? "Exercise name";
@@ -87,7 +88,7 @@ export function InlineSetEditor({
       <CustomLabelField
         initial={customLabel ?? ""}
         placeholder={canonicalLabel}
-        onChange={(next) => debouncedLabelFanout(next.trim() === "" ? null : next)}
+        onChange={(next) => labelFanout(next.trim() === "" ? null : next)}
       />
 
       <div className="space-y-1">
@@ -272,11 +273,6 @@ function FieldInput({ field, set, weightUnit, distanceUnit, onUpdate }: FieldInp
     setDraft(formatInitial(current));
   }
 
-  const debouncedPatch = useDebouncedCallback((next: number | undefined) => {
-    setLastSaved(next);
-    onUpdate({ [field]: next ?? null } as PatchExerciseSetPayload);
-  }, CELL_SAVE_DEBOUNCE_MS);
-
   return (
     <Input
       type="number"
@@ -287,7 +283,9 @@ function FieldInput({ field, set, weightUnit, distanceUnit, onUpdate }: FieldInp
         setDraft(raw);
         const parsed = parseDraft(raw);
         if (parsed == null || !Number.isNaN(parsed)) {
-          debouncedPatch(parsed ?? undefined);
+          const next = parsed ?? undefined;
+          setLastSaved(next);
+          onUpdate({ [field]: next ?? null } as PatchExerciseSetPayload);
         }
       }}
       placeholder="--"
@@ -312,18 +310,15 @@ function NotesField({ set, onUpdate }: NotesFieldProps) {
     setDraft(initial);
   }
 
-  const debouncedPatch = useDebouncedCallback((next: string) => {
-    const stored = next.trim() === "" ? null : next;
-    setLastSaved(stored ?? "");
-    onUpdate({ notes: stored });
-  }, CELL_SAVE_DEBOUNCE_MS);
-
   return (
     <Textarea
       value={draft}
       onChange={(e) => {
-        setDraft(e.target.value);
-        debouncedPatch(e.target.value);
+        const next = e.target.value;
+        setDraft(next);
+        const stored = next.trim() === "" ? null : next;
+        setLastSaved(stored ?? "");
+        onUpdate({ notes: stored });
       }}
       placeholder="Note for this set"
       className="min-h-[48px] text-sm"

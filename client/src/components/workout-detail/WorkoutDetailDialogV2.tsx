@@ -25,6 +25,7 @@ import { CoachTakePanel } from "./CoachTakePanel";
 import { ExerciseTable } from "./ExerciseTable";
 import { HistoryPanel } from "./HistoryPanel";
 import { InDialogCoachChat } from "./InDialogCoachChat";
+import { SaveWorkoutButton } from "./SaveWorkoutButton";
 import { WorkoutDetailHeaderV2 } from "./WorkoutDetailHeaderV2";
 import { WorkoutStatsRow } from "./WorkoutStatsRow";
 
@@ -142,7 +143,8 @@ export function WorkoutDetailDialogV2({
     isLoading,
     isSaving: isSavingLoggedSets,
     lastSavedAt: loggedLastSavedAt,
-    updateSet,
+    patchSetDebounced: patchLoggedSetDebounced,
+    flushPendingSetPatches: flushLoggedSetPatches,
     addSet,
     deleteSet,
     reparseFreeText,
@@ -159,6 +161,94 @@ export function WorkoutDetailDialogV2({
   // way. When the entry isn't planned, planDayId is null and every
   // mutation no-ops, which is the same behaviour DialogBody had before.
   const planSets = usePlanDayExercises(entry?.planDayId ?? null);
+  // Hoisted for the same reason — the Save button lives in the dialog
+  // footer and needs `regenerate.mutate()` + `isRegenerating`. DialogBody
+  // receives the hook as a prop so CoachTakePanel wiring stays identical.
+  const planCoachNote = usePlanDayCoachNote(entry?.planDayId ?? null);
+
+  // Local stamp of the most recent successful Save click. Bumped after the
+  // blur-flush and (when applicable) coach-note regenerate resolve, so
+  // SaveWorkoutButton can flash "Saved ✓" once per click.
+  const [saveClickedAt, setSaveClickedAt] = useState<number | null>(null);
+  const [saveInFlight, setSaveInFlight] = useState(false);
+  // Frozen at click time so the drain watcher regenerates the entry
+  // the user actually clicked Save on — even if they navigate to a
+  // different entry while the per-set PATCHes are still draining.
+  // null means "no plan-day refresh for this save" (ad-hoc logged
+  // workout, or a logged workout whose edits don't touch plan-day state).
+  const [saveTargetPlanDayId, setSaveTargetPlanDayId] = useState<string | null>(null);
+  // Guards against the drain watcher re-firing regenerate on every
+  // isSaving toggle — one regenerate per Save click. Resets when
+  // saveInFlight returns to false at the end of the cycle.
+  const saveRegenerateFiredRef = useRef(false);
+  const regenerateMutate = planCoachNote.regenerate.mutate;
+
+  // Live entry id — read from the regenerate's finalize callback so a
+  // late success (user navigated away while the mutation was in flight)
+  // doesn't flash "Saved ✓" on whatever entry is current now. The ref
+  // is updated from an effect rather than during render to satisfy
+  // react-hooks/refs.
+  const currentEntryIdRef = useRef<string | undefined>(entry?.id);
+  useEffect(() => {
+    currentEntryIdRef.current = entry?.id;
+  }, [entry?.id]);
+
+  // Entry-change sentinel: the dialog stays mounted while the athlete
+  // browses between timeline cards, so per-entry save state has to
+  // reset explicitly. Without this, opening entry B after saving entry
+  // A shows A's "Saved ✓" confirmation and leaves B's button disabled
+  // if A's regenerate is still draining. `lastEntryId` is a render-time
+  // sentinel — same pattern as `ownerId` in usePlanDayExercises —
+  // which satisfies react-hooks/set-state-in-effect.
+  const [lastEntryId, setLastEntryId] = useState<string | undefined>(entry?.id);
+  if (entry?.id !== lastEntryId) {
+    setLastEntryId(entry?.id);
+    setSaveClickedAt(null);
+    setSaveInFlight(false);
+    setSaveTargetPlanDayId(null);
+  }
+
+  // Drain watcher: once every set mutation the flush kicked off has
+  // settled, fire the coach-note regenerate (planned entries) or just
+  // finalize (ad-hoc logged). Without this the regenerate would
+  // snapshot a plan day that still has pre-edit rows, since the
+  // mutations fired from `flushPendingSetPatches` are async.
+  useEffect(() => {
+    if (!saveInFlight) {
+      saveRegenerateFiredRef.current = false;
+      return;
+    }
+    if (planSets.isSaving || isSavingLoggedSets) return;
+    if (saveRegenerateFiredRef.current) return;
+    saveRegenerateFiredRef.current = true;
+    // Freeze the entry id at fire time so the finalize closure can
+    // suppress the flash when the user has navigated away since.
+    const targetEntryId = entry?.id;
+    // "Saved ✓" is the success signal — only flash it when the
+    // regenerate actually succeeded AND the user is still looking at
+    // the entry they clicked Save on. Error paths still clear
+    // saveInFlight + saveTargetPlanDayId so the button unlocks; the
+    // `errorToast` on the hook's mutation surfaces the failure.
+    const finalizeSuccess = () => {
+      setSaveInFlight(false);
+      setSaveTargetPlanDayId(null);
+      if (currentEntryIdRef.current === targetEntryId) {
+        setSaveClickedAt(Date.now());
+      }
+    };
+    const finalizeFailure = () => {
+      setSaveInFlight(false);
+      setSaveTargetPlanDayId(null);
+    };
+    if (saveTargetPlanDayId) {
+      regenerateMutate(saveTargetPlanDayId, {
+        onSuccess: finalizeSuccess,
+        onError: finalizeFailure,
+      });
+    } else {
+      finalizeSuccess();
+    }
+  }, [saveInFlight, planSets.isSaving, isSavingLoggedSets, saveTargetPlanDayId, regenerateMutate, entry?.id]);
 
   // Tracks the most recent focus value submitted from the header. The
   // timeline query owns `entry.focus` and is only invalidated on save
@@ -290,11 +380,12 @@ export function WorkoutDetailDialogV2({
           history={history}
           onMarkComplete={onMarkComplete}
           isMarkingComplete={isMarkingComplete}
-          onUpdateSet={(setId, data) => updateSet.mutate({ setId, data })}
+          onUpdateSet={patchLoggedSetDebounced}
           onAddSet={(data) => addSet.mutate(data)}
           onDeleteSet={(setId) => deleteSet.mutate(setId)}
           loggedSaveState={loggedSaveState}
           planSets={planSets}
+          planCoachNote={planCoachNote}
           latestFocusRef={latestFocusRef}
           onSaveNote={(note) => workoutId && updateNote.mutate(note)}
           onSaveLoggedPrescription={(patch) => workoutId && updatePrescription.mutate(patch)}
@@ -322,6 +413,37 @@ export function WorkoutDetailDialogV2({
           }}
           onCloseChat={() => setChatOpen(false)}
         />
+
+        <div className="flex items-center justify-end gap-3 border-t border-border px-6 py-3">
+          <SaveWorkoutButton
+            isBusy={saveInFlight || planCoachNote.isRegenerating}
+            savedAt={saveClickedAt}
+            showCoachNoteHint={entry.planDayId != null}
+            disabled={planCoachNote.isCoolingDown}
+            onClick={() => {
+              // Blur so EditableFocus + CoachPrescriptionCollapsible's
+              // onBlur-flushes commit pending edits. Cell debounces live
+              // in the hook below, so per-set PATCHes are driven by the
+              // explicit flush calls rather than the blur.
+              const active = document.activeElement;
+              if (active instanceof HTMLElement) active.blur();
+              // Commit any pending per-set PATCHes synchronously before
+              // the drain watcher starts counting down. `flushLoggedSetPatches`
+              // no-ops for the planned branch (workoutId is null) and
+              // `planSets.flushPendingSetPatches` no-ops for ad-hoc workouts.
+              planSets.flushPendingSetPatches();
+              flushLoggedSetPatches();
+              // Only planned entries write to plan_days, so only planned
+              // entries need the coach-note regenerate. A logged workout
+              // that happens to be linked to a plan day still edits its
+              // workoutLog via api.workouts.*, not plan_days — regenerate
+              // there would burn AI budget / cooldown without reflecting
+              // what was actually saved.
+              setSaveTargetPlanDayId(isPlanned ? entry.planDayId ?? null : null);
+              setSaveInFlight(true);
+            }}
+          />
+        </div>
       </DialogContent>
 
       {/* Explicit confirm step before firing onDelete — the v2 menu's ⋮ is
@@ -385,6 +507,14 @@ interface DialogBodyProps {
    */
   readonly planSets: ReturnType<typeof usePlanDayExercises>;
   /**
+   * Coach-note regenerate hook hoisted up to the dialog so the Save
+   * button in the footer and CoachTakePanel in the sidebar share one
+   * instance. Passing it down here keeps CoachTakePanel's wiring
+   * identical — it still reads `localRationale`, `localUpdatedAt`, and
+   * `isRegenerating` from this bundle.
+   */
+  readonly planCoachNote: ReturnType<typeof usePlanDayCoachNote>;
+  /**
    * Ref tracking the most recent focus submitted from the header input,
    * read by PlannedCallToAction so Mark complete uses the just-typed
    * value instead of the `entry.focus` prop, which lags the save.
@@ -441,6 +571,7 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     onDeleteSet,
     loggedSaveState,
     planSets,
+    planCoachNote,
     latestFocusRef,
     onSaveNote,
     onSaveLoggedPrescription,
@@ -451,12 +582,7 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     onCloseChat,
   } = props;
 
-  // Hoisted out of PlannedCallToAction so the same lastSavedAt / rationale
-  // refresh state can feed the CoachTakePanel on the right rail. planSets
-  // is passed in from the parent (shared with the header's focus save);
-  // planCoachNote stays local since only DialogBody uses it.
   const planDayId = entry.planDayId ?? null;
-  const planCoachNote = usePlanDayCoachNote(planDayId);
 
   // Prefer the locally-regenerated rationale when present so the UI updates
   // the moment the refresh mutation resolves — without waiting for the
@@ -473,34 +599,6 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     planSets.lastSavedAt != null &&
     displayNoteUpdatedAt != null &&
     planSets.lastSavedAt > displayNoteUpdatedAt.getTime();
-
-  // Auto-regenerate coach take on dialog close when exercises were edited
-  // during this session. Fire-and-forget — the cooldown + aiBudgetCheck on
-  // the server make repeat calls cheap and safe. We mirror the relevant
-  // state into a ref inside an effect (not during render, per react-hooks/
-  // refs) and the deps-empty cleanup reads it once on unmount.
-  const autoRegenRef = useRef<{ trigger: () => void; shouldFire: () => boolean }>({
-    trigger: () => {},
-    shouldFire: () => false,
-  });
-  const shouldFireAutoRegen =
-    isPlanned &&
-    planDayId != null &&
-    planSets.lastSavedAt != null &&
-    (displayNoteUpdatedAt == null || planSets.lastSavedAt > displayNoteUpdatedAt.getTime());
-  useEffect(() => {
-    autoRegenRef.current = {
-      trigger: () => planCoachNote.regenerate.mutate(),
-      shouldFire: () => shouldFireAutoRegen,
-    };
-  }, [planCoachNote.regenerate, shouldFireAutoRegen]);
-  useEffect(() => {
-    return () => {
-      if (autoRegenRef.current.shouldFire()) {
-        autoRegenRef.current.trigger();
-      }
-    };
-  }, []);
 
   // Route free-text edits to the right mutation based on which branch is open.
   const onSavePrescriptionField = (field: "mainWorkout" | "accessory" | "notes", value: string) => {
@@ -703,7 +801,7 @@ function PlannedCallToAction({ entry, onMarkComplete, isMarkingComplete, weightU
           workoutId={planDayId}
           exerciseSets={planSets.exerciseSets}
           weightUnit={weightUnit}
-          onUpdateSet={(setId, data) => planSets.updateSet.mutate({ setId, data })}
+          onUpdateSet={planSets.patchSetDebounced}
           onAddSet={(data) => planSets.addSet.mutate(data)}
           onDeleteSet={(setId) => planSets.deleteSet.mutate(setId)}
           saveState={{ isSaving: planSets.isSaving, lastSavedAt: planSets.lastSavedAt }}
