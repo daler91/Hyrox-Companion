@@ -210,6 +210,17 @@ export function WorkoutDetailDialogV2({
   });
   const showStatsRow = !isPlanned && !!workout;
 
+  const onChangeFocus = buildFocusHandler({
+    isPlanned,
+    planDayId: entry.planDayId ?? null,
+    workoutId,
+    planSets,
+    updateFocus,
+  });
+  const headerSaveState = isPlanned
+    ? { isSaving: planSets.isSaving, lastSavedAt: planSets.lastSavedAt }
+    : loggedSaveState;
+
   return (
     <Dialog open={!!entry} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
@@ -239,20 +250,8 @@ export function WorkoutDetailDialogV2({
             onDelete={handlers.menuDelete}
             onChangeStatus={handlers.menuChangeStatus}
             onCombine={handlers.menuCombine}
-            onChangeFocus={
-              isPlanned
-                ? entry.planDayId
-                  ? (focus) => planSets.updatePrescription.mutate({ focus })
-                  : undefined
-                : workoutId
-                  ? (focus) => updateFocus.mutate(focus)
-                  : undefined
-            }
-            saveState={
-              isPlanned
-                ? { isSaving: planSets.isSaving, lastSavedAt: planSets.lastSavedAt }
-                : loggedSaveState
-            }
+            onChangeFocus={onChangeFocus}
+            saveState={headerSaveState}
           />
           {showStatsRow && workout && (
             <WorkoutStatsRow
@@ -712,6 +711,29 @@ function PlannedCallToAction({ entry, onMarkComplete, isMarkingComplete, weightU
       </div>
     </div>
   );
+}
+
+/**
+ * Resolve the focus-save handler for the header title input. Branches on
+ * planned-vs-logged state, then guards on the owning id (planDayId /
+ * workoutId). Returning undefined on either guard drops the header into
+ * its read-only fallback. Extracted so the JSX site stays free of nested
+ * ternaries.
+ */
+function buildFocusHandler(args: {
+  readonly isPlanned: boolean;
+  readonly planDayId: string | null;
+  readonly workoutId: string | null;
+  readonly planSets: ReturnType<typeof usePlanDayExercises>;
+  readonly updateFocus: ReturnType<typeof useWorkoutDetail>["updateFocus"];
+}): ((focus: string) => void) | undefined {
+  const { isPlanned, planDayId, workoutId, planSets, updateFocus } = args;
+  if (isPlanned) {
+    if (!planDayId) return undefined;
+    return (focus) => planSets.updatePrescription.mutate({ focus });
+  }
+  if (!workoutId) return undefined;
+  return (focus) => updateFocus.mutate(focus);
 }
 
 interface BuildDialogHandlersArgs {
