@@ -46,6 +46,14 @@ export function SaveWorkoutButton({
 }: SaveWorkoutButtonProps) {
   const buttonDisabled = isBusy || !!disabled;
   const label = isBusy ? "Saving…" : "Save";
+  const hasSaved = savedAt != null;
+  let IconComponent = Save;
+  if (isBusy) {
+    IconComponent = Loader2;
+  } else if (hasSaved) {
+    IconComponent = Check;
+  }
+  const showFlash = isBusy === false && hasSaved;
 
   return (
     <div
@@ -63,13 +71,10 @@ export function SaveWorkoutButton({
           data-testid="workout-detail-save-button"
           aria-live="polite"
         >
-          {isBusy ? (
-            <Loader2 className="size-4 animate-spin" aria-hidden />
-          ) : savedAt != null ? (
-            <Check className="size-4" aria-hidden />
-          ) : (
-            <Save className="size-4" aria-hidden />
-          )}
+          <IconComponent
+            className={cn("size-4", isBusy && "animate-spin")}
+            aria-hidden
+          />
           {label}
         </Button>
         {showCoachNoteHint && (
@@ -78,7 +83,7 @@ export function SaveWorkoutButton({
           </span>
         )}
       </div>
-      {!isBusy && savedAt != null && (
+      {showFlash && (
         <SaveFlashBadge key={savedAt} testId="workout-detail-save-flash" />
       )}
     </div>

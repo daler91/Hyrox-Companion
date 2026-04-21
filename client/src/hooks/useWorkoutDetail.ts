@@ -1,6 +1,6 @@
 import type { ExerciseSet, WorkoutLog } from "@shared/schema";
 import { useIsMutating,useQuery } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useApiMutation } from "@/hooks/useApiMutation";
 import {
@@ -20,6 +20,16 @@ type WorkoutWithSets = WorkoutLog & { exerciseSets?: ExerciseSet[] };
 // pattern in usePlanDayExercises.
 const workoutSetsMutationKey = (workoutId: string) =>
   ["workout-sets", workoutId] as const;
+
+// Debounce window the cell inputs used to own. Lifted here for the same
+// reason as usePlanDayExercises — the Save button needs a flush seam the
+// per-component debounce couldn't provide.
+const CELL_SAVE_DEBOUNCE_MS = 350;
+
+interface PendingSetPatch {
+  timer: ReturnType<typeof setTimeout>;
+  patch: PatchExerciseSetPayload;
+}
 
 /**
  * Data + mutation bundle used by the v2 workout detail dialog. Keeps the
@@ -99,6 +109,47 @@ export function useWorkoutDetail(workoutId: string | null) {
     },
     errorToast: "Couldn't save that change",
   });
+
+  // Per-set debounce coordinator. Cells call `patchSetDebounced`; the
+  // Save button flushes pending patches synchronously via
+  // `flushPendingSetPatches` before any downstream drain-waiters settle.
+  // Mirror of the pattern in usePlanDayExercises — kept here rather than
+  // shared because the underlying mutation (`api.workouts.updateSet` vs
+  // `api.plans.updateDayExercise`) differs.
+  const pendingPatchesRef = useRef<Map<string, PendingSetPatch>>(new Map());
+  const firePatchRef = useRef<(setId: string) => void>(() => {});
+  firePatchRef.current = (setId: string) => {
+    const entry = pendingPatchesRef.current.get(setId);
+    if (!entry) return;
+    clearTimeout(entry.timer);
+    pendingPatchesRef.current.delete(setId);
+    updateSet.mutate({ setId, data: entry.patch });
+  };
+
+  const patchSetDebounced = (setId: string, patch: PatchExerciseSetPayload) => {
+    const existing = pendingPatchesRef.current.get(setId);
+    if (existing) clearTimeout(existing.timer);
+    const merged = { ...(existing?.patch ?? {}), ...patch };
+    const timer = setTimeout(
+      () => firePatchRef.current(setId),
+      CELL_SAVE_DEBOUNCE_MS,
+    );
+    pendingPatchesRef.current.set(setId, { timer, patch: merged });
+  };
+
+  const flushPendingSetPatches = () => {
+    const ids = Array.from(pendingPatchesRef.current.keys());
+    for (const setId of ids) firePatchRef.current(setId);
+  };
+
+  useEffect(() => {
+    const pending = pendingPatchesRef.current;
+    const fire = firePatchRef;
+    return () => {
+      const ids = Array.from(pending.keys());
+      for (const setId of ids) fire.current(setId);
+    };
+  }, []);
 
   const addSet = useApiMutation({
     mutationKey: workoutId ? workoutSetsMutationKey(workoutId) : undefined,
@@ -318,6 +369,8 @@ export function useWorkoutDetail(workoutId: string | null) {
     isSaving,
     lastSavedAt,
     updateSet,
+    patchSetDebounced,
+    flushPendingSetPatches,
     addSet,
     deleteSet,
     seedFromPlan,

@@ -143,7 +143,8 @@ export function WorkoutDetailDialogV2({
     isLoading,
     isSaving: isSavingLoggedSets,
     lastSavedAt: loggedLastSavedAt,
-    updateSet,
+    patchSetDebounced: patchLoggedSetDebounced,
+    flushPendingSetPatches: flushLoggedSetPatches,
     addSet,
     deleteSet,
     reparseFreeText,
@@ -170,6 +171,38 @@ export function WorkoutDetailDialogV2({
   // SaveWorkoutButton can flash "Saved ✓" once per click.
   const [saveClickedAt, setSaveClickedAt] = useState<number | null>(null);
   const [saveInFlight, setSaveInFlight] = useState(false);
+  // Guards against the drain watcher re-firing regenerate on every
+  // isSaving toggle — one regenerate per Save click. Resets when
+  // saveInFlight returns to false at the end of the cycle.
+  const saveRegenerateFiredRef = useRef(false);
+  // React Query's mutate function is stable, but the mutation object
+  // ref isn't. Hold a ref so the drain watcher's deps stay primitive.
+  const regenerateMutateRef = useRef(planCoachNote.regenerate.mutate);
+  regenerateMutateRef.current = planCoachNote.regenerate.mutate;
+
+  // Drain watcher: once every set mutation the flush kicked off has
+  // settled, fire the coach-note regenerate (planned entries) or just
+  // finalize (ad-hoc logged). Without this the regenerate would
+  // snapshot a plan day that still has pre-edit rows, since the
+  // mutations fired from `flushPendingSetPatches` are async.
+  useEffect(() => {
+    if (!saveInFlight) {
+      saveRegenerateFiredRef.current = false;
+      return;
+    }
+    if (planSets.isSaving || isSavingLoggedSets) return;
+    if (saveRegenerateFiredRef.current) return;
+    saveRegenerateFiredRef.current = true;
+    const finalize = () => {
+      setSaveInFlight(false);
+      setSaveClickedAt(Date.now());
+    };
+    if (entry?.planDayId) {
+      regenerateMutateRef.current(undefined, { onSettled: finalize });
+    } else {
+      finalize();
+    }
+  }, [saveInFlight, planSets.isSaving, isSavingLoggedSets, entry?.planDayId]);
 
   // Tracks the most recent focus value submitted from the header. The
   // timeline query owns `entry.focus` and is only invalidated on save
@@ -301,7 +334,7 @@ export function WorkoutDetailDialogV2({
           history={history}
           onMarkComplete={onMarkComplete}
           isMarkingComplete={isMarkingComplete}
-          onUpdateSet={(setId, data) => updateSet.mutate({ setId, data })}
+          onUpdateSet={patchLoggedSetDebounced}
           onAddSet={(data) => addSet.mutate(data)}
           onDeleteSet={(setId) => deleteSet.mutate(setId)}
           loggedSaveState={loggedSaveState}
@@ -342,28 +375,18 @@ export function WorkoutDetailDialogV2({
             showCoachNoteHint={entry.planDayId != null}
             disabled={planCoachNote.isCoolingDown}
             onClick={() => {
-              // Flush any pending debounced edits first by blurring the
-              // focused input — our EditableFocus + cell inputs fire their
-              // save on blur, so this lets those PATCHes hit the network
-              // before we regenerate the coach take (which snapshots the
-              // plan day server-side).
+              // Blur so EditableFocus's onBlur-flush commits any pending
+              // title edit. Cell debounces live in the hook below, not in
+              // the input — so they don't need the blur to flush.
               const active = document.activeElement;
               if (active instanceof HTMLElement) active.blur();
+              // Commit any pending per-set PATCHes synchronously before
+              // the drain watcher starts counting down. `flushLoggedSetPatches`
+              // no-ops for the planned branch (workoutId is null) and
+              // `planSets.flushPendingSetPatches` no-ops for ad-hoc workouts.
+              planSets.flushPendingSetPatches();
+              flushLoggedSetPatches();
               setSaveInFlight(true);
-              const finalize = () => {
-                setSaveInFlight(false);
-                setSaveClickedAt(Date.now());
-              };
-              if (entry.planDayId) {
-                planCoachNote.regenerate.mutate(undefined, {
-                  onSettled: finalize,
-                });
-              } else {
-                // Ad-hoc logged workout — no coach take to regenerate.
-                // Still flash "Saved ✓" so the click has visible
-                // confirmation that any in-flight debounces flushed.
-                finalize();
-              }
             }}
           />
         </div>
@@ -724,7 +747,7 @@ function PlannedCallToAction({ entry, onMarkComplete, isMarkingComplete, weightU
           workoutId={planDayId}
           exerciseSets={planSets.exerciseSets}
           weightUnit={weightUnit}
-          onUpdateSet={(setId, data) => planSets.updateSet.mutate({ setId, data })}
+          onUpdateSet={planSets.patchSetDebounced}
           onAddSet={(data) => planSets.addSet.mutate(data)}
           onDeleteSet={(setId) => planSets.deleteSet.mutate(setId)}
           saveState={{ isSaving: planSets.isSaving, lastSavedAt: planSets.lastSavedAt }}

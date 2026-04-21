@@ -41,6 +41,17 @@ export function usePlanDayCoachNote(planDayId: string | null) {
   }, [cooldownUntil]);
   const isCoolingDown = cooldownUntil != null;
 
+  // The hook is now called at the always-mounted WorkoutDetailDialogV2 level
+  // (Radix Dialog keeps children mounted while closed). Without this reset,
+  // a regenerate against plan day A leaves `localRationale` populated, and
+  // opening plan day B would render A's text in B's sidebar until the
+  // invalidated timeline query round-tripped.
+  useEffect(() => {
+    setLocalRationale(null);
+    setLocalUpdatedAt(null);
+    setCooldownUntil(null);
+  }, [planDayId]);
+
   const regenerate = useApiMutation<
     { planDayId: string; aiRationale: string; aiNoteUpdatedAt: string },
     Error,

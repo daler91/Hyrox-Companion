@@ -1,6 +1,6 @@
 import type { ExerciseSet } from "@shared/schema";
 import { useIsMutating,useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useApiMutation } from "@/hooks/useApiMutation";
 import { type AddExerciseSetPayload, api, type PatchExerciseSetPayload, QUERY_KEYS } from "@/lib/api";
@@ -12,6 +12,16 @@ import { queryClient } from "@/lib/queryClient";
 // mutate() call, which would hide concurrent PATCHes when a row edit
 // fans out to multiple set ids.
 const planDaySetsMutationKey = (planDayId: string) => ["plan-day-sets", planDayId] as const;
+
+// Same debounce window the cell inputs used to own. Lifted here because
+// the Save button needs to flush pending cell edits synchronously before
+// regenerating the coach note; a per-component debounce has no flush seam.
+const CELL_SAVE_DEBOUNCE_MS = 350;
+
+interface PendingSetPatch {
+  timer: ReturnType<typeof setTimeout>;
+  patch: PatchExerciseSetPayload;
+}
 
 /**
  * Mutation + query bundle for a plan day's prescribed exercise sets.
@@ -83,6 +93,51 @@ export function usePlanDayExercises(planDayId: string | null) {
     },
     errorToast: "Couldn't save that change",
   });
+
+  // Per-set debounce coordinator. Cell inputs hand raw patches to
+  // `patchSetDebounced`; each set id owns one pending entry whose patch
+  // fields merge as the user edits within the window. The Save button
+  // calls `flushPendingSetPatches` to commit everything synchronously
+  // before the regenerate fires — otherwise the server snapshots a
+  // pre-edit plan day. `firePatchRef` is re-assigned each render so the
+  // timer/flush callbacks always see the freshest `updateSet.mutate`.
+  const pendingPatchesRef = useRef<Map<string, PendingSetPatch>>(new Map());
+  const firePatchRef = useRef<(setId: string) => void>(() => {});
+  firePatchRef.current = (setId: string) => {
+    const entry = pendingPatchesRef.current.get(setId);
+    if (!entry) return;
+    clearTimeout(entry.timer);
+    pendingPatchesRef.current.delete(setId);
+    updateSet.mutate({ setId, data: entry.patch });
+  };
+
+  const patchSetDebounced = (setId: string, patch: PatchExerciseSetPayload) => {
+    const existing = pendingPatchesRef.current.get(setId);
+    if (existing) clearTimeout(existing.timer);
+    const merged = { ...(existing?.patch ?? {}), ...patch };
+    const timer = setTimeout(
+      () => firePatchRef.current(setId),
+      CELL_SAVE_DEBOUNCE_MS,
+    );
+    pendingPatchesRef.current.set(setId, { timer, patch: merged });
+  };
+
+  const flushPendingSetPatches = () => {
+    const ids = Array.from(pendingPatchesRef.current.keys());
+    for (const setId of ids) firePatchRef.current(setId);
+  };
+
+  // Flush on unmount so closing the dialog mid-edit doesn't silently drop
+  // the last keystroke — matches the guarantee useDebouncedCallback gave
+  // when the debounce lived inside each cell input.
+  useEffect(() => {
+    const pending = pendingPatchesRef.current;
+    const fire = firePatchRef;
+    return () => {
+      const ids = Array.from(pending.keys());
+      for (const setId of ids) fire.current(setId);
+    };
+  }, []);
 
   const addSet = useApiMutation({
     mutationKey: planDayId ? planDaySetsMutationKey(planDayId) : undefined,
@@ -168,6 +223,8 @@ export function usePlanDayExercises(planDayId: string | null) {
     isSaving,
     lastSavedAt,
     updateSet,
+    patchSetDebounced,
+    flushPendingSetPatches,
     addSet,
     deleteSet,
     reparseFreeText,
