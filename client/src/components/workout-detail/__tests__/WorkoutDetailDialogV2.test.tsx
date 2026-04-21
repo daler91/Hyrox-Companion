@@ -622,4 +622,75 @@ describe("WorkoutDetailDialogV2", () => {
     const regenerateOrder = mockPlans.regenerateCoachNote.mock.invocationCallOrder[0];
     expect(patchOrder).toBeLessThan(regenerateOrder);
   });
+
+  it("does not regenerate the coach note for a logged workout that happens to be plan-linked", async () => {
+    // Guards the P1 fix: edits on a LOGGED workout (even one linked to
+    // a plan day) go through api.workouts.*, not plan_days, so firing
+    // regenerateCoachNote on Save would burn AI budget / cooldown for
+    // a plan day whose content didn't change.
+    mockWorkouts.get.mockResolvedValue(
+      makeWorkout({ exerciseSets: [makeSet()], planDayId: "plan-day-1" }),
+    );
+    mockWorkouts.history.mockResolvedValue({
+      lastSameFocus: null,
+      prSetCount: 0,
+      blockAvgRpe: null,
+    });
+
+    renderDialog({
+      entry: makeEntry({ planDayId: "plan-day-1" }),
+    });
+
+    const saveBtn = await screen.findByTestId("workout-detail-save-button");
+    const user = userEvent.setup();
+    await user.click(saveBtn);
+
+    await screen.findByTestId("workout-detail-save-flash");
+    expect(mockPlans.regenerateCoachNote).not.toHaveBeenCalled();
+  });
+
+  it("clears the Saved confirmation when the dialog switches to a different entry", async () => {
+    // Guards the P2 fix: `saveClickedAt` is dialog-level state. The
+    // dialog stays mounted across entry switches, so without the
+    // entry-id sentinel a prior save's "Saved ✓" confirmation bleeds
+    // onto the next entry the athlete opens.
+    mockWorkouts.get.mockResolvedValue(
+      makeWorkout({ exerciseSets: [makeSet()] }),
+    );
+    mockWorkouts.history.mockResolvedValue({
+      lastSameFocus: null,
+      prSetCount: 0,
+      blockAvgRpe: null,
+    });
+
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const { rerender } = render(
+      <QueryClientProvider client={queryClient}>
+        <WorkoutDetailDialogV2
+          entry={makeEntry({ id: "log-A", planDayId: null })}
+          onClose={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+
+    const user = userEvent.setup();
+    const saveBtn = await screen.findByTestId("workout-detail-save-button");
+    await user.click(saveBtn);
+    await screen.findByTestId("workout-detail-save-flash");
+
+    // Simulate the Timeline swapping in a different entry while the
+    // dialog stays mounted.
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <WorkoutDetailDialogV2
+          entry={makeEntry({ id: "log-B", planDayId: null })}
+          onClose={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.queryByTestId("workout-detail-save-flash")).not.toBeInTheDocument();
+  });
 });

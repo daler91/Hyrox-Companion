@@ -174,14 +174,39 @@ export function WorkoutDetailDialogV2({
   // Frozen at click time so the drain watcher regenerates the entry
   // the user actually clicked Save on — even if they navigate to a
   // different entry while the per-set PATCHes are still draining.
-  // null means "no plan day — ad-hoc logged workout" so we skip the
-  // regenerate altogether.
+  // null means "no plan-day refresh for this save" (ad-hoc logged
+  // workout, or a logged workout whose edits don't touch plan-day state).
   const [saveTargetPlanDayId, setSaveTargetPlanDayId] = useState<string | null>(null);
   // Guards against the drain watcher re-firing regenerate on every
   // isSaving toggle — one regenerate per Save click. Resets when
   // saveInFlight returns to false at the end of the cycle.
   const saveRegenerateFiredRef = useRef(false);
   const regenerateMutate = planCoachNote.regenerate.mutate;
+
+  // Live entry id — read from the regenerate's finalize callback so a
+  // late success (user navigated away while the mutation was in flight)
+  // doesn't flash "Saved ✓" on whatever entry is current now. The ref
+  // is updated from an effect rather than during render to satisfy
+  // react-hooks/refs.
+  const currentEntryIdRef = useRef<string | undefined>(entry?.id);
+  useEffect(() => {
+    currentEntryIdRef.current = entry?.id;
+  }, [entry?.id]);
+
+  // Entry-change sentinel: the dialog stays mounted while the athlete
+  // browses between timeline cards, so per-entry save state has to
+  // reset explicitly. Without this, opening entry B after saving entry
+  // A shows A's "Saved ✓" confirmation and leaves B's button disabled
+  // if A's regenerate is still draining. `lastEntryId` is a render-time
+  // sentinel — same pattern as `ownerId` in usePlanDayExercises —
+  // which satisfies react-hooks/set-state-in-effect.
+  const [lastEntryId, setLastEntryId] = useState<string | undefined>(entry?.id);
+  if (entry?.id !== lastEntryId) {
+    setLastEntryId(entry?.id);
+    setSaveClickedAt(null);
+    setSaveInFlight(false);
+    setSaveTargetPlanDayId(null);
+  }
 
   // Drain watcher: once every set mutation the flush kicked off has
   // settled, fire the coach-note regenerate (planned entries) or just
@@ -196,15 +221,20 @@ export function WorkoutDetailDialogV2({
     if (planSets.isSaving || isSavingLoggedSets) return;
     if (saveRegenerateFiredRef.current) return;
     saveRegenerateFiredRef.current = true;
+    // Freeze the entry id at fire time so the finalize closure can
+    // suppress the flash when the user has navigated away since.
+    const targetEntryId = entry?.id;
     // "Saved ✓" is the success signal — only flash it when the
-    // regenerate actually succeeded (or when the entry had no plan
-    // day and the save is trivially done). Error paths still clear
+    // regenerate actually succeeded AND the user is still looking at
+    // the entry they clicked Save on. Error paths still clear
     // saveInFlight + saveTargetPlanDayId so the button unlocks; the
     // `errorToast` on the hook's mutation surfaces the failure.
     const finalizeSuccess = () => {
       setSaveInFlight(false);
-      setSaveClickedAt(Date.now());
       setSaveTargetPlanDayId(null);
+      if (currentEntryIdRef.current === targetEntryId) {
+        setSaveClickedAt(Date.now());
+      }
     };
     const finalizeFailure = () => {
       setSaveInFlight(false);
@@ -218,7 +248,7 @@ export function WorkoutDetailDialogV2({
     } else {
       finalizeSuccess();
     }
-  }, [saveInFlight, planSets.isSaving, isSavingLoggedSets, saveTargetPlanDayId, regenerateMutate]);
+  }, [saveInFlight, planSets.isSaving, isSavingLoggedSets, saveTargetPlanDayId, regenerateMutate, entry?.id]);
 
   // Tracks the most recent focus value submitted from the header. The
   // timeline query owns `entry.focus` and is only invalidated on save
@@ -403,10 +433,13 @@ export function WorkoutDetailDialogV2({
               // `planSets.flushPendingSetPatches` no-ops for ad-hoc workouts.
               planSets.flushPendingSetPatches();
               flushLoggedSetPatches();
-              // Freeze the target plan day BEFORE setSaveInFlight so
-              // the drain watcher reads a stable id even if the user
-              // navigates to a different entry while mutations drain.
-              setSaveTargetPlanDayId(entry.planDayId ?? null);
+              // Only planned entries write to plan_days, so only planned
+              // entries need the coach-note regenerate. A logged workout
+              // that happens to be linked to a plan day still edits its
+              // workoutLog via api.workouts.*, not plan_days — regenerate
+              // there would burn AI budget / cooldown without reflecting
+              // what was actually saved.
+              setSaveTargetPlanDayId(isPlanned ? entry.planDayId ?? null : null);
               setSaveInFlight(true);
             }}
           />
