@@ -47,14 +47,14 @@ export function usePlanDayCoachNote(planDayId: string | null) {
     void
   >({
     mutationFn: () => api.plans.regenerateCoachNote(planDayId!),
-    onSuccess: (result) => {
+    onSuccess: async (result) => {
       setLocalRationale(result.aiRationale);
       setLocalUpdatedAt(new Date(result.aiNoteUpdatedAt));
       setCooldownUntil(null);
       // Refresh the timeline so next render reads the server's new rationale
       // and the dialog stays consistent even after the local state resets
       // (e.g. reopen).
-      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
     },
     onError: (err) => {
       // The server returns 429 with a Retry-After header when the 30-second

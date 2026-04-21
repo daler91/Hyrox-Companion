@@ -110,7 +110,7 @@ async function decodeTable(target: ColumnTarget, dryRun: boolean): Promise<{ upd
   return { updated: rowCount, needed };
 }
 
-async function main() {
+try {
   const flags = parseFlags(process.argv.slice(2));
   logger.info({ dryRun: flags.dryRun }, "[decode-entities] starting");
 
@@ -124,9 +124,7 @@ async function main() {
 
   logger.info({ summary, dryRun: flags.dryRun }, "[decode-entities] done");
   process.exit(0);
-}
-
-main().catch((err) => {
+} catch (err) {
   logger.error({ err }, "[decode-entities] fatal");
   process.exit(1);
-});
+}
