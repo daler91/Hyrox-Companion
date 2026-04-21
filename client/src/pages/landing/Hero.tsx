@@ -80,9 +80,9 @@ export function LandingHeader() {
           <span className="font-bold text-lg">fitai.coach</span>
         </div>
         <div className="flex items-center gap-3">
-          <a href="#features" className="text-sm text-muted-foreground hover:text-foreground transition-colors hidden sm:block">Features</a>
-          <a href="#how-it-works" className="text-sm text-muted-foreground hover:text-foreground transition-colors hidden sm:block">How It Works</a>
-          <a href="#faq" className="text-sm text-muted-foreground hover:text-foreground transition-colors hidden sm:block">FAQ</a>
+          <a href="#features" className="text-sm text-muted-foreground hover:text-foreground transition-colors hidden sm:block rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">Features</a>
+          <a href="#how-it-works" className="text-sm text-muted-foreground hover:text-foreground transition-colors hidden sm:block rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">How It Works</a>
+          <a href="#faq" className="text-sm text-muted-foreground hover:text-foreground transition-colors hidden sm:block rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">FAQ</a>
           <SignInButton mode="modal">
             <Button data-testid="button-login-header" size="sm">Log In</Button>
           </SignInButton>
@@ -109,21 +109,21 @@ export function LandingHeader() {
           <div className="container mx-auto px-4 py-3 flex flex-col gap-3">
             <a
               href="#features"
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               onClick={() => setMobileNavOpen(false)}
             >
               Features
             </a>
             <a
               href="#how-it-works"
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               onClick={() => setMobileNavOpen(false)}
             >
               How It Works
             </a>
             <a
               href="#faq"
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               onClick={() => setMobileNavOpen(false)}
             >
               FAQ

@@ -42,7 +42,7 @@ export function LandingFooter() {
           </div>
           <div className="flex items-center gap-4 text-sm text-muted-foreground">
             <span>Train smarter with AI</span>
-            <a href="/privacy" className="underline hover:text-foreground">Privacy Policy</a>
+            <a href="/privacy" className="underline hover:text-foreground rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">Privacy Policy</a>
           </div>
         </div>
       </div>
