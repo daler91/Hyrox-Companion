@@ -272,6 +272,83 @@ async function handleStravaDisconnect(req: Request, res: Response) {
   }
 }
 
+// Split out of handleStravaSync so the main handler stays under
+// SonarCloud's cognitive-complexity ceiling. Classifies upstream
+// responses so retryWithJitter can distinguish retryable (429, 5xx)
+// from non-retryable auth-revocation failures.
+async function fetchStravaActivities(
+  accessToken: string,
+  log: Pick<typeof logger, "error">,
+): Promise<StravaActivity[]> {
+  return retryWithJitter(
+    async () => {
+      const response = await fetch(
+        "https://www.strava.com/api/v3/athlete/activities?per_page=30",
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          signal: AbortSignal.timeout(EXTERNAL_API_TIMEOUT_MS),
+        },
+      );
+
+      if (response.status === 429 || response.status >= 500) {
+        throw new RetryableHttpError(
+          response.status,
+          parseRetryAfter(response.headers.get("retry-after")),
+        );
+      }
+      if (response.status === 401 || response.status === 403) {
+        // Token was revoked on Strava's side (user removed our app) — a
+        // refresh won't help, we need the user to reconnect. Non-retryable.
+        throw new AppError(
+          ErrorCode.UNAUTHORIZED,
+          "Strava authorization was revoked — please reconnect your account",
+          401,
+        );
+      }
+      if (!response.ok) {
+        log.error(
+          { err: await response.text(), status: response.status },
+          "Failed to fetch Strava activities:",
+        );
+        throw new AppError(
+          ErrorCode.EXTERNAL_API_ERROR,
+          `Strava activities request failed: ${response.status}`,
+          502,
+        );
+      }
+      return (await response.json()) as StravaActivity[];
+    },
+    { label: "strava.listActivities", retries: 3 },
+  );
+}
+
+// Translate upstream errors into actionable client responses instead
+// of a blanket 500 (Warning-13):
+//  - 429 after retry exhaustion → surface Retry-After so the UI can
+//    schedule a reconnect instead of nagging the user to retry.
+//  - 401/403 → explicit "reconnect Strava" path.
+function sendStravaFetchError(res: Response, err: unknown): Response {
+  if (err instanceof RetryableHttpError && err.status === 429) {
+    const retrySeconds = err.retryAfterMs ? Math.ceil(err.retryAfterMs / 1000) : 60;
+    res.setHeader("Retry-After", String(retrySeconds));
+    return res.status(429).json({
+      error: `Strava rate-limited the request. Please retry in about ${Math.ceil(retrySeconds / 60)} minute(s).`,
+      code: "RATE_LIMITED",
+      retryAfterSeconds: retrySeconds,
+    });
+  }
+  if (err instanceof AppError && err.status === 401) {
+    return res.status(401).json({
+      error: err.message,
+      code: "STRAVA_REAUTH_REQUIRED",
+    });
+  }
+  return res.status(502).json({
+    error: "Strava is temporarily unavailable. Please try again shortly.",
+    code: "EXTERNAL_API_ERROR",
+  });
+}
+
 async function handleStravaSync(req: Request, res: Response) {
   try {
     const userId = getUserId(req);
@@ -286,72 +363,10 @@ async function handleStravaSync(req: Request, res: Response) {
 
     let activities: StravaActivity[];
     try {
-      activities = await retryWithJitter(
-        async () => {
-          const activitiesResponse = await fetch(
-            "https://www.strava.com/api/v3/athlete/activities?per_page=30",
-            {
-              headers: { Authorization: `Bearer ${accessToken}` },
-              signal: AbortSignal.timeout(EXTERNAL_API_TIMEOUT_MS),
-            },
-          );
-
-          if (activitiesResponse.status === 429 || activitiesResponse.status >= 500) {
-            throw new RetryableHttpError(
-              activitiesResponse.status,
-              parseRetryAfter(activitiesResponse.headers.get("retry-after")),
-            );
-          }
-          if (activitiesResponse.status === 401 || activitiesResponse.status === 403) {
-            // Token was revoked on Strava's side (user removed our app) — a
-            // refresh won't help, we need the user to reconnect. Non-retryable.
-            throw new AppError(
-              ErrorCode.UNAUTHORIZED,
-              "Strava authorization was revoked — please reconnect your account",
-              401,
-            );
-          }
-          if (!activitiesResponse.ok) {
-            (req.log || logger).error(
-              { err: await activitiesResponse.text(), status: activitiesResponse.status },
-              "Failed to fetch Strava activities:",
-            );
-            throw new AppError(
-              ErrorCode.EXTERNAL_API_ERROR,
-              `Strava activities request failed: ${activitiesResponse.status}`,
-              502,
-            );
-          }
-          return (await activitiesResponse.json()) as StravaActivity[];
-        },
-        { label: "strava.listActivities", retries: 3 },
-      );
+      activities = await fetchStravaActivities(accessToken, req.log || logger);
     } catch (err) {
       (req.log || logger).error({ err }, "Failed to fetch Strava activities after retries:");
-      // Translate upstream errors into actionable client responses instead
-      // of a blanket 500 (Warning-13):
-      //  - 429 after retry exhaustion → surface Retry-After so the UI can
-      //    schedule a reconnect instead of nagging the user to retry.
-      //  - 401/403 → explicit "reconnect Strava" path.
-      if (err instanceof RetryableHttpError && err.status === 429) {
-        const retrySeconds = err.retryAfterMs ? Math.ceil(err.retryAfterMs / 1000) : 60;
-        res.setHeader("Retry-After", String(retrySeconds));
-        return res.status(429).json({
-          error: `Strava rate-limited the request. Please retry in about ${Math.ceil(retrySeconds / 60)} minute(s).`,
-          code: "RATE_LIMITED",
-          retryAfterSeconds: retrySeconds,
-        });
-      }
-      if (err instanceof AppError && err.status === 401) {
-        return res.status(401).json({
-          error: err.message,
-          code: "STRAVA_REAUTH_REQUIRED",
-        });
-      }
-      return res.status(502).json({
-        error: "Strava is temporarily unavailable. Please try again shortly.",
-        code: "EXTERNAL_API_ERROR",
-      });
+      return sendStravaFetchError(res, err);
     }
 
     const activityIds = activities.map(a => String(a.id));
