@@ -32,7 +32,7 @@ function makeReq(method: string, headers: Record<string, string> = {}): Request 
     method,
     path: "/api/v1/workouts",
     header: (name: string) => headers[name.toLowerCase()],
-    log: { error: vi.fn() },
+    log: { error: vi.fn(), warn: vi.fn() },
   } as unknown as Request;
 }
 
@@ -131,6 +131,24 @@ describe("idempotencyMiddleware", () => {
     expect(key).toBe("new-key");
     expect(record.responseBody).toEqual({ id: "w-2" });
     expect(record.statusCode).toBe(200);
+  });
+
+  it("skips persisting response bodies that exceed the cache size cap", async () => {
+    mockStorage.idempotency.get.mockResolvedValue(undefined);
+
+    const req = makeReq("POST", { "x-idempotency-key": "huge" });
+    const res = makeRes();
+    (res as Response & { statusCode: number }).statusCode = 200;
+    const next: NextFunction = vi.fn();
+
+    await idempotencyMiddleware(req, res, next);
+
+    // 64 KiB cap — fill just over to trigger the skip.
+    const hugeBody = { blob: "x".repeat(64 * 1024 + 1) };
+    res.json(hugeBody);
+
+    await new Promise((r) => setTimeout(r, 0));
+    expect(mockStorage.idempotency.set).not.toHaveBeenCalled();
   });
 
   it("does not cache non-2xx responses", async () => {

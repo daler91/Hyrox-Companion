@@ -302,6 +302,15 @@ async function handleStravaSync(req: Request, res: Response) {
               parseRetryAfter(activitiesResponse.headers.get("retry-after")),
             );
           }
+          if (activitiesResponse.status === 401 || activitiesResponse.status === 403) {
+            // Token was revoked on Strava's side (user removed our app) — a
+            // refresh won't help, we need the user to reconnect. Non-retryable.
+            throw new AppError(
+              ErrorCode.UNAUTHORIZED,
+              "Strava authorization was revoked — please reconnect your account",
+              401,
+            );
+          }
           if (!activitiesResponse.ok) {
             (req.log || logger).error(
               { err: await activitiesResponse.text(), status: activitiesResponse.status },
@@ -319,7 +328,30 @@ async function handleStravaSync(req: Request, res: Response) {
       );
     } catch (err) {
       (req.log || logger).error({ err }, "Failed to fetch Strava activities after retries:");
-      return res.status(500).json({ error: "Failed to fetch activities from Strava", code: "INTERNAL_SERVER_ERROR" });
+      // Translate upstream errors into actionable client responses instead
+      // of a blanket 500 (Warning-13):
+      //  - 429 after retry exhaustion → surface Retry-After so the UI can
+      //    schedule a reconnect instead of nagging the user to retry.
+      //  - 401/403 → explicit "reconnect Strava" path.
+      if (err instanceof RetryableHttpError && err.status === 429) {
+        const retrySeconds = err.retryAfterMs ? Math.ceil(err.retryAfterMs / 1000) : 60;
+        res.setHeader("Retry-After", String(retrySeconds));
+        return res.status(429).json({
+          error: `Strava rate-limited the request. Please retry in about ${Math.ceil(retrySeconds / 60)} minute(s).`,
+          code: "RATE_LIMITED",
+          retryAfterSeconds: retrySeconds,
+        });
+      }
+      if (err instanceof AppError && err.status === 401) {
+        return res.status(401).json({
+          error: err.message,
+          code: "STRAVA_REAUTH_REQUIRED",
+        });
+      }
+      return res.status(502).json({
+        error: "Strava is temporarily unavailable. Please try again shortly.",
+        code: "EXTERNAL_API_ERROR",
+      });
     }
 
     const activityIds = activities.map(a => String(a.id));

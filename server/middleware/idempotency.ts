@@ -5,8 +5,17 @@ import { storage } from "../storage";
 import { getUserId } from "../types";
 
 const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
-const IDEMPOTENCY_TTL_SECONDS = 24 * 60 * 60;
+// 1h window is plenty for offlineQueue replay (normal retry is seconds to
+// minutes after reconnect) and dramatically shrinks the stale-payload
+// exposure if a user mutates or deletes the underlying resource between the
+// original write and the replay (CODEBASE_AUDIT.md §2, Warning-1).
+const IDEMPOTENCY_TTL_SECONDS = 60 * 60;
 const MAX_KEY_LENGTH = 255;
+// Cap the cached response size. Above this we still de-dupe (we record the
+// status code) but skip persisting the body so we don't duplicate large
+// payloads — stops a rogue handler from turning the idempotency table into
+// a secondary data store.
+const MAX_CACHED_PAYLOAD_BYTES = 64 * 1024;
 
 /**
  * Server-side enforcement for the `X-Idempotency-Key` header that
@@ -57,16 +66,29 @@ export async function idempotencyMiddleware(req: Request, res: Response, next: N
     // Only cache 2xx responses — replaying a cached 4xx/5xx would mask a
     // transient error once the underlying issue is fixed.
     if (statusCode >= 200 && statusCode < 300) {
-      void storage.idempotency
-        .set(userId, key, {
-          method: req.method,
-          path: req.path,
-          statusCode,
-          responseBody: body,
-        }, IDEMPOTENCY_TTL_SECONDS)
-        .catch((err) => {
-          (req.log || logger).error({ err }, "Failed to persist idempotency record");
-        });
+      // Skip caching oversized bodies. A retry will re-execute the handler,
+      // which is safe because the idempotency invariant for these routes is
+      // enforced by downstream uniqueness constraints (e.g. unique
+      // strava_activity_id), not by this cache.
+      const serialized = JSON.stringify(body);
+      const byteLength = Buffer.byteLength(serialized, "utf8");
+      if (byteLength > MAX_CACHED_PAYLOAD_BYTES) {
+        (req.log || logger).warn(
+          { byteLength, limit: MAX_CACHED_PAYLOAD_BYTES, path: req.path },
+          "Idempotency response exceeded cache size cap; skipping persistence",
+        );
+      } else {
+        void storage.idempotency
+          .set(userId, key, {
+            method: req.method,
+            path: req.path,
+            statusCode,
+            responseBody: body,
+          }, IDEMPOTENCY_TTL_SECONDS)
+          .catch((err) => {
+            (req.log || logger).error({ err }, "Failed to persist idempotency record");
+          });
+      }
     }
     return originalJson(body);
   }) as typeof res.json;
