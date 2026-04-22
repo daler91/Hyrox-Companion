@@ -1,13 +1,16 @@
 import { ChevronDown, Loader2, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { ImageCaptureButton } from "@/components/ImageCaptureButton";
 import { Button } from "@/components/ui/button";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { ExerciseImagePreview } from "@/components/workout/ExerciseImagePreview";
 import { useDebouncedCallback } from "@/hooks/useDebouncedCallback";
+import type { CompressedImage } from "@/lib/image";
 import { cn } from "@/lib/utils";
 
 export type PrescriptionField = "mainWorkout" | "accessory" | "notes";
@@ -47,6 +50,17 @@ interface CoachPrescriptionCollapsibleProps {
    */
   readonly onParse?: () => void;
   readonly isParsing?: boolean;
+  /**
+   * Image capture + preview. Enabling these props swaps the collapsible's
+   * body for a preview surface (thumbnail + Retake / Parse) while a
+   * capture is pending. Leaving them undefined hides the photo button and
+   * keeps the text-only flow.
+   */
+  readonly onCapture?: (image: CompressedImage) => void;
+  readonly imagePreview?: { readonly url: string; readonly error?: string | null } | null;
+  readonly onRetakeImage?: () => void;
+  readonly onParseImage?: () => void;
+  readonly isParsingImage?: boolean;
 }
 
 /**
@@ -71,10 +85,16 @@ export function CoachPrescriptionCollapsible({
   onSaveField,
   onParse,
   isParsing,
+  onCapture,
+  imagePreview,
+  onRetakeImage,
+  onParseImage,
+  isParsingImage,
 }: CoachPrescriptionCollapsibleProps) {
   const hasContent = hasText(mainWorkout) || hasText(accessory) || hasText(notes);
   const editable = typeof onSaveField === "function";
-  if (!hasContent && !editable) return null;
+  const previewActive = !!imagePreview && !!onRetakeImage && !!onParseImage;
+  if (!hasContent && !editable && !previewActive) return null;
 
   const collapsibleProps = open === undefined
     ? { defaultOpen }
@@ -100,7 +120,23 @@ export function CoachPrescriptionCollapsible({
             aria-hidden
           />
         </CollapsibleTrigger>
-        {onParse && (
+        {/*
+          Header actions hide while a capture is being confirmed — the
+          preview body owns Retake + Parse in that state. Keeping them
+          visible would duplicate the Parse action and let the user fire
+          a text-parse on the still-populated textareas mid-confirm.
+        */}
+        {!previewActive && onCapture && (
+          <ImageCaptureButton
+            onImage={onCapture}
+            size="sm"
+            className="h-7 shrink-0"
+            disabled={isParsing}
+            data-testid="coach-prescription-photo"
+            label="Photo"
+          />
+        )}
+        {!previewActive && onParse && (
           <Button
             type="button"
             variant="secondary"
@@ -120,27 +156,39 @@ export function CoachPrescriptionCollapsible({
         )}
       </div>
       <CollapsibleContent className="flex flex-col gap-3 border-t border-border px-4 py-3 text-sm">
-        <PrescriptionSection
-          field="mainWorkout"
-          label="Main"
-          text={mainWorkout ?? ""}
-          editable={editable}
-          onSaveField={onSaveField}
-        />
-        <PrescriptionSection
-          field="accessory"
-          label="Accessory"
-          text={accessory ?? ""}
-          editable={editable}
-          onSaveField={onSaveField}
-        />
-        <PrescriptionSection
-          field="notes"
-          label="Notes"
-          text={notes ?? ""}
-          editable={editable}
-          onSaveField={onSaveField}
-        />
+        {previewActive ? (
+          <ExerciseImagePreview
+            previewUrl={imagePreview.url}
+            error={imagePreview.error ?? null}
+            isParsing={isParsingImage}
+            onRetake={onRetakeImage}
+            onParse={onParseImage}
+          />
+        ) : (
+          <>
+            <PrescriptionSection
+              field="mainWorkout"
+              label="Main"
+              text={mainWorkout ?? ""}
+              editable={editable}
+              onSaveField={onSaveField}
+            />
+            <PrescriptionSection
+              field="accessory"
+              label="Accessory"
+              text={accessory ?? ""}
+              editable={editable}
+              onSaveField={onSaveField}
+            />
+            <PrescriptionSection
+              field="notes"
+              label="Notes"
+              text={notes ?? ""}
+              editable={editable}
+              onSaveField={onSaveField}
+            />
+          </>
+        )}
       </CollapsibleContent>
     </Collapsible>
   );

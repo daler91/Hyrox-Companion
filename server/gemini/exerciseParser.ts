@@ -5,7 +5,7 @@ import { AppError, ErrorCode } from "../errors";
 import { logger } from "../logger";
 import { PARSE_EXERCISES_PROMPT, VALID_CATEGORIES,VALID_EXERCISE_NAMES } from "../prompts";
 import { sanitizeUserInput, validateAiOutput } from "../utils/sanitize";
-import { GEMINI_MODEL, getAiClient, retryWithBackoff, trackUsageFromResponse } from "./client";
+import { GEMINI_MODEL, GEMINI_VISION_MODEL, getAiClient, retryWithBackoff, trackUsageFromResponse } from "./client";
 
 // 🛡️ exerciseName must be non-empty. customLabel must accompany any "custom"
 // row; if the AI misses it we synthesize one in post-validation rather than
@@ -215,6 +215,57 @@ function parseRawResponse(responseText: string): unknown {
   }
 }
 
+// Appended to the shared prompt for the vision path so the model knows the
+// input is an image (whiteboard, printed sheet, notebook page) rather than
+// a typed-out free-text description. The shared body of the prompt still
+// enforces the JSON schema and category rules.
+const IMAGE_PARSE_PREAMBLE =
+  "\n\nYou will receive a photo of a handwritten or printed workout plan " +
+  "(whiteboard, printed sheet, notebook page). Extract the exercises from " +
+  "the image. Ignore doodles, coach initials, dates, and any text that " +
+  "isn't part of the workout prescription.";
+
+async function callGeminiParseImage(
+  imageBase64: string,
+  mimeType: string,
+  weightUnit: string,
+  customExerciseNames: string[] | undefined,
+  userId: string | undefined,
+): Promise<string> {
+  const systemInstruction =
+    PARSE_EXERCISES_PROMPT +
+    IMAGE_PARSE_PREAMBLE +
+    buildUnitNote(weightUnit) +
+    buildCustomNote(customExerciseNames);
+  const response = await retryWithBackoff(
+    () =>
+      getAiClient().models.generateContent({
+        model: GEMINI_VISION_MODEL,
+        config: { systemInstruction, responseMimeType: "application/json" },
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { inlineData: { mimeType, data: imageBase64 } },
+              {
+                text: "Parse the workout plan shown in the attached image into structured exercise data.",
+              },
+            ],
+          },
+        ],
+      }),
+    "exercise-parse-image",
+  );
+
+  if (userId) trackUsageFromResponse(userId, GEMINI_VISION_MODEL, "parse", response);
+
+  if (!response.text || response.text.length === 0) {
+    logger.error({ response }, "[gemini] exercise-parse-image returned empty response");
+    throw new AppError(ErrorCode.AI_ERROR, "AI returned empty response for exercise parsing", 502);
+  }
+  return validateAiOutput(response.text);
+}
+
 export async function parseExercisesFromText(
   text: string,
   weightUnit: string = "kg",
@@ -245,5 +296,53 @@ export async function parseExercisesFromText(
     }
     logger.error({ err: error }, "[gemini] exercise-parse error:");
     throw new AppError(ErrorCode.AI_ERROR, "Failed to parse exercises from text", 502);
+  }
+}
+
+export interface ParseExercisesFromImageInput {
+  readonly imageBase64: string;
+  readonly mimeType: string;
+  readonly weightUnit?: string;
+  readonly customExerciseNames?: string[];
+  readonly userId?: string;
+}
+
+export async function parseExercisesFromImage(
+  input: ParseExercisesFromImageInput,
+): Promise<ParsedExercise[]> {
+  const {
+    imageBase64,
+    mimeType,
+    weightUnit = "kg",
+    customExerciseNames,
+    userId,
+  } = input;
+  try {
+    const responseText = await callGeminiParseImage(
+      imageBase64,
+      mimeType,
+      weightUnit,
+      customExerciseNames,
+      userId,
+    );
+    const raw = parseRawResponse(responseText);
+    const rawArray = Array.isArray(raw) ? raw : [];
+    const validated = validateRows(rawArray);
+
+    if (validated.length === 0 && rawArray.length > 0) {
+      throw new AppError(ErrorCode.AI_ERROR, "AI returned malformed exercise data", 502);
+    }
+
+    // synthesizeCustomLabel needs the source text when the model returns a
+    // "custom" row without a label. For image input there's no source text,
+    // so the synthesizer falls back to "Unknown exercise" — the correct
+    // degraded behavior and what mapValidatedExercise already handles.
+    return validated.map((ex) => mapValidatedExercise(ex, ""));
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+    logger.error({ err: error }, "[gemini] exercise-parse-image error:");
+    throw new AppError(ErrorCode.AI_ERROR, "Failed to parse exercises from image", 502);
   }
 }

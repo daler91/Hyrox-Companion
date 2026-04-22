@@ -2,7 +2,7 @@ import express from "express";
 import request from "supertest";
 import { afterEach,beforeEach, describe, expect, it, vi } from "vitest";
 
-import { chatWithCoach, generateWorkoutSuggestions,parseExercisesFromText, streamChatWithCoach } from "../../gemini";
+import { chatWithCoach, generateWorkoutSuggestions,parseExercisesFromImage, parseExercisesFromText, streamChatWithCoach } from "../../gemini";
 import { buildTrainingContext } from "../../services/ai";
 import { retrieveRelevantChunks } from "../../services/ragService";
 import { storage } from "../../storage";
@@ -60,6 +60,7 @@ vi.mock("../../storage", () => ({
 // Mock the gemini functions
 vi.mock("../../gemini", () => ({
   parseExercisesFromText: vi.fn(),
+  parseExercisesFromImage: vi.fn(),
   chatWithCoach: vi.fn(),
   streamChatWithCoach: vi.fn(),
   generateWorkoutSuggestions: vi.fn(),
@@ -194,6 +195,98 @@ describe("POST /api/parse-exercises", () => {
     // Next request should succeed again
     const successfulResponse = await request(app).post("/api/v1/parse-exercises").send(payload);
     expect(successfulResponse.status).toBe(200);
+  });
+});
+
+describe("POST /api/v1/parse-exercises-from-image", () => {
+  let app: express.Express;
+
+  const validPayload = {
+    imageBase64: "ZmFrZS1pbWFnZQ==",
+    mimeType: "image/jpeg",
+  };
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const routeUtils = await import("../../routeUtils");
+    routeUtils.clearRateLimitBuckets();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2025, 0, 1));
+    app = createTestApp(aiRouter);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("returns parsed exercises on success", async () => {
+    vi.mocked(storage.users.getUser).mockResolvedValue({ weightUnit: "kg" });
+    vi.mocked(storage.users.getCustomExercises).mockResolvedValue([{ name: "Custom Squat" }]);
+    const parsed = [{ exerciseName: "back_squat", sets: [{ setNumber: 1, reps: 5 }] }];
+    vi.mocked(parseExercisesFromImage).mockResolvedValue(parsed as never);
+
+    const response = await request(app)
+      .post("/api/v1/parse-exercises-from-image")
+      .send(validPayload);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(parsed);
+    expect(parseExercisesFromImage).toHaveBeenCalledWith({
+      imageBase64: validPayload.imageBase64,
+      mimeType: validPayload.mimeType,
+      weightUnit: "kg",
+      customExerciseNames: ["Custom Squat"],
+      userId: "test_user_id",
+    });
+  });
+
+  it("rejects an unsupported mime type with a 400", async () => {
+    const response = await request(app)
+      .post("/api/v1/parse-exercises-from-image")
+      .send({ imageBase64: "abc", mimeType: "image/gif" });
+
+    expect(response.status).toBe(400);
+  });
+
+  it("rejects an empty image with a 400", async () => {
+    const response = await request(app)
+      .post("/api/v1/parse-exercises-from-image")
+      .send({ imageBase64: "", mimeType: "image/png" });
+
+    expect(response.status).toBe(400);
+  });
+
+  it("shares the 'parse' rate bucket with the text endpoint", async () => {
+    vi.mocked(storage.users.getUser).mockResolvedValue({ weightUnit: "kg" });
+    vi.mocked(storage.users.getCustomExercises).mockResolvedValue([]);
+    vi.mocked(parseExercisesFromImage).mockResolvedValue([] as never);
+    vi.mocked(parseExercisesFromText).mockResolvedValue([] as never);
+
+    // Mix of text + image calls up to 5 total → 6th is rate-limited.
+    for (let i = 0; i < 3; i++) {
+      const r = await request(app).post("/api/v1/parse-exercises").send({ text: "bench 135x10" });
+      expect(r.status).toBe(200);
+    }
+    for (let i = 0; i < 2; i++) {
+      const r = await request(app).post("/api/v1/parse-exercises-from-image").send(validPayload);
+      expect(r.status).toBe(200);
+    }
+
+    const r = await request(app).post("/api/v1/parse-exercises-from-image").send(validPayload);
+    expect(r.status).toBe(429);
+  });
+
+  it("returns 500 when parsing throws", async () => {
+    vi.mocked(storage.users.getUser).mockResolvedValue({ weightUnit: "kg" });
+    vi.mocked(storage.users.getCustomExercises).mockResolvedValue([]);
+    vi.mocked(parseExercisesFromImage).mockRejectedValue(new Error("gemini exploded"));
+
+    const response = await request(app)
+      .post("/api/v1/parse-exercises-from-image")
+      .send(validPayload);
+
+    expect(response.status).toBe(500);
+    expect(response.body).toHaveProperty("error", "Internal Server Error");
   });
 });
 

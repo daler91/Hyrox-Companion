@@ -314,6 +314,22 @@ app.use((req, res, next) => {
 // Coaching material routes accept large document content (up to 1.5M chars)
 app.use("/api/v1/coaching-materials", express.json({ limit: "2mb" }));
 
+// Image-parse routes ship the image as a base64 string in the JSON body.
+// The schema caps base64 length at 10MB; this parser matches so oversized
+// payloads are rejected at the body-parser layer with a 413 rather than
+// hitting the global 100kb limit below. Applied to three paths: the
+// stateless exercise parser + the stateful reparse siblings on workouts
+// and plan days (`.../:id/reparse-from-image`).
+const imageParseJsonParser = express.json({ limit: "10mb" });
+const IMAGE_PARSE_PATH_RE =
+  /^\/api\/v1\/(?:parse-exercises-from-image|workouts\/[^/]+\/reparse-from-image|plans\/days\/[^/]+\/reparse-from-image)\/?$/;
+app.use((req, res, next) => {
+  if (IMAGE_PARSE_PATH_RE.test(req.path)) {
+    return imageParseJsonParser(req, res, next);
+  }
+  return next();
+});
+
 app.use(
   express.json({
     limit: "100kb", // 🛡️ Sentinel: Limit request body size to prevent DoS

@@ -149,6 +149,18 @@ export function usePlanDayExercises(planDayId: string | null) {
     errorToast: "Parse failed — try rewording and retry.",
   });
 
+  // Photo sibling — mirrors reparseFreeText but sources the exercises
+  // from a captured image. Same replace semantics: the plan day's
+  // existing structured rows are wiped before the new ones land.
+  const reparseFromImage = useApiMutation({
+    mutationFn: (payload: {
+      imageBase64: string;
+      mimeType: "image/jpeg" | "image/png" | "image/webp";
+    }) => api.plans.reparseDayFromImage(planDayId!, payload),
+    invalidateQueries: planDayId ? [QUERY_KEYS.planDayExercises(planDayId)] : undefined,
+    errorToast: "Couldn't parse that photo — try a clearer shot.",
+  });
+
   // Debounced PATCH of free-text fields (focus / mainWorkout / accessory /
   // notes) on the plan day. Intentionally not optimistic-cached — the
   // timeline query owns these fields and we rely on invalidation to refresh
@@ -194,6 +206,7 @@ export function usePlanDayExercises(planDayId: string | null) {
     addSet,
     deleteSet,
     reparseFreeText,
+    reparseFromImage,
     updatePrescription,
   };
 }

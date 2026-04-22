@@ -15,6 +15,7 @@ import {
 
 export const GEMINI_MODEL = env.GEMINI_MODEL;
 export const GEMINI_SUGGESTIONS_MODEL = env.GEMINI_SUGGESTIONS_MODEL;
+export const GEMINI_VISION_MODEL = env.GEMINI_VISION_MODEL;
 
 let _ai: GoogleGenAI | null = null;
 export function getAiClient(): GoogleGenAI {

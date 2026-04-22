@@ -270,6 +270,56 @@ export function useParseWorkoutMutation(
   });
 }
 
+export interface ParseImagePayload {
+  readonly imageBase64: string;
+  readonly mimeType: "image/jpeg" | "image/png" | "image/webp";
+}
+
+/**
+ * Parse a captured photo of a workout plan into structured blocks. Shares
+ * the same post-parse pipeline (`processParsedExercises` → replace blocks)
+ * and success/error toast copy family as the text-parse mutation so a
+ * source switch doesn't introduce behavioural drift.
+ */
+export function useParseWorkoutFromImageMutation(
+  blockCounterRef: MutableRefObject<number>,
+  options: UseParseWorkoutMutationOptions,
+) {
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: (payload: ParseImagePayload) => api.exercises.parseFromImage(payload),
+    onSuccess: (parsed: ParsedExercise[]) => {
+      if (parsed.length === 0) {
+        toast({
+          title: "No exercises found",
+          description:
+            "AI couldn't identify any exercises in that photo. Try a clearer shot with the workout in frame.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const { newBlocks, newData } = processParsedExercises(parsed, blockCounterRef);
+      options.onSuccess(newBlocks, newData);
+
+      toast({
+        title: "Exercises parsed",
+        description: getParseSuccessDescription(parsed),
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Parsing failed",
+        description:
+          "AI couldn't parse that photo. Try a clearer shot or enter exercises manually.",
+        variant: "destructive",
+      });
+      options.onError();
+    },
+  });
+}
+
 
 export function useWorkoutSensors(setExerciseBlocks: React.Dispatch<React.SetStateAction<string[]>>) {
   const sensors = useSensors(
@@ -383,6 +433,17 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
     onSuccess: (newBlocks, newData) => {
       setExerciseBlocks(newBlocks);
       setExerciseData(newData);
+      setUseTextMode(false);
+    },
+    onError: () => {},
+  });
+
+  const parseImageMutation = useParseWorkoutFromImageMutation(blockCounterRef, {
+    onSuccess: (newBlocks, newData) => {
+      setExerciseBlocks(newBlocks);
+      setExerciseData(newData);
+      // Collapse the text panel on success — the user came in via the
+      // photo path, so the structured table is what they want to see now.
       setUseTextMode(false);
     },
     onError: () => {},
@@ -530,6 +591,7 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
     updateBlock,
     getSelectedExerciseNames,
     parseMutation,
+    parseImageMutation,
     resetEditor,
     // Auto-parse surface for the composer.
     autoParsing,

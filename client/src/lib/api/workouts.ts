@@ -91,6 +91,16 @@ export const workouts = {
   reparse: (id: string) =>
     typedRequest<ReparseResponse>("POST", `/api/v1/workouts/${id}/reparse`),
 
+  reparseFromImage: (
+    id: string,
+    payload: { imageBase64: string; mimeType: "image/jpeg" | "image/png" | "image/webp" },
+  ) =>
+    typedRequest<ReparseResponse>(
+      "POST",
+      `/api/v1/workouts/${id}/reparse-from-image`,
+      payload,
+    ),
+
   batchReparse: () => typedRequest<BatchReparseResponse>("POST", "/api/v1/workouts/batch-reparse"),
 
   // --- Set-level CRUD used by the structured exercises table in the v2

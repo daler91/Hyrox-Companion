@@ -74,4 +74,14 @@ export const plans = {
       `/api/v1/plans/days/${dayId}/reparse`,
       {},
     ),
+
+  reparseDayFromImage: (
+    dayId: string,
+    payload: { imageBase64: string; mimeType: "image/jpeg" | "image/png" | "image/webp" },
+  ) =>
+    typedRequest<{ exercises: unknown[]; saved: boolean; setCount: number }>(
+      "POST",
+      `/api/v1/plans/days/${dayId}/reparse-from-image`,
+      payload,
+    ),
 } as const;

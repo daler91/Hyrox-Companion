@@ -47,6 +47,7 @@ const envSchema = z.object({
   RAG_CHUNK_OVERLAP: z.coerce.number().default(100),
   GEMINI_MODEL: z.string().default("gemini-2.5-flash-lite"),
   GEMINI_SUGGESTIONS_MODEL: z.string().default("gemini-3.1-pro-preview"),
+  GEMINI_VISION_MODEL: z.string().default("gemini-2.5-flash"),
   VAPID_PUBLIC_KEY: z.string().optional(),
   VAPID_PRIVATE_KEY: z.string().optional(),
   VAPID_EMAIL: z.email().optional(),

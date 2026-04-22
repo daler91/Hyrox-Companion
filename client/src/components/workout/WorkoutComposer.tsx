@@ -8,6 +8,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { WorkoutExerciseMode } from "@/components/workout/WorkoutExerciseMode";
 import { WorkoutTextMode } from "@/components/workout/WorkoutTextMode";
 import type { toast as toastFn } from "@/hooks/use-toast";
+import type { CompressedImage } from "@/lib/image";
 import { cn } from "@/lib/utils";
 
 interface WorkoutComposerProps {
@@ -41,6 +42,19 @@ interface WorkoutComposerProps {
    * content so the user sees where their input is held.
    */
   readonly defaultPanelOpen?: boolean;
+
+  /**
+   * Image-parse pipeline. The caller is responsible for invoking the
+   * parseImageMutation; this component only orchestrates capture + preview.
+   * The `opts.onSuccess` callback fires AFTER the mutation resolves so the
+   * composer can revoke the object URL and clear the preview without
+   * lifting preview state up to LogWorkout.
+   */
+  readonly onParseImage?: (
+    payload: { imageBase64: string; mimeType: "image/jpeg" | "image/png" | "image/webp" },
+    opts?: { onSuccess?: () => void },
+  ) => void;
+  readonly isParsingImage?: boolean;
 }
 
 /**
@@ -74,7 +88,14 @@ export function WorkoutComposer({
   stopListening,
   toast,
   defaultPanelOpen,
+  onParseImage,
+  isParsingImage,
 }: WorkoutComposerProps) {
+  const [imagePreview, setImagePreview] = useState<{
+    url: string;
+    base64: string;
+    mimeType: "image/jpeg" | "image/png" | "image/webp";
+  } | null>(null);
   const [panelOpen, setPanelOpen] = useState(
     () => defaultPanelOpen ?? freeText.trim().length > 0,
   );
@@ -181,6 +202,43 @@ export function WorkoutComposer({
             stopListening={stopListening}
             interimTranscript={interimTranscript}
             toast={toast}
+            onCaptureImage={
+              onParseImage
+                ? (img: CompressedImage) => {
+                    if (imagePreview) URL.revokeObjectURL(imagePreview.url);
+                    setImagePreview({
+                      url: img.previewUrl,
+                      base64: img.base64,
+                      mimeType: img.mimeType,
+                    });
+                  }
+                : undefined
+            }
+            imagePreview={imagePreview ? { url: imagePreview.url } : null}
+            onRetakeImage={() => {
+              if (imagePreview) URL.revokeObjectURL(imagePreview.url);
+              setImagePreview(null);
+            }}
+            onParseImage={
+              onParseImage
+                ? () => {
+                    if (!imagePreview) return;
+                    onParseImage(
+                      {
+                        imageBase64: imagePreview.base64,
+                        mimeType: imagePreview.mimeType,
+                      },
+                      {
+                        onSuccess: () => {
+                          URL.revokeObjectURL(imagePreview.url);
+                          setImagePreview(null);
+                        },
+                      },
+                    );
+                  }
+                : undefined
+            }
+            isParsingImage={isParsingImage}
           />
         </CollapsibleContent>
       </Collapsible>
