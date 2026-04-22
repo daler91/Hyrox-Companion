@@ -80,8 +80,11 @@ export function ImageCaptureButton({
   };
 
   const busy = disabled || processing;
-  const iconSize = size === "icon" ? "size-4" : "size-3.5";
-  const sparkleSize = size === "icon" ? "size-2.5" : "size-2";
+  // `!` suffix (Tailwind v4) forces size over shadcn Button's
+  // `[&_svg]:size-4` descendant rule — without important both icons would
+  // render at 16px and the Sparkles badge would overlap the Camera.
+  const iconSize = size === "icon" ? "size-4!" : "size-3.5!";
+  const sparkleSize = size === "icon" ? "size-2.5!" : "size-2!";
   const tooltipCopy =
     tooltip ?? "Scan a printed or whiteboard workout — we'll auto-fill the exercises.";
 
