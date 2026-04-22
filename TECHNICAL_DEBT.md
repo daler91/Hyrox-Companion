@@ -1,7 +1,7 @@
 # Technical Debt Registry
 
 > Living document cataloging known technical debt in the Hyrox-Companion codebase.
-> Last audited: 2026-04-05
+> Last audited: 2026-04-22 (doc refresh — no new items, registry re-reviewed alongside the codebase documentation sweep)
 
 ---
 

@@ -20,7 +20,7 @@
     <img src="https://img.shields.io/badge/Node.js-43853D?style=flat-square&logo=node.js&logoColor=white" alt="Node.js">
     <img src="https://img.shields.io/badge/PostgreSQL-316192?style=flat-square&logo=postgresql&logoColor=white" alt="PostgreSQL">
     <img src="https://img.shields.io/badge/pnpm-F69220?style=flat-square&logo=pnpm&logoColor=white" alt="pnpm">
-    <img src="https://img.shields.io/badge/Vitest-750%2B_Tests-729B1B?style=flat-square&logo=vitest&logoColor=white" alt="Vitest">
+    <img src="https://img.shields.io/badge/Vitest-880%2B_Tests-729B1B?style=flat-square&logo=vitest&logoColor=white" alt="Vitest">
     <img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License">
   </p>
 </div>
@@ -42,7 +42,8 @@ Plan structured training programs, log complex workouts with voice or free-text 
 
 ### Gemini AI Engine
 - **Workout Parsing** — Say or type *"3 sets bench 225lbs x 8, then 3 miles in 24 min"* and Gemini parses it into structured data with Zod-validated schemas.
-- **Auto-Coach** — Reads your plan and recent activity to evaluate fatigue, volume, and pacing, then suggests schedule adjustments.
+- **Photo-to-Workout** — Snap a photo of a workout plan (whiteboard, gym printout, coach's notes) and Gemini extracts the exercises, sets, and prescribed loads. Images are compressed client-side before upload.
+- **Auto-Coach** — Reads your plan and recent activity to evaluate fatigue, volume, and pacing, then suggests schedule adjustments with rationale stored alongside each plan day.
 - **Streaming Chat** — Ask contextual questions over Server-Sent Events (SSE), e.g. *"What pace for my next 1km run?"*
 
 ### RAG-Powered Coaching
@@ -200,13 +201,17 @@ Hyrox-Companion/
 │   └── src/
 │       ├── components/         # UI components
 │       │   ├── ui/             # shadcn/ui primitives
+│       │   ├── icons/          # Custom SVG icon components
 │       │   ├── analytics/      # Analytics dashboard
 │       │   ├── coach/          # AI coaching interface
 │       │   ├── onboarding/     # Onboarding wizard
 │       │   ├── plans/          # Training plan management
 │       │   ├── settings/       # User preferences
 │       │   ├── timeline/       # Drag-and-drop timeline
-│       │   └── workout/        # Workout logging
+│       │   ├── workout/        # Workout logging
+│       │   ├── workout-detail/ # Workout detail dialog (v2) + coach prescription UI
+│       │   ├── exercise-input/ # Multi-set / single-set entry widgets
+│       │   └── exercise-row/   # Shared exercise row renderer
 │       ├── hooks/              # Custom React hooks
 │       ├── lib/                # Utilities & API client
 │       └── pages/              # Route pages (Landing, Timeline, LogWorkout, Analytics, Settings)
@@ -310,6 +315,7 @@ This fires up the Vite frontend with HMR and the Express backend on port `5000`.
 | `pnpm check` | TypeScript type checking |
 | `pnpm test` | Run Vitest unit & integration tests |
 | `pnpm test:watch` | Run tests in watch mode |
+| `pnpm test:smoke` | Fast smoke-test suite (via `vitest.smoke.config.ts`) for pre-push checks |
 | `pnpm lint` | Run ESLint |
 | `pnpm lint:fix` | Auto-fix lint issues |
 | `pnpm format` | Format code with Prettier |
@@ -317,6 +323,10 @@ This fires up the Vite frontend with HMR and the Express backend on port `5000`.
 | `pnpm db:generate` | Generate Drizzle migrations from schema changes |
 | `pnpm db:migrate` | Run pending database migrations |
 | `pnpm db:check` | Validate migration/schema consistency |
+| `pnpm db:decode-entities` | One-off maintenance script that decodes HTML entities in stored text |
+| `pnpm coach:influence` | Runs the AI coach influence/metrics harness against scripted scenarios |
+
+`postinstall` also runs `script/patch-cypress-deps.js` automatically to patch a vulnerable transitive Cypress dep.
 
 ---
 
@@ -324,8 +334,8 @@ This fires up the Vite frontend with HMR and the Express backend on port `5000`.
 
 | Layer | Tool | Coverage | Command |
 |---|---|---|---|
-| Unit & Integration | Vitest | 750+ tests across 60+ files (80% threshold) | `pnpm test` |
-| End-to-End | Cypress | 120+ tests across 9 suites | `pnpm exec cypress open` |
+| Unit & Integration | Vitest | 880+ tests across 89 files (80% threshold) | `pnpm test` |
+| End-to-End | Cypress | 60+ tests across 12 spec suites | `pnpm exec cypress open` |
 | Accessibility | jest-axe (via Vitest + jsdom) | Automated a11y assertions on interactive components (`*.a11y.test.tsx`) | `pnpm test` |
 | Type Safety | TypeScript 5.9 (strict) | Full codebase | `pnpm check` |
 | Lint & Format | ESLint + Prettier | Full codebase | `pnpm lint` / `pnpm format:check` |

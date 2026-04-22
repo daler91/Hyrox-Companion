@@ -682,14 +682,23 @@ migrations/
   0017_workout_logs_strava_unique.sql
   0018_backfill_plan_dates_and_workout_links.sql
   0019_add_idempotency_keys.sql
+  0020_spicy_rocket_racer.sql
+  0021_broken_serpent_society.sql
+  0022_closed_blazing_skull.sql
+  0023_cultured_ben_parker.sql
+  0024_hot_sue_storm.sql
+  0025_early_timeslip.sql
+  0026_smart_frog_thor.sql
+  0027_add_coach_notes.sql
+  0028_plan_day_exercise_sets.sql
   meta/
     _journal.json
     0000_snapshot.json
     ...
-    0019_snapshot.json
+    0028_snapshot.json
 ```
 
-- **SQL files**: Each migration contains the raw SQL statements (20 total).
+- **SQL files**: Each migration contains the raw SQL statements (29 total).
 - **`meta/_journal.json`**: Tracks migration ordering and versions.
 - **`meta/NNNN_snapshot.json`**: Full schema snapshots at each migration point.
 
@@ -700,6 +709,8 @@ Notable recent migrations:
 - `0017`: Adds unique constraint on `strava_activity_id` in `workout_logs`
 - `0018`: Backfills `plan_dates` and `workout-to-plan` links
 - `0019`: Creates the `idempotency_keys` table for server-side idempotency
+- `0027`: Adds coach-note columns to `plan_days` (`ai_rationale`, `ai_note_updated_at`, `ai_inputs_used`) so the auto-coach can persist prescriptive rationale per day.
+- `0028`: Adds `plan_day_id` FK on `exercise_sets`, allowing coach-prescribed exercises to be attached to a plan day before any workout is logged.
 
 ### Startup Migration
 

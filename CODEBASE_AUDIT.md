@@ -14,13 +14,17 @@ I re-ran a fresh multi-pass review across:
 
 ## 1) Architecture & Design Patterns
 
-### [Severity Level]: Medium
-**File/Location:** `server/routes/workouts.ts` (module-level orchestration)
+### [Severity Level]: Medium — PARTIALLY RESOLVED (2026-04-22)
+**File/Location:** `server/routes/workouts.ts` + `server/services/workoutUseCases.ts`
 
-**The Issue:**
-`workouts.ts` is still carrying too many responsibilities (transport parsing, validation edge-cases, business orchestration, and response shaping). This weakens separation of concerns and makes transactional behavior harder to reason about as features grow.
+**Status:** The use-case layer now exists. `workoutUseCases.ts` exports `createWorkout` and `updateWorkoutUseCase`, and `workouts.ts` delegates its create/update flow through them (`grep workoutUseCases server/routes/workouts.ts`). The specific example shown below was the target state of the refactor.
 
-**The Fix:**
+**Remaining work:** `workouts.ts` is still ~420 lines because the image-parse, re-parse, batch re-parse, and unstructured-workout routes have not yet been pulled into the use-case layer — they still mix transport parsing, validation edge-cases, and orchestration inline. Splitting those out is the next step to complete the refactor.
+
+**Original issue:**
+`workouts.ts` was carrying too many responsibilities (transport parsing, validation edge-cases, business orchestration, and response shaping). This weakened separation of concerns and made transactional behavior harder to reason about as features grew.
+
+**The Fix (target state, now partly in place):**
 Move route-independent orchestration into a use-case/service layer and keep route handlers thin.
 
 ```ts
@@ -40,7 +44,7 @@ router.post(
   }),
 );
 
-// server/useCases/workoutUseCases.ts
+// server/services/workoutUseCases.ts  (actual location)
 export async function createWorkout(input: {
   userId: string;
   payload: CreateWorkoutRoutePayload;
