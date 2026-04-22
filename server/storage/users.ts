@@ -16,7 +16,7 @@ import {
   type User,
   users,
 } from "@shared/schema";
-import { and, desc, eq, isNotNull, lt } from "drizzle-orm";
+import { and, desc, eq, isNotNull, lt, or } from "drizzle-orm";
 
 import { decryptToken,encryptToken } from "../crypto";
 import { db } from "../db";
@@ -91,22 +91,35 @@ export class UserStorage {
   }
 
   // Cursor-paginated chat history. Returns the newest `limit` messages
-  // older than `beforeTimestamp` (exclusive) in chronological order so
+  // older than the (timestamp, id) cursor in chronological order so
   // callers can append to the existing conversation view without a sort.
+  // Composite cursor is required because `chat_messages.timestamp` is not
+  // unique — user+assistant pairs saved in the same handler can share a
+  // millisecond. A timestamp-only `lt(...)` filter silently drops those
+  // sibling rows, making them unreachable via pagination. The route layer
+  // validates that `beforeTimestamp` and `beforeId` are always passed
+  // together.
   async getChatMessages(
     userId: string,
-    options: { limit?: number; beforeTimestamp?: Date } = {},
+    options: { limit?: number; beforeTimestamp?: Date; beforeId?: string } = {},
   ): Promise<ChatMessage[]> {
     const limit = Math.min(Math.max(options.limit ?? 50, 1), 200);
     const conditions = [eq(chatMessages.userId, userId)];
-    if (options.beforeTimestamp) {
-      conditions.push(lt(chatMessages.timestamp, options.beforeTimestamp));
+    if (options.beforeTimestamp && options.beforeId) {
+      const cursorClause = or(
+        lt(chatMessages.timestamp, options.beforeTimestamp),
+        and(
+          eq(chatMessages.timestamp, options.beforeTimestamp),
+          lt(chatMessages.id, options.beforeId),
+        ),
+      );
+      if (cursorClause) conditions.push(cursorClause);
     }
     const page = await db
       .select()
       .from(chatMessages)
       .where(conditions.length === 1 ? conditions[0] : and(...conditions))
-      .orderBy(desc(chatMessages.timestamp))
+      .orderBy(desc(chatMessages.timestamp), desc(chatMessages.id))
       .limit(limit);
     return page.reverse();
   }

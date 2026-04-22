@@ -10,14 +10,23 @@ export const DEV_USER_ID = "dev-user";
 
 // Clerk SDK does not accept an AbortSignal, so bound its network calls
 // with Promise.race to keep auth middleware from stalling worker threads
-// when Clerk's API hangs.
+// when Clerk's API hangs. Clear the timer once `promise` settles so we
+// don't leak one pending `setTimeout` per cache-miss auth — under load
+// those timers can pile up and extend the shutdown window by the full
+// timeout duration.
 async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms),
-    ),
-  ]);
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<T>((_, reject) => {
+    timeoutId = setTimeout(
+      () => reject(new Error(`${label} timed out after ${ms}ms`)),
+      ms,
+    );
+  });
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
 }
 
 function isDev(): boolean {

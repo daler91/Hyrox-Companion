@@ -115,13 +115,20 @@ router.post("/api/v1/chat/stream", ...protectedMutationGuards, rateLimiter("chat
 
 // Cursor-paginated to cap memory/bandwidth growth as chat history accumulates.
 // Response body stays a plain ChatMessage[] for backward compatibility; the
-// cursor for older messages is surfaced in the `X-Next-Cursor` response
-// header so new clients can implement infinite scroll without a breaking
-// change to the shape.
-const chatHistoryQuerySchema = z.object({
-  limit: z.coerce.number().int().min(1).max(200).optional(),
-  before: z.string().datetime({ offset: true }).optional(),
-});
+// cursor for older messages is surfaced in two sibling response headers
+// (`X-Next-Cursor` = timestamp, `X-Next-Cursor-Id` = row id). Both must be
+// echoed back on the next request to avoid dropping rows that share a
+// millisecond — see `storage/users.ts` comment for details.
+const chatHistoryQuerySchema = z
+  .object({
+    limit: z.coerce.number().int().min(1).max(200).optional(),
+    before: z.string().datetime({ offset: true }).optional(),
+    beforeId: z.string().min(1).max(255).optional(),
+  })
+  .refine(
+    (q) => (q.before == null) === (q.beforeId == null),
+    { message: "before and beforeId must be provided together" },
+  );
 
 router.get("/api/v1/chat/history", isAuthenticated, asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
@@ -129,14 +136,16 @@ router.get("/api/v1/chat/history", isAuthenticated, asyncHandler(async (req: Exp
     if (!parsed.success) {
       return res.status(400).json({ error: "Invalid pagination params", code: "VALIDATION_ERROR" });
     }
-    const { limit, before } = parsed.data;
+    const { limit, before, beforeId } = parsed.data;
     const messages = await storage.users.getChatMessages(userId, {
       limit,
       beforeTimestamp: before ? new Date(before) : undefined,
+      beforeId,
     });
-    const oldestTimestamp = messages[0]?.timestamp;
-    if (oldestTimestamp) {
-      res.setHeader("X-Next-Cursor", oldestTimestamp.toISOString());
+    const oldest = messages[0];
+    if (oldest?.timestamp) {
+      res.setHeader("X-Next-Cursor", oldest.timestamp.toISOString());
+      res.setHeader("X-Next-Cursor-Id", oldest.id);
     }
     res.json(messages);
   }));

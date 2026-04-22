@@ -428,17 +428,54 @@ describe("Chat History and Messages Routes", () => {
 
   it("should get chat history", async () => {
 
-    const mockMessages = [{ id: 1, role: "user", content: "Hi" }];
+    const mockMessages = [{ id: "m1", role: "user", content: "Hi", timestamp: new Date("2025-01-01T00:00:00Z") }];
     vi.mocked(storage.users.getChatMessages).mockResolvedValue(mockMessages);
 
     const response = await request(app).get(CHAT_HISTORY_ENDPOINT);
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual(mockMessages);
+    expect(response.body).toEqual(mockMessages.map((m) => ({ ...m, timestamp: m.timestamp.toISOString() })));
     expect(storage.users.getChatMessages).toHaveBeenCalledWith("test_user_id", {
       limit: undefined,
       beforeTimestamp: undefined,
+      beforeId: undefined,
     });
+    expect(response.headers["x-next-cursor"]).toBe("2025-01-01T00:00:00.000Z");
+    expect(response.headers["x-next-cursor-id"]).toBe("m1");
+  });
+
+  it("passes composite cursor through to storage", async () => {
+    vi.mocked(storage.users.getChatMessages).mockResolvedValue([]);
+    const before = "2025-01-01T00:00:00.000Z";
+
+    const response = await request(app)
+      .get(CHAT_HISTORY_ENDPOINT)
+      .query({ limit: 20, before, beforeId: "m2" });
+
+    expect(response.status).toBe(200);
+    expect(storage.users.getChatMessages).toHaveBeenCalledWith("test_user_id", {
+      limit: 20,
+      beforeTimestamp: new Date(before),
+      beforeId: "m2",
+    });
+  });
+
+  it("rejects partial cursor (before without beforeId)", async () => {
+    const response = await request(app)
+      .get(CHAT_HISTORY_ENDPOINT)
+      .query({ before: "2025-01-01T00:00:00.000Z" });
+
+    expect(response.status).toBe(400);
+    expect(response.body.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("rejects partial cursor (beforeId without before)", async () => {
+    const response = await request(app)
+      .get(CHAT_HISTORY_ENDPOINT)
+      .query({ beforeId: "m2" });
+
+    expect(response.status).toBe(400);
+    expect(response.body.code).toBe("VALIDATION_ERROR");
   });
 
   it("should return 500 when getting history fails", async () => {
