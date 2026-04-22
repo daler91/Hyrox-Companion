@@ -68,6 +68,20 @@ if (env.SENTRY_DSN) {
       return event;
     },
   });
+  // Operator sanity check: emit a structured boot log so deploy logs can
+  // confirm Sentry is wired without spraying a fake error into the issue
+  // tracker. Log a masked DSN prefix + environment; a silent failure to
+  // initialise otherwise only shows up the next time an error fires,
+  // which can be days later (CODEBASE_AUDIT.md Suggestion-11).
+  const client = Sentry.getClient();
+  const maskedDsn = env.SENTRY_DSN.replace(/\/\/[^@]+@/, "//***@");
+  if (client) {
+    logger.info({ context: "sentry", environment: env.NODE_ENV || "development", dsn: maskedDsn }, "Sentry error reporting initialised");
+  } else {
+    logger.warn({ context: "sentry", dsn: maskedDsn }, "Sentry.init returned without a client — error reports will be dropped");
+  }
+} else {
+  logger.info({ context: "sentry" }, "SENTRY_DSN not set — error reports disabled");
 }
 
 const app = express();
