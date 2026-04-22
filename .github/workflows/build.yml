@@ -28,6 +28,13 @@ jobs:
         run: pnpm eslint .
       - name: TypeScript
         run: pnpm tsc --noEmit
+      - name: OpenAPI snapshot is up-to-date
+        run: |
+          pnpm docs:openapi
+          git diff --exit-code docs/openapi.json || {
+            echo "::error file=docs/openapi.json::docs/openapi.json is stale. Run 'pnpm docs:openapi' locally and commit the result." >&2
+            exit 1
+          }
 
   # SonarQube Automatic Analysis is enabled for this project in SonarQube Cloud.
   # If you prefer manual CI scans, disable Automatic Analysis in SonarQube Cloud

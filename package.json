@@ -20,6 +20,7 @@
     "test:smoke": "vitest run --config vitest.smoke.config.ts",
     "coach:influence": "tsx --env-file=.env script/coach-influence/harness.ts",
     "db:decode-entities": "tsx --env-file=.env script/decode-text-entities.ts",
+    "docs:openapi": "tsx script/generate-openapi.ts",
     "postinstall": "node script/patch-cypress-deps.js"
   },
   "dependencies": {

@@ -1,0 +1,1384 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "version": "1.0.0",
+    "title": "fitai.coach Workout API",
+    "description": "API for managing workouts, exercises, and training plans.\n\n### Authentication\nThis API is protected using JWT Bearer authentication provided by Clerk.\nTo authenticate your requests:\n1. Obtain a valid JWT session token for your user from Clerk. If you are building a frontend integration, you can use Clerk's `getToken()` method from their SDKs.\n2. Include the token in the `Authorization` header of your HTTP requests as follows:\n   `Authorization: Bearer <your-clerk-jwt-token>`\n\nClick the **Authorize** button below to enter your JWT token for use within this Swagger UI."
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Enter your Clerk JWT token in the format: Bearer <token>"
+      }
+    },
+    "schemas": {
+      "InsertWorkoutLog": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string"
+          },
+          "focus": {
+            "type": "string"
+          },
+          "mainWorkout": {
+            "type": "string"
+          },
+          "accessory": {
+            "type": "string",
+            "nullable": true
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "duration": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "rpe": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 10
+          },
+          "planDayId": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "planId": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "source": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "stravaActivityId": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "garminActivityId": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "calories": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "distanceMeters": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -8388608,
+            "maximum": 8388607
+          },
+          "elevationGain": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -8388608,
+            "maximum": 8388607
+          },
+          "avgHeartrate": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "maxHeartrate": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "avgSpeed": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -8388608,
+            "maximum": 8388607
+          },
+          "maxSpeed": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -8388608,
+            "maximum": 8388607
+          },
+          "avgCadence": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -8388608,
+            "maximum": 8388607
+          },
+          "avgWatts": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "sufferScore": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          }
+        },
+        "required": [
+          "date",
+          "focus",
+          "mainWorkout"
+        ],
+        "title": "InsertWorkoutLog",
+        "description": "Payload for creating a new workout log"
+      },
+      "ExerciseSet": {
+        "type": "object",
+        "properties": {
+          "setNumber": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 100
+          },
+          "reps": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "weight": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 2000
+          },
+          "distance": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 1000000
+          },
+          "time": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 86400
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 1000
+          }
+        },
+        "title": "ExerciseSet",
+        "description": "A single set of an exercise in a workout"
+      },
+      "InsertExerciseSet": {
+        "type": "object",
+        "properties": {
+          "workoutLogId": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "planDayId": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "exerciseName": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "customLabel": {
+            "type": "string",
+            "nullable": true
+          },
+          "category": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "setNumber": {
+            "type": "integer",
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "reps": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "weight": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -8388608,
+            "maximum": 8388607
+          },
+          "distance": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -8388608,
+            "maximum": 8388607
+          },
+          "time": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -8388608,
+            "maximum": 8388607
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "confidence": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "sortOrder": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          }
+        },
+        "required": [
+          "exerciseName",
+          "category"
+        ],
+        "title": "InsertExerciseSet",
+        "description": "Payload for creating a new exercise set"
+      },
+      "UpdateUserPreferences": {
+        "type": "object",
+        "properties": {
+          "weightUnit": {
+            "type": "string",
+            "enum": [
+              "kg",
+              "lbs"
+            ]
+          },
+          "distanceUnit": {
+            "type": "string",
+            "enum": [
+              "km",
+              "miles"
+            ]
+          },
+          "weeklyGoal": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 14
+          },
+          "emailNotifications": {
+            "type": "boolean"
+          },
+          "emailWeeklySummary": {
+            "type": "boolean"
+          },
+          "emailMissedReminder": {
+            "type": "boolean"
+          },
+          "aiCoachEnabled": {
+            "type": "boolean"
+          }
+        },
+        "title": "UpdateUserPreferences",
+        "description": "User profile preferences"
+      },
+      "InsertPlanDay": {
+        "type": "object",
+        "properties": {
+          "planId": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "weekNumber": {
+            "type": "integer",
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "dayName": {
+            "type": "string"
+          },
+          "focus": {
+            "type": "string"
+          },
+          "mainWorkout": {
+            "type": "string"
+          },
+          "accessory": {
+            "type": "string",
+            "nullable": true
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "scheduledDate": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "planned",
+              "completed",
+              "missed",
+              "skipped"
+            ],
+            "default": "planned"
+          },
+          "aiSource": {
+            "type": "string",
+            "nullable": true
+          },
+          "aiRationale": {
+            "type": "string",
+            "nullable": true
+          },
+          "aiNoteUpdatedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "aiInputsUsed": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "nullable": true
+              },
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "nullable": true
+                }
+              },
+              {
+                "type": "array",
+                "items": {
+                  "nullable": true
+                }
+              }
+            ]
+          }
+        },
+        "required": [
+          "planId",
+          "weekNumber",
+          "dayName",
+          "focus",
+          "mainWorkout"
+        ],
+        "title": "InsertPlanDay",
+        "description": "Payload for creating a planned workout day"
+      },
+      "CreateWorkoutRequest": {
+        "allOf": [
+          {
+            "type": "object",
+            "properties": {
+              "date": {
+                "type": "string"
+              },
+              "focus": {
+                "type": "string"
+              },
+              "mainWorkout": {
+                "type": "string"
+              },
+              "accessory": {
+                "type": "string",
+                "nullable": true
+              },
+              "notes": {
+                "type": "string",
+                "nullable": true
+              },
+              "duration": {
+                "type": "integer",
+                "nullable": true,
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "rpe": {
+                "type": "integer",
+                "nullable": true,
+                "minimum": 1,
+                "maximum": 10
+              },
+              "planDayId": {
+                "type": "string",
+                "nullable": true,
+                "maxLength": 255
+              },
+              "planId": {
+                "type": "string",
+                "nullable": true,
+                "maxLength": 255
+              },
+              "source": {
+                "type": "string",
+                "nullable": true,
+                "maxLength": 255
+              },
+              "stravaActivityId": {
+                "type": "string",
+                "nullable": true,
+                "maxLength": 255
+              },
+              "garminActivityId": {
+                "type": "string",
+                "nullable": true,
+                "maxLength": 255
+              },
+              "calories": {
+                "type": "integer",
+                "nullable": true,
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "distanceMeters": {
+                "type": "number",
+                "nullable": true,
+                "minimum": -8388608,
+                "maximum": 8388607
+              },
+              "elevationGain": {
+                "type": "number",
+                "nullable": true,
+                "minimum": -8388608,
+                "maximum": 8388607
+              },
+              "avgHeartrate": {
+                "type": "integer",
+                "nullable": true,
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "maxHeartrate": {
+                "type": "integer",
+                "nullable": true,
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "avgSpeed": {
+                "type": "number",
+                "nullable": true,
+                "minimum": -8388608,
+                "maximum": 8388607
+              },
+              "maxSpeed": {
+                "type": "number",
+                "nullable": true,
+                "minimum": -8388608,
+                "maximum": 8388607
+              },
+              "avgCadence": {
+                "type": "number",
+                "nullable": true,
+                "minimum": -8388608,
+                "maximum": 8388607
+              },
+              "avgWatts": {
+                "type": "integer",
+                "nullable": true,
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "sufferScore": {
+                "type": "integer",
+                "nullable": true,
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              }
+            },
+            "required": [
+              "date",
+              "focus",
+              "mainWorkout"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "exercises": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "exerciseName": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 255
+                    },
+                    "customLabel": {
+                      "type": "string",
+                      "nullable": true,
+                      "maxLength": 255
+                    },
+                    "category": {
+                      "type": "string",
+                      "nullable": true,
+                      "maxLength": 50
+                    },
+                    "numSets": {
+                      "type": "number",
+                      "nullable": true,
+                      "minimum": 1,
+                      "maximum": 50
+                    },
+                    "reps": {
+                      "type": "number",
+                      "nullable": true,
+                      "minimum": 1,
+                      "maximum": 10000
+                    },
+                    "weight": {
+                      "type": "number",
+                      "nullable": true,
+                      "minimum": 0,
+                      "maximum": 2000
+                    },
+                    "distance": {
+                      "type": "number",
+                      "nullable": true,
+                      "minimum": 0,
+                      "maximum": 1000000
+                    },
+                    "time": {
+                      "type": "number",
+                      "nullable": true,
+                      "minimum": 0,
+                      "maximum": 86400
+                    },
+                    "confidence": {
+                      "type": "number",
+                      "nullable": true,
+                      "minimum": 0,
+                      "maximum": 100
+                    },
+                    "notes": {
+                      "type": "string",
+                      "nullable": true,
+                      "maxLength": 1000
+                    },
+                    "sets": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "setNumber": {
+                            "type": "number",
+                            "nullable": true,
+                            "minimum": 1,
+                            "maximum": 100
+                          },
+                          "reps": {
+                            "type": "number",
+                            "nullable": true,
+                            "minimum": 0,
+                            "maximum": 10000
+                          },
+                          "weight": {
+                            "type": "number",
+                            "nullable": true,
+                            "minimum": 0,
+                            "maximum": 2000
+                          },
+                          "distance": {
+                            "type": "number",
+                            "nullable": true,
+                            "minimum": 0,
+                            "maximum": 1000000
+                          },
+                          "time": {
+                            "type": "number",
+                            "nullable": true,
+                            "minimum": 0,
+                            "maximum": 86400
+                          },
+                          "notes": {
+                            "type": "string",
+                            "nullable": true,
+                            "maxLength": 1000
+                          }
+                        }
+                      },
+                      "maxItems": 50
+                    }
+                  },
+                  "required": [
+                    "exerciseName"
+                  ]
+                },
+                "maxItems": 200
+              }
+            }
+          }
+        ],
+        "title": "CreateWorkoutRequest",
+        "description": "Payload for creating a new workout log along with optional exercise sets"
+      },
+      "UpdateWorkoutRequest": {
+        "allOf": [
+          {
+            "type": "object",
+            "properties": {
+              "date": {
+                "type": "string"
+              },
+              "focus": {
+                "type": "string"
+              },
+              "mainWorkout": {
+                "type": "string"
+              },
+              "accessory": {
+                "type": "string",
+                "nullable": true
+              },
+              "notes": {
+                "type": "string",
+                "nullable": true
+              },
+              "duration": {
+                "type": "integer",
+                "nullable": true,
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "rpe": {
+                "type": "integer",
+                "nullable": true,
+                "minimum": 1,
+                "maximum": 10
+              },
+              "planDayId": {
+                "type": "string",
+                "nullable": true,
+                "maxLength": 255
+              },
+              "planId": {
+                "type": "string",
+                "nullable": true,
+                "maxLength": 255
+              },
+              "source": {
+                "type": "string",
+                "nullable": true,
+                "maxLength": 255
+              },
+              "stravaActivityId": {
+                "type": "string",
+                "nullable": true,
+                "maxLength": 255
+              },
+              "garminActivityId": {
+                "type": "string",
+                "nullable": true,
+                "maxLength": 255
+              },
+              "calories": {
+                "type": "integer",
+                "nullable": true,
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "distanceMeters": {
+                "type": "number",
+                "nullable": true,
+                "minimum": -8388608,
+                "maximum": 8388607
+              },
+              "elevationGain": {
+                "type": "number",
+                "nullable": true,
+                "minimum": -8388608,
+                "maximum": 8388607
+              },
+              "avgHeartrate": {
+                "type": "integer",
+                "nullable": true,
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "maxHeartrate": {
+                "type": "integer",
+                "nullable": true,
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "avgSpeed": {
+                "type": "number",
+                "nullable": true,
+                "minimum": -8388608,
+                "maximum": 8388607
+              },
+              "maxSpeed": {
+                "type": "number",
+                "nullable": true,
+                "minimum": -8388608,
+                "maximum": 8388607
+              },
+              "avgCadence": {
+                "type": "number",
+                "nullable": true,
+                "minimum": -8388608,
+                "maximum": 8388607
+              },
+              "avgWatts": {
+                "type": "integer",
+                "nullable": true,
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "sufferScore": {
+                "type": "integer",
+                "nullable": true,
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "exercises": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "exerciseName": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 255
+                    },
+                    "customLabel": {
+                      "type": "string",
+                      "nullable": true,
+                      "maxLength": 255
+                    },
+                    "category": {
+                      "type": "string",
+                      "nullable": true,
+                      "maxLength": 50
+                    },
+                    "numSets": {
+                      "type": "number",
+                      "nullable": true,
+                      "minimum": 1,
+                      "maximum": 50
+                    },
+                    "reps": {
+                      "type": "number",
+                      "nullable": true,
+                      "minimum": 1,
+                      "maximum": 10000
+                    },
+                    "weight": {
+                      "type": "number",
+                      "nullable": true,
+                      "minimum": 0,
+                      "maximum": 2000
+                    },
+                    "distance": {
+                      "type": "number",
+                      "nullable": true,
+                      "minimum": 0,
+                      "maximum": 1000000
+                    },
+                    "time": {
+                      "type": "number",
+                      "nullable": true,
+                      "minimum": 0,
+                      "maximum": 86400
+                    },
+                    "confidence": {
+                      "type": "number",
+                      "nullable": true,
+                      "minimum": 0,
+                      "maximum": 100
+                    },
+                    "notes": {
+                      "type": "string",
+                      "nullable": true,
+                      "maxLength": 1000
+                    },
+                    "sets": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "setNumber": {
+                            "type": "number",
+                            "nullable": true,
+                            "minimum": 1,
+                            "maximum": 100
+                          },
+                          "reps": {
+                            "type": "number",
+                            "nullable": true,
+                            "minimum": 0,
+                            "maximum": 10000
+                          },
+                          "weight": {
+                            "type": "number",
+                            "nullable": true,
+                            "minimum": 0,
+                            "maximum": 2000
+                          },
+                          "distance": {
+                            "type": "number",
+                            "nullable": true,
+                            "minimum": 0,
+                            "maximum": 1000000
+                          },
+                          "time": {
+                            "type": "number",
+                            "nullable": true,
+                            "minimum": 0,
+                            "maximum": 86400
+                          },
+                          "notes": {
+                            "type": "string",
+                            "nullable": true,
+                            "maxLength": 1000
+                          }
+                        }
+                      },
+                      "maxItems": 50
+                    }
+                  },
+                  "required": [
+                    "exerciseName"
+                  ]
+                },
+                "maxItems": 200
+              }
+            }
+          }
+        ],
+        "title": "UpdateWorkoutRequest",
+        "description": "Payload for updating a workout log along with optional exercise sets"
+      },
+      "WorkoutId": {
+        "type": "string",
+        "example": "123e4567-e89b-12d3-a456-426614174000",
+        "description": "The UUID of the workout log"
+      }
+    },
+    "parameters": {
+      "WorkoutId": {
+        "schema": {
+          "$ref": "#/components/schemas/WorkoutId"
+        },
+        "required": true,
+        "description": "The UUID of the workout log",
+        "name": "id",
+        "in": "path"
+      }
+    }
+  },
+  "paths": {
+    "/api/v1/workouts": {
+      "post": {
+        "tags": [
+          "Workouts"
+        ],
+        "summary": "Create a new workout log",
+        "description": "Creates a new workout log with optional detailed exercise sets (the `exercises` array).",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWorkoutRequest"
+              },
+              "example": {
+                "date": "2026-03-29",
+                "focus": "conditioning",
+                "mainWorkout": "3 rounds: Sled Push 50m, Burpee Broad Jumps x10, 1km Row",
+                "accessory": "Core circuit: 3x20 sit-ups, 3x30s plank",
+                "notes": "Hyrox simulation - focus on transitions",
+                "duration": 55,
+                "rpe": 7,
+                "source": "manual",
+                "exercises": [
+                  {
+                    "exerciseName": "Sled Push",
+                    "category": "conditioning",
+                    "numSets": 3,
+                    "sets": [
+                      {
+                        "setNumber": 1,
+                        "distance": 50,
+                        "time": 42,
+                        "notes": "Smooth pace"
+                      },
+                      {
+                        "setNumber": 2,
+                        "distance": 50,
+                        "time": 45
+                      },
+                      {
+                        "setNumber": 3,
+                        "distance": 50,
+                        "time": 48
+                      }
+                    ]
+                  },
+                  {
+                    "exerciseName": "Burpee Broad Jumps",
+                    "category": "functional",
+                    "numSets": 2,
+                    "reps": 10,
+                    "sets": [
+                      {
+                        "setNumber": 1,
+                        "reps": 10,
+                        "notes": "Full extension"
+                      },
+                      {
+                        "setNumber": 2,
+                        "reps": 10
+                      }
+                    ]
+                  },
+                  {
+                    "exerciseName": "Rowing",
+                    "category": "conditioning",
+                    "numSets": 1,
+                    "distance": 1000,
+                    "time": 210,
+                    "sets": [
+                      {
+                        "setNumber": 1,
+                        "distance": 1000,
+                        "time": 210
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Workout log created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Workout log created successfully"
+                    },
+                    "workout": {
+                      "$ref": "#/components/schemas/InsertWorkoutLog"
+                    }
+                  },
+                  "required": [
+                    "message",
+                    "workout"
+                  ]
+                },
+                "example": {
+                  "message": "Workout log created successfully",
+                  "workout": {
+                    "date": "2026-03-29",
+                    "focus": "conditioning",
+                    "mainWorkout": "3 rounds: Sled Push 50m, Burpee Broad Jumps x10, 1km Row",
+                    "accessory": "Core circuit: 3x20 sit-ups, 3x30s plank",
+                    "notes": "Hyrox simulation - focus on transitions",
+                    "duration": 55,
+                    "rpe": 7,
+                    "source": "manual",
+                    "planDayId": null,
+                    "stravaActivityId": null,
+                    "calories": null,
+                    "distanceMeters": null,
+                    "elevationGain": null,
+                    "avgHeartrate": null,
+                    "maxHeartrate": null,
+                    "avgSpeed": null,
+                    "maxSpeed": null,
+                    "avgCadence": null,
+                    "avgWatts": null,
+                    "sufferScore": null
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request payload"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Workouts"
+        ],
+        "summary": "Get all workout logs",
+        "description": "Retrieves a list of all workout logs for the authenticated user.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A list of workout logs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/InsertWorkoutLog"
+                  }
+                },
+                "example": [
+                  {
+                    "date": "2026-03-29",
+                    "focus": "conditioning",
+                    "mainWorkout": "3 rounds: Sled Push 50m, Burpee Broad Jumps x10, 1km Row",
+                    "accessory": "Core circuit: 3x20 sit-ups, 3x30s plank",
+                    "notes": "Hyrox simulation - focus on transitions",
+                    "duration": 55,
+                    "rpe": 7,
+                    "source": "manual",
+                    "planDayId": null,
+                    "stravaActivityId": null,
+                    "calories": null,
+                    "distanceMeters": null,
+                    "elevationGain": null,
+                    "avgHeartrate": null,
+                    "maxHeartrate": null,
+                    "avgSpeed": null,
+                    "maxSpeed": null,
+                    "avgCadence": null,
+                    "avgWatts": null,
+                    "sufferScore": null
+                  }
+                ]
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/workouts/{id}": {
+      "get": {
+        "tags": [
+          "Workouts"
+        ],
+        "summary": "Get a specific workout log",
+        "description": "Retrieves a specific workout log by its ID for the authenticated user.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/WorkoutId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The requested workout log",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InsertWorkoutLog"
+                },
+                "example": {
+                  "date": "2026-03-29",
+                  "focus": "conditioning",
+                  "mainWorkout": "3 rounds: Sled Push 50m, Burpee Broad Jumps x10, 1km Row",
+                  "accessory": "Core circuit: 3x20 sit-ups, 3x30s plank",
+                  "notes": "Hyrox simulation - focus on transitions",
+                  "duration": 55,
+                  "rpe": 7,
+                  "source": "manual",
+                  "planDayId": null,
+                  "stravaActivityId": null,
+                  "calories": null,
+                  "distanceMeters": null,
+                  "elevationGain": null,
+                  "avgHeartrate": null,
+                  "maxHeartrate": null,
+                  "avgSpeed": null,
+                  "maxSpeed": null,
+                  "avgCadence": null,
+                  "avgWatts": null,
+                  "sufferScore": null
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Workout not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Workouts"
+        ],
+        "summary": "Update a specific workout log",
+        "description": "Updates an existing workout log by its ID. You can optionally include an `exercises` array to replace the existing exercise sets.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/WorkoutId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWorkoutRequest"
+              },
+              "example": {
+                "duration": 52,
+                "rpe": 8,
+                "notes": "Felt stronger on the sled push rounds today",
+                "exercises": [
+                  {
+                    "exerciseName": "Sled Push",
+                    "category": "conditioning",
+                    "numSets": 3,
+                    "sets": [
+                      {
+                        "setNumber": 1,
+                        "distance": 50,
+                        "time": 42,
+                        "notes": "Smooth pace"
+                      },
+                      {
+                        "setNumber": 2,
+                        "distance": 50,
+                        "time": 45
+                      },
+                      {
+                        "setNumber": 3,
+                        "distance": 50,
+                        "time": 48
+                      }
+                    ]
+                  },
+                  {
+                    "exerciseName": "Rowing",
+                    "category": "conditioning",
+                    "numSets": 1,
+                    "distance": 1000,
+                    "time": 210,
+                    "sets": [
+                      {
+                        "setNumber": 1,
+                        "distance": 1000,
+                        "time": 210
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Workout log updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InsertWorkoutLog"
+                },
+                "example": {
+                  "date": "2026-03-29",
+                  "focus": "conditioning",
+                  "mainWorkout": "3 rounds: Sled Push 50m, Burpee Broad Jumps x10, 1km Row",
+                  "accessory": "Core circuit: 3x20 sit-ups, 3x30s plank",
+                  "notes": "Hyrox simulation - focus on transitions",
+                  "duration": 55,
+                  "rpe": 7,
+                  "source": "manual",
+                  "planDayId": null,
+                  "stravaActivityId": null,
+                  "calories": null,
+                  "distanceMeters": null,
+                  "elevationGain": null,
+                  "avgHeartrate": null,
+                  "maxHeartrate": null,
+                  "avgSpeed": null,
+                  "maxSpeed": null,
+                  "avgCadence": null,
+                  "avgWatts": null,
+                  "sufferScore": null
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request payload"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Workout not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Workouts"
+        ],
+        "summary": "Delete a specific workout log",
+        "description": "Deletes an existing workout log by its ID for the authenticated user.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/WorkoutId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workout log deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    }
+                  },
+                  "required": [
+                    "success"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Workout not found"
+          }
+        }
+      }
+    },
+    "/api/v1/preferences": {
+      "patch": {
+        "tags": [
+          "Preferences"
+        ],
+        "summary": "Update user preferences",
+        "description": "Updates the authenticated user's profile preferences.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserPreferences"
+              },
+              "example": {
+                "weightUnit": "kg",
+                "distanceUnit": "km",
+                "weeklyGoal": 4,
+                "emailNotifications": true,
+                "emailWeeklySummary": true,
+                "emailMissedReminder": true,
+                "aiCoachEnabled": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Preferences updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateUserPreferences"
+                },
+                "example": {
+                  "weightUnit": "kg",
+                  "distanceUnit": "km",
+                  "weeklyGoal": 4,
+                  "emailNotifications": true,
+                  "emailWeeklySummary": true,
+                  "emailMissedReminder": true,
+                  "aiCoachEnabled": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    }
+  }
+}

@@ -10,6 +10,8 @@ The Hyrox Companion exposes a RESTful API under the `/api/v1/` prefix. All endpo
 **Content-Type:** `application/json` (requests and responses)
 **Authentication:** Clerk JWT via `credentials: "include"` (cookie-based)
 
+**Machine-readable spec:** a committed OpenAPI 3.0 snapshot lives at [`docs/openapi.json`](openapi.json). It is regenerated from the same Zod registry that powers Swagger UI (`shared/openapi.ts`) via `pnpm docs:openapi` and is CI-gated — the `Build` workflow fails if the committed file drifts from the schemas. Use it for client-code generation, contract testing, or importing into tools like Postman / Insomnia. Endpoints marked below that are not yet registered with the registry are **not** in the snapshot; coverage is being broadened as routes are migrated.
+
 ---
 
 ## Table of Contents
