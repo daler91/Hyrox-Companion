@@ -1,3 +1,3 @@
-## 2026-04-02 - Added `aria-expanded` and `aria-controls` to AI Coach Floating Action Button
-**Learning:** Found a missing `aria-expanded` attribute on a button that toggles a side panel. Providing this state is critical for screen reader users to understand if the panel is open or closed.
-**Action:** Always check interactive elements that toggle visibility of other elements to ensure they include `aria-expanded` and `aria-controls` attributes.
+## 2026-04-22 - Upgraded native `title` to design system `Tooltip` for Send Message button
+**Learning:** Found a button using the native HTML `title` attribute for tooltips (`title="Send message"`) instead of the project's consistent Radix UI / Shadcn `Tooltip` components. Native tooltips lack visual consistency, have delay issues, and behave differently across browsers and operating systems.
+**Action:** Always prefer the design system `Tooltip` over native `title` attributes for icon-only buttons to maintain visual polish and predictable accessibility. When converting, ensure `aria-label` remains on the button for screen readers.
