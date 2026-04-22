@@ -122,22 +122,51 @@ export const EMBEDDING_DIMENSIONS = 3072;
 // rag-retrieval health probe, repeated chat queries, and re-embed passes from
 // re-billing the same string (S8). Size is bounded so the worst case is a few
 // MB of floats per process.
+//
+// TTL (1h) prevents long-lived processes from serving an embedding that was
+// generated under a now-superseded model or after a prompt-engineering
+// change (CODEBASE_AUDIT.md Suggestion-4). Expired entries are evicted
+// lazily on get and during set, so no background timer is needed.
 const EMBEDDING_CACHE_MAX_ENTRIES = 256;
-const embeddingCache = new Map<string, number[]>();
+const EMBEDDING_CACHE_TTL_MS = 60 * 60 * 1000;
+type EmbeddingCacheEntry = { values: number[]; expiresAt: number };
+const embeddingCache = new Map<string, EmbeddingCacheEntry>();
 
 function cacheKey(text: string): string {
   // Trim whitespace so leading/trailing padding doesn't partition the cache.
   return text.trim();
 }
 
-function touchEmbeddingCache(key: string, value: number[]): void {
+function readEmbeddingCache(key: string): number[] | undefined {
+  const entry = embeddingCache.get(key);
+  if (!entry) return undefined;
+  if (entry.expiresAt <= Date.now()) {
+    embeddingCache.delete(key);
+    return undefined;
+  }
   // Re-insert to move to the tail (Map iteration order == insertion order).
   embeddingCache.delete(key);
-  embeddingCache.set(key, value);
-  if (embeddingCache.size > EMBEDDING_CACHE_MAX_ENTRIES) {
+  embeddingCache.set(key, entry);
+  return entry.values;
+}
+
+function writeEmbeddingCache(key: string, values: number[]): void {
+  embeddingCache.delete(key);
+  embeddingCache.set(key, { values, expiresAt: Date.now() + EMBEDDING_CACHE_TTL_MS });
+  // Opportunistic sweep of any expired head entries before falling back to
+  // LRU eviction. Stops a batch of writes after a long idle from evicting
+  // still-warm entries while expired ones linger at the front.
+  while (embeddingCache.size > EMBEDDING_CACHE_MAX_ENTRIES) {
     const firstKey = embeddingCache.keys().next().value;
-    if (firstKey !== undefined) embeddingCache.delete(firstKey);
+    if (firstKey === undefined) break;
+    embeddingCache.delete(firstKey);
   }
+}
+
+// Exported for tests to reset the cache between cases without reloading
+// the module.
+export function __resetEmbeddingCacheForTests(): void {
+  embeddingCache.clear();
 }
 
 /**
@@ -146,11 +175,8 @@ function touchEmbeddingCache(key: string, value: number[]): void {
  */
 export async function generateEmbedding(text: string): Promise<number[]> {
   const key = cacheKey(text);
-  const cached = embeddingCache.get(key);
-  if (cached) {
-    touchEmbeddingCache(key, cached);
-    return cached;
-  }
+  const cached = readEmbeddingCache(key);
+  if (cached) return cached;
 
   const response = await retryWithBackoff(
     () =>
@@ -164,7 +190,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
   if (!values || values.length === 0) {
     throw new Error("Empty embedding returned from Gemini");
   }
-  touchEmbeddingCache(key, values);
+  writeEmbeddingCache(key, values);
   return values;
 }
 

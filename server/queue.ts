@@ -57,11 +57,17 @@ queue.on("error", (error: Error) => {
 // (CODEBASE_AUDIT.md §3).
 const IN_BATCH_CONCURRENCY = 2;
 
-// Per-job wall-clock timeout. expireInMinutes only expunges the queue row —
-// it does not kill the worker, so a hung Gemini / HTTP call would leak a
-// worker slot forever (W6). We reject the job promise shortly before the
-// 60min expire so pg-boss still sees it as failed and can retry.
-const JOB_TIMEOUT_MS = 55 * 60 * 1000;
+// Per-job wall-clock timeout. expireInMinutes (60) only expunges the queue
+// row — it does not kill the worker, so a hung Gemini / HTTP call would leak
+// a worker slot forever (W5). We reject the job promise well before the
+// 60min expire so pg-boss sees it as failed and can retry.
+//
+// Kept deliberately 10 minutes BELOW expire (not 5) so that when the JS
+// rejection fires, any orphaned upstream fetch/Gemini call still in Node's
+// event loop has time to complete (or time out on its own AbortSignal)
+// before pg-boss's expire treats the job as re-dispatchable
+// (CODEBASE_AUDIT.md Warning-17).
+const JOB_TIMEOUT_MS = 50 * 60 * 1000;
 
 async function runWithTimeout<T>(label: string, fn: () => Promise<T>): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
