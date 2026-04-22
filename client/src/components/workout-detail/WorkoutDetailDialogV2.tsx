@@ -621,13 +621,34 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
   // button in the collapsible just triggers the ask, not the mutation.
   const [confirmingParse, setConfirmingParse] = useState(false);
   const currentSets = isPlanned ? planSets.exerciseSets : exerciseSets;
+  const hasSets = currentSets.length > 0;
   // Free-text panel sits above the exercise section. Start open for empty
   // planned entries (onboarding — nothing in the table yet), collapsed
   // otherwise so the structured rows dominate. Auto-collapses after a
   // successful parse (see triggerParse below).
+  //
+  // Two edge cases we reconcile via render-time sentinels (same pattern as
+  // `lastEntryId` in the parent component):
+  //   1. Entry change — DialogBody stays mounted while the athlete browses
+  //      between timeline cards, so per-entry panel state has to reset.
+  //   2. Cache-miss hydration — `planSets.exerciseSets` starts as [] while
+  //      the exercises query resolves, so the useState initializer can't
+  //      see already-persisted rows on first render. Re-sync once rows
+  //      arrive so a planned entry that already has a table collapses the
+  //      panel as intended.
   const [prescriptionOpen, setPrescriptionOpen] = useState<boolean>(
-    isPlanned && currentSets.length === 0,
+    isPlanned && !hasSets,
   );
+  const [prescriptionHydrated, setPrescriptionHydrated] = useState<boolean>(hasSets);
+  const [lastPrescriptionEntryId, setLastPrescriptionEntryId] = useState<string | undefined>(entry.id);
+  if (entry.id !== lastPrescriptionEntryId) {
+    setLastPrescriptionEntryId(entry.id);
+    setPrescriptionOpen(isPlanned && !hasSets);
+    setPrescriptionHydrated(hasSets);
+  } else if (isPlanned && !prescriptionHydrated && hasSets) {
+    setPrescriptionHydrated(true);
+    setPrescriptionOpen(false);
+  }
   const triggerParse = () => {
     const onSuccess = () => setPrescriptionOpen(false);
     if (isPlanned) planSets.reparseFreeText.mutate(undefined, { onSuccess });
