@@ -30,6 +30,7 @@ The Hyrox Companion exposes a RESTful API under the `/api/v1/` prefix. All endpo
 - [Coaching Material Routes](#coaching-material-routes)
 - [Preferences Routes](#preferences-routes)
 - [Email Routes](#email-routes)
+- [Push Notification Routes](#push-notification-routes)
 - [Strava Routes](#strava-routes)
 - [Garmin Routes](#garmin-routes)
 - [Timeline and Export Routes](#timeline-and-export-routes)
@@ -655,6 +656,24 @@ Parse free-text or voice input into structured exercise data using Gemini AI.
 ]
 ```
 
+### POST /api/v1/parse-exercises-from-image
+
+Parse a photo of a workout plan (whiteboard, printout, screenshot) into structured exercise data using Gemini's multi-modal vision model. Images are expected to be compressed client-side via `client/src/lib/image.ts` (`compressImage`) before upload.
+
+- **Auth:** Required
+- **Rate limit:** `parse` category, shared budget with text parsing
+- **Body:** `{ imageBase64: string, mimeType: "image/jpeg" | "image/png" | "image/webp" }`
+- **Response:** Same `ParsedExercise[]` shape as `/api/v1/parse-exercises`.
+
+### POST /api/v1/workouts/:id/reparse-from-image
+
+Re-parse an existing workout's exercises against a newly-uploaded photo. Used from the workout detail dialog when the coach updates the prescribed block or when the athlete captures the post-session whiteboard.
+
+- **Auth:** Required (user must own the workout)
+- **Rate limit:** `parse` category
+- **Body:** `{ imageBase64, mimeType }` (same as above)
+- **Response:** The updated workout payload including re-parsed exercises.
+
 ### POST /api/v1/chat
 
 Send a message to the AI coach and receive a complete response.
@@ -849,6 +868,47 @@ External cron trigger endpoint for batch email processing across all users.
 - **Auth:** `x-cron-secret` header (timing-safe comparison with `CRON_SECRET` env var)
 - **No Clerk auth required**
 - **Response:** Cron job result summary
+
+---
+
+## Push Notification Routes
+
+**File:** `server/routes/push.ts`
+
+Web Push (VAPID) endpoints used by the PWA to deliver missed-workout nudges and weekly summary notifications. All endpoints return `404 PUSH_NOT_CONFIGURED` when `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` are not set.
+
+### GET /api/v1/push/vapid-key
+
+Return the server's VAPID public key so the client can call `PushManager.subscribe`.
+
+- **Auth:** Required
+- **Response:** `{ publicKey: string }`
+
+### POST /api/v1/push/subscribe
+
+Persist a `PushSubscription` for the authenticated user. Multiple endpoints per user are allowed (one per device).
+
+- **Auth:** Required
+- **Rate limit:** `push` category, 10/min
+- **Body:** `{ endpoint: string, keys: { p256dh: string, auth: string } }`
+- **Response:** `{ success: true }`
+
+### DELETE /api/v1/push/unsubscribe
+
+Remove a specific subscription endpoint for the authenticated user.
+
+- **Auth:** Required
+- **Rate limit:** `push` category, 10/min
+- **Body:** `{ endpoint: string }`
+- **Response:** `{ success: true }`
+
+### POST /api/v1/push/test
+
+Dispatch a test notification to every registered subscription for the authenticated user. Used by the Settings UI to verify the PWA install is wired up correctly.
+
+- **Auth:** Required
+- **Rate limit:** `push` category, 5/min
+- **Response:** `{ success: true, sent: number }`
 
 ---
 

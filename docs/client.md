@@ -206,16 +206,48 @@ Foundational UI building blocks generated via shadcn/ui CLI. Includes: `accordio
 
 The largest component group, further subdivided:
 
-- **Top-level**: `TimelineHeader`, `TimelineSkeleton`, `TimelineEmptyState`, `TimelineDateGroup`, `FloatingActionButton`, `TimelineTodayIndicator` (jump-to-today pill; hidden when today is filtered out of the current view).
-- **Annotations**: `AnnotationsDialog`, `AnnotationsList`, inline annotation rows rendered as first-class log entries on the Timeline for injury / illness / travel / rest periods.
-- **Dialogs**: `WorkoutDetailDialog`, `SchedulePlanDialog`, `SkipConfirmDialog`, `ImportPreviewDialog`, `EditWorkoutDialog`, `ConfirmDialog`.
-- **Workout detail**: `WorkoutDetailHeader`, `WorkoutDetailViewMode`, `WorkoutDetailEditMode`, `WorkoutDetailActions`.
-- **`timeline-filters/`**: `TimelineFilters`, `PlanSelector`, `RenamePlanDialog`, `GoalDialog`, `csv-utils.ts`.
+- **Top-level**: `TimelineHeader`, `TimelineSkeleton`, `TimelineEmptyState`, `TimelineDateGroup`, `FloatingActionButton`, `TimelineTodayIndicator` (jump-to-today pill; hidden when today is filtered out of the current view), `CoachReviewingIndicator`, `SuggestionsPanel`.
+- **Annotations**: `AnnotationsDialog`, `TimelineAnnotationCard`, `AnnotationTypeIcon` — inline annotation rows rendered as first-class log entries on the Timeline for injury / illness / travel / rest periods.
+- **Dialogs**: `SchedulePlanDialog`, `SkipConfirmDialog`, `ImportPreviewDialog`, `EditWorkoutDialog`, `ConfirmDialog`. (The workout detail dialog has graduated to its own top-level `workout-detail/` directory — see below.)
+- **`timeline-filters/`**: `TimelineFilters`, `PlanSelector`, `GoalDialog`, `csv-utils.ts`.
 - **`timeline-workout-card/`**: `TimelineWorkoutCard`, `ExerciseChips`, `WorkoutStravaStats`, utility and type files.
-- **`workout-detail-exercises/`**: `WorkoutDetailEditForm`, `WorkoutDetailView`, `WorkoutBlockMode`, `WorkoutTextMode`, `SortableDialogBlock`, `WorkoutAccessoryNotes`, `WorkoutDetailStravaMetrics`.
 - **`combine-workouts-dialog/`**: `CombineWorkoutsDialog`, `FieldSelector`, `WorkoutCard`, `CombinedResultSummary`.
 
 Barrel exports via `index.ts` files in each subdirectory.
+
+### `workout-detail/` -- Workout Detail Dialog (v2)
+
+The workout detail dialog lives in its own top-level directory so it can be shared between Timeline, Log Workout, and Coach surfaces.
+
+- `WorkoutDetailDialogV2` -- Current implementation of the workout detail dialog (view + edit modes in one surface, with AI coach rail).
+- `WorkoutDetailHeaderV2` -- Dialog header (title, date, menu, close button).
+- `ExerciseTable` -- Responsive exercise + set table with per-row load/reps/time cells, dense mobile layout, readable exercise names.
+- `CoachPrescriptionCollapsible` -- Collapsible panel showing the coach's prescribed exercises for the day; integrates free-text parse + photo-parse entry points.
+- `CoachTakePanel` / `InDialogCoachChat` -- Inline AI coach rail for asking questions about the open workout.
+- `AthleteNoteInput` -- Free-text note capture scoped to the workout.
+- `HistoryPanel` -- Previous completions of the same exercise for context.
+- `SaveStatePill` / `SaveWorkoutButton` -- Autosave indicator + explicit save button.
+- `WorkoutStatsRow` -- Summary row (duration, RPE, set totals) shown at the top of the dialog.
+- `useDialogParseControls` -- Hook that orchestrates text + photo parse state inside the dialog (preview URL lifecycle, dispatch-time entry-id guards to avoid stale callbacks, cancel-in-flight semantics when a photo starts while a text parse is mid-flight).
+
+### `exercise-input/` -- Exercise Entry Widgets
+
+Structured exercise entry surfaces shared across logging and detail:
+
+- `ExerciseHeader` -- Exercise title, category icon, action menu.
+- `ExerciseWarnings` -- Inline validation hints (e.g. implausible load or time).
+- `MultiSetTable` -- Tabular editor for multi-set exercises (load × reps × rest × time).
+- `SingleSetFields` -- Flat editor used when an exercise has a single prescribed set.
+- `types.ts` / `index.ts` -- Shared types + barrel exports.
+
+### `exercise-row/` -- Exercise Row Renderer
+
+- `InlineSetEditor` -- Inline per-row set editor used from the exercise table.
+- `fieldMeta.ts` -- Shared metadata describing which fields are relevant per exercise category (reps-primary vs. time-primary vs. distance-primary).
+
+### `icons/` -- Integration Icons
+
+- `StravaIcon`, `GarminIcon` -- Brand-color SVG icons used in Settings and on timeline cards.
 
 ### `workout/` -- Log Workout Page Components
 
@@ -224,12 +256,15 @@ Barrel exports via `index.ts` files in each subdirectory.
 - `WorkoutNotesCard` -- Notes textarea with voice input.
 - `WorkoutSaveButton` -- Save action button.
 - `WorkoutComposer` -- Unified log-workout surface: structured exercise list with a collapsible "Describe / dictate" panel. Auto-parses the text panel's contents into the exercise list via Gemini on a debounce, preserving cells the user has already edited.
-- `WorkoutTextMode` -- Textarea + voice dictation used inside the composer's collapsible panel. No longer owns a manual parse button.
+- `WorkoutTextMode` -- Textarea + voice dictation used inside the composer's collapsible panel. Also mounts `ImageCaptureButton` for photo-to-workout parsing; the voice button is hidden while a photo preview is active to avoid conflicting input surfaces.
 - `WorkoutExerciseMode` -- Structured exercise block editor / picker.
+- `ExerciseRow` / `SortableExerciseBlock` -- Draggable exercise block primitives used by the composer.
+- `ExerciseImagePreview` -- Thumbnail + remove control rendered after a user captures a workout photo but before the parsed exercises are committed.
 
 ### Root-level Components
 
 - `AppSidebar` -- Main navigation sidebar with Training and Analytics links, user avatar, settings/logout/theme toggle in footer.
+- `Breadcrumbs` -- Route breadcrumb trail driven by `useNavigationBreadcrumb`.
 - `CoachPanel` -- AI coach chat panel (described above).
 - `OnboardingWizard` -- Multi-step onboarding dialog.
 - `ThemeProvider` -- Dark/light theme context provider.
@@ -241,12 +276,24 @@ Barrel exports via `index.ts` files in each subdirectory.
 - `ChatInput` -- Chat text input.
 - `ExerciseSelector` -- Exercise picker.
 - `ExerciseInput` -- Individual exercise input fields.
+- `ImageCaptureButton` -- Camera + file-input wrapper that opens the device camera (or falls back to file chooser), compresses the picked image via `lib/image.ts`, and exposes the result as a base64 payload. Used by the Log Workout flow and by `CoachPrescriptionCollapsible` in the workout detail dialog.
 - `MetricCard` -- Reusable stat/metric card.
+- `PrivacyConsentBanner` -- AI-consent gate shown on first entry when `aiCoachEnabled` is `false`; opens the relevant Settings section on "Manage".
+- `RagDebugBadge` -- Dev-only indicator that surfaces which RAG chunks (if any) were injected into the last chat response; gated behind a dev flag.
 - `RpeSelector` -- Rate of Perceived Exertion selector.
 - `VoiceButton` / `VoiceFieldButton` -- Voice input controls.
 - `WeeklySummary` -- Weekly training summary.
 - `QuickActions` -- Quick action buttons.
 - `WorkoutCard` -- Workout display card.
+
+### Photo-to-Workout Parsing
+
+A user flow introduced in April 2026 that lets athletes snap a photo of a whiteboard / coach printout / phone screenshot and have Gemini extract exercises and sets.
+
+- **Entry points**: `ImageCaptureButton` mounted inside `WorkoutTextMode` (Log Workout) and inside `CoachPrescriptionCollapsible` (Workout Detail dialog, for re-parsing an existing workout against a new photo).
+- **Client-side compression**: `compressImage()` in `client/src/lib/image.ts` resizes the captured image to a max edge of 1600px and re-encodes as JPEG at quality 0.8 before base64 upload, keeping payloads OCR-ready while staying inside the Gemini request limit. Centralized `getImageMimeType()` ensures the same mime-type handling on both call sites.
+- **Orchestration hook**: `useDialogParseControls` (in `client/src/components/workout-detail/`) manages preview URL lifecycle (`URL.createObjectURL` is revoked on unmount via `useLayoutEffect`), cancels any in-flight text auto-parse when a photo capture starts, guards success callbacks against stale dispatches via a dispatch-time entry-id comparison, and preserves the current capture when a parse call resolves with an empty exercise list.
+- **Server endpoints**: `POST /api/v1/parse-exercises-from-image` (new workout) and `POST /api/v1/workouts/:id/reparse-from-image` (existing workout). Both accept `{ imageBase64, mimeType }` and are rate-limited under the AI category. See [API Reference](api-reference.md).
 
 ### Component Communication Patterns
 

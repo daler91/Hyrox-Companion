@@ -1,6 +1,6 @@
 # External Integrations
 
-This document covers the external service integrations used by the Hyrox Companion application: Strava and Garmin activity syncing, Resend transactional email, pg-boss job queue, and node-cron scheduling.
+This document covers the external service integrations used by the Hyrox Companion application: Strava and Garmin activity syncing, Resend transactional email, pg-boss job queue, node-cron scheduling, and Sentry error tracking.
 
 ---
 
@@ -12,19 +12,21 @@ This document covers the external service integrations used by the Hyrox Compani
 4. [Email System (Resend)](#email-system-resend)
 5. [Job Queue (pg-boss)](#job-queue-pg-boss)
 6. [Cron Scheduling (node-cron)](#cron-scheduling-node-cron)
-7. [Startup Maintenance](#startup-maintenance)
+7. [Error Tracking (Sentry)](#error-tracking-sentry)
+8. [Startup Maintenance](#startup-maintenance)
 
 ---
 
 ## Overview
 
-The application relies on five external integration layers:
+The application relies on six external integration layers:
 
 - **Strava** -- OAuth 2.0 integration for importing workout activities from athletes' Strava accounts.
 - **Garmin Connect** -- Email/password sign-in against Garmin's reverse-engineered SSO (no public OAuth) to import activities. Wrapped in a strict safety stack because every request goes out through the same shared server IP.
 - **Resend** -- Transactional email delivery for weekly training summaries and missed workout reminders.
 - **pg-boss** -- PostgreSQL-backed persistent job queue for background processing (auto-coaching, embedding generation). Retries are scoped to idempotent handlers only.
 - **node-cron** -- In-process cron scheduler that triggers the daily email pipeline.
+- **Sentry** -- Server- and client-side error tracking. Completely optional; a missing DSN disables reporting without affecting the rest of the app.
 
 All integrations are configured through environment variables and initialized during server startup.
 
@@ -458,6 +460,35 @@ This ensures emails are not missed due to server restarts. The idempotency guard
 
 - `startCron(storage)` -- Initializes the cron schedule. Includes a guard against duplicate starts.
 - `stopCron()` -- Stops the cron task (used during graceful shutdown).
+
+---
+
+## Error Tracking (Sentry)
+
+Sentry provides centralized error tracking for both server and client. It is entirely optional: a missing DSN disables initialization without affecting the rest of the app.
+
+**Key files:**
+
+- `server/index.ts` -- Server-side Sentry initialization with `@sentry/node`. Wraps Express with request + error handlers so unhandled rejections and uncaught exceptions surface in Sentry.
+- `client/src/main.tsx` -- Client-side Sentry initialization with `@sentry/react`. The root `<App />` is wrapped in `Sentry.ErrorBoundary` with `FallbackErrorBoundary` as its fallback UI.
+- `client/src/components/FeatureErrorBoundaryWrapper.tsx` -- Per-feature error boundary that reports to Sentry with a `featureName` tag so regressions can be attributed to a specific page.
+
+### Environment Variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `SENTRY_DSN` | No | Server DSN. When absent, the `@sentry/node` init is skipped. |
+| `VITE_SENTRY_DSN` | No | Client DSN. When absent, `Sentry.init` on the client is skipped. |
+| `SENTRY_ENVIRONMENT` | No | Optional environment tag (e.g. `production`, `staging`). Defaults to `NODE_ENV`. |
+
+Because the app ships without a bundled DSN, local development does not report to Sentry unless the developer explicitly opts in by setting the variables.
+
+### What Is Reported
+
+- **Server**: unhandled errors thrown from routes (via the Express error handler), rejected promises inside `asyncHandler`, and fatal errors from `runStartupMaintenance` before the HTTP listener binds.
+- **Client**: render-time errors caught by `Sentry.ErrorBoundary` / `FeatureErrorBoundaryWrapper`, plus any explicit `Sentry.captureException` calls inside fetch wrappers.
+
+PII-sensitive payloads (request bodies, auth headers) are scrubbed before being sent — see `beforeSend` hooks in the init calls.
 
 ---
 

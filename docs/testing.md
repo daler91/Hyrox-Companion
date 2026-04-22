@@ -30,11 +30,14 @@ The project follows a testing pyramid with three layers:
 
 | Layer | Count | Location |
 |-------|-------|----------|
-| Unit tests (server) | ~35 files | `server/**/*.test.ts` |
-| Unit tests (client) | ~24 files | `client/src/**/*.test.{ts,tsx}` |
+| Unit tests (server) | ~48 files | `server/**/*.test.ts` |
+| Unit tests (client) | ~37 files | `client/src/**/*.test.{ts,tsx}` |
 | Unit tests (shared) | 2 files | `shared/*.test.ts` |
 | Integration tests | 2 files | `server/routes/tests/*.integration.test.ts` |
-| Cypress E2E specs | 9 files | `cypress/e2e/*.cy.ts` |
+| Smoke tests | ~25 cases | `test/` + `vitest.smoke.config.ts` — run as `pnpm test:smoke` for fast pre-push feedback |
+| Cypress E2E specs | 12 files | `cypress/e2e/*.cy.ts` |
+
+Across Vitest, this works out to **~880 `it()` blocks spread across 89 test files**. Cypress contributes **~60 `it()` blocks across 12 specs**.
 
 ### Coverage thresholds
 
