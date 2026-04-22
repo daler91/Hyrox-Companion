@@ -523,6 +523,9 @@ function GroupRow({
     weightVaries: loadVaries,
     hasWeight,
   });
+  const prescriptionSegments = prescription.visual.map((seg) => (
+    <PrescriptionSegment key={seg.separator ?? "sets"} segment={seg} />
+  ));
 
   const changeExerciseItem = (
     <DropdownMenuItem
@@ -599,16 +602,31 @@ function GroupRow({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        <button
-          type="button"
-          onClick={onToggle}
-          aria-label={`Edit ${label}: ${prescription.aria}`}
-          className="flex w-full items-center gap-1.5 px-3 pb-2 pl-[22px] text-left text-xs text-muted-foreground"
-        >
-          {prescription.visual.map((seg) => (
-            <PrescriptionSegment key={seg.separator ?? "sets"} segment={seg} />
-          ))}
-        </button>
+        {/*
+         * When expanded, the InlineSetEditor below surfaces the
+         * per-set values in editable form, so an extra tappable
+         * summary would be redundant and its "Edit …" label would
+         * misleadingly collapse the editor when tapped. Render the
+         * same prescription statically as a labelled summary instead.
+         */}
+        {isExpanded ? (
+          <div
+            role="group"
+            aria-label={`${label} summary: ${prescription.aria}`}
+            className="flex w-full items-center gap-1.5 px-3 pb-2 pl-[22px] text-xs text-muted-foreground"
+          >
+            {prescriptionSegments}
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-label={`Edit ${label}: ${prescription.aria}`}
+            className="flex w-full items-center gap-1.5 px-3 pb-2 pl-[22px] text-left text-xs text-muted-foreground"
+          >
+            {prescriptionSegments}
+          </button>
+        )}
       </div>
 
       <div className={cn(GRID_TEMPLATE, "hidden text-sm sm:grid")}>
