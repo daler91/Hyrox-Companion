@@ -389,7 +389,10 @@ export function WorkoutDetailDialogV2({
           latestFocusRef={latestFocusRef}
           onSaveNote={(note) => workoutId && updateNote.mutate(note)}
           onSaveLoggedPrescription={(patch) => workoutId && updatePrescription.mutate(patch)}
-          onParseLoggedFreeText={() => workoutId && reparseFreeText.mutate()}
+          onParseLoggedFreeText={(opts) => {
+            if (!workoutId) return;
+            reparseFreeText.mutate(undefined, opts);
+          }}
           isParsingLogged={reparseFreeText.isPending}
           chatOpen={chatOpen}
           onOpenChat={() => {
@@ -526,7 +529,7 @@ interface DialogBodyProps {
    * On the planned branch these are handled in-hook via usePlanDayExercises.
    */
   readonly onSaveLoggedPrescription: (patch: { mainWorkout?: string | null; accessory?: string | null; notes?: string | null }) => void;
-  readonly onParseLoggedFreeText: () => void;
+  readonly onParseLoggedFreeText: (opts?: { onSuccess?: () => void }) => void;
   readonly isParsingLogged: boolean;
   /**
    * Whether the in-dialog coach chat is visible. When true the
@@ -617,18 +620,51 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
   // sets yet, fire straight away. Dialog state is hoisted here so the Parse
   // button in the collapsible just triggers the ask, not the mutation.
   const [confirmingParse, setConfirmingParse] = useState(false);
+  const currentSets = isPlanned ? planSets.exerciseSets : exerciseSets;
+  const hasSets = currentSets.length > 0;
+  // Free-text panel sits above the exercise section. Start open for empty
+  // planned entries (onboarding — nothing in the table yet), collapsed
+  // otherwise so the structured rows dominate. Auto-collapses after a
+  // successful parse (see triggerParse below).
+  //
+  // Two edge cases we reconcile via render-time sentinels (same pattern as
+  // `lastEntryId` in the parent component):
+  //   1. Entry change — DialogBody stays mounted while the athlete browses
+  //      between timeline cards, so per-entry panel state has to reset.
+  //   2. Cache-miss hydration — `planSets.exerciseSets` starts as [] while
+  //      the exercises query resolves, so the useState initializer can't
+  //      see already-persisted rows on first render. Re-sync once rows
+  //      arrive so a planned entry that already has a table collapses the
+  //      panel as intended.
+  const [prescriptionOpen, setPrescriptionOpen] = useState<boolean>(
+    isPlanned && !hasSets,
+  );
+  const [prescriptionHydrated, setPrescriptionHydrated] = useState<boolean>(hasSets);
+  const [lastPrescriptionEntryId, setLastPrescriptionEntryId] = useState<string | undefined>(entry.id);
+  if (entry.id !== lastPrescriptionEntryId) {
+    setLastPrescriptionEntryId(entry.id);
+    setPrescriptionOpen(isPlanned && !hasSets);
+    setPrescriptionHydrated(hasSets);
+  } else if (isPlanned && !prescriptionHydrated && hasSets) {
+    setPrescriptionHydrated(true);
+    setPrescriptionOpen(false);
+  }
   const triggerParse = () => {
-    if (isPlanned) planSets.reparseFreeText.mutate();
-    else onParseLoggedFreeText();
+    const onSuccess = () => setPrescriptionOpen(false);
+    if (isPlanned) planSets.reparseFreeText.mutate(undefined, { onSuccess });
+    else onParseLoggedFreeText({ onSuccess });
   };
   const onParseClicked = () => {
-    const currentSets = isPlanned ? planSets.exerciseSets : exerciseSets;
     if (currentSets.length === 0) {
       triggerParse();
       return;
     }
     setConfirmingParse(true);
   };
+  // Empty-state nudge: when the prescription has text but no structured rows
+  // exist yet, point the user at Parse instead of Add.
+  const hasUnparsedText =
+    hasPrescriptionText(entry.mainWorkout) || hasPrescriptionText(entry.accessory);
 
   const focusLabel = entry.focus?.trim() || "this workout";
   const chatSeed = `Can you walk me through your take on my ${focusLabel} workout?`;
@@ -639,95 +675,100 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     : "grid grid-cols-1 gap-4 px-6 py-4 md:grid-cols-[1fr_280px]";
 
   return (
-    <>
-      <div className={gridClasses}>
-        <div className="flex flex-col gap-3">
-          {isPlanned ? (
-            <PlannedCallToAction
-              entry={entry}
-              onMarkComplete={onMarkComplete}
-              isMarkingComplete={isMarkingComplete}
-              weightUnit={weightUnit}
-              planSets={planSets}
-              latestFocusRef={latestFocusRef}
-            />
-          ) : (
-            <LoggedExerciseSection
-              workoutId={workoutId}
-              exerciseSets={exerciseSets}
-              weightUnit={weightUnit}
-              onUpdateSet={onUpdateSet}
-              onAddSet={onAddSet}
-              onDeleteSet={onDeleteSet}
-              saveState={loggedSaveState}
-            />
-          )}
+    <div className={gridClasses}>
+      <div className="flex flex-col gap-3">
+        <CoachPrescriptionCollapsible
+          title={isPlanned ? "Coach's prescription" : "Workout description"}
+          mainWorkout={entry.mainWorkout}
+          accessory={entry.accessory}
+          notes={entry.notes}
+          open={prescriptionOpen}
+          onOpenChange={setPrescriptionOpen}
+          onSaveField={onSavePrescriptionField}
+          onParse={parseReady ? onParseClicked : undefined}
+          isParsing={isParsing}
+        />
 
-          <CoachPrescriptionCollapsible
-            mainWorkout={entry.mainWorkout}
-            accessory={entry.accessory}
-            notes={entry.notes}
-            defaultOpen={isPlanned}
-            onSaveField={onSavePrescriptionField}
-            onParse={parseReady ? onParseClicked : undefined}
-            isParsing={isParsing}
+        {isPlanned ? (
+          <PlannedCallToAction
+            entry={entry}
+            onMarkComplete={onMarkComplete}
+            isMarkingComplete={isMarkingComplete}
+            weightUnit={weightUnit}
+            planSets={planSets}
+            latestFocusRef={latestFocusRef}
+            hasUnparsedText={hasUnparsedText}
           />
-          <AlertDialog open={confirmingParse} onOpenChange={setConfirmingParse}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Replace existing exercises?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Parsing the coach's text will replace the current structured exercises for this workout. Any manual edits you've made to the rows will be lost.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={() => {
-                    setConfirmingParse(false);
-                    triggerParse();
-                  }}
-                  data-testid="coach-prescription-parse-confirm"
-                >
-                  Replace
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </div>
+        ) : (
+          <LoggedExerciseSection
+            workoutId={workoutId}
+            exerciseSets={exerciseSets}
+            weightUnit={weightUnit}
+            onUpdateSet={onUpdateSet}
+            onAddSet={onAddSet}
+            onDeleteSet={onDeleteSet}
+            saveState={loggedSaveState}
+            hasUnparsedText={hasUnparsedText}
+          />
+        )}
 
-        <aside className="flex flex-col gap-3">
-          {chatOpen ? (
-            <InDialogCoachChat
-              focusLabel={focusLabel}
-              seedText={chatSeed}
-              onBack={onCloseChat}
-            />
-          ) : (
-            <>
-              <CoachTakePanel
-                rationale={displayRationale}
-                onAskCoach={onOpenChat}
-                isStale={isCoachNoteStale}
-                isRefreshing={planCoachNote.isRegenerating}
-              />
-              {!isPlanned && <HistoryPanel stats={history} isLoading={isLoading} />}
-            </>
-          )}
-        </aside>
-      </div>
-
-      {!isPlanned && (
-        <div className="border-t border-border px-6 py-4">
+        {!isPlanned && (
           <AthleteNoteInput
             value={workout?.notes}
             onSave={onSaveNote}
             disabled={!workoutId}
           />
-        </div>
-      )}
-    </>
+        )}
+
+        <AlertDialog open={confirmingParse} onOpenChange={setConfirmingParse}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Replace existing exercises?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Parsing the coach's text will replace the current structured exercises for this workout. Any manual edits you've made to the rows will be lost.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  setConfirmingParse(false);
+                  triggerParse();
+                }}
+                data-testid="coach-prescription-parse-confirm"
+              >
+                Replace
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+
+      <aside className="flex flex-col gap-3">
+        {chatOpen ? (
+          <InDialogCoachChat
+            focusLabel={focusLabel}
+            seedText={chatSeed}
+            onBack={onCloseChat}
+          />
+        ) : (
+          <>
+            <CoachTakePanel
+              rationale={displayRationale}
+              onAskCoach={onOpenChat}
+              isStale={isCoachNoteStale}
+              isRefreshing={planCoachNote.isRegenerating}
+            />
+            {!isPlanned && <HistoryPanel stats={history} isLoading={isLoading} />}
+          </>
+        )}
+      </aside>
+    </div>
   );
+}
+
+function hasPrescriptionText(value: string | null | undefined): boolean {
+  return !!value && value.trim().length > 0;
 }
 
 interface LoggedExerciseSectionProps {
@@ -738,6 +779,7 @@ interface LoggedExerciseSectionProps {
   readonly onAddSet: (data: import("@/lib/api").AddExerciseSetPayload) => void;
   readonly onDeleteSet: (setId: string) => void;
   readonly saveState: { isSaving: boolean; lastSavedAt: number | null };
+  readonly hasUnparsedText?: boolean;
 }
 
 function LoggedExerciseSection({
@@ -748,6 +790,7 @@ function LoggedExerciseSection({
   onAddSet,
   onDeleteSet,
   saveState,
+  hasUnparsedText,
 }: Readonly<LoggedExerciseSectionProps>) {
   if (!workoutId) return null;
   return (
@@ -759,6 +802,7 @@ function LoggedExerciseSection({
       onAddSet={onAddSet}
       onDeleteSet={onDeleteSet}
       saveState={saveState}
+      hasUnparsedText={hasUnparsedText}
     />
   );
 }
@@ -772,9 +816,10 @@ interface PlannedCallToActionProps {
   /** Latest-submitted focus from the header input; used to override a
    *  potentially-stale `entry.focus` on Mark complete. */
   readonly latestFocusRef: MutableRefObject<string>;
+  readonly hasUnparsedText?: boolean;
 }
 
-function PlannedCallToAction({ entry, onMarkComplete, isMarkingComplete, weightUnit, planSets, latestFocusRef }: Readonly<PlannedCallToActionProps>) {
+function PlannedCallToAction({ entry, onMarkComplete, isMarkingComplete, weightUnit, planSets, latestFocusRef, hasUnparsedText }: Readonly<PlannedCallToActionProps>) {
   // Plan-day-backed exercise edits. `planSets` is hoisted up to DialogBody
   // so the same hook instance feeds both this CTA and the CoachTakePanel's
   // staleness comparison. Writes go to plan_day-owned exerciseSets; Mark
@@ -805,6 +850,7 @@ function PlannedCallToAction({ entry, onMarkComplete, isMarkingComplete, weightU
           onAddSet={(data) => planSets.addSet.mutate(data)}
           onDeleteSet={(setId) => planSets.deleteSet.mutate(setId)}
           saveState={{ isSaving: planSets.isSaving, lastSavedAt: planSets.lastSavedAt }}
+          hasUnparsedText={hasUnparsedText}
         />
       ) : (
         <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
