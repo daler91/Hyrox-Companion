@@ -605,8 +605,8 @@ function GroupRow({
           aria-label={`Edit ${label}: ${prescription.aria}`}
           className="flex w-full items-center gap-1.5 px-3 pb-2 pl-[22px] text-left text-xs text-muted-foreground"
         >
-          {prescription.visual.map((seg, i) => (
-            <PrescriptionSegment key={i} segment={seg} />
+          {prescription.visual.map((seg) => (
+            <PrescriptionSegment key={seg.separator ?? "sets"} segment={seg} />
           ))}
         </button>
       </div>
