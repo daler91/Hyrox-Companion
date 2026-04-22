@@ -13,7 +13,7 @@ export function useOpenWorkoutId(): UseOpenWorkoutIdResult {
 
   const setOpenWorkoutId = useCallback(
     (id: string | null) => {
-      if (typeof globalThis.window === "undefined") return;
+      if (globalThis.window === undefined) return;
       // Read the current URL at call time instead of closing over the
       // hook's reactive values. A mutation's stale `onSuccess` firing after
       // the user has navigated away from Timeline should act on the URL
