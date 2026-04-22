@@ -106,7 +106,11 @@ export function ExerciseTable({
   } | null>(null);
 
   if (pendingExpand) {
-    const match = groups.find(
+    // `groupExerciseSets` groups by *contiguous* sortOrder, so the same
+    // exercise name can appear in multiple groups. Add always appends to
+    // the end of the list, so match from the tail to pick the newly added
+    // group — not an earlier occurrence of the same exercise.
+    const match = groups.findLast(
       (g) =>
         g.exerciseName === pendingExpand.exerciseName &&
         (g.customLabel ?? null) === pendingExpand.customLabel,
