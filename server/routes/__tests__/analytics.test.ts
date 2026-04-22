@@ -111,6 +111,24 @@ describe("Analytics Routes", () => {
         expect(storage.analytics.getAllExerciseSetsWithDates).toHaveBeenCalledWith("test_user_id", "2024-01-01", "2024-12-31");
       });
 
+      it("clamps a future 'to' date to today", async () => {
+        vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([]);
+        vi.mocked(mockMethod).mockReturnValue({});
+        // A distant future "to" should be silently clamped rather than
+        // flowing through to the DB (otherwise users get an empty page).
+        const response = await request(app).get(`${endpoint}?from=2020-01-01&to=2099-12-31`);
+
+        expect(response.status).toBe(200);
+        const call = vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mock.calls[0];
+        expect(call[0]).toBe("test_user_id");
+        expect(call[1]).toBe("2020-01-01");
+        // Clamped value should be today's UTC date string — never 2099.
+        expect(call[2]).not.toBe("2099-12-31");
+        expect(call[2]).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+        const today = new Date().toISOString().split("T")[0];
+        expect(call[2]).toBe(today);
+      });
+
       testInvalidDates(endpoint);
 
       it("should return 500 when storage throws an error", async () => {

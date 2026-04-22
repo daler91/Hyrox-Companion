@@ -38,7 +38,7 @@ Plan structured training programs, log complex workouts with voice or free-text 
 - **Timeline Annotations** — Mark date ranges as injury / illness / travel / rest so dips in volume are visible in context on the Timeline and as shaded bands on Analytics charts.
 - **Training Plans** — Import CSV, DOCX, or PDF training blocks, use the built-in 8-week Hyrox program, or generate a fully custom plan via AI.
 - **Custom Exercises** — Log non-standard movements (sled pushes, sandbag lunges) alongside standard lifts.
-- **Guided Onboarding** — Configure profile, units, weekly goals, and AI coach personality on first launch.
+- **Guided Onboarding** — Configure profile, units, and weekly goals on first launch.
 
 ### Gemini AI Engine
 - **Workout Parsing** — Say or type *"3 sets bench 225lbs x 8, then 3 miles in 24 min"* and Gemini parses it into structured data with Zod-validated schemas.
