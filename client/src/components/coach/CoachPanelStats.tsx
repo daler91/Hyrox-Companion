@@ -14,9 +14,8 @@ interface CoachPanelStatsProps {
 
 export function CoachPanelStats({ stats }: Readonly<CoachPanelStatsProps>) {
   return (
-    <div
+    <section
       className="grid grid-cols-5 gap-1.5 p-2 border-b flex-shrink-0"
-      role="region"
       aria-label="Training stats"
       data-testid="stats-bar"
     >
@@ -25,6 +24,6 @@ export function CoachPanelStats({ stats }: Readonly<CoachPanelStatsProps>) {
       <StatBadge icon={Calendar} value={stats.plannedUpcoming} label="Next" color="text-blue-500" ariaLabel={`${stats.plannedUpcoming} upcoming planned`} />
       <StatBadge icon={TrendingUp} value={`${stats.completionRate}%`} label="Rate" color="text-orange-500" ariaLabel={`${stats.completionRate}% completion rate`} />
       <StatBadge icon={Flame} value={stats.currentStreak} label="Streak" color="text-red-500" ariaLabel={`${stats.currentStreak} day streak`} />
-    </div>
+    </section>
   );
 }
