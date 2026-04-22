@@ -1,6 +1,6 @@
 import type { AllowedImageMimeType, ExerciseName, ParsedExercise } from "@shared/schema";
 import { AlertTriangle, ChevronDown, Loader2, Sparkles } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { StructuredExercise } from "@/components/ExerciseInput";
 import { Button } from "@/components/ui/button";
@@ -100,6 +100,22 @@ export function WorkoutComposer({
     base64: string;
     mimeType: AllowedImageMimeType;
   } | null>(null);
+
+  // Mirror the active preview URL into a ref so a single unmount-only
+  // cleanup effect can revoke it without re-running on every preview swap
+  // (the swap paths — Retake, success, replace-on-recapture — already
+  // revoke the previous URL synchronously). Without this, a user who
+  // captures and then navigates away leaks the underlying Blob until the
+  // tab is closed.
+  const previewUrlRef = useRef<string | null>(null);
+  useEffect(() => {
+    previewUrlRef.current = imagePreview?.url ?? null;
+  }, [imagePreview?.url]);
+  useEffect(() => {
+    return () => {
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    };
+  }, []);
   const [panelOpen, setPanelOpen] = useState(
     () => defaultPanelOpen ?? freeText.trim().length > 0,
   );

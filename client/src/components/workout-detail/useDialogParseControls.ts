@@ -1,5 +1,5 @@
 import type { AllowedImageMimeType } from "@shared/schema";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import type { usePlanDayExercises } from "@/hooks/usePlanDayExercises";
 import type { ParseFromImagePayload, ReparseResponse } from "@/lib/api";
@@ -96,6 +96,20 @@ export function useDialogParseControls(input: DialogParseControlsInput): DialogP
   useLayoutEffect(() => {
     currentEntryIdRef.current = entryId;
   }, [entryId]);
+
+  // Mirror the active preview URL so a single unmount-only effect can
+  // revoke it. The other revoke paths (retake / success / entry change /
+  // replace-on-recapture) handle the URL synchronously, so this only
+  // matters when the dialog closes while a capture is sitting unparsed.
+  const previewUrlRef = useRef<string | null>(null);
+  useEffect(() => {
+    previewUrlRef.current = imagePreview?.url ?? null;
+  }, [imagePreview?.url]);
+  useEffect(() => {
+    return () => {
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    };
+  }, []);
 
   if (entryId !== lastEntryId) {
     setLastEntryId(entryId);

@@ -73,15 +73,17 @@ router.post("/api/v1/workouts/:id/reparse", ...protectedMutationGuards, rateLimi
 router.post("/api/v1/workouts/:id/reparse-from-image", ...protectedMutationGuards, rateLimiter("reparse", 5), aiBudgetCheck, validateBody(parseExercisesFromImageRequestSchema), asyncHandler(async (req: Request<{ id: string }, unknown, z.infer<typeof parseExercisesFromImageRequestSchema>>, res: Response) => {
     const userId = getUserId(req);
     const workoutId = req.params.id;
-    const [workout, user] = await Promise.all([
+    const [workout, user, customExercises] = await Promise.all([
       storage.workouts.getWorkoutLog(workoutId, userId),
       storage.users.getUser(userId),
+      storage.users.getCustomExercises(userId),
     ]);
     if (!workout) {
       return res.status(404).json({ error: "Workout not found", code: "NOT_FOUND" });
     }
     const weightUnit = user?.weightUnit || "kg";
-    const result = await reparseWorkoutFromImage(workout, req.body, weightUnit, userId);
+    const customNames = customExercises.map((e) => e.name);
+    const result = await reparseWorkoutFromImage(workout, req.body, weightUnit, userId, customNames);
     if (!result) {
       return res.json({ exercises: [], saved: false });
     }

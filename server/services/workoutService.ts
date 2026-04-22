@@ -272,12 +272,14 @@ export async function reparseWorkoutFromImage(
   image: ReparseFromImageInput,
   weightUnit: string,
   userId: string,
+  customExerciseNames?: string[],
 ): Promise<{ exercises: ParsedExercise[]; setCount: number } | null> {
   const { parseExercisesFromImage } = await import("../gemini");
   const exercises = await parseExercisesFromImage({
     imageBase64: image.imageBase64,
     mimeType: image.mimeType,
     weightUnit,
+    customExerciseNames,
     userId,
   });
   if (exercises.length === 0) return null;
@@ -292,12 +294,14 @@ export async function reparsePlanDayFromImage(
   image: ReparseFromImageInput,
   weightUnit: string,
   userId: string,
+  customExerciseNames?: string[],
 ): Promise<{ exercises: ParsedExercise[]; setCount: number } | null> {
   const { parseExercisesFromImage } = await import("../gemini");
   const exercises = await parseExercisesFromImage({
     imageBase64: image.imageBase64,
     mimeType: image.mimeType,
     weightUnit,
+    customExerciseNames,
     userId,
   });
   if (exercises.length === 0) return null;

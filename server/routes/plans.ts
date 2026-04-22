@@ -276,15 +276,17 @@ router.post(
   validateBody(parseExercisesFromImageRequestSchema),
   asyncHandler(async (req: ExpressRequest<{ dayId: string }, unknown, z.infer<typeof parseExercisesFromImageRequestSchema>>, res: Response) => {
     const userId = getUserId(req);
-    const [planDay, user] = await Promise.all([
+    const [planDay, user, customExercises] = await Promise.all([
       storage.plans.getPlanDay(req.params.dayId, userId),
       storage.users.getUser(userId),
+      storage.users.getCustomExercises(userId),
     ]);
     if (!planDay) {
       return res.status(404).json({ error: PLAN_DAY_NOT_FOUND, code: "NOT_FOUND" });
     }
     const weightUnit = user?.weightUnit || "kg";
-    const result = await reparsePlanDayFromImage(planDay, req.body, weightUnit, userId);
+    const customNames = customExercises.map((e) => e.name);
+    const result = await reparsePlanDayFromImage(planDay, req.body, weightUnit, userId, customNames);
     if (!result) {
       return res.json({ exercises: [], saved: false, setCount: 0 });
     }
