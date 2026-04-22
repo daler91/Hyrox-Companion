@@ -42,6 +42,10 @@ describe('useWorkoutActions', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Reset URL so query-param state from a prior test (e.g. ?workout=<id>)
+    // doesn't leak into `useOpenWorkoutId` and make `detailEntry` resolve
+    // to a stale id on the fresh hook instance.
+    globalThis.window.history.replaceState(null, '', '/');
     vi.mocked(queryClientLib.queryClient.invalidateQueries).mockResolvedValue(undefined);
     vi.mocked(toastHook.useToast).mockReturnValue({ toast: mockToast } as unknown as ReturnType<typeof toastHook.useToast>);
     vi.mocked(queryClientLib.apiRequest).mockResolvedValue({
@@ -63,7 +67,9 @@ describe('useWorkoutActions', () => {
 
     it('sets detailEntry on openDetailDialog', () => {
       const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
-      const mockEntry = createMockTimelineEntry({ date: '2024-01-01', focus: 'strength' });
+      // detailEntry is derived from the ?workout=<id> URL param, so the
+      // mock entry needs an id (workoutLogId or planDayId) to round-trip.
+      const mockEntry = createMockTimelineEntry({ workoutLogId: 'w-open', date: '2024-01-01', focus: 'strength' });
 
       act(() => {
         result.current.openDetailDialog(mockEntry);
