@@ -432,7 +432,9 @@ export default function Timeline() {
         isAnnotationDeleting={deleteAnnotationMutation.isPending}
       />
 
-          <FloatingActionButton coachPanelOpen={coachOpen} onCoachToggle={() => handleCoachToggle(!coachOpen)} />
+          {!detailEntry && (
+            <FloatingActionButton coachPanelOpen={coachOpen} onCoachToggle={() => handleCoachToggle(!coachOpen)} />
+          )}
 
           <SchedulePlanDialog
             open={!!schedulingPlanId}
@@ -516,7 +518,7 @@ export default function Timeline() {
       </div>
       
       {coachOpen && !isMobile && (
-        <div className="w-80 lg:w-96 flex-shrink-0">
+        <div className={detailEntry ? "hidden" : "w-80 lg:w-96 flex-shrink-0"}>
           <FeatureErrorBoundaryWrapper featureName="Coach">
             <CoachPanel
               isOpen={coachOpen}
@@ -531,7 +533,9 @@ export default function Timeline() {
       {coachOpen && isMobile && (
         // Mobile coach surface: a bottom sheet at ~70vh so the user can still
         // see the top of their timeline while chatting with the coach.
-        <div className="fixed inset-x-0 bottom-0 z-50 h-[70vh]">
+        // Hidden (display:none) rather than unmounted while a workout detail
+        // is open so in-flight chat streams and local message state survive.
+        <div className={detailEntry ? "hidden" : "fixed inset-x-0 bottom-0 z-50 h-[70vh]"}>
           <div
             data-testid="coach-panel-mobile-sheet"
             className="relative h-full bg-background shadow-2xl rounded-t-2xl border-t border-x"
