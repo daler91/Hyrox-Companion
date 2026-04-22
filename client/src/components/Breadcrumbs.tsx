@@ -1,8 +1,10 @@
 import type { TimelineEntry } from "@shared/schema";
+import { useQueryClient } from "@tanstack/react-query";
 import { ChevronRight } from "lucide-react";
+import { useEffect, useReducer } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 
-import { useTimelineData } from "@/hooks/useTimelineData";
+import { QUERY_KEYS } from "@/lib/api";
 
 const ROUTE_LABELS: Record<string, string> = {
   "/": "Home",
@@ -22,11 +24,42 @@ function entryLabel(entry: TimelineEntry): string {
   return truncate(entry.focus || entry.mainWorkout || "Workout", WORKOUT_LABEL_MAX_CHARS);
 }
 
-function WorkoutBreadcrumbLabel({ id, fallback }: { id: string; fallback: string }) {
-  const { timelineData } = useTimelineData(null);
-  const match = timelineData.find(
-    (entry) => entry.workoutLogId === id || entry.planDayId === id,
-  );
+function findEntryInTimelineCache(
+  queryClient: ReturnType<typeof useQueryClient>,
+  id: string,
+): TimelineEntry | undefined {
+  // Scan every cached timeline variant (the key is prefixed with
+  // QUERY_KEYS.timeline; each user-selected plan produces its own entry).
+  const variants = queryClient.getQueriesData<TimelineEntry[]>({
+    queryKey: QUERY_KEYS.timeline,
+  });
+  for (const [, data] of variants) {
+    if (!data) continue;
+    const hit = data.find(
+      (entry) => entry.workoutLogId === id || entry.planDayId === id,
+    );
+    if (hit) return hit;
+  }
+  return undefined;
+}
+
+function WorkoutBreadcrumbLabel({ id, fallback }: Readonly<{ id: string; fallback: string }>) {
+  const queryClient = useQueryClient();
+  // Re-render when any timeline variant's cache updates so the label appears
+  // once Timeline populates it (e.g. on a `/?workout=<id>` deep link).
+  const [, forceRender] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => {
+    const cache = queryClient.getQueryCache();
+    const [timelinePrefix] = QUERY_KEYS.timeline;
+    return cache.subscribe((event) => {
+      const queryKey = event.query.queryKey as readonly unknown[];
+      if (queryKey[0] === timelinePrefix) {
+        forceRender();
+      }
+    });
+  }, [queryClient]);
+
+  const match = findEntryInTimelineCache(queryClient, id);
   return <>{match ? entryLabel(match) : fallback}</>;
 }
 
