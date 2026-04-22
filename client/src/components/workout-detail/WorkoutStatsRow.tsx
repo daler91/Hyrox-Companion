@@ -35,24 +35,33 @@ interface WorkoutStatsRowProps {
 export function WorkoutStatsRow({ workout, exerciseSets, onChangeRpe, rpeResetSignal = 0 }: WorkoutStatsRowProps) {
   const stats = useMemo(() => {
     const uniqueExercises = new Set<string>();
+    let summedMinutes = 0;
     for (const s of exerciseSets) {
       const key = s.exerciseName === "custom" && s.customLabel
         ? `custom:${s.customLabel}`
         : s.exerciseName;
       uniqueExercises.add(key);
+      if (s.time != null && s.time > 0) {
+        summedMinutes += s.time;
+      }
     }
     return {
       exerciseCount: uniqueExercises.size,
       setCount: exerciseSets.length,
+      // Fallback when workout.duration is null (manual logs — Strava/Garmin
+      // imports populate it directly). set.time is already in minutes.
+      summedSetMinutes: summedMinutes > 0 ? Math.round(summedMinutes) : null,
     };
   }, [exerciseSets]);
+
+  const displayDuration = workout.duration ?? stats.summedSetMinutes;
 
   return (
     <div
       className="grid grid-cols-2 gap-4 border-y border-border py-4 sm:grid-cols-4"
       data-testid="workout-stats-row"
     >
-      <StatCell label="Duration" value={workout.duration} unit="min" />
+      <StatCell label="Duration" value={displayDuration} unit="min" />
       <StatCell label="Exercises" value={stats.exerciseCount} />
       {onChangeRpe ? (
         // Key includes workout.id so switching dialogs between two
