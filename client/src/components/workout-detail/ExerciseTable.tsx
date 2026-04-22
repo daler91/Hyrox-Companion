@@ -56,6 +56,13 @@ interface ExerciseTableProps {
    * Omit for surfaces that don't persist edits (nothing renders).
    */
   readonly saveState?: SaveState;
+  /**
+   * When true and the table is empty, the empty state nudges the user to
+   * tap Parse on the prescription panel instead of the Add button. Used
+   * by WorkoutDetailDialogV2 once the prescription has text but no rows
+   * have been extracted yet.
+   */
+  readonly hasUnparsedText?: boolean;
 }
 
 /**
@@ -79,10 +86,51 @@ export function ExerciseTable({
   onAddSet,
   onDeleteSet,
   saveState,
+  hasUnparsedText,
 }: ExerciseTableProps) {
   const groups = useMemo(() => groupExerciseSets(exerciseSets), [exerciseSets]);
-  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  // Multiple rows can be expanded at once — matches WorkoutExerciseMode's
+  // Set<string> pattern so adding a new row (auto-expanded below) doesn't
+  // collapse whatever the user was editing.
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(() => new Set());
   const [addPickerOpen, setAddPickerOpen] = useState(false);
+  // Identity of the most-recently-added exercise. The row key we care about
+  // (first set id) only exists once the mutation lands, so we reconcile
+  // pending expansion during render: as soon as a group matching the identity
+  // appears in `groups`, expand it and clear the pending marker. Render-time
+  // reconciliation is the codebase convention to satisfy the
+  // react-hooks/set-state-in-effect rule.
+  const [pendingExpand, setPendingExpand] = useState<{
+    exerciseName: string;
+    customLabel: string | null;
+  } | null>(null);
+
+  if (pendingExpand) {
+    const match = groups.find(
+      (g) =>
+        g.exerciseName === pendingExpand.exerciseName &&
+        (g.customLabel ?? null) === pendingExpand.customLabel,
+    );
+    const firstSetId = match?.sets[0]?.id;
+    if (firstSetId) {
+      setPendingExpand(null);
+      setExpandedKeys((prev) => {
+        if (prev.has(firstSetId)) return prev;
+        const next = new Set(prev);
+        next.add(firstSetId);
+        return next;
+      });
+    }
+  }
+
+  const toggleExpanded = useCallback((rowKey: string) => {
+    setExpandedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(rowKey)) next.delete(rowKey);
+      else next.add(rowKey);
+      return next;
+    });
+  }, []);
 
   // Track the timestamp of the most recent successful mutation per row so
   // GroupRow can flash its own "Saved" badge — per-row feedback is the only
@@ -114,6 +162,7 @@ export function ExerciseTable({
       customLabel: null,
       setNumber: 1,
     });
+    setPendingExpand({ exerciseName: name, customLabel: null });
     setAddPickerOpen(false);
   };
 
@@ -124,6 +173,7 @@ export function ExerciseTable({
       category: "conditioning",
       setNumber: 1,
     });
+    setPendingExpand({ exerciseName: "custom", customLabel: "New exercise" });
     setAddPickerOpen(false);
   };
 
@@ -154,13 +204,16 @@ export function ExerciseTable({
       </div>
 
       {groups.length === 0 ? (
-        <EmptyExerciseState onAdd={() => setAddPickerOpen(true)} />
+        <EmptyExerciseState
+          onAdd={() => setAddPickerOpen(true)}
+          hasUnparsedText={hasUnparsedText ?? false}
+        />
       ) : (
         <div className="divide-y divide-border rounded-lg border border-border">
           <HeaderRow />
           {groups.map((group) => {
             const rowKey = group.sets[0]?.id ?? `${group.exerciseName}:${group.customLabel ?? ""}`;
-            const isExpanded = expandedKey === rowKey;
+            const isExpanded = expandedKeys.has(rowKey);
 
             return (
               <GroupRow
@@ -169,7 +222,7 @@ export function ExerciseTable({
                 weightUnit={weightUnit}
                 isExpanded={isExpanded}
                 rowSavedAt={savedAtByRow[rowKey] ?? null}
-                onToggle={() => setExpandedKey((prev) => (prev === rowKey ? null : rowKey))}
+                onToggle={() => toggleExpanded(rowKey)}
                 onUpdateSet={(setId, data) => {
                   onUpdateSet(setId, data);
                   markRowSaved(pickRowKeyForSet(setId) ?? rowKey);
@@ -270,7 +323,30 @@ function HeaderRow() {
   );
 }
 
-function EmptyExerciseState({ onAdd }: Readonly<{ onAdd: () => void }>) {
+function EmptyExerciseState({
+  onAdd,
+  hasUnparsedText,
+}: Readonly<{ onAdd: () => void; hasUnparsedText: boolean }>) {
+  if (hasUnparsedText) {
+    return (
+      <div
+        className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground"
+        data-testid="exercise-table-empty-parse-hint"
+      >
+        <span>Tap <strong className="font-medium text-foreground">Parse</strong> above to extract exercises from the description.</span>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={onAdd}
+          data-testid="exercise-table-empty-add"
+        >
+          <Plus className="mr-1 size-3.5" aria-hidden />
+          Add manually
+        </Button>
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
       <span>No exercises yet.</span>

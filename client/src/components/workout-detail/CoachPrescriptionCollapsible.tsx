@@ -17,11 +17,21 @@ interface CoachPrescriptionCollapsibleProps {
   readonly accessory: string | null | undefined;
   readonly notes: string | null | undefined;
   /**
-   * Open on mount when `true`. Planned entries pass `true` because the
-   * prescription is all they have — there's no structured table yet.
-   * Logged workouts keep it collapsed so the structured table dominates.
+   * Header label. Defaults to "Coach's prescription" for planned/prescribed
+   * entries. Logged workouts pass "Workout description" since the free text
+   * there is the athlete's own description, not a coach's note.
+   */
+  readonly title?: string;
+  /**
+   * Open on mount when `true` (uncontrolled). Ignored when `open` is passed.
    */
   readonly defaultOpen?: boolean;
+  /**
+   * Controlled open state. When provided, the parent owns collapse/expand
+   * (e.g. to auto-collapse after a successful parse).
+   */
+  readonly open?: boolean;
+  readonly onOpenChange?: (open: boolean) => void;
   /**
    * Optional editor callbacks. Omit to keep the panel read-only (e.g.
    * workouts owned by another user, historical rows). When supplied the
@@ -30,8 +40,9 @@ interface CoachPrescriptionCollapsibleProps {
   readonly onSaveField?: (field: PrescriptionField, value: string) => void;
   /**
    * Parse the current free text into structured exercise rows. When set,
-   * the panel shows a "Parse to exercises" button. The parent is responsible
-   * for confirming with the user if existing sets would be replaced — this
+   * the panel shows a "Parse" button on the header row so it's reachable
+   * even when the panel is collapsed. The parent is responsible for
+   * confirming with the user if existing sets would be replaced — this
    * component just fires the callback.
    */
   readonly onParse?: () => void;
@@ -53,7 +64,10 @@ export function CoachPrescriptionCollapsible({
   mainWorkout,
   accessory,
   notes,
+  title = "Coach's prescription",
   defaultOpen = false,
+  open,
+  onOpenChange,
   onSaveField,
   onParse,
   isParsing,
@@ -62,22 +76,49 @@ export function CoachPrescriptionCollapsible({
   const editable = typeof onSaveField === "function";
   if (!hasContent && !editable) return null;
 
+  const collapsibleProps = open === undefined
+    ? { defaultOpen }
+    : { open, onOpenChange };
+
   return (
     <Collapsible
-      defaultOpen={defaultOpen}
+      {...collapsibleProps}
       className="rounded-lg border border-border"
       data-testid="coach-prescription-collapsible"
     >
-      <CollapsibleTrigger className="group flex w-full items-center justify-between gap-2 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground hover:bg-muted/50">
-        <span>Coach's prescription</span>
-        <ChevronDown
-          className={cn(
-            "size-4 transition-transform",
-            "group-data-[state=open]:rotate-180",
-          )}
-          aria-hidden
-        />
-      </CollapsibleTrigger>
+      <div className="group flex w-full items-center gap-2 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <CollapsibleTrigger
+          className="flex flex-1 items-center justify-between gap-2 hover:text-foreground"
+          data-testid="coach-prescription-toggle"
+        >
+          <span>{title}</span>
+          <ChevronDown
+            className={cn(
+              "size-4 transition-transform",
+              "group-data-[state=open]:rotate-180",
+            )}
+            aria-hidden
+          />
+        </CollapsibleTrigger>
+        {onParse && (
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="ml-2 h-7 shrink-0"
+            onClick={onParse}
+            disabled={isParsing || !hasContent}
+            data-testid="coach-prescription-parse"
+          >
+            {isParsing ? (
+              <Loader2 className="mr-1.5 size-3.5 animate-spin" aria-hidden />
+            ) : (
+              <Sparkles className="mr-1.5 size-3.5" aria-hidden />
+            )}
+            {isParsing ? "Parsing…" : "Parse"}
+          </Button>
+        )}
+      </div>
       <CollapsibleContent className="flex flex-col gap-3 border-t border-border px-4 py-3 text-sm">
         <PrescriptionSection
           field="mainWorkout"
@@ -100,25 +141,6 @@ export function CoachPrescriptionCollapsible({
           editable={editable}
           onSaveField={onSaveField}
         />
-        {onParse && (
-          <div className="flex items-center justify-end gap-2 pt-1">
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={onParse}
-              disabled={isParsing || !hasContent}
-              data-testid="coach-prescription-parse"
-            >
-              {isParsing ? (
-                <Loader2 className="mr-1.5 size-3.5 animate-spin" aria-hidden />
-              ) : (
-                <Sparkles className="mr-1.5 size-3.5" aria-hidden />
-              )}
-              {isParsing ? "Parsing…" : "Parse to exercises"}
-            </Button>
-          </div>
-        )}
       </CollapsibleContent>
     </Collapsible>
   );
