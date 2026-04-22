@@ -255,6 +255,67 @@ export async function reparsePlanDay(
   return { exercises, setCount: setRows.length };
 }
 
+export interface ReparseFromImageInput {
+  readonly imageBase64: string;
+  readonly mimeType: string;
+}
+
+/**
+ * Image equivalent of reparseWorkout — snap a photo of a handwritten /
+ * printed plan, run it through Gemini vision, and REPLACE the logged
+ * workout's structured exerciseSets with the parsed rows. Mirrors the
+ * text path's replace semantics and save transaction so the downstream
+ * set-membership behaviour is identical regardless of input modality.
+ */
+export async function reparseWorkoutFromImage(
+  workout: { id: string },
+  image: ReparseFromImageInput,
+  weightUnit: string,
+  userId: string,
+  customExerciseNames?: string[],
+): Promise<{ exercises: ParsedExercise[]; setCount: number } | null> {
+  const { parseExercisesFromImage } = await import("../gemini");
+  const exercises = await parseExercisesFromImage({
+    imageBase64: image.imageBase64,
+    mimeType: image.mimeType,
+    weightUnit,
+    customExerciseNames,
+    userId,
+  });
+  if (exercises.length === 0) return null;
+
+  const setRows = expandExercisesToSetRows(exercises, workout.id);
+  const setCount = await saveParsedWorkout(workout.id, setRows);
+  return { exercises, setCount };
+}
+
+export async function reparsePlanDayFromImage(
+  planDay: { id: string },
+  image: ReparseFromImageInput,
+  weightUnit: string,
+  userId: string,
+  customExerciseNames?: string[],
+): Promise<{ exercises: ParsedExercise[]; setCount: number } | null> {
+  const { parseExercisesFromImage } = await import("../gemini");
+  const exercises = await parseExercisesFromImage({
+    imageBase64: image.imageBase64,
+    mimeType: image.mimeType,
+    weightUnit,
+    customExerciseNames,
+    userId,
+  });
+  if (exercises.length === 0) return null;
+
+  const setRows = expandExercisesToPlanDaySetRows(exercises, planDay.id);
+  await db.transaction(async (tx) => {
+    await tx.delete(exerciseSets).where(eq(exerciseSets.planDayId, planDay.id));
+    if (setRows.length > 0) {
+      await tx.insert(exerciseSets).values(setRows);
+    }
+  });
+  return { exercises, setCount: setRows.length };
+}
+
 export type CreateWorkoutResult = WorkoutLog & { exerciseSets?: ExerciseSet[] };
 export type UpdateWorkoutResult = WorkoutLog & { exerciseSets?: ExerciseSet[] };
 

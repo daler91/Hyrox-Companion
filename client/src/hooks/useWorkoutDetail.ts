@@ -7,6 +7,7 @@ import { useDebouncedSetPatches } from "@/hooks/useDebouncedSetPatches";
 import {
   type AddExerciseSetPayload,
   api,
+  type ParseFromImagePayload,
   type PatchExerciseSetPayload,
   QUERY_KEYS,
 } from "@/lib/api";
@@ -185,6 +186,19 @@ export function useWorkoutDetail(workoutId: string | null) {
     // visible, which is the graceful degradation path.
   });
 
+  // Photo sibling of reparseFreeText — takes a freshly-captured image and
+  // REPLACES the workout's structured sets with the parsed rows. User-
+  // initiated (tap Photo → Parse in the dialog), so it DOES surface an
+  // error toast.
+  const reparseFromImage = useApiMutation({
+    mutationFn: (payload: ParseFromImagePayload) =>
+      api.workouts.reparseFromImage(workoutId!, payload),
+    invalidateQueries: workoutId
+      ? [QUERY_KEYS.workout(workoutId), QUERY_KEYS.workoutHistory(workoutId)]
+      : undefined,
+    errorToast: "Couldn't parse that photo",
+  });
+
   const isHydrating = seedFromPlan.isPending || reparseFreeText.isPending;
 
   // Debounced note autosave lives here (and NOT on the global
@@ -344,6 +358,7 @@ export function useWorkoutDetail(workoutId: string | null) {
     deleteSet,
     seedFromPlan,
     reparseFreeText,
+    reparseFromImage,
     updateNote,
     updatePrescription,
     updateFocus,

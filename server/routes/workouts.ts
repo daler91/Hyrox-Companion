@@ -1,4 +1,4 @@
-import { type AddExerciseSetBody, addExerciseSetBodySchema, exercisesPayloadSchema,insertCustomExerciseSchema, insertWorkoutLogSchema, type PatchExerciseSetBody,patchExerciseSetBodySchema, planDays, trainingPlans, updateWorkoutLogSchema, workoutLogs } from "@shared/schema";
+import { type AddExerciseSetBody, addExerciseSetBodySchema, exercisesPayloadSchema,insertCustomExerciseSchema, insertWorkoutLogSchema, parseExercisesFromImageRequestSchema, type PatchExerciseSetBody,patchExerciseSetBodySchema, planDays, trainingPlans, updateWorkoutLogSchema, workoutLogs } from "@shared/schema";
 import { and,eq, inArray } from "drizzle-orm";
 import { type Request, type Response,Router } from "express";
 import { z } from "zod";
@@ -7,10 +7,11 @@ import { isAuthenticated } from "../clerkAuth";
 import { DEFAULT_PAGE_LIMIT, DEFAULT_TIMELINE_LIMIT, MAX_PAGE_LIMIT } from "../constants";
 import { db } from "../db";
 import { AppError, ErrorCode } from "../errors";
+import { aiBudgetCheck } from "../middleware/aibudget";
 import { protectedMutationGuards } from "../routeGuards";
 import { asyncHandler, rateLimiter, validateBody } from "../routeUtils";
 import { generateCSV, generateJSON } from "../services/exportService";
-import { batchReparseWorkouts,reparseWorkout } from "../services/workoutService";
+import { batchReparseWorkouts,reparseWorkout, reparseWorkoutFromImage } from "../services/workoutService";
 import { createWorkout, updateWorkoutUseCase } from "../services/workoutUseCases";
 import { storage } from "../storage";
 import { getUserId } from "../types";
@@ -56,6 +57,33 @@ router.post("/api/v1/workouts/:id/reparse", ...protectedMutationGuards, rateLimi
     }
     const weightUnit = user?.weightUnit || "kg";
     const result = await reparseWorkout(workout, weightUnit);
+    if (!result) {
+      return res.json({ exercises: [], saved: false });
+    }
+    res.json({ exercises: result.exercises, saved: true, setCount: result.setCount });
+  }));
+
+
+// Photo equivalent of /reparse. The image lives only in the request body
+// — it's never persisted — so each call is stateless apart from the
+// exercise_sets write. Shares the "reparse" rate bucket with the text
+// sibling so the total reparse-family spend stays capped per user. The
+// route-scoped 10MB express.json() (mounted in server/index.ts) enforces
+// the body size before validation runs.
+router.post("/api/v1/workouts/:id/reparse-from-image", ...protectedMutationGuards, rateLimiter("reparse", 5), aiBudgetCheck, validateBody(parseExercisesFromImageRequestSchema), asyncHandler(async (req: Request<{ id: string }, unknown, z.infer<typeof parseExercisesFromImageRequestSchema>>, res: Response) => {
+    const userId = getUserId(req);
+    const workoutId = req.params.id;
+    const [workout, user, customExercises] = await Promise.all([
+      storage.workouts.getWorkoutLog(workoutId, userId),
+      storage.users.getUser(userId),
+      storage.users.getCustomExercises(userId),
+    ]);
+    if (!workout) {
+      return res.status(404).json({ error: "Workout not found", code: "NOT_FOUND" });
+    }
+    const weightUnit = user?.weightUnit || "kg";
+    const customNames = customExercises.map((e) => e.name);
+    const result = await reparseWorkoutFromImage(workout, req.body, weightUnit, userId, customNames);
     if (!result) {
       return res.json({ exercises: [], saved: false });
     }

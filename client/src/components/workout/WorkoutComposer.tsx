@@ -1,6 +1,6 @@
-import type { ExerciseName } from "@shared/schema";
+import type { AllowedImageMimeType, ExerciseName, ParsedExercise } from "@shared/schema";
 import { AlertTriangle, ChevronDown, Loader2, Sparkles } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { StructuredExercise } from "@/components/ExerciseInput";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { WorkoutExerciseMode } from "@/components/workout/WorkoutExerciseMode";
 import { WorkoutTextMode } from "@/components/workout/WorkoutTextMode";
 import type { toast as toastFn } from "@/hooks/use-toast";
+import type { ParseFromImagePayload } from "@/lib/api";
+import type { CompressedImage } from "@/lib/image";
 import { cn } from "@/lib/utils";
 
 interface WorkoutComposerProps {
@@ -41,6 +43,22 @@ interface WorkoutComposerProps {
    * content so the user sees where their input is held.
    */
   readonly defaultPanelOpen?: boolean;
+
+  /**
+   * Image-parse pipeline. The caller is responsible for invoking the
+   * parseImageMutation; this component only orchestrates capture + preview.
+   * The `opts.onSuccess` callback fires AFTER the mutation resolves so the
+   * composer can revoke the object URL and clear the preview without
+   * lifting preview state up to LogWorkout. The mutation's resolved data
+   * is forwarded so the composer can distinguish a real parse from an
+   * empty-result "no exercises found" soft failure — in the latter case
+   * the preview must stay so the user can retake/retry.
+   */
+  readonly onParseImage?: (
+    payload: ParseFromImagePayload,
+    opts?: { onSuccess?: (parsed: ParsedExercise[]) => void },
+  ) => void;
+  readonly isParsingImage?: boolean;
 }
 
 /**
@@ -74,7 +92,30 @@ export function WorkoutComposer({
   stopListening,
   toast,
   defaultPanelOpen,
+  onParseImage,
+  isParsingImage,
 }: WorkoutComposerProps) {
+  const [imagePreview, setImagePreview] = useState<{
+    url: string;
+    base64: string;
+    mimeType: AllowedImageMimeType;
+  } | null>(null);
+
+  // Mirror the active preview URL into a ref so a single unmount-only
+  // cleanup effect can revoke it without re-running on every preview swap
+  // (the swap paths — Retake, success, replace-on-recapture — already
+  // revoke the previous URL synchronously). Without this, a user who
+  // captures and then navigates away leaks the underlying Blob until the
+  // tab is closed.
+  const previewUrlRef = useRef<string | null>(null);
+  useEffect(() => {
+    previewUrlRef.current = imagePreview?.url ?? null;
+  }, [imagePreview?.url]);
+  useEffect(() => {
+    return () => {
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    };
+  }, []);
   const [panelOpen, setPanelOpen] = useState(
     () => defaultPanelOpen ?? freeText.trim().length > 0,
   );
@@ -181,6 +222,59 @@ export function WorkoutComposer({
             stopListening={stopListening}
             interimTranscript={interimTranscript}
             toast={toast}
+            onCaptureImage={
+              onParseImage
+                ? (img: CompressedImage) => {
+                    if (imagePreview) URL.revokeObjectURL(imagePreview.url);
+                    setImagePreview({
+                      url: img.previewUrl,
+                      base64: img.base64,
+                      mimeType: img.mimeType,
+                    });
+                  }
+                : undefined
+            }
+            imagePreview={imagePreview ? { url: imagePreview.url } : null}
+            onRetakeImage={() => {
+              if (imagePreview) URL.revokeObjectURL(imagePreview.url);
+              setImagePreview(null);
+            }}
+            onParseImage={
+              onParseImage
+                ? () => {
+                    if (!imagePreview) return;
+                    // Cancel any queued / in-flight text auto-parse first.
+                    // Without this, a debounced text parse from recent
+                    // freeText edits can land after the image parse and
+                    // overwrite the image-derived blocks (which don't
+                    // carry hasUserEdits, so mergeParsedWithEdits treats
+                    // them as replaceable).
+                    cancelAutoParse();
+                    const capturedPreview = imagePreview;
+                    onParseImage(
+                      {
+                        imageBase64: capturedPreview.base64,
+                        mimeType: capturedPreview.mimeType,
+                      },
+                      {
+                        onSuccess: (parsed) => {
+                          // Soft-failure guard: parseFromImage resolves
+                          // successfully with parsed.length === 0 when
+                          // Gemini extracted nothing. Keep the preview
+                          // so the user can retake/retry without losing
+                          // the capture.
+                          if (!parsed || parsed.length === 0) return;
+                          URL.revokeObjectURL(capturedPreview.url);
+                          setImagePreview((current) =>
+                            current?.url === capturedPreview.url ? null : current,
+                          );
+                        },
+                      },
+                    );
+                  }
+                : undefined
+            }
+            isParsingImage={isParsingImage}
           />
         </CollapsibleContent>
       </Collapsible>

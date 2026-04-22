@@ -80,6 +80,7 @@ function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
     autoParseError,
     scheduleAutoParse,
     cancelAutoParse,
+    parseImageMutation,
   } = useWorkoutEditor({
     initialExerciseBlocks: initialDraft?.exerciseBlocks,
     initialExerciseData: initialDraft?.exerciseData,
@@ -308,6 +309,8 @@ function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
             // saved text but no useTextMode flag still reveals its
             // content instead of hiding it behind a collapsed panel.
             defaultPanelOpen={initialDraft?.useTextMode ? true : undefined}
+            onParseImage={(payload, opts) => parseImageMutation.mutate(payload, opts)}
+            isParsingImage={parseImageMutation.isPending}
           />
         </div>
       </div>

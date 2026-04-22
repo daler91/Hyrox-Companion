@@ -1,4 +1,4 @@
-import { type AddExerciseSetBody, addExerciseSetBodySchema, dateStringSchema, type GeneratePlanInput,generatePlanInputSchema, importPlanRequestSchema, type PatchExerciseSetBody,patchExerciseSetBodySchema, type PlanDay, schedulePlanRequestSchema, type UpdatePlanDay, updatePlanDaySchema, type UpdateTrainingPlanGoal, updateTrainingPlanGoalSchema, workoutStatusEnum } from "@shared/schema";
+import { type AddExerciseSetBody, addExerciseSetBodySchema, dateStringSchema, type GeneratePlanInput,generatePlanInputSchema, importPlanRequestSchema, parseExercisesFromImageRequestSchema, type PatchExerciseSetBody,patchExerciseSetBodySchema, type PlanDay, schedulePlanRequestSchema, type UpdatePlanDay, updatePlanDaySchema, type UpdateTrainingPlanGoal, updateTrainingPlanGoalSchema, workoutStatusEnum } from "@shared/schema";
 import { type Request as ExpressRequest,type Response, Router } from "express";
 import { z } from "zod";
 
@@ -10,7 +10,7 @@ import { asyncHandler, rateLimiter, validateBody } from "../routeUtils";
 import { regenerateCoachNoteForPlanDay } from "../services/coachService";
 import { generatePlan } from "../services/planGenerationService";
 import { createSamplePlan, importPlanFromCSV, updatePlanDayStatus,updatePlanDayWithCleanup } from "../services/planService";
-import { reparsePlanDay } from "../services/workoutService";
+import { reparsePlanDay, reparsePlanDayFromImage } from "../services/workoutService";
 import { storage } from "../storage";
 import { getUserId } from "../types";
 
@@ -258,6 +258,35 @@ router.post(
     }
     const weightUnit = user?.weightUnit || "kg";
     const result = await reparsePlanDay(planDay, weightUnit);
+    if (!result) {
+      return res.json({ exercises: [], saved: false, setCount: 0 });
+    }
+    res.json({ exercises: result.exercises, saved: true, setCount: result.setCount });
+  }),
+);
+
+// Photo sibling of /reparse for plan days. Same replace semantics, same
+// rate bucket — only the input modality differs. Body size enforced by
+// the route-scoped 10MB express.json() in server/index.ts.
+router.post(
+  "/api/v1/plans/days/:dayId/reparse-from-image",
+  ...protectedMutationGuards,
+  rateLimiter("planDayReparse", 5),
+  aiBudgetCheck,
+  validateBody(parseExercisesFromImageRequestSchema),
+  asyncHandler(async (req: ExpressRequest<{ dayId: string }, unknown, z.infer<typeof parseExercisesFromImageRequestSchema>>, res: Response) => {
+    const userId = getUserId(req);
+    const [planDay, user, customExercises] = await Promise.all([
+      storage.plans.getPlanDay(req.params.dayId, userId),
+      storage.users.getUser(userId),
+      storage.users.getCustomExercises(userId),
+    ]);
+    if (!planDay) {
+      return res.status(404).json({ error: PLAN_DAY_NOT_FOUND, code: "NOT_FOUND" });
+    }
+    const weightUnit = user?.weightUnit || "kg";
+    const customNames = customExercises.map((e) => e.name);
+    const result = await reparsePlanDayFromImage(planDay, req.body, weightUnit, userId, customNames);
     if (!result) {
       return res.json({ exercises: [], saved: false, setCount: 0 });
     }

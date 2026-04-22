@@ -220,6 +220,24 @@ export const parseExercisesRequestSchema = z.object({
     .max(2000, "Text must be 2000 characters or less"),
 });
 
+/**
+ * Image-parse request. We transport the image as a base64 string inside the
+ * JSON body (no multer / multipart) so the global body parser and CSRF
+ * pipeline apply unchanged; the route caps body size at 10MB on its own
+ * express.json() middleware. The base64 length cap matches that budget —
+ * an accepted string can decode to ~7.5MB of image bytes, which is
+ * comfortably above the ≤1.5MB payloads the client compresses to.
+ */
+export const ALLOWED_IMAGE_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
+export type AllowedImageMimeType = (typeof ALLOWED_IMAGE_MIME_TYPES)[number];
+export const parseExercisesFromImageRequestSchema = z.object({
+  mimeType: z.enum(ALLOWED_IMAGE_MIME_TYPES),
+  imageBase64: z.string()
+    .min(1, "Image is required")
+    .max(10 * 1024 * 1024, "Image must be 10MB or less"),
+});
+export type ParseExercisesFromImageRequest = z.infer<typeof parseExercisesFromImageRequestSchema>;
+
 export const importPlanRequestSchema = z.object({
   csvContent: z.string().min(1, "CSV content is required").max(100000, "CSV content must be 100,000 characters or less"),
   fileName: z.string().max(255, "File name must be 255 characters or less").optional(),

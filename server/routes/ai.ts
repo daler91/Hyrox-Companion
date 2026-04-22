@@ -1,9 +1,9 @@
-import { chatRequestSchema, type InsertChatMessage,insertChatMessageSchema, parseExercisesRequestSchema } from "@shared/schema";
+import { chatRequestSchema, type InsertChatMessage,insertChatMessageSchema, parseExercisesFromImageRequestSchema, parseExercisesRequestSchema } from "@shared/schema";
 import { type Request as ExpressRequest, type Response,Router } from "express";
 import { z } from "zod";
 
 import { isAuthenticated } from "../clerkAuth";
-import { chatWithCoach, parseExercisesFromText,streamChatWithCoach } from "../gemini/index";
+import { chatWithCoach, parseExercisesFromImage, parseExercisesFromText,streamChatWithCoach } from "../gemini/index";
 import { logger } from "../logger";
 import { aiBudgetCheck } from "../middleware/aibudget";
 import { protectedMutationGuards } from "../routeGuards";
@@ -28,6 +28,29 @@ router.post("/api/v1/parse-exercises", ...protectedMutationGuards, rateLimiter("
     const weightUnit = user?.weightUnit || "kg";
     const customNames = userCustomExercises.map(e => e.name);
     const exercises = await parseExercisesFromText(text.trim(), weightUnit, customNames, userId);
+    res.json(exercises);
+  }));
+
+// Photo-parse sibling. Shares the "parse" rate bucket and AI-budget gates
+// with the text route so total parse-family spend stays capped per user.
+// Body size is enforced by a route-scoped express.json({ limit: "10mb" })
+// mounted in server/index.ts BEFORE the global 100kb parser.
+router.post("/api/v1/parse-exercises-from-image", ...protectedMutationGuards, rateLimiter("parse", 5), aiBudgetCheck, validateBody(parseExercisesFromImageRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof parseExercisesFromImageRequestSchema>>, res: Response) => {
+    const { imageBase64, mimeType } = req.body;
+    const userId = getUserId(req);
+    const [user, userCustomExercises] = await Promise.all([
+      storage.users.getUser(userId),
+      storage.users.getCustomExercises(userId),
+    ]);
+    const weightUnit = user?.weightUnit || "kg";
+    const customNames = userCustomExercises.map(e => e.name);
+    const exercises = await parseExercisesFromImage({
+      imageBase64,
+      mimeType,
+      weightUnit,
+      customExerciseNames: customNames,
+      userId,
+    });
     res.json(exercises);
   }));
 
