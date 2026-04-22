@@ -1,5 +1,5 @@
 import type { AllowedImageMimeType } from "@shared/schema";
-import { useEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 
 import type { usePlanDayExercises } from "@/hooks/usePlanDayExercises";
 import type { ParseFromImagePayload, ReparseResponse } from "@/lib/api";
@@ -86,12 +86,14 @@ export function useDialogParseControls(input: DialogParseControlsInput): DialogP
 
   // Late-landing mutation success handlers compare against this ref so they
   // only mutate state (clear preview / collapse panel) when the user is
-  // still looking at the entry the parse was dispatched on. Without the
-  // guard, navigating to another timeline card before an in-flight parse
-  // resolves would let a stale success callback wipe the new entry's
-  // captured image.
+  // still looking at the entry the parse was dispatched on. Updated in
+  // useLayoutEffect (not useEffect) — effects flush AFTER the commit task
+  // returns to the event loop, leaving a window where pending Promise
+  // microtasks (TanStack Query's onSuccess) drain BEFORE the ref updates.
+  // useLayoutEffect runs synchronously within the commit task so no
+  // microtask can interleave between render and ref sync.
   const currentEntryIdRef = useRef(entryId);
-  useEffect(() => {
+  useLayoutEffect(() => {
     currentEntryIdRef.current = entryId;
   }, [entryId]);
 
