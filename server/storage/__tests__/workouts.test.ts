@@ -5,13 +5,19 @@ import { db } from "../../db";
 import { WorkoutStorage } from "../workouts";
 
 
-vi.mock("../../db", () => ({
-  db: {
+vi.mock("../../db", () => {
+  const db: Record<string, unknown> = {
     insert: vi.fn(),
     update: vi.fn(),
     select: vi.fn().mockReturnValue({ from: vi.fn().mockReturnValue({ where: vi.fn().mockReturnValue([]) }) }),
-  },
-}));
+  };
+  // createWorkoutLog and deleteWorkoutLog both wrap their DB calls in a
+  // db.transaction(tx => ...) block. The mocked transaction just invokes
+  // the callback with the same `db` object so per-test mockReturnValue
+  // setups on db.insert/db.update continue to apply.
+  db.transaction = vi.fn((cb: (tx: typeof db) => Promise<unknown>) => cb(db));
+  return { db };
+});
 
 describe("WorkoutStorage.createWorkoutLog", () => {
   let storage: WorkoutStorage;

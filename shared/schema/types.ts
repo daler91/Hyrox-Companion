@@ -124,10 +124,23 @@ export type InsertGarminConnection = z.infer<typeof insertGarminConnectionSchema
 export type GarminConnection = typeof garminConnections.$inferSelect;
 
 // Workout log types and schemas
+// Reject workout dates more than 24h in the future. A 24h grace window lets
+// Strava/Garmin activities that straddle midnight in the user's timezone
+// still land, while preventing users from logging genuinely future workouts
+// (which otherwise skew Week-over-Week deltas and completion stats).
+const workoutDateNotFuture = z
+  .string()
+  .refine((d) => {
+    const target = new Date(`${d}T00:00:00Z`).getTime();
+    if (Number.isNaN(target)) return false;
+    return target <= Date.now() + 24 * 60 * 60 * 1000;
+  }, { message: "Workout date cannot be in the future" });
+
 export const insertWorkoutLogSchema = createInsertSchema(workoutLogs).omit({
   id: true,
   userId: true,
 }).extend({
+  date: workoutDateNotFuture,
   rpe: z.number().int().min(1, "RPE must be at least 1").max(10, "RPE must be at most 10").optional().nullable(),
 });
 

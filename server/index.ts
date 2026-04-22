@@ -8,7 +8,7 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import express, { NextFunction,type Request, Response } from "express";
 import helmet from "helmet";
-import type { PoolClient } from "pg";
+import type { Pool, PoolClient } from "pg";
 import pinoHttp from "pino-http";
 
 import { generateOpenApiDocument } from "../shared/openapi";
@@ -24,7 +24,7 @@ import { runWithRequestContext } from "./requestContext";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { storage } from "./storage";
-import { vectorPool } from "./vectorDb";
+import { isVectorDbSeparate, vectorPool } from "./vectorDb";
 
 // 🛡️ Sentinel: Dev Auth Bypass double-guard
 if (env.ALLOW_DEV_AUTH_BYPASS === "true") {
@@ -135,7 +135,7 @@ const HEALTH_PROBE_TIMEOUT_MS = 3000;
  * on the query would let /api/v1/health block on pool.connect() until the
  * pool's own connectionTimeoutMillis — defeats the fast-fail intent.
  */
-async function probeDatabase(): Promise<boolean> {
+async function probePool(pool: Pool): Promise<boolean> {
   // Track the client through a shared reference so the timeout path can
   // still release it if pool.connect() resolves AFTER the race rejects.
   // Without this, a slow pool under saturation leaks a connection per
@@ -174,6 +174,16 @@ async function probeDatabase(): Promise<boolean> {
   }
 }
 
+// Main transactional DB probe.
+const probeDatabase = (): Promise<boolean> => probePool(pool);
+
+// Probe the vector/RAG pool when it is configured on a separate connection
+// string. When VECTOR_DATABASE_URL is unset both pools share a Neon
+// endpoint, so probing it twice just burns a round trip without adding
+// signal.
+const probeVectorDatabase = (): Promise<boolean> =>
+  isVectorDbSeparate ? probePool(vectorPool) : Promise.resolve(true);
+
 // Health endpoint — intentionally unthrottled because platform probes
 // (Railway, load balancers) poll frequently and must never be rejected.
 // The handler is O(1) and short-circuits before any DB call while not
@@ -189,10 +199,10 @@ app.get("/api/v1/health", (_req, res) => {
     res.status(503).json({ status: "starting", phase: startupPhase, uptimeMs, timestamp: Date.now() });
     return;
   }
-  probeDatabase()
-    .then((dbOk) => {
-      if (!dbOk) {
-        res.status(503).json({ status: "degraded", db: false, uptimeMs, timestamp: Date.now() });
+  Promise.all([probeDatabase(), probeVectorDatabase()])
+    .then(([dbOk, vectorDbOk]) => {
+      if (!dbOk || !vectorDbOk) {
+        res.status(503).json({ status: "degraded", db: dbOk, vectorDb: vectorDbOk, uptimeMs, timestamp: Date.now() });
         return;
       }
       res.json({ status: "ok", uptimeMs, timestamp: Date.now() });

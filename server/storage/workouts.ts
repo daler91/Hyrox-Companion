@@ -48,21 +48,26 @@ export class WorkoutStorage {
   }
 
   async createWorkoutLog(log: InsertWorkoutLog & { userId: string }): Promise<WorkoutLog> {
-    const [workoutLog] = await db
-      .insert(workoutLogs)
-      .values(log)
-      .returning();
+    // Wrap the insert and the plan_day status update in a single
+    // transaction so two concurrent saves cannot interleave between the
+    // insert and the status write, leaving the plan day's "completed" flag
+    // out of sync with the underlying workout rows.
+    return await db.transaction(async (tx) => {
+      const [workoutLog] = await tx
+        .insert(workoutLogs)
+        .values(log)
+        .returning();
 
-    if (log.planDayId) {
-      // Bolt Optimization: Use direct JOIN via .from() instead of inArray() subquery to prevent N+1 execution
-      await db
-        .update(planDays)
-        .set({ status: "completed" })
-        .from(trainingPlans)
-        .where(this.getPlanDayCompletionCondition(log.planDayId, log.userId));
-    }
+      if (log.planDayId) {
+        await tx
+          .update(planDays)
+          .set({ status: "completed" })
+          .from(trainingPlans)
+          .where(this.getPlanDayCompletionCondition(log.planDayId, log.userId));
+      }
 
-    return workoutLog;
+      return workoutLog;
+    });
   }
 
   async createWorkoutLogs(logs: (InsertWorkoutLog & { userId: string })[]): Promise<WorkoutLog[]> {

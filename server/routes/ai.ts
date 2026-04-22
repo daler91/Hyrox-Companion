@@ -6,6 +6,7 @@ import { isAuthenticated } from "../clerkAuth";
 import { chatWithCoach, parseExercisesFromImage, parseExercisesFromText,streamChatWithCoach } from "../gemini/index";
 import { logger } from "../logger";
 import { aiBudgetCheck } from "../middleware/aibudget";
+import { aiConsentCheck } from "../middleware/aiConsent";
 import { protectedMutationGuards } from "../routeGuards";
 import { asyncHandler, rateLimiter, validateBody } from "../routeUtils";
 import { type AIContext, buildAIContext, type ChatInput } from "../services/aiContextService";
@@ -16,7 +17,7 @@ import { getUserId } from "../types";
 
 const router = Router();
 
-router.post("/api/v1/parse-exercises", ...protectedMutationGuards, rateLimiter("parse", 5), aiBudgetCheck, validateBody(parseExercisesRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof parseExercisesRequestSchema>>, res: Response) => {
+router.post("/api/v1/parse-exercises", ...protectedMutationGuards, rateLimiter("parse", 5), aiConsentCheck, aiBudgetCheck, validateBody(parseExercisesRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof parseExercisesRequestSchema>>, res: Response) => {
     const { text } = req.body;
     const userId = getUserId(req);
     // ⚡ Perf: Parallelize independent DB queries to cut latency from
@@ -35,7 +36,7 @@ router.post("/api/v1/parse-exercises", ...protectedMutationGuards, rateLimiter("
 // with the text route so total parse-family spend stays capped per user.
 // Body size is enforced by a route-scoped express.json({ limit: "10mb" })
 // mounted in server/index.ts BEFORE the global 100kb parser.
-router.post("/api/v1/parse-exercises-from-image", ...protectedMutationGuards, rateLimiter("parse", 5), aiBudgetCheck, validateBody(parseExercisesFromImageRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof parseExercisesFromImageRequestSchema>>, res: Response) => {
+router.post("/api/v1/parse-exercises-from-image", ...protectedMutationGuards, rateLimiter("parse", 5), aiConsentCheck, aiBudgetCheck, validateBody(parseExercisesFromImageRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof parseExercisesFromImageRequestSchema>>, res: Response) => {
     const { imageBase64, mimeType } = req.body;
     const userId = getUserId(req);
     const [user, userCustomExercises] = await Promise.all([
@@ -65,14 +66,14 @@ async function prepareChatContext(
   return { input: { message, history: history || [] }, aiContext };
 }
 
-router.post("/api/v1/chat", ...protectedMutationGuards, rateLimiter("chat", 10), aiBudgetCheck, validateBody(chatRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof chatRequestSchema>>, res: Response) => {
+router.post("/api/v1/chat", ...protectedMutationGuards, rateLimiter("chat", 10), aiConsentCheck, aiBudgetCheck, validateBody(chatRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof chatRequestSchema>>, res: Response) => {
     const userId = getUserId(req);
     const { input, aiContext } = await prepareChatContext(req);
     const response = await chatWithCoach(input.message, input.history, aiContext.trainingContext, aiContext.coachingMaterials, aiContext.retrievedChunks, userId);
     res.json({ response, ragInfo: sanitizeRagInfo(aiContext.ragInfo) });
   }));
 
-router.post("/api/v1/chat/stream", ...protectedMutationGuards, rateLimiter("chat", 10), aiBudgetCheck, validateBody(chatRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof chatRequestSchema>>, res: Response) => {
+router.post("/api/v1/chat/stream", ...protectedMutationGuards, rateLimiter("chat", 10), aiConsentCheck, aiBudgetCheck, validateBody(chatRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof chatRequestSchema>>, res: Response) => {
     const userId = getUserId(req);
     const { input, aiContext } = await prepareChatContext(req);
 
@@ -112,9 +113,40 @@ router.post("/api/v1/chat/stream", ...protectedMutationGuards, rateLimiter("chat
     }
   }));
 
+// Cursor-paginated to cap memory/bandwidth growth as chat history accumulates.
+// Response body stays a plain ChatMessage[] for backward compatibility; the
+// cursor for older messages is surfaced in two sibling response headers
+// (`X-Next-Cursor` = timestamp, `X-Next-Cursor-Id` = row id). Both must be
+// echoed back on the next request to avoid dropping rows that share a
+// millisecond — see `storage/users.ts` comment for details.
+const chatHistoryQuerySchema = z
+  .object({
+    limit: z.coerce.number().int().min(1).max(200).optional(),
+    before: z.string().datetime({ offset: true }).optional(),
+    beforeId: z.string().min(1).max(255).optional(),
+  })
+  .refine(
+    (q) => (q.before == null) === (q.beforeId == null),
+    { message: "before and beforeId must be provided together" },
+  );
+
 router.get("/api/v1/chat/history", isAuthenticated, asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
-    const messages = await storage.users.getChatMessages(userId);
+    const parsed = chatHistoryQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ error: "Invalid pagination params", code: "VALIDATION_ERROR" });
+    }
+    const { limit, before, beforeId } = parsed.data;
+    const messages = await storage.users.getChatMessages(userId, {
+      limit,
+      beforeTimestamp: before ? new Date(before) : undefined,
+      beforeId,
+    });
+    const oldest = messages[0];
+    if (oldest?.timestamp) {
+      res.setHeader("X-Next-Cursor", oldest.timestamp.toISOString());
+      res.setHeader("X-Next-Cursor-Id", oldest.id);
+    }
     res.json(messages);
   }));
 
@@ -132,7 +164,7 @@ router.delete("/api/v1/chat/history", ...protectedMutationGuards, rateLimiter("c
     res.json({ success: true });
   }));
 
-router.post("/api/v1/timeline/ai-suggestions", ...protectedMutationGuards, rateLimiter("suggestions", 3), aiBudgetCheck, asyncHandler(async (req: ExpressRequest, res: Response) => {
+router.post("/api/v1/timeline/ai-suggestions", ...protectedMutationGuards, rateLimiter("suggestions", 3), aiConsentCheck, aiBudgetCheck, asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const result = await generateTimelineAiSuggestions(userId, req.log || logger);
     res.json(result);
