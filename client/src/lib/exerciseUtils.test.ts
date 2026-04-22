@@ -24,6 +24,27 @@ describe("getExerciseLabel", () => {
   it("handles custom exercise with customLabel", () => {
     expect(getExerciseLabel("custom", "Special Lift")).toBe("Special Lift");
   });
+
+  // Guards against the AI parser leaking a set multiplier ("2", "2x") into
+  // customLabel on a known exercise — falling back to the canonical name
+  // keeps the EXERCISE column meaningful.
+  it("falls back to canonical label when customLabel is a bare digit", () => {
+    expect(getExerciseLabel("back_squat", "2")).toBe("Back Squat");
+  });
+
+  it("falls back to canonical label when customLabel is a multiplier like '2x'", () => {
+    expect(getExerciseLabel("sled_push", "3x")).toBe("Sled Push");
+  });
+
+  it("preserves a legitimate user rename over the canonical label", () => {
+    expect(getExerciseLabel("assault_bike", "Echo Bike")).toBe("Echo Bike");
+  });
+
+  it("trusts a numeric customLabel for custom exercises", () => {
+    // For exerciseName === "custom" the label IS the display name — don't
+    // second-guess the user even if they typed "2".
+    expect(getExerciseLabel("custom", "2")).toBe("2");
+  });
 });
 
 describe("formatExerciseSummary", () => {

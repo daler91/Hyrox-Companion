@@ -37,17 +37,23 @@ const SET_COUNT_DEBOUNCE_MS = 500;
 const MIN_SETS = 1;
 const MAX_SETS = 50;
 // Grid columns: label | sets | primary metric (reps/dist/time) | load | chevron | menu.
-// The metric + load columns are wide enough for 4-digit inputs (e.g.
-// "5000 m" for an interval run) plus the unit suffix without
-// clipping. The NumberCell input fills its cell via flex-1 so it
-// expands with the column.
+// Mobile keeps the metric + load cells tight so the label column fits
+// two-word exercise names at ~360px viewports; `sm:` breakpoint restores
+// the 120px cells that comfortably fit 4-digit inputs + unit.
 const GRID_TEMPLATE =
-  "grid grid-cols-[1fr_60px_120px_120px_32px_32px] items-center gap-2 px-3 py-2";
+  "grid grid-cols-[1fr_52px_84px_84px_28px_28px] sm:grid-cols-[1fr_60px_120px_120px_32px_32px] items-center gap-2 px-2 sm:px-3 py-2";
 
 interface ExerciseTableProps {
   readonly workoutId: string;
   readonly exerciseSets: ExerciseSet[];
   readonly weightUnit: "kg" | "lb";
+  /**
+   * User's distance preference. Drives the primary-metric suffix on
+   * distance-based rows ("m" for km users, "ft" for miles users), mirroring
+   * the convention in `fieldMeta.ts`. Optional so existing callers don't
+   * break; defaults to "km".
+   */
+  readonly distanceUnit?: "km" | "miles";
   readonly onUpdateSet: (setId: string, data: PatchExerciseSetPayload) => void;
   readonly onAddSet: (data: AddExerciseSetPayload) => void;
   readonly onDeleteSet: (setId: string) => void;
@@ -82,6 +88,7 @@ export function ExerciseTable({
   workoutId,
   exerciseSets,
   weightUnit,
+  distanceUnit = "km",
   onUpdateSet,
   onAddSet,
   onDeleteSet,
@@ -224,6 +231,7 @@ export function ExerciseTable({
                 key={rowKey}
                 group={group}
                 weightUnit={weightUnit}
+                distanceUnit={distanceUnit}
                 isExpanded={isExpanded}
                 rowSavedAt={savedAtByRow[rowKey] ?? null}
                 onToggle={() => toggleExpanded(rowKey)}
@@ -371,6 +379,7 @@ function EmptyExerciseState({
 interface GroupRowProps {
   readonly group: GroupedExercise;
   readonly weightUnit: "kg" | "lb";
+  readonly distanceUnit: "km" | "miles";
   readonly isExpanded: boolean;
   /** Epoch-ms of the latest successful mutation targeting this row, or null. */
   readonly rowSavedAt: number | null;
@@ -383,6 +392,7 @@ interface GroupRowProps {
 function GroupRow({
   group,
   weightUnit,
+  distanceUnit,
   isExpanded,
   rowSavedAt,
   onToggle,
@@ -402,8 +412,8 @@ function GroupRow({
   // (e.g. battle_ropes) would otherwise fall back to "reps" and
   // silently misroute every edit through the wrong column.
   const metric = useMemo(
-    () => resolvePrimaryMetric(group.exerciseName, uniformity),
-    [group.exerciseName, uniformity],
+    () => resolvePrimaryMetric(group.exerciseName, uniformity, distanceUnit),
+    [group.exerciseName, uniformity, distanceUnit],
   );
   const hasWeight = useMemo(() => shouldShowLoad(group), [group]);
   const loadVaries = uniformity.weightVaries;
@@ -587,6 +597,7 @@ function GroupRow({
             customLabel={group.customLabel}
             category={group.category}
             weightUnit={weightUnit}
+            distanceUnit={distanceUnit}
             onUpdateSet={onUpdateSet}
             onAddSet={onAddSet}
             onDeleteSet={onDeleteSet}
@@ -804,7 +815,7 @@ interface PrimaryMetric {
 
 interface MetricMeta {
   readonly label: string;
-  readonly suffix?: string;
+  readonly suffix?: (distanceUnit: "km" | "miles") => string;
   readonly valueKey: "reps" | "distance" | "time";
   readonly variesKey: "repsVaries" | "distanceVaries" | "timeVaries";
 }
@@ -813,10 +824,17 @@ interface MetricMeta {
 // display metadata, and keeps `resolvePrimaryMetric` as a single
 // lookup. Static property keys (rather than computed template
 // literals) keep the indexing both type-safe and lint-clean.
+// Distance suffix is a function of the user's distanceUnit preference —
+// mirrors `fieldMeta.ts` so miles users see "ft" instead of "m".
 const METRIC_META: Readonly<Record<PrimaryField, MetricMeta>> = {
-  reps: { label: "Reps", suffix: "reps", valueKey: "reps", variesKey: "repsVaries" },
-  distance: { label: "Distance", suffix: "m", valueKey: "distance", variesKey: "distanceVaries" },
-  time: { label: "Time", suffix: "min", valueKey: "time", variesKey: "timeVaries" },
+  reps: { label: "Reps", suffix: () => "reps", valueKey: "reps", variesKey: "repsVaries" },
+  distance: {
+    label: "Distance",
+    suffix: (du) => (du === "km" ? "m" : "ft"),
+    valueKey: "distance",
+    variesKey: "distanceVaries",
+  },
+  time: { label: "Time", suffix: () => "min", valueKey: "time", variesKey: "timeVaries" },
 };
 
 const METRIC_PRIORITY: readonly PrimaryField[] = ["reps", "distance", "time"];
@@ -834,7 +852,11 @@ const METRIC_PRIORITY: readonly PrimaryField[] = ["reps", "distance", "time"];
  * custom "Interval Run" with reps=1 + distance=5000 rolls up the
  * distance instead of the reps placeholder.
  */
-function resolvePrimaryMetric(exerciseName: string, u: UniformitySummary): PrimaryMetric {
+function resolvePrimaryMetric(
+  exerciseName: string,
+  u: UniformitySummary,
+  distanceUnit: "km" | "miles",
+): PrimaryMetric {
   const field = pickPrimaryField(exerciseName, u);
   const meta = METRIC_META[field];
   return {
@@ -842,7 +864,7 @@ function resolvePrimaryMetric(exerciseName: string, u: UniformitySummary): Prima
     value: u[meta.valueKey],
     varies: u[meta.variesKey],
     label: meta.label,
-    suffix: meta.suffix,
+    suffix: meta.suffix?.(distanceUnit),
   };
 }
 
@@ -857,16 +879,23 @@ function pickPrimaryField(exerciseName: string, u: UniformitySummary): PrimaryFi
 }
 
 /**
- * Whether the aggregate Load cell should render. Non-custom
- * exercises key off the definition's field list. Custom exercises
- * declare every field, so additionally require that at least one
- * set has an actual weight — otherwise a custom running exercise
- * would surface a misleading empty Load input.
+ * Whether the aggregate Load cell should render as an editable input.
+ * Gated on two conditions:
+ *   1. The exercise definition allows a weight field at all (otherwise
+ *      we render the "—" dash unconditionally).
+ *   2. At least one set in the group has an actual weight value.
+ *
+ * Prior to (2), weighted-but-optional exercises like `sled_push` or
+ * `farmers_carry` always rendered an empty input with the user's
+ * weight-unit suffix ("lb" / "kg"), even when the prescription was
+ * distance-only and had no weight to enter. The phantom "lb" read as
+ * "the app expects a weight here" and confused users. Rows still
+ * expose the input as soon as one set gets a weight value, and users
+ * can always open the inline editor to add weight from scratch.
  */
 function shouldShowLoad(group: GroupedExercise): boolean {
   const fields = getFields(group.exerciseName);
   if (!fields.includes("weight")) return false;
-  if (group.exerciseName !== "custom") return true;
   return group.sets.some((s) => s.weight != null);
 }
 

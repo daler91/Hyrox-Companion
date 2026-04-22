@@ -61,6 +61,7 @@ interface WorkoutDetailDialogV2Props {
    */
   readonly onCombine?: (entry: TimelineEntry) => void;
   readonly weightUnit?: "kg" | "lb";
+  readonly distanceUnit?: "km" | "miles";
   /**
    * Fires the moment the user opens the in-dialog coach chat. Parent
    * uses this to close the global coach rail so the two chat surfaces
@@ -104,6 +105,7 @@ export function WorkoutDetailDialogV2({
   isMarkingComplete = false,
   onCombine,
   weightUnit = "kg",
+  distanceUnit = "km",
   onAskCoachOpen,
   aiCoachEnabled = true,
   onRequestCoachConsent,
@@ -377,6 +379,7 @@ export function WorkoutDetailDialogV2({
           isPlanned={isPlanned}
           isLoading={isLoading}
           weightUnit={weightUnit}
+          distanceUnit={distanceUnit}
           history={history}
           onMarkComplete={onMarkComplete}
           isMarkingComplete={isMarkingComplete}
@@ -494,6 +497,7 @@ interface DialogBodyProps {
   readonly isPlanned: boolean;
   readonly isLoading: boolean;
   readonly weightUnit: "kg" | "lb";
+  readonly distanceUnit: "km" | "miles";
   readonly history: import("@/lib/api").WorkoutHistoryStats | undefined;
   readonly onMarkComplete?: (entry: TimelineEntry) => void;
   readonly isMarkingComplete: boolean;
@@ -566,6 +570,7 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     isPlanned,
     isLoading,
     weightUnit,
+    distanceUnit,
     history,
     onMarkComplete,
     isMarkingComplete,
@@ -695,6 +700,7 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
             onMarkComplete={onMarkComplete}
             isMarkingComplete={isMarkingComplete}
             weightUnit={weightUnit}
+            distanceUnit={distanceUnit}
             planSets={planSets}
             latestFocusRef={latestFocusRef}
             hasUnparsedText={hasUnparsedText}
@@ -704,6 +710,7 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
             workoutId={workoutId}
             exerciseSets={exerciseSets}
             weightUnit={weightUnit}
+            distanceUnit={distanceUnit}
             onUpdateSet={onUpdateSet}
             onAddSet={onAddSet}
             onDeleteSet={onDeleteSet}
@@ -775,6 +782,7 @@ interface LoggedExerciseSectionProps {
   readonly workoutId: string | null;
   readonly exerciseSets: ExerciseSet[];
   readonly weightUnit: "kg" | "lb";
+  readonly distanceUnit: "km" | "miles";
   readonly onUpdateSet: (setId: string, data: import("@/lib/api").PatchExerciseSetPayload) => void;
   readonly onAddSet: (data: import("@/lib/api").AddExerciseSetPayload) => void;
   readonly onDeleteSet: (setId: string) => void;
@@ -786,6 +794,7 @@ function LoggedExerciseSection({
   workoutId,
   exerciseSets,
   weightUnit,
+  distanceUnit,
   onUpdateSet,
   onAddSet,
   onDeleteSet,
@@ -798,6 +807,7 @@ function LoggedExerciseSection({
       workoutId={workoutId}
       exerciseSets={exerciseSets}
       weightUnit={weightUnit}
+      distanceUnit={distanceUnit}
       onUpdateSet={onUpdateSet}
       onAddSet={onAddSet}
       onDeleteSet={onDeleteSet}
@@ -812,6 +822,7 @@ interface PlannedCallToActionProps {
   readonly onMarkComplete?: (entry: TimelineEntry) => void;
   readonly isMarkingComplete?: boolean;
   readonly weightUnit: "kg" | "lb";
+  readonly distanceUnit: "km" | "miles";
   readonly planSets: ReturnType<typeof usePlanDayExercises>;
   /** Latest-submitted focus from the header input; used to override a
    *  potentially-stale `entry.focus` on Mark complete. */
@@ -819,7 +830,7 @@ interface PlannedCallToActionProps {
   readonly hasUnparsedText?: boolean;
 }
 
-function PlannedCallToAction({ entry, onMarkComplete, isMarkingComplete, weightUnit, planSets, latestFocusRef, hasUnparsedText }: Readonly<PlannedCallToActionProps>) {
+function PlannedCallToAction({ entry, onMarkComplete, isMarkingComplete, weightUnit, distanceUnit, planSets, latestFocusRef, hasUnparsedText }: Readonly<PlannedCallToActionProps>) {
   // Plan-day-backed exercise edits. `planSets` is hoisted up to DialogBody
   // so the same hook instance feeds both this CTA and the CoachTakePanel's
   // staleness comparison. Writes go to plan_day-owned exerciseSets; Mark
@@ -846,6 +857,7 @@ function PlannedCallToAction({ entry, onMarkComplete, isMarkingComplete, weightU
           workoutId={planDayId}
           exerciseSets={planSets.exerciseSets}
           weightUnit={weightUnit}
+          distanceUnit={distanceUnit}
           onUpdateSet={planSets.patchSetDebounced}
           onAddSet={(data) => planSets.addSet.mutate(data)}
           onDeleteSet={(setId) => planSets.deleteSet.mutate(setId)}
