@@ -150,11 +150,9 @@ export function WorkoutDetailHeaderV2({
         />
       </div>
       {hasOverflowMenu && (
-        // Pin the ⋮ trigger to the top-right cluster where shadcn's
-        // DialogContent renders its own absolute close X. Without this
-        // the ⋮ sits lower than the X (inside the flex row) and the
-        // two controls stack vertically instead of aligning as a pair.
-        <div className="absolute right-12 top-3">
+        // top-1.5 centers the 36×36 size-icon Button's 16×16 icon at y=24,
+        // matching shadcn's bare-16×16 close X at right-4 top-4.
+        <div className="absolute right-12 top-1.5">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
