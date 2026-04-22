@@ -208,6 +208,8 @@ See also: [Integrations -- pg-boss Job Queue](integrations.md#job-queue-pg-boss)
 
 ## RAG Pipeline
 
+For a sequence diagram of the full upload → chunk → embed → persist path, see [architecture.md § 3b — RAG Ingest Pipeline](architecture.md#3b-rag-ingest-pipeline). The complementary read-path decision tree lives in [architecture.md § 4](architecture.md#4-rag-retrieval-decision-tree).
+
 ### Document Chunking
 
 **File:** `server/services/ragService.ts`
