@@ -74,7 +74,18 @@ if (env.SENTRY_DSN) {
   // initialise otherwise only shows up the next time an error fires,
   // which can be days later (CODEBASE_AUDIT.md Suggestion-11).
   const client = Sentry.getClient();
-  const maskedDsn = env.SENTRY_DSN.replace(/\/\/[^@]+@/, "//***@");
+  // Mask the `user:pass@` portion of the DSN via index arithmetic rather
+  // than a regex. The previous /\/\/[^@]+@/ was linear in practice (no
+  // overlapping alternatives), but SonarCloud flagged it as S5852 since
+  // the greedy class could be misread as backtracking-prone. indexOf is
+  // O(n) worst-case with no regex engine involved, which sidesteps the
+  // hotspot and is easier to reason about.
+  const dsn = env.SENTRY_DSN;
+  const schemeEnd = dsn.indexOf("//");
+  const atIdx = schemeEnd >= 0 ? dsn.indexOf("@", schemeEnd + 2) : -1;
+  const maskedDsn = atIdx > schemeEnd + 2
+    ? `${dsn.slice(0, schemeEnd + 2)}***${dsn.slice(atIdx)}`
+    : dsn;
   if (client) {
     logger.info({ context: "sentry", environment: env.NODE_ENV || "development", dsn: maskedDsn }, "Sentry error reporting initialised");
   } else {
