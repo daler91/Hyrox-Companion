@@ -22,6 +22,7 @@ import { cspNonceMiddleware } from "./middleware/cspNonce";
 import { queue,startQueue } from "./queue";
 import { runWithRequestContext } from "./requestContext";
 import { registerRoutes } from "./routes";
+import { drainSseStreams } from "./sseRegistry";
 import { serveStatic } from "./static";
 import { storage } from "./storage";
 import { isVectorDbSeparate, vectorPool } from "./vectorDb";
@@ -518,39 +519,79 @@ try {
   Sentry.captureException(err);
 }
 
-// Graceful shutdown
-const SHUTDOWN_TIMEOUT_MS = 30_000;
-const shutdown = () => {
-  logger.info("Received shutdown signal. Closing HTTP server...");
+// Graceful shutdown. Ordered phases:
+//   1. stop cron/queue intake (no new jobs or scheduled work)
+//   2. abort in-flight SSE streams so long-lived connections release
+//   3. httpServer.close() then closeAllConnections() for idle keepalive sockets
+//   4. await queue.stop() so pg-boss finishes its current batch
+//   5. drain DB pools
+//   6. flush Sentry last so errors captured during shutdown get reported
+// 60s total budget covers a full auto-coach batch + queue drain; force
+// exit runs if any phase wedges beyond that.
+const SHUTDOWN_TIMEOUT_MS = 60_000;
+const SSE_DRAIN_TIMEOUT_MS = 5_000;
+const SENTRY_FLUSH_TIMEOUT_MS = 5_000;
+let shuttingDown = false;
 
-  // Force exit if graceful shutdown takes too long (e.g. lingering SSE streams)
+const shutdown = () => {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  logger.info("Received shutdown signal. Starting graceful shutdown...");
+
   const forceExit = setTimeout(() => {
-    logger.error("Graceful shutdown timed out. Forcing exit.");
+    logger.error({ timeoutMs: SHUTDOWN_TIMEOUT_MS }, "Graceful shutdown timed out. Forcing exit.");
     process.exit(1);
   }, SHUTDOWN_TIMEOUT_MS);
   forceExit.unref();
 
-  stopCron();
-  // Flush pending Sentry events before draining connections so errors
-  // captured during shutdown aren't silently dropped.
-  Sentry.close(5000).catch(() => {});
-  httpServer.close(() => {
-    logger.info("HTTP server closed. Stopping queue...");
-    queue.stop().then(() => {
-      logger.info("Queue stopped.");
-    }).catch((err) => {
-      logger.error(err, "Error stopping queue");
-    }).finally(() => {
-      logger.info("Draining database pools...");
-      Promise.all([pool.end(), vectorPool.end()]).then(() => {
-        logger.info("Database pools drained. Exiting process.");
-        process.exit(0);
-      }).catch((err) => {
-        logger.error(err, "Error draining database pools. Exiting process.");
-        process.exit(1);
+  void (async () => {
+    try {
+      stopCron();
+
+      const remaining = await drainSseStreams(SSE_DRAIN_TIMEOUT_MS);
+      if (remaining > 0) {
+        logger.warn({ remaining }, "Some SSE streams did not finish within drain window");
+      }
+
+      await new Promise<void>((resolve, reject) => {
+        httpServer.close((err) => (err ? reject(err) : resolve()));
+        // Node 18.2+: severs idle keep-alive sockets so server.close()
+        // doesn't wait on them. Guarded for older runtimes.
+        const closeAll = (httpServer as unknown as { closeAllConnections?: () => void }).closeAllConnections;
+        if (typeof closeAll === "function") closeAll.call(httpServer);
       });
-    });
-  });
+      logger.info("HTTP server closed.");
+
+      logger.info("Stopping queue...");
+      try {
+        await queue.stop();
+        logger.info("Queue stopped.");
+      } catch (err) {
+        logger.error({ err }, "Error stopping queue");
+      }
+
+      logger.info("Draining database pools...");
+      const drainResults = await Promise.allSettled([pool.end(), vectorPool.end()]);
+      for (const r of drainResults) {
+        if (r.status === "rejected") {
+          logger.error({ err: r.reason }, "Error draining a database pool");
+        }
+      }
+      logger.info("Database pools drained.");
+
+      await Sentry.close(SENTRY_FLUSH_TIMEOUT_MS).catch((err) => {
+        logger.error({ err }, "Error flushing Sentry");
+      });
+
+      clearTimeout(forceExit);
+      logger.info("Graceful shutdown complete. Exiting process.");
+      process.exit(0);
+    } catch (err) {
+      logger.error({ err }, "Unexpected error during graceful shutdown. Exiting.");
+      clearTimeout(forceExit);
+      process.exit(1);
+    }
+  })();
 };
 
 process.on("SIGTERM", shutdown);
