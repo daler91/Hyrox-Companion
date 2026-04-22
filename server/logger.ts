@@ -7,7 +7,26 @@ const isDev = env.NODE_ENV !== "production";
 
 export const logger = pino({
   level: env.LOG_LEVEL || "info",
-  redact: ["req.headers.authorization", "req.headers.cookie", "req.headers.x-cron-secret"],
+  // Redact credentials that can appear in either headers or request bodies.
+  // Body fields are common in OAuth/integration callbacks and account flows;
+  // leaving them unredacted leaks tokens into log aggregators and Sentry
+  // breadcrumbs. `*` covers nested objects (e.g. req.body.strava.accessToken).
+  redact: [
+    "req.headers.authorization",
+    "req.headers.cookie",
+    "req.headers.x-cron-secret",
+    'req.body.password',
+    'req.body.newPassword',
+    'req.body.currentPassword',
+    'req.body.accessToken',
+    'req.body.refreshToken',
+    'req.body.token',
+    'req.body.apiKey',
+    'req.body.clientSecret',
+    'req.body.*.password',
+    'req.body.*.accessToken',
+    'req.body.*.refreshToken',
+  ],
   transport: isDev
     ? {
         target: "pino-pretty",

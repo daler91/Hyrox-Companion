@@ -76,18 +76,30 @@ export function validDate(val: unknown): string | undefined {
 type DateQuery = { from?: string; to?: string };
 type DateReq = ExpressRequest<Record<string, never>, unknown, unknown, DateQuery>;
 
+function todayUtcYyyyMmDd(): string {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+    .toISOString()
+    .split("T")[0];
+}
+
 function parseDateParams(req: DateReq, res: Response): { from?: string; to?: string } | null {
   const from = validDate(req.query.from);
-  const to = validDate(req.query.to);
+  const rawTo = validDate(req.query.to);
 
   if (req.query.from && !from) {
     res.status(400).json({ error: "Invalid 'from' date format", code: "BAD_REQUEST" });
     return null;
   }
-  if (req.query.to && !to) {
+  if (req.query.to && !rawTo) {
     res.status(400).json({ error: "Invalid 'to' date format", code: "BAD_REQUEST" });
     return null;
   }
+  // Clamp a future `to` to today so `?to=2099-01-01` can't silently
+  // return an empty window. The cost of a silent empty-result reply is
+  // worse than a visible off-by-one on the upper bound.
+  const today = todayUtcYyyyMmDd();
+  const to = rawTo && rawTo > today ? today : rawTo;
   return { from, to };
 }
 

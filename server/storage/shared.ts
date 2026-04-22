@@ -5,6 +5,7 @@ import {
 import { and, desc, eq, gte, lte, type SQL } from "drizzle-orm";
 
 import { db } from "../db";
+import { logger } from "../logger";
 
 // This helper only walks workoutLogs → exerciseSets, so every returned row
 // is a logged set with a non-null workoutLogId. The narrowed return type
@@ -15,6 +16,14 @@ export type LoggedExerciseSetWithDate = Omit<ExerciseSet, "workoutLogId"> & {
   workoutLogId: string;
   date: string;
 };
+
+// Upper bound on the number of workoutLogs rows a single analytics query
+// will pull (each log fans out to its exercise_sets via the relational
+// join). 5000 covers ~14 years of daily training with headroom and keeps
+// analytics response memory bounded even when the user supplies no date
+// range. When the cap is hit the query log emits a warning so we can
+// detect users pushing past the limit and proactively offer pagination.
+const MAX_WORKOUT_LOGS_PER_QUERY = 5000;
 
 export async function queryExerciseSetsWithDates(
   userId: string,
@@ -41,7 +50,15 @@ export async function queryExerciseSetsWithDates(
         : true,
     },
     orderBy: desc(workoutLogs.date),
+    limit: MAX_WORKOUT_LOGS_PER_QUERY,
   });
+
+  if (logs.length >= MAX_WORKOUT_LOGS_PER_QUERY) {
+    logger.warn(
+      { userId, limit: MAX_WORKOUT_LOGS_PER_QUERY, from: filters?.from, to: filters?.to },
+      "queryExerciseSetsWithDates hit row cap — analytics may be truncated; consider narrowing the date range",
+    );
+  }
 
   const result: LoggedExerciseSetWithDate[] = [];
   for (const log of logs) {
