@@ -2,7 +2,7 @@ import type { AllowedImageMimeType } from "@shared/schema";
 import { useEffect, useRef, useState } from "react";
 
 import type { usePlanDayExercises } from "@/hooks/usePlanDayExercises";
-import type { ParseFromImagePayload } from "@/lib/api";
+import type { ParseFromImagePayload, ReparseResponse } from "@/lib/api";
 
 export type PendingParseSource = "text" | "image" | null;
 
@@ -15,7 +15,7 @@ export interface DialogParseControlsInput {
   readonly isParsingLogged: boolean;
   readonly onParseLoggedFromImage: (
     payload: ParseFromImagePayload,
-    opts?: { onSuccess?: () => void },
+    opts?: { onSuccess?: (data: ReparseResponse) => void },
   ) => void;
   readonly isParsingLoggedImage: boolean;
 }
@@ -146,11 +146,16 @@ export function useDialogParseControls(input: DialogParseControlsInput): DialogP
     if (!imagePreview) return;
     const dispatchedEntryId = entryId;
     const payload = { imageBase64: imagePreview.base64, mimeType: imagePreview.mimeType };
-    const onSuccess = () => {
+    const onSuccess = (data: ReparseResponse) => {
       // Guard against a late-landing success after the user navigated:
       // clearing preview / collapsing the panel would corrupt the now-
       // current entry's state.
       if (currentEntryIdRef.current !== dispatchedEntryId) return;
+      // Soft-failure guard: the stateful reparse endpoints return 200
+      // with saved=false when Gemini extracted no exercises. Keep the
+      // preview so the user can retake/retry from the same capture
+      // instead of recapturing.
+      if (!data.saved) return;
       clearImagePreview();
       setPrescriptionOpen(false);
     };

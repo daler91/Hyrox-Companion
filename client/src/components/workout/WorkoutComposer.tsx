@@ -1,4 +1,4 @@
-import type { AllowedImageMimeType, ExerciseName } from "@shared/schema";
+import type { AllowedImageMimeType, ExerciseName, ParsedExercise } from "@shared/schema";
 import { AlertTriangle, ChevronDown, Loader2, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
@@ -49,11 +49,14 @@ interface WorkoutComposerProps {
    * parseImageMutation; this component only orchestrates capture + preview.
    * The `opts.onSuccess` callback fires AFTER the mutation resolves so the
    * composer can revoke the object URL and clear the preview without
-   * lifting preview state up to LogWorkout.
+   * lifting preview state up to LogWorkout. The mutation's resolved data
+   * is forwarded so the composer can distinguish a real parse from an
+   * empty-result "no exercises found" soft failure — in the latter case
+   * the preview must stay so the user can retake/retry.
    */
   readonly onParseImage?: (
     payload: ParseFromImagePayload,
-    opts?: { onSuccess?: () => void },
+    opts?: { onSuccess?: (parsed: ParsedExercise[]) => void },
   ) => void;
   readonly isParsingImage?: boolean;
 }
@@ -231,15 +234,24 @@ export function WorkoutComposer({
                     // carry hasUserEdits, so mergeParsedWithEdits treats
                     // them as replaceable).
                     cancelAutoParse();
+                    const capturedPreview = imagePreview;
                     onParseImage(
                       {
-                        imageBase64: imagePreview.base64,
-                        mimeType: imagePreview.mimeType,
+                        imageBase64: capturedPreview.base64,
+                        mimeType: capturedPreview.mimeType,
                       },
                       {
-                        onSuccess: () => {
-                          URL.revokeObjectURL(imagePreview.url);
-                          setImagePreview(null);
+                        onSuccess: (parsed) => {
+                          // Soft-failure guard: parseFromImage resolves
+                          // successfully with parsed.length === 0 when
+                          // Gemini extracted nothing. Keep the preview
+                          // so the user can retake/retry without losing
+                          // the capture.
+                          if (!parsed || parsed.length === 0) return;
+                          URL.revokeObjectURL(capturedPreview.url);
+                          setImagePreview((current) =>
+                            current?.url === capturedPreview.url ? null : current,
+                          );
                         },
                       },
                     );

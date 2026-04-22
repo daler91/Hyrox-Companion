@@ -17,7 +17,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { usePlanDayCoachNote } from "@/hooks/usePlanDayCoachNote";
 import { usePlanDayExercises } from "@/hooks/usePlanDayExercises";
 import { useWorkoutDetail } from "@/hooks/useWorkoutDetail";
-import type { ParseFromImagePayload } from "@/lib/api";
+import type { ParseFromImagePayload, ReparseResponse } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 import { useDialogParseControls } from "./useDialogParseControls";
@@ -542,7 +542,7 @@ interface DialogBodyProps {
   readonly isParsingLogged: boolean;
   readonly onParseLoggedFromImage: (
     payload: ParseFromImagePayload,
-    opts?: { onSuccess?: () => void },
+    opts?: { onSuccess?: (data: ReparseResponse) => void },
   ) => void;
   readonly isParsingLoggedImage: boolean;
   /**
