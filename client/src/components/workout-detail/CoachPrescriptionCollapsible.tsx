@@ -133,7 +133,7 @@ export function CoachPrescriptionCollapsible({
             className="h-7 shrink-0"
             disabled={isParsing}
             data-testid="coach-prescription-photo"
-            label="Photo"
+            label="Scan"
           />
         )}
         {!previewActive && onParse && (
