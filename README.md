@@ -259,6 +259,8 @@ Detailed documentation for each subsystem is available in the [`docs/`](docs/) d
 
 Interactive API documentation is available via **Swagger UI** at `/api/docs` when the server is running. The spec is auto-generated from Zod schemas using `@asteasolutions/zod-to-openapi`, ensuring documentation always stays in sync with the codebase.
 
+A committed OpenAPI 3.0 snapshot is also kept at [`docs/openapi.json`](docs/openapi.json). Regenerate it with `pnpm docs:openapi`; the `Build` CI job fails if the committed file drifts from the Zod schemas, making API changes diff-visible in every pull request.
+
 ---
 
 ## 🚀 Getting Started
@@ -326,6 +328,7 @@ This fires up the Vite frontend with HMR and the Express backend on port `5000`.
 | `pnpm db:check` | Validate migration/schema consistency |
 | `pnpm db:decode-entities` | One-off maintenance script that decodes HTML entities in stored text |
 | `pnpm coach:influence` | Runs the AI coach influence/metrics harness against scripted scenarios |
+| `pnpm docs:openapi` | Regenerate `docs/openapi.json` from the Zod registry (CI fails if stale) |
 
 `postinstall` also runs `script/patch-cypress-deps.js` automatically to patch a vulnerable transitive Cypress dep.
 
