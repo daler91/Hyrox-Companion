@@ -603,21 +603,13 @@ function GroupRow({
           </DropdownMenu>
         </div>
         {/*
-         * When expanded, the InlineSetEditor below surfaces the
-         * per-set values in editable form, so an extra tappable
-         * summary would be redundant and its "Edit …" label would
-         * misleadingly collapse the editor when tapped. Render the
-         * same prescription statically as a labelled summary instead.
+         * Summary is only shown when the row is collapsed. When expanded,
+         * the InlineSetEditor below surfaces the same values in editable
+         * form, so the summary would be redundant — and an "Edit …"
+         * button wired to onToggle would misleadingly collapse the
+         * editor when tapped.
          */}
-        {isExpanded ? (
-          <div
-            role="group"
-            aria-label={`${label} summary: ${prescription.aria}`}
-            className="flex w-full items-center gap-1.5 px-3 pb-2 pl-[22px] text-xs text-muted-foreground"
-          >
-            {prescriptionSegments}
-          </div>
-        ) : (
+        {!isExpanded && (
           <button
             type="button"
             onClick={onToggle}
