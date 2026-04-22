@@ -16,7 +16,7 @@ import {
   type User,
   users,
 } from "@shared/schema";
-import { and, eq, isNotNull, lt } from "drizzle-orm";
+import { and, desc, eq, isNotNull, lt } from "drizzle-orm";
 
 import { decryptToken,encryptToken } from "../crypto";
 import { db } from "../db";
@@ -90,12 +90,25 @@ export class UserStorage {
     return rows.length;
   }
 
-  async getChatMessages(userId: string): Promise<ChatMessage[]> {
-    return await db
+  // Cursor-paginated chat history. Returns the newest `limit` messages
+  // older than `beforeTimestamp` (exclusive) in chronological order so
+  // callers can append to the existing conversation view without a sort.
+  async getChatMessages(
+    userId: string,
+    options: { limit?: number; beforeTimestamp?: Date } = {},
+  ): Promise<ChatMessage[]> {
+    const limit = Math.min(Math.max(options.limit ?? 50, 1), 200);
+    const conditions = [eq(chatMessages.userId, userId)];
+    if (options.beforeTimestamp) {
+      conditions.push(lt(chatMessages.timestamp, options.beforeTimestamp));
+    }
+    const page = await db
       .select()
       .from(chatMessages)
-      .where(eq(chatMessages.userId, userId))
-      .orderBy(chatMessages.timestamp);
+      .where(conditions.length === 1 ? conditions[0] : and(...conditions))
+      .orderBy(desc(chatMessages.timestamp))
+      .limit(limit);
+    return page.reverse();
   }
 
   async saveChatMessage(message: InsertChatMessage): Promise<ChatMessage> {

@@ -2,6 +2,7 @@ import { clerkClient } from "@clerk/express";
 import { type Request as ExpressRequest, type Response, Router } from "express";
 
 import { evictUserFromSeenCache, isAuthenticated } from "../clerkAuth";
+import { EXTERNAL_API_TIMEOUT_MS } from "../constants";
 import { env } from "../env";
 import { logger } from "../logger";
 import { asyncHandler, rateLimiter } from "../routeUtils";
@@ -58,7 +59,8 @@ router.delete(
         await fetch("https://www.strava.com/oauth/deauthorize", {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: `access_token=${stravaConn.accessToken}`,
+          body: new URLSearchParams({ access_token: stravaConn.accessToken }).toString(),
+          signal: AbortSignal.timeout(EXTERNAL_API_TIMEOUT_MS),
         });
       }
     } catch (err) {

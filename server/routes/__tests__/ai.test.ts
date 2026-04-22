@@ -36,8 +36,11 @@ vi.mock("../../types", () => ({
 vi.mock("../../storage", () => ({
   storage: {
     users: {
-      getUser: vi.fn(),
-      getCustomExercises: vi.fn(),
+      // Default getUser returns a consented user so the aiConsentCheck
+      // middleware allows routes through. Individual tests can override
+      // via vi.mocked(storage.users.getUser).mockResolvedValue(...).
+      getUser: vi.fn().mockResolvedValue({ aiCoachEnabled: true }),
+      getCustomExercises: vi.fn().mockResolvedValue([]),
       getChatMessages: vi.fn(),
       saveChatMessage: vi.fn(),
       clearChatHistory: vi.fn(),
@@ -104,7 +107,7 @@ describe("POST /api/parse-exercises", () => {
 
   it("should successfully parse exercises and return them", async () => {
 
-    vi.mocked(storage.users.getUser).mockResolvedValue({ weightUnit: "lbs" });
+    vi.mocked(storage.users.getUser).mockResolvedValue({ weightUnit: "lbs", aiCoachEnabled: true });
     vi.mocked(storage.users.getCustomExercises).mockResolvedValue([{ name: "Custom Squat" }]);
 
     const mockParsedExercises = [
@@ -134,7 +137,7 @@ describe("POST /api/parse-exercises", () => {
 
 
   it("should return 500 when AI parsing fails", async () => {
-    vi.mocked(storage.users.getUser).mockResolvedValue({ weightUnit: "lbs" });
+    vi.mocked(storage.users.getUser).mockResolvedValue({ weightUnit: "lbs", aiCoachEnabled: true });
     vi.mocked(storage.users.getCustomExercises).mockResolvedValue([]);
     vi.mocked(parseExercisesFromText).mockRejectedValue(new Error("AI error"));
 
@@ -172,7 +175,7 @@ describe("POST /api/parse-exercises", () => {
 
   it("should rate limit requests after 5 attempts", async () => {
 
-    vi.mocked(storage.users.getUser).mockResolvedValue({ weightUnit: "kg" });
+    vi.mocked(storage.users.getUser).mockResolvedValue({ weightUnit: "kg", aiCoachEnabled: true });
     vi.mocked(storage.users.getCustomExercises).mockResolvedValue([]);
     vi.mocked(parseExercisesFromText).mockResolvedValue([]);
 
@@ -220,7 +223,7 @@ describe("POST /api/v1/parse-exercises-from-image", () => {
   });
 
   it("returns parsed exercises on success", async () => {
-    vi.mocked(storage.users.getUser).mockResolvedValue({ weightUnit: "kg" });
+    vi.mocked(storage.users.getUser).mockResolvedValue({ weightUnit: "kg", aiCoachEnabled: true });
     vi.mocked(storage.users.getCustomExercises).mockResolvedValue([{ name: "Custom Squat" }]);
     const parsed = [{ exerciseName: "back_squat", sets: [{ setNumber: 1, reps: 5 }] }];
     vi.mocked(parseExercisesFromImage).mockResolvedValue(parsed as never);
@@ -257,7 +260,7 @@ describe("POST /api/v1/parse-exercises-from-image", () => {
   });
 
   it("shares the 'parse' rate bucket with the text endpoint", async () => {
-    vi.mocked(storage.users.getUser).mockResolvedValue({ weightUnit: "kg" });
+    vi.mocked(storage.users.getUser).mockResolvedValue({ weightUnit: "kg", aiCoachEnabled: true });
     vi.mocked(storage.users.getCustomExercises).mockResolvedValue([]);
     vi.mocked(parseExercisesFromImage).mockResolvedValue([] as never);
     vi.mocked(parseExercisesFromText).mockResolvedValue([] as never);
@@ -277,7 +280,7 @@ describe("POST /api/v1/parse-exercises-from-image", () => {
   });
 
   it("returns 500 when parsing throws", async () => {
-    vi.mocked(storage.users.getUser).mockResolvedValue({ weightUnit: "kg" });
+    vi.mocked(storage.users.getUser).mockResolvedValue({ weightUnit: "kg", aiCoachEnabled: true });
     vi.mocked(storage.users.getCustomExercises).mockResolvedValue([]);
     vi.mocked(parseExercisesFromImage).mockRejectedValue(new Error("gemini exploded"));
 
@@ -432,7 +435,10 @@ describe("Chat History and Messages Routes", () => {
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual(mockMessages);
-    expect(storage.users.getChatMessages).toHaveBeenCalledWith("test_user_id");
+    expect(storage.users.getChatMessages).toHaveBeenCalledWith("test_user_id", {
+      limit: undefined,
+      beforeTimestamp: undefined,
+    });
   });
 
   it("should return 500 when getting history fails", async () => {
