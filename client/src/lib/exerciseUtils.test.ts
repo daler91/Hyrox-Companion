@@ -9,20 +9,28 @@ import {
 } from "./exerciseUtils";
 
 describe("getExerciseLabel", () => {
-  it("returns label for known exercise name", () => {
-    expect(getExerciseLabel("unknown_exercise_123")).toBe(
-      "unknown_exercise_123",
-    );
-  });
-
-  it("handles custom prefix", () => {
-    expect(getExerciseLabel("custom:My Custom Exercise")).toBe(
-      "My Custom Exercise",
-    );
-  });
-
-  it("handles custom exercise with customLabel", () => {
-    expect(getExerciseLabel("custom", "Special Lift")).toBe("Special Lift");
+  // `custom` + numeric label is intentional: for custom exercises the label
+  // IS the display name, so we trust "2" verbatim. The bogus-label guard
+  // only kicks in for known exerciseNames where customLabel looks like a
+  // parser-leaked set multiplier ("2", "2x") — canonical name wins there
+  // so the EXERCISE column stays meaningful.
+  it.each([
+    { desc: "known name, no customLabel → name echoes back",
+      name: "unknown_exercise_123", label: undefined, expected: "unknown_exercise_123" },
+    { desc: "custom: prefix strips prefix",
+      name: "custom:My Custom Exercise", label: undefined, expected: "My Custom Exercise" },
+    { desc: "custom + label uses label",
+      name: "custom", label: "Special Lift", expected: "Special Lift" },
+    { desc: "known name + bare-digit label falls back to canonical",
+      name: "back_squat", label: "2", expected: "Back Squat" },
+    { desc: "known name + multiplier label (2x) falls back to canonical",
+      name: "sled_push", label: "3x", expected: "Sled Push" },
+    { desc: "known name + legitimate rename is preserved",
+      name: "assault_bike", label: "Echo Bike", expected: "Echo Bike" },
+    { desc: "custom + numeric label is trusted verbatim",
+      name: "custom", label: "2", expected: "2" },
+  ])("$desc", ({ name, label, expected }) => {
+    expect(getExerciseLabel(name, label)).toBe(expected);
   });
 });
 

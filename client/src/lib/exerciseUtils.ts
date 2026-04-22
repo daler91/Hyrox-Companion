@@ -23,12 +23,26 @@ export const categoryLabels: Record<string, string> = {
   conditioning: "Conditioning",
 };
 
+// Matches labels the AI parser occasionally leaks in place of a real name —
+// a bare set multiplier like "2", "10", "2x", "3X". For known exercises we
+// prefer the canonical definition over these.
+const BOGUS_LABEL_RE = /^\d+\s*[xX]?$/;
+
 export function getExerciseLabel(name: string, customLabel?: string | null): string {
   // `customLabel` acts as a display override for any exercise — a user-renamed
   // "Assault Bike" → "Echo Bike" shows "Echo Bike" in the UI while the
   // underlying `exerciseName` + `category` stay intact so PR/analytics
   // aggregation continues to work against the canonical name.
-  if (customLabel && customLabel.trim().length > 0) return customLabel;
+  //
+  // Custom exercises (exerciseName === "custom") use customLabel AS the
+  // display name, so we trust it verbatim. For known exerciseNames we guard
+  // against parser-leaked numeric labels ("2", "2x"), falling back to the
+  // canonical definition.
+  const trimmed = customLabel?.trim();
+  if (trimmed && trimmed.length > 0) {
+    if (name === "custom" || name.startsWith("custom:")) return trimmed;
+    if (!BOGUS_LABEL_RE.test(trimmed)) return trimmed;
+  }
   if (name.startsWith("custom:")) return name.slice(7);
   const def = EXERCISE_DEFINITIONS[name as ExerciseName];
   return def?.label || name;
