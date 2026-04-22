@@ -32,7 +32,7 @@ function makeReq(method: string, headers: Record<string, string> = {}): Request 
     method,
     path: "/api/v1/workouts",
     header: (name: string) => headers[name.toLowerCase()],
-    log: { error: vi.fn() },
+    log: { error: vi.fn(), warn: vi.fn() },
   } as unknown as Request;
 }
 
@@ -130,6 +130,52 @@ describe("idempotencyMiddleware", () => {
     expect(userId).toBe("user-1");
     expect(key).toBe("new-key");
     expect(record.responseBody).toEqual({ id: "w-2" });
+    expect(record.statusCode).toBe(200);
+  });
+
+  it("persists the record when the handler sends a non-stringifiable body", async () => {
+    // Guards against the size cap throwing on JSON.stringify(undefined) →
+    // Buffer.byteLength(undefined) rejections, which would otherwise turn a
+    // successful 2xx into a crashed response path and leak the
+    // idempotency key so retries re-execute the write (Codex review of #877).
+    mockStorage.idempotency.get.mockResolvedValue(undefined);
+
+    const req = makeReq("POST", { "x-idempotency-key": "empty" });
+    const res = makeRes();
+    (res as Response & { statusCode: number }).statusCode = 200;
+    const next: NextFunction = vi.fn();
+
+    await idempotencyMiddleware(req, res, next);
+
+    expect(() => res.json(undefined as never)).not.toThrow();
+
+    await new Promise((r) => setTimeout(r, 0));
+    expect(mockStorage.idempotency.set).toHaveBeenCalledOnce();
+    const [, , record] = mockStorage.idempotency.set.mock.calls[0];
+    expect(record.statusCode).toBe(200);
+    expect(record.responseBody).toBeUndefined();
+  });
+
+  it("persists a sentinel body when the response exceeds the cache size cap", async () => {
+    // Even for oversized responses we still need to lock the idempotency
+    // key so a retry doesn't re-execute the mutation. Only the full
+    // payload is discarded — the key is always recorded (Codex P1).
+    mockStorage.idempotency.get.mockResolvedValue(undefined);
+
+    const req = makeReq("POST", { "x-idempotency-key": "huge" });
+    const res = makeRes();
+    (res as Response & { statusCode: number }).statusCode = 200;
+    const next: NextFunction = vi.fn();
+
+    await idempotencyMiddleware(req, res, next);
+
+    const hugeBody = { blob: "x".repeat(64 * 1024 + 1) };
+    res.json(hugeBody);
+
+    await new Promise((r) => setTimeout(r, 0));
+    expect(mockStorage.idempotency.set).toHaveBeenCalledOnce();
+    const [, , record] = mockStorage.idempotency.set.mock.calls[0];
+    expect(record.responseBody).toEqual({ idempotencyReplayed: true });
     expect(record.statusCode).toBe(200);
   });
 
