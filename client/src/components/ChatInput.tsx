@@ -103,7 +103,7 @@ export function ChatInput({ onSend, isLoading, placeholder = "Ask about your tra
           title={message.trim() ? "Send message" : "Type a message to send"}
         >
           {isLoading ? (
-            <Loader2 className="h-4 w-4 animate-spin" aria-label="Sending message..." />
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
           ) : (
             <Send className="h-4 w-4" />
           )}
