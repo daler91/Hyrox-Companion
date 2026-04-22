@@ -415,7 +415,10 @@ function GroupRow({
     () => resolvePrimaryMetric(group.exerciseName, uniformity, distanceUnit),
     [group.exerciseName, uniformity, distanceUnit],
   );
-  const hasWeight = useMemo(() => shouldShowLoad(group), [group]);
+  const hasWeight = useMemo(
+    () => shouldShowLoad(group, metric.field),
+    [group, metric.field],
+  );
   const loadVaries = uniformity.weightVaries;
 
   // Refs mirroring the latest props so the debounced set-count timer
@@ -879,23 +882,24 @@ function pickPrimaryField(exerciseName: string, u: UniformitySummary): PrimaryFi
 }
 
 /**
- * Whether the aggregate Load cell should render as an editable input.
- * Gated on two conditions:
- *   1. The exercise definition allows a weight field at all (otherwise
- *      we render the "—" dash unconditionally).
- *   2. At least one set in the group has an actual weight value.
- *
- * Prior to (2), weighted-but-optional exercises like `sled_push` or
- * `farmers_carry` always rendered an empty input with the user's
- * weight-unit suffix ("lb" / "kg"), even when the prescription was
- * distance-only and had no weight to enter. The phantom "lb" read as
- * "the app expects a weight here" and confused users. Rows still
- * expose the input as soon as one set gets a weight value, and users
- * can always open the inline editor to add weight from scratch.
+ * Whether the aggregate Load cell should render as an editable input
+ * vs. the "—" dash. Three-state decision:
+ *   1. Exercise definition doesn't list `weight` → always dash.
+ *   2. Weight is the primary logging axis (reps-primary strength
+ *      movements like `back_squat`, `kettlebell_swings`) → always
+ *      editable, even before the first weight is entered, so users
+ *      can type the prescribed load inline.
+ *   3. Weight is a secondary annotation (distance- or time-primary
+ *      exercises like `sled_push`, `farmers_carry`, and custom rows
+ *      primary-resolved to distance/time) → editable only once at
+ *      least one set has a weight value. Otherwise render the dash
+ *      so a distance-only prescription doesn't show a phantom `lb`
+ *      input that implies "you must fill this in".
  */
-function shouldShowLoad(group: GroupedExercise): boolean {
+function shouldShowLoad(group: GroupedExercise, primaryField: PrimaryField): boolean {
   const fields = getFields(group.exerciseName);
   if (!fields.includes("weight")) return false;
+  if (primaryField === "reps") return true;
   return group.sets.some((s) => s.weight != null);
 }
 
