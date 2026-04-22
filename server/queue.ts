@@ -112,10 +112,29 @@ const QUEUE_START_TIMEOUT_MS = 30_000;
 
 export async function startQueue() {
   logger.info("Starting pg-boss queue...");
-  const timeout = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error(`pg-boss queue.start() timed out after ${QUEUE_START_TIMEOUT_MS / 1000}s — check DATABASE_URL connectivity`)), QUEUE_START_TIMEOUT_MS),
-  );
-  await Promise.race([queue.start(), timeout]);
+  // Clear the timeout timer when the race resolves so we don't leak a
+  // pending setTimeout for the full 30s window when queue.start() wins.
+  // On timeout or any other start failure, call queue.stop() to release
+  // the partially-initialised connection pool — pg-boss opens its pool
+  // before returning from start(), so leaving the failed instance alive
+  // leaks a DB slot for the process lifetime (Warning-18).
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`pg-boss queue.start() timed out after ${QUEUE_START_TIMEOUT_MS / 1000}s — check DATABASE_URL connectivity`)),
+      QUEUE_START_TIMEOUT_MS,
+    );
+  });
+  try {
+    await Promise.race([queue.start(), timeoutPromise]);
+  } catch (err) {
+    await queue.stop().catch((stopErr) => {
+      logger.error({ err: stopErr }, "[pg-boss] queue.stop() after failed start also failed; proceeding with original error");
+    });
+    throw err;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 
   await queue.createQueue("auto-coach");
   await queue.createQueue("embed-coaching-material");
