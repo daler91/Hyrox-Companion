@@ -432,7 +432,9 @@ export default function Timeline() {
         isAnnotationDeleting={deleteAnnotationMutation.isPending}
       />
 
-          <FloatingActionButton coachPanelOpen={coachOpen} onCoachToggle={() => handleCoachToggle(!coachOpen)} />
+          {!detailEntry && (
+            <FloatingActionButton coachPanelOpen={coachOpen} onCoachToggle={() => handleCoachToggle(!coachOpen)} />
+          )}
 
           <SchedulePlanDialog
             open={!!schedulingPlanId}
@@ -515,7 +517,7 @@ export default function Timeline() {
         </div>
       </div>
       
-      {coachOpen && !isMobile && (
+      {coachOpen && !isMobile && !detailEntry && (
         <div className="w-80 lg:w-96 flex-shrink-0">
           <FeatureErrorBoundaryWrapper featureName="Coach">
             <CoachPanel
@@ -528,7 +530,7 @@ export default function Timeline() {
         </div>
       )}
 
-      {coachOpen && isMobile && (
+      {coachOpen && isMobile && !detailEntry && (
         // Mobile coach surface: a bottom sheet at ~70vh so the user can still
         // see the top of their timeline while chatting with the coach.
         <div className="fixed inset-x-0 bottom-0 z-50 h-[70vh]">
