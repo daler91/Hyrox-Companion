@@ -133,7 +133,10 @@ describe("idempotencyMiddleware", () => {
     expect(record.statusCode).toBe(200);
   });
 
-  it("skips persisting response bodies that exceed the cache size cap", async () => {
+  it("persists a sentinel body when the response exceeds the cache size cap", async () => {
+    // Even for oversized responses we still need to lock the idempotency
+    // key so a retry doesn't re-execute the mutation. Only the full
+    // payload is discarded — the key is always recorded (Codex P1).
     mockStorage.idempotency.get.mockResolvedValue(undefined);
 
     const req = makeReq("POST", { "x-idempotency-key": "huge" });
@@ -143,12 +146,14 @@ describe("idempotencyMiddleware", () => {
 
     await idempotencyMiddleware(req, res, next);
 
-    // 64 KiB cap — fill just over to trigger the skip.
     const hugeBody = { blob: "x".repeat(64 * 1024 + 1) };
     res.json(hugeBody);
 
     await new Promise((r) => setTimeout(r, 0));
-    expect(mockStorage.idempotency.set).not.toHaveBeenCalled();
+    expect(mockStorage.idempotency.set).toHaveBeenCalledOnce();
+    const [, , record] = mockStorage.idempotency.set.mock.calls[0];
+    expect(record.responseBody).toEqual({ idempotencyReplayed: true });
+    expect(record.statusCode).toBe(200);
   });
 
   it("does not cache non-2xx responses", async () => {
