@@ -70,6 +70,22 @@ describe("formatPrescription", () => {
     expect(p.aria).toBe("2 sets of 25 m");
   });
 
+  it("preserves a zero-valued metric rather than hiding it", () => {
+    const p = formatPrescription({ ...base, metricValue: 0 });
+    expect(p.visual).toEqual([
+      { text: "2" },
+      { text: "0 reps", separator: "times" },
+      { text: "150 lb", separator: "dot" },
+    ]);
+    expect(p.aria).toBe("2 sets of 0 reps at 150 lb");
+  });
+
+  it("preserves a zero-valued load rather than hiding it", () => {
+    const p = formatPrescription({ ...base, weightValue: 0 });
+    expect(p.visual[2]).toEqual({ text: "0 lb", separator: "dot" });
+    expect(p.aria).toBe("2 sets of 6 reps at 0 lb");
+  });
+
   it("omits the metric segment when the metric value is missing", () => {
     const p = formatPrescription({ ...base, metricValue: null });
     expect(p.visual).toEqual([

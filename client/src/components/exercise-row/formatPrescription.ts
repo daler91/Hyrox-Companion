@@ -52,7 +52,7 @@ function metricSegment(
   input: PrescriptionInput,
 ): { visual: string; aria: string } | null {
   if (input.metricVaries) return { visual: "varies", aria: "varies" };
-  if (input.metricValue == null || input.metricValue === 0) return null;
+  if (input.metricValue == null) return null;
   const text = `${input.metricValue} ${input.metricSuffix}`;
   return { visual: text, aria: text };
 }
