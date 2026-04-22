@@ -70,12 +70,21 @@ export const WorkoutTextMode = ({
               data-testid="button-photo-input"
             />
           )}
-          <VoiceButton
-            isListening={isListening}
-            isSupported={isSupported}
-            onClick={toggleListening}
-            className=""
-          />
+          {/*
+            Hide voice while a photo preview is active. Without this, a user
+            who toggles dictation after capturing can stream transcript into
+            `freeText` — every change re-schedules an auto-parse, which can
+            land AFTER the image parse and overwrite the image-derived
+            blocks. Mirrors the photo-button hide for symmetry.
+          */}
+          {!previewActive && (
+            <VoiceButton
+              isListening={isListening}
+              isSupported={isSupported}
+              onClick={toggleListening}
+              className=""
+            />
+          )}
         </div>
       </div>
       {previewActive ? (
