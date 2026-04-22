@@ -3,6 +3,10 @@ import { ChevronDown, MoreVertical, Plus, Repeat, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { type FieldKey, getFields } from "@/components/exercise-row/fieldMeta";
+import {
+  formatPrescription,
+  type VisualSegment,
+} from "@/components/exercise-row/formatPrescription";
 import { InlineSetEditor } from "@/components/exercise-row/InlineSetEditor";
 import { ExerciseSelector } from "@/components/ExerciseSelector";
 import { Button } from "@/components/ui/button";
@@ -311,6 +315,11 @@ function HeaderRow() {
     <div
       className={cn(
         GRID_TEMPLATE,
+        // Hidden on mobile: the new two-line row layout is self-describing
+        // (name on its own line, labelled prescription summary below), so
+        // a header labelled against the desktop 6-column grid would no
+        // longer align with what renders beneath it.
+        "hidden sm:grid",
         "border-b border-border bg-muted/40 text-xs font-medium uppercase tracking-wide text-muted-foreground",
       )}
     >
@@ -504,9 +513,115 @@ function GroupRow({
     setChangeExerciseOpen(false);
   };
 
+  const prescription = formatPrescription({
+    setCount,
+    metricValue: metric.value,
+    metricSuffix: metric.suffix ?? "",
+    metricVaries: metric.varies,
+    weightValue: uniformity.weight,
+    weightUnit,
+    weightVaries: loadVaries,
+    hasWeight,
+  });
+  const prescriptionSegments = prescription.visual.map((seg) => (
+    <PrescriptionSegment key={seg.separator ?? "sets"} segment={seg} />
+  ));
+
+  const changeExerciseItem = (
+    <DropdownMenuItem
+      onSelect={() => setChangeExerciseOpen(true)}
+      data-testid="exercise-row-change"
+    >
+      <Repeat className="mr-2 size-4" aria-hidden /> Change exercise
+    </DropdownMenuItem>
+  );
+  const deleteItem = (
+    <DropdownMenuItem onSelect={handleDeleteRow} className="text-destructive">
+      <Trash2 className="mr-2 size-4" aria-hidden /> Delete
+    </DropdownMenuItem>
+  );
+
   return (
     <div className="flex flex-col" data-testid="exercise-row" data-row-key={group.sets[0]?.id}>
-      <div className={cn(GRID_TEMPLATE, "text-sm")}>
+      {/*
+       * Mobile two-line layout: name gets the full row width on line 1;
+       * a human-readable prescription ("2 × 6 reps · 150 lb") sits on
+       * line 2 so the sets count can't be mistaken for part of the name.
+       * Editing happens inside the expanded InlineSetEditor — cramming
+       * three inline number inputs onto a 360 px viewport is what caused
+       * the 2-letter name truncation in the first place.
+       */}
+      <div className="text-sm sm:hidden">
+        <div className="flex items-center gap-2 px-3 py-2">
+          <span
+            aria-hidden
+            className="inline-block size-2 shrink-0 rounded-full"
+            style={{ backgroundColor: color }}
+          />
+          <span
+            className={cn(
+              "min-w-0 flex-1 truncate font-medium",
+              lowConfidence && "text-muted-foreground",
+            )}
+            title={lowConfidence ? "Low-confidence parse — expand to review" : label}
+          >
+            {label}
+          </span>
+          {rowSavedAt != null && (
+            <SaveFlashBadge key={rowSavedAt} testId="exercise-row-saved-mobile" />
+          )}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8 text-muted-foreground"
+            aria-label={isExpanded ? `Collapse ${label}` : `Expand ${label}`}
+            aria-expanded={isExpanded}
+            onClick={onToggle}
+          >
+            <ChevronDown
+              className={cn("size-4 transition-transform", isExpanded && "rotate-180")}
+              aria-hidden
+            />
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8 text-muted-foreground"
+                aria-label={`Row actions for ${label}`}
+              >
+                <MoreVertical className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {changeExerciseItem}
+              <DropdownMenuSeparator />
+              {deleteItem}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        {/*
+         * Summary is only shown when the row is collapsed. When expanded,
+         * the InlineSetEditor below surfaces the same values in editable
+         * form, so the summary would be redundant — and an "Edit …"
+         * button wired to onToggle would misleadingly collapse the
+         * editor when tapped.
+         */}
+        {!isExpanded && (
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-label={`Edit ${label}: ${prescription.aria}`}
+            className="flex w-full items-center gap-1.5 px-3 pb-2 pl-[22px] text-left text-xs text-muted-foreground"
+          >
+            {prescriptionSegments}
+          </button>
+        )}
+      </div>
+
+      <div className={cn(GRID_TEMPLATE, "hidden text-sm sm:grid")}>
         <ExerciseLabel
           label={label}
           color={color}
@@ -578,16 +693,9 @@ function GroupRow({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              onSelect={() => setChangeExerciseOpen(true)}
-              data-testid="exercise-row-change"
-            >
-              <Repeat className="mr-2 size-4" aria-hidden /> Change exercise
-            </DropdownMenuItem>
+            {changeExerciseItem}
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={handleDeleteRow} className="text-destructive">
-              <Trash2 className="mr-2 size-4" aria-hidden /> Delete
-            </DropdownMenuItem>
+            {deleteItem}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -623,6 +731,19 @@ function GroupRow({
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function PrescriptionSegment({ segment }: Readonly<{ segment: VisualSegment }>) {
+  return (
+    <>
+      {segment.separator && (
+        <span aria-hidden className="text-muted-foreground/60">
+          {segment.separator === "times" ? "×" : "·"}
+        </span>
+      )}
+      <span>{segment.text}</span>
+    </>
   );
 }
 
