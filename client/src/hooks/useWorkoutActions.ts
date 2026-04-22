@@ -1,14 +1,41 @@
 import { type ParsedExercise, type PlanDay, type TimelineEntry, type UpdateWorkoutLog, type User,type WorkoutStatus } from "@shared/schema";
-import { useCallback,useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { api, QUERY_KEYS } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
 
 import { useApiMutation } from "./useApiMutation";
+import { useOpenWorkoutId } from "./useOpenWorkoutId";
 
-export function useWorkoutActions(selectedPlanId: string | null) {
-  const [detailEntry, setDetailEntry] = useState<TimelineEntry | null>(null);
+function entryId(entry: TimelineEntry): string | null {
+  return entry.workoutLogId ?? entry.planDayId ?? null;
+}
+
+export function useWorkoutActions(
+  selectedPlanId: string | null,
+  timelineData: TimelineEntry[] = [],
+) {
+  const { openWorkoutId, setOpenWorkoutId } = useOpenWorkoutId();
+  // Locally cache the entry passed into openDetailDialog so the dialog can
+  // render immediately from the click handler's data, even if the URL is the
+  // source of truth. On a deep link / refresh the cache is empty and we fall
+  // back to looking up the id in timelineData.
+  const [cachedEntry, setCachedEntry] = useState<TimelineEntry | null>(null);
   const [skipConfirmEntry, setSkipConfirmEntry] = useState<TimelineEntry | null>(null);
+
+  const detailEntry = useMemo<TimelineEntry | null>(() => {
+    if (!openWorkoutId) return null;
+    if (cachedEntry && entryId(cachedEntry) === openWorkoutId) return cachedEntry;
+    return timelineData.find((e) => entryId(e) === openWorkoutId) ?? null;
+  }, [openWorkoutId, cachedEntry, timelineData]);
+
+  const setDetailEntry = useCallback(
+    (entry: TimelineEntry | null) => {
+      setCachedEntry(entry);
+      setOpenWorkoutId(entry ? entryId(entry) : null);
+    },
+    [setOpenWorkoutId],
+  );
 
   const updateStatusMutation = useApiMutation({
     mutationFn: ({ dayId, status }: { dayId: string; status: string }) =>
@@ -195,9 +222,12 @@ export function useWorkoutActions(selectedPlanId: string | null) {
     },
   });
 
-  const openDetailDialog = useCallback((entry: TimelineEntry) => {
-    setDetailEntry(entry);
-  }, []);
+  const openDetailDialog = useCallback(
+    (entry: TimelineEntry) => {
+      setDetailEntry(entry);
+    },
+    [setDetailEntry],
+  );
 
   const handleSaveFromDetail = useCallback((updates: { focus: string; mainWorkout: string; accessory: string | null; notes: string | null; rpe?: number | null; exercises?: ParsedExercise[] }) => {
     if (!detailEntry) return;

@@ -18,7 +18,7 @@ export function useTimelineState(options?: { aiCoachEnabled?: boolean }) {
   });
 
   const onboarding = useOnboarding(data.isNewUser, planImport.fileInputRef, options?.aiCoachEnabled);
-  const workoutActions = useWorkoutActions(selectedPlanId);
+  const workoutActions = useWorkoutActions(selectedPlanId, data.timelineData);
   const combine = useCombineWorkouts();
 
   return {

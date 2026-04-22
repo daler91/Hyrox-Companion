@@ -5,6 +5,7 @@ import { lazy, Suspense } from "react";
 import { Route,Switch } from "wouter";
 
 import { AppSidebar } from "@/components/AppSidebar";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { FeatureErrorBoundaryWrapper } from "@/components/FeatureErrorBoundaryWrapper";
 import { PrivacyConsentBanner } from "@/components/PrivacyConsentBanner";
 import { ThemeProvider } from "@/components/ThemeProvider";
@@ -14,6 +15,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import { useEmailCheck } from "@/hooks/useEmailCheck";
+import { useNavigationBreadcrumb } from "@/hooks/useNavigationBreadcrumb";
 import { useOfflineDropNotifier } from "@/hooks/useOfflineDropNotifier";
 import NotFound from "@/pages/not-found";
 import Timeline from "@/pages/Timeline";
@@ -115,6 +117,7 @@ function AuthenticatedLayout() {
             <span className="font-semibold">fitai.coach</span>
           </header>
           <main id="main-content" className="flex-1 overflow-auto">
+            <Breadcrumbs />
             <AuthenticatedRouter />
           </main>
         </div>
@@ -125,6 +128,8 @@ function AuthenticatedLayout() {
 }
 
 function AppContent() {
+  useNavigationBreadcrumb();
+
   if (shouldBypassAuth()) {
     return <AuthenticatedLayout />;
   }
