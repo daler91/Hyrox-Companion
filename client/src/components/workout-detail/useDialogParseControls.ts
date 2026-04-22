@@ -1,5 +1,5 @@
 import type { AllowedImageMimeType } from "@shared/schema";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { usePlanDayExercises } from "@/hooks/usePlanDayExercises";
 import type { ParseFromImagePayload } from "@/lib/api";
@@ -84,6 +84,17 @@ export function useDialogParseControls(input: DialogParseControlsInput): DialogP
   const [prescriptionHydrated, setPrescriptionHydrated] = useState<boolean>(hasSets);
   const [lastEntryId, setLastEntryId] = useState<string>(entryId);
 
+  // Late-landing mutation success handlers compare against this ref so they
+  // only mutate state (clear preview / collapse panel) when the user is
+  // still looking at the entry the parse was dispatched on. Without the
+  // guard, navigating to another timeline card before an in-flight parse
+  // resolves would let a stale success callback wipe the new entry's
+  // captured image.
+  const currentEntryIdRef = useRef(entryId);
+  useEffect(() => {
+    currentEntryIdRef.current = entryId;
+  }, [entryId]);
+
   if (entryId !== lastEntryId) {
     setLastEntryId(entryId);
     setPrescriptionOpen(isPlanned && !hasSets);
@@ -120,15 +131,26 @@ export function useDialogParseControls(input: DialogParseControlsInput): DialogP
   const isParsingImage = isPlanned ? planSets.reparseFromImage.isPending : isParsingLoggedImage;
 
   const triggerParseText = () => {
-    const onSuccess = () => setPrescriptionOpen(false);
+    // Snapshot the entry id at dispatch time; ignore the success callback
+    // if the user navigated away while the parse was in flight.
+    const dispatchedEntryId = entryId;
+    const onSuccess = () => {
+      if (currentEntryIdRef.current !== dispatchedEntryId) return;
+      setPrescriptionOpen(false);
+    };
     if (isPlanned) planSets.reparseFreeText.mutate(undefined, { onSuccess });
     else onParseLoggedFreeText({ onSuccess });
   };
 
   const triggerParseImage = () => {
     if (!imagePreview) return;
+    const dispatchedEntryId = entryId;
     const payload = { imageBase64: imagePreview.base64, mimeType: imagePreview.mimeType };
     const onSuccess = () => {
+      // Guard against a late-landing success after the user navigated:
+      // clearing preview / collapsing the panel would corrupt the now-
+      // current entry's state.
+      if (currentEntryIdRef.current !== dispatchedEntryId) return;
       clearImagePreview();
       setPrescriptionOpen(false);
     };
