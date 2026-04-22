@@ -3,6 +3,7 @@ import { useCallback,useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { VoiceButton } from "@/components/VoiceButton";
 import { useToast } from "@/hooks/use-toast";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
@@ -94,20 +95,28 @@ export function ChatInput({ onSend, isLoading, placeholder = "Ask about your tra
           isSupported={isSupported}
           onClick={toggleListening}
         />
-        <Button
-          type="submit"
-          size="icon"
-          disabled={message.trim() === "" || isLoading}
-          data-testid="button-send-message"
-          aria-label="Send message"
-          title={message.trim() ? "Send message" : "Type a message to send"}
-        >
-          {isLoading ? (
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-          ) : (
-            <Send className="h-4 w-4" />
-          )}
-        </Button>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="submit"
+                size="icon"
+                disabled={message.trim() === "" || isLoading}
+                data-testid="button-send-message"
+                aria-label="Send message"
+              >
+                {isLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {message.trim() ? "Send message" : "Type a message to send"}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
     </form>
   );
