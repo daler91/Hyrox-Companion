@@ -1,4 +1,4 @@
-import type { AllowedImageMimeType, ExerciseSet, TimelineEntry, WorkoutStatus } from "@shared/schema";
+import type { ExerciseSet, TimelineEntry, WorkoutStatus } from "@shared/schema";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { type MutableRefObject,useEffect, useRef, useState } from "react";
 
@@ -19,6 +19,8 @@ import { usePlanDayExercises } from "@/hooks/usePlanDayExercises";
 import { useWorkoutDetail } from "@/hooks/useWorkoutDetail";
 import type { ParseFromImagePayload } from "@/lib/api";
 import { cn } from "@/lib/utils";
+
+import { useDialogParseControls } from "./useDialogParseControls";
 
 import { AthleteNoteInput } from "./AthleteNoteInput";
 import { CoachPrescriptionCollapsible } from "./CoachPrescriptionCollapsible";
@@ -628,114 +630,20 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
   };
   const parseReady =
     (isPlanned && planDayId != null) || (!isPlanned && workoutId != null);
-  const isParsing = isPlanned ? planSets.reparseFreeText.isPending : isParsingLogged;
-
-  // Confirm before Parse replaces existing structured rows. If there are no
-  // sets yet, fire straight away. Dialog state is hoisted here so the Parse
-  // button in the collapsible just triggers the ask, not the mutation.
-  const [confirmingParse, setConfirmingParse] = useState(false);
-  const [pendingParseSource, setPendingParseSource] = useState<"text" | "image" | null>(null);
   const currentSets = isPlanned ? planSets.exerciseSets : exerciseSets;
   const hasSets = currentSets.length > 0;
 
-  // Image-capture state owned here so the preview survives the collapsible's
-  // open/close toggles and can be cleared from both the Retake button and a
-  // successful parse. Parent owns the previewUrl lifetime — URL.revokeObjectURL
-  // fires on retake, successful parse, and entry change.
-  const [imagePreview, setImagePreview] = useState<{
-    url: string;
-    base64: string;
-    mimeType: AllowedImageMimeType;
-  } | null>(null);
-  const clearImagePreview = () => {
-    setImagePreview((prev) => {
-      if (prev) URL.revokeObjectURL(prev.url);
-      return null;
-    });
-  };
-  // Free-text panel sits above the exercise section. Start open for empty
-  // planned entries (onboarding — nothing in the table yet), collapsed
-  // otherwise so the structured rows dominate. Auto-collapses after a
-  // successful parse (see triggerParse below).
-  //
-  // Two edge cases we reconcile via render-time sentinels (same pattern as
-  // `lastEntryId` in the parent component):
-  //   1. Entry change — DialogBody stays mounted while the athlete browses
-  //      between timeline cards, so per-entry panel state has to reset.
-  //   2. Cache-miss hydration — `planSets.exerciseSets` starts as [] while
-  //      the exercises query resolves, so the useState initializer can't
-  //      see already-persisted rows on first render. Re-sync once rows
-  //      arrive so a planned entry that already has a table collapses the
-  //      panel as intended.
-  const [prescriptionOpen, setPrescriptionOpen] = useState<boolean>(
-    isPlanned && !hasSets,
-  );
-  const [prescriptionHydrated, setPrescriptionHydrated] = useState<boolean>(hasSets);
-  const [lastPrescriptionEntryId, setLastPrescriptionEntryId] = useState<string | undefined>(entry.id);
-  if (entry.id !== lastPrescriptionEntryId) {
-    setLastPrescriptionEntryId(entry.id);
-    setPrescriptionOpen(isPlanned && !hasSets);
-    setPrescriptionHydrated(hasSets);
-    // Drop any pending image + confirm state left over from the previous
-    // entry so the new one starts fresh.
-    if (imagePreview) {
-      URL.revokeObjectURL(imagePreview.url);
-      setImagePreview(null);
-    }
-    setConfirmingParse(false);
-    setPendingParseSource(null);
-  } else if (isPlanned && !prescriptionHydrated && hasSets) {
-    setPrescriptionHydrated(true);
-    setPrescriptionOpen(false);
-  }
+  const parseControls = useDialogParseControls({
+    entryId: entry.id,
+    isPlanned,
+    hasSets,
+    planSets,
+    onParseLoggedFreeText,
+    isParsingLogged,
+    onParseLoggedFromImage,
+    isParsingLoggedImage,
+  });
 
-  const isParsingImage = isPlanned
-    ? planSets.reparseFromImage.isPending
-    : isParsingLoggedImage;
-
-  const triggerParseText = () => {
-    const onSuccess = () => setPrescriptionOpen(false);
-    if (isPlanned) planSets.reparseFreeText.mutate(undefined, { onSuccess });
-    else onParseLoggedFreeText({ onSuccess });
-  };
-
-  const triggerParseImage = () => {
-    if (!imagePreview) return;
-    const payload = { imageBase64: imagePreview.base64, mimeType: imagePreview.mimeType };
-    const onSuccess = () => {
-      clearImagePreview();
-      setPrescriptionOpen(false);
-    };
-    if (isPlanned) planSets.reparseFromImage.mutate(payload, { onSuccess });
-    else onParseLoggedFromImage(payload, { onSuccess });
-  };
-
-  const onParseClicked = () => {
-    if (!hasSets) {
-      triggerParseText();
-      return;
-    }
-    setPendingParseSource("text");
-    setConfirmingParse(true);
-  };
-
-  const onParseImageClicked = () => {
-    if (!hasSets) {
-      triggerParseImage();
-      return;
-    }
-    setPendingParseSource("image");
-    setConfirmingParse(true);
-  };
-
-  const onCapture = (img: { previewUrl: string; base64: string; mimeType: AllowedImageMimeType }) => {
-    // Replace any prior preview the user didn't retake/parse explicitly.
-    if (imagePreview) URL.revokeObjectURL(imagePreview.url);
-    setImagePreview({ url: img.previewUrl, base64: img.base64, mimeType: img.mimeType });
-    // Surface the preview immediately — otherwise a user who just tapped
-    // the photo button from a collapsed panel wouldn't see the thumbnail.
-    setPrescriptionOpen(true);
-  };
   // Empty-state nudge: when the prescription has text but no structured rows
   // exist yet, point the user at Parse instead of Add.
   const hasUnparsedText =
@@ -757,16 +665,16 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
           mainWorkout={entry.mainWorkout}
           accessory={entry.accessory}
           notes={entry.notes}
-          open={prescriptionOpen}
-          onOpenChange={setPrescriptionOpen}
+          open={parseControls.prescriptionOpen}
+          onOpenChange={parseControls.setPrescriptionOpen}
           onSaveField={onSavePrescriptionField}
-          onParse={parseReady ? onParseClicked : undefined}
-          isParsing={isParsing}
-          onCapture={parseReady ? onCapture : undefined}
-          imagePreview={imagePreview ? { url: imagePreview.url } : null}
-          onRetakeImage={clearImagePreview}
-          onParseImage={onParseImageClicked}
-          isParsingImage={isParsingImage}
+          onParse={parseReady ? parseControls.onParseClicked : undefined}
+          isParsing={parseControls.isParsing}
+          onCapture={parseReady ? parseControls.onCapture : undefined}
+          imagePreview={parseControls.imagePreview}
+          onRetakeImage={parseControls.clearImagePreview}
+          onParseImage={parseControls.onParseImageClicked}
+          isParsingImage={parseControls.isParsingImage}
         />
 
         {isPlanned ? (
@@ -800,12 +708,15 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
           />
         )}
 
-        <AlertDialog open={confirmingParse} onOpenChange={setConfirmingParse}>
+        <AlertDialog
+          open={parseControls.confirmingParse}
+          onOpenChange={parseControls.setConfirmingParse}
+        >
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Replace existing exercises?</AlertDialogTitle>
               <AlertDialogDescription>
-                {pendingParseSource === "image"
+                {parseControls.pendingParseSource === "image"
                   ? "Parsing this photo will replace the current structured exercises for this workout. Any manual edits you've made to the rows will be lost."
                   : "Parsing the coach's text will replace the current structured exercises for this workout. Any manual edits you've made to the rows will be lost."}
               </AlertDialogDescription>
@@ -813,13 +724,7 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
               <AlertDialogAction
-                onClick={() => {
-                  setConfirmingParse(false);
-                  const source = pendingParseSource;
-                  setPendingParseSource(null);
-                  if (source === "image") triggerParseImage();
-                  else triggerParseText();
-                }}
+                onClick={parseControls.confirmReplace}
                 data-testid="coach-prescription-parse-confirm"
               >
                 Replace
