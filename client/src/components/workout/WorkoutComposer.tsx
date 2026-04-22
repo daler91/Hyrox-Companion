@@ -1,4 +1,4 @@
-import type { ExerciseName } from "@shared/schema";
+import type { AllowedImageMimeType, ExerciseName } from "@shared/schema";
 import { AlertTriangle, ChevronDown, Loader2, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
@@ -8,6 +8,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { WorkoutExerciseMode } from "@/components/workout/WorkoutExerciseMode";
 import { WorkoutTextMode } from "@/components/workout/WorkoutTextMode";
 import type { toast as toastFn } from "@/hooks/use-toast";
+import type { ParseFromImagePayload } from "@/lib/api";
 import type { CompressedImage } from "@/lib/image";
 import { cn } from "@/lib/utils";
 
@@ -51,7 +52,7 @@ interface WorkoutComposerProps {
    * lifting preview state up to LogWorkout.
    */
   readonly onParseImage?: (
-    payload: { imageBase64: string; mimeType: "image/jpeg" | "image/png" | "image/webp" },
+    payload: ParseFromImagePayload,
     opts?: { onSuccess?: () => void },
   ) => void;
   readonly isParsingImage?: boolean;
@@ -94,7 +95,7 @@ export function WorkoutComposer({
   const [imagePreview, setImagePreview] = useState<{
     url: string;
     base64: string;
-    mimeType: "image/jpeg" | "image/png" | "image/webp";
+    mimeType: AllowedImageMimeType;
   } | null>(null);
   const [panelOpen, setPanelOpen] = useState(
     () => defaultPanelOpen ?? freeText.trim().length > 0,
@@ -223,6 +224,13 @@ export function WorkoutComposer({
               onParseImage
                 ? () => {
                     if (!imagePreview) return;
+                    // Cancel any queued / in-flight text auto-parse first.
+                    // Without this, a debounced text parse from recent
+                    // freeText edits can land after the image parse and
+                    // overwrite the image-derived blocks (which don't
+                    // carry hasUserEdits, so mergeParsedWithEdits treats
+                    // them as replaceable).
+                    cancelAutoParse();
                     onParseImage(
                       {
                         imageBase64: imagePreview.base64,

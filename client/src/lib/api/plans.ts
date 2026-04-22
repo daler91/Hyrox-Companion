@@ -1,6 +1,7 @@
 import type { ExerciseSet, GeneratePlanInput, PlanDay, TrainingPlan, TrainingPlanWithDays } from "@shared/schema";
 
 import { rawRequest,typedRequest } from "./client";
+import type { ParseFromImagePayload } from "./exercises";
 import type { AddExerciseSetPayload, PatchExerciseSetPayload } from "./workouts";
 
 export const plans = {
@@ -75,10 +76,7 @@ export const plans = {
       {},
     ),
 
-  reparseDayFromImage: (
-    dayId: string,
-    payload: { imageBase64: string; mimeType: "image/jpeg" | "image/png" | "image/webp" },
-  ) =>
+  reparseDayFromImage: (dayId: string, payload: ParseFromImagePayload) =>
     typedRequest<{ exercises: unknown[]; saved: boolean; setCount: number }>(
       "POST",
       `/api/v1/plans/days/${dayId}/reparse-from-image`,

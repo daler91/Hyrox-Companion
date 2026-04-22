@@ -7,6 +7,7 @@ import { useDebouncedSetPatches } from "@/hooks/useDebouncedSetPatches";
 import {
   type AddExerciseSetPayload,
   api,
+  type ParseFromImagePayload,
   type PatchExerciseSetPayload,
   QUERY_KEYS,
 } from "@/lib/api";
@@ -190,10 +191,8 @@ export function useWorkoutDetail(workoutId: string | null) {
   // initiated (tap Photo → Parse in the dialog), so it DOES surface an
   // error toast.
   const reparseFromImage = useApiMutation({
-    mutationFn: (payload: {
-      imageBase64: string;
-      mimeType: "image/jpeg" | "image/png" | "image/webp";
-    }) => api.workouts.reparseFromImage(workoutId!, payload),
+    mutationFn: (payload: ParseFromImagePayload) =>
+      api.workouts.reparseFromImage(workoutId!, payload),
     invalidateQueries: workoutId
       ? [QUERY_KEYS.workout(workoutId), QUERY_KEYS.workoutHistory(workoutId)]
       : undefined,

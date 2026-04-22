@@ -1,6 +1,8 @@
+const JPEG_MIME = "image/jpeg" as const;
+
 export interface CompressedImage {
   readonly blob: Blob;
-  readonly mimeType: "image/jpeg";
+  readonly mimeType: typeof JPEG_MIME;
   readonly base64: string;
   readonly previewUrl: string;
   readonly width: number;
@@ -49,7 +51,7 @@ export async function compressImage(
     const blob = await new Promise<Blob>((resolve, reject) => {
       canvas.toBlob(
         (b) => (b ? resolve(b) : reject(new Error("Image encoding failed."))),
-        "image/jpeg",
+        JPEG_MIME,
         quality,
       );
     });
@@ -57,7 +59,7 @@ export async function compressImage(
     const base64 = extractBase64(dataUrl);
     return {
       blob,
-      mimeType: "image/jpeg",
+      mimeType: JPEG_MIME,
       base64,
       previewUrl: URL.createObjectURL(blob),
       width,

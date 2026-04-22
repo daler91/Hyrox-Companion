@@ -4,7 +4,7 @@ import { useState } from "react";
 
 import { useApiMutation } from "@/hooks/useApiMutation";
 import { useDebouncedSetPatches } from "@/hooks/useDebouncedSetPatches";
-import { type AddExerciseSetPayload, api, type PatchExerciseSetPayload, QUERY_KEYS } from "@/lib/api";
+import { type AddExerciseSetPayload, api, type ParseFromImagePayload, type PatchExerciseSetPayload, QUERY_KEYS } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
 
 // Tag every plan-day set mutation with this key family so useIsMutating
@@ -153,10 +153,8 @@ export function usePlanDayExercises(planDayId: string | null) {
   // from a captured image. Same replace semantics: the plan day's
   // existing structured rows are wiped before the new ones land.
   const reparseFromImage = useApiMutation({
-    mutationFn: (payload: {
-      imageBase64: string;
-      mimeType: "image/jpeg" | "image/png" | "image/webp";
-    }) => api.plans.reparseDayFromImage(planDayId!, payload),
+    mutationFn: (payload: ParseFromImagePayload) =>
+      api.plans.reparseDayFromImage(planDayId!, payload),
     invalidateQueries: planDayId ? [QUERY_KEYS.planDayExercises(planDayId)] : undefined,
     errorToast: "Couldn't parse that photo — try a clearer shot.",
   });

@@ -7,7 +7,7 @@ import { useCallback,useEffect, useRef, useState } from "react";
 
 import { createDefaultSet,type StructuredExercise } from "@/components/ExerciseInput";
 import { useToast } from "@/hooks/use-toast";
-import { api } from "@/lib/api";
+import { api, type ParseFromImagePayload } from "@/lib/api";
 
 
 interface UseWorkoutEditorOptions {
@@ -270,10 +270,7 @@ export function useParseWorkoutMutation(
   });
 }
 
-export interface ParseImagePayload {
-  readonly imageBase64: string;
-  readonly mimeType: "image/jpeg" | "image/png" | "image/webp";
-}
+export type ParseImagePayload = ParseFromImagePayload;
 
 /**
  * Parse a captured photo of a workout plan into structured blocks. Shares

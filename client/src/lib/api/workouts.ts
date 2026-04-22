@@ -7,6 +7,7 @@ import type {
 } from "@shared/schema";
 
 import { typedRequest } from "./client";
+import type { ParseFromImagePayload } from "./exercises";
 
 export interface BatchReparseResponse {
   total: number;
@@ -91,10 +92,7 @@ export const workouts = {
   reparse: (id: string) =>
     typedRequest<ReparseResponse>("POST", `/api/v1/workouts/${id}/reparse`),
 
-  reparseFromImage: (
-    id: string,
-    payload: { imageBase64: string; mimeType: "image/jpeg" | "image/png" | "image/webp" },
-  ) =>
+  reparseFromImage: (id: string, payload: ParseFromImagePayload) =>
     typedRequest<ReparseResponse>(
       "POST",
       `/api/v1/workouts/${id}/reparse-from-image`,

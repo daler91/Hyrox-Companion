@@ -1,4 +1,4 @@
-import type { ExerciseSet, TimelineEntry, WorkoutStatus } from "@shared/schema";
+import type { AllowedImageMimeType, ExerciseSet, TimelineEntry, WorkoutStatus } from "@shared/schema";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { type MutableRefObject,useEffect, useRef, useState } from "react";
 
@@ -17,6 +17,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { usePlanDayCoachNote } from "@/hooks/usePlanDayCoachNote";
 import { usePlanDayExercises } from "@/hooks/usePlanDayExercises";
 import { useWorkoutDetail } from "@/hooks/useWorkoutDetail";
+import type { ParseFromImagePayload } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 import { AthleteNoteInput } from "./AthleteNoteInput";
@@ -538,7 +539,7 @@ interface DialogBodyProps {
   readonly onParseLoggedFreeText: (opts?: { onSuccess?: () => void }) => void;
   readonly isParsingLogged: boolean;
   readonly onParseLoggedFromImage: (
-    payload: { imageBase64: string; mimeType: "image/jpeg" | "image/png" | "image/webp" },
+    payload: ParseFromImagePayload,
     opts?: { onSuccess?: () => void },
   ) => void;
   readonly isParsingLoggedImage: boolean;
@@ -644,7 +645,7 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
   const [imagePreview, setImagePreview] = useState<{
     url: string;
     base64: string;
-    mimeType: "image/jpeg" | "image/png" | "image/webp";
+    mimeType: AllowedImageMimeType;
   } | null>(null);
   const clearImagePreview = () => {
     setImagePreview((prev) => {
@@ -727,7 +728,7 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     setConfirmingParse(true);
   };
 
-  const onCapture = (img: { previewUrl: string; base64: string; mimeType: "image/jpeg" }) => {
+  const onCapture = (img: { previewUrl: string; base64: string; mimeType: AllowedImageMimeType }) => {
     // Replace any prior preview the user didn't retake/parse explicitly.
     if (imagePreview) URL.revokeObjectURL(imagePreview.url);
     setImagePreview({ url: img.previewUrl, base64: img.base64, mimeType: img.mimeType });

@@ -228,9 +228,10 @@ export const parseExercisesRequestSchema = z.object({
  * an accepted string can decode to ~7.5MB of image bytes, which is
  * comfortably above the ≤1.5MB payloads the client compresses to.
  */
-const ALLOWED_IMAGE_MIME = ["image/jpeg", "image/png", "image/webp"] as const;
+export const ALLOWED_IMAGE_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
+export type AllowedImageMimeType = (typeof ALLOWED_IMAGE_MIME_TYPES)[number];
 export const parseExercisesFromImageRequestSchema = z.object({
-  mimeType: z.enum(ALLOWED_IMAGE_MIME),
+  mimeType: z.enum(ALLOWED_IMAGE_MIME_TYPES),
   imageBase64: z.string()
     .min(1, "Image is required")
     .max(10 * 1024 * 1024, "Image must be 10MB or less"),

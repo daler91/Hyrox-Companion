@@ -1,4 +1,5 @@
 import type {
+  AllowedImageMimeType,
   CustomExercise,
   ExerciseSet,
   InsertCustomExercise,
@@ -9,7 +10,7 @@ import { typedRequest } from "./client";
 
 export interface ParseFromImagePayload {
   readonly imageBase64: string;
-  readonly mimeType: "image/jpeg" | "image/png" | "image/webp";
+  readonly mimeType: AllowedImageMimeType;
 }
 
 export const exercises = {
