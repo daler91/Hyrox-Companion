@@ -12,6 +12,7 @@ import { asyncHandler, rateLimiter, validateBody } from "../routeUtils";
 import { type AIContext, buildAIContext, type ChatInput } from "../services/aiContextService";
 import { generateTimelineAiSuggestions } from "../services/aiSuggestionService";
 import { sanitizeRagInfo } from "../services/ragRetrieval";
+import { registerSseStream } from "../sseRegistry";
 import { storage } from "../storage";
 import { getUserId } from "../types";
 
@@ -84,8 +85,12 @@ router.post("/api/v1/chat/stream", ...protectedMutationGuards, rateLimiter("chat
 
     // Bridge Express req-close → AbortController so upstream Gemini
     // generation is torn down promptly on client disconnect
-    // (CODEBASE_AUDIT.md §3).
+    // (CODEBASE_AUDIT.md §3). The same controller is registered with
+    // the SSE registry so graceful shutdown can abort every in-flight
+    // stream and let `httpServer.close()` complete without waiting on
+    // long-lived connections.
     const controller = new AbortController();
+    const unregister = registerSseStream(controller);
     req.on("close", () => controller.abort());
 
     try {
@@ -110,6 +115,8 @@ router.post("/api/v1/chat/stream", ...protectedMutationGuards, rateLimiter("chat
       (req.log || logger).error({ err: streamError }, "Stream error:");
       res.write(`data: ${JSON.stringify({ error: "Stream error" })}\n\n`);
       res.end();
+    } finally {
+      unregister();
     }
   }));
 
