@@ -2,12 +2,14 @@ import cron from "node-cron";
 
 import { runEmailCronJob } from "./emailScheduler";
 import { logger } from "./logger";
+import { queue } from "./queue";
 import type { IStorage } from "./storage";
 
 let task: ReturnType<typeof cron.schedule> | null = null;
 let idempotencyCleanupTask: ReturnType<typeof cron.schedule> | null = null;
 let aiUsageCleanupTask: ReturnType<typeof cron.schedule> | null = null;
 let staleAutoCoachTask: ReturnType<typeof cron.schedule> | null = null;
+let queueDepthTask: ReturnType<typeof cron.schedule> | null = null;
 
 // Flags older than this are considered orphaned (worker crashed mid-job).
 // 15min gives a comfortable margin above the longest expected auto-coach
@@ -96,6 +98,45 @@ export function startCron(storage: IStorage): void {
   );
   logger.info({ context: "cron" }, "Stale isAutoCoaching recovery scheduled: every 10 minutes");
 
+  // Queue-depth telemetry every 5 minutes (Suggestion-12). Emits a
+  // structured info log per queue with deferred/queued/active counts so
+  // operators can spot a backlog building up before it hurts users.
+  // A deferredCount >100 or activeCount >5 escalates to warn so alerting
+  // pipelines can pick it up. Uses queue.getQueues() introduced in
+  // pg-boss v10; tolerates absence gracefully for older versions.
+  const QUEUE_WARN_DEFERRED = 100;
+  const QUEUE_WARN_ACTIVE = 5;
+  queueDepthTask = cron.schedule(
+    "*/5 * * * *",
+    async () => {
+      try {
+        type QueueDepth = { name: string; queuedCount?: number; deferredCount?: number; activeCount?: number };
+        const queues: QueueDepth[] = await queue.getQueues();
+        for (const q of queues) {
+          const deferred = q.deferredCount ?? 0;
+          const active = q.activeCount ?? 0;
+          const queued = q.queuedCount ?? 0;
+          const backlogged = deferred > QUEUE_WARN_DEFERRED || active > QUEUE_WARN_ACTIVE;
+          const log = backlogged ? logger.warn.bind(logger) : logger.info.bind(logger);
+          log(
+            {
+              context: "queue-depth",
+              queue: q.name,
+              deferred,
+              active,
+              queued,
+            },
+            backlogged ? "pg-boss queue is backlogged" : "pg-boss queue depth",
+          );
+        }
+      } catch (err) {
+        logger.error({ context: "cron", err }, "Queue-depth telemetry failed");
+      }
+    },
+    { timezone: "Etc/UTC" },
+  );
+  logger.info({ context: "cron" }, "Queue-depth telemetry scheduled: every 5 minutes");
+
   // Run a catch-up if the server started after 09:00 UTC (e.g. Railway restart).
   // The idempotency guards in emailScheduler prevent duplicate sends.
   const currentHour = new Date().getUTCHours();
@@ -133,5 +174,9 @@ export function stopCron(): void {
   if (staleAutoCoachTask) {
     const _stop = staleAutoCoachTask.stop();
     staleAutoCoachTask = null;
+  }
+  if (queueDepthTask) {
+    const _stop = queueDepthTask.stop();
+    queueDepthTask = null;
   }
 }

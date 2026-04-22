@@ -1,8 +1,11 @@
+import { randomBytes } from "node:crypto";
+
 import { getAuth } from "@clerk/express";
 import { doubleCsrf } from "csrf-csrf";
 import type { Request, RequestHandler } from "express";
 
 import { env } from "../env";
+import { logger } from "../logger";
 
 /**
  * CSRF protection using the double-submit cookie pattern (csrf-csrf).
@@ -26,9 +29,22 @@ import { env } from "../env";
  * pre-login window (login flow itself does not hit mutating endpoints).
  */
 
-// CSRF_SECRET is required in production (see env.ts refine). In development
-// we fall back to ENCRYPTION_KEY for convenience.
-const csrfSecret = env.CSRF_SECRET ?? env.ENCRYPTION_KEY;
+// CSRF_SECRET is required in production (see env.ts refine). When it's
+// unset in dev, generate a random per-process secret instead of aliasing
+// ENCRYPTION_KEY (Suggestion-2): the two secrets are required to be
+// distinct in prod, and the dev alias made the non-prod behaviour diverge
+// from the prod invariant. A per-process random still works because the
+// CSRF cookie never needs to outlive the server process.
+function resolveCsrfSecret(): string {
+  if (env.CSRF_SECRET) return env.CSRF_SECRET;
+  const generated = randomBytes(32).toString("hex");
+  logger.warn(
+    { context: "csrf" },
+    "CSRF_SECRET not set — generated a per-process random dev secret. Set CSRF_SECRET before deploying to production.",
+  );
+  return generated;
+}
+const csrfSecret = resolveCsrfSecret();
 
 const { doubleCsrfProtection, generateCsrfToken } = doubleCsrf({
   getSecret: () => csrfSecret,
