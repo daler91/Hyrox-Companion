@@ -239,6 +239,26 @@ All mutating routes go through `protectedMutationGuards` (authentication + CSRF 
 
 The order matters: each layer is designed to short-circuit requests before they cost the application a Garmin round-trip.
 
+```mermaid
+flowchart TD
+    Req([Request hits /connect or /sync]) --> L1{"Layer 1 — Per-route limiter<br/>5 / 15min per user"}
+    L1 -- over --> R429a["429 rate_limited"]
+    L1 -- ok --> L2{"Layer 2 — Per-user mutex<br/>inFlightUsers"}
+    L2 -- overlap --> R409["409 GARMIN_BUSY"]
+    L2 -- ok --> L3{"Layer 3 — Min sync interval<br/>lastSyncedAt &lt; 5min?"}
+    L3 -- too soon --> R429b["429 GARMIN_SYNC_TOO_SOON"]
+    L3 -- ok --> L4{"Layer 4 — Prior lastError<br/>on the connection?"}
+    L4 -- yes --> R400["400 — disconnect+reconnect required"]
+    L4 -- no --> L5{"Layer 5 — Global 429 breaker<br/>blockedUntil &gt; now?"}
+    L5 -- tripped --> R503["503 GARMIN_CIRCUIT_OPEN"]
+    L5 -- ok --> L6["Layer 6 — Use cached OAuth token<br/>(no silent re-login on 401)"]
+    L6 --> Call[Call Garmin SSO / API]
+    Call --> Audit["Layer 7 — Audit log<br/>context=garmin, userId"]
+    Call -- looksLike429 --> Trip[trip circuit breaker<br/>30-min cooldown]
+    Trip --> Fail([re-throw])
+    Audit --> Ok([success])
+```
+
 | Layer | Mechanism | File location |
 |---|---|---|
 | 1. Per-route rate limiter | 5 requests per 15 minutes per authenticated user on `/connect` and `/sync` | `garminConnectLimiter`, `garminSyncLimiter` in `server/garmin.ts` |
@@ -327,6 +347,8 @@ per-type switches are nested under the master toggle and are disabled
 the settings page.
 
 ### Email Sending Pipeline
+
+For an end-to-end diagram covering the cron tick → pg-boss enqueue → per-user worker → Resend send flow (including the scoped-retry invariant and startup catch-up), see [architecture.md § 7 — Cron → Email Pipeline](architecture.md#7-cron--email-pipeline).
 
 The `sendEmail()` function in `server/email.ts`:
 

@@ -168,6 +168,50 @@ sequenceDiagram
 
 ---
 
+## 3b. RAG Ingest Pipeline
+
+Coaching materials (CSV, DOCX, PDF) are uploaded by the user, parsed to plaintext, chunked, embedded, and persisted on the **vector** pool. The read path (§4 below) queries the same `document_chunks` table that this pipeline writes.
+
+```mermaid
+sequenceDiagram
+    participant Client as React Client
+    participant Upload as POST /api/v1/coaching-materials
+    participant Parser as Parser (csv-parse / mammoth / pdfjs-dist)
+    participant Queue as pg-boss Queue
+    participant Embed as embedCoachingMaterial
+    participant Gemini as generateEmbeddings (Gemini)
+    participant Vector as document_chunks (vectorPool)
+    participant Cache as retrieval cache
+
+    Client->>Upload: POST file + title (multipart)
+    Upload->>Parser: extract plaintext for the MIME type
+    Parser-->>Upload: content (string)
+    Upload->>Upload: persist coaching_materials row (status = "pending")
+    Upload->>Queue: enqueue embed-coaching-material (idempotent)
+    Upload-->>Client: 201 Created { id, status: "pending" }
+
+    Queue->>Embed: dequeue { materialId, userId }
+    Embed->>Embed: chunkText(content, RAG_CHUNK_SIZE, RAG_CHUNK_OVERLAP)
+    Note over Embed: prepends title to each chunk for context;<br/>caps at MAX_CHUNKS_PER_MATERIAL
+
+    Embed->>Gemini: generateEmbeddings(texts)
+    Gemini-->>Embed: Float32 vectors
+
+    Embed->>Vector: transaction: delete old chunks, insert new
+    Embed->>Cache: invalidate user's retrieval cache
+    Embed->>Embed: coaching_materials.status = "ready"
+
+    Note over Queue,Embed: Uses DEFAULT_JOB_OPTIONS (retryLimit 3,<br/>exponential backoff) — handler is idempotent<br/>by materialId.
+```
+
+**Key details:**
+- **Parsers**: `csv-parse` for CSV, `mammoth` for DOCX, `pdfjs-dist` for PDF; each runs synchronously before the row is persisted so the API returns fast.
+- **Chunking**: `chunkText()` in `server/services/ragService.ts` prefers paragraph / sentence boundaries (`\n\n`, `. `) to keep semantic units intact, with `RAG_CHUNK_OVERLAP` characters bridging adjacent chunks for context continuity.
+- **Dimension awareness**: the embedding dimension is recorded per-chunk so the retrieval path (§4) can detect model upgrades and fall back to legacy full-text materials when dimensions mismatch.
+- **Idempotency**: re-enqueuing the same `materialId` replaces the existing chunks in a single transaction so the UI never observes a material in a half-embedded state.
+
+---
+
 ## 4. RAG Retrieval Decision Tree
 
 The RAG retrieval system (`server/services/ragRetrieval.ts`) determines whether to use vector search, legacy full-text materials, or neither when building coaching context.
@@ -330,7 +374,54 @@ graph TD
 
 ---
 
-## 7. Cross-References
+## 7. Cron → Email Pipeline
+
+The daily notification pipeline is split across three runtimes: `node-cron` fires at a fixed UTC time, the tick enqueues per-user jobs into pg-boss, and the queue workers call Resend. Splitting the work this way means one user's slow send cannot block the next user, and a worker crash mid-batch only loses the in-flight job (the rest stay queued).
+
+```mermaid
+flowchart LR
+    Cron["node-cron<br/>0 9 * * * UTC"] --> Run[runEmailCronJob]
+    Ext["External cron<br/>GET /api/v1/cron/emails"] -. x-cron-secret .-> Run
+
+    Run --> Scan[Iterate eligible users<br/>respects emailWeeklySummary<br/>and emailMissedReminder]
+
+    Scan --> EnqWeekly[sendJobNoRetry<br/>send-weekly-summary]
+    Scan --> EnqMissed[sendJobNoRetry<br/>send-missed-reminder]
+
+    EnqWeekly --> QW[pg-boss queue]
+    EnqMissed --> QM[pg-boss queue]
+
+    QW --> WW[send-weekly-summary worker]
+    QM --> MW[send-missed-reminder worker]
+
+    WW --> Guard1{"has summary<br/>been sent<br/>this week?"}
+    MW --> Guard2{"has reminder<br/>been sent<br/>today?"}
+
+    Guard1 -- No --> Tmpl1[emailTemplates.weeklySummary]
+    Guard2 -- No --> Tmpl2[emailTemplates.missedWorkout]
+
+    Tmpl1 --> Send[Resend.emails.send]
+    Tmpl2 --> Send
+
+    Send --> Mark[Persist &quot;sent&quot; marker<br/>lastWeeklySummaryAt /<br/>lastMissedReminderAt]
+
+    Guard1 -- Yes --> Skip([skip])
+    Guard2 -- Yes --> Skip
+
+    Startup["Server start after 09:00 UTC"] -. 30s delay .-> Run
+```
+
+**Key details:**
+- **Fixed UTC schedule**: `"0 9 * * *"` in `server/cron.ts` — daily at 09:00 UTC. Three other crons live in the same process (idempotency cleanup 03:30, AI-usage log cleanup 04:00, stale `isAutoCoaching` recovery every 10 minutes).
+- **Startup catch-up**: if the server boots after 09:00 UTC (e.g. a Railway restart), `cron.ts` schedules a one-shot catch-up run after 30 s. The per-user "sent" markers below keep this idempotent.
+- **Scoped retries**: the enqueue uses `sendJobNoRetry()` for the send legs because the final "mark as sent" happens *after* Resend returns, so a retry after a post-send DB failure would deliver a duplicate email. Upstream jobs (parse / ingest) use `sendJob()` with the default `retryLimit: 3` because their handlers are idempotent by id.
+- **External trigger**: the same `runEmailCronJob` can be invoked via `GET /api/v1/cron/emails` guarded by the `CRON_SECRET` header — useful when scheduling from Railway Cron or GitHub Actions instead of the in-process timer.
+- **Per-job timeout**: every worker is wrapped in `runWithTimeout` (55 min) so a hung Resend or Gemini call cannot leak a worker slot indefinitely.
+- See [integrations.md § Email](integrations.md#email-system-resend) for the prose walkthrough and [integrations.md § Job Queue](integrations.md#job-queue-pg-boss) for the queue-level details.
+
+---
+
+## 8. Cross-References
 
 Detailed documentation for each subsystem:
 

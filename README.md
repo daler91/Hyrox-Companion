@@ -241,6 +241,7 @@ Detailed documentation for each subsystem is available in the [`docs/`](docs/) d
 | Document | Description |
 |----------|-------------|
 | [Architecture Overview](docs/architecture.md) | End-to-end flows, service dependencies, RAG decision tree, schema pipeline |
+| [Environment Variables](docs/env-reference.md) | Curated reference: what each env var unlocks, defaults, safety invariants |
 | [Client (Frontend)](docs/client.md) | React SPA: pages, components, routing, styling, PWA, error tracking |
 | [Server (Backend)](docs/server.md) | Express API: bootstrap, middleware stack, security, logging, graceful shutdown |
 | [Database](docs/database.md) | PostgreSQL schema, Drizzle ORM, pgvector, migrations, storage layer |
@@ -282,7 +283,7 @@ At minimum, set the two **required** variables:
 - `DATABASE_URL` – PostgreSQL connection string
 - `ENCRYPTION_KEY` – 32+ char hex key (generate with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`)
 
-See `.env.example` for all available configuration options including Clerk auth, Gemini AI, Strava sync, Resend email, Sentry, and more.
+See [`.env.example`](.env.example) for the copy-template and [`docs/env-reference.md`](docs/env-reference.md) for the curated reference with per-variable context and safety invariants (Clerk auth, Gemini AI, Strava sync, Resend email, Web Push, Sentry, and more).
 
 ### 2. Installation & Database Setup
 
