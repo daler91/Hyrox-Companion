@@ -128,8 +128,8 @@ export const WorkoutTextMode = ({
           )}
           <p className="text-xs text-muted-foreground">
             {isSupported
-              ? "Use the microphone to dictate, type, or tap the camera to scan a printed / whiteboard workout."
-              : "Type your workout or tap the camera to scan a printed / whiteboard workout."}
+              ? "Type, dictate with the mic, or scan a whiteboard photo — the scan auto-fills your exercises."
+              : "Type your workout or scan a whiteboard photo — the scan auto-fills your exercises."}
           </p>
         </>
       )}
