@@ -75,8 +75,13 @@ export async function idempotencyMiddleware(req: Request, res: Response, next: N
       // the header (client/src/lib/offlineQueue.ts) ignores the response
       // body, so the stub is only a signal that the write was already
       // applied.
+      // JSON.stringify returns undefined for bare `undefined`, functions,
+      // and top-level Symbols; Buffer.byteLength would throw on those. A
+      // non-stringifiable body serialises to zero bytes from the
+      // idempotency cache's perspective, so treat it as empty rather than
+      // letting the error tank the response (Codex review of #877).
       const serialized = JSON.stringify(body);
-      const byteLength = Buffer.byteLength(serialized, "utf8");
+      const byteLength = typeof serialized === "string" ? Buffer.byteLength(serialized, "utf8") : 0;
       const oversized = byteLength > MAX_CACHED_PAYLOAD_BYTES;
       if (oversized) {
         (req.log || logger).warn(
