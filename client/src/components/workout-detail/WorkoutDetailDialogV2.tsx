@@ -20,8 +20,6 @@ import { useWorkoutDetail } from "@/hooks/useWorkoutDetail";
 import type { ParseFromImagePayload, ReparseResponse } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-import { useDialogParseControls } from "./useDialogParseControls";
-
 import { AthleteNoteInput } from "./AthleteNoteInput";
 import { CoachPrescriptionCollapsible } from "./CoachPrescriptionCollapsible";
 import { CoachTakePanel } from "./CoachTakePanel";
@@ -29,6 +27,7 @@ import { ExerciseTable } from "./ExerciseTable";
 import { HistoryPanel } from "./HistoryPanel";
 import { InDialogCoachChat } from "./InDialogCoachChat";
 import { SaveWorkoutButton } from "./SaveWorkoutButton";
+import { useDialogParseControls } from "./useDialogParseControls";
 import { WorkoutDetailHeaderV2 } from "./WorkoutDetailHeaderV2";
 import { WorkoutStatsRow } from "./WorkoutStatsRow";
 

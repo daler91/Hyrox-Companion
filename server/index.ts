@@ -313,6 +313,7 @@ app.use((req, res, next) => {
 
 // Coaching material routes accept large document content (up to 1.5M chars)
 app.use("/api/v1/coaching-materials", express.json({ limit: "2mb" }));
+app.use("/api/v1/coaching-materials", express.urlencoded({ extended: false, limit: "2mb" })); // 🛡️ Sentinel: Limit urlencoded body size to prevent DoS
 
 // Image-parse routes ship the image as a base64 string in the JSON body.
 // The schema caps base64 length at 10MB; this parser matches so oversized

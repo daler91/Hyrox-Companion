@@ -6,3 +6,7 @@
 **Vulnerability:** Express 'trust proxy' configuration was being executed conditionally and too late in the middleware chain inside `server/clerkAuth.ts`, potentially allowing IP spoofing for rate limiters, logging, and CSRF protection that executes before the app setup finishes or before the configuration actually executes.
 **Learning:** `app.set('trust proxy', ...)` must be configured synchronously right after `app = express()` so that any middleware attached afterward consistently accesses the correct real client IP and not an attacker-spoofed `X-Forwarded-For` header.
 **Prevention:** Always place global application configurations like `trust proxy` at the very top of `server/index.ts` (or equivalent entry file) instead of burying them inside auth or routing helper functions.
+## 2026-04-22 - [Express urlencoded payload limit]
+**Vulnerability:** The application was using `express.json` with a customized limit but did not have the same limit configured for `express.urlencoded`, potentially leading to Denial of Service (DoS) attacks via oversized url-encoded request payloads.
+**Learning:** `express.json` only limits JSON payloads, whereas `express.urlencoded` is required to parse and limit URL-encoded form data submissions. If one uses customized limits, both must generally be updated.
+**Prevention:** Whenever you increase the `limit` parameter for `express.json()`, consider applying a similar limit to `express.urlencoded()` to ensure all parsed incoming body types are adequately restricted from excessively large payloads.
