@@ -4,6 +4,7 @@ import React from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useCoachingMaterials,useRagStatus, useReEmbed } from "@/hooks/useCoachingMaterials";
 
 export function RagStatusCard() {
@@ -35,7 +36,7 @@ export function RagStatusCard() {
   if (ragLoading) {
     content = (
       <div className="flex items-center justify-center py-2">
-        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        <LoadingSpinner label="Loading RAG status" iconClassName="h-4 w-4" />
       </div>
     );
   } else if (ragError) {

@@ -1,6 +1,7 @@
-import { FileText, Loader2, Plus, Trash2, Upload } from "lucide-react";
+import { FileText, Plus, Trash2, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useCoachingMaterials, useDeleteCoachingMaterial } from "@/hooks/useCoachingMaterials";
 
 interface CoachingMaterialListProps {
@@ -24,7 +25,7 @@ export function CoachingMaterialList({
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-4">
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        <LoadingSpinner label="Loading coaching materials" iconClassName="h-5 w-5" />
       </div>
     );
   }
