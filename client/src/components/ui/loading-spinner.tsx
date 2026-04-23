@@ -28,7 +28,7 @@ export function LoadingSpinner({
   iconClassName = "h-8 w-8",
   className,
   assertive = false,
-}: LoadingSpinnerProps) {
+}: Readonly<LoadingSpinnerProps>) {
   return (
     <div
       role="status"
