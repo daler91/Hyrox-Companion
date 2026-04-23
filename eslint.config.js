@@ -34,7 +34,7 @@ const iconButtonNeedsLabelRule = {
       }
       if (value.type === "JSXExpressionContainer") {
         const expr = value.expression;
-        if (expr && expr.type === "Literal") {
+        if (expr?.type === "Literal") {
           return typeof expr.value === "string" && expr.value.trim() !== ""
             ? "ok"
             : "empty";
@@ -65,8 +65,8 @@ const iconButtonNeedsLabelRule = {
         );
         // Accept if any label attr is statically non-empty OR dynamic.
         // Report only when every label attr is statically empty / missing.
-        const verdicts = labelAttrs.map((a) => classifyLabelValue(a.value));
-        const hasAcceptableLabel = verdicts.includes("ok") || verdicts.includes("dynamic");
+        const verdicts = new Set(labelAttrs.map((a) => classifyLabelValue(a.value)));
+        const hasAcceptableLabel = verdicts.has("ok") || verdicts.has("dynamic");
         if (!hasAcceptableLabel) {
           context.report({
             node,
