@@ -70,7 +70,18 @@ const envSchema = z.object({
   // has ~128 bits of entropy; these patterns have effectively none.
   message: "❌ FATAL: ENCRYPTION_KEY is a known weak/test placeholder; generate a real 32-byte random key",
   path: ["ENCRYPTION_KEY"],
-});
+}).refine(
+  // Suggestion-10 — catch the most common prod misconfiguration: a deploy
+  // that provisioned live Clerk keys but forgot NODE_ENV=production.
+  // Without this, all the env refines above silently don't apply,
+  // ALLOW_DEV_AUTH_BYPASS would become settable, Sentry trace-sample
+  // stays at 100%, and the CSP/secure-cookie gates loosen.
+  (data) => !(data.CLERK_PUBLISHABLE_KEY?.startsWith("pk_live_") && data.NODE_ENV !== "production"),
+  {
+    message: "❌ FATAL: pk_live_ Clerk keys detected but NODE_ENV is not 'production' — set NODE_ENV=production on this deploy",
+    path: ["NODE_ENV"],
+  },
+);
 
 const parsed = envSchema.safeParse(process.env);
 
