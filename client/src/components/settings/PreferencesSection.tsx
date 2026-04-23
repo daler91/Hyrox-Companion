@@ -42,7 +42,7 @@ export function PreferencesSection({
     <>
       <Card>
         <CardHeader>
-          <CardTitle>Units</CardTitle>
+          <CardTitle as="h2">Units</CardTitle>
           <CardDescription>Choose your preferred measurement units</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -81,7 +81,7 @@ export function PreferencesSection({
 
       <Card>
         <CardHeader>
-          <CardTitle>Training Goals</CardTitle>
+          <CardTitle as="h2">Training Goals</CardTitle>
           <CardDescription>Set your weekly training targets</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -108,7 +108,7 @@ export function PreferencesSection({
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle as="h2" className="flex items-center gap-2">
             <Mail className="h-5 w-5 text-primary" />
             Email Notifications
           </CardTitle>
@@ -178,7 +178,7 @@ export function PreferencesSection({
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle as="h2" className="flex items-center gap-2">
             <BrainCircuit className="h-5 w-5 text-primary" />
             AI Coach
           </CardTitle>

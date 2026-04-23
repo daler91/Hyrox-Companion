@@ -29,11 +29,21 @@ const CardHeader = React.forwardRef<
 ));
 CardHeader.displayName = "CardHeader"
 
+type CardTitleProps = React.HTMLAttributes<HTMLHeadingElement> & {
+  /**
+   * Heading level. Defaults to `"h3"` so card titles contribute to the
+   * document outline for screen-reader navigation (WCAG 1.3.1). Override
+   * when the card is a top-level section of a page that doesn't already
+   * have its own h1/h2 — e.g. `as="h2"`.
+   */
+  as?: "h2" | "h3" | "h4" | "h5" | "h6"
+}
+
 const CardTitle = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => (
-  <div
+  HTMLHeadingElement,
+  CardTitleProps
+>(({ className, as: Comp = "h3", ...props }, ref) => (
+  <Comp
     ref={ref}
     className={cn(
       "text-2xl font-semibold leading-none tracking-tight",

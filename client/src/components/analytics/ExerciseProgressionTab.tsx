@@ -56,7 +56,7 @@ export function ExerciseProgressionTab({ dateParams }: ExerciseProgressionTabPro
       <CardHeader>
         <div className="flex items-center gap-2">
           <TrendingUp className="h-5 w-5 text-primary" />
-          <CardTitle>Exercise Progression</CardTitle>
+          <CardTitle as="h2">Exercise Progression</CardTitle>
         </div>
         <CardDescription>
           Select an exercise to view its detailed history and progression

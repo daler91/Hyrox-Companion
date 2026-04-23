@@ -27,7 +27,7 @@ export function CoachingSection() {
     <>
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle as="h2" className="flex items-center gap-2">
             <BookOpen className="h-5 w-5" />
             Coaching Knowledge
           </CardTitle>

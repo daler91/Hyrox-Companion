@@ -92,7 +92,7 @@ export function CategoryBreakdownTab({ dateParams }: CategoryBreakdownTabProps) 
       {pieData.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Training Distribution</CardTitle>
+            <CardTitle as="h2" className="text-base">Training Distribution</CardTitle>
             <CardDescription>Workout sessions by exercise category</CardDescription>
           </CardHeader>
           <CardContent>
@@ -129,7 +129,7 @@ export function CategoryBreakdownTab({ dateParams }: CategoryBreakdownTabProps) 
       {/* Functional Station Coverage */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Functional Station Coverage</CardTitle>
+          <CardTitle as="h2" className="text-base">Functional Station Coverage</CardTitle>
           <CardDescription>Track when you last trained each functional station (incl. hyrox stations)</CardDescription>
         </CardHeader>
         <CardContent>

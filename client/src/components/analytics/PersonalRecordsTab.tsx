@@ -95,7 +95,7 @@ export function PersonalRecordsTab({ dateParams }: PersonalRecordsTabProps) {
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2">
             <Trophy className="h-5 w-5 text-yellow-500" />
-            <CardTitle>Personal Records</CardTitle>
+            <CardTitle as="h2">Personal Records</CardTitle>
           </div>
           <div className="flex items-center gap-2">
             <Select value={categoryFilter} onValueChange={setCategoryFilter}>

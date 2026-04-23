@@ -63,7 +63,7 @@ export function DataToolsSection() {
     <>
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle as="h2" className="flex items-center gap-2">
             <Sparkles className="h-5 w-5" />
             Structure Old Workouts
           </CardTitle>
@@ -143,7 +143,7 @@ export function DataToolsSection() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle as="h2" className="flex items-center gap-2">
             <Download className="h-5 w-5" />
             Export Data
           </CardTitle>

@@ -23,7 +23,7 @@ export function PushNotificationSection() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle as="h2" className="flex items-center gap-2">
             <BellOff className="h-5 w-5 text-muted-foreground" />
             Push Notifications
           </CardTitle>
@@ -71,7 +71,7 @@ export function PushNotificationSection() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+        <CardTitle as="h2" className="flex items-center gap-2">
           <Bell className="h-5 w-5 text-primary" />
           Push Notifications
         </CardTitle>

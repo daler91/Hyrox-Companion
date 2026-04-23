@@ -47,7 +47,7 @@ export function StravaSection({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+        <CardTitle as="h2" className="flex items-center gap-2">
           <Link2 className="h-5 w-5" />
           Integrations
         </CardTitle>
