@@ -4,6 +4,85 @@ import eslintConfigPrettier from "eslint-config-prettier";
 import reactHooks from "eslint-plugin-react-hooks";
 import simpleImportSort from "eslint-plugin-simple-import-sort";
 
+// Local a11y rule: `<Button size="icon" | "icon-touch">` renders an icon-only
+// control. Without an `aria-label` (or `aria-labelledby`), screen readers
+// have no accessible name for it. WCAG 4.1.2 Name, Role, Value.
+//
+// Note: the rule intentionally only checks the string-literal shape. A
+// dynamic `size={someVar}` falls through and is assumed intentional.
+// Empty / whitespace-only static labels (e.g. `aria-label=""`) count as
+// missing — they exist as attributes but carry no accessible name.
+const iconButtonNeedsLabelRule = {
+  meta: {
+    type: "problem",
+    docs: { description: "Icon-only Button must have an aria-label" },
+    schema: [],
+    messages: {
+      missingLabel:
+        "Icon-only <Button size=\"{{size}}\"> must have a non-empty aria-label (or aria-labelledby) so screen readers have an accessible name.",
+    },
+  },
+  create(context) {
+    // Returns one of: "ok" (real value present), "empty" (statically-empty
+    // string literal), or "dynamic" (JSX expression — we can't verify).
+    const classifyLabelValue = (value) => {
+      if (!value) return "empty"; // `<Button aria-label>` — no value at all
+      if (value.type === "Literal") {
+        return typeof value.value === "string" && value.value.trim() !== ""
+          ? "ok"
+          : "empty";
+      }
+      if (value.type === "JSXExpressionContainer") {
+        const expr = value.expression;
+        if (expr?.type === "Literal") {
+          return typeof expr.value === "string" && expr.value.trim() !== ""
+            ? "ok"
+            : "empty";
+        }
+        return "dynamic";
+      }
+      return "dynamic";
+    };
+
+    return {
+      JSXOpeningElement(node) {
+        if (node.name.type !== "JSXIdentifier" || node.name.name !== "Button") return;
+        const attrs = node.attributes;
+        const sizeAttr = attrs.find(
+          (a) => a.type === "JSXAttribute" && a.name?.name === "size",
+        );
+        if (!sizeAttr || sizeAttr.value?.type !== "Literal") return;
+        const sizeValue = sizeAttr.value.value;
+        if (sizeValue !== "icon" && sizeValue !== "icon-touch") return;
+        // Allow spread attributes (e.g. {...props}) to short-circuit the
+        // check — we can't statically verify those carry a label.
+        const hasSpread = attrs.some((a) => a.type === "JSXSpreadAttribute");
+        if (hasSpread) return;
+        const labelAttrs = attrs.filter(
+          (a) =>
+            a.type === "JSXAttribute" &&
+            (a.name?.name === "aria-label" || a.name?.name === "aria-labelledby"),
+        );
+        // Accept if any label attr is statically non-empty OR dynamic.
+        // Report only when every label attr is statically empty / missing.
+        const verdicts = new Set(labelAttrs.map((a) => classifyLabelValue(a.value)));
+        const hasAcceptableLabel = verdicts.has("ok") || verdicts.has("dynamic");
+        if (!hasAcceptableLabel) {
+          context.report({
+            node,
+            messageId: "missingLabel",
+            data: { size: sizeValue },
+          });
+        }
+      },
+    };
+  },
+};
+
+const localA11yPlugin = {
+  rules: { "icon-button-needs-label": iconButtonNeedsLabelRule },
+};
+
 export default tseslint.config(
   // Global ignores
   {
@@ -86,10 +165,12 @@ export default tseslint.config(
     files: ["client/**/*.{ts,tsx}"],
     plugins: {
       "react-hooks": reactHooks,
+      "local-a11y": localA11yPlugin,
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
       "no-console": ["warn", { allow: ["warn", "error"] }],
+      "local-a11y/icon-button-needs-label": "error",
     },
   },
 

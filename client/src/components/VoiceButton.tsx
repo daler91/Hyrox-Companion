@@ -1,4 +1,5 @@
 import { Mic, MicOff } from "lucide-react";
+import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -14,6 +15,23 @@ interface VoiceButtonProps {
 }
 
 export function VoiceButton({ isListening, isSupported, onClick, size = "icon", className, "data-testid": dataTestId }: Readonly<VoiceButtonProps>) {
+  // Derive the live-region announcement from an actual transition (not
+  // just the current state) so SRs don't hear "Recording stopped." every
+  // time VoiceButton mounts with isListening=false.
+  //
+  // This uses the React-sanctioned "store info from previous render"
+  // pattern (react.dev/reference/react/useState#storing-information-from-
+  // previous-renders): seed prevListening from the initial prop so the
+  // first render sees no transition, then update both snapshots when the
+  // prop actually changes. setState-during-render is allowed here because
+  // it's strictly conditional and terminates.
+  const [announcement, setAnnouncement] = useState("");
+  const [prevListening, setPrevListening] = useState(isListening);
+  if (isListening !== prevListening) {
+    setPrevListening(isListening);
+    setAnnouncement(isListening ? "Recording. Speak now." : "Recording stopped.");
+  }
+
   if (!isSupported) return null;
 
   return (
@@ -45,6 +63,14 @@ export function VoiceButton({ isListening, isSupported, onClick, size = "icon", 
           <p>{isListening ? "Stop recording" : "Use voice input — your browser will ask for mic permission"}</p>
         </TooltipContent>
       </Tooltip>
+      {/* SR-only live region — announces state transitions so users who
+          can't see the pulsing button know when recording starts/stops,
+          including auto-stops from timeout/error paths. Empty on mount;
+          only populated after the first real start → stop transition.
+          WCAG 4.1.3. */}
+      <span role="status" aria-live="polite" className="sr-only">
+        {announcement}
+      </span>
     </TooltipProvider>
   );
 }

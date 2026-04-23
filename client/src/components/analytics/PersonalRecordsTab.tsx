@@ -130,12 +130,12 @@ export function PersonalRecordsTab({ dateParams }: PersonalRecordsTabProps) {
                 <p className="text-muted-foreground text-sm">
                   No personal records yet. Log workouts with structured exercise data to see your PRs here.
                 </p>
-                <Link href="/log">
-                  <Button variant="outline" data-testid="button-log-workout-from-analytics">
+                <Button variant="outline" asChild>
+                  <Link href="/log" data-testid="button-log-workout-from-analytics">
                     <Dumbbell className="h-4 w-4 mr-2" />
                     Log a Workout
-                  </Button>
-                </Link>
+                  </Link>
+                </Button>
               </div>
             );
           }

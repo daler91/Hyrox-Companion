@@ -1,9 +1,11 @@
 import type { TrainingOverview } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, PieChart as PieChartIcon } from "lucide-react";
+import { Dumbbell, Loader2, PieChart as PieChartIcon } from "lucide-react";
 import { useMemo } from "react";
 import { Cell, Legend,Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import { Link } from "wouter";
 
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription,CardHeader, CardTitle } from "@/components/ui/card";
 import { api } from "@/lib/api";
 import { CATEGORY_COLORS } from "@/lib/categoryColors";
@@ -77,10 +79,18 @@ export function CategoryBreakdownTab({ dateParams }: CategoryBreakdownTabProps) 
 
   if (!overview || (pieData.length === 0 && overview.stationCoverage.every((s) => s.lastTrained === null))) {
     return (
-      <div className="flex items-center justify-center py-12 text-center text-muted-foreground bg-muted/20 rounded-lg border border-dashed">
-        <div>
-          <PieChartIcon className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
-          <p>No exercise data yet. Log workouts to see your training breakdown.</p>
+      <div className="flex items-center justify-center py-12 text-center bg-muted/20 rounded-lg border border-dashed">
+        <div className="space-y-3">
+          <PieChartIcon className="h-10 w-10 mx-auto text-muted-foreground/40" />
+          <p className="text-sm text-muted-foreground">
+            Your training mix and station coverage appear here once you&apos;ve logged a handful of workouts across different categories.
+          </p>
+          <Button variant="outline" asChild>
+            <Link href="/log" data-testid="button-log-workout-from-breakdown">
+              <Dumbbell className="h-4 w-4 mr-2" />
+              Log a Workout
+            </Link>
+          </Button>
         </div>
       </div>
     );
