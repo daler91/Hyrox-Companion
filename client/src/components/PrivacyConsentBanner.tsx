@@ -1,10 +1,11 @@
 import { X } from "lucide-react";
-import { useState } from "react";
+import { useEffect,useState } from "react";
 import { Link } from "wouter";
 
 import { Button } from "@/components/ui/button";
 
 const CONSENT_STORAGE_KEY = "fitai-privacy-consent-v1";
+const CONSENT_CHANGED_EVENT = "fitai:privacy-consent-changed";
 
 function hasStoredConsent(): boolean {
   if (globalThis.window === undefined) return true;
@@ -20,6 +21,10 @@ function hasStoredConsent(): boolean {
 function recordConsent(): void {
   try {
     globalThis.localStorage.setItem(CONSENT_STORAGE_KEY, String(Date.now()));
+    // Notify same-tab listeners — the native `storage` event only fires
+    // across tabs, so we need a custom channel for our own listener below
+    // (and for tests that set the key imperatively after mount).
+    globalThis.window.dispatchEvent(new Event(CONSENT_CHANGED_EVENT));
   } catch {
     // Storage unavailable; nothing to do — user will see the banner again
     // next session but that's acceptable.
@@ -38,6 +43,26 @@ export function PrivacyConsentBanner() {
   // a cascading setState inside useEffect. hasStoredConsent() already guards
   // against missing window / denied storage.
   const [visible, setVisible] = useState<boolean>(() => !hasStoredConsent());
+
+  // Self-hide if consent is recorded AFTER mount (our own dismiss button,
+  // another tab, or a Cypress command that seeds the key post-visit). The
+  // lazy initializer snapshots localStorage once, so without this listener
+  // the banner sticks around and can overlay fixed-bottom interactive UI.
+  useEffect(() => {
+    if (globalThis.window === undefined) return;
+    const check = () => {
+      if (hasStoredConsent()) setVisible(false);
+    };
+    // Re-check on mount in case the key was set between render-time snapshot
+    // and effect commit (covers the Cypress `window:before:load` race).
+    check();
+    globalThis.window.addEventListener(CONSENT_CHANGED_EVENT, check);
+    globalThis.window.addEventListener("storage", check);
+    return () => {
+      globalThis.window.removeEventListener(CONSENT_CHANGED_EVENT, check);
+      globalThis.window.removeEventListener("storage", check);
+    };
+  }, []);
 
   if (!visible) return null;
 

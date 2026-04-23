@@ -256,10 +256,17 @@
   }
 
   /* Keep keyboard-focused/scrolled-to elements clear of the sticky mobile header
-   * (h-14 = 3.5rem). Applied at the scroll container so anchor links and
-   * focus-bring-into-view both respect it. */
-  main {
-    scroll-padding-top: 4rem;
+   * (h-14 = 3.5rem). Scoped to mobile widths because:
+   *   - the mobile sticky header only renders below `md` (App.tsx h-14 md:hidden)
+   *   - at desktop widths an unconditional scroll-padding interacts with
+   *     Cypress/browser auto-scroll targeting buttons inside sticky columns,
+   *     which can land the element at a y-offset that overlaps upstream
+   *     content (e.g. the page WorkoutHeader paragraph), causing false-
+   *     positive "element is covered" Cypress failures. */
+  @media (max-width: 767px) {
+    main {
+      scroll-padding-top: 4rem;
+    }
   }
 }
 
