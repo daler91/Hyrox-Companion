@@ -30,6 +30,11 @@ const buttonVariants = cva(
         sm: "min-h-8 rounded-md px-3 text-xs",
         lg: "min-h-10 rounded-md px-8",
         icon: "h-9 w-9",
+        // 44x44 CSS px target for touch (WCAG 2.5.5 / Apple HIG).
+        // Use on icon-only controls in dense mobile surfaces (sticky header,
+        // RPE compact, etc.). Pair with `md:h-9 md:w-9` if you want a denser
+        // pointer-only desktop sibling.
+        "icon-touch": "h-11 w-11",
       },
     },
     defaultVariants: {

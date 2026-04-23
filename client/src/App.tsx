@@ -1,6 +1,5 @@
 import { ClerkProvider, Show } from "@clerk/react";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
 import { lazy, Suspense } from "react";
 import { Route,Switch } from "wouter";
 
@@ -10,6 +9,7 @@ import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { FeatureErrorBoundaryWrapper } from "@/components/FeatureErrorBoundaryWrapper";
 import { PrivacyConsentBanner } from "@/components/PrivacyConsentBanner";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { OfflineIndicator } from "@/components/ui/OfflineIndicator";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/toaster";
@@ -57,7 +57,7 @@ function DevModeBanner() {
 function LazyFallback() {
   return (
     <div className="flex items-center justify-center h-full">
-      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <LoadingSpinner />
     </div>
   );
 }
@@ -117,7 +117,9 @@ function AuthenticatedLayout() {
             <SidebarTrigger data-testid="button-sidebar-toggle" />
             <Logo size={24} />
           </header>
-          <main id="main-content" className="flex-1 overflow-auto">
+          {/* tabIndex=-1 so the skip-to-content link can move focus here.
+              Without it, browsers move scroll but not focus, which defeats AT users. */}
+          <main id="main-content" tabIndex={-1} className="flex-1 overflow-auto focus:outline-none">
             <Breadcrumbs />
             <AuthenticatedRouter />
           </main>

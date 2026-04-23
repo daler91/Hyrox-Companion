@@ -82,7 +82,10 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
       onKeyDown={handleCardKeyDown}
       role="button"
       tabIndex={0}
-      aria-label={`${entry.focus || "Workout"} on ${entry.date}, ${entry.status}`}
+      // Label uses only the visible focus + status badge text (date sits in
+      // the parent date-group heading) so the accessible name matches what
+      // the user can read on screen — WCAG 2.5.3 Label in Name.
+      aria-label={`${entry.focus || "Workout"}, ${entry.status}`}
       data-testid={`card-timeline-entry-${entry.id}`}
     >
       {isTargetedByCoach && (
