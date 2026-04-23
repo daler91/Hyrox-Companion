@@ -1,3 +1,4 @@
+import { getAuth } from "@clerk/express";
 import { chatRequestSchema, type InsertChatMessage,insertChatMessageSchema, parseExercisesFromImageRequestSchema, parseExercisesRequestSchema } from "@shared/schema";
 import { type Request as ExpressRequest, type Response,Router } from "express";
 import { z } from "zod";
@@ -74,6 +75,41 @@ router.post("/api/v1/chat", ...protectedMutationGuards, rateLimiter("chat", 10),
     res.json({ response, ragInfo: sanitizeRagInfo(aiContext.ragInfo) });
   }));
 
+// Belt-and-suspenders ceiling for SSE stream duration. Both caps fire
+// via controller.abort() so the existing drain/finally path runs cleanly:
+//   - SSE_MAX_DURATION_MS: hard wall-clock cap, applies even when the JWT
+//     has hours of headroom (prevents runaway Gemini generation on a
+//     pathologically slow prompt).
+//   - JWT `exp` minus a small margin: aborts before the Clerk session
+//     actually expires so responses can't persist against a
+//     now-invalid session (Warning-12).
+const SSE_MAX_DURATION_MS = 5 * 60 * 1000;
+const SSE_EXPIRY_MARGIN_MS = 5_000;
+
+// Exported for unit tests — no external consumer should rely on this.
+export function computeSseDeadlineMs(req: ExpressRequest): number {
+  const hardCap = Date.now() + SSE_MAX_DURATION_MS;
+  try {
+    const auth = getAuth(req);
+    const expSec = auth?.sessionClaims?.exp;
+    if (typeof expSec === "number" && expSec > 0) {
+      // The JWT floor overrides the hard cap even when it's already in
+      // the past. A token that expires inside the 5s margin (or was
+      // mid-stream when the user logged out) should abort the stream
+      // immediately, not fall back to a 5-minute cap — otherwise the
+      // stated "no persistence under an invalid session" invariant
+      // silently breaks (Codex review of #877). Clamp to `now` so
+      // setTimeout fires on the next tick.
+      const expMs = expSec * 1000 - SSE_EXPIRY_MARGIN_MS;
+      return Math.min(hardCap, Math.max(expMs, Date.now()));
+    }
+  } catch {
+    // Dev bypass / test harness won't expose sessionClaims — fall back
+    // to the hard cap, which is always safe.
+  }
+  return hardCap;
+}
+
 router.post("/api/v1/chat/stream", ...protectedMutationGuards, rateLimiter("chat", 10), aiConsentCheck, aiBudgetCheck, validateBody(chatRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof chatRequestSchema>>, res: Response) => {
     const userId = getUserId(req);
     const { input, aiContext } = await prepareChatContext(req);
@@ -92,6 +128,16 @@ router.post("/api/v1/chat/stream", ...protectedMutationGuards, rateLimiter("chat
     const controller = new AbortController();
     const unregister = registerSseStream(controller);
     req.on("close", () => controller.abort());
+
+    // Auto-abort when the stream exceeds its deadline (hard cap OR Clerk
+    // session expiry, whichever comes first). unref() so the timer
+    // doesn't block process exit on an otherwise-idle server.
+    const deadlineMs = computeSseDeadlineMs(req);
+    const deadlineTimer = setTimeout(
+      () => controller.abort(),
+      Math.max(0, deadlineMs - Date.now()),
+    );
+    deadlineTimer.unref();
 
     try {
       res.write(`data: ${JSON.stringify({ ragInfo: sanitizeRagInfo(aiContext.ragInfo) })}\n\n`);
@@ -116,6 +162,7 @@ router.post("/api/v1/chat/stream", ...protectedMutationGuards, rateLimiter("chat
       res.write(`data: ${JSON.stringify({ error: "Stream error" })}\n\n`);
       res.end();
     } finally {
+      clearTimeout(deadlineTimer);
       unregister();
     }
   }));

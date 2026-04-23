@@ -13,7 +13,9 @@
       "Bash(mkdir -p /root/.claude/plans)",
       "Read(//root/.claude/plans/**)",
       "mcp__c588a2f1-0000-4fda-abb0-7cbd9381f209__resolve-library-id",
-      "mcp__c588a2f1-0000-4fda-abb0-7cbd9381f209__query-docs"
+      "mcp__c588a2f1-0000-4fda-abb0-7cbd9381f209__query-docs",
+      "Bash(rm /home/user/Hyrox-Companion/.git/index.lock)",
+      "Bash(git -C /home/user/Hyrox-Companion status)"
     ]
   }
 }
