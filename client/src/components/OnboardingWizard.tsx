@@ -114,7 +114,13 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
         onPointerDownOutside={(e) => e.preventDefault()}
       >
         <DialogHeader>
-          <DialogTitle className="text-xl">{TITLES[step]}</DialogTitle>
+          <DialogTitle className="text-xl">
+            {/* sr-only prefix so screen readers announce step context when
+                the dialog opens — the visible "Step X of Y" progress is
+                rendered separately below for sighted users. WCAG 1.3.1. */}
+            <span className="sr-only">Step {idx + 1} of {total}, </span>
+            {TITLES[step]}
+          </DialogTitle>
           <DialogDescription>{DESCS[step]}</DialogDescription>
         </DialogHeader>
 

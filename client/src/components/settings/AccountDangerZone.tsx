@@ -49,7 +49,7 @@ export function AccountDangerZone() {
   return (
     <Card className="border-destructive/50">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-destructive">
+        <CardTitle as="h2" className="flex items-center gap-2 text-destructive">
           <AlertTriangle className="h-5 w-5" aria-hidden="true" />
           Danger Zone
         </CardTitle>

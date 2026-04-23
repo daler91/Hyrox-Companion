@@ -47,7 +47,10 @@ function DevModeBanner() {
   return (
     <div
       data-testid="banner-dev-mode"
-      className="bg-yellow-500 text-black text-center text-xs py-1 font-semibold z-50 relative"
+      // amber-400 on black passes 4.5:1 cleanly (~10:1); yellow-500 + text-xs
+      // was marginal. Only renders in dev preview so visual changes are
+      // invisible to end users, but keeps parity for screenshots / QA.
+      className="bg-amber-400 text-black text-center text-sm py-1 font-semibold z-50 relative"
     >
       DEV MODE — Auth bypass active (Clerk skipped)
     </div>

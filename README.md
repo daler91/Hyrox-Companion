@@ -364,6 +364,23 @@ Every push and pull request triggers automated pipelines via GitHub Actions:
 
 ---
 
+## ♿ Accessibility
+
+We target **WCAG 2.1 Level AA** conformance. The app is built on Radix UI primitives for robust focus management, supports keyboard-only navigation across every page, respects `prefers-reduced-motion`, and ships with automated `jest-axe` checks on interactive components.
+
+**Supported assistive tech** (CI-validated via axe; manual spot-checks per release):
+
+| Screen reader | Browser |
+|---|---|
+| VoiceOver | Safari (macOS / iOS) |
+| NVDA | Firefox (Windows) |
+| JAWS | Chrome (Windows) |
+| TalkBack | Chrome (Android) |
+
+**Report an issue:** open a GitHub issue with the `accessibility` label including the page, assistive tech + browser version, and the expected vs. actual behaviour.
+
+---
+
 ## 🤝 Contributing
 
 Contributions make the open-source community an amazing place to learn, inspire, and create. Any contributions to HyroxTracker are **greatly appreciated**.

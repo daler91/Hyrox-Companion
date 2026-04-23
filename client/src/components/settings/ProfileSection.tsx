@@ -9,7 +9,7 @@ export function ProfileSection({ userName }: Readonly<ProfileSectionProps>) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Profile</CardTitle>
+        <CardTitle as="h2">Profile</CardTitle>
         <CardDescription>Your personal information</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
