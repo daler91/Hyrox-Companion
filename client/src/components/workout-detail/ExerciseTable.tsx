@@ -1,6 +1,6 @@
 import { EXERCISE_DEFINITIONS, type ExerciseName, type ExerciseSet } from "@shared/schema";
 import { ChevronDown, MoreVertical, Plus, Repeat, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { type FieldKey, getFields } from "@/components/exercise-row/fieldMeta";
 import {
@@ -31,7 +31,7 @@ import { categoryColor } from "@/lib/categoryColors";
 import { getExerciseLabel, type GroupedExercise,groupExerciseSets } from "@/lib/exerciseUtils";
 import { cn } from "@/lib/utils";
 
-import { SaveFlashBadge, type SaveState, SaveStatePill } from "./SaveStatePill";
+import { type SaveState, SaveStatePill } from "./SaveStatePill";
 
 const AGG_DEBOUNCE_MS = 350;
 // Debounce window for set-count changes. Longer than cell writes so a
@@ -147,28 +147,6 @@ export function ExerciseTable({
     });
   }, []);
 
-  // Track the timestamp of the most recent successful mutation per row so
-  // GroupRow can flash its own "Saved" badge — per-row feedback is the only
-  // way a user knows *which* cell just persisted when several are edited in
-  // quick succession. Keyed on the first set's id, matching `expandedKey`.
-  const [savedAtByRow, setSavedAtByRow] = useState<Record<string, number>>({});
-  const markRowSaved = useCallback((rowKey: string | undefined) => {
-    if (!rowKey) return;
-    setSavedAtByRow((prev) => ({ ...prev, [rowKey]: Date.now() }));
-  }, []);
-
-  const pickRowKeyForSet = useCallback(
-    (setId: string): string | undefined => {
-      for (const g of groups) {
-        const first = g.sets[0];
-        if (!first) continue;
-        if (g.sets.some((s) => s.id === setId)) return first.id;
-      }
-      return undefined;
-    },
-    [groups],
-  );
-
   const handlePickFromCatalog = (name: ExerciseName) => {
     const def = EXERCISE_DEFINITIONS[name];
     onAddSet({
@@ -233,24 +211,15 @@ export function ExerciseTable({
             return (
               <GroupRow
                 key={rowKey}
+                rowKey={rowKey}
                 group={group}
                 weightUnit={weightUnit}
                 distanceUnit={distanceUnit}
                 isExpanded={isExpanded}
-                rowSavedAt={savedAtByRow[rowKey] ?? null}
-                onToggle={() => toggleExpanded(rowKey)}
-                onUpdateSet={(setId, data) => {
-                  onUpdateSet(setId, data);
-                  markRowSaved(pickRowKeyForSet(setId) ?? rowKey);
-                }}
-                onAddSet={(data) => {
-                  onAddSet(data);
-                  markRowSaved(rowKey);
-                }}
-                onDeleteSet={(setId) => {
-                  onDeleteSet(setId);
-                  markRowSaved(pickRowKeyForSet(setId) ?? rowKey);
-                }}
+                onToggle={toggleExpanded}
+                onUpdateSet={onUpdateSet}
+                onAddSet={onAddSet}
+                onDeleteSet={onDeleteSet}
               />
             );
           })}
@@ -386,29 +355,29 @@ function EmptyExerciseState({
 }
 
 interface GroupRowProps {
+  readonly rowKey: string;
   readonly group: GroupedExercise;
   readonly weightUnit: "kg" | "lb";
   readonly distanceUnit: "km" | "miles";
   readonly isExpanded: boolean;
-  /** Epoch-ms of the latest successful mutation targeting this row, or null. */
-  readonly rowSavedAt: number | null;
-  readonly onToggle: () => void;
+  readonly onToggle: (rowKey: string) => void;
   readonly onUpdateSet: (setId: string, data: PatchExerciseSetPayload) => void;
   readonly onAddSet: (data: AddExerciseSetPayload) => void;
   readonly onDeleteSet: (setId: string) => void;
 }
 
-function GroupRow({
+const GroupRow = memo(function GroupRow({
+  rowKey,
   group,
   weightUnit,
   distanceUnit,
   isExpanded,
-  rowSavedAt,
   onToggle,
   onUpdateSet,
   onAddSet,
   onDeleteSet,
 }: GroupRowProps) {
+  const handleToggle = useCallback(() => onToggle(rowKey), [onToggle, rowKey]);
   const label = getExerciseLabel(group.exerciseName, group.customLabel);
   const color = categoryColor(group.category);
   const lowConfidence = typeof group.confidence === "number" && group.confidence < 60;
@@ -567,9 +536,6 @@ function GroupRow({
           >
             {label}
           </span>
-          {rowSavedAt != null && (
-            <SaveFlashBadge key={rowSavedAt} testId="exercise-row-saved-mobile" />
-          )}
           <Button
             type="button"
             variant="ghost"
@@ -577,7 +543,7 @@ function GroupRow({
             className="size-8 text-muted-foreground"
             aria-label={isExpanded ? `Collapse ${label}` : `Expand ${label}`}
             aria-expanded={isExpanded}
-            onClick={onToggle}
+            onClick={handleToggle}
           >
             <ChevronDown
               className={cn("size-4 transition-transform", isExpanded && "rotate-180")}
@@ -612,7 +578,7 @@ function GroupRow({
         {!isExpanded && (
           <button
             type="button"
-            onClick={onToggle}
+            onClick={handleToggle}
             aria-label={`Edit ${label}: ${prescription.aria}`}
             className="flex w-full items-center gap-1.5 px-3 pb-2 pl-[22px] text-left text-xs text-muted-foreground"
           >
@@ -626,7 +592,6 @@ function GroupRow({
           label={label}
           color={color}
           lowConfidence={lowConfidence}
-          rowSavedAt={rowSavedAt}
         />
 
         <AggregateCell
@@ -642,7 +607,7 @@ function GroupRow({
           ariaLabel={`${metric.label} for ${label}`}
           suffix={metric.suffix}
           varies={metric.varies}
-          onExpandForVariable={onToggle}
+          onExpandForVariable={handleToggle}
           onChange={(next) => debouncedFanout({ [metric.field]: next } as PatchExerciseSetPayload)}
         />
 
@@ -652,7 +617,7 @@ function GroupRow({
             ariaLabel={`Load for ${label}`}
             suffix={weightUnit}
             varies={loadVaries}
-            onExpandForVariable={onToggle}
+            onExpandForVariable={handleToggle}
             onChange={(next) => debouncedFanout({ weight: next })}
           />
         ) : (
@@ -671,7 +636,7 @@ function GroupRow({
           className="size-7 text-muted-foreground"
           aria-label={isExpanded ? `Collapse ${label}` : `Expand ${label}`}
           aria-expanded={isExpanded}
-          onClick={onToggle}
+          onClick={handleToggle}
           data-testid="exercise-row-toggle"
         >
           <ChevronDown
@@ -732,7 +697,7 @@ function GroupRow({
       </Dialog>
     </div>
   );
-}
+});
 
 function PrescriptionSegment({ segment }: Readonly<{ segment: VisualSegment }>) {
   return (
@@ -751,8 +716,7 @@ function ExerciseLabel({
   label,
   color,
   lowConfidence,
-  rowSavedAt,
-}: Readonly<{ label: string; color: string; lowConfidence: boolean; rowSavedAt: number | null }>) {
+}: Readonly<{ label: string; color: string; lowConfidence: boolean }>) {
   return (
     <div className="flex min-w-0 items-center gap-2">
       <span
@@ -766,9 +730,6 @@ function ExerciseLabel({
       >
         {label}
       </span>
-      {rowSavedAt != null && (
-        <SaveFlashBadge key={rowSavedAt} testId="exercise-row-saved" />
-      )}
     </div>
   );
 }
