@@ -1,3 +1,5 @@
+import { useId } from "react";
+
 type NexusVariant = "primary" | "ink" | "mono" | "currentColor";
 
 const VARIANT_BG: Record<Exclude<NexusVariant, "currentColor">, string> = {
@@ -12,17 +14,21 @@ const VARIANT_FG: Record<Exclude<NexusVariant, "currentColor">, string> = {
   mono: "#0a0a0a",
 };
 
+type NexusMarkProps = Readonly<{
+  size?: number;
+  className?: string;
+  variant?: NexusVariant;
+  title?: string;
+}>;
+
 export function NexusMark({
   size = 32,
   className = "",
   variant = "primary",
   title = "fitai.coach",
-}: {
-  size?: number;
-  className?: string;
-  variant?: NexusVariant;
-  title?: string;
-}) {
+}: NexusMarkProps) {
+  const titleId = useId();
+
   if (variant === "currentColor") {
     return (
       <svg
@@ -30,9 +36,9 @@ export function NexusMark({
         height={size}
         viewBox="0 0 96 96"
         className={className}
-        role="img"
-        aria-label={title}
+        aria-labelledby={titleId}
       >
+        <title id={titleId}>{title}</title>
         <g stroke="currentColor" strokeWidth="5" strokeLinecap="round" fill="none">
           <line x1="24" y1="72" x2="72" y2="72" />
           <line x1="24" y1="72" x2="48" y2="26" />
@@ -54,9 +60,9 @@ export function NexusMark({
       height={size}
       viewBox="0 0 96 96"
       className={className}
-      role="img"
-      aria-label={title}
+      aria-labelledby={titleId}
     >
+      <title id={titleId}>{title}</title>
       <rect width="96" height="96" rx="21" fill={bg} />
       <g stroke={fg} strokeWidth="5" strokeLinecap="round">
         <line x1="24" y1="72" x2="72" y2="72" />
