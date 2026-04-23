@@ -274,9 +274,11 @@ function EditablePrescription({ field, label, value, onSave }: Readonly<Editable
           // synchronous flush before regenerating the coach note. Without
           // this onBlur save the 600ms debounce keeps pending text off
           // the server and regenerate runs against a stale plan day.
-          // Mirrors the unmount-flush predicate above.
+          // `lastExternal` only tracks the prop — writing `draft` into it
+          // here used to trip the during-render sync into reverting the
+          // textarea to the stale prop value the moment focus left the
+          // field.
           if (draft !== lastExternal) {
-            setLastExternal(draft);
             onSave(field, draft);
           }
         }}
