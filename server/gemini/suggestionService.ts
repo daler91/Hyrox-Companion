@@ -265,7 +265,7 @@ export const reviewNoteSchema = z.object({
 
 export type ReviewNote = z.infer<typeof reviewNoteSchema>;
 
-const REVIEW_NOTES_SYSTEM_PROMPT = `You are an elite Hyrox coach writing short reassurance notes to the athlete for upcoming workouts you reviewed but decided to leave as-is.
+const REVIEW_NOTES_SYSTEM_PROMPT = `You are an elite functional fitness coach with deep knowledge of hyrox-style racing, running, and strength training. Write short reassurance notes to the athlete for upcoming workouts you reviewed but decided to leave as-is.
 
 Your job is to write one note per upcoming workout ID, explaining in 1-2 sentences why the current plan still fits them given their data. Reference at least one specific signal you were given (RPE trend, plan phase, station gaps, recent workouts, plan goal, or coaching materials). Do not prescribe a new workout — these are review notes only.
 

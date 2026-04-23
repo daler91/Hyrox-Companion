@@ -36,10 +36,10 @@ export function useOnboarding(
     if (onboardingTriggered) return;
     const forcedByUrl = hasOnboardingForceParam();
     const isFirstTime =
-      isNewUser && !localStorage.getItem("hyrox-onboarding-complete");
+      isNewUser && !localStorage.getItem("fitai-onboarding-complete");
     if (forcedByUrl || isFirstTime) {
       if (forcedByUrl) {
-        localStorage.removeItem("hyrox-onboarding-complete");
+        localStorage.removeItem("fitai-onboarding-complete");
         clearOnboardingForceParam();
       }
       // eslint-disable-next-line react-hooks/set-state-in-effect

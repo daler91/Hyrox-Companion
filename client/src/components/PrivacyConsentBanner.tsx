@@ -4,7 +4,7 @@ import { Link } from "wouter";
 
 import { Button } from "@/components/ui/button";
 
-const CONSENT_STORAGE_KEY = "hyrox-privacy-consent-v1";
+const CONSENT_STORAGE_KEY = "fitai-privacy-consent-v1";
 
 function hasStoredConsent(): boolean {
   if (globalThis.window === undefined) return true;

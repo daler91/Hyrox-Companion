@@ -13,7 +13,7 @@ export function downloadTemplate() {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "hyrox_training_template.csv";
+  link.download = "training_template.csv";
   document.body.appendChild(link);
   link.click();
   link.remove();

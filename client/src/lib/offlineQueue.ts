@@ -56,7 +56,7 @@ const pendingMutationSchema: z.ZodType<PendingMutation> = z.object({
 }) as z.ZodType<PendingMutation>;
 const pendingMutationArraySchema = z.array(pendingMutationSchema);
 
-const STORAGE_KEY = "hyrox-offline-queue";
+const STORAGE_KEY = "fitai-offline-queue";
 const MAX_RETRIES = 5;
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const MAX_QUEUE_SIZE = 100;

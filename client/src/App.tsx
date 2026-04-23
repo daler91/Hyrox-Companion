@@ -5,6 +5,7 @@ import { lazy, Suspense } from "react";
 import { Route,Switch } from "wouter";
 
 import { AppSidebar } from "@/components/AppSidebar";
+import { Logo } from "@/components/brand/Logo";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { FeatureErrorBoundaryWrapper } from "@/components/FeatureErrorBoundaryWrapper";
 import { PrivacyConsentBanner } from "@/components/PrivacyConsentBanner";
@@ -114,7 +115,7 @@ function AuthenticatedLayout() {
         <div className="flex flex-col flex-1 min-w-0">
           <header className="sticky top-0 z-50 flex items-center gap-2 p-2 border-b h-14 flex-shrink-0 md:hidden bg-background/80 backdrop-blur-sm">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
-            <span className="font-semibold">fitai.coach</span>
+            <Logo size={24} />
           </header>
           <main id="main-content" className="flex-1 overflow-auto">
             <Breadcrumbs />

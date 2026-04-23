@@ -25,7 +25,7 @@ describe("AI Coach Panel", () => {
   const visitWithOnboardingSkipped = (path: string) => {
     cy.visit(path, {
       onBeforeLoad: (win) => {
-        win.localStorage.setItem("hyrox-onboarding-complete", "true");
+        win.localStorage.setItem("fitai-onboarding-complete", "true");
       },
     });
   };

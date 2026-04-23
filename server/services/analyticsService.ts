@@ -1,6 +1,6 @@
 import type { OverviewStats, PersonalRecord, TrainingOverview, WeeklySummary,WorkoutLog } from "@shared/schema";
 
-import { HYROX_STATIONS_WITH_RUNNING } from "../constants";
+import { FUNCTIONAL_STATIONS_WITH_RUNNING } from "../constants";
 import type { LoggedExerciseSetWithDate } from "../storage/shared";
 
 // Analytics always operates on logged sets, so workoutLogId is guaranteed
@@ -235,7 +235,7 @@ function buildStationCoverage(
 
     if (!matches) {
       const normalizedKey = key.toLowerCase().replaceAll(/[\s-]/g, "_");
-      matches = HYROX_STATIONS_WITH_RUNNING.filter((station) =>
+      matches = FUNCTIONAL_STATIONS_WITH_RUNNING.filter((station) =>
         normalizedKey.includes(station)
       );
       stationMatchesCache.set(key, matches);
@@ -249,7 +249,7 @@ function buildStationCoverage(
     }
   }
 
-  return HYROX_STATIONS_WITH_RUNNING.map((station) => {
+  return FUNCTIONAL_STATIONS_WITH_RUNNING.map((station) => {
     const lastTrained = stationLastTrained.get(station) ?? null;
     let daysSince: number | null = null;
     if (lastTrained) {

@@ -2,6 +2,7 @@ import { SignInButton } from "@clerk/react";
 import { ArrowRight, CheckCircle2, Menu, Sparkles } from "lucide-react";
 import { useState } from "react";
 
+import { Logo } from "@/components/brand/Logo";
 import { StravaIcon } from "@/components/icons/StravaIcon";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -73,12 +74,7 @@ export function LandingHeader() {
   return (
     <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-md">
       <div className="container mx-auto px-4 py-3 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center">
-            <span className="text-primary-foreground font-bold text-sm">F</span>
-          </div>
-          <span className="font-bold text-lg">fitai.coach</span>
-        </div>
+        <Logo size={32} />
         <div className="flex items-center gap-3">
           <a href="#features" className="text-sm text-muted-foreground hover:text-foreground transition-colors hidden sm:block">Features</a>
           <a href="#how-it-works" className="text-sm text-muted-foreground hover:text-foreground transition-colors hidden sm:block">How It Works</a>

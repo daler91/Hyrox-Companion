@@ -18,7 +18,7 @@ Cypress.on('uncaught:exception', (err, runnable) => {
 // bottom of the viewport, causing false-positive "element is covered" click
 // failures. A global listener attaches once and fires reliably for every visit.
 Cypress.on('window:before:load', (win) => {
-  win.localStorage.setItem('hyrox-privacy-consent-v1', String(Date.now()));
+  win.localStorage.setItem('fitai-privacy-consent-v1', String(Date.now()));
 });
 
 beforeEach(() => {

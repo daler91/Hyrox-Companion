@@ -184,7 +184,7 @@ export function GeneratePlanDialog({ open, onOpenChange }: GeneratePlanDialogPro
               <Label htmlFor="goal">Goal</Label>
               <Textarea
                 id="goal"
-                placeholder="e.g., Complete Hyrox Open in under 90 minutes, or Train for my first half marathon"
+                placeholder="e.g. complete hyrox open in under 90 minutes, or train for my first half marathon"
                 value={form.goal}
                 onChange={(e) => form.setGoal(e.target.value)}
                 maxLength={500}

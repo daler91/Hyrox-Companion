@@ -38,7 +38,7 @@ interface UseChatSessionOptions {
   useStreaming?: boolean;
 }
 
-const DEFAULT_WELCOME = "Hey! I'm your AI training coach. Ask me about pacing, training tips, or anything Hyrox-related!";
+const DEFAULT_WELCOME = "hey. i'm your ai training coach. ask me about pacing, sessions, or anything you're training for — running, functional fitness, hyrox, the lot.";
 const MAX_HISTORY_MESSAGES = 20;
 const MAX_HISTORY_CHARS = 30000;
 const TRUNCATED_MSG_LENGTH = 200;

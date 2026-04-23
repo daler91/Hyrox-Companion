@@ -57,53 +57,57 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
-/* LIGHT MODE */
+/* LIGHT MODE — fitai.coach (Nexus) brand kit */
 :root {
-  --button-outline: rgba(0,0,0, .10);
-  --badge-outline: rgba(0,0,0, .05);
+  --button-outline: rgba(10,10,10, .10);
+  --badge-outline: rgba(10,10,10, .05);
   --opaque-button-border-intensity: -8;
-  --elevate-1: rgba(0,0,0, .03);
-  --elevate-2: rgba(0,0,0, .08);
+  --elevate-1: rgba(10,10,10, .04);
+  --elevate-2: rgba(10,10,10, .08);
+  /* paper / ink */
   --background: 0 0% 100%;
-  --foreground: 0 0% 0%;
-  --border: 0 0% 96.47%;
-  --card: 0 0% 96.47%;
-  --card-foreground: 0 0% 0%;
+  --foreground: 0 0% 4%;
+  --border: 0 0% 94%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 4%;
   --card-border: 0 0% 94%;
-  --sidebar: 180 6.6667% 97.0588%;
-  --sidebar-foreground: 210 25% 7.8431%;
-  --sidebar-border: 205.0000 25.0000% 90.5882%;
-  --sidebar-primary: 203.8863 88.2845% 53.1373%;
+  --sidebar: 0 0% 98%;
+  --sidebar-foreground: 0 0% 4%;
+  --sidebar-border: 0 0% 94%;
+  --sidebar-primary: 0 0% 4%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 211.5789 51.3514% 92.7451%;
-  --sidebar-accent-foreground: 203.8863 88.2845% 53.1373%;
-  --sidebar-ring: 202.8169 89.1213% 53.1373%;
+  --sidebar-accent: 96 60% 94%;
+  --sidebar-accent-foreground: 96 56% 24%;
+  --sidebar-ring: 0 0% 4%;
   --popover: 0 0% 100%;
-  --popover-foreground: 0 0% 0%;
-  --popover-border: 0 0% 91%;
-  --primary: 96 85.19% 73.53%;
-  --primary-foreground: 0 0% 0%;
-  --secondary: 0 0% 0%;
-  --secondary-foreground: 0 0% 100%;
-  --muted: 0 0% 96.08%;
-  --muted-foreground: 0 0% 52.94%;
-  --accent: 254.21 100% 92.55%;
-  --accent-foreground: 0 0% 0%;
-  --destructive: 2.04 74.62% 61.37%;
+  --popover-foreground: 0 0% 4%;
+  --popover-border: 0 0% 94%;
+  /* primary CTA = ink, accent = lime (brand moments only) */
+  --primary: 0 0% 4%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 0 0% 96%;
+  --secondary-foreground: 0 0% 4%;
+  --muted: 0 0% 96%;
+  --muted-foreground: 0 0% 52%;
+  --accent: 96 85% 74%;
+  --accent-foreground: 0 0% 4%;
+  --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 100%;
   --success: 142 71% 45%;
   --success-foreground: 0 0% 100%;
-  --input: 0 0% 0%;
-  --ring: 0 0% 0%;
-  --chart-1: 203.8863 88.2845% 53.1373%;
-  --chart-2: 159.7826 100% 36.0784%;
-  --chart-3: 42.0290 92.8251% 56.2745%;
-  --chart-4: 147.1429 78.5047% 41.9608%;
-  --chart-5: 341.4894 75.2000% 50.9804%;
-  --font-sans: 'Space Grotesk', sans-serif;
-  --font-serif: 'Geist', sans-serif;
-  --font-mono: 'Geist Mono', monospace;
-  --radius: 0rem;
+  --input: 0 0% 83%;
+  --ring: 0 0% 4%;
+  /* data viz — azure / teal / amber / coral / violet */
+  --chart-1: 211 88% 53%;
+  --chart-2: 162 100% 36%;
+  --chart-3: 36 92% 55%;
+  --chart-4: 352 76% 60%;
+  --chart-5: 258 90% 66%;
+  --font-sans: 'Geist', 'Geist Sans', system-ui, sans-serif;
+  --font-heading: 'Space Grotesk', sans-serif;
+  --font-serif: 'Space Grotesk', sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, monospace;
+  --radius: 0.75rem;
   --shadow-2xs: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0.00);
   --shadow-xs: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0.00);
   --shadow-sm: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0.00), 0px 1px 2px -1px hsl(202.8169 89.1213% 53.1373% / 0.00);
@@ -150,42 +154,44 @@
   --opaque-button-border-intensity: 9;
   --elevate-1: rgba(255,255,255, .04);
   --elevate-2: rgba(255,255,255, .09);
-  --background: 0 0% 0%;
-  --foreground: 200 6.6667% 91.1765%;
-  --border: 210 5.2632% 14.9020%;
-  --card: 228 9.8039% 10%;
-  --card-foreground: 0 0% 85.0980%;
-  --card-border: 0 0% 12%;
-  --sidebar: 228 9.8039% 10%;
-  --sidebar-foreground: 0 0% 85.0980%;
-  --sidebar-border: 205.7143 15.7895% 26.0784%;
-  --sidebar-primary: 202.8169 89.1213% 53.1373%;
-  --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 205.7143 70% 7.8431%;
-  --sidebar-accent-foreground: 203.7736 87.6033% 52.5490%;
-  --sidebar-ring: 202.8169 89.1213% 53.1373%;
-  --popover: 0 0% 0%;
-  --popover-foreground: 200 6.6667% 91.1765%;
-  --popover-border: 0 0% 16%;
-  --primary: 203.7736 87.6033% 52.5490%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 195.0000 15.3846% 94.9020%;
-  --secondary-foreground: 210 25% 7.8431%;
-  --muted: 0 0% 9.4118%;
-  --muted-foreground: 210 3.3898% 46.2745%;
-  --accent: 205.7143 70% 7.8431%;
-  --accent-foreground: 203.7736 87.6033% 52.5490%;
-  --destructive: 356.3033 90.5579% 54.3137%;
+  /* ink surface, paper text */
+  --background: 0 0% 4%;
+  --foreground: 0 0% 96%;
+  --border: 0 0% 15%;
+  --card: 0 0% 8%;
+  --card-foreground: 0 0% 96%;
+  --card-border: 0 0% 15%;
+  --sidebar: 0 0% 8%;
+  --sidebar-foreground: 0 0% 96%;
+  --sidebar-border: 0 0% 15%;
+  --sidebar-primary: 96 85% 74%;
+  --sidebar-primary-foreground: 0 0% 4%;
+  --sidebar-accent: 0 0% 11%;
+  --sidebar-accent-foreground: 96 85% 74%;
+  --sidebar-ring: 96 85% 74%;
+  --popover: 0 0% 8%;
+  --popover-foreground: 0 0% 96%;
+  --popover-border: 0 0% 15%;
+  /* lime takes over as primary CTA in dark per brand kit */
+  --primary: 96 85% 74%;
+  --primary-foreground: 0 0% 4%;
+  --secondary: 0 0% 11%;
+  --secondary-foreground: 0 0% 96%;
+  --muted: 0 0% 11%;
+  --muted-foreground: 0 0% 52%;
+  --accent: 96 85% 74%;
+  --accent-foreground: 0 0% 4%;
+  --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 100%;
   --success: 142 71% 45%;
-  --success-foreground: 0 0% 100%;
-  --input: 207.6923 27.6596% 18.4314%;
-  --ring: 202.8169 89.1213% 53.1373%;
-  --chart-1: 203.8863 88.2845% 53.1373%;
-  --chart-2: 159.7826 100% 36.0784%;
-  --chart-3: 42.0290 92.8251% 56.2745%;
-  --chart-4: 147.1429 78.5047% 41.9608%;
-  --chart-5: 341.4894 75.2000% 50.9804%;
+  --success-foreground: 0 0% 4%;
+  --input: 0 0% 15%;
+  --ring: 96 85% 74%;
+  --chart-1: 211 88% 53%;
+  --chart-2: 162 100% 36%;
+  --chart-3: 36 92% 55%;
+  --chart-4: 352 76% 60%;
+  --chart-5: 258 90% 66%;
   --shadow-2xs: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0.00);
   --shadow-xs: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0.00);
   --shadow-sm: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0.00), 0px 1px 2px -1px hsl(202.8169 89.1213% 53.1373% / 0.00);
@@ -222,13 +228,19 @@
   /* Fallback for older browsers */
   --destructive-border: hsl(var(--destructive));
   --destructive-border: hsl(from hsl(var(--destructive)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
-  --radius: 1.3rem;
+  --radius: 0.75rem;
   --spacing: 0.25rem;
-  --font-mono: 'Geist Mono', Menlo, monospace;
-  --font-sans: 'Geist Sans', 'Open Sans', sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, Menlo, monospace;
+  --font-sans: 'Geist', 'Geist Sans', system-ui, sans-serif;
   --font-heading: 'Space Grotesk', sans-serif;
-  --font-serif: Georgia, serif;
+  --font-serif: 'Space Grotesk', sans-serif;
   --tracking-normal: 0em;
+}
+
+/* Tabular numerals for metric/data displays per brand kit §4 */
+.metric,
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
 }
 
 @layer base {

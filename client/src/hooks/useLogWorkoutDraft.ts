@@ -1,7 +1,7 @@
 import type { StructuredExercise } from "@/components/ExerciseInput";
 
-const DRAFT_STORAGE_KEY = "hyrox-log-workout-draft";
-const DRAFT_ANNOUNCED_KEY = "hyrox-log-workout-draft-announced";
+const DRAFT_STORAGE_KEY = "fitai-log-workout-draft";
+const DRAFT_ANNOUNCED_KEY = "fitai-log-workout-draft-announced";
 const DRAFT_VERSION = 1;
 
 /**

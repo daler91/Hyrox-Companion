@@ -215,7 +215,7 @@ export default function TimelineFilters({
               data-testid="button-plan-goal"
               aria-label="Edit plan goal"
             >
-              {selectedPlan.goal ? selectedPlan.goal : <span className="italic">Add a goal, e.g. Complete Hyrox in under 90 min…</span>}
+              {selectedPlan.goal ? selectedPlan.goal : <span className="italic">Add a goal, e.g. complete hyrox in under 90 min…</span>}
             </button>
             <Tooltip>
               <TooltipTrigger asChild>

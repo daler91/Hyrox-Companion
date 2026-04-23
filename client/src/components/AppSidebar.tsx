@@ -18,6 +18,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useAuth } from "@/hooks/useAuth";
 import { useSignOut } from "@/hooks/useSignOut";
 
+import { Logo } from "./brand/Logo";
 import { ThemeToggle } from "./ThemeToggle";
 
 const menuItems = [
@@ -48,12 +49,7 @@ export function AppSidebar() {
   return (
     <Sidebar>
       <SidebarHeader className="p-4">
-        <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-            <span className="text-primary-foreground font-bold text-sm">F</span>
-          </div>
-          <span className="font-bold text-lg">fitai.coach</span>
-        </div>
+        <Logo size={32} />
       </SidebarHeader>
       <SidebarContent>
         <nav aria-label="Main navigation">

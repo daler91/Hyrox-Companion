@@ -17,7 +17,7 @@ describe("Plan Generation", () => {
   const visitTimelineWithOnboardingSkipped = () => {
     cy.visit("/", {
       onBeforeLoad: (win) => {
-        win.localStorage.setItem("hyrox-onboarding-complete", "true");
+        win.localStorage.setItem("fitai-onboarding-complete", "true");
       },
     });
   };

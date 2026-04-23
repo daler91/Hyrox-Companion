@@ -335,7 +335,7 @@ export default function Settings() {
             variant="outline"
             data-testid="button-rerun-onboarding"
             onClick={() => {
-              localStorage.removeItem("hyrox-onboarding-complete");
+              localStorage.removeItem("fitai-onboarding-complete");
               setLocation("/?onboarding=run");
             }}
           >
