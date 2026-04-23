@@ -7,9 +7,9 @@ const FAQS = [
       "Yes. The core training tracker, timeline, workout logging, and analytics are free. Some AI-assisted features (plan generation, streaming chat) may have fair-use limits.",
   },
   {
-    question: "Do I need to be training for Hyrox specifically?",
+    question: "Do I need a specific race goal?",
     answer:
-      "No. The app is built around Hyrox-style training blocks, but the exercise library covers strength, running, conditioning, and functional movements, so anyone following a structured program can use it.",
+      "No. fitai.coach works for any structured training: hyrox prep, half-marathon builds, general functional fitness, strength cycles. The exercise library covers running, strength, conditioning, and the full set of functional stations.",
   },
   {
     question: "How does the AI coach work?",

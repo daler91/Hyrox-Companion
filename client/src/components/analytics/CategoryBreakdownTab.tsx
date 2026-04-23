@@ -126,11 +126,11 @@ export function CategoryBreakdownTab({ dateParams }: CategoryBreakdownTabProps) 
         </Card>
       )}
 
-      {/* Hyrox Station Coverage */}
+      {/* Functional Station Coverage */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Hyrox Station Coverage</CardTitle>
-          <CardDescription>Track when you last trained each Hyrox station</CardDescription>
+          <CardTitle className="text-base">Functional Station Coverage</CardTitle>
+          <CardDescription>Track when you last trained each functional station (incl. hyrox stations)</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3" data-testid="station-coverage-grid">

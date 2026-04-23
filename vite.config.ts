@@ -10,7 +10,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "prompt",
-      includeAssets: ["favicon.svg"],
+      includeAssets: ["favicon.svg", "logo-primary.svg", "logo-ink.svg", "logo-mono.svg", "mark-currentcolor.svg"],
       manifest: {
         name: "fitai.coach",
         short_name: "fitai",
@@ -18,9 +18,11 @@ export default defineConfig({
         start_url: "/",
         display: "standalone",
         background_color: "#0a0a0a",
-        theme_color: "#0a0a0a",
+        theme_color: "#C4F37E",
         icons: [
           { src: "/favicon.svg", sizes: "any", type: "image/svg+xml" },
+          { src: "/logo-primary.svg", sizes: "any", type: "image/svg+xml", purpose: "any" },
+          { src: "/mark-currentcolor.svg", sizes: "any", type: "image/svg+xml", purpose: "maskable" },
         ],
       },
       workbox: {

@@ -18,6 +18,9 @@ import { createRoot } from "react-dom/client";
 
 import App from "./App";
 import { FallbackErrorBoundary } from "./components/FallbackErrorBoundary";
+import { migrateLegacyKeys } from "./lib/storageMigration";
+
+migrateLegacyKeys();
 
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({

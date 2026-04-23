@@ -57,7 +57,7 @@ const { doubleCsrfProtection, generateCsrfToken } = doubleCsrf({
     }
     return req.ip ?? "anonymous";
   },
-  cookieName: env.NODE_ENV === "production" ? "__Host-hyrox.x-csrf" : "hyrox.x-csrf",
+  cookieName: env.NODE_ENV === "production" ? "__Host-fitai.x-csrf" : "fitai.x-csrf",
   cookieOptions: {
     httpOnly: true,
     sameSite: "strict",

@@ -47,7 +47,7 @@ export function GoalDialog({
             id="plan-goal-input"
             value={goalText}
             onChange={(e) => setGoalText(e.target.value.slice(0, 500))}
-            placeholder="e.g. Complete Hyrox in under 90 minutes, finish my first marathon sub-4h…"
+            placeholder="e.g. complete hyrox in under 90 minutes, finish my first marathon sub-4h…"
             className="resize-none"
             rows={3}
             data-testid="input-plan-goal"

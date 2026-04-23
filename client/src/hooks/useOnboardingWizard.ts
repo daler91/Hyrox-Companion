@@ -17,7 +17,7 @@ const PREV: Partial<Record<Step, Step>> = {
 };
 
 const markComplete = () =>
-  localStorage.setItem("hyrox-onboarding-complete", "true");
+  localStorage.setItem("fitai-onboarding-complete", "true");
 
 export function useOnboardingWizard(onComplete: (choice: "sample" | "import" | "skip") => void) {
   const { toast } = useToast();
