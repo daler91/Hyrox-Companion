@@ -1,4 +1,5 @@
 import { Mic, MicOff } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -14,6 +15,22 @@ interface VoiceButtonProps {
 }
 
 export function VoiceButton({ isListening, isSupported, onClick, size = "icon", className, "data-testid": dataTestId }: Readonly<VoiceButtonProps>) {
+  // Track whether the user has actually started recording at least once so
+  // the live region stays silent on mount. Without this guard, "Recording
+  // stopped." is announced spuriously whenever a VoiceButton first renders
+  // (and every route transition / multi-mount scenario) because isListening
+  // starts as false.
+  const hasStartedRef = useRef(false);
+  const [announcement, setAnnouncement] = useState("");
+  useEffect(() => {
+    if (isListening) {
+      hasStartedRef.current = true;
+      setAnnouncement("Recording. Speak now.");
+    } else if (hasStartedRef.current) {
+      setAnnouncement("Recording stopped.");
+    }
+  }, [isListening]);
+
   if (!isSupported) return null;
 
   return (
@@ -47,9 +64,11 @@ export function VoiceButton({ isListening, isSupported, onClick, size = "icon", 
       </Tooltip>
       {/* SR-only live region — announces state transitions so users who
           can't see the pulsing button know when recording starts/stops,
-          including auto-stops from timeout/error paths. WCAG 4.1.3. */}
+          including auto-stops from timeout/error paths. Empty on mount;
+          only populated after the first real start → stop transition.
+          WCAG 4.1.3. */}
       <span role="status" aria-live="polite" className="sr-only">
-        {isListening ? "Recording. Speak now." : "Recording stopped."}
+        {announcement}
       </span>
     </TooltipProvider>
   );
