@@ -37,6 +37,8 @@ interface WorkoutHeatmapProps {
 }
 
 export function WorkoutHeatmap({ workoutDates }: WorkoutHeatmapProps) {
+  const workoutCount = workoutDates.length;
+
   const { grid, monthLabels } = useMemo(() => {
     const dateSet = new Set(workoutDates);
     const today = new Date();
@@ -77,9 +79,13 @@ export function WorkoutHeatmap({ workoutDates }: WorkoutHeatmapProps) {
   }, [workoutDates]);
 
   return (
-    <div className={CHART_CARD_CLASS}>
-      <p className="text-sm font-semibold">Workout Consistency</p>
-      <div className="overflow-x-auto">
+    <div
+      className={CHART_CARD_CLASS}
+      role="img"
+      aria-label={`Workout consistency heatmap: ${workoutCount} ${workoutCount === 1 ? "workout" : "workouts"} in the last ${WEEKS_TO_SHOW} weeks`}
+    >
+      <p className="text-sm font-semibold" aria-hidden="true">Workout Consistency</p>
+      <div className="overflow-x-auto" aria-hidden="true">
         <div className="min-w-[400px]">
           {/* Month labels */}
           <div className="flex ml-8 mb-1 text-[10px] text-muted-foreground">
