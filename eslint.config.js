@@ -4,6 +4,57 @@ import eslintConfigPrettier from "eslint-config-prettier";
 import reactHooks from "eslint-plugin-react-hooks";
 import simpleImportSort from "eslint-plugin-simple-import-sort";
 
+// Local a11y rule: `<Button size="icon" | "icon-touch">` renders an icon-only
+// control. Without an `aria-label` (or `aria-labelledby`), screen readers
+// have no accessible name for it. WCAG 4.1.2 Name, Role, Value.
+//
+// Note: the rule intentionally only checks the string-literal shape. A
+// dynamic `size={someVar}` falls through and is assumed intentional.
+const iconButtonNeedsLabelRule = {
+  meta: {
+    type: "problem",
+    docs: { description: "Icon-only Button must have an aria-label" },
+    schema: [],
+    messages: {
+      missingLabel:
+        "Icon-only <Button size=\"{{size}}\"> must have an aria-label (or aria-labelledby) so screen readers have an accessible name.",
+    },
+  },
+  create(context) {
+    return {
+      JSXOpeningElement(node) {
+        if (node.name.type !== "JSXIdentifier" || node.name.name !== "Button") return;
+        const attrs = node.attributes;
+        const sizeAttr = attrs.find(
+          (a) => a.type === "JSXAttribute" && a.name?.name === "size",
+        );
+        if (!sizeAttr || sizeAttr.value?.type !== "Literal") return;
+        const sizeValue = sizeAttr.value.value;
+        if (sizeValue !== "icon" && sizeValue !== "icon-touch") return;
+        const hasLabel = attrs.some(
+          (a) =>
+            a.type === "JSXAttribute" &&
+            (a.name?.name === "aria-label" || a.name?.name === "aria-labelledby"),
+        );
+        // Allow spread attributes (e.g. {...props}) to short-circuit the
+        // check — we can't statically verify those carry a label.
+        const hasSpread = attrs.some((a) => a.type === "JSXSpreadAttribute");
+        if (!hasLabel && !hasSpread) {
+          context.report({
+            node,
+            messageId: "missingLabel",
+            data: { size: sizeValue },
+          });
+        }
+      },
+    };
+  },
+};
+
+const localA11yPlugin = {
+  rules: { "icon-button-needs-label": iconButtonNeedsLabelRule },
+};
+
 export default tseslint.config(
   // Global ignores
   {
@@ -86,10 +137,12 @@ export default tseslint.config(
     files: ["client/**/*.{ts,tsx}"],
     plugins: {
       "react-hooks": reactHooks,
+      "local-a11y": localA11yPlugin,
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
       "no-console": ["warn", { allow: ["warn", "error"] }],
+      "local-a11y/icon-button-needs-label": "error",
     },
   },
 

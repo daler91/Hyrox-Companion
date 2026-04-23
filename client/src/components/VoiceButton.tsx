@@ -45,6 +45,12 @@ export function VoiceButton({ isListening, isSupported, onClick, size = "icon", 
           <p>{isListening ? "Stop recording" : "Use voice input — your browser will ask for mic permission"}</p>
         </TooltipContent>
       </Tooltip>
+      {/* SR-only live region — announces state transitions so users who
+          can't see the pulsing button know when recording starts/stops,
+          including auto-stops from timeout/error paths. WCAG 4.1.3. */}
+      <span role="status" aria-live="polite" className="sr-only">
+        {isListening ? "Recording. Speak now." : "Recording stopped."}
+      </span>
     </TooltipProvider>
   );
 }

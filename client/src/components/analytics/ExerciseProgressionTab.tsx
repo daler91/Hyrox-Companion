@@ -1,9 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { Activity, TrendingUp } from "lucide-react";
+import { Activity, Dumbbell, TrendingUp } from "lucide-react";
 import { useMemo,useState } from "react";
+import { Link } from "wouter";
 
 import { ExerciseProgressionCharts } from "@/components/analytics/ExerciseProgressionCharts";
 import { type ExerciseAnalyticDay } from "@/components/analytics/MiniBarChart";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription,CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
@@ -64,9 +66,17 @@ export function ExerciseProgressionTab({ dateParams }: ExerciseProgressionTabPro
       </CardHeader>
       <CardContent>
         {availableExercises.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground" data-testid="text-no-progression">
-            <Activity className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
-            <p className="text-sm">No exercise data yet. Log workouts with structured exercises to track your progression over time.</p>
+          <div className="text-center py-8 space-y-3" data-testid="text-no-progression">
+            <Activity className="h-10 w-10 mx-auto text-muted-foreground/40" />
+            <p className="text-sm text-muted-foreground">
+              Your exercise progression lines appear here once you&apos;ve logged a few structured workouts — weights, reps, and times across sessions.
+            </p>
+            <Link href="/log">
+              <Button variant="outline" data-testid="button-log-workout-from-progression">
+                <Dumbbell className="h-4 w-4 mr-2" />
+                Log a Workout
+              </Button>
+            </Link>
           </div>
         ) : (
         <>
