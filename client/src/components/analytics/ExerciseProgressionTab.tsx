@@ -71,12 +71,12 @@ export function ExerciseProgressionTab({ dateParams }: ExerciseProgressionTabPro
             <p className="text-sm text-muted-foreground">
               Your exercise progression lines appear here once you&apos;ve logged a few structured workouts — weights, reps, and times across sessions.
             </p>
-            <Link href="/log">
-              <Button variant="outline" data-testid="button-log-workout-from-progression">
+            <Button variant="outline" asChild>
+              <Link href="/log" data-testid="button-log-workout-from-progression">
                 <Dumbbell className="h-4 w-4 mr-2" />
                 Log a Workout
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           </div>
         ) : (
         <>

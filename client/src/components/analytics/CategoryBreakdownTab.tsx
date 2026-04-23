@@ -85,12 +85,12 @@ export function CategoryBreakdownTab({ dateParams }: CategoryBreakdownTabProps) 
           <p className="text-sm text-muted-foreground">
             Your training mix and station coverage appear here once you&apos;ve logged a handful of workouts across different categories.
           </p>
-          <Link href="/log">
-            <Button variant="outline" data-testid="button-log-workout-from-breakdown">
+          <Button variant="outline" asChild>
+            <Link href="/log" data-testid="button-log-workout-from-breakdown">
               <Dumbbell className="h-4 w-4 mr-2" />
               Log a Workout
-            </Button>
-          </Link>
+            </Link>
+          </Button>
         </div>
       </div>
     );
