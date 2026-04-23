@@ -86,14 +86,22 @@ router.post("/api/v1/chat", ...protectedMutationGuards, rateLimiter("chat", 10),
 const SSE_MAX_DURATION_MS = 5 * 60 * 1000;
 const SSE_EXPIRY_MARGIN_MS = 5_000;
 
-function computeSseDeadlineMs(req: ExpressRequest): number {
+// Exported for unit tests — no external consumer should rely on this.
+export function computeSseDeadlineMs(req: ExpressRequest): number {
   const hardCap = Date.now() + SSE_MAX_DURATION_MS;
   try {
     const auth = getAuth(req);
     const expSec = auth?.sessionClaims?.exp;
     if (typeof expSec === "number" && expSec > 0) {
+      // The JWT floor overrides the hard cap even when it's already in
+      // the past. A token that expires inside the 5s margin (or was
+      // mid-stream when the user logged out) should abort the stream
+      // immediately, not fall back to a 5-minute cap — otherwise the
+      // stated "no persistence under an invalid session" invariant
+      // silently breaks (Codex review of #877). Clamp to `now` so
+      // setTimeout fires on the next tick.
       const expMs = expSec * 1000 - SSE_EXPIRY_MARGIN_MS;
-      if (expMs > Date.now()) return Math.min(hardCap, expMs);
+      return Math.min(hardCap, Math.max(expMs, Date.now()));
     }
   } catch {
     // Dev bypass / test harness won't expose sessionClaims — fall back
