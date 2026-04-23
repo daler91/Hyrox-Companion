@@ -21,6 +21,7 @@ describe("Log Workout Submission", () => {
 
     cy.visit("/log");
     cy.wait("@authUser");
+    cy.ensureConsentDismissed();
   });
 
   it("successfully logs a workout via free text", () => {
@@ -90,6 +91,7 @@ describe("Log Workout Exercise Mode Submission", () => {
 
     cy.visit("/log");
     cy.wait("@authUser");
+    cy.ensureConsentDismissed();
   });
 
   it("successfully logs a workout with selected exercises", () => {
