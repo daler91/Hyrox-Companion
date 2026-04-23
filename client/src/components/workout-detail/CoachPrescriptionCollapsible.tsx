@@ -1,5 +1,5 @@
 import { ChevronDown, Loader2, Sparkles } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { ImageCaptureButton } from "@/components/ImageCaptureButton";
 import { Button } from "@/components/ui/button";
@@ -239,18 +239,31 @@ function EditablePrescription({ field, label, value, onSave }: Readonly<Editable
   // otherwise the user's in-progress edit wins.
   const [draft, setDraft] = useState(value);
   const [lastExternal, setLastExternal] = useState(value);
+  // `lastSavedRef` records what we actually PATCHed (or the server truth the
+  // prop most recently reflected) so save/blur can dedup against client-known
+  // server state. `lastExternal` must only mirror the prop so the
+  // during-render sync stays honest — trying to share a single cursor across
+  // both roles caused the textarea to snap back to stale prop values on blur.
+  const lastSavedRef = useRef<string>(value);
   if (value !== lastExternal) {
     setLastExternal(value);
+    // The prop is the server's current truth (optimistic cache or fresh
+    // fetch); whatever we sent before is moot.
+    lastSavedRef.current = value;
     if (draft === lastExternal) setDraft(value);
   }
 
-  const debouncedSave = useDebouncedCallback((next: string) => onSave(field, next), PRESCRIPTION_SAVE_DEBOUNCE_MS);
+  const debouncedSave = useDebouncedCallback((next: string) => {
+    if (next === lastSavedRef.current) return;
+    lastSavedRef.current = next;
+    onSave(field, next);
+  }, PRESCRIPTION_SAVE_DEBOUNCE_MS);
 
   // Flush any pending edit on unmount so a fast dialog close doesn't drop
   // the last keystroke before the debounce timer fires.
   useEffect(() => {
     return () => {
-      if (draft !== lastExternal) onSave(field, draft);
+      if (draft !== lastSavedRef.current) onSave(field, draft);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -271,12 +284,13 @@ function EditablePrescription({ field, label, value, onSave }: Readonly<Editable
         }}
         onBlur={() => {
           // The dialog's Save handler calls `active.blur()` to drive a
-          // synchronous flush before regenerating the coach note. Without
-          // this onBlur save the 600ms debounce keeps pending text off
-          // the server and regenerate runs against a stale plan day.
-          // Mirrors the unmount-flush predicate above.
-          if (draft !== lastExternal) {
-            setLastExternal(draft);
+          // synchronous flush before regenerating the coach note. Dedup
+          // against the last value we actually PATCHed so Save button
+          // re-blurs on a logged workout (whose timeline-backed `value`
+          // prop never catches up after updatePrescription's optimistic
+          // patch) don't re-fire the same PATCH every click.
+          if (draft !== lastSavedRef.current) {
+            lastSavedRef.current = draft;
             onSave(field, draft);
           }
         }}
