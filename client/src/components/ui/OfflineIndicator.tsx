@@ -84,11 +84,13 @@ export function OfflineIndicator() {
   return (
     <div
       className="fixed bottom-4 left-4 z-50 flex items-center gap-2 rounded-lg bg-destructive px-4 py-2 text-destructive-foreground shadow-lg"
-      role="alert"
-      aria-live="assertive"
+      // WCAG 4.1.3: status, not alert. Offline is informational — work
+      // continues to be queued — so it shouldn't interrupt AT users mid-task.
+      role="status"
+      aria-live="polite"
       data-testid="indicator-offline"
     >
-      <WifiOff className="h-4 w-4" />
+      <WifiOff className="h-4 w-4" aria-hidden="true" />
       <div className="flex flex-col leading-tight">
         <span className="text-sm font-medium">You&apos;re offline</span>
         {pendingCount > 0 ? (

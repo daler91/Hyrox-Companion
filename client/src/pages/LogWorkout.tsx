@@ -1,9 +1,9 @@
 import { useMutation } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Loader2 } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { WorkoutComposer } from "@/components/workout/WorkoutComposer";
 import { WorkoutDetailsCard } from "@/components/workout/WorkoutDetailsCard";
 import { WorkoutHeader } from "@/components/workout/WorkoutHeader";
@@ -39,7 +39,7 @@ export default function LogWorkout() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full p-8">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" aria-label="Loading" />
+        <LoadingSpinner />
       </div>
     );
   }

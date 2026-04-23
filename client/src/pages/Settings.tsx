@@ -13,6 +13,7 @@ import { PushNotificationSection } from "@/components/settings/PushNotificationS
 import { StravaSection } from "@/components/settings/StravaSection";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { ToastAction } from "@/components/ui/toast";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -255,7 +256,7 @@ export default function Settings() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <LoadingSpinner label="Loading settings" />
       </div>
     );
   }
@@ -359,7 +360,7 @@ export default function Settings() {
           >
             {saveMutation.isPending ? (
               <>
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                <Loader2 className="h-4 w-4 animate-spin mr-2" aria-hidden="true" />
                 Saving...
               </>
             ) : (
