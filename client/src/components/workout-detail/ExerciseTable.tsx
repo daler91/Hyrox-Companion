@@ -1,6 +1,23 @@
+import {
+  closestCenter,
+  DndContext,
+  type DragEndEvent,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { EXERCISE_DEFINITIONS, type ExerciseName, type ExerciseSet } from "@shared/schema";
-import { ChevronDown, MoreVertical, Plus, Repeat, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, GripVertical, MoreVertical, Plus, Repeat, Trash2 } from "lucide-react";
+import { type CSSProperties,useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { type FieldKey, getFields } from "@/components/exercise-row/fieldMeta";
 import {
@@ -40,12 +57,14 @@ const AGG_DEBOUNCE_MS = 350;
 const SET_COUNT_DEBOUNCE_MS = 500;
 const MIN_SETS = 1;
 const MAX_SETS = 50;
-// Grid columns: label | sets | primary metric (reps/dist/time) | load | chevron | menu.
+// Grid columns: handle | label | sets | primary metric (reps/dist/time) | load | chevron | menu.
 // Mobile keeps the metric + load cells tight so the label column fits
 // two-word exercise names at ~360px viewports; `sm:` breakpoint restores
-// the 120px cells that comfortably fit 4-digit inputs + unit.
+// the 120px cells that comfortably fit 4-digit inputs + unit. The
+// leading fixed track holds the drag handle so reordering doesn't shift
+// the editable cells when it shows/hides.
 const GRID_TEMPLATE =
-  "grid grid-cols-[1fr_52px_84px_84px_28px_28px] sm:grid-cols-[1fr_60px_120px_120px_32px_32px] items-center gap-2 px-2 sm:px-3 py-2";
+  "grid grid-cols-[24px_1fr_52px_84px_84px_28px_28px] sm:grid-cols-[28px_1fr_60px_120px_120px_32px_32px] items-center gap-2 px-2 sm:px-3 py-2";
 
 interface ExerciseTableProps {
   readonly workoutId: string;
@@ -100,6 +119,51 @@ export function ExerciseTable({
   hasUnparsedText,
 }: ExerciseTableProps) {
   const groups = useMemo(() => groupExerciseSets(exerciseSets), [exerciseSets]);
+  // Stable per-group identity for @dnd-kit — matches the React `key` used
+  // below so `SortableContext` items align with the rendered rows. When a
+  // row is brand-new and its first-set id hasn't landed yet we fall back
+  // to a name/label composite; it's unique per render and the row
+  // reconciles to the id once the add mutation returns.
+  const rowKeys = useMemo(
+    () =>
+      groups.map(
+        (g) => g.sets[0]?.id ?? `${g.exerciseName}:${g.customLabel ?? ""}`,
+      ),
+    [groups],
+  );
+
+  // 8 px activation distance matches useWorkoutSensors — an input tap
+  // inside the row doesn't get hijacked as a drag. Keyboard sensor gives
+  // us a11y (Tab to handle → Space → ↑/↓ → Space) without extra wiring.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      if (!over || active.id === over.id) return;
+      const oldIndex = rowKeys.indexOf(active.id as string);
+      const newIndex = rowKeys.indexOf(over.id as string);
+      if (oldIndex < 0 || newIndex < 0) return;
+      // Move a whole group (all its sets) at once. Then walk the flat
+      // set sequence and reassign contiguous `sortOrder` values; only
+      // the sets whose position actually changed get a PATCH so a
+      // two-row swap doesn't fan out across every set in the table.
+      const nextGroups = arrayMove(groups, oldIndex, newIndex);
+      let order = 0;
+      for (const g of nextGroups) {
+        for (const s of g.sets) {
+          if (s.sortOrder !== order) {
+            onUpdateSet(s.id, { sortOrder: order });
+          }
+          order += 1;
+        }
+      }
+    },
+    [groups, rowKeys, onUpdateSet],
+  );
   // Multiple rows can be expanded at once — matches WorkoutExerciseMode's
   // Set<string> pattern so adding a new row (auto-expanded below) doesn't
   // collapse whatever the user was editing.
@@ -226,34 +290,43 @@ export function ExerciseTable({
       ) : (
         <div className="divide-y divide-border rounded-lg border border-border">
           <HeaderRow />
-          {groups.map((group) => {
-            const rowKey = group.sets[0]?.id ?? `${group.exerciseName}:${group.customLabel ?? ""}`;
-            const isExpanded = expandedKeys.has(rowKey);
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext items={rowKeys} strategy={verticalListSortingStrategy}>
+              {groups.map((group, idx) => {
+                const rowKey = rowKeys[idx];
+                const isExpanded = expandedKeys.has(rowKey);
 
-            return (
-              <GroupRow
-                key={rowKey}
-                group={group}
-                weightUnit={weightUnit}
-                distanceUnit={distanceUnit}
-                isExpanded={isExpanded}
-                rowSavedAt={savedAtByRow[rowKey] ?? null}
-                onToggle={() => toggleExpanded(rowKey)}
-                onUpdateSet={(setId, data) => {
-                  onUpdateSet(setId, data);
-                  markRowSaved(pickRowKeyForSet(setId) ?? rowKey);
-                }}
-                onAddSet={(data) => {
-                  onAddSet(data);
-                  markRowSaved(rowKey);
-                }}
-                onDeleteSet={(setId) => {
-                  onDeleteSet(setId);
-                  markRowSaved(pickRowKeyForSet(setId) ?? rowKey);
-                }}
-              />
-            );
-          })}
+                return (
+                  <SortableGroupRow
+                    key={rowKey}
+                    rowKey={rowKey}
+                    group={group}
+                    weightUnit={weightUnit}
+                    distanceUnit={distanceUnit}
+                    isExpanded={isExpanded}
+                    rowSavedAt={savedAtByRow[rowKey] ?? null}
+                    onToggle={() => toggleExpanded(rowKey)}
+                    onUpdateSet={(setId, data) => {
+                      onUpdateSet(setId, data);
+                      markRowSaved(pickRowKeyForSet(setId) ?? rowKey);
+                    }}
+                    onAddSet={(data) => {
+                      onAddSet(data);
+                      markRowSaved(rowKey);
+                    }}
+                    onDeleteSet={(setId) => {
+                      onDeleteSet(setId);
+                      markRowSaved(pickRowKeyForSet(setId) ?? rowKey);
+                    }}
+                  />
+                );
+              })}
+            </SortableContext>
+          </DndContext>
         </div>
       )}
 
@@ -323,6 +396,10 @@ function HeaderRow() {
         "border-b border-border bg-muted/40 text-xs font-medium uppercase tracking-wide text-muted-foreground",
       )}
     >
+      {/* Leading drag-handle column — blank header, same nbsp trick as
+          the primary-metric cell so grid auto-placement keeps the
+          following columns in their expected slots. */}
+      <span aria-hidden>&nbsp;</span>
       <span>Exercise</span>
       <span className="text-right">Sets</span>
       {/*
@@ -385,6 +462,13 @@ function EmptyExerciseState({
   );
 }
 
+type SortableAttrs = ReturnType<typeof useSortable>;
+
+interface DragHandleProps {
+  readonly attributes: SortableAttrs["attributes"];
+  readonly listeners: SortableAttrs["listeners"];
+}
+
 interface GroupRowProps {
   readonly group: GroupedExercise;
   readonly weightUnit: "kg" | "lb";
@@ -396,6 +480,71 @@ interface GroupRowProps {
   readonly onUpdateSet: (setId: string, data: PatchExerciseSetPayload) => void;
   readonly onAddSet: (data: AddExerciseSetPayload) => void;
   readonly onDeleteSet: (setId: string) => void;
+  /**
+   * Sortable attrs + listeners forwarded from `SortableGroupRow`. Applied
+   * to the leading `GripVertical` button on both the mobile and desktop
+   * layouts so the handle — and only the handle — initiates drag. Left
+   * optional so legacy tests can render `GroupRow` directly without a
+   * `DndContext`; the handle renders inert in that case.
+   */
+  readonly dragHandleProps?: DragHandleProps;
+}
+
+interface SortableGroupRowProps extends GroupRowProps {
+  /** `rowKey` is also the `SortableContext` item id — must match 1:1. */
+  readonly rowKey: string;
+}
+
+function SortableGroupRow({ rowKey, ...rowProps }: SortableGroupRowProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: rowKey });
+
+  // Relative positioning + a raised z-index while dragging so the
+  // floating row renders above its neighbours' divide-y borders.
+  // Translation comes from @dnd-kit's transform; transition is undefined
+  // during the active drag and populated during the settle animation.
+  const style: CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : 1,
+    position: "relative",
+    zIndex: isDragging ? 20 : undefined,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <GroupRow {...rowProps} dragHandleProps={{ attributes, listeners }} />
+    </div>
+  );
+}
+
+function DragHandle({
+  dragHandleProps,
+  label,
+}: Readonly<{ dragHandleProps?: DragHandleProps; label: string }>) {
+  if (!dragHandleProps) {
+    // Keep the column occupied so the grid alignment doesn't collapse
+    // when a test renders `GroupRow` without a sortable wrapper.
+    return <span aria-hidden className="block" />;
+  }
+  return (
+    <button
+      type="button"
+      aria-label={`Reorder ${label}`}
+      data-testid="exercise-row-drag-handle"
+      className="flex h-7 w-full cursor-grab touch-none items-center justify-center rounded text-muted-foreground hover:text-foreground active:cursor-grabbing focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      {...dragHandleProps.attributes}
+      {...dragHandleProps.listeners}
+    >
+      <GripVertical className="size-4" aria-hidden />
+    </button>
+  );
 }
 
 function GroupRow({
@@ -408,6 +557,7 @@ function GroupRow({
   onUpdateSet,
   onAddSet,
   onDeleteSet,
+  dragHandleProps,
 }: GroupRowProps) {
   const label = getExerciseLabel(group.exerciseName, group.customLabel);
   const color = categoryColor(group.category);
@@ -553,6 +703,7 @@ function GroupRow({
        */}
       <div className="text-sm sm:hidden">
         <div className="flex items-center gap-2 px-3 py-2">
+          <DragHandle dragHandleProps={dragHandleProps} label={label} />
           <span
             aria-hidden
             className="inline-block size-2 shrink-0 rounded-full"
@@ -622,6 +773,7 @@ function GroupRow({
       </div>
 
       <div className={cn(GRID_TEMPLATE, "hidden text-sm sm:grid")}>
+        <DragHandle dragHandleProps={dragHandleProps} label={label} />
         <ExerciseLabel
           label={label}
           color={color}
