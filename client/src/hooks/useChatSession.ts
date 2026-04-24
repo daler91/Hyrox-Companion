@@ -214,11 +214,15 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     shouldAutoScrollRef.current = distanceFromBottom <= STICKY_SCROLL_THRESHOLD_PX;
   }, []);
 
-  useEffect(() => {
+  const scrollToBottomIfPinned = useCallback(() => {
     if (shouldAutoScrollRef.current) {
       scrollToBottom();
     }
-  }, [messages, scrollToBottom]);
+  }, [scrollToBottom]);
+
+  useEffect(() => {
+    scrollToBottomIfPinned();
+  }, [messages, scrollToBottomIfPinned]);
 
   const sendMessage = useCallback(async (content: string) => {
     if (isSubmittingRef.current) return;
@@ -339,6 +343,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     historyLoading,
     scrollRef,
     updateAutoScrollMode,
+    scrollToBottomIfPinned,
     sendMessage,
     cancelStream,
     clearHistory,

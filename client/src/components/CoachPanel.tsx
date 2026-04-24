@@ -56,6 +56,7 @@ export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }
     isStreaming,
     scrollRef,
     updateAutoScrollMode,
+    scrollToBottomIfPinned,
     sendMessage,
     cancelStream,
     clearHistory,
@@ -113,6 +114,10 @@ export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }
       setLocalMessages([{ id: "new-user-welcome", role: "assistant", content: WELCOME_TEXT, timestamp: getCurrentTimeString() }]);
     }
   }, [isOpen, isNewUser, hasShownWelcome, messages.length]);
+
+  useEffect(() => {
+    scrollToBottomIfPinned();
+  }, [messages, scrollToBottomIfPinned]);
 
   const handleQuickAction = (action: { id: string; label: string }) => {
     if (action.id === "suggestions") {
