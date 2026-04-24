@@ -56,6 +56,14 @@ export interface AddExerciseSetPayload {
   time?: number | null;
   notes?: string | null;
   confidence?: number | null;
+  /**
+   * Client-only hint: id of the set the add was initiated from (used by
+   * InlineSetEditor's "Add set" button). Stripped by the server's zod
+   * schema, but surfaces the originating row to local adapters that need
+   * to group the new set with its siblings when multiple same-named
+   * groups coexist. Optional so existing callers don't need updating.
+   */
+  sourceSetId?: string | null;
 }
 
 export const workouts = {

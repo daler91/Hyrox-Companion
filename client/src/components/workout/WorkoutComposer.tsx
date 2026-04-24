@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { StructuredExercise } from "@/components/ExerciseInput";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { WorkoutExerciseMode } from "@/components/workout/WorkoutExerciseMode";
+import { DraftExerciseTable } from "@/components/workout/DraftExerciseTable";
 import { WorkoutTextMode } from "@/components/workout/WorkoutTextMode";
 import type { toast as toastFn } from "@/hooks/use-toast";
 import type { ParseFromImagePayload } from "@/lib/api";
@@ -17,16 +17,21 @@ interface WorkoutComposerProps {
   readonly setFreeText: (value: string) => void;
   readonly exerciseBlocks: string[];
   readonly exerciseData: Record<string, StructuredExercise>;
-  readonly addExercise: (name: ExerciseName) => void;
+  readonly addExercise: (name: ExerciseName, customLabel?: string) => void;
   readonly updateBlock: (blockId: string, data: StructuredExercise) => void;
   readonly removeBlock: (blockId: string) => void;
+  readonly reorderBlocks: (nextOrder: string[]) => void;
   readonly weightUnit: "kg" | "lbs";
   readonly distanceUnit: "km" | "miles";
 
-  /** Auto-parse control surfaced from useWorkoutEditor. */
+  /** Parse control surfaced from useWorkoutEditor. */
   readonly autoParsing: boolean;
   readonly autoParseError: boolean;
-  readonly scheduleAutoParse: (text: string) => void;
+  /**
+   * Fires a parse immediately (no debounce). Wired to the explicit
+   * Parse button in the text panel — text-change no longer auto-parses.
+   */
+  readonly parseNow: (text: string) => void;
   readonly cancelAutoParse: () => void;
 
   /** Voice input for dictating into the text panel. */
@@ -64,12 +69,12 @@ interface WorkoutComposerProps {
 /**
  * Unified input surface for the Log Workout page. Structured exercises
  * are the long-term source of truth; the free-text area sits inside a
- * collapsible panel whose contents get parsed into the exercise list on
- * a debounce. Voice dictation flows into the same text panel.
+ * collapsible panel whose contents are parsed into the exercise list
+ * only when the user clicks the Parse button. Voice dictation flows
+ * into the same text panel.
  *
- * Auto-parse is cancelled the moment the user edits a parsed block so
- * a fresh parse doesn't overwrite their in-progress edits. Re-entering
- * the text field (or changing its value) re-primes the debounce.
+ * A pending parse is cancelled the moment the user edits a block so an
+ * in-flight parse doesn't overwrite their in-progress edits.
  */
 export function WorkoutComposer({
   freeText,
@@ -79,11 +84,12 @@ export function WorkoutComposer({
   addExercise,
   updateBlock,
   removeBlock,
+  reorderBlocks,
   weightUnit,
   distanceUnit,
   autoParsing,
   autoParseError,
-  scheduleAutoParse,
+  parseNow,
   cancelAutoParse,
   isListening,
   isSupported,
@@ -135,15 +141,8 @@ export function WorkoutComposer({
     }
   }
 
-  // Whenever the free-text changes, re-prime the auto-parse debounce.
-  // The editor hook handles dedup (skips unchanged text) and abort on
-  // subsequent calls so we don't need to gate here.
-  useEffect(() => {
-    scheduleAutoParse(freeText);
-  }, [freeText, scheduleAutoParse]);
-
-  // Touching a block cancels any pending auto-parse so the user's edit
-  // isn't clobbered by a parse that was debounced before they focused
+  // Touching a block cancels any pending parse so the user's edit
+  // isn't clobbered by a parse that was dispatched before they focused
   // the stepper.
   const handleUpdateBlock = useCallback(
     (blockId: string, ex: StructuredExercise) => {
@@ -162,9 +161,9 @@ export function WorkoutComposer({
   );
 
   const handleAddExercise = useCallback(
-    (name: ExerciseName) => {
+    (name: ExerciseName, customLabel?: string) => {
       cancelAutoParse();
-      addExercise(name);
+      addExercise(name, customLabel);
     },
     [cancelAutoParse, addExercise],
   );
@@ -222,6 +221,8 @@ export function WorkoutComposer({
             stopListening={stopListening}
             interimTranscript={interimTranscript}
             toast={toast}
+            onParseText={() => parseNow(freeText)}
+            isParsingText={autoParsing}
             onCaptureImage={
               onParseImage
                 ? (img: CompressedImage) => {
@@ -279,12 +280,13 @@ export function WorkoutComposer({
         </CollapsibleContent>
       </Collapsible>
 
-      <WorkoutExerciseMode
+      <DraftExerciseTable
         exerciseBlocks={exerciseBlocks}
         exerciseData={exerciseData}
         addExercise={handleAddExercise}
         updateBlock={handleUpdateBlock}
         removeBlock={handleRemoveBlock}
+        reorderBlocks={reorderBlocks}
         weightUnit={weightUnit}
         distanceUnit={distanceUnit}
       />

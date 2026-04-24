@@ -75,10 +75,11 @@ function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
     addExercise,
     removeBlock,
     updateBlock,
+    reorderBlocks,
     resetEditor,
     autoParsing,
     autoParseError,
-    scheduleAutoParse,
+    parseNow,
     cancelAutoParse,
     parseImageMutation,
   } = useWorkoutEditor({
@@ -290,11 +291,12 @@ function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
             addExercise={addExercise}
             updateBlock={updateBlock}
             removeBlock={removeBlock}
+            reorderBlocks={reorderBlocks}
             weightUnit={weightUnit}
             distanceUnit={distanceUnit}
             autoParsing={autoParsing}
             autoParseError={autoParseError}
-            scheduleAutoParse={scheduleAutoParse}
+            parseNow={parseNow}
             cancelAutoParse={cancelAutoParse}
             isListening={isListening}
             isSupported={isSupported}

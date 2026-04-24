@@ -1,7 +1,8 @@
-import { Mic } from "lucide-react";
+import { Loader2, Mic, Sparkles } from "lucide-react";
 import React from "react";
 
 import { ImageCaptureButton } from "@/components/ImageCaptureButton";
+import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { VoiceButton } from "@/components/VoiceButton";
 import { ExerciseImagePreview } from "@/components/workout/ExerciseImagePreview";
@@ -16,10 +17,14 @@ interface WorkoutTextModeProps {
   toggleListening: () => void;
   stopListening: () => void;
   interimTranscript: string;
-  // Kept in the props signature so legacy callers don't break, but the
-  // inline "Parse & review" button has moved to the composer's
-  // auto-parse pipeline and this prop is ignored.
   toast?: typeof toastFn;
+  /**
+   * Fires the manual text-parse pipeline. When omitted the Parse
+   * button is hidden — keeps existing consumers that don't pass a
+   * parse handler untouched.
+   */
+  onParseText?: () => void;
+  isParsingText?: boolean;
   /**
    * Optional image-capture wiring. When any of these props is undefined the
    * photo button is hidden and the component falls back to the voice-only
@@ -33,11 +38,11 @@ interface WorkoutTextModeProps {
 }
 
 /**
- * Pure textarea + voice dictation surface. Used inside
- * `WorkoutComposer`'s collapsible panel — the auto-parse loop lives in
- * `useWorkoutEditor` and watches the `freeText` value, so this component
- * no longer owns a "parse now" button. Voice transcripts stream into
- * `freeText` via the parent's onChange, which re-primes the debounce.
+ * Textarea + voice dictation surface with an explicit Parse button.
+ * Used inside `WorkoutComposer`'s collapsible panel — parsing no
+ * longer runs on every keystroke, so the user taps Parse when the
+ * description is ready. Voice transcripts stream into `freeText` via
+ * the parent's onChange.
  *
  * When an `imagePreview` is active, the textarea is swapped for the
  * image preview surface so the user confirms the capture before the
@@ -50,6 +55,8 @@ export const WorkoutTextMode = ({
   isSupported,
   toggleListening,
   interimTranscript,
+  onParseText,
+  isParsingText,
   onCaptureImage,
   imagePreview,
   onRetakeImage,
@@ -126,10 +133,28 @@ export const WorkoutTextMode = ({
               {interimTranscript}
             </div>
           )}
+          {onParseText && (
+            <Button
+              type="button"
+              variant="default"
+              size="sm"
+              onClick={onParseText}
+              disabled={isParsingText || freeText.trim().length === 0}
+              className="w-full gap-1.5"
+              data-testid="button-parse-text"
+            >
+              {isParsingText ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5" aria-hidden />
+              )}
+              {isParsingText ? "Parsing…" : "Parse into exercises"}
+            </Button>
+          )}
           <p className="text-xs text-muted-foreground">
             {isSupported
-              ? "Type, dictate with the mic, or scan a whiteboard photo — the scan auto-fills your exercises."
-              : "Type your workout or scan a whiteboard photo — the scan auto-fills your exercises."}
+              ? "Type or dictate, then tap Parse. A scanned whiteboard photo auto-fills your exercises on its own."
+              : "Type your workout, then tap Parse. A scanned whiteboard photo auto-fills your exercises on its own."}
           </p>
         </>
       )}
