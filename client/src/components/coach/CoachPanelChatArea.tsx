@@ -1,10 +1,10 @@
-import { forwardRef } from "react";
+import { forwardRef, type UIEventHandler } from "react";
 
 import { ChatMessage } from "@/components/ChatMessage";
 import { SuggestionsList } from "@/components/coach/SuggestionsTab";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { Message } from "@/hooks/useChatSession";
-import type { RagInfo,Suggestion } from "@/lib/api";
+import type { RagInfo, Suggestion } from "@/lib/api";
 
 interface CoachPanelChatAreaProps {
   readonly messages: Message[];
@@ -12,6 +12,7 @@ interface CoachPanelChatAreaProps {
   readonly applyingId: string | null;
   readonly suggestionsRagInfo?: RagInfo;
   readonly isProcessing: boolean;
+  readonly onViewportScroll?: UIEventHandler<HTMLDivElement>;
   readonly onApplySuggestion: (suggestion: Suggestion) => void;
   readonly onDismissSuggestion: (id: string) => void;
 }
@@ -24,13 +25,18 @@ export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaP
       applyingId,
       suggestionsRagInfo,
       isProcessing,
+      onViewportScroll,
       onApplySuggestion,
       onDismissSuggestion,
     },
     ref
   ) => {
     return (
-      <ScrollArea className="flex-1 p-3" ref={ref}>
+      <ScrollArea
+        className="flex-1 p-3"
+        viewportRef={ref}
+        viewportProps={{ onScroll: onViewportScroll }}
+      >
         <div className="space-y-3" role="log" aria-live="polite" aria-label="Coach conversation">
           {messages.map((message) => (
             <ChatMessage

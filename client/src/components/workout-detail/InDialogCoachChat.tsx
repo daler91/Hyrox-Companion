@@ -1,5 +1,5 @@
 import { ArrowLeft, Sparkles } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { ChatInput, type ChatInputSeed } from "@/components/ChatInput";
 import { CoachPanelChatArea } from "@/components/coach/CoachPanelChatArea";
@@ -26,7 +26,7 @@ interface InDialogCoachChatProps {
  * which isn't available here).
  */
 export function InDialogCoachChat({ focusLabel, seedText, onBack }: InDialogCoachChatProps) {
-  const { messages, isLoading, scrollRef, sendMessage, scrollToBottom } = useChatSession({
+  const { messages, isLoading, scrollRef, updateAutoScrollMode, sendMessage } = useChatSession({
     useStreaming: true,
   });
 
@@ -34,10 +34,6 @@ export function InDialogCoachChat({ focusLabel, seedText, onBack }: InDialogCoac
   // is required by ChatInput to re-seed on demand; for this one-shot
   // flow we never need to re-seed, so any stable value works.
   const [seed] = useState<ChatInputSeed>(() => ({ text: seedText, nonce: 1 }));
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, scrollToBottom]);
 
   return (
     <section
@@ -77,6 +73,7 @@ export function InDialogCoachChat({ focusLabel, seedText, onBack }: InDialogCoac
         pendingSuggestions={[]}
         applyingId={null}
         isProcessing={isLoading}
+        onViewportScroll={updateAutoScrollMode}
         onApplySuggestion={discardSuggestionEvent}
         onDismissSuggestion={discardSuggestionEvent}
       />

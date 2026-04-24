@@ -55,6 +55,9 @@ export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }
     isLoading,
     isStreaming,
     scrollRef,
+    updateAutoScrollMode,
+    scrollToBottomIfPinned,
+    pinAutoScroll,
     sendMessage,
     cancelStream,
     clearHistory,
@@ -113,10 +116,13 @@ export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }
     }
   }, [isOpen, isNewUser, hasShownWelcome, messages.length]);
 
-  useEffect(() => { scrollToBottom(); }, [messages, scrollToBottom]);
+  useEffect(() => {
+    scrollToBottomIfPinned();
+  }, [messages, scrollToBottomIfPinned]);
 
   const handleQuickAction = (action: { id: string; label: string }) => {
     if (action.id === "suggestions") {
+      pinAutoScroll();
       addLocalMessage({ id: Date.now().toString(), role: "user", content: action.label, timestamp: getCurrentTimeString() });
       saveMessage({ role: "user", content: action.label });
       suggestionsMutation.mutate();
@@ -147,6 +153,7 @@ export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }
         applyingId={applyingId}
         suggestionsRagInfo={suggestionsRagInfo}
         isProcessing={isProcessing}
+        onViewportScroll={updateAutoScrollMode}
         onApplySuggestion={handleApplySuggestion}
         onDismissSuggestion={handleDismissSuggestion}
       />
