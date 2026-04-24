@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 interface PendingSetPatch<TPatch> {
   timer: ReturnType<typeof setTimeout>;
@@ -40,7 +40,13 @@ export function useDebouncedSetPatches<TPatch extends object>(
     };
   }, [mutate]);
 
-  const patchSetDebounced = (setId: string, patch: TPatch) => {
+  // Stable identities for the three callbacks. Cell inputs pass these
+  // through as `onUpdateSet` — without useCallback, each render of the
+  // owning hook returns a new function, which breaks the React.memo
+  // guarantees on GroupRow / SetRow / FieldInput and re-renders every
+  // cell on every optimistic cache patch (i.e. every 350ms during
+  // typing).
+  const patchSetDebounced = useCallback((setId: string, patch: TPatch) => {
     const existing = pendingRef.current.get(setId);
     if (existing) clearTimeout(existing.timer);
     const merged: TPatch = existing
@@ -48,12 +54,12 @@ export function useDebouncedSetPatches<TPatch extends object>(
       : patch;
     const timer = setTimeout(() => fireRef.current(setId), debounceMs);
     pendingRef.current.set(setId, { timer, patch: merged });
-  };
+  }, [debounceMs]);
 
-  const flushPendingSetPatches = () => {
+  const flushPendingSetPatches = useCallback(() => {
     const ids = Array.from(pendingRef.current.keys());
     for (const setId of ids) fireRef.current(setId);
-  };
+  }, []);
 
   // Drop every pending timer without firing. Callers use this when the
   // owning entity changes (e.g. the dialog switches from workout A to
@@ -61,12 +67,12 @@ export function useDebouncedSetPatches<TPatch extends object>(
   // owner, so firing the queued patches would PATCH the wrong owner.
   // The edits that didn't make the debounce window are lost, which is
   // the same outcome as navigating away before typing finished.
-  const cancelPending = () => {
+  const cancelPending = useCallback(() => {
     for (const entry of pendingRef.current.values()) {
       clearTimeout(entry.timer);
     }
     pendingRef.current.clear();
-  };
+  }, []);
 
   useEffect(() => {
     const pending = pendingRef.current;

@@ -419,9 +419,18 @@ function SortableGroupRow(props: GroupRowProps) {
     zIndex: isDragging ? 20 : undefined,
   };
 
+  // Stable object identity so GroupRow's React.memo isn't busted by a
+  // fresh `{ attributes, listeners }` literal on every parent render —
+  // otherwise typing into one row's InlineSetEditor re-renders every
+  // row in the table via its memoized GroupRow wrapper.
+  const dragHandleProps = useMemo(
+    () => ({ attributes, listeners }),
+    [attributes, listeners],
+  );
+
   return (
     <div ref={setNodeRef} style={style}>
-      <GroupRow {...props} dragHandleProps={{ attributes, listeners }} />
+      <GroupRow {...props} dragHandleProps={dragHandleProps} />
     </div>
   );
 }

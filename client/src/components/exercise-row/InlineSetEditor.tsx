@@ -36,7 +36,7 @@ interface InlineSetEditorProps {
  * rather than the large-card stepper pattern. A per-set notes toggle
  * is tucked on the right so the row stays narrow by default.
  */
-export function InlineSetEditor({
+export const InlineSetEditor = memo(function InlineSetEditor({
   sets,
   exerciseName,
   customLabel,
@@ -127,7 +127,7 @@ export function InlineSetEditor({
       </Button>
     </div>
   );
-}
+});
 
 interface HeaderRowProps {
   readonly fields: readonly FieldKey[];
