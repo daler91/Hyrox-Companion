@@ -1,3 +1,16 @@
+/**
+ * Format a Date as `YYYY-MM-DD` in the **user's local timezone**.
+ *
+ * NOT UTC — using `Date#toISOString().split("T")[0]` would silently shift
+ * the date back/forward for users outside UTC (e.g. a 23:00 PST log would
+ * land on tomorrow's date). All timeline / workout / plan-day date strings
+ * in this app are local-TZ; mixing UTC strings with these will misalign
+ * "today" / "yesterday" comparisons, streak counts, and date-based
+ * filters.
+ *
+ * Use this helper any time you persist or compare a calendar date that
+ * the user authored — never the raw `toISOString` slice.
+ */
 export function toISODateString(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");

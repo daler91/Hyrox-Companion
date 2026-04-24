@@ -53,6 +53,7 @@ export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }
   const {
     messages: hookMessages,
     isLoading,
+    isStreaming,
     scrollRef,
     sendMessage,
     cancelStream,
@@ -155,7 +156,11 @@ export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }
         )}
         onQuickAction={handleQuickAction}
         onSendMessage={sendMessage}
-        onStopMessage={cancelStream}
+        // Only expose Stop while a chat stream is actually cancellable.
+        // The suggestionsMutation contributes to isProcessing but cannot
+        // be aborted today, so showing Stop during it would be a no-op
+        // button that leaves the user wondering if it worked.
+        onStopMessage={isStreaming ? cancelStream : undefined}
         isProcessing={isProcessing}
       />
     </div>

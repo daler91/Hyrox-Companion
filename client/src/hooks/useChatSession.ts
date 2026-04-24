@@ -84,6 +84,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
 
   const [messages, setMessages] = useState<Message[]>([welcomeMessageObj]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const messagesRef = useRef<Message[]>(messages);
@@ -176,6 +177,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
 
         const controller = new AbortController();
         streamControllerRef.current = controller;
+        setIsStreaming(true);
 
         const response = await api.chat.sendStream(
           { message: content, history },
@@ -188,10 +190,18 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
           throw new Error("No response body");
         }
 
+        // Capture the latest accumulated content on every flush so the catch
+        // handler can persist a partial response after a Stop / network drop.
+        // Without this, `fullResponse` is only assigned after consumeSSEStream
+        // resolves — but abort throws first, so the partial would be lost.
+        const updateMessage = createMessageUpdater(assistantMessageId, setMessages);
         const result = await consumeSSEStream<RagInfo>(reader, {
           metaKey: "ragInfo",
           signal: controller.signal,
-          onFlush: createMessageUpdater(assistantMessageId, setMessages),
+          onFlush: (snapshot) => {
+            fullResponse = snapshot.content;
+            updateMessage(snapshot);
+          },
         });
         fullResponse = result.content;
 
@@ -255,6 +265,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       }
     } finally {
       streamControllerRef.current = null;
+      setIsStreaming(false);
       setIsLoading(false);
       isSubmittingRef.current = false;
     }
@@ -271,6 +282,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   return {
     messages,
     isLoading,
+    isStreaming,
     historyLoading,
     scrollRef,
     sendMessage,

@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription,CardHeader, CardTitle } from "@/comp
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { api } from "@/lib/api";
+import { toISODateString } from "@/lib/dateUtils";
 
 import { PersonalRecordItem } from "./PersonalRecordItem";
 
@@ -50,7 +51,9 @@ export function PersonalRecordsTab({ dateParams }: PersonalRecordsTabProps) {
 
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const cutoff = thirtyDaysAgo.toISOString().split("T")[0];
+    // PR dates are stored in local TZ; cutoff must be too or evening users
+    // outside UTC see PRs from 31 days ago tagged as "recent".
+    const cutoff = toISODateString(thirtyDaysAgo);
 
     const results = [];
     const recent = [];

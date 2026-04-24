@@ -43,7 +43,7 @@ router.get("/api/v1/workouts/unstructured", isAuthenticated, rateLimiter("workou
     res.json(workouts);
   }));
 
-router.post("/api/v1/workouts/:id/reparse", ...protectedMutationGuards, rateLimiter("reparse", 5), asyncHandler(async (req: Request<{ id: string }>, res: Response) => {
+router.post("/api/v1/workouts/:id/reparse", ...protectedMutationGuards, rateLimiter("reparse", 5), aiBudgetCheck, asyncHandler(async (req: Request<{ id: string }>, res: Response) => {
     const userId = getUserId(req);
     const workoutId = req.params.id;
     // ⚡ Perf: Parallelize independent DB queries — getWorkoutLog and getUser
@@ -91,7 +91,7 @@ router.post("/api/v1/workouts/:id/reparse-from-image", ...protectedMutationGuard
   }));
 
 
-router.post("/api/v1/workouts/batch-reparse", ...protectedMutationGuards, rateLimiter("batchReparse", 2), asyncHandler(async (req: Request, res: Response) => {
+router.post("/api/v1/workouts/batch-reparse", ...protectedMutationGuards, rateLimiter("batchReparse", 2), aiBudgetCheck, asyncHandler(async (req: Request, res: Response) => {
     const userId = getUserId(req);
     const { total, parsed, failed } = await batchReparseWorkouts(userId);
     res.json({ total, parsed, failed });

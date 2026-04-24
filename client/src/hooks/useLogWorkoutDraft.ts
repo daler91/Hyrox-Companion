@@ -1,4 +1,5 @@
 import type { StructuredExercise } from "@/components/ExerciseInput";
+import { getTodayString } from "@/lib/dateUtils";
 
 const DRAFT_STORAGE_KEY = "fitai-log-workout-draft";
 const DRAFT_ANNOUNCED_KEY = "fitai-log-workout-draft-announced";
@@ -53,7 +54,7 @@ export function loadLogWorkoutDraft(userKey: string): LoadedDraft | null {
     if (parsed.userKey !== userKey) return null;
     return {
       title: parsed.title ?? "",
-      date: parsed.date ?? new Date().toISOString().split("T")[0],
+      date: parsed.date ?? getTodayString(),
       freeText: parsed.freeText ?? "",
       notes: parsed.notes ?? "",
       rpe: parsed.rpe ?? null,
