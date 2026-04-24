@@ -329,17 +329,17 @@ function MoveEntryMenu({
   const maxDate = isLoggedMove ? tomorrowIso : undefined;
   const showNextWeek = !isLoggedMove && entry.date !== nextWeekIso;
 
-  // Stop mousedown on the control cluster so the card's onClick
-  // (which opens the detail dialog) doesn't fire when the user taps a
-  // button. mousedown avoids wrapping the cluster in a non-native
-  // interactive `<div onClick>`, which would force role + keyboard
-  // handling for a presentational container (WCAG / sonar a11y rule).
-  const stopMouseDown = (e: React.MouseEvent) => e.stopPropagation();
+  // Stop mousedown + click on each button so tapping a control doesn't
+  // also fire the Card's onClick (open detail) or open-on-focus flows.
+  // Handlers live on the native buttons themselves rather than an
+  // outer `<div onClick>` wrapper — a non-native interactive container
+  // would force us to add role/keyboard plumbing on a presentational
+  // element (WCAG / sonar a11y rule).
+  const stop = (e: React.SyntheticEvent) => e.stopPropagation();
 
   return (
     <div
       className="absolute right-2 top-2 z-10 flex items-center gap-0.5 opacity-60 hover:opacity-100 focus-within:opacity-100 transition-opacity"
-      onMouseDown={stopMouseDown}
       data-testid={`move-entry-controls-${entry.id}`}
     >
       <TooltipProvider>
@@ -355,6 +355,8 @@ function MoveEntryMenu({
               )}
               aria-label={`Drag ${entry.focus || "workout"} to another day`}
               data-testid={`drag-handle-${entry.id}`}
+              onClick={stop}
+              onMouseDown={stop}
               {...dragListeners}
               {...dragAttributes}
             >
@@ -374,6 +376,8 @@ function MoveEntryMenu({
             aria-label={`Move ${entry.focus || "workout"} to another day`}
             data-testid={`move-menu-${entry.id}`}
             disabled={isMoving}
+            onClick={stop}
+            onMouseDown={stop}
           >
             <CalendarClock className="h-3.5 w-3.5" />
           </button>
