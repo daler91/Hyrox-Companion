@@ -84,6 +84,10 @@ export function convertDistance(value: number, from: string, to: string): number
 }
 
 export function formatNumberWithUnit(value: number, unit: string, decimals: number): string {
+  // Guard against NaN / Infinity slipping into the UI as "NaN kg" or
+  // "Infinity miles" — both can be produced upstream by a divide-by-zero
+  // (e.g. unit conversion with a corrupt source) or unvalidated user input.
+  if (!Number.isFinite(value)) return `— ${unit}`;
   return `${Number(value.toFixed(decimals))} ${unit}`;
 }
 

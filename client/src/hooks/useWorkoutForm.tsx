@@ -203,6 +203,18 @@ export function useWorkoutForm({
       .map((id) => exerciseData[id])
       .filter(Boolean);
 
+    // If structured blocks exist but every one was filtered out (no
+    // populated data), fall through to the same empty-workout toast as
+    // the no-blocks branch instead of silently saving an empty log.
+    if (exercises.length === 0 && !freeText.trim()) {
+      toast({
+        title: "Missing workout details",
+        description: "Please add at least one exercise or describe your workout.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const allWarnings = exercises.flatMap((ex) => getMissingFieldWarnings(ex));
     if (allWarnings.length > 0) {
       const uniqueWarnings = [...new Set(allWarnings)];

@@ -83,6 +83,12 @@ export function decryptToken(encryptedData: string): string {
     const iv = Buffer.from(ivHex, "hex");
     const authTag = Buffer.from(authTagHex, "hex");
 
+    // Reject truncated/padded auth tags — GCM is 128-bit and a shorter tag
+    // weakens forgery resistance (NIST SP 800-38D §5.2.1.2).
+    if (authTag.length !== 16) {
+      throw new Error("Invalid auth tag length — expected 16 bytes");
+    }
+
     const decipher = crypto.createDecipheriv(ALGORITHM, key, iv, { authTagLength: 16 });
     decipher.setAuthTag(authTag);
 

@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 
+import { env } from "../env";
 import { logger } from "../logger";
 import { checkAiBudget, DAILY_LIMIT_CENTS } from "../services/aiUsageService";
 import { getUserId } from "../types";
@@ -14,6 +15,17 @@ export function aiBudgetCheck(
   res: Response,
   next: NextFunction,
 ): void {
+  // Operator-level kill switch. Runs before any DB work so flipping the
+  // env flag immediately short-circuits AI traffic without touching
+  // storage, the AI budget, or Gemini.
+  if (env.AI_FEATURES_ENABLED === "false") {
+    res.status(503).json({
+      error: "AI features are temporarily disabled.",
+      code: "AI_FEATURES_DISABLED",
+    });
+    return;
+  }
+
   const run = async () => {
     try {
       const userId = getUserId(req);

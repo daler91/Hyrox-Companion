@@ -1,4 +1,4 @@
-import { Loader2,Send } from "lucide-react";
+import { Loader2,Send, Square } from "lucide-react";
 import { useCallback,useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -21,12 +21,13 @@ export interface ChatInputSeed {
 
 interface ChatInputProps {
   readonly onSend: (message: string) => void;
+  readonly onStop?: () => void;
   readonly isLoading?: boolean;
   readonly placeholder?: string;
   readonly seed?: ChatInputSeed | null;
 }
 
-export function ChatInput({ onSend, isLoading, placeholder = "Ask about your training...", seed }: Readonly<ChatInputProps>) {
+export function ChatInput({ onSend, onStop, isLoading, placeholder = "Ask about your training...", seed }: Readonly<ChatInputProps>) {
   const [message, setMessage] = useState("");
   const { toast } = useToast();
 
@@ -98,22 +99,37 @@ export function ChatInput({ onSend, isLoading, placeholder = "Ask about your tra
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button
-                type="submit"
-                size="icon"
-                disabled={message.trim() === "" || isLoading}
-                data-testid="button-send-message"
-                aria-label="Send message"
-              >
-                {isLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                ) : (
-                  <Send className="h-4 w-4" />
-                )}
-              </Button>
+              {isLoading && onStop ? (
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="destructive"
+                  onClick={onStop}
+                  data-testid="button-stop-stream"
+                  aria-label="Stop AI response"
+                >
+                  <Square className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              ) : (
+                <Button
+                  type="submit"
+                  size="icon"
+                  disabled={message.trim() === "" || isLoading}
+                  data-testid="button-send-message"
+                  aria-label="Send message"
+                >
+                  {isLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                </Button>
+              )}
             </TooltipTrigger>
             <TooltipContent>
-              {message.trim() ? "Send message" : "Type a message to send"}
+              {isLoading && onStop
+                ? "Stop response"
+                : message.trim() ? "Send message" : "Type a message to send"}
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>

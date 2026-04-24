@@ -58,11 +58,21 @@ export interface SSEStreamOptions<TMeta = unknown> {
   onFlush: (snapshot: SSEStreamResult<TMeta>) => void;
   /** Optional key name in the SSE payload to extract as metadata (e.g. "ragInfo"). */
   metaKey?: string;
+  /**
+   * Optional abort signal — when aborted, stops reading, cancels the pending
+   * rAF, and suppresses the trailing flush so stale callbacks can't overwrite
+   * a newer stream's state.
+   */
+  signal?: AbortSignal;
 }
 
 /**
  * Consume an SSE ReadableStream, batching UI updates via rAF.
  * Returns the final accumulated content and metadata.
+ *
+ * Aborting via `options.signal` cancels the reader, drops the pending rAF
+ * flush, and rejects with the abort reason so the caller can distinguish
+ * user-cancellation from network errors.
  */
 export async function consumeSSEStream<TMeta = unknown>(
   reader: ReadableStreamDefaultReader<Uint8Array>,
@@ -73,9 +83,22 @@ export async function consumeSSEStream<TMeta = unknown>(
   let buffer = "";
   let rafId = 0;
   let dirty = false;
+  let aborted = false;
+
+  const onAbort = () => {
+    aborted = true;
+    reader.cancel().catch(() => {/* best effort */});
+  };
+  if (options.signal) {
+    if (options.signal.aborted) {
+      onAbort();
+    } else {
+      options.signal.addEventListener("abort", onAbort, { once: true });
+    }
+  }
 
   const flush = () => {
-    if (!dirty) return;
+    if (!dirty || aborted) return;
     dirty = false;
     options.onFlush({ content: acc.content, meta: acc.meta });
   };
@@ -89,6 +112,7 @@ export async function consumeSSEStream<TMeta = unknown>(
 
   try {
     while (true) {
+      if (aborted) break;
       const { done, value } = await reader.read();
       if (done) break;
 
@@ -102,13 +126,22 @@ export async function consumeSSEStream<TMeta = unknown>(
       scheduleFlush();
     }
 
-    if (buffer.trim()) {
+    if (!aborted && buffer.trim()) {
       processSSELines(buffer.split("\n"), acc, options.metaKey);
     }
   } finally {
     cancelAnimationFrame(rafId);
-    dirty = true;
-    flush();
+    if (!aborted) {
+      dirty = true;
+      flush();
+    }
+    if (options.signal) {
+      options.signal.removeEventListener("abort", onAbort);
+    }
+  }
+
+  if (aborted) {
+    throw new DOMException("Stream aborted", "AbortError");
   }
 
   return { content: acc.content, meta: acc.meta };

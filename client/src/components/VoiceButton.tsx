@@ -32,7 +32,33 @@ export function VoiceButton({ isListening, isSupported, onClick, size = "icon", 
     setAnnouncement(isListening ? "Recording. Speak now." : "Recording stopped.");
   }
 
-  if (!isSupported) return null;
+  if (!isSupported) {
+    // Render a disabled hint instead of silently hiding so users on iOS
+    // Safari and other browsers without SpeechRecognition know why voice
+    // input isn't available, rather than wondering if it's a bug.
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size={size}
+              disabled
+              className={cn("relative opacity-50", className)}
+              data-testid={dataTestId || "button-voice-input"}
+              aria-label="Voice input not supported in this browser"
+            >
+              <MicOff className="h-4 w-4" aria-hidden="true" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Voice input isn&apos;t supported in this browser. Try Chrome or Edge.</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
 
   return (
     <TooltipProvider>

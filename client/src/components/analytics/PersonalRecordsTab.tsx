@@ -169,6 +169,9 @@ export function PersonalRecordsTab({ dateParams }: PersonalRecordsTabProps) {
                   />
                 ))}
               </div>
+              <p className="text-xs text-muted-foreground pt-1">
+                Estimated 1RM uses the Epley formula and is shown only for sets of 2–10 reps; higher rep counts trade strength for endurance and the estimate degrades quickly.
+              </p>
             </div>
           );
         })()}

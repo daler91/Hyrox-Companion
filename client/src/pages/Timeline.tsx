@@ -1,4 +1,4 @@
-import type { TimelineAnnotation } from "@shared/schema";
+import type { TimelineAnnotation, TimelineEntry } from "@shared/schema";
 import { useMutation } from "@tanstack/react-query";
 import type { Virtualizer } from "@tanstack/react-virtual";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -19,6 +19,7 @@ import {
   CombineWorkoutsDialog,
   FloatingActionButton,
   ImportPreviewDialog,
+  MoveWorkoutDialog,
   SchedulePlanDialog,
   SkipConfirmDialog,
   TimelineDateGroup,
@@ -248,6 +249,10 @@ export default function Timeline() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showAIConsent, setShowAIConsent] = useState(false);
   const [annotationsDialogOpen, setAnnotationsDialogOpen] = useState(false);
+  // Reschedule dialog state. Holds the entry whose date is being changed
+  // so MoveWorkoutDialog can seed itself with the current date and route
+  // the chosen date to the right mutation (plan day vs workout log).
+  const [movingEntry, setMovingEntry] = useState<TimelineEntry | null>(null);
   // Seeds the create form in AnnotationsDialog when the user clicks a row's
   // inline "+ Note" chip, so they don't have to re-pick the date.
   const [annotationInitialDate, setAnnotationInitialDate] = useState<string | undefined>(undefined);
@@ -302,6 +307,44 @@ export default function Timeline() {
         variant: "destructive",
       }),
   });
+
+  // Reschedule a workout. Plan-day-backed entries persist via
+  // PATCH /api/v1/plans/days/:dayId/status (the same route used by the
+  // status chip — it accepts scheduledDate alongside status). Logged
+  // workouts persist via PATCH /api/v1/workouts/:id. The detail dialog is
+  // closed before invalidation so the user can see the row jump dates in
+  // its new position.
+  const moveEntryMutation = useMutation({
+    mutationFn: async ({ entry, date }: { entry: TimelineEntry; date: string }) => {
+      if (entry.planDayId) {
+        await api.plans.setScheduledDate(entry.planDayId, date);
+      } else if (entry.workoutLogId) {
+        await api.workouts.update(entry.workoutLogId, { date });
+      } else {
+        throw new Error("Entry has neither a planDayId nor a workoutLogId");
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }).catch(() => {});
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.trainingOverview }).catch(() => {});
+      setMovingEntry(null);
+      setDetailEntry(null);
+      toast({ title: "Workout moved" });
+    },
+    onError: () =>
+      toast({
+        title: "Couldn't move workout",
+        description: "Please try again.",
+        variant: "destructive",
+      }),
+  });
+
+  const handleChangeDate = useCallback((entry: TimelineEntry) => {
+    // Open the move dialog seeded with this entry. Closing the detail
+    // dialog at the same time would unmount the source of the click and
+    // disorient the user mid-interaction; we close it on success instead.
+    setMovingEntry(entry);
+  }, []);
 
   const handleAddAnnotation = useCallback((date: string) => {
     setAnnotationInitialDate(date);
@@ -462,6 +505,7 @@ export default function Timeline() {
               setDetailEntry(null);
               handleCombine(entry);
             }}
+            onChangeDate={handleChangeDate}
             weightUnit={user?.weightUnit === "lbs" ? "lb" : "kg"}
             distanceUnit={user?.distanceUnit === "miles" ? "miles" : "km"}
             // Close the global coach rail when the in-dialog chat
@@ -514,6 +558,17 @@ export default function Timeline() {
               }
             }}
             initialDate={annotationInitialDate}
+          />
+
+          <MoveWorkoutDialog
+            entry={movingEntry}
+            onOpenChange={(open) => {
+              if (!open) setMovingEntry(null);
+            }}
+            onConfirm={(date) =>
+              movingEntry && moveEntryMutation.mutate({ entry: movingEntry, date })
+            }
+            isPending={moveEntryMutation.isPending}
           />
         </div>
       </div>

@@ -1,6 +1,7 @@
 import { CheckCircle2, CloudUpload, WifiOff } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { useToast } from "@/hooks/use-toast";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { getPendingCount } from "@/lib/offlineQueue";
 
@@ -18,6 +19,7 @@ const SYNC_SUCCESS_DISMISS_MS = 3500;
  */
 export function OfflineIndicator() {
   const isOnline = useOnlineStatus();
+  const { toast } = useToast();
   // Lazy initializer reads the queue length once on mount so the first
   // render already reflects reality without setState-in-effect patterns.
   const [pendingCount, setPendingCount] = useState<number>(() => getPendingCount());
@@ -41,8 +43,19 @@ export function OfflineIndicator() {
     let dismissTimerId: ReturnType<typeof setTimeout> | null = null;
 
     const handleSyncComplete = (event: Event) => {
-      const detail = (event as CustomEvent<{ synced: number }>).detail;
-      if (!detail || detail.synced <= 0) return;
+      const detail = (event as CustomEvent<{ synced: number; dropped: number }>).detail;
+      if (!detail) return;
+      if (detail.dropped > 0) {
+        // Surface the drop explicitly so users aren't silently losing logged
+        // workouts after prolonged offline periods (7d / 5 retry limit).
+        toast({
+          title: "Some offline changes couldn't be synced",
+          description: `${detail.dropped} change${detail.dropped === 1 ? " was" : "s were"} discarded after too many failed attempts. Please re-enter recent edits.`,
+          variant: "destructive",
+          duration: 10_000,
+        });
+      }
+      if (detail.synced <= 0) return;
       setRecentlySynced(detail.synced);
       setPendingCount(0);
       if (dismissTimerId !== null) {
@@ -61,7 +74,7 @@ export function OfflineIndicator() {
       }
       globalThis.removeEventListener("offline-sync-complete", handleSyncComplete);
     };
-  }, []);
+  }, [toast]);
 
   if (isOnline && recentlySynced !== null) {
     return (

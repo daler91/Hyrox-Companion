@@ -6,6 +6,7 @@ export { default as EditWorkoutDialog } from "./EditWorkoutDialog";
 export { default as FloatingActionButton } from "./FloatingActionButton";
 export type { CsvPreviewData } from "./ImportPreviewDialog";
 export { default as ImportPreviewDialog } from "./ImportPreviewDialog";
+export { default as MoveWorkoutDialog } from "./MoveWorkoutDialog";
 export { default as SchedulePlanDialog } from "./SchedulePlanDialog";
 export { default as SkipConfirmDialog } from "./SkipConfirmDialog";
 export { default as SuggestionsPanel } from "./SuggestionsPanel";

@@ -63,6 +63,13 @@ interface WorkoutDetailDialogV2Props {
    * workout to merge with when nothing's logged yet).
    */
   readonly onCombine?: (entry: TimelineEntry) => void;
+  /**
+   * ⋮ menu → Move to date. Parent opens MoveWorkoutDialog and persists
+   * the chosen date via the right mutation (plan_days vs workout_logs).
+   * Surfaces on any entry with either a workoutLogId or a planDayId so
+   * users can reschedule both planned and logged workouts.
+   */
+  readonly onChangeDate?: (entry: TimelineEntry) => void;
   readonly weightUnit?: "kg" | "lb";
   readonly distanceUnit?: "km" | "miles";
   /**
@@ -107,6 +114,7 @@ export function WorkoutDetailDialogV2({
   onMarkComplete,
   isMarkingComplete = false,
   onCombine,
+  onChangeDate,
   weightUnit = "kg",
   distanceUnit = "km",
   onAskCoachOpen,
@@ -309,6 +317,7 @@ export function WorkoutDetailDialogV2({
     onDelete,
     onChangeStatus,
     onCombine,
+    onChangeDate,
     updateRpe,
     openDeleteConfirm: () => setConfirmingDelete(true),
     displayedWorkoutIdRef,
@@ -362,6 +371,7 @@ export function WorkoutDetailDialogV2({
             onDelete={handlers.menuDelete}
             onChangeStatus={handlers.menuChangeStatus}
             onCombine={handlers.menuCombine}
+            onChangeDate={handlers.menuChangeDate}
             onChangeFocus={onChangeFocus}
             saveState={headerSaveState}
           />
@@ -929,6 +939,7 @@ interface BuildDialogHandlersArgs {
   onDelete: WorkoutDetailDialogV2Props["onDelete"];
   onChangeStatus: WorkoutDetailDialogV2Props["onChangeStatus"];
   onCombine: WorkoutDetailDialogV2Props["onCombine"];
+  onChangeDate: WorkoutDetailDialogV2Props["onChangeDate"];
   updateRpe: {
     mutate: (
       vars: { rpe: number | null; forWorkoutId: string },
@@ -952,7 +963,7 @@ interface BuildDialogHandlersArgs {
 function buildDialogHandlers(args: BuildDialogHandlersArgs) {
   const {
     entry, workoutId, isPlanned, actionsLocked,
-    onDelete, onChangeStatus, onCombine,
+    onDelete, onChangeStatus, onCombine, onChangeDate,
     updateRpe, openDeleteConfirm, displayedWorkoutIdRef, bumpRpeErrorToken,
   } = args;
   const menuUnlocked = !actionsLocked;
@@ -986,6 +997,14 @@ function buildDialogHandlers(args: BuildDialogHandlersArgs) {
         : undefined,
     menuCombine:
       !isPlanned && onCombine && menuUnlocked ? () => onCombine(entry) : undefined,
+    // Move-to-date is available on any entry that has either a workoutLogId
+    // (logged) or a planDayId (planned). Ad-hoc workouts logged without a
+    // plan day still satisfy the workoutLogId branch; legacy entries with
+    // neither id can't be persisted anywhere, so we hide the menu item.
+    menuChangeDate:
+      onChangeDate && menuUnlocked && (entry.workoutLogId || entry.planDayId)
+        ? () => onChangeDate(entry)
+        : undefined,
     changeRpe,
   };
 }

@@ -21,6 +21,23 @@ async function ensurePdfjs() {
 }
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+// Cap PDF/DOCX parsing at 30 s. Corrupt PDFs can hang `getPage()`
+// indefinitely (W4-25); the timeout surfaces as a normal "Failed to read
+// file" toast instead of a frozen UI.
+const PARSE_TIMEOUT_MS = 30_000;
+
+function withParseTimeout<T>(label: string, fn: () => Promise<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`${label}: parsing timed out after ${PARSE_TIMEOUT_MS / 1000}s`)),
+      PARSE_TIMEOUT_MS,
+    );
+    fn().then(
+      (val) => { clearTimeout(timer); resolve(val); },
+      (err) => { clearTimeout(timer); reject(err); },
+    );
+  });
+}
 
 /** Strip null bytes and non-printable control characters that PostgreSQL text columns reject. */
 function sanitizeText(text: string): string {
@@ -80,8 +97,8 @@ async function extractDocxText(file: File): Promise<string> {
 
 async function extractFileText(file: File): Promise<string> {
   const ext = file.name.split(".").pop()?.toLowerCase();
-  if (ext === "pdf") return extractPdfText(file);
-  if (ext === "docx") return extractDocxText(file);
+  if (ext === "pdf") return withParseTimeout(file.name, () => extractPdfText(file));
+  if (ext === "docx") return withParseTimeout(file.name, () => extractDocxText(file));
   return sanitizeText(await file.text());
 }
 

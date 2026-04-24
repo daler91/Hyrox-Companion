@@ -1,3 +1,12 @@
+// Pin to UTC so date-fns / `format()` / Date parsing produce identical
+// strings on every contributor's machine. Several timeline / calendar
+// tests construct fixtures via `format(new Date("2023-10-15"), …)`,
+// which ECMAScript parses as UTC midnight — under non-UTC dev timezones
+// (e.g. America/Chicago) the formatted date shifts by a day and the
+// past/future grouping assertions misalign. CI runs in UTC, so this just
+// brings local dev into parity with CI.
+process.env.TZ = "UTC";
+
 import "@testing-library/jest-dom/vitest";
 import { toHaveNoViolations } from "jest-axe";
 import { expect } from "vitest";

@@ -555,7 +555,7 @@ try {
 // exit runs if any phase wedges beyond that.
 const SHUTDOWN_TIMEOUT_MS = 60_000;
 const SSE_DRAIN_TIMEOUT_MS = 5_000;
-const SENTRY_FLUSH_TIMEOUT_MS = 5_000;
+const SENTRY_FLUSH_TIMEOUT_MS = 10_000;
 let shuttingDown = false;
 
 const shutdown = () => {

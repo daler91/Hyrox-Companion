@@ -129,18 +129,51 @@ router.post("/api/v1/chat/stream", ...protectedMutationGuards, rateLimiter("chat
     const unregister = registerSseStream(controller);
     req.on("close", () => controller.abort());
 
+    // Track the abort reason separately so we can tell the client whether
+    // their stream was killed because the Clerk session expired (which they
+    // can recover from by re-authing) vs a generic abort. Wrapped in an
+    // object so TypeScript control-flow doesn't narrow it to its initial
+    // literal value (the setTimeout reassignment is async).
+    const abortState: { reason: "auth-expired" | "generic" } = { reason: "generic" };
+
     // Auto-abort when the stream exceeds its deadline (hard cap OR Clerk
     // session expiry, whichever comes first). unref() so the timer
     // doesn't block process exit on an otherwise-idle server.
     const deadlineMs = computeSseDeadlineMs(req);
-    const deadlineTimer = setTimeout(
-      () => controller.abort(),
-      Math.max(0, deadlineMs - Date.now()),
-    );
+    const deadlineTimer = setTimeout(() => {
+      abortState.reason = "auth-expired";
+      controller.abort();
+    }, Math.max(0, deadlineMs - Date.now()));
     deadlineTimer.unref();
 
+    // Honour slow-client backpressure. A slow client drains the Node write
+    // buffer slowly — without waiting on `drain` we keep res.write()-ing
+    // chunks that balloon the process's memory. awaitDrain resolves once
+    // the socket is ready for more, or immediately when the stream is
+    // aborted so we don't leak a listener.
+    const awaitDrain = () =>
+      new Promise<void>((resolve) => {
+        const onDrain = () => {
+          controller.signal.removeEventListener("abort", onAbort);
+          resolve();
+        };
+        const onAbort = () => {
+          res.off("drain", onDrain);
+          resolve();
+        };
+        res.once("drain", onDrain);
+        controller.signal.addEventListener("abort", onAbort, { once: true });
+      });
+
+    const safeWrite = async (payload: string) => {
+      const ok = res.write(payload);
+      if (!ok && !controller.signal.aborted) {
+        await awaitDrain();
+      }
+    };
+
     try {
-      res.write(`data: ${JSON.stringify({ ragInfo: sanitizeRagInfo(aiContext.ragInfo) })}\n\n`);
+      await safeWrite(`data: ${JSON.stringify({ ragInfo: sanitizeRagInfo(aiContext.ragInfo) })}\n\n`);
 
       const stream = streamChatWithCoach(input.message, input.history, aiContext.trainingContext, aiContext.coachingMaterials, aiContext.retrievedChunks, controller.signal, userId);
 
@@ -149,11 +182,17 @@ router.post("/api/v1/chat/stream", ...protectedMutationGuards, rateLimiter("chat
           (req.log || logger).info("Client disconnected mid-stream, stopping AI generation");
           break;
         }
-        res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+        await safeWrite(`data: ${JSON.stringify({ text: chunk })}\n\n`);
       }
 
       if (!controller.signal.aborted) {
         res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+      } else if (abortState.reason === "auth-expired") {
+        // Best-effort — the underlying socket may already be half-closed
+        // by the time we try. The client SSE reader treats a visible
+        // error payload differently from a silent close, so we prefer
+        // a named event over letting the connection die in silence.
+        res.write(`data: ${JSON.stringify({ error: "auth-expired", reason: "Your session expired — please sign in again." })}\n\n`);
       }
       res.end();
     } catch (streamError) {

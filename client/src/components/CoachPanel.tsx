@@ -55,6 +55,7 @@ export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }
     isLoading,
     scrollRef,
     sendMessage,
+    cancelStream,
     clearHistory,
     isClearingHistory,
     scrollToBottom,
@@ -154,6 +155,7 @@ export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }
         )}
         onQuickAction={handleQuickAction}
         onSendMessage={sendMessage}
+        onStopMessage={cancelStream}
         isProcessing={isProcessing}
       />
     </div>

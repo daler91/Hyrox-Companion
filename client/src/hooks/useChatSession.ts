@@ -88,6 +88,13 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const messagesRef = useRef<Message[]>(messages);
   const isSubmittingRef = useRef(false);
+  const streamControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => () => {
+    // Abort any in-flight stream on unmount so the rAF / setState in
+    // consumeSSEStream don't fire against an unmounted tree.
+    streamControllerRef.current?.abort();
+  }, []);
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -167,10 +174,13 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         };
         setMessages((prev) => [...prev, placeholderMessage]);
 
-        const response = await api.chat.sendStream({
-          message: content,
-          history
-        });
+        const controller = new AbortController();
+        streamControllerRef.current = controller;
+
+        const response = await api.chat.sendStream(
+          { message: content, history },
+          { signal: controller.signal },
+        );
 
         const reader = response.body?.getReader();
 
@@ -180,6 +190,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
 
         const result = await consumeSSEStream<RagInfo>(reader, {
           metaKey: "ragInfo",
+          signal: controller.signal,
           onFlush: createMessageUpdater(assistantMessageId, setMessages),
         });
         fullResponse = result.content;
@@ -204,21 +215,37 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         setMessages((prev) => [...prev, assistantMessage]);
         saveMessageMutation.mutate({ role: "assistant", content: data.response });
       }
-    } catch {
-      // Ignore detailed errors in the UI, just show interruption message
+    } catch (err) {
+      const isAbort = err instanceof DOMException && err.name === "AbortError";
+      const isNetwork = err instanceof TypeError; // fetch throws TypeError on network failure
+      const suffix = isAbort
+        ? "\n\n(Stopped)"
+        : isNetwork
+          ? "\n\n(Connection lost — check your internet)"
+          : "\n\n(Stream interrupted)";
+
       if (fullResponse) {
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMessageId
-              ? { ...m, content: fullResponse + "\n\n(Stream interrupted)" }
+              ? { ...m, content: fullResponse + suffix }
               : m
           )
         );
+        if (isAbort) {
+          // Persist the partial so the user doesn't lose it on reload
+          saveMessageMutation.mutate({ role: "assistant", content: fullResponse });
+        }
       } else {
+        const body = isAbort
+          ? "Stopped."
+          : isNetwork
+            ? "Your connection dropped. Check your internet and try again."
+            : "Something went wrong on our side. Please try again.";
         const errorMessage: Message = {
           id: assistantMessageId,
           role: "assistant",
-          content: "Sorry, I encountered an error. Please try again.",
+          content: body,
           timestamp: getCurrentTimeString(),
         };
         setMessages((prev) => {
@@ -227,10 +254,15 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         });
       }
     } finally {
+      streamControllerRef.current = null;
       setIsLoading(false);
       isSubmittingRef.current = false;
     }
   }, [useStreaming, saveMessageMutation]);
+
+  const cancelStream = useCallback(() => {
+    streamControllerRef.current?.abort();
+  }, []);
 
   const clearHistory = useCallback(() => {
     clearHistoryMutation.mutate();
@@ -242,6 +274,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     historyLoading,
     scrollRef,
     sendMessage,
+    cancelStream,
     clearHistory,
     isClearingHistory: clearHistoryMutation.isPending,
     scrollToBottom,

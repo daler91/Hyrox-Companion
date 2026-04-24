@@ -1,4 +1,5 @@
 import { AppError, ErrorCode } from "../errors";
+import { logger } from "../logger";
 
 /**
  * Safely encodes HTML special characters to their corresponding HTML entities.
@@ -51,6 +52,25 @@ export function validateAiOutput(output: string): string {
         "AI output validation failed: detected restricted system-level content",
         502,
       );
+    }
+  }
+
+  // Log suspicious variants (bracket/brace system markers, jailbreak phrases)
+  // for forensic analysis. Non-blocking — a blacklist is inherently incomplete
+  // so the primary defense is structured output, not filtering.
+  const suspiciousPatterns = [
+    "[system]",
+    "{system}",
+    "you are an ai",
+    "as an ai",
+    "override instructions",
+    "developer mode",
+    "jailbreak",
+  ];
+  for (const pattern of suspiciousPatterns) {
+    if (lowerOutput.includes(pattern)) {
+      logger.warn({ context: "ai-output-validation", pattern }, "Suspicious AI output pattern detected");
+      break;
     }
   }
 
