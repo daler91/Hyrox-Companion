@@ -329,12 +329,15 @@ function MoveEntryMenu({
   const maxDate = isLoggedMove ? tomorrowIso : undefined;
   const showNextWeek = !isLoggedMove && entry.date !== nextWeekIso;
 
-  // Stop mousedown + click on each button so tapping a control doesn't
-  // also fire the Card's onClick (open detail) or open-on-focus flows.
-  // Handlers live on the native buttons themselves rather than an
-  // outer `<div onClick>` wrapper — a non-native interactive container
-  // would force us to add role/keyboard plumbing on a presentational
-  // element (WCAG / sonar a11y rule).
+  // Stop mousedown + click on each interactive surface so tapping a
+  // control doesn't also fire the Card's onClick (open detail) via
+  // React's synthetic event system. React events bubble through the
+  // component tree even across portals, so DropdownMenu / Popover
+  // content still propagate to the Card unless we stop them at each
+  // interactive surface. We attach to native buttons and to the
+  // Radix *Content components (which are semantic, not presentational
+  // divs — satisfying the sonar a11y rule against interactive
+  // wrapper `<div>`s).
   const stop = (e: React.SyntheticEvent) => e.stopPropagation();
 
   return (
@@ -382,7 +385,7 @@ function MoveEntryMenu({
             <CalendarClock className="h-3.5 w-3.5" />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
+        <DropdownMenuContent align="end" onClick={stop} onMouseDown={stop}>
           {entry.date !== todayIso && (
             <DropdownMenuItem
               onSelect={() => onMove(todayIso)}
@@ -420,7 +423,7 @@ function MoveEntryMenu({
                 Pick date…
               </DropdownMenuItem>
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-auto p-2">
+            <PopoverContent align="end" className="w-auto p-2" onClick={stop} onMouseDown={stop}>
               <Input
                 type="date"
                 defaultValue={entry.date}
