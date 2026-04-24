@@ -34,7 +34,12 @@ function withParseTimeout<T>(label: string, fn: () => Promise<T>): Promise<T> {
     );
     fn().then(
       (val) => { clearTimeout(timer); resolve(val); },
-      (err) => { clearTimeout(timer); reject(err); },
+      (err: unknown) => {
+        clearTimeout(timer);
+        // ESLint wants the rejection reason to be a real Error so caller-side
+        // err.message / err.stack are available — wrap non-Error throws.
+        reject(err instanceof Error ? err : new Error(String(err)));
+      },
     );
   });
 }
