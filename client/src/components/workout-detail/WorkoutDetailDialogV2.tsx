@@ -336,7 +336,7 @@ export function WorkoutDetailDialogV2({
     <Dialog open={!!entry} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
         className={cn(
-          "max-h-[90vh] overflow-y-auto p-0",
+          "flex max-h-[90vh] flex-col overflow-hidden p-0",
           // Widen the dialog a touch when the in-dialog chat is
           // open so the right sidebar has room for the thread +
           // input without squeezing the exercise table on the
@@ -355,80 +355,82 @@ export function WorkoutDetailDialogV2({
           {(entry.focus || "Workout")} on {entry.date} — status {entry.status}.
         </DialogDescription>
 
-        <div className="flex flex-col gap-4 px-6 pt-4">
-          <WorkoutDetailHeaderV2
-            entry={entry}
-            onDelete={handlers.menuDelete}
-            onChangeStatus={handlers.menuChangeStatus}
-            onCombine={handlers.menuCombine}
-            onChangeFocus={onChangeFocus}
-            saveState={headerSaveState}
-          />
-          {showStatsRow && workout && (
-            <WorkoutStatsRow
-              workout={workout}
-              exerciseSets={exerciseSets}
-              onChangeRpe={handlers.changeRpe}
-              rpeResetSignal={rpeErrorToken}
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="flex flex-col gap-4 px-6 pt-4">
+            <WorkoutDetailHeaderV2
+              entry={entry}
+              onDelete={handlers.menuDelete}
+              onChangeStatus={handlers.menuChangeStatus}
+              onCombine={handlers.menuCombine}
+              onChangeFocus={onChangeFocus}
+              saveState={headerSaveState}
             />
-          )}
+            {showStatsRow && workout && (
+              <WorkoutStatsRow
+                workout={workout}
+                exerciseSets={exerciseSets}
+                onChangeRpe={handlers.changeRpe}
+                rpeResetSignal={rpeErrorToken}
+              />
+            )}
+          </div>
+
+          <DialogBody
+            entry={entry}
+            workout={workout}
+            workoutId={workoutId}
+            exerciseSets={exerciseSets}
+            isPlanned={isPlanned}
+            isLoading={isLoading}
+            weightUnit={weightUnit}
+            distanceUnit={distanceUnit}
+            history={history}
+            onMarkComplete={onMarkComplete}
+            isMarkingComplete={isMarkingComplete}
+            onUpdateSet={patchLoggedSetDebounced}
+            onAddSet={addSet.mutate}
+            onDeleteSet={deleteSet.mutate}
+            loggedSaveState={loggedSaveState}
+            planSets={planSets}
+            planCoachNote={planCoachNote}
+            latestFocusRef={latestFocusRef}
+            onSaveNote={(note) => workoutId && updateNote.mutate(note)}
+            onSaveLoggedPrescription={(patch) => workoutId && updatePrescription.mutate(patch)}
+            onParseLoggedFreeText={(opts) => {
+              if (!workoutId) return;
+              reparseFreeText.mutate(undefined, opts);
+            }}
+            isParsingLogged={reparseFreeText.isPending}
+            onParseLoggedFromImage={(payload, opts) => {
+              if (!workoutId) return;
+              reparseFromImage.mutate(payload, opts);
+            }}
+            isParsingLoggedImage={reparseFromImage.isPending}
+            chatOpen={chatOpen}
+            onOpenChat={() => {
+              // Gate on consent first: the global-rail flow enforces
+              // AIConsentDialog via handleCoachToggle in Timeline;
+              // the in-dialog path needs the same guard or a
+              // non-consented user could bypass it just by clicking
+              // Ask coach from a workout detail.
+              if (!aiCoachEnabled) {
+                onRequestCoachConsent?.();
+                return;
+              }
+              // Tell the parent to close the global coach rail before
+              // we mount the in-dialog chat: both surfaces would spin
+              // up their own `useChatSession` with independent local
+              // state, so a message sent in one wouldn't reach the
+              // other. One surface at a time keeps them consistent
+              // until we hoist the session into a shared context.
+              onAskCoachOpen?.();
+              setChatOpen(true);
+            }}
+            onCloseChat={() => setChatOpen(false)}
+          />
         </div>
 
-        <DialogBody
-          entry={entry}
-          workout={workout}
-          workoutId={workoutId}
-          exerciseSets={exerciseSets}
-          isPlanned={isPlanned}
-          isLoading={isLoading}
-          weightUnit={weightUnit}
-          distanceUnit={distanceUnit}
-          history={history}
-          onMarkComplete={onMarkComplete}
-          isMarkingComplete={isMarkingComplete}
-          onUpdateSet={patchLoggedSetDebounced}
-          onAddSet={addSet.mutate}
-          onDeleteSet={deleteSet.mutate}
-          loggedSaveState={loggedSaveState}
-          planSets={planSets}
-          planCoachNote={planCoachNote}
-          latestFocusRef={latestFocusRef}
-          onSaveNote={(note) => workoutId && updateNote.mutate(note)}
-          onSaveLoggedPrescription={(patch) => workoutId && updatePrescription.mutate(patch)}
-          onParseLoggedFreeText={(opts) => {
-            if (!workoutId) return;
-            reparseFreeText.mutate(undefined, opts);
-          }}
-          isParsingLogged={reparseFreeText.isPending}
-          onParseLoggedFromImage={(payload, opts) => {
-            if (!workoutId) return;
-            reparseFromImage.mutate(payload, opts);
-          }}
-          isParsingLoggedImage={reparseFromImage.isPending}
-          chatOpen={chatOpen}
-          onOpenChat={() => {
-            // Gate on consent first: the global-rail flow enforces
-            // AIConsentDialog via handleCoachToggle in Timeline;
-            // the in-dialog path needs the same guard or a
-            // non-consented user could bypass it just by clicking
-            // Ask coach from a workout detail.
-            if (!aiCoachEnabled) {
-              onRequestCoachConsent?.();
-              return;
-            }
-            // Tell the parent to close the global coach rail before
-            // we mount the in-dialog chat: both surfaces would spin
-            // up their own `useChatSession` with independent local
-            // state, so a message sent in one wouldn't reach the
-            // other. One surface at a time keeps them consistent
-            // until we hoist the session into a shared context.
-            onAskCoachOpen?.();
-            setChatOpen(true);
-          }}
-          onCloseChat={() => setChatOpen(false)}
-        />
-
-        <div className="flex items-center justify-end gap-3 border-t border-border px-6 py-3">
+        <div className="sticky bottom-0 z-10 flex items-center justify-end gap-3 border-t border-border bg-background/95 px-6 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
           <SaveWorkoutButton
             isBusy={saveInFlight || planCoachNote.isRegenerating}
             savedAt={saveClickedAt}
@@ -658,8 +660,8 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
   // Widen the right column when the chat surface is active so the
   // thread + input have room without squeezing the exercise table.
   const gridClasses = chatOpen
-    ? "grid grid-cols-1 gap-4 px-6 py-4 md:grid-cols-[1fr_380px] lg:grid-cols-[1fr_420px]"
-    : "grid grid-cols-1 gap-4 px-6 py-4 md:grid-cols-[1fr_280px]";
+    ? "grid grid-cols-1 items-start gap-4 px-6 py-4 md:grid-cols-[1fr_380px] lg:grid-cols-[1fr_420px]"
+    : "grid grid-cols-1 items-start gap-4 px-6 py-4 md:grid-cols-[1fr_280px]";
 
   return (
     <div className={gridClasses}>
@@ -740,7 +742,7 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
         </AlertDialog>
       </div>
 
-      <aside className="flex flex-col gap-3">
+      <aside className="flex self-start flex-col gap-3">
         {chatOpen ? (
           <InDialogCoachChat
             focusLabel={focusLabel}
@@ -988,4 +990,3 @@ function buildDialogHandlers(args: BuildDialogHandlersArgs) {
     changeRpe,
   };
 }
-
