@@ -2,11 +2,11 @@ export type { Suggestion } from "./analytics";
 export { analytics, timeline } from "./analytics";
 export type { RagInfo, RagStatus } from "./coaching";
 export { chat, coaching } from "./coaching";
-export { exercises } from "./exercises";
 export type { ParseFromImagePayload } from "./exercises";
+export { exercises } from "./exercises";
 export { plans } from "./plans";
 export { timelineAnnotations } from "./timelineAnnotations";
-export type { GarminStatus, GarminSyncResponse,StravaSyncResponse } from "./user";
+export type { GarminStatus, GarminSyncResponse, StravaStatus, StravaSyncResponse, UserPreferences } from "./user";
 export { auth, email,garmin, preferences, strava } from "./user";
 export type {
   AddExerciseSetPayload,

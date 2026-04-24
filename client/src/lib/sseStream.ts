@@ -58,12 +58,37 @@ export interface SSEStreamOptions<TMeta = unknown> {
   onFlush: (snapshot: SSEStreamResult<TMeta>) => void;
   /** Optional key name in the SSE payload to extract as metadata (e.g. "ragInfo"). */
   metaKey?: string;
+  /**
+   * Optional abort signal — when aborted, stops reading, cancels the pending
+   * rAF, and suppresses the trailing flush so stale callbacks can't overwrite
+   * a newer stream's state.
+   */
+  signal?: AbortSignal;
 }
 
 /**
  * Consume an SSE ReadableStream, batching UI updates via rAF.
  * Returns the final accumulated content and metadata.
+ *
+ * Aborting via `options.signal` cancels the reader, drops the pending rAF
+ * flush, and rejects with the abort reason so the caller can distinguish
+ * user-cancellation from network errors.
  */
+/**
+ * Wire an abort signal to a callback that fires once, immediately if the
+ * signal is already aborted. Returns a teardown that detaches the listener.
+ * Pulled out so consumeSSEStream stays under the cognitive-complexity limit.
+ */
+function bindAbortSignal(signal: AbortSignal | undefined, onAbort: () => void): () => void {
+  if (!signal) return () => {};
+  if (signal.aborted) {
+    onAbort();
+    return () => {};
+  }
+  signal.addEventListener("abort", onAbort, { once: true });
+  return () => signal.removeEventListener("abort", onAbort);
+}
+
 export async function consumeSSEStream<TMeta = unknown>(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   options: SSEStreamOptions<TMeta>,
@@ -73,9 +98,15 @@ export async function consumeSSEStream<TMeta = unknown>(
   let buffer = "";
   let rafId = 0;
   let dirty = false;
+  let aborted = false;
+
+  const detachAbort = bindAbortSignal(options.signal, () => {
+    aborted = true;
+    reader.cancel().catch(() => {/* best effort */});
+  });
 
   const flush = () => {
-    if (!dirty) return;
+    if (!dirty || aborted) return;
     dirty = false;
     options.onFlush({ content: acc.content, meta: acc.meta });
   };
@@ -89,6 +120,7 @@ export async function consumeSSEStream<TMeta = unknown>(
 
   try {
     while (true) {
+      if (aborted) break;
       const { done, value } = await reader.read();
       if (done) break;
 
@@ -102,13 +134,20 @@ export async function consumeSSEStream<TMeta = unknown>(
       scheduleFlush();
     }
 
-    if (buffer.trim()) {
+    if (!aborted && buffer.trim()) {
       processSSELines(buffer.split("\n"), acc, options.metaKey);
     }
   } finally {
     cancelAnimationFrame(rafId);
-    dirty = true;
-    flush();
+    if (!aborted) {
+      dirty = true;
+      flush();
+    }
+    detachAbort();
+  }
+
+  if (aborted) {
+    throw new DOMException("Stream aborted", "AbortError");
   }
 
   return { content: acc.content, meta: acc.meta };

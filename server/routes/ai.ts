@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { isAuthenticated } from "../clerkAuth";
 import { chatWithCoach, parseExercisesFromImage, parseExercisesFromText,streamChatWithCoach } from "../gemini/index";
-import { logger } from "../logger";
+import { reqLogger } from "../logger";
 import { aiBudgetCheck } from "../middleware/aibudget";
 import { aiConsentCheck } from "../middleware/aiConsent";
 import { protectedMutationGuards } from "../routeGuards";
@@ -64,7 +64,7 @@ async function prepareChatContext(
 ): Promise<{ input: ChatInput; aiContext: AIContext }> {
   const { message, history } = req.body;
   const userId = getUserId(req);
-  const aiContext = await buildAIContext(userId, message, req.log || logger);
+  const aiContext = await buildAIContext(userId, message, reqLogger(req));
   return { input: { message, history: history || [] }, aiContext };
 }
 
@@ -86,8 +86,10 @@ router.post("/api/v1/chat", ...protectedMutationGuards, rateLimiter("chat", 10),
 const SSE_MAX_DURATION_MS = 5 * 60 * 1000;
 const SSE_EXPIRY_MARGIN_MS = 5_000;
 
+export type SseDeadlineReason = "auth-expired" | "timeout";
+
 // Exported for unit tests — no external consumer should rely on this.
-export function computeSseDeadlineMs(req: ExpressRequest): number {
+export function computeSseDeadline(req: ExpressRequest): { deadlineMs: number; reason: SseDeadlineReason } {
   const hardCap = Date.now() + SSE_MAX_DURATION_MS;
   try {
     const auth = getAuth(req);
@@ -101,13 +103,21 @@ export function computeSseDeadlineMs(req: ExpressRequest): number {
       // silently breaks (Codex review of #877). Clamp to `now` so
       // setTimeout fires on the next tick.
       const expMs = expSec * 1000 - SSE_EXPIRY_MARGIN_MS;
-      return Math.min(hardCap, Math.max(expMs, Date.now()));
+      if (expMs < hardCap) {
+        return { deadlineMs: Math.max(expMs, Date.now()), reason: "auth-expired" };
+      }
     }
   } catch {
     // Dev bypass / test harness won't expose sessionClaims — fall back
     // to the hard cap, which is always safe.
   }
-  return hardCap;
+  return { deadlineMs: hardCap, reason: "timeout" };
+}
+
+// Backwards-compat shim for tests still asserting on the old number-returning
+// signature. Internal call sites use computeSseDeadline().
+export function computeSseDeadlineMs(req: ExpressRequest): number {
+  return computeSseDeadline(req).deadlineMs;
 }
 
 router.post("/api/v1/chat/stream", ...protectedMutationGuards, rateLimiter("chat", 10), aiConsentCheck, aiBudgetCheck, validateBody(chatRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof chatRequestSchema>>, res: Response) => {
@@ -129,36 +139,86 @@ router.post("/api/v1/chat/stream", ...protectedMutationGuards, rateLimiter("chat
     const unregister = registerSseStream(controller);
     req.on("close", () => controller.abort());
 
+    // Track the abort reason separately so we can tell the client whether
+    // their stream was killed because the Clerk session expired (which they
+    // can recover from by re-authing) vs a hard-cap timeout vs a generic
+    // client/shutdown abort. Wrapped in an object so TypeScript control-flow
+    // doesn't narrow it to its initial literal value (the setTimeout
+    // reassignment is async).
+    const abortState: { reason: "auth-expired" | "timeout" | "generic" } = { reason: "generic" };
+
     // Auto-abort when the stream exceeds its deadline (hard cap OR Clerk
-    // session expiry, whichever comes first). unref() so the timer
-    // doesn't block process exit on an otherwise-idle server.
-    const deadlineMs = computeSseDeadlineMs(req);
-    const deadlineTimer = setTimeout(
-      () => controller.abort(),
-      Math.max(0, deadlineMs - Date.now()),
-    );
+    // session expiry, whichever comes first). The deadline reason
+    // distinguishes which one fired so we report the correct cause to
+    // the client — only auth-expired is recoverable by re-authing. unref()
+    // so the timer doesn't block process exit on an otherwise-idle server.
+    const { deadlineMs, reason: deadlineReason } = computeSseDeadline(req);
+    const deadlineTimer = setTimeout(() => {
+      abortState.reason = deadlineReason;
+      controller.abort();
+    }, Math.max(0, deadlineMs - Date.now()));
     deadlineTimer.unref();
 
+    // Honour slow-client backpressure. A slow client drains the Node write
+    // buffer slowly — without waiting on `drain` we keep res.write()-ing
+    // chunks that balloon the process's memory. awaitDrain resolves once
+    // the socket is ready for more, or immediately when the stream is
+    // aborted so we don't leak a listener.
+    const awaitDrain = () =>
+      new Promise<void>((resolve) => {
+        let settled = false;
+        const settle = () => {
+          if (settled) return;
+          settled = true;
+          res.off("drain", onDrain);
+          controller.signal.removeEventListener("abort", onAbort);
+          resolve();
+        };
+        const onDrain = () => settle();
+        const onAbort = () => settle();
+        res.once("drain", onDrain);
+        controller.signal.addEventListener("abort", onAbort, { once: true });
+        // Re-check after registration: if abort fired between the caller's
+        // pre-check and our addEventListener, the listener will never be
+        // invoked and the promise would hang forever.
+        if (controller.signal.aborted) settle();
+      });
+
+    const safeWrite = async (payload: string) => {
+      const ok = res.write(payload);
+      if (!ok && !controller.signal.aborted) {
+        await awaitDrain();
+      }
+    };
+
     try {
-      res.write(`data: ${JSON.stringify({ ragInfo: sanitizeRagInfo(aiContext.ragInfo) })}\n\n`);
+      await safeWrite(`data: ${JSON.stringify({ ragInfo: sanitizeRagInfo(aiContext.ragInfo) })}\n\n`);
 
       const stream = streamChatWithCoach(input.message, input.history, aiContext.trainingContext, aiContext.coachingMaterials, aiContext.retrievedChunks, controller.signal, userId);
 
       for await (const chunk of stream) {
         if (controller.signal.aborted) {
-          (req.log || logger).info("Client disconnected mid-stream, stopping AI generation");
+          reqLogger(req).info("Client disconnected mid-stream, stopping AI generation");
           break;
         }
-        res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+        await safeWrite(`data: ${JSON.stringify({ text: chunk })}\n\n`);
       }
 
       if (!controller.signal.aborted) {
         res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+      } else if (abortState.reason === "auth-expired") {
+        // Best-effort — the underlying socket may already be half-closed
+        // by the time we try. The client SSE reader treats a visible
+        // error payload differently from a silent close, so we prefer
+        // a named event over letting the connection die in silence.
+        res.write(`data: ${JSON.stringify({ error: "auth-expired", reason: "Your session expired — please sign in again." })}\n\n`);
+      } else if (abortState.reason === "timeout") {
+        res.write(`data: ${JSON.stringify({ error: "timeout", reason: "The response took too long and was stopped." })}\n\n`);
       }
       res.end();
     } catch (streamError) {
       if (controller.signal.aborted) return;
-      (req.log || logger).error({ err: streamError }, "Stream error:");
+      reqLogger(req).error({ err: streamError }, "Stream error:");
       res.write(`data: ${JSON.stringify({ error: "Stream error" })}\n\n`);
       res.end();
     } finally {
@@ -220,7 +280,7 @@ router.delete("/api/v1/chat/history", ...protectedMutationGuards, rateLimiter("c
 
 router.post("/api/v1/timeline/ai-suggestions", ...protectedMutationGuards, rateLimiter("suggestions", 3), aiConsentCheck, aiBudgetCheck, asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
-    const result = await generateTimelineAiSuggestions(userId, req.log || logger);
+    const result = await generateTimelineAiSuggestions(userId, reqLogger(req));
     res.json(result);
   }));
 

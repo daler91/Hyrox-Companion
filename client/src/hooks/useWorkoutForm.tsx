@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
 import { exerciseToPayload,generateSummary } from "@/hooks/useWorkoutEditor";
 import { api, QUERY_KEYS } from "@/lib/api";
+import { getTodayString } from "@/lib/dateUtils";
 import { getMissingFieldWarnings } from "@/lib/exerciseWarnings";
 import { queryClient } from "@/lib/queryClient";
 
@@ -53,7 +54,10 @@ export function useWorkoutForm({
   const [, navigate] = useLocation();
 
   const [title, setTitle] = useState(initialValues?.title ?? "");
-  const [date, setDate] = useState(initialValues?.date ?? new Date().toISOString().split("T")[0]);
+  // Default to the user's local-TZ today (matches getTodayString) so an
+  // evening user outside UTC doesn't get tomorrow's date stamped on a
+  // workout they're logging right now.
+  const [date, setDate] = useState(initialValues?.date ?? getTodayString());
   const [freeText, setFreeText] = useState(initialValues?.freeText ?? "");
   const [notes, setNotes] = useState(initialValues?.notes ?? "");
   const [rpe, setRpe] = useState<number | null>(initialValues?.rpe ?? null);
@@ -202,6 +206,18 @@ export function useWorkoutForm({
     const exercises = exerciseBlocks
       .map((id) => exerciseData[id])
       .filter(Boolean);
+
+    // If structured blocks exist but every one was filtered out (no
+    // populated data), fall through to the same empty-workout toast as
+    // the no-blocks branch instead of silently saving an empty log.
+    if (exercises.length === 0 && !freeText.trim()) {
+      toast({
+        title: "Missing workout details",
+        description: "Please add at least one exercise or describe your workout.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     const allWarnings = exercises.flatMap((ex) => getMissingFieldWarnings(ex));
     if (allWarnings.length > 0) {

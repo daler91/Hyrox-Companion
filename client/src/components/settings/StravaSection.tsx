@@ -13,12 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { useStravaMutations } from "@/hooks/useStravaMutations";
-
-interface StravaStatus {
-  connected: boolean;
-  athleteId?: string;
-  lastSyncedAt?: string | null;
-}
+import type { StravaStatus } from "@/lib/api";
 
 interface StravaSectionProps {
   readonly stravaStatus: StravaStatus | undefined;

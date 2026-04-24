@@ -135,6 +135,13 @@ export function ImageCaptureButton({
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
+      {/* Mounted unconditionally so screen readers pick up the polite
+          announcement when `processing` flips from false → true. The
+          inline "Preparing…" text only appears when the button has a
+          visible label, leaving icon-only variants silent without this. */}
+      <span role="status" aria-live="polite" className="sr-only">
+        {processing ? "Image is being prepared for upload" : ""}
+      </span>
     </>
   );
 }

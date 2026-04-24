@@ -6,7 +6,7 @@ import { type Request, type Response, Router } from "express";
 
 import { isAuthenticated } from "../clerkAuth";
 import { protectedMutationGuards } from "../routeGuards";
-import { asyncHandler, formatValidationErrors, rateLimiter } from "../routeUtils";
+import { asyncHandler, formatValidationErrors, rateLimiter, sendNotFound } from "../routeUtils";
 import { storage } from "../storage";
 import { getUserId } from "../types";
 
@@ -77,7 +77,7 @@ router.patch(
     // date bounds before writing.
     const existing = await storage.timelineAnnotations.findById(userId, req.params.id);
     if (!existing) {
-      return res.status(404).json({ error: "Annotation not found", code: "NOT_FOUND" });
+      return sendNotFound(res, "Annotation not found");
     }
 
     const mergedStart = parseResult.data.startDate ?? existing.startDate;
@@ -92,7 +92,7 @@ router.patch(
 
     const row = await storage.timelineAnnotations.update(userId, req.params.id, parseResult.data);
     if (!row) {
-      return res.status(404).json({ error: "Annotation not found", code: "NOT_FOUND" });
+      return sendNotFound(res, "Annotation not found");
     }
     res.json(row);
   }),
@@ -109,7 +109,7 @@ router.delete(
     const userId = getUserId(req);
     const deleted = await storage.timelineAnnotations.delete(userId, req.params.id);
     if (!deleted) {
-      return res.status(404).json({ error: "Annotation not found", code: "NOT_FOUND" });
+      return sendNotFound(res, "Annotation not found");
     }
     res.json({ success: true });
   }),

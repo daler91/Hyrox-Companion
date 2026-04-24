@@ -35,8 +35,17 @@ interface ChatResponse {
 }
 
 export const chat = {
-  sendStream: (data: { message: string; history?: Array<{ role: string; content: string }> }) =>
-    rawRequest("POST", "/api/v1/chat/stream", data),
+  sendStream: (
+    data: { message: string; history?: Array<{ role: string; content: string }> },
+    options?: { signal?: AbortSignal },
+  ) =>
+    rawRequest("POST", "/api/v1/chat/stream", data, {
+      // Long-lived stream — the timeout only gates the initial Response,
+      // not the body, but bump it anyway so a slow Gemini start doesn't
+      // cut off before the first chunk.
+      timeoutMs: 60_000,
+      signal: options?.signal,
+    }),
 
   send: (data: { message: string; history?: Array<{ role: string; content: string }> }) =>
     typedRequest<ChatResponse>("POST", "/api/v1/chat", data),

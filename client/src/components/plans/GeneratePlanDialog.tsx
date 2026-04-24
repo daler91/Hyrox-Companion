@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useGeneratePlan } from "@/hooks/usePlanGeneration";
+import { toISODateString } from "@/lib/dateUtils";
 
 const MAX_WEEKS = 24;
 const MIN_WEEKS = 1;
@@ -57,7 +58,9 @@ function calculateSuggestedStartDate(race: string, weeks: number): string {
   else if (dayOfWeek === 1) mondayOffset = 0;
   else mondayOffset = 8 - dayOfWeek;
   start.setDate(start.getDate() + mondayOffset);
-  return start.toISOString().split("T")[0];
+  // Local-TZ string: matches plan-day scheduledDate semantics on the server
+  // (which is also user-local). UTC would shift by a day for evening users.
+  return toISODateString(start);
 }
 
 function useGeneratePlanForm() {

@@ -1,6 +1,6 @@
 import type { NextFunction,Request, Response } from "express";
 
-import { logger } from "../logger";
+import { reqLogger } from "../logger";
 import { storage } from "../storage";
 import { getUserId } from "../types";
 
@@ -57,7 +57,7 @@ export async function idempotencyMiddleware(req: Request, res: Response, next: N
   } catch (err) {
     // Storage failure should not block writes; log and continue without
     // idempotency guarantees for this request.
-    (req.log || logger).error({ err }, "idempotency lookup failed, continuing without cache");
+    reqLogger(req).error({ err }, "idempotency lookup failed, continuing without cache");
     return next();
   }
 
@@ -84,7 +84,7 @@ export async function idempotencyMiddleware(req: Request, res: Response, next: N
       const byteLength = typeof serialized === "string" ? Buffer.byteLength(serialized, "utf8") : 0;
       const oversized = byteLength > MAX_CACHED_PAYLOAD_BYTES;
       if (oversized) {
-        (req.log || logger).warn(
+        reqLogger(req).warn(
           { byteLength, limit: MAX_CACHED_PAYLOAD_BYTES, path: req.path },
           "Idempotency response exceeded cache size cap; storing sentinel body",
         );
@@ -98,7 +98,7 @@ export async function idempotencyMiddleware(req: Request, res: Response, next: N
           responseBody: storedBody,
         }, IDEMPOTENCY_TTL_SECONDS)
         .catch((err) => {
-          (req.log || logger).error({ err }, "Failed to persist idempotency record");
+          reqLogger(req).error({ err }, "Failed to persist idempotency record");
         });
     }
     return originalJson(body);

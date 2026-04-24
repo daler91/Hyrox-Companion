@@ -1,10 +1,11 @@
 import type { TimelineEntry } from "@shared/schema";
 
-import { 
-  getEndOfWeekString, 
-  getStartOfWeekString, 
-  getTodayString, 
-  isDateInRange 
+import {
+  getEndOfWeekString,
+  getStartOfWeekString,
+  getTodayString,
+  isDateInRange,
+  toISODateString,
 } from "./dateUtils";
 
 export interface TrainingStats {
@@ -71,13 +72,15 @@ export function calculateStats(timeline: TimelineEntry[]): TrainingStats {
 export function calculateStreak(completedDates: Set<string>): number {
   if (completedDates.size === 0) return 0;
 
+  // Compare against local-TZ date strings to match how `completedDates`
+  // is populated (entry.date is stored in the user's local TZ).
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const todayStr = today.toISOString().split("T")[0];
+  const todayStr = toISODateString(today);
 
   const yesterday = new Date(today);
   yesterday.setDate(today.getDate() - 1);
-  const yesterdayStr = yesterday.toISOString().split("T")[0];
+  const yesterdayStr = toISODateString(yesterday);
 
   if (!completedDates.has(todayStr) && !completedDates.has(yesterdayStr)) return 0;
 
@@ -85,7 +88,7 @@ export function calculateStreak(completedDates: Set<string>): number {
   const checkDate = completedDates.has(todayStr) ? new Date(today) : new Date(yesterday);
 
   while (true) {
-    const dateStr = checkDate.toISOString().split("T")[0];
+    const dateStr = toISODateString(checkDate);
     if (completedDates.has(dateStr)) {
       streak++;
       checkDate.setDate(checkDate.getDate() - 1);

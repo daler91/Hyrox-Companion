@@ -1,5 +1,7 @@
 import { useMemo } from "react";
 
+import { toISODateString } from "@/lib/dateUtils";
+
 import { CHART_CARD_CLASS } from "./chartConstants";
 
 const DAY_LABELS = [
@@ -23,7 +25,9 @@ function getMonday(date: Date): Date {
 }
 
 function toDateStr(d: Date): string {
-  return d.toISOString().split("T")[0];
+  // Local-TZ string so heatmap cells line up with workout entries
+  // (which are stored in the user's local TZ).
+  return toISODateString(d);
 }
 
 function getHeatmapCellColor(cell: { isFuture: boolean; hasWorkout: boolean }): string {

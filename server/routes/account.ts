@@ -5,7 +5,7 @@ import { evictUserFromSeenCache, isAuthenticated } from "../clerkAuth";
 import { EXTERNAL_API_TIMEOUT_MS } from "../constants";
 import { env } from "../env";
 import { logger } from "../logger";
-import { asyncHandler, rateLimiter } from "../routeUtils";
+import { asyncHandler, rateLimiter, sendNotFound } from "../routeUtils";
 import { storage } from "../storage";
 import { getUserId } from "../types";
 
@@ -71,7 +71,7 @@ router.delete(
     // Step 3: Delete the user row — all child rows cascade.
     const deleted = await storage.users.deleteUser(userId);
     if (!deleted) {
-      return res.status(404).json({ error: "User not found", code: "NOT_FOUND" });
+      return sendNotFound(res, "User not found");
     }
 
     // Step 4: Evict from the auth seen-cache so stale sessions can't

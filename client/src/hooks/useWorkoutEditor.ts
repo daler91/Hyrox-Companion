@@ -233,19 +233,30 @@ interface UseParseWorkoutMutationOptions {
   onError: () => void;
 }
 
-export function useParseWorkoutMutation(
+interface ParseCopy {
+  readonly emptyDescription: string;
+  readonly errorDescription: string;
+}
+
+// Text- and image-parse diverge only in (a) how Gemini is called and (b)
+// the toast copy for the "no exercises detected" / "parse failed" paths.
+// Share the post-parse pipeline through a single factory so a future tweak
+// to the merge/replace logic can't drift between the two surfaces.
+function useParseMutationBase<TVariables>(
   blockCounterRef: MutableRefObject<number>,
-  options: UseParseWorkoutMutationOptions
+  options: UseParseWorkoutMutationOptions,
+  mutationFn: (variables: TVariables) => Promise<ParsedExercise[]>,
+  copy: ParseCopy,
 ) {
   const { toast } = useToast();
 
-  return useMutation({
-    mutationFn: parseWorkoutText,
-    onSuccess: (parsed: ParsedExercise[]) => {
+  return useMutation<ParsedExercise[], Error, TVariables>({
+    mutationFn,
+    onSuccess: (parsed) => {
       if (parsed.length === 0) {
         toast({
           title: "No exercises found",
-          description: "AI couldn't identify any exercises in your text. Try being more specific, e.g. '4x8 back squat at 70kg'.",
+          description: copy.emptyDescription,
           variant: "destructive",
         });
         return;
@@ -262,11 +273,23 @@ export function useParseWorkoutMutation(
     onError: () => {
       toast({
         title: "Parsing failed",
-        description: "AI couldn't parse your workout text. Please try again or enter exercises manually.",
+        description: copy.errorDescription,
         variant: "destructive",
       });
       options.onError();
     },
+  });
+}
+
+export function useParseWorkoutMutation(
+  blockCounterRef: MutableRefObject<number>,
+  options: UseParseWorkoutMutationOptions,
+) {
+  return useParseMutationBase<string>(blockCounterRef, options, parseWorkoutText, {
+    emptyDescription:
+      "AI couldn't identify any exercises in your text. Try being more specific, e.g. '4x8 back squat at 70kg'.",
+    errorDescription:
+      "AI couldn't parse your workout text. Please try again or enter exercises manually.",
   });
 }
 
@@ -282,39 +305,17 @@ export function useParseWorkoutFromImageMutation(
   blockCounterRef: MutableRefObject<number>,
   options: UseParseWorkoutMutationOptions,
 ) {
-  const { toast } = useToast();
-
-  return useMutation({
-    mutationFn: (payload: ParseImagePayload) => api.exercises.parseFromImage(payload),
-    onSuccess: (parsed: ParsedExercise[]) => {
-      if (parsed.length === 0) {
-        toast({
-          title: "No exercises found",
-          description:
-            "AI couldn't identify any exercises in that photo. Try a clearer shot with the workout in frame.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      const { newBlocks, newData } = processParsedExercises(parsed, blockCounterRef);
-      options.onSuccess(newBlocks, newData);
-
-      toast({
-        title: "Exercises parsed",
-        description: getParseSuccessDescription(parsed),
-      });
+  return useParseMutationBase<ParseImagePayload>(
+    blockCounterRef,
+    options,
+    (payload) => api.exercises.parseFromImage(payload),
+    {
+      emptyDescription:
+        "AI couldn't identify any exercises in that photo. Try a clearer shot with the workout in frame.",
+      errorDescription:
+        "AI couldn't parse that photo. Try a clearer shot or enter exercises manually.",
     },
-    onError: () => {
-      toast({
-        title: "Parsing failed",
-        description:
-          "AI couldn't parse that photo. Try a clearer shot or enter exercises manually.",
-        variant: "destructive",
-      });
-      options.onError();
-    },
-  });
+  );
 }
 
 

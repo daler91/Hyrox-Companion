@@ -114,7 +114,7 @@ describe('useChatSession', () => {
     expect(result.current.messages[1].content).toBe('Fail stream');
 
     expect(result.current.messages[2].role).toBe('assistant');
-    expect(result.current.messages[2].content).toBe('Sorry, I encountered an error. Please try again.');
+    expect(result.current.messages[2].content).toBe('Something went wrong on our side. Please try again.');
     expect(result.current.isLoading).toBe(false);
   });
 
@@ -130,7 +130,7 @@ describe('useChatSession', () => {
 
     expect(result.current.messages).toHaveLength(3);
     expect(result.current.messages[2].role).toBe('assistant');
-    expect(result.current.messages[2].content).toBe('Sorry, I encountered an error. Please try again.');
+    expect(result.current.messages[2].content).toBe('Something went wrong on our side. Please try again.');
     expect(result.current.isLoading).toBe(false);
   });
 

@@ -9,7 +9,7 @@ import { db } from "../db";
 import { AppError, ErrorCode } from "../errors";
 import { aiBudgetCheck } from "../middleware/aibudget";
 import { protectedMutationGuards } from "../routeGuards";
-import { asyncHandler, rateLimiter, validateBody } from "../routeUtils";
+import { asyncHandler, parsePagination, rateLimiter, sendNotFound, validateBody } from "../routeUtils";
 import { generateCSV, generateJSON } from "../services/exportService";
 import { batchReparseWorkouts,reparseWorkout, reparseWorkoutFromImage } from "../services/workoutService";
 import { createWorkout, updateWorkoutUseCase } from "../services/workoutUseCases";
@@ -43,7 +43,7 @@ router.get("/api/v1/workouts/unstructured", isAuthenticated, rateLimiter("workou
     res.json(workouts);
   }));
 
-router.post("/api/v1/workouts/:id/reparse", ...protectedMutationGuards, rateLimiter("reparse", 5), asyncHandler(async (req: Request<{ id: string }>, res: Response) => {
+router.post("/api/v1/workouts/:id/reparse", ...protectedMutationGuards, rateLimiter("reparse", 5), aiBudgetCheck, asyncHandler(async (req: Request<{ id: string }>, res: Response) => {
     const userId = getUserId(req);
     const workoutId = req.params.id;
     // ⚡ Perf: Parallelize independent DB queries — getWorkoutLog and getUser
@@ -53,7 +53,7 @@ router.post("/api/v1/workouts/:id/reparse", ...protectedMutationGuards, rateLimi
       storage.users.getUser(userId),
     ]);
     if (!workout) {
-      return res.status(404).json({ error: "Workout not found", code: "NOT_FOUND" });
+      return sendNotFound(res, "Workout not found");
     }
     const weightUnit = user?.weightUnit || "kg";
     const result = await reparseWorkout(workout, weightUnit);
@@ -79,7 +79,7 @@ router.post("/api/v1/workouts/:id/reparse-from-image", ...protectedMutationGuard
       storage.users.getCustomExercises(userId),
     ]);
     if (!workout) {
-      return res.status(404).json({ error: "Workout not found", code: "NOT_FOUND" });
+      return sendNotFound(res, "Workout not found");
     }
     const weightUnit = user?.weightUnit || "kg";
     const customNames = customExercises.map((e) => e.name);
@@ -91,7 +91,7 @@ router.post("/api/v1/workouts/:id/reparse-from-image", ...protectedMutationGuard
   }));
 
 
-router.post("/api/v1/workouts/batch-reparse", ...protectedMutationGuards, rateLimiter("batchReparse", 2), asyncHandler(async (req: Request, res: Response) => {
+router.post("/api/v1/workouts/batch-reparse", ...protectedMutationGuards, rateLimiter("batchReparse", 2), aiBudgetCheck, asyncHandler(async (req: Request, res: Response) => {
     const userId = getUserId(req);
     const { total, parsed, failed } = await batchReparseWorkouts(userId);
     res.json({ total, parsed, failed });
@@ -116,23 +116,14 @@ router.post("/api/v1/custom-exercises", ...protectedMutationGuards, rateLimiter(
 
 router.get("/api/v1/workouts", isAuthenticated, rateLimiter("workoutList", 60), asyncHandler(async (req: Request<Record<string, never>, Record<string, never>, Record<string, never>, { limit?: string; offset?: string }>, res: Response) => {
     const userId = getUserId(req);
-    const rawLimit = req.query.limit ? Number.parseInt(req.query.limit, 10) : DEFAULT_PAGE_LIMIT;
-    const offset = req.query.offset ? Number.parseInt(req.query.offset, 10) : undefined;
-
-    if (Number.isNaN(rawLimit) || rawLimit < 1) return res.status(400).json({ error: "Invalid limit", code: "BAD_REQUEST" });
-    if (offset !== undefined && (Number.isNaN(offset) || offset < 0)) return res.status(400).json({ error: "Invalid offset", code: "BAD_REQUEST" });
     // Reject rather than silently clamp so clients that rely on the full page
     // size don't render incomplete results without noticing (S1).
-    if (rawLimit > MAX_PAGE_LIMIT) {
-      return res.status(412).json({
-        error: `limit exceeds maximum of ${MAX_PAGE_LIMIT}`,
-        code: "PRECONDITION_FAILED",
-        maxLimit: MAX_PAGE_LIMIT,
-      });
-    }
-
-    const limit = rawLimit;
-    const logs = await storage.workouts.listWorkoutLogs(userId, limit, offset);
+    const pagination = parsePagination(req.query, res, {
+      defaultLimit: DEFAULT_PAGE_LIMIT,
+      maxLimit: MAX_PAGE_LIMIT,
+    });
+    if (!pagination) return;
+    const logs = await storage.workouts.listWorkoutLogs(userId, pagination.limit, pagination.offset);
     res.json(logs);
   }));
 
@@ -145,7 +136,7 @@ router.get("/api/v1/workouts/latest", isAuthenticated, rateLimiter("workout", 60
     const userId = getUserId(req);
     const [latest] = await storage.workouts.listWorkoutLogs(userId, 1);
     if (!latest) {
-      return res.status(404).json({ error: "No workouts found", code: "NOT_FOUND" });
+      return sendNotFound(res, "No workouts found");
     }
     const exerciseSets = await storage.workouts.getExerciseSetsByWorkoutLog(latest.id);
     res.json({ ...latest, exerciseSets });
@@ -170,13 +161,8 @@ type PatchExerciseSetPayload = PatchExerciseSetBody;
 const addExerciseSetSchema = addExerciseSetBodySchema;
 type AddExerciseSetPayload = AddExerciseSetBody;
 
-const NOT_FOUND_CODE = "NOT_FOUND";
 const WORKOUT_NOT_FOUND = "Workout not found";
 const EXERCISE_SET_NOT_FOUND = "Exercise set not found";
-
-function respond404(res: Response, message: string): Response {
-  return res.status(404).json({ error: message, code: NOT_FOUND_CODE });
-}
 
 router.patch(
   "/api/v1/workouts/:id/sets/:setId",
@@ -187,7 +173,7 @@ router.patch(
     const userId = getUserId(req);
     const updated = await storage.workouts.updateExerciseSet(req.params.id, req.params.setId, req.body, userId);
     if (!updated) {
-      return respond404(res, EXERCISE_SET_NOT_FOUND);
+      return sendNotFound(res, EXERCISE_SET_NOT_FOUND);
     }
     res.json(updated);
   }),
@@ -202,7 +188,7 @@ router.post(
     const userId = getUserId(req);
     const created = await storage.workouts.addExerciseSetToWorkoutLog(req.params.id, req.body, userId);
     if (!created) {
-      return respond404(res, WORKOUT_NOT_FOUND);
+      return sendNotFound(res, WORKOUT_NOT_FOUND);
     }
     res.status(201).json(created);
   }),
@@ -216,7 +202,7 @@ router.delete(
     const userId = getUserId(req);
     const deleted = await storage.workouts.deleteExerciseSet(req.params.id, req.params.setId, userId);
     if (!deleted) {
-      return respond404(res, EXERCISE_SET_NOT_FOUND);
+      return sendNotFound(res, EXERCISE_SET_NOT_FOUND);
     }
     res.json({ success: true });
   }),
@@ -230,7 +216,7 @@ router.get(
     const userId = getUserId(req);
     const stats = await storage.workouts.getWorkoutHistoryStats(req.params.id, userId);
     if (!stats) {
-      return respond404(res, WORKOUT_NOT_FOUND);
+      return sendNotFound(res, WORKOUT_NOT_FOUND);
     }
     res.json(stats);
   }),
@@ -251,7 +237,7 @@ router.get("/api/v1/workouts/:id", isAuthenticated, rateLimiter("workout", 60), 
     const userId = getUserId(req);
     const log = await storage.workouts.getWorkoutLog(req.params.id, userId);
     if (!log) {
-      return res.status(404).json({ error: "Workout not found", code: "NOT_FOUND" });
+      return sendNotFound(res, "Workout not found");
     }
     // Eagerly attach exerciseSets so the workout-detail dialog can render
     // the structured table without a second round trip. Previously this
@@ -272,7 +258,7 @@ router.patch("/api/v1/workouts/:id", ...protectedMutationGuards, rateLimiter("wo
     const userId = getUserId(req);
     const result = await updateWorkoutUseCase({ userId, workoutId: req.params.id, payload: req.body });
     if (!result) {
-      return res.status(404).json({ error: "Workout not found", code: "NOT_FOUND" });
+      return sendNotFound(res, "Workout not found");
     }
 
     res.json(result);
@@ -284,7 +270,7 @@ router.delete("/api/v1/workouts/:id", ...protectedMutationGuards, rateLimiter("w
     // delete them explicitly (avoids a non-atomic two-step delete).
     const deleted = await storage.workouts.deleteWorkoutLog(req.params.id, userId);
     if (!deleted) {
-      return res.status(404).json({ error: "Workout not found", code: "NOT_FOUND" });
+      return sendNotFound(res, "Workout not found");
     }
     res.json({ success: true });
   }));
@@ -391,14 +377,11 @@ router.get("/api/v1/exercises/:exerciseName/history", isAuthenticated, rateLimit
 router.get("/api/v1/timeline", isAuthenticated, rateLimiter("timeline", 60), asyncHandler(async (req: Request<Record<string, never>, Record<string, never>, Record<string, never>, { planId?: string; limit?: string; offset?: string }>, res: Response) => {
     const userId = getUserId(req);
     const planId = req.query.planId;
-    const rawLimit = req.query.limit ? Number.parseInt(req.query.limit, 10) : DEFAULT_TIMELINE_LIMIT;
-    const offset = req.query.offset ? Number.parseInt(req.query.offset, 10) : undefined;
+    const pagination = parsePagination(req.query, res, { defaultLimit: DEFAULT_TIMELINE_LIMIT });
+    if (!pagination) return;
 
-    if (Number.isNaN(rawLimit) || rawLimit < 1) return res.status(400).json({ error: "Invalid limit", code: "BAD_REQUEST" });
-    if (offset !== undefined && (Number.isNaN(offset) || offset < 0)) return res.status(400).json({ error: "Invalid offset", code: "BAD_REQUEST" });
-
-    const limit = Math.min(rawLimit, DEFAULT_TIMELINE_LIMIT);
-    const entries = await storage.timeline.getTimeline(userId, planId, limit, offset);
+    const limit = Math.min(pagination.limit, DEFAULT_TIMELINE_LIMIT);
+    const entries = await storage.timeline.getTimeline(userId, planId, limit, pagination.offset);
     res.json(entries);
   }));
 

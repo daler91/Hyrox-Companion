@@ -51,6 +51,11 @@ const envSchema = z.object({
   VAPID_PUBLIC_KEY: z.string().optional(),
   VAPID_PRIVATE_KEY: z.string().optional(),
   VAPID_EMAIL: z.email().optional(),
+  // Runtime kill-switch for all AI routes (chat, parsing, plan generation,
+  // RAG, coach suggestions). Lets operators disable Gemini traffic without
+  // redeploying or rotating GEMINI_API_KEY. Defaults to "true" so existing
+  // deployments behave the same.
+  AI_FEATURES_ENABLED: z.enum(["true", "false"]).default("true"),
 }).refine((data) => !(data.NODE_ENV === "production" && data.ALLOW_DEV_AUTH_BYPASS === "true"), {
   message: "❌ FATAL: ALLOW_DEV_AUTH_BYPASS cannot be enabled in production environment",
   path: ["ALLOW_DEV_AUTH_BYPASS"],

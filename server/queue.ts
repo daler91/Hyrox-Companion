@@ -69,16 +69,24 @@ const IN_BATCH_CONCURRENCY = 2;
 // (CODEBASE_AUDIT.md Warning-17).
 const JOB_TIMEOUT_MS = 50 * 60 * 1000;
 
-async function runWithTimeout<T>(label: string, fn: () => Promise<T>): Promise<T> {
+async function runWithTimeout<T>(
+  label: string,
+  fn: (signal: AbortSignal) => Promise<T>,
+): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
+  const controller = new AbortController();
   try {
     return await Promise.race<T>([
-      fn(),
+      fn(controller.signal),
       new Promise<T>((_, reject) => {
-        timer = setTimeout(
-          () => reject(new Error(`[pg-boss] ${label} job exceeded ${JOB_TIMEOUT_MS / 60_000}min timeout`)),
-          JOB_TIMEOUT_MS,
-        );
+        timer = setTimeout(() => {
+          // Aborts the signal so downstream callers that accept it
+          // (fetch, Gemini SDK, custom AbortSignal listeners) can tear
+          // down promptly rather than running to completion after the
+          // timeout reject propagates.
+          controller.abort();
+          reject(new Error(`[pg-boss] ${label} job exceeded ${JOB_TIMEOUT_MS / 60_000}min timeout`));
+        }, JOB_TIMEOUT_MS);
       }),
     ]);
   } finally {

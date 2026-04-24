@@ -200,25 +200,57 @@ export async function saveParsedWorkout(
   workoutId: string,
   setRows: InsertExerciseSet[]
 ): Promise<number> {
+  return replaceExerciseSetsByOwner({ workoutLogId: workoutId }, setRows);
+}
+
+// Replace-all semantics for an owner (either a logged workout or a plan day):
+// drop the existing rows inside a single tx and insert the new ones, so repeat
+// Parse calls don't accumulate duplicates. Shared by every reparse path.
+async function replaceExerciseSetsByOwner(
+  owner: SetOwner,
+  setRows: InsertExerciseSet[],
+): Promise<number> {
+  const condition = "workoutLogId" in owner
+    ? eq(exerciseSets.workoutLogId, owner.workoutLogId)
+    : eq(exerciseSets.planDayId, owner.planDayId);
   await db.transaction(async (tx) => {
-    await tx.delete(exerciseSets).where(eq(exerciseSets.workoutLogId, workoutId));
+    await tx.delete(exerciseSets).where(condition);
     if (setRows.length > 0) {
       await tx.insert(exerciseSets).values(setRows);
     }
   });
-
   return setRows.length;
 }
 
-export async function reparseWorkout(
-  workout: { id: string; mainWorkout?: string | null; accessory?: string | null },
-  weightUnit: string
-): Promise<{ exercises: ParsedExercise[]; setCount: number } | null> {
-  const prepared = await prepareParsedWorkout(workout, weightUnit);
-  if (!prepared) return null;
+type ReparseTarget = { id: string; mainWorkout?: string | null; accessory?: string | null };
 
-  const setCount = await saveParsedWorkout(workout.id, prepared.setRows);
-  return { exercises: prepared.exercises, setCount };
+// Parse the target's free text with Gemini and REPLACE its structured
+// exerciseSets. Returns null when the combined text is empty or produced
+// zero exercises. The replace semantics match every reparse call site so a
+// repeated Parse press never doubles up rows.
+async function reparseFromText(
+  target: ReparseTarget,
+  owner: SetOwner,
+  weightUnit: string,
+  context: "workout" | "plan",
+): Promise<{ exercises: ParsedExercise[]; setCount: number } | null> {
+  const { parseExercisesFromText } = await import("../gemini");
+  const textToParse = [target.mainWorkout, target.accessory].filter(Boolean).join("\n");
+  if (!textToParse.trim()) return null;
+
+  const exercises = await parseExercisesFromText(textToParse.trim(), weightUnit);
+  if (exercises.length === 0) return null;
+
+  const setRows = expandExercisesToRows(exercises, owner, context);
+  const setCount = await replaceExerciseSetsByOwner(owner, setRows);
+  return { exercises, setCount };
+}
+
+export function reparseWorkout(
+  workout: { id: string; mainWorkout?: string | null; accessory?: string | null },
+  weightUnit: string,
+): Promise<{ exercises: ParsedExercise[]; setCount: number } | null> {
+  return reparseFromText(workout, { workoutLogId: workout.id }, weightUnit, "workout");
 }
 
 /**
@@ -232,32 +264,40 @@ export async function reparseWorkout(
  * zero exercises. The replace semantics match the workout-log path so
  * repeated Parse presses don't accumulate duplicate rows.
  */
-export async function reparsePlanDay(
+export function reparsePlanDay(
   planDay: { id: string; mainWorkout?: string | null; accessory?: string | null },
   weightUnit: string,
 ): Promise<{ exercises: ParsedExercise[]; setCount: number } | null> {
-  const { parseExercisesFromText } = await import("../gemini");
-  const textToParse = [planDay.mainWorkout, planDay.accessory].filter(Boolean).join("\n");
-  if (!textToParse.trim()) return null;
-
-  const exercises = await parseExercisesFromText(textToParse.trim(), weightUnit);
-  if (exercises.length === 0) return null;
-
-  const setRows = expandExercisesToPlanDaySetRows(exercises, planDay.id);
-
-  await db.transaction(async (tx) => {
-    await tx.delete(exerciseSets).where(eq(exerciseSets.planDayId, planDay.id));
-    if (setRows.length > 0) {
-      await tx.insert(exerciseSets).values(setRows);
-    }
-  });
-
-  return { exercises, setCount: setRows.length };
+  return reparseFromText(planDay, { planDayId: planDay.id }, weightUnit, "plan");
 }
 
 export interface ReparseFromImageInput {
   readonly imageBase64: string;
   readonly mimeType: string;
+}
+
+/** Shared image-reparse pipeline for workouts and plan days. */
+async function reparseFromImage(
+  owner: SetOwner,
+  image: ReparseFromImageInput,
+  weightUnit: string,
+  userId: string,
+  context: "workout" | "plan",
+  customExerciseNames?: string[],
+): Promise<{ exercises: ParsedExercise[]; setCount: number } | null> {
+  const { parseExercisesFromImage } = await import("../gemini");
+  const exercises = await parseExercisesFromImage({
+    imageBase64: image.imageBase64,
+    mimeType: image.mimeType,
+    weightUnit,
+    customExerciseNames,
+    userId,
+  });
+  if (exercises.length === 0) return null;
+
+  const setRows = expandExercisesToRows(exercises, owner, context);
+  const setCount = await replaceExerciseSetsByOwner(owner, setRows);
+  return { exercises, setCount };
 }
 
 /**
@@ -267,53 +307,38 @@ export interface ReparseFromImageInput {
  * text path's replace semantics and save transaction so the downstream
  * set-membership behaviour is identical regardless of input modality.
  */
-export async function reparseWorkoutFromImage(
+export function reparseWorkoutFromImage(
   workout: { id: string },
   image: ReparseFromImageInput,
   weightUnit: string,
   userId: string,
   customExerciseNames?: string[],
 ): Promise<{ exercises: ParsedExercise[]; setCount: number } | null> {
-  const { parseExercisesFromImage } = await import("../gemini");
-  const exercises = await parseExercisesFromImage({
-    imageBase64: image.imageBase64,
-    mimeType: image.mimeType,
+  return reparseFromImage(
+    { workoutLogId: workout.id },
+    image,
     weightUnit,
-    customExerciseNames,
     userId,
-  });
-  if (exercises.length === 0) return null;
-
-  const setRows = expandExercisesToSetRows(exercises, workout.id);
-  const setCount = await saveParsedWorkout(workout.id, setRows);
-  return { exercises, setCount };
+    "workout",
+    customExerciseNames,
+  );
 }
 
-export async function reparsePlanDayFromImage(
+export function reparsePlanDayFromImage(
   planDay: { id: string },
   image: ReparseFromImageInput,
   weightUnit: string,
   userId: string,
   customExerciseNames?: string[],
 ): Promise<{ exercises: ParsedExercise[]; setCount: number } | null> {
-  const { parseExercisesFromImage } = await import("../gemini");
-  const exercises = await parseExercisesFromImage({
-    imageBase64: image.imageBase64,
-    mimeType: image.mimeType,
+  return reparseFromImage(
+    { planDayId: planDay.id },
+    image,
     weightUnit,
-    customExerciseNames,
     userId,
-  });
-  if (exercises.length === 0) return null;
-
-  const setRows = expandExercisesToPlanDaySetRows(exercises, planDay.id);
-  await db.transaction(async (tx) => {
-    await tx.delete(exerciseSets).where(eq(exerciseSets.planDayId, planDay.id));
-    if (setRows.length > 0) {
-      await tx.insert(exerciseSets).values(setRows);
-    }
-  });
-  return { exercises, setCount: setRows.length };
+    "plan",
+    customExerciseNames,
+  );
 }
 
 export type CreateWorkoutResult = WorkoutLog & { exerciseSets?: ExerciseSet[] };
