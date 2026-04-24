@@ -186,7 +186,7 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
           )}
 
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-2 flex-wrap">
+            <div className={cn("flex items-center gap-2 mb-2 flex-wrap", canMove && "pr-16")}>
               {getStatusBadge(entry.status)}
               {isTargetedByCoach && (
                 <Badge
