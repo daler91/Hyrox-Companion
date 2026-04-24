@@ -1,3 +1,4 @@
+import { useDroppable } from "@dnd-kit/core";
 import type { PersonalRecord,TimelineAnnotation, TimelineEntry } from "@shared/schema";
 import { format, isBefore,isToday, isTomorrow, isYesterday, parseISO } from "date-fns";
 import { StickyNote } from "lucide-react";
@@ -5,6 +6,7 @@ import React, { forwardRef } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 import TimelineWorkoutCard from "./timeline-workout-card";
 import { TimelineAnnotationCard } from "./TimelineAnnotationCard";
@@ -25,6 +27,8 @@ interface TimelineDateGroupProps {
   onEditAnnotation?: (annotation: TimelineAnnotation) => void;
   onDeleteAnnotation?: (id: string) => void;
   isAnnotationDeleting?: boolean;
+  onMoveEntry?: (entry: TimelineEntry, newDate: string) => void;
+  isMovingEntry?: boolean;
 }
 
 function getDateLabel(dateObj: Date) {
@@ -59,6 +63,8 @@ const TimelineDateGroupComponent = forwardRef<HTMLDivElement, TimelineDateGroupP
       onEditAnnotation,
       onDeleteAnnotation,
       isAnnotationDeleting,
+      onMoveEntry,
+      isMovingEntry,
     },
     ref,
   ) => {
@@ -66,6 +72,21 @@ const TimelineDateGroupComponent = forwardRef<HTMLDivElement, TimelineDateGroupP
     const isTodayDate = isToday(dateObj);
     const isPast = isBefore(dateObj, new Date()) && !isTodayDate;
     const hasAnnotations = (annotations?.length ?? 0) > 0;
+
+    // Register as a drop target so a draggable timeline card can be released
+    // on the date heading or the space below its entries. `data.date` is
+    // read back in the DndContext's onDragEnd handler to fire the move.
+    const { setNodeRef: setDropNodeRef, isOver, active } = useDroppable({
+      id: `timeline-date:${date}`,
+      data: { date },
+    });
+
+    // The card itself knows its origin date (entry.data.entry.date) — we
+    // only want to highlight drop targets that would actually change the
+    // date, not the group the card came from.
+    const activeEntryDate =
+      (active?.data?.current as { entry?: { date?: string } } | undefined)?.entry?.date;
+    const isDropTarget = isOver && activeEntryDate && activeEntryDate !== date;
 
     // Defensive: an empty date group with no annotations should not render a
     // visible row. Step 1 of the annotation wiring (useTimelineFilters) only
@@ -83,8 +104,24 @@ const TimelineDateGroupComponent = forwardRef<HTMLDivElement, TimelineDateGroupP
       ? ""
       : "opacity-100 md:opacity-0 md:group-hover/date:opacity-100 transition-opacity";
 
+    const composedRef = (node: HTMLDivElement | null) => {
+      setDropNodeRef(node);
+      if (typeof ref === "function") {
+        ref(node);
+      } else if (ref) {
+        ref.current = node;
+      }
+    };
+
     return (
-      <div className="relative pb-4 group/date" ref={ref}>
+      <div
+        className={cn(
+          "relative pb-4 group/date rounded-md transition-colors",
+          isDropTarget && "bg-primary/10 outline outline-2 outline-dashed outline-primary/50",
+        )}
+        ref={composedRef}
+        data-testid={`timeline-date-group-${date}`}
+      >
         {isTodayDate && (
           <div className="absolute -left-4 top-0 bottom-0 w-1 bg-primary rounded-full" />
         )}
@@ -145,6 +182,8 @@ const TimelineDateGroupComponent = forwardRef<HTMLDivElement, TimelineDateGroupP
               combiningEntryDate={combiningEntryDate}
               personalRecords={personalRecords}
               isAutoCoaching={isAutoCoaching}
+              onMove={onMoveEntry}
+              isMoving={isMovingEntry}
             />
           ))}
         </div>
