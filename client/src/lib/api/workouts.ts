@@ -9,6 +9,8 @@ import type {
 import { typedRequest } from "./client";
 import type { ParseFromImagePayload } from "./exercises";
 
+const IMAGE_REPARSE_TIMEOUT_MS = 60_000;
+
 export interface BatchReparseResponse {
   total: number;
   parsed: number;
@@ -105,6 +107,7 @@ export const workouts = {
       "POST",
       `/api/v1/workouts/${id}/reparse-from-image`,
       payload,
+      { timeoutMs: IMAGE_REPARSE_TIMEOUT_MS },
     ),
 
   batchReparse: () => typedRequest<BatchReparseResponse>("POST", "/api/v1/workouts/batch-reparse"),

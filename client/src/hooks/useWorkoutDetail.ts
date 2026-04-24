@@ -28,6 +28,22 @@ const workoutSetsMutationKey = (workoutId: string) =>
 // per-component debounce couldn't provide.
 const CELL_SAVE_DEBOUNCE_MS = 350;
 
+function isTimeoutLikeError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const message = error.message.toLowerCase();
+  return (
+    message.includes("request timed out") ||
+    message.includes("timeouterror") ||
+    message.includes("aborterror")
+  );
+}
+
+function isWorkoutNotFoundError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const message = error.message.toLowerCase();
+  return message.includes("404") && message.includes("workout not found");
+}
+
 /**
  * Data + mutation bundle used by the v2 workout detail dialog. Keeps the
  * dialog component free of React Query wiring: it consumes
@@ -196,7 +212,13 @@ export function useWorkoutDetail(workoutId: string | null) {
     invalidateQueries: workoutId
       ? [QUERY_KEYS.workout(workoutId), QUERY_KEYS.workoutHistory(workoutId)]
       : undefined,
-    errorToast: "Couldn't parse that photo",
+    errorToast: (error) =>
+      isTimeoutLikeError(error)
+        ? {
+            title: "Parsing took too long — please retry.",
+            description: "The image may still finish in the background. Refresh to check before retaking.",
+          }
+        : { title: "Couldn't parse that photo — try a clearer shot." },
   });
 
   const isHydrating = seedFromPlan.isPending || reparseFreeText.isPending;
@@ -291,7 +313,13 @@ export function useWorkoutDetail(workoutId: string | null) {
         queryClient.setQueryData(QUERY_KEYS.workout(workoutId), prev);
       }
     },
-    errorToast: "Couldn't save prescription",
+    errorToast: (error) =>
+      isWorkoutNotFoundError(error)
+        ? {
+            title: "That workout was just changed",
+            description: "Refresh to sync the latest entry, then try again.",
+          }
+        : { title: "Couldn't save prescription" },
   });
 
   // Inline RPE edit from the stats row. Non-optimistic — rollback
