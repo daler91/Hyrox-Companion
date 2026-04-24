@@ -74,6 +74,12 @@ export function InlineSetEditor({
       weight: lastSet?.weight ?? undefined,
       distance: lastSet?.distance ?? undefined,
       time: lastSet?.time ?? undefined,
+      // Forward the originating row's id so client-side adapters that
+      // manage multiple independent groups with the same
+      // exerciseName+customLabel can append the new set to the right
+      // block (the draft Log Workout flow needs this; server callers
+      // ignore the field).
+      sourceSetId: lastSet?.id ?? null,
     });
   };
 

@@ -99,11 +99,12 @@ describe("Log Workout Exercise Mode Submission", () => {
     cy.getBySel("input-workout-title").type("Leg Day");
     cy.getBySel("input-workout-notes").type("Squats felt heavy");
 
-    // Click on an exercise to add it
+    // Open the picker and pick Back Squat. The draft table uses the
+    // same ExerciseTable flow as the detail dialog: Add → picker →
+    // select an exercise.
+    cy.getBySel("exercise-table-add").click();
+    cy.getBySel("exercise-add-dialog").should("exist");
     cy.getBySel("button-exercise-back_squat").click();
-
-    // Since we added an exercise, the exercise details block should appear.
-    // Let's assume there's a way to input sets. We can just save it with defaults.
 
     cy.getBySel("button-save-workout").should("not.be.disabled").click();
 
