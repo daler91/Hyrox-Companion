@@ -15,13 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useGarminMutations } from "@/hooks/useGarminMutations";
-
-interface GarminStatus {
-  connected: boolean;
-  garminDisplayName?: string | null;
-  lastSyncedAt?: string | null;
-  lastError?: string | null;
-}
+import type { GarminStatus } from "@/lib/api";
 
 interface GarminSectionProps {
   readonly garminStatus: GarminStatus | undefined;

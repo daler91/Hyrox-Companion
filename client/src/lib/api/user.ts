@@ -8,6 +8,12 @@ export interface StravaSyncResponse {
   total: number;
 }
 
+export interface StravaStatus {
+  connected: boolean;
+  athleteId?: string;
+  lastSyncedAt?: string | null;
+}
+
 export const auth = {
   getUser: () => typedRequest<User>("GET", "/api/v1/auth/user"),
 } as const;

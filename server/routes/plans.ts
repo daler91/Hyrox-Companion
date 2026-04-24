@@ -3,10 +3,10 @@ import { type Request as ExpressRequest,type Response, Router } from "express";
 import { z } from "zod";
 
 import { isAuthenticated } from "../clerkAuth";
-import { logger } from "../logger";
+import { reqLogger } from "../logger";
 import { aiBudgetCheck } from "../middleware/aibudget";
 import { protectedMutationGuards } from "../routeGuards";
-import { asyncHandler, rateLimiter, validateBody } from "../routeUtils";
+import { asyncHandler, rateLimiter, sendNotFound, validateBody } from "../routeUtils";
 import { regenerateCoachNoteForPlanDay } from "../services/coachService";
 import { generatePlan } from "../services/planGenerationService";
 import { createSamplePlan, importPlanFromCSV, updatePlanDayStatus,updatePlanDayWithCleanup } from "../services/planService";
@@ -26,7 +26,7 @@ const handlePlanDayUpdate = (updateFn: (dayId: string, data: UpdatePlanDay, user
     const userId = getUserId(req);
     const updatedDay = await updateFn(dayId, req.body, userId);
   if (!updatedDay) {
-    return res.status(404).json({ error: "Day not found", code: "NOT_FOUND" });
+    return sendNotFound(res, "Day not found");
   }
 
   res.json(updatedDay);
@@ -43,7 +43,7 @@ const handleGetOrDeletePlan = (
   const userId = getUserId(req);
   const result = await actionFn(req.params.id, userId);
   if (!result) {
-    return res.status(404).json({ error: "Training plan not found", code: "NOT_FOUND" });
+    return sendNotFound(res, "Training plan not found");
   }
   res.json(successMsg ? { success: true } : result);
 })
@@ -63,8 +63,7 @@ router.post("/api/v1/plans/import", ...protectedMutationGuards, rateLimiter("pla
       const fullPlan = await importPlanFromCSV(csvContent, userId, { fileName, planName });
       res.json(fullPlan);
     } catch (error: unknown) {
-      const log = req.log || logger;
-      log.error({ err: error }, "Failed to import plan from CSV");
+      reqLogger(req).error({ err: error }, "Failed to import plan from CSV");
       return res.status(400).json({ error: "Failed to parse CSV content. Please ensure it follows the expected template format.", code: "INVALID_CSV" });
     }
   }));
@@ -81,8 +80,7 @@ router.post("/api/v1/plans/generate", ...protectedMutationGuards, rateLimiter("p
       const fullPlan = await generatePlan(req.body as GeneratePlanInput, userId);
       res.json(fullPlan);
     } catch (error: unknown) {
-      const log = req.log || logger;
-      log.error({ err: error }, "Failed to generate AI training plan");
+      reqLogger(req).error({ err: error }, "Failed to generate AI training plan");
       return res.status(500).json({ error: "Failed to generate training plan. Please try again.", code: "GENERATION_FAILED" });
     }
   }));
@@ -99,7 +97,7 @@ router.patch("/api/v1/plans/:id", ...protectedMutationGuards, rateLimiter("planU
     const userId = getUserId(req);
     const updated = await storage.plans.renameTrainingPlan(req.params.id, req.body.name, userId);
     if (!updated) {
-      return res.status(404).json({ error: "Training plan not found", code: "NOT_FOUND" });
+      return sendNotFound(res, "Training plan not found");
     }
     res.json(updated);
   }));
@@ -108,7 +106,7 @@ router.patch("/api/v1/plans/:id/goal", ...protectedMutationGuards, rateLimiter("
     const userId = getUserId(req);
     const updated = await storage.plans.updateTrainingPlanGoal(req.params.id, req.body.goal, userId);
     if (!updated) {
-      return res.status(404).json({ error: "Training plan not found", code: "NOT_FOUND" });
+      return sendNotFound(res, "Training plan not found");
     }
     res.json(updated);
   }));
@@ -122,7 +120,7 @@ router.post("/api/v1/plans/:planId/schedule", ...protectedMutationGuards, rateLi
 
     const success = await storage.plans.schedulePlan(planId, startDate, userId);
     if (!success) {
-      return res.status(404).json({ error: "Training plan not found", code: "NOT_FOUND" });
+      return sendNotFound(res, "Training plan not found");
     }
 
     res.json({ success: true });
@@ -140,7 +138,7 @@ router.patch("/api/v1/plans/days/:dayId/status", ...protectedMutationGuards, rat
 
     const updatedDay = await updatePlanDayStatus(dayId, { status, scheduledDate }, userId);
     if (!updatedDay) {
-      return res.status(404).json({ error: "Day not found", code: "NOT_FOUND" });
+      return sendNotFound(res, "Day not found");
     }
 
     res.json(updatedDay);
@@ -151,7 +149,7 @@ router.delete("/api/v1/plans/days/:dayId", ...protectedMutationGuards, rateLimit
     const userId = getUserId(req);
     const deleted = await storage.plans.deletePlanDay(dayId, userId);
     if (!deleted) {
-      return res.status(404).json({ error: "Plan day not found", code: "NOT_FOUND" });
+      return sendNotFound(res, "Plan day not found");
     }
     res.json({ success: true });
   }));
@@ -179,7 +177,7 @@ router.get(
     const userId = getUserId(req);
     const sets = await storage.workouts.getExerciseSetsByPlanDay(req.params.dayId, userId);
     if (sets === null) {
-      return res.status(404).json({ error: PLAN_DAY_NOT_FOUND, code: "NOT_FOUND" });
+      return sendNotFound(res, PLAN_DAY_NOT_FOUND);
     }
     res.json(sets);
   }),
@@ -194,7 +192,7 @@ router.post(
     const userId = getUserId(req);
     const created = await storage.workouts.addExerciseSetToPlanDay(req.params.dayId, req.body, userId);
     if (!created) {
-      return res.status(404).json({ error: PLAN_DAY_NOT_FOUND, code: "NOT_FOUND" });
+      return sendNotFound(res, PLAN_DAY_NOT_FOUND);
     }
     res.status(201).json(created);
   }),
@@ -214,7 +212,7 @@ router.patch(
       userId,
     );
     if (!updated) {
-      return res.status(404).json({ error: PLAN_DAY_SET_NOT_FOUND, code: "NOT_FOUND" });
+      return sendNotFound(res, PLAN_DAY_SET_NOT_FOUND);
     }
     res.json(updated);
   }),
@@ -232,7 +230,7 @@ router.delete(
       userId,
     );
     if (!deleted) {
-      return res.status(404).json({ error: PLAN_DAY_SET_NOT_FOUND, code: "NOT_FOUND" });
+      return sendNotFound(res, PLAN_DAY_SET_NOT_FOUND);
     }
     res.json({ success: true });
   }),
@@ -254,7 +252,7 @@ router.post(
       storage.users.getUser(userId),
     ]);
     if (!planDay) {
-      return res.status(404).json({ error: PLAN_DAY_NOT_FOUND, code: "NOT_FOUND" });
+      return sendNotFound(res, PLAN_DAY_NOT_FOUND);
     }
     const weightUnit = user?.weightUnit || "kg";
     const result = await reparsePlanDay(planDay, weightUnit);
@@ -282,7 +280,7 @@ router.post(
       storage.users.getCustomExercises(userId),
     ]);
     if (!planDay) {
-      return res.status(404).json({ error: PLAN_DAY_NOT_FOUND, code: "NOT_FOUND" });
+      return sendNotFound(res, PLAN_DAY_NOT_FOUND);
     }
     const weightUnit = user?.weightUnit || "kg";
     const customNames = customExercises.map((e) => e.name);

@@ -1,6 +1,6 @@
 import type { TimelineEntry, WorkoutStatus } from "@shared/schema";
 import { format, parseISO } from "date-fns";
-import { CalendarClock,CheckCircle2, ChevronDown,Clock, Layers, MoreVertical, SkipForward, Sparkles, Trash2,XCircle } from "lucide-react";
+import { CheckCircle2, ChevronDown,Clock, Layers, MoreVertical, SkipForward, Sparkles, Trash2,XCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -32,10 +32,6 @@ interface WorkoutDetailHeaderV2Props {
   readonly onChangeStatus?: (status: WorkoutStatus) => void;
   /** Opens the combine-workouts picker. Only available on logged entries. */
   readonly onCombine?: () => void;
-  /** Opens the move-to-date dialog. Parent routes the chosen date to
-   *  either plan_days.scheduledDate (planned entries) or workout_logs.date
-   *  (logged entries) via the right mutation. */
-  readonly onChangeDate?: () => void;
   /**
    * Debounced autosave handler for the workout's title (focus). When
    * omitted the title renders as read-only text. The parent picks the
@@ -94,7 +90,6 @@ export function WorkoutDetailHeaderV2({
   onDelete,
   onChangeStatus,
   onCombine,
-  onChangeDate,
   onChangeFocus,
   saveState,
 }: WorkoutDetailHeaderV2Props) {
@@ -124,7 +119,7 @@ export function WorkoutDetailHeaderV2({
       })
     : [];
 
-  const hasOverflowMenu = !!onDelete || !!onCombine || !!onChangeDate;
+  const hasOverflowMenu = !!onDelete || !!onCombine;
 
   return (
     <div className="flex items-start justify-between gap-4 pb-2 pr-20">
@@ -170,22 +165,14 @@ export function WorkoutDetailHeaderV2({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {onChangeDate && (
-                <DropdownMenuItem onSelect={onChangeDate} data-testid="workout-detail-change-date">
-                  <CalendarClock className="mr-2 size-4" aria-hidden /> Move to date…
-                </DropdownMenuItem>
-              )}
               {onCombine && (
-                <>
-                  {onChangeDate && <DropdownMenuSeparator />}
-                  <DropdownMenuItem onSelect={onCombine} data-testid="workout-detail-combine">
-                    <Layers className="mr-2 size-4" aria-hidden /> Combine workouts
-                  </DropdownMenuItem>
-                </>
+                <DropdownMenuItem onSelect={onCombine} data-testid="workout-detail-combine">
+                  <Layers className="mr-2 size-4" aria-hidden /> Combine workouts
+                </DropdownMenuItem>
               )}
               {onDelete && (
                 <>
-                  {(onCombine || onChangeDate) && <DropdownMenuSeparator />}
+                  {onCombine && <DropdownMenuSeparator />}
                   <DropdownMenuItem
                     onSelect={onDelete}
                     className="text-destructive"

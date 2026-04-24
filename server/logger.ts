@@ -1,3 +1,9 @@
+// Import `pino-http` for its type-augmentation on Request.log; the value
+// import keeps the augmentation visible to TypeScript even though we don't
+// use any exported runtime bindings from the module here.
+import "pino-http";
+
+import type { Request } from "express";
 import pino from "pino";
 
 import { env } from "./env";
@@ -50,4 +56,18 @@ export function getContextLogger() {
     return logger.child({ requestId: ctx.requestId, userId: ctx.userId });
   }
   return logger;
+}
+
+/**
+ * Prefer the per-request child logger attached by pino-http (request id +
+ * user id are already bound). Fall back to the module-level logger when the
+ * request hasn't been through the pino-http middleware yet (e.g. lower-level
+ * middleware, or error handlers reached before req.log was set).
+ *
+ * Extracted so the 24+ `req.log || logger` call sites stay consistent and
+ * can pick up future enhancements — e.g. always preferring the async-local
+ * request context child — in one place.
+ */
+export function reqLogger(req: Request) {
+  return req.log ?? logger;
 }

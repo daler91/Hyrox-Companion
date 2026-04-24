@@ -48,6 +48,11 @@ vi.mock("../queue", () => {
     queue: {
       send: vi.fn().mockResolvedValue(undefined),
     },
+    DEFAULT_JOB_OPTIONS: {
+      retryLimit: 3,
+      retryBackoff: true,
+      expireInMinutes: 60,
+    },
   };
 });
 

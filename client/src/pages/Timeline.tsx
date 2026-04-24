@@ -1,3 +1,11 @@
+import {
+  DndContext,
+  type DragEndEvent,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
 import type { TimelineAnnotation, TimelineEntry } from "@shared/schema";
 import { useMutation } from "@tanstack/react-query";
 import type { Virtualizer } from "@tanstack/react-virtual";
@@ -19,7 +27,6 @@ import {
   CombineWorkoutsDialog,
   FloatingActionButton,
   ImportPreviewDialog,
-  MoveWorkoutDialog,
   SchedulePlanDialog,
   SkipConfirmDialog,
   TimelineDateGroup,
@@ -35,6 +42,7 @@ import { WorkoutDetailDialogV2 } from "@/components/workout-detail/WorkoutDetail
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { useMoveTimelineEntry } from "@/hooks/useMoveTimelineEntry";
 import { useTimelineState } from "@/hooks/useTimelineState";
 import { api, QUERY_KEYS } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
@@ -76,6 +84,8 @@ interface TimelineContentProps {
   onEditAnnotation: (annotation: TimelineAnnotation) => void;
   onDeleteAnnotation: (id: string) => void;
   isAnnotationDeleting: boolean;
+  onMoveEntry: (entry: TimelineEntry, newDate: string) => void;
+  isMovingEntry: boolean;
 }
 
 function TimelineContent({
@@ -110,6 +120,8 @@ function TimelineContent({
   onEditAnnotation,
   onDeleteAnnotation,
   isAnnotationDeleting,
+  onMoveEntry,
+  isMovingEntry,
 }: Readonly<TimelineContentProps>) {
   if (timelineLoading) {
     return <TimelineSkeleton />;
@@ -199,6 +211,8 @@ function TimelineContent({
                   onEditAnnotation={onEditAnnotation}
                   onDeleteAnnotation={onDeleteAnnotation}
                   isAnnotationDeleting={isAnnotationDeleting}
+                  onMoveEntry={onMoveEntry}
+                  isMovingEntry={isMovingEntry}
                 />
               </div>
             );
@@ -249,10 +263,6 @@ export default function Timeline() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showAIConsent, setShowAIConsent] = useState(false);
   const [annotationsDialogOpen, setAnnotationsDialogOpen] = useState(false);
-  // Reschedule dialog state. Holds the entry whose date is being changed
-  // so MoveWorkoutDialog can seed itself with the current date and route
-  // the chosen date to the right mutation (plan day vs workout log).
-  const [movingEntry, setMovingEntry] = useState<TimelineEntry | null>(null);
   // Seeds the create form in AnnotationsDialog when the user clicks a row's
   // inline "+ Note" chip, so they don't have to re-pick the date.
   const [annotationInitialDate, setAnnotationInitialDate] = useState<string | undefined>(undefined);
@@ -308,44 +318,6 @@ export default function Timeline() {
       }),
   });
 
-  // Reschedule a workout. Plan-day-backed entries persist via
-  // PATCH /api/v1/plans/days/:dayId/status (the same route used by the
-  // status chip — it accepts scheduledDate alongside status). Logged
-  // workouts persist via PATCH /api/v1/workouts/:id. The detail dialog is
-  // closed before invalidation so the user can see the row jump dates in
-  // its new position.
-  const moveEntryMutation = useMutation({
-    mutationFn: async ({ entry, date }: { entry: TimelineEntry; date: string }) => {
-      if (entry.planDayId) {
-        await api.plans.setScheduledDate(entry.planDayId, date);
-      } else if (entry.workoutLogId) {
-        await api.workouts.update(entry.workoutLogId, { date });
-      } else {
-        throw new Error("Entry has neither a planDayId nor a workoutLogId");
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }).catch(() => {});
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.trainingOverview }).catch(() => {});
-      setMovingEntry(null);
-      setDetailEntry(null);
-      toast({ title: "Workout moved" });
-    },
-    onError: () =>
-      toast({
-        title: "Couldn't move workout",
-        description: "Please try again.",
-        variant: "destructive",
-      }),
-  });
-
-  const handleChangeDate = useCallback((entry: TimelineEntry) => {
-    // Open the move dialog seeded with this entry. Closing the detail
-    // dialog at the same time would unmount the source of the click and
-    // disorient the user mid-interaction; we close it on success instead.
-    setMovingEntry(entry);
-  }, []);
-
   const handleAddAnnotation = useCallback((date: string) => {
     setAnnotationInitialDate(date);
     setAnnotationsDialogOpen(true);
@@ -365,6 +337,29 @@ export default function Timeline() {
   const allVisibleGroups = useMemo(() => {
     return [...visiblePastGroups.slice().reverse(), ...visibleFutureGroups];
   }, [visiblePastGroups, visibleFutureGroups]);
+
+  const { moveEntry, isMoving } = useMoveTimelineEntry(selectedPlanId);
+
+  // Require a small activation distance on pointer drag so clicking the
+  // drag handle to open a tooltip / focus it doesn't accidentally pick
+  // the card up. The DnD only engages after the user moves >6px, which
+  // matches the shadcn grip-handle UX in ExerciseTable.
+  const dragSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor),
+  );
+
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      if (!over) return;
+      const entry = (active.data.current as { entry?: TimelineEntry } | undefined)?.entry;
+      const newDate = (over.data.current as { date?: string } | undefined)?.date;
+      if (!entry || !newDate || entry.date === newDate) return;
+      moveEntry(entry, newDate);
+    },
+    [moveEntry],
+  );
 
   // Whether today's date is in the currently-filtered/visible groups.
   // Passed to TimelineTodayIndicator so the "Jump to today" pill stays
@@ -441,39 +436,43 @@ export default function Timeline() {
             todayPresent={todayPresent}
           />
 
-      <TimelineContent
-        timelineLoading={timelineLoading}
-        filterStatus={filterStatus}
-        selectedPlanId={selectedPlanId}
-        plans={plans}
-        samplePlanMutation={samplePlanMutation}
-        importMutation={importMutation}
-        handleFileUpload={handleFileUpload}
-        setSchedulingPlanId={setSchedulingPlanId}
-        setFilterStatus={setFilterStatus}
-        hiddenPastCount={hiddenPastCount}
-        setShowAllPast={setShowAllPast}
-        showAllPast={showAllPast}
-        pastGroups={pastGroups}
-        hiddenFutureCount={hiddenFutureCount}
-        setShowAllFuture={setShowAllFuture}
-        showAllFuture={showAllFuture}
-        futureGroups={futureGroups}
-        allVisibleGroups={allVisibleGroups}
-        rowVirtualizer={rowVirtualizer}
-        todayRef={todayRef}
-        handleMarkComplete={handleMarkComplete}
-        openDetailDialog={openDetailDialog}
-        handleCombine={handleCombine}
-        combiningEntry={combiningEntry}
-        personalRecords={personalRecords}
-        isAutoCoaching={!!user?.isAutoCoaching}
-        annotationsByDate={annotationsByDate}
-        onAddAnnotation={handleAddAnnotation}
-        onEditAnnotation={handleEditAnnotation}
-        onDeleteAnnotation={handleDeleteAnnotation}
-        isAnnotationDeleting={deleteAnnotationMutation.isPending}
-      />
+      <DndContext sensors={dragSensors} onDragEnd={handleDragEnd}>
+        <TimelineContent
+          timelineLoading={timelineLoading}
+          filterStatus={filterStatus}
+          selectedPlanId={selectedPlanId}
+          plans={plans}
+          samplePlanMutation={samplePlanMutation}
+          importMutation={importMutation}
+          handleFileUpload={handleFileUpload}
+          setSchedulingPlanId={setSchedulingPlanId}
+          setFilterStatus={setFilterStatus}
+          hiddenPastCount={hiddenPastCount}
+          setShowAllPast={setShowAllPast}
+          showAllPast={showAllPast}
+          pastGroups={pastGroups}
+          hiddenFutureCount={hiddenFutureCount}
+          setShowAllFuture={setShowAllFuture}
+          showAllFuture={showAllFuture}
+          futureGroups={futureGroups}
+          allVisibleGroups={allVisibleGroups}
+          rowVirtualizer={rowVirtualizer}
+          todayRef={todayRef}
+          handleMarkComplete={handleMarkComplete}
+          openDetailDialog={openDetailDialog}
+          handleCombine={handleCombine}
+          combiningEntry={combiningEntry}
+          personalRecords={personalRecords}
+          isAutoCoaching={!!user?.isAutoCoaching}
+          annotationsByDate={annotationsByDate}
+          onAddAnnotation={handleAddAnnotation}
+          onEditAnnotation={handleEditAnnotation}
+          onDeleteAnnotation={handleDeleteAnnotation}
+          isAnnotationDeleting={deleteAnnotationMutation.isPending}
+          onMoveEntry={moveEntry}
+          isMovingEntry={isMoving}
+        />
+      </DndContext>
 
           {!detailEntry && (
             <FloatingActionButton coachPanelOpen={coachOpen} onCoachToggle={() => handleCoachToggle(!coachOpen)} />
@@ -505,7 +504,6 @@ export default function Timeline() {
               setDetailEntry(null);
               handleCombine(entry);
             }}
-            onChangeDate={handleChangeDate}
             weightUnit={user?.weightUnit === "lbs" ? "lb" : "kg"}
             distanceUnit={user?.distanceUnit === "miles" ? "miles" : "km"}
             // Close the global coach rail when the in-dialog chat
@@ -558,17 +556,6 @@ export default function Timeline() {
               }
             }}
             initialDate={annotationInitialDate}
-          />
-
-          <MoveWorkoutDialog
-            entry={movingEntry}
-            onOpenChange={(open) => {
-              if (!open) setMovingEntry(null);
-            }}
-            onConfirm={(date) =>
-              movingEntry && moveEntryMutation.mutate({ entry: movingEntry, date })
-            }
-            isPending={moveEntryMutation.isPending}
           />
         </div>
       </div>

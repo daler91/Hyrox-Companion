@@ -35,37 +35,49 @@ function evictStale<T extends { timestamp: number }>(map: Map<string, T>, ttl: n
   }
 }
 
-interface CacheEntry {
-  promise: Promise<ExerciseSetWithDate[]>;
+interface CacheEntry<T> {
+  promise: Promise<T>;
   timestamp: number;
 }
 
-// Store pending promises and cached results to prevent redundant DB queries
-// for both concurrent and sequential requests within the TTL window.
-export const _cacheForTesting = new Map<string, CacheEntry>();
-const cache = _cacheForTesting;
+/**
+ * In-memory request coalescing + TTL cache used for the analytics routes.
+ * Collapses concurrent requests for the same (userId, from, to) into a
+ * single storage call and caches the result for up to `CACHE_TTL_MS` to
+ * absorb rapid refetches from the Analytics tabs. On fetch failure the
+ * entry is evicted so the next request retries immediately.
+ */
+function createCoalescedCache<T>(
+  cache: Map<string, CacheEntry<T>>,
+  keyPrefix: string,
+  fetcher: (userId: string, from?: string, to?: string) => Promise<T>,
+): (userId: string, from?: string, to?: string) => Promise<T> {
+  return (userId, from, to) => {
+    const cacheKey = `${keyPrefix}${userId}-${from ?? 'none'}-${to ?? 'none'}`;
+    const now = Date.now();
 
-function getExerciseSetsCoalesced(userId: string, from?: string, to?: string): Promise<ExerciseSetWithDate[]> {
-  const cacheKey = `${userId}-${from || 'none'}-${to || 'none'}`;
-  const now = Date.now();
+    const entry = cache.get(cacheKey);
+    if (entry && now - entry.timestamp < CACHE_TTL_MS) {
+      return entry.promise;
+    }
 
-  const entry = cache.get(cacheKey);
-  if (entry && (now - entry.timestamp < CACHE_TTL_MS)) {
-    return entry.promise;
-  }
-
-  // If expired or missing, fetch from storage
-  const promise = storage.analytics.getAllExerciseSetsWithDates(userId, from, to)
-    .catch((error) => {
-      // Remove from cache on failure so subsequent requests retry immediately
+    const promise = fetcher(userId, from, to).catch((error: unknown) => {
       cache.delete(cacheKey);
       throw error;
     });
-
-  cache.set(cacheKey, { promise, timestamp: now });
-  evictStale(cache, CACHE_TTL_MS, MAX_CACHE_SIZE);
-  return promise;
+    cache.set(cacheKey, { promise, timestamp: now });
+    evictStale(cache, CACHE_TTL_MS, MAX_CACHE_SIZE);
+    return promise;
+  };
 }
+
+// Exercise-sets cache. Exported for testing only so tests can clear it.
+export const _cacheForTesting = new Map<string, CacheEntry<ExerciseSetWithDate[]>>();
+const getExerciseSetsCoalesced = createCoalescedCache(
+  _cacheForTesting,
+  "",
+  (userId, from, to) => storage.analytics.getAllExerciseSetsWithDates(userId, from, to),
+);
 
 export function validDate(val: unknown): string | undefined {
   if (!val) return undefined;
@@ -121,34 +133,14 @@ router.get("/api/v1/exercise-analytics", isAuthenticated, rateLimiter("analytics
     res.json(calculateExerciseAnalytics(allSets));
   }));
 
-// Workout logs cache for training overview
-interface WorkoutLogCacheEntry {
-  promise: Promise<WorkoutLog[]>;
-  timestamp: number;
-}
-
-export const _workoutLogCacheForTesting = new Map<string, WorkoutLogCacheEntry>();
-const workoutLogCache = _workoutLogCacheForTesting;
-
-function getWorkoutLogsCoalesced(userId: string, from?: string, to?: string): Promise<WorkoutLog[]> {
-  const cacheKey = `wl-${userId}-${from ?? 'none'}-${to ?? 'none'}`;
-  const now = Date.now();
-
-  const entry = workoutLogCache.get(cacheKey);
-  if (entry && (now - entry.timestamp < CACHE_TTL_MS)) {
-    return entry.promise;
-  }
-
-  const promise = storage.analytics.getWorkoutLogsByDateRange(userId, from, to)
-    .catch((error) => {
-      workoutLogCache.delete(cacheKey);
-      throw error;
-    });
-
-  workoutLogCache.set(cacheKey, { promise, timestamp: now });
-  evictStale(workoutLogCache, CACHE_TTL_MS, MAX_CACHE_SIZE);
-  return promise;
-}
+// Workout-logs cache — same coalescing pattern as above, namespaced with a
+// `wl-` prefix so the shared `createCoalescedCache` helper can stay generic.
+export const _workoutLogCacheForTesting = new Map<string, CacheEntry<WorkoutLog[]>>();
+const getWorkoutLogsCoalesced = createCoalescedCache(
+  _workoutLogCacheForTesting,
+  "wl-",
+  (userId, from, to) => storage.analytics.getWorkoutLogsByDateRange(userId, from, to),
+);
 
 /**
  * Returns the pair of ISO dates that bound the period immediately BEFORE

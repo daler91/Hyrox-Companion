@@ -19,8 +19,8 @@ describe("Log Workout Page", () => {
     cy.getBySel("input-workout-notes").should("exist");
   });
 
-  it("shows the exercise selector", () => {
-    cy.getBySel("exercise-selector").should("exist");
+  it("shows the exercise table", () => {
+    cy.getBySel("exercise-table").should("exist");
   });
 
   it("shows the composer with a describe/dictate panel toggle", () => {

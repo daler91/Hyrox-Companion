@@ -1,12 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { QUERY_KEYS } from "@/lib/api";
-
-interface Preferences {
-  weightUnit: string;
-  distanceUnit: string;
-  weeklyGoal: number;
-}
+import { QUERY_KEYS, type UserPreferences } from "@/lib/api";
 
 interface UnitPreferences {
   weightUnit: "kg" | "lbs";
@@ -17,7 +11,7 @@ interface UnitPreferences {
 }
 
 export function useUnitPreferences(): UnitPreferences {
-  const { data: preferences, isLoading } = useQuery<Preferences>({
+  const { data: preferences, isLoading } = useQuery<UserPreferences>({
     queryKey: QUERY_KEYS.preferences,
   });
 

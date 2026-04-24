@@ -17,6 +17,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import { useSignOut } from "@/hooks/useSignOut";
+import { getUserDisplayName } from "@/lib/authUtils";
 
 import { Logo } from "./brand/Logo";
 import { ThemeToggle } from "./ThemeToggle";
@@ -33,18 +34,11 @@ export function AppSidebar() {
   const { user } = useAuth();
   const signOut = useSignOut();
 
-  const userInitials = user 
+  const userInitials = user
     ? `${user.firstName?.charAt(0) || ''}${user.lastName?.charAt(0) || ''}`.toUpperCase() || user.email?.charAt(0).toUpperCase() || 'U'
     : 'U';
 
-  let userName = 'User';
-  if (user) {
-    if (user.firstName && user.lastName) {
-      userName = `${user.firstName} ${user.lastName}`;
-    } else {
-      userName = user.email || 'User';
-    }
-  }
+  const userName = getUserDisplayName(user);
 
   return (
     <Sidebar>

@@ -34,12 +34,6 @@ export const plans = {
   updateDayStatus: (dayId: string, status: string) =>
     typedRequest<PlanDay>("PATCH", `/api/v1/plans/days/${dayId}/status`, { status }),
 
-  // The /status route accepts a `scheduledDate` alongside (or instead of)
-  // status — it's how plan-day rescheduling persists. Sending null clears
-  // the date so the entry falls out of the timeline.
-  setScheduledDate: (dayId: string, scheduledDate: string | null) =>
-    typedRequest<PlanDay>("PATCH", `/api/v1/plans/days/${dayId}/status`, { scheduledDate }),
-
   generate: (input: GeneratePlanInput) =>
     typedRequest<TrainingPlanWithDays>("POST", "/api/v1/plans/generate", input),
 
