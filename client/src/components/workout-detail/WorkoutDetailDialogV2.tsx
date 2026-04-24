@@ -388,8 +388,8 @@ export function WorkoutDetailDialogV2({
           onMarkComplete={onMarkComplete}
           isMarkingComplete={isMarkingComplete}
           onUpdateSet={patchLoggedSetDebounced}
-          onAddSet={(data) => addSet.mutate(data)}
-          onDeleteSet={(setId) => deleteSet.mutate(setId)}
+          onAddSet={addSet.mutate}
+          onDeleteSet={deleteSet.mutate}
           loggedSaveState={loggedSaveState}
           planSets={planSets}
           planCoachNote={planCoachNote}
@@ -849,8 +849,8 @@ function PlannedCallToAction({ entry, onMarkComplete, isMarkingComplete, weightU
           weightUnit={weightUnit}
           distanceUnit={distanceUnit}
           onUpdateSet={planSets.patchSetDebounced}
-          onAddSet={(data) => planSets.addSet.mutate(data)}
-          onDeleteSet={(setId) => planSets.deleteSet.mutate(setId)}
+          onAddSet={planSets.addSet.mutate}
+          onDeleteSet={planSets.deleteSet.mutate}
           saveState={{ isSaving: planSets.isSaving, lastSavedAt: planSets.lastSavedAt }}
           hasUnparsedText={hasUnparsedText}
         />

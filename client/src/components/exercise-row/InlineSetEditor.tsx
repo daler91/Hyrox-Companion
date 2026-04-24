@@ -1,6 +1,6 @@
 import { EXERCISE_DEFINITIONS, type ExerciseName,type ExerciseSet } from "@shared/schema";
 import { MessageSquarePlus, Pencil, Plus, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,7 +56,13 @@ export function InlineSetEditor({
 
   // Grid: # | field-1 | field-2 ... | note-toggle | remove
   // Each field column shares width; note/remove are fixed-width icons.
-  const colTemplate = `28px ${fields.map(() => "minmax(80px, 1fr)").join(" ")} 28px 28px`;
+  // Memoised so sibling `SetRow` components (wrapped in React.memo) skip
+  // re-render when an unrelated field keystroke flushes through.
+  const colTemplate = useMemo(
+    () => `28px ${fields.map(() => "minmax(80px, 1fr)").join(" ")} 28px 28px`,
+    [fields],
+  );
+  const canDelete = orderedSets.length > 1;
 
   const handleAddSet = () => {
     onAddSet({
@@ -100,10 +106,10 @@ export function InlineSetEditor({
             fields={fields}
             weightUnit={weightUnit}
             distanceUnit={distanceUnit}
-            canDelete={orderedSets.length > 1}
+            canDelete={canDelete}
             colTemplate={colTemplate}
-            onUpdate={(patch) => onUpdateSet(set.id, patch)}
-            onDelete={() => onDeleteSet(set.id)}
+            onUpdateSet={onUpdateSet}
+            onDeleteSet={onDeleteSet}
           />
         ))}
       </div>
@@ -187,21 +193,27 @@ interface SetRowProps {
   readonly distanceUnit: string;
   readonly canDelete: boolean;
   readonly colTemplate: string;
-  readonly onUpdate: (patch: PatchExerciseSetPayload) => void;
-  readonly onDelete: () => void;
+  readonly onUpdateSet: (setId: string, data: PatchExerciseSetPayload) => void;
+  readonly onDeleteSet: (setId: string) => void;
 }
 
-function SetRow({
+const SetRow = memo(function SetRow({
   set,
   fields,
   weightUnit,
   distanceUnit,
   canDelete,
   colTemplate,
-  onUpdate,
-  onDelete,
+  onUpdateSet,
+  onDeleteSet,
 }: SetRowProps) {
   const [notesOpen, setNotesOpen] = useState(() => (set.notes ?? "").length > 0);
+  const setId = set.id;
+  const onUpdate = useCallback(
+    (patch: PatchExerciseSetPayload) => onUpdateSet(setId, patch),
+    [onUpdateSet, setId],
+  );
+  const onDelete = useCallback(() => onDeleteSet(setId), [onDeleteSet, setId]);
 
   return (
     <div className="space-y-1" data-testid={`set-row-${set.id}`}>
@@ -248,7 +260,7 @@ function SetRow({
       {notesOpen && <NotesField set={set} onUpdate={onUpdate} />}
     </div>
   );
-}
+});
 
 interface FieldInputProps {
   readonly field: FieldKey;
@@ -258,7 +270,7 @@ interface FieldInputProps {
   readonly onUpdate: (patch: PatchExerciseSetPayload) => void;
 }
 
-function FieldInput({ field, set, weightUnit, distanceUnit, onUpdate }: FieldInputProps) {
+const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUnit, onUpdate }: FieldInputProps) {
   const meta = fieldMeta[field];
   const label = meta.label(weightUnit, distanceUnit);
   const current = set[field] ?? undefined;
@@ -294,7 +306,7 @@ function FieldInput({ field, set, weightUnit, distanceUnit, onUpdate }: FieldInp
       data-testid={`input-${field}-${set.id}`}
     />
   );
-}
+});
 
 interface NotesFieldProps {
   readonly set: ExerciseSet;

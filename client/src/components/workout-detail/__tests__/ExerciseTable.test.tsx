@@ -61,11 +61,10 @@ describe("ExerciseTable drag handle", () => {
       />,
     );
 
-    // Mobile + desktop layouts each render their own handle per row, so
-    // 3 groups × 2 layouts = 6 nodes. The count is a proxy for "every
-    // row got a handle at both breakpoints" without asserting on CSS.
+    // Unified summary layout renders one row (and one handle) per group
+    // at every viewport, so 3 groups → 3 handles.
     const handles = screen.getAllByTestId("exercise-row-drag-handle");
-    expect(handles.length).toBe(sets.length * 2);
+    expect(handles.length).toBe(sets.length);
     for (const h of handles) {
       expect(h.getAttribute("aria-label")).toMatch(/Reorder /);
     }
