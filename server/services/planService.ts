@@ -6,9 +6,24 @@ import { and,asc, eq } from "drizzle-orm";
 import { db } from "../db";
 import { AppError, ErrorCode } from "../errors";
 import { logger } from "../logger";
-import { queue } from "../queue";
+import { DEFAULT_JOB_OPTIONS, queue } from "../queue";
 import { samplePlanDays } from "../samplePlan";
 import { storage } from "../storage";
+
+// Shared with workoutService: moving a plan day or logged workout changes
+// the shape of the athlete's upcoming schedule, so re-run the auto-coach
+// so its suggestions/review notes reflect the new order. Singleton-keyed
+// per-user with a 60s window so a burst of reschedules (e.g. dragging
+// three workouts in a row) collapses into a single job.
+function enqueueAutoCoachForReschedule(userId: string): void {
+  queue
+    .send(
+      "auto-coach",
+      { userId },
+      { ...DEFAULT_JOB_OPTIONS, singletonKey: `auto-coach:${userId}`, singletonSeconds: 60 },
+    )
+    .catch((err) => logger.error({ err }, "Failed to queue auto-coach job after reschedule"));
+}
 
 interface CSVRow {
   Week: string;
@@ -242,7 +257,20 @@ export async function updatePlanDayWithCleanup(
   // tweak the free text alongside the structured rows. Use the /reparse
   // endpoint when the athlete explicitly wants the text converted into
   // new structured rows.
-  return await storage.plans.updatePlanDay(dayId, updates, userId);
+  const existing = updates.scheduledDate !== undefined
+    ? await storage.plans.getPlanDay(dayId, userId)
+    : null;
+  const result = await storage.plans.updatePlanDay(dayId, updates, userId);
+
+  if (result && updates.scheduledDate !== undefined && existing) {
+    const newDate = updates.scheduledDate ?? null;
+    const oldDate = existing.scheduledDate ?? null;
+    if (newDate !== oldDate) {
+      enqueueAutoCoachForReschedule(userId);
+    }
+  }
+
+  return result;
 }
 
 type PlanDayStatus = "planned" | "completed" | "skipped" | "missed";
@@ -271,15 +299,30 @@ export async function updatePlanDayStatus(
   if (!status) {
     const updates: Record<string, string | null> = {};
     if (scheduledDate !== undefined) updates.scheduledDate = scheduledDate ?? null;
-    return await storage.plans.updatePlanDay(dayId, updates, userId);
+    // Snapshot the current date so we only enqueue the coach when the move
+    // actually changes the scheduled date. A no-op patch (same date) leaves
+    // the coach alone.
+    const existing = scheduledDate !== undefined
+      ? await storage.plans.getPlanDay(dayId, userId)
+      : null;
+    const result = await storage.plans.updatePlanDay(dayId, updates, userId);
+    if (
+      result &&
+      scheduledDate !== undefined &&
+      existing &&
+      (scheduledDate ?? null) !== (existing.scheduledDate ?? null)
+    ) {
+      enqueueAutoCoachForReschedule(userId);
+    }
+    return result;
   }
 
   // Transition path: do the read, transition check, optional log cleanup,
   // and write inside a single transaction so a concurrent cron or workout
   // mutation can't race the check and sneak through a forbidden from-state.
-  const updatedDay = await db.transaction(async (tx) => {
+  const { updatedDay, dateChanged } = await db.transaction(async (tx) => {
     const [current] = await tx
-      .select({ status: planDays.status })
+      .select({ status: planDays.status, scheduledDate: planDays.scheduledDate })
       .from(planDays)
       .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
       .where(and(eq(planDays.id, dayId), eq(trainingPlans.userId, userId)))
@@ -370,13 +413,15 @@ export async function updatePlanDayStatus(
       .where(eq(planDays.id, dayId))
       .returning();
 
-    return row;
+    const dateChanged =
+      scheduledDate !== undefined &&
+      (scheduledDate ?? null) !== (current.scheduledDate ?? null);
+
+    return { updatedDay: row, dateChanged };
   });
 
-  if (updatedDay && status === "completed") {
-    queue
-      .send("auto-coach", { userId })
-      .catch((err) => logger.error({ err }, "Failed to queue auto-coach job"));
+  if (updatedDay && (status === "completed" || dateChanged)) {
+    enqueueAutoCoachForReschedule(userId);
   }
 
   return updatedDay;

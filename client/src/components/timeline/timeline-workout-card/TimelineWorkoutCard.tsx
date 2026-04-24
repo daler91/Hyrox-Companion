@@ -1,14 +1,25 @@
-import { format } from "date-fns";
-import { BookOpen, CheckCircle2, Circle, Database, FileText,Loader2 } from "lucide-react";
-import React, { useMemo } from "react";
+import { useDraggable } from "@dnd-kit/core";
+import { addDays, format } from "date-fns";
+import { BookOpen, CalendarClock, CheckCircle2, Circle, Database, FileText,Loader2, Move } from "lucide-react";
+import React, { useMemo, useState } from "react";
 
 import { StravaIcon } from "@/components/icons/StravaIcon";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { groupExerciseSets } from "@/lib/exerciseUtils";
+import { cn } from "@/lib/utils";
 
 import { CoachNote } from "./CoachNote";
 import { ExerciseChips } from "./ExerciseChips";
@@ -26,8 +37,11 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
   combiningEntryDate,
   personalRecords,
   isAutoCoaching,
+  onMove,
+  isMoving,
 }: Readonly<TimelineWorkoutCardProps>) {
   const { distanceUnit, weightLabel } = useUnitPreferences();
+  const [movePickerOpen, setMovePickerOpen] = useState(false);
 
   const isBeingCombined = combiningEntryId === entry.id;
   const isSameDate = combiningEntryDate === entry.date;
@@ -36,6 +50,22 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
 
   const todayStr = format(new Date(), "yyyy-MM-dd");
   const isTargetedByCoach = isAutoCoaching && isPlanned && entry.date >= todayStr;
+
+  // We only allow moving entries that have a stable anchor — either a plan
+  // day (reschedule prescription) or a workout log (change date). Ad-hoc
+  // rows without either (e.g. header placeholders) can't be moved.
+  const canMove = Boolean(onMove) && (entry.planDayId || entry.workoutLogId) && !isCombining;
+
+  const {
+    attributes: dragAttributes,
+    listeners: dragListeners,
+    setNodeRef: setDragNodeRef,
+    isDragging,
+  } = useDraggable({
+    id: `timeline-entry:${entry.id}`,
+    disabled: !canMove,
+    data: { entry },
+  });
 
   const handleCardClick = (_e: React.MouseEvent) => {
     if (canBeCombinedWith) {
@@ -74,10 +104,25 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
   const aiCoachClasses = isTargetedByCoach
     ? "border-primary/60 bg-primary/5 shadow-md shadow-primary/20 transition-all duration-700 relative"
     : "";
+  const dragClasses = cn(
+    isDragging && "opacity-50 ring-2 ring-primary/60",
+    isMoving && "opacity-70",
+  );
+
+  const handleMoveSelect = (newDate: string) => {
+    if (!onMove) return;
+    onMove(entry, newDate);
+  };
 
   return (
     <Card
-      className={`cursor-pointer transition-colors hover-elevate focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${baseCardClasses} ${aiCoachClasses}`}
+      ref={setDragNodeRef}
+      className={cn(
+        "cursor-pointer transition-colors hover-elevate focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        baseCardClasses,
+        aiCoachClasses,
+        dragClasses,
+      )}
       onClick={handleCardClick}
       onKeyDown={handleCardKeyDown}
       role="button"
@@ -99,6 +144,18 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
         </Badge>
       )}
       <CardContent className="p-4 relative">
+        {canMove && (
+          <MoveEntryMenu
+            entry={entry}
+            isMoving={isMoving}
+            isDragging={isDragging}
+            movePickerOpen={movePickerOpen}
+            setMovePickerOpen={setMovePickerOpen}
+            onMove={handleMoveSelect}
+            dragListeners={dragListeners}
+            dragAttributes={dragAttributes}
+          />
+        )}
         <div className="flex items-start gap-3">
           {isPlanned && (
             <TooltipProvider>
@@ -226,3 +283,142 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
 // parent timeline component state changes (unless their specific entry/props change).
 // This reduces unnecessary re-renders in a potentially long list.
 export default TimelineWorkoutCard;
+
+interface MoveEntryMenuProps {
+  readonly entry: TimelineWorkoutCardProps["entry"];
+  readonly isMoving: boolean | undefined;
+  readonly isDragging: boolean;
+  readonly movePickerOpen: boolean;
+  readonly setMovePickerOpen: (open: boolean) => void;
+  readonly onMove: (newDate: string) => void;
+  readonly dragListeners: ReturnType<typeof useDraggable>["listeners"];
+  readonly dragAttributes: ReturnType<typeof useDraggable>["attributes"];
+}
+
+/**
+ * Top-right affordance cluster on a timeline card:
+ *  - Drag handle (⋮⋮) to pick up the card and drop it on a date row.
+ *  - Overflow menu with quick jumps (today / tomorrow / +7d) and a
+ *    "Pick date…" popover for arbitrary dates outside the visible window.
+ *
+ * Both paths funnel through the parent's `onMove` handler, which wraps the
+ * reschedule mutation and optimistic timeline update. Buttons stop click
+ * propagation so tapping them doesn't also open the workout detail dialog.
+ */
+function MoveEntryMenu({
+  entry,
+  isMoving,
+  isDragging,
+  movePickerOpen,
+  setMovePickerOpen,
+  onMove,
+  dragListeners,
+  dragAttributes,
+}: Readonly<MoveEntryMenuProps>) {
+  const todayIso = format(new Date(), "yyyy-MM-dd");
+  const tomorrowIso = format(addDays(new Date(), 1), "yyyy-MM-dd");
+  const nextWeekIso = format(addDays(new Date(), 7), "yyyy-MM-dd");
+
+  const stopPropagation = (e: React.SyntheticEvent) => e.stopPropagation();
+
+  return (
+    <div
+      className="absolute right-2 top-2 z-10 flex items-center gap-0.5 opacity-60 hover:opacity-100 focus-within:opacity-100 transition-opacity"
+      onClick={stopPropagation}
+      onKeyDown={stopPropagation}
+      data-testid={`move-entry-controls-${entry.id}`}
+    >
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              className={cn(
+                "inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground touch-none",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                isDragging && "cursor-grabbing text-primary",
+                !isDragging && "cursor-grab",
+              )}
+              aria-label={`Drag ${entry.focus || "workout"} to another day`}
+              data-testid={`drag-handle-${entry.id}`}
+              {...dragListeners}
+              {...dragAttributes}
+            >
+              <Move className="h-3.5 w-3.5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Drag to reschedule</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label={`Move ${entry.focus || "workout"} to another day`}
+            data-testid={`move-menu-${entry.id}`}
+            disabled={isMoving}
+          >
+            <CalendarClock className="h-3.5 w-3.5" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" onClick={stopPropagation}>
+          {entry.date !== todayIso && (
+            <DropdownMenuItem
+              onSelect={() => onMove(todayIso)}
+              data-testid={`move-today-${entry.id}`}
+            >
+              Move to today
+            </DropdownMenuItem>
+          )}
+          {entry.date !== tomorrowIso && (
+            <DropdownMenuItem
+              onSelect={() => onMove(tomorrowIso)}
+              data-testid={`move-tomorrow-${entry.id}`}
+            >
+              Move to tomorrow
+            </DropdownMenuItem>
+          )}
+          {entry.date !== nextWeekIso && (
+            <DropdownMenuItem
+              onSelect={() => onMove(nextWeekIso)}
+              data-testid={`move-next-week-${entry.id}`}
+            >
+              Move to next week
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuSeparator />
+          <Popover open={movePickerOpen} onOpenChange={setMovePickerOpen}>
+            <PopoverTrigger asChild>
+              <DropdownMenuItem
+                onSelect={(e) => {
+                  e.preventDefault();
+                  setMovePickerOpen(true);
+                }}
+                data-testid={`move-pick-date-${entry.id}`}
+              >
+                Pick date…
+              </DropdownMenuItem>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-auto p-2" onClick={stopPropagation}>
+              <Input
+                type="date"
+                defaultValue={entry.date}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  if (!next || next === entry.date) return;
+                  onMove(next);
+                  setMovePickerOpen(false);
+                }}
+                data-testid={`move-date-input-${entry.id}`}
+                aria-label="New workout date"
+              />
+            </PopoverContent>
+          </Popover>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}

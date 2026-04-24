@@ -1,4 +1,12 @@
-import type { TimelineAnnotation } from "@shared/schema";
+import {
+  DndContext,
+  type DragEndEvent,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import type { TimelineAnnotation, TimelineEntry } from "@shared/schema";
 import { useMutation } from "@tanstack/react-query";
 import type { Virtualizer } from "@tanstack/react-virtual";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -34,6 +42,7 @@ import { WorkoutDetailDialogV2 } from "@/components/workout-detail/WorkoutDetail
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { useMoveTimelineEntry } from "@/hooks/useMoveTimelineEntry";
 import { useTimelineState } from "@/hooks/useTimelineState";
 import { api, QUERY_KEYS } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
@@ -75,6 +84,8 @@ interface TimelineContentProps {
   onEditAnnotation: (annotation: TimelineAnnotation) => void;
   onDeleteAnnotation: (id: string) => void;
   isAnnotationDeleting: boolean;
+  onMoveEntry: (entry: TimelineEntry, newDate: string) => void;
+  isMovingEntry: boolean;
 }
 
 function TimelineContent({
@@ -109,6 +120,8 @@ function TimelineContent({
   onEditAnnotation,
   onDeleteAnnotation,
   isAnnotationDeleting,
+  onMoveEntry,
+  isMovingEntry,
 }: Readonly<TimelineContentProps>) {
   if (timelineLoading) {
     return <TimelineSkeleton />;
@@ -198,6 +211,8 @@ function TimelineContent({
                   onEditAnnotation={onEditAnnotation}
                   onDeleteAnnotation={onDeleteAnnotation}
                   isAnnotationDeleting={isAnnotationDeleting}
+                  onMoveEntry={onMoveEntry}
+                  isMovingEntry={isMovingEntry}
                 />
               </div>
             );
@@ -323,6 +338,29 @@ export default function Timeline() {
     return [...visiblePastGroups.slice().reverse(), ...visibleFutureGroups];
   }, [visiblePastGroups, visibleFutureGroups]);
 
+  const { moveEntry, isMoving } = useMoveTimelineEntry(selectedPlanId);
+
+  // Require a small activation distance on pointer drag so clicking the
+  // drag handle to open a tooltip / focus it doesn't accidentally pick
+  // the card up. The DnD only engages after the user moves >6px, which
+  // matches the shadcn grip-handle UX in ExerciseTable.
+  const dragSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor),
+  );
+
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      if (!over) return;
+      const entry = (active.data.current as { entry?: TimelineEntry } | undefined)?.entry;
+      const newDate = (over.data.current as { date?: string } | undefined)?.date;
+      if (!entry || !newDate || entry.date === newDate) return;
+      moveEntry(entry, newDate);
+    },
+    [moveEntry],
+  );
+
   // Whether today's date is in the currently-filtered/visible groups.
   // Passed to TimelineTodayIndicator so the "Jump to today" pill stays
   // hidden when the active filter excludes today — otherwise a stale
@@ -398,39 +436,43 @@ export default function Timeline() {
             todayPresent={todayPresent}
           />
 
-      <TimelineContent
-        timelineLoading={timelineLoading}
-        filterStatus={filterStatus}
-        selectedPlanId={selectedPlanId}
-        plans={plans}
-        samplePlanMutation={samplePlanMutation}
-        importMutation={importMutation}
-        handleFileUpload={handleFileUpload}
-        setSchedulingPlanId={setSchedulingPlanId}
-        setFilterStatus={setFilterStatus}
-        hiddenPastCount={hiddenPastCount}
-        setShowAllPast={setShowAllPast}
-        showAllPast={showAllPast}
-        pastGroups={pastGroups}
-        hiddenFutureCount={hiddenFutureCount}
-        setShowAllFuture={setShowAllFuture}
-        showAllFuture={showAllFuture}
-        futureGroups={futureGroups}
-        allVisibleGroups={allVisibleGroups}
-        rowVirtualizer={rowVirtualizer}
-        todayRef={todayRef}
-        handleMarkComplete={handleMarkComplete}
-        openDetailDialog={openDetailDialog}
-        handleCombine={handleCombine}
-        combiningEntry={combiningEntry}
-        personalRecords={personalRecords}
-        isAutoCoaching={!!user?.isAutoCoaching}
-        annotationsByDate={annotationsByDate}
-        onAddAnnotation={handleAddAnnotation}
-        onEditAnnotation={handleEditAnnotation}
-        onDeleteAnnotation={handleDeleteAnnotation}
-        isAnnotationDeleting={deleteAnnotationMutation.isPending}
-      />
+      <DndContext sensors={dragSensors} onDragEnd={handleDragEnd}>
+        <TimelineContent
+          timelineLoading={timelineLoading}
+          filterStatus={filterStatus}
+          selectedPlanId={selectedPlanId}
+          plans={plans}
+          samplePlanMutation={samplePlanMutation}
+          importMutation={importMutation}
+          handleFileUpload={handleFileUpload}
+          setSchedulingPlanId={setSchedulingPlanId}
+          setFilterStatus={setFilterStatus}
+          hiddenPastCount={hiddenPastCount}
+          setShowAllPast={setShowAllPast}
+          showAllPast={showAllPast}
+          pastGroups={pastGroups}
+          hiddenFutureCount={hiddenFutureCount}
+          setShowAllFuture={setShowAllFuture}
+          showAllFuture={showAllFuture}
+          futureGroups={futureGroups}
+          allVisibleGroups={allVisibleGroups}
+          rowVirtualizer={rowVirtualizer}
+          todayRef={todayRef}
+          handleMarkComplete={handleMarkComplete}
+          openDetailDialog={openDetailDialog}
+          handleCombine={handleCombine}
+          combiningEntry={combiningEntry}
+          personalRecords={personalRecords}
+          isAutoCoaching={!!user?.isAutoCoaching}
+          annotationsByDate={annotationsByDate}
+          onAddAnnotation={handleAddAnnotation}
+          onEditAnnotation={handleEditAnnotation}
+          onDeleteAnnotation={handleDeleteAnnotation}
+          isAnnotationDeleting={deleteAnnotationMutation.isPending}
+          onMoveEntry={moveEntry}
+          isMovingEntry={isMoving}
+        />
+      </DndContext>
 
           {!detailEntry && (
             <FloatingActionButton coachPanelOpen={coachOpen} onCoachToggle={() => handleCoachToggle(!coachOpen)} />

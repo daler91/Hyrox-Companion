@@ -543,12 +543,14 @@ export async function updateWorkout(
   userId: string
 ): Promise<UpdateWorkoutResult | null> {
   if (exercises && Array.isArray(exercises)) {
-    return await db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       const existing = await tx
         .select()
         .from(workoutLogs)
         .where(and(eq(workoutLogs.id, workoutId), eq(workoutLogs.userId, userId)));
       if (existing.length === 0) return null;
+
+      const previousDate = existing[0].date;
 
       const [log] = await tx
         .update(workoutLogs)
@@ -571,16 +573,49 @@ export async function updateWorkout(
             .onConflictDoNothing();
         }
 
-        return { ...log, exerciseSets: savedSets };
+        return { log: { ...log, exerciseSets: savedSets } as UpdateWorkoutResult, previousDate };
       }
 
-      return log;
+      return { log, previousDate };
     });
+
+    if (!result) return null;
+    maybeEnqueueAutoCoachOnDateChange(userId, result.previousDate, updateData.date);
+    return result.log;
   }
 
+  const previous = await storage.workouts.getWorkoutLog(workoutId, userId);
+  if (!previous) return null;
   const log = await storage.workouts.updateWorkoutLog(workoutId, updateData, userId);
   if (!log) return null;
+  maybeEnqueueAutoCoachOnDateChange(userId, previous.date, updateData.date);
   return log;
+}
+
+// When the athlete moves a logged workout to a different day, its position in
+// the recent-history window the coach reasons over shifts — rerun the coach so
+// upcoming plan-day rationales stay consistent with what was actually done
+// and when. Coalesced per-user with the same 60s singleton window used on
+// workout create / plan-day reschedule so bursts of edits don't spam Gemini.
+function maybeEnqueueAutoCoachOnDateChange(
+  userId: string,
+  previousDate: string | null | undefined,
+  nextDate: string | null | undefined,
+): void {
+  if (nextDate === undefined) return;
+  const prev = previousDate ?? null;
+  const next = nextDate ?? null;
+  if (prev === next) return;
+
+  queue
+    .send(
+      "auto-coach",
+      { userId },
+      { ...DEFAULT_JOB_OPTIONS, singletonKey: `auto-coach:${userId}`, singletonSeconds: 60 },
+    )
+    .catch((err) =>
+      logger.error({ err }, "Failed to queue auto-coach job after workout date change"),
+    );
 }
 
 export async function processBatchChunk(
