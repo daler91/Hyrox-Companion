@@ -4,6 +4,8 @@ import { rawRequest,typedRequest } from "./client";
 import type { ParseFromImagePayload } from "./exercises";
 import type { AddExerciseSetPayload, PatchExerciseSetPayload } from "./workouts";
 
+const IMAGE_REPARSE_TIMEOUT_MS = 60_000;
+
 export const plans = {
   list: () => typedRequest<TrainingPlan[]>("GET", "/api/v1/plans"),
 
@@ -81,5 +83,6 @@ export const plans = {
       "POST",
       `/api/v1/plans/days/${dayId}/reparse-from-image`,
       payload,
+      { timeoutMs: IMAGE_REPARSE_TIMEOUT_MS },
     ),
 } as const;

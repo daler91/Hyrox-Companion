@@ -20,6 +20,16 @@ const planDaySetsMutationKey = (planDayId: string) => ["plan-day-sets", planDayI
 // debounce has no flush seam.
 const CELL_SAVE_DEBOUNCE_MS = 350;
 
+function isTimeoutLikeError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const message = error.message.toLowerCase();
+  return (
+    message.includes("request timed out") ||
+    message.includes("timeouterror") ||
+    message.includes("aborterror")
+  );
+}
+
 /**
  * Mutation + query bundle for a plan day's prescribed exercise sets.
  * Used by the v2 workout detail dialog when a planned entry is open so
@@ -156,7 +166,13 @@ export function usePlanDayExercises(planDayId: string | null) {
     mutationFn: (payload: ParseFromImagePayload) =>
       api.plans.reparseDayFromImage(planDayId!, payload),
     invalidateQueries: planDayId ? [QUERY_KEYS.planDayExercises(planDayId)] : undefined,
-    errorToast: "Couldn't parse that photo — try a clearer shot.",
+    errorToast: (error) =>
+      isTimeoutLikeError(error)
+        ? {
+            title: "Parsing took too long — please retry.",
+            description: "The image may still finish in the background. Refresh to check before retaking.",
+          }
+        : { title: "Couldn't parse that photo — try a clearer shot." },
   });
 
   // Debounced PATCH of free-text fields (focus / mainWorkout / accessory /
