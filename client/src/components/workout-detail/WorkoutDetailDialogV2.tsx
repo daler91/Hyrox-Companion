@@ -660,8 +660,8 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
   // Widen the right column when the chat surface is active so the
   // thread + input have room without squeezing the exercise table.
   const gridClasses = chatOpen
-    ? "grid grid-cols-1 gap-4 px-6 py-4 md:grid-cols-[1fr_380px] lg:grid-cols-[1fr_420px]"
-    : "grid grid-cols-1 gap-4 px-6 py-4 md:grid-cols-[1fr_280px]";
+    ? "grid grid-cols-1 items-start gap-4 px-6 py-4 md:grid-cols-[1fr_380px] lg:grid-cols-[1fr_420px]"
+    : "grid grid-cols-1 items-start gap-4 px-6 py-4 md:grid-cols-[1fr_280px]";
 
   return (
     <div className={gridClasses}>
@@ -742,7 +742,7 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
         </AlertDialog>
       </div>
 
-      <aside className="flex flex-col gap-3">
+      <aside className="flex self-start flex-col gap-3">
         {chatOpen ? (
           <InDialogCoachChat
             focusLabel={focusLabel}

@@ -41,7 +41,7 @@ export function InDialogCoachChat({ focusLabel, seedText, onBack }: InDialogCoac
 
   return (
     <section
-      className="flex h-full min-h-[400px] flex-col rounded-lg border border-border bg-card"
+      className="flex min-h-[400px] max-h-[calc(90vh-14rem)] flex-col overflow-hidden rounded-lg border border-border bg-card"
       aria-label="Coach chat about this workout"
       data-testid="in-dialog-coach-chat"
     >
