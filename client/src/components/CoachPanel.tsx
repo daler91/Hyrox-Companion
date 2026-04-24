@@ -57,6 +57,7 @@ export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }
     scrollRef,
     updateAutoScrollMode,
     scrollToBottomIfPinned,
+    pinAutoScroll,
     sendMessage,
     cancelStream,
     clearHistory,
@@ -121,6 +122,7 @@ export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }
 
   const handleQuickAction = (action: { id: string; label: string }) => {
     if (action.id === "suggestions") {
+      pinAutoScroll();
       addLocalMessage({ id: Date.now().toString(), role: "user", content: action.label, timestamp: getCurrentTimeString() });
       saveMessage({ role: "user", content: action.label });
       suggestionsMutation.mutate();

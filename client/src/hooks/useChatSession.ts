@@ -220,6 +220,10 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     }
   }, [scrollToBottom]);
 
+  const pinAutoScroll = useCallback(() => {
+    shouldAutoScrollRef.current = true;
+  }, []);
+
   useEffect(() => {
     scrollToBottomIfPinned();
   }, [messages, scrollToBottomIfPinned]);
@@ -344,6 +348,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     scrollRef,
     updateAutoScrollMode,
     scrollToBottomIfPinned,
+    pinAutoScroll,
     sendMessage,
     cancelStream,
     clearHistory,
