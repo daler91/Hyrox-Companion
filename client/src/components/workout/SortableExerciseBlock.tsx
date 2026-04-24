@@ -32,13 +32,15 @@ export function SortableExerciseBlock({ blockId, exData, blockLabel, weightUnit,
     position: "relative" as const,
   };
 
+  const dragLabel = blockLabel ? `Drag to reorder ${blockLabel}` : "Drag to reorder";
+
   return (
     <div ref={setNodeRef} style={style}>
       <div
         className="absolute left-0 top-3 z-10 cursor-grab active:cursor-grabbing touch-none p-1"
         {...attributes}
         {...listeners}
-        aria-label={`Drag to reorder${blockLabel ? ` ${blockLabel}` : ""}`}
+        aria-label={dragLabel}
         data-testid={`drag-handle-${blockId}`}
       >
         <GripVertical className="h-4 w-4 text-muted-foreground" aria-hidden="true" />

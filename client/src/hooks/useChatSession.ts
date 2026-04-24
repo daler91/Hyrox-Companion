@@ -25,6 +25,75 @@ function createMessageUpdater(
   };
 }
 
+type StreamErrorKind = "abort" | "network" | "other";
+
+function classifyStreamError(err: unknown): StreamErrorKind {
+  if (err instanceof DOMException && err.name === "AbortError") return "abort";
+  // fetch surfaces network failures as TypeError
+  if (err instanceof TypeError) return "network";
+  return "other";
+}
+
+const STREAM_ERROR_SUFFIX: Record<StreamErrorKind, string> = {
+  abort: "\n\n(Stopped)",
+  network: "\n\n(Connection lost — check your internet)",
+  other: "\n\n(Stream interrupted)",
+};
+
+const STREAM_ERROR_BODY: Record<StreamErrorKind, string> = {
+  abort: "Stopped.",
+  network: "Your connection dropped. Check your internet and try again.",
+  other: "Something went wrong on our side. Please try again.",
+};
+
+interface HandleStreamErrorArgs {
+  err: unknown;
+  fullResponse: string;
+  assistantMessageId: string;
+  setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
+  saveAssistantMessage: (content: string) => void;
+}
+
+/**
+ * Reconcile chat UI + persistence when the streaming pipeline rejects.
+ * Pulled out of `sendMessage` so the latter stays under the cognitive-
+ * complexity ceiling — there are three distinct branches (abort with
+ * partial, abort without partial, network/other) plus the optimistic-
+ * placeholder cleanup, and inlining all of them dwarfed the happy path.
+ */
+function handleStreamError({
+  err,
+  fullResponse,
+  assistantMessageId,
+  setMessages,
+  saveAssistantMessage,
+}: HandleStreamErrorArgs): void {
+  const kind = classifyStreamError(err);
+
+  if (fullResponse) {
+    const finalContent = fullResponse + STREAM_ERROR_SUFFIX[kind];
+    setMessages((prev) =>
+      prev.map((m) => (m.id === assistantMessageId ? { ...m, content: finalContent } : m)),
+    );
+    if (kind === "abort") {
+      // Persist the partial so the user doesn't lose it on reload.
+      saveAssistantMessage(fullResponse);
+    }
+    return;
+  }
+
+  const errorMessage: Message = {
+    id: assistantMessageId,
+    role: "assistant",
+    content: STREAM_ERROR_BODY[kind],
+    timestamp: getCurrentTimeString(),
+  };
+  setMessages((prev) => {
+    const withoutPlaceholder = prev.filter((m) => m.id !== assistantMessageId);
+    return [...withoutPlaceholder, errorMessage];
+  });
+}
+
 export interface Message {
   id: string;
   role: "user" | "assistant";
@@ -226,43 +295,14 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         saveMessageMutation.mutate({ role: "assistant", content: data.response });
       }
     } catch (err) {
-      const isAbort = err instanceof DOMException && err.name === "AbortError";
-      const isNetwork = err instanceof TypeError; // fetch throws TypeError on network failure
-      const suffix = isAbort
-        ? "\n\n(Stopped)"
-        : isNetwork
-          ? "\n\n(Connection lost — check your internet)"
-          : "\n\n(Stream interrupted)";
-
-      if (fullResponse) {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantMessageId
-              ? { ...m, content: fullResponse + suffix }
-              : m
-          )
-        );
-        if (isAbort) {
-          // Persist the partial so the user doesn't lose it on reload
-          saveMessageMutation.mutate({ role: "assistant", content: fullResponse });
-        }
-      } else {
-        const body = isAbort
-          ? "Stopped."
-          : isNetwork
-            ? "Your connection dropped. Check your internet and try again."
-            : "Something went wrong on our side. Please try again.";
-        const errorMessage: Message = {
-          id: assistantMessageId,
-          role: "assistant",
-          content: body,
-          timestamp: getCurrentTimeString(),
-        };
-        setMessages((prev) => {
-          const withoutPlaceholder = prev.filter(m => m.id !== assistantMessageId);
-          return [...withoutPlaceholder, errorMessage];
-        });
-      }
+      handleStreamError({
+        err,
+        fullResponse,
+        assistantMessageId,
+        setMessages,
+        saveAssistantMessage: (content) =>
+          saveMessageMutation.mutate({ role: "assistant", content }),
+      });
     } finally {
       streamControllerRef.current = null;
       setIsStreaming(false);

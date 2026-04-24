@@ -27,6 +27,12 @@ interface ChatInputProps {
   readonly seed?: ChatInputSeed | null;
 }
 
+function getSendTooltip(args: { isLoading: boolean; canStop: boolean; hasText: boolean }): string {
+  if (args.isLoading && args.canStop) return "Stop response";
+  if (args.hasText) return "Send message";
+  return "Type a message to send";
+}
+
 export function ChatInput({ onSend, onStop, isLoading, placeholder = "Ask about your training...", seed }: Readonly<ChatInputProps>) {
   const [message, setMessage] = useState("");
   const { toast } = useToast();
@@ -127,9 +133,11 @@ export function ChatInput({ onSend, onStop, isLoading, placeholder = "Ask about 
               )}
             </TooltipTrigger>
             <TooltipContent>
-              {isLoading && onStop
-                ? "Stop response"
-                : message.trim() ? "Send message" : "Type a message to send"}
+              {getSendTooltip({
+                isLoading: !!isLoading,
+                canStop: !!onStop,
+                hasText: message.trim().length > 0,
+              })}
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>

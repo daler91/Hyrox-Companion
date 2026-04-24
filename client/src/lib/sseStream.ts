@@ -74,6 +74,21 @@ export interface SSEStreamOptions<TMeta = unknown> {
  * flush, and rejects with the abort reason so the caller can distinguish
  * user-cancellation from network errors.
  */
+/**
+ * Wire an abort signal to a callback that fires once, immediately if the
+ * signal is already aborted. Returns a teardown that detaches the listener.
+ * Pulled out so consumeSSEStream stays under the cognitive-complexity limit.
+ */
+function bindAbortSignal(signal: AbortSignal | undefined, onAbort: () => void): () => void {
+  if (!signal) return () => {};
+  if (signal.aborted) {
+    onAbort();
+    return () => {};
+  }
+  signal.addEventListener("abort", onAbort, { once: true });
+  return () => signal.removeEventListener("abort", onAbort);
+}
+
 export async function consumeSSEStream<TMeta = unknown>(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   options: SSEStreamOptions<TMeta>,
@@ -85,17 +100,10 @@ export async function consumeSSEStream<TMeta = unknown>(
   let dirty = false;
   let aborted = false;
 
-  const onAbort = () => {
+  const detachAbort = bindAbortSignal(options.signal, () => {
     aborted = true;
     reader.cancel().catch(() => {/* best effort */});
-  };
-  if (options.signal) {
-    if (options.signal.aborted) {
-      onAbort();
-    } else {
-      options.signal.addEventListener("abort", onAbort, { once: true });
-    }
-  }
+  });
 
   const flush = () => {
     if (!dirty || aborted) return;
@@ -135,9 +143,7 @@ export async function consumeSSEStream<TMeta = unknown>(
       dirty = true;
       flush();
     }
-    if (options.signal) {
-      options.signal.removeEventListener("abort", onAbort);
-    }
+    detachAbort();
   }
 
   if (aborted) {
