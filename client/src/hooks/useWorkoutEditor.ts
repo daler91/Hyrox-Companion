@@ -386,8 +386,9 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
 
   const { sensors, handleDragEnd } = useWorkoutSensors(setExerciseBlocks);
 
-  const addExercise = useCallback((name: ExerciseName) => {
-    const blockId = makeBlockId(name, blockCounterRef);
+  const addExercise = useCallback((name: ExerciseName, customLabel?: string) => {
+    const blockKey = name === "custom" && customLabel ? `custom:${customLabel}` : name;
+    const blockId = makeBlockId(blockKey, blockCounterRef);
     const def = EXERCISE_DEFINITIONS[name];
     setExerciseBlocks(prev => [...prev, blockId]);
     setExerciseData(prev => ({
@@ -395,6 +396,7 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
       [blockId]: {
         exerciseName: name,
         category: def.category,
+        customLabel,
         sets: [createDefaultSet(1)],
         // Manually adding an exercise counts as an edit — the user
         // asked for this row, auto-parse shouldn't replace it.
@@ -409,6 +411,21 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
       const newData = { ...prev };
       delete newData[blockId];
       return newData;
+    });
+  }, []);
+
+  const reorderBlocks = useCallback((nextOrder: string[]) => {
+    setExerciseBlocks(prev => {
+      // Guard against stale orderings: the caller may race a concurrent
+      // add/remove. If the incoming order has a different set of ids than
+      // what's currently in state, drop the reorder — the next render
+      // will pass a fresh order.
+      if (nextOrder.length !== prev.length) return prev;
+      const prevSet = new Set(prev);
+      for (const id of nextOrder) {
+        if (!prevSet.has(id)) return prev;
+      }
+      return nextOrder;
     });
   }, []);
 
@@ -532,6 +549,26 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
     if (autoParsing) setAutoParsing(false);
   }, [autoParsing]);
 
+  // Fire a parse immediately, bypassing the debounce. Used by the
+  // composer's manual Parse button — the user explicitly asked to
+  // parse, so don't wait for the trailing debounce. Also resets the
+  // "last parsed text" snapshot so clicking Parse on unchanged text
+  // re-runs the parse (common after toggling blocks).
+  const parseNow = useCallback(
+    (text: string) => {
+      if (debounceRef.current !== null) {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+      abortRef.current?.abort();
+      lastParsedTextRef.current = "";
+      runAutoParse(text).catch(() => {
+        /* errors surface via autoParseError state inside runAutoParse */
+      });
+    },
+    [runAutoParse],
+  );
+
   useEffect(() => {
     return () => {
       if (debounceRef.current !== null) clearTimeout(debounceRef.current);
@@ -586,6 +623,7 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
     addExercise,
     removeBlock,
     updateBlock,
+    reorderBlocks,
     getSelectedExerciseNames,
     parseMutation,
     parseImageMutation,
@@ -596,5 +634,6 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
     lastParsedAt,
     scheduleAutoParse,
     cancelAutoParse,
+    parseNow,
   };
 }
