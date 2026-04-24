@@ -18,8 +18,12 @@ interface MoveContext {
 /**
  * Move a timeline entry to a different day.
  *
- * - Planned entries (linked to a plan_day) patch `plan_days.scheduledDate`.
- * - Logged entries patch `workout_logs.date`.
+ * - Entries backed by a workout log (including completed plan days, which
+ *   carry both ids) patch `workout_logs.date`. The timeline renders
+ *   completed rows from the log's date, so updating the plan day's
+ *   `scheduledDate` instead would leave the card visually pinned to its
+ *   old day after the refetch.
+ * - Planned entries with no log yet patch `plan_days.scheduledDate`.
  *
  * Both server paths enqueue the auto-coach on a real date change so the
  * coach re-runs on future workouts and reflects the new schedule.
@@ -31,12 +35,12 @@ interface MoveContext {
 export function useMoveTimelineEntry(selectedPlanId: string | null) {
   const moveMutation = useApiMutation<unknown, Error, MoveVariables, MoveContext>({
     mutationFn: async ({ entry, newDate }: MoveVariables) => {
-      if (entry.planDayId) {
-        await api.plans.updateDayWithoutPlan(entry.planDayId, { scheduledDate: newDate });
-        return;
-      }
       if (entry.workoutLogId) {
         await api.workouts.update(entry.workoutLogId, { date: newDate });
+        return;
+      }
+      if (entry.planDayId) {
+        await api.plans.updateDayWithoutPlan(entry.planDayId, { scheduledDate: newDate });
         return;
       }
       throw new Error("Cannot move an entry with no plan day or workout log");

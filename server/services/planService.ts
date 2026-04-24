@@ -257,15 +257,17 @@ export async function updatePlanDayWithCleanup(
   // tweak the free text alongside the structured rows. Use the /reparse
   // endpoint when the athlete explicitly wants the text converted into
   // new structured rows.
-  const existing = updates.scheduledDate !== undefined
+  const reschedulePending = updates.scheduledDate === undefined
+    ? null
+    : { nextDate: updates.scheduledDate ?? null };
+  const existing = reschedulePending
     ? await storage.plans.getPlanDay(dayId, userId)
     : null;
   const result = await storage.plans.updatePlanDay(dayId, updates, userId);
 
-  if (result && updates.scheduledDate !== undefined && existing) {
-    const newDate = updates.scheduledDate ?? null;
+  if (result && existing && reschedulePending) {
     const oldDate = existing.scheduledDate ?? null;
-    if (newDate !== oldDate) {
+    if (reschedulePending.nextDate !== oldDate) {
       enqueueAutoCoachForReschedule(userId);
     }
   }
@@ -298,19 +300,24 @@ export async function updatePlanDayStatus(
   // Date-only update: no transition check needed.
   if (!status) {
     const updates: Record<string, string | null> = {};
-    if (scheduledDate !== undefined) updates.scheduledDate = scheduledDate ?? null;
+    const reschedule = scheduledDate === undefined
+      ? null
+      : { nextDate: scheduledDate ?? null };
+    if (reschedule) {
+      updates.scheduledDate = reschedule.nextDate;
+    }
     // Snapshot the current date so we only enqueue the coach when the move
     // actually changes the scheduled date. A no-op patch (same date) leaves
     // the coach alone.
-    const existing = scheduledDate !== undefined
+    const existing = reschedule
       ? await storage.plans.getPlanDay(dayId, userId)
       : null;
     const result = await storage.plans.updatePlanDay(dayId, updates, userId);
     if (
       result &&
-      scheduledDate !== undefined &&
       existing &&
-      (scheduledDate ?? null) !== (existing.scheduledDate ?? null)
+      reschedule &&
+      reschedule.nextDate !== (existing.scheduledDate ?? null)
     ) {
       enqueueAutoCoachForReschedule(userId);
     }

@@ -319,13 +319,27 @@ function MoveEntryMenu({
   const tomorrowIso = format(addDays(new Date(), 1), "yyyy-MM-dd");
   const nextWeekIso = format(addDays(new Date(), 7), "yyyy-MM-dd");
 
-  const stopPropagation = (e: React.SyntheticEvent) => e.stopPropagation();
+  // Workout-log moves route through PATCH /api/v1/workouts/:id, whose
+  // `updateWorkoutLogSchema` rejects dates more than 24h in the future
+  // (see `workoutDateNotFuture` in shared/schema/types.ts). Clamp the
+  // menu to the allowed window so we don't offer taps that would
+  // deterministically produce validation-error toasts. Plan-day-only
+  // moves have no such server constraint.
+  const isLoggedMove = Boolean(entry.workoutLogId);
+  const maxDate = isLoggedMove ? tomorrowIso : undefined;
+  const showNextWeek = !isLoggedMove && entry.date !== nextWeekIso;
+
+  // Stop mousedown on the control cluster so the card's onClick
+  // (which opens the detail dialog) doesn't fire when the user taps a
+  // button. mousedown avoids wrapping the cluster in a non-native
+  // interactive `<div onClick>`, which would force role + keyboard
+  // handling for a presentational container (WCAG / sonar a11y rule).
+  const stopMouseDown = (e: React.MouseEvent) => e.stopPropagation();
 
   return (
     <div
       className="absolute right-2 top-2 z-10 flex items-center gap-0.5 opacity-60 hover:opacity-100 focus-within:opacity-100 transition-opacity"
-      onClick={stopPropagation}
-      onKeyDown={stopPropagation}
+      onMouseDown={stopMouseDown}
       data-testid={`move-entry-controls-${entry.id}`}
     >
       <TooltipProvider>
@@ -364,7 +378,7 @@ function MoveEntryMenu({
             <CalendarClock className="h-3.5 w-3.5" />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" onClick={stopPropagation}>
+        <DropdownMenuContent align="end">
           {entry.date !== todayIso && (
             <DropdownMenuItem
               onSelect={() => onMove(todayIso)}
@@ -381,7 +395,7 @@ function MoveEntryMenu({
               Move to tomorrow
             </DropdownMenuItem>
           )}
-          {entry.date !== nextWeekIso && (
+          {showNextWeek && (
             <DropdownMenuItem
               onSelect={() => onMove(nextWeekIso)}
               data-testid={`move-next-week-${entry.id}`}
@@ -402,10 +416,11 @@ function MoveEntryMenu({
                 Pick date…
               </DropdownMenuItem>
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-auto p-2" onClick={stopPropagation}>
+            <PopoverContent align="end" className="w-auto p-2">
               <Input
                 type="date"
                 defaultValue={entry.date}
+                max={maxDate}
                 onChange={(e) => {
                   const next = e.target.value;
                   if (!next || next === entry.date) return;
