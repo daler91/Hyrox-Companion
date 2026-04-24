@@ -29,7 +29,11 @@ function mapWorkoutLogToTimelineFields(log: WorkoutLog) {
   };
 }
 
-function calculatePlanDayStatus(dayStatus: string | null, scheduledDate: string, today: string): WorkoutStatus {
+function calculatePlanDayStatus(
+  dayStatus: string | null,
+  scheduledDate: string,
+  today: string,
+): WorkoutStatus {
   if (dayStatus === "skipped") return "skipped";
   if (dayStatus === "completed") return "completed";
   if (dayStatus === "missed") return "missed";
@@ -37,7 +41,11 @@ function calculatePlanDayStatus(dayStatus: string | null, scheduledDate: string,
   return "planned";
 }
 
-function createLinkedWorkoutEntry(day: PlanDay, linkedLog: WorkoutLog, row: { planName: string; planId: string }): TimelineEntry {
+function createLinkedWorkoutEntry(
+  day: PlanDay,
+  linkedLog: WorkoutLog,
+  row: { planName: string; planId: string },
+): TimelineEntry {
   return {
     id: `log-${linkedLog.id}`,
     date: linkedLog.date,
@@ -63,7 +71,12 @@ function createLinkedWorkoutEntry(day: PlanDay, linkedLog: WorkoutLog, row: { pl
   };
 }
 
-function createPlannedDayEntry(day: PlanDay, scheduledDate: string, row: { planName: string; planId: string }, today: string): TimelineEntry {
+function createPlannedDayEntry(
+  day: PlanDay,
+  scheduledDate: string,
+  row: { planName: string; planId: string },
+  today: string,
+): TimelineEntry {
   const status = calculatePlanDayStatus(day.status, scheduledDate, today);
   return {
     id: `plan-${day.id}`,
@@ -107,9 +120,12 @@ export class TimelineStorage {
   constructor(private readonly workoutStorage: WorkoutStorage) {}
 
   private async attachExerciseSets(entries: TimelineEntry[]): Promise<void> {
-    const workoutLogIds = entries
-      .filter(e => e.workoutLogId)
-      .map(e => e.workoutLogId!);
+    const workoutLogIds: string[] = [];
+    for (const e of entries) {
+      if (e.workoutLogId) {
+        workoutLogIds.push(e.workoutLogId);
+      }
+    }
 
     if (workoutLogIds.length === 0) return;
 
@@ -150,10 +166,7 @@ export class TimelineStorage {
     const planNameById = new Map(userPlans.map((p) => [p.id, p.name]));
 
     const days = await db.query.planDays.findMany({
-      where: and(
-        inArray(planDays.planId, relevantPlanIds),
-        isNotNull(planDays.scheduledDate),
-      ),
+      where: and(inArray(planDays.planId, relevantPlanIds), isNotNull(planDays.scheduledDate)),
       orderBy: desc(planDays.scheduledDate),
       ...(sqlLimit === undefined ? {} : { limit: sqlLimit }),
     });
@@ -206,9 +219,18 @@ export class TimelineStorage {
       if (!day.scheduledDate) continue;
       const linkedLog = workoutsByPlanDayId.get(day.id);
       if (linkedLog) {
-        entries.push(createLinkedWorkoutEntry(day, linkedLog, { planName: row.planName, planId: row.planId }));
+        entries.push(
+          createLinkedWorkoutEntry(day, linkedLog, { planName: row.planName, planId: row.planId }),
+        );
       } else {
-        entries.push(createPlannedDayEntry(day, day.scheduledDate, { planName: row.planName, planId: row.planId }, today));
+        entries.push(
+          createPlannedDayEntry(
+            day,
+            day.scheduledDate,
+            { planName: row.planName, planId: row.planId },
+            today,
+          ),
+        );
       }
     }
 
@@ -219,23 +241,34 @@ export class TimelineStorage {
     return entries;
   }
 
-  async getTimeline(userId: string, planId?: string, limit?: number, offset?: number): Promise<TimelineEntry[]> {
+  async getTimeline(
+    userId: string,
+    planId?: string,
+    limit?: number,
+    offset?: number,
+  ): Promise<TimelineEntry[]> {
     const today = toDateStr();
     const sqlOverFetch = this.computeSqlOverFetch(limit, offset);
 
     const scheduledDays = await this.fetchScheduledDays(userId, planId, sqlOverFetch);
-    const planDayIds = scheduledDays.map(r => r.planDay.id);
+    const planDayIds = scheduledDays.map((r) => r.planDay.id);
 
     const [linkedWorkouts, standaloneWorkouts] = await Promise.all([
       planDayIds.length > 0
-        ? db.select().from(workoutLogs).where(
-            and(eq(workoutLogs.userId, userId), inArray(workoutLogs.planDayId, planDayIds))
-          )
+        ? db
+            .select()
+            .from(workoutLogs)
+            .where(and(eq(workoutLogs.userId, userId), inArray(workoutLogs.planDayId, planDayIds)))
         : Promise.resolve([]),
       this.fetchStandaloneWorkouts(userId, sqlOverFetch),
     ]);
 
-    const entries = this.buildTimelineEntries(scheduledDays, linkedWorkouts, standaloneWorkouts, today);
+    const entries = this.buildTimelineEntries(
+      scheduledDays,
+      linkedWorkouts,
+      standaloneWorkouts,
+      today,
+    );
     await this.attachExerciseSets(entries);
 
     // Fast string comparison for YYYY-MM-DD dates instead of Date object instantiation
@@ -257,14 +290,19 @@ export class TimelineStorage {
    * Fetch only upcoming planned workouts directly from DB with LIMIT.
    * Avoids loading the full timeline for AI suggestions.
    */
-  async getUpcomingPlannedDays(userId: string, limit: number): Promise<Array<{
-    planDayId: string;
-    date: string;
-    focus: string;
-    mainWorkout: string;
-    accessory: string | null;
-    notes: string | null;
-  }>> {
+  async getUpcomingPlannedDays(
+    userId: string,
+    limit: number,
+  ): Promise<
+    Array<{
+      planDayId: string;
+      date: string;
+      focus: string;
+      mainWorkout: string;
+      accessory: string | null;
+      notes: string | null;
+    }>
+  > {
     const today = toDateStr();
     // Relational query: resolve user's plans first, then pull matching days
     // filtered by plan IDs. Same pattern as fetchScheduledDays.
@@ -297,24 +335,28 @@ export class TimelineStorage {
       limit,
     });
 
-    return rows
-      .map((r) => ({
-        planDayId: r.id,
-        date: r.scheduledDate,
-        focus: r.focus,
-        mainWorkout: r.mainWorkout,
-        accessory: r.accessory,
-        notes: r.notes,
-        status: r.status,
-      }))
-      .filter((r): r is typeof r & { date: string } => r.date !== null)
-      .map((r) => ({
-        planDayId: r.planDayId,
-        date: r.date,
-        focus: r.focus || "",
-        mainWorkout: r.mainWorkout || "",
-        accessory: r.accessory,
-        notes: r.notes,
-      }));
+    const upcoming: Array<{
+      planDayId: string;
+      date: string;
+      focus: string;
+      mainWorkout: string;
+      accessory: string | null;
+      notes: string | null;
+    }> = [];
+
+    for (const r of rows) {
+      if (r.scheduledDate !== null) {
+        upcoming.push({
+          planDayId: r.id,
+          date: r.scheduledDate,
+          focus: r.focus || "",
+          mainWorkout: r.mainWorkout || "",
+          accessory: r.accessory,
+          notes: r.notes,
+        });
+      }
+    }
+
+    return upcoming;
   }
 }
