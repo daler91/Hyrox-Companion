@@ -7,6 +7,7 @@ import { StravaIcon } from "@/components/icons/StravaIcon";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,7 +16,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { groupExerciseSets } from "@/lib/exerciseUtils";
@@ -411,36 +411,41 @@ function MoveEntryMenu({
             </DropdownMenuItem>
           )}
           <DropdownMenuSeparator />
-          <Popover open={movePickerOpen} onOpenChange={setMovePickerOpen}>
-            <PopoverTrigger asChild>
-              <DropdownMenuItem
-                onSelect={(e) => {
-                  e.preventDefault();
-                  setMovePickerOpen(true);
-                }}
-                data-testid={`move-pick-date-${entry.id}`}
-              >
-                Pick date…
-              </DropdownMenuItem>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-auto p-2" onClick={stop} onMouseDown={stop}>
-              <Input
-                type="date"
-                defaultValue={entry.date}
-                max={maxDate}
-                onChange={(e) => {
-                  const next = e.target.value;
-                  if (!next || next === entry.date) return;
-                  onMove(next);
-                  setMovePickerOpen(false);
-                }}
-                data-testid={`move-date-input-${entry.id}`}
-                aria-label="New workout date"
-              />
-            </PopoverContent>
-          </Popover>
+          <DropdownMenuItem
+            onSelect={() => {
+              setMovePickerOpen(true);
+            }}
+            data-testid={`move-pick-date-${entry.id}`}
+          >
+            Pick date…
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      <Dialog open={movePickerOpen} onOpenChange={setMovePickerOpen}>
+        <DialogContent
+          className="sm:max-w-xs"
+          onClick={stop}
+          onMouseDown={stop}
+          data-testid={`move-date-dialog-${entry.id}`}
+        >
+          <DialogHeader>
+            <DialogTitle>Pick a new date</DialogTitle>
+          </DialogHeader>
+          <Input
+            type="date"
+            defaultValue={entry.date}
+            max={maxDate}
+            onChange={(e) => {
+              const next = e.target.value;
+              if (!next || next === entry.date) return;
+              onMove(next);
+              setMovePickerOpen(false);
+            }}
+            data-testid={`move-date-input-${entry.id}`}
+            aria-label="New workout date"
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
