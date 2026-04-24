@@ -2,6 +2,7 @@ import type { NextFunction,Request, Response } from "express";
 import rateLimit, { MemoryStore } from "express-rate-limit";
 
 import { DEFAULT_RATE_LIMIT_WINDOW_MS, MS_PER_DAY } from "./constants";
+import { ErrorCode } from "./errors";
 import { logger } from "./logger";
 import { toDateStr } from "./types";
 
@@ -140,3 +141,52 @@ export const asyncHandler = <Req extends Request>(fn: (req: Req, res: Response, 
     next(err);
   });
 };
+
+/**
+ * Uniform 404 response for handlers that resolve "not found" by returning a
+ * falsy value from storage. Keeps the `{ error, code: "NOT_FOUND" }` contract
+ * consistent across every route so clients can branch on `code` reliably.
+ */
+export function sendNotFound(res: Response, message: string): Response {
+  return res.status(404).json({ error: message, code: ErrorCode.NOT_FOUND });
+}
+
+export interface ParsedPagination {
+  readonly limit: number;
+  readonly offset: number | undefined;
+}
+
+/**
+ * Parse `?limit` and `?offset` query params. On an invalid value, writes the
+ * 400 response and returns null so the caller can early-return. When
+ * `maxLimit` is provided, values above it produce a 412 PRECONDITION_FAILED
+ * rather than a silent clamp — matches the behaviour previously hand-coded
+ * in `/api/v1/workouts`.
+ */
+export function parsePagination(
+  query: { limit?: string; offset?: string },
+  res: Response,
+  options: { defaultLimit: number; maxLimit?: number },
+): ParsedPagination | null {
+  const rawLimit = query.limit ? Number.parseInt(query.limit, 10) : options.defaultLimit;
+  const offset = query.offset ? Number.parseInt(query.offset, 10) : undefined;
+
+  if (Number.isNaN(rawLimit) || rawLimit < 1) {
+    res.status(400).json({ error: "Invalid limit", code: "BAD_REQUEST" });
+    return null;
+  }
+  if (offset !== undefined && (Number.isNaN(offset) || offset < 0)) {
+    res.status(400).json({ error: "Invalid offset", code: "BAD_REQUEST" });
+    return null;
+  }
+  if (options.maxLimit !== undefined && rawLimit > options.maxLimit) {
+    res.status(412).json({
+      error: `limit exceeds maximum of ${options.maxLimit}`,
+      code: "PRECONDITION_FAILED",
+      maxLimit: options.maxLimit,
+    });
+    return null;
+  }
+
+  return { limit: rawLimit, offset };
+}

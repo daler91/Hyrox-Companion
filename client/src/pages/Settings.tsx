@@ -17,40 +17,21 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { ToastAction } from "@/components/ui/toast";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { api, QUERY_KEYS } from "@/lib/api";
+import { api, type GarminStatus, QUERY_KEYS, type StravaStatus, type UserPreferences } from "@/lib/api";
+import { getUserDisplayName } from "@/lib/authUtils";
 import { queryClient } from "@/lib/queryClient";
 
-interface Preferences {
-  weightUnit: string;
-  distanceUnit: string;
-  weeklyGoal: number;
-  emailNotifications: boolean;
-  emailWeeklySummary: boolean;
-  emailMissedReminder: boolean;
-  aiCoachEnabled: boolean;
-}
+// Local alias so callsites that refer to `Preferences` still read naturally.
+// Shape is maintained by the api/user.ts export contract.
+type Preferences = UserPreferences;
 
-interface StravaStatus {
-  connected: boolean;
-  athleteId?: string;
-  lastSyncedAt?: string | null;
-}
-
-interface GarminStatus {
-  connected: boolean;
-  garminDisplayName?: string | null;
-  lastSyncedAt?: string | null;
-  lastError?: string | null;
-}
-
-interface PreferencesSnapshot {
-  weightUnit: string;
-  distanceUnit: string;
+// The save mutation sends weeklyGoal as a number; local form state stores
+// it as a string so the <Input type="number"> can hold a partially-typed
+// value. `PreferencesSnapshot` captures the form-state shape (weeklyGoal as
+// string) used for Undo + committed-state tracking.
+type SavePayload = Omit<UserPreferences, "weeklyGoal"> & { weeklyGoal: number };
+interface PreferencesSnapshot extends Omit<UserPreferences, "weeklyGoal"> {
   weeklyGoal: string;
-  emailNotifications: boolean;
-  emailWeeklySummary: boolean;
-  emailMissedReminder: boolean;
-  aiCoachEnabled: boolean;
 }
 
 function preferencesToSnapshot(
@@ -64,6 +45,30 @@ function preferencesToSnapshot(
     emailWeeklySummary: preferences.emailWeeklySummary ?? true,
     emailMissedReminder: preferences.emailMissedReminder ?? true,
     aiCoachEnabled: preferences.aiCoachEnabled ?? true,
+  };
+}
+
+function savePayloadToSnapshot(payload: SavePayload): PreferencesSnapshot {
+  return {
+    weightUnit: payload.weightUnit,
+    distanceUnit: payload.distanceUnit,
+    weeklyGoal: String(payload.weeklyGoal),
+    emailNotifications: payload.emailNotifications,
+    emailWeeklySummary: payload.emailWeeklySummary,
+    emailMissedReminder: payload.emailMissedReminder,
+    aiCoachEnabled: payload.aiCoachEnabled,
+  };
+}
+
+function snapshotToSavePayload(snapshot: PreferencesSnapshot): SavePayload {
+  return {
+    weightUnit: snapshot.weightUnit,
+    distanceUnit: snapshot.distanceUnit,
+    weeklyGoal: Number.parseInt(snapshot.weeklyGoal, 10),
+    emailNotifications: snapshot.emailNotifications,
+    emailWeeklySummary: snapshot.emailWeeklySummary,
+    emailMissedReminder: snapshot.emailMissedReminder,
+    aiCoachEnabled: snapshot.aiCoachEnabled,
   };
 }
 
@@ -143,30 +148,14 @@ export default function Settings() {
   }, [preferences]);
 
   const saveMutation = useMutation({
-    mutationFn: (data: {
-      weightUnit: string;
-      distanceUnit: string;
-      weeklyGoal: number;
-      emailNotifications: boolean;
-      emailWeeklySummary: boolean;
-      emailMissedReminder: boolean;
-      aiCoachEnabled: boolean;
-    }) => api.preferences.update(data),
+    mutationFn: (data: SavePayload) => api.preferences.update(data),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.preferences }).catch(() => {});
       // Promote the values we just persisted to the committed-state
       // tracker so the NEXT save's undo snapshot sees these — not
       // whatever the (still-invalidating) preferences query happens to
       // return in the meantime.
-      lastCommittedRef.current = {
-        weightUnit: variables.weightUnit,
-        distanceUnit: variables.distanceUnit,
-        weeklyGoal: String(variables.weeklyGoal),
-        emailNotifications: variables.emailNotifications,
-        emailWeeklySummary: variables.emailWeeklySummary,
-        emailMissedReminder: variables.emailMissedReminder,
-        aiCoachEnabled: variables.aiCoachEnabled,
-      };
+      lastCommittedRef.current = savePayloadToSnapshot(variables);
       setHasChanges(false);
       const previous = undoSnapshotRef.current;
       toast({
@@ -188,15 +177,7 @@ export default function Settings() {
               setEmailWeeklySummary(previous.emailWeeklySummary);
               setEmailMissedReminder(previous.emailMissedReminder);
               setAiCoachEnabled(previous.aiCoachEnabled);
-              saveMutation.mutate({
-                weightUnit: previous.weightUnit,
-                distanceUnit: previous.distanceUnit,
-                weeklyGoal: Number.parseInt(previous.weeklyGoal, 10),
-                emailNotifications: previous.emailNotifications,
-                emailWeeklySummary: previous.emailWeeklySummary,
-                emailMissedReminder: previous.emailMissedReminder,
-                aiCoachEnabled: previous.aiCoachEnabled,
-              });
+              saveMutation.mutate(snapshotToSavePayload(previous));
             }}
           >
             Undo
@@ -244,14 +225,7 @@ export default function Settings() {
 
   const markChanged = () => setHasChanges(true);
 
-  let userName = "User";
-  if (user) {
-    if (user.firstName && user.lastName) {
-      userName = `${user.firstName} ${user.lastName}`;
-    } else if (user.email) {
-      userName = user.email;
-    }
-  }
+  const userName = getUserDisplayName(user);
 
   if (isLoading) {
     return (

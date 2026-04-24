@@ -3,11 +3,11 @@ import { type Request as ExpressRequest, type Response,Router } from "express";
 import { z } from "zod";
 
 import { isAuthenticated } from "../clerkAuth";
-import { logger } from "../logger";
+import { reqLogger } from "../logger";
 import { aiBudgetCheck } from "../middleware/aibudget";
 import { sendJob } from "../queue";
 import { protectedMutationGuards } from "../routeGuards";
-import { asyncHandler, rateLimiter, validateBody } from "../routeUtils";
+import { asyncHandler, rateLimiter, sendNotFound, validateBody } from "../routeUtils";
 import { getRagStatus, reembedAllMaterials } from "../services/ragService";
 import { storage } from "../storage";
 import { getUserId } from "../types";
@@ -36,7 +36,7 @@ router.post("/api/v1/coaching-materials", ...protectedMutationGuards, rateLimite
     const material = await storage.coaching.createCoachingMaterial({ ...body, userId });
 
     // Fire-and-forget: chunk and embed in background (send only ID to avoid pg-boss payload limits)
-    sendJob("embed-coaching-material", { materialId: material.id, userId }).catch(err => (req.log || logger).error({ err }, "Failed to queue coaching material embedding"));
+    sendJob("embed-coaching-material", { materialId: material.id, userId }).catch(err => reqLogger(req).error({ err }, "Failed to queue coaching material embedding"));
 
     res.status(201).json(material);
   }));
@@ -46,12 +46,12 @@ router.patch("/api/v1/coaching-materials/:id", ...protectedMutationGuards, rateL
     const body = req.body as UpdateMaterialBody;
     const material = await storage.coaching.updateCoachingMaterial(req.params.id, body, userId);
     if (!material) {
-      return res.status(404).json({ error: "Coaching material not found", code: "NOT_FOUND" });
+      return sendNotFound(res, "Coaching material not found");
     }
 
     // Re-embed if content or title changed
     if (body.content || body.title) {
-      sendJob("embed-coaching-material", { materialId: material.id, userId }).catch(err => (req.log || logger).error({ err }, "Failed to queue coaching material embedding"));
+      sendJob("embed-coaching-material", { materialId: material.id, userId }).catch(err => reqLogger(req).error({ err }, "Failed to queue coaching material embedding"));
     }
 
     res.json(material);
@@ -74,7 +74,7 @@ router.delete("/api/v1/coaching-materials/:id", ...protectedMutationGuards, rate
     // Chunks are cascade-deleted via FK, no manual cleanup needed
     const deleted = await storage.coaching.deleteCoachingMaterial(req.params.id, userId);
     if (!deleted) {
-      return res.status(404).json({ error: "Coaching material not found", code: "NOT_FOUND" });
+      return sendNotFound(res, "Coaching material not found");
     }
     res.json({ success: true });
   }));

@@ -8,7 +8,7 @@ import { isAuthenticated } from "./clerkAuth";
 import { EXTERNAL_API_TIMEOUT_MS,RATE_LIMIT_WINDOW_15M_MS, STRAVA_STATE_MAX_AGE_MS } from "./constants";
 import { env } from "./env";
 import { AppError, ErrorCode } from "./errors";
-import { logger } from "./logger";
+import { logger, reqLogger } from "./logger";
 import { protectedMutationGuards } from "./routeGuards";
 import { asyncHandler } from "./routeUtils";
 import { mapStravaActivityToWorkout, type StravaActivity } from "./services/stravaMapper";
@@ -167,7 +167,7 @@ async function handleStravaStatus(req: Request, res: Response) {
       lastSyncedAt: connection.lastSyncedAt,
     });
   } catch (error) {
-    (req.log || logger).error({ err: error }, "Strava status error:");
+    reqLogger(req).error({ err: error }, "Strava status error:");
     res.status(500).json({ error: "Failed to get Strava status", code: "INTERNAL_SERVER_ERROR" });
   }
 }
@@ -196,18 +196,18 @@ async function handleStravaCallback(req: Request, res: Response) {
   const { code, state, error: stravaError } = req.query;
 
   if (stravaError) {
-    (req.log || logger).error("Strava auth error received from provider");
+    reqLogger(req).error("Strava auth error received from provider");
     return res.redirect("/settings?strava=error");
   }
 
   if (typeof state !== "string" || typeof code !== "string") {
-    (req.log || logger).error("Strava OAuth callback received invalid query params");
+    reqLogger(req).error("Strava OAuth callback received invalid query params");
     return res.redirect("/settings?strava=error");
   }
 
   const verified = verifySignedState(state);
   if (!verified) {
-    (req.log || logger).error("Strava OAuth state invalid or expired - possible CSRF attack");
+    reqLogger(req).error("Strava OAuth state invalid or expired - possible CSRF attack");
     return res.redirect("/settings?strava=error");
   }
 
@@ -238,7 +238,7 @@ async function handleStravaCallback(req: Request, res: Response) {
     }, { label: "strava.oauthToken", retries: 3 });
 
     if (!tokenResponse.ok) {
-      (req.log || logger).error({ err: await tokenResponse.text() }, "Token exchange failed:");
+      reqLogger(req).error({ err: await tokenResponse.text() }, "Token exchange failed:");
       return res.redirect("/settings?strava=error");
     }
 
@@ -256,7 +256,7 @@ async function handleStravaCallback(req: Request, res: Response) {
 
     res.redirect("/settings?strava=connected");
   } catch (error) {
-    (req.log || logger).error({ err: error }, "Strava callback error:");
+    reqLogger(req).error({ err: error }, "Strava callback error:");
     res.redirect("/settings?strava=error");
   }
 }
@@ -267,7 +267,7 @@ async function handleStravaDisconnect(req: Request, res: Response) {
     await storage.users.deleteStravaConnection(userId);
     res.json({ success: true });
   } catch (error) {
-    (req.log || logger).error({ err: error }, "Strava disconnect error:");
+    reqLogger(req).error({ err: error }, "Strava disconnect error:");
     res.status(500).json({ error: "Failed to disconnect Strava", code: "INTERNAL_SERVER_ERROR" });
   }
 }
@@ -363,9 +363,9 @@ async function handleStravaSync(req: Request, res: Response) {
 
     let activities: StravaActivity[];
     try {
-      activities = await fetchStravaActivities(accessToken, req.log || logger);
+      activities = await fetchStravaActivities(accessToken, reqLogger(req));
     } catch (err) {
-      (req.log || logger).error({ err }, "Failed to fetch Strava activities after retries:");
+      reqLogger(req).error({ err }, "Failed to fetch Strava activities after retries:");
       return sendStravaFetchError(res, err);
     }
 
@@ -398,7 +398,7 @@ async function handleStravaSync(req: Request, res: Response) {
 
     await storage.users.updateStravaLastSync(userId);
 
-    (req.log || logger).info(
+    reqLogger(req).info(
       { context: "strava", userId, imported, skipped: skipped + raceSkipped, total: activities.length },
       "strava.sync.ok",
     );
@@ -410,7 +410,7 @@ async function handleStravaSync(req: Request, res: Response) {
       total: activities.length,
     });
   } catch (error) {
-    (req.log || logger).error({ err: error }, "Strava sync error:");
+    reqLogger(req).error({ err: error }, "Strava sync error:");
     res.status(500).json({ error: "Failed to sync Strava activities", code: "INTERNAL_SERVER_ERROR" });
   }
 }

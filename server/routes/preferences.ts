@@ -3,7 +3,7 @@ import { type Request as ExpressRequest, type Response,Router } from "express";
 
 import { isAuthenticated } from "../clerkAuth";
 import { protectedMutationGuards } from "../routeGuards";
-import { asyncHandler, formatValidationErrors,rateLimiter } from "../routeUtils";
+import { asyncHandler, formatValidationErrors,rateLimiter, sendNotFound } from "../routeUtils";
 import { storage } from "../storage";
 import { getUserId } from "../types";
 
@@ -13,7 +13,7 @@ router.get('/api/v1/preferences', isAuthenticated, asyncHandler(async (req: Expr
     const userId = getUserId(req);
     const user = await storage.users.getUser(userId);
     if (!user) {
-      return res.status(404).json({ error: "User not found", code: "NOT_FOUND" });
+      return sendNotFound(res, "User not found");
     }
 
     // S4 — if the user's weeklyGoal exceeds their active plan's density,
@@ -59,7 +59,7 @@ router.patch('/api/v1/preferences', ...protectedMutationGuards, rateLimiter("pre
 
     const user = await storage.users.updateUserPreferences(userId, parseResult.data);
     if (!user) {
-      return res.status(404).json({ error: "User not found", code: "NOT_FOUND" });
+      return sendNotFound(res, "User not found");
     }
     res.json({
       weightUnit: user.weightUnit,

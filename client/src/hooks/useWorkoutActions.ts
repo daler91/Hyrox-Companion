@@ -11,6 +11,37 @@ function entryId(entry: TimelineEntry): string | null {
   return entry.workoutLogId ?? entry.planDayId ?? null;
 }
 
+/**
+ * Shared plumbing for optimistic timeline mutations: cancel in-flight
+ * queries, snapshot the previous state, apply the optimistic update, and
+ * return a rollback context. Keeps the 4 mutations below from each
+ * re-implementing the same cancel/snapshot/rollback dance.
+ */
+function buildOptimisticTimelineHandlers<TVariables>(
+  selectedPlanId: string | null,
+  mutate: (entries: TimelineEntry[], variables: TVariables) => TimelineEntry[],
+) {
+  const queryKey = [...QUERY_KEYS.timeline, selectedPlanId];
+  return {
+    onMutate: async (variables: TVariables) => {
+      await queryClient.cancelQueries({ queryKey });
+      const previousTimeline = queryClient.getQueryData<TimelineEntry[]>(queryKey);
+      if (previousTimeline) {
+        queryClient.setQueryData<TimelineEntry[]>(queryKey, (old) => {
+          if (!old) return old;
+          return mutate(old, variables);
+        });
+      }
+      return { previousTimeline };
+    },
+    onError: (_err: Error, _variables: TVariables, context: { previousTimeline?: TimelineEntry[] } | undefined) => {
+      if (context?.previousTimeline) {
+        queryClient.setQueryData(queryKey, context.previousTimeline);
+      }
+    },
+  };
+}
+
 export function useWorkoutActions(
   selectedPlanId: string | null,
   timelineData: TimelineEntry[] = [],
@@ -37,34 +68,22 @@ export function useWorkoutActions(
     [setOpenWorkoutId],
   );
 
+  const updateStatusHandlers = buildOptimisticTimelineHandlers<{ dayId: string; status: string }>(
+    selectedPlanId,
+    (old, { dayId, status }) =>
+      old.map((entry) =>
+        entry.planDayId === dayId
+          ? { ...entry, status: status as WorkoutStatus }
+          : entry,
+      ),
+  );
   const updateStatusMutation = useApiMutation({
     mutationFn: ({ dayId, status }: { dayId: string; status: string }) =>
       api.plans.updateDayStatus(dayId, status),
     invalidateQueries: [QUERY_KEYS.timeline],
     successToast: "Status updated",
     errorToast: "Failed to update status",
-    onMutate: async ({ dayId, status }) => {
-      await queryClient.cancelQueries({ queryKey: [...QUERY_KEYS.timeline, selectedPlanId] });
-      const previousTimeline = queryClient.getQueryData<TimelineEntry[]>([...QUERY_KEYS.timeline, selectedPlanId]);
-
-      if (previousTimeline) {
-        queryClient.setQueryData<TimelineEntry[]>([...QUERY_KEYS.timeline, selectedPlanId], (old) => {
-          if (!old) return old;
-          return old.map((entry) =>
-            entry.planDayId === dayId
-              ? { ...entry, status: status as WorkoutStatus }
-              : entry
-          );
-        });
-      }
-
-      return { previousTimeline };
-    },
-    onError: (err, variables, context: { previousTimeline?: TimelineEntry[] } | undefined) => {
-      if (context?.previousTimeline) {
-        queryClient.setQueryData([...QUERY_KEYS.timeline, selectedPlanId], context.previousTimeline);
-      }
-    },
+    ...updateStatusHandlers,
     onSuccess: (data, variables) => {
       if (variables.status === "completed") {
         queryClient.setQueryData<User | null>([...QUERY_KEYS.authUser], (old) => {
@@ -86,37 +105,25 @@ export function useWorkoutActions(
     },
   });
 
+  type LogWorkoutVariables = { planDayId: string; date: string; focus: string; mainWorkout: string; accessory?: string; notes?: string; rpe?: number; exercises?: ParsedExercise[] };
+  const logWorkoutHandlers = buildOptimisticTimelineHandlers<LogWorkoutVariables>(
+    selectedPlanId,
+    (old, variables) =>
+      old.map((entry) =>
+        entry.planDayId === variables.planDayId
+          ? { ...entry, status: "completed" as WorkoutStatus }
+          : entry,
+      ),
+  );
   const logWorkoutMutation = useApiMutation({
-    mutationFn: (data: { planDayId: string; date: string; focus: string; mainWorkout: string; accessory?: string; notes?: string; rpe?: number; exercises?: ParsedExercise[] }) =>
-      api.workouts.create(data),
+    mutationFn: (data: LogWorkoutVariables) => api.workouts.create(data),
     // 🧠 New workouts can set new PRs / extend analytics series — invalidate
     // so ExerciseProgressionTab + PersonalRecordsTab (staleTime: Infinity)
     // refresh. (CODEBASE_REVIEW_2026-04-12.md #27)
     invalidateQueries: [QUERY_KEYS.timeline, QUERY_KEYS.personalRecords, QUERY_KEYS.exerciseAnalytics],
     successToast: "Workout logged!",
     errorToast: "Failed to log workout",
-    onMutate: async (variables) => {
-      await queryClient.cancelQueries({ queryKey: [...QUERY_KEYS.timeline, selectedPlanId] });
-      const previousTimeline = queryClient.getQueryData<TimelineEntry[]>([...QUERY_KEYS.timeline, selectedPlanId]);
-
-      if (previousTimeline) {
-        queryClient.setQueryData<TimelineEntry[]>([...QUERY_KEYS.timeline, selectedPlanId], (old) => {
-          if (!old) return old;
-          return old.map((entry) =>
-            entry.planDayId === variables.planDayId
-              ? { ...entry, status: "completed" as WorkoutStatus }
-              : entry
-          );
-        });
-      }
-
-      return { previousTimeline };
-    },
-    onError: (err, variables, context: { previousTimeline?: TimelineEntry[] } | undefined) => {
-      if (context?.previousTimeline) {
-        queryClient.setQueryData([...QUERY_KEYS.timeline, selectedPlanId], context.previousTimeline);
-      }
-    },
+    ...logWorkoutHandlers,
     onSuccess: () => {
       queryClient.setQueryData<User | null>([...QUERY_KEYS.authUser], (old) => {
         if (!old) return old;
@@ -126,97 +133,60 @@ export function useWorkoutActions(
     },
   });
 
+  type UpdateWorkoutVariables = { workoutId: string; updates: UpdateWorkoutLog & { exercises?: ParsedExercise[] } };
+  const updateWorkoutHandlers = buildOptimisticTimelineHandlers<UpdateWorkoutVariables>(
+    selectedPlanId,
+    (old, { workoutId, updates }) =>
+      old.map((entry) =>
+        entry.workoutLogId === workoutId
+          ? {
+              ...entry,
+              ...updates.focus != null && { focus: updates.focus },
+              ...updates.mainWorkout != null && { mainWorkout: updates.mainWorkout },
+              ...updates.accessory !== undefined && { accessory: updates.accessory },
+              ...updates.notes !== undefined && { notes: updates.notes },
+              ...updates.rpe !== undefined && { rpe: updates.rpe },
+            }
+          : entry,
+      ),
+  );
   const updateWorkoutMutation = useApiMutation({
-    mutationFn: ({ workoutId, updates }: { workoutId: string; updates: UpdateWorkoutLog & { exercises?: ParsedExercise[] } }) =>
+    mutationFn: ({ workoutId, updates }: UpdateWorkoutVariables) =>
       api.workouts.update(workoutId, updates),
     invalidateQueries: [QUERY_KEYS.timeline, QUERY_KEYS.workouts, QUERY_KEYS.personalRecords, QUERY_KEYS.exerciseAnalytics],
     successToast: "Workout updated",
     errorToast: "Failed to update workout",
-    onMutate: async ({ workoutId, updates }) => {
-      await queryClient.cancelQueries({ queryKey: [...QUERY_KEYS.timeline, selectedPlanId] });
-      const previousTimeline = queryClient.getQueryData<TimelineEntry[]>([...QUERY_KEYS.timeline, selectedPlanId]);
-
-      if (previousTimeline) {
-        queryClient.setQueryData<TimelineEntry[]>([...QUERY_KEYS.timeline, selectedPlanId], (old) => {
-          if (!old) return old;
-          return old.map((entry) =>
-            entry.workoutLogId === workoutId
-              ? {
-                  ...entry,
-                  ...updates.focus != null && { focus: updates.focus },
-                  ...updates.mainWorkout != null && { mainWorkout: updates.mainWorkout },
-                  ...updates.accessory !== undefined && { accessory: updates.accessory },
-                  ...updates.notes !== undefined && { notes: updates.notes },
-                  ...updates.rpe !== undefined && { rpe: updates.rpe },
-                }
-              : entry
-          );
-        });
-      }
-
-      return { previousTimeline };
-    },
-    onError: (err, variables, context: { previousTimeline?: TimelineEntry[] } | undefined) => {
-      if (context?.previousTimeline) {
-        queryClient.setQueryData([...QUERY_KEYS.timeline, selectedPlanId], context.previousTimeline);
-      }
-    },
+    ...updateWorkoutHandlers,
     onSuccess: () => {
       setDetailEntry(null);
     },
   });
 
+  const deleteWorkoutHandlers = buildOptimisticTimelineHandlers<string>(
+    selectedPlanId,
+    (old, workoutId) => old.filter((entry) => entry.workoutLogId !== workoutId),
+  );
   const deleteWorkoutMutation = useApiMutation({
     mutationFn: (workoutId: string) => api.workouts.delete(workoutId),
     invalidateQueries: [QUERY_KEYS.timeline, QUERY_KEYS.workouts, QUERY_KEYS.personalRecords, QUERY_KEYS.exerciseAnalytics],
     successToast: "Workout deleted",
     errorToast: "Failed to delete workout",
-    onMutate: async (workoutId) => {
-      await queryClient.cancelQueries({ queryKey: [...QUERY_KEYS.timeline, selectedPlanId] });
-      const previousTimeline = queryClient.getQueryData<TimelineEntry[]>([...QUERY_KEYS.timeline, selectedPlanId]);
-
-      if (previousTimeline) {
-        queryClient.setQueryData<TimelineEntry[]>([...QUERY_KEYS.timeline, selectedPlanId], (old) => {
-          if (!old) return old;
-          return old.filter((entry) => entry.workoutLogId !== workoutId);
-        });
-      }
-
-      return { previousTimeline };
-    },
-    onError: (err, variables, context: { previousTimeline?: TimelineEntry[] } | undefined) => {
-      if (context?.previousTimeline) {
-        queryClient.setQueryData([...QUERY_KEYS.timeline, selectedPlanId], context.previousTimeline);
-      }
-    },
+    ...deleteWorkoutHandlers,
     onSuccess: () => {
       setDetailEntry(null);
     },
   });
 
+  const deletePlanDayHandlers = buildOptimisticTimelineHandlers<string>(
+    selectedPlanId,
+    (old, dayId) => old.filter((entry) => entry.planDayId !== dayId),
+  );
   const deletePlanDayMutation = useApiMutation({
     mutationFn: (dayId: string) => api.plans.deleteDay(dayId),
     invalidateQueries: [QUERY_KEYS.timeline, QUERY_KEYS.plans],
     successToast: "Workout removed from plan",
     errorToast: "Failed to delete workout",
-    onMutate: async (dayId) => {
-      await queryClient.cancelQueries({ queryKey: [...QUERY_KEYS.timeline, selectedPlanId] });
-      const previousTimeline = queryClient.getQueryData<TimelineEntry[]>([...QUERY_KEYS.timeline, selectedPlanId]);
-
-      if (previousTimeline) {
-        queryClient.setQueryData<TimelineEntry[]>([...QUERY_KEYS.timeline, selectedPlanId], (old) => {
-          if (!old) return old;
-          return old.filter((entry) => entry.planDayId !== dayId);
-        });
-      }
-
-      return { previousTimeline };
-    },
-    onError: (err, variables, context: { previousTimeline?: TimelineEntry[] } | undefined) => {
-      if (context?.previousTimeline) {
-        queryClient.setQueryData([...QUERY_KEYS.timeline, selectedPlanId], context.previousTimeline);
-      }
-    },
+    ...deletePlanDayHandlers,
     onSuccess: () => {
       setDetailEntry(null);
     },

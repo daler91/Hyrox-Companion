@@ -25,7 +25,7 @@ type GarminConnect = GarminConnectType;
 
 import { isAuthenticated } from "./clerkAuth";
 import { RATE_LIMIT_WINDOW_15M_MS } from "./constants";
-import { logger } from "./logger";
+import { logger, reqLogger } from "./logger";
 import { protectedMutationGuards } from "./routeGuards";
 import { asyncHandler, rateLimiter } from "./routeUtils";
 import { type GarminActivity,mapGarminActivityToWorkout } from "./services/garminMapper";
@@ -339,7 +339,7 @@ async function handleGarminStatus(req: Request, res: Response) {
       lastError: conn.lastError,
     });
   } catch (error) {
-    (req.log || logger).error({ err: error }, "Garmin status error:");
+    reqLogger(req).error({ err: error }, "Garmin status error:");
     res.status(500).json({ error: "Failed to get Garmin status", code: "INTERNAL_SERVER_ERROR" });
   }
 }
@@ -363,7 +363,7 @@ async function handleGarminConnect(req: Request, res: Response) {
   const { email, password } = parsed.data;
 
   const userId = getUserId(req);
-  const reqLog = req.log || logger;
+  const reqLog = reqLogger(req);
 
   try {
     await withUserLock(userId, async () => {
@@ -437,7 +437,7 @@ async function handleGarminDisconnect(req: Request, res: Response) {
     await storage.users.deleteGarminConnection(userId);
     res.json({ success: true });
   } catch (error) {
-    (req.log || logger).error({ err: error }, "Garmin disconnect error:");
+    reqLogger(req).error({ err: error }, "Garmin disconnect error:");
     res.status(500).json({ error: "Failed to disconnect Garmin", code: "INTERNAL_SERVER_ERROR" });
   }
 }
@@ -566,7 +566,7 @@ async function handleGarminSync(req: Request, res: Response) {
   if (rejectIfCircuitOpen(res)) return;
 
   const userId = getUserId(req);
-  const reqLog = req.log || logger;
+  const reqLog = reqLogger(req);
 
   const existing = await storage.users.getGarminConnection(userId);
   if (rejectSyncPreflight(res, existing)) return;

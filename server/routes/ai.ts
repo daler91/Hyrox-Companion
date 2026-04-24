@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { isAuthenticated } from "../clerkAuth";
 import { chatWithCoach, parseExercisesFromImage, parseExercisesFromText,streamChatWithCoach } from "../gemini/index";
-import { logger } from "../logger";
+import { reqLogger } from "../logger";
 import { aiBudgetCheck } from "../middleware/aibudget";
 import { aiConsentCheck } from "../middleware/aiConsent";
 import { protectedMutationGuards } from "../routeGuards";
@@ -64,7 +64,7 @@ async function prepareChatContext(
 ): Promise<{ input: ChatInput; aiContext: AIContext }> {
   const { message, history } = req.body;
   const userId = getUserId(req);
-  const aiContext = await buildAIContext(userId, message, req.log || logger);
+  const aiContext = await buildAIContext(userId, message, reqLogger(req));
   return { input: { message, history: history || [] }, aiContext };
 }
 
@@ -146,7 +146,7 @@ router.post("/api/v1/chat/stream", ...protectedMutationGuards, rateLimiter("chat
 
       for await (const chunk of stream) {
         if (controller.signal.aborted) {
-          (req.log || logger).info("Client disconnected mid-stream, stopping AI generation");
+          reqLogger(req).info("Client disconnected mid-stream, stopping AI generation");
           break;
         }
         res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
@@ -158,7 +158,7 @@ router.post("/api/v1/chat/stream", ...protectedMutationGuards, rateLimiter("chat
       res.end();
     } catch (streamError) {
       if (controller.signal.aborted) return;
-      (req.log || logger).error({ err: streamError }, "Stream error:");
+      reqLogger(req).error({ err: streamError }, "Stream error:");
       res.write(`data: ${JSON.stringify({ error: "Stream error" })}\n\n`);
       res.end();
     } finally {
@@ -220,7 +220,7 @@ router.delete("/api/v1/chat/history", ...protectedMutationGuards, rateLimiter("c
 
 router.post("/api/v1/timeline/ai-suggestions", ...protectedMutationGuards, rateLimiter("suggestions", 3), aiConsentCheck, aiBudgetCheck, asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
-    const result = await generateTimelineAiSuggestions(userId, req.log || logger);
+    const result = await generateTimelineAiSuggestions(userId, reqLogger(req));
     res.json(result);
   }));
 
