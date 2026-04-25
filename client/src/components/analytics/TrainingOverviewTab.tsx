@@ -1,6 +1,6 @@
 import type { TimelineAnnotation, TimelineAnnotationType, TrainingOverview } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, Clock, Flame, Loader2, Zap } from "lucide-react";
+import { BarChart3, Clock, Flame, Loader2, ShieldCheck, Zap } from "lucide-react";
 import { useMemo } from "react";
 import {
   Bar,
@@ -196,7 +196,7 @@ export function TrainingOverviewTab({ dateParams, weeklyGoal }: TrainingOverview
     <div className="space-y-6">
       {/* Summary Stats with "vs previous period" deltas */}
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <div className="bg-muted/50 p-4 rounded-lg flex items-start gap-3">
             <BarChart3 className="h-5 w-5 text-primary mt-0.5 shrink-0" />
             <div className="flex-1">
@@ -277,6 +277,30 @@ export function TrainingOverviewTab({ dateParams, weeklyGoal }: TrainingOverview
               </div>
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 Avg RPE
+              </p>
+            </div>
+          </div>
+          <div className="bg-muted/50 p-4 rounded-lg flex items-start gap-3">
+            <ShieldCheck className="h-5 w-5 text-emerald-500 mt-0.5 shrink-0" />
+            <div className="flex-1">
+              <div className="flex items-baseline gap-2">
+                <p className="text-2xl font-bold" data-testid="text-avg-adherence">
+                  {stats.avgCompliancePct ?? "—"}
+                  {stats.avgCompliancePct != null && (
+                    <span className="text-sm font-normal text-muted-foreground">%</span>
+                  )}
+                </p>
+                {previousStats && stats.avgCompliancePct !== null && previousStats.avgCompliancePct !== null ? (
+                  <DeltaIndicator
+                    current={stats.avgCompliancePct}
+                    previous={previousStats.avgCompliancePct}
+                    unit="%"
+                    testIdSuffix="avg-adherence"
+                  />
+                ) : null}
+              </div>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Avg Adherence
               </p>
             </div>
           </div>

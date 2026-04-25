@@ -46,6 +46,7 @@ export const updateUserPreferencesSchema = z.object({
   // existing users.
   emailWeeklySummary: z.boolean().optional(),
   emailMissedReminder: z.boolean().optional(),
+  showAdherenceInsights: z.boolean().optional(),
   aiCoachEnabled: z.boolean().optional(),
 });
 
@@ -139,6 +140,15 @@ const workoutDateNotFuture = z
 export const insertWorkoutLogSchema = createInsertSchema(workoutLogs).omit({
   id: true,
   userId: true,
+  prescribedMainWorkout: true,
+  prescribedAccessory: true,
+  prescribedNotes: true,
+  plannedSetCount: true,
+  actualSetCount: true,
+  matchedSetCount: true,
+  addedSetCount: true,
+  removedSetCount: true,
+  compliancePct: true,
 }).extend({
   date: workoutDateNotFuture,
   rpe: z.number().int().min(1, "RPE must be at least 1").max(10, "RPE must be at most 10").optional().nullable(),
@@ -191,6 +201,12 @@ export type TimelineEntry = {
   avgCadence?: number | null;
   avgWatts?: number | null;
   sufferScore?: number | null;
+  plannedSetCount?: number | null;
+  actualSetCount?: number | null;
+  matchedSetCount?: number | null;
+  addedSetCount?: number | null;
+  removedSetCount?: number | null;
+  compliancePct?: number | null;
 };
 
 // Custom exercise types and schemas
@@ -446,6 +462,8 @@ export interface OverviewStats {
   avgDuration: number;
   /** Mean of the per-week avgRpe values that had at least one RPE entry. */
   avgRpe: number | null;
+  /** Mean adherence % across workouts that have compliance snapshots. */
+  avgCompliancePct: number | null;
 }
 
 export interface TrainingOverview {

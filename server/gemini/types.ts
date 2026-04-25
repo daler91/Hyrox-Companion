@@ -63,6 +63,7 @@ export interface TrainingContext {
       totalWeeks: number;
       phaseLabel: "early" | "build" | "peak" | "taper" | "race_week";
       progressPct: number;
+      remainingPhases: Array<"early" | "build" | "peak" | "taper" | "race_week">;
     };
     weeklyVolume?: {
       thisWeekCompleted: number;

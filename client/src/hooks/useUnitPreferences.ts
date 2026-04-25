@@ -7,6 +7,7 @@ interface UnitPreferences {
   distanceUnit: "km" | "miles";
   weightLabel: string;
   distanceLabel: string;
+  showAdherenceInsights: boolean;
   isLoading: boolean;
 }
 
@@ -17,12 +18,14 @@ export function useUnitPreferences(): UnitPreferences {
 
   const weightUnit = (preferences?.weightUnit || "kg") as "kg" | "lbs";
   const distanceUnit = (preferences?.distanceUnit || "km") as "km" | "miles";
+  const showAdherenceInsights = preferences?.showAdherenceInsights ?? true;
 
   return {
     weightUnit,
     distanceUnit,
     weightLabel: weightUnit === "kg" ? "kg" : "lbs",
     distanceLabel: distanceUnit === "km" ? "km" : "miles",
+    showAdherenceInsights,
     isLoading,
   };
 }

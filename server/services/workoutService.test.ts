@@ -1,6 +1,8 @@
 import { describe, expect,it } from "vitest";
 
-import { expandExercisesToSetRows } from "./workoutService";
+import type { ExerciseSet } from "@shared/schema";
+
+import { expandExercisesToSetRows, summarizeSetAdherence } from "./workoutService";
 
 describe("expandExercisesToSetRows", () => {
   const workoutLogId = "w1";
@@ -231,6 +233,43 @@ describe("expandExercisesToSetRows", () => {
       setNumber: 1,
       distance: 5000,
       time: 1200,
+    });
+  });
+});
+
+describe("summarizeSetAdherence", () => {
+  function makeSet(exerciseName: string, overrides: Partial<ExerciseSet> = {}): ExerciseSet {
+    return {
+      id: "set-id",
+      workoutLogId: null,
+      planDayId: null,
+      exerciseName,
+      customLabel: null,
+      category: "strength",
+      setNumber: 1,
+      reps: null,
+      weight: null,
+      distance: null,
+      time: null,
+      notes: null,
+      confidence: null,
+      sortOrder: 0,
+      ...overrides,
+    };
+  }
+
+  it("computes matched/added/removed counts and compliance", () => {
+    const planned = [makeSet("back_squat"), makeSet("walking_lunge", { id: "p2", setNumber: 2 })];
+    const actual = [makeSet("back_squat", { id: "a1" })];
+    const summary = summarizeSetAdherence(planned, actual);
+
+    expect(summary).toMatchObject({
+      plannedSetCount: 2,
+      actualSetCount: 1,
+      matchedSetCount: 1,
+      addedSetCount: 0,
+      removedSetCount: 1,
+      compliancePct: 50,
     });
   });
 });

@@ -46,6 +46,7 @@ router.get('/api/v1/preferences', isAuthenticated, asyncHandler(async (req: Expr
       emailNotifications: user.emailNotifications ?? true,
       emailWeeklySummary: user.emailWeeklySummary ?? true,
       emailMissedReminder: user.emailMissedReminder ?? true,
+      showAdherenceInsights: user.showAdherenceInsights ?? true,
       aiCoachEnabled: user.aiCoachEnabled ?? true,
     });
   }));
@@ -68,6 +69,7 @@ router.patch('/api/v1/preferences', ...protectedMutationGuards, rateLimiter("pre
       emailNotifications: user.emailNotifications ?? true,
       emailWeeklySummary: user.emailWeeklySummary ?? true,
       emailMissedReminder: user.emailMissedReminder ?? true,
+      showAdherenceInsights: user.showAdherenceInsights ?? true,
       aiCoachEnabled: user.aiCoachEnabled ?? true,
     });
   }));

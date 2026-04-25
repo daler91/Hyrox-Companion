@@ -36,6 +36,7 @@ export const users = pgTable("users", {
   emailNotifications: boolean("email_notifications").default(false),
   emailWeeklySummary: boolean("email_weekly_summary").default(false),
   emailMissedReminder: boolean("email_missed_reminder").default(false),
+  showAdherenceInsights: boolean("show_adherence_insights").default(true),
   // AI coach requires explicit consent before first use because workout
   // data is sent to Google Gemini for processing.
   aiCoachEnabled: boolean("ai_coach_enabled").default(false),
@@ -91,6 +92,18 @@ export const workoutLogs = pgTable("workout_logs", {
   mainWorkout: text("main_workout").notNull(),
   accessory: text("accessory"),
   notes: text("notes"),
+  // Immutable snapshot of the free-text prescription at initial log create.
+  // Used by completed-workout UI to show original coach intent even if the
+  // mutable log text fields are later edited.
+  prescribedMainWorkout: text("prescribed_main_workout"),
+  prescribedAccessory: text("prescribed_accessory"),
+  prescribedNotes: text("prescribed_notes"),
+  plannedSetCount: integer("planned_set_count"),
+  actualSetCount: integer("actual_set_count"),
+  matchedSetCount: integer("matched_set_count"),
+  addedSetCount: integer("added_set_count"),
+  removedSetCount: integer("removed_set_count"),
+  compliancePct: integer("compliance_pct"),
   duration: integer("duration"),
   rpe: integer("rpe"),
   planDayId: varchar("plan_day_id", { length: 255 }).references(() => planDays.id, { onDelete: "set null" }),

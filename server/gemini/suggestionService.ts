@@ -152,7 +152,10 @@ function formatCoachingAnalysis(insights: NonNullable<TrainingContext["coachingI
 
   if (insights.planPhase) {
     const p = insights.planPhase;
-    lines.push(`PLAN PHASE: Week ${p.currentWeek} of ${p.totalWeeks} (${p.phaseLabel.toUpperCase()} phase, ${p.progressPct}% complete). Coach according to ${p.phaseLabel} phase guidelines.`);
+    const remaining = p.remainingPhases.length > 0
+      ? ` Remaining phases: ${p.remainingPhases.map(phase => phase.toUpperCase()).join(" → ")}.`
+      : "";
+    lines.push(`PLAN PHASE: Week ${p.currentWeek} of ${p.totalWeeks} (${p.phaseLabel.toUpperCase()} phase, ${p.progressPct}% complete). Coach according to ${p.phaseLabel} phase guidelines.${remaining}`);
   }
 
   if (insights.progressionFlags.length > 0) {

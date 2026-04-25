@@ -26,6 +26,12 @@ function mapWorkoutLogToTimelineFields(log: WorkoutLog) {
     avgCadence: log.avgCadence,
     avgWatts: log.avgWatts,
     sufferScore: log.sufferScore,
+    plannedSetCount: log.plannedSetCount,
+    actualSetCount: log.actualSetCount,
+    matchedSetCount: log.matchedSetCount,
+    addedSetCount: log.addedSetCount,
+    removedSetCount: log.removedSetCount,
+    compliancePct: log.compliancePct,
   };
 }
 

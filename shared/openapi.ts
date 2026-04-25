@@ -104,6 +104,7 @@ const EXAMPLE_PREFERENCES = {
   emailNotifications: true,
   emailWeeklySummary: true,
   emailMissedReminder: true,
+  showAdherenceInsights: true,
   aiCoachEnabled: true,
 };
 

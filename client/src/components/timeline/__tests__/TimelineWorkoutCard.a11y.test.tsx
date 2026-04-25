@@ -84,4 +84,19 @@ describe("TimelineWorkoutCard a11y", () => {
     fireEvent.keyDown(card, { key: " " });
     expect(onClick).toHaveBeenCalledWith(mockEntry);
   });
+
+  it("renders an adherence badge when compliance is available on completed logs", () => {
+    renderCard({
+      entry: {
+        ...(mockEntry as TimelineEntry),
+        id: "entry-2",
+        type: "logged",
+        status: "completed",
+        planDayId: "plan-1",
+        compliancePct: 82,
+      },
+    });
+
+    expect(screen.getByTestId("badge-adherence-entry-2")).toHaveTextContent("Adherence 82%");
+  });
 });

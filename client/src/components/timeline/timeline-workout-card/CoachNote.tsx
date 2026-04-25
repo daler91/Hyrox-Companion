@@ -37,9 +37,27 @@ function sourceBadgeClasses(source: CoachNoteSource): string {
 const DEFAULT_SOURCE_BADGE_CLASSES =
   "text-muted-foreground border-border bg-muted/40";
 
+const planPhaseOrder = ["early", "build", "peak", "taper", "race_week"] as const;
+
+function formatPhaseName(phase: (typeof planPhaseOrder)[number]): string {
+  if (phase === "race_week") return "Race week";
+  return `${phase.charAt(0).toUpperCase()}${phase.slice(1)}`;
+}
+
 function phaseChip(phase: CoachNoteInputs["planPhase"]): string | null {
   if (!phase) return null;
-  return `${phase.charAt(0).toUpperCase()}${phase.slice(1)} phase`;
+  return `${formatPhaseName(phase)} phase`;
+}
+
+function remainingPhasesChip(phase: CoachNoteInputs["planPhase"]): string | null {
+  if (!phase) return null;
+  const phaseIndex = planPhaseOrder.indexOf(phase);
+  if (phaseIndex < 0 || phaseIndex >= planPhaseOrder.length - 1) return null;
+  const upcoming = planPhaseOrder
+    .slice(phaseIndex + 1)
+    .map(formatPhaseName)
+    .join(" → ");
+  return `Next: ${upcoming}`;
 }
 
 function rpeChip(inputs: CoachNoteInputs): string | null {
@@ -63,6 +81,7 @@ function basedOnChips(inputs: CoachNoteInputs | null | undefined): string[] {
   const candidates: Array<string | null | undefined> = [
     inputs.planGoalPresent ? "Plan goal" : null,
     phaseChip(inputs.planPhase),
+    remainingPhasesChip(inputs.planPhase),
     rpeChip(inputs),
     inputs.weeklyVolumeTrend ? `Volume ${inputs.weeklyVolumeTrend}` : null,
     stationGapsChip(inputs.stationGaps),

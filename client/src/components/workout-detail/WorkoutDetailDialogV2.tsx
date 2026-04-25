@@ -94,7 +94,7 @@ interface WorkoutDetailDialogV2Props {
  *     athlete note, coach take + history sidebar.
  *   - **Planned** (entry.workoutLogId == null): a "Mark complete" primary
  *     CTA that turns the plan day into a workoutLog (with prescribed
- *     sets copied across by the phase-6 server path), plus the coach's
+ *     sets copied across by the server's copy-from-plan path), plus the coach's
  *     prescription and coach take — no stats/history/athlete-note since
  *     there's no log to measure or annotate yet.
  */
@@ -154,7 +154,6 @@ export function WorkoutDetailDialogV2({
     reparseFreeText,
     reparseFromImage,
     updateNote,
-    updatePrescription,
     updateFocus,
     updateRpe,
   } = useWorkoutDetail(workoutId);
@@ -395,7 +394,6 @@ export function WorkoutDetailDialogV2({
             planCoachNote={planCoachNote}
             latestFocusRef={latestFocusRef}
             onSaveNote={(note) => workoutId && updateNote.mutate(note)}
-            onSaveLoggedPrescription={(patch) => workoutId && updatePrescription.mutate(patch)}
             onParseLoggedFreeText={(opts) => {
               if (!workoutId) return;
               reparseFreeText.mutate(undefined, opts);
@@ -539,10 +537,9 @@ interface DialogBodyProps {
   readonly latestFocusRef: MutableRefObject<string>;
   readonly onSaveNote: (note: string | null) => void;
   /**
-   * Save handlers + Parse trigger for the logged-workout free-text editor.
-   * On the planned branch these are handled in-hook via usePlanDayExercises.
+   * Parse trigger for the logged-workout free-text prescription when
+   * available. Planned entries parse via usePlanDayExercises.
    */
-  readonly onSaveLoggedPrescription: (patch: { mainWorkout?: string | null; accessory?: string | null; notes?: string | null }) => void;
   readonly onParseLoggedFreeText: (opts?: { onSuccess?: () => void }) => void;
   readonly isParsingLogged: boolean;
   readonly onParseLoggedFromImage: (
@@ -597,7 +594,6 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     planCoachNote,
     latestFocusRef,
     onSaveNote,
-    onSaveLoggedPrescription,
     onParseLoggedFreeText,
     isParsingLogged,
     onParseLoggedFromImage,
@@ -630,12 +626,10 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     const normalized = value.trim().length === 0 ? null : value;
     if (isPlanned && planDayId) {
       planSets.updatePrescription.mutate({ [field]: normalized });
-    } else if (!isPlanned && workoutId) {
-      onSaveLoggedPrescription({ [field]: normalized });
     }
   };
   const parseReady =
-    (isPlanned && planDayId != null) || (!isPlanned && workoutId != null);
+    isPlanned && planDayId != null;
   const currentSets = isPlanned ? planSets.exerciseSets : exerciseSets;
   const hasSets = currentSets.length > 0;
 
@@ -656,7 +650,36 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     hasPrescriptionText(entry.mainWorkout) || hasPrescriptionText(entry.accessory);
 
   const focusLabel = entry.focus?.trim() || "this workout";
-  const chatSeed = `Can you walk me through your take on my ${focusLabel} workout?`;
+  const referenceMainWorkout = isPlanned
+    ? entry.mainWorkout
+    : workout?.prescribedMainWorkout ?? entry.mainWorkout;
+  const referenceAccessory = isPlanned
+    ? entry.accessory
+    : workout?.prescribedAccessory ?? entry.accessory;
+  const referenceNotes = isPlanned
+    ? entry.notes
+    : workout?.prescribedNotes ?? entry.notes;
+  const loggedTextDiffFields = !isPlanned
+    ? getLoggedPrescriptionDiffFields({
+      prescribedMainWorkout: workout?.prescribedMainWorkout ?? null,
+      prescribedAccessory: workout?.prescribedAccessory ?? null,
+      prescribedNotes: workout?.prescribedNotes ?? null,
+      actualMainWorkout: workout?.mainWorkout ?? entry.mainWorkout ?? null,
+      actualAccessory: workout?.accessory ?? entry.accessory ?? null,
+      actualNotes: workout?.notes ?? entry.notes ?? null,
+    })
+    : [];
+  const plannedVsActual = !isPlanned && planDayId
+    ? summarizePlannedVsActual(planSets.exerciseSets, exerciseSets)
+    : null;
+  const chatSeed = buildCoachChatSeed({
+    focusLabel,
+    isPlanned,
+    plannedVsActual,
+  });
+  const complianceTag = plannedVsActual?.compliancePct != null
+    ? classifyCompliance(plannedVsActual.compliancePct)
+    : null;
   // Widen the right column when the chat surface is active so the
   // thread + input have room without squeezing the exercise table.
   const gridClasses = chatOpen
@@ -667,13 +690,14 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     <div className={gridClasses}>
       <div className="flex flex-col gap-3">
         <CoachPrescriptionCollapsible
-          title={isPlanned ? "Coach's prescription" : "Workout description"}
-          mainWorkout={entry.mainWorkout}
-          accessory={entry.accessory}
-          notes={entry.notes}
+          title={isPlanned ? "Coach's prescription" : "Reference/Notes"}
+          compact={!isPlanned}
+          mainWorkout={referenceMainWorkout}
+          accessory={referenceAccessory}
+          notes={referenceNotes}
           open={parseControls.prescriptionOpen}
           onOpenChange={parseControls.setPrescriptionOpen}
-          onSaveField={onSavePrescriptionField}
+          onSaveField={isPlanned ? onSavePrescriptionField : undefined}
           onParse={parseReady ? parseControls.onParseClicked : undefined}
           isParsing={parseControls.isParsing}
           onCapture={parseReady ? parseControls.onCapture : undefined}
@@ -682,6 +706,49 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
           onParseImage={parseControls.onParseImageClicked}
           isParsingImage={parseControls.isParsingImage}
         />
+        {!isPlanned && loggedTextDiffFields.length > 0 && (
+          <div
+            className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-muted-foreground"
+            data-testid="logged-prescription-diff-note"
+          >
+            Updated after completion: {loggedTextDiffFields.join(", ")}.
+          </div>
+        )}
+        {!isPlanned && plannedVsActual && plannedVsActual.hasComparisonData && (
+          <div
+            className="rounded-md border border-border/70 bg-muted/20 px-3 py-2 text-xs text-muted-foreground"
+            data-testid="planned-actual-summary"
+          >
+            <span className="font-medium text-foreground">Planned vs Actual:</span>{" "}
+            {plannedVsActual.plannedSets} planned set{plannedVsActual.plannedSets === 1 ? "" : "s"},{" "}
+            {plannedVsActual.actualSets} logged set{plannedVsActual.actualSets === 1 ? "" : "s"}{" "}
+            {plannedVsActual.addedSets > 0 && <>· {plannedVsActual.addedSets} added</>}
+            {plannedVsActual.removedSets > 0 && <> · {plannedVsActual.removedSets} removed</>}
+            {plannedVsActual.compliancePct != null && (
+              <div className="mt-1">
+                <span className="font-medium text-foreground">Compliance:</span>{" "}
+                {plannedVsActual.compliancePct}% ({plannedVsActual.matchedSets}/{plannedVsActual.plannedSets} planned sets matched)
+                {complianceTag && (
+                  <span className={cn("ml-2 rounded-full px-2 py-0.5 text-[10px] font-medium", complianceTag.className)}>
+                    {complianceTag.label}
+                  </span>
+                )}
+              </div>
+            )}
+            {plannedVsActual.addedExercises.length > 0 && (
+              <div>
+                <span className="font-medium text-foreground">Added:</span>{" "}
+                {plannedVsActual.addedExercises.join(", ")}
+              </div>
+            )}
+            {plannedVsActual.removedExercises.length > 0 && (
+              <div>
+                <span className="font-medium text-foreground">Removed:</span>{" "}
+                {plannedVsActual.removedExercises.join(", ")}
+              </div>
+            )}
+          </div>
+        )}
 
         {isPlanned ? (
           <PlannedCallToAction
@@ -757,7 +824,13 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
               isStale={isCoachNoteStale}
               isRefreshing={planCoachNote.isRegenerating}
             />
-            {!isPlanned && <HistoryPanel stats={history} isLoading={isLoading} />}
+            {!isPlanned && (
+              <HistoryPanel
+                stats={history}
+                adherencePct={workout?.compliancePct ?? plannedVsActual?.compliancePct ?? null}
+                isLoading={isLoading}
+              />
+            )}
           </>
         )}
       </aside>
@@ -765,8 +838,133 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
   );
 }
 
+interface LoggedPrescriptionDiffInput {
+  readonly prescribedMainWorkout: string | null;
+  readonly prescribedAccessory: string | null;
+  readonly prescribedNotes: string | null;
+  readonly actualMainWorkout: string | null;
+  readonly actualAccessory: string | null;
+  readonly actualNotes: string | null;
+}
+
+function getLoggedPrescriptionDiffFields(input: LoggedPrescriptionDiffInput): string[] {
+  const out: string[] = [];
+  if (!sameText(input.prescribedMainWorkout, input.actualMainWorkout)) out.push("Main");
+  if (!sameText(input.prescribedAccessory, input.actualAccessory)) out.push("Accessory");
+  if (!sameText(input.prescribedNotes, input.actualNotes)) out.push("Notes");
+  return out;
+}
+
+function sameText(a: string | null, b: string | null): boolean {
+  return normalizeText(a) === normalizeText(b);
+}
+
+function normalizeText(v: string | null): string {
+  return (v ?? "").trim().replace(/\s+/g, " ");
+}
+
+interface PlannedVsActualSummary {
+  readonly hasComparisonData: boolean;
+  readonly plannedSets: number;
+  readonly actualSets: number;
+  readonly matchedSets: number;
+  readonly compliancePct: number | null;
+  readonly addedSets: number;
+  readonly removedSets: number;
+  readonly addedExercises: readonly string[];
+  readonly removedExercises: readonly string[];
+}
+
+function summarizePlannedVsActual(
+  planned: ExerciseSet[],
+  actual: ExerciseSet[],
+): PlannedVsActualSummary {
+  const plannedCounts = countSetsByExercise(planned);
+  const actualCounts = countSetsByExercise(actual);
+  const keys = new Set([...plannedCounts.keys(), ...actualCounts.keys()]);
+
+  let addedSets = 0;
+  let removedSets = 0;
+  let matchedSets = 0;
+  const addedExercises: string[] = [];
+  const removedExercises: string[] = [];
+  for (const key of keys) {
+    const plannedCount = plannedCounts.get(key) ?? 0;
+    const actualCount = actualCounts.get(key) ?? 0;
+    matchedSets += Math.min(plannedCount, actualCount);
+    if (actualCount > plannedCount) {
+      const delta = actualCount - plannedCount;
+      addedSets += delta;
+      addedExercises.push(`${formatExerciseLabel(key)} ×${delta}`);
+    }
+    if (plannedCount > actualCount) {
+      const delta = plannedCount - actualCount;
+      removedSets += delta;
+      removedExercises.push(`${formatExerciseLabel(key)} ×${delta}`);
+    }
+  }
+
+  return {
+    hasComparisonData: planned.length > 0 || actual.length > 0,
+    plannedSets: planned.length,
+    actualSets: actual.length,
+    matchedSets,
+    compliancePct: planned.length > 0 ? Math.round((matchedSets / planned.length) * 100) : null,
+    addedSets,
+    removedSets,
+    addedExercises,
+    removedExercises,
+  };
+}
+
+function countSetsByExercise(sets: ExerciseSet[]): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const set of sets) {
+    const key = normalizeExerciseLabel(set);
+    map.set(key, (map.get(key) ?? 0) + 1);
+  }
+  return map;
+}
+
+function normalizeExerciseLabel(set: ExerciseSet): string {
+  return (set.customLabel || set.exerciseName || "").toLowerCase().trim();
+}
+
+function formatExerciseLabel(label: string): string {
+  return label.replace(/_/g, " ");
+}
+
+function classifyCompliance(pct: number): { label: string; className: string } {
+  if (pct >= 85) {
+    return { label: "High adherence", className: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" };
+  }
+  if (pct >= 60) {
+    return { label: "Moderate adherence", className: "bg-amber-500/15 text-amber-700 dark:text-amber-300" };
+  }
+  return { label: "Low adherence", className: "bg-rose-500/15 text-rose-700 dark:text-rose-300" };
+}
+
 function hasPrescriptionText(value: string | null | undefined): boolean {
   return !!value && value.trim().length > 0;
+}
+
+function buildCoachChatSeed(args: {
+  readonly focusLabel: string;
+  readonly isPlanned: boolean;
+  readonly plannedVsActual: PlannedVsActualSummary | null;
+}): string {
+  const { focusLabel, isPlanned, plannedVsActual } = args;
+  const base = `Can you walk me through your take on my ${focusLabel} workout?`;
+  if (isPlanned || !plannedVsActual || plannedVsActual.compliancePct == null) return base;
+
+  const details: string[] = [
+    `compliance was ${plannedVsActual.compliancePct}%`,
+    `${plannedVsActual.matchedSets}/${plannedVsActual.plannedSets} planned sets matched`,
+  ];
+  if (plannedVsActual.addedSets > 0) details.push(`${plannedVsActual.addedSets} added sets`);
+  if (plannedVsActual.removedSets > 0) details.push(`${plannedVsActual.removedSets} removed sets`);
+
+  return `${base} For context: ${details.join(", ")}.`;
 }
 
 interface LoggedExerciseSectionProps {
@@ -825,8 +1023,8 @@ function PlannedCallToAction({ entry, onMarkComplete, isMarkingComplete, weightU
   // Plan-day-backed exercise edits. `planSets` is hoisted up to DialogBody
   // so the same hook instance feeds both this CTA and the CoachTakePanel's
   // staleness comparison. Writes go to plan_day-owned exerciseSets; Mark
-  // complete's phase-6 server copy copies whatever this hook has persisted
-  // into the new workoutLog at log time.
+  // complete's server copy-from-plan path copies whatever this hook has
+  // persisted into the new workoutLog at log time.
   const planDayId = entry.planDayId ?? null;
 
   // Block Mark complete while any plan-day set mutation is still in

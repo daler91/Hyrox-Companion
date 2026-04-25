@@ -232,6 +232,7 @@ describe("Analytics Routes", () => {
       totalDuration: 0,
       avgDuration: 0,
       avgRpe: null,
+      avgCompliancePct: null,
     } as const;
 
     it("should return training overview data", async () => {

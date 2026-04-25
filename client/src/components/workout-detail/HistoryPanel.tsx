@@ -4,6 +4,7 @@ import type { WorkoutHistoryStats } from "@/lib/api";
 
 interface HistoryPanelProps {
   readonly stats: WorkoutHistoryStats | undefined;
+  readonly adherencePct?: number | null;
   readonly isLoading?: boolean;
 }
 
@@ -13,10 +14,11 @@ interface HistoryPanelProps {
  * GET /api/v1/workouts/:id/history; see server/storage/workouts.ts
  * getWorkoutHistoryStats() for the exact semantics of each field.
  */
-export function HistoryPanel({ stats, isLoading }: HistoryPanelProps) {
+export function HistoryPanel({ stats, adherencePct, isLoading }: HistoryPanelProps) {
   const lastTime = stats?.lastSameFocus ? formatDate(stats.lastSameFocus.date) : null;
   const prCount = stats?.prSetCount ?? null;
   const blockAvg = stats?.blockAvgRpe ?? null;
+  const adherence = adherencePct == null ? null : `${adherencePct}%`;
 
   return (
     <section
@@ -31,6 +33,11 @@ export function HistoryPanel({ stats, isLoading }: HistoryPanelProps) {
         <HistoryRow
           label="Block avg"
           value={blockAvg == null ? null : `RPE ${blockAvg.toFixed(1)}`}
+          loading={isLoading}
+        />
+        <HistoryRow
+          label="Adherence"
+          value={adherence}
           loading={isLoading}
         />
       </dl>

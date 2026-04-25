@@ -192,13 +192,19 @@ describe("WorkoutDetailDialogV2", () => {
     mockWorkouts.get.mockResolvedValue(
       makeWorkout({ exerciseSets: [makeSet()] }),
     );
+    mockPlans.getDayExercises.mockResolvedValue([
+      makeSet({ id: "plan-set-1", workoutLogId: null, planDayId: "plan-1", exerciseName: "back_squat", setNumber: 1 }),
+      makeSet({ id: "plan-set-2", workoutLogId: null, planDayId: "plan-1", exerciseName: "walking_lunge", setNumber: 1 }),
+    ]);
     mockWorkouts.history.mockResolvedValue({
       lastSameFocus: null,
       prSetCount: 0,
       blockAvgRpe: null,
     });
 
-    renderDialog();
+    renderDialog({
+      entry: makeEntry({ planDayId: "plan-1", workoutLogId: "log-1" }),
+    });
 
     const user = userEvent.setup();
     // Coach Take panel visible by default.
@@ -212,6 +218,7 @@ describe("WorkoutDetailDialogV2", () => {
     expect(await screen.findByTestId("in-dialog-coach-chat")).toBeInTheDocument();
     expect(screen.queryByTestId("coach-take-panel")).not.toBeInTheDocument();
     expect(screen.queryByTestId("history-panel")).not.toBeInTheDocument();
+    expect((screen.getByTestId("input-chat-message") as HTMLTextAreaElement).value).toContain("compliance was");
 
     // Back button restores Coach Take + History.
     await user.click(screen.getByTestId("in-dialog-coach-chat-back"));
@@ -232,6 +239,112 @@ describe("WorkoutDetailDialogV2", () => {
     });
 
     expect(await screen.findByTestId("ai-modified-chip")).toBeInTheDocument();
+  });
+
+  it("shows prescribed snapshot text in logged Reference/Notes when available", async () => {
+    mockWorkouts.get.mockResolvedValue(
+      makeWorkout({
+        mainWorkout: "Athlete edited description",
+        prescribedMainWorkout: "Coach original prescription",
+        exerciseSets: [makeSet()],
+      } as Partial<WorkoutLog & { exerciseSets?: ExerciseSet[] }>),
+    );
+    mockWorkouts.history.mockResolvedValue({
+      lastSameFocus: null,
+      prSetCount: 0,
+      blockAvgRpe: null,
+    });
+
+    renderDialog({
+      entry: makeEntry({ mainWorkout: "Athlete edited description", notes: null }),
+    });
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByTestId("coach-prescription-toggle"));
+
+    expect(await screen.findByText("Coach original prescription")).toBeInTheDocument();
+    expect(screen.queryByText("Athlete edited description")).not.toBeInTheDocument();
+  });
+
+  it("shows a diff note when logged workout text was edited after completion", async () => {
+    mockWorkouts.get.mockResolvedValue(
+      makeWorkout({
+        mainWorkout: "Athlete edited description",
+        accessory: "Different accessory",
+        notes: null,
+        prescribedMainWorkout: "Coach original prescription",
+        prescribedAccessory: "Coach accessory",
+        prescribedNotes: null,
+        exerciseSets: [makeSet()],
+      } as Partial<WorkoutLog & { exerciseSets?: ExerciseSet[] }>),
+    );
+    mockWorkouts.history.mockResolvedValue({
+      lastSameFocus: null,
+      prSetCount: 0,
+      blockAvgRpe: null,
+    });
+
+    renderDialog({
+      entry: makeEntry({ mainWorkout: "Athlete edited description", notes: null }),
+    });
+
+    expect(await screen.findByTestId("logged-prescription-diff-note")).toHaveTextContent(
+      /Updated after completion: .*Main/i,
+    );
+  });
+
+  it("shows planned-vs-actual set summary for plan-linked logged workouts", async () => {
+    mockWorkouts.get.mockResolvedValue(
+      makeWorkout({
+        planDayId: "plan-1",
+        exerciseSets: [makeSet({ exerciseName: "back_squat", setNumber: 1 })],
+      }),
+    );
+    mockPlans.getDayExercises.mockResolvedValue([
+      makeSet({ id: "plan-set-1", workoutLogId: null, planDayId: "plan-1", exerciseName: "back_squat", setNumber: 1 }),
+      makeSet({ id: "plan-set-2", workoutLogId: null, planDayId: "plan-1", exerciseName: "walking_lunge", setNumber: 1 }),
+    ]);
+    mockWorkouts.history.mockResolvedValue({
+      lastSameFocus: null,
+      prSetCount: 0,
+      blockAvgRpe: null,
+    });
+
+    renderDialog({
+      entry: makeEntry({ planDayId: "plan-1", workoutLogId: "log-1" }),
+    });
+
+    expect(await screen.findByTestId("planned-actual-summary")).toHaveTextContent(
+      "Planned vs Actual: 2 planned sets, 1 logged set · 1 removed",
+    );
+    expect(screen.getByTestId("planned-actual-summary")).toHaveTextContent(
+      "Compliance: 50% (1/2 planned sets matched)",
+    );
+    expect(screen.getByTestId("planned-actual-summary")).toHaveTextContent("Low adherence");
+    expect(screen.getByTestId("planned-actual-summary")).toHaveTextContent(
+      "Removed: walking lunge ×1",
+    );
+  });
+
+  it("shows adherence in the History panel for logged workouts when available", async () => {
+    mockWorkouts.get.mockResolvedValue(
+      makeWorkout({
+        compliancePct: 82,
+        exerciseSets: [makeSet()],
+      } as Partial<WorkoutLog & { exerciseSets?: ExerciseSet[] }>),
+    );
+    mockWorkouts.history.mockResolvedValue({
+      lastSameFocus: { date: "2026-04-01", focus: "Upper Body Strength" },
+      prSetCount: 2,
+      blockAvgRpe: 7.4,
+    });
+
+    renderDialog();
+
+    expect(await screen.findByTestId("history-panel")).toHaveTextContent("Adherence");
+    await waitFor(() => {
+      expect(screen.getByTestId("history-panel")).toHaveTextContent("82%");
+    });
   });
 
   // ---- Lazy-parse hydration ---------------------------------------------

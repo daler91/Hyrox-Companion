@@ -40,13 +40,16 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
   onMove,
   isMoving,
 }: Readonly<TimelineWorkoutCardProps>) {
-  const { distanceUnit, weightLabel } = useUnitPreferences();
+  const { distanceUnit, weightLabel, showAdherenceInsights } = useUnitPreferences();
   const [movePickerOpen, setMovePickerOpen] = useState(false);
 
   const isBeingCombined = combiningEntryId === entry.id;
   const isSameDate = combiningEntryDate === entry.date;
   const canBeCombinedWith = isCombining && !isBeingCombined && isSameDate;
   const isPlanned = entry.status === "planned" && entry.planDayId;
+  const adherenceBadge = showAdherenceInsights
+    ? getAdherenceBadge(entry.compliancePct ?? null)
+    : null;
 
   const todayStr = format(new Date(), "yyyy-MM-dd");
   const isTargetedByCoach = isAutoCoaching && isPlanned && entry.date >= todayStr;
@@ -215,6 +218,15 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
                 </Badge>
               )}
               {entry.dayName && <Badge variant="secondary">{entry.dayName}</Badge>}
+              {adherenceBadge && (
+                <Badge
+                  variant="outline"
+                  className={adherenceBadge.className}
+                  data-testid={`badge-adherence-${entry.id}`}
+                >
+                  {adherenceBadge.label}
+                </Badge>
+              )}
               {entry.aiSource === "rag" && (
                 <Badge
                   variant="outline"
@@ -283,6 +295,26 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
 // parent timeline component state changes (unless their specific entry/props change).
 // This reduces unnecessary re-renders in a potentially long list.
 export default TimelineWorkoutCard;
+
+function getAdherenceBadge(compliancePct: number | null): { label: string; className: string } | null {
+  if (compliancePct == null) return null;
+  if (compliancePct >= 85) {
+    return {
+      label: `Adherence ${compliancePct}%`,
+      className: "border-emerald-300 text-emerald-700 bg-emerald-50 dark:border-emerald-800 dark:text-emerald-300 dark:bg-emerald-950",
+    };
+  }
+  if (compliancePct >= 60) {
+    return {
+      label: `Adherence ${compliancePct}%`,
+      className: "border-amber-300 text-amber-700 bg-amber-50 dark:border-amber-800 dark:text-amber-300 dark:bg-amber-950",
+    };
+  }
+  return {
+    label: `Adherence ${compliancePct}%`,
+    className: "border-rose-300 text-rose-700 bg-rose-50 dark:border-rose-800 dark:text-rose-300 dark:bg-rose-950",
+  };
+}
 
 interface MoveEntryMenuProps {
   readonly entry: TimelineWorkoutCardProps["entry"];

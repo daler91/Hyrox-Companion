@@ -28,6 +28,8 @@ export interface UserPreferences {
   emailWeeklySummary: boolean;
   /** Per-type toggle for the next-day missed workout reminder. */
   emailMissedReminder: boolean;
+  /** Whether adherence indicators are shown in timeline/detail UI surfaces. */
+  showAdherenceInsights: boolean;
   aiCoachEnabled: boolean;
 }
 

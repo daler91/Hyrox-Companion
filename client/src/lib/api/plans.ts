@@ -42,8 +42,8 @@ export const plans = {
   // Plan-day prescribed exerciseSets — used by the v2 dialog when a
   // planned entry is open so the athlete can tweak the coach's
   // prescription before marking complete. Edits write back to the
-  // plan day; Mark complete's phase-6 server copy picks up whatever
-  // the plan day has at mutation time.
+  // plan day; Mark complete's server copy-from-plan path picks up
+  // whatever the plan day has at mutation time.
   getDayExercises: (dayId: string) =>
     typedRequest<ExerciseSet[]>("GET", `/api/v1/plans/days/${dayId}/sets`),
 
