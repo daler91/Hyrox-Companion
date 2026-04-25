@@ -8,6 +8,16 @@ import { api } from "@/lib/api";
 
 import { WorkoutDetailDialogV2 } from "../WorkoutDetailDialogV2";
 
+let showAdherenceInsights = true;
+
+vi.mock("@/hooks/useUnitPreferences", () => ({
+  useUnitPreferences: () => ({
+    weightUnit: "kg" as const,
+    distanceUnit: "km" as const,
+    showAdherenceInsights,
+  }),
+}));
+
 // The dialog fetches the workout + history on open and fires set-level
 // mutations on edits. Mock every workouts-API call the component touches
 // so tests run without a server.
@@ -143,6 +153,7 @@ function renderDialog(props: Partial<React.ComponentProps<typeof WorkoutDetailDi
 
 describe("WorkoutDetailDialogV2", () => {
   beforeEach(() => {
+    showAdherenceInsights = true;
     vi.clearAllMocks();
   });
 
@@ -218,7 +229,7 @@ describe("WorkoutDetailDialogV2", () => {
     expect(await screen.findByTestId("in-dialog-coach-chat")).toBeInTheDocument();
     expect(screen.queryByTestId("coach-take-panel")).not.toBeInTheDocument();
     expect(screen.queryByTestId("history-panel")).not.toBeInTheDocument();
-    expect((screen.getByTestId("input-chat-message") as HTMLTextAreaElement).value).toContain("compliance was");
+    expect(screen.getByTestId("input-chat-message")).toHaveDisplayValue(/compliance was/i);
 
     // Back button restores Coach Take + History.
     await user.click(screen.getByTestId("in-dialog-coach-chat-back"));
@@ -345,6 +356,34 @@ describe("WorkoutDetailDialogV2", () => {
     await waitFor(() => {
       expect(screen.getByTestId("history-panel")).toHaveTextContent("82%");
     });
+  });
+
+  it("hides adherence UI when adherence insights are disabled", async () => {
+    showAdherenceInsights = false;
+    mockWorkouts.get.mockResolvedValue(
+      makeWorkout({
+        planDayId: "plan-1",
+        compliancePct: 82,
+        exerciseSets: [makeSet({ id: "actual-1", setNumber: 1 })],
+      }),
+    );
+    mockPlans.getDayExercises.mockResolvedValue([
+      makeSet({ id: "plan-set-1", workoutLogId: null, planDayId: "plan-1", setNumber: 1 }),
+      makeSet({ id: "plan-set-2", workoutLogId: null, planDayId: "plan-1", setNumber: 2 }),
+    ]);
+    mockWorkouts.history.mockResolvedValue({
+      lastSameFocus: null,
+      prSetCount: 0,
+      blockAvgRpe: null,
+    });
+
+    renderDialog({
+      entry: makeEntry({ planDayId: "plan-1", workoutLogId: "log-1" }),
+    });
+
+    await screen.findByTestId("history-panel");
+    expect(screen.queryByTestId("planned-actual-summary")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("history-adherence")).not.toBeInTheDocument();
   });
 
   // ---- Lazy-parse hydration ---------------------------------------------

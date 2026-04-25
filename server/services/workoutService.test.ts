@@ -1,6 +1,5 @@
-import { describe, expect,it } from "vitest";
-
 import type { ExerciseSet } from "@shared/schema";
+import { describe, expect, it } from "vitest";
 
 import { expandExercisesToSetRows, summarizeSetAdherence } from "./workoutService";
 

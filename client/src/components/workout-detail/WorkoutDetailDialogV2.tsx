@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { usePlanDayCoachNote } from "@/hooks/usePlanDayCoachNote";
 import { usePlanDayExercises } from "@/hooks/usePlanDayExercises";
+import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { useWorkoutDetail } from "@/hooks/useWorkoutDetail";
 import type { ParseFromImagePayload, ReparseResponse } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -157,6 +158,7 @@ export function WorkoutDetailDialogV2({
     updateFocus,
     updateRpe,
   } = useWorkoutDetail(workoutId);
+  const { showAdherenceInsights } = useUnitPreferences();
   const loggedSaveState = { isSaving: isSavingLoggedSets, lastSavedAt: loggedLastSavedAt };
 
   // Hoisted to top-level so both the header's onChangeFocus handler and the
@@ -405,6 +407,7 @@ export function WorkoutDetailDialogV2({
             }}
             isParsingLoggedImage={reparseFromImage.isPending}
             chatOpen={chatOpen}
+            showAdherenceInsights={showAdherenceInsights}
             onOpenChat={() => {
               // Gate on consent first: the global-rail flow enforces
               // AIConsentDialog via handleCoachToggle in Timeline;
@@ -552,6 +555,7 @@ interface DialogBodyProps {
    * sidebar swaps from CoachTake + History to the chat surface.
    */
   readonly chatOpen: boolean;
+  readonly showAdherenceInsights: boolean;
   readonly onOpenChat: () => void;
   readonly onCloseChat: () => void;
 }
@@ -582,6 +586,7 @@ interface DialogBodyComputedState {
   readonly plannedVsActual: PlannedVsActualSummary | null;
   readonly chatSeed: string;
   readonly complianceTag: { label: string; className: string } | null;
+  readonly detailAdherencePct: number | null;
   readonly gridClasses: string;
 }
 
@@ -593,8 +598,9 @@ function buildDialogBodyComputedState(args: {
   readonly plannedSets: ExerciseSet[];
   readonly loggedSets: ExerciseSet[];
   readonly chatOpen: boolean;
+  readonly showAdherenceInsights: boolean;
 }): DialogBodyComputedState {
-  const { entry, workout, isPlanned, planDayId, plannedSets, loggedSets, chatOpen } = args;
+  const { entry, workout, isPlanned, planDayId, plannedSets, loggedSets, chatOpen, showAdherenceInsights } = args;
   const focusLabel = entry.focus?.trim() || "this workout";
   const referenceMainWorkout = isPlanned
     ? entry.mainWorkout
@@ -606,7 +612,12 @@ function buildDialogBodyComputedState(args: {
     ? entry.notes
     : workout?.prescribedNotes ?? entry.notes;
 
-  const loggedTextDiffFields = isPlanned
+  const hasPrescriptionSnapshot = !!(
+    workout?.prescribedMainWorkout ||
+    workout?.prescribedAccessory ||
+    workout?.prescribedNotes
+  );
+  const loggedTextDiffFields = isPlanned || !hasPrescriptionSnapshot
     ? []
     : getLoggedPrescriptionDiffFields({
       prescribedMainWorkout: workout?.prescribedMainWorkout ?? null,
@@ -628,6 +639,9 @@ function buildDialogBodyComputedState(args: {
   const complianceTag = plannedVsActual?.compliancePct == null
     ? null
     : classifyCompliance(plannedVsActual.compliancePct);
+  const detailAdherencePct = showAdherenceInsights
+    ? workout?.compliancePct ?? plannedVsActual?.compliancePct ?? null
+    : null;
   const gridClasses = chatOpen
     ? "grid grid-cols-1 items-start gap-4 px-6 py-4 md:grid-cols-[1fr_380px] lg:grid-cols-[1fr_420px]"
     : "grid grid-cols-1 items-start gap-4 px-6 py-4 md:grid-cols-[1fr_280px]";
@@ -641,6 +655,7 @@ function buildDialogBodyComputedState(args: {
     plannedVsActual,
     chatSeed,
     complianceTag,
+    detailAdherencePct,
     gridClasses,
   };
 }
@@ -671,6 +686,7 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     onParseLoggedFromImage,
     isParsingLoggedImage,
     chatOpen,
+    showAdherenceInsights,
     onOpenChat,
     onCloseChat,
   } = props;
@@ -730,6 +746,7 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     plannedVsActual,
     chatSeed,
     complianceTag,
+    detailAdherencePct,
     gridClasses,
   } = buildDialogBodyComputedState({
     entry,
@@ -739,6 +756,7 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     plannedSets: planSets.exerciseSets,
     loggedSets: exerciseSets,
     chatOpen,
+    showAdherenceInsights,
   });
 
   return (
@@ -769,7 +787,7 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
             Updated after completion: {loggedTextDiffFields.join(", ")}.
           </div>
         )}
-        {!isPlanned && plannedVsActual && plannedVsActual.hasComparisonData && (
+        {!isPlanned && showAdherenceInsights && plannedVsActual && plannedVsActual.hasComparisonData && (
           <div
             className="rounded-md border border-border/70 bg-muted/20 px-3 py-2 text-xs text-muted-foreground"
             data-testid="planned-actual-summary"
@@ -882,7 +900,7 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
             {!isPlanned && (
               <HistoryPanel
                 stats={history}
-                adherencePct={workout?.compliancePct ?? plannedVsActual?.compliancePct ?? null}
+                adherencePct={detailAdherencePct}
                 isLoading={isLoading}
               />
             )}
