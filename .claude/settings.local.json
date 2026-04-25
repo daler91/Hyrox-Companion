@@ -15,7 +15,18 @@
       "mcp__c588a2f1-0000-4fda-abb0-7cbd9381f209__resolve-library-id",
       "mcp__c588a2f1-0000-4fda-abb0-7cbd9381f209__query-docs",
       "Bash(rm /home/user/Hyrox-Companion/.git/index.lock)",
-      "Bash(git -C /home/user/Hyrox-Companion status)"
+      "Bash(git -C /home/user/Hyrox-Companion status)",
+      "Bash(git fetch *)",
+      "Bash(git pull *)",
+      "Bash(npx vitest *)",
+      "Bash(npx tsc *)",
+      "Bash(npx eslint *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(gh pr *)",
+      "Bash(gh run *)",
+      "Bash(CLERK_PUBLISHABLE_KEY=dummy CLERK_SECRET_KEY=dummy DATABASE_URL=postgres://dummy:dummy@localhost:5432/dummy ENCRYPTION_KEY=01234567890123456789012345678901 npx vitest run server/services/analyticsService.test.ts server/services/workoutService.test.ts client/src/components/workout-detail/)"
     ]
   }
 }
