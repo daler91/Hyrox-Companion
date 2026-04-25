@@ -280,8 +280,28 @@ router.delete("/api/v1/chat/history", ...protectedMutationGuards, rateLimiter("c
 
 router.post("/api/v1/timeline/ai-suggestions", ...protectedMutationGuards, rateLimiter("suggestions", 3), aiConsentCheck, aiBudgetCheck, asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
-    const result = await generateTimelineAiSuggestions(userId, reqLogger(req));
-    res.json(result);
+    const log = reqLogger(req);
+    const startedAt = Date.now();
+    try {
+      const result = await generateTimelineAiSuggestions(userId, log);
+      log.info(
+        {
+          userId,
+          durationMs: Date.now() - startedAt,
+          suggestionCount: result.suggestions.length,
+          ragSource: result.ragInfo?.source ?? "none",
+        },
+        "[ai] Timeline suggestions completed",
+      );
+      res.json(result);
+      return;
+    } catch (err) {
+      log.error(
+        { err, userId, durationMs: Date.now() - startedAt },
+        "[ai] Timeline suggestions failed",
+      );
+      throw err;
+    }
   }));
 
 export default router;
