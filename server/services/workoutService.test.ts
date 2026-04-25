@@ -4,6 +4,26 @@ import type { ExerciseSet } from "@shared/schema";
 
 import { expandExercisesToSetRows, summarizeSetAdherence } from "./workoutService";
 
+function makeSet(exerciseName: string, overrides: Partial<ExerciseSet> = {}): ExerciseSet {
+  return {
+    id: "set-id",
+    workoutLogId: null,
+    planDayId: null,
+    exerciseName,
+    customLabel: null,
+    category: "strength",
+    setNumber: 1,
+    reps: null,
+    weight: null,
+    distance: null,
+    time: null,
+    notes: null,
+    confidence: null,
+    sortOrder: 0,
+    ...overrides,
+  };
+}
+
 describe("expandExercisesToSetRows", () => {
   const workoutLogId = "w1";
 
@@ -238,26 +258,6 @@ describe("expandExercisesToSetRows", () => {
 });
 
 describe("summarizeSetAdherence", () => {
-  function makeSet(exerciseName: string, overrides: Partial<ExerciseSet> = {}): ExerciseSet {
-    return {
-      id: "set-id",
-      workoutLogId: null,
-      planDayId: null,
-      exerciseName,
-      customLabel: null,
-      category: "strength",
-      setNumber: 1,
-      reps: null,
-      weight: null,
-      distance: null,
-      time: null,
-      notes: null,
-      confidence: null,
-      sortOrder: 0,
-      ...overrides,
-    };
-  }
-
   it("computes matched/added/removed counts and compliance", () => {
     const planned = [makeSet("back_squat"), makeSet("walking_lunge", { id: "p2", setNumber: 2 })];
     const actual = [makeSet("back_squat", { id: "a1" })];

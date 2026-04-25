@@ -88,7 +88,7 @@ describe("TimelineWorkoutCard a11y", () => {
   it("renders an adherence badge when compliance is available on completed logs", () => {
     renderCard({
       entry: {
-        ...(mockEntry as TimelineEntry),
+        ...mockEntry,
         id: "entry-2",
         type: "logged",
         status: "completed",

@@ -573,6 +573,78 @@ function toDate(value: string | Date | null | undefined): Date | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+interface DialogBodyComputedState {
+  readonly focusLabel: string;
+  readonly referenceMainWorkout: string | null | undefined;
+  readonly referenceAccessory: string | null | undefined;
+  readonly referenceNotes: string | null | undefined;
+  readonly loggedTextDiffFields: string[];
+  readonly plannedVsActual: PlannedVsActualSummary | null;
+  readonly chatSeed: string;
+  readonly complianceTag: { label: string; className: string } | null;
+  readonly gridClasses: string;
+}
+
+function buildDialogBodyComputedState(args: {
+  readonly entry: TimelineEntry;
+  readonly workout: (import("@shared/schema").WorkoutLog & { exerciseSets?: ExerciseSet[]; notes?: string | null }) | undefined;
+  readonly isPlanned: boolean;
+  readonly planDayId: string | null;
+  readonly plannedSets: ExerciseSet[];
+  readonly loggedSets: ExerciseSet[];
+  readonly chatOpen: boolean;
+}): DialogBodyComputedState {
+  const { entry, workout, isPlanned, planDayId, plannedSets, loggedSets, chatOpen } = args;
+  const focusLabel = entry.focus?.trim() || "this workout";
+  const referenceMainWorkout = isPlanned
+    ? entry.mainWorkout
+    : workout?.prescribedMainWorkout ?? entry.mainWorkout;
+  const referenceAccessory = isPlanned
+    ? entry.accessory
+    : workout?.prescribedAccessory ?? entry.accessory;
+  const referenceNotes = isPlanned
+    ? entry.notes
+    : workout?.prescribedNotes ?? entry.notes;
+
+  const loggedTextDiffFields = isPlanned
+    ? []
+    : getLoggedPrescriptionDiffFields({
+      prescribedMainWorkout: workout?.prescribedMainWorkout ?? null,
+      prescribedAccessory: workout?.prescribedAccessory ?? null,
+      prescribedNotes: workout?.prescribedNotes ?? null,
+      actualMainWorkout: workout?.mainWorkout ?? entry.mainWorkout ?? null,
+      actualAccessory: workout?.accessory ?? entry.accessory ?? null,
+      actualNotes: workout?.notes ?? entry.notes ?? null,
+    });
+
+  const plannedVsActual = isPlanned || !planDayId
+    ? null
+    : summarizePlannedVsActual(plannedSets, loggedSets);
+  const chatSeed = buildCoachChatSeed({
+    focusLabel,
+    isPlanned,
+    plannedVsActual,
+  });
+  const complianceTag = plannedVsActual?.compliancePct == null
+    ? null
+    : classifyCompliance(plannedVsActual.compliancePct);
+  const gridClasses = chatOpen
+    ? "grid grid-cols-1 items-start gap-4 px-6 py-4 md:grid-cols-[1fr_380px] lg:grid-cols-[1fr_420px]"
+    : "grid grid-cols-1 items-start gap-4 px-6 py-4 md:grid-cols-[1fr_280px]";
+
+  return {
+    focusLabel,
+    referenceMainWorkout,
+    referenceAccessory,
+    referenceNotes,
+    loggedTextDiffFields,
+    plannedVsActual,
+    chatSeed,
+    complianceTag,
+    gridClasses,
+  };
+}
+
 function DialogBody(props: Readonly<DialogBodyProps>) {
   const {
     entry,
@@ -649,42 +721,25 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
   const hasUnparsedText =
     hasPrescriptionText(entry.mainWorkout) || hasPrescriptionText(entry.accessory);
 
-  const focusLabel = entry.focus?.trim() || "this workout";
-  const referenceMainWorkout = isPlanned
-    ? entry.mainWorkout
-    : workout?.prescribedMainWorkout ?? entry.mainWorkout;
-  const referenceAccessory = isPlanned
-    ? entry.accessory
-    : workout?.prescribedAccessory ?? entry.accessory;
-  const referenceNotes = isPlanned
-    ? entry.notes
-    : workout?.prescribedNotes ?? entry.notes;
-  const loggedTextDiffFields = !isPlanned
-    ? getLoggedPrescriptionDiffFields({
-      prescribedMainWorkout: workout?.prescribedMainWorkout ?? null,
-      prescribedAccessory: workout?.prescribedAccessory ?? null,
-      prescribedNotes: workout?.prescribedNotes ?? null,
-      actualMainWorkout: workout?.mainWorkout ?? entry.mainWorkout ?? null,
-      actualAccessory: workout?.accessory ?? entry.accessory ?? null,
-      actualNotes: workout?.notes ?? entry.notes ?? null,
-    })
-    : [];
-  const plannedVsActual = !isPlanned && planDayId
-    ? summarizePlannedVsActual(planSets.exerciseSets, exerciseSets)
-    : null;
-  const chatSeed = buildCoachChatSeed({
+  const {
     focusLabel,
-    isPlanned,
+    referenceMainWorkout,
+    referenceAccessory,
+    referenceNotes,
+    loggedTextDiffFields,
     plannedVsActual,
+    chatSeed,
+    complianceTag,
+    gridClasses,
+  } = buildDialogBodyComputedState({
+    entry,
+    workout,
+    isPlanned,
+    planDayId,
+    plannedSets: planSets.exerciseSets,
+    loggedSets: exerciseSets,
+    chatOpen,
   });
-  const complianceTag = plannedVsActual?.compliancePct != null
-    ? classifyCompliance(plannedVsActual.compliancePct)
-    : null;
-  // Widen the right column when the chat surface is active so the
-  // thread + input have room without squeezing the exercise table.
-  const gridClasses = chatOpen
-    ? "grid grid-cols-1 items-start gap-4 px-6 py-4 md:grid-cols-[1fr_380px] lg:grid-cols-[1fr_420px]"
-    : "grid grid-cols-1 items-start gap-4 px-6 py-4 md:grid-cols-[1fr_280px]";
 
   return (
     <div className={gridClasses}>
@@ -860,7 +915,7 @@ function sameText(a: string | null, b: string | null): boolean {
 }
 
 function normalizeText(v: string | null): string {
-  return (v ?? "").trim().replace(/\s+/g, " ");
+  return (v ?? "").trim().replaceAll(/\s+/g, " ");
 }
 
 interface PlannedVsActualSummary {
@@ -931,7 +986,7 @@ function normalizeExerciseLabel(set: ExerciseSet): string {
 }
 
 function formatExerciseLabel(label: string): string {
-  return label.replace(/_/g, " ");
+  return label.replaceAll("_", " ");
 }
 
 function classifyCompliance(pct: number): { label: string; className: string } {
@@ -955,7 +1010,7 @@ function buildCoachChatSeed(args: {
 }): string {
   const { focusLabel, isPlanned, plannedVsActual } = args;
   const base = `Can you walk me through your take on my ${focusLabel} workout?`;
-  if (isPlanned || !plannedVsActual || plannedVsActual.compliancePct == null) return base;
+  if (isPlanned || plannedVsActual?.compliancePct == null) return base;
 
   const details: string[] = [
     `compliance was ${plannedVsActual.compliancePct}%`,
