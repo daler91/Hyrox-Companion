@@ -342,7 +342,7 @@ function EmptyExerciseState({
         className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground"
         data-testid="exercise-table-empty-parse-hint"
       >
-        <span>Tap <strong className="font-medium text-foreground">Parse</strong> above to extract exercises from the description.</span>
+        <span><strong className="font-medium text-foreground">Description captured.</strong> No exercise rows yet.</span>
         <Button
           type="button"
           variant="ghost"

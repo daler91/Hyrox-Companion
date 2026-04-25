@@ -20,15 +20,15 @@ interface WorkoutTextModeProps {
   toast?: typeof toastFn;
   /**
    * Fires the manual text-parse pipeline. When omitted the Parse
-   * button is hidden — keeps existing consumers that don't pass a
-   * parse handler untouched.
+   * button is hidden, which keeps consumers that do not pass a parse
+   * handler untouched.
    */
   onParseText?: () => void;
   isParsingText?: boolean;
   /**
    * Optional image-capture wiring. When any of these props is undefined the
    * photo button is hidden and the component falls back to the voice-only
-   * flow, so existing callers don't have to opt in.
+   * flow, so existing callers do not have to opt in.
    */
   onCaptureImage?: (image: CompressedImage) => void;
   imagePreview?: { readonly url: string; readonly error?: string | null } | null;
@@ -39,14 +39,7 @@ interface WorkoutTextModeProps {
 
 /**
  * Textarea + voice dictation surface with an explicit Parse button.
- * Used inside `WorkoutComposer`'s collapsible panel — parsing no
- * longer runs on every keystroke, so the user taps Parse when the
- * description is ready. Voice transcripts stream into `freeText` via
- * the parent's onChange.
- *
- * When an `imagePreview` is active, the textarea is swapped for the
- * image preview surface so the user confirms the capture before the
- * vision-parse mutation fires.
+ * Used inside `WorkoutComposer`'s collapsible panel.
  */
 export const WorkoutTextMode = ({
   freeText,
@@ -64,31 +57,26 @@ export const WorkoutTextMode = ({
   isParsingImage,
 }: Readonly<WorkoutTextModeProps>) => {
   const previewActive = !!imagePreview && !!onRetakeImage && !!onParseImage;
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-medium text-foreground">Workout description</span>
+        <span className="text-sm font-medium text-foreground">Description</span>
         <div className="flex items-center gap-2">
           {onCaptureImage && !previewActive && (
             <ImageCaptureButton
               onImage={onCaptureImage}
-              size="icon"
+              size="icon-touch"
               disabled={isListening}
               data-testid="button-photo-input"
             />
           )}
-          {/*
-            Hide voice while a photo preview is active. Without this, a user
-            who toggles dictation after capturing can stream transcript into
-            `freeText` — every change re-schedules an auto-parse, which can
-            land AFTER the image parse and overwrite the image-derived
-            blocks. Mirrors the photo-button hide for symmetry.
-          */}
           {!previewActive && (
             <VoiceButton
               isListening={isListening}
               isSupported={isSupported}
               onClick={toggleListening}
+              size="icon-touch"
               className=""
             />
           )}
@@ -110,13 +98,13 @@ export const WorkoutTextMode = ({
               data-testid="voice-listening-indicator"
             >
               <Mic className="h-4 w-4 animate-pulse" aria-hidden />
-              <span>Listening… speak your workout</span>
+              <span>Listening... speak your workout</span>
             </div>
           )}
           <Textarea
             placeholder={
               isListening
-                ? "Listening… describe your workout"
+                ? "Listening... describe your workout"
                 : "Describe your workout, e.g.:\n4x8 back squat at 70kg\n3x10 bent over rows at 50kg\n5km tempo run in 25 min\n1000m skierg"
             }
             value={freeText}
@@ -140,7 +128,7 @@ export const WorkoutTextMode = ({
               size="sm"
               onClick={onParseText}
               disabled={isParsingText || freeText.trim().length === 0}
-              className="w-full gap-1.5"
+              className="min-h-10 w-full gap-1.5"
               data-testid="button-parse-text"
             >
               {isParsingText ? (
@@ -148,13 +136,15 @@ export const WorkoutTextMode = ({
               ) : (
                 <Sparkles className="h-3.5 w-3.5" aria-hidden />
               )}
-              {isParsingText ? "Parsing…" : "Parse into exercises"}
+              {isParsingText ? "Parsing..." : "Parse description"}
             </Button>
           )}
           <p className="text-xs text-muted-foreground">
-            {isSupported
-              ? "Type or dictate, then tap Parse. A scanned whiteboard photo auto-fills your exercises on its own."
-              : "Type your workout, then tap Parse. A scanned whiteboard photo auto-fills your exercises on its own."}
+            {freeText.trim()
+              ? "Description captured."
+              : isSupported
+                ? "Text, voice, and photo input are available here."
+                : "Text and photo input are available here."}
           </p>
         </>
       )}

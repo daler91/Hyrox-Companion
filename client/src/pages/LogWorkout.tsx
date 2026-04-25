@@ -189,6 +189,8 @@ function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
     duplicateLastMutation.mutate();
   }, [duplicateLastMutation]);
 
+  const hasWorkoutDetails = exerciseBlocks.length > 0 || freeText.trim().length > 0;
+
   // Debounced autosave of the current in-progress workout to localStorage.
   // Uses the block counter derived from the highest seen suffix so restored
   // drafts keep producing unique block IDs when the user adds more exercises.
@@ -249,7 +251,7 @@ function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
 
 
   return (
-    <div className="container max-w-5xl mx-auto p-4 pb-20 md:pb-8 pt-4 md:pt-8 min-h-screen">
+    <div className="container max-w-5xl mx-auto p-4 pb-28 md:pb-8 pt-4 md:pt-8 min-h-screen">
       <WorkoutHeader
         onDuplicateLast={handleDuplicateLast}
         isDuplicating={duplicateLastMutation.isPending}
@@ -278,6 +280,7 @@ function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
             handleSave={handleSave}
             isPending={saveMutation.isPending}
             onCancel={handleCancel}
+            hasWorkoutDetails={hasWorkoutDetails}
           />
         </div>
 

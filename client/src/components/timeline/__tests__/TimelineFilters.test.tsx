@@ -152,7 +152,9 @@ describe("TimelineFilters", () => {
 
     render(<TimelineFilters {...defaultProps} />);
 
-    const downloadBtn = screen.getByTestId("button-download-template");
+    await user.click(screen.getByTestId("button-plan-tools"));
+
+    const downloadBtn = await screen.findByTestId("button-download-template");
     await user.click(downloadBtn);
 
     expect(mockCreateObjectURL).toHaveBeenCalled();
@@ -176,18 +178,16 @@ describe("TimelineFilters", () => {
     expect(defaultProps.onFileUpload).toHaveBeenCalled();
   });
 
-  it("shows loader when importing", () => {
+  it("shows loader when importing", async () => {
+    const user = userEvent.setup();
     render(<TimelineFilters {...defaultProps} isImporting={true} />);
 
-    const uploadBtnLabel = screen.getByText((content, element) => {
-      return element?.tagName.toLowerCase() === 'label' &&
-             element?.getAttribute('for') === 'csv-upload';
-    });
+    await user.click(screen.getByTestId("button-plan-tools"));
 
-    const button = uploadBtnLabel?.querySelector("button");
+    const importItem = await screen.findByTestId("button-import-plan");
 
-    expect(button).toBeDisabled();
-    expect(button?.querySelector(".animate-spin")).toBeInTheDocument();
+    expect(importItem).toHaveAttribute("data-disabled");
+    expect(importItem.querySelector(".animate-spin")).toBeInTheDocument();
   });
 
   it("handles renaming a plan", async () => {

@@ -332,6 +332,17 @@ export function WorkoutDetailDialogV2({
   const headerSaveState = isPlanned
     ? { isSaving: planSets.isSaving, lastSavedAt: planSets.lastSavedAt }
     : loggedSaveState;
+  const completeBusy = isMarkingComplete || planSets.isSaving;
+  let completeLabel = "Mark complete";
+  if (isMarkingComplete) completeLabel = "Logging...";
+  else if (planSets.isSaving) completeLabel = "Saving edits...";
+
+  const handleFooterMarkComplete = () => {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement) active.blur();
+    const focus = latestFocusRef.current || entry.focus;
+    onMarkComplete?.(focus === entry.focus ? entry : { ...entry, focus });
+  };
 
   return (
     <Dialog open={!!entry} onOpenChange={(open) => !open && onClose()}>
@@ -386,15 +397,12 @@ export function WorkoutDetailDialogV2({
             weightUnit={weightUnit}
             distanceUnit={distanceUnit}
             history={history}
-            onMarkComplete={onMarkComplete}
-            isMarkingComplete={isMarkingComplete}
             onUpdateSet={patchLoggedSetDebounced}
             onAddSet={addSet.mutate}
             onDeleteSet={deleteSet.mutate}
             loggedSaveState={loggedSaveState}
             planSets={planSets}
             planCoachNote={planCoachNote}
-            latestFocusRef={latestFocusRef}
             onSaveNote={(note) => workoutId && updateNote.mutate(note)}
             onParseLoggedFreeText={(opts) => {
               if (!workoutId) return;
@@ -431,11 +439,21 @@ export function WorkoutDetailDialogV2({
           />
         </div>
 
-        <div className="sticky bottom-0 z-10 flex items-center justify-end gap-3 border-t border-border bg-background/95 px-6 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-          <SaveWorkoutButton
+        <div className="sticky bottom-0 z-10 flex flex-col gap-3 border-t border-border bg-background/95 px-6 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">
+              {isPlanned ? "Planned workout" : "Logged workout"}
+            </span>
+            <span className="ml-2">
+              {isPlanned ? "Edits save before completion." : "Edits save in place."}
+            </span>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+            <SaveWorkoutButton
             isBusy={saveInFlight || planCoachNote.isRegenerating}
             savedAt={saveClickedAt}
             showCoachNoteHint={entry.planDayId != null}
+            emphasis={isPlanned ? "secondary" : "primary"}
             disabled={planCoachNote.isCoolingDown}
             onClick={() => {
               // Blur so EditableFocus + CoachPrescriptionCollapsible's
@@ -459,7 +477,25 @@ export function WorkoutDetailDialogV2({
               setSaveTargetPlanDayId(isPlanned ? entry.planDayId ?? null : null);
               setSaveInFlight(true);
             }}
-          />
+            />
+            {isPlanned && onMarkComplete ? (
+              <Button
+                type="button"
+                size="sm"
+                className="gap-2"
+                disabled={completeBusy}
+                onClick={handleFooterMarkComplete}
+                data-testid="workout-detail-mark-complete"
+              >
+                {completeBusy ? (
+                  <Loader2 className="size-4 animate-spin" aria-hidden />
+                ) : (
+                  <CheckCircle2 className="size-4" aria-hidden />
+                )}
+                {completeLabel}
+              </Button>
+            ) : null}
+          </div>
         </div>
       </DialogContent>
 
@@ -510,8 +546,6 @@ interface DialogBodyProps {
   readonly weightUnit: "kg" | "lb";
   readonly distanceUnit: "km" | "miles";
   readonly history: import("@/lib/api").WorkoutHistoryStats | undefined;
-  readonly onMarkComplete?: (entry: TimelineEntry) => void;
-  readonly isMarkingComplete: boolean;
   readonly onUpdateSet: (setId: string, data: import("@/lib/api").PatchExerciseSetPayload) => void;
   readonly onAddSet: (data: import("@/lib/api").AddExerciseSetPayload) => void;
   readonly onDeleteSet: (setId: string) => void;
@@ -532,12 +566,6 @@ interface DialogBodyProps {
    * `isRegenerating` from this bundle.
    */
   readonly planCoachNote: ReturnType<typeof usePlanDayCoachNote>;
-  /**
-   * Ref tracking the most recent focus submitted from the header input,
-   * read by PlannedCallToAction so Mark complete uses the just-typed
-   * value instead of the `entry.focus` prop, which lags the save.
-   */
-  readonly latestFocusRef: MutableRefObject<string>;
   readonly onSaveNote: (note: string | null) => void;
   /**
    * Parse trigger for the logged-workout free-text prescription when
@@ -677,15 +705,12 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     weightUnit,
     distanceUnit,
     history,
-    onMarkComplete,
-    isMarkingComplete,
     onUpdateSet,
     onAddSet,
     onDeleteSet,
     loggedSaveState,
     planSets,
     planCoachNote,
-    latestFocusRef,
     onSaveNote,
     onParseLoggedFreeText,
     isParsingLogged,
@@ -834,12 +859,9 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
         {isPlanned ? (
           <PlannedCallToAction
             entry={entry}
-            onMarkComplete={onMarkComplete}
-            isMarkingComplete={isMarkingComplete}
             weightUnit={weightUnit}
             distanceUnit={distanceUnit}
             planSets={planSets}
-            latestFocusRef={latestFocusRef}
             hasUnparsedText={hasUnparsedText}
           />
         ) : (
@@ -1124,36 +1146,19 @@ function LoggedExerciseSection({
 
 interface PlannedCallToActionProps {
   readonly entry: TimelineEntry;
-  readonly onMarkComplete?: (entry: TimelineEntry) => void;
-  readonly isMarkingComplete?: boolean;
   readonly weightUnit: "kg" | "lb";
   readonly distanceUnit: "km" | "miles";
   readonly planSets: ReturnType<typeof usePlanDayExercises>;
-  /** Latest-submitted focus from the header input; used to override a
-   *  potentially-stale `entry.focus` on Mark complete. */
-  readonly latestFocusRef: MutableRefObject<string>;
   readonly hasUnparsedText?: boolean;
 }
 
-function PlannedCallToAction({ entry, onMarkComplete, isMarkingComplete, weightUnit, distanceUnit, planSets, latestFocusRef, hasUnparsedText }: Readonly<PlannedCallToActionProps>) {
+function PlannedCallToAction({ entry, weightUnit, distanceUnit, planSets, hasUnparsedText }: Readonly<PlannedCallToActionProps>) {
   // Plan-day-backed exercise edits. `planSets` is hoisted up to DialogBody
   // so the same hook instance feeds both this CTA and the CoachTakePanel's
   // staleness comparison. Writes go to plan_day-owned exerciseSets; Mark
   // complete's server copy-from-plan path copies whatever this hook has
   // persisted into the new workoutLog at log time.
   const planDayId = entry.planDayId ?? null;
-
-  // Block Mark complete while any plan-day set mutation is still in
-  // flight — otherwise createWorkoutInTx can race the mutation and
-  // snapshot pre-edit plan_day rows before the PATCH commits.
-  // Debounced-but-not-yet-fired cell edits still narrowly race, but
-  // this catches the common "edit + click" sequence once the debounce
-  // has fired its mutation.
-  const ctaBusy = isMarkingComplete || planSets.isSaving;
-  const ctaDisabled = ctaBusy;
-  let ctaLabel = "Mark complete";
-  if (isMarkingComplete) ctaLabel = "Logging…";
-  else if (planSets.isSaving) ctaLabel = "Saving edits…";
 
   return (
     <div className="flex flex-col gap-4" data-testid="workout-detail-planned-cta">
@@ -1179,35 +1184,8 @@ function PlannedCallToAction({ entry, onMarkComplete, isMarkingComplete, weightU
         className="flex flex-col items-center gap-2 rounded-lg border border-border bg-muted/20 px-4 py-4 text-center"
       >
         <p className="text-sm text-muted-foreground">
-          Tweak the sets above if needed, then mark the workout complete to log it.
+          Planned sets are ready for review.
         </p>
-        {onMarkComplete && (
-          <Button
-            onClick={() => {
-              // Blur whatever input is focused so EditableFocus's onBlur
-              // flush fires synchronously before Mark complete posts. The
-              // flush updates latestFocusRef via the dialog's wrapped
-              // onChangeFocus, so reading the ref below gives us the
-              // just-typed title even if the timeline query hasn't
-              // invalidated yet.
-              const active = document.activeElement;
-              if (active instanceof HTMLElement) active.blur();
-              const focus = latestFocusRef.current || entry.focus;
-              onMarkComplete(focus === entry.focus ? entry : { ...entry, focus });
-            }}
-            size="lg"
-            className="gap-2"
-            disabled={ctaDisabled}
-            data-testid="workout-detail-mark-complete"
-          >
-            {ctaBusy ? (
-              <Loader2 className="size-4 animate-spin" aria-hidden />
-            ) : (
-              <CheckCircle2 className="size-4" aria-hidden />
-            )}
-            {ctaLabel}
-          </Button>
-        )}
       </div>
     </div>
   );

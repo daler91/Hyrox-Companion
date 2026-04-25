@@ -26,6 +26,7 @@ interface SaveWorkoutButtonProps {
    * ad-hoc logged workout.
    */
   readonly showCoachNoteHint: boolean;
+  readonly emphasis?: "primary" | "secondary";
   readonly disabled?: boolean;
   readonly onClick: () => void;
 }
@@ -41,12 +42,14 @@ export function SaveWorkoutButton({
   isBusy,
   savedAt,
   showCoachNoteHint,
+  emphasis = "secondary",
   disabled,
   onClick,
 }: SaveWorkoutButtonProps) {
   const buttonDisabled = isBusy || !!disabled;
   const label = isBusy ? "Saving…" : "Save";
   const hasSaved = savedAt != null;
+  const variant = emphasis === "primary" ? "default" : "secondary";
   let IconComponent = Save;
   if (isBusy) {
     IconComponent = Loader2;
@@ -64,7 +67,7 @@ export function SaveWorkoutButton({
         <Button
           type="button"
           size="sm"
-          variant="secondary"
+          variant={variant}
           onClick={onClick}
           disabled={buttonDisabled}
           className={cn("gap-2", !buttonDisabled && "cursor-pointer")}

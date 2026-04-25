@@ -193,7 +193,7 @@ describe("WorkoutDetailDialogV2", () => {
     });
 
     expect(screen.getByTestId("workout-detail-mark-complete")).toBeInTheDocument();
-    expect(screen.getByText(/tweak the sets above/i)).toBeInTheDocument();
+    expect(screen.getByText(/planned sets are ready for review/i)).toBeInTheDocument();
     // Exercise table renders with plan-day-backed mutations — see the
     // +Add button used to append prescribed sets pre-log.
     expect(await screen.findByTestId("exercise-table")).toBeInTheDocument();

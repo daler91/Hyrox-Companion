@@ -44,7 +44,7 @@ export default function FloatingActionButton({
         data-testid="button-log-workout-fab"
       >
         <Plus className="h-5 w-5" />
-        <span>New Workout</span>
+        <span>Log Workout</span>
       </Button>
     </div>,
     document.body,

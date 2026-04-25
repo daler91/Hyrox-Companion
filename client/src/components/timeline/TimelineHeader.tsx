@@ -6,7 +6,7 @@ export default function TimelineHeader() {
           Training Timeline
         </h1>
         <p className="text-muted-foreground mt-1">
-          Your complete training journey - past, present, and future
+          Today, upcoming sessions, and recent training.
         </p>
       </div>
     </div>
