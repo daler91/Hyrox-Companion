@@ -340,6 +340,7 @@ describe("calculateTrainingOverview", () => {
       totalDuration: 150,
       avgDuration: 50, // 150 / 3
       avgRpe: 7, // week1 avg=6, week2 avg=8 → (6+8)/2
+      avgCompliancePct: null,
     });
   });
 
@@ -374,6 +375,7 @@ describe("calculateTrainingOverview", () => {
       totalDuration: 0,
       avgDuration: 0,
       avgRpe: null,
+      avgCompliancePct: null,
     });
   });
 });
@@ -386,6 +388,7 @@ describe("computeOverviewStats", () => {
       totalDuration: 0,
       avgDuration: 0,
       avgRpe: null,
+      avgCompliancePct: null,
     });
   });
 
