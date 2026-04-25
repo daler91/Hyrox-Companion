@@ -1,6 +1,7 @@
 // Toast constants
 export const TOAST_LIMIT = 1;
-export const TOAST_REMOVE_DELAY = 1000000;
+export const TOAST_DURATION_MS = 5000;
+export const TOAST_REMOVE_DELAY = 1000;
 
 // Timeline Data constants
 export const SCROLL_TO_TODAY_DELAY_MS = 100;
