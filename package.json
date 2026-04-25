@@ -178,7 +178,18 @@
     "  tokens and email/password credentials, so a malicious redirect from the Garmin",
     "  API hostname could exfiltrate them. Dependabot cannot update transitive pnpm",
     "  deps, so the override is required.",
-    "  Remove when @flow-js/garmin-connect ships a release whose axios pulls follow-redirects >=1.16.0."
+    "  Remove when @flow-js/garmin-connect ships a release whose axios pulls follow-redirects >=1.16.0.",
+    "",
+    "@xmldom/xmldom ^0.8.13: fixes GHSA (XML injection through unvalidated DocumentType",
+    "  serialization, Dependabot issue #42). In @xmldom/xmldom <0.8.13, the serializer did",
+    "  not validate DOCTYPE name/publicId/systemId, so a crafted DocumentType node could",
+    "  inject arbitrary markup when re-serialized. Patched in 0.8.13.",
+    "  Pulled transitively by mammoth 1.12.0 (depends on @xmldom/xmldom ^0.8.6), which we",
+    "  use in client/src/components/settings/coaching/useCoachingUpload.ts to extract raw",
+    "  text from user-uploaded .docx files. Untrusted DOCX archives are exactly the attack",
+    "  surface this advisory targets, so the override is required. Dependabot cannot update",
+    "  transitive pnpm deps.",
+    "  Remove when mammoth ships a version whose @xmldom/xmldom range resolves to >=0.8.13."
   ],
   "overrides": {
     "esbuild": "0.27.5",
@@ -189,7 +200,8 @@
     "@hono/node-server": "^1.19.13",
     "protobufjs": "^7.5.5",
     "@clerk/shared": "^4.8.1",
-    "follow-redirects": "^1.16.0"
+    "follow-redirects": "^1.16.0",
+    "@xmldom/xmldom": "^0.8.13"
   },
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.19",
@@ -249,7 +261,8 @@
       "@hono/node-server": "^1.19.13",
       "protobufjs": "^7.5.5",
       "@clerk/shared": "^4.8.1",
-      "follow-redirects": "^1.16.0"
+      "follow-redirects": "^1.16.0",
+      "@xmldom/xmldom": "^0.8.13"
     }
   },
   "packageManager": "pnpm@9.12.0",
