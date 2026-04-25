@@ -33,7 +33,7 @@ if (import.meta.env.VITE_SENTRY_DSN) {
 import { registerSW } from "virtual:pwa-register";
 
 const shouldRegisterServiceWorkers =
-  !("Cypress" in window) && "serviceWorker" in navigator;
+  !("Cypress" in globalThis) && "serviceWorker" in globalThis.navigator;
 
 createRoot(document.getElementById("root")!).render(
   <Sentry.ErrorBoundary fallback={FallbackErrorBoundary}>
@@ -55,5 +55,5 @@ if (shouldRegisterServiceWorkers) {
 
 // Register push notification service worker (separate scope from Workbox SW)
 if (shouldRegisterServiceWorkers) {
-  void navigator.serviceWorker.register("/sw-push.js");
+  void globalThis.navigator.serviceWorker.register("/sw-push.js");
 }
