@@ -12,6 +12,7 @@ interface PreferencesSectionProps {
   readonly emailNotifications: boolean;
   readonly emailWeeklySummary: boolean;
   readonly emailMissedReminder: boolean;
+  readonly showAdherenceInsights: boolean;
   readonly aiCoachEnabled: boolean;
   readonly onWeightUnitChange: (value: string) => void;
   readonly onDistanceUnitChange: (value: string) => void;
@@ -19,6 +20,7 @@ interface PreferencesSectionProps {
   readonly onEmailNotificationsChange: (checked: boolean) => void;
   readonly onEmailWeeklySummaryChange: (checked: boolean) => void;
   readonly onEmailMissedReminderChange: (checked: boolean) => void;
+  readonly onShowAdherenceInsightsChange: (checked: boolean) => void;
   readonly onAiCoachEnabledChange: (checked: boolean) => void;
 }
 
@@ -29,6 +31,7 @@ export function PreferencesSection({
   emailNotifications,
   emailWeeklySummary,
   emailMissedReminder,
+  showAdherenceInsights,
   aiCoachEnabled,
   onWeightUnitChange,
   onDistanceUnitChange,
@@ -36,6 +39,7 @@ export function PreferencesSection({
   onEmailNotificationsChange,
   onEmailWeeklySummaryChange,
   onEmailMissedReminderChange,
+  onShowAdherenceInsightsChange,
   onAiCoachEnabledChange,
 }: Readonly<PreferencesSectionProps>) {
   return (
@@ -172,6 +176,31 @@ export function PreferencesSection({
                 aria-label="Missed workout reminder toggle"
               />
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle as="h2">Workout Review</CardTitle>
+          <CardDescription>Control adherence indicators on timeline and detail views</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-1">
+              <Label htmlFor="adherence-insights-switch" className="cursor-pointer">
+                Show adherence insights
+              </Label>
+              <p className="text-sm text-muted-foreground">
+                Display adherence badges and planned-vs-actual guidance in review surfaces.
+              </p>
+            </div>
+            <Switch
+              id="adherence-insights-switch"
+              checked={showAdherenceInsights}
+              onCheckedChange={onShowAdherenceInsightsChange}
+              data-testid="switch-show-adherence-insights"
+            />
           </div>
         </CardContent>
       </Card>

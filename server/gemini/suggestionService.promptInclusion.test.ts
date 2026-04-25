@@ -64,6 +64,7 @@ function kitchenSinkContext(): TrainingContext {
         totalWeeks: 10,
         phaseLabel: "taper",
         progressPct: 90,
+        remainingPhases: ["race_week"],
       },
       weeklyVolume: {
         thisWeekCompleted: 4,
@@ -135,6 +136,7 @@ describe("buildSuggestionsPrompt — input inclusion regression guard", () => {
     expect(prompt).toContain("Sled Push (NEVER TRAINED");
     expect(prompt).toContain("TAPER phase");
     expect(prompt).toContain("Week 9 of 10");
+    expect(prompt).toContain("Remaining phases: RACE_WEEK");
     expect(prompt).toContain("FINGERPRINT_EX_PLATEAU: PLATEAU");
     expect(prompt).toContain("WEEKLY VOLUME: 4/6 goal");
     expect(prompt).toContain("last week: 2/6");

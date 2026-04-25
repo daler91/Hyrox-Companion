@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { usePlanDayCoachNote } from "@/hooks/usePlanDayCoachNote";
 import { usePlanDayExercises } from "@/hooks/usePlanDayExercises";
+import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { useWorkoutDetail } from "@/hooks/useWorkoutDetail";
 import type { ParseFromImagePayload, ReparseResponse } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -94,7 +95,7 @@ interface WorkoutDetailDialogV2Props {
  *     athlete note, coach take + history sidebar.
  *   - **Planned** (entry.workoutLogId == null): a "Mark complete" primary
  *     CTA that turns the plan day into a workoutLog (with prescribed
- *     sets copied across by the phase-6 server path), plus the coach's
+ *     sets copied across by the server's copy-from-plan path), plus the coach's
  *     prescription and coach take — no stats/history/athlete-note since
  *     there's no log to measure or annotate yet.
  */
@@ -154,10 +155,10 @@ export function WorkoutDetailDialogV2({
     reparseFreeText,
     reparseFromImage,
     updateNote,
-    updatePrescription,
     updateFocus,
     updateRpe,
   } = useWorkoutDetail(workoutId);
+  const { showAdherenceInsights } = useUnitPreferences();
   const loggedSaveState = { isSaving: isSavingLoggedSets, lastSavedAt: loggedLastSavedAt };
 
   // Hoisted to top-level so both the header's onChangeFocus handler and the
@@ -395,7 +396,6 @@ export function WorkoutDetailDialogV2({
             planCoachNote={planCoachNote}
             latestFocusRef={latestFocusRef}
             onSaveNote={(note) => workoutId && updateNote.mutate(note)}
-            onSaveLoggedPrescription={(patch) => workoutId && updatePrescription.mutate(patch)}
             onParseLoggedFreeText={(opts) => {
               if (!workoutId) return;
               reparseFreeText.mutate(undefined, opts);
@@ -407,6 +407,7 @@ export function WorkoutDetailDialogV2({
             }}
             isParsingLoggedImage={reparseFromImage.isPending}
             chatOpen={chatOpen}
+            showAdherenceInsights={showAdherenceInsights}
             onOpenChat={() => {
               // Gate on consent first: the global-rail flow enforces
               // AIConsentDialog via handleCoachToggle in Timeline;
@@ -539,10 +540,9 @@ interface DialogBodyProps {
   readonly latestFocusRef: MutableRefObject<string>;
   readonly onSaveNote: (note: string | null) => void;
   /**
-   * Save handlers + Parse trigger for the logged-workout free-text editor.
-   * On the planned branch these are handled in-hook via usePlanDayExercises.
+   * Parse trigger for the logged-workout free-text prescription when
+   * available. Planned entries parse via usePlanDayExercises.
    */
-  readonly onSaveLoggedPrescription: (patch: { mainWorkout?: string | null; accessory?: string | null; notes?: string | null }) => void;
   readonly onParseLoggedFreeText: (opts?: { onSuccess?: () => void }) => void;
   readonly isParsingLogged: boolean;
   readonly onParseLoggedFromImage: (
@@ -555,6 +555,7 @@ interface DialogBodyProps {
    * sidebar swaps from CoachTake + History to the chat surface.
    */
   readonly chatOpen: boolean;
+  readonly showAdherenceInsights: boolean;
   readonly onOpenChat: () => void;
   readonly onCloseChat: () => void;
 }
@@ -574,6 +575,95 @@ function toDate(value: string | Date | null | undefined): Date | null {
   if (value instanceof Date) return value;
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+interface DialogBodyComputedState {
+  readonly focusLabel: string;
+  readonly referenceMainWorkout: string | null | undefined;
+  readonly referenceAccessory: string | null | undefined;
+  readonly referenceNotes: string | null | undefined;
+  readonly loggedTextDiffFields: string[];
+  readonly plannedVsActual: PlannedVsActualSummary | null;
+  readonly chatSeed: string;
+  readonly complianceTag: { label: string; className: string } | null;
+  readonly detailAdherencePct: number | null;
+  readonly gridClasses: string;
+}
+
+function buildDialogBodyComputedState(args: {
+  readonly entry: TimelineEntry;
+  readonly workout: (import("@shared/schema").WorkoutLog & { exerciseSets?: ExerciseSet[]; notes?: string | null }) | undefined;
+  readonly isPlanned: boolean;
+  readonly planDayId: string | null;
+  readonly plannedSets: ExerciseSet[];
+  readonly loggedSets: ExerciseSet[];
+  readonly chatOpen: boolean;
+  readonly showAdherenceInsights: boolean;
+}): DialogBodyComputedState {
+  const { entry, workout, isPlanned, planDayId, plannedSets, loggedSets, chatOpen, showAdherenceInsights } = args;
+  const focusLabel = entry.focus?.trim() || "this workout";
+  const referenceMainWorkout = isPlanned
+    ? entry.mainWorkout
+    : workout?.prescribedMainWorkout ?? entry.mainWorkout;
+  const referenceAccessory = isPlanned
+    ? entry.accessory
+    : workout?.prescribedAccessory ?? entry.accessory;
+  const referenceNotes = isPlanned
+    ? entry.notes
+    : workout?.prescribedNotes ?? entry.notes;
+
+  const hasPrescriptionSnapshot = !!(
+    workout?.prescribedMainWorkout ||
+    workout?.prescribedAccessory ||
+    workout?.prescribedNotes
+  );
+  const loggedTextDiffFields = isPlanned || !hasPrescriptionSnapshot
+    ? []
+    : getLoggedPrescriptionDiffFields({
+      prescribedMainWorkout: workout?.prescribedMainWorkout ?? null,
+      prescribedAccessory: workout?.prescribedAccessory ?? null,
+      prescribedNotes: workout?.prescribedNotes ?? null,
+      actualMainWorkout: workout?.mainWorkout ?? entry.mainWorkout ?? null,
+      actualAccessory: workout?.accessory ?? entry.accessory ?? null,
+      actualNotes: workout?.notes ?? entry.notes ?? null,
+    });
+
+  // Prefer the persisted snapshot so later plan-day edits don't
+  // retroactively change a completed workout's compliance.
+  const plannedVsActual = computePlannedVsActual({
+    isPlanned,
+    planDayId,
+    workout,
+    plannedSets,
+    loggedSets,
+  });
+  const chatSeed = buildCoachChatSeed({
+    focusLabel,
+    isPlanned,
+    plannedVsActual,
+  });
+  const complianceTag = plannedVsActual?.compliancePct == null
+    ? null
+    : classifyCompliance(plannedVsActual.compliancePct);
+  const detailAdherencePct = showAdherenceInsights
+    ? workout?.compliancePct ?? plannedVsActual?.compliancePct ?? null
+    : null;
+  const gridClasses = chatOpen
+    ? "grid grid-cols-1 items-start gap-4 px-6 py-4 md:grid-cols-[1fr_380px] lg:grid-cols-[1fr_420px]"
+    : "grid grid-cols-1 items-start gap-4 px-6 py-4 md:grid-cols-[1fr_280px]";
+
+  return {
+    focusLabel,
+    referenceMainWorkout,
+    referenceAccessory,
+    referenceNotes,
+    loggedTextDiffFields,
+    plannedVsActual,
+    chatSeed,
+    complianceTag,
+    detailAdherencePct,
+    gridClasses,
+  };
 }
 
 function DialogBody(props: Readonly<DialogBodyProps>) {
@@ -597,12 +687,12 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     planCoachNote,
     latestFocusRef,
     onSaveNote,
-    onSaveLoggedPrescription,
     onParseLoggedFreeText,
     isParsingLogged,
     onParseLoggedFromImage,
     isParsingLoggedImage,
     chatOpen,
+    showAdherenceInsights,
     onOpenChat,
     onCloseChat,
   } = props;
@@ -630,10 +720,10 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     const normalized = value.trim().length === 0 ? null : value;
     if (isPlanned && planDayId) {
       planSets.updatePrescription.mutate({ [field]: normalized });
-    } else if (!isPlanned && workoutId) {
-      onSaveLoggedPrescription({ [field]: normalized });
     }
   };
+  // Keep parse available for logged workouts so legacy/imported entries
+  // with free text but no structured sets can reach the Parse path.
   const parseReady =
     (isPlanned && planDayId != null) || (!isPlanned && workoutId != null);
   const currentSets = isPlanned ? planSets.exerciseSets : exerciseSets;
@@ -655,25 +745,40 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
   const hasUnparsedText =
     hasPrescriptionText(entry.mainWorkout) || hasPrescriptionText(entry.accessory);
 
-  const focusLabel = entry.focus?.trim() || "this workout";
-  const chatSeed = `Can you walk me through your take on my ${focusLabel} workout?`;
-  // Widen the right column when the chat surface is active so the
-  // thread + input have room without squeezing the exercise table.
-  const gridClasses = chatOpen
-    ? "grid grid-cols-1 items-start gap-4 px-6 py-4 md:grid-cols-[1fr_380px] lg:grid-cols-[1fr_420px]"
-    : "grid grid-cols-1 items-start gap-4 px-6 py-4 md:grid-cols-[1fr_280px]";
+  const {
+    focusLabel,
+    referenceMainWorkout,
+    referenceAccessory,
+    referenceNotes,
+    loggedTextDiffFields,
+    plannedVsActual,
+    chatSeed,
+    complianceTag,
+    detailAdherencePct,
+    gridClasses,
+  } = buildDialogBodyComputedState({
+    entry,
+    workout,
+    isPlanned,
+    planDayId,
+    plannedSets: planSets.exerciseSets,
+    loggedSets: exerciseSets,
+    chatOpen,
+    showAdherenceInsights,
+  });
 
   return (
     <div className={gridClasses}>
       <div className="flex flex-col gap-3">
         <CoachPrescriptionCollapsible
-          title={isPlanned ? "Coach's prescription" : "Workout description"}
-          mainWorkout={entry.mainWorkout}
-          accessory={entry.accessory}
-          notes={entry.notes}
+          title={isPlanned ? "Coach's prescription" : "Reference/Notes"}
+          compact={!isPlanned}
+          mainWorkout={referenceMainWorkout}
+          accessory={referenceAccessory}
+          notes={referenceNotes}
           open={parseControls.prescriptionOpen}
           onOpenChange={parseControls.setPrescriptionOpen}
-          onSaveField={onSavePrescriptionField}
+          onSaveField={isPlanned ? onSavePrescriptionField : undefined}
           onParse={parseReady ? parseControls.onParseClicked : undefined}
           isParsing={parseControls.isParsing}
           onCapture={parseReady ? parseControls.onCapture : undefined}
@@ -682,6 +787,49 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
           onParseImage={parseControls.onParseImageClicked}
           isParsingImage={parseControls.isParsingImage}
         />
+        {!isPlanned && loggedTextDiffFields.length > 0 && (
+          <div
+            className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-muted-foreground"
+            data-testid="logged-prescription-diff-note"
+          >
+            Updated after completion: {loggedTextDiffFields.join(", ")}.
+          </div>
+        )}
+        {!isPlanned && showAdherenceInsights && plannedVsActual && plannedVsActual.hasComparisonData && (
+          <div
+            className="rounded-md border border-border/70 bg-muted/20 px-3 py-2 text-xs text-muted-foreground"
+            data-testid="planned-actual-summary"
+          >
+            <span className="font-medium text-foreground">Planned vs Actual:</span>{" "}
+            {plannedVsActual.plannedSets} planned set{plannedVsActual.plannedSets === 1 ? "" : "s"},{" "}
+            {plannedVsActual.actualSets} logged set{plannedVsActual.actualSets === 1 ? "" : "s"}{" "}
+            {plannedVsActual.addedSets > 0 && <>· {plannedVsActual.addedSets} added</>}
+            {plannedVsActual.removedSets > 0 && <> · {plannedVsActual.removedSets} removed</>}
+            {plannedVsActual.compliancePct != null && (
+              <div className="mt-1">
+                <span className="font-medium text-foreground">Compliance:</span>{" "}
+                {plannedVsActual.compliancePct}% ({plannedVsActual.matchedSets}/{plannedVsActual.plannedSets} planned sets matched)
+                {complianceTag && (
+                  <span className={cn("ml-2 rounded-full px-2 py-0.5 text-[10px] font-medium", complianceTag.className)}>
+                    {complianceTag.label}
+                  </span>
+                )}
+              </div>
+            )}
+            {plannedVsActual.addedExercises.length > 0 && (
+              <div>
+                <span className="font-medium text-foreground">Added:</span>{" "}
+                {plannedVsActual.addedExercises.join(", ")}
+              </div>
+            )}
+            {plannedVsActual.removedExercises.length > 0 && (
+              <div>
+                <span className="font-medium text-foreground">Removed:</span>{" "}
+                {plannedVsActual.removedExercises.join(", ")}
+              </div>
+            )}
+          </div>
+        )}
 
         {isPlanned ? (
           <PlannedCallToAction
@@ -757,7 +905,13 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
               isStale={isCoachNoteStale}
               isRefreshing={planCoachNote.isRegenerating}
             />
-            {!isPlanned && <HistoryPanel stats={history} isLoading={isLoading} />}
+            {!isPlanned && (
+              <HistoryPanel
+                stats={history}
+                adherencePct={detailAdherencePct}
+                isLoading={isLoading}
+              />
+            )}
           </>
         )}
       </aside>
@@ -765,8 +919,168 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
   );
 }
 
+interface LoggedPrescriptionDiffInput {
+  readonly prescribedMainWorkout: string | null;
+  readonly prescribedAccessory: string | null;
+  readonly prescribedNotes: string | null;
+  readonly actualMainWorkout: string | null;
+  readonly actualAccessory: string | null;
+  readonly actualNotes: string | null;
+}
+
+function getLoggedPrescriptionDiffFields(input: LoggedPrescriptionDiffInput): string[] {
+  const out: string[] = [];
+  if (!sameText(input.prescribedMainWorkout, input.actualMainWorkout)) out.push("Main");
+  if (!sameText(input.prescribedAccessory, input.actualAccessory)) out.push("Accessory");
+  if (!sameText(input.prescribedNotes, input.actualNotes)) out.push("Notes");
+  return out;
+}
+
+function sameText(a: string | null, b: string | null): boolean {
+  return normalizeText(a) === normalizeText(b);
+}
+
+function normalizeText(v: string | null): string {
+  return (v ?? "").trim().replaceAll(/\s+/g, " ");
+}
+
+interface PlannedVsActualSummary {
+  readonly hasComparisonData: boolean;
+  readonly plannedSets: number;
+  readonly actualSets: number;
+  readonly matchedSets: number;
+  readonly compliancePct: number | null;
+  readonly addedSets: number;
+  readonly removedSets: number;
+  readonly addedExercises: readonly string[];
+  readonly removedExercises: readonly string[];
+}
+
+function computePlannedVsActual(args: {
+  readonly isPlanned: boolean;
+  readonly planDayId: string | null;
+  readonly workout: Parameters<typeof buildPlannedVsActualFromSnapshot>[0];
+  readonly plannedSets: ExerciseSet[];
+  readonly loggedSets: ExerciseSet[];
+}): PlannedVsActualSummary | null {
+  if (args.isPlanned) return null;
+  const snapshot = buildPlannedVsActualFromSnapshot(args.workout);
+  if (snapshot) return snapshot;
+  if (!args.planDayId) return null;
+  return summarizePlannedVsActual(args.plannedSets, args.loggedSets);
+}
+
+// Returns null when no snapshot exists so the caller can fall back to a
+// live comparison. Per-exercise added/removed labels aren't snapshotted.
+function buildPlannedVsActualFromSnapshot(
+  workout: { plannedSetCount?: number | null; actualSetCount?: number | null; matchedSetCount?: number | null; addedSetCount?: number | null; removedSetCount?: number | null; compliancePct?: number | null } | undefined,
+): PlannedVsActualSummary | null {
+  if (workout?.plannedSetCount == null) return null;
+  const plannedSets = workout.plannedSetCount;
+  const actualSets = workout.actualSetCount ?? 0;
+  return {
+    hasComparisonData: plannedSets > 0 || actualSets > 0,
+    plannedSets,
+    actualSets,
+    matchedSets: workout.matchedSetCount ?? 0,
+    compliancePct: workout.compliancePct ?? null,
+    addedSets: workout.addedSetCount ?? 0,
+    removedSets: workout.removedSetCount ?? 0,
+    addedExercises: [],
+    removedExercises: [],
+  };
+}
+
+function summarizePlannedVsActual(
+  planned: ExerciseSet[],
+  actual: ExerciseSet[],
+): PlannedVsActualSummary {
+  const plannedCounts = countSetsByExercise(planned);
+  const actualCounts = countSetsByExercise(actual);
+  const keys = new Set([...plannedCounts.keys(), ...actualCounts.keys()]);
+
+  let addedSets = 0;
+  let removedSets = 0;
+  let matchedSets = 0;
+  const addedExercises: string[] = [];
+  const removedExercises: string[] = [];
+  for (const key of keys) {
+    const plannedCount = plannedCounts.get(key) ?? 0;
+    const actualCount = actualCounts.get(key) ?? 0;
+    matchedSets += Math.min(plannedCount, actualCount);
+    if (actualCount > plannedCount) {
+      const delta = actualCount - plannedCount;
+      addedSets += delta;
+      addedExercises.push(`${formatExerciseLabel(key)} ×${delta}`);
+    }
+    if (plannedCount > actualCount) {
+      const delta = plannedCount - actualCount;
+      removedSets += delta;
+      removedExercises.push(`${formatExerciseLabel(key)} ×${delta}`);
+    }
+  }
+
+  return {
+    hasComparisonData: planned.length > 0 || actual.length > 0,
+    plannedSets: planned.length,
+    actualSets: actual.length,
+    matchedSets,
+    compliancePct: planned.length > 0 ? Math.round((matchedSets / planned.length) * 100) : null,
+    addedSets,
+    removedSets,
+    addedExercises,
+    removedExercises,
+  };
+}
+
+function countSetsByExercise(sets: ExerciseSet[]): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const set of sets) {
+    const key = normalizeExerciseLabel(set);
+    map.set(key, (map.get(key) ?? 0) + 1);
+  }
+  return map;
+}
+
+function normalizeExerciseLabel(set: ExerciseSet): string {
+  return (set.customLabel || set.exerciseName || "").toLowerCase().trim();
+}
+
+function formatExerciseLabel(label: string): string {
+  return label.replaceAll("_", " ");
+}
+
+function classifyCompliance(pct: number): { label: string; className: string } {
+  if (pct >= 85) {
+    return { label: "High adherence", className: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" };
+  }
+  if (pct >= 60) {
+    return { label: "Moderate adherence", className: "bg-amber-500/15 text-amber-700 dark:text-amber-300" };
+  }
+  return { label: "Low adherence", className: "bg-rose-500/15 text-rose-700 dark:text-rose-300" };
+}
+
 function hasPrescriptionText(value: string | null | undefined): boolean {
   return !!value && value.trim().length > 0;
+}
+
+function buildCoachChatSeed(args: {
+  readonly focusLabel: string;
+  readonly isPlanned: boolean;
+  readonly plannedVsActual: PlannedVsActualSummary | null;
+}): string {
+  const { focusLabel, isPlanned, plannedVsActual } = args;
+  const base = `Can you walk me through your take on my ${focusLabel} workout?`;
+  if (isPlanned || plannedVsActual?.compliancePct == null) return base;
+
+  const details: string[] = [
+    `compliance was ${plannedVsActual.compliancePct}%`,
+    `${plannedVsActual.matchedSets}/${plannedVsActual.plannedSets} planned sets matched`,
+  ];
+  if (plannedVsActual.addedSets > 0) details.push(`${plannedVsActual.addedSets} added sets`);
+  if (plannedVsActual.removedSets > 0) details.push(`${plannedVsActual.removedSets} removed sets`);
+
+  return `${base} For context: ${details.join(", ")}.`;
 }
 
 interface LoggedExerciseSectionProps {
@@ -825,8 +1139,8 @@ function PlannedCallToAction({ entry, onMarkComplete, isMarkingComplete, weightU
   // Plan-day-backed exercise edits. `planSets` is hoisted up to DialogBody
   // so the same hook instance feeds both this CTA and the CoachTakePanel's
   // staleness comparison. Writes go to plan_day-owned exerciseSets; Mark
-  // complete's phase-6 server copy copies whatever this hook has persisted
-  // into the new workoutLog at log time.
+  // complete's server copy-from-plan path copies whatever this hook has
+  // persisted into the new workoutLog at log time.
   const planDayId = entry.planDayId ?? null;
 
   // Block Mark complete while any plan-day set mutation is still in

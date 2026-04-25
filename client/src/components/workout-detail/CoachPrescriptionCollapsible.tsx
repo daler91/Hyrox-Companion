@@ -26,6 +26,11 @@ interface CoachPrescriptionCollapsibleProps {
    */
   readonly title?: string;
   /**
+   * Compact rendering variant used for completed/logged workouts where this
+   * section is archival context ("Reference/Notes") instead of primary input.
+   */
+  readonly compact?: boolean;
+  /**
    * Open on mount when `true` (uncontrolled). Ignored when `open` is passed.
    */
   readonly defaultOpen?: boolean;
@@ -79,6 +84,7 @@ export function CoachPrescriptionCollapsible({
   accessory,
   notes,
   title = "Coach's prescription",
+  compact = false,
   defaultOpen = false,
   open,
   onOpenChange,
@@ -103,10 +109,13 @@ export function CoachPrescriptionCollapsible({
   return (
     <Collapsible
       {...collapsibleProps}
-      className="rounded-lg border border-border"
+      className={cn("rounded-lg border border-border", compact && "border-border/70")}
       data-testid="coach-prescription-collapsible"
     >
-      <div className="group flex w-full items-center gap-2 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+      <div className={cn(
+        "group flex w-full items-center gap-2 text-left font-medium uppercase tracking-wide text-muted-foreground",
+        compact ? "px-3 py-1.5 text-[10px]" : "px-4 py-2 text-xs",
+      )}>
         <CollapsibleTrigger
           className="flex flex-1 items-center justify-between gap-2 hover:text-foreground"
           data-testid="coach-prescription-toggle"
@@ -155,7 +164,10 @@ export function CoachPrescriptionCollapsible({
           </Button>
         )}
       </div>
-      <CollapsibleContent className="flex flex-col gap-3 border-t border-border px-4 py-3 text-sm">
+      <CollapsibleContent className={cn(
+        "flex flex-col gap-3 border-t border-border",
+        compact ? "px-3 py-2 text-xs" : "px-4 py-3 text-sm",
+      )}>
         {previewActive ? (
           <ExerciseImagePreview
             previewUrl={imagePreview.url}
@@ -172,6 +184,7 @@ export function CoachPrescriptionCollapsible({
               text={mainWorkout ?? ""}
               editable={editable}
               onSaveField={onSaveField}
+              compact={compact}
             />
             <PrescriptionSection
               field="accessory"
@@ -179,6 +192,7 @@ export function CoachPrescriptionCollapsible({
               text={accessory ?? ""}
               editable={editable}
               onSaveField={onSaveField}
+              compact={compact}
             />
             <PrescriptionSection
               field="notes"
@@ -186,6 +200,7 @@ export function CoachPrescriptionCollapsible({
               text={notes ?? ""}
               editable={editable}
               onSaveField={onSaveField}
+              compact={compact}
             />
           </>
         )}
@@ -200,15 +215,16 @@ interface PrescriptionSectionProps {
   readonly text: string;
   readonly editable: boolean;
   readonly onSaveField?: (field: PrescriptionField, value: string) => void;
+  readonly compact?: boolean;
 }
 
-function PrescriptionSection({ field, label, text, editable, onSaveField }: Readonly<PrescriptionSectionProps>) {
+function PrescriptionSection({ field, label, text, editable, onSaveField, compact }: Readonly<PrescriptionSectionProps>) {
   if (!editable) {
     if (!hasText(text)) return null;
     return (
       <div className="flex flex-col gap-1">
-        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
-        <p className="whitespace-pre-wrap text-foreground">{text}</p>
+        <span className={cn("text-xs font-medium uppercase tracking-wide text-muted-foreground", compact && "text-[10px]")}>{label}</span>
+        <p className={cn("whitespace-pre-wrap text-foreground", compact && "text-xs text-muted-foreground")}>{text}</p>
       </div>
     );
   }
@@ -218,6 +234,7 @@ function PrescriptionSection({ field, label, text, editable, onSaveField }: Read
       label={label}
       value={text}
       onSave={onSaveField!}
+      compact={compact}
     />
   );
 }
@@ -229,9 +246,10 @@ interface EditablePrescriptionProps {
   readonly label: string;
   readonly value: string;
   readonly onSave: (field: PrescriptionField, value: string) => void;
+  readonly compact?: boolean;
 }
 
-function EditablePrescription({ field, label, value, onSave }: Readonly<EditablePrescriptionProps>) {
+function EditablePrescription({ field, label, value, onSave, compact }: Readonly<EditablePrescriptionProps>) {
   // Local draft so keystrokes feel instant; debounced onSave fans out the
   // PATCH to the server. Sync from props when the upstream value changes
   // (optimistic cache updates, initial fetch) without fighting an active
@@ -272,10 +290,13 @@ function EditablePrescription({ field, label, value, onSave }: Readonly<Editable
 
   return (
     <label className="flex flex-col gap-1" htmlFor={`prescription-${field}`}>
-      <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
+      <span className={cn("text-xs font-medium uppercase tracking-wide text-muted-foreground", compact && "text-[10px]")}>{label}</span>
       <textarea
         id={`prescription-${field}`}
-        className="min-h-[72px] w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors hover:border-ring/60 focus:border-ring focus-visible:ring-2 focus-visible:ring-ring"
+        className={cn(
+          "w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-foreground outline-none transition-colors hover:border-ring/60 focus:border-ring focus-visible:ring-2 focus-visible:ring-ring",
+          compact ? "min-h-[56px] text-xs text-muted-foreground" : "min-h-[72px] text-sm",
+        )}
         value={draft}
         placeholder={placeholder}
         onChange={(e) => {

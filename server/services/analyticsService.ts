@@ -269,7 +269,14 @@ function buildStationCoverage(
  */
 export function computeOverviewStats(weeklySummaries: WeeklySummary[]): OverviewStats {
   if (weeklySummaries.length === 0) {
-    return { totalWorkouts: 0, avgPerWeek: 0, totalDuration: 0, avgDuration: 0, avgRpe: null };
+    return {
+      totalWorkouts: 0,
+      avgPerWeek: 0,
+      totalDuration: 0,
+      avgDuration: 0,
+      avgRpe: null,
+      avgCompliancePct: null,
+    };
   }
   const totalWorkouts = weeklySummaries.reduce((s, w) => s + w.workoutCount, 0);
   const avgPerWeek = Math.round((totalWorkouts / weeklySummaries.length) * 10) / 10;
@@ -284,7 +291,7 @@ export function computeOverviewStats(weeklySummaries: WeeklySummary[]): Overview
     ? Math.round((rpeWeeks.reduce((s, w) => s + (w.avgRpe ?? 0), 0) / rpeWeeks.length) * 10) / 10
     : null;
 
-  return { totalWorkouts, avgPerWeek, totalDuration, avgDuration, avgRpe };
+  return { totalWorkouts, avgPerWeek, totalDuration, avgDuration, avgRpe, avgCompliancePct: null };
 }
 
 export function calculateTrainingOverview(
@@ -296,12 +303,31 @@ export function calculateTrainingOverview(
   const categoryTotals = buildCategoryTotals(exerciseSets);
   const stationCoverage = buildStationCoverage(exerciseSets);
   const currentStats = computeOverviewStats(weeklySummaries);
+  const currentCompliance = workoutLogs
+    .map((w) => w.compliancePct)
+    .filter((v): v is number => typeof v === "number");
+  if (currentCompliance.length > 0) {
+    currentStats.avgCompliancePct = Math.round(
+      currentCompliance.reduce((sum, v) => sum + v, 0) / currentCompliance.length,
+    );
+  }
 
   // Previous-period stats are optional — the route handler omits them
   // when the user picked "all time" (no lower bound → no meaningful
   // previous window).
   const previousStats = previousWorkoutLogs
-    ? computeOverviewStats(buildWeeklySummaries(previousWorkoutLogs).summaries)
+    ? (() => {
+      const stats = computeOverviewStats(buildWeeklySummaries(previousWorkoutLogs).summaries);
+      const previousCompliance = previousWorkoutLogs
+        .map((w) => w.compliancePct)
+        .filter((v): v is number => typeof v === "number");
+      if (previousCompliance.length > 0) {
+        stats.avgCompliancePct = Math.round(
+          previousCompliance.reduce((sum, v) => sum + v, 0) / previousCompliance.length,
+        );
+      }
+      return stats;
+    })()
     : undefined;
 
   return {

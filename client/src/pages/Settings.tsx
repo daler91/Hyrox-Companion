@@ -35,7 +35,7 @@ interface PreferencesSnapshot extends Omit<UserPreferences, "weeklyGoal"> {
 }
 
 function preferencesToSnapshot(
-  preferences: Pick<Preferences, "weightUnit" | "distanceUnit" | "weeklyGoal" | "emailNotifications" | "emailWeeklySummary" | "emailMissedReminder" | "aiCoachEnabled">,
+  preferences: Pick<Preferences, "weightUnit" | "distanceUnit" | "weeklyGoal" | "emailNotifications" | "emailWeeklySummary" | "emailMissedReminder" | "showAdherenceInsights" | "aiCoachEnabled">,
 ): PreferencesSnapshot {
   return {
     weightUnit: preferences.weightUnit || "kg",
@@ -44,6 +44,7 @@ function preferencesToSnapshot(
     emailNotifications: preferences.emailNotifications,
     emailWeeklySummary: preferences.emailWeeklySummary ?? true,
     emailMissedReminder: preferences.emailMissedReminder ?? true,
+    showAdherenceInsights: preferences.showAdherenceInsights ?? true,
     aiCoachEnabled: preferences.aiCoachEnabled ?? true,
   };
 }
@@ -56,6 +57,7 @@ function savePayloadToSnapshot(payload: SavePayload): PreferencesSnapshot {
     emailNotifications: payload.emailNotifications,
     emailWeeklySummary: payload.emailWeeklySummary,
     emailMissedReminder: payload.emailMissedReminder,
+    showAdherenceInsights: payload.showAdherenceInsights,
     aiCoachEnabled: payload.aiCoachEnabled,
   };
 }
@@ -68,6 +70,7 @@ function snapshotToSavePayload(snapshot: PreferencesSnapshot): SavePayload {
     emailNotifications: snapshot.emailNotifications,
     emailWeeklySummary: snapshot.emailWeeklySummary,
     emailMissedReminder: snapshot.emailMissedReminder,
+    showAdherenceInsights: snapshot.showAdherenceInsights,
     aiCoachEnabled: snapshot.aiCoachEnabled,
   };
 }
@@ -83,6 +86,7 @@ export default function Settings() {
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [emailWeeklySummary, setEmailWeeklySummary] = useState(true);
   const [emailMissedReminder, setEmailMissedReminder] = useState(true);
+  const [showAdherenceInsights, setShowAdherenceInsights] = useState(true);
   const [aiCoachEnabled, setAiCoachEnabled] = useState(true);
   const [hasChanges, setHasChanges] = useState(false);
   // Snapshot of values before the most recent save, used to offer an
@@ -137,6 +141,7 @@ export default function Settings() {
       setEmailNotifications(preferences.emailNotifications);
       setEmailWeeklySummary(preferences.emailWeeklySummary ?? true);
       setEmailMissedReminder(preferences.emailMissedReminder ?? true);
+      setShowAdherenceInsights(preferences.showAdherenceInsights ?? true);
       setAiCoachEnabled(preferences.aiCoachEnabled ?? true);
       // Seed the committed-state tracker the first time preferences load.
       // Subsequent updates come from saveMutation.onSuccess so we don't
@@ -176,6 +181,7 @@ export default function Settings() {
               setEmailNotifications(previous.emailNotifications);
               setEmailWeeklySummary(previous.emailWeeklySummary);
               setEmailMissedReminder(previous.emailMissedReminder);
+              setShowAdherenceInsights(previous.showAdherenceInsights);
               setAiCoachEnabled(previous.aiCoachEnabled);
               saveMutation.mutate(snapshotToSavePayload(previous));
             }}
@@ -219,9 +225,10 @@ export default function Settings() {
       emailNotifications,
       emailWeeklySummary,
       emailMissedReminder,
+      showAdherenceInsights,
       aiCoachEnabled,
     });
-  }, [saveMutation, weightUnit, distanceUnit, weeklyGoal, emailNotifications, emailWeeklySummary, emailMissedReminder, aiCoachEnabled]);
+  }, [saveMutation, weightUnit, distanceUnit, weeklyGoal, emailNotifications, emailWeeklySummary, emailMissedReminder, showAdherenceInsights, aiCoachEnabled]);
 
   const markChanged = () => setHasChanges(true);
 
@@ -263,6 +270,7 @@ export default function Settings() {
         emailNotifications={emailNotifications}
         emailWeeklySummary={emailWeeklySummary}
         emailMissedReminder={emailMissedReminder}
+        showAdherenceInsights={showAdherenceInsights}
         aiCoachEnabled={aiCoachEnabled}
         onWeightUnitChange={(v) => {
           setWeightUnit(v);
@@ -286,6 +294,10 @@ export default function Settings() {
         }}
         onEmailMissedReminderChange={(v) => {
           setEmailMissedReminder(v);
+          markChanged();
+        }}
+        onShowAdherenceInsightsChange={(v) => {
+          setShowAdherenceInsights(v);
           markChanged();
         }}
         onAiCoachEnabledChange={(v) => {

@@ -450,6 +450,61 @@ async function copyPrescribedSetsIntoLog(
   return tx.insert(exerciseSets).values(copyRows).returning();
 }
 
+export function summarizeSetAdherence(planned: ExerciseSet[], actual: ExerciseSet[]) {
+  const plannedCounts = new Map<string, number>();
+  const actualCounts = new Map<string, number>();
+  const keyFor = (s: ExerciseSet) => (s.customLabel || s.exerciseName || "").toLowerCase().trim();
+
+  for (const s of planned) {
+    const key = keyFor(s);
+    plannedCounts.set(key, (plannedCounts.get(key) ?? 0) + 1);
+  }
+  for (const s of actual) {
+    const key = keyFor(s);
+    actualCounts.set(key, (actualCounts.get(key) ?? 0) + 1);
+  }
+
+  let matchedSetCount = 0;
+  let addedSetCount = 0;
+  let removedSetCount = 0;
+  const keys = new Set([...plannedCounts.keys(), ...actualCounts.keys()]);
+  for (const key of keys) {
+    const plannedCount = plannedCounts.get(key) ?? 0;
+    const actualCount = actualCounts.get(key) ?? 0;
+    matchedSetCount += Math.min(plannedCount, actualCount);
+    if (actualCount > plannedCount) addedSetCount += actualCount - plannedCount;
+    if (plannedCount > actualCount) removedSetCount += plannedCount - actualCount;
+  }
+
+  return {
+    plannedSetCount: planned.length,
+    actualSetCount: actual.length,
+    matchedSetCount,
+    addedSetCount,
+    removedSetCount,
+    compliancePct: planned.length > 0 ? Math.round((matchedSetCount / planned.length) * 100) : null,
+  };
+}
+
+async function persistAdherenceSnapshot(
+  tx: WorkoutTx,
+  workoutLogId: string,
+  planDayId: string,
+  actualSets: ExerciseSet[],
+): Promise<void> {
+  const plannedSets = await tx
+    .select()
+    .from(exerciseSets)
+    .where(eq(exerciseSets.planDayId, planDayId))
+    .orderBy(asc(exerciseSets.sortOrder));
+
+  const snapshot = summarizeSetAdherence(plannedSets, actualSets);
+  await tx
+    .update(workoutLogs)
+    .set(snapshot)
+    .where(eq(workoutLogs.id, workoutLogId));
+}
+
 async function createWorkoutInTx(
   tx: WorkoutTx,
   enrichedData: InsertWorkoutLog,
@@ -458,23 +513,31 @@ async function createWorkoutInTx(
 ): Promise<CreateWorkoutResult> {
   const [log] = await tx
     .insert(workoutLogs)
-    .values({ ...enrichedData, userId })
+    .values({
+      ...enrichedData,
+      userId,
+      prescribedMainWorkout: enrichedData.mainWorkout,
+      prescribedAccessory: enrichedData.accessory ?? null,
+      prescribedNotes: enrichedData.notes ?? null,
+    })
     .returning();
 
   if (enrichedData.planDayId) {
     await markPlanDayCompleted(tx, enrichedData.planDayId, userId);
   }
 
+  let savedSets: ExerciseSet[] = [];
   if (exercises && Array.isArray(exercises) && exercises.length > 0) {
-    const savedSets = await insertClientSuppliedExercises(tx, exercises, log.id, userId);
-    return { ...log, exerciseSets: savedSets };
+    savedSets = await insertClientSuppliedExercises(tx, exercises, log.id, userId);
+  } else if (enrichedData.planDayId) {
+    savedSets = await copyPrescribedSetsIntoLog(tx, enrichedData.planDayId, log.id);
   }
 
   if (enrichedData.planDayId) {
-    const savedSets = await copyPrescribedSetsIntoLog(tx, enrichedData.planDayId, log.id);
-    if (savedSets.length > 0) return { ...log, exerciseSets: savedSets };
+    await persistAdherenceSnapshot(tx, log.id, enrichedData.planDayId, savedSets);
   }
 
+  if (savedSets.length > 0) return { ...log, exerciseSets: savedSets };
   return log;
 }
 

@@ -40,6 +40,7 @@ describe("CoachNote", () => {
     expect(screen.getByTestId("coach-note-source-plan-day-1")).toHaveTextContent("RAG");
     expect(screen.getByText("Plan goal")).toBeInTheDocument();
     expect(screen.getByText("Build phase")).toBeInTheDocument();
+    expect(screen.getByText("Next: Peak → Taper → Race week")).toBeInTheDocument();
     expect(screen.getByText("RPE stable")).toBeInTheDocument();
     expect(screen.getByText("3 recent workouts")).toBeInTheDocument();
     expect(screen.getByText("Coaching docs")).toBeInTheDocument();
@@ -80,6 +81,22 @@ describe("CoachNote", () => {
     fireEvent.click(screen.getByTestId("coach-note-toggle-plan-day-1"));
     expect(screen.queryByText(/Based on/)).toBeNull();
     expect(screen.getByTestId("coach-note-source-plan-day-1")).toHaveTextContent("Legacy");
+  });
+
+  it("does not render a next-phases chip during race week", () => {
+    render(
+      <CoachNote
+        {...baseProps}
+        source="rag"
+        inputsUsed={{
+          ...baseProps.inputsUsed,
+          planPhase: "race_week",
+        }}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("coach-note-toggle-plan-day-1"));
+    expect(screen.getByText("Race week phase")).toBeInTheDocument();
+    expect(screen.queryByText(/^Next:/)).toBeNull();
   });
 
   it("is keyboard-toggleable via Enter/Space on the button", () => {

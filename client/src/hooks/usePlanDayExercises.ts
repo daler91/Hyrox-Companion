@@ -38,9 +38,9 @@ function isTimeoutLikeError(error: unknown): boolean {
  * shape so the ExerciseTable component can plug in either source
  * without knowing which owner it's writing to.
  *
- * When Mark complete fires, phase-6's createWorkoutInTx copies
- * whatever rows this hook has persisted into the new workoutLog — so
- * these edits are the starting state of the logged workout.
+ * When Mark complete fires, the server's `createWorkoutInTx` copy-from-plan
+ * path copies whatever rows this hook has persisted into the new workoutLog —
+ * so these edits are the starting state of the logged workout.
  */
 export function usePlanDayExercises(planDayId: string | null) {
   const queryKey = planDayId

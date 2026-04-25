@@ -112,6 +112,7 @@ export function computePlanPhase(
   if (totalWeeks <= 0 || currentWeek <= 0) return undefined;
 
   const progressPct = Math.round((currentWeek / totalWeeks) * 100);
+  const orderedPhases = ["early", "build", "peak", "taper", "race_week"] as const;
 
   let phaseLabel: "early" | "build" | "peak" | "taper" | "race_week";
   if (currentWeek >= totalWeeks) phaseLabel = "race_week";
@@ -120,7 +121,10 @@ export function computePlanPhase(
   else if (progressPct >= 25) phaseLabel = "build";
   else phaseLabel = "early";
 
-  return { currentWeek, totalWeeks, phaseLabel, progressPct };
+  const phaseIndex = orderedPhases.indexOf(phaseLabel);
+  const remainingPhases = orderedPhases.slice(Math.max(phaseIndex + 1, 0));
+
+  return { currentWeek, totalWeeks, phaseLabel, progressPct, remainingPhases };
 }
 
 export function computeWeeklyVolume(
