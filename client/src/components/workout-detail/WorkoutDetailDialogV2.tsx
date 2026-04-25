@@ -630,10 +630,13 @@ function buildDialogBodyComputedState(args: {
 
   // Prefer the persisted snapshot so later plan-day edits don't
   // retroactively change a completed workout's compliance.
-  const snapshotSummary = isPlanned ? null : buildPlannedVsActualFromSnapshot(workout);
-  const plannedVsActual = isPlanned
-    ? null
-    : snapshotSummary ?? (planDayId ? summarizePlannedVsActual(plannedSets, loggedSets) : null);
+  const plannedVsActual = computePlannedVsActual({
+    isPlanned,
+    planDayId,
+    workout,
+    plannedSets,
+    loggedSets,
+  });
   const chatSeed = buildCoachChatSeed({
     focusLabel,
     isPlanned,
@@ -953,12 +956,26 @@ interface PlannedVsActualSummary {
   readonly removedExercises: readonly string[];
 }
 
+function computePlannedVsActual(args: {
+  readonly isPlanned: boolean;
+  readonly planDayId: string | null;
+  readonly workout: Parameters<typeof buildPlannedVsActualFromSnapshot>[0];
+  readonly plannedSets: ExerciseSet[];
+  readonly loggedSets: ExerciseSet[];
+}): PlannedVsActualSummary | null {
+  if (args.isPlanned) return null;
+  const snapshot = buildPlannedVsActualFromSnapshot(args.workout);
+  if (snapshot) return snapshot;
+  if (!args.planDayId) return null;
+  return summarizePlannedVsActual(args.plannedSets, args.loggedSets);
+}
+
 // Returns null when no snapshot exists so the caller can fall back to a
 // live comparison. Per-exercise added/removed labels aren't snapshotted.
 function buildPlannedVsActualFromSnapshot(
   workout: { plannedSetCount?: number | null; actualSetCount?: number | null; matchedSetCount?: number | null; addedSetCount?: number | null; removedSetCount?: number | null; compliancePct?: number | null } | undefined,
 ): PlannedVsActualSummary | null {
-  if (!workout || workout.plannedSetCount == null) return null;
+  if (workout?.plannedSetCount == null) return null;
   const plannedSets = workout.plannedSetCount;
   const actualSets = workout.actualSetCount ?? 0;
   return {
