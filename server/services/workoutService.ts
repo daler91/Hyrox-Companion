@@ -779,9 +779,25 @@ export async function processBatchChunk(
       await saveParsedWorkoutsBatch(successfulParses);
       parsed += successfulParses.length;
     } catch (dbError) {
-      logger.error({ err: dbError }, `Failed to save batch of re-parsed workouts:`);
-      // If batch fails, count them all as failed
-      failed += successfulParses.length;
+      logger.warn(
+        { err: dbError },
+        `Batch save failed, falling back to sequential save to isolate failure`,
+      );
+
+      // Fallback: If batch fails (e.g., due to a single invalid row), process sequentially
+      // to ensure valid workouts are still saved and failures are isolated.
+      for (const w of successfulParses) {
+        try {
+          await saveParsedWorkout(w.workoutId, w.setRows);
+          parsed++;
+        } catch (individualError) {
+          logger.error(
+            { err: individualError },
+            `Failed to save re-parsed workout ${w.workoutId} during fallback:`,
+          );
+          failed++;
+        }
+      }
     }
   }
 
