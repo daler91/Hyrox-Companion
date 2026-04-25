@@ -189,7 +189,18 @@
     "  text from user-uploaded .docx files. Untrusted DOCX archives are exactly the attack",
     "  surface this advisory targets, so the override is required. Dependabot cannot update",
     "  transitive pnpm deps.",
-    "  Remove when mammoth ships a version whose @xmldom/xmldom range resolves to >=0.8.13."
+    "  Remove when mammoth ships a version whose @xmldom/xmldom range resolves to >=0.8.13.",
+    "",
+    "uuid ^14.0.0: fixes GHSA (missing buffer bounds check in v3/v5/v6 when buf is provided,",
+    "  Dependabot issue #43). In uuid <14.0.0, v3()/v5()/v6() did not validate the offset into",
+    "  a caller-supplied buffer, so an invalid offset (negative or offset+16 > buf.length)",
+    "  produced an out-of-bounds write. Patched in 14.0.0, which now throws RangeError on",
+    "  invalid offsets. Pulled transitively by @cypress/request 3.0.10 (declares uuid ^8.3.2).",
+    "  @cypress/request inherited the dep from upstream `request` but no longer imports uuid",
+    "  in its source, so the major bump (CommonJS removed in uuid@12) does not break it.",
+    "  cypress is a devDependency only, so runtime is unaffected either way. Dependabot cannot",
+    "  update transitive pnpm deps, so the override is required to clear the advisory.",
+    "  Remove when @cypress/request drops the unused uuid dependency or pins >=14.0.0."
   ],
   "overrides": {
     "esbuild": "0.27.5",
@@ -201,7 +212,8 @@
     "protobufjs": "^7.5.5",
     "@clerk/shared": "^4.8.1",
     "follow-redirects": "^1.16.0",
-    "@xmldom/xmldom": "^0.8.13"
+    "@xmldom/xmldom": "^0.8.13",
+    "uuid": "^14.0.0"
   },
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.19",
@@ -262,7 +274,8 @@
       "protobufjs": "^7.5.5",
       "@clerk/shared": "^4.8.1",
       "follow-redirects": "^1.16.0",
-      "@xmldom/xmldom": "^0.8.13"
+      "@xmldom/xmldom": "^0.8.13",
+      "uuid": "^14.0.0"
     }
   },
   "packageManager": "pnpm@9.12.0",
