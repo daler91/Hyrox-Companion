@@ -7,7 +7,7 @@ describe("Log Workout Submission", () => {
     // Intercept the POST request to save the workout
     cy.intercept("POST", "/api/v1/workouts", {
       statusCode: 200,
-      body: { id: "new-workout-1", title: "My New Workout", date: new Date().toISOString() }
+      body: { id: "new-workout-1", title: "My New Workout", date: new Date().toISOString() },
     }).as("saveWorkout");
 
     // Stub auto-parse to return no structured rows so the composer
@@ -20,7 +20,9 @@ describe("Log Workout Submission", () => {
     }).as("parseExercises");
 
     cy.visit("/log");
-    cy.wait("@authUser");
+    // Auth user may already be hydrated from cache between specs; assert
+    // page readiness instead of requiring a fresh network call each time.
+    cy.getBySel("button-save-workout").should("exist");
     cy.ensureConsentDismissed();
   });
 
@@ -44,7 +46,7 @@ describe("Log Workout Submission", () => {
       expect(interception.request.body).to.include({
         title: "Morning Training Run",
         mainWorkout: "5km tempo run\n4x10 pushups",
-        notes: "Felt really good today!"
+        notes: "Felt really good today!",
       });
     });
 
@@ -82,7 +84,7 @@ describe("Log Workout Exercise Mode Submission", () => {
     setupAuthIntercepts();
     cy.intercept("POST", "/api/v1/workouts", {
       statusCode: 200,
-      body: { id: "new-workout-2", title: "Exercise Mode Workout", date: new Date().toISOString() }
+      body: { id: "new-workout-2", title: "Exercise Mode Workout", date: new Date().toISOString() },
     }).as("saveWorkout");
     cy.intercept("POST", "/api/v1/parse-exercises", {
       statusCode: 200,
@@ -90,7 +92,9 @@ describe("Log Workout Exercise Mode Submission", () => {
     }).as("parseExercises");
 
     cy.visit("/log");
-    cy.wait("@authUser");
+    // Auth user may already be hydrated from cache between specs; assert
+    // page readiness instead of requiring a fresh network call each time.
+    cy.getBySel("button-save-workout").should("exist");
     cy.ensureConsentDismissed();
   });
 
@@ -111,11 +115,11 @@ describe("Log Workout Exercise Mode Submission", () => {
     cy.wait("@saveWorkout").then((interception) => {
       expect(interception.request.body).to.include({
         title: "Leg Day",
-        notes: "Squats felt heavy"
+        notes: "Squats felt heavy",
       });
       // Ensure exercises array is present and contains back_squat
       expect(interception.request.body.exercises[0]).to.include({
-        exerciseName: "back_squat"
+        exerciseName: "back_squat",
       });
     });
 
