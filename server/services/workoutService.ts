@@ -1,5 +1,18 @@
-import { customExercises, type ExerciseSet,exerciseSets, type InsertExerciseSet, type InsertWorkoutLog, type ParsedExercise, planDays, trainingPlans, type UpdateWorkoutLog, users, type WorkoutLog, workoutLogs } from "@shared/schema";
-import { and,asc, eq } from "drizzle-orm";
+import {
+  customExercises,
+  type ExerciseSet,
+  exerciseSets,
+  type InsertExerciseSet,
+  type InsertWorkoutLog,
+  type ParsedExercise,
+  planDays,
+  trainingPlans,
+  type UpdateWorkoutLog,
+  users,
+  type WorkoutLog,
+  workoutLogs,
+} from "@shared/schema";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import pLimit from "p-limit";
 
 import { db } from "../db";
@@ -17,12 +30,11 @@ const GEMINI_PARSE_CONCURRENCY = 3;
 // Drizzle transaction type — any method chain valid on `db` is also valid on `tx`.
 type WorkoutTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-
 // ⚡ Bolt Performance Optimization:
 // Combined multiple O(N) array traversals (.filter, .map, .map) into a single loop
 // using a Map to avoid redundant array allocations and garbage collection overhead.
 export function extractAndDeduplicateCustomExercises(exercises: ParsedExercise[], userId: string) {
-  const uniqueCustomExs = new Map<string, { userId: string, name: string, category: string }>();
+  const uniqueCustomExs = new Map<string, { userId: string; name: string; category: string }>();
 
   for (const ex of exercises) {
     if (ex.exerciseName === "custom" && ex.customLabel) {
@@ -37,8 +49,6 @@ export function extractAndDeduplicateCustomExercises(exercises: ParsedExercise[]
 
   return Array.from(uniqueCustomExs.values());
 }
-
-
 
 // Hard cap on expanded set rows per workout submit. Zod already bounds per-
 // exercise numSets and the exercises array, but their product can still reach
@@ -165,7 +175,10 @@ function expandExercisesToRows(
   return rows;
 }
 
-export function expandExercisesToSetRows(exercises: ParsedExercise[], workoutLogId: string): InsertExerciseSet[] {
+export function expandExercisesToSetRows(
+  exercises: ParsedExercise[],
+  workoutLogId: string,
+): InsertExerciseSet[] {
   return expandExercisesToRows(exercises, { workoutLogId }, "workout");
 }
 
@@ -179,10 +192,9 @@ export function expandExercisesToPlanDaySetRows(
   return expandExercisesToRows(exercises, { planDayId }, "plan");
 }
 
-
 export async function prepareParsedWorkout(
   workout: { id: string; mainWorkout?: string | null; accessory?: string | null },
-  weightUnit: string
+  weightUnit: string,
 ): Promise<{ exercises: ParsedExercise[]; setRows: InsertExerciseSet[] } | null> {
   const { parseExercisesFromText } = await import("../gemini");
 
@@ -198,9 +210,33 @@ export async function prepareParsedWorkout(
 
 export async function saveParsedWorkout(
   workoutId: string,
-  setRows: InsertExerciseSet[]
+  setRows: InsertExerciseSet[],
 ): Promise<number> {
   return replaceExerciseSetsByOwner({ workoutLogId: workoutId }, setRows);
+}
+
+// ⚡ Bolt Performance Optimization:
+// Batch replace exercise sets for multiple workouts in a single transaction
+// to avoid N+1 query overhead during batch reparsing.
+export async function saveParsedWorkoutsBatch(
+  workouts: { workoutId: string; setRows: InsertExerciseSet[] }[],
+): Promise<number> {
+  if (workouts.length === 0) return 0;
+
+  const workoutIds = workouts.map((w) => w.workoutId);
+  const allSetRows = workouts.flatMap((w) => w.setRows);
+
+  await db.transaction(async (tx) => {
+    // Drop all existing sets for these workouts
+    await tx.delete(exerciseSets).where(inArray(exerciseSets.workoutLogId, workoutIds));
+
+    // Insert new sets in bulk
+    if (allSetRows.length > 0) {
+      await tx.insert(exerciseSets).values(allSetRows);
+    }
+  });
+
+  return allSetRows.length;
 }
 
 // Replace-all semantics for an owner (either a logged workout or a plan day):
@@ -210,9 +246,10 @@ async function replaceExerciseSetsByOwner(
   owner: SetOwner,
   setRows: InsertExerciseSet[],
 ): Promise<number> {
-  const condition = "workoutLogId" in owner
-    ? eq(exerciseSets.workoutLogId, owner.workoutLogId)
-    : eq(exerciseSets.planDayId, owner.planDayId);
+  const condition =
+    "workoutLogId" in owner
+      ? eq(exerciseSets.workoutLogId, owner.workoutLogId)
+      : eq(exerciseSets.planDayId, owner.planDayId);
   await db.transaction(async (tx) => {
     await tx.delete(exerciseSets).where(condition);
     if (setRows.length > 0) {
@@ -346,7 +383,7 @@ export type UpdateWorkoutResult = WorkoutLog & { exerciseSets?: ExerciseSet[] };
 
 async function resolveActivePlanLinks(
   workoutData: InsertWorkoutLog,
-  userId: string
+  userId: string,
 ): Promise<{ planId?: string | null; planDayId?: string | null }> {
   if (workoutData.planDayId) {
     // Already linked to a plan day — derive planId from it
@@ -499,17 +536,14 @@ async function persistAdherenceSnapshot(
     .orderBy(asc(exerciseSets.sortOrder));
 
   const snapshot = summarizeSetAdherence(plannedSets, actualSets);
-  await tx
-    .update(workoutLogs)
-    .set(snapshot)
-    .where(eq(workoutLogs.id, workoutLogId));
+  await tx.update(workoutLogs).set(snapshot).where(eq(workoutLogs.id, workoutLogId));
 }
 
 async function createWorkoutInTx(
   tx: WorkoutTx,
   enrichedData: InsertWorkoutLog,
   exercises: ParsedExercise[] | undefined,
-  userId: string
+  userId: string,
 ): Promise<CreateWorkoutResult> {
   const [log] = await tx
     .insert(workoutLogs)
@@ -544,7 +578,7 @@ async function createWorkoutInTx(
 export async function createWorkout(
   workoutData: InsertWorkoutLog,
   exercises: ParsedExercise[] | undefined,
-  userId: string
+  userId: string,
 ): Promise<CreateWorkoutResult> {
   // Resolve plan linkage before creating the workout
   const planLinks = await resolveActivePlanLinks(workoutData, userId);
@@ -573,7 +607,7 @@ export async function createWorkout(
 export async function createWorkoutAndScheduleCoaching(
   workoutData: InsertWorkoutLog,
   exercises: ParsedExercise[] | undefined,
-  userId: string
+  userId: string,
 ): Promise<CreateWorkoutResult> {
   const planLinks = await resolveActivePlanLinks(workoutData, userId);
   const enrichedData = {
@@ -628,7 +662,7 @@ export async function updateWorkout(
   workoutId: string,
   updateData: UpdateWorkoutLog,
   exercises: ParsedExercise[] | undefined,
-  userId: string
+  userId: string,
 ): Promise<UpdateWorkoutResult | null> {
   if (exercises && Array.isArray(exercises)) {
     const result = await db.transaction(async (tx) => {
@@ -655,10 +689,7 @@ export async function updateWorkout(
         const uniqueCustomExs = extractAndDeduplicateCustomExercises(exercises, userId);
 
         if (uniqueCustomExs.length > 0) {
-          await tx
-            .insert(customExercises)
-            .values(uniqueCustomExs)
-            .onConflictDoNothing();
+          await tx.insert(customExercises).values(uniqueCustomExs).onConflictDoNothing();
         }
 
         return { log: { ...log, exerciseSets: savedSets } as UpdateWorkoutResult, previousDate };
@@ -708,7 +739,7 @@ function maybeEnqueueAutoCoachOnDateChange(
 
 export async function processBatchChunk(
   chunk: { id: string; mainWorkout?: string | null; accessory?: string | null }[],
-  weightUnit: string
+  weightUnit: string,
 ): Promise<{ parsed: number; failed: number }> {
   let parsed = 0;
   let failed = 0;
@@ -718,15 +749,17 @@ export async function processBatchChunk(
   // GEMINI_PARSE_CONCURRENCY in-flight calls regardless of chunk size.
   const limit = pLimit(GEMINI_PARSE_CONCURRENCY);
   const chunkResults = await Promise.allSettled(
-    chunk.map(workout => limit(() => prepareParsedWorkout(workout, weightUnit)))
+    chunk.map((workout) => limit(() => prepareParsedWorkout(workout, weightUnit))),
   );
 
-  // Save each successfully parsed workout sequentially to prevent DB connection strain
+  const successfulParses: { workoutId: string; setRows: InsertExerciseSet[] }[] = [];
+
+  // Accumulate successfully parsed workouts
   for (let j = 0; j < chunkResults.length; j++) {
     const result = chunkResults[j];
     const workout = chunk[j];
 
-    if (result.status === 'rejected') {
+    if (result.status === "rejected") {
       logger.error({ err: result.reason }, `Batch reparse failed for workout ${workout.id}:`);
       failed++;
       continue;
@@ -737,19 +770,43 @@ export async function processBatchChunk(
       continue;
     }
 
+    successfulParses.push({ workoutId: workout.id, setRows: result.value.setRows });
+  }
+
+  // ⚡ Bolt Performance Optimization: Replace N+1 queries with a single batch operation
+  if (successfulParses.length > 0) {
     try {
-      await saveParsedWorkout(workout.id, result.value.setRows);
-      parsed++;
+      await saveParsedWorkoutsBatch(successfulParses);
+      parsed += successfulParses.length;
     } catch (dbError) {
-      logger.error({ err: dbError }, `Failed to save re-parsed workout ${workout.id}:`);
-      failed++;
+      logger.warn(
+        { err: dbError },
+        `Batch save failed, falling back to sequential save to isolate failure`,
+      );
+
+      // Fallback: If batch fails (e.g., due to a single invalid row), process sequentially
+      // to ensure valid workouts are still saved and failures are isolated.
+      for (const w of successfulParses) {
+        try {
+          await saveParsedWorkout(w.workoutId, w.setRows);
+          parsed++;
+        } catch (individualError) {
+          logger.error(
+            { err: individualError },
+            `Failed to save re-parsed workout ${w.workoutId} during fallback:`,
+          );
+          failed++;
+        }
+      }
     }
   }
 
   return { parsed, failed };
 }
 
-export async function batchReparseWorkouts(userId: string): Promise<{ total: number; parsed: number; failed: number }> {
+export async function batchReparseWorkouts(
+  userId: string,
+): Promise<{ total: number; parsed: number; failed: number }> {
   const workouts = await storage.workouts.getWorkoutsWithoutExerciseSets(userId);
   const user = await storage.users.getUser(userId);
   const weightUnit = user?.weightUnit || "kg";
