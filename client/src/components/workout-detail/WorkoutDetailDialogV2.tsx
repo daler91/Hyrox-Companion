@@ -628,9 +628,12 @@ function buildDialogBodyComputedState(args: {
       actualNotes: workout?.notes ?? entry.notes ?? null,
     });
 
-  const plannedVsActual = isPlanned || !planDayId
+  // Prefer the persisted snapshot so later plan-day edits don't
+  // retroactively change a completed workout's compliance.
+  const snapshotSummary = isPlanned ? null : buildPlannedVsActualFromSnapshot(workout);
+  const plannedVsActual = isPlanned
     ? null
-    : summarizePlannedVsActual(plannedSets, loggedSets);
+    : snapshotSummary ?? (planDayId ? summarizePlannedVsActual(plannedSets, loggedSets) : null);
   const chatSeed = buildCoachChatSeed({
     focusLabel,
     isPlanned,
@@ -716,8 +719,10 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
       planSets.updatePrescription.mutate({ [field]: normalized });
     }
   };
+  // Keep parse available for logged workouts so legacy/imported entries
+  // with free text but no structured sets can reach the Parse path.
   const parseReady =
-    isPlanned && planDayId != null;
+    (isPlanned && planDayId != null) || (!isPlanned && workoutId != null);
   const currentSets = isPlanned ? planSets.exerciseSets : exerciseSets;
   const hasSets = currentSets.length > 0;
 
@@ -946,6 +951,27 @@ interface PlannedVsActualSummary {
   readonly removedSets: number;
   readonly addedExercises: readonly string[];
   readonly removedExercises: readonly string[];
+}
+
+// Returns null when no snapshot exists so the caller can fall back to a
+// live comparison. Per-exercise added/removed labels aren't snapshotted.
+function buildPlannedVsActualFromSnapshot(
+  workout: { plannedSetCount?: number | null; actualSetCount?: number | null; matchedSetCount?: number | null; addedSetCount?: number | null; removedSetCount?: number | null; compliancePct?: number | null } | undefined,
+): PlannedVsActualSummary | null {
+  if (!workout || workout.plannedSetCount == null) return null;
+  const plannedSets = workout.plannedSetCount;
+  const actualSets = workout.actualSetCount ?? 0;
+  return {
+    hasComparisonData: plannedSets > 0 || actualSets > 0,
+    plannedSets,
+    actualSets,
+    matchedSets: workout.matchedSetCount ?? 0,
+    compliancePct: workout.compliancePct ?? null,
+    addedSets: workout.addedSetCount ?? 0,
+    removedSets: workout.removedSetCount ?? 0,
+    addedExercises: [],
+    removedExercises: [],
+  };
 }
 
 function summarizePlannedVsActual(
