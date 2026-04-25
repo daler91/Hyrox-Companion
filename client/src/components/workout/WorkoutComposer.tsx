@@ -1,5 +1,5 @@
 import type { AllowedImageMimeType, ExerciseName, ParsedExercise } from "@shared/schema";
-import { AlertTriangle, ChevronDown, Loader2, Sparkles } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, Loader2, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { StructuredExercise } from "@/components/ExerciseInput";
@@ -182,12 +182,19 @@ export function WorkoutComposer({
     [isListening, stopListening],
   );
 
+  const hasDescription = freeText.trim().length > 0;
+
   return (
     <div className="space-y-4" data-testid="workout-composer">
       <ParseStatusStrip
         parsing={autoParsing}
         error={autoParseError}
-        hasText={freeText.trim().length > 0}
+        hasText={hasDescription}
+      />
+
+      <WorkoutContentsStatus
+        exerciseCount={exerciseBlocks.length}
+        hasDescription={hasDescription}
       />
 
       <Collapsible open={panelOpen} onOpenChange={handlePanelOpenChange}>
@@ -195,12 +202,12 @@ export function WorkoutComposer({
           <Button
             type="button"
             variant="outline"
-            className="w-full justify-between"
+            className="min-h-11 w-full justify-between px-3"
             data-testid="workout-composer-toggle-text"
           >
             <span className="flex items-center gap-2 text-sm font-medium">
               <Sparkles className="h-4 w-4 text-primary" aria-hidden />
-              Describe or dictate your workout
+              Description, voice, or photo
             </span>
             <ChevronDown
               className={cn(
@@ -290,6 +297,45 @@ export function WorkoutComposer({
         weightUnit={weightUnit}
         distanceUnit={distanceUnit}
       />
+    </div>
+  );
+}
+
+interface WorkoutContentsStatusProps {
+  readonly exerciseCount: number;
+  readonly hasDescription: boolean;
+}
+
+function WorkoutContentsStatus({ exerciseCount, hasDescription }: WorkoutContentsStatusProps) {
+  let label = "Empty";
+  let detail = "Add exercise rows or a description";
+  if (exerciseCount > 0) {
+    label = `${exerciseCount} exercise${exerciseCount === 1 ? "" : "s"}`;
+    detail = hasDescription ? "Structured rows with source text" : "Structured rows ready";
+  } else if (hasDescription) {
+    label = "Description captured";
+    detail = "No exercise rows yet";
+  }
+
+  return (
+    <div
+      className="flex flex-col gap-2 rounded-lg border border-border bg-muted/20 px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between"
+      role="status"
+      aria-live="polite"
+      data-testid="workout-contents-status"
+    >
+      <div className="min-w-0">
+        <div className="text-xs font-medium uppercase text-muted-foreground">
+          Workout contents
+        </div>
+        <div className="truncate font-medium">{label}</div>
+      </div>
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        {exerciseCount > 0 ? (
+          <CheckCircle2 className="h-3.5 w-3.5 text-success" aria-hidden />
+        ) : null}
+        <span>{detail}</span>
+      </div>
     </div>
   );
 }

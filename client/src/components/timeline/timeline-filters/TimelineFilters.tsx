@@ -1,5 +1,15 @@
-import { CalendarDays, Download, Filter, Loader2, Pencil, Settings2, Sparkles,Target, Upload } from "lucide-react";
-import { useState } from "react";
+import {
+  CalendarDays,
+  Download,
+  Filter,
+  Loader2,
+  MoreHorizontal,
+  Pencil,
+  Sparkles,
+  Target,
+  Upload,
+} from "lucide-react";
+import { useRef, useState } from "react";
 
 import { GeneratePlanDialog } from "@/components/plans/GeneratePlanDialog";
 import { Button } from "@/components/ui/button";
@@ -13,7 +23,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -55,6 +64,7 @@ export default function TimelineFilters({
   const [goalDialogOpen, setGoalDialogOpen] = useState(false);
   const [goalText, setGoalText] = useState("");
   const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const selectedPlan = plans.find((p) => p.id === selectedPlanId);
 
@@ -86,180 +96,184 @@ export default function TimelineFilters({
     }
   };
 
+  const openImportPicker = () => {
+    if (!isImporting) fileInputRef.current?.click();
+  };
+
   return (
     <>
-    <Card>
-      <CardContent className="p-4">
-        <TooltipProvider delayDuration={300}>
-        <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
-          <PlanSelector
-            plansLoading={plansLoading}
-            plans={plans}
-            selectedPlanId={selectedPlanId}
-            onPlanChange={onPlanChange}
-            openRenameDialog={openRenameDialog}
-          />
+      <Card>
+        <CardContent className="p-4">
+          <TooltipProvider delayDuration={300}>
+            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_10rem_auto] md:items-center">
+              <PlanSelector
+                plansLoading={plansLoading}
+                plans={plans}
+                selectedPlanId={selectedPlanId}
+                onPlanChange={onPlanChange}
+                openRenameDialog={openRenameDialog}
+              />
 
-          <Select value={filterStatus} onValueChange={(v) => onFilterChange(v as FilterStatus)}>
-            <SelectTrigger aria-label="Filter workouts by status" className="w-full sm:w-36" data-testid="select-filter">
-              <Filter className="h-4 w-4 mr-2" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
-              <SelectItem value="planned">Planned</SelectItem>
-              <SelectItem value="missed">Missed</SelectItem>
-              <SelectItem value="skipped">Skipped</SelectItem>
-            </SelectContent>
-          </Select>
+              <Select value={filterStatus} onValueChange={(v) => onFilterChange(v as FilterStatus)}>
+                <SelectTrigger aria-label="Filter workouts by status" className="w-full" data-testid="select-filter">
+                  <Filter className="h-4 w-4 mr-2" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                  <SelectItem value="planned">Planned</SelectItem>
+                  <SelectItem value="missed">Missed</SelectItem>
+                  <SelectItem value="skipped">Skipped</SelectItem>
+                </SelectContent>
+              </Select>
 
-          <div className="flex gap-2">
-            {selectedPlan ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant="outline"
-                    data-testid="button-manage-plan"
-                    aria-label="Manage plan"
+                    className="w-full justify-between md:w-auto"
+                    data-testid="button-plan-tools"
+                    aria-label="Plan tools"
                   >
-                    <Settings2 className="h-4 w-4 mr-2" />
-                    Manage
+                    <span className="inline-flex items-center gap-2">
+                      <MoreHorizontal className="h-4 w-4" />
+                      Plan tools
+                    </span>
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-52">
-                  <DropdownMenuLabel className="text-xs">
-                    {selectedPlan.name}
-                  </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={openRenameDialog}
-                    data-testid="menuitem-rename-plan"
-                  >
-                    <Pencil className="h-4 w-4 mr-2" />
-                    Rename plan
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={openGoalDialog}
-                    data-testid="menuitem-set-goal"
-                  >
-                    <Target className="h-4 w-4 mr-2" />
-                    {selectedPlan.goal ? "Edit goal" : "Set goal"}
-                  </DropdownMenuItem>
-                  {onScheduleClick ? (
-                    <DropdownMenuItem
-                      onClick={() => onScheduleClick(selectedPlan.id)}
-                      data-testid="menuitem-reschedule-plan"
-                    >
-                      <CalendarDays className="h-4 w-4 mr-2" />
-                      Reschedule
-                    </DropdownMenuItem>
+                <DropdownMenuContent align="end" className="w-56">
+                  {selectedPlan ? (
+                    <>
+                      <DropdownMenuLabel className="text-xs">
+                        {selectedPlan.name}
+                      </DropdownMenuLabel>
+                      <DropdownMenuItem
+                        onClick={openRenameDialog}
+                        data-testid="menuitem-rename-plan"
+                      >
+                        <Pencil className="h-4 w-4 mr-2" />
+                        Rename plan
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={openGoalDialog}
+                        data-testid="menuitem-set-goal"
+                      >
+                        <Target className="h-4 w-4 mr-2" />
+                        {selectedPlan.goal ? "Edit goal" : "Set goal"}
+                      </DropdownMenuItem>
+                      {onScheduleClick ? (
+                        <DropdownMenuItem
+                          onClick={() => onScheduleClick(selectedPlan.id)}
+                          data-testid="menuitem-reschedule-plan"
+                        >
+                          <CalendarDays className="h-4 w-4 mr-2" />
+                          Reschedule
+                        </DropdownMenuItem>
+                      ) : null}
+                      <DropdownMenuSeparator />
+                    </>
                   ) : null}
+                  <DropdownMenuLabel className="text-xs">
+                    Plan setup
+                  </DropdownMenuLabel>
+                  <DropdownMenuItem
+                    onClick={() => setGenerateDialogOpen(true)}
+                    data-testid="button-generate-ai-plan"
+                  >
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    AI plan
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={downloadTemplate}
+                    data-testid="button-download-template"
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Download template
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    disabled={isImporting}
+                    onSelect={(event) => {
+                      event.preventDefault();
+                      openImportPicker();
+                    }}
+                    data-testid="button-import-plan"
+                  >
+                    {isImporting ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Upload className="h-4 w-4 mr-2" />
+                    )}
+                    Import plan
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            ) : null}
+              <Input
+                ref={fileInputRef}
+                id="csv-upload"
+                type="file"
+                accept=".csv"
+                className="hidden"
+                onChange={onFileUpload}
+                data-testid="input-csv-upload"
+              />
+            </div>
 
-            <Button
-              variant="outline"
-              onClick={() => setGenerateDialogOpen(true)}
-              data-testid="button-generate-ai-plan"
-            >
-              <Sparkles className="h-4 w-4 mr-2" />
-              AI Plan
-            </Button>
-
-            <Button
-              variant="outline"
-              onClick={downloadTemplate}
-              data-testid="button-download-template"
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Template
-            </Button>
-
-            <Label htmlFor="csv-upload" className="cursor-pointer">
-              <Button
-                variant="outline"
-                className="pointer-events-none"
-                disabled={isImporting}
-              >
-                {isImporting ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <>
-                    <Upload className="h-4 w-4 mr-2" />
-                    Import
-                  </>
-                )}
-              </Button>
-            </Label>
-            <Input
-              id="csv-upload"
-              type="file"
-              accept=".csv"
-              className="hidden"
-              onChange={onFileUpload}
-              data-testid="input-csv-upload"
-            />
-          </div>
-        </div>
-
-        {/* Plan goal strip — shown when a specific plan is selected */}
-        {selectedPlan && (
-          <div className="flex items-center gap-2 pt-1 border-t mt-1">
-            <Target className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-            <button
-              type="button"
-              className="flex-1 text-left text-sm text-muted-foreground hover:text-foreground truncate transition-colors rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
-              onClick={openGoalDialog}
-              data-testid="button-plan-goal"
-              aria-label="Edit plan goal"
-            >
-              {selectedPlan.goal ? selectedPlan.goal : <span className="italic">Add a goal, e.g. complete hyrox in under 90 min…</span>}
-            </button>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-6 w-6 shrink-0"
+            {selectedPlan && (
+              <div className="flex items-center gap-2 pt-3 border-t mt-3">
+                <Target className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <button
+                  type="button"
+                  className="flex-1 text-left text-sm text-muted-foreground hover:text-foreground truncate transition-colors rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
                   onClick={openGoalDialog}
+                  data-testid="button-plan-goal"
                   aria-label="Edit plan goal"
-                  data-testid="button-edit-goal"
                 >
-                  <Pencil className="h-3 w-3" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Edit plan goal</TooltipContent>
-            </Tooltip>
-          </div>
-        )}
-              </TooltipProvider>
-      </CardContent>
-    </Card>
+                  {selectedPlan.goal ? selectedPlan.goal : <span className="italic">No plan goal set</span>}
+                </button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 shrink-0 md:h-7 md:w-7"
+                      onClick={openGoalDialog}
+                      aria-label="Edit plan goal"
+                      data-testid="button-edit-goal"
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Edit plan goal</TooltipContent>
+                </Tooltip>
+              </div>
+            )}
+          </TooltipProvider>
+        </CardContent>
+      </Card>
 
-    <RenamePlanDialog
-      open={renameDialogOpen}
-      onOpenChange={setRenameDialogOpen}
-      renameName={renameName}
-      setRenameName={setRenameName}
-      onSubmit={handleRenameSubmit}
-      isRenaming={isRenaming}
-    />
+      <RenamePlanDialog
+        open={renameDialogOpen}
+        onOpenChange={setRenameDialogOpen}
+        renameName={renameName}
+        setRenameName={setRenameName}
+        onSubmit={handleRenameSubmit}
+        isRenaming={isRenaming}
+      />
 
-    <GoalDialog
-      open={goalDialogOpen}
-      onOpenChange={setGoalDialogOpen}
-      goalText={goalText}
-      setGoalText={setGoalText}
-      onSubmit={handleGoalSubmit}
-      isUpdatingGoal={isUpdatingGoal}
-    />
+      <GoalDialog
+        open={goalDialogOpen}
+        onOpenChange={setGoalDialogOpen}
+        goalText={goalText}
+        setGoalText={setGoalText}
+        onSubmit={handleGoalSubmit}
+        isUpdatingGoal={isUpdatingGoal}
+      />
 
-    <GeneratePlanDialog
-      open={generateDialogOpen}
-      onOpenChange={setGenerateDialogOpen}
-    />
+      <GeneratePlanDialog
+        open={generateDialogOpen}
+        onOpenChange={setGenerateDialogOpen}
+      />
     </>
   );
 }

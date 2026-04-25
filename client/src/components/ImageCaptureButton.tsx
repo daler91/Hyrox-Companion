@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 export interface ImageCaptureButtonProps {
   readonly onImage: (image: CompressedImage) => void;
   readonly disabled?: boolean;
-  readonly size?: "icon" | "sm" | "default";
+  readonly size?: "icon" | "icon-touch" | "sm" | "default";
   readonly label?: string;
   readonly className?: string;
   readonly "data-testid"?: string;
@@ -83,8 +83,8 @@ export function ImageCaptureButton({
   // `!` suffix (Tailwind v4) forces size over shadcn Button's
   // `[&_svg]:size-4` descendant rule — without important both icons would
   // render at 16px and the Sparkles badge would overlap the Camera.
-  const iconSize = size === "icon" ? "size-4!" : "size-3.5!";
-  const sparkleSize = size === "icon" ? "size-2.5!" : "size-2!";
+  const iconSize = size === "sm" ? "size-3.5!" : "size-4!";
+  const sparkleSize = size === "sm" ? "size-2!" : "size-2.5!";
   const tooltipCopy =
     tooltip ?? "Scan a printed or whiteboard workout — we'll auto-fill the exercises.";
 

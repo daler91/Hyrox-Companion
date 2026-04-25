@@ -172,89 +172,16 @@ export function WorkoutDetailDialogV2({
   // receives the hook as a prop so CoachTakePanel wiring stays identical.
   const planCoachNote = usePlanDayCoachNote(entry?.planDayId ?? null);
 
-  // Local stamp of the most recent successful Save click. Bumped after the
-  // blur-flush and (when applicable) coach-note regenerate resolve, so
-  // SaveWorkoutButton can flash "Saved ✓" once per click.
-  const [saveClickedAt, setSaveClickedAt] = useState<number | null>(null);
-  const [saveInFlight, setSaveInFlight] = useState(false);
-  // Frozen at click time so the drain watcher regenerates the entry
-  // the user actually clicked Save on — even if they navigate to a
-  // different entry while the per-set PATCHes are still draining.
-  // null means "no plan-day refresh for this save" (ad-hoc logged
-  // workout, or a logged workout whose edits don't touch plan-day state).
-  const [saveTargetPlanDayId, setSaveTargetPlanDayId] = useState<string | null>(null);
-  // Guards against the drain watcher re-firing regenerate on every
-  // isSaving toggle — one regenerate per Save click. Resets when
-  // saveInFlight returns to false at the end of the cycle.
-  const saveRegenerateFiredRef = useRef(false);
-  const regenerateMutate = planCoachNote.regenerate.mutate;
-
-  // Live entry id — read from the regenerate's finalize callback so a
-  // late success (user navigated away while the mutation was in flight)
-  // doesn't flash "Saved ✓" on whatever entry is current now. The ref
-  // is updated from an effect rather than during render to satisfy
-  // react-hooks/refs.
-  const currentEntryIdRef = useRef<string | undefined>(entry?.id);
-  useEffect(() => {
-    currentEntryIdRef.current = entry?.id;
-  }, [entry?.id]);
-
-  // Entry-change sentinel: the dialog stays mounted while the athlete
-  // browses between timeline cards, so per-entry save state has to
-  // reset explicitly. Without this, opening entry B after saving entry
-  // A shows A's "Saved ✓" confirmation and leaves B's button disabled
-  // if A's regenerate is still draining. `lastEntryId` is a render-time
-  // sentinel — same pattern as `ownerId` in usePlanDayExercises —
-  // which satisfies react-hooks/set-state-in-effect.
-  const [lastEntryId, setLastEntryId] = useState<string | undefined>(entry?.id);
-  if (entry?.id !== lastEntryId) {
-    setLastEntryId(entry?.id);
-    setSaveClickedAt(null);
-    setSaveInFlight(false);
-    setSaveTargetPlanDayId(null);
-  }
-
-  // Drain watcher: once every set mutation the flush kicked off has
-  // settled, fire the coach-note regenerate (planned entries) or just
-  // finalize (ad-hoc logged). Without this the regenerate would
-  // snapshot a plan day that still has pre-edit rows, since the
-  // mutations fired from `flushPendingSetPatches` are async.
-  useEffect(() => {
-    if (!saveInFlight) {
-      saveRegenerateFiredRef.current = false;
-      return;
-    }
-    if (planSets.isSaving || isSavingLoggedSets) return;
-    if (saveRegenerateFiredRef.current) return;
-    saveRegenerateFiredRef.current = true;
-    // Freeze the entry id at fire time so the finalize closure can
-    // suppress the flash when the user has navigated away since.
-    const targetEntryId = entry?.id;
-    // "Saved ✓" is the success signal — only flash it when the
-    // regenerate actually succeeded AND the user is still looking at
-    // the entry they clicked Save on. Error paths still clear
-    // saveInFlight + saveTargetPlanDayId so the button unlocks; the
-    // `errorToast` on the hook's mutation surfaces the failure.
-    const finalizeSuccess = () => {
-      setSaveInFlight(false);
-      setSaveTargetPlanDayId(null);
-      if (currentEntryIdRef.current === targetEntryId) {
-        setSaveClickedAt(Date.now());
-      }
-    };
-    const finalizeFailure = () => {
-      setSaveInFlight(false);
-      setSaveTargetPlanDayId(null);
-    };
-    if (saveTargetPlanDayId) {
-      regenerateMutate(saveTargetPlanDayId, {
-        onSuccess: finalizeSuccess,
-        onError: finalizeFailure,
-      });
-    } else {
-      finalizeSuccess();
-    }
-  }, [saveInFlight, planSets.isSaving, isSavingLoggedSets, saveTargetPlanDayId, regenerateMutate, entry?.id]);
+  const {
+    saveClickedAt,
+    saveInFlight,
+    startSaveCycle,
+  } = useWorkoutDetailSaveCoordinator({
+    entryId: entry?.id,
+    planSets,
+    isSavingLoggedSets,
+    regenerateMutate: planCoachNote.regenerate.mutate,
+  });
 
   // Tracks the most recent focus value submitted from the header. The
   // timeline query owns `entry.focus` and is only invalidated on save
@@ -332,6 +259,34 @@ export function WorkoutDetailDialogV2({
   const headerSaveState = isPlanned
     ? { isSaving: planSets.isSaving, lastSavedAt: planSets.lastSavedAt }
     : loggedSaveState;
+  const completeAction = getCompleteActionState(isMarkingComplete, planSets.isSaving);
+  const handleOpenChat = buildOpenChatHandler({
+    aiCoachEnabled,
+    onRequestCoachConsent,
+    onAskCoachOpen,
+    openChat: () => setChatOpen(true),
+  });
+  const handleCloseChat = () => setChatOpen(false);
+  const handleSaveNote = buildSaveNoteHandler(workoutId, updateNote.mutate);
+  const handleParseLoggedFreeText = buildLoggedFreeTextParser(workoutId, reparseFreeText.mutate);
+  const handleParseLoggedFromImage = buildLoggedImageParser(workoutId, reparseFromImage.mutate);
+  const handleSaveClick = () => handleWorkoutDetailSaveClick({
+    isPlanned,
+    planDayId: entry.planDayId ?? null,
+    planSets,
+    flushLoggedSetPatches,
+    startSaveCycle,
+  });
+  const handleFooterMarkComplete = () => handleWorkoutDetailMarkComplete({
+    entry,
+    latestFocus: latestFocusRef.current,
+    onMarkComplete,
+  });
+  const handleConfirmDelete = () => handleWorkoutDetailDeleteConfirm({
+    entry,
+    onDelete,
+    closeDeleteConfirm: () => setConfirmingDelete(false),
+  });
 
   return (
     <Dialog open={!!entry} onOpenChange={(open) => !open && onClose()}>
@@ -386,81 +341,36 @@ export function WorkoutDetailDialogV2({
             weightUnit={weightUnit}
             distanceUnit={distanceUnit}
             history={history}
-            onMarkComplete={onMarkComplete}
-            isMarkingComplete={isMarkingComplete}
             onUpdateSet={patchLoggedSetDebounced}
             onAddSet={addSet.mutate}
             onDeleteSet={deleteSet.mutate}
             loggedSaveState={loggedSaveState}
             planSets={planSets}
             planCoachNote={planCoachNote}
-            latestFocusRef={latestFocusRef}
-            onSaveNote={(note) => workoutId && updateNote.mutate(note)}
-            onParseLoggedFreeText={(opts) => {
-              if (!workoutId) return;
-              reparseFreeText.mutate(undefined, opts);
-            }}
+            onSaveNote={handleSaveNote}
+            onParseLoggedFreeText={handleParseLoggedFreeText}
             isParsingLogged={reparseFreeText.isPending}
-            onParseLoggedFromImage={(payload, opts) => {
-              if (!workoutId) return;
-              reparseFromImage.mutate(payload, opts);
-            }}
+            onParseLoggedFromImage={handleParseLoggedFromImage}
             isParsingLoggedImage={reparseFromImage.isPending}
             chatOpen={chatOpen}
             showAdherenceInsights={showAdherenceInsights}
-            onOpenChat={() => {
-              // Gate on consent first: the global-rail flow enforces
-              // AIConsentDialog via handleCoachToggle in Timeline;
-              // the in-dialog path needs the same guard or a
-              // non-consented user could bypass it just by clicking
-              // Ask coach from a workout detail.
-              if (!aiCoachEnabled) {
-                onRequestCoachConsent?.();
-                return;
-              }
-              // Tell the parent to close the global coach rail before
-              // we mount the in-dialog chat: both surfaces would spin
-              // up their own `useChatSession` with independent local
-              // state, so a message sent in one wouldn't reach the
-              // other. One surface at a time keeps them consistent
-              // until we hoist the session into a shared context.
-              onAskCoachOpen?.();
-              setChatOpen(true);
-            }}
-            onCloseChat={() => setChatOpen(false)}
+            onOpenChat={handleOpenChat}
+            onCloseChat={handleCloseChat}
           />
         </div>
 
-        <div className="sticky bottom-0 z-10 flex items-center justify-end gap-3 border-t border-border bg-background/95 px-6 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-          <SaveWorkoutButton
-            isBusy={saveInFlight || planCoachNote.isRegenerating}
-            savedAt={saveClickedAt}
-            showCoachNoteHint={entry.planDayId != null}
-            disabled={planCoachNote.isCoolingDown}
-            onClick={() => {
-              // Blur so EditableFocus + CoachPrescriptionCollapsible's
-              // onBlur-flushes commit pending edits. Cell debounces live
-              // in the hook below, so per-set PATCHes are driven by the
-              // explicit flush calls rather than the blur.
-              const active = document.activeElement;
-              if (active instanceof HTMLElement) active.blur();
-              // Commit any pending per-set PATCHes synchronously before
-              // the drain watcher starts counting down. `flushLoggedSetPatches`
-              // no-ops for the planned branch (workoutId is null) and
-              // `planSets.flushPendingSetPatches` no-ops for ad-hoc workouts.
-              planSets.flushPendingSetPatches();
-              flushLoggedSetPatches();
-              // Only planned entries write to plan_days, so only planned
-              // entries need the coach-note regenerate. A logged workout
-              // that happens to be linked to a plan day still edits its
-              // workoutLog via api.workouts.*, not plan_days — regenerate
-              // there would burn AI budget / cooldown without reflecting
-              // what was actually saved.
-              setSaveTargetPlanDayId(isPlanned ? entry.planDayId ?? null : null);
-              setSaveInFlight(true);
-            }}
-          />
-        </div>
+        <WorkoutDetailFooter
+          isPlanned={isPlanned}
+          canMarkComplete={onMarkComplete != null}
+          completeBusy={completeAction.busy}
+          completeLabel={completeAction.label}
+          saveBusy={saveInFlight || planCoachNote.isRegenerating}
+          savedAt={saveClickedAt}
+          showCoachNoteHint={entry.planDayId != null}
+          saveDisabled={planCoachNote.isCoolingDown}
+          onSaveClick={handleSaveClick}
+          onMarkComplete={handleFooterMarkComplete}
+        />
       </DialogContent>
 
       {/* Explicit confirm step before firing onDelete — the v2 menu's ⋮ is
@@ -478,10 +388,7 @@ export function WorkoutDetailDialogV2({
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => {
-                if (onDelete) onDelete(entry);
-                setConfirmingDelete(false);
-              }}
+              onClick={handleConfirmDelete}
               data-testid="workout-detail-delete-confirm"
             >
               Delete
@@ -490,6 +397,274 @@ export function WorkoutDetailDialogV2({
         </AlertDialogContent>
       </AlertDialog>
     </Dialog>
+  );
+}
+
+type PlanSetsController = ReturnType<typeof usePlanDayExercises>;
+type RegenerateCoachNote = ReturnType<typeof usePlanDayCoachNote>["regenerate"]["mutate"];
+type ReparseTextOptions = { onSuccess?: () => void };
+type ReparseImageOptions = { onSuccess?: (data: ReparseResponse) => void };
+
+interface WorkoutSaveCoordinatorArgs {
+  readonly entryId: string | undefined;
+  readonly planSets: PlanSetsController;
+  readonly isSavingLoggedSets: boolean;
+  readonly regenerateMutate: RegenerateCoachNote;
+}
+
+function useWorkoutDetailSaveCoordinator({
+  entryId,
+  planSets,
+  isSavingLoggedSets,
+  regenerateMutate,
+}: WorkoutSaveCoordinatorArgs) {
+  const [saveClickedAt, setSaveClickedAt] = useState<number | null>(null);
+  const [saveInFlight, setSaveInFlight] = useState(false);
+  const [saveTargetPlanDayId, setSaveTargetPlanDayId] = useState<string | null>(null);
+  const saveRegenerateFiredRef = useRef(false);
+  const currentEntryIdRef = useRef<string | undefined>(entryId);
+
+  useEffect(() => {
+    currentEntryIdRef.current = entryId;
+  }, [entryId]);
+
+  const [lastEntryId, setLastEntryId] = useState<string | undefined>(entryId);
+  if (entryId !== lastEntryId) {
+    setLastEntryId(entryId);
+    setSaveClickedAt(null);
+    setSaveInFlight(false);
+    setSaveTargetPlanDayId(null);
+  }
+
+  useEffect(() => {
+    if (!saveInFlight) {
+      saveRegenerateFiredRef.current = false;
+      return;
+    }
+    if (planSets.isSaving || isSavingLoggedSets) return;
+    if (saveRegenerateFiredRef.current) return;
+
+    saveRegenerateFiredRef.current = true;
+    const targetEntryId = entryId;
+    const finalizeSuccess = () => {
+      setSaveInFlight(false);
+      setSaveTargetPlanDayId(null);
+      if (currentEntryIdRef.current === targetEntryId) {
+        setSaveClickedAt(Date.now());
+      }
+    };
+    const finalizeFailure = () => {
+      setSaveInFlight(false);
+      setSaveTargetPlanDayId(null);
+    };
+
+    if (saveTargetPlanDayId) {
+      regenerateMutate(saveTargetPlanDayId, {
+        onSuccess: finalizeSuccess,
+        onError: finalizeFailure,
+      });
+      return;
+    }
+
+    finalizeSuccess();
+  }, [saveInFlight, planSets.isSaving, isSavingLoggedSets, saveTargetPlanDayId, regenerateMutate, entryId]);
+
+  return {
+    saveClickedAt,
+    saveInFlight,
+    startSaveCycle: setSaveTargetPlanDayIdAndMarkPending,
+  };
+
+  function setSaveTargetPlanDayIdAndMarkPending(targetPlanDayId: string | null) {
+    setSaveTargetPlanDayId(targetPlanDayId);
+    setSaveInFlight(true);
+  }
+}
+
+interface WorkoutDetailSaveClickArgs {
+  readonly isPlanned: boolean;
+  readonly planDayId: string | null;
+  readonly planSets: PlanSetsController;
+  readonly flushLoggedSetPatches: () => void;
+  readonly startSaveCycle: (targetPlanDayId: string | null) => void;
+}
+
+function handleWorkoutDetailSaveClick({
+  isPlanned,
+  planDayId,
+  planSets,
+  flushLoggedSetPatches,
+  startSaveCycle,
+}: WorkoutDetailSaveClickArgs) {
+  blurActiveElement();
+  planSets.flushPendingSetPatches();
+  flushLoggedSetPatches();
+  startSaveCycle(isPlanned ? planDayId : null);
+}
+
+interface CompleteActionState {
+  readonly busy: boolean;
+  readonly label: string;
+}
+
+function getCompleteActionState(isMarkingComplete: boolean, isSavingPlanSets: boolean): CompleteActionState {
+  if (isMarkingComplete) return { busy: true, label: "Logging..." };
+  if (isSavingPlanSets) return { busy: true, label: "Saving edits..." };
+  return { busy: false, label: "Mark complete" };
+}
+
+interface MarkCompleteArgs {
+  readonly entry: TimelineEntry;
+  readonly latestFocus: string;
+  readonly onMarkComplete?: (entry: TimelineEntry) => void;
+}
+
+function handleWorkoutDetailMarkComplete({ entry, latestFocus, onMarkComplete }: MarkCompleteArgs) {
+  blurActiveElement();
+  if (!onMarkComplete) return;
+
+  const focus = latestFocus || entry.focus;
+  onMarkComplete(focus === entry.focus ? entry : { ...entry, focus });
+}
+
+function blurActiveElement() {
+  const active = document.activeElement;
+  if (active instanceof HTMLElement) active.blur();
+}
+
+interface OpenChatHandlerArgs {
+  readonly aiCoachEnabled: boolean;
+  readonly onRequestCoachConsent: (() => void) | undefined;
+  readonly onAskCoachOpen: (() => void) | undefined;
+  readonly openChat: () => void;
+}
+
+function buildOpenChatHandler({
+  aiCoachEnabled,
+  onRequestCoachConsent,
+  onAskCoachOpen,
+  openChat,
+}: OpenChatHandlerArgs) {
+  return () => {
+    if (!aiCoachEnabled) {
+      onRequestCoachConsent?.();
+      return;
+    }
+
+    onAskCoachOpen?.();
+    openChat();
+  };
+}
+
+function buildSaveNoteHandler(workoutId: string | null, saveNote: (note: string | null) => void) {
+  return (note: string | null) => {
+    if (workoutId) saveNote(note);
+  };
+}
+
+function buildLoggedFreeTextParser(
+  workoutId: string | null,
+  parse: (variables: undefined, opts?: ReparseTextOptions) => void,
+) {
+  return (opts?: ReparseTextOptions) => {
+    if (!workoutId) return;
+    parse(undefined, opts);
+  };
+}
+
+function buildLoggedImageParser(
+  workoutId: string | null,
+  parse: (payload: ParseFromImagePayload, opts?: ReparseImageOptions) => void,
+) {
+  return (payload: ParseFromImagePayload, opts?: ReparseImageOptions) => {
+    if (!workoutId) return;
+    parse(payload, opts);
+  };
+}
+
+interface DeleteConfirmArgs {
+  readonly entry: TimelineEntry;
+  readonly onDelete: ((entry: TimelineEntry) => void) | undefined;
+  readonly closeDeleteConfirm: () => void;
+}
+
+function handleWorkoutDetailDeleteConfirm({ entry, onDelete, closeDeleteConfirm }: DeleteConfirmArgs) {
+  onDelete?.(entry);
+  closeDeleteConfirm();
+}
+
+interface WorkoutDetailFooterProps {
+  readonly isPlanned: boolean;
+  readonly canMarkComplete: boolean;
+  readonly completeBusy: boolean;
+  readonly completeLabel: string;
+  readonly saveBusy: boolean;
+  readonly savedAt: number | null;
+  readonly showCoachNoteHint: boolean;
+  readonly saveDisabled: boolean;
+  readonly onSaveClick: () => void;
+  readonly onMarkComplete: () => void;
+}
+
+function WorkoutDetailFooter({
+  isPlanned,
+  canMarkComplete,
+  completeBusy,
+  completeLabel,
+  saveBusy,
+  savedAt,
+  showCoachNoteHint,
+  saveDisabled,
+  onSaveClick,
+  onMarkComplete,
+}: WorkoutDetailFooterProps) {
+  const copy = getFooterCopy(isPlanned);
+  const saveEmphasis = isPlanned ? "secondary" : "primary";
+
+  return (
+    <div className="sticky bottom-0 z-10 flex flex-col gap-3 border-t border-border bg-background/95 px-6 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:flex-row sm:items-center sm:justify-between">
+      <div className="text-xs text-muted-foreground">
+        <span className="font-medium text-foreground">{copy.title}</span>
+        <span className="ml-2">{copy.description}</span>
+      </div>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+        <SaveWorkoutButton
+          isBusy={saveBusy}
+          savedAt={savedAt}
+          showCoachNoteHint={showCoachNoteHint}
+          emphasis={saveEmphasis}
+          disabled={saveDisabled}
+          onClick={onSaveClick}
+        />
+        {isPlanned && canMarkComplete ? (
+          <Button
+            type="button"
+            size="sm"
+            className="gap-2"
+            disabled={completeBusy}
+            onClick={onMarkComplete}
+            data-testid="workout-detail-mark-complete"
+          >
+            <CompleteActionIcon busy={completeBusy} />
+            {completeLabel}
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function getFooterCopy(isPlanned: boolean) {
+  return isPlanned
+    ? { title: "Planned workout", description: "Edits save before completion." }
+    : { title: "Logged workout", description: "Edits save in place." };
+}
+
+function CompleteActionIcon({ busy }: Readonly<{ busy: boolean }>) {
+  return busy ? (
+    <Loader2 className="size-4 animate-spin" aria-hidden />
+  ) : (
+    <CheckCircle2 className="size-4" aria-hidden />
   );
 }
 
@@ -510,8 +685,6 @@ interface DialogBodyProps {
   readonly weightUnit: "kg" | "lb";
   readonly distanceUnit: "km" | "miles";
   readonly history: import("@/lib/api").WorkoutHistoryStats | undefined;
-  readonly onMarkComplete?: (entry: TimelineEntry) => void;
-  readonly isMarkingComplete: boolean;
   readonly onUpdateSet: (setId: string, data: import("@/lib/api").PatchExerciseSetPayload) => void;
   readonly onAddSet: (data: import("@/lib/api").AddExerciseSetPayload) => void;
   readonly onDeleteSet: (setId: string) => void;
@@ -532,12 +705,6 @@ interface DialogBodyProps {
    * `isRegenerating` from this bundle.
    */
   readonly planCoachNote: ReturnType<typeof usePlanDayCoachNote>;
-  /**
-   * Ref tracking the most recent focus submitted from the header input,
-   * read by PlannedCallToAction so Mark complete uses the just-typed
-   * value instead of the `entry.focus` prop, which lags the save.
-   */
-  readonly latestFocusRef: MutableRefObject<string>;
   readonly onSaveNote: (note: string | null) => void;
   /**
    * Parse trigger for the logged-workout free-text prescription when
@@ -677,15 +844,12 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     weightUnit,
     distanceUnit,
     history,
-    onMarkComplete,
-    isMarkingComplete,
     onUpdateSet,
     onAddSet,
     onDeleteSet,
     loggedSaveState,
     planSets,
     planCoachNote,
-    latestFocusRef,
     onSaveNote,
     onParseLoggedFreeText,
     isParsingLogged,
@@ -834,12 +998,9 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
         {isPlanned ? (
           <PlannedCallToAction
             entry={entry}
-            onMarkComplete={onMarkComplete}
-            isMarkingComplete={isMarkingComplete}
             weightUnit={weightUnit}
             distanceUnit={distanceUnit}
             planSets={planSets}
-            latestFocusRef={latestFocusRef}
             hasUnparsedText={hasUnparsedText}
           />
         ) : (
@@ -1124,36 +1285,19 @@ function LoggedExerciseSection({
 
 interface PlannedCallToActionProps {
   readonly entry: TimelineEntry;
-  readonly onMarkComplete?: (entry: TimelineEntry) => void;
-  readonly isMarkingComplete?: boolean;
   readonly weightUnit: "kg" | "lb";
   readonly distanceUnit: "km" | "miles";
   readonly planSets: ReturnType<typeof usePlanDayExercises>;
-  /** Latest-submitted focus from the header input; used to override a
-   *  potentially-stale `entry.focus` on Mark complete. */
-  readonly latestFocusRef: MutableRefObject<string>;
   readonly hasUnparsedText?: boolean;
 }
 
-function PlannedCallToAction({ entry, onMarkComplete, isMarkingComplete, weightUnit, distanceUnit, planSets, latestFocusRef, hasUnparsedText }: Readonly<PlannedCallToActionProps>) {
+function PlannedCallToAction({ entry, weightUnit, distanceUnit, planSets, hasUnparsedText }: Readonly<PlannedCallToActionProps>) {
   // Plan-day-backed exercise edits. `planSets` is hoisted up to DialogBody
   // so the same hook instance feeds both this CTA and the CoachTakePanel's
   // staleness comparison. Writes go to plan_day-owned exerciseSets; Mark
   // complete's server copy-from-plan path copies whatever this hook has
   // persisted into the new workoutLog at log time.
   const planDayId = entry.planDayId ?? null;
-
-  // Block Mark complete while any plan-day set mutation is still in
-  // flight — otherwise createWorkoutInTx can race the mutation and
-  // snapshot pre-edit plan_day rows before the PATCH commits.
-  // Debounced-but-not-yet-fired cell edits still narrowly race, but
-  // this catches the common "edit + click" sequence once the debounce
-  // has fired its mutation.
-  const ctaBusy = isMarkingComplete || planSets.isSaving;
-  const ctaDisabled = ctaBusy;
-  let ctaLabel = "Mark complete";
-  if (isMarkingComplete) ctaLabel = "Logging…";
-  else if (planSets.isSaving) ctaLabel = "Saving edits…";
 
   return (
     <div className="flex flex-col gap-4" data-testid="workout-detail-planned-cta">
@@ -1179,35 +1323,8 @@ function PlannedCallToAction({ entry, onMarkComplete, isMarkingComplete, weightU
         className="flex flex-col items-center gap-2 rounded-lg border border-border bg-muted/20 px-4 py-4 text-center"
       >
         <p className="text-sm text-muted-foreground">
-          Tweak the sets above if needed, then mark the workout complete to log it.
+          Planned sets are ready for review.
         </p>
-        {onMarkComplete && (
-          <Button
-            onClick={() => {
-              // Blur whatever input is focused so EditableFocus's onBlur
-              // flush fires synchronously before Mark complete posts. The
-              // flush updates latestFocusRef via the dialog's wrapped
-              // onChangeFocus, so reading the ref below gives us the
-              // just-typed title even if the timeline query hasn't
-              // invalidated yet.
-              const active = document.activeElement;
-              if (active instanceof HTMLElement) active.blur();
-              const focus = latestFocusRef.current || entry.focus;
-              onMarkComplete(focus === entry.focus ? entry : { ...entry, focus });
-            }}
-            size="lg"
-            className="gap-2"
-            disabled={ctaDisabled}
-            data-testid="workout-detail-mark-complete"
-          >
-            {ctaBusy ? (
-              <Loader2 className="size-4 animate-spin" aria-hidden />
-            ) : (
-              <CheckCircle2 className="size-4" aria-hidden />
-            )}
-            {ctaLabel}
-          </Button>
-        )}
       </div>
     </div>
   );

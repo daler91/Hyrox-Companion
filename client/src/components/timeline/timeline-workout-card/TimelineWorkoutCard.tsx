@@ -165,9 +165,9 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
-                    size="icon"
+                    size="icon-touch"
                     variant="ghost"
-                    className="shrink-0 mt-0.5 text-muted-foreground hover:text-success"
+                    className="shrink-0 mt-0.5 text-muted-foreground hover:text-success md:h-9 md:w-9"
                     onClick={handleCompleteClick}
                     data-testid={`button-complete-${entry.id}`}
                     aria-label={`Mark ${entry.focus} as complete`}

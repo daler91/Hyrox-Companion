@@ -55,8 +55,9 @@ export function PlanSelector({
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                size="icon"
+                size="icon-touch"
                 variant="ghost"
+                className="md:h-9 md:w-9"
                 onClick={openRenameDialog}
                 data-testid="button-rename-plan" aria-label="Rename plan"
               >

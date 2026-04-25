@@ -122,7 +122,7 @@ export function WorkoutDetailHeaderV2({
   const hasOverflowMenu = !!onDelete || !!onCombine;
 
   return (
-    <div className="flex items-start justify-between gap-4 pb-2 pr-20">
+    <div className="flex items-start justify-between gap-4 pb-2 pr-16 sm:pr-20">
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground" data-testid="workout-detail-date">
           <span className="inline-flex items-center gap-1">
@@ -135,11 +135,11 @@ export function WorkoutDetailHeaderV2({
           />
           {aiModified && (
             <span
-              className="inline-flex items-center gap-1 rounded-md border border-green-500/40 bg-green-500/10 px-2 py-0.5 text-xs font-normal text-green-700 dark:text-green-400"
+              className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 px-2 py-0.5 text-xs font-normal text-muted-foreground"
               data-testid="ai-modified-chip"
             >
               <Sparkles className="size-3" aria-hidden />
-              AI modified
+              Coach updated
             </span>
           )}
         </div>
@@ -157,8 +157,9 @@ export function WorkoutDetailHeaderV2({
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
-                size="icon"
+                size="icon-touch"
                 aria-label="Workout actions"
+                className="md:h-9 md:w-9"
                 data-testid="workout-detail-actions-trigger"
               >
                 <MoreVertical className="size-4" />
@@ -205,7 +206,7 @@ interface StatusChipProps {
 function StatusChip({ style, options, onChangeStatus }: Readonly<StatusChipProps>) {
   const canChange = !!onChangeStatus && options.length > 0;
   const baseClass = cn(
-    "inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-normal",
+    "inline-flex min-h-8 items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-normal",
     style.chipClass,
   );
 

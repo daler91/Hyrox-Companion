@@ -9,7 +9,7 @@ interface VoiceButtonProps {
   isListening: boolean;
   isSupported: boolean;
   onClick: () => void;
-  size?: "icon" | "sm" | "default";
+  size?: "icon" | "icon-touch" | "sm" | "default";
   className?: string;
   "data-testid"?: string;
 }
