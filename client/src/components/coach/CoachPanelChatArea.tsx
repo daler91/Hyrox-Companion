@@ -33,7 +33,7 @@ export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaP
   ) => {
     return (
       <ScrollArea
-        className="flex-1 p-3"
+        className="min-h-0 flex-1 p-3"
         viewportRef={ref}
         viewportProps={{ onScroll: onViewportScroll }}
       >

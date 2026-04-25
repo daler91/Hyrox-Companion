@@ -742,7 +742,7 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
         </AlertDialog>
       </div>
 
-      <aside className="flex self-start flex-col gap-3">
+      <aside className="flex min-h-0 self-start flex-col gap-3">
         {chatOpen ? (
           <InDialogCoachChat
             focusLabel={focusLabel}
