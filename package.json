@@ -200,7 +200,19 @@
     "  in its source, so the major bump (CommonJS removed in uuid@12) does not break it.",
     "  cypress is a devDependency only, so runtime is unaffected either way. Dependabot cannot",
     "  update transitive pnpm deps, so the override is required to clear the advisory.",
-    "  Remove when @cypress/request drops the unused uuid dependency or pins >=14.0.0."
+    "  Remove when @cypress/request drops the unused uuid dependency or pins >=14.0.0.",
+    "",
+    "postcss ^8.5.10: fixes GHSA (XSS via unescaped </style> in CSS stringify output,",
+    "  Dependabot issue #44). In postcss <8.5.10, the stringifier did not escape '</style>'",
+    "  sequences inside CSS values/comments, so attacker-controlled CSS embedded in an inline",
+    "  <style> block could break out of the element and inject arbitrary HTML. Patched in 8.5.10.",
+    "  Pulled transitively by vite 6.4.2 and the Tailwind/Vitest/PWA toolchain (vite,",
+    "  @tailwindcss/vite, @vitejs/plugin-react, @vitest/coverage-v8, vite-plugin-pwa, vitest),",
+    "  all of which depend on postcss ^8.4 / ^8.5. This is a build-time toolchain dependency",
+    "  rather than a runtime one, but we pin the patched version to clear the advisory and",
+    "  reduce supply-chain exposure. Dependabot cannot update transitive pnpm deps, so the",
+    "  override is required.",
+    "  Remove when vite ships a version whose postcss range resolves to >=8.5.10."
   ],
   "overrides": {
     "esbuild": "0.27.5",
@@ -213,7 +225,8 @@
     "@clerk/shared": "^4.8.1",
     "follow-redirects": "^1.16.0",
     "@xmldom/xmldom": "^0.8.13",
-    "uuid": "^14.0.0"
+    "uuid": "^14.0.0",
+    "postcss": "^8.5.10"
   },
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.19",
@@ -275,7 +288,8 @@
       "@clerk/shared": "^4.8.1",
       "follow-redirects": "^1.16.0",
       "@xmldom/xmldom": "^0.8.13",
-      "uuid": "^14.0.0"
+      "uuid": "^14.0.0",
+      "postcss": "^8.5.10"
     }
   },
   "packageManager": "pnpm@9.12.0",
