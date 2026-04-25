@@ -45,3 +45,6 @@
 ## 2026-04-24 - Avoid Multi-Pass Array Traversals
 **Learning:** Chaining array methods like `.filter().map()` or `.map().filter().map()` causes the JavaScript engine to iterate over the array multiple times, creating temporary arrays at each step. This adds unnecessary memory allocation and garbage collection overhead, which can degrade performance in hot paths or with large data sets.
 **Action:** Replace multiple sequential array methods with a single `for...of` loop or a `.reduce()` when aggregating or transforming data to ensure only one pass is made over the array.
+## 2026-04-25 - Drizzle ORM Batch Operations Avoid N+1
+**Learning:** In heavily looped backend batch functions (like `processBatchChunk`), executing an individual delete/insert database transaction in a loop causes significant connection overhead. Gathering parameters and using Drizzle ORM's `inArray` combined with bulk inserts (`insert().values(array)`) reduces queries to O(1).
+**Action:** When a loop iterates over external IO or database calls, always accumulate results in memory first, then fire a single batch command outside the loop.
