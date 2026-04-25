@@ -32,6 +32,9 @@ if (import.meta.env.VITE_SENTRY_DSN) {
 
 import { registerSW } from "virtual:pwa-register";
 
+const shouldRegisterServiceWorkers =
+  !("Cypress" in globalThis) && "serviceWorker" in globalThis.navigator;
+
 createRoot(document.getElementById("root")!).render(
   <Sentry.ErrorBoundary fallback={FallbackErrorBoundary}>
     <App />
@@ -39,16 +42,18 @@ createRoot(document.getElementById("root")!).render(
 );
 
 // Register service worker for PWA support
-registerSW({
-  onNeedRefresh() {
-    // A new version is available - the user can refresh when ready
-  },
-  onOfflineReady() {
-    // The app is ready to work offline
-  },
-});
+if (shouldRegisterServiceWorkers) {
+  registerSW({
+    onNeedRefresh() {
+      // A new version is available - the user can refresh when ready
+    },
+    onOfflineReady() {
+      // The app is ready to work offline
+    },
+  });
+}
 
 // Register push notification service worker (separate scope from Workbox SW)
-if ("serviceWorker" in navigator) {
-  void navigator.serviceWorker.register("/sw-push.js");
+if (shouldRegisterServiceWorkers) {
+  void globalThis.navigator.serviceWorker.register("/sw-push.js");
 }
