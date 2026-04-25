@@ -57,6 +57,10 @@ export const WorkoutTextMode = ({
   isParsingImage,
 }: Readonly<WorkoutTextModeProps>) => {
   const previewActive = !!imagePreview && !!onRetakeImage && !!onParseImage;
+  const helperText = getWorkoutTextModeHelperText({
+    hasDescription: freeText.trim().length > 0,
+    isSupported,
+  });
 
   return (
     <div className="space-y-3">
@@ -140,14 +144,19 @@ export const WorkoutTextMode = ({
             </Button>
           )}
           <p className="text-xs text-muted-foreground">
-            {freeText.trim()
-              ? "Description captured."
-              : isSupported
-                ? "Text, voice, and photo input are available here."
-                : "Text and photo input are available here."}
+            {helperText}
           </p>
         </>
       )}
     </div>
   );
 };
+
+function getWorkoutTextModeHelperText({
+  hasDescription,
+  isSupported,
+}: Readonly<{ hasDescription: boolean; isSupported: boolean }>) {
+  if (hasDescription) return "Description captured.";
+  if (isSupported) return "Text, voice, and photo input are available here.";
+  return "Text and photo input are available here.";
+}

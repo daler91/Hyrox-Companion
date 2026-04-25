@@ -27,7 +27,7 @@ export const WorkoutSaveButton = ({
     >
       <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
         <span>{hasWorkoutDetails ? "Ready to save" : "Add workout details to save"}</span>
-        {isPending ? <span role="status">Saving...</span> : null}
+        {isPending ? <output>Saving...</output> : null}
       </div>
       <div className="flex gap-2 md:flex-col">
         {onCancel && (
