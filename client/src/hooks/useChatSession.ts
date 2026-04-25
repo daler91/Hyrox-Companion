@@ -111,6 +111,7 @@ const DEFAULT_WELCOME = "hey. i'm your ai training coach. ask me about pacing, s
 const MAX_HISTORY_MESSAGES = 20;
 const MAX_HISTORY_CHARS = 30000;
 const TRUNCATED_MSG_LENGTH = 200;
+const STICKY_SCROLL_THRESHOLD_PX = 48;
 
 function truncateHistory(history: { role: string; content: string }[]): { role: string; content: string }[] {
   let totalChars = 0;
@@ -156,6 +157,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const shouldAutoScrollRef = useRef(true);
   const messagesRef = useRef<Message[]>(messages);
   const isSubmittingRef = useRef(false);
   const streamControllerRef = useRef<AbortController | null>(null);
@@ -204,9 +206,27 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     }
   }, []);
 
+  const updateAutoScrollMode = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const distanceFromBottom = el.scrollHeight - (el.scrollTop + el.clientHeight);
+    shouldAutoScrollRef.current = distanceFromBottom <= STICKY_SCROLL_THRESHOLD_PX;
+  }, []);
+
+  const scrollToBottomIfPinned = useCallback(() => {
+    if (shouldAutoScrollRef.current) {
+      scrollToBottom();
+    }
+  }, [scrollToBottom]);
+
+  const pinAutoScroll = useCallback(() => {
+    shouldAutoScrollRef.current = true;
+  }, []);
+
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, scrollToBottom]);
+    scrollToBottomIfPinned();
+  }, [messages, scrollToBottomIfPinned]);
 
   const sendMessage = useCallback(async (content: string) => {
     if (isSubmittingRef.current) return;
@@ -220,6 +240,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     };
 
     setMessages((prev) => [...prev, userMessage]);
+    shouldAutoScrollRef.current = true;
     setIsLoading(true);
 
     saveMessageMutation.mutate({ role: "user", content });
@@ -325,6 +346,9 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     isStreaming,
     historyLoading,
     scrollRef,
+    updateAutoScrollMode,
+    scrollToBottomIfPinned,
+    pinAutoScroll,
     sendMessage,
     cancelStream,
     clearHistory,
