@@ -1,44 +1,36 @@
-import { ChevronLeft,ChevronRight, Loader2 } from "lucide-react";
 import { useState } from "react";
 
 import { GoalStep } from "@/components/onboarding/GoalStep";
+import { OnboardingWizardFooter } from "@/components/onboarding/OnboardingWizardFooter";
+import { OnboardingWizardFrame } from "@/components/onboarding/OnboardingWizardFrame";
 import { PlanStep } from "@/components/onboarding/PlanStep";
 import { ScheduleStep } from "@/components/onboarding/ScheduleStep";
 import { UnitsStep } from "@/components/onboarding/UnitsStep";
 import { WelcomeStep } from "@/components/onboarding/WelcomeStep";
 import { GeneratePlanDialog } from "@/components/plans/GeneratePlanDialog";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import type { OnboardingCompletionChoice, OnboardingWizardStep } from "@/hooks/onboardingTypes";
 import { useOnboardingWizard } from "@/hooks/useOnboardingWizard";
 
 interface OnboardingWizardProps {
   readonly open: boolean;
-  readonly onComplete: (choice: "sample" | "import" | "skip") => void;
+  readonly onComplete: (choice: OnboardingCompletionChoice) => void;
 }
 
-type Step = "welcome" | "units" | "goal" | "plan" | "schedule";
-
-const TITLES: Record<Step, string> = {
+const TITLES: Record<OnboardingWizardStep, string> = {
   welcome: "Welcome to fitai.coach",
   units: "Set Your Preferences",
   goal: "What's Your Goal?",
   plan: "Choose Your Path",
   schedule: "When Do You Start?",
 };
-const DESCS: Record<Step, string> = {
+const DESCS: Record<OnboardingWizardStep, string> = {
   welcome: "Let's get you set up in just a few steps.",
   units: "Choose your preferred measurement units.",
   goal: "This helps us tailor your experience.",
   plan: "How would you like to start training?",
   schedule: "Pick the first day of your 8-week program.",
 };
-const STEPS: Step[] = ["welcome", "units", "goal", "plan", "schedule"];
+const STEPS: OnboardingWizardStep[] = ["welcome", "units", "goal", "plan", "schedule"];
 
 export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizardProps>) {
   const [showGenerateDialog, setShowGenerateDialog] = useState(false);
@@ -60,47 +52,14 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
     handleBack,
     handleStartTraining,
     handleUseSamplePlan,
+    handleGeneratedPlan,
     isPrefsPending,
     isSamplePending,
     isSchedulePending,
   } = useOnboardingWizard(onComplete);
 
-  const renderNextButton = () => {
-    if (step === "schedule") {
-      return (
-        <Button
-          onClick={handleStartTraining}
-          disabled={isSchedulePending}
-          data-testid="button-onboarding-start-plan"
-        >
-          {isSchedulePending && (
-            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-          )}
-          Start Training <ChevronRight className="h-4 w-4 ml-1" />
-        </Button>
-      );
-    }
-
-    if (step !== "plan") {
-      return (
-        <Button onClick={handleNext} disabled={isPrefsPending}>
-          {isPrefsPending && (
-            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-          )}
-          {step === "welcome" ? "Get Started" : "Continue"}{" "}
-          <ChevronRight className="h-4 w-4 ml-1" />
-        </Button>
-      );
-    }
-
-    return null;
-  };
-
-  // ♿ A11y: Esc must dismiss the onboarding dialog — a WCAG 2.1 A keyboard
-  // trap otherwise. Closing via Esc is treated as "skip" so the user's
-  // progress through earlier steps is preserved. Backdrop click remains
-  // blocked (onPointerDownOutside preventDefault below) because it's easy
-  // to trigger accidentally mid-wizard. (CODEBASE_REVIEW_2026-04-12.md #9)
+  // Esc closes onboarding as "skip"; backdrop clicks remain blocked in the
+  // frame to avoid accidental dismissal mid-wizard.
   const handleDialogOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) {
       handleSkip();
@@ -108,104 +67,55 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
-      <DialogContent
-        className="sm:max-w-lg"
-        onPointerDownOutside={(e) => e.preventDefault()}
-      >
-        <DialogHeader>
-          <DialogTitle className="text-xl">
-            {/* sr-only prefix so screen readers announce step context when
-                the dialog opens — the visible "Step X of Y" progress is
-                rendered separately below for sighted users. WCAG 1.3.1. */}
-            <span className="sr-only">Step {idx + 1} of {total}, </span>
-            {TITLES[step]}
-          </DialogTitle>
-          <DialogDescription>{DESCS[step]}</DialogDescription>
-        </DialogHeader>
-
-        <div className="mt-2 mb-1 flex items-center justify-between">
-          <span
-            className="text-xs font-medium uppercase tracking-wide text-muted-foreground"
-            data-testid="text-onboarding-step-count"
-          >
-            Step {idx + 1} of {total}
-          </span>
-        </div>
-        <progress
-          value={idx + 1}
-          max={total}
-          className="sr-only"
-          aria-label={`Step ${idx + 1} of ${total}`}
+    <OnboardingWizardFrame
+      open={open}
+      onOpenChange={handleDialogOpenChange}
+      title={TITLES[step]}
+      description={DESCS[step]}
+      step={step}
+      steps={STEPS}
+      idx={idx}
+      total={total}
+      footer={
+        <OnboardingWizardFooter
+          step={step}
+          onBack={handleBack}
+          onNext={handleNext}
+          onStartTraining={handleStartTraining}
+          isPrefsPending={isPrefsPending}
+          isSchedulePending={isSchedulePending}
         />
-        <div className="flex gap-1 mb-2" aria-hidden="true">
-          {Array.from({ length: total }).map((_, i) => (
-            <div
-              key={STEPS[i]}
-              className={`h-1 flex-1 rounded-full transition-colors ${i <= idx ? "bg-primary" : "bg-muted"}`}
-            />
-          ))}
-        </div>
-
-        <div className="py-4">
-          {step === "welcome" && <WelcomeStep />}
-          {step === "units" && (
-            <UnitsStep
-              weightUnit={weightUnit}
-              distanceUnit={distanceUnit}
-              onWeightUnitChange={setWeightUnit}
-              onDistanceUnitChange={setDistanceUnit}
-            />
-          )}
-          {step === "goal" && (
-            <GoalStep
-              selectedGoal={selectedGoal}
-              onGoalChange={setSelectedGoal}
-            />
-          )}
-          {step === "plan" && (
-            <>
-              <PlanStep
-                isPending={isSamplePending}
-                onUseSamplePlan={handleUseSamplePlan}
-                onImportPlan={handleImportPlan}
-                onGeneratePlan={() => setShowGenerateDialog(true)}
-                onSkip={handleSkip}
-              />
-              <GeneratePlanDialog
-                open={showGenerateDialog}
-                onOpenChange={(v) => {
-                  setShowGenerateDialog(v);
-                  if (!v) {
-                    // If dialog closed after generating, complete onboarding
-                  }
-                }}
-              />
-            </>
-          )}
-          {step === "schedule" && (
-            <ScheduleStep
-              startDate={startDate}
-              onStartDateChange={setStartDate}
-            />
-          )}
-        </div>
-
-        <div className="flex justify-between pt-2">
-          {step !== "welcome" && step !== "plan" ? (
-            <Button
-              variant="ghost"
-              onClick={handleBack}
-              disabled={isSchedulePending}
-            >
-              <ChevronLeft className="h-4 w-4 mr-1" /> Back
-            </Button>
-          ) : (
-            <div />
-          )}
-          {renderNextButton()}
-        </div>
-      </DialogContent>
-    </Dialog>
+      }
+    >
+      {step === "welcome" && <WelcomeStep />}
+      {step === "units" && (
+        <UnitsStep
+          weightUnit={weightUnit}
+          distanceUnit={distanceUnit}
+          onWeightUnitChange={setWeightUnit}
+          onDistanceUnitChange={setDistanceUnit}
+        />
+      )}
+      {step === "goal" && <GoalStep selectedGoal={selectedGoal} onGoalChange={setSelectedGoal} />}
+      {step === "plan" && (
+        <>
+          <PlanStep
+            isPending={isSamplePending}
+            onUseSamplePlan={handleUseSamplePlan}
+            onImportPlan={handleImportPlan}
+            onGeneratePlan={() => setShowGenerateDialog(true)}
+            onSkip={handleSkip}
+          />
+          <GeneratePlanDialog
+            open={showGenerateDialog}
+            onOpenChange={setShowGenerateDialog}
+            onGenerated={handleGeneratedPlan}
+          />
+        </>
+      )}
+      {step === "schedule" && (
+        <ScheduleStep startDate={startDate} onStartDateChange={setStartDate} />
+      )}
+    </OnboardingWizardFrame>
   );
 }
