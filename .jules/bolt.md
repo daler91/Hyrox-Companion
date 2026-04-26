@@ -48,3 +48,7 @@
 ## 2026-04-25 - Drizzle ORM Batch Operations Avoid N+1
 **Learning:** In heavily looped backend batch functions (like `processBatchChunk`), executing an individual delete/insert database transaction in a loop causes significant connection overhead. Gathering parameters and using Drizzle ORM's `inArray` combined with bulk inserts (`insert().values(array)`) reduces queries to O(1).
 **Action:** When a loop iterates over external IO or database calls, always accumulate results in memory first, then fire a single batch command outside the loop.
+
+## 2026-04-26 - Module-level React Array Caching for getFields
+**Learning:** Returning fresh array references derived from `.filter()` or inline literal arrays (e.g., `['reps', 'weight']`) on every call to configuration helper functions like `getFields(exerciseName)` breaks React memoization. When these arrays are passed to child components or dependency arrays, they cause complete re-renders of list items (like `ExerciseRow` and `InlineSetEditor`) even when state hasn't conceptually changed.
+**Action:** Use a module-level `Map` cache and module-scoped `DEFAULT_FIELDS` constants to securely memoize and return the same memory references for static configurations. Replace `.filter` with `for...of` internally to remove multiple O(N) Array passes.

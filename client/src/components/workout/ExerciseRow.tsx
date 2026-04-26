@@ -26,12 +26,24 @@ const fieldMeta: Record<
   time: { label: () => "Time (min)", defaultStep: 1, stepOptions: [1, 5, 10] },
 };
 
+// ⚡ Bolt: Cache array references to guarantee referential stability during re-renders.
+const fieldsCache = new Map<ExerciseName, FieldKey[]>();
+const DEFAULT_FIELDS: FieldKey[] = ["reps", "weight"];
+
 function getFields(exerciseName: ExerciseName): FieldKey[] {
+  const cached = fieldsCache.get(exerciseName);
+  if (cached) return cached;
+
   const def = EXERCISE_DEFINITIONS[exerciseName];
-  if (!def) return ["reps", "weight"];
-  return (def.fields as readonly string[]).filter((f): f is FieldKey =>
-    f !== "sets" && f in fieldMeta,
-  );
+  if (!def) return DEFAULT_FIELDS;
+
+  const out: FieldKey[] = [];
+  for (const f of def.fields as readonly string[]) {
+    if (f !== "sets" && f in fieldMeta) out.push(f as FieldKey);
+  }
+
+  fieldsCache.set(exerciseName, out);
+  return out;
 }
 
 export interface ExerciseRowBlock {
