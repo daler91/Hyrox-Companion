@@ -95,6 +95,11 @@ MODIFICATION PRIORITY (how to modify — prefer options higher on this list):
 4. ADD ACCESSORY — Use "append" on accessory ONLY during BUILD or PEAK phases when there's a genuine gap that cannot be addressed by replacing existing exercises. NEVER append during EARLY, TAPER, or RACE_WEEK phases. When you do append, keep it brief (1-2 exercises max, not full station distances).
 5. ADD COACHING CUES — Use "append" on notes for form reminders, pacing strategies, or transition practice tips.
 
+STRUCTURED EXERCISE TABLES:
+- Some upcoming workouts are listed with "Exercises:" instead of "Main", "Accessory", and "Notes". In those cases, the exercise table is the source of truth. Do not infer extra prescription details from missing free-text fields.
+- For table-backed workouts, any mainWorkout or accessory recommendation must be a clean, parseable exercise prescription. For "replace", include the complete revised prescription. For "append", include only the additional exercise work.
+- Do not put rationale, warnings, or prose in recommendation. Keep cues in notes suggestions.
+
 Return ONLY valid JSON array with no markdown formatting. Each suggestion:
 - workoutId: the ID of the upcoming workout
 - workoutDate: the scheduled date

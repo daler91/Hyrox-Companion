@@ -50,6 +50,8 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     completionRate,
     currentStreak,
     weeklyGoal: user?.weeklyGoal ?? undefined,
+    ...(user?.weightUnit ? { weightUnit: user.weightUnit } : {}),
+    ...(user?.distanceUnit ? { distanceUnit: user.distanceUnit } : {}),
     recentWorkouts: recentWorkouts.slice(0, 10),
     upcomingWorkouts: upcomingDays.map(d => ({
       planDayId: d.planDayId,
@@ -58,6 +60,22 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
       mainWorkout: d.mainWorkout,
       accessory: d.accessory,
       notes: d.notes,
+      ...((d.exerciseSets?.length ?? 0) > 0
+        ? {
+            exerciseDetails: d.exerciseSets!.map(es => ({
+              exerciseName: es.exerciseName,
+              customLabel: es.customLabel,
+              category: es.category,
+              setNumber: es.setNumber,
+              reps: es.reps,
+              weight: es.weight,
+              distance: es.distance,
+              time: es.time,
+              notes: es.notes,
+              sortOrder: es.sortOrder,
+            })),
+          }
+        : {}),
     })),
     exerciseBreakdown,
     structuredExerciseStats,

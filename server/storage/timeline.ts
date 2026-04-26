@@ -1,4 +1,6 @@
 import {
+  type ExerciseSet,
+  exerciseSets,
   type PlanDay,
   planDays,
   type TimelineEntry,
@@ -307,6 +309,7 @@ export class TimelineStorage {
       mainWorkout: string;
       accessory: string | null;
       notes: string | null;
+      exerciseSets?: ExerciseSet[];
     }>
   > {
     const today = toDateStr();
@@ -341,6 +344,22 @@ export class TimelineStorage {
       limit,
     });
 
+    const planDayIds = rows.map((r) => r.id);
+    const prescribedSets = planDayIds.length > 0
+      ? await db
+          .select()
+          .from(exerciseSets)
+          .where(inArray(exerciseSets.planDayId, planDayIds))
+          .orderBy(asc(exerciseSets.planDayId), asc(exerciseSets.sortOrder))
+      : [];
+    const setsByPlanDayId = new Map<string, ExerciseSet[]>();
+    for (const set of prescribedSets) {
+      if (!set.planDayId) continue;
+      const existing = setsByPlanDayId.get(set.planDayId);
+      if (existing) existing.push(set);
+      else setsByPlanDayId.set(set.planDayId, [set]);
+    }
+
     const upcoming: Array<{
       planDayId: string;
       date: string;
@@ -348,6 +367,7 @@ export class TimelineStorage {
       mainWorkout: string;
       accessory: string | null;
       notes: string | null;
+      exerciseSets: ExerciseSet[];
     }> = [];
 
     for (const r of rows) {
@@ -359,6 +379,7 @@ export class TimelineStorage {
           mainWorkout: r.mainWorkout || "",
           accessory: r.accessory,
           notes: r.notes,
+          exerciseSets: setsByPlanDayId.get(r.id) ?? [],
         });
       }
     }

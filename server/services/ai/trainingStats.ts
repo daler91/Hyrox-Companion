@@ -70,13 +70,18 @@ export function collectRecentWorkouts(timeline: TimelineEntry[]): TrainingContex
         status: entry.status,
         rpe: entry.rpe,
         duration: entry.duration,
+        athleteNote: entry.notes,
         exerciseDetails: entry.exerciseSets?.map(es => ({
-          name: es.exerciseName,
+          exerciseName: es.exerciseName,
+          customLabel: es.customLabel,
+          category: es.category,
           setNumber: es.setNumber,
           reps: es.reps,
           weight: es.weight,
           distance: es.distance,
           time: es.time,
+          notes: es.notes,
+          sortOrder: es.sortOrder,
         })),
       });
     }

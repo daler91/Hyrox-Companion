@@ -1,26 +1,5 @@
 import type { TrainingContext } from "../gemini/types";
-
-function formatExerciseDetails(exerciseDetails: NonNullable<TrainingContext["recentWorkouts"][0]["exerciseDetails"]>): string {
-  type ExDetail = typeof exerciseDetails[0];
-  const grouped = new Map<string, ExDetail[]>();
-  for (const ex of exerciseDetails) {
-    if (!grouped.has(ex.name)) grouped.set(ex.name, []);
-    grouped.get(ex.name)!.push(ex);
-  }
-  const details: string[] = [];
-  grouped.forEach((sets, name) => {
-    const parts = [name];
-    const firstSet = sets[0];
-    const allSameReps = sets.every((s: ExDetail) => s.reps === firstSet.reps);
-    if (allSameReps && firstSet.reps && sets.length > 1) parts.push(`${sets.length}x${firstSet.reps}`);
-    else if (firstSet.reps) parts.push(`${sets.length > 1 ? sets.length + "x" : ""}${firstSet.reps}reps`);
-    if (firstSet.weight) parts.push(`@${firstSet.weight}`);
-    if (firstSet.distance) parts.push(`${firstSet.distance}m`);
-    if (firstSet.time) parts.push(`${firstSet.time}min`);
-    details.push(parts.join(" "));
-  });
-  return details.join(", ");
-}
+import { formatExerciseSetsForPrompt } from "./exerciseSetFormatter";
 
 export function buildOverallStats(trainingContext: TrainingContext): string {
   let section = `\nOverall Stats:
@@ -71,10 +50,14 @@ export function buildRecentWorkouts(trainingContext: TrainingContext): string {
 
   let section = `\n\nRecent Workouts (last 7):`;
   for (const workout of trainingContext.recentWorkouts.slice(0, 7)) {
-    let line = `\n- ${workout.date}: ${workout.focus || "General"} - ${workout.mainWorkout || "No details"} (${workout.status})`;
-    if (workout.exerciseDetails && workout.exerciseDetails.length > 0) {
-      line += ` [${formatExerciseDetails(workout.exerciseDetails)}]`;
-    }
+    const exerciseSummary = formatExerciseSetsForPrompt(workout.exerciseDetails, {
+      weightUnit: trainingContext.weightUnit,
+    });
+    const workoutDetails = exerciseSummary
+      ? `Exercises: ${exerciseSummary}`
+      : workout.mainWorkout || "No details";
+    let line = `\n- ${workout.date}: ${workout.focus || "General"} - ${workoutDetails} (${workout.status})`;
+    if (workout.athleteNote?.trim()) line += ` | Athlete note: ${workout.athleteNote.trim()}`;
     section += line;
   }
   return section;
@@ -85,9 +68,17 @@ export function buildUpcomingWorkouts(trainingContext: TrainingContext): string 
 
   let section = `\n\nUpcoming Planned Workouts (next 7 days):`;
   for (const workout of trainingContext.upcomingWorkouts) {
-    let line = `\n- ${workout.date}: ${workout.focus || "General"} - ${workout.mainWorkout || "No details"}`;
-    if (workout.accessory) line += ` | Accessory: ${workout.accessory}`;
-    if (workout.notes) line += ` | Notes: ${workout.notes}`;
+    const exerciseSummary = formatExerciseSetsForPrompt(workout.exerciseDetails, {
+      weightUnit: trainingContext.weightUnit,
+    });
+    let line = `\n- ${workout.date}: ${workout.focus || "General"} - `;
+    if (exerciseSummary) {
+      line += `Exercises: ${exerciseSummary}`;
+    } else {
+      line += workout.mainWorkout || "No details";
+      if (workout.accessory) line += ` | Accessory: ${workout.accessory}`;
+      if (workout.notes) line += ` | Notes: ${workout.notes}`;
+    }
     section += line;
   }
   return section;

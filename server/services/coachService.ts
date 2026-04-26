@@ -1,15 +1,18 @@
-import type { CoachNoteInputs,PlanDay } from "@shared/schema";
+import { type CoachNoteInputs, exerciseSets, type InsertExerciseSet, type ParsedExercise, type PlanDay } from "@shared/schema";
+import { eq, sql } from "drizzle-orm";
 
 import { db, type DbExecutor } from "../db";
 import { AppError, ErrorCode } from "../errors";
 import {
   generateReviewNotes,
   generateWorkoutSuggestions,
+  parseExercisesFromText,
   type TrainingContext,
   type UpcomingWorkout,
   type WorkoutSuggestion,
 } from "../gemini/index";
 import { logger } from "../logger";
+import { buildWorkoutSearchText } from "../prompts/exerciseSetFormatter";
 import { storage } from "../storage";
 import { buildTrainingContext } from "./ai";
 import { checkAiBudget } from "./aiUsageService";
@@ -37,6 +40,133 @@ function buildUpdateValue(
   return existing
     ? `${existing}\n[AI Coach] ${suggestion.recommendation}`
     : `[AI Coach] ${suggestion.recommendation}`;
+}
+
+interface PreparedSuggestion {
+  readonly suggestion: WorkoutSuggestion;
+  readonly structuredSetRows?: InsertExerciseSet[];
+}
+
+function hasStructuredExercises(entry: UpcomingWorkout | undefined): boolean {
+  return Boolean(entry?.exerciseDetails && entry.exerciseDetails.length > 0);
+}
+
+function shouldUseStructuredWrite(suggestion: WorkoutSuggestion, entry: UpcomingWorkout | undefined): boolean {
+  return hasStructuredExercises(entry) && suggestion.targetField !== "notes";
+}
+
+function expandParsedExercisesToPlanDayRows(
+  exercises: readonly ParsedExercise[],
+  planDayId: string,
+): InsertExerciseSet[] {
+  const rows: InsertExerciseSet[] = [];
+  let sortOrder = 0;
+  for (const ex of exercises) {
+    const sets = ex.sets && ex.sets.length > 0
+      ? ex.sets
+      : [{
+          setNumber: 1,
+          reps: ex.reps,
+          weight: ex.weight,
+          distance: ex.distance,
+          time: ex.time,
+          notes: ex.notes,
+        }];
+    for (const set of sets) {
+      rows.push({
+        workoutLogId: null,
+        planDayId,
+        exerciseName: ex.exerciseName,
+        customLabel: ex.customLabel || null,
+        category: ex.category,
+        setNumber: set.setNumber || 1,
+        reps: set.reps ?? null,
+        weight: set.weight ?? null,
+        distance: set.distance ?? null,
+        time: set.time ?? null,
+        notes: set.notes || null,
+        confidence: ex.confidence ?? null,
+        sortOrder,
+      });
+      sortOrder += 1;
+    }
+  }
+  return rows;
+}
+
+async function prepareSuggestion(
+  suggestion: WorkoutSuggestion,
+  upcomingWorkouts: UpcomingWorkout[],
+  weightUnit: string,
+  userId: string,
+): Promise<PreparedSuggestion> {
+  const entry = upcomingWorkouts.find((w) => w.id === suggestion.workoutId);
+  if (!suggestionWillApply(suggestion, upcomingWorkouts) || !shouldUseStructuredWrite(suggestion, entry)) {
+    return { suggestion };
+  }
+
+  try {
+    const parsedExercises = await parseExercisesFromText(suggestion.recommendation, weightUnit, undefined, userId);
+    if (parsedExercises.length === 0) return { suggestion };
+    return {
+      suggestion,
+      structuredSetRows: expandParsedExercisesToPlanDayRows(parsedExercises, suggestion.workoutId),
+    };
+  } catch (err) {
+    logger.warn(
+      { err, workoutId: suggestion.workoutId, targetField: suggestion.targetField },
+      "[coach] Structured suggestion parse failed; falling back to text update",
+    );
+    return { suggestion };
+  }
+}
+
+async function getNextPlanDaySortOrder(planDayId: string, tx: DbExecutor): Promise<number> {
+  const [max] = await tx
+    .select({ maxOrder: sql<number | null>`max(${exerciseSets.sortOrder})` })
+    .from(exerciseSets)
+    .where(eq(exerciseSets.planDayId, planDayId));
+  return (max?.maxOrder ?? -1) + 1;
+}
+
+function withSortOffset(rows: readonly InsertExerciseSet[], offset: number): InsertExerciseSet[] {
+  return rows.map((row) => ({
+    ...row,
+    sortOrder: (row.sortOrder ?? 0) + offset,
+  }));
+}
+
+async function applyStructuredSuggestion(
+  prepared: PreparedSuggestion,
+  userId: string,
+  aiSource: "rag" | "legacy" | null | undefined,
+  inputsUsed: CoachNoteInputs,
+  tx: DbExecutor,
+): Promise<boolean> {
+  const { suggestion, structuredSetRows } = prepared;
+  if (!structuredSetRows || structuredSetRows.length === 0) return false;
+
+  const rows = suggestion.action === "append"
+    ? withSortOffset(structuredSetRows, await getNextPlanDaySortOrder(suggestion.workoutId, tx))
+    : structuredSetRows;
+
+  if (suggestion.action === "replace") {
+    await tx.delete(exerciseSets).where(eq(exerciseSets.planDayId, suggestion.workoutId));
+  }
+  await tx.insert(exerciseSets).values(rows);
+
+  await storage.plans.updatePlanDay(
+    suggestion.workoutId,
+    {
+      aiSource: aiSource ?? null,
+      aiRationale: suggestion.rationale.slice(0, 400),
+      aiNoteUpdatedAt: new Date(),
+      aiInputsUsed: inputsUsed,
+    },
+    userId,
+    tx,
+  );
+  return true;
 }
 
 /**
@@ -94,14 +224,18 @@ function suggestionWillApply(
 }
 
 async function applySuggestion(
-  suggestion: WorkoutSuggestion,
+  prepared: PreparedSuggestion,
   upcomingWorkouts: UpcomingWorkout[],
   userId: string,
   aiSource: "rag" | "legacy" | null | undefined,
   inputsUsed: CoachNoteInputs,
   tx: DbExecutor,
 ): Promise<boolean> {
+  const { suggestion } = prepared;
   if (!suggestionWillApply(suggestion, upcomingWorkouts)) return false;
+  if (prepared.structuredSetRows && prepared.structuredSetRows.length > 0) {
+    return applyStructuredSuggestion(prepared, userId, aiSource, inputsUsed, tx);
+  }
   const entry = upcomingWorkouts.find((w) => w.id === suggestion.workoutId)!;
 
   // Let errors propagate so the enclosing transaction rolls back — we want
@@ -153,8 +287,9 @@ async function applyReviewNote(
 async function getCoachingMaterialsString(
   userId: string,
   upcomingWorkouts: UpcomingWorkout[],
+  weightUnit?: string,
 ): Promise<{ text: string | undefined; source: "rag" | "legacy" | null }> {
-  const query = upcomingWorkouts.map(w => `${w.focus} ${w.mainWorkout}`).join("; ");
+  const query = upcomingWorkouts.map(w => buildWorkoutSearchText(w, { weightUnit })).join("; ");
   return retrieveCoachingText(userId, query);
 }
 
@@ -199,6 +334,7 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
         mainWorkout: w.mainWorkout,
         accessory: w.accessory || undefined,
         notes: w.notes || undefined,
+        ...(w.exerciseDetails && w.exerciseDetails.length > 0 ? { exerciseDetails: w.exerciseDetails } : {}),
       }));
 
     if (upcomingWorkouts.length === 0) {
@@ -212,7 +348,7 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
       return { adjusted: 0 };
     }
 
-    const coachingContext = await getCoachingMaterialsString(userId, upcomingWorkouts);
+    const coachingContext = await getCoachingMaterialsString(userId, upcomingWorkouts, user.weightUnit || "kg");
     const inputsUsed = buildCoachNoteInputs(
       trainingContext,
       coachingContext.source === "rag",
@@ -225,6 +361,9 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
       activePlanGoal,
       coachingContext.text,
       userId,
+    );
+    const preparedSuggestions = await Promise.all(
+      suggestions.map((s) => prepareSuggestion(s, upcomingWorkouts, user.weightUnit || "kg", userId)),
     );
 
     // For any upcoming day the coach did NOT modify, request a short review
@@ -272,11 +411,14 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
     // rolls back every earlier apply so the plan never ends up partially
     // mutated (C2).
     const { adjusted, noted } = await db.transaction(async (tx) => {
-      const modResults = await Promise.all(
-        suggestions.map((s) =>
-          applySuggestion(s, upcomingWorkouts, userId, coachingContext.source, inputsUsed, tx),
-        ),
-      );
+      const modResults: boolean[] = [];
+      // Keep duplicate suggestions for the same plan day ordered so structured
+      // appends re-read sortOrder after any earlier insert in this transaction.
+      for (const s of preparedSuggestions) {
+        modResults.push(
+          await applySuggestion(s, upcomingWorkouts, userId, coachingContext.source, inputsUsed, tx),
+        );
+      }
       const noteResults = await Promise.all(
         reviewNotes.map((n) =>
           applyReviewNote(n.workoutId, n.note, userId, inputsUsed, tx),
@@ -361,17 +503,30 @@ export async function regenerateCoachNoteForPlanDay(
 
   const trainingContext = await buildTrainingContext(userId);
   const activePlanGoal = trainingContext.activePlan?.goal ?? undefined;
+  const planDaySets = await storage.workouts.getExerciseSetsByPlanDay(day.id, userId);
 
   const workoutInput: UpcomingWorkout = {
     id: day.id,
     date: day.scheduledDate ?? new Date().toISOString().slice(0, 10),
     focus: day.focus,
     mainWorkout: day.mainWorkout,
-    accessory: day.accessory || undefined,
-    notes: day.notes || undefined,
+    accessory: planDaySets && planDaySets.length > 0 ? undefined : day.accessory || undefined,
+    notes: planDaySets && planDaySets.length > 0 ? undefined : day.notes || undefined,
+    exerciseDetails: (planDaySets ?? []).map(es => ({
+      exerciseName: es.exerciseName,
+      customLabel: es.customLabel,
+      category: es.category,
+      setNumber: es.setNumber,
+      reps: es.reps,
+      weight: es.weight,
+      distance: es.distance,
+      time: es.time,
+      notes: es.notes,
+      sortOrder: es.sortOrder,
+    })),
   };
 
-  const coachingContext = await getCoachingMaterialsString(userId, [workoutInput]);
+  const coachingContext = await getCoachingMaterialsString(userId, [workoutInput], trainingContext.weightUnit);
   const inputsUsed = buildCoachNoteInputs(
     trainingContext,
     coachingContext.source === "rag",

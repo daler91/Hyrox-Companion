@@ -1,6 +1,7 @@
 import type { Logger } from "pino";
 
 import { generateWorkoutSuggestions, type UpcomingWorkout } from "../gemini/index";
+import { buildWorkoutSearchText } from "../prompts/exerciseSetFormatter";
 import { storage } from "../storage";
 import { buildAIContext, extractCoachingMaterialsText } from "./aiContextService";
 import { sanitizeRagInfo } from "./ragRetrieval";
@@ -34,7 +35,10 @@ export async function generateTimelineAiSuggestions(
   userId: string,
   log: Logger,
 ): Promise<TimelineSuggestionsResult> {
-  const plannedDays = await storage.timeline.getUpcomingPlannedDays(userId, 5);
+  const [plannedDays, user] = await Promise.all([
+    storage.timeline.getUpcomingPlannedDays(userId, 5),
+    storage.users.getUser(userId),
+  ]);
   const upcomingWorkouts: UpcomingWorkout[] = plannedDays.map((d) => ({
     id: d.planDayId,
     date: d.date,
@@ -42,13 +46,31 @@ export async function generateTimelineAiSuggestions(
     mainWorkout: d.mainWorkout,
     accessory: d.accessory || undefined,
     notes: d.notes || undefined,
+    ...(d.exerciseSets && d.exerciseSets.length > 0
+      ? {
+          exerciseDetails: d.exerciseSets.map(es => ({
+            exerciseName: es.exerciseName,
+            customLabel: es.customLabel,
+            category: es.category,
+            setNumber: es.setNumber,
+            reps: es.reps,
+            weight: es.weight,
+            distance: es.distance,
+            time: es.time,
+            notes: es.notes,
+            sortOrder: es.sortOrder,
+          })),
+        }
+      : {}),
   }));
 
   if (upcomingWorkouts.length === 0) {
     return { suggestions: [], message: "No upcoming planned workouts found" };
   }
 
-  const suggestionQuery = upcomingWorkouts.map((w) => `${w.focus} ${w.mainWorkout}`).join("; ");
+  const suggestionQuery = upcomingWorkouts
+    .map((w) => buildWorkoutSearchText(w, { weightUnit: user?.weightUnit || "kg" }))
+    .join("; ");
   const aiContext = await buildAIContext(userId, suggestionQuery, log);
   const coachingMaterials = extractCoachingMaterialsText(aiContext);
 

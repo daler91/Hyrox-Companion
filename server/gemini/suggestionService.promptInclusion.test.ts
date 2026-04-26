@@ -4,6 +4,7 @@ import {
   createMockTrainingContext,
   createMockUpcomingWorkout,
 } from "../../test/factories";
+import { buildSystemPrompt } from "../prompts";
 import { buildSuggestionsPrompt } from "./suggestionService";
 import type { TrainingContext } from "./types";
 
@@ -41,6 +42,7 @@ function kitchenSinkContext(): TrainingContext {
         status: "completed",
         rpe: 8,
         duration: 62,
+        athleteNote: "FINGERPRINT_ATHLETE_NOTE",
       },
     ],
     activePlan: {
@@ -125,6 +127,7 @@ describe("buildSuggestionsPrompt — input inclusion regression guard", () => {
 
     // Recent workouts block
     expect(prompt).toContain("FINGERPRINT_RECENT_MAINWORKOUT");
+    expect(prompt).toContain("FINGERPRINT_ATHLETE_NOTE");
     expect(prompt).toContain("RPE: 8");
     expect(prompt).toContain("Duration: 62min");
 
@@ -205,6 +208,131 @@ describe("buildSuggestionsPrompt — input inclusion regression guard", () => {
     );
 
     expect(prompt).not.toContain("FINGERPRINT_RAG_CHUNK");
+  });
+
+  it("uses upcoming exercise-table rows instead of main/accessory/notes when rows exist", () => {
+    const prompt = buildSuggestionsPrompt(
+      createMockTrainingContext(),
+      [
+        createMockUpcomingWorkout({
+          id: "table-backed-day",
+          focus: "strength",
+          mainWorkout: "FINGERPRINT_FREE_MAIN",
+          accessory: "FINGERPRINT_FREE_ACCESSORY",
+          notes: "FINGERPRINT_PLAN_NOTES",
+          exerciseDetails: [
+            {
+              exerciseName: "back_squat",
+              category: "strength",
+              setNumber: 1,
+              reps: 8,
+              weight: 100,
+              sortOrder: 0,
+            },
+            {
+              exerciseName: "back_squat",
+              category: "strength",
+              setNumber: 2,
+              reps: 8,
+              weight: 100,
+              sortOrder: 1,
+            },
+          ],
+        }),
+      ],
+    );
+
+    expect(prompt).toContain("ID: table-backed-day");
+    expect(prompt).toContain("Exercises: Back Squat: 2 sets x 8 reps, 100 kg");
+    expect(prompt).not.toContain("FINGERPRINT_FREE_MAIN");
+    expect(prompt).not.toContain("FINGERPRINT_FREE_ACCESSORY");
+    expect(prompt).not.toContain("FINGERPRINT_PLAN_NOTES");
+  });
+
+  it("includes completed exercise rows and athlete note in recent workout context", () => {
+    const prompt = buildSuggestionsPrompt(
+      createMockTrainingContext({
+        recentWorkouts: [
+          {
+            date: "2026-04-18",
+            focus: "conditioning",
+            mainWorkout: "FINGERPRINT_COMPLETED_FREE_TEXT",
+            status: "completed",
+            athleteNote: "FINGERPRINT_COMPLETED_ATHLETE_NOTE",
+            exerciseDetails: [
+              {
+                exerciseName: "rowing",
+                category: "functional",
+                setNumber: 1,
+                distance: 1000,
+                time: 4,
+                sortOrder: 0,
+              },
+            ],
+          },
+        ],
+      }),
+      [createMockUpcomingWorkout()],
+    );
+
+    expect(prompt).toContain("Exercises: Rowing: 1000m, 4 min");
+    expect(prompt).toContain("Athlete note: FINGERPRINT_COMPLETED_ATHLETE_NOTE");
+    expect(prompt).not.toContain("FINGERPRINT_COMPLETED_FREE_TEXT");
+  });
+
+  it("uses exercise-table rows in the shared chat system prompt", () => {
+    const prompt = buildSystemPrompt(
+      createMockTrainingContext({
+        totalWorkouts: 2,
+        recentWorkouts: [
+          {
+            date: "2026-04-18",
+            focus: "conditioning",
+            mainWorkout: "FINGERPRINT_CHAT_RECENT_FREE_TEXT",
+            status: "completed",
+            athleteNote: "FINGERPRINT_CHAT_ATHLETE_NOTE",
+            exerciseDetails: [
+              {
+                exerciseName: "wall_balls",
+                category: "functional",
+                setNumber: 1,
+                reps: 50,
+                weight: 20,
+                sortOrder: 0,
+              },
+            ],
+          },
+        ],
+        upcomingWorkouts: [
+          {
+            planDayId: "chat-plan-day",
+            date: "2026-04-20",
+            focus: "strength",
+            mainWorkout: "FINGERPRINT_CHAT_UPCOMING_MAIN",
+            accessory: "FINGERPRINT_CHAT_UPCOMING_ACCESSORY",
+            notes: "FINGERPRINT_CHAT_PLAN_NOTES",
+            exerciseDetails: [
+              {
+                exerciseName: "deadlift",
+                category: "strength",
+                setNumber: 1,
+                reps: 5,
+                weight: 140,
+                sortOrder: 0,
+              },
+            ],
+          },
+        ],
+      }),
+    );
+
+    expect(prompt).toContain("Exercises: Wall Balls: 50 reps, 20 kg");
+    expect(prompt).toContain("Athlete note: FINGERPRINT_CHAT_ATHLETE_NOTE");
+    expect(prompt).toContain("Exercises: Deadlift: 5 reps, 140 kg");
+    expect(prompt).not.toContain("FINGERPRINT_CHAT_RECENT_FREE_TEXT");
+    expect(prompt).not.toContain("FINGERPRINT_CHAT_UPCOMING_MAIN");
+    expect(prompt).not.toContain("FINGERPRINT_CHAT_UPCOMING_ACCESSORY");
+    expect(prompt).not.toContain("FINGERPRINT_CHAT_PLAN_NOTES");
   });
 
   it("preserves the canonical section ordering", () => {
