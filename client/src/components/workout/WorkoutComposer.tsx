@@ -28,11 +28,6 @@ interface WorkoutComposerProps {
   /** Parse control surfaced from useWorkoutEditor. */
   readonly autoParsing: boolean;
   readonly autoParseError: boolean;
-  /**
-   * Fires a parse immediately (no debounce). Wired to the explicit
-   * Parse button in the text panel — text-change no longer auto-parses.
-   */
-  readonly parseNow: (text: string) => void;
   readonly cancelAutoParse: () => void;
 
   /** Voice input for dictating into the text panel. */
@@ -90,7 +85,6 @@ export function WorkoutComposer({
   distanceUnit,
   autoParsing,
   autoParseError,
-  parseNow,
   cancelAutoParse,
   isListening,
   isSupported,
@@ -229,7 +223,6 @@ export function WorkoutComposer({
             stopListening={stopListening}
             interimTranscript={interimTranscript}
             toast={toast}
-            onParseText={() => parseNow(freeText)}
             isParsingText={autoParsing}
             onCaptureImage={
               onParseImage

@@ -318,15 +318,18 @@ export const exercisesPayloadSchema = z.array(incomingExerciseSchema).max(200);
 
 // Shared measurement fields used by both patch and add request bodies.
 // Extracted to a single definition so the 9-line block doesn't duplicate.
+//
+// Planned fields are intentionally NOT exposed in the per-set request bodies:
+// the prescription baseline is set once at log-materialisation time
+// (server/storage/shared.ts#prescribedSetToLogRow) and must not be mutable
+// via the per-set CRUD routes — otherwise any client could overwrite the
+// prescription baseline after a log is created and corrupt downstream
+// plan-vs-actual adherence reporting.
 const measurableSetFields = {
   reps: z.number().int().min(0).max(10_000).nullable().optional(),
   weight: z.number().min(0).max(2_000).nullable().optional(),
   distance: z.number().min(0).max(1_000_000).nullable().optional(),
   time: z.number().min(0).max(86_400).nullable().optional(),
-  plannedReps: z.number().int().min(0).max(10_000).nullable().optional(),
-  plannedWeight: z.number().min(0).max(2_000).nullable().optional(),
-  plannedDistance: z.number().min(0).max(1_000_000).nullable().optional(),
-  plannedTime: z.number().min(0).max(86_400).nullable().optional(),
   notes: z.string().max(1000).nullable().optional(),
 };
 

@@ -74,6 +74,13 @@ export function ConfirmStep({
     },
     [cancelAutoParse, removeBlock],
   );
+  const handleReorderBlocks = useCallback(
+    (nextOrder: string[]) => {
+      cancelAutoParse();
+      reorderBlocks(nextOrder);
+    },
+    [cancelAutoParse, reorderBlocks],
+  );
 
   return (
     <div className="space-y-6">
@@ -106,7 +113,7 @@ export function ConfirmStep({
             addExercise={handleAddExercise}
             updateBlock={handleUpdateBlock}
             removeBlock={handleRemoveBlock}
-            reorderBlocks={reorderBlocks}
+            reorderBlocks={handleReorderBlocks}
             weightUnit={weightUnit}
             distanceUnit={distanceUnit}
           />

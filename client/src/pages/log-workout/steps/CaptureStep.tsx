@@ -128,7 +128,6 @@ export function CaptureStep({
             autoParsing={autoParsing}
             autoParseError={autoParseError}
             isParsingImage={isParsingImage}
-            parseNow={parseNow}
             defaultPanelOpen={defaultPanelOpen ?? true}
             {...composerRest}
           />
