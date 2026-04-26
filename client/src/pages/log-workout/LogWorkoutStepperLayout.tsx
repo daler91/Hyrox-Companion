@@ -113,6 +113,21 @@ export function LogWorkoutStepperLayout({
   onParseImage,
   isParsingImage,
 }: LogWorkoutStepperLayoutProps) {
+  // Shared props passed to both CaptureStep (which forwards them to
+  // WorkoutComposer) and ConfirmStep (which forwards them to DraftExerciseTable).
+  const exerciseTableProps = {
+    exerciseBlocks,
+    exerciseData,
+    addExercise,
+    updateBlock,
+    removeBlock,
+    reorderBlocks,
+    weightUnit,
+    distanceUnit,
+    autoParsing,
+    cancelAutoParse,
+  };
+
   return (
     <div className="container max-w-3xl mx-auto p-4 pb-28 md:pb-8 pt-4 md:pt-8 min-h-screen">
       <WorkoutHeader
@@ -131,18 +146,9 @@ export function LogWorkoutStepperLayout({
             setDate={setDate}
             freeText={freeText}
             setFreeText={setFreeText}
-            exerciseBlocks={exerciseBlocks}
-            exerciseData={exerciseData}
-            addExercise={addExercise}
-            updateBlock={updateBlock}
-            removeBlock={removeBlock}
-            reorderBlocks={reorderBlocks}
-            weightUnit={weightUnit}
-            distanceUnit={distanceUnit}
-            autoParsing={autoParsing}
+            {...exerciseTableProps}
             autoParseError={autoParseError}
             parseNow={parseNow}
-            cancelAutoParse={cancelAutoParse}
             isListening={isListening}
             isSupported={isSupported}
             interimTranscript={interimTranscript}
@@ -160,16 +166,7 @@ export function LogWorkoutStepperLayout({
         {step === 2 && (
           <ConfirmStep
             freeText={freeText}
-            exerciseBlocks={exerciseBlocks}
-            exerciseData={exerciseData}
-            addExercise={addExercise}
-            updateBlock={updateBlock}
-            removeBlock={removeBlock}
-            reorderBlocks={reorderBlocks}
-            weightUnit={weightUnit}
-            distanceUnit={distanceUnit}
-            autoParsing={autoParsing}
-            cancelAutoParse={cancelAutoParse}
+            {...exerciseTableProps}
             onBack={() => setStep(1)}
             onContinue={() => setStep(3)}
           />
