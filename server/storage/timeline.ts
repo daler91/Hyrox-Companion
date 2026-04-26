@@ -124,6 +124,48 @@ function createStandaloneWorkoutEntry(log: WorkoutLog): TimelineEntry {
   };
 }
 
+function addSetToGroup(groups: Map<string, ExerciseSet[]>, key: string, set: ExerciseSet): void {
+  const existing = groups.get(key);
+  if (existing) {
+    existing.push(set);
+    return;
+  }
+  groups.set(key, [set]);
+}
+
+function collectExerciseSetOwnerIds(entries: TimelineEntry[]): {
+  readonly workoutLogIds: string[];
+  readonly planDayIds: string[];
+} {
+  const workoutLogIds = new Set<string>();
+  const planDayIds = new Set<string>();
+
+  for (const entry of entries) {
+    if (entry.workoutLogId) {
+      workoutLogIds.add(entry.workoutLogId);
+      continue;
+    }
+    if (entry.planDayId) {
+      planDayIds.add(entry.planDayId);
+    }
+  }
+
+  return {
+    workoutLogIds: Array.from(workoutLogIds),
+    planDayIds: Array.from(planDayIds),
+  };
+}
+
+function groupExerciseSetsByWorkoutLogId(sets: ExerciseSet[]): Map<string, ExerciseSet[]> {
+  const setsByWorkoutId = new Map<string, ExerciseSet[]>();
+  for (const set of sets) {
+    if (set.workoutLogId) {
+      addSetToGroup(setsByWorkoutId, set.workoutLogId, set);
+    }
+  }
+  return setsByWorkoutId;
+}
+
 async function fetchPlanDayExerciseSets(planDayIds: string[]): Promise<Map<string, ExerciseSet[]>> {
   if (planDayIds.length === 0) return new Map();
 
@@ -135,53 +177,52 @@ async function fetchPlanDayExerciseSets(planDayIds: string[]): Promise<Map<strin
 
   const setsByPlanDayId = new Map<string, ExerciseSet[]>();
   for (const set of prescribedSets) {
-    if (!set.planDayId) continue;
-    const existing = setsByPlanDayId.get(set.planDayId);
-    if (existing) existing.push(set);
-    else setsByPlanDayId.set(set.planDayId, [set]);
+    if (set.planDayId) {
+      addSetToGroup(setsByPlanDayId, set.planDayId, set);
+    }
   }
   return setsByPlanDayId;
+}
+
+function getTimelineEntryExerciseSets(
+  entry: TimelineEntry,
+  setsByWorkoutId: Map<string, ExerciseSet[]>,
+  setsByPlanDayId: Map<string, ExerciseSet[]>,
+): ExerciseSet[] | undefined {
+  if (entry.workoutLogId) return setsByWorkoutId.get(entry.workoutLogId) || [];
+  if (entry.planDayId) return setsByPlanDayId.get(entry.planDayId) || [];
+  return undefined;
+}
+
+function hydrateTimelineExerciseSets(
+  entries: TimelineEntry[],
+  setsByWorkoutId: Map<string, ExerciseSet[]>,
+  setsByPlanDayId: Map<string, ExerciseSet[]>,
+): void {
+  for (const entry of entries) {
+    const sets = getTimelineEntryExerciseSets(entry, setsByWorkoutId, setsByPlanDayId);
+    if (sets) {
+      entry.exerciseSets = sets;
+    }
+  }
 }
 
 export class TimelineStorage {
   constructor(private readonly workoutStorage: WorkoutStorage) {}
 
   private async attachExerciseSets(entries: TimelineEntry[]): Promise<void> {
-    const workoutLogIds = new Set<string>();
-    const planDayIds = new Set<string>();
-    for (const e of entries) {
-      if (e.workoutLogId) {
-        workoutLogIds.add(e.workoutLogId);
-      } else if (e.planDayId) {
-        planDayIds.add(e.planDayId);
-      }
-    }
+    const { workoutLogIds, planDayIds } = collectExerciseSetOwnerIds(entries);
 
-    if (workoutLogIds.size === 0 && planDayIds.size === 0) return;
+    if (workoutLogIds.length === 0 && planDayIds.length === 0) return;
 
     const [allSets, setsByPlanDayId] = await Promise.all([
-      workoutLogIds.size > 0
-        ? this.workoutStorage.getExerciseSetsByWorkoutLogs(Array.from(workoutLogIds))
+      workoutLogIds.length > 0
+        ? this.workoutStorage.getExerciseSetsByWorkoutLogs(workoutLogIds)
         : Promise.resolve([]),
-      fetchPlanDayExerciseSets(Array.from(planDayIds)),
+      fetchPlanDayExerciseSets(planDayIds),
     ]);
-    const setsByWorkoutId = new Map<string, typeof allSets>();
-    for (const s of allSets) {
-      // workoutLogId is nullable since prescribed sets can live on planDays,
-      // but this path queries logged sets only so null shouldn't appear.
-      if (!s.workoutLogId) continue;
-      const existing = setsByWorkoutId.get(s.workoutLogId);
-      if (existing) existing.push(s);
-      else setsByWorkoutId.set(s.workoutLogId, [s]);
-    }
 
-    for (const entry of entries) {
-      if (entry.workoutLogId) {
-        entry.exerciseSets = setsByWorkoutId.get(entry.workoutLogId) || [];
-      } else if (entry.planDayId) {
-        entry.exerciseSets = setsByPlanDayId.get(entry.planDayId) || [];
-      }
-    }
+    hydrateTimelineExerciseSets(entries, groupExerciseSetsByWorkoutLogId(allSets), setsByPlanDayId);
   }
 
   private async fetchScheduledDays(userId: string, planId?: string, sqlLimit?: number) {
