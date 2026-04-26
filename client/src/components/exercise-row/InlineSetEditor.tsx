@@ -291,7 +291,7 @@ const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUn
   // a "planned X" annotation when the actual diverges — equal values would
   // just be visual noise.
   const planned = set[PLANNED_FIELD[field]] ?? undefined;
-  const showPlannedDiff = planned != null && planned !== current;
+  const showPlannedDiff = planned !== undefined && planned !== current;
 
   // Local draft + "last saved" snapshot so incoming server / optimistic
   // updates at the same value don't overwrite an in-progress edit. A

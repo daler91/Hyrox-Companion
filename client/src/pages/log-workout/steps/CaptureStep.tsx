@@ -1,5 +1,4 @@
 import type { ExerciseName, ParsedExercise } from "@shared/schema";
-import { format, subDays } from "date-fns";
 import { ArrowRight, Loader2 } from "lucide-react";
 
 import type { StructuredExercise } from "@/components/ExerciseInput";
@@ -10,6 +9,9 @@ import { Label } from "@/components/ui/label";
 import { WorkoutComposer } from "@/components/workout/WorkoutComposer";
 import type { useToast } from "@/hooks/use-toast";
 import type { ParseFromImagePayload } from "@/lib/api";
+import { getTodayString, getYesterdayString } from "@/lib/dateUtils";
+
+import { StepFooter } from "../StepFooter";
 
 interface CaptureStepProps {
   readonly title: string;
@@ -44,13 +46,6 @@ interface CaptureStepProps {
   readonly isParsingImage: boolean;
   readonly onCancel: () => void;
   readonly onContinue: () => void;
-}
-
-function todayIso(): string {
-  return format(new Date(), "yyyy-MM-dd");
-}
-function yesterdayIso(): string {
-  return format(subDays(new Date(), 1), "yyyy-MM-dd");
 }
 
 /**
@@ -90,8 +85,8 @@ export function CaptureStep({
   onCancel,
   onContinue,
 }: CaptureStepProps) {
-  const today = todayIso();
-  const yesterday = yesterdayIso();
+  const today = getTodayString();
+  const yesterday = getYesterdayString();
   const hasText = freeText.trim().length > 0;
   const hasBlocks = exerciseBlocks.length > 0;
   const isWorking = autoParsing || isParsingImage;
@@ -227,16 +222,3 @@ export function CaptureStep({
   );
 }
 
-function StepFooter({ children }: { readonly children: React.ReactNode }) {
-  return (
-    <div
-      className={
-        "fixed inset-x-0 bottom-0 z-40 flex flex-col-reverse gap-2 border-t border-border bg-background/95 px-4 py-3 backdrop-blur " +
-        "md:static md:flex-row md:justify-end md:border-0 md:bg-transparent md:p-0 md:pt-2 md:backdrop-blur-none"
-      }
-      data-testid="step-footer"
-    >
-      {children}
-    </div>
-  );
-}

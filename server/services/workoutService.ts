@@ -19,6 +19,7 @@ import { db } from "../db";
 import { AppError, ErrorCode } from "../errors";
 import { logger } from "../logger";
 import { DEFAULT_JOB_OPTIONS, queue } from "../queue";
+import { prescribedSetToLogRow } from "../storage/shared";
 import { storage } from "../storage";
 
 // ⚡ Perf: cap concurrent Gemini parse calls per chunk to protect the
@@ -498,28 +499,7 @@ async function copyPrescribedSetsIntoLog(
     .orderBy(asc(exerciseSets.sortOrder));
   if (prescribed.length === 0) return [];
 
-  const copyRows: InsertExerciseSet[] = prescribed.map((p) => ({
-    workoutLogId,
-    planDayId: null,
-    exerciseName: p.exerciseName,
-    customLabel: p.customLabel,
-    category: p.category,
-    setNumber: p.setNumber,
-    // Both actual and planned start equal to the prescription. Edits made
-    // mid-workout overwrite the actual columns; planned* stays as the
-    // immutable record of what was prescribed.
-    reps: p.reps,
-    weight: p.weight,
-    distance: p.distance,
-    time: p.time,
-    plannedReps: p.reps,
-    plannedWeight: p.weight,
-    plannedDistance: p.distance,
-    plannedTime: p.time,
-    notes: p.notes,
-    confidence: p.confidence,
-    sortOrder: p.sortOrder,
-  }));
+  const copyRows = prescribed.map((p) => prescribedSetToLogRow(p, workoutLogId));
   return tx.insert(exerciseSets).values(copyRows).returning();
 }
 
