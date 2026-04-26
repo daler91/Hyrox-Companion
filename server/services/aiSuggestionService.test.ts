@@ -32,6 +32,9 @@ vi.mock("../storage", () => ({
     timeline: {
       getUpcomingPlannedDays: vi.fn(),
     },
+    aiUsage: {
+      getDailyTotalCents: vi.fn(),
+    },
   },
 }));
 
@@ -100,6 +103,7 @@ describe("applyTimelineAiSuggestion", () => {
     dbMockState.selectWhere.mockResolvedValue([{ maxSortOrder: 2 }]);
     vi.mocked(storage.plans.getPlanDay).mockResolvedValue(mockPlanDay() as never);
     vi.mocked(storage.users.getUser).mockResolvedValue({ weightUnit: "lb" } as never);
+    vi.mocked(storage.aiUsage.getDailyTotalCents).mockResolvedValue(0);
     vi.mocked(storage.workouts.getExerciseSetsByPlanDay).mockResolvedValue([
       { id: "set-1", planDayId: "day-1", workoutLogId: null, exerciseName: "back_squat" },
     ] as never);
@@ -155,6 +159,7 @@ describe("applyTimelineAiSuggestion", () => {
 
   it("falls back to text updates when the day is not table-backed", async () => {
     vi.mocked(storage.workouts.getExerciseSetsByPlanDay).mockResolvedValue([] as never);
+    vi.mocked(storage.aiUsage.getDailyTotalCents).mockResolvedValue(200);
 
     const result = await applyTimelineAiSuggestion(
       "user-1",
@@ -171,6 +176,7 @@ describe("applyTimelineAiSuggestion", () => {
 
     expect(result).toEqual({ applied: true, structured: false });
     expect(parseExercisesFromText).not.toHaveBeenCalled();
+    expect(storage.aiUsage.getDailyTotalCents).not.toHaveBeenCalled();
     expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
       "day-1",
       expect.objectContaining({
@@ -180,5 +186,58 @@ describe("applyTimelineAiSuggestion", () => {
       }),
       "user-1",
     );
+  });
+
+  it("leaves table-backed days unchanged when structured parsing returns no rows", async () => {
+    vi.mocked(parseExercisesFromText).mockResolvedValue([] as never);
+
+    const result = await applyTimelineAiSuggestion(
+      "user-1",
+      {
+        workoutId: "day-1",
+        targetField: "mainWorkout",
+        action: "replace",
+        recommendation: "Keep this easier today",
+        rationale: "Fatigue is elevated",
+        aiSource: "rag",
+      },
+      testLog,
+    );
+
+    expect(result).toEqual({
+      applied: false,
+      structured: false,
+      reason: "structured_parse_failed",
+      message: expect.stringContaining("left the table-backed workout unchanged"),
+    });
+    expect(dbMockState.deleteWhere).not.toHaveBeenCalled();
+    expect(dbMockState.insertValues).not.toHaveBeenCalled();
+    expect(storage.plans.updatePlanDay).not.toHaveBeenCalled();
+  });
+
+  it("leaves table-backed days unchanged when structured parsing is over budget", async () => {
+    vi.mocked(storage.aiUsage.getDailyTotalCents).mockResolvedValue(200);
+
+    const result = await applyTimelineAiSuggestion(
+      "user-1",
+      {
+        workoutId: "day-1",
+        targetField: "accessory",
+        action: "append",
+        recommendation: "Walking lunges 2x20m",
+        rationale: "Add station durability",
+        aiSource: "rag",
+      },
+      testLog,
+    );
+
+    expect(result).toEqual({
+      applied: false,
+      structured: false,
+      reason: "ai_budget_exceeded",
+      message: expect.stringContaining("daily AI limit"),
+    });
+    expect(parseExercisesFromText).not.toHaveBeenCalled();
+    expect(storage.plans.updatePlanDay).not.toHaveBeenCalled();
   });
 });

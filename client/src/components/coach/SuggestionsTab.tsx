@@ -85,10 +85,21 @@ export function useSuggestions({ timeline, addLocalMessage, saveMessage }: UseSu
         return;
       }
 
-      await api.timeline.applySuggestion({
+      const result = await api.timeline.applySuggestion({
         ...suggestion,
         aiSource: suggestionsRagInfo?.source ?? null,
       });
+
+      if (!result.applied) {
+        const notAppliedMessage: Message = {
+          id: Date.now().toString(),
+          role: "assistant",
+          content: result.message,
+          timestamp: getCurrentTimeString(),
+        };
+        addLocalMessage(notAppliedMessage);
+        return;
+      }
 
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }).catch(() => {});
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.planDayExercises(suggestion.workoutId) }).catch(() => {});

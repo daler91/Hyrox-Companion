@@ -18,6 +18,15 @@ export interface ApplySuggestionPayload extends Suggestion {
   aiSource?: RagInfo["source"] | null;
 }
 
+export type ApplySuggestionResult =
+  | { applied: true; structured: boolean }
+  | {
+      applied: false;
+      structured: false;
+      reason: "ai_budget_exceeded" | "ai_disabled" | "structured_parse_failed";
+      message: string;
+    };
+
 export const analytics = {
   getPersonalRecords: (dateParams?: string) =>
     typedRequest<Record<string, PersonalRecord>>("GET", `/api/v1/personal-records${dateParams || ""}`),
@@ -43,7 +52,7 @@ export const timeline = {
     }),
 
   applySuggestion: (payload: ApplySuggestionPayload) =>
-    typedRequest<{ applied: true; structured: boolean }>(
+    typedRequest<ApplySuggestionResult>(
       "POST",
       "/api/v1/timeline/ai-suggestions/apply",
       payload,

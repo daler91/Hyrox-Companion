@@ -49,6 +49,13 @@ vi.mock("../../storage", () => ({
       getTimeline: vi.fn(),
       getUpcomingPlannedDays: vi.fn().mockResolvedValue([]),
     },
+    plans: {
+      getPlanDay: vi.fn(),
+      updatePlanDay: vi.fn(),
+    },
+    workouts: {
+      getExerciseSetsByPlanDay: vi.fn(),
+    },
     coaching: {
       listCoachingMaterials: vi.fn(),
       hasChunksForUser: vi.fn().mockResolvedValue(false),
@@ -701,6 +708,54 @@ describe("POST /api/timeline/ai-suggestions", () => {
 
     expect(response.status).toBe(500);
     expect(response.body).toHaveProperty("error", "Internal Server Error");
+  });
+});
+
+const APPLY_TIMELINE_SUGGESTION_ENDPOINT = "/api/v1/timeline/ai-suggestions/apply";
+describe("POST /api/timeline/ai-suggestions/apply", () => {
+  let app: express.Express;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const routeUtils = await import("../../routeUtils");
+    routeUtils.clearRateLimitBuckets();
+    app = createTestApp(aiRouter);
+    vi.mocked(storage.users.getUser).mockResolvedValue({ aiCoachEnabled: true, weightUnit: "kg" } as never);
+    vi.mocked(storage.plans.getPlanDay).mockResolvedValue({
+      id: "day-1",
+      mainWorkout: "Old main",
+      accessory: null,
+      notes: null,
+    } as never);
+    vi.mocked(storage.workouts.getExerciseSetsByPlanDay).mockResolvedValue([] as never);
+    vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({} as never);
+  });
+
+  it("applies text-only suggestions without checking AI budget", async () => {
+    const response = await request(app)
+      .post(APPLY_TIMELINE_SUGGESTION_ENDPOINT)
+      .send({
+        workoutId: "day-1",
+        targetField: "notes",
+        action: "append",
+        recommendation: "Keep two reps in reserve.",
+        rationale: "RPE is rising",
+        aiSource: "rag",
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ applied: true, structured: false });
+    expect(storage.aiUsage.getDailyTotalCents).not.toHaveBeenCalled();
+    expect(parseExercisesFromText).not.toHaveBeenCalled();
+    expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
+      "day-1",
+      expect.objectContaining({
+        notes: "AI suggestion: Keep two reps in reserve.",
+        aiSource: "rag",
+        aiRationale: "RPE is rising",
+      }),
+      "test_user_id",
+    );
   });
 });
 
