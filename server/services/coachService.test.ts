@@ -9,7 +9,7 @@ import { retrieveRelevantChunks } from "./ragService";
 const dbMockState = vi.hoisted(() => {
   const deleteWhere = vi.fn().mockResolvedValue(undefined);
   const insertValues = vi.fn().mockResolvedValue(undefined);
-  const selectWhere = vi.fn().mockResolvedValue([{ maxOrder: 1 }]);
+  const selectWhere = vi.fn().mockResolvedValue([{ maxSortOrder: 1 }]);
   const selectFrom = vi.fn(() => ({ where: selectWhere }));
   const tx = {
     delete: vi.fn(() => ({ where: deleteWhere })),
@@ -113,7 +113,7 @@ describe("coachService", () => {
     vi.clearAllMocks();
     dbMockState.deleteWhere.mockResolvedValue(undefined);
     dbMockState.insertValues.mockResolvedValue(undefined);
-    dbMockState.selectWhere.mockResolvedValue([{ maxOrder: 1 }]);
+    dbMockState.selectWhere.mockResolvedValue([{ maxSortOrder: 1 }]);
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-01-15T12:00:00Z"));
   });
@@ -272,7 +272,7 @@ describe("coachService", () => {
           ],
         }),
       ]);
-      dbMockState.selectWhere.mockResolvedValue([{ maxOrder: 4 }]);
+      dbMockState.selectWhere.mockResolvedValue([{ maxSortOrder: 4 }]);
       vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
         makeSuggestion({
           targetField: "accessory",
@@ -315,7 +315,7 @@ describe("coachService", () => {
         }),
       ]);
       dbMockState.selectWhere.mockImplementation(() =>
-        Promise.resolve([{ maxOrder: 4 + dbMockState.insertValues.mock.calls.length }]),
+        Promise.resolve([{ maxSortOrder: 4 + dbMockState.insertValues.mock.calls.length }]),
       );
       vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
         makeSuggestion({

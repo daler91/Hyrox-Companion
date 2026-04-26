@@ -14,6 +14,10 @@ export interface Suggestion {
   priority: "high" | "medium" | "low";
 }
 
+export interface ApplySuggestionPayload extends Suggestion {
+  aiSource?: RagInfo["source"] | null;
+}
+
 export const analytics = {
   getPersonalRecords: (dateParams?: string) =>
     typedRequest<Record<string, PersonalRecord>>("GET", `/api/v1/personal-records${dateParams || ""}`),
@@ -37,4 +41,15 @@ export const timeline = {
       // Gemini generation; responses often exceed the default 15s timeout.
       timeoutMs: 90_000,
     }),
+
+  applySuggestion: (payload: ApplySuggestionPayload) =>
+    typedRequest<{ applied: true; structured: boolean }>(
+      "POST",
+      "/api/v1/timeline/ai-suggestions/apply",
+      payload,
+      {
+        // Table-backed suggestions may need a parse pass before rows are written.
+        timeoutMs: 90_000,
+      },
+    ),
 } as const;

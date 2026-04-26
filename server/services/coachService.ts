@@ -1,12 +1,10 @@
-import { type CoachNoteInputs, exerciseSets, type InsertExerciseSet, type ParsedExercise, type PlanDay } from "@shared/schema";
-import { eq, sql } from "drizzle-orm";
+import { type CoachNoteInputs, type InsertExerciseSet, type PlanDay } from "@shared/schema";
 
 import { db, type DbExecutor } from "../db";
 import { AppError, ErrorCode } from "../errors";
 import {
   generateReviewNotes,
   generateWorkoutSuggestions,
-  parseExercisesFromText,
   type TrainingContext,
   type UpcomingWorkout,
   type WorkoutSuggestion,
@@ -17,6 +15,10 @@ import { storage } from "../storage";
 import { buildTrainingContext } from "./ai";
 import { checkAiBudget } from "./aiUsageService";
 import { retrieveCoachingText } from "./ragRetrieval";
+import {
+  applyStructuredPlanDaySuggestionRows,
+  parseStructuredPlanDaySuggestionRows,
+} from "./structuredPlanDaySuggestion";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -55,45 +57,6 @@ function shouldUseStructuredWrite(suggestion: WorkoutSuggestion, entry: Upcoming
   return hasStructuredExercises(entry) && suggestion.targetField !== "notes";
 }
 
-function expandParsedExercisesToPlanDayRows(
-  exercises: readonly ParsedExercise[],
-  planDayId: string,
-): InsertExerciseSet[] {
-  const rows: InsertExerciseSet[] = [];
-  let sortOrder = 0;
-  for (const ex of exercises) {
-    const sets = ex.sets && ex.sets.length > 0
-      ? ex.sets
-      : [{
-          setNumber: 1,
-          reps: ex.reps,
-          weight: ex.weight,
-          distance: ex.distance,
-          time: ex.time,
-          notes: ex.notes,
-        }];
-    for (const set of sets) {
-      rows.push({
-        workoutLogId: null,
-        planDayId,
-        exerciseName: ex.exerciseName,
-        customLabel: ex.customLabel || null,
-        category: ex.category,
-        setNumber: set.setNumber || 1,
-        reps: set.reps ?? null,
-        weight: set.weight ?? null,
-        distance: set.distance ?? null,
-        time: set.time ?? null,
-        notes: set.notes || null,
-        confidence: ex.confidence ?? null,
-        sortOrder,
-      });
-      sortOrder += 1;
-    }
-  }
-  return rows;
-}
-
 async function prepareSuggestion(
   suggestion: WorkoutSuggestion,
   upcomingWorkouts: UpcomingWorkout[],
@@ -106,11 +69,11 @@ async function prepareSuggestion(
   }
 
   try {
-    const parsedExercises = await parseExercisesFromText(suggestion.recommendation, weightUnit, undefined, userId);
-    if (parsedExercises.length === 0) return { suggestion };
+    const structuredSetRows = await parseStructuredPlanDaySuggestionRows(suggestion, weightUnit, userId);
+    if (structuredSetRows.length === 0) return { suggestion };
     return {
       suggestion,
-      structuredSetRows: expandParsedExercisesToPlanDayRows(parsedExercises, suggestion.workoutId),
+      structuredSetRows,
     };
   } catch (err) {
     logger.warn(
@@ -119,21 +82,6 @@ async function prepareSuggestion(
     );
     return { suggestion };
   }
-}
-
-async function getNextPlanDaySortOrder(planDayId: string, tx: DbExecutor): Promise<number> {
-  const [max] = await tx
-    .select({ maxOrder: sql<number | null>`max(${exerciseSets.sortOrder})` })
-    .from(exerciseSets)
-    .where(eq(exerciseSets.planDayId, planDayId));
-  return (max?.maxOrder ?? -1) + 1;
-}
-
-function withSortOffset(rows: readonly InsertExerciseSet[], offset: number): InsertExerciseSet[] {
-  return rows.map((row) => ({
-    ...row,
-    sortOrder: (row.sortOrder ?? 0) + offset,
-  }));
 }
 
 async function applyStructuredSuggestion(
@@ -146,14 +94,7 @@ async function applyStructuredSuggestion(
   const { suggestion, structuredSetRows } = prepared;
   if (!structuredSetRows || structuredSetRows.length === 0) return false;
 
-  const rows = suggestion.action === "append"
-    ? withSortOffset(structuredSetRows, await getNextPlanDaySortOrder(suggestion.workoutId, tx))
-    : structuredSetRows;
-
-  if (suggestion.action === "replace") {
-    await tx.delete(exerciseSets).where(eq(exerciseSets.planDayId, suggestion.workoutId));
-  }
-  await tx.insert(exerciseSets).values(rows);
+  await applyStructuredPlanDaySuggestionRows(suggestion.workoutId, suggestion.action, structuredSetRows, tx);
 
   await storage.plans.updatePlanDay(
     suggestion.workoutId,

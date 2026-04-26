@@ -124,20 +124,47 @@ function createStandaloneWorkoutEntry(log: WorkoutLog): TimelineEntry {
   };
 }
 
+async function fetchPlanDayExerciseSets(planDayIds: string[]): Promise<Map<string, ExerciseSet[]>> {
+  if (planDayIds.length === 0) return new Map();
+
+  const prescribedSets = await db
+    .select()
+    .from(exerciseSets)
+    .where(inArray(exerciseSets.planDayId, planDayIds))
+    .orderBy(asc(exerciseSets.planDayId), asc(exerciseSets.sortOrder));
+
+  const setsByPlanDayId = new Map<string, ExerciseSet[]>();
+  for (const set of prescribedSets) {
+    if (!set.planDayId) continue;
+    const existing = setsByPlanDayId.get(set.planDayId);
+    if (existing) existing.push(set);
+    else setsByPlanDayId.set(set.planDayId, [set]);
+  }
+  return setsByPlanDayId;
+}
+
 export class TimelineStorage {
   constructor(private readonly workoutStorage: WorkoutStorage) {}
 
   private async attachExerciseSets(entries: TimelineEntry[]): Promise<void> {
-    const workoutLogIds: string[] = [];
+    const workoutLogIds = new Set<string>();
+    const planDayIds = new Set<string>();
     for (const e of entries) {
       if (e.workoutLogId) {
-        workoutLogIds.push(e.workoutLogId);
+        workoutLogIds.add(e.workoutLogId);
+      } else if (e.planDayId) {
+        planDayIds.add(e.planDayId);
       }
     }
 
-    if (workoutLogIds.length === 0) return;
+    if (workoutLogIds.size === 0 && planDayIds.size === 0) return;
 
-    const allSets = await this.workoutStorage.getExerciseSetsByWorkoutLogs(workoutLogIds);
+    const [allSets, setsByPlanDayId] = await Promise.all([
+      workoutLogIds.size > 0
+        ? this.workoutStorage.getExerciseSetsByWorkoutLogs(Array.from(workoutLogIds))
+        : Promise.resolve([]),
+      fetchPlanDayExerciseSets(Array.from(planDayIds)),
+    ]);
     const setsByWorkoutId = new Map<string, typeof allSets>();
     for (const s of allSets) {
       // workoutLogId is nullable since prescribed sets can live on planDays,
@@ -151,6 +178,8 @@ export class TimelineStorage {
     for (const entry of entries) {
       if (entry.workoutLogId) {
         entry.exerciseSets = setsByWorkoutId.get(entry.workoutLogId) || [];
+      } else if (entry.planDayId) {
+        entry.exerciseSets = setsByPlanDayId.get(entry.planDayId) || [];
       }
     }
   }
@@ -344,21 +373,7 @@ export class TimelineStorage {
       limit,
     });
 
-    const planDayIds = rows.map((r) => r.id);
-    const prescribedSets = planDayIds.length > 0
-      ? await db
-          .select()
-          .from(exerciseSets)
-          .where(inArray(exerciseSets.planDayId, planDayIds))
-          .orderBy(asc(exerciseSets.planDayId), asc(exerciseSets.sortOrder))
-      : [];
-    const setsByPlanDayId = new Map<string, ExerciseSet[]>();
-    for (const set of prescribedSets) {
-      if (!set.planDayId) continue;
-      const existing = setsByPlanDayId.get(set.planDayId);
-      if (existing) existing.push(set);
-      else setsByPlanDayId.set(set.planDayId, [set]);
-    }
+    const setsByPlanDayId = await fetchPlanDayExerciseSets(rows.map((r) => r.id));
 
     const upcoming: Array<{
       planDayId: string;

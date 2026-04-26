@@ -1,10 +1,17 @@
+import type { UpdatePlanDay } from "@shared/schema";
 import type { Logger } from "pino";
 
+import { db } from "../db";
 import { generateWorkoutSuggestions, type UpcomingWorkout } from "../gemini/index";
+import { logger as defaultLogger } from "../logger";
 import { buildWorkoutSearchText } from "../prompts/exerciseSetFormatter";
 import { storage } from "../storage";
 import { buildAIContext, extractCoachingMaterialsText } from "./aiContextService";
 import { sanitizeRagInfo } from "./ragRetrieval";
+import {
+  applyStructuredPlanDaySuggestionRows,
+  parseStructuredPlanDaySuggestionRows,
+} from "./structuredPlanDaySuggestion";
 
 export interface TimelineSuggestion {
   workoutId: string;
@@ -21,6 +28,44 @@ export interface TimelineSuggestionsResult {
   suggestions: TimelineSuggestion[];
   ragInfo?: ReturnType<typeof sanitizeRagInfo>;
   message?: string;
+}
+
+export interface ApplyTimelineSuggestionInput {
+  workoutId: string;
+  targetField: TimelineSuggestion["targetField"];
+  action: TimelineSuggestion["action"];
+  recommendation: string;
+  rationale?: string | null;
+  aiSource?: "rag" | "legacy" | "none" | null;
+}
+
+export interface ApplyTimelineSuggestionResult {
+  applied: true;
+  structured: boolean;
+}
+
+function getPlanDayFieldValue(
+  day: { mainWorkout: string; accessory?: string | null; notes?: string | null },
+  targetField: TimelineSuggestion["targetField"],
+): string {
+  if (targetField === "mainWorkout") return day.mainWorkout;
+  if (targetField === "accessory") return day.accessory || "";
+  return day.notes || "";
+}
+
+function buildTextUpdateValue(
+  day: { mainWorkout: string; accessory?: string | null; notes?: string | null },
+  input: ApplyTimelineSuggestionInput,
+): string {
+  if (input.action !== "append") return input.recommendation;
+  const existing = getPlanDayFieldValue(day, input.targetField).trim();
+  return existing
+    ? `${existing}\n\nAI suggestion: ${input.recommendation}`
+    : `AI suggestion: ${input.recommendation}`;
+}
+
+function normalizeAiSource(source: ApplyTimelineSuggestionInput["aiSource"]): "rag" | "legacy" | null {
+  return source === "rag" || source === "legacy" ? source : null;
 }
 
 /**
@@ -102,4 +147,61 @@ export async function generateTimelineAiSuggestions(
   }, []);
 
   return { suggestions, ragInfo: sanitizeRagInfo(aiContext.ragInfo) };
+}
+
+export async function applyTimelineAiSuggestion(
+  userId: string,
+  input: ApplyTimelineSuggestionInput,
+  log: Logger = defaultLogger,
+): Promise<ApplyTimelineSuggestionResult | undefined> {
+  const [day, user, existingExerciseSets] = await Promise.all([
+    storage.plans.getPlanDay(input.workoutId, userId),
+    storage.users.getUser(userId),
+    storage.workouts.getExerciseSetsByPlanDay(input.workoutId, userId),
+  ]);
+
+  if (!day || existingExerciseSets === null) {
+    return undefined;
+  }
+
+  const aiMetadata: UpdatePlanDay = {
+    aiSource: normalizeAiSource(input.aiSource),
+    aiRationale: input.rationale ? input.rationale.slice(0, 400) : null,
+    aiNoteUpdatedAt: new Date(),
+  };
+
+  const shouldWriteStructuredRows = existingExerciseSets.length > 0 && input.targetField !== "notes";
+  if (shouldWriteStructuredRows) {
+    try {
+      const structuredSetRows = await parseStructuredPlanDaySuggestionRows(
+        input,
+        user?.weightUnit || "kg",
+        userId,
+      );
+
+      if (structuredSetRows.length > 0) {
+        await db.transaction(async (tx) => {
+          await applyStructuredPlanDaySuggestionRows(
+            input.workoutId,
+            input.action,
+            structuredSetRows,
+            tx,
+          );
+          await storage.plans.updatePlanDay(input.workoutId, aiMetadata, userId, tx);
+        });
+        return { applied: true, structured: true };
+      }
+    } catch (err) {
+      log.warn(
+        { err, workoutId: input.workoutId, targetField: input.targetField },
+        "[timeline] Structured suggestion apply failed; falling back to text update",
+      );
+    }
+  }
+
+  const textUpdates: UpdatePlanDay = { ...aiMetadata };
+  textUpdates[input.targetField] = buildTextUpdateValue(day, input);
+  await storage.plans.updatePlanDay(input.workoutId, textUpdates, userId);
+
+  return { applied: true, structured: false };
 }

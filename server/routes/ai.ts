@@ -9,15 +9,24 @@ import { reqLogger } from "../logger";
 import { aiBudgetCheck } from "../middleware/aibudget";
 import { aiConsentCheck } from "../middleware/aiConsent";
 import { protectedMutationGuards } from "../routeGuards";
-import { asyncHandler, rateLimiter, validateBody } from "../routeUtils";
+import { asyncHandler, rateLimiter, sendNotFound, validateBody } from "../routeUtils";
 import { type AIContext, buildAIContext, type ChatInput } from "../services/aiContextService";
-import { generateTimelineAiSuggestions } from "../services/aiSuggestionService";
+import { applyTimelineAiSuggestion, generateTimelineAiSuggestions } from "../services/aiSuggestionService";
 import { sanitizeRagInfo } from "../services/ragRetrieval";
 import { registerSseStream } from "../sseRegistry";
 import { storage } from "../storage";
 import { getUserId } from "../types";
 
 const router = Router();
+
+const applyTimelineSuggestionSchema = z.object({
+  workoutId: z.string().min(1),
+  targetField: z.enum(["notes", "mainWorkout", "accessory"]),
+  action: z.enum(["replace", "append"]),
+  recommendation: z.string().min(1).max(10_000),
+  rationale: z.string().max(2_000).nullable().optional(),
+  aiSource: z.enum(["rag", "legacy", "none"]).nullable().optional(),
+});
 
 router.post("/api/v1/parse-exercises", ...protectedMutationGuards, rateLimiter("parse", 5), aiConsentCheck, aiBudgetCheck, validateBody(parseExercisesRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof parseExercisesRequestSchema>>, res: Response) => {
     const { text } = req.body;
@@ -302,6 +311,16 @@ router.post("/api/v1/timeline/ai-suggestions", ...protectedMutationGuards, rateL
       );
       throw err;
     }
+  }));
+
+router.post("/api/v1/timeline/ai-suggestions/apply", ...protectedMutationGuards, rateLimiter("suggestionApply", 10), aiConsentCheck, aiBudgetCheck, validateBody(applyTimelineSuggestionSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof applyTimelineSuggestionSchema>>, res: Response) => {
+    const userId = getUserId(req);
+    const result = await applyTimelineAiSuggestion(userId, req.body, reqLogger(req));
+    if (!result) {
+      sendNotFound(res, "Plan day not found");
+      return;
+    }
+    res.json(result);
   }));
 
 export default router;
