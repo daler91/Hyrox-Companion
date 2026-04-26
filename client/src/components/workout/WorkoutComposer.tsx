@@ -1,11 +1,12 @@
 import type { AllowedImageMimeType, ExerciseName, ParsedExercise } from "@shared/schema";
-import { AlertTriangle, CheckCircle2, ChevronDown, Loader2, Sparkles } from "lucide-react";
+import { CheckCircle2, ChevronDown, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { StructuredExercise } from "@/components/ExerciseInput";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { DraftExerciseTable } from "@/components/workout/DraftExerciseTable";
+import { ParseStatusStrip } from "@/components/workout/ParseStatusStrip";
 import { WorkoutTextMode } from "@/components/workout/WorkoutTextMode";
 import type { toast as toastFn } from "@/hooks/use-toast";
 import type { ParseFromImagePayload } from "@/lib/api";
@@ -27,11 +28,6 @@ interface WorkoutComposerProps {
   /** Parse control surfaced from useWorkoutEditor. */
   readonly autoParsing: boolean;
   readonly autoParseError: boolean;
-  /**
-   * Fires a parse immediately (no debounce). Wired to the explicit
-   * Parse button in the text panel — text-change no longer auto-parses.
-   */
-  readonly parseNow: (text: string) => void;
   readonly cancelAutoParse: () => void;
 
   /** Voice input for dictating into the text panel. */
@@ -65,7 +61,6 @@ interface WorkoutComposerProps {
   ) => void;
   readonly isParsingImage?: boolean;
 }
-
 /**
  * Unified input surface for the Log Workout page. Structured exercises
  * are the long-term source of truth; the free-text area sits inside a
@@ -89,7 +84,6 @@ export function WorkoutComposer({
   distanceUnit,
   autoParsing,
   autoParseError,
-  parseNow,
   cancelAutoParse,
   isListening,
   isSupported,
@@ -122,9 +116,7 @@ export function WorkoutComposer({
       if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
     };
   }, []);
-  const [panelOpen, setPanelOpen] = useState(
-    () => defaultPanelOpen ?? freeText.trim().length > 0,
-  );
+  const [panelOpen, setPanelOpen] = useState(() => defaultPanelOpen ?? freeText.trim().length > 0);
   // Reconcile panel visibility with external changes to `freeText`.
   // The panel can only receive typed input while it's open — anything
   // that mutates `freeText` while we're collapsed is necessarily an
@@ -186,11 +178,7 @@ export function WorkoutComposer({
 
   return (
     <div className="space-y-4" data-testid="workout-composer">
-      <ParseStatusStrip
-        parsing={autoParsing}
-        error={autoParseError}
-        hasText={hasDescription}
-      />
+      <ParseStatusStrip parsing={autoParsing} error={autoParseError} hasText={hasDescription} />
 
       <WorkoutContentsStatus
         exerciseCount={exerciseBlocks.length}
@@ -228,7 +216,6 @@ export function WorkoutComposer({
             stopListening={stopListening}
             interimTranscript={interimTranscript}
             toast={toast}
-            onParseText={() => parseNow(freeText)}
             isParsingText={autoParsing}
             onCaptureImage={
               onParseImage
@@ -300,12 +287,10 @@ export function WorkoutComposer({
     </div>
   );
 }
-
 interface WorkoutContentsStatusProps {
   readonly exerciseCount: number;
   readonly hasDescription: boolean;
 }
-
 function WorkoutContentsStatus({ exerciseCount, hasDescription }: WorkoutContentsStatusProps) {
   let label = "Empty";
   let detail = "Add exercise rows or a description";
@@ -325,9 +310,7 @@ function WorkoutContentsStatus({ exerciseCount, hasDescription }: WorkoutContent
       data-testid="workout-contents-status"
     >
       <div className="min-w-0">
-        <div className="text-xs font-medium uppercase text-muted-foreground">
-          Workout contents
-        </div>
+        <div className="text-xs font-medium uppercase text-muted-foreground">Workout contents</div>
         <div className="truncate font-medium">{label}</div>
       </div>
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -338,40 +321,4 @@ function WorkoutContentsStatus({ exerciseCount, hasDescription }: WorkoutContent
       </div>
     </div>
   );
-}
-
-interface ParseStatusStripProps {
-  readonly parsing: boolean;
-  readonly error: boolean;
-  readonly hasText: boolean;
-}
-
-function ParseStatusStrip({ parsing, error, hasText }: ParseStatusStripProps) {
-  if (parsing) {
-    return (
-      <div
-        className="flex items-center gap-2 rounded-md border border-dashed border-primary/30 bg-primary/5 px-3 py-2 text-xs text-primary"
-        role="status"
-        aria-live="polite"
-        data-testid="composer-parsing"
-      >
-        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-        Parsing your description into exercises…
-      </div>
-    );
-  }
-  if (error && hasText) {
-    return (
-      <div
-        className="flex items-center gap-2 rounded-md border border-dashed border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-400"
-        role="status"
-        aria-live="polite"
-        data-testid="composer-parse-error"
-      >
-        <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
-        Couldn't auto-parse. Keep typing or add exercises manually below.
-      </div>
-    );
-  }
-  return null;
 }

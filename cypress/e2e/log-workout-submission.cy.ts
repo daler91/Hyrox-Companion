@@ -20,24 +20,18 @@ describe("Log Workout Submission", () => {
     }).as("parseExercises");
 
     cy.visit("/log");
-    // Auth user may already be hydrated from cache between specs; assert
-    // page readiness instead of requiring a fresh network call each time.
-    cy.getBySel("button-save-workout").should("exist");
+    cy.wait("@authUser");
+    cy.getBySel("input-workout-title").should("exist");
     cy.ensureConsentDismissed();
   });
 
   it("successfully logs a workout via free text", () => {
-    // Open the describe/dictate panel
-    cy.getBySel("workout-composer-toggle-text").click();
-
-    // Fill out the basic details
     cy.getBySel("input-workout-title").type("Morning Training Run");
+    cy.advanceLogWorkoutToReflect("5km tempo run\n4x10 pushups");
 
-    // Fill the free text area
-    cy.getBySel("input-freetext").type("5km tempo run\n4x10 pushups");
-
-    // Add some notes
+    // Step 3: add notes, skip RPE, then save
     cy.getBySel("input-workout-notes").type("Felt really good today!");
+    cy.getBySel("button-skip-rpe").click();
 
     cy.getBySel("button-save-workout").should("not.be.disabled").click();
 
@@ -56,9 +50,9 @@ describe("Log Workout Submission", () => {
   });
 
   it("saves with fallback title when no title is provided", () => {
-    // Don't enter a title
-    cy.getBySel("workout-composer-toggle-text").click();
-    cy.getBySel("input-freetext").type("Some workout");
+    // Text must include a digit/x to pass auto-parse signal gate.
+    cy.advanceLogWorkoutToReflect("3x10 squats");
+    cy.getBySel("button-skip-rpe").click();
 
     cy.getBySel("button-save-workout").should("not.be.disabled").click();
 
@@ -70,12 +64,10 @@ describe("Log Workout Submission", () => {
     cy.location("pathname").should("eq", "/");
   });
 
-  it("shows an error when trying to save with no exercises and no free text", () => {
+  it("blocks progression with no exercises and no free text", () => {
+    // Title alone is not enough to proceed — Continue must be disabled
     cy.getBySel("input-workout-title").type("Title Only");
-
-    cy.getBySel("button-save-workout").should("not.be.disabled").click();
-
-    cy.contains("Missing workout details").should("exist");
+    cy.getBySel("button-step-continue").should("be.disabled");
   });
 });
 
@@ -92,23 +84,26 @@ describe("Log Workout Exercise Mode Submission", () => {
     }).as("parseExercises");
 
     cy.visit("/log");
-    // Auth user may already be hydrated from cache between specs; assert
-    // page readiness instead of requiring a fresh network call each time.
-    cy.getBySel("button-save-workout").should("exist");
+    cy.wait("@authUser");
+    cy.getBySel("input-workout-title").should("exist");
     cy.ensureConsentDismissed();
   });
 
   it("successfully logs a workout with selected exercises", () => {
     // Fill the basic details
     cy.getBySel("input-workout-title").type("Leg Day");
-    cy.getBySel("input-workout-notes").type("Squats felt heavy");
 
-    // Open the picker and pick Back Squat. The draft table uses the
-    // same ExerciseTable flow as the detail dialog: Add → picker →
-    // select an exercise.
+    // Add Back Squat via the exercise picker (available in step 1)
     cy.getBySel("exercise-table-add").click();
     cy.getBySel("exercise-add-dialog").should("exist");
     cy.getBySel("button-exercise-back_squat").click();
+
+    // Navigate through Confirm to Reflect (no text → no parse triggered)
+    cy.advanceLogWorkoutToReflect("");
+
+    // Step 3: add notes, skip RPE, then save
+    cy.getBySel("button-skip-rpe").click();
+    cy.getBySel("input-workout-notes").type("Squats felt heavy");
 
     cy.getBySel("button-save-workout").should("not.be.disabled").click();
 
@@ -127,12 +122,9 @@ describe("Log Workout Exercise Mode Submission", () => {
     cy.contains("Workout logged").should("exist");
   });
 
-  it("shows an error when trying to save without any exercises or free text", () => {
+  it("blocks progression without any exercises or free text", () => {
+    // Title alone is not enough — Continue stays disabled
     cy.getBySel("input-workout-title").type("Leg Day");
-
-    // Do not select any exercises
-    cy.getBySel("button-save-workout").click();
-
-    cy.contains("Missing workout details").should("exist");
+    cy.getBySel("button-step-continue").should("be.disabled");
   });
 });

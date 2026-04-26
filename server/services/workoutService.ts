@@ -20,6 +20,7 @@ import { AppError, ErrorCode } from "../errors";
 import { logger } from "../logger";
 import { DEFAULT_JOB_OPTIONS, queue } from "../queue";
 import { storage } from "../storage";
+import { prescribedSetToLogRow } from "../storage/shared";
 
 // ⚡ Perf: cap concurrent Gemini parse calls per chunk to protect the
 // quota & circuit breaker (CODEBASE_REVIEW_2026-04-12.md #12). Prior code
@@ -78,6 +79,9 @@ interface SetMeasurements {
   weight: number | null;
   distance: number | null;
   time: number | null;
+  // Planned values mirror the actuals at log creation when supplied by the
+  // client (e.g. when a planDay-rooted draft hands the prescription forward).
+  // Null when the user is logging an ad-hoc workout with no prior plan.
   plannedReps: number | null;
   plannedWeight: number | null;
   plannedDistance: number | null;
@@ -108,7 +112,7 @@ function buildExerciseSetRow(
     confidence: ex.confidence ?? null,
     notes: measurements.notes,
     sortOrder,
-  } as InsertExerciseSet;
+  };
 }
 
 function measurementsFromExplicit(set: ParsedExercise["sets"][number]): SetMeasurements {
@@ -495,25 +499,7 @@ async function copyPrescribedSetsIntoLog(
     .orderBy(asc(exerciseSets.sortOrder));
   if (prescribed.length === 0) return [];
 
-  const copyRows: InsertExerciseSet[] = prescribed.map((p) => ({
-    workoutLogId,
-    planDayId: null,
-    exerciseName: p.exerciseName,
-    customLabel: p.customLabel,
-    category: p.category,
-    setNumber: p.setNumber,
-    reps: p.reps,
-    weight: p.weight,
-    distance: p.distance,
-    time: p.time,
-    plannedReps: p.plannedReps ?? p.reps,
-    plannedWeight: p.plannedWeight ?? p.weight,
-    plannedDistance: p.plannedDistance ?? p.distance,
-    plannedTime: p.plannedTime ?? p.time,
-    notes: p.notes,
-    confidence: p.confidence,
-    sortOrder: p.sortOrder,
-  }));
+  const copyRows = prescribed.map((p) => prescribedSetToLogRow(p, workoutLogId));
   return tx.insert(exerciseSets).values(copyRows).returning();
 }
 

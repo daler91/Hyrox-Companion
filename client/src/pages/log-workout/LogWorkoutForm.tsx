@@ -1,13 +1,17 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useLocation } from "wouter";
 
 import { useToast } from "@/hooks/use-toast";
-import { clearLogWorkoutDraft } from "@/hooks/useLogWorkoutDraft";
+import {
+  clearLogWorkoutDraft,
+  FIRST_STEP,
+  type WorkoutStep,
+} from "@/hooks/useLogWorkoutDraft";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { useWorkoutEditor } from "@/hooks/useWorkoutEditor";
 import { useWorkoutForm } from "@/hooks/useWorkoutForm";
 
-import { LogWorkoutFormLayout } from "./LogWorkoutFormLayout";
+import { LogWorkoutStepperLayout } from "./LogWorkoutStepperLayout";
 import { useDuplicateLastWorkout } from "./useDuplicateLastWorkout";
 import {
   useInitialLogWorkoutDraft,
@@ -101,6 +105,8 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
     toast,
   });
 
+  const [step, setStep] = useState<WorkoutStep>(initialDraft?.step ?? FIRST_STEP);
+
   useLogWorkoutDraftPersistence({
     userKey,
     initialDraft,
@@ -113,13 +119,16 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
     useTextMode,
     exerciseBlocks,
     exerciseData,
+    step,
     toast,
   });
 
   const hasWorkoutDetails = exerciseBlocks.length > 0 || freeText.trim().length > 0;
 
   return (
-    <LogWorkoutFormLayout
+    <LogWorkoutStepperLayout
+      step={step}
+      setStep={setStep}
       title={title}
       setTitle={setTitle}
       date={date}

@@ -13,7 +13,7 @@ import { and, asc, desc, eq, inArray,isNotNull, isNull, or, sql } from "drizzle-
 
 import { db } from "../db";
 import { syncPlanDayStatusFromWorkouts } from "./planDayStatus";
-import { queryExerciseSetsWithDates } from "./shared";
+import { prescribedSetToLogRow, queryExerciseSetsWithDates } from "./shared";
 
 // Count distinct exercises in a logged workout whose best weight matches the
 // user's all-time max for that exercise. "Conservative PR" — we only credit
@@ -592,25 +592,7 @@ export class WorkoutStorage {
         .orderBy(asc(exerciseSets.sortOrder));
       if (prescribed.length === 0) return 0;
 
-      const rows = prescribed.map((p) => ({
-        workoutLogId,
-        planDayId: null,
-        exerciseName: p.exerciseName,
-        customLabel: p.customLabel,
-        category: p.category,
-        setNumber: p.setNumber,
-        reps: p.reps,
-        weight: p.weight,
-        distance: p.distance,
-        time: p.time,
-        plannedReps: p.plannedReps ?? p.reps,
-        plannedWeight: p.plannedWeight ?? p.weight,
-        plannedDistance: p.plannedDistance ?? p.distance,
-        plannedTime: p.plannedTime ?? p.time,
-        notes: p.notes,
-        confidence: p.confidence,
-        sortOrder: p.sortOrder,
-      }));
+      const rows = prescribed.map((p) => prescribedSetToLogRow(p, workoutLogId));
       await tx.insert(exerciseSets).values(rows);
       return rows.length;
     });

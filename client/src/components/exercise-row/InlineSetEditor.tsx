@@ -288,8 +288,8 @@ const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUn
   const label = meta.label(weightUnit, distanceUnit);
   const current = set[field] ?? undefined;
   const planned = getPlannedValue(set, field);
-  const showPlanned = showPlannedDiffs && planned != null;
-  const changed = showPlanned && current !== planned;
+  const hasPlannedValue = showPlannedDiffs && typeof planned === "number";
+  const showPlannedDiff = hasPlannedValue && planned !== current;
 
   // Local draft + "last saved" snapshot so incoming server / optimistic
   // updates at the same value don't overwrite an in-progress edit. A
@@ -317,16 +317,16 @@ const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUn
             onUpdate({ [field]: next ?? null } as PatchExerciseSetPayload);
           }
         }}
-        placeholder={showPlanned ? String(planned) : "--"}
+        placeholder={hasPlannedValue ? String(planned) : "--"}
         className="h-10 text-center text-sm tabular-nums"
         aria-label={`${label} for set ${set.setNumber}`}
         data-testid={`input-${field}-${set.id}`}
       />
-      {showPlanned && (
+      {showPlannedDiff && (
         <span
           className={cn(
             "text-center text-[10px] leading-none text-muted-foreground",
-            changed && "font-medium text-amber-700 dark:text-amber-300",
+            "font-medium text-amber-700 dark:text-amber-300",
           )}
           data-testid={`planned-${field}-${set.id}`}
         >

@@ -20,11 +20,26 @@ Cypress.Commands.add("ensureConsentDismissed", () => {
   });
 });
 
+// Navigates the log-workout stepper from step 1 (Capture) all the way to
+// step 3 (Reflect). Assumes a `parseExercises` intercept alias exists when
+// `text` is non-empty (caller must `cy.intercept` before invoking).
+Cypress.Commands.add("advanceLogWorkoutToReflect", (text: string) => {
+  if (text.length > 0) {
+    cy.getBySel("input-freetext").type(text);
+    cy.getBySel("button-step-continue").click();
+    cy.wait("@parseExercises");
+  } else {
+    cy.getBySel("button-step-continue").click();
+  }
+  cy.getBySel("button-step-continue").should("not.be.disabled").click();
+});
+
 declare global {
   namespace Cypress {
     interface Chainable {
       getBySel(selector: string): Chainable<JQuery<HTMLElement>>;
       ensureConsentDismissed(): Chainable<void>;
+      advanceLogWorkoutToReflect(text: string): Chainable<void>;
     }
   }
 }

@@ -1,11 +1,43 @@
 import {
   type ExerciseSet,
+  type InsertExerciseSet,
   workoutLogs,
 } from "@shared/schema";
 import { and, desc, eq, gte, lte, type SQL } from "drizzle-orm";
 
 import { db } from "../db";
 import { logger } from "../logger";
+
+/**
+ * Maps a prescribed ExerciseSet row into an InsertExerciseSet for a workout
+ * log, mirroring the prescription into both actual and planned columns.
+ * Used by both copyPrescribedSetsIntoLog (workoutService) and
+ * seedExerciseSetsFromPlanDay (WorkoutStorage) to ensure consistency.
+ */
+export function prescribedSetToLogRow(
+  p: ExerciseSet,
+  workoutLogId: string,
+): InsertExerciseSet {
+  return {
+    workoutLogId,
+    planDayId: null,
+    exerciseName: p.exerciseName,
+    customLabel: p.customLabel,
+    category: p.category,
+    setNumber: p.setNumber,
+    reps: p.reps,
+    weight: p.weight,
+    distance: p.distance,
+    time: p.time,
+    plannedReps: p.plannedReps ?? p.reps,
+    plannedWeight: p.plannedWeight ?? p.weight,
+    plannedDistance: p.plannedDistance ?? p.distance,
+    plannedTime: p.plannedTime ?? p.time,
+    notes: p.notes,
+    confidence: p.confidence,
+    sortOrder: p.sortOrder,
+  };
+}
 
 // This helper only walks workoutLogs → exerciseSets, so every returned row
 // is a logged set with a non-null workoutLogId. The narrowed return type

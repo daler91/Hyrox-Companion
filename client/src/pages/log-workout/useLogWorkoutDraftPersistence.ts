@@ -8,6 +8,7 @@ import {
   loadLogWorkoutDraft,
   markAnnouncedDraftRestore,
   saveLogWorkoutDraft,
+  type WorkoutStep,
 } from "@/hooks/useLogWorkoutDraft";
 
 const DRAFT_SAVE_DEBOUNCE_MS = 400;
@@ -31,6 +32,7 @@ interface UseLogWorkoutDraftPersistenceOptions {
   readonly useTextMode: boolean;
   readonly exerciseBlocks: string[];
   readonly exerciseData: Record<string, StructuredExercise>;
+  readonly step: WorkoutStep;
   readonly toast: ReturnType<typeof useToast>["toast"];
 }
 
@@ -46,6 +48,7 @@ export function useLogWorkoutDraftPersistence({
   useTextMode,
   exerciseBlocks,
   exerciseData,
+  step,
   toast,
 }: UseLogWorkoutDraftPersistenceOptions) {
   // Uses the block counter derived from the highest seen suffix so restored
@@ -73,6 +76,7 @@ export function useLogWorkoutDraftPersistence({
         exerciseBlocks,
         exerciseData,
         blockCounter: currentBlockCounter,
+        step,
       });
     }, DRAFT_SAVE_DEBOUNCE_MS);
     return () => clearTimeout(timerId);
@@ -88,6 +92,7 @@ export function useLogWorkoutDraftPersistence({
     exerciseBlocks,
     exerciseData,
     currentBlockCounter,
+    step,
   ]);
 
   useEffect(() => {

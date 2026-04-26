@@ -313,7 +313,7 @@ router.post("/api/v1/timeline/ai-suggestions", ...protectedMutationGuards, rateL
     }
   }));
 
-router.post("/api/v1/timeline/ai-suggestions/apply", ...protectedMutationGuards, rateLimiter("suggestionApply", 10), aiConsentCheck, aiBudgetCheck, validateBody(applyTimelineSuggestionSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof applyTimelineSuggestionSchema>>, res: Response) => {
+router.post("/api/v1/timeline/ai-suggestions/apply", ...protectedMutationGuards, rateLimiter("suggestionApply", 10), aiConsentCheck, validateBody(applyTimelineSuggestionSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof applyTimelineSuggestionSchema>>, res: Response) => {
     const userId = getUserId(req);
     const result = await applyTimelineAiSuggestion(userId, req.body, reqLogger(req));
     if (!result) {

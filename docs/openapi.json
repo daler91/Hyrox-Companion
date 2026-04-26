@@ -179,6 +179,30 @@
             "minimum": 0,
             "maximum": 86400
           },
+          "plannedReps": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "plannedWeight": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 2000
+          },
+          "plannedDistance": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 1000000
+          },
+          "plannedTime": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 86400
+          },
           "notes": {
             "type": "string",
             "nullable": true,
@@ -237,6 +261,30 @@
             "maximum": 8388607
           },
           "time": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -8388608,
+            "maximum": 8388607
+          },
+          "plannedReps": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "plannedWeight": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -8388608,
+            "maximum": 8388607
+          },
+          "plannedDistance": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -8388608,
+            "maximum": 8388607
+          },
+          "plannedTime": {
             "type": "number",
             "nullable": true,
             "minimum": -8388608,
@@ -628,6 +676,30 @@
                             "minimum": 0,
                             "maximum": 86400
                           },
+                          "plannedReps": {
+                            "type": "number",
+                            "nullable": true,
+                            "minimum": 0,
+                            "maximum": 10000
+                          },
+                          "plannedWeight": {
+                            "type": "number",
+                            "nullable": true,
+                            "minimum": 0,
+                            "maximum": 2000
+                          },
+                          "plannedDistance": {
+                            "type": "number",
+                            "nullable": true,
+                            "minimum": 0,
+                            "maximum": 1000000
+                          },
+                          "plannedTime": {
+                            "type": "number",
+                            "nullable": true,
+                            "minimum": 0,
+                            "maximum": 86400
+                          },
                           "notes": {
                             "type": "string",
                             "nullable": true,
@@ -866,6 +938,30 @@
                             "maximum": 1000000
                           },
                           "time": {
+                            "type": "number",
+                            "nullable": true,
+                            "minimum": 0,
+                            "maximum": 86400
+                          },
+                          "plannedReps": {
+                            "type": "number",
+                            "nullable": true,
+                            "minimum": 0,
+                            "maximum": 10000
+                          },
+                          "plannedWeight": {
+                            "type": "number",
+                            "nullable": true,
+                            "minimum": 0,
+                            "maximum": 2000
+                          },
+                          "plannedDistance": {
+                            "type": "number",
+                            "nullable": true,
+                            "minimum": 0,
+                            "maximum": 1000000
+                          },
+                          "plannedTime": {
                             "type": "number",
                             "nullable": true,
                             "minimum": 0,

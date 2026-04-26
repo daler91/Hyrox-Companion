@@ -262,7 +262,7 @@ describe("WorkoutDetailDialogV2", () => {
         mainWorkout: "Athlete edited description",
         prescribedMainWorkout: "Coach original prescription",
         exerciseSets: [makeSet()],
-      } as Partial<WorkoutLog & { exerciseSets?: ExerciseSet[] }>),
+      }),
     );
     mockWorkouts.history.mockResolvedValue({
       lastSameFocus: null,
@@ -291,7 +291,7 @@ describe("WorkoutDetailDialogV2", () => {
         prescribedAccessory: "Coach accessory",
         prescribedNotes: null,
         exerciseSets: [makeSet()],
-      } as Partial<WorkoutLog & { exerciseSets?: ExerciseSet[] }>),
+      }),
     );
     mockWorkouts.history.mockResolvedValue({
       lastSameFocus: null,
@@ -346,7 +346,7 @@ describe("WorkoutDetailDialogV2", () => {
       makeWorkout({
         compliancePct: 82,
         exerciseSets: [makeSet()],
-      } as Partial<WorkoutLog & { exerciseSets?: ExerciseSet[] }>),
+      }),
     );
     mockWorkouts.history.mockResolvedValue({
       lastSameFocus: { date: "2026-04-01", focus: "Upper Body Strength" },

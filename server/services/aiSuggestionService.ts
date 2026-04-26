@@ -2,11 +2,13 @@ import type { UpdatePlanDay } from "@shared/schema";
 import type { Logger } from "pino";
 
 import { db } from "../db";
+import { env } from "../env";
 import { generateWorkoutSuggestions, type UpcomingWorkout } from "../gemini/index";
 import { logger as defaultLogger } from "../logger";
 import { buildWorkoutSearchText } from "../prompts/exerciseSetFormatter";
 import { storage } from "../storage";
 import { buildAIContext, extractCoachingMaterialsText } from "./aiContextService";
+import { checkAiBudget } from "./aiUsageService";
 import { sanitizeRagInfo } from "./ragRetrieval";
 import {
   applyStructuredPlanDaySuggestionRows,
@@ -39,10 +41,26 @@ export interface ApplyTimelineSuggestionInput {
   aiSource?: "rag" | "legacy" | "none" | null;
 }
 
-export interface ApplyTimelineSuggestionResult {
+export type ApplyTimelineSuggestionFailureReason =
+  | "ai_budget_exceeded"
+  | "ai_disabled"
+  | "structured_parse_failed";
+
+export interface AppliedTimelineSuggestionResult {
   applied: true;
   structured: boolean;
 }
+
+export interface UnappliedTimelineSuggestionResult {
+  applied: false;
+  structured: false;
+  reason: ApplyTimelineSuggestionFailureReason;
+  message: string;
+}
+
+export type ApplyTimelineSuggestionResult =
+  | AppliedTimelineSuggestionResult
+  | UnappliedTimelineSuggestionResult;
 
 function getPlanDayFieldValue(
   day: { mainWorkout: string; accessory?: string | null; notes?: string | null },
@@ -66,6 +84,45 @@ function buildTextUpdateValue(
 
 function normalizeAiSource(source: ApplyTimelineSuggestionInput["aiSource"]): "rag" | "legacy" | null {
   return source === "rag" || source === "legacy" ? source : null;
+}
+
+function buildUnappliedStructuredResult(
+  reason: ApplyTimelineSuggestionFailureReason,
+): UnappliedTimelineSuggestionResult {
+  const messageByReason: Record<ApplyTimelineSuggestionFailureReason, string> = {
+    ai_budget_exceeded:
+      "Applying that table-backed suggestion needs one more AI parse, but your daily AI limit has been reached. I left the workout unchanged.",
+    ai_disabled:
+      "Applying that table-backed suggestion needs one more AI parse, but AI features are temporarily disabled. I left the workout unchanged.",
+    structured_parse_failed:
+      "I couldn't convert that suggestion into exercise-table rows, so I left the table-backed workout unchanged.",
+  };
+  return {
+    applied: false,
+    structured: false,
+    reason,
+    message: messageByReason[reason],
+  };
+}
+
+async function getStructuredApplyBlocker(
+  userId: string,
+  log: Logger,
+): Promise<UnappliedTimelineSuggestionResult | null> {
+  if (env.AI_FEATURES_ENABLED === "false") {
+    return buildUnappliedStructuredResult("ai_disabled");
+  }
+
+  try {
+    const budget = await checkAiBudget(userId);
+    if (!budget.allowed) {
+      return buildUnappliedStructuredResult("ai_budget_exceeded");
+    }
+  } catch (err) {
+    log.warn({ err, userId }, "[timeline] AI budget check failed before structured apply; allowing parse");
+  }
+
+  return null;
 }
 
 /**
@@ -172,6 +229,11 @@ export async function applyTimelineAiSuggestion(
 
   const shouldWriteStructuredRows = existingExerciseSets.length > 0 && input.targetField !== "notes";
   if (shouldWriteStructuredRows) {
+    const structuredApplyBlocker = await getStructuredApplyBlocker(userId, log);
+    if (structuredApplyBlocker) {
+      return structuredApplyBlocker;
+    }
+
     try {
       const structuredSetRows = await parseStructuredPlanDaySuggestionRows(
         input,
@@ -191,11 +253,14 @@ export async function applyTimelineAiSuggestion(
         });
         return { applied: true, structured: true };
       }
+
+      return buildUnappliedStructuredResult("structured_parse_failed");
     } catch (err) {
       log.warn(
         { err, workoutId: input.workoutId, targetField: input.targetField },
-        "[timeline] Structured suggestion apply failed; falling back to text update",
+        "[timeline] Structured suggestion apply failed; leaving table-backed workout unchanged",
       );
+      return buildUnappliedStructuredResult("structured_parse_failed");
     }
   }
 
