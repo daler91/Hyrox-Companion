@@ -612,6 +612,51 @@ describe("POST /api/timeline/ai-suggestions", () => {
     );
   });
 
+  it("uses the user's weight unit when building the timeline suggestion RAG query", async () => {
+    vi.mocked(storage.users.getUser).mockResolvedValue({ aiCoachEnabled: true, weightUnit: "lbs" } as never);
+    vi.mocked(storage.coaching.hasChunksForUser).mockResolvedValue(true);
+    vi.mocked(storage.coaching.getStoredEmbeddingDimension).mockResolvedValue(3072);
+    vi.mocked(retrieveRelevantChunks).mockResolvedValue(["chunk about heavier squats"]);
+    vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
+    vi.mocked(storage.timeline.getUpcomingPlannedDays).mockResolvedValue([
+      {
+        planDayId: "1",
+        date: "2024-03-12",
+        focus: "Strength",
+        mainWorkout: "Free text should not drive structured query",
+        accessory: null,
+        notes: null,
+        exerciseSets: [
+          {
+            id: "set-1",
+            workoutLogId: null,
+            planDayId: "1",
+            exerciseName: "back_squat",
+            customLabel: null,
+            category: "strength",
+            setNumber: 1,
+            reps: 5,
+            weight: 135,
+            distance: null,
+            time: null,
+            notes: null,
+            confidence: 95,
+            sortOrder: 0,
+          },
+        ],
+      },
+    ] as never);
+    vi.mocked(generateWorkoutSuggestions).mockResolvedValue([]);
+
+    const response = await request(app).post(TIMELINE_SUGGESTIONS_ENDPOINT);
+
+    expect(response.status).toBe(200);
+    expect(retrieveRelevantChunks).toHaveBeenCalledWith(
+      "test_user_id",
+      expect.stringContaining("Back Squat: 5 reps, 135 lbs"),
+    );
+  });
+
   it("should handle no upcoming planned workouts gracefully", async () => {
 
     vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);

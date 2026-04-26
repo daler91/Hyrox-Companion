@@ -306,6 +306,59 @@ describe("coachService", () => {
       expect(updatePayload).toEqual(expect.objectContaining({ aiRationale: "Progressive overload" }));
     });
 
+    it("serializes duplicate structured appends so sort orders do not collide", async () => {
+      mockBaseAutoCoachDeps([
+        makeTimelineEntry({
+          exerciseDetails: [
+            { exerciseName: "deadlift", category: "strength", setNumber: 1, reps: 3, weight: 140, sortOrder: 0 },
+          ],
+        }),
+      ]);
+      dbMockState.selectWhere.mockImplementation(() =>
+        Promise.resolve([{ maxOrder: 4 + dbMockState.insertValues.mock.calls.length }]),
+      );
+      vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
+        makeSuggestion({
+          targetField: "accessory",
+          action: "append",
+          recommendation: "Walking lunges 20m",
+        }),
+        makeSuggestion({
+          targetField: "accessory",
+          action: "append",
+          recommendation: "Wall balls 15 reps",
+        }),
+      ]);
+      vi.mocked(parseExercisesFromText)
+        .mockResolvedValueOnce([
+          {
+            exerciseName: "walking_lunges",
+            category: "conditioning",
+            confidence: 90,
+            sets: [{ setNumber: 1, distance: 20 }],
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            exerciseName: "wall_balls",
+            category: "functional",
+            confidence: 90,
+            sets: [{ setNumber: 1, reps: 15 }],
+          },
+        ]);
+      vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({} as never);
+
+      expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 2 });
+      expect(dbMockState.insertValues).toHaveBeenNthCalledWith(
+        1,
+        [expect.objectContaining({ exerciseName: "walking_lunges", sortOrder: 5 })],
+      );
+      expect(dbMockState.insertValues).toHaveBeenNthCalledWith(
+        2,
+        [expect.objectContaining({ exerciseName: "wall_balls", sortOrder: 6 })],
+      );
+    });
+
     it("falls back to text-field writes when structured recommendation parsing returns no exercises", async () => {
       mockBaseAutoCoachDeps([
         makeTimelineEntry({

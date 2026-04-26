@@ -35,7 +35,10 @@ export async function generateTimelineAiSuggestions(
   userId: string,
   log: Logger,
 ): Promise<TimelineSuggestionsResult> {
-  const plannedDays = await storage.timeline.getUpcomingPlannedDays(userId, 5);
+  const [plannedDays, user] = await Promise.all([
+    storage.timeline.getUpcomingPlannedDays(userId, 5),
+    storage.users.getUser(userId),
+  ]);
   const upcomingWorkouts: UpcomingWorkout[] = plannedDays.map((d) => ({
     id: d.planDayId,
     date: d.date,
@@ -65,7 +68,9 @@ export async function generateTimelineAiSuggestions(
     return { suggestions: [], message: "No upcoming planned workouts found" };
   }
 
-  const suggestionQuery = upcomingWorkouts.map((w) => buildWorkoutSearchText(w)).join("; ");
+  const suggestionQuery = upcomingWorkouts
+    .map((w) => buildWorkoutSearchText(w, { weightUnit: user?.weightUnit || "kg" }))
+    .join("; ");
   const aiContext = await buildAIContext(userId, suggestionQuery, log);
   const coachingMaterials = extractCoachingMaterialsText(aiContext);
 

@@ -411,11 +411,14 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
     // rolls back every earlier apply so the plan never ends up partially
     // mutated (C2).
     const { adjusted, noted } = await db.transaction(async (tx) => {
-      const modResults = await Promise.all(
-        preparedSuggestions.map((s) =>
-          applySuggestion(s, upcomingWorkouts, userId, coachingContext.source, inputsUsed, tx),
-        ),
-      );
+      const modResults: boolean[] = [];
+      // Keep duplicate suggestions for the same plan day ordered so structured
+      // appends re-read sortOrder after any earlier insert in this transaction.
+      for (const s of preparedSuggestions) {
+        modResults.push(
+          await applySuggestion(s, upcomingWorkouts, userId, coachingContext.source, inputsUsed, tx),
+        );
+      }
       const noteResults = await Promise.all(
         reviewNotes.map((n) =>
           applyReviewNote(n.workoutId, n.note, userId, inputsUsed, tx),
