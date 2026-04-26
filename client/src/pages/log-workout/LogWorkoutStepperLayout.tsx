@@ -1,6 +1,6 @@
 import type { ParsedExercise } from "@shared/schema";
 import { Check } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { WorkoutHeader } from "@/components/workout/WorkoutHeader";
@@ -102,10 +102,14 @@ export function LogWorkoutStepperLayout({
   // text and skip the next re-parse, persisting stale blocks (Codex P1).
   const lastParsedTextRef = useRef("");
   const pendingParseTextRef = useRef<string | null>(null);
+  const [isReparsePending, setIsReparsePending] = useState(false);
   useEffect(() => {
-    if (!autoParsing && !autoParseError && pendingParseTextRef.current !== null) {
-      lastParsedTextRef.current = pendingParseTextRef.current;
+    if (!autoParsing && pendingParseTextRef.current !== null) {
+      if (!autoParseError) {
+        lastParsedTextRef.current = pendingParseTextRef.current;
+      }
       pendingParseTextRef.current = null;
+      setIsReparsePending(false);
     }
   }, [autoParsing, autoParseError]);
 
@@ -116,6 +120,7 @@ export function LogWorkoutStepperLayout({
       hasText && (freeText !== lastParsedTextRef.current || !hasBlocks);
     if (needsParse) {
       pendingParseTextRef.current = freeText;
+      setIsReparsePending(true);
       parseNow(freeText);
     }
     setStep(2);
@@ -174,6 +179,7 @@ export function LogWorkoutStepperLayout({
           <ConfirmStep
             freeText={freeText}
             {...exerciseTableProps}
+            isReparsePending={isReparsePending}
             onBack={() => setStep(1)}
             onContinue={() => setStep(3)}
           />

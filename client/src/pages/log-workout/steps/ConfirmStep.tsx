@@ -22,6 +22,7 @@ interface ConfirmStepProps {
   readonly weightUnit: "kg" | "lbs";
   readonly distanceUnit: "km" | "miles";
   readonly autoParsing: boolean;
+  readonly isReparsePending: boolean;
   readonly cancelAutoParse: () => void;
   readonly onBack: () => void;
   readonly onContinue: () => void;
@@ -44,6 +45,7 @@ export function ConfirmStep({
   weightUnit,
   distanceUnit,
   autoParsing,
+  isReparsePending,
   cancelAutoParse,
   onBack,
   onContinue,
@@ -93,7 +95,7 @@ export function ConfirmStep({
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
-          {autoParsing && (
+          {(autoParsing || isReparsePending) && (
             <ParseStatusStrip parsing data-testid="confirm-step-parsing" />
           )}
 
@@ -160,11 +162,11 @@ export function ConfirmStep({
           type="button"
           size="lg"
           onClick={onContinue}
-          disabled={autoParsing}
+          disabled={autoParsing || isReparsePending}
           data-testid="button-step-continue"
           className="flex-1 sm:flex-none sm:min-w-40"
         >
-          {autoParsing ? (
+          {autoParsing || isReparsePending ? (
             <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden />
           ) : (
             <ArrowRight className="h-4 w-4 mr-2" aria-hidden />
@@ -175,4 +177,3 @@ export function ConfirmStep({
     </div>
   );
 }
-
