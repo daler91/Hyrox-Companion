@@ -181,4 +181,32 @@ describe("applyTimelineAiSuggestion", () => {
       "user-1",
     );
   });
+
+  it("keeps accessory replace suggestions as text updates on table-backed days", async () => {
+    const result = await applyTimelineAiSuggestion(
+      "user-1",
+      {
+        workoutId: "day-1",
+        targetField: "accessory",
+        action: "replace",
+        recommendation: "Swap in banded hamstring curls",
+        rationale: "Reduce posterior chain fatigue",
+        aiSource: "rag",
+      },
+      testLog,
+    );
+
+    expect(result).toEqual({ applied: true, structured: false });
+    expect(parseExercisesFromText).not.toHaveBeenCalled();
+    expect(dbMockState.deleteWhere).not.toHaveBeenCalled();
+    expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
+      "day-1",
+      expect.objectContaining({
+        accessory: "Swap in banded hamstring curls",
+        aiSource: "rag",
+        aiRationale: "Reduce posterior chain fatigue",
+      }),
+      "user-1",
+    );
+  });
 });

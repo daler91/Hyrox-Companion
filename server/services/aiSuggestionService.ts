@@ -170,7 +170,9 @@ export async function applyTimelineAiSuggestion(
     aiNoteUpdatedAt: new Date(),
   };
 
-  const shouldWriteStructuredRows = existingExerciseSets.length > 0 && input.targetField !== "notes";
+  const isAccessoryReplace = input.targetField === "accessory" && input.action === "replace";
+  const shouldWriteStructuredRows =
+    existingExerciseSets.length > 0 && input.targetField !== "notes" && !isAccessoryReplace;
   if (shouldWriteStructuredRows) {
     try {
       const structuredSetRows = await parseStructuredPlanDaySuggestionRows(
