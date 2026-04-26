@@ -12,7 +12,7 @@ import {
   type WorkoutLog,
   workoutLogs,
 } from "@shared/schema";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import pLimit from "p-limit";
 
 import { db } from "../db";
@@ -223,19 +223,14 @@ export async function saveParsedWorkoutsBatch(
 ): Promise<{ saved: number; failed: number }> {
   if (workouts.length === 0) return { saved: 0, failed: 0 };
 
-  const workoutIds = workouts.map((w) => w.workoutId);
   let saved = 0;
   let failed = 0;
 
-  // Drop existing sets in one query, then insert per-workout so one invalid
-  // row can't roll back every other parsed workout in the chunk.
-  await db.delete(exerciseSets).where(inArray(exerciseSets.workoutLogId, workoutIds));
-
+  // Preserve per-workout replace atomicity: delete + insert must live in the
+  // same transaction for each workout so failed inserts never erase prior sets.
   for (const workout of workouts) {
     try {
-      if (workout.setRows.length > 0) {
-        await db.insert(exerciseSets).values(workout.setRows);
-      }
+      await replaceExerciseSetsByOwner({ workoutLogId: workout.workoutId }, workout.setRows);
       saved++;
     } catch (err) {
       failed++;
