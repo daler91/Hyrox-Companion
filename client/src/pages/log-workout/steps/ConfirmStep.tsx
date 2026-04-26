@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { DraftExerciseTable } from "@/components/workout/DraftExerciseTable";
+import { ParseStatusStrip } from "@/components/workout/ParseStatusStrip";
 
 import { StepFooter } from "../StepFooter";
 
@@ -59,16 +60,8 @@ export function ConfirmStep({
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
-          {autoParsing && !hasBlocks && (
-            <div
-              className="flex items-center gap-2 rounded-md border border-dashed border-primary/30 bg-primary/5 px-3 py-2 text-sm text-primary"
-              role="status"
-              aria-live="polite"
-              data-testid="confirm-step-parsing"
-            >
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-              Parsing your description into exercises…
-            </div>
+          {autoParsing && (
+            <ParseStatusStrip parsing data-testid="confirm-step-parsing" />
           )}
 
           {!autoParsing && !hasBlocks && (
@@ -134,11 +127,11 @@ export function ConfirmStep({
           type="button"
           size="lg"
           onClick={onContinue}
-          disabled={autoParsing && !hasBlocks}
+          disabled={autoParsing}
           data-testid="button-step-continue"
           className="flex-1 sm:flex-none sm:min-w-40"
         >
-          {autoParsing && !hasBlocks ? (
+          {autoParsing ? (
             <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden />
           ) : (
             <ArrowRight className="h-4 w-4 mr-2" aria-hidden />

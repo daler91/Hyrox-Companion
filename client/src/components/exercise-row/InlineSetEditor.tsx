@@ -290,8 +290,9 @@ const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUn
   // Compare against the prescription captured at log creation. Only show
   // a "planned X" annotation when the actual diverges — equal values would
   // just be visual noise.
-  const planned = set[PLANNED_FIELD[field]] ?? undefined;
-  const showPlannedDiff = planned !== undefined && planned !== current;
+  const rawPlanned = set[PLANNED_FIELD[field]];
+  const hasPlannedValue = typeof rawPlanned === "number";
+  const showPlannedDiff = hasPlannedValue && rawPlanned !== current;
 
   // Local draft + "last saved" snapshot so incoming server / optimistic
   // updates at the same value don't overwrite an in-progress edit. A
@@ -319,7 +320,7 @@ const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUn
             onUpdate({ [field]: next ?? null });
           }
         }}
-        placeholder={planned != null ? String(planned) : "--"}
+        placeholder={hasPlannedValue ? String(rawPlanned) : "--"}
         className="h-8 text-center text-sm tabular-nums"
         aria-label={`${label} for set ${set.setNumber}`}
         data-testid={`input-${field}-${set.id}`}
@@ -329,7 +330,7 @@ const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUn
           className="text-center text-[10px] leading-none text-muted-foreground tabular-nums"
           data-testid={`planned-${field}-${set.id}`}
         >
-          planned {planned}
+          planned {rawPlanned}
         </span>
       )}
     </div>
