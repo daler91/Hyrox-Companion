@@ -1,6 +1,6 @@
 import type { ExerciseName, ParsedExercise } from "@shared/schema";
 import { ArrowRight, Loader2 } from "lucide-react";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 
 import type { StructuredExercise } from "@/components/ExerciseInput";
 import { Button } from "@/components/ui/button";
@@ -59,46 +59,40 @@ export function CaptureStep({
   date,
   setDate,
   freeText,
-  setFreeText,
   exerciseBlocks,
-  exerciseData,
-  addExercise,
-  updateBlock,
-  removeBlock,
-  reorderBlocks,
-  weightUnit,
-  distanceUnit,
   autoParsing,
   autoParseError,
-  parseNow,
-  cancelAutoParse,
-  isListening,
-  isSupported,
-  interimTranscript,
-  toggleListening,
-  stopListening,
-  toast,
-  defaultPanelOpen,
-  onParseImage,
   isParsingImage,
+  parseNow,
+  defaultPanelOpen,
   onCancel,
   onContinue,
+  ...composerRest
 }: CaptureStepProps) {
   const hasText = freeText.trim().length > 0;
   const hasBlocks = exerciseBlocks.length > 0;
   const isWorking = autoParsing || isParsingImage;
   const canContinue = hasText || hasBlocks;
 
-  // Track the text that was sent to the last parse so we can detect edits
-  // made after the user returns to step 1. Initialised to the current text
-  // when blocks already exist (draft restored) so we don't re-parse on mount.
+  // lastParsedTextRef advances only when a parse actually completes
+  // successfully — not at dispatch time — so returning to step 1 after a
+  // failed parse still offers a re-parse.
   const lastParsedTextRef = useRef(hasBlocks ? freeText : "");
+  const pendingParseText = useRef<string | null>(null);
+
+  // Commit lastParsedTextRef only after a parse finishes without error.
+  useEffect(() => {
+    if (!autoParsing && !autoParseError && pendingParseText.current !== null) {
+      lastParsedTextRef.current = pendingParseText.current;
+      pendingParseText.current = null;
+    }
+  }, [autoParsing, autoParseError]);
 
   const handleContinue = () => {
     const needsParse = hasText && (freeText !== lastParsedTextRef.current || !hasBlocks);
     if (needsParse) {
+      pendingParseText.current = freeText;
       parseNow(freeText);
-      lastParsedTextRef.current = freeText;
     }
     onContinue();
   };
@@ -130,28 +124,13 @@ export function CaptureStep({
         <CardContent>
           <WorkoutComposer
             freeText={freeText}
-            setFreeText={setFreeText}
             exerciseBlocks={exerciseBlocks}
-            exerciseData={exerciseData}
-            addExercise={addExercise}
-            updateBlock={updateBlock}
-            removeBlock={removeBlock}
-            reorderBlocks={reorderBlocks}
-            weightUnit={weightUnit}
-            distanceUnit={distanceUnit}
             autoParsing={autoParsing}
             autoParseError={autoParseError}
-            parseNow={parseNow}
-            cancelAutoParse={cancelAutoParse}
-            isListening={isListening}
-            isSupported={isSupported}
-            interimTranscript={interimTranscript}
-            toggleListening={toggleListening}
-            stopListening={stopListening}
-            toast={toast}
-            defaultPanelOpen={defaultPanelOpen ?? true}
-            onParseImage={onParseImage}
             isParsingImage={isParsingImage}
+            parseNow={parseNow}
+            defaultPanelOpen={defaultPanelOpen ?? true}
+            {...composerRest}
           />
         </CardContent>
       </Card>

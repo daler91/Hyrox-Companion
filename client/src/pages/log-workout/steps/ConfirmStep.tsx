@@ -1,6 +1,6 @@
 import type { ExerciseName } from "@shared/schema";
 import { ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 import type { StructuredExercise } from "@/components/ExerciseInput";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ interface ConfirmStepProps {
   readonly weightUnit: "kg" | "lbs";
   readonly distanceUnit: "km" | "miles";
   readonly autoParsing: boolean;
+  readonly cancelAutoParse: () => void;
   readonly onBack: () => void;
   readonly onContinue: () => void;
 }
@@ -43,11 +44,36 @@ export function ConfirmStep({
   weightUnit,
   distanceUnit,
   autoParsing,
+  cancelAutoParse,
   onBack,
   onContinue,
 }: ConfirmStepProps) {
   const [showOriginal, setShowOriginal] = useState(false);
   const hasBlocks = exerciseBlocks.length > 0;
+
+  // Cancel any in-flight parse before mutating the exercise list so a
+  // late parse response can't overwrite the user's in-progress edits.
+  const handleAddExercise = useCallback(
+    (name: ExerciseName, customLabel?: string) => {
+      cancelAutoParse();
+      addExercise(name, customLabel);
+    },
+    [cancelAutoParse, addExercise],
+  );
+  const handleUpdateBlock = useCallback(
+    (blockId: string, ex: StructuredExercise) => {
+      cancelAutoParse();
+      updateBlock(blockId, ex);
+    },
+    [cancelAutoParse, updateBlock],
+  );
+  const handleRemoveBlock = useCallback(
+    (blockId: string) => {
+      cancelAutoParse();
+      removeBlock(blockId);
+    },
+    [cancelAutoParse, removeBlock],
+  );
 
   return (
     <div className="space-y-6">
@@ -77,9 +103,9 @@ export function ConfirmStep({
           <DraftExerciseTable
             exerciseBlocks={exerciseBlocks}
             exerciseData={exerciseData}
-            addExercise={addExercise}
-            updateBlock={updateBlock}
-            removeBlock={removeBlock}
+            addExercise={handleAddExercise}
+            updateBlock={handleUpdateBlock}
+            removeBlock={handleRemoveBlock}
             reorderBlocks={reorderBlocks}
             weightUnit={weightUnit}
             distanceUnit={distanceUnit}

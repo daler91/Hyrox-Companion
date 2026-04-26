@@ -68,14 +68,56 @@ const STEP_LABELS: Record<WorkoutStep, string> = {
   3: "Reflect",
 };
 
-export function LogWorkoutStepperLayout(props: LogWorkoutStepperLayoutProps) {
-  const { step, setStep } = props;
-
+export function LogWorkoutStepperLayout({
+  step,
+  setStep,
+  title,
+  setTitle,
+  date,
+  setDate,
+  rpe,
+  setRpe,
+  notes,
+  setNotes,
+  freeText,
+  setFreeText,
+  exerciseBlocks,
+  exerciseData,
+  addExercise,
+  updateBlock,
+  removeBlock,
+  reorderBlocks,
+  weightUnit,
+  distanceUnit,
+  autoParsing,
+  autoParseError,
+  parseNow,
+  cancelAutoParse,
+  isListening,
+  isSupported,
+  interimTranscript,
+  toggleListening,
+  stopListening,
+  isNotesListening,
+  isNotesSupported,
+  notesInterim,
+  toggleNotesListening,
+  handleSave,
+  isSaving,
+  handleCancel,
+  hasWorkoutDetails,
+  handleDuplicateLast,
+  isDuplicating,
+  defaultPanelOpen,
+  toast,
+  onParseImage,
+  isParsingImage,
+}: LogWorkoutStepperLayoutProps) {
   return (
     <div className="container max-w-3xl mx-auto p-4 pb-28 md:pb-8 pt-4 md:pt-8 min-h-screen">
       <WorkoutHeader
-        onDuplicateLast={step === 1 ? props.handleDuplicateLast : undefined}
-        isDuplicating={props.isDuplicating}
+        onDuplicateLast={step === 1 ? handleDuplicateLast : undefined}
+        isDuplicating={isDuplicating}
       />
 
       <StepIndicator current={step} onJump={setStep} />
@@ -83,50 +125,51 @@ export function LogWorkoutStepperLayout(props: LogWorkoutStepperLayoutProps) {
       <div className="mt-6">
         {step === 1 && (
           <CaptureStep
-            title={props.title}
-            setTitle={props.setTitle}
-            date={props.date}
-            setDate={props.setDate}
-            freeText={props.freeText}
-            setFreeText={props.setFreeText}
-            exerciseBlocks={props.exerciseBlocks}
-            exerciseData={props.exerciseData}
-            addExercise={props.addExercise}
-            updateBlock={props.updateBlock}
-            removeBlock={props.removeBlock}
-            reorderBlocks={props.reorderBlocks}
-            weightUnit={props.weightUnit}
-            distanceUnit={props.distanceUnit}
-            autoParsing={props.autoParsing}
-            autoParseError={props.autoParseError}
-            parseNow={props.parseNow}
-            cancelAutoParse={props.cancelAutoParse}
-            isListening={props.isListening}
-            isSupported={props.isSupported}
-            interimTranscript={props.interimTranscript}
-            toggleListening={props.toggleListening}
-            stopListening={props.stopListening}
-            toast={props.toast}
-            defaultPanelOpen={props.defaultPanelOpen}
-            onParseImage={props.onParseImage}
-            isParsingImage={props.isParsingImage}
-            onCancel={props.handleCancel}
+            title={title}
+            setTitle={setTitle}
+            date={date}
+            setDate={setDate}
+            freeText={freeText}
+            setFreeText={setFreeText}
+            exerciseBlocks={exerciseBlocks}
+            exerciseData={exerciseData}
+            addExercise={addExercise}
+            updateBlock={updateBlock}
+            removeBlock={removeBlock}
+            reorderBlocks={reorderBlocks}
+            weightUnit={weightUnit}
+            distanceUnit={distanceUnit}
+            autoParsing={autoParsing}
+            autoParseError={autoParseError}
+            parseNow={parseNow}
+            cancelAutoParse={cancelAutoParse}
+            isListening={isListening}
+            isSupported={isSupported}
+            interimTranscript={interimTranscript}
+            toggleListening={toggleListening}
+            stopListening={stopListening}
+            toast={toast}
+            defaultPanelOpen={defaultPanelOpen}
+            onParseImage={onParseImage}
+            isParsingImage={isParsingImage}
+            onCancel={handleCancel}
             onContinue={() => setStep(2)}
           />
         )}
 
         {step === 2 && (
           <ConfirmStep
-            freeText={props.freeText}
-            exerciseBlocks={props.exerciseBlocks}
-            exerciseData={props.exerciseData}
-            addExercise={props.addExercise}
-            updateBlock={props.updateBlock}
-            removeBlock={props.removeBlock}
-            reorderBlocks={props.reorderBlocks}
-            weightUnit={props.weightUnit}
-            distanceUnit={props.distanceUnit}
-            autoParsing={props.autoParsing}
+            freeText={freeText}
+            exerciseBlocks={exerciseBlocks}
+            exerciseData={exerciseData}
+            addExercise={addExercise}
+            updateBlock={updateBlock}
+            removeBlock={removeBlock}
+            reorderBlocks={reorderBlocks}
+            weightUnit={weightUnit}
+            distanceUnit={distanceUnit}
+            autoParsing={autoParsing}
+            cancelAutoParse={cancelAutoParse}
             onBack={() => setStep(1)}
             onContinue={() => setStep(3)}
           />
@@ -134,18 +177,18 @@ export function LogWorkoutStepperLayout(props: LogWorkoutStepperLayoutProps) {
 
         {step === 3 && (
           <ReflectStep
-            rpe={props.rpe}
-            setRpe={props.setRpe}
-            notes={props.notes}
-            setNotes={props.setNotes}
-            isNotesListening={props.isNotesListening}
-            isNotesSupported={props.isNotesSupported}
-            notesInterim={props.notesInterim}
-            toggleNotesListening={props.toggleNotesListening}
+            rpe={rpe}
+            setRpe={setRpe}
+            notes={notes}
+            setNotes={setNotes}
+            isNotesListening={isNotesListening}
+            isNotesSupported={isNotesSupported}
+            notesInterim={notesInterim}
+            toggleNotesListening={toggleNotesListening}
             onBack={() => setStep(2)}
-            handleSave={props.handleSave}
-            isSaving={props.isSaving}
-            hasWorkoutDetails={props.hasWorkoutDetails}
+            handleSave={handleSave}
+            isSaving={isSaving}
+            hasWorkoutDetails={hasWorkoutDetails}
           />
         )}
       </div>
