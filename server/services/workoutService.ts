@@ -220,23 +220,33 @@ export async function saveParsedWorkout(
 // to avoid N+1 query overhead during batch reparsing.
 export async function saveParsedWorkoutsBatch(
   workouts: { workoutId: string; setRows: InsertExerciseSet[] }[],
-): Promise<number> {
-  if (workouts.length === 0) return 0;
+): Promise<{ saved: number; failed: number }> {
+  if (workouts.length === 0) return { saved: 0, failed: 0 };
 
   const workoutIds = workouts.map((w) => w.workoutId);
-  const allSetRows = workouts.flatMap((w) => w.setRows);
+  let saved = 0;
+  let failed = 0;
 
-  await db.transaction(async (tx) => {
-    // Drop all existing sets for these workouts
-    await tx.delete(exerciseSets).where(inArray(exerciseSets.workoutLogId, workoutIds));
+  // Drop existing sets in one query, then insert per-workout so one invalid
+  // row can't roll back every other parsed workout in the chunk.
+  await db.delete(exerciseSets).where(inArray(exerciseSets.workoutLogId, workoutIds));
 
-    // Insert new sets in bulk
-    if (allSetRows.length > 0) {
-      await tx.insert(exerciseSets).values(allSetRows);
+  for (const workout of workouts) {
+    try {
+      if (workout.setRows.length > 0) {
+        await db.insert(exerciseSets).values(workout.setRows);
+      }
+      saved++;
+    } catch (err) {
+      failed++;
+      logger.error(
+        { err, workoutId: workout.workoutId },
+        "Failed to persist parsed exercise sets for workout during batch reparse",
+      );
     }
-  });
+  }
 
-  return allSetRows.length;
+  return { saved, failed };
 }
 
 // Replace-all semantics for an owner (either a logged workout or a plan day):
@@ -775,30 +785,9 @@ export async function processBatchChunk(
 
   // ⚡ Bolt Performance Optimization: Replace N+1 queries with a single batch operation
   if (successfulParses.length > 0) {
-    try {
-      await saveParsedWorkoutsBatch(successfulParses);
-      parsed += successfulParses.length;
-    } catch (dbError) {
-      logger.warn(
-        { err: dbError },
-        `Batch save failed, falling back to sequential save to isolate failure`,
-      );
-
-      // Fallback: If batch fails (e.g., due to a single invalid row), process sequentially
-      // to ensure valid workouts are still saved and failures are isolated.
-      for (const w of successfulParses) {
-        try {
-          await saveParsedWorkout(w.workoutId, w.setRows);
-          parsed++;
-        } catch (individualError) {
-          logger.error(
-            { err: individualError },
-            `Failed to save re-parsed workout ${w.workoutId} during fallback:`,
-          );
-          failed++;
-        }
-      }
-    }
+    const { saved, failed: writeFailures } = await saveParsedWorkoutsBatch(successfulParses);
+    parsed += saved;
+    failed += writeFailures;
   }
 
   return { parsed, failed };
