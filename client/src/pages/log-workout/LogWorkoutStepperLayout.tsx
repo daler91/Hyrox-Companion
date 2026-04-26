@@ -110,6 +110,10 @@ export function LogWorkoutStepperLayout({
   }, [autoParsing, autoParseError]);
 
   const advanceFromCapture = () => {
+    if (isListening) {
+      stopListening();
+    }
+
     const hasText = freeText.trim().length > 0;
     const hasBlocks = exerciseBlocks.length > 0;
     const needsParse =
