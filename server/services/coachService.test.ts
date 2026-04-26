@@ -1,10 +1,23 @@
 import { afterEach,beforeEach, describe, expect, it, vi } from "vitest";
 
-import { generateReviewNotes, generateWorkoutSuggestions } from "../gemini/index";
+import { generateReviewNotes, generateWorkoutSuggestions, parseExercisesFromText } from "../gemini/index";
 import { storage } from "../storage";
 import { buildTrainingContext } from "./ai";
-import { triggerAutoCoach } from "./coachService";
+import { regenerateCoachNoteForPlanDay, triggerAutoCoach } from "./coachService";
 import { retrieveRelevantChunks } from "./ragService";
+
+const dbMockState = vi.hoisted(() => {
+  const deleteWhere = vi.fn().mockResolvedValue(undefined);
+  const insertValues = vi.fn().mockResolvedValue(undefined);
+  const selectWhere = vi.fn().mockResolvedValue([{ maxOrder: 1 }]);
+  const selectFrom = vi.fn(() => ({ where: selectWhere }));
+  const tx = {
+    delete: vi.fn(() => ({ where: deleteWhere })),
+    insert: vi.fn(() => ({ values: insertValues })),
+    select: vi.fn(() => ({ from: selectFrom })),
+  };
+  return { deleteWhere, insertValues, selectFrom, selectWhere, tx };
+});
 
 vi.mock("../storage", () => ({
   storage: {
@@ -12,9 +25,13 @@ vi.mock("../storage", () => ({
       getUser: vi.fn(),
       updateIsAutoCoaching: vi.fn(),
     },
+    workouts: {
+      getExerciseSetsByPlanDay: vi.fn(),
+    },
     plans: {
       listTrainingPlans: vi.fn(),
       getActivePlan: vi.fn(),
+      getPlanDay: vi.fn(),
       updatePlanDay: vi.fn(),
     },
     timeline: {
@@ -35,7 +52,7 @@ vi.mock("../storage", () => ({
 // so tests don't need a live Postgres to exercise the C2 atomic apply path.
 vi.mock("../db", () => ({
   db: {
-    transaction: vi.fn(<T,>(fn: (tx: unknown) => Promise<T>) => fn({} as unknown)),
+    transaction: vi.fn(<T,>(fn: (tx: unknown) => Promise<T>) => fn(dbMockState.tx as unknown)),
   },
 }));
 
@@ -43,6 +60,7 @@ vi.mock("./ai", () => ({ buildTrainingContext: vi.fn() }));
 vi.mock("../gemini/index", () => ({
   generateWorkoutSuggestions: vi.fn(),
   generateReviewNotes: vi.fn().mockResolvedValue([]),
+  parseExercisesFromText: vi.fn(),
   EMBEDDING_DIMENSIONS: 3072,
 }));
 vi.mock("./ragService", () => ({ retrieveRelevantChunks: vi.fn() }));
@@ -73,6 +91,7 @@ function mockBaseAutoCoachDeps(timeline: Record<string, unknown>[] = [makeTimeli
       mainWorkout: e.mainWorkout as string,
       accessory: e.accessory as string | null,
       notes: e.notes as string | null,
+      ...(Array.isArray(e.exerciseDetails) ? { exerciseDetails: e.exerciseDetails } : {}),
     }));
   vi.mocked(buildTrainingContext).mockResolvedValue({ upcomingWorkouts } as never);
   vi.mocked(storage.coaching.hasChunksForUser).mockResolvedValue(false);
@@ -92,6 +111,9 @@ function makeSuggestion(overrides: Record<string, unknown> = {}) {
 describe("coachService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    dbMockState.deleteWhere.mockResolvedValue(undefined);
+    dbMockState.insertValues.mockResolvedValue(undefined);
+    dbMockState.selectWhere.mockResolvedValue([{ maxOrder: 1 }]);
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-01-15T12:00:00Z"));
   });
@@ -189,6 +211,148 @@ describe("coachService", () => {
         expect.objectContaining({
           accessory: "Leg Press\n[AI Coach] Add 3x10 calf raises",
           aiSource: null,
+          aiRationale: "Progressive overload",
+        }),
+        "user-1",
+        expect.anything(),
+      );
+    });
+
+    it("replaces structured plan-day exercises before falling back to text fields", async () => {
+      mockBaseAutoCoachDeps([
+        makeTimelineEntry({
+          exerciseDetails: [
+            { exerciseName: "back_squat", category: "strength", setNumber: 1, reps: 5, weight: 100, sortOrder: 0 },
+          ],
+        }),
+      ]);
+      vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
+        makeSuggestion({ recommendation: "Back squat 3x5 at 105kg" }),
+      ]);
+      vi.mocked(parseExercisesFromText).mockResolvedValue([
+        {
+          exerciseName: "back_squat",
+          category: "strength",
+          confidence: 95,
+          sets: [
+            { setNumber: 1, reps: 5, weight: 105 },
+            { setNumber: 2, reps: 5, weight: 105 },
+            { setNumber: 3, reps: 5, weight: 105 },
+          ],
+        },
+      ]);
+      vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({} as never);
+
+      expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 1 });
+      expect(parseExercisesFromText).toHaveBeenCalledWith("Back squat 3x5 at 105kg", "kg", undefined, "user-1");
+      expect(dbMockState.deleteWhere).toHaveBeenCalled();
+      expect(dbMockState.insertValues).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({
+            planDayId: "day-1",
+            workoutLogId: null,
+            exerciseName: "back_squat",
+            reps: 5,
+            weight: 105,
+            sortOrder: 0,
+          }),
+        ]),
+      );
+      const updatePayload = vi.mocked(storage.plans.updatePlanDay).mock.calls[0][1] as Record<string, unknown>;
+      expect(updatePayload).not.toHaveProperty("mainWorkout");
+      expect(updatePayload).not.toHaveProperty("accessory");
+      expect(updatePayload).toEqual(expect.objectContaining({ aiRationale: "Progressive overload" }));
+    });
+
+    it("appends parsed structured suggestions after existing plan-day rows", async () => {
+      mockBaseAutoCoachDeps([
+        makeTimelineEntry({
+          exerciseDetails: [
+            { exerciseName: "deadlift", category: "strength", setNumber: 1, reps: 3, weight: 140, sortOrder: 0 },
+          ],
+        }),
+      ]);
+      dbMockState.selectWhere.mockResolvedValue([{ maxOrder: 4 }]);
+      vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
+        makeSuggestion({
+          targetField: "accessory",
+          action: "append",
+          recommendation: "Walking lunges 2x20m",
+        }),
+      ]);
+      vi.mocked(parseExercisesFromText).mockResolvedValue([
+        {
+          exerciseName: "walking_lunges",
+          category: "conditioning",
+          confidence: 90,
+          sets: [
+            { setNumber: 1, distance: 20 },
+            { setNumber: 2, distance: 20 },
+          ],
+        },
+      ]);
+      vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({} as never);
+
+      expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 1 });
+      expect(dbMockState.deleteWhere).not.toHaveBeenCalled();
+      expect(dbMockState.insertValues).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ exerciseName: "walking_lunges", sortOrder: 5 }),
+          expect.objectContaining({ exerciseName: "walking_lunges", sortOrder: 6 }),
+        ]),
+      );
+      const updatePayload = vi.mocked(storage.plans.updatePlanDay).mock.calls[0][1] as Record<string, unknown>;
+      expect(updatePayload).not.toHaveProperty("accessory");
+      expect(updatePayload).toEqual(expect.objectContaining({ aiRationale: "Progressive overload" }));
+    });
+
+    it("falls back to text-field writes when structured recommendation parsing returns no exercises", async () => {
+      mockBaseAutoCoachDeps([
+        makeTimelineEntry({
+          exerciseDetails: [
+            { exerciseName: "deadlift", category: "strength", setNumber: 1, reps: 3, weight: 140, sortOrder: 0 },
+          ],
+        }),
+      ]);
+      vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
+        makeSuggestion({ recommendation: "Keep this lighter today" }),
+      ]);
+      vi.mocked(parseExercisesFromText).mockResolvedValue([]);
+      vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({} as never);
+
+      expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 1 });
+      expect(dbMockState.insertValues).not.toHaveBeenCalled();
+      expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
+        "day-1",
+        expect.objectContaining({
+          mainWorkout: "Keep this lighter today",
+          aiRationale: "Progressive overload",
+        }),
+        "user-1",
+        expect.anything(),
+      );
+    });
+
+    it("keeps notes suggestions as text writes for table-backed workouts", async () => {
+      mockBaseAutoCoachDeps([
+        makeTimelineEntry({
+          exerciseDetails: [
+            { exerciseName: "deadlift", category: "strength", setNumber: 1, reps: 3, weight: 140, sortOrder: 0 },
+          ],
+        }),
+      ]);
+      vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
+        makeSuggestion({ targetField: "notes", recommendation: "Keep two reps in reserve." }),
+      ]);
+      vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({} as never);
+
+      expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 1 });
+      expect(parseExercisesFromText).not.toHaveBeenCalled();
+      expect(dbMockState.insertValues).not.toHaveBeenCalled();
+      expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
+        "day-1",
+        expect.objectContaining({
+          notes: "Keep two reps in reserve.",
           aiRationale: "Progressive overload",
         }),
         "user-1",
@@ -315,6 +479,85 @@ describe("coachService", () => {
 
       expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 0 });
       expect(storage.plans.updatePlanDay).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("regenerateCoachNoteForPlanDay", () => {
+    it("passes plan-day exercise rows to Coach's Take and suppresses accessory/notes fallback", async () => {
+      vi.mocked(storage.plans.getPlanDay).mockResolvedValue({
+        id: "day-1",
+        planId: "plan-1",
+        weekNumber: 1,
+        dayName: "Monday",
+        focus: "Strength",
+        mainWorkout: "FINGERPRINT_PLAN_MAIN",
+        accessory: "FINGERPRINT_PLAN_ACCESSORY",
+        notes: "FINGERPRINT_PLAN_NOTES",
+        scheduledDate: "2026-01-16",
+        status: "planned",
+        aiSource: null,
+        aiRationale: null,
+        aiNoteUpdatedAt: null,
+        aiInputsUsed: null,
+      } as never);
+      vi.mocked(storage.workouts.getExerciseSetsByPlanDay).mockResolvedValue([
+        {
+          id: "set-1",
+          workoutLogId: null,
+          planDayId: "day-1",
+          exerciseName: "back_squat",
+          customLabel: null,
+          category: "strength",
+          setNumber: 1,
+          reps: 5,
+          weight: 100,
+          distance: null,
+          time: null,
+          notes: null,
+          confidence: 95,
+          sortOrder: 0,
+        },
+      ] as never);
+      vi.mocked(buildTrainingContext).mockResolvedValue({
+        recentWorkouts: [],
+        coachingInsights: { rpeTrend: "stable", fatigueFlag: false, undertrainingFlag: false, stationGaps: [], progressionFlags: [] },
+      } as never);
+      vi.mocked(storage.coaching.hasChunksForUser).mockResolvedValue(false);
+      vi.mocked(storage.coaching.listCoachingMaterials).mockResolvedValue([]);
+      vi.mocked(generateReviewNotes).mockResolvedValue([
+        { workoutId: "day-1", note: "Looks right for the current phase." },
+      ]);
+      vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({
+        aiRationale: "Looks right for the current phase.",
+      } as never);
+
+      await expect(regenerateCoachNoteForPlanDay("day-1", "user-1")).resolves.toEqual(
+        expect.objectContaining({
+          planDayId: "day-1",
+          aiRationale: "Looks right for the current phase.",
+        }),
+      );
+
+      expect(generateReviewNotes).toHaveBeenCalledWith(
+        expect.anything(),
+        [
+          expect.objectContaining({
+            id: "day-1",
+            accessory: undefined,
+            notes: undefined,
+            exerciseDetails: [
+              expect.objectContaining({
+                exerciseName: "back_squat",
+                reps: 5,
+                weight: 100,
+              }),
+            ],
+          }),
+        ],
+        undefined,
+        undefined,
+        "user-1",
+      );
     });
   });
 });

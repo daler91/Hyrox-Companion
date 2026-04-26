@@ -1,6 +1,7 @@
 import type { Logger } from "pino";
 
 import { generateWorkoutSuggestions, type UpcomingWorkout } from "../gemini/index";
+import { buildWorkoutSearchText } from "../prompts/exerciseSetFormatter";
 import { storage } from "../storage";
 import { buildAIContext, extractCoachingMaterialsText } from "./aiContextService";
 import { sanitizeRagInfo } from "./ragRetrieval";
@@ -42,13 +43,29 @@ export async function generateTimelineAiSuggestions(
     mainWorkout: d.mainWorkout,
     accessory: d.accessory || undefined,
     notes: d.notes || undefined,
+    ...(d.exerciseSets && d.exerciseSets.length > 0
+      ? {
+          exerciseDetails: d.exerciseSets.map(es => ({
+            exerciseName: es.exerciseName,
+            customLabel: es.customLabel,
+            category: es.category,
+            setNumber: es.setNumber,
+            reps: es.reps,
+            weight: es.weight,
+            distance: es.distance,
+            time: es.time,
+            notes: es.notes,
+            sortOrder: es.sortOrder,
+          })),
+        }
+      : {}),
   }));
 
   if (upcomingWorkouts.length === 0) {
     return { suggestions: [], message: "No upcoming planned workouts found" };
   }
 
-  const suggestionQuery = upcomingWorkouts.map((w) => `${w.focus} ${w.mainWorkout}`).join("; ");
+  const suggestionQuery = upcomingWorkouts.map((w) => buildWorkoutSearchText(w)).join("; ");
   const aiContext = await buildAIContext(userId, suggestionQuery, log);
   const coachingMaterials = extractCoachingMaterialsText(aiContext);
 

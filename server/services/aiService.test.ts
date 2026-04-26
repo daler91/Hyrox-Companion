@@ -111,6 +111,76 @@ describe("buildTrainingContext", () => {
     expect(result.recentWorkouts[0].mainWorkout).toBe("Workout 14");
   });
 
+  it("carries completed athlete notes and upcoming plan-day exercise rows into AI context", async () => {
+    vi.mocked(storage.plans.getActivePlan).mockResolvedValue(undefined);
+    vi.mocked(storage.timeline.getTimeline).mockResolvedValue([
+      {
+        status: "completed",
+        date: "2026-01-15",
+        focus: "strength",
+        mainWorkout: "Logged free text",
+        notes: "Felt strong on the last set",
+        exerciseSets: [
+          {
+            exerciseName: "back_squat",
+            customLabel: null,
+            category: "strength",
+            setNumber: 1,
+            reps: 5,
+            weight: 100,
+            distance: null,
+            time: null,
+            notes: null,
+            sortOrder: 0,
+          },
+        ],
+      },
+    ]);
+    vi.mocked(storage.timeline.getUpcomingPlannedDays).mockResolvedValue([
+      {
+        planDayId: "day-1",
+        date: "2026-01-16",
+        focus: "strength",
+        mainWorkout: "Planned free text",
+        accessory: "Accessory free text",
+        notes: "Plan note",
+        exerciseSets: [
+          {
+            id: "set-1",
+            workoutLogId: null,
+            planDayId: "day-1",
+            exerciseName: "deadlift",
+            customLabel: null,
+            category: "strength",
+            setNumber: 1,
+            reps: 3,
+            weight: 140,
+            distance: null,
+            time: null,
+            notes: null,
+            confidence: 95,
+            sortOrder: 0,
+          },
+        ],
+      },
+    ] as never);
+
+    const result = await buildTrainingContext("user-1");
+
+    expect(result.recentWorkouts[0]).toEqual(
+      expect.objectContaining({
+        athleteNote: "Felt strong on the last set",
+        exerciseDetails: [expect.objectContaining({ exerciseName: "back_squat", reps: 5, weight: 100 })],
+      }),
+    );
+    expect(result.upcomingWorkouts?.[0]).toEqual(
+      expect.objectContaining({
+        planDayId: "day-1",
+        exerciseDetails: [expect.objectContaining({ exerciseName: "deadlift", reps: 3, weight: 140 })],
+      }),
+    );
+  });
+
   it("calculates structured exercise stats correctly", async () => {
     vi.mocked(storage.plans.getActivePlan).mockResolvedValue(undefined);
 

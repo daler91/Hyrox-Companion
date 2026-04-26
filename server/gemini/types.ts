@@ -1,3 +1,5 @@
+import type { PromptExerciseSet } from "../prompts/exerciseSetFormatter";
+
 export interface TrainingContext {
   totalWorkouts: number;
   completedWorkouts: number;
@@ -7,6 +9,8 @@ export interface TrainingContext {
   completionRate: number;
   currentStreak: number;
   weeklyGoal?: number;
+  weightUnit?: string;
+  distanceUnit?: string;
   recentWorkouts: Array<{
     date: string;
     focus: string;
@@ -14,14 +18,8 @@ export interface TrainingContext {
     status: string;
     rpe?: number | null;
     duration?: number | null;
-    exerciseDetails?: Array<{
-      name: string;
-      setNumber?: number | null;
-      reps?: number | null;
-      weight?: number | null;
-      distance?: number | null;
-      time?: number | null;
-    }>;
+    athleteNote?: string | null;
+    exerciseDetails?: PromptExerciseSet[];
   }>;
   upcomingWorkouts?: Array<{
     planDayId?: string;
@@ -30,6 +28,7 @@ export interface TrainingContext {
     mainWorkout: string;
     accessory?: string | null;
     notes?: string | null;
+    exerciseDetails?: PromptExerciseSet[];
   }>;
   exerciseBreakdown: Record<string, number>;
   structuredExerciseStats?: Record<

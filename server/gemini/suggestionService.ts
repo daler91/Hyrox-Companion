@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { logger } from "../logger";
 import { SUGGESTIONS_PROMPT } from "../prompts";
+import { formatExerciseSetsForPrompt, type PromptExerciseSet } from "../prompts/exerciseSetFormatter";
 import { GEMINI_SUGGESTIONS_MODEL, getAiClient, retryWithBackoff, trackUsageFromResponse } from "./client";
 import type { TrainingContext } from "./types";
 
@@ -14,6 +15,7 @@ export interface UpcomingWorkout {
   mainWorkout: string;
   accessory?: string;
   notes?: string;
+  exerciseDetails?: PromptExerciseSet[];
 }
 
 export type { WorkoutSuggestion } from "@shared/schema";
@@ -82,21 +84,27 @@ function formatPerformanceStats(stats: TrainingContext["structuredExerciseStats"
   return "\nExercise performance stats:\n" + Object.entries(stats).map(([ex, s]) => formatExerciseStatLine(ex, s)).join("\n") + "\n";
 }
 
-function formatRecentWorkout(workout: TrainingContext["recentWorkouts"][0]): string {
-  let line = `- ${workout.date}: ${workout.focus} - ${workout.mainWorkout}`;
+function formatRecentWorkout(workout: TrainingContext["recentWorkouts"][0], weightUnit?: string): string {
+  const exerciseSummary = formatExerciseSetsForPrompt(workout.exerciseDetails, { weightUnit });
+  let line = `- ${workout.date}: ${workout.focus} - ${exerciseSummary ? `Exercises: ${exerciseSummary}` : workout.mainWorkout}`;
   const meta: string[] = [];
   if (workout.rpe != null) meta.push(`RPE: ${workout.rpe}`);
   if (workout.duration != null) meta.push(`Duration: ${workout.duration}min`);
   if (meta.length > 0) line += ` (${meta.join(", ")})`;
+  if (workout.athleteNote?.trim()) line += ` | Athlete note: ${workout.athleteNote.trim()}`;
   return line;
 }
 
-function formatRecentWorkouts(workouts: TrainingContext["recentWorkouts"]): string {
+function formatRecentWorkouts(workouts: TrainingContext["recentWorkouts"], weightUnit?: string): string {
   if (workouts.length === 0) return "";
-  return "\nRecent completed workouts:\n" + workouts.slice(0, 10).map(formatRecentWorkout).join("\n") + "\n";
+  return "\nRecent completed workouts:\n" + workouts.slice(0, 10).map((workout) => formatRecentWorkout(workout, weightUnit)).join("\n") + "\n";
 }
 
-function formatUpcomingWorkout(workout: UpcomingWorkout): string {
+function formatUpcomingWorkout(workout: UpcomingWorkout, weightUnit?: string): string {
+  const exerciseSummary = formatExerciseSetsForPrompt(workout.exerciseDetails, { weightUnit });
+  if (exerciseSummary) {
+    return `ID: ${workout.id}, Date: ${workout.date}, Focus: ${workout.focus}, Exercises: ${exerciseSummary}`;
+  }
   let line = `ID: ${workout.id}, Date: ${workout.date}, Focus: ${workout.focus}, Main: ${workout.mainWorkout}`;
   if (workout.accessory) line += `, Accessory: ${workout.accessory}`;
   if (workout.notes) line += `, Notes: ${workout.notes}`;
@@ -205,7 +213,7 @@ function buildPromptDataSections(
     ...header,
     formatExerciseFrequency(trainingContext.exerciseBreakdown),
     formatPerformanceStats(trainingContext.structuredExerciseStats),
-    formatRecentWorkouts(trainingContext.recentWorkouts),
+    formatRecentWorkouts(trainingContext.recentWorkouts, trainingContext.weightUnit),
   ];
 
   if (trainingContext.coachingInsights) {
@@ -214,7 +222,7 @@ function buildPromptDataSections(
 
   sections.push(
     `--- UPCOMING WORKOUTS ---`,
-    upcomingWorkouts.map(formatUpcomingWorkout).join("\n"),
+    upcomingWorkouts.map((workout) => formatUpcomingWorkout(workout, trainingContext.weightUnit)).join("\n"),
     ...(coachingMaterials ? [coachingMaterials] : []),
   );
 
