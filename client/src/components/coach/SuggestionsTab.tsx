@@ -85,25 +85,13 @@ export function useSuggestions({ timeline, addLocalMessage, saveMessage }: UseSu
         return;
       }
 
-      const currentValue = (workoutEntry[suggestion.targetField] as string) || "";
-      let newValue: string;
-      
-      if (suggestion.action === "append") {
-        if (currentValue.trim()) {
-          newValue = `${currentValue}\n\nAI suggestion: ${suggestion.recommendation}`;
-        } else {
-          newValue = `AI suggestion: ${suggestion.recommendation}`;
-        }
-      } else {
-        newValue = suggestion.recommendation;
-      }
-
-      await api.plans.updateDayWithoutPlan(suggestion.workoutId, {
-        [suggestion.targetField]: newValue,
+      await api.timeline.applySuggestion({
+        ...suggestion,
         aiSource: suggestionsRagInfo?.source ?? null,
       });
 
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }).catch(() => {});
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.planDayExercises(suggestion.workoutId) }).catch(() => {});
       if (suggestion.action === "replace" && suggestion.targetField === "mainWorkout") {
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.exerciseAnalytics }).catch(() => {});
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.personalRecords }).catch(() => {});
