@@ -1,11 +1,12 @@
 import type { AllowedImageMimeType, ExerciseName, ParsedExercise } from "@shared/schema";
-import { AlertTriangle, CheckCircle2, ChevronDown, Loader2, Sparkles } from "lucide-react";
+import { CheckCircle2, ChevronDown, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { StructuredExercise } from "@/components/ExerciseInput";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { DraftExerciseTable } from "@/components/workout/DraftExerciseTable";
+import { ParseStatusStrip } from "@/components/workout/ParseStatusStrip";
 import { WorkoutTextMode } from "@/components/workout/WorkoutTextMode";
 import type { toast as toastFn } from "@/hooks/use-toast";
 import type { ParseFromImagePayload } from "@/lib/api";
@@ -27,11 +28,6 @@ interface WorkoutComposerProps {
   /** Parse control surfaced from useWorkoutEditor. */
   readonly autoParsing: boolean;
   readonly autoParseError: boolean;
-  /**
-   * Fires a parse immediately (no debounce). Wired to the explicit
-   * Parse button in the text panel — text-change no longer auto-parses.
-   */
-  readonly parseNow: (text: string) => void;
   readonly cancelAutoParse: () => void;
 
   /** Voice input for dictating into the text panel. */
@@ -89,7 +85,6 @@ export function WorkoutComposer({
   distanceUnit,
   autoParsing,
   autoParseError,
-  parseNow,
   cancelAutoParse,
   isListening,
   isSupported,
@@ -228,7 +223,6 @@ export function WorkoutComposer({
             stopListening={stopListening}
             interimTranscript={interimTranscript}
             toast={toast}
-            onParseText={() => parseNow(freeText)}
             isParsingText={autoParsing}
             onCaptureImage={
               onParseImage
@@ -340,38 +334,3 @@ function WorkoutContentsStatus({ exerciseCount, hasDescription }: WorkoutContent
   );
 }
 
-interface ParseStatusStripProps {
-  readonly parsing: boolean;
-  readonly error: boolean;
-  readonly hasText: boolean;
-}
-
-function ParseStatusStrip({ parsing, error, hasText }: ParseStatusStripProps) {
-  if (parsing) {
-    return (
-      <div
-        className="flex items-center gap-2 rounded-md border border-dashed border-primary/30 bg-primary/5 px-3 py-2 text-xs text-primary"
-        role="status"
-        aria-live="polite"
-        data-testid="composer-parsing"
-      >
-        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-        Parsing your description into exercises…
-      </div>
-    );
-  }
-  if (error && hasText) {
-    return (
-      <div
-        className="flex items-center gap-2 rounded-md border border-dashed border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-400"
-        role="status"
-        aria-live="polite"
-        data-testid="composer-parse-error"
-      >
-        <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
-        Couldn't auto-parse. Keep typing or add exercises manually below.
-      </div>
-    );
-  }
-  return null;
-}

@@ -16,6 +16,11 @@ describe("Log Workout Page", () => {
   });
 
   it("shows the notes input", () => {
+    // Notes live on step 3 — navigate there via the stepper.
+    // Text must be ≥8 chars AND contain a digit/x to satisfy
+    // the auto-parse signal gate (useWorkoutEditor#AUTO_PARSE_SIGNAL_RE).
+    cy.intercept("POST", "/api/v1/parse-exercises", { statusCode: 200, body: [] }).as("parseExercises");
+    cy.advanceLogWorkoutToReflect("3x10 squats");
     cy.getBySel("input-workout-notes").should("exist");
   });
 
@@ -28,12 +33,15 @@ describe("Log Workout Page", () => {
     cy.getBySel("workout-composer-toggle-text").should("exist");
   });
 
-  it("reveals the free-text area when the describe/dictate panel is expanded", () => {
-    cy.getBySel("workout-composer-toggle-text").click();
+  it("shows the free-text area in the expanded panel", () => {
+    // The describe/dictate panel starts expanded on step 1
     cy.getBySel("input-freetext").should("exist");
   });
 
   it("shows save workout button", () => {
+    // Save button lives on step 3 — navigate there
+    cy.intercept("POST", "/api/v1/parse-exercises", { statusCode: 200, body: [] }).as("parseExercises");
+    cy.advanceLogWorkoutToReflect("3x10 squats");
     cy.getBySel("button-save-workout").should("exist");
   });
 

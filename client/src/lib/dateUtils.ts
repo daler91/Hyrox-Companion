@@ -22,6 +22,12 @@ export function getTodayString(): string {
   return toISODateString(new Date());
 }
 
+export function getYesterdayString(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return toISODateString(d);
+}
+
 export function getStartOfWeek(date: Date = new Date(), weekStartsOn: 0 | 1 = 0): Date {
   const d = new Date(date);
   const day = d.getDay();

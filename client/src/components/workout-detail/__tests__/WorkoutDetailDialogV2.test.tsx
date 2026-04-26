@@ -129,6 +129,10 @@ function makeSet(overrides: Partial<ExerciseSet> = {}): ExerciseSet {
     weight: 60,
     distance: null,
     time: null,
+    plannedReps: null,
+    plannedWeight: null,
+    plannedDistance: null,
+    plannedTime: null,
     notes: null,
     confidence: 95,
     sortOrder: 0,
@@ -258,7 +262,7 @@ describe("WorkoutDetailDialogV2", () => {
         mainWorkout: "Athlete edited description",
         prescribedMainWorkout: "Coach original prescription",
         exerciseSets: [makeSet()],
-      } as Partial<WorkoutLog & { exerciseSets?: ExerciseSet[] }>),
+      }),
     );
     mockWorkouts.history.mockResolvedValue({
       lastSameFocus: null,
@@ -287,7 +291,7 @@ describe("WorkoutDetailDialogV2", () => {
         prescribedAccessory: "Coach accessory",
         prescribedNotes: null,
         exerciseSets: [makeSet()],
-      } as Partial<WorkoutLog & { exerciseSets?: ExerciseSet[] }>),
+      }),
     );
     mockWorkouts.history.mockResolvedValue({
       lastSameFocus: null,
@@ -342,7 +346,7 @@ describe("WorkoutDetailDialogV2", () => {
       makeWorkout({
         compliancePct: 82,
         exerciseSets: [makeSet()],
-      } as Partial<WorkoutLog & { exerciseSets?: ExerciseSet[] }>),
+      }),
     );
     mockWorkouts.history.mockResolvedValue({
       lastSameFocus: { date: "2026-04-01", focus: "Upper Body Strength" },

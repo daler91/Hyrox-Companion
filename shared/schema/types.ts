@@ -290,6 +290,13 @@ export const exerciseSetSchema = z.object({
   weight: z.number().min(0).max(2_000).optional().nullable(),
   distance: z.number().min(0).max(1_000_000).optional().nullable(),
   time: z.number().min(0).max(86_400).optional().nullable(),
+  // Planned (prescribed) values, captured at log creation. Optional so
+  // ad-hoc logs without a prescription can simply omit them. Same numeric
+  // bounds as the actual fields to keep validation symmetric.
+  plannedReps: z.number().min(0).max(10_000).optional().nullable(),
+  plannedWeight: z.number().min(0).max(2_000).optional().nullable(),
+  plannedDistance: z.number().min(0).max(1_000_000).optional().nullable(),
+  plannedTime: z.number().min(0).max(86_400).optional().nullable(),
   notes: z.string().max(1000).optional().nullable(),
 }).strip();
 
@@ -309,6 +316,23 @@ export const incomingExerciseSchema = z.object({
 
 export const exercisesPayloadSchema = z.array(incomingExerciseSchema).max(200);
 
+// Shared measurement fields used by both patch and add request bodies.
+// Extracted to a single definition so the 9-line block doesn't duplicate.
+//
+// Planned fields are intentionally NOT exposed in the per-set request bodies:
+// the prescription baseline is set once at log-materialisation time
+// (server/storage/shared.ts#prescribedSetToLogRow) and must not be mutable
+// via the per-set CRUD routes — otherwise any client could overwrite the
+// prescription baseline after a log is created and corrupt downstream
+// plan-vs-actual adherence reporting.
+const measurableSetFields = {
+  reps: z.number().int().min(0).max(10_000).nullable().optional(),
+  weight: z.number().min(0).max(2_000).nullable().optional(),
+  distance: z.number().min(0).max(1_000_000).nullable().optional(),
+  time: z.number().min(0).max(86_400).nullable().optional(),
+  notes: z.string().max(1000).nullable().optional(),
+};
+
 // Request bodies for the set-level CRUD routes. Shared between the
 // workout-log routes (server/routes/workouts.ts) and the plan-day routes
 // (server/routes/plans.ts) so a single numeric-bounds contract covers
@@ -318,11 +342,7 @@ export const patchExerciseSetBodySchema = z.object({
   customLabel: z.string().max(255).nullable().optional(),
   category: z.string().max(50).optional(),
   setNumber: z.number().int().min(1).max(100).optional(),
-  reps: z.number().int().min(0).max(10_000).nullable().optional(),
-  weight: z.number().min(0).max(2_000).nullable().optional(),
-  distance: z.number().min(0).max(1_000_000).nullable().optional(),
-  time: z.number().min(0).max(86_400).nullable().optional(),
-  notes: z.string().max(1000).nullable().optional(),
+  ...measurableSetFields,
   sortOrder: z.number().int().nullable().optional(),
 });
 export type PatchExerciseSetBody = z.infer<typeof patchExerciseSetBodySchema>;
@@ -332,11 +352,7 @@ export const addExerciseSetBodySchema = z.object({
   customLabel: z.string().max(255).nullable().optional(),
   category: z.string().max(50),
   setNumber: z.number().int().min(1).max(100).default(1),
-  reps: z.number().int().min(0).max(10_000).nullable().optional(),
-  weight: z.number().min(0).max(2_000).nullable().optional(),
-  distance: z.number().min(0).max(1_000_000).nullable().optional(),
-  time: z.number().min(0).max(86_400).nullable().optional(),
-  notes: z.string().max(1000).nullable().optional(),
+  ...measurableSetFields,
   confidence: z.number().int().min(0).max(100).nullable().optional(),
 });
 export type AddExerciseSetBody = z.infer<typeof addExerciseSetBodySchema>;
@@ -359,6 +375,10 @@ export interface ParsedExercise {
     weight?: number;
     distance?: number;
     time?: number;
+    plannedReps?: number;
+    plannedWeight?: number;
+    plannedDistance?: number;
+    plannedTime?: number;
     notes?: string;
   }>;
 }
