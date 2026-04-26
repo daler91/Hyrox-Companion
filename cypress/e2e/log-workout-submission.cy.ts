@@ -50,7 +50,8 @@ describe("Log Workout Submission", () => {
   });
 
   it("saves with fallback title when no title is provided", () => {
-    cy.advanceLogWorkoutToReflect("Some workout");
+    // Text must include a digit/x to pass auto-parse signal gate.
+    cy.advanceLogWorkoutToReflect("3x10 squats");
     cy.getBySel("button-skip-rpe").click();
 
     cy.getBySel("button-save-workout").should("not.be.disabled").click();
