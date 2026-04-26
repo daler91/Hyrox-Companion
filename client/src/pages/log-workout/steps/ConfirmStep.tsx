@@ -134,10 +134,15 @@ export function ConfirmStep({
           type="button"
           size="lg"
           onClick={onContinue}
+          disabled={autoParsing && !hasBlocks}
           data-testid="button-step-continue"
           className="flex-1 sm:flex-none sm:min-w-40"
         >
-          <ArrowRight className="h-4 w-4 mr-2" aria-hidden />
+          {autoParsing && !hasBlocks ? (
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden />
+          ) : (
+            <ArrowRight className="h-4 w-4 mr-2" aria-hidden />
+          )}
           Continue to RPE & notes
         </Button>
       </StepFooter>

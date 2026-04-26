@@ -1,15 +1,14 @@
 import type { ExerciseName, ParsedExercise } from "@shared/schema";
 import { ArrowRight, Loader2 } from "lucide-react";
+import { useRef } from "react";
 
 import type { StructuredExercise } from "@/components/ExerciseInput";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { WorkoutComposer } from "@/components/workout/WorkoutComposer";
+import { WorkoutDateFields } from "@/components/workout/WorkoutDateFields";
 import type { useToast } from "@/hooks/use-toast";
 import type { ParseFromImagePayload } from "@/lib/api";
-import { getTodayString, getYesterdayString } from "@/lib/dateUtils";
 
 import { StepFooter } from "../StepFooter";
 
@@ -50,9 +49,9 @@ interface CaptureStepProps {
 
 /**
  * Step 1 of the log-workout stepper. Lets the user describe today's session
- * (free text, voice, or photo). Continue advances to Confirm and, if the
- * description has changed since the last parse, triggers parseNow so the
- * structured table is ready when step 2 mounts.
+ * (free text, voice, or photo). Continue advances to Confirm and triggers a
+ * parse whenever the text has changed since the last parse — even if blocks
+ * already exist from a previous visit to this step.
  */
 export function CaptureStep({
   title,
@@ -85,19 +84,22 @@ export function CaptureStep({
   onCancel,
   onContinue,
 }: CaptureStepProps) {
-  const today = getTodayString();
-  const yesterday = getYesterdayString();
   const hasText = freeText.trim().length > 0;
   const hasBlocks = exerciseBlocks.length > 0;
   const isWorking = autoParsing || isParsingImage;
   const canContinue = hasText || hasBlocks;
 
+  // Track the text that was sent to the last parse so we can detect edits
+  // made after the user returns to step 1. Initialised to the current text
+  // when blocks already exist (draft restored) so we don't re-parse on mount.
+  const lastParsedTextRef = useRef(hasBlocks ? freeText : "");
+
   const handleContinue = () => {
-    // Fire a parse if the user has typed text but no blocks have been
-    // produced yet (or the blocks are stale relative to the text). The
-    // composer's existing parseNow path handles the LLM call; step 2
-    // shows the loading state while it resolves.
-    if (hasText && !hasBlocks) parseNow(freeText);
+    const needsParse = hasText && (freeText !== lastParsedTextRef.current || !hasBlocks);
+    if (needsParse) {
+      parseNow(freeText);
+      lastParsedTextRef.current = freeText;
+    }
     onContinue();
   };
 
@@ -107,50 +109,13 @@ export function CaptureStep({
         <CardHeader>
           <CardTitle className="text-lg">Workout details</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="title">Title (Optional)</Label>
-              <Input
-                id="title"
-                placeholder="e.g., Morning Push"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                data-testid="input-workout-title"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="date">Date</Label>
-              <Input
-                id="date"
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                data-testid="input-workout-date"
-              />
-            </div>
-          </div>
-          <fieldset className="flex flex-wrap gap-2 border-0 p-0 m-0">
-            <legend className="sr-only">Quick-pick workout date</legend>
-            <Button
-              type="button"
-              variant={date === today ? "default" : "outline"}
-              size="sm"
-              onClick={() => setDate(today)}
-              data-testid="button-date-today"
-            >
-              Today
-            </Button>
-            <Button
-              type="button"
-              variant={date === yesterday ? "default" : "outline"}
-              size="sm"
-              onClick={() => setDate(yesterday)}
-              data-testid="button-date-yesterday"
-            >
-              Yesterday
-            </Button>
-          </fieldset>
+        <CardContent>
+          <WorkoutDateFields
+            title={title}
+            setTitle={setTitle}
+            date={date}
+            setDate={setDate}
+          />
         </CardContent>
       </Card>
 
@@ -221,4 +186,3 @@ export function CaptureStep({
     </div>
   );
 }
-

@@ -19,8 +19,8 @@ import { db } from "../db";
 import { AppError, ErrorCode } from "../errors";
 import { logger } from "../logger";
 import { DEFAULT_JOB_OPTIONS, queue } from "../queue";
-import { prescribedSetToLogRow } from "../storage/shared";
 import { storage } from "../storage";
+import { prescribedSetToLogRow } from "../storage/shared";
 
 // ⚡ Perf: cap concurrent Gemini parse calls per chunk to protect the
 // quota & circuit breaker (CODEBASE_REVIEW_2026-04-12.md #12). Prior code
