@@ -52,7 +52,7 @@ export function useLogWorkoutDraftPersistence({
     let max = 0;
     for (const id of exerciseBlocks) {
       const parts = id.split("__");
-      const n = Number.parseInt(parts[parts.length - 1] ?? "", 10);
+      const n = Number.parseInt(parts.at(-1) ?? "", 10);
       if (Number.isFinite(n) && n > max) max = n;
     }
     return max;

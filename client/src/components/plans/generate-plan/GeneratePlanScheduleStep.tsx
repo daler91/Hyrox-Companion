@@ -15,6 +15,7 @@ import {
   DAY_NAMES,
   DEFAULT_DAYS_PER_WEEK,
   DEFAULT_WEEKS,
+  type ExperienceLevel,
   MAX_DAYS_PER_WEEK,
   MAX_WEEKS,
   MIN_DAYS_PER_WEEK,
@@ -29,8 +30,8 @@ interface GeneratePlanScheduleStepProps {
   readonly restDays: string[];
   readonly requiredRestDays: number;
   readonly onRestDayToggle: (day: string) => void;
-  readonly experienceLevel: "beginner" | "intermediate" | "advanced";
-  readonly onExperienceLevelChange: (value: "beginner" | "intermediate" | "advanced") => void;
+  readonly experienceLevel: ExperienceLevel;
+  readonly onExperienceLevelChange: (value: ExperienceLevel) => void;
   readonly startDate: string;
   readonly onStartDateChange: (value: string) => void;
   readonly raceDate: string;
@@ -120,9 +121,7 @@ export function GeneratePlanScheduleStep({
         <Label>Experience Level</Label>
         <Select
           value={experienceLevel}
-          onValueChange={(value) =>
-            onExperienceLevelChange(value as "beginner" | "intermediate" | "advanced")
-          }
+          onValueChange={(value) => onExperienceLevelChange(value as ExperienceLevel)}
         >
           <SelectTrigger aria-label="Select experience level">
             <SelectValue />

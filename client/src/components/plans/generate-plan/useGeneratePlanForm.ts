@@ -43,7 +43,7 @@ export const FOCUS_OPTIONS = [
 ];
 
 export type GeneratePlanStep = 0 | 1 | 2;
-type ExperienceLevel = "beginner" | "intermediate" | "advanced";
+export type ExperienceLevel = "beginner" | "intermediate" | "advanced";
 
 export interface GeneratePlanFormValues {
   readonly goal: string;
