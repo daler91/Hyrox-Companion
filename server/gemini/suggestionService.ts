@@ -86,7 +86,8 @@ function formatPerformanceStats(stats: TrainingContext["structuredExerciseStats"
 
 function formatRecentWorkout(workout: TrainingContext["recentWorkouts"][0], weightUnit?: string): string {
   const exerciseSummary = formatExerciseSetsForPrompt(workout.exerciseDetails, { weightUnit });
-  let line = `- ${workout.date}: ${workout.focus} - ${exerciseSummary ? `Exercises: ${exerciseSummary}` : workout.mainWorkout}`;
+  const workoutDetails = exerciseSummary ? `Exercises: ${exerciseSummary}` : workout.mainWorkout;
+  let line = `- ${workout.date}: ${workout.focus} - ${workoutDetails}`;
   const meta: string[] = [];
   if (workout.rpe != null) meta.push(`RPE: ${workout.rpe}`);
   if (workout.duration != null) meta.push(`Duration: ${workout.duration}min`);

@@ -53,7 +53,10 @@ export function buildRecentWorkouts(trainingContext: TrainingContext): string {
     const exerciseSummary = formatExerciseSetsForPrompt(workout.exerciseDetails, {
       weightUnit: trainingContext.weightUnit,
     });
-    let line = `\n- ${workout.date}: ${workout.focus || "General"} - ${exerciseSummary ? `Exercises: ${exerciseSummary}` : workout.mainWorkout || "No details"} (${workout.status})`;
+    const workoutDetails = exerciseSummary
+      ? `Exercises: ${exerciseSummary}`
+      : workout.mainWorkout || "No details";
+    let line = `\n- ${workout.date}: ${workout.focus || "General"} - ${workoutDetails} (${workout.status})`;
     if (workout.athleteNote?.trim()) line += ` | Athlete note: ${workout.athleteNote.trim()}`;
     section += line;
   }
