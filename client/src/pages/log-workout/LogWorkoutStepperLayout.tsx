@@ -1,7 +1,7 @@
-import type { ExerciseName, ParsedExercise } from "@shared/schema";
+import type { ParsedExercise } from "@shared/schema";
 import { Check } from "lucide-react";
+import { useEffect, useRef } from "react";
 
-import type { StructuredExercise } from "@/components/ExerciseInput";
 import { Button } from "@/components/ui/button";
 import { WorkoutHeader } from "@/components/workout/WorkoutHeader";
 import type { useToast } from "@/hooks/use-toast";
@@ -9,11 +9,13 @@ import type { WorkoutStep } from "@/hooks/useLogWorkoutDraft";
 import type { ParseFromImagePayload } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
+import type { SharedComposerProps } from "./sharedComposerProps";
 import { CaptureStep } from "./steps/CaptureStep";
 import { ConfirmStep } from "./steps/ConfirmStep";
 import { ReflectStep } from "./steps/ReflectStep";
 
-interface LogWorkoutStepperLayoutProps {
+interface LogWorkoutStepperLayoutProps extends SharedComposerProps {
+  readonly parseNow: (text: string) => void;
   readonly step: WorkoutStep;
   readonly setStep: (step: WorkoutStep) => void;
   readonly title: string;
@@ -24,25 +26,6 @@ interface LogWorkoutStepperLayoutProps {
   readonly setRpe: (value: number | null) => void;
   readonly notes: string;
   readonly setNotes: (value: string) => void;
-  readonly freeText: string;
-  readonly setFreeText: (value: string) => void;
-  readonly exerciseBlocks: string[];
-  readonly exerciseData: Record<string, StructuredExercise>;
-  readonly addExercise: (name: ExerciseName, customLabel?: string) => void;
-  readonly updateBlock: (blockId: string, data: StructuredExercise) => void;
-  readonly removeBlock: (blockId: string) => void;
-  readonly reorderBlocks: (nextOrder: string[]) => void;
-  readonly weightUnit: "kg" | "lbs";
-  readonly distanceUnit: "km" | "miles";
-  readonly autoParsing: boolean;
-  readonly autoParseError: boolean;
-  readonly parseNow: (text: string) => void;
-  readonly cancelAutoParse: () => void;
-  readonly isListening: boolean;
-  readonly isSupported: boolean;
-  readonly interimTranscript: string;
-  readonly toggleListening: () => void;
-  readonly stopListening: () => void;
   readonly isNotesListening: boolean;
   readonly isNotesSupported: boolean;
   readonly notesInterim: string;
@@ -113,6 +96,31 @@ export function LogWorkoutStepperLayout({
   onParseImage,
   isParsingImage,
 }: LogWorkoutStepperLayoutProps) {
+  // Parse-checkpoint state lives here (above CaptureStep) so it survives
+  // CaptureStep unmounting on step transitions. Returning to Capture after
+  // an in-flight parse fails would otherwise reseed the ref to the edited
+  // text and skip the next re-parse, persisting stale blocks (Codex P1).
+  const lastParsedTextRef = useRef("");
+  const pendingParseTextRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!autoParsing && !autoParseError && pendingParseTextRef.current !== null) {
+      lastParsedTextRef.current = pendingParseTextRef.current;
+      pendingParseTextRef.current = null;
+    }
+  }, [autoParsing, autoParseError]);
+
+  const advanceFromCapture = () => {
+    const hasText = freeText.trim().length > 0;
+    const hasBlocks = exerciseBlocks.length > 0;
+    const needsParse =
+      hasText && (freeText !== lastParsedTextRef.current || !hasBlocks);
+    if (needsParse) {
+      pendingParseTextRef.current = freeText;
+      parseNow(freeText);
+    }
+    setStep(2);
+  };
+
   // Shared props passed to both CaptureStep (which forwards them to
   // WorkoutComposer) and ConfirmStep (which forwards them to DraftExerciseTable).
   const exerciseTableProps = {
@@ -148,7 +156,6 @@ export function LogWorkoutStepperLayout({
             setFreeText={setFreeText}
             {...exerciseTableProps}
             autoParseError={autoParseError}
-            parseNow={parseNow}
             isListening={isListening}
             isSupported={isSupported}
             interimTranscript={interimTranscript}
@@ -159,7 +166,7 @@ export function LogWorkoutStepperLayout({
             onParseImage={onParseImage}
             isParsingImage={isParsingImage}
             onCancel={handleCancel}
-            onContinue={() => setStep(2)}
+            onContinue={advanceFromCapture}
           />
         )}
 

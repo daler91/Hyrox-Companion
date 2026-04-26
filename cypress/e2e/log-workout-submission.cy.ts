@@ -26,16 +26,8 @@ describe("Log Workout Submission", () => {
   });
 
   it("successfully logs a workout via free text", () => {
-    // Step 1: fill in details — panel starts expanded
     cy.getBySel("input-workout-title").type("Morning Training Run");
-    cy.getBySel("input-freetext").type("5km tempo run\n4x10 pushups");
-
-    // Navigate to step 2 (triggers parse)
-    cy.getBySel("button-step-continue").click();
-    cy.wait("@parseExercises");
-
-    // Navigate to step 3
-    cy.getBySel("button-step-continue").should("not.be.disabled").click();
+    cy.advanceLogWorkoutToReflect("5km tempo run\n4x10 pushups");
 
     // Step 3: add notes, skip RPE, then save
     cy.getBySel("input-workout-notes").type("Felt really good today!");
@@ -58,13 +50,7 @@ describe("Log Workout Submission", () => {
   });
 
   it("saves with fallback title when no title is provided", () => {
-    // Step 1: text only, no title
-    cy.getBySel("input-freetext").type("Some workout");
-    cy.getBySel("button-step-continue").click();
-    cy.wait("@parseExercises");
-
-    // Step 3
-    cy.getBySel("button-step-continue").should("not.be.disabled").click();
+    cy.advanceLogWorkoutToReflect("Some workout");
     cy.getBySel("button-skip-rpe").click();
 
     cy.getBySel("button-save-workout").should("not.be.disabled").click();
@@ -111,11 +97,8 @@ describe("Log Workout Exercise Mode Submission", () => {
     cy.getBySel("exercise-add-dialog").should("exist");
     cy.getBySel("button-exercise-back_squat").click();
 
-    // Navigate to step 2 (no text → no parse triggered)
-    cy.getBySel("button-step-continue").click();
-
-    // Navigate to step 3
-    cy.getBySel("button-step-continue").should("not.be.disabled").click();
+    // Navigate through Confirm to Reflect (no text → no parse triggered)
+    cy.advanceLogWorkoutToReflect("");
 
     // Step 3: add notes, skip RPE, then save
     cy.getBySel("button-skip-rpe").click();

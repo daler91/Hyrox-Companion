@@ -1,8 +1,6 @@
-import type { ExerciseName, ParsedExercise } from "@shared/schema";
+import type { ParsedExercise } from "@shared/schema";
 import { ArrowRight, Loader2 } from "lucide-react";
-import { useEffect, useRef } from "react";
 
-import type { StructuredExercise } from "@/components/ExerciseInput";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { WorkoutComposer } from "@/components/workout/WorkoutComposer";
@@ -10,32 +8,14 @@ import { WorkoutDateFields } from "@/components/workout/WorkoutDateFields";
 import type { useToast } from "@/hooks/use-toast";
 import type { ParseFromImagePayload } from "@/lib/api";
 
+import type { SharedComposerProps } from "../sharedComposerProps";
 import { StepFooter } from "../StepFooter";
 
-interface CaptureStepProps {
+interface CaptureStepProps extends SharedComposerProps {
   readonly title: string;
   readonly setTitle: (value: string) => void;
   readonly date: string;
   readonly setDate: (value: string) => void;
-  readonly freeText: string;
-  readonly setFreeText: (value: string) => void;
-  readonly exerciseBlocks: string[];
-  readonly exerciseData: Record<string, StructuredExercise>;
-  readonly addExercise: (name: ExerciseName, customLabel?: string) => void;
-  readonly updateBlock: (blockId: string, data: StructuredExercise) => void;
-  readonly removeBlock: (blockId: string) => void;
-  readonly reorderBlocks: (nextOrder: string[]) => void;
-  readonly weightUnit: "kg" | "lbs";
-  readonly distanceUnit: "km" | "miles";
-  readonly autoParsing: boolean;
-  readonly autoParseError: boolean;
-  readonly parseNow: (text: string) => void;
-  readonly cancelAutoParse: () => void;
-  readonly isListening: boolean;
-  readonly isSupported: boolean;
-  readonly interimTranscript: string;
-  readonly toggleListening: () => void;
-  readonly stopListening: () => void;
   readonly toast: ReturnType<typeof useToast>["toast"];
   readonly defaultPanelOpen?: boolean;
   readonly onParseImage: (
@@ -44,14 +24,18 @@ interface CaptureStepProps {
   ) => void;
   readonly isParsingImage: boolean;
   readonly onCancel: () => void;
+  /**
+   * Fired when the user clicks Continue. The parent owns the parse-trigger
+   * + checkpoint logic so the bookkeeping survives this step's unmount on
+   * stepper transitions.
+   */
   readonly onContinue: () => void;
 }
 
 /**
  * Step 1 of the log-workout stepper. Lets the user describe today's session
- * (free text, voice, or photo). Continue advances to Confirm and triggers a
- * parse whenever the text has changed since the last parse — even if blocks
- * already exist from a previous visit to this step.
+ * (free text, voice, or photo). Continue is wired up at the parent so the
+ * parse-checkpoint state persists across step transitions.
  */
 export function CaptureStep({
   title,
@@ -61,9 +45,7 @@ export function CaptureStep({
   freeText,
   exerciseBlocks,
   autoParsing,
-  autoParseError,
   isParsingImage,
-  parseNow,
   defaultPanelOpen,
   onCancel,
   onContinue,
@@ -73,29 +55,6 @@ export function CaptureStep({
   const hasBlocks = exerciseBlocks.length > 0;
   const isWorking = autoParsing || isParsingImage;
   const canContinue = hasText || hasBlocks;
-
-  // lastParsedTextRef advances only when a parse actually completes
-  // successfully — not at dispatch time — so returning to step 1 after a
-  // failed parse still offers a re-parse.
-  const lastParsedTextRef = useRef(hasBlocks ? freeText : "");
-  const pendingParseText = useRef<string | null>(null);
-
-  // Commit lastParsedTextRef only after a parse finishes without error.
-  useEffect(() => {
-    if (!autoParsing && !autoParseError && pendingParseText.current !== null) {
-      lastParsedTextRef.current = pendingParseText.current;
-      pendingParseText.current = null;
-    }
-  }, [autoParsing, autoParseError]);
-
-  const handleContinue = () => {
-    const needsParse = hasText && (freeText !== lastParsedTextRef.current || !hasBlocks);
-    if (needsParse) {
-      pendingParseText.current = freeText;
-      parseNow(freeText);
-    }
-    onContinue();
-  };
 
   return (
     <div className="space-y-6">
@@ -126,7 +85,6 @@ export function CaptureStep({
             freeText={freeText}
             exerciseBlocks={exerciseBlocks}
             autoParsing={autoParsing}
-            autoParseError={autoParseError}
             isParsingImage={isParsingImage}
             defaultPanelOpen={defaultPanelOpen ?? true}
             {...composerRest}
@@ -148,7 +106,7 @@ export function CaptureStep({
         <Button
           type="button"
           size="lg"
-          onClick={handleContinue}
+          onClick={onContinue}
           disabled={!canContinue || isWorking}
           data-testid="button-step-continue"
           className="flex-1 sm:flex-none sm:min-w-40"

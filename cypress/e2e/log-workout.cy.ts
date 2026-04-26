@@ -17,11 +17,8 @@ describe("Log Workout Page", () => {
 
   it("shows the notes input", () => {
     // Notes live on step 3 — navigate there via the stepper
-    cy.intercept("POST", "/api/v1/parse-exercises", { statusCode: 200, body: [] }).as("parseEx");
-    cy.getBySel("input-freetext").type("test workout");
-    cy.getBySel("button-step-continue").click();
-    cy.wait("@parseEx");
-    cy.getBySel("button-step-continue").should("not.be.disabled").click();
+    cy.intercept("POST", "/api/v1/parse-exercises", { statusCode: 200, body: [] }).as("parseExercises");
+    cy.advanceLogWorkoutToReflect("test workout");
     cy.getBySel("input-workout-notes").should("exist");
   });
 
@@ -41,11 +38,8 @@ describe("Log Workout Page", () => {
 
   it("shows save workout button", () => {
     // Save button lives on step 3 — navigate there
-    cy.intercept("POST", "/api/v1/parse-exercises", { statusCode: 200, body: [] }).as("parseEx");
-    cy.getBySel("input-freetext").type("test");
-    cy.getBySel("button-step-continue").click();
-    cy.wait("@parseEx");
-    cy.getBySel("button-step-continue").should("not.be.disabled").click();
+    cy.intercept("POST", "/api/v1/parse-exercises", { statusCode: 200, body: [] }).as("parseExercises");
+    cy.advanceLogWorkoutToReflect("test");
     cy.getBySel("button-save-workout").should("exist");
   });
 
