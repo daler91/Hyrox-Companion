@@ -290,6 +290,13 @@ export const exerciseSetSchema = z.object({
   weight: z.number().min(0).max(2_000).optional().nullable(),
   distance: z.number().min(0).max(1_000_000).optional().nullable(),
   time: z.number().min(0).max(86_400).optional().nullable(),
+  // Planned (prescribed) values, captured at log creation. Optional so
+  // ad-hoc logs without a prescription can simply omit them. Same numeric
+  // bounds as the actual fields to keep validation symmetric.
+  plannedReps: z.number().min(0).max(10_000).optional().nullable(),
+  plannedWeight: z.number().min(0).max(2_000).optional().nullable(),
+  plannedDistance: z.number().min(0).max(1_000_000).optional().nullable(),
+  plannedTime: z.number().min(0).max(86_400).optional().nullable(),
   notes: z.string().max(1000).optional().nullable(),
 }).strip();
 
@@ -322,6 +329,10 @@ export const patchExerciseSetBodySchema = z.object({
   weight: z.number().min(0).max(2_000).nullable().optional(),
   distance: z.number().min(0).max(1_000_000).nullable().optional(),
   time: z.number().min(0).max(86_400).nullable().optional(),
+  plannedReps: z.number().int().min(0).max(10_000).nullable().optional(),
+  plannedWeight: z.number().min(0).max(2_000).nullable().optional(),
+  plannedDistance: z.number().min(0).max(1_000_000).nullable().optional(),
+  plannedTime: z.number().min(0).max(86_400).nullable().optional(),
   notes: z.string().max(1000).nullable().optional(),
   sortOrder: z.number().int().nullable().optional(),
 });
@@ -336,6 +347,10 @@ export const addExerciseSetBodySchema = z.object({
   weight: z.number().min(0).max(2_000).nullable().optional(),
   distance: z.number().min(0).max(1_000_000).nullable().optional(),
   time: z.number().min(0).max(86_400).nullable().optional(),
+  plannedReps: z.number().int().min(0).max(10_000).nullable().optional(),
+  plannedWeight: z.number().min(0).max(2_000).nullable().optional(),
+  plannedDistance: z.number().min(0).max(1_000_000).nullable().optional(),
+  plannedTime: z.number().min(0).max(86_400).nullable().optional(),
   notes: z.string().max(1000).nullable().optional(),
   confidence: z.number().int().min(0).max(100).nullable().optional(),
 });
@@ -359,6 +374,10 @@ export interface ParsedExercise {
     weight?: number;
     distance?: number;
     time?: number;
+    plannedReps?: number;
+    plannedWeight?: number;
+    plannedDistance?: number;
+    plannedTime?: number;
     notes?: string;
   }>;
 }

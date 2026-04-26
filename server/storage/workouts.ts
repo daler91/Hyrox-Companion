@@ -599,10 +599,17 @@ export class WorkoutStorage {
         customLabel: p.customLabel,
         category: p.category,
         setNumber: p.setNumber,
+        // Mirror the prescription into both actual and planned columns so
+        // historical workouts seeded from a planDay carry their original
+        // prescription forward (matches copyPrescribedSetsIntoLog).
         reps: p.reps,
         weight: p.weight,
         distance: p.distance,
         time: p.time,
+        plannedReps: p.reps,
+        plannedWeight: p.weight,
+        plannedDistance: p.distance,
+        plannedTime: p.time,
         notes: p.notes,
         confidence: p.confidence,
         sortOrder: p.sortOrder,

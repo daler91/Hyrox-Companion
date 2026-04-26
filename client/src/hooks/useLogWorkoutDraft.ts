@@ -3,7 +3,12 @@ import { getTodayString } from "@/lib/dateUtils";
 
 const DRAFT_STORAGE_KEY = "fitai-log-workout-draft";
 const DRAFT_ANNOUNCED_KEY = "fitai-log-workout-draft-announced";
-const DRAFT_VERSION = 1;
+// v2 adds `step`. v1 drafts are silently dropped on load — they're short-lived
+// (cleared on save) so the upgrade cost is negligible.
+const DRAFT_VERSION = 2;
+
+export type WorkoutStep = 1 | 2 | 3;
+export const FIRST_STEP: WorkoutStep = 1;
 
 /**
  * Serializable shape of an in-progress workout log so the user doesn't lose
@@ -22,6 +27,7 @@ export interface LogWorkoutDraft {
   exerciseBlocks: string[];
   exerciseData: Record<string, StructuredExercise>;
   blockCounter: number;
+  step: WorkoutStep;
 }
 
 export type LoadedDraft = Omit<LogWorkoutDraft, "version" | "userKey" | "savedAt">;
@@ -62,6 +68,7 @@ export function loadLogWorkoutDraft(userKey: string): LoadedDraft | null {
       exerciseBlocks: parsed.exerciseBlocks ?? [],
       exerciseData: parsed.exerciseData ?? {},
       blockCounter: parsed.blockCounter ?? 0,
+      step: parsed.step ?? FIRST_STEP,
     };
   } catch {
     return null;

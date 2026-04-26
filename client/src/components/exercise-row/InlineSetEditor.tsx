@@ -276,10 +276,22 @@ interface FieldInputProps {
   readonly onUpdate: (patch: PatchExerciseSetPayload) => void;
 }
 
+const PLANNED_FIELD: Record<FieldKey, "plannedReps" | "plannedWeight" | "plannedDistance" | "plannedTime"> = {
+  reps: "plannedReps",
+  weight: "plannedWeight",
+  distance: "plannedDistance",
+  time: "plannedTime",
+};
+
 const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUnit, onUpdate }: FieldInputProps) {
   const meta = fieldMeta[field];
   const label = meta.label(weightUnit, distanceUnit);
   const current = set[field] ?? undefined;
+  // Compare against the prescription captured at log creation. Only show
+  // a "planned X" annotation when the actual diverges — equal values would
+  // just be visual noise.
+  const planned = set[PLANNED_FIELD[field]] ?? undefined;
+  const showPlannedDiff = planned != null && planned !== current;
 
   // Local draft + "last saved" snapshot so incoming server / optimistic
   // updates at the same value don't overwrite an in-progress edit. A
@@ -292,25 +304,35 @@ const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUn
   }
 
   return (
-    <Input
-      type="number"
-      inputMode="decimal"
-      value={draft}
-      onChange={(e) => {
-        const raw = e.target.value;
-        setDraft(raw);
-        const parsed = parseDraft(raw);
-        if (parsed == null || !Number.isNaN(parsed)) {
-          const next = parsed ?? undefined;
-          setLastSaved(next);
-          onUpdate({ [field]: next ?? null } as PatchExerciseSetPayload);
-        }
-      }}
-      placeholder="--"
-      className="h-8 text-center text-sm tabular-nums"
-      aria-label={`${label} for set ${set.setNumber}`}
-      data-testid={`input-${field}-${set.id}`}
-    />
+    <div className="flex flex-col items-stretch gap-0.5">
+      <Input
+        type="number"
+        inputMode="decimal"
+        value={draft}
+        onChange={(e) => {
+          const raw = e.target.value;
+          setDraft(raw);
+          const parsed = parseDraft(raw);
+          if (parsed == null || !Number.isNaN(parsed)) {
+            const next = parsed ?? undefined;
+            setLastSaved(next);
+            onUpdate({ [field]: next ?? null });
+          }
+        }}
+        placeholder={planned != null ? String(planned) : "--"}
+        className="h-8 text-center text-sm tabular-nums"
+        aria-label={`${label} for set ${set.setNumber}`}
+        data-testid={`input-${field}-${set.id}`}
+      />
+      {showPlannedDiff && (
+        <span
+          className="text-center text-[10px] leading-none text-muted-foreground tabular-nums"
+          data-testid={`planned-${field}-${set.id}`}
+        >
+          planned {planned}
+        </span>
+      )}
+    </div>
   );
 });
 

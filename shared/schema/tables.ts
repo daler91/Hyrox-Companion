@@ -193,6 +193,13 @@ export const garminConnections = pgTable("garmin_connections", {
 // set per row; when a user logs a planned day we copy prescribed rows into a
 // new workoutLog as starter rows so the plan stays pristine and the log is
 // a snapshot.
+//
+// On logged rows, `reps`/`weight`/`distance`/`time` represent the ACTUAL
+// performed values, while `plannedReps`/`plannedWeight`/`plannedDistance`/
+// `plannedTime` capture the prescription at the moment the log was created.
+// This lets the UI render mid-workout adjustments (e.g. dropped from 100 → 95
+// lb) as a diff without losing the original plan. Prescribed rows
+// (planDay-owned) leave `plannedX` NULL — the row itself is the prescription.
 export const exerciseSets = pgTable("exercise_sets", {
   id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
   workoutLogId: varchar("workout_log_id", { length: 255 }).references(() => workoutLogs.id, { onDelete: "cascade" }),
@@ -205,6 +212,10 @@ export const exerciseSets = pgTable("exercise_sets", {
   weight: real("weight"),
   distance: real("distance"),
   time: real("time"),
+  plannedReps: integer("planned_reps"),
+  plannedWeight: real("planned_weight"),
+  plannedDistance: real("planned_distance"),
+  plannedTime: real("planned_time"),
   notes: text("notes"),
   confidence: integer("confidence"),
   sortOrder: integer("sort_order").default(0),
@@ -219,6 +230,9 @@ export const exerciseSets = pgTable("exercise_sets", {
   check("weight_non_negative_check", sql`weight IS NULL OR weight >= 0`),
   check("distance_non_negative_check", sql`distance IS NULL OR distance >= 0`),
   check("time_non_negative_check", sql`time IS NULL OR time >= 0`),
+  check("planned_weight_non_negative_check", sql`planned_weight IS NULL OR planned_weight >= 0`),
+  check("planned_distance_non_negative_check", sql`planned_distance IS NULL OR planned_distance >= 0`),
+  check("planned_time_non_negative_check", sql`planned_time IS NULL OR planned_time >= 0`),
   // Exactly one owner — prescribed (planDay) xor logged (workoutLog).
   check(
     "exercise_set_single_owner_check",
