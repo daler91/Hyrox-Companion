@@ -46,6 +46,7 @@ interface CoachPrescriptionCollapsibleProps {
    * fields render as auto-saving textareas.
    */
   readonly onSaveField?: (field: PrescriptionField, value: string) => void;
+  readonly onDraftFieldChange?: (field: PrescriptionField, value: string) => void;
   /**
    * Parse the current free text into structured exercise rows. When set,
    * the panel shows a "Parse" button on the header row so it's reachable
@@ -89,6 +90,7 @@ export function CoachPrescriptionCollapsible({
   open,
   onOpenChange,
   onSaveField,
+  onDraftFieldChange,
   onParse,
   isParsing,
   onCapture,
@@ -184,6 +186,7 @@ export function CoachPrescriptionCollapsible({
               text={mainWorkout ?? ""}
               editable={editable}
               onSaveField={onSaveField}
+              onDraftFieldChange={onDraftFieldChange}
               compact={compact}
             />
             <PrescriptionSection
@@ -192,6 +195,7 @@ export function CoachPrescriptionCollapsible({
               text={accessory ?? ""}
               editable={editable}
               onSaveField={onSaveField}
+              onDraftFieldChange={onDraftFieldChange}
               compact={compact}
             />
             <PrescriptionSection
@@ -200,6 +204,7 @@ export function CoachPrescriptionCollapsible({
               text={notes ?? ""}
               editable={editable}
               onSaveField={onSaveField}
+              onDraftFieldChange={onDraftFieldChange}
               compact={compact}
             />
           </>
@@ -215,10 +220,19 @@ interface PrescriptionSectionProps {
   readonly text: string;
   readonly editable: boolean;
   readonly onSaveField?: (field: PrescriptionField, value: string) => void;
+  readonly onDraftFieldChange?: (field: PrescriptionField, value: string) => void;
   readonly compact?: boolean;
 }
 
-function PrescriptionSection({ field, label, text, editable, onSaveField, compact }: Readonly<PrescriptionSectionProps>) {
+function PrescriptionSection({
+  field,
+  label,
+  text,
+  editable,
+  onSaveField,
+  onDraftFieldChange,
+  compact,
+}: Readonly<PrescriptionSectionProps>) {
   if (!editable) {
     if (!hasText(text)) return null;
     return (
@@ -234,6 +248,7 @@ function PrescriptionSection({ field, label, text, editable, onSaveField, compac
       label={label}
       value={text}
       onSave={onSaveField!}
+      onDraftChange={onDraftFieldChange}
       compact={compact}
     />
   );
@@ -246,10 +261,18 @@ interface EditablePrescriptionProps {
   readonly label: string;
   readonly value: string;
   readonly onSave: (field: PrescriptionField, value: string) => void;
+  readonly onDraftChange?: (field: PrescriptionField, value: string) => void;
   readonly compact?: boolean;
 }
 
-function EditablePrescription({ field, label, value, onSave, compact }: Readonly<EditablePrescriptionProps>) {
+function EditablePrescription({
+  field,
+  label,
+  value,
+  onSave,
+  onDraftChange,
+  compact,
+}: Readonly<EditablePrescriptionProps>) {
   // Local draft so keystrokes feel instant; debounced onSave fans out the
   // PATCH to the server. Sync from props when the upstream value changes
   // (optimistic cache updates, initial fetch) without fighting an active
@@ -300,8 +323,10 @@ function EditablePrescription({ field, label, value, onSave, compact }: Readonly
         value={draft}
         placeholder={placeholder}
         onChange={(e) => {
-          setDraft(e.target.value);
-          debouncedSave(e.target.value);
+          const next = e.target.value;
+          setDraft(next);
+          onDraftChange?.(field, next);
+          debouncedSave(next);
         }}
         onBlur={() => {
           // The dialog's Save handler calls `active.blur()` to drive a

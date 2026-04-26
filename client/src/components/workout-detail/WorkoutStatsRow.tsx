@@ -155,7 +155,7 @@ function RpeEditableCell({ value, onChange, reviewFirst }: Readonly<RpeEditableC
           data-testid="workout-stats-rpe-review"
         >
           <span className="text-2xl font-semibold tabular-nums">
-            {value == null ? "—" : value}
+            {value ?? "—"}
           </span>
           <Pencil className="size-3.5 text-muted-foreground" aria-hidden />
         </Button>

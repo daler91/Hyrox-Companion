@@ -38,6 +38,7 @@ interface WorkoutDetailHeaderV2Props {
    * right branch (logged workout vs plan day) and wires the mutation.
    */
   readonly onChangeFocus?: (focus: string) => void;
+  readonly onDraftFocusChange?: (focus: string) => void;
   /** Drives the "Saving…/Saved" pill shown next to the title. */
   readonly saveState?: SaveState;
 }
@@ -91,6 +92,7 @@ export function WorkoutDetailHeaderV2({
   onChangeStatus,
   onCombine,
   onChangeFocus,
+  onDraftFocusChange,
   saveState,
 }: WorkoutDetailHeaderV2Props) {
   const dateLabel = formatDateHeader(entry.date);
@@ -146,6 +148,7 @@ export function WorkoutDetailHeaderV2({
         <EditableFocus
           focus={entry.focus || ""}
           onChange={onChangeFocus}
+          onDraftChange={onDraftFocusChange}
           saveState={saveState}
         />
       </div>
@@ -266,6 +269,7 @@ function formatDateHeader(dateStr: string): string {
 interface EditableFocusProps {
   readonly focus: string;
   readonly onChange?: (next: string) => void;
+  readonly onDraftChange?: (next: string) => void;
   readonly saveState?: SaveState;
 }
 
@@ -280,7 +284,7 @@ interface EditableFocusProps {
  * `workout_logs.focus` are NOT NULL columns, and the server would reject.
  * The user still sees an empty input; blurring restores the last saved value.
  */
-function EditableFocus({ focus, onChange, saveState }: Readonly<EditableFocusProps>) {
+function EditableFocus({ focus, onChange, onDraftChange, saveState }: Readonly<EditableFocusProps>) {
   const [draft, setDraft] = useState(focus);
   const [lastExternal, setLastExternal] = useState(focus);
   // Track the latest value we've submitted to the server. Comparing against
@@ -342,8 +346,10 @@ function EditableFocus({ focus, onChange, saveState }: Readonly<EditableFocusPro
         placeholder="Workout"
         aria-label="Workout title"
         onChange={(e) => {
-          setDraft(e.target.value);
-          debouncedSave(e.target.value);
+          const next = e.target.value;
+          setDraft(next);
+          onDraftChange?.(next);
+          debouncedSave(next);
         }}
         onBlur={handleBlur}
         className={cn(

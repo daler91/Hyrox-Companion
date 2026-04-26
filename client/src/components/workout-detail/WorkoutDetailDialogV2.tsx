@@ -22,7 +22,7 @@ import type { ParseFromImagePayload, ReparseResponse } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 import { AthleteNoteInput } from "./AthleteNoteInput";
-import { CoachPrescriptionCollapsible } from "./CoachPrescriptionCollapsible";
+import { CoachPrescriptionCollapsible, type PrescriptionField } from "./CoachPrescriptionCollapsible";
 import { CoachTakePanel } from "./CoachTakePanel";
 import { ExerciseTable } from "./ExerciseTable";
 import { HistoryPanel } from "./HistoryPanel";
@@ -199,9 +199,15 @@ export function WorkoutDetailDialogV2({
   // pre-edit value for a few hundred ms. Mark complete reads this ref at
   // click time to avoid posting a stale focus to logWorkoutMutation.
   const latestFocusRef = useRef<string>(entry?.focus || "");
+  const latestPrescriptionRef = useRef<PlanPrescriptionDraft>(
+    buildPlanPrescriptionDraft(entry),
+  );
   useEffect(() => {
     latestFocusRef.current = entry?.focus || "";
   }, [entry?.focus]);
+  useEffect(() => {
+    latestPrescriptionRef.current = buildPlanPrescriptionDraft(entry);
+  }, [entry]);
 
   // Hydration (auto-seed + auto-reparse on first open) was removed: plans
   // generated after the structured-exercises refactor always have prescribed
@@ -264,6 +270,15 @@ export function WorkoutDetailDialogV2({
         baseFocusHandler(focus);
       }
     : undefined;
+  const handleDraftFocusChange = (focus: string) => {
+    latestFocusRef.current = focus;
+  };
+  const handleDraftPrescriptionChange = (field: PrescriptionField, value: string) => {
+    latestPrescriptionRef.current = {
+      ...latestPrescriptionRef.current,
+      [field]: value,
+    };
+  };
   const headerSaveState = isPlanned
     ? { isSaving: planSets.isSaving, lastSavedAt: planSets.lastSavedAt }
     : loggedSaveState;
@@ -291,8 +306,14 @@ export function WorkoutDetailDialogV2({
     onMarkComplete,
   });
   const handleFooterLogWorkout = () => {
+    const latestEntry = buildLogWorkoutHandoffEntry({
+      entry,
+      latestFocus: latestFocusRef.current,
+      latestPrescription: latestPrescriptionRef.current,
+    });
+    const latestExerciseSets = planSets.getExerciseSetsWithPendingPatches();
     planSets.flushPendingSetPatches();
-    onOpenLogWorkout?.(entry, planSets.exerciseSets);
+    onOpenLogWorkout?.(latestEntry, latestExerciseSets);
   };
   const handleConfirmDelete = () => handleWorkoutDetailDeleteConfirm({
     entry,
@@ -331,6 +352,7 @@ export function WorkoutDetailDialogV2({
               onChangeStatus={handlers.menuChangeStatus}
               onCombine={handlers.menuCombine}
               onChangeFocus={onChangeFocus}
+              onDraftFocusChange={handleDraftFocusChange}
               saveState={headerSaveState}
             />
           </div>
@@ -351,6 +373,7 @@ export function WorkoutDetailDialogV2({
             loggedSaveState={loggedSaveState}
             planSets={planSets}
             planCoachNote={planCoachNote}
+            onDraftPrescriptionChange={handleDraftPrescriptionChange}
             onSaveNote={handleSaveNote}
             onParseLoggedFreeText={handleParseLoggedFreeText}
             isParsingLogged={reparseFreeText.isPending}
@@ -413,6 +436,42 @@ type PlanSetsController = ReturnType<typeof usePlanDayExercises>;
 type RegenerateCoachNote = ReturnType<typeof usePlanDayCoachNote>["regenerate"]["mutate"];
 type ReparseTextOptions = { onSuccess?: () => void };
 type ReparseImageOptions = { onSuccess?: (data: ReparseResponse) => void };
+type PlanPrescriptionDraft = Record<PrescriptionField, string | null>;
+
+function buildPlanPrescriptionDraft(entry: TimelineEntry | null | undefined): PlanPrescriptionDraft {
+  return {
+    mainWorkout: entry?.mainWorkout ?? null,
+    accessory: entry?.accessory ?? null,
+    notes: entry?.notes ?? null,
+  };
+}
+
+function normalizePrescriptionDraft(value: string | null | undefined): string | null {
+  return value && value.trim().length > 0 ? value : null;
+}
+
+function normalizeFocusDraft(latestFocus: string, entry: TimelineEntry): string {
+  const trimmed = latestFocus.trim();
+  return trimmed.length > 0 ? trimmed : entry.focus;
+}
+
+function buildLogWorkoutHandoffEntry({
+  entry,
+  latestFocus,
+  latestPrescription,
+}: {
+  readonly entry: TimelineEntry;
+  readonly latestFocus: string;
+  readonly latestPrescription: PlanPrescriptionDraft;
+}): TimelineEntry {
+  return {
+    ...entry,
+    focus: normalizeFocusDraft(latestFocus, entry),
+    mainWorkout: normalizePrescriptionDraft(latestPrescription.mainWorkout) ?? "",
+    accessory: normalizePrescriptionDraft(latestPrescription.accessory),
+    notes: normalizePrescriptionDraft(latestPrescription.notes),
+  };
+}
 
 interface WorkoutSaveCoordinatorArgs {
   readonly entryId: string | undefined;
@@ -748,6 +807,7 @@ interface DialogBodyProps {
    * `isRegenerating` from this bundle.
    */
   readonly planCoachNote: ReturnType<typeof usePlanDayCoachNote>;
+  readonly onDraftPrescriptionChange: (field: PrescriptionField, value: string) => void;
   readonly onSaveNote: (note: string | null) => void;
   /**
    * Parse trigger for the logged-workout free-text prescription when
@@ -888,6 +948,7 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     loggedSaveState,
     planSets,
     planCoachNote,
+    onDraftPrescriptionChange,
     onSaveNote,
     onParseLoggedFreeText,
     isParsingLogged,
@@ -920,8 +981,9 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     planSets.lastSavedAt > displayNoteUpdatedAt.getTime();
 
   // Route free-text edits to the right mutation based on which branch is open.
-  const onSavePrescriptionField = (field: "mainWorkout" | "accessory" | "notes", value: string) => {
+  const onSavePrescriptionField = (field: PrescriptionField, value: string) => {
     const normalized = value.trim().length === 0 ? null : value;
+    onDraftPrescriptionChange(field, value);
     if (isPlanned && planDayId) {
       planSets.updatePrescription.mutate({ [field]: normalized });
     }
@@ -979,6 +1041,7 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
       open={parseControls.prescriptionOpen}
       onOpenChange={parseControls.setPrescriptionOpen}
       onSaveField={isPlanned ? onSavePrescriptionField : undefined}
+      onDraftFieldChange={isPlanned ? onDraftPrescriptionChange : undefined}
       onParse={parseReady ? parseControls.onParseClicked : undefined}
       isParsing={parseControls.isParsing}
       onCapture={parseReady ? parseControls.onCapture : undefined}
@@ -999,7 +1062,7 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
   );
 
   const plannedActualSummary =
-    !isPlanned && showAdherenceInsights && plannedVsActual && plannedVsActual.hasComparisonData ? (
+    !isPlanned && showAdherenceInsights && plannedVsActual?.hasComparisonData ? (
       <PlannedActualSummary
         plannedVsActual={plannedVsActual}
         complianceTag={complianceTag}

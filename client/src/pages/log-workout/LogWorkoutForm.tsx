@@ -62,6 +62,7 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
     rpe,
     setRpe,
     planDayId,
+    setPlanDayId,
     voiceInput,
     notesVoiceInput,
     saveMutation,
@@ -101,6 +102,7 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
     setTitle,
     setNotes,
     setFreeText,
+    setPlanDayId,
     resetEditor,
     toast,
   });
