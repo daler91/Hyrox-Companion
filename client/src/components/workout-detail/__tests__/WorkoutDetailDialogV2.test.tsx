@@ -129,6 +129,10 @@ function makeSet(overrides: Partial<ExerciseSet> = {}): ExerciseSet {
     weight: 60,
     distance: null,
     time: null,
+    plannedReps: null,
+    plannedWeight: null,
+    plannedDistance: null,
+    plannedTime: null,
     notes: null,
     confidence: 95,
     sortOrder: 0,
@@ -326,7 +330,7 @@ describe("WorkoutDetailDialogV2", () => {
     });
 
     expect(await screen.findByTestId("planned-actual-summary")).toHaveTextContent(
-      "Planned vs Actual: 2 planned sets, 1 logged set · 1 removed",
+      "Planned vs Actual: 2 planned sets, 1 logged set, 1 removed",
     );
     expect(screen.getByTestId("planned-actual-summary")).toHaveTextContent(
       "Compliance: 50% (1/2 planned sets matched)",
@@ -565,6 +569,8 @@ describe("WorkoutDetailDialogV2", () => {
     });
 
     expect(screen.getByTestId("workout-detail-planned-cta")).toBeInTheDocument();
+    expect(screen.getByTestId("workout-detail-overview")).toBeInTheDocument();
+    expect(screen.getByTestId("planned-overview-summary")).toHaveTextContent("Exercises");
     expect(screen.getByTestId("workout-detail-mark-complete")).toBeInTheDocument();
     // Stats/history/athlete-note are workout-log-backed; they shouldn't
     // surface for a planned entry with nothing logged yet.
@@ -595,6 +601,38 @@ describe("WorkoutDetailDialogV2", () => {
     expect(onMarkComplete).toHaveBeenCalledWith(
       expect.objectContaining({ workoutLogId: null, planDayId: "plan-day-1" }),
     );
+  });
+
+  it("uses the Log workout handoff for planned entries when available", async () => {
+    const planSet = makeSet({
+      id: "plan-set-1",
+      workoutLogId: null,
+      planDayId: "plan-day-1",
+      exerciseName: "back_squat",
+    });
+    const onOpenLogWorkout = vi.fn();
+    mockPlans.getDayExercises.mockResolvedValue([planSet]);
+
+    renderDialog({
+      entry: makeEntry({
+        workoutLogId: null,
+        status: "planned",
+        planDayId: "plan-day-1",
+      }),
+      onOpenLogWorkout,
+      onMarkComplete: vi.fn(),
+    });
+
+    expect(await screen.findByText(/Back Squat/i)).toBeInTheDocument();
+
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId("workout-detail-log-workout"));
+
+    expect(onOpenLogWorkout).toHaveBeenCalledWith(
+      expect.objectContaining({ workoutLogId: null, planDayId: "plan-day-1" }),
+      [planSet],
+    );
+    expect(screen.queryByTestId("workout-detail-mark-complete")).not.toBeInTheDocument();
   });
 
   it("offers Combine in the ⋮ menu for logged workouts only", async () => {
@@ -631,11 +669,13 @@ describe("WorkoutDetailDialogV2", () => {
 
     renderDialog();
 
+    const user = userEvent.setup();
+    await user.click(await screen.findByTestId("workout-stats-rpe-review"));
+
     const input = await screen.findByTestId("workout-stats-rpe-input");
     // Initial value reflects the server state.
     expect(input).toHaveValue(7);
 
-    const user = userEvent.setup();
     await user.clear(input);
     await user.type(input, "8");
 

@@ -41,6 +41,10 @@ export function exerciseToPayload(ex: StructuredExercise | ParsedExercise) {
       weight: s.weight,
       distance: s.distance,
       time: s.time,
+      plannedReps: s.plannedReps,
+      plannedWeight: s.plannedWeight,
+      plannedDistance: s.plannedDistance,
+      plannedTime: s.plannedTime,
       notes: s.notes,
     })),
   };
@@ -128,6 +132,10 @@ function buildBlockFromParsed(ex: ParsedExercise): ParsedBlockBuild {
         weight: s.weight,
         distance: s.distance,
         time: s.time,
+        plannedReps: s.plannedReps,
+        plannedWeight: s.plannedWeight,
+        plannedDistance: s.plannedDistance,
+        plannedTime: s.plannedTime,
       })),
     },
   };

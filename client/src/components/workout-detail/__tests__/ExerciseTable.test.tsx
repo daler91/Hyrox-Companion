@@ -1,5 +1,6 @@
 import type { ExerciseSet } from "@shared/schema";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { ExerciseTable } from "../ExerciseTable";
@@ -17,6 +18,10 @@ function makeSet(overrides: Partial<ExerciseSet> = {}): ExerciseSet {
     weight: 60,
     distance: null,
     time: null,
+    plannedReps: null,
+    plannedWeight: null,
+    plannedDistance: null,
+    plannedTime: null,
     notes: null,
     confidence: 95,
     sortOrder: 0,
@@ -68,6 +73,40 @@ describe("ExerciseTable drag handle", () => {
     for (const h of handles) {
       expect(h.getAttribute("aria-label")).toMatch(/Reorder /);
     }
+  });
+
+  it("renders readable planned diffs and expands the inline editor on tap", async () => {
+    const sets: ExerciseSet[] = [
+      makeSet({
+        id: "set-diff",
+        reps: 8,
+        weight: 95,
+        plannedReps: 8,
+        plannedWeight: 100,
+      }),
+    ];
+
+    render(
+      <ExerciseTable
+        workoutId="log-1"
+        exerciseSets={sets}
+        weightUnit="kg"
+        onUpdateSet={vi.fn()}
+        onAddSet={vi.fn()}
+        onDeleteSet={vi.fn()}
+        readableSummary
+        showPlannedDiffs
+      />,
+    );
+
+    expect(screen.getByTestId("exercise-row-planned-diff")).toHaveTextContent("planned 100 kg");
+    expect(screen.queryByTestId("set-row-set-diff")).not.toBeInTheDocument();
+
+    const user = userEvent.setup();
+    await user.click(screen.getByLabelText(/Edit Back Squat/i));
+
+    expect(screen.getByTestId("set-row-set-diff")).toBeInTheDocument();
+    expect(screen.getByTestId("planned-weight-set-diff")).toHaveTextContent("planned 100 kg");
   });
 
   it("sends a sortOrder PATCH only for rows whose index changed", () => {

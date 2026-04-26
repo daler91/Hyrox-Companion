@@ -78,6 +78,10 @@ interface SetMeasurements {
   weight: number | null;
   distance: number | null;
   time: number | null;
+  plannedReps: number | null;
+  plannedWeight: number | null;
+  plannedDistance: number | null;
+  plannedTime: number | null;
   notes: string | null;
 }
 
@@ -97,6 +101,10 @@ function buildExerciseSetRow(
     weight: measurements.weight,
     distance: measurements.distance,
     time: measurements.time,
+    plannedReps: measurements.plannedReps,
+    plannedWeight: measurements.plannedWeight,
+    plannedDistance: measurements.plannedDistance,
+    plannedTime: measurements.plannedTime,
     confidence: ex.confidence ?? null,
     notes: measurements.notes,
     sortOrder,
@@ -110,6 +118,10 @@ function measurementsFromExplicit(set: ParsedExercise["sets"][number]): SetMeasu
     weight: set.weight ?? null,
     distance: set.distance ?? null,
     time: set.time ?? null,
+    plannedReps: set.plannedReps ?? null,
+    plannedWeight: set.plannedWeight ?? null,
+    plannedDistance: set.plannedDistance ?? null,
+    plannedTime: set.plannedTime ?? null,
     notes: set.notes || null,
   };
 }
@@ -121,6 +133,10 @@ function measurementsFromAggregate(ex: ParsedExercise, setNumber: number): SetMe
     weight: ex.weight ?? null,
     distance: ex.distance ?? null,
     time: ex.time ?? null,
+    plannedReps: ex.plannedReps ?? null,
+    plannedWeight: ex.plannedWeight ?? null,
+    plannedDistance: ex.plannedDistance ?? null,
+    plannedTime: ex.plannedTime ?? null,
     notes: ex.notes || null,
   };
 }
@@ -490,6 +506,10 @@ async function copyPrescribedSetsIntoLog(
     weight: p.weight,
     distance: p.distance,
     time: p.time,
+    plannedReps: p.plannedReps ?? p.reps,
+    plannedWeight: p.plannedWeight ?? p.weight,
+    plannedDistance: p.plannedDistance ?? p.distance,
+    plannedTime: p.plannedTime ?? p.time,
     notes: p.notes,
     confidence: p.confidence,
     sortOrder: p.sortOrder,

@@ -136,7 +136,46 @@ export function formatExerciseSummary(group: GroupedExercise, weightUnit: string
 }
 
 
-export function exerciseSetsToStructured(dbSets: ExerciseSet[]): { names: string[]; data: Record<string, StructuredExercise> } {
+interface ExerciseSetsToStructuredOptions {
+  readonly snapshotActualsAsPlanned?: boolean;
+}
+
+function plannedValue(
+  planned: number | null | undefined,
+  actual: number | null | undefined,
+  snapshotActualsAsPlanned: boolean,
+): number | undefined {
+  return planned ?? (snapshotActualsAsPlanned ? actual ?? undefined : undefined);
+}
+
+function structuredSetFromExerciseSet(
+  set: ExerciseSet,
+  snapshotActualsAsPlanned: boolean,
+): StructuredExercise["sets"][number] {
+  const structuredSet: StructuredExercise["sets"][number] = {
+    setNumber: set.setNumber,
+    reps: set.reps ?? undefined,
+    weight: set.weight ?? undefined,
+    distance: set.distance ?? undefined,
+    time: set.time ?? undefined,
+    notes: set.notes ?? undefined,
+  };
+  const plannedReps = plannedValue(set.plannedReps, set.reps, snapshotActualsAsPlanned);
+  const plannedWeight = plannedValue(set.plannedWeight, set.weight, snapshotActualsAsPlanned);
+  const plannedDistance = plannedValue(set.plannedDistance, set.distance, snapshotActualsAsPlanned);
+  const plannedTime = plannedValue(set.plannedTime, set.time, snapshotActualsAsPlanned);
+  if (plannedReps !== undefined) structuredSet.plannedReps = plannedReps;
+  if (plannedWeight !== undefined) structuredSet.plannedWeight = plannedWeight;
+  if (plannedDistance !== undefined) structuredSet.plannedDistance = plannedDistance;
+  if (plannedTime !== undefined) structuredSet.plannedTime = plannedTime;
+  return structuredSet;
+}
+
+export function exerciseSetsToStructured(
+  dbSets: ExerciseSet[],
+  options: ExerciseSetsToStructuredOptions = {},
+): { names: string[]; data: Record<string, StructuredExercise> } {
+  const snapshotActualsAsPlanned = options.snapshotActualsAsPlanned ?? false;
   const groups = groupExerciseSets(dbSets);
   const names: string[] = [];
   const data: Record<string, StructuredExercise> = {};
@@ -154,14 +193,7 @@ export function exerciseSetsToStructured(dbSets: ExerciseSet[]): { names: string
       category: group.category,
       customLabel: group.customLabel || undefined,
       confidence: group.confidence ?? undefined,
-      sets: group.sets.map(s => ({
-        setNumber: s.setNumber,
-        reps: s.reps ?? undefined,
-        weight: s.weight ?? undefined,
-        distance: s.distance ?? undefined,
-        time: s.time ?? undefined,
-        notes: s.notes ?? undefined,
-      })),
+      sets: group.sets.map((s) => structuredSetFromExerciseSet(s, snapshotActualsAsPlanned)),
     };
   }
   return { names, data };

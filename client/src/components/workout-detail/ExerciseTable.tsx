@@ -74,6 +74,9 @@ interface ExerciseTableProps {
    * have been extracted yet.
    */
   readonly hasUnparsedText?: boolean;
+  readonly defaultExpanded?: boolean;
+  readonly readableSummary?: boolean;
+  readonly showPlannedDiffs?: boolean;
 }
 
 /**
@@ -99,6 +102,9 @@ export function ExerciseTable({
   onDeleteSet,
   saveState,
   hasUnparsedText,
+  defaultExpanded = false,
+  readableSummary = true,
+  showPlannedDiffs = false,
 }: ExerciseTableProps) {
   const groups = useMemo(() => groupExerciseSets(exerciseSets), [exerciseSets]);
   // Stable per-group identity for @dnd-kit — matches the React `key` used
@@ -149,7 +155,9 @@ export function ExerciseTable({
   // Multiple rows can be expanded at once — matches WorkoutExerciseMode's
   // Set<string> pattern so adding a new row (auto-expanded below) doesn't
   // collapse whatever the user was editing.
-  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(() => new Set());
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(() =>
+    defaultExpanded ? new Set(rowKeys) : new Set(),
+  );
   const [addPickerOpen, setAddPickerOpen] = useState(false);
   // Identity of the most-recently-added exercise. The row key we care about
   // (first set id) only exists once the mutation lands, so we reconcile
@@ -271,6 +279,8 @@ export function ExerciseTable({
                     onUpdateSet={onUpdateSet}
                     onAddSet={onAddSet}
                     onDeleteSet={onDeleteSet}
+                    readableSummary={readableSummary}
+                    showPlannedDiffs={showPlannedDiffs}
                   />
                 );
               })}
@@ -390,6 +400,8 @@ interface GroupRowProps {
   readonly onUpdateSet: (setId: string, data: PatchExerciseSetPayload) => void;
   readonly onAddSet: (data: AddExerciseSetPayload) => void;
   readonly onDeleteSet: (setId: string) => void;
+  readonly readableSummary: boolean;
+  readonly showPlannedDiffs: boolean;
   /**
    * Sortable attrs + listeners forwarded from `SortableGroupRow`. Applied
    * to the leading `GripVertical` button so the handle — and only the
@@ -468,6 +480,8 @@ const GroupRow = memo(function GroupRow({
   onUpdateSet,
   onAddSet,
   onDeleteSet,
+  readableSummary,
+  showPlannedDiffs,
   dragHandleProps,
 }: GroupRowProps) {
   const handleToggle = useCallback(() => onToggle(rowKey), [onToggle, rowKey]);
@@ -524,6 +538,9 @@ const GroupRow = memo(function GroupRow({
   const prescriptionSegments = prescription.visual.map((seg) => (
     <PrescriptionSegment key={seg.separator ?? "sets"} segment={seg} />
   ));
+  const plannedDiffSummary = showPlannedDiffs
+    ? getPlannedDiffSummary(group.sets, weightUnit, distanceUnit)
+    : null;
 
   const changeExerciseItem = (
     <DropdownMenuItem
@@ -605,14 +622,22 @@ const GroupRow = memo(function GroupRow({
          * button wired to onToggle would misleadingly collapse the
          * editor when tapped.
          */}
-        {!isExpanded && (
+        {!isExpanded && readableSummary && (
           <button
             type="button"
             onClick={handleToggle}
             aria-label={`Edit ${label}: ${prescription.aria}`}
-            className="flex w-full items-center gap-1.5 px-3 pb-2 pl-[50px] text-left text-xs text-muted-foreground sm:px-4 sm:pb-3 sm:pl-[54px] sm:text-sm"
+            className="flex w-full flex-wrap items-center gap-1.5 px-3 pb-2 pl-[50px] text-left text-xs text-muted-foreground sm:px-4 sm:pb-3 sm:pl-[54px] sm:text-sm"
           >
             {prescriptionSegments}
+            {plannedDiffSummary && (
+              <span
+                className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300"
+                data-testid="exercise-row-planned-diff"
+              >
+                {plannedDiffSummary}
+              </span>
+            )}
           </button>
         )}
       </div>
@@ -629,6 +654,7 @@ const GroupRow = memo(function GroupRow({
             onUpdateSet={onUpdateSet}
             onAddSet={onAddSet}
             onDeleteSet={onDeleteSet}
+            showPlannedDiffs={showPlannedDiffs}
           />
         </div>
       )}
@@ -662,6 +688,80 @@ function PrescriptionSegment({ segment }: Readonly<{ segment: VisualSegment }>) 
       <span>{segment.text}</span>
     </>
   );
+}
+
+type PlannedMetricField = "reps" | "weight" | "distance" | "time";
+
+const PLANNED_FIELDS: readonly PlannedMetricField[] = ["reps", "weight", "distance", "time"];
+
+function getActualValue(set: ExerciseSet, field: PlannedMetricField): number | null {
+  return set[field] ?? null;
+}
+
+function getPlannedValue(set: ExerciseSet, field: PlannedMetricField): number | null {
+  switch (field) {
+    case "reps":
+      return set.plannedReps ?? null;
+    case "weight":
+      return set.plannedWeight ?? null;
+    case "distance":
+      return set.plannedDistance ?? null;
+    case "time":
+      return set.plannedTime ?? null;
+  }
+}
+
+function getChangedPlannedFields(sets: readonly ExerciseSet[]): PlannedMetricField[] {
+  return PLANNED_FIELDS.filter((field) =>
+    sets.some((set) => {
+      const planned = getPlannedValue(set, field);
+      return planned != null && planned !== getActualValue(set, field);
+    }),
+  );
+}
+
+function getUniformPlannedValue(
+  sets: readonly ExerciseSet[],
+  field: PlannedMetricField,
+): { value: number | null; varies: boolean } {
+  const plannedValues = sets
+    .map((set) => getPlannedValue(set, field))
+    .filter((value): value is number => value != null);
+  if (plannedValues.length === 0) return { value: null, varies: false };
+  const first = plannedValues[0];
+  return {
+    value: first,
+    varies: plannedValues.some((value) => value !== first),
+  };
+}
+
+function getPlannedDiffSummary(
+  sets: readonly ExerciseSet[],
+  weightUnit: "kg" | "lb",
+  distanceUnit: "km" | "miles",
+): string | null {
+  const changedFields = getChangedPlannedFields(sets);
+  if (changedFields.length === 0) return null;
+
+  const parts = changedFields
+    .map((field) => formatPlannedFieldSummary(sets, field, weightUnit, distanceUnit))
+    .filter(Boolean);
+  return parts.length > 0 ? `planned ${parts.join(", ")}` : null;
+}
+
+function formatPlannedFieldSummary(
+  sets: readonly ExerciseSet[],
+  field: PlannedMetricField,
+  weightUnit: "kg" | "lb",
+  distanceUnit: "km" | "miles",
+): string | null {
+  const planned = getUniformPlannedValue(sets, field);
+  if (planned.value == null) return null;
+  if (planned.varies) return `${field} varied`;
+  if (field === "weight") return `${planned.value} ${weightUnit}`;
+  if (field === "distance") return `${planned.value} ${distanceUnit === "km" ? "m" : "ft"}`;
+  if (field === "time") return `${planned.value} min`;
+  return `${planned.value} reps`;
 }
 
 interface UniformitySummary {

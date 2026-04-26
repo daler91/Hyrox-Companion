@@ -1,6 +1,8 @@
 import type { ExerciseSet, WorkoutLog } from "@shared/schema";
+import { Pencil } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
 
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useDebouncedCallback } from "@/hooks/useDebouncedCallback";
 
@@ -15,6 +17,7 @@ interface WorkoutStatsRowProps {
    * anywhere we don't want the edit affordance).
    */
   readonly onChangeRpe?: (rpe: number | null) => void;
+  readonly reviewFirst?: boolean;
   /**
    * Bumped whenever the caller's updateRpe mutation fails so the
    * editable cell remounts and its local draft resets to the
@@ -32,7 +35,7 @@ interface WorkoutStatsRowProps {
  * denormalise these counts — cheap aggregates over the already-loaded
  * exerciseSets array.
  */
-export function WorkoutStatsRow({ workout, exerciseSets, onChangeRpe, rpeResetSignal = 0 }: WorkoutStatsRowProps) {
+export function WorkoutStatsRow({ workout, exerciseSets, onChangeRpe, reviewFirst = false, rpeResetSignal = 0 }: WorkoutStatsRowProps) {
   const stats = useMemo(() => {
     const uniqueExercises = new Set<string>();
     let summedMinutes = 0;
@@ -75,6 +78,7 @@ export function WorkoutStatsRow({ workout, exerciseSets, onChangeRpe, rpeResetSi
           key={`${workout.id}:${workout.rpe ?? "null"}:${rpeResetSignal}`}
           value={workout.rpe}
           onChange={onChangeRpe}
+          reviewFirst={reviewFirst}
         />
       ) : (
         <StatCell label="RPE" value={workout.rpe} />
@@ -112,6 +116,7 @@ function StatCell({ label, value, unit }: Readonly<{ label: string; value: numbe
 interface RpeEditableCellProps {
   readonly value: number | null | undefined;
   readonly onChange: (rpe: number | null) => void;
+  readonly reviewFirst: boolean;
 }
 
 function formatRpeDraft(value: number | null | undefined): string {
@@ -124,8 +129,9 @@ function formatRpeDraft(value: number | null | undefined): string {
  * cell with a `key={value}` so prop changes reset the draft instead of
  * fighting local typing via a useEffect state sync.
  */
-function RpeEditableCell({ value, onChange }: Readonly<RpeEditableCellProps>) {
+function RpeEditableCell({ value, onChange, reviewFirst }: Readonly<RpeEditableCellProps>) {
   const [draft, setDraft] = useState<string>(() => formatRpeDraft(value));
+  const [isEditing, setIsEditing] = useState(!reviewFirst);
 
   const debouncedSave = useDebouncedCallback((next: string) => {
     if (next.trim() === "") {
@@ -137,6 +143,25 @@ function RpeEditableCell({ value, onChange }: Readonly<RpeEditableCellProps>) {
     const clamped = Math.min(10, Math.max(1, parsed));
     onChange(clamped);
   }, RPE_SAVE_DEBOUNCE_MS);
+
+  if (!isEditing) {
+    return (
+      <StatCellShell label="RPE" testId="workout-stats-rpe-cell">
+        <Button
+          type="button"
+          variant="ghost"
+          className="h-auto w-fit justify-start gap-2 px-0 py-0 text-left hover:bg-transparent"
+          onClick={() => setIsEditing(true)}
+          data-testid="workout-stats-rpe-review"
+        >
+          <span className="text-2xl font-semibold tabular-nums">
+            {value == null ? "—" : value}
+          </span>
+          <Pencil className="size-3.5 text-muted-foreground" aria-hidden />
+        </Button>
+      </StatCellShell>
+    );
+  }
 
   return (
     <StatCellShell label="RPE" testId="workout-stats-rpe-cell">
@@ -150,6 +175,9 @@ function RpeEditableCell({ value, onChange }: Readonly<RpeEditableCellProps>) {
         onChange={(e) => {
           setDraft(e.target.value);
           debouncedSave(e.target.value);
+        }}
+        onBlur={() => {
+          if (reviewFirst) setIsEditing(false);
         }}
         aria-label="Rate of perceived exertion"
         placeholder="—"

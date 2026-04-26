@@ -29,6 +29,14 @@ import { HistoryPanel } from "./HistoryPanel";
 import { InDialogCoachChat } from "./InDialogCoachChat";
 import { SaveWorkoutButton } from "./SaveWorkoutButton";
 import { useDialogParseControls } from "./useDialogParseControls";
+import {
+  CompletedWorkoutDetailContent,
+  PlannedWorkoutDetailContent,
+  WorkoutDetailGuidedLayout,
+  WorkoutDetailOverview,
+  WorkoutDetailReflection,
+  WorkoutDetailSection,
+} from "./WorkoutDetailGuidedLayout";
 import { WorkoutDetailHeaderV2 } from "./WorkoutDetailHeaderV2";
 import { WorkoutStatsRow } from "./WorkoutStatsRow";
 
@@ -51,6 +59,7 @@ interface WorkoutDetailDialogV2Props {
    * newly-logged workout in their list.
    */
   readonly onMarkComplete?: (entry: TimelineEntry) => void;
+  readonly onOpenLogWorkout?: (entry: TimelineEntry, exerciseSets: ExerciseSet[]) => void;
   /**
    * When true, the Mark complete CTA shows a spinner and disables clicks.
    * The dialog stays mounted until the logWorkoutMutation resolves, so
@@ -105,6 +114,7 @@ export function WorkoutDetailDialogV2({
   onDelete,
   onChangeStatus,
   onMarkComplete,
+  onOpenLogWorkout,
   isMarkingComplete = false,
   onCombine,
   weightUnit = "kg",
@@ -241,8 +251,6 @@ export function WorkoutDetailDialogV2({
     displayedWorkoutIdRef,
     bumpRpeErrorToken: setRpeErrorToken,
   });
-  const showStatsRow = !isPlanned && !!workout;
-
   const baseFocusHandler = buildFocusHandler({
     isPlanned,
     planDayId: entry.planDayId ?? null,
@@ -282,6 +290,10 @@ export function WorkoutDetailDialogV2({
     latestFocus: latestFocusRef.current,
     onMarkComplete,
   });
+  const handleFooterLogWorkout = () => {
+    planSets.flushPendingSetPatches();
+    onOpenLogWorkout?.(entry, planSets.exerciseSets);
+  };
   const handleConfirmDelete = () => handleWorkoutDetailDeleteConfirm({
     entry,
     onDelete,
@@ -321,14 +333,6 @@ export function WorkoutDetailDialogV2({
               onChangeFocus={onChangeFocus}
               saveState={headerSaveState}
             />
-            {showStatsRow && workout && (
-              <WorkoutStatsRow
-                workout={workout}
-                exerciseSets={exerciseSets}
-                onChangeRpe={handlers.changeRpe}
-                rpeResetSignal={rpeErrorToken}
-              />
-            )}
           </div>
 
           <DialogBody
@@ -356,20 +360,25 @@ export function WorkoutDetailDialogV2({
             showAdherenceInsights={showAdherenceInsights}
             onOpenChat={handleOpenChat}
             onCloseChat={handleCloseChat}
+            onChangeRpe={handlers.changeRpe}
+            rpeResetSignal={rpeErrorToken}
           />
         </div>
 
         <WorkoutDetailFooter
           isPlanned={isPlanned}
           canMarkComplete={onMarkComplete != null}
+          canOpenLogWorkout={onOpenLogWorkout != null}
           completeBusy={completeAction.busy}
           completeLabel={completeAction.label}
           saveBusy={saveInFlight || planCoachNote.isRegenerating}
           savedAt={saveClickedAt}
-          showCoachNoteHint={entry.planDayId != null}
+          showCoachNoteHint={isPlanned && entry.planDayId != null}
           saveDisabled={planCoachNote.isCoolingDown}
           onSaveClick={handleSaveClick}
           onMarkComplete={handleFooterMarkComplete}
+          onOpenLogWorkout={handleFooterLogWorkout}
+          onDone={onClose}
         />
       </DialogContent>
 
@@ -596,6 +605,7 @@ function handleWorkoutDetailDeleteConfirm({ entry, onDelete, closeDeleteConfirm 
 interface WorkoutDetailFooterProps {
   readonly isPlanned: boolean;
   readonly canMarkComplete: boolean;
+  readonly canOpenLogWorkout: boolean;
   readonly completeBusy: boolean;
   readonly completeLabel: string;
   readonly saveBusy: boolean;
@@ -604,11 +614,14 @@ interface WorkoutDetailFooterProps {
   readonly saveDisabled: boolean;
   readonly onSaveClick: () => void;
   readonly onMarkComplete: () => void;
+  readonly onOpenLogWorkout: () => void;
+  readonly onDone: () => void;
 }
 
 function WorkoutDetailFooter({
   isPlanned,
   canMarkComplete,
+  canOpenLogWorkout,
   completeBusy,
   completeLabel,
   saveBusy,
@@ -617,9 +630,14 @@ function WorkoutDetailFooter({
   saveDisabled,
   onSaveClick,
   onMarkComplete,
+  onOpenLogWorkout,
+  onDone,
 }: WorkoutDetailFooterProps) {
   const copy = getFooterCopy(isPlanned);
   const saveEmphasis = isPlanned ? "secondary" : "primary";
+  const saveLabel = isPlanned ? "Save prescription" : "Save changes";
+  const showLogWorkout = isPlanned && canOpenLogWorkout;
+  const showLegacyComplete = isPlanned && !canOpenLogWorkout && canMarkComplete;
 
   return (
     <div className="sticky bottom-0 z-10 flex flex-col gap-3 border-t border-border bg-background/95 px-6 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:flex-row sm:items-center sm:justify-between">
@@ -633,10 +651,35 @@ function WorkoutDetailFooter({
           savedAt={savedAt}
           showCoachNoteHint={showCoachNoteHint}
           emphasis={saveEmphasis}
+          label={saveLabel}
           disabled={saveDisabled}
           onClick={onSaveClick}
         />
-        {isPlanned && canMarkComplete ? (
+        {!isPlanned && (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={onDone}
+            data-testid="workout-detail-done"
+          >
+            Done
+          </Button>
+        )}
+        {showLogWorkout ? (
+          <Button
+            type="button"
+            size="sm"
+            className="gap-2"
+            disabled={completeBusy}
+            onClick={onOpenLogWorkout}
+            data-testid="workout-detail-log-workout"
+          >
+            <CompleteActionIcon busy={completeBusy} />
+            Log workout
+          </Button>
+        ) : null}
+        {showLegacyComplete ? (
           <Button
             type="button"
             size="sm"
@@ -656,8 +699,8 @@ function WorkoutDetailFooter({
 
 function getFooterCopy(isPlanned: boolean) {
   return isPlanned
-    ? { title: "Planned workout", description: "Edits save before completion." }
-    : { title: "Logged workout", description: "Edits save in place." };
+    ? { title: "Planned workout", description: "Review the prescription, then log actuals." }
+    : { title: "Logged workout", description: "Review first. Edit only what changed." };
 }
 
 function CompleteActionIcon({ busy }: Readonly<{ busy: boolean }>) {
@@ -725,6 +768,8 @@ interface DialogBodyProps {
   readonly showAdherenceInsights: boolean;
   readonly onOpenChat: () => void;
   readonly onCloseChat: () => void;
+  readonly onChangeRpe?: (rpe: number | null) => void;
+  readonly rpeResetSignal: number;
 }
 
 /**
@@ -754,7 +799,6 @@ interface DialogBodyComputedState {
   readonly chatSeed: string;
   readonly complianceTag: { label: string; className: string } | null;
   readonly detailAdherencePct: number | null;
-  readonly gridClasses: string;
 }
 
 function buildDialogBodyComputedState(args: {
@@ -764,10 +808,9 @@ function buildDialogBodyComputedState(args: {
   readonly planDayId: string | null;
   readonly plannedSets: ExerciseSet[];
   readonly loggedSets: ExerciseSet[];
-  readonly chatOpen: boolean;
   readonly showAdherenceInsights: boolean;
 }): DialogBodyComputedState {
-  const { entry, workout, isPlanned, planDayId, plannedSets, loggedSets, chatOpen, showAdherenceInsights } = args;
+  const { entry, workout, isPlanned, planDayId, plannedSets, loggedSets, showAdherenceInsights } = args;
   const focusLabel = entry.focus?.trim() || "this workout";
   const referenceMainWorkout = isPlanned
     ? entry.mainWorkout
@@ -815,10 +858,6 @@ function buildDialogBodyComputedState(args: {
   const detailAdherencePct = showAdherenceInsights
     ? workout?.compliancePct ?? plannedVsActual?.compliancePct ?? null
     : null;
-  const gridClasses = chatOpen
-    ? "grid grid-cols-1 items-start gap-4 px-6 py-4 md:grid-cols-[1fr_380px] lg:grid-cols-[1fr_420px]"
-    : "grid grid-cols-1 items-start gap-4 px-6 py-4 md:grid-cols-[1fr_280px]";
-
   return {
     focusLabel,
     referenceMainWorkout,
@@ -829,7 +868,6 @@ function buildDialogBodyComputedState(args: {
     chatSeed,
     complianceTag,
     detailAdherencePct,
-    gridClasses,
   };
 }
 
@@ -859,6 +897,8 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     showAdherenceInsights,
     onOpenChat,
     onCloseChat,
+    onChangeRpe,
+    rpeResetSignal,
   } = props;
 
   const planDayId = entry.planDayId ?? null;
@@ -919,7 +959,6 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     chatSeed,
     complianceTag,
     detailAdherencePct,
-    gridClasses,
   } = buildDialogBodyComputedState({
     entry,
     workout,
@@ -927,156 +966,163 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     planDayId,
     plannedSets: planSets.exerciseSets,
     loggedSets: exerciseSets,
-    chatOpen,
     showAdherenceInsights,
   });
 
-  return (
-    <div className={gridClasses}>
-      <div className="flex flex-col gap-3">
-        <CoachPrescriptionCollapsible
-          title={isPlanned ? "Coach's prescription" : "Reference/Notes"}
-          compact={!isPlanned}
-          mainWorkout={referenceMainWorkout}
-          accessory={referenceAccessory}
-          notes={referenceNotes}
-          open={parseControls.prescriptionOpen}
-          onOpenChange={parseControls.setPrescriptionOpen}
-          onSaveField={isPlanned ? onSavePrescriptionField : undefined}
-          onParse={parseReady ? parseControls.onParseClicked : undefined}
-          isParsing={parseControls.isParsing}
-          onCapture={parseReady ? parseControls.onCapture : undefined}
-          imagePreview={parseControls.imagePreview}
-          onRetakeImage={parseControls.clearImagePreview}
-          onParseImage={parseControls.onParseImageClicked}
-          isParsingImage={parseControls.isParsingImage}
-        />
-        {!isPlanned && loggedTextDiffFields.length > 0 && (
-          <div
-            className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-muted-foreground"
-            data-testid="logged-prescription-diff-note"
-          >
-            Updated after completion: {loggedTextDiffFields.join(", ")}.
-          </div>
-        )}
-        {!isPlanned && showAdherenceInsights && plannedVsActual && plannedVsActual.hasComparisonData && (
-          <div
-            className="rounded-md border border-border/70 bg-muted/20 px-3 py-2 text-xs text-muted-foreground"
-            data-testid="planned-actual-summary"
-          >
-            <span className="font-medium text-foreground">Planned vs Actual:</span>{" "}
-            {plannedVsActual.plannedSets} planned set{plannedVsActual.plannedSets === 1 ? "" : "s"},{" "}
-            {plannedVsActual.actualSets} logged set{plannedVsActual.actualSets === 1 ? "" : "s"}{" "}
-            {plannedVsActual.addedSets > 0 && <>· {plannedVsActual.addedSets} added</>}
-            {plannedVsActual.removedSets > 0 && <> · {plannedVsActual.removedSets} removed</>}
-            {plannedVsActual.compliancePct != null && (
-              <div className="mt-1">
-                <span className="font-medium text-foreground">Compliance:</span>{" "}
-                {plannedVsActual.compliancePct}% ({plannedVsActual.matchedSets}/{plannedVsActual.plannedSets} planned sets matched)
-                {complianceTag && (
-                  <span className={cn("ml-2 rounded-full px-2 py-0.5 text-[10px] font-medium", complianceTag.className)}>
-                    {complianceTag.label}
-                  </span>
-                )}
-              </div>
-            )}
-            {plannedVsActual.addedExercises.length > 0 && (
-              <div>
-                <span className="font-medium text-foreground">Added:</span>{" "}
-                {plannedVsActual.addedExercises.join(", ")}
-              </div>
-            )}
-            {plannedVsActual.removedExercises.length > 0 && (
-              <div>
-                <span className="font-medium text-foreground">Removed:</span>{" "}
-                {plannedVsActual.removedExercises.join(", ")}
-              </div>
-            )}
-          </div>
-        )}
+  const prescriptionPanel = (
+    <CoachPrescriptionCollapsible
+      title={isPlanned ? "Coach's prescription" : "Reference/Notes"}
+      compact={!isPlanned}
+      mainWorkout={referenceMainWorkout}
+      accessory={referenceAccessory}
+      notes={referenceNotes}
+      open={parseControls.prescriptionOpen}
+      onOpenChange={parseControls.setPrescriptionOpen}
+      onSaveField={isPlanned ? onSavePrescriptionField : undefined}
+      onParse={parseReady ? parseControls.onParseClicked : undefined}
+      isParsing={parseControls.isParsing}
+      onCapture={parseReady ? parseControls.onCapture : undefined}
+      imagePreview={parseControls.imagePreview}
+      onRetakeImage={parseControls.clearImagePreview}
+      onParseImage={parseControls.onParseImageClicked}
+      isParsingImage={parseControls.isParsingImage}
+    />
+  );
 
-        {isPlanned ? (
-          <PlannedCallToAction
-            entry={entry}
-            weightUnit={weightUnit}
-            distanceUnit={distanceUnit}
-            planSets={planSets}
-            hasUnparsedText={hasUnparsedText}
-          />
-        ) : (
-          <LoggedExerciseSection
-            workoutId={workoutId}
-            exerciseSets={exerciseSets}
-            weightUnit={weightUnit}
-            distanceUnit={distanceUnit}
-            onUpdateSet={onUpdateSet}
-            onAddSet={onAddSet}
-            onDeleteSet={onDeleteSet}
-            saveState={loggedSaveState}
-            hasUnparsedText={hasUnparsedText}
-          />
-        )}
-
-        {!isPlanned && (
-          <AthleteNoteInput
-            value={workout?.notes}
-            onSave={onSaveNote}
-            disabled={!workoutId}
-          />
-        )}
-
-        <AlertDialog
-          open={parseControls.confirmingParse}
-          onOpenChange={parseControls.setConfirmingParse}
-        >
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Replace existing exercises?</AlertDialogTitle>
-              <AlertDialogDescription>
-                {parseControls.pendingParseSource === "image"
-                  ? "Parsing this photo will replace the current structured exercises for this workout. Any manual edits you've made to the rows will be lost."
-                  : "Parsing the coach's text will replace the current structured exercises for this workout. Any manual edits you've made to the rows will be lost."}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={parseControls.confirmReplace}
-                data-testid="coach-prescription-parse-confirm"
-              >
-                Replace
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </div>
-
-      <aside className="flex min-h-0 self-start flex-col gap-3">
-        {chatOpen ? (
-          <InDialogCoachChat
-            focusLabel={focusLabel}
-            seedText={chatSeed}
-            onBack={onCloseChat}
-          />
-        ) : (
-          <>
-            <CoachTakePanel
-              rationale={displayRationale}
-              onAskCoach={onOpenChat}
-              isStale={isCoachNoteStale}
-              isRefreshing={planCoachNote.isRegenerating}
-            />
-            {!isPlanned && (
-              <HistoryPanel
-                stats={history}
-                adherencePct={detailAdherencePct}
-                isLoading={isLoading}
-              />
-            )}
-          </>
-        )}
-      </aside>
+  const textDiffNote = !isPlanned && loggedTextDiffFields.length > 0 && (
+    <div
+      className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-muted-foreground"
+      data-testid="logged-prescription-diff-note"
+    >
+      Updated after completion: {loggedTextDiffFields.join(", ")}.
     </div>
+  );
+
+  const plannedActualSummary =
+    !isPlanned && showAdherenceInsights && plannedVsActual && plannedVsActual.hasComparisonData ? (
+      <PlannedActualSummary
+        plannedVsActual={plannedVsActual}
+        complianceTag={complianceTag}
+      />
+    ) : null;
+
+  const parseConfirmDialog = (
+    <AlertDialog
+      open={parseControls.confirmingParse}
+      onOpenChange={parseControls.setConfirmingParse}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Replace existing exercises?</AlertDialogTitle>
+          <AlertDialogDescription>
+            {parseControls.pendingParseSource === "image"
+              ? "Parsing this photo will replace the current structured exercises for this workout. Any manual edits you've made to the rows will be lost."
+              : "Parsing the coach's text will replace the current structured exercises for this workout. Any manual edits you've made to the rows will be lost."}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={parseControls.confirmReplace}
+            data-testid="coach-prescription-parse-confirm"
+          >
+            Replace
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+
+  const sidebar = chatOpen ? (
+    <InDialogCoachChat
+      focusLabel={focusLabel}
+      seedText={chatSeed}
+      onBack={onCloseChat}
+    />
+  ) : (
+    <>
+      <CoachTakePanel
+        rationale={displayRationale}
+        onAskCoach={onOpenChat}
+        isStale={isCoachNoteStale}
+        isRefreshing={planCoachNote.isRegenerating}
+      />
+      {!isPlanned && (
+        <HistoryPanel
+          stats={history}
+          adherencePct={detailAdherencePct}
+          isLoading={isLoading}
+        />
+      )}
+    </>
+  );
+
+  return (
+    <WorkoutDetailGuidedLayout sidebar={sidebar} chatOpen={chatOpen}>
+      {isPlanned ? (
+        <PlannedWorkoutDetailContent>
+          <WorkoutDetailOverview>
+            <PlannedOverviewSummary
+              exerciseCount={countSetsByExercise(planSets.exerciseSets).size}
+              setCount={planSets.exerciseSets.length}
+              hasPrescriptionText={hasUnparsedText}
+            />
+          </WorkoutDetailOverview>
+          <WorkoutDetailSection title="Prescription" testId="workout-detail-prescription-section">
+            {prescriptionPanel}
+          </WorkoutDetailSection>
+          <WorkoutDetailSection title="Exercises" testId="workout-detail-exercises-section">
+            <PlannedCallToAction
+              entry={entry}
+              weightUnit={weightUnit}
+              distanceUnit={distanceUnit}
+              planSets={planSets}
+              hasUnparsedText={hasUnparsedText}
+            />
+          </WorkoutDetailSection>
+        </PlannedWorkoutDetailContent>
+      ) : (
+        <CompletedWorkoutDetailContent>
+          {workout && (
+            <WorkoutDetailOverview>
+              <WorkoutStatsRow
+                workout={workout}
+                exerciseSets={exerciseSets}
+                onChangeRpe={onChangeRpe}
+                reviewFirst
+                rpeResetSignal={rpeResetSignal}
+              />
+            </WorkoutDetailOverview>
+          )}
+          <WorkoutDetailSection title="Exercises" testId="workout-detail-exercises-section">
+            {prescriptionPanel}
+            {textDiffNote}
+            {plannedActualSummary}
+            <LoggedExerciseSection
+              workoutId={workoutId}
+              exerciseSets={exerciseSets}
+              weightUnit={weightUnit}
+              distanceUnit={distanceUnit}
+              onUpdateSet={onUpdateSet}
+              onAddSet={onAddSet}
+              onDeleteSet={onDeleteSet}
+              saveState={loggedSaveState}
+              hasUnparsedText={hasUnparsedText}
+              showPlannedDiffs
+            />
+          </WorkoutDetailSection>
+          <WorkoutDetailReflection>
+            <AthleteNoteInput
+              value={workout?.notes}
+              onSave={onSaveNote}
+              disabled={!workoutId}
+              reviewFirst
+            />
+          </WorkoutDetailReflection>
+        </CompletedWorkoutDetailContent>
+      )}
+      {parseConfirmDialog}
+    </WorkoutDetailGuidedLayout>
   );
 }
 
@@ -1115,6 +1161,91 @@ interface PlannedVsActualSummary {
   readonly removedSets: number;
   readonly addedExercises: readonly string[];
   readonly removedExercises: readonly string[];
+}
+
+function PlannedActualSummary({
+  plannedVsActual,
+  complianceTag,
+}: Readonly<{
+  plannedVsActual: PlannedVsActualSummary;
+  complianceTag: { label: string; className: string } | null;
+}>) {
+  const setSummaryParts = [
+    `${plannedVsActual.plannedSets} planned set${plannedVsActual.plannedSets === 1 ? "" : "s"}`,
+    `${plannedVsActual.actualSets} logged set${plannedVsActual.actualSets === 1 ? "" : "s"}`,
+  ];
+  if (plannedVsActual.addedSets > 0) {
+    setSummaryParts.push(`${plannedVsActual.addedSets} added`);
+  }
+  if (plannedVsActual.removedSets > 0) {
+    setSummaryParts.push(`${plannedVsActual.removedSets} removed`);
+  }
+
+  return (
+    <div
+      className="rounded-md border border-border/70 bg-muted/20 px-3 py-2 text-xs text-muted-foreground"
+      data-testid="planned-actual-summary"
+    >
+      <span className="font-medium text-foreground">Planned vs Actual:</span>{" "}
+      {setSummaryParts.join(", ")}
+      {plannedVsActual.compliancePct != null && (
+        <div className="mt-1">
+          <span className="font-medium text-foreground">Compliance:</span>{" "}
+          {plannedVsActual.compliancePct}% ({plannedVsActual.matchedSets}/{plannedVsActual.plannedSets} planned sets matched)
+          {complianceTag && (
+            <span className={cn("ml-2 rounded-full px-2 py-0.5 text-[10px] font-medium", complianceTag.className)}>
+              {complianceTag.label}
+            </span>
+          )}
+        </div>
+      )}
+      {plannedVsActual.addedExercises.length > 0 && (
+        <div>
+          <span className="font-medium text-foreground">Added:</span>{" "}
+          {plannedVsActual.addedExercises.join(", ")}
+        </div>
+      )}
+      {plannedVsActual.removedExercises.length > 0 && (
+        <div>
+          <span className="font-medium text-foreground">Removed:</span>{" "}
+          {plannedVsActual.removedExercises.join(", ")}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PlannedOverviewSummary({
+  exerciseCount,
+  setCount,
+  hasPrescriptionText,
+}: Readonly<{
+  exerciseCount: number;
+  setCount: number;
+  hasPrescriptionText: boolean;
+}>) {
+  return (
+    <div className="grid grid-cols-3 gap-3 text-sm" data-testid="planned-overview-summary">
+      <OverviewMetric label="Exercises" value={exerciseCount} />
+      <OverviewMetric label="Sets" value={setCount} />
+      <OverviewMetric label="Prescription" value={hasPrescriptionText ? "Text" : "Rows"} />
+    </div>
+  );
+}
+
+function OverviewMetric({
+  label,
+  value,
+}: Readonly<{
+  label: string;
+  value: number | string;
+}>) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
+      <span className="truncate text-lg font-semibold tabular-nums text-foreground">{value}</span>
+    </div>
+  );
 }
 
 function computePlannedVsActual(args: {
@@ -1254,6 +1385,7 @@ interface LoggedExerciseSectionProps {
   readonly onDeleteSet: (setId: string) => void;
   readonly saveState: { isSaving: boolean; lastSavedAt: number | null };
   readonly hasUnparsedText?: boolean;
+  readonly showPlannedDiffs?: boolean;
 }
 
 function LoggedExerciseSection({
@@ -1266,6 +1398,7 @@ function LoggedExerciseSection({
   onDeleteSet,
   saveState,
   hasUnparsedText,
+  showPlannedDiffs = false,
 }: Readonly<LoggedExerciseSectionProps>) {
   if (!workoutId) return null;
   return (
@@ -1279,6 +1412,7 @@ function LoggedExerciseSection({
       onDeleteSet={onDeleteSet}
       saveState={saveState}
       hasUnparsedText={hasUnparsedText}
+      showPlannedDiffs={showPlannedDiffs}
     />
   );
 }

@@ -1,5 +1,8 @@
+import type { ExerciseSet, TimelineEntry } from "@shared/schema";
+
 import type { StructuredExercise } from "@/components/ExerciseInput";
 import { getTodayString } from "@/lib/dateUtils";
+import { exerciseSetsToStructured } from "@/lib/exerciseUtils";
 
 const DRAFT_STORAGE_KEY = "fitai-log-workout-draft";
 const DRAFT_ANNOUNCED_KEY = "fitai-log-workout-draft-announced";
@@ -18,6 +21,7 @@ export interface LogWorkoutDraft {
   freeText: string;
   notes: string;
   rpe: number | null;
+  planDayId?: string | null;
   useTextMode: boolean;
   exerciseBlocks: string[];
   exerciseData: Record<string, StructuredExercise>;
@@ -40,6 +44,7 @@ function isBlank(draft: LoadedDraft): boolean {
     draft.freeText.trim() === "" &&
     draft.notes.trim() === "" &&
     draft.rpe === null &&
+    draft.planDayId == null &&
     draft.exerciseBlocks.length === 0
   );
 }
@@ -58,6 +63,7 @@ export function loadLogWorkoutDraft(userKey: string): LoadedDraft | null {
       freeText: parsed.freeText ?? "",
       notes: parsed.notes ?? "",
       rpe: parsed.rpe ?? null,
+      planDayId: parsed.planDayId ?? null,
       useTextMode: parsed.useTextMode ?? false,
       exerciseBlocks: parsed.exerciseBlocks ?? [],
       exerciseData: parsed.exerciseData ?? {},
@@ -86,6 +92,30 @@ export function saveLogWorkoutDraft(userKey: string, draft: LoadedDraft): void {
   } catch {
     // Quota exceeded or storage disabled — best-effort only, fail silently.
   }
+}
+
+export function saveLogWorkoutDraftFromTimelineEntry(
+  userKey: string,
+  entry: TimelineEntry,
+  exerciseSets: ExerciseSet[] = entry.exerciseSets ?? [],
+): void {
+  const structured = exerciseSetsToStructured(exerciseSets, { snapshotActualsAsPlanned: true });
+  const prescription = [entry.mainWorkout, entry.accessory, entry.notes]
+    .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
+    .join("\n\n");
+
+  saveLogWorkoutDraft(userKey, {
+    title: entry.focus || "Workout",
+    date: entry.date ?? getTodayString(),
+    freeText: prescription,
+    notes: "",
+    rpe: null,
+    planDayId: entry.planDayId ?? null,
+    useTextMode: structured.names.length === 0,
+    exerciseBlocks: structured.names,
+    exerciseData: structured.data,
+    blockCounter: structured.names.length,
+  });
 }
 
 export function clearLogWorkoutDraft(userKey: string): void {

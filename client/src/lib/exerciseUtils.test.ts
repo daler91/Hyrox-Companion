@@ -325,4 +325,38 @@ describe("exerciseSetsToStructured", () => {
       },
     },
   ])("$desc", ({ sets, assert }) => runTest(sets, assert));
+
+  it("can snapshot actual prescription values into planned fields", () => {
+    const sets = [
+      {
+        id: "plan-set-1",
+        workoutLogId: null,
+        planDayId: "plan-day-1",
+        exerciseName: "bench_press",
+        customLabel: null,
+        category: "strength",
+        sortOrder: 1,
+        setNumber: 1,
+        reps: 8,
+        weight: 100,
+        distance: null,
+        time: null,
+        plannedReps: null,
+        plannedWeight: null,
+        plannedDistance: null,
+        plannedTime: null,
+        notes: null,
+        confidence: 95,
+      },
+    ] as ExerciseSet[];
+
+    const { data } = exerciseSetsToStructured(sets, { snapshotActualsAsPlanned: true });
+
+    expect(data["bench_press__1"].sets[0]).toMatchObject({
+      reps: 8,
+      weight: 100,
+      plannedReps: 8,
+      plannedWeight: 100,
+    });
+  });
 });

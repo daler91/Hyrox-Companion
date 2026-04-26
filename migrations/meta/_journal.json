@@ -225,6 +225,13 @@
       "when": 1777080474742,
       "tag": "0031_user_adherence_visibility_pref",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1777080474743,
+      "tag": "0032_exercise_set_planned_values",
+      "breakpoints": true
     }
   ]
 }
