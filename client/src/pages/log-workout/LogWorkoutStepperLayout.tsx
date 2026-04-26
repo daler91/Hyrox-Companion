@@ -9,6 +9,7 @@ import type { WorkoutStep } from "@/hooks/useLogWorkoutDraft";
 import type { ParseFromImagePayload } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
+import { shouldTriggerParseOnContinue } from "./parseCheckpoint";
 import type { SharedComposerProps } from "./sharedComposerProps";
 import { CaptureStep } from "./steps/CaptureStep";
 import { ConfirmStep } from "./steps/ConfirmStep";
@@ -110,10 +111,11 @@ export function LogWorkoutStepperLayout({
   }, [autoParsing, autoParseError]);
 
   const advanceFromCapture = () => {
-    const hasText = freeText.trim().length > 0;
-    const hasBlocks = exerciseBlocks.length > 0;
-    const needsParse =
-      hasText && (freeText !== lastParsedTextRef.current || !hasBlocks);
+    const needsParse = shouldTriggerParseOnContinue({
+      freeText,
+      lastParsedText: lastParsedTextRef.current,
+      hasBlocks: exerciseBlocks.length > 0,
+    });
     if (needsParse) {
       pendingParseTextRef.current = freeText;
       parseNow(freeText);
