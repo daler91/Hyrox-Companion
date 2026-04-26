@@ -1,8 +1,9 @@
-import { useCallback,useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { queryClient } from "@/lib/queryClient";
 
 import { COACH_AUTO_OPEN_DELAY_MS, IMPORT_INPUT_DELAY_MS, MOBILE_BREAKPOINT_PX } from "./constants";
+import type { OnboardingCompletionChoice } from "./onboardingTypes";
 
 function hasOnboardingForceParam(): boolean {
   if (globalThis.window === undefined) return false;
@@ -35,8 +36,7 @@ export function useOnboarding(
   useEffect(() => {
     if (onboardingTriggered) return;
     const forcedByUrl = hasOnboardingForceParam();
-    const isFirstTime =
-      isNewUser && !localStorage.getItem("fitai-onboarding-complete");
+    const isFirstTime = isNewUser && !localStorage.getItem("fitai-onboarding-complete");
     if (forcedByUrl || isFirstTime) {
       if (forcedByUrl) {
         localStorage.removeItem("fitai-onboarding-complete");
@@ -62,17 +62,20 @@ export function useOnboarding(
     }
   }, [showOnboarding, onboardingTriggered, hasAutoOpenedCoach, aiCoachEnabled]);
 
-  const handleOnboardingComplete = useCallback((choice: "sample" | "import" | "skip") => {
-    setShowOnboarding(false);
-    if (choice === "import" && fileInputRef.current) {
-      setTimeout(() => {
-        fileInputRef.current?.click();
-      }, IMPORT_INPUT_DELAY_MS);
-    } else if (choice === "sample") {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/plans"] }).catch(() => {});
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] }).catch(() => {});
-    }
-  }, [fileInputRef]);
+  const handleOnboardingComplete = useCallback(
+    (choice: OnboardingCompletionChoice) => {
+      setShowOnboarding(false);
+      if (choice === "import" && fileInputRef.current) {
+        setTimeout(() => {
+          fileInputRef.current?.click();
+        }, IMPORT_INPUT_DELAY_MS);
+      } else if (choice === "sample" || choice === "generated") {
+        queryClient.invalidateQueries({ queryKey: ["/api/v1/plans"] }).catch(() => {});
+        queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] }).catch(() => {});
+      }
+    },
+    [fileInputRef],
+  );
 
   return {
     showOnboarding,

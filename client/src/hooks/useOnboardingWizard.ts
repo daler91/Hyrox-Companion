@@ -1,27 +1,25 @@
 import { useMutation } from "@tanstack/react-query";
-import { addDays,format } from "date-fns";
+import { addDays, format } from "date-fns";
 import { useState } from "react";
 
+import type { OnboardingCompletionChoice, OnboardingWizardStep } from "@/hooks/onboardingTypes";
 import { useToast } from "@/hooks/use-toast";
 import { api, QUERY_KEYS } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
 
-type Step = "welcome" | "units" | "goal" | "plan" | "schedule";
-
-const STEPS: Step[] = ["welcome", "units", "goal", "plan", "schedule"];
-const PREV: Partial<Record<Step, Step>> = {
+const STEPS: OnboardingWizardStep[] = ["welcome", "units", "goal", "plan", "schedule"];
+const PREV: Partial<Record<OnboardingWizardStep, OnboardingWizardStep>> = {
   units: "welcome",
   goal: "units",
   plan: "goal",
   schedule: "plan",
 };
 
-const markComplete = () =>
-  localStorage.setItem("fitai-onboarding-complete", "true");
+const markComplete = () => localStorage.setItem("fitai-onboarding-complete", "true");
 
-export function useOnboardingWizard(onComplete: (choice: "sample" | "import" | "skip") => void) {
+export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionChoice) => void) {
   const { toast } = useToast();
-  const [step, setStep] = useState<Step>("welcome");
+  const [step, setStep] = useState<OnboardingWizardStep>("welcome");
   const [weightUnit, setWeightUnit] = useState<"kg" | "lbs">("kg");
   const [distanceUnit, setDistanceUnit] = useState<"km" | "miles">("km");
   const [selectedGoal, setSelectedGoal] = useState("first");
@@ -44,8 +42,7 @@ export function useOnboardingWizard(onComplete: (choice: "sample" | "import" | "
       setCreatedPlanId(data.id);
       setStep("schedule");
     },
-    onError: () =>
-      toast({ title: "Failed to create plan", variant: "destructive" }),
+    onError: () => toast({ title: "Failed to create plan", variant: "destructive" }),
   });
 
   const scheduleMutation = useMutation({
@@ -61,8 +58,7 @@ export function useOnboardingWizard(onComplete: (choice: "sample" | "import" | "
       markComplete();
       onComplete("sample");
     },
-    onError: () =>
-      toast({ title: "Failed to schedule plan", variant: "destructive" }),
+    onError: () => toast({ title: "Failed to schedule plan", variant: "destructive" }),
   });
 
   const handleNext = async () => {
@@ -115,6 +111,13 @@ export function useOnboardingWizard(onComplete: (choice: "sample" | "import" | "
     sampleMutation.mutate();
   };
 
+  const handleGeneratedPlan = () => {
+    queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans }).catch(() => {});
+    queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }).catch(() => {});
+    markComplete();
+    onComplete("generated");
+  };
+
   const idx = STEPS.indexOf(step);
   const total = step === "schedule" ? 5 : 4;
 
@@ -136,6 +139,7 @@ export function useOnboardingWizard(onComplete: (choice: "sample" | "import" | "
     handleBack,
     handleStartTraining,
     handleUseSamplePlan,
+    handleGeneratedPlan,
     isPrefsPending: prefsMutation.isPending,
     isSamplePending: sampleMutation.isPending,
     isSchedulePending: scheduleMutation.isPending,
