@@ -179,15 +179,15 @@ describe("Timeline Workout Details Interactions", () => {
     cy.getBySel("exercise-row").should("have.length", 2);
     cy.contains("Bench Press").should("exist");
     cy.contains("Overhead Press").should("exist");
-    // Step 2 surfaces the RPE input + AthleteNoteInput once workoutId is
+    // Step 2 puts the reflection fields front and center once workoutId is
     // bound. The mutation onSuccess primes the workout-detail cache from
     // the API response so the inputs render without a separate GET.
     cy.getBySel("workout-logging-step-continue").click();
     cy.getBySel("workout-logging-step-2").should("have.attr", "aria-current", "step");
-    cy.getBySel("workout-stats-rpe-review").should("be.visible").click();
+    cy.getBySel("workout-stats-rpe-focus-panel").should("be.visible");
     cy.getBySel("workout-stats-rpe-input").should("be.visible");
-    cy.getBySel("athlete-note-input").should("exist");
-    cy.getBySel("athlete-note-edit").should("not.be.disabled");
+    cy.getBySel("athlete-note-input").should("have.attr", "data-emphasis", "reflect");
+    cy.get("textarea#athlete-note-textarea").should("be.visible").and("not.be.disabled");
     cy.getBySel("workout-logging-step-finish").click();
     cy.getBySel("workout-logging-stepper").should("not.exist");
   });

@@ -1513,27 +1513,27 @@ function StepperReflect({
   onSaveNote,
 }: Readonly<StepperReflectProps>) {
   return (
-    <>
+    <div className={cn("grid gap-4", workout && "lg:grid-cols-2")}>
       {workout && (
         <WorkoutDetailOverview>
           <WorkoutStatsRow
             workout={workout}
             exerciseSets={exerciseSets}
             onChangeRpe={onChangeRpe}
-            reviewFirst
+            variant="reflect"
             rpeResetSignal={rpeResetSignal}
           />
         </WorkoutDetailOverview>
       )}
-      <WorkoutDetailReflection>
+      <WorkoutDetailReflection emphasized>
         <AthleteNoteInput
           value={workout?.notes}
           onSave={onSaveNote}
           disabled={!workoutId}
-          reviewFirst
+          emphasized
         />
       </WorkoutDetailReflection>
-    </>
+    </div>
   );
 }
 
