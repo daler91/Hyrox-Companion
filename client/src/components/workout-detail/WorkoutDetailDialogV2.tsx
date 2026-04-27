@@ -1,6 +1,6 @@
 import type { ExerciseSet, TimelineEntry, WorkoutStatus } from "@shared/schema";
-import { CheckCircle2, Loader2 } from "lucide-react";
-import { type MutableRefObject,useEffect, useRef, useState } from "react";
+import { Check, CheckCircle2, Loader2 } from "lucide-react";
+import { type MutableRefObject,type ReactNode,useEffect, useRef, useState } from "react";
 
 import {
   AlertDialog,
@@ -59,7 +59,6 @@ interface WorkoutDetailDialogV2Props {
    * newly-logged workout in their list.
    */
   readonly onMarkComplete?: (entry: TimelineEntry) => void;
-  readonly onOpenLogWorkout?: (entry: TimelineEntry, exerciseSets: ExerciseSet[]) => void;
   /**
    * When true, the Mark complete CTA shows a spinner and disables clicks.
    * The dialog stays mounted until the logWorkoutMutation resolves, so
@@ -114,7 +113,6 @@ export function WorkoutDetailDialogV2({
   onDelete,
   onChangeStatus,
   onMarkComplete,
-  onOpenLogWorkout,
   isMarkingComplete = false,
   onCombine,
   weightUnit = "kg",
@@ -131,10 +129,16 @@ export function WorkoutDetailDialogV2({
   // local to the dialog — no Timeline-side seed wiring — so the
   // global coach panel (FAB) stays independent.
   const [chatOpen, setChatOpen] = useState(false);
-  // Reset the chat when the dialog is closed or the entry changes,
-  // so reopening a workout starts fresh on Coach Take + History.
+  // Tracks the in-dialog logging stepper. `null` = no stepper (default
+  // planned overview or default logged view); `1` = "Log actuals"; `2` =
+  // "Reflect". Set to 1 when the user clicks the planned-state Log
+  // workout CTA so the dialog re-renders into the guided flow once the
+  // mutation creates the workoutLog. Reset on entry change so reopening
+  // a different card starts on its default view.
+  const [loggingStep, setLoggingStep] = useState<1 | 2 | null>(null);
   useEffect(() => {
     setChatOpen(false);
+    setLoggingStep(null);
   }, [entry?.id]);
   // Monotonic counter bumped whenever an RPE save errors on the
   // currently-displayed workout. Passed to WorkoutStatsRow as the
@@ -199,6 +203,14 @@ export function WorkoutDetailDialogV2({
   // pre-edit value for a few hundred ms. Mark complete reads this ref at
   // click time to avoid posting a stale focus to logWorkoutMutation.
   const latestFocusRef = useRef<string>(entry?.focus || "");
+  // Tracks in-progress prescription edits the same way `latestFocusRef`
+  // tracks focus. Saves go through `planSets.updatePrescription.mutate`
+  // (no debounce, fired on blur), but the timeline cache only refreshes
+  // after that mutation settles + invalidations refetch — so a user who
+  // types a new prescription, blurs, and then immediately clicks Log
+  // workout can race the save and end up posting the pre-edit text via
+  // entry.mainWorkout/accessory/notes. Carrying the latest draft into
+  // handleFooterMarkComplete sidesteps that race.
   const latestPrescriptionRef = useRef<PlanPrescriptionDraft>(
     buildPlanPrescriptionDraft(entry),
   );
@@ -300,20 +312,24 @@ export function WorkoutDetailDialogV2({
     flushLoggedSetPatches,
     startSaveCycle,
   });
-  const handleFooterMarkComplete = () => handleWorkoutDetailMarkComplete({
-    entry,
-    latestFocus: latestFocusRef.current,
-    onMarkComplete,
-  });
-  const handleFooterLogWorkout = () => {
-    const latestEntry = buildLogWorkoutHandoffEntry({
+  const handleFooterMarkComplete = () => {
+    // Flush any debounced ExerciseTable edits before the mutation runs.
+    // logWorkoutMutation creates the workoutLog by copying persisted
+    // plan-day rows on the server, so a row edit still in the debounce
+    // queue would be missing from the new log.
+    planSets.flushPendingSetPatches();
+    handleWorkoutDetailMarkComplete({
       entry,
       latestFocus: latestFocusRef.current,
       latestPrescription: latestPrescriptionRef.current,
+      onMarkComplete,
     });
-    const latestExerciseSets = planSets.getExerciseSetsWithPendingPatches();
-    planSets.flushPendingSetPatches();
-    onOpenLogWorkout?.(latestEntry, latestExerciseSets);
+    // Open the in-dialog stepper so the user can edit actuals and reflect
+    // immediately, instead of being dropped back into the read-only logged
+    // view (or worse, redirected to /log as the previous flow did). The
+    // mutation onSuccess re-binds the URL to the new workoutLogId so this
+    // local state survives the planned→logged transition.
+    setLoggingStep(1);
   };
   const handleConfirmDelete = () => handleWorkoutDetailDeleteConfirm({
     entry,
@@ -375,6 +391,7 @@ export function WorkoutDetailDialogV2({
             planCoachNote={planCoachNote}
             onDraftPrescriptionChange={handleDraftPrescriptionChange}
             onSaveNote={handleSaveNote}
+            loggingStep={loggingStep}
             onParseLoggedFreeText={handleParseLoggedFreeText}
             isParsingLogged={reparseFreeText.isPending}
             onParseLoggedFromImage={handleParseLoggedFromImage}
@@ -388,21 +405,29 @@ export function WorkoutDetailDialogV2({
           />
         </div>
 
-        <WorkoutDetailFooter
-          isPlanned={isPlanned}
-          canMarkComplete={onMarkComplete != null}
-          canOpenLogWorkout={onOpenLogWorkout != null}
-          completeBusy={completeAction.busy}
-          completeLabel={completeAction.label}
-          saveBusy={saveInFlight || planCoachNote.isRegenerating}
-          savedAt={saveClickedAt}
-          showCoachNoteHint={isPlanned && entry.planDayId != null}
-          saveDisabled={planCoachNote.isCoolingDown}
-          onSaveClick={handleSaveClick}
-          onMarkComplete={handleFooterMarkComplete}
-          onOpenLogWorkout={handleFooterLogWorkout}
-          onDone={onClose}
-        />
+        {loggingStep ? (
+          <WorkoutLoggingStepFooter
+            step={loggingStep}
+            onBack={() => setLoggingStep(1)}
+            onContinue={() => setLoggingStep(2)}
+            onCancel={() => setLoggingStep(null)}
+            onFinish={() => setLoggingStep(null)}
+          />
+        ) : (
+          <WorkoutDetailFooter
+            isPlanned={isPlanned}
+            canMarkComplete={onMarkComplete != null}
+            completeBusy={completeAction.busy}
+            completeLabel={completeAction.label}
+            saveBusy={saveInFlight || planCoachNote.isRegenerating}
+            savedAt={saveClickedAt}
+            showCoachNoteHint={isPlanned && entry.planDayId != null}
+            saveDisabled={planCoachNote.isCoolingDown}
+            onSaveClick={handleSaveClick}
+            onMarkComplete={handleFooterMarkComplete}
+            onDone={onClose}
+          />
+        )}
       </DialogContent>
 
       {/* Explicit confirm step before firing onDelete — the v2 menu's ⋮ is
@@ -432,13 +457,11 @@ export function WorkoutDetailDialogV2({
   );
 }
 
-type PlanSetsController = ReturnType<typeof usePlanDayExercises>;
-type RegenerateCoachNote = ReturnType<typeof usePlanDayCoachNote>["regenerate"]["mutate"];
-type ReparseTextOptions = { onSuccess?: () => void };
-type ReparseImageOptions = { onSuccess?: (data: ReparseResponse) => void };
 type PlanPrescriptionDraft = Record<PrescriptionField, string | null>;
 
-function buildPlanPrescriptionDraft(entry: TimelineEntry | null | undefined): PlanPrescriptionDraft {
+function buildPlanPrescriptionDraft(
+  entry: TimelineEntry | null | undefined,
+): PlanPrescriptionDraft {
   return {
     mainWorkout: entry?.mainWorkout ?? null,
     accessory: entry?.accessory ?? null,
@@ -450,28 +473,10 @@ function normalizePrescriptionDraft(value: string | null | undefined): string | 
   return value && value.trim().length > 0 ? value : null;
 }
 
-function normalizeFocusDraft(latestFocus: string, entry: TimelineEntry): string {
-  const trimmed = latestFocus.trim();
-  return trimmed.length > 0 ? trimmed : entry.focus;
-}
-
-function buildLogWorkoutHandoffEntry({
-  entry,
-  latestFocus,
-  latestPrescription,
-}: {
-  readonly entry: TimelineEntry;
-  readonly latestFocus: string;
-  readonly latestPrescription: PlanPrescriptionDraft;
-}): TimelineEntry {
-  return {
-    ...entry,
-    focus: normalizeFocusDraft(latestFocus, entry),
-    mainWorkout: normalizePrescriptionDraft(latestPrescription.mainWorkout) ?? "",
-    accessory: normalizePrescriptionDraft(latestPrescription.accessory),
-    notes: normalizePrescriptionDraft(latestPrescription.notes),
-  };
-}
+type PlanSetsController = ReturnType<typeof usePlanDayExercises>;
+type RegenerateCoachNote = ReturnType<typeof usePlanDayCoachNote>["regenerate"]["mutate"];
+type ReparseTextOptions = { onSuccess?: () => void };
+type ReparseImageOptions = { onSuccess?: (data: ReparseResponse) => void };
 
 interface WorkoutSaveCoordinatorArgs {
   readonly entryId: string | undefined;
@@ -578,21 +583,46 @@ interface CompleteActionState {
 function getCompleteActionState(isMarkingComplete: boolean, isSavingPlanSets: boolean): CompleteActionState {
   if (isMarkingComplete) return { busy: true, label: "Logging..." };
   if (isSavingPlanSets) return { busy: true, label: "Saving edits..." };
-  return { busy: false, label: "Mark complete" };
+  return { busy: false, label: "Log workout" };
 }
 
 interface MarkCompleteArgs {
   readonly entry: TimelineEntry;
   readonly latestFocus: string;
+  readonly latestPrescription: PlanPrescriptionDraft;
   readonly onMarkComplete?: (entry: TimelineEntry) => void;
 }
 
-function handleWorkoutDetailMarkComplete({ entry, latestFocus, onMarkComplete }: MarkCompleteArgs) {
+function handleWorkoutDetailMarkComplete({
+  entry,
+  latestFocus,
+  latestPrescription,
+  onMarkComplete,
+}: MarkCompleteArgs) {
   blurActiveElement();
   if (!onMarkComplete) return;
 
-  const focus = latestFocus || entry.focus;
-  onMarkComplete(focus === entry.focus ? entry : { ...entry, focus });
+  const focus = (latestFocus.trim() || entry.focus).trim();
+  // Carry the latest in-progress prescription edits into the payload so
+  // useWorkoutActions.handleMarkComplete (which reads
+  // entry.mainWorkout/accessory/notes verbatim) doesn't post stale text
+  // when the user edits the prescription and clicks Log workout before
+  // the planSets.updatePrescription save round-trips back through the
+  // timeline cache.
+  const mainWorkout = normalizePrescriptionDraft(latestPrescription.mainWorkout) ?? "";
+  const accessory = normalizePrescriptionDraft(latestPrescription.accessory);
+  const notes = normalizePrescriptionDraft(latestPrescription.notes);
+
+  const focusChanged = focus !== entry.focus;
+  const mainChanged = mainWorkout !== (entry.mainWorkout ?? "");
+  const accessoryChanged = accessory !== (entry.accessory ?? null);
+  const notesChanged = notes !== (entry.notes ?? null);
+
+  if (!focusChanged && !mainChanged && !accessoryChanged && !notesChanged) {
+    onMarkComplete(entry);
+    return;
+  }
+  onMarkComplete({ ...entry, focus, mainWorkout, accessory, notes });
 }
 
 function blurActiveElement() {
@@ -664,7 +694,6 @@ function handleWorkoutDetailDeleteConfirm({ entry, onDelete, closeDeleteConfirm 
 interface WorkoutDetailFooterProps {
   readonly isPlanned: boolean;
   readonly canMarkComplete: boolean;
-  readonly canOpenLogWorkout: boolean;
   readonly completeBusy: boolean;
   readonly completeLabel: string;
   readonly saveBusy: boolean;
@@ -673,14 +702,12 @@ interface WorkoutDetailFooterProps {
   readonly saveDisabled: boolean;
   readonly onSaveClick: () => void;
   readonly onMarkComplete: () => void;
-  readonly onOpenLogWorkout: () => void;
   readonly onDone: () => void;
 }
 
 function WorkoutDetailFooter({
   isPlanned,
   canMarkComplete,
-  canOpenLogWorkout,
   completeBusy,
   completeLabel,
   saveBusy,
@@ -689,14 +716,12 @@ function WorkoutDetailFooter({
   saveDisabled,
   onSaveClick,
   onMarkComplete,
-  onOpenLogWorkout,
   onDone,
 }: WorkoutDetailFooterProps) {
   const copy = getFooterCopy(isPlanned);
   const saveEmphasis = isPlanned ? "secondary" : "primary";
   const saveLabel = isPlanned ? "Save prescription" : "Save changes";
-  const showLogWorkout = isPlanned && canOpenLogWorkout;
-  const showLegacyComplete = isPlanned && !canOpenLogWorkout && canMarkComplete;
+  const showLogWorkout = isPlanned && canMarkComplete;
 
   return (
     <div className="sticky bottom-0 z-10 flex flex-col gap-3 border-t border-border bg-background/95 px-6 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:flex-row sm:items-center sm:justify-between">
@@ -731,21 +756,8 @@ function WorkoutDetailFooter({
             size="sm"
             className="gap-2"
             disabled={completeBusy}
-            onClick={onOpenLogWorkout}
-            data-testid="workout-detail-log-workout"
-          >
-            <CompleteActionIcon busy={completeBusy} />
-            Log workout
-          </Button>
-        ) : null}
-        {showLegacyComplete ? (
-          <Button
-            type="button"
-            size="sm"
-            className="gap-2"
-            disabled={completeBusy}
             onClick={onMarkComplete}
-            data-testid="workout-detail-mark-complete"
+            data-testid="workout-detail-log-workout"
           >
             <CompleteActionIcon busy={completeBusy} />
             {completeLabel}
@@ -758,8 +770,84 @@ function WorkoutDetailFooter({
 
 function getFooterCopy(isPlanned: boolean) {
   return isPlanned
-    ? { title: "Planned workout", description: "Review the prescription, then log actuals." }
+    ? { title: "Planned workout", description: "Log it to enter actuals step by step." }
     : { title: "Logged workout", description: "Review first. Edit only what changed." };
+}
+
+interface WorkoutLoggingStepFooterProps {
+  readonly step: 1 | 2;
+  readonly onBack: () => void;
+  readonly onContinue: () => void;
+  readonly onCancel: () => void;
+  readonly onFinish: () => void;
+}
+
+function WorkoutLoggingStepFooter({
+  step,
+  onBack,
+  onContinue,
+  onCancel,
+  onFinish,
+}: WorkoutLoggingStepFooterProps) {
+  return (
+    <div
+      className="sticky bottom-0 z-10 flex flex-col gap-3 border-t border-border bg-background/95 px-6 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:flex-row sm:items-center sm:justify-between"
+      data-testid="workout-logging-step-footer"
+    >
+      <div className="text-xs text-muted-foreground">
+        <span className="font-medium text-foreground">Step {step} of 2</span>
+        <span className="ml-2">
+          {step === 1
+            ? "Edit the seeded sets to match what you actually did."
+            : "Add an RPE and a quick note about how it felt."}
+        </span>
+      </div>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+        {step === 1 ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={onCancel}
+            data-testid="workout-logging-step-cancel"
+          >
+            Skip for now
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={onBack}
+            data-testid="workout-logging-step-back"
+          >
+            Back
+          </Button>
+        )}
+        {step === 1 ? (
+          <Button
+            type="button"
+            size="sm"
+            onClick={onContinue}
+            data-testid="workout-logging-step-continue"
+          >
+            Continue
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            size="sm"
+            className="gap-2"
+            onClick={onFinish}
+            data-testid="workout-logging-step-finish"
+          >
+            <CheckCircle2 className="size-4" aria-hidden />
+            Finish
+          </Button>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function CompleteActionIcon({ busy }: Readonly<{ busy: boolean }>) {
@@ -767,6 +855,64 @@ function CompleteActionIcon({ busy }: Readonly<{ busy: boolean }>) {
     <Loader2 className="size-4 animate-spin" aria-hidden />
   ) : (
     <CheckCircle2 className="size-4" aria-hidden />
+  );
+}
+
+const LOGGING_STEP_LABELS: Record<1 | 2, string> = {
+  1: "Log actuals",
+  2: "Reflect",
+};
+
+// Visual pattern matches /log's StepIndicator (LogWorkoutStepperLayout.tsx)
+// — numbered chip, connector line, Check icon when done — so users moving
+// between the in-dialog stepper and the standalone /log surface see the
+// same pacing cues. Inlined rather than extracted because the standalone
+// stepper has 3 fixed steps while this one has 2; the abstraction isn't
+// justified for two callers with different shapes.
+function WorkoutLoggingStepHeader({ current }: Readonly<{ current: 1 | 2 }>) {
+  const steps: (1 | 2)[] = [1, 2];
+  return (
+    <ol
+      className="flex items-center gap-2"
+      aria-label="Workout logging progress"
+      data-testid="workout-logging-step-indicator"
+    >
+      {steps.map((s, idx) => {
+        const isActive = s === current;
+        const isDone = s < current;
+        return (
+          <li key={s} className="flex flex-1 items-center gap-2">
+            <span
+              aria-current={isActive ? "step" : undefined}
+              className={cn(
+                "flex w-full items-center gap-2 rounded-md px-2 py-1.5",
+                isActive && "bg-primary/10 text-primary",
+                isDone && "text-muted-foreground",
+              )}
+              data-testid={`workout-logging-step-${s}`}
+            >
+              <span
+                className={cn(
+                  "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
+                  isActive && "bg-primary text-primary-foreground",
+                  isDone && "bg-muted text-muted-foreground",
+                  !isActive && !isDone && "border border-border text-muted-foreground",
+                )}
+              >
+                {isDone ? <Check className="h-3.5 w-3.5" aria-hidden /> : s}
+              </span>
+              <span className="text-sm font-medium">{LOGGING_STEP_LABELS[s]}</span>
+            </span>
+            {idx < steps.length - 1 && (
+              <span
+                className={cn("h-px flex-1 bg-border", isDone && "bg-primary/40")}
+                aria-hidden
+              />
+            )}
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
@@ -807,8 +953,20 @@ interface DialogBodyProps {
    * `isRegenerating` from this bundle.
    */
   readonly planCoachNote: ReturnType<typeof usePlanDayCoachNote>;
+  /**
+   * Tracks in-progress prescription edits so the dialog can carry them
+   * into the Log workout payload before the planSets save round-trips
+   * back through the timeline cache.
+   */
   readonly onDraftPrescriptionChange: (field: PrescriptionField, value: string) => void;
   readonly onSaveNote: (note: string | null) => void;
+  /**
+   * Active in-dialog logging step, or null when the user is not in the
+   * guided flow. When non-null we hide the sidebar and only render the
+   * step-relevant section so the surface stays focused (mirrors the
+   * /log stepper's UX without the page navigation).
+   */
+  readonly loggingStep: 1 | 2 | null;
   /**
    * Parse trigger for the logged-workout free-text prescription when
    * available. Planned entries parse via usePlanDayExercises.
@@ -950,6 +1108,7 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     planCoachNote,
     onDraftPrescriptionChange,
     onSaveNote,
+    loggingStep,
     onParseLoggedFreeText,
     isParsingLogged,
     onParseLoggedFromImage,
@@ -983,7 +1142,6 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
   // Route free-text edits to the right mutation based on which branch is open.
   const onSavePrescriptionField = (field: PrescriptionField, value: string) => {
     const normalized = value.trim().length === 0 ? null : value;
-    onDraftPrescriptionChange(field, value);
     if (isPlanned && planDayId) {
       planSets.updatePrescription.mutate({ [field]: normalized });
     }
@@ -1120,6 +1278,29 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     </>
   );
 
+  if (loggingStep) {
+    return (
+      <StepperContent
+        loggingStep={loggingStep}
+        prescriptionPanel={prescriptionPanel}
+        parseConfirmDialog={parseConfirmDialog}
+        workout={workout}
+        workoutId={workoutId}
+        exerciseSets={exerciseSets}
+        weightUnit={weightUnit}
+        distanceUnit={distanceUnit}
+        onUpdateSet={onUpdateSet}
+        onAddSet={onAddSet}
+        onDeleteSet={onDeleteSet}
+        loggedSaveState={loggedSaveState}
+        hasUnparsedText={hasUnparsedText}
+        onChangeRpe={onChangeRpe}
+        rpeResetSignal={rpeResetSignal}
+        onSaveNote={onSaveNote}
+      />
+    );
+  }
+
   return (
     <WorkoutDetailGuidedLayout sidebar={sidebar} chatOpen={chatOpen}>
       {isPlanned ? (
@@ -1186,6 +1367,167 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
       )}
       {parseConfirmDialog}
     </WorkoutDetailGuidedLayout>
+  );
+}
+
+interface StepperContentProps {
+  readonly loggingStep: 1 | 2;
+  readonly prescriptionPanel: ReactNode;
+  readonly parseConfirmDialog: ReactNode;
+  readonly workout:
+    | (import("@shared/schema").WorkoutLog & { exerciseSets?: ExerciseSet[]; notes?: string | null })
+    | undefined;
+  readonly workoutId: string | null;
+  readonly exerciseSets: ExerciseSet[];
+  readonly weightUnit: "kg" | "lb";
+  readonly distanceUnit: "km" | "miles";
+  readonly onUpdateSet: (setId: string, data: import("@/lib/api").PatchExerciseSetPayload) => void;
+  readonly onAddSet: (data: import("@/lib/api").AddExerciseSetPayload) => void;
+  readonly onDeleteSet: (setId: string) => void;
+  readonly loggedSaveState: { isSaving: boolean; lastSavedAt: number | null };
+  readonly hasUnparsedText: boolean;
+  readonly onChangeRpe?: (rpe: number | null) => void;
+  readonly rpeResetSignal: number;
+  readonly onSaveNote: (note: string | null) => void;
+}
+
+// Renders the in-dialog logging flow's body. Extracted from DialogBody so
+// the parent stays under Sonar's cognitive-complexity ceiling — nested
+// step ternaries + workout/workoutId guards inflate that score quickly.
+function StepperContent({
+  loggingStep,
+  prescriptionPanel,
+  parseConfirmDialog,
+  workout,
+  workoutId,
+  exerciseSets,
+  weightUnit,
+  distanceUnit,
+  onUpdateSet,
+  onAddSet,
+  onDeleteSet,
+  loggedSaveState,
+  hasUnparsedText,
+  onChangeRpe,
+  rpeResetSignal,
+  onSaveNote,
+}: Readonly<StepperContentProps>) {
+  return (
+    <div className="flex flex-col gap-4 px-4 py-4 sm:px-6" data-testid="workout-logging-stepper">
+      <WorkoutLoggingStepHeader current={loggingStep} />
+      {loggingStep === 1 ? (
+        <StepperLogActuals
+          prescriptionPanel={prescriptionPanel}
+          workoutId={workoutId}
+          exerciseSets={exerciseSets}
+          weightUnit={weightUnit}
+          distanceUnit={distanceUnit}
+          onUpdateSet={onUpdateSet}
+          onAddSet={onAddSet}
+          onDeleteSet={onDeleteSet}
+          loggedSaveState={loggedSaveState}
+          hasUnparsedText={hasUnparsedText}
+        />
+      ) : (
+        <StepperReflect
+          workout={workout}
+          workoutId={workoutId}
+          exerciseSets={exerciseSets}
+          onChangeRpe={onChangeRpe}
+          rpeResetSignal={rpeResetSignal}
+          onSaveNote={onSaveNote}
+        />
+      )}
+      {parseConfirmDialog}
+    </div>
+  );
+}
+
+interface StepperLogActualsProps {
+  readonly prescriptionPanel: ReactNode;
+  readonly workoutId: string | null;
+  readonly exerciseSets: ExerciseSet[];
+  readonly weightUnit: "kg" | "lb";
+  readonly distanceUnit: "km" | "miles";
+  readonly onUpdateSet: (setId: string, data: import("@/lib/api").PatchExerciseSetPayload) => void;
+  readonly onAddSet: (data: import("@/lib/api").AddExerciseSetPayload) => void;
+  readonly onDeleteSet: (setId: string) => void;
+  readonly loggedSaveState: { isSaving: boolean; lastSavedAt: number | null };
+  readonly hasUnparsedText: boolean;
+}
+
+function StepperLogActuals({
+  prescriptionPanel,
+  workoutId,
+  exerciseSets,
+  weightUnit,
+  distanceUnit,
+  onUpdateSet,
+  onAddSet,
+  onDeleteSet,
+  loggedSaveState,
+  hasUnparsedText,
+}: Readonly<StepperLogActualsProps>) {
+  return (
+    <WorkoutDetailSection title="Log actuals" testId="workout-logging-step-actuals">
+      {prescriptionPanel}
+      <LoggedExerciseSection
+        workoutId={workoutId}
+        exerciseSets={exerciseSets}
+        weightUnit={weightUnit}
+        distanceUnit={distanceUnit}
+        onUpdateSet={onUpdateSet}
+        onAddSet={onAddSet}
+        onDeleteSet={onDeleteSet}
+        saveState={loggedSaveState}
+        hasUnparsedText={hasUnparsedText}
+        showPlannedDiffs
+      />
+    </WorkoutDetailSection>
+  );
+}
+
+interface StepperReflectProps {
+  readonly workout:
+    | (import("@shared/schema").WorkoutLog & { exerciseSets?: ExerciseSet[]; notes?: string | null })
+    | undefined;
+  readonly workoutId: string | null;
+  readonly exerciseSets: ExerciseSet[];
+  readonly onChangeRpe?: (rpe: number | null) => void;
+  readonly rpeResetSignal: number;
+  readonly onSaveNote: (note: string | null) => void;
+}
+
+function StepperReflect({
+  workout,
+  workoutId,
+  exerciseSets,
+  onChangeRpe,
+  rpeResetSignal,
+  onSaveNote,
+}: Readonly<StepperReflectProps>) {
+  return (
+    <>
+      {workout && (
+        <WorkoutDetailOverview>
+          <WorkoutStatsRow
+            workout={workout}
+            exerciseSets={exerciseSets}
+            onChangeRpe={onChangeRpe}
+            reviewFirst
+            rpeResetSignal={rpeResetSignal}
+          />
+        </WorkoutDetailOverview>
+      )}
+      <WorkoutDetailReflection>
+        <AthleteNoteInput
+          value={workout?.notes}
+          onSave={onSaveNote}
+          disabled={!workoutId}
+          reviewFirst
+        />
+      </WorkoutDetailReflection>
+    </>
   );
 }
 
