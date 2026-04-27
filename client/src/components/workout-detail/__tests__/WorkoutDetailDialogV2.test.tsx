@@ -678,6 +678,13 @@ describe("WorkoutDetailDialogV2", () => {
 
     expect(screen.getByTestId("workout-logging-stepper")).toBeInTheDocument();
     expect(screen.getByTestId("workout-logging-step-1")).toHaveAttribute("aria-current", "step");
+
+    await user.click(screen.getByTestId("workout-logging-step-continue"));
+    expect(screen.getByTestId("workout-logging-step-2")).toHaveAttribute("aria-current", "step");
+    expect(await screen.findByTestId("workout-stats-rpe-focus-panel")).toBeInTheDocument();
+    expect(screen.getByTestId("workout-stats-rpe-input")).toBeInTheDocument();
+    expect(screen.getByTestId("athlete-note-input")).toHaveAttribute("data-emphasis", "reflect");
+    expect(screen.getByLabelText(/athlete note/i)).toBeEnabled();
   });
 
   it("clears the logging stepper when the dialog switches to a different owner", async () => {

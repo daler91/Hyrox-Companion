@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useDebouncedCallback } from "@/hooks/useDebouncedCallback";
+import { cn } from "@/lib/utils";
 
 const SAVE_DEBOUNCE_MS = 500;
 
@@ -12,6 +13,7 @@ interface AthleteNoteInputProps {
   readonly onSave: (note: string | null) => void;
   readonly disabled?: boolean;
   readonly reviewFirst?: boolean;
+  readonly emphasized?: boolean;
 }
 
 /**
@@ -20,7 +22,13 @@ interface AthleteNoteInputProps {
  * character doesn't hit the API. Parent controls the mutation — this
  * component is purely a controlled textarea with built-in debounce.
  */
-export function AthleteNoteInput({ value, onSave, disabled, reviewFirst = false }: AthleteNoteInputProps) {
+export function AthleteNoteInput({
+  value,
+  onSave,
+  disabled,
+  reviewFirst = false,
+  emphasized = false,
+}: AthleteNoteInputProps) {
   const [draft, setDraft] = useState(value ?? "");
   const [isEditing, setIsEditing] = useState(!reviewFirst);
 
@@ -39,16 +47,26 @@ export function AthleteNoteInput({ value, onSave, disabled, reviewFirst = false 
   if (!isEditing) {
     const preview = draft.trim().length > 0 ? draft : "No athlete note yet.";
     return (
-      <section className="flex flex-col gap-2" data-testid="athlete-note-input">
+      <section
+        className={cn("flex flex-col gap-2", emphasized && "gap-3")}
+        data-testid="athlete-note-input"
+        data-emphasis={emphasized ? "reflect" : undefined}
+      >
         <div className="flex items-center justify-between gap-2">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <span className={cn(
+            "text-xs font-medium uppercase tracking-wide text-muted-foreground",
+            emphasized && "text-sm font-semibold text-foreground",
+          )}>
             Athlete note
           </span>
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            className="h-7 gap-1.5 px-2 text-xs text-muted-foreground"
+            className={cn(
+              "h-7 gap-1.5 px-2 text-xs text-muted-foreground",
+              emphasized && "h-8 border border-border bg-background px-3 text-sm font-medium text-foreground hover:bg-muted/40",
+            )}
             onClick={() => setIsEditing(true)}
             disabled={disabled}
             data-testid="athlete-note-edit"
@@ -59,7 +77,10 @@ export function AthleteNoteInput({ value, onSave, disabled, reviewFirst = false 
         </div>
         <button
           type="button"
-          className="min-h-[52px] rounded-md border border-border bg-muted/20 px-3 py-2 text-left text-sm text-muted-foreground hover:border-ring/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className={cn(
+            "min-h-[52px] rounded-md border border-border bg-muted/20 px-3 py-2 text-left text-sm text-muted-foreground hover:border-ring/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            emphasized && "min-h-[112px] bg-background px-4 py-3 text-base leading-relaxed text-foreground",
+          )}
           onClick={() => setIsEditing(true)}
           disabled={disabled}
           data-testid="athlete-note-review"
@@ -71,8 +92,18 @@ export function AthleteNoteInput({ value, onSave, disabled, reviewFirst = false 
   }
 
   return (
-    <section className="flex flex-col gap-2" data-testid="athlete-note-input">
-      <label htmlFor="athlete-note-textarea" className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+    <section
+      className={cn("flex flex-col gap-2", emphasized && "gap-3")}
+      data-testid="athlete-note-input"
+      data-emphasis={emphasized ? "reflect" : undefined}
+    >
+      <label
+        htmlFor="athlete-note-textarea"
+        className={cn(
+          "text-xs font-medium uppercase tracking-wide text-muted-foreground",
+          emphasized && "text-sm font-semibold text-foreground",
+        )}
+      >
         Athlete note
       </label>
       <Textarea
@@ -86,9 +117,9 @@ export function AthleteNoteInput({ value, onSave, disabled, reviewFirst = false 
           if (reviewFirst) setIsEditing(false);
         }}
         disabled={disabled}
-        placeholder="Tap to add a note…"
-        rows={2}
-        className="resize-none"
+        placeholder={emphasized ? "Add an athlete note..." : "Tap to add a note..."}
+        rows={emphasized ? 4 : 2}
+        className={cn("resize-none", emphasized && "min-h-[120px] text-base leading-relaxed")}
       />
     </section>
   );
