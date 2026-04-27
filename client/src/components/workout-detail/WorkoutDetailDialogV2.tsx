@@ -1,6 +1,6 @@
 import type { ExerciseSet, TimelineEntry, WorkoutStatus } from "@shared/schema";
 import { Check, CheckCircle2, Loader2 } from "lucide-react";
-import { type MutableRefObject,useEffect, useRef, useState } from "react";
+import { type MutableRefObject,type ReactNode,useEffect, useRef, useState } from "react";
 
 import {
   AlertDialog,
@@ -405,7 +405,7 @@ export function WorkoutDetailDialogV2({
           />
         </div>
 
-        {loggingStep != null ? (
+        {loggingStep ? (
           <WorkoutLoggingStepFooter
             step={loggingStep}
             onBack={() => setLoggingStep(1)}
@@ -1278,51 +1278,26 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     </>
   );
 
-  if (loggingStep != null) {
+  if (loggingStep) {
     return (
-      <div className="flex flex-col gap-4 px-4 py-4 sm:px-6" data-testid="workout-logging-stepper">
-        <WorkoutLoggingStepHeader current={loggingStep} />
-        {loggingStep === 1 ? (
-          <WorkoutDetailSection title="Log actuals" testId="workout-logging-step-actuals">
-            {prescriptionPanel}
-            <LoggedExerciseSection
-              workoutId={workoutId}
-              exerciseSets={exerciseSets}
-              weightUnit={weightUnit}
-              distanceUnit={distanceUnit}
-              onUpdateSet={onUpdateSet}
-              onAddSet={onAddSet}
-              onDeleteSet={onDeleteSet}
-              saveState={loggedSaveState}
-              hasUnparsedText={hasUnparsedText}
-              showPlannedDiffs
-            />
-          </WorkoutDetailSection>
-        ) : (
-          <>
-            {workout && (
-              <WorkoutDetailOverview>
-                <WorkoutStatsRow
-                  workout={workout}
-                  exerciseSets={exerciseSets}
-                  onChangeRpe={onChangeRpe}
-                  reviewFirst
-                  rpeResetSignal={rpeResetSignal}
-                />
-              </WorkoutDetailOverview>
-            )}
-            <WorkoutDetailReflection>
-              <AthleteNoteInput
-                value={workout?.notes}
-                onSave={onSaveNote}
-                disabled={!workoutId}
-                reviewFirst
-              />
-            </WorkoutDetailReflection>
-          </>
-        )}
-        {parseConfirmDialog}
-      </div>
+      <StepperContent
+        loggingStep={loggingStep}
+        prescriptionPanel={prescriptionPanel}
+        parseConfirmDialog={parseConfirmDialog}
+        workout={workout}
+        workoutId={workoutId}
+        exerciseSets={exerciseSets}
+        weightUnit={weightUnit}
+        distanceUnit={distanceUnit}
+        onUpdateSet={onUpdateSet}
+        onAddSet={onAddSet}
+        onDeleteSet={onDeleteSet}
+        loggedSaveState={loggedSaveState}
+        hasUnparsedText={hasUnparsedText}
+        onChangeRpe={onChangeRpe}
+        rpeResetSignal={rpeResetSignal}
+        onSaveNote={onSaveNote}
+      />
     );
   }
 
@@ -1392,6 +1367,167 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
       )}
       {parseConfirmDialog}
     </WorkoutDetailGuidedLayout>
+  );
+}
+
+interface StepperContentProps {
+  readonly loggingStep: 1 | 2;
+  readonly prescriptionPanel: ReactNode;
+  readonly parseConfirmDialog: ReactNode;
+  readonly workout:
+    | (import("@shared/schema").WorkoutLog & { exerciseSets?: ExerciseSet[]; notes?: string | null })
+    | undefined;
+  readonly workoutId: string | null;
+  readonly exerciseSets: ExerciseSet[];
+  readonly weightUnit: "kg" | "lb";
+  readonly distanceUnit: "km" | "miles";
+  readonly onUpdateSet: (setId: string, data: import("@/lib/api").PatchExerciseSetPayload) => void;
+  readonly onAddSet: (data: import("@/lib/api").AddExerciseSetPayload) => void;
+  readonly onDeleteSet: (setId: string) => void;
+  readonly loggedSaveState: { isSaving: boolean; lastSavedAt: number | null };
+  readonly hasUnparsedText: boolean;
+  readonly onChangeRpe?: (rpe: number | null) => void;
+  readonly rpeResetSignal: number;
+  readonly onSaveNote: (note: string | null) => void;
+}
+
+// Renders the in-dialog logging flow's body. Extracted from DialogBody so
+// the parent stays under Sonar's cognitive-complexity ceiling — nested
+// step ternaries + workout/workoutId guards inflate that score quickly.
+function StepperContent({
+  loggingStep,
+  prescriptionPanel,
+  parseConfirmDialog,
+  workout,
+  workoutId,
+  exerciseSets,
+  weightUnit,
+  distanceUnit,
+  onUpdateSet,
+  onAddSet,
+  onDeleteSet,
+  loggedSaveState,
+  hasUnparsedText,
+  onChangeRpe,
+  rpeResetSignal,
+  onSaveNote,
+}: Readonly<StepperContentProps>) {
+  return (
+    <div className="flex flex-col gap-4 px-4 py-4 sm:px-6" data-testid="workout-logging-stepper">
+      <WorkoutLoggingStepHeader current={loggingStep} />
+      {loggingStep === 1 ? (
+        <StepperLogActuals
+          prescriptionPanel={prescriptionPanel}
+          workoutId={workoutId}
+          exerciseSets={exerciseSets}
+          weightUnit={weightUnit}
+          distanceUnit={distanceUnit}
+          onUpdateSet={onUpdateSet}
+          onAddSet={onAddSet}
+          onDeleteSet={onDeleteSet}
+          loggedSaveState={loggedSaveState}
+          hasUnparsedText={hasUnparsedText}
+        />
+      ) : (
+        <StepperReflect
+          workout={workout}
+          workoutId={workoutId}
+          exerciseSets={exerciseSets}
+          onChangeRpe={onChangeRpe}
+          rpeResetSignal={rpeResetSignal}
+          onSaveNote={onSaveNote}
+        />
+      )}
+      {parseConfirmDialog}
+    </div>
+  );
+}
+
+interface StepperLogActualsProps {
+  readonly prescriptionPanel: ReactNode;
+  readonly workoutId: string | null;
+  readonly exerciseSets: ExerciseSet[];
+  readonly weightUnit: "kg" | "lb";
+  readonly distanceUnit: "km" | "miles";
+  readonly onUpdateSet: (setId: string, data: import("@/lib/api").PatchExerciseSetPayload) => void;
+  readonly onAddSet: (data: import("@/lib/api").AddExerciseSetPayload) => void;
+  readonly onDeleteSet: (setId: string) => void;
+  readonly loggedSaveState: { isSaving: boolean; lastSavedAt: number | null };
+  readonly hasUnparsedText: boolean;
+}
+
+function StepperLogActuals({
+  prescriptionPanel,
+  workoutId,
+  exerciseSets,
+  weightUnit,
+  distanceUnit,
+  onUpdateSet,
+  onAddSet,
+  onDeleteSet,
+  loggedSaveState,
+  hasUnparsedText,
+}: Readonly<StepperLogActualsProps>) {
+  return (
+    <WorkoutDetailSection title="Log actuals" testId="workout-logging-step-actuals">
+      {prescriptionPanel}
+      <LoggedExerciseSection
+        workoutId={workoutId}
+        exerciseSets={exerciseSets}
+        weightUnit={weightUnit}
+        distanceUnit={distanceUnit}
+        onUpdateSet={onUpdateSet}
+        onAddSet={onAddSet}
+        onDeleteSet={onDeleteSet}
+        saveState={loggedSaveState}
+        hasUnparsedText={hasUnparsedText}
+        showPlannedDiffs
+      />
+    </WorkoutDetailSection>
+  );
+}
+
+interface StepperReflectProps {
+  readonly workout:
+    | (import("@shared/schema").WorkoutLog & { exerciseSets?: ExerciseSet[]; notes?: string | null })
+    | undefined;
+  readonly workoutId: string | null;
+  readonly exerciseSets: ExerciseSet[];
+  readonly onChangeRpe?: (rpe: number | null) => void;
+  readonly rpeResetSignal: number;
+  readonly onSaveNote: (note: string | null) => void;
+}
+
+function StepperReflect({
+  workout,
+  workoutId,
+  exerciseSets,
+  onChangeRpe,
+  rpeResetSignal,
+  onSaveNote,
+}: Readonly<StepperReflectProps>) {
+  return (
+    <>
+      {workout && (
+        <WorkoutDetailOverview>
+          <WorkoutStatsRow
+            workout={workout}
+            exerciseSets={exerciseSets}
+            onChangeRpe={onChangeRpe}
+            reviewFirst
+            rpeResetSignal={rpeResetSignal}
+          />
+        </WorkoutDetailOverview>
+      )}
+      <WorkoutDetailReflection>
+        <AthleteNoteInput
+          value={workout?.notes}
+          onSave={onSaveNote}
+          disabled={!workoutId}
+          reviewFirst
+        />
+      </WorkoutDetailReflection>
+    </>
   );
 }
 
