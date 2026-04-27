@@ -1,4 +1,4 @@
-import type { TimelineEntry, User, WorkoutStatus } from "@shared/schema";
+import type { ExerciseSet, TimelineEntry, User, WorkoutLog, WorkoutStatus } from "@shared/schema";
 
 import { api, QUERY_KEYS } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
@@ -17,6 +17,67 @@ function markAutoCoachingActive() {
     if (!old) return old;
     return { ...old, isAutoCoaching: true };
   });
+}
+
+type CreatedWorkout = WorkoutLog & { exerciseSets?: ExerciseSet[] };
+
+function buildLoggedTimelineEntry(workout: CreatedWorkout, sourceEntry?: TimelineEntry | null): TimelineEntry {
+  return {
+    id: `log-${workout.id}`,
+    date: workout.date ?? sourceEntry?.date ?? "",
+    type: "logged",
+    status: "completed",
+    focus: workout.focus || sourceEntry?.focus || "Workout",
+    mainWorkout: workout.mainWorkout ?? sourceEntry?.mainWorkout ?? "",
+    accessory: workout.accessory ?? sourceEntry?.accessory ?? null,
+    notes: workout.notes ?? sourceEntry?.notes ?? null,
+    duration: workout.duration,
+    rpe: workout.rpe,
+    planDayId: workout.planDayId ?? sourceEntry?.planDayId ?? null,
+    workoutLogId: workout.id,
+    weekNumber: sourceEntry?.weekNumber,
+    dayName: sourceEntry?.dayName,
+    planName: sourceEntry?.planName,
+    planId: workout.planId ?? sourceEntry?.planId ?? null,
+    source: (workout.source as TimelineEntry["source"]) ?? sourceEntry?.source ?? "manual",
+    aiSource: sourceEntry?.aiSource,
+    aiRationale: sourceEntry?.aiRationale,
+    aiNoteUpdatedAt: sourceEntry?.aiNoteUpdatedAt,
+    aiInputsUsed: sourceEntry?.aiInputsUsed,
+    exerciseSets: workout.exerciseSets ?? [],
+    calories: workout.calories,
+    distanceMeters: workout.distanceMeters,
+    elevationGain: workout.elevationGain,
+    avgHeartrate: workout.avgHeartrate,
+    maxHeartrate: workout.maxHeartrate,
+    avgSpeed: workout.avgSpeed,
+    maxSpeed: workout.maxSpeed,
+    avgCadence: workout.avgCadence,
+    avgWatts: workout.avgWatts,
+    sufferScore: workout.sufferScore,
+  };
+}
+
+function patchTimelineEntriesForLoggedWorkout(
+  workout: CreatedWorkout,
+  variables: LogWorkoutVariables,
+): TimelineEntry {
+  let detailEntry = buildLoggedTimelineEntry(workout, variables.sourceEntry);
+
+  queryClient.setQueriesData<TimelineEntry[]>({ queryKey: QUERY_KEYS.timeline }, (old) => {
+    if (!old) return old;
+    let patched = false;
+    const nextEntries = old.map((entry) => {
+      if (entry.planDayId !== variables.planDayId) return entry;
+      patched = true;
+      const nextEntry = buildLoggedTimelineEntry(workout, entry);
+      detailEntry = nextEntry;
+      return nextEntry;
+    });
+    return patched ? nextEntries : old;
+  });
+
+  return detailEntry;
 }
 
 export function useWorkoutActionMutations(
@@ -65,45 +126,26 @@ export function useWorkoutActionMutations(
       ),
   );
   const logWorkoutMutation = useApiMutation({
-    mutationFn: (data: LogWorkoutVariables) => api.workouts.create(data),
-    // New workouts can set new PRs / extend analytics series. Keep the
-    // staleTime: Infinity analytics tabs fresh after mutation success.
-    invalidateQueries: [
-      QUERY_KEYS.timeline,
-      QUERY_KEYS.personalRecords,
-      QUERY_KEYS.exerciseAnalytics,
-    ],
+    mutationFn: (data: LogWorkoutVariables) => {
+      const { sourceEntry: _sourceEntry, ...payload } = data;
+      return api.workouts.create(payload);
+    },
     successToast: "Workout logged!",
     errorToast: "Failed to log workout",
     ...logWorkoutHandlers,
-    onSuccess: (data, variables) => {
+    onSuccess: async (data, variables) => {
       markAutoCoachingActive();
-      // Patch the cached timeline entry with the freshly-created
-      // workoutLogId so the detail dialog can stay open and re-render in
-      // logged state. entryId() prefers workoutLogId over planDayId, so
-      // without rebinding the URL the dialog's openWorkoutId (still the
-      // planDayId) no longer matches any entry and the dialog closes.
-      const queryKey = [...QUERY_KEYS.timeline, selectedPlanId];
-      let updatedEntry: TimelineEntry | null = null;
-      queryClient.setQueryData<TimelineEntry[]>(queryKey, (old) => {
-        if (!old) return old;
-        return old.map((entry) => {
-          if (entry.planDayId !== variables.planDayId) return entry;
-          const next: TimelineEntry = { ...entry, workoutLogId: data.id };
-          updatedEntry = next;
-          return next;
-        });
-      });
       // Prime the workout-detail cache so the in-dialog stepper renders
       // the seeded sets / RPE / notes immediately on its first paint —
       // without this, useWorkoutDetail(workoutId) starts loading and the
       // user sees an empty step 1 until the GET round-trip lands.
       queryClient.setQueryData(QUERY_KEYS.workout(data.id), data);
-      if (updatedEntry) {
-        setDetailEntry(updatedEntry);
-      } else {
-        setDetailEntry(null);
-      }
+      setDetailEntry(patchTimelineEntriesForLoggedWorkout(data, variables));
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }),
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.personalRecords }),
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.exerciseAnalytics }),
+      ]);
     },
   });
 

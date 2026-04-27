@@ -1,4 +1,4 @@
-import type { ParsedExercise, PlanDay, UpdateWorkoutLog } from "@shared/schema";
+import type { ParsedExercise, PlanDay, TimelineEntry, UpdateWorkoutLog } from "@shared/schema";
 
 export type LogWorkoutVariables = {
   planDayId: string;
@@ -9,6 +9,7 @@ export type LogWorkoutVariables = {
   notes?: string;
   rpe?: number;
   exercises?: ParsedExercise[];
+  sourceEntry?: TimelineEntry;
 };
 
 export type UpdateDayVariables = {

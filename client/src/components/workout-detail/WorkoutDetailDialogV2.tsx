@@ -136,10 +136,11 @@ export function WorkoutDetailDialogV2({
   // mutation creates the workoutLog. Reset on entry change so reopening
   // a different card starts on its default view.
   const [loggingStep, setLoggingStep] = useState<1 | 2 | null>(null);
+  const loggingOwnerId = entry?.planDayId ?? entry?.workoutLogId ?? entry?.id;
   useEffect(() => {
     setChatOpen(false);
     setLoggingStep(null);
-  }, [entry?.id]);
+  }, [loggingOwnerId]);
   // Monotonic counter bumped whenever an RPE save errors on the
   // currently-displayed workout. Passed to WorkoutStatsRow as the
   // reset signal so the editable input remounts with the
