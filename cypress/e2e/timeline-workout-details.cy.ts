@@ -73,18 +73,22 @@ describe("Timeline Workout Details Interactions", () => {
     cy.contains("Workout logged").should("exist");
   });
 
-  it("opens the guided log workout flow from the dialog's CTA", () => {
+  it("opens the in-dialog guided logging stepper from the CTA", () => {
     cy.getBySel(`card-timeline-entry-${workoutId}`).click();
     cy.wait("@getPlanDaySets");
     cy.getBySel("workout-detail-log-workout").click();
 
-    cy.url().should("include", "/log");
-    cy.getBySel("stepper-step-2").should("have.attr", "aria-current", "step");
-    cy.getBySel("button-show-original").click();
-    cy.getBySel("text-original-description")
-      .should("contain", "4x8 bench press at 60kg")
-      .and("contain", "3x12 lateral raises")
-      .and("contain", "Focus on form");
+    cy.wait("@logWorkoutFromPlan");
+    // Dialog stays open and re-renders into the 2-step stepper instead
+    // of redirecting to /log. Step 1 (Log actuals) is active by default.
+    cy.url().should("not.include", "/log");
+    cy.getBySel("workout-detail-dialog-v2").should("exist");
+    cy.getBySel("workout-logging-stepper").should("exist");
+    cy.getBySel("workout-logging-step-1").should("have.attr", "aria-current", "step");
+    cy.getBySel("workout-logging-step-continue").click();
+    cy.getBySel("workout-logging-step-2").should("have.attr", "aria-current", "step");
+    cy.getBySel("workout-logging-step-finish").click();
+    cy.getBySel("workout-logging-stepper").should("not.exist");
   });
 
   it("can mark a workout as missed from the v2 overflow menu", () => {
