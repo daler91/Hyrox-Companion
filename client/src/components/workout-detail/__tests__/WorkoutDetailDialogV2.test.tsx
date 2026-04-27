@@ -186,7 +186,7 @@ describe("WorkoutDetailDialogV2", () => {
     });
   });
 
-  it("renders Mark complete CTA and the plan-day exercise table when the workout hasn't been logged yet", async () => {
+  it("renders Log workout CTA and the plan-day exercise table when the workout hasn't been logged yet", async () => {
     mockWorkouts.get.mockResolvedValue(makeWorkout());
     mockWorkouts.history.mockResolvedValue({
       lastSameFocus: null,
@@ -199,7 +199,7 @@ describe("WorkoutDetailDialogV2", () => {
       onMarkComplete: vi.fn(),
     });
 
-    expect(screen.getByTestId("workout-detail-mark-complete")).toBeInTheDocument();
+    expect(screen.getByTestId("workout-detail-log-workout")).toBeInTheDocument();
     expect(screen.getByText(/planned sets are ready for review/i)).toBeInTheDocument();
     // Exercise table renders with plan-day-backed mutations — see the
     // +Add button used to append prescribed sets pre-log.
@@ -559,7 +559,7 @@ describe("WorkoutDetailDialogV2", () => {
 
   // ---- Planned-entry state --------------------------------------------
 
-  it("renders the Mark complete CTA for planned entries and hides stats + history", () => {
+  it("renders the Log workout CTA for planned entries and hides stats + history", () => {
     const onMarkComplete = vi.fn();
 
     renderDialog({
@@ -574,7 +574,7 @@ describe("WorkoutDetailDialogV2", () => {
     expect(screen.getByTestId("workout-detail-planned-cta")).toBeInTheDocument();
     expect(screen.getByTestId("workout-detail-overview")).toBeInTheDocument();
     expect(screen.getByTestId("planned-overview-summary")).toHaveTextContent("Exercises");
-    expect(screen.getByTestId("workout-detail-mark-complete")).toBeInTheDocument();
+    expect(screen.getByTestId("workout-detail-log-workout")).toBeInTheDocument();
     // Stats/history/athlete-note are workout-log-backed; they shouldn't
     // surface for a planned entry with nothing logged yet.
     expect(screen.queryByTestId("workout-stats-row")).not.toBeInTheDocument();
@@ -587,7 +587,7 @@ describe("WorkoutDetailDialogV2", () => {
     expect(mockWorkouts.get).not.toHaveBeenCalled();
   });
 
-  it("fires onMarkComplete when the CTA is clicked", async () => {
+  it("fires onMarkComplete and opens the in-dialog stepper when Log workout is clicked", async () => {
     const onMarkComplete = vi.fn();
     renderDialog({
       entry: makeEntry({
@@ -599,105 +599,18 @@ describe("WorkoutDetailDialogV2", () => {
     });
 
     const user = userEvent.setup();
-    await user.click(screen.getByTestId("workout-detail-mark-complete"));
+    await user.click(screen.getByTestId("workout-detail-log-workout"));
 
     expect(onMarkComplete).toHaveBeenCalledWith(
       expect.objectContaining({ workoutLogId: null, planDayId: "plan-day-1" }),
     );
-  });
-
-  it("uses the Log workout handoff for planned entries when available", async () => {
-    const planSet = makeSet({
-      id: "plan-set-1",
-      workoutLogId: null,
-      planDayId: "plan-day-1",
-      exerciseName: "back_squat",
-    });
-    const onOpenLogWorkout = vi.fn();
-    mockPlans.getDayExercises.mockResolvedValue([planSet]);
-
-    renderDialog({
-      entry: makeEntry({
-        workoutLogId: null,
-        status: "planned",
-        planDayId: "plan-day-1",
-      }),
-      onOpenLogWorkout,
-      onMarkComplete: vi.fn(),
-    });
-
-    expect(await screen.findByText(/Back Squat/i)).toBeInTheDocument();
-
-    const user = userEvent.setup();
-    await user.click(screen.getByTestId("workout-detail-log-workout"));
-
-    expect(onOpenLogWorkout).toHaveBeenCalledWith(
-      expect.objectContaining({ workoutLogId: null, planDayId: "plan-day-1" }),
-      [planSet],
-    );
-    expect(screen.queryByTestId("workout-detail-mark-complete")).not.toBeInTheDocument();
-  });
-
-  it("hands off the latest planned edits when opening the log workout flow", async () => {
-    const planSet = makeSet({
-      id: "plan-set-1",
-      workoutLogId: null,
-      planDayId: "plan-day-1",
-      exerciseName: "back_squat",
-      reps: 8,
-      weight: 60,
-    });
-    const onOpenLogWorkout = vi.fn();
-    mockPlans.getDayExercises.mockResolvedValue([planSet]);
-    mockPlans.updateDayExercise.mockImplementation(
-      (_planDayId: string, setId: string, data: Partial<ExerciseSet>) =>
-        Promise.resolve(makeSet({ ...planSet, id: setId, ...data })),
-    );
-
-    renderDialog({
-      entry: makeEntry({
-        workoutLogId: null,
-        status: "planned",
-        planDayId: "plan-day-1",
-        focus: "Original focus",
-        mainWorkout: "Original main",
-        accessory: "Original accessory",
-        notes: "Original notes",
-      }),
-      onOpenLogWorkout,
-      onMarkComplete: vi.fn(),
-    });
-
-    const user = userEvent.setup();
-    const focusInput = await screen.findByTestId("workout-detail-focus-input");
-    await user.clear(focusInput);
-    await user.type(focusInput, "Updated focus");
-
-    let mainPrescription = screen.queryByTestId("prescription-textarea-mainWorkout");
-    if (!mainPrescription) {
-      await user.click(await screen.findByTestId("coach-prescription-toggle"));
-      mainPrescription = await screen.findByTestId("prescription-textarea-mainWorkout");
-    }
-    await user.clear(mainPrescription);
-    await user.type(mainPrescription, "Updated main");
-
-    await user.click(screen.getByLabelText(/Edit Back Squat/i));
-    const weightInput = await screen.findByTestId("input-weight-plan-set-1");
-    fireEvent.change(weightInput, { target: { value: "65" } });
-
-    await user.click(screen.getByTestId("workout-detail-log-workout"));
-
-    expect(onOpenLogWorkout).toHaveBeenCalledWith(
-      expect.objectContaining({
-        focus: "Updated focus",
-        mainWorkout: "Updated main",
-        accessory: "Original accessory",
-        notes: "Original notes",
-        workoutLogId: null,
-        planDayId: "plan-day-1",
-      }),
-      [expect.objectContaining({ id: "plan-set-1", weight: 65 })],
-    );
+    // Stepper opens immediately on click; the planned→logged dialog
+    // re-render is handled by the timeline cache patch in
+    // logWorkoutMutation.onSuccess so we just assert the in-dialog
+    // surface here.
+    expect(screen.getByTestId("workout-logging-stepper")).toBeInTheDocument();
+    expect(screen.getByTestId("workout-logging-step-1")).toHaveAttribute("aria-current", "step");
+    expect(screen.getByTestId("workout-logging-step-continue")).toBeInTheDocument();
   });
 
   it("offers Combine in the ⋮ menu for logged workouts only", async () => {

@@ -6,7 +6,7 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import type { ExerciseSet, TimelineAnnotation, TimelineEntry } from "@shared/schema";
+import type { TimelineAnnotation, TimelineEntry } from "@shared/schema";
 import { useMutation } from "@tanstack/react-query";
 import type { Virtualizer } from "@tanstack/react-virtual";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -16,7 +16,6 @@ import {
   ChevronUp,
 } from "lucide-react";
 import { useCallback,useMemo, useRef, useState } from "react";
-import { useLocation } from "wouter";
 
 import { AIConsentDialog } from "@/components/coach/AIConsentDialog";
 import { CoachPanel } from "@/components/CoachPanel";
@@ -43,7 +42,6 @@ import { WorkoutDetailDialogV2 } from "@/components/workout-detail/WorkoutDetail
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { saveLogWorkoutDraftFromTimelineEntry } from "@/hooks/useLogWorkoutDraft";
 import { useMoveTimelineEntry } from "@/hooks/useMoveTimelineEntry";
 import { useTimelineState } from "@/hooks/useTimelineState";
 import { api, QUERY_KEYS } from "@/lib/api";
@@ -254,7 +252,6 @@ export default function Timeline() {
   const { user } = useAuth();
   const { toast } = useToast();
   const isMobile = useIsMobile();
-  const [, setLocation] = useLocation();
   const { data, filters, onboarding, planImport, workoutActions, combine, selectedPlanId, setSelectedPlanId } = useTimelineState({ aiCoachEnabled: !!user?.aiCoachEnabled });
 
   const { plans, plansLoading, personalRecords, timelineData, timelineLoading, annotations, isNewUser, todayRef, scrollToToday } = data;
@@ -291,12 +288,6 @@ export default function Timeline() {
         toast({ title: "Could not enable AI Coach", description: "Please try again." });
       });
   }, [setCoachOpen, toast]);
-
-  const handleOpenLogWorkout = useCallback((entry: TimelineEntry, exerciseSets: ExerciseSet[]) => {
-    saveLogWorkoutDraftFromTimelineEntry(user?.id ?? "anon", entry, exerciseSets);
-    setDetailEntry(null);
-    setLocation("/log");
-  }, [setDetailEntry, setLocation, user?.id]);
 
   // O(1) lookup by start date for the virtualized row renderer. Rebuilds
   // only when the annotations array itself changes.
@@ -508,7 +499,6 @@ export default function Timeline() {
               setDetailEntry(null);
             }}
             onMarkComplete={handleMarkComplete}
-            onOpenLogWorkout={handleOpenLogWorkout}
             isMarkingComplete={logWorkoutMutation.isPending}
             onCombine={(entry) => {
               setDetailEntry(null);
