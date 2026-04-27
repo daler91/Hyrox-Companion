@@ -80,7 +80,7 @@ export function useDialogParseControls(input: DialogParseControlsInput): DialogP
   const [confirmingParse, setConfirmingParse] = useState(false);
   const [pendingParseSource, setPendingParseSource] = useState<PendingParseSource>(null);
   const [imagePreview, setImagePreview] = useState<ImagePreviewState | null>(null);
-  const [prescriptionOpen, setPrescriptionOpen] = useState<boolean>(isPlanned && !hasSets);
+  const [prescriptionOpen, setPrescriptionOpen] = useState<boolean>(false);
   const [prescriptionHydrated, setPrescriptionHydrated] = useState<boolean>(hasSets);
   const [lastEntryId, setLastEntryId] = useState<string>(entryId);
 
@@ -113,7 +113,7 @@ export function useDialogParseControls(input: DialogParseControlsInput): DialogP
 
   if (entryId !== lastEntryId) {
     setLastEntryId(entryId);
-    setPrescriptionOpen(isPlanned && !hasSets);
+    setPrescriptionOpen(false);
     setPrescriptionHydrated(hasSets);
     if (imagePreview) {
       URL.revokeObjectURL(imagePreview.url);

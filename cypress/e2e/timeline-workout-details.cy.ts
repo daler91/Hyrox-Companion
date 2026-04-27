@@ -14,8 +14,11 @@ describe("Timeline Workout Details Interactions", () => {
     cy.intercept("POST", "/api/v1/workouts", {
       statusCode: 200,
       body: {
-        message: "Workout logged",
-        workout: { id: "logged-workout-from-plan", title: "Upper Body Strength" },
+        id: "logged-workout-from-plan",
+        title: "Upper Body Strength",
+        focus: "Upper Body Strength",
+        date: today,
+        exerciseSets: [],
       },
     }).as("logWorkoutFromPlan");
 
@@ -76,10 +79,15 @@ describe("Timeline Workout Details Interactions", () => {
     cy.contains("Workout logged").should("exist");
   });
 
-  it("opens the in-dialog guided logging stepper from the CTA", () => {
+  it("opens the in-dialog guided logging stepper from the body CTA", () => {
     cy.getBySel(`card-timeline-entry-${workoutId}`).click();
     cy.wait("@getPlanDaySets");
-    cy.getBySel("workout-detail-log-workout").click();
+
+    // Body-level CTA card is the primary entry point on the slimmed
+    // planned-overview. The slimmed surface no longer shows the planned
+    // exercise table or the stats grid — both move into stepper step 1.
+    cy.getBySel("workout-detail-log-cta-button").should("be.visible");
+    cy.getBySel("workout-detail-log-cta-button").click();
 
     cy.wait("@logWorkoutFromPlan");
     // Dialog stays open and re-renders into the 2-step stepper instead
@@ -88,8 +96,12 @@ describe("Timeline Workout Details Interactions", () => {
     cy.getBySel("workout-detail-dialog-v2").should("exist");
     cy.getBySel("workout-logging-stepper").should("exist");
     cy.getBySel("workout-logging-step-1").should("have.attr", "aria-current", "step");
+    // Step 2 surfaces the RPE input + AthleteNoteInput once workoutId is
+    // bound. The mutation onSuccess primes the workout-detail cache from
+    // the API response so the inputs render without a separate GET.
     cy.getBySel("workout-logging-step-continue").click();
     cy.getBySel("workout-logging-step-2").should("have.attr", "aria-current", "step");
+    cy.getBySel("athlete-note-input").should("exist");
     cy.getBySel("workout-logging-step-finish").click();
     cy.getBySel("workout-logging-stepper").should("not.exist");
   });

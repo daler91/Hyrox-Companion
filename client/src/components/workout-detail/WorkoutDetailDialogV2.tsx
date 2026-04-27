@@ -392,6 +392,8 @@ export function WorkoutDetailDialogV2({
             onDraftPrescriptionChange={handleDraftPrescriptionChange}
             onSaveNote={handleSaveNote}
             loggingStep={loggingStep}
+            onLogWorkout={handleFooterMarkComplete}
+            isLoggingWorkout={isMarkingComplete}
             onParseLoggedFreeText={handleParseLoggedFreeText}
             isParsingLogged={reparseFreeText.isPending}
             onParseLoggedFromImage={handleParseLoggedFromImage}
@@ -968,6 +970,14 @@ interface DialogBodyProps {
    */
   readonly loggingStep: 1 | 2 | null;
   /**
+   * Fires the planned→logged transition (same handler the footer uses).
+   * Threaded down so the body-level CTA on the slimmed planned-overview
+   * can trigger logging without requiring the user to scroll to find
+   * the footer button.
+   */
+  readonly onLogWorkout: () => void;
+  readonly isLoggingWorkout: boolean;
+  /**
    * Parse trigger for the logged-workout free-text prescription when
    * available. Planned entries parse via usePlanDayExercises.
    */
@@ -1109,6 +1119,8 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     onDraftPrescriptionChange,
     onSaveNote,
     loggingStep,
+    onLogWorkout,
+    isLoggingWorkout,
     onParseLoggedFreeText,
     isParsingLogged,
     onParseLoggedFromImage,
@@ -1301,29 +1313,22 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     );
   }
 
+  // Hide the right sidebar (Coach Take + History) on the planned-overview
+  // so the primary CTA is unmistakable. The sidebar still surfaces for
+  // logged entries and inside the in-dialog coach chat path.
+  const renderedSidebar = isPlanned && !chatOpen ? null : sidebar;
+
   return (
-    <WorkoutDetailGuidedLayout sidebar={sidebar} chatOpen={chatOpen}>
+    <WorkoutDetailGuidedLayout sidebar={renderedSidebar} chatOpen={chatOpen}>
       {isPlanned ? (
         <PlannedWorkoutDetailContent>
-          <WorkoutDetailOverview>
-            <PlannedOverviewSummary
-              exerciseCount={countSetsByExercise(planSets.exerciseSets).size}
-              setCount={planSets.exerciseSets.length}
-              hasPrescriptionText={hasUnparsedText}
-            />
-          </WorkoutDetailOverview>
           <WorkoutDetailSection title="Prescription" testId="workout-detail-prescription-section">
             {prescriptionPanel}
           </WorkoutDetailSection>
-          <WorkoutDetailSection title="Exercises" testId="workout-detail-exercises-section">
-            <PlannedCallToAction
-              entry={entry}
-              weightUnit={weightUnit}
-              distanceUnit={distanceUnit}
-              planSets={planSets}
-              hasUnparsedText={hasUnparsedText}
-            />
-          </WorkoutDetailSection>
+          <PlannedLogWorkoutCta
+            onLogWorkout={onLogWorkout}
+            isLoggingWorkout={isLoggingWorkout}
+          />
         </PlannedWorkoutDetailContent>
       ) : (
         <CompletedWorkoutDetailContent>
@@ -1620,35 +1625,43 @@ function PlannedActualSummary({
   );
 }
 
-function PlannedOverviewSummary({
-  exerciseCount,
-  setCount,
-  hasPrescriptionText,
-}: Readonly<{
-  exerciseCount: number;
-  setCount: number;
-  hasPrescriptionText: boolean;
-}>) {
-  return (
-    <div className="grid grid-cols-3 gap-3 text-sm" data-testid="planned-overview-summary">
-      <OverviewMetric label="Exercises" value={exerciseCount} />
-      <OverviewMetric label="Sets" value={setCount} />
-      <OverviewMetric label="Prescription" value={hasPrescriptionText ? "Text" : "Rows"} />
-    </div>
-  );
+interface PlannedLogWorkoutCtaProps {
+  readonly onLogWorkout: () => void;
+  readonly isLoggingWorkout: boolean;
 }
 
-function OverviewMetric({
-  label,
-  value,
-}: Readonly<{
-  label: string;
-  value: number | string;
-}>) {
+// Body-level primary CTA on the slimmed planned-overview. The footer
+// button is still wired for parity, but a planned-overview that surfaces
+// only "prescription + collapsed accordion" needs an unmistakable
+// primary action above the fold so the user doesn't have to scroll.
+function PlannedLogWorkoutCta({
+  onLogWorkout,
+  isLoggingWorkout,
+}: Readonly<PlannedLogWorkoutCtaProps>) {
   return (
-    <div className="flex min-w-0 flex-col gap-1">
-      <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
-      <span className="truncate text-lg font-semibold tabular-nums text-foreground">{value}</span>
+    <div
+      className="flex flex-col items-center gap-3 rounded-lg border border-border bg-muted/15 px-4 py-6 text-center"
+      data-testid="workout-detail-log-cta"
+    >
+      <p className="text-sm font-medium text-foreground">Time to log this one?</p>
+      <p className="text-xs text-muted-foreground">
+        We'll seed your sets from the prescription and walk you through editing actuals.
+      </p>
+      <Button
+        type="button"
+        size="lg"
+        className="w-full gap-2 sm:w-auto sm:min-w-[200px]"
+        disabled={isLoggingWorkout}
+        onClick={onLogWorkout}
+        data-testid="workout-detail-log-cta-button"
+      >
+        {isLoggingWorkout ? (
+          <Loader2 className="size-4 animate-spin" aria-hidden />
+        ) : (
+          <CheckCircle2 className="size-4" aria-hidden />
+        )}
+        {isLoggingWorkout ? "Logging..." : "Log workout"}
+      </Button>
     </div>
   );
 }
@@ -1819,53 +1832,6 @@ function LoggedExerciseSection({
       hasUnparsedText={hasUnparsedText}
       showPlannedDiffs={showPlannedDiffs}
     />
-  );
-}
-
-interface PlannedCallToActionProps {
-  readonly entry: TimelineEntry;
-  readonly weightUnit: "kg" | "lb";
-  readonly distanceUnit: "km" | "miles";
-  readonly planSets: ReturnType<typeof usePlanDayExercises>;
-  readonly hasUnparsedText?: boolean;
-}
-
-function PlannedCallToAction({ entry, weightUnit, distanceUnit, planSets, hasUnparsedText }: Readonly<PlannedCallToActionProps>) {
-  // Plan-day-backed exercise edits. `planSets` is hoisted up to DialogBody
-  // so the same hook instance feeds both this CTA and the CoachTakePanel's
-  // staleness comparison. Writes go to plan_day-owned exerciseSets; Mark
-  // complete's server copy-from-plan path copies whatever this hook has
-  // persisted into the new workoutLog at log time.
-  const planDayId = entry.planDayId ?? null;
-
-  return (
-    <div className="flex flex-col gap-4" data-testid="workout-detail-planned-cta">
-      {planDayId ? (
-        <ExerciseTable
-          workoutId={planDayId}
-          exerciseSets={planSets.exerciseSets}
-          weightUnit={weightUnit}
-          distanceUnit={distanceUnit}
-          onUpdateSet={planSets.patchSetDebounced}
-          onAddSet={planSets.addSet.mutate}
-          onDeleteSet={planSets.deleteSet.mutate}
-          saveState={{ isSaving: planSets.isSaving, lastSavedAt: planSets.lastSavedAt }}
-          hasUnparsedText={hasUnparsedText}
-        />
-      ) : (
-        <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
-          This entry isn't linked to a plan day, so there's nothing to prescribe yet.
-        </div>
-      )}
-
-      <div
-        className="flex flex-col items-center gap-2 rounded-lg border border-border bg-muted/20 px-4 py-4 text-center"
-      >
-        <p className="text-sm text-muted-foreground">
-          Planned sets are ready for review.
-        </p>
-      </div>
-    </div>
   );
 }
 
