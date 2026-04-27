@@ -203,9 +203,23 @@ export function WorkoutDetailDialogV2({
   // pre-edit value for a few hundred ms. Mark complete reads this ref at
   // click time to avoid posting a stale focus to logWorkoutMutation.
   const latestFocusRef = useRef<string>(entry?.focus || "");
+  // Tracks in-progress prescription edits the same way `latestFocusRef`
+  // tracks focus. Saves go through `planSets.updatePrescription.mutate`
+  // (no debounce, fired on blur), but the timeline cache only refreshes
+  // after that mutation settles + invalidations refetch — so a user who
+  // types a new prescription, blurs, and then immediately clicks Log
+  // workout can race the save and end up posting the pre-edit text via
+  // entry.mainWorkout/accessory/notes. Carrying the latest draft into
+  // handleFooterMarkComplete sidesteps that race.
+  const latestPrescriptionRef = useRef<PlanPrescriptionDraft>(
+    buildPlanPrescriptionDraft(entry),
+  );
   useEffect(() => {
     latestFocusRef.current = entry?.focus || "";
   }, [entry?.focus]);
+  useEffect(() => {
+    latestPrescriptionRef.current = buildPlanPrescriptionDraft(entry);
+  }, [entry]);
 
   // Hydration (auto-seed + auto-reparse on first open) was removed: plans
   // generated after the structured-exercises refactor always have prescribed
@@ -271,6 +285,12 @@ export function WorkoutDetailDialogV2({
   const handleDraftFocusChange = (focus: string) => {
     latestFocusRef.current = focus;
   };
+  const handleDraftPrescriptionChange = (field: PrescriptionField, value: string) => {
+    latestPrescriptionRef.current = {
+      ...latestPrescriptionRef.current,
+      [field]: value,
+    };
+  };
   const headerSaveState = isPlanned
     ? { isSaving: planSets.isSaving, lastSavedAt: planSets.lastSavedAt }
     : loggedSaveState;
@@ -293,9 +313,15 @@ export function WorkoutDetailDialogV2({
     startSaveCycle,
   });
   const handleFooterMarkComplete = () => {
+    // Flush any debounced ExerciseTable edits before the mutation runs.
+    // logWorkoutMutation creates the workoutLog by copying persisted
+    // plan-day rows on the server, so a row edit still in the debounce
+    // queue would be missing from the new log.
+    planSets.flushPendingSetPatches();
     handleWorkoutDetailMarkComplete({
       entry,
       latestFocus: latestFocusRef.current,
+      latestPrescription: latestPrescriptionRef.current,
       onMarkComplete,
     });
     // Open the in-dialog stepper so the user can edit actuals and reflect
@@ -363,6 +389,7 @@ export function WorkoutDetailDialogV2({
             loggedSaveState={loggedSaveState}
             planSets={planSets}
             planCoachNote={planCoachNote}
+            onDraftPrescriptionChange={handleDraftPrescriptionChange}
             onSaveNote={handleSaveNote}
             loggingStep={loggingStep}
             onParseLoggedFreeText={handleParseLoggedFreeText}
@@ -428,6 +455,22 @@ export function WorkoutDetailDialogV2({
       </AlertDialog>
     </Dialog>
   );
+}
+
+type PlanPrescriptionDraft = Record<PrescriptionField, string | null>;
+
+function buildPlanPrescriptionDraft(
+  entry: TimelineEntry | null | undefined,
+): PlanPrescriptionDraft {
+  return {
+    mainWorkout: entry?.mainWorkout ?? null,
+    accessory: entry?.accessory ?? null,
+    notes: entry?.notes ?? null,
+  };
+}
+
+function normalizePrescriptionDraft(value: string | null | undefined): string | null {
+  return value && value.trim().length > 0 ? value : null;
 }
 
 type PlanSetsController = ReturnType<typeof usePlanDayExercises>;
@@ -546,15 +589,40 @@ function getCompleteActionState(isMarkingComplete: boolean, isSavingPlanSets: bo
 interface MarkCompleteArgs {
   readonly entry: TimelineEntry;
   readonly latestFocus: string;
+  readonly latestPrescription: PlanPrescriptionDraft;
   readonly onMarkComplete?: (entry: TimelineEntry) => void;
 }
 
-function handleWorkoutDetailMarkComplete({ entry, latestFocus, onMarkComplete }: MarkCompleteArgs) {
+function handleWorkoutDetailMarkComplete({
+  entry,
+  latestFocus,
+  latestPrescription,
+  onMarkComplete,
+}: MarkCompleteArgs) {
   blurActiveElement();
   if (!onMarkComplete) return;
 
-  const focus = latestFocus || entry.focus;
-  onMarkComplete(focus === entry.focus ? entry : { ...entry, focus });
+  const focus = (latestFocus.trim() || entry.focus).trim();
+  // Carry the latest in-progress prescription edits into the payload so
+  // useWorkoutActions.handleMarkComplete (which reads
+  // entry.mainWorkout/accessory/notes verbatim) doesn't post stale text
+  // when the user edits the prescription and clicks Log workout before
+  // the planSets.updatePrescription save round-trips back through the
+  // timeline cache.
+  const mainWorkout = normalizePrescriptionDraft(latestPrescription.mainWorkout) ?? "";
+  const accessory = normalizePrescriptionDraft(latestPrescription.accessory);
+  const notes = normalizePrescriptionDraft(latestPrescription.notes);
+
+  const focusChanged = focus !== entry.focus;
+  const mainChanged = mainWorkout !== (entry.mainWorkout ?? "");
+  const accessoryChanged = accessory !== (entry.accessory ?? null);
+  const notesChanged = notes !== (entry.notes ?? null);
+
+  if (!focusChanged && !mainChanged && !accessoryChanged && !notesChanged) {
+    onMarkComplete(entry);
+    return;
+  }
+  onMarkComplete({ ...entry, focus, mainWorkout, accessory, notes });
 }
 
 function blurActiveElement() {
@@ -885,6 +953,12 @@ interface DialogBodyProps {
    * `isRegenerating` from this bundle.
    */
   readonly planCoachNote: ReturnType<typeof usePlanDayCoachNote>;
+  /**
+   * Tracks in-progress prescription edits so the dialog can carry them
+   * into the Log workout payload before the planSets save round-trips
+   * back through the timeline cache.
+   */
+  readonly onDraftPrescriptionChange: (field: PrescriptionField, value: string) => void;
   readonly onSaveNote: (note: string | null) => void;
   /**
    * Active in-dialog logging step, or null when the user is not in the
@@ -1032,6 +1106,7 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     loggedSaveState,
     planSets,
     planCoachNote,
+    onDraftPrescriptionChange,
     onSaveNote,
     loggingStep,
     onParseLoggedFreeText,
@@ -1124,6 +1199,7 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
       open={parseControls.prescriptionOpen}
       onOpenChange={parseControls.setPrescriptionOpen}
       onSaveField={isPlanned ? onSavePrescriptionField : undefined}
+      onDraftFieldChange={isPlanned ? onDraftPrescriptionChange : undefined}
       onParse={parseReady ? parseControls.onParseClicked : undefined}
       isParsing={parseControls.isParsing}
       onCapture={parseReady ? parseControls.onCapture : undefined}

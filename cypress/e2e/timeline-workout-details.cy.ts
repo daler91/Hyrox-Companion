@@ -13,7 +13,10 @@ describe("Timeline Workout Details Interactions", () => {
 
     cy.intercept("POST", "/api/v1/workouts", {
       statusCode: 200,
-      body: { id: "logged-workout-from-plan", title: "Upper Body Strength" },
+      body: {
+        message: "Workout logged",
+        workout: { id: "logged-workout-from-plan", title: "Upper Body Strength" },
+      },
     }).as("logWorkoutFromPlan");
 
     cy.intercept("DELETE", `/api/v1/plans/days/${planDayId}`, {
