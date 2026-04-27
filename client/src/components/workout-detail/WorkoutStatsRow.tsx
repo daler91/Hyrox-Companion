@@ -67,15 +67,13 @@ export function WorkoutStatsRow({ workout, exerciseSets, onChangeRpe, reviewFirs
       <StatCell label="Duration" value={displayDuration} unit="min" />
       <StatCell label="Exercises" value={stats.exerciseCount} />
       {onChangeRpe ? (
-        // Key includes workout.id so switching dialogs between two
-        // workouts with the same RPE still remounts the cell — otherwise
-        // a debounced save queued on workout A could fire after
-        // navigation and write A's draft value into workout B via the
-        // new onChange handler. rpeResetSignal covers the same-workout
-        // case where a failed save needs to drop the unsaved draft
-        // even though workout.rpe itself didn't change.
+        // Key intentionally excludes workout.rpe. Successful autosaves patch
+        // the cached value while the input is still focused; remounting here
+        // would re-apply reviewFirst's closed state and interrupt editing.
+        // workout.id still isolates dialog navigation, and rpeResetSignal
+        // forces a reset after a failed save.
         <RpeEditableCell
-          key={`${workout.id}:${workout.rpe ?? "null"}:${rpeResetSignal}`}
+          key={`${workout.id}:${rpeResetSignal}`}
           value={workout.rpe}
           onChange={onChangeRpe}
           reviewFirst={reviewFirst}
@@ -125,9 +123,10 @@ function formatRpeDraft(value: number | null | undefined): string {
 
 /**
  * Editable RPE stat cell. Keystrokes update local state immediately; the
- * persisted save fires 500ms after the last edit. Parent remounts this
- * cell with a `key={value}` so prop changes reset the draft instead of
- * fighting local typing via a useEffect state sync.
+ * persisted save fires 500ms after the last edit. Successful autosaves update
+ * the value prop without remounting, so the review-first editor stays open
+ * while focused. Opening from review mode refreshes the draft from the latest
+ * prop; error resets still remount via rpeResetSignal.
  */
 function RpeEditableCell({ value, onChange, reviewFirst }: Readonly<RpeEditableCellProps>) {
   const [draft, setDraft] = useState<string>(() => formatRpeDraft(value));
@@ -151,7 +150,10 @@ function RpeEditableCell({ value, onChange, reviewFirst }: Readonly<RpeEditableC
           type="button"
           variant="ghost"
           className="h-auto w-fit justify-start gap-2 px-0 py-0 text-left hover:bg-transparent"
-          onClick={() => setIsEditing(true)}
+          onClick={() => {
+            setDraft(formatRpeDraft(value));
+            setIsEditing(true);
+          }}
           data-testid="workout-stats-rpe-review"
         >
           <span className="text-2xl font-semibold tabular-nums">

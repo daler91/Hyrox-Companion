@@ -1,6 +1,6 @@
 import type { ExerciseSet, TimelineEntry, WorkoutLog } from "@shared/schema";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -730,7 +730,12 @@ describe("WorkoutDetailDialogV2", () => {
       prSetCount: 0,
       blockAvgRpe: null,
     });
-    mockWorkouts.update.mockResolvedValue(makeWorkout({ rpe: 8 }));
+    let resolveRpeUpdate: (workout: ReturnType<typeof makeWorkout>) => void = () => {};
+    mockWorkouts.update.mockImplementation(
+      () => new Promise((resolve) => {
+        resolveRpeUpdate = resolve;
+      }),
+    );
 
     renderDialog();
 
@@ -748,6 +753,13 @@ describe("WorkoutDetailDialogV2", () => {
     await waitFor(() => {
       expect(mockWorkouts.update).toHaveBeenCalledWith("log-1", { rpe: 8 });
     }, { timeout: 2000 });
+
+    await act(async () => {
+      resolveRpeUpdate(makeWorkout({ exerciseSets: [makeSet()], rpe: 8 }));
+    });
+
+    expect(screen.getByTestId("workout-stats-rpe-input")).toHaveValue(8);
+    expect(screen.queryByTestId("workout-stats-rpe-review")).not.toBeInTheDocument();
   });
 
   it("keeps the RPE cell read-only for planned entries", () => {
