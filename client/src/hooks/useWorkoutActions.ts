@@ -54,6 +54,7 @@ export function useWorkoutActions(
           notes: updates.notes || undefined,
           rpe: updates.rpe ?? undefined,
           exercises: updates.exercises,
+          sourceEntry: detailEntry,
         });
         return;
       }
@@ -77,6 +78,7 @@ export function useWorkoutActions(
         accessory: entry.accessory || undefined,
         notes: entry.notes || undefined,
         rpe: entry.rpe ?? undefined,
+        sourceEntry: entry,
       });
     },
     [logWorkoutMutation],

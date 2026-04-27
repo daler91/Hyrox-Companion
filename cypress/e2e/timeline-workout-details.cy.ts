@@ -4,6 +4,77 @@ describe("Timeline Workout Details Interactions", () => {
   const today = new Date().toISOString().split("T")[0];
   const workoutId = "timeline-entry-1";
   const planDayId = "plan-day-1";
+  const loggedWorkoutId = "logged-workout-from-plan";
+  const seededExerciseSets = [
+    {
+      id: "logged-set-1",
+      workoutLogId: loggedWorkoutId,
+      planDayId: null,
+      exerciseName: "bench_press",
+      customLabel: null,
+      category: "strength",
+      setNumber: 1,
+      reps: 8,
+      weight: 60,
+      distance: null,
+      time: null,
+      plannedReps: 8,
+      plannedWeight: 60,
+      plannedDistance: null,
+      plannedTime: null,
+      notes: null,
+      confidence: 95,
+      sortOrder: 0,
+    },
+    {
+      id: "logged-set-2",
+      workoutLogId: loggedWorkoutId,
+      planDayId: null,
+      exerciseName: "overhead_press",
+      customLabel: null,
+      category: "strength",
+      setNumber: 1,
+      reps: 10,
+      weight: 40,
+      distance: null,
+      time: null,
+      plannedReps: 10,
+      plannedWeight: 40,
+      plannedDistance: null,
+      plannedTime: null,
+      notes: null,
+      confidence: 95,
+      sortOrder: 1,
+    },
+  ];
+
+  const loggedWorkout = {
+    id: loggedWorkoutId,
+    userId: "test-user",
+    date: today,
+    focus: "Upper Body Strength",
+    mainWorkout: "4x8 bench press at 60kg\n3x10 overhead press",
+    accessory: "3x12 lateral raises",
+    notes: null,
+    duration: null,
+    rpe: null,
+    planDayId,
+    planId: "plan-1",
+    source: "manual",
+    stravaActivityId: null,
+    garminActivityId: null,
+    calories: null,
+    distanceMeters: null,
+    elevationGain: null,
+    avgHeartrate: null,
+    maxHeartrate: null,
+    avgSpeed: null,
+    maxSpeed: null,
+    avgCadence: null,
+    avgWatts: null,
+    sufferScore: null,
+    exerciseSets: seededExerciseSets,
+  };
 
   beforeEach(() => {
     cy.intercept("PATCH", `/api/v1/plans/days/${planDayId}/status`, {
@@ -13,14 +84,22 @@ describe("Timeline Workout Details Interactions", () => {
 
     cy.intercept("POST", "/api/v1/workouts", {
       statusCode: 200,
-      body: {
-        id: "logged-workout-from-plan",
-        title: "Upper Body Strength",
-        focus: "Upper Body Strength",
-        date: today,
-        exerciseSets: [],
-      },
+      body: loggedWorkout,
     }).as("logWorkoutFromPlan");
+
+    cy.intercept("GET", `/api/v1/workouts/${loggedWorkoutId}`, {
+      statusCode: 200,
+      body: loggedWorkout,
+    }).as("getLoggedWorkout");
+
+    cy.intercept("GET", `/api/v1/workouts/${loggedWorkoutId}/history`, {
+      statusCode: 200,
+      body: {
+        lastSameFocus: null,
+        prSetCount: 0,
+        blockAvgRpe: null,
+      },
+    }).as("getLoggedWorkoutHistory");
 
     cy.intercept("DELETE", `/api/v1/plans/days/${planDayId}`, {
       statusCode: 200,
@@ -96,12 +175,19 @@ describe("Timeline Workout Details Interactions", () => {
     cy.getBySel("workout-detail-dialog-v2").should("exist");
     cy.getBySel("workout-logging-stepper").should("exist");
     cy.getBySel("workout-logging-step-1").should("have.attr", "aria-current", "step");
+    cy.getBySel("exercise-table").should("be.visible");
+    cy.getBySel("exercise-row").should("have.length", 2);
+    cy.contains("Bench Press").should("exist");
+    cy.contains("Overhead Press").should("exist");
     // Step 2 surfaces the RPE input + AthleteNoteInput once workoutId is
     // bound. The mutation onSuccess primes the workout-detail cache from
     // the API response so the inputs render without a separate GET.
     cy.getBySel("workout-logging-step-continue").click();
     cy.getBySel("workout-logging-step-2").should("have.attr", "aria-current", "step");
+    cy.getBySel("workout-stats-rpe-review").should("be.visible").click();
+    cy.getBySel("workout-stats-rpe-input").should("be.visible");
     cy.getBySel("athlete-note-input").should("exist");
+    cy.getBySel("athlete-note-edit").should("not.be.disabled");
     cy.getBySel("workout-logging-step-finish").click();
     cy.getBySel("workout-logging-stepper").should("not.exist");
   });

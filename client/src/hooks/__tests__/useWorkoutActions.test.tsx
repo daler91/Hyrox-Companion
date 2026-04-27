@@ -27,6 +27,7 @@ vi.mock('@/lib/queryClient', async (importOriginal) => {
       cancelQueries: vi.fn().mockResolvedValue(undefined),
       getQueryData: vi.fn().mockReturnValue([]),
       setQueryData: vi.fn(),
+      setQueriesData: vi.fn(),
     },
   };
 });
@@ -34,6 +35,37 @@ vi.mock('@/lib/queryClient', async (importOriginal) => {
 vi.mock('@/hooks/use-toast', () => ({
   useToast: vi.fn(),
 }));
+
+function mockLoggedWorkoutResponse(overrides: Record<string, unknown> = {}) {
+  vi.mocked(queryClientLib.apiRequest).mockResolvedValueOnce({
+    json: () =>
+      Promise.resolve({
+        id: 'logged-pd-1',
+        date: '2024-01-01',
+        focus: 'strength',
+        mainWorkout: 'lift',
+        accessory: null,
+        notes: null,
+        duration: null,
+        rpe: null,
+        planDayId: 'pd-1',
+        planId: 'test-plan-id',
+        source: 'manual',
+        calories: null,
+        distanceMeters: null,
+        elevationGain: null,
+        avgHeartrate: null,
+        maxHeartrate: null,
+        avgSpeed: null,
+        maxSpeed: null,
+        avgCadence: null,
+        avgWatts: null,
+        sufferScore: null,
+        exerciseSets: [],
+        ...overrides,
+      }),
+  } as Response);
+}
 
 
 
@@ -115,6 +147,11 @@ describe('useWorkoutActions', () => {
       });
 
       it('logs new workout if planDayId is present and exercises exist', async () => {
+        mockLoggedWorkoutResponse({
+          focus: 'cardio',
+          mainWorkout: 'run',
+          exerciseSets: [{ id: 'set-1', workoutLogId: 'logged-pd-1' }],
+        });
         const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
         const mockEntry = createMockTimelineEntry({ planDayId: 'pd-1', date: '2024-01-01', focus: 'strength' });
 
@@ -135,9 +172,18 @@ describe('useWorkoutActions', () => {
             mainWorkout: 'run',
             accessory: undefined,
             notes: undefined,
+            rpe: undefined,
             exercises: [{ exerciseName: 'run', category: 'conditioning', sets: [] }]
           }, expect.any(AbortSignal));
-          expect(result.current.detailEntry).toBeNull();
+          expect(result.current.detailEntry).toEqual(
+            expect.objectContaining({
+              id: 'log-logged-pd-1',
+              type: 'logged',
+              planDayId: 'pd-1',
+              workoutLogId: 'logged-pd-1',
+              focus: 'cardio',
+            }),
+          );
         });
       });
 
@@ -163,6 +209,7 @@ describe('useWorkoutActions', () => {
 
     describe('handleMarkComplete', () => {
       it('logs a workout based on planDayId', async () => {
+        mockLoggedWorkoutResponse({ notes: 'good' });
         const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
         const mockEntry = createMockTimelineEntry({ planDayId: 'pd-1', date: '2024-01-01', focus: 'strength', mainWorkout: 'lift', accessory: 'curls', notes: 'good' });
 
@@ -178,7 +225,16 @@ describe('useWorkoutActions', () => {
             mainWorkout: 'lift',
             accessory: 'curls',
             notes: 'good',
+            rpe: undefined,
           }, expect.any(AbortSignal));
+          expect(result.current.detailEntry).toEqual(
+            expect.objectContaining({
+              id: 'log-logged-pd-1',
+              type: 'logged',
+              planDayId: 'pd-1',
+              workoutLogId: 'logged-pd-1',
+            }),
+          );
         });
       });
     });

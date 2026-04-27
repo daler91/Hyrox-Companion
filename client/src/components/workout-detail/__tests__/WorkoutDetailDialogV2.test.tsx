@@ -620,6 +620,114 @@ describe("WorkoutDetailDialogV2", () => {
     expect(screen.getByTestId("workout-logging-step-continue")).toBeInTheDocument();
   });
 
+  it("keeps the logging stepper open when a plan day rebinds to its logged workout", async () => {
+    const onMarkComplete = vi.fn();
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const plannedEntry = makeEntry({
+      id: "plan-plan-day-1",
+      type: "planned",
+      status: "planned",
+      workoutLogId: null,
+      planDayId: "plan-day-1",
+    });
+    const loggedEntry = makeEntry({
+      id: "log-logged-workout-1",
+      type: "logged",
+      status: "completed",
+      workoutLogId: "logged-workout-1",
+      planDayId: "plan-day-1",
+    });
+    mockWorkouts.get.mockResolvedValue(
+      makeWorkout({
+        id: "logged-workout-1",
+        planDayId: "plan-day-1",
+        exerciseSets: [makeSet({ id: "set-logged", workoutLogId: "logged-workout-1" })],
+      }),
+    );
+    mockWorkouts.history.mockResolvedValue({
+      lastSameFocus: null,
+      prSetCount: 0,
+      blockAvgRpe: null,
+    });
+
+    const { rerender } = render(
+      <QueryClientProvider client={queryClient}>
+        <WorkoutDetailDialogV2
+          entry={plannedEntry}
+          onClose={vi.fn()}
+          onMarkComplete={onMarkComplete}
+        />
+      </QueryClientProvider>,
+    );
+
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId("workout-detail-log-cta-button"));
+    expect(screen.getByTestId("workout-logging-stepper")).toBeInTheDocument();
+
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <WorkoutDetailDialogV2
+          entry={loggedEntry}
+          onClose={vi.fn()}
+          onMarkComplete={onMarkComplete}
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByTestId("workout-logging-stepper")).toBeInTheDocument();
+    expect(screen.getByTestId("workout-logging-step-1")).toHaveAttribute("aria-current", "step");
+  });
+
+  it("clears the logging stepper when the dialog switches to a different owner", async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const firstEntry = makeEntry({
+      id: "plan-plan-day-1",
+      type: "planned",
+      status: "planned",
+      workoutLogId: null,
+      planDayId: "plan-day-1",
+    });
+    const secondEntry = makeEntry({
+      id: "plan-plan-day-2",
+      type: "planned",
+      status: "planned",
+      workoutLogId: null,
+      planDayId: "plan-day-2",
+    });
+
+    const { rerender } = render(
+      <QueryClientProvider client={queryClient}>
+        <WorkoutDetailDialogV2
+          entry={firstEntry}
+          onClose={vi.fn()}
+          onMarkComplete={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId("workout-detail-log-cta-button"));
+    expect(screen.getByTestId("workout-logging-stepper")).toBeInTheDocument();
+
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <WorkoutDetailDialogV2
+          entry={secondEntry}
+          onClose={vi.fn()}
+          onMarkComplete={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("workout-logging-stepper")).not.toBeInTheDocument();
+    });
+  });
+
   it("offers Combine in the ⋮ menu for logged workouts only", async () => {
     const onCombine = vi.fn();
     mockWorkouts.get.mockResolvedValue(
