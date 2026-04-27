@@ -8,6 +8,7 @@ export interface WorkoutFormInitialValues {
   freeText?: string;
   notes?: string;
   rpe?: number | null;
+  planDayId?: string | null;
 }
 
 export interface UseWorkoutFormProps {

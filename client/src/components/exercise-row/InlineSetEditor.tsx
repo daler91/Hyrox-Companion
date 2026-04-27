@@ -21,6 +21,7 @@ interface InlineSetEditorProps {
   readonly onUpdateSet: (setId: string, data: PatchExerciseSetPayload) => void;
   readonly onAddSet: (data: AddExerciseSetPayload) => void;
   readonly onDeleteSet: (setId: string) => void;
+  readonly showPlannedDiffs?: boolean;
 }
 
 /**
@@ -46,6 +47,7 @@ export const InlineSetEditor = memo(function InlineSetEditor({
   onUpdateSet,
   onAddSet,
   onDeleteSet,
+  showPlannedDiffs = false,
 }: InlineSetEditorProps) {
   const fields = useMemo(() => getFields(exerciseName), [exerciseName]);
   const orderedSets = useMemo(
@@ -116,6 +118,7 @@ export const InlineSetEditor = memo(function InlineSetEditor({
             colTemplate={colTemplate}
             onUpdateSet={onUpdateSet}
             onDeleteSet={onDeleteSet}
+            showPlannedDiffs={showPlannedDiffs}
           />
         ))}
       </div>
@@ -201,6 +204,7 @@ interface SetRowProps {
   readonly colTemplate: string;
   readonly onUpdateSet: (setId: string, data: PatchExerciseSetPayload) => void;
   readonly onDeleteSet: (setId: string) => void;
+  readonly showPlannedDiffs: boolean;
 }
 
 const SetRow = memo(function SetRow({
@@ -212,6 +216,7 @@ const SetRow = memo(function SetRow({
   colTemplate,
   onUpdateSet,
   onDeleteSet,
+  showPlannedDiffs,
 }: SetRowProps) {
   const [notesOpen, setNotesOpen] = useState(() => (set.notes ?? "").length > 0);
   const setId = set.id;
@@ -235,6 +240,7 @@ const SetRow = memo(function SetRow({
             weightUnit={weightUnit}
             distanceUnit={distanceUnit}
             onUpdate={onUpdate}
+            showPlannedDiffs={showPlannedDiffs}
           />
         ))}
         <Button
@@ -274,25 +280,16 @@ interface FieldInputProps {
   readonly weightUnit: string;
   readonly distanceUnit: string;
   readonly onUpdate: (patch: PatchExerciseSetPayload) => void;
+  readonly showPlannedDiffs: boolean;
 }
 
-const PLANNED_FIELD: Record<FieldKey, "plannedReps" | "plannedWeight" | "plannedDistance" | "plannedTime"> = {
-  reps: "plannedReps",
-  weight: "plannedWeight",
-  distance: "plannedDistance",
-  time: "plannedTime",
-};
-
-const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUnit, onUpdate }: FieldInputProps) {
+const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUnit, onUpdate, showPlannedDiffs }: FieldInputProps) {
   const meta = fieldMeta[field];
   const label = meta.label(weightUnit, distanceUnit);
   const current = set[field] ?? undefined;
-  // Compare against the prescription captured at log creation. Only show
-  // a "planned X" annotation when the actual diverges — equal values would
-  // just be visual noise.
-  const rawPlanned = set[PLANNED_FIELD[field]];
-  const hasPlannedValue = typeof rawPlanned === "number";
-  const showPlannedDiff = hasPlannedValue && rawPlanned !== current;
+  const planned = getPlannedValue(set, field);
+  const hasPlannedValue = showPlannedDiffs && typeof planned === "number";
+  const showPlannedDiff = hasPlannedValue && planned !== current;
 
   // Local draft + "last saved" snapshot so incoming server / optimistic
   // updates at the same value don't overwrite an in-progress edit. A
@@ -305,7 +302,7 @@ const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUn
   }
 
   return (
-    <div className="flex flex-col items-stretch gap-0.5">
+    <div className="flex min-w-0 flex-col gap-1">
       <Input
         type="number"
         inputMode="decimal"
@@ -317,20 +314,23 @@ const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUn
           if (parsed == null || !Number.isNaN(parsed)) {
             const next = parsed ?? undefined;
             setLastSaved(next);
-            onUpdate({ [field]: next ?? null });
+            onUpdate({ [field]: next ?? null } as PatchExerciseSetPayload);
           }
         }}
-        placeholder={hasPlannedValue ? String(rawPlanned) : "--"}
-        className="h-8 text-center text-sm tabular-nums"
+        placeholder={hasPlannedValue ? String(planned) : "--"}
+        className="h-10 text-center text-sm tabular-nums"
         aria-label={`${label} for set ${set.setNumber}`}
         data-testid={`input-${field}-${set.id}`}
       />
       {showPlannedDiff && (
         <span
-          className="text-center text-[10px] leading-none text-muted-foreground tabular-nums"
+          className={cn(
+            "text-center text-[10px] leading-none text-muted-foreground",
+            "font-medium text-amber-700 dark:text-amber-300",
+          )}
           data-testid={`planned-${field}-${set.id}`}
         >
-          planned {rawPlanned}
+          planned {formatPlannedValue(planned, field, weightUnit, distanceUnit)}
         </span>
       )}
     </div>
@@ -378,4 +378,29 @@ function parseDraft(raw: string): number | null {
   if (raw.trim() === "") return null;
   const n = Number.parseFloat(raw);
   return Number.isNaN(n) ? null : n;
+}
+
+function getPlannedValue(set: ExerciseSet, field: FieldKey): number | null | undefined {
+  switch (field) {
+    case "reps":
+      return set.plannedReps;
+    case "weight":
+      return set.plannedWeight;
+    case "distance":
+      return set.plannedDistance;
+    case "time":
+      return set.plannedTime;
+  }
+}
+
+function formatPlannedValue(
+  value: number,
+  field: FieldKey,
+  weightUnit: string,
+  distanceUnit: string,
+): string {
+  if (field === "weight") return `${value} ${weightUnit}`;
+  if (field === "distance") return `${value} ${distanceUnit === "km" ? "m" : "ft"}`;
+  if (field === "time") return `${value} min`;
+  return `${value} reps`;
 }

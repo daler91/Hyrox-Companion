@@ -61,6 +61,8 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
     setNotes,
     rpe,
     setRpe,
+    planDayId,
+    setPlanDayId,
     voiceInput,
     notesVoiceInput,
     saveMutation,
@@ -78,6 +80,7 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
           freeText: initialDraft.freeText,
           notes: initialDraft.notes,
           rpe: initialDraft.rpe,
+          planDayId: initialDraft.planDayId,
         }
       : undefined,
     onSaveSuccess: () => clearLogWorkoutDraft(userKey),
@@ -99,6 +102,7 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
     setTitle,
     setNotes,
     setFreeText,
+    setPlanDayId,
     resetEditor,
     toast,
   });
@@ -113,6 +117,7 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
     freeText,
     notes,
     rpe,
+    planDayId,
     useTextMode,
     exerciseBlocks,
     exerciseData,

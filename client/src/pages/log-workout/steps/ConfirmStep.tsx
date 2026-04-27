@@ -26,7 +26,6 @@ interface ConfirmStepProps {
   readonly onBack: () => void;
   readonly onContinue: () => void;
 }
-
 /**
  * Step 2: Confirm and live-log structured exercises. Doubles as the
  * during-workout editing surface — users tap into reps/weight inputs to
@@ -88,22 +87,20 @@ export function ConfirmStep({
         <CardHeader>
           <CardTitle className="text-lg">Confirm exercises</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Tap any value to edit. Changes save as you go — perfect for
-            updating reps or weight between sets.
+            Tap any value to edit. Changes save as you go — perfect for updating reps or weight
+            between sets.
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
-          {autoParsing && (
-            <ParseStatusStrip parsing data-testid="confirm-step-parsing" />
-          )}
+          {autoParsing && <ParseStatusStrip parsing data-testid="confirm-step-parsing" />}
 
           {!autoParsing && !hasBlocks && (
             <div
               className="rounded-md border border-dashed border-border bg-muted/20 px-3 py-4 text-sm text-muted-foreground"
               data-testid="confirm-step-empty"
             >
-              No structured exercises yet. Add exercises manually below, or
-              go back and describe your workout.
+              No structured exercises yet. Add exercises manually below, or go back and describe
+              your workout.
             </div>
           )}
 
@@ -175,4 +172,3 @@ export function ConfirmStep({
     </div>
   );
 }
-

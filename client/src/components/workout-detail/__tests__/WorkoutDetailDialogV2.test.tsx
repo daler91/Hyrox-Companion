@@ -1,6 +1,6 @@
 import type { ExerciseSet, TimelineEntry, WorkoutLog } from "@shared/schema";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -43,6 +43,7 @@ vi.mock("@/lib/api", async () => {
         getDayExercises: vi.fn().mockResolvedValue([]),
         addDayExercise: vi.fn(),
         updateDayExercise: vi.fn(),
+        updateDayWithoutPlan: vi.fn(),
         deleteDayExercise: vi.fn(),
         regenerateCoachNote: vi.fn(),
       },
@@ -65,6 +66,7 @@ const mockPlans = api.plans as unknown as {
   regenerateCoachNote: ReturnType<typeof vi.fn>;
   getDayExercises: ReturnType<typeof vi.fn>;
   updateDayExercise: ReturnType<typeof vi.fn>;
+  updateDayWithoutPlan: ReturnType<typeof vi.fn>;
 };
 
 function makeEntry(overrides: Partial<TimelineEntry> = {}): TimelineEntry {
@@ -159,6 +161,7 @@ describe("WorkoutDetailDialogV2", () => {
   beforeEach(() => {
     showAdherenceInsights = true;
     vi.clearAllMocks();
+    mockPlans.updateDayWithoutPlan.mockResolvedValue({});
   });
 
   it("renders the header, stats, exercise table and coach take panel", async () => {
@@ -330,7 +333,7 @@ describe("WorkoutDetailDialogV2", () => {
     });
 
     expect(await screen.findByTestId("planned-actual-summary")).toHaveTextContent(
-      "Planned vs Actual: 2 planned sets, 1 logged set · 1 removed",
+      "Planned vs Actual: 2 planned sets, 1 logged set, 1 removed",
     );
     expect(screen.getByTestId("planned-actual-summary")).toHaveTextContent(
       "Compliance: 50% (1/2 planned sets matched)",
@@ -569,6 +572,8 @@ describe("WorkoutDetailDialogV2", () => {
     });
 
     expect(screen.getByTestId("workout-detail-planned-cta")).toBeInTheDocument();
+    expect(screen.getByTestId("workout-detail-overview")).toBeInTheDocument();
+    expect(screen.getByTestId("planned-overview-summary")).toHaveTextContent("Exercises");
     expect(screen.getByTestId("workout-detail-mark-complete")).toBeInTheDocument();
     // Stats/history/athlete-note are workout-log-backed; they shouldn't
     // surface for a planned entry with nothing logged yet.
@@ -598,6 +603,100 @@ describe("WorkoutDetailDialogV2", () => {
 
     expect(onMarkComplete).toHaveBeenCalledWith(
       expect.objectContaining({ workoutLogId: null, planDayId: "plan-day-1" }),
+    );
+  });
+
+  it("uses the Log workout handoff for planned entries when available", async () => {
+    const planSet = makeSet({
+      id: "plan-set-1",
+      workoutLogId: null,
+      planDayId: "plan-day-1",
+      exerciseName: "back_squat",
+    });
+    const onOpenLogWorkout = vi.fn();
+    mockPlans.getDayExercises.mockResolvedValue([planSet]);
+
+    renderDialog({
+      entry: makeEntry({
+        workoutLogId: null,
+        status: "planned",
+        planDayId: "plan-day-1",
+      }),
+      onOpenLogWorkout,
+      onMarkComplete: vi.fn(),
+    });
+
+    expect(await screen.findByText(/Back Squat/i)).toBeInTheDocument();
+
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId("workout-detail-log-workout"));
+
+    expect(onOpenLogWorkout).toHaveBeenCalledWith(
+      expect.objectContaining({ workoutLogId: null, planDayId: "plan-day-1" }),
+      [planSet],
+    );
+    expect(screen.queryByTestId("workout-detail-mark-complete")).not.toBeInTheDocument();
+  });
+
+  it("hands off the latest planned edits when opening the log workout flow", async () => {
+    const planSet = makeSet({
+      id: "plan-set-1",
+      workoutLogId: null,
+      planDayId: "plan-day-1",
+      exerciseName: "back_squat",
+      reps: 8,
+      weight: 60,
+    });
+    const onOpenLogWorkout = vi.fn();
+    mockPlans.getDayExercises.mockResolvedValue([planSet]);
+    mockPlans.updateDayExercise.mockImplementation(
+      (_planDayId: string, setId: string, data: Partial<ExerciseSet>) =>
+        Promise.resolve(makeSet({ ...planSet, id: setId, ...data })),
+    );
+
+    renderDialog({
+      entry: makeEntry({
+        workoutLogId: null,
+        status: "planned",
+        planDayId: "plan-day-1",
+        focus: "Original focus",
+        mainWorkout: "Original main",
+        accessory: "Original accessory",
+        notes: "Original notes",
+      }),
+      onOpenLogWorkout,
+      onMarkComplete: vi.fn(),
+    });
+
+    const user = userEvent.setup();
+    const focusInput = await screen.findByTestId("workout-detail-focus-input");
+    await user.clear(focusInput);
+    await user.type(focusInput, "Updated focus");
+
+    let mainPrescription = screen.queryByTestId("prescription-textarea-mainWorkout");
+    if (!mainPrescription) {
+      await user.click(await screen.findByTestId("coach-prescription-toggle"));
+      mainPrescription = await screen.findByTestId("prescription-textarea-mainWorkout");
+    }
+    await user.clear(mainPrescription);
+    await user.type(mainPrescription, "Updated main");
+
+    await user.click(screen.getByLabelText(/Edit Back Squat/i));
+    const weightInput = await screen.findByTestId("input-weight-plan-set-1");
+    fireEvent.change(weightInput, { target: { value: "65" } });
+
+    await user.click(screen.getByTestId("workout-detail-log-workout"));
+
+    expect(onOpenLogWorkout).toHaveBeenCalledWith(
+      expect.objectContaining({
+        focus: "Updated focus",
+        mainWorkout: "Updated main",
+        accessory: "Original accessory",
+        notes: "Original notes",
+        workoutLogId: null,
+        planDayId: "plan-day-1",
+      }),
+      [expect.objectContaining({ id: "plan-set-1", weight: 65 })],
     );
   });
 
@@ -631,15 +730,22 @@ describe("WorkoutDetailDialogV2", () => {
       prSetCount: 0,
       blockAvgRpe: null,
     });
-    mockWorkouts.update.mockResolvedValue(makeWorkout({ rpe: 8 }));
+    let resolveRpeUpdate: (workout: ReturnType<typeof makeWorkout>) => void = () => {};
+    mockWorkouts.update.mockImplementation(
+      () => new Promise((resolve) => {
+        resolveRpeUpdate = resolve;
+      }),
+    );
 
     renderDialog();
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByTestId("workout-stats-rpe-review"));
 
     const input = await screen.findByTestId("workout-stats-rpe-input");
     // Initial value reflects the server state.
     expect(input).toHaveValue(7);
 
-    const user = userEvent.setup();
     await user.clear(input);
     await user.type(input, "8");
 
@@ -647,6 +753,13 @@ describe("WorkoutDetailDialogV2", () => {
     await waitFor(() => {
       expect(mockWorkouts.update).toHaveBeenCalledWith("log-1", { rpe: 8 });
     }, { timeout: 2000 });
+
+    await act(async () => {
+      resolveRpeUpdate(makeWorkout({ exerciseSets: [makeSet()], rpe: 8 }));
+    });
+
+    expect(screen.getByTestId("workout-stats-rpe-input")).toHaveValue(8);
+    expect(screen.queryByTestId("workout-stats-rpe-review")).not.toBeInTheDocument();
   });
 
   it("keeps the RPE cell read-only for planned entries", () => {

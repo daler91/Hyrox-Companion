@@ -22,7 +22,6 @@ interface ReflectStepProps {
   readonly isSaving: boolean;
   readonly hasWorkoutDetails: boolean;
 }
-
 /**
  * Step 3: Post-workout reflection. RPE is required to save by default —
  * users can opt out via the "skip RPE" link, but the friction is intentional
@@ -53,8 +52,7 @@ export function ReflectStep({
         <CardHeader>
           <CardTitle className="text-lg">How hard was that?</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Rate of Perceived Exertion. 1 is barely working, 10 is maximum
-            effort.
+            Rate of Perceived Exertion. 1 is barely working, 10 is maximum effort.
           </p>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -66,7 +64,9 @@ export function ReflectStep({
               className="text-xs text-muted-foreground underline-offset-2 hover:underline"
               data-testid="button-skip-rpe"
             >
-              {rpeSkipped ? "RPE skipped — you can still pick one above" : "Skip RPE for this workout"}
+              {rpeSkipped
+                ? "RPE skipped — you can still pick one above"
+                : "Skip RPE for this workout"}
             </button>
           )}
         </CardContent>
@@ -113,4 +113,3 @@ export function ReflectStep({
     </div>
   );
 }
-

@@ -61,6 +61,13 @@ export function useDebouncedSetPatches<TPatch extends object>(
     for (const setId of ids) fireRef.current(setId);
   }, []);
 
+  const getPendingPatches = useCallback(() => {
+    return Array.from(pendingRef.current, ([setId, entry]) => ({
+      setId,
+      patch: entry.patch,
+    }));
+  }, []);
+
   // Drop every pending timer without firing. Callers use this when the
   // owning entity changes (e.g. the dialog switches from workout A to
   // workout B) — by that time `mutate` already closes over the new
@@ -83,5 +90,10 @@ export function useDebouncedSetPatches<TPatch extends object>(
     };
   }, []);
 
-  return { patchSetDebounced, flushPendingSetPatches, cancelPending };
+  return {
+    patchSetDebounced,
+    flushPendingSetPatches,
+    cancelPending,
+    getPendingPatches,
+  };
 }

@@ -17,6 +17,10 @@ export interface SetData {
   weight?: number;
   distance?: number;
   time?: number;
+  plannedReps?: number;
+  plannedWeight?: number;
+  plannedDistance?: number;
+  plannedTime?: number;
   notes?: string;
 }
 
@@ -85,6 +89,10 @@ export function createExerciseFromSets(
     weight?: number | null;
     distance?: number | null;
     time?: number | null;
+    plannedReps?: number | null;
+    plannedWeight?: number | null;
+    plannedDistance?: number | null;
+    plannedTime?: number | null;
     notes?: string | null;
   }>,
 ): StructuredExercise {
@@ -98,6 +106,10 @@ export function createExerciseFromSets(
       weight: s.weight ?? undefined,
       distance: s.distance ?? undefined,
       time: s.time ?? undefined,
+      plannedReps: s.plannedReps ?? undefined,
+      plannedWeight: s.plannedWeight ?? undefined,
+      plannedDistance: s.plannedDistance ?? undefined,
+      plannedTime: s.plannedTime ?? undefined,
       notes: s.notes ?? undefined,
     })),
   };

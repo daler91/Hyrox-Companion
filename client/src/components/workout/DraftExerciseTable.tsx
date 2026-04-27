@@ -28,6 +28,10 @@ function applySetPatch(target: SetData, patch: PatchExerciseSetPayload): SetData
   if ("weight" in patch) next.weight = patch.weight ?? undefined;
   if ("distance" in patch) next.distance = patch.distance ?? undefined;
   if ("time" in patch) next.time = patch.time ?? undefined;
+  if ("plannedReps" in patch) next.plannedReps = patch.plannedReps ?? undefined;
+  if ("plannedWeight" in patch) next.plannedWeight = patch.plannedWeight ?? undefined;
+  if ("plannedDistance" in patch) next.plannedDistance = patch.plannedDistance ?? undefined;
+  if ("plannedTime" in patch) next.plannedTime = patch.plannedTime ?? undefined;
   if ("notes" in patch) next.notes = patch.notes ?? undefined;
   if ("setNumber" in patch && typeof patch.setNumber === "number") {
     next.setNumber = patch.setNumber;
@@ -94,10 +98,10 @@ export function DraftExerciseTable({
           weight: s.weight ?? null,
           distance: s.distance ?? null,
           time: s.time ?? null,
-          plannedReps: null,
-          plannedWeight: null,
-          plannedDistance: null,
-          plannedTime: null,
+          plannedReps: s.plannedReps ?? null,
+          plannedWeight: s.plannedWeight ?? null,
+          plannedDistance: s.plannedDistance ?? null,
+          plannedTime: s.plannedTime ?? null,
           notes: s.notes ?? null,
           confidence: data.confidence ?? null,
           sortOrder,

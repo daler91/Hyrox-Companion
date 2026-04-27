@@ -208,6 +208,10 @@ export const exerciseSets = pgTable("exercise_sets", {
   customLabel: text("custom_label"),
   category: varchar("category", { length: 255 }).notNull(),
   setNumber: integer("set_number").notNull().default(1),
+  // Logged rows store actual values in reps/weight/distance/time. When a
+  // plan row is copied into a workout log, these nullable fields snapshot the
+  // original prescription so the athlete can edit actuals without losing plan
+  // context.
   reps: integer("reps"),
   weight: real("weight"),
   distance: real("distance"),

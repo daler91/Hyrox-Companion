@@ -137,10 +137,10 @@ function measurementsFromAggregate(ex: ParsedExercise, setNumber: number): SetMe
     weight: ex.weight ?? null,
     distance: ex.distance ?? null,
     time: ex.time ?? null,
-    plannedReps: null,
-    plannedWeight: null,
-    plannedDistance: null,
-    plannedTime: null,
+    plannedReps: ex.plannedReps ?? null,
+    plannedWeight: ex.plannedWeight ?? null,
+    plannedDistance: ex.plannedDistance ?? null,
+    plannedTime: ex.plannedTime ?? null,
     notes: ex.notes || null,
   };
 }

@@ -1,6 +1,6 @@
 import type { ExerciseSet } from "@shared/schema";
 import { useIsMutating,useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { useApiMutation } from "@/hooks/useApiMutation";
 import { useDebouncedSetPatches } from "@/hooks/useDebouncedSetPatches";
@@ -100,7 +100,12 @@ export function usePlanDayExercises(planDayId: string | null) {
   // Per-set debounce coordinator. Cells call `patchSetDebounced`; Save
   // calls `flushPendingSetPatches` before firing the coach-note
   // regenerate so the server snapshots the just-edited prescription.
-  const { patchSetDebounced, flushPendingSetPatches, cancelPending } = useDebouncedSetPatches<PatchExerciseSetPayload>(
+  const {
+    patchSetDebounced,
+    flushPendingSetPatches,
+    cancelPending,
+    getPendingPatches,
+  } = useDebouncedSetPatches<PatchExerciseSetPayload>(
     updateSet.mutate,
     CELL_SAVE_DEBOUNCE_MS,
   );
@@ -208,9 +213,23 @@ export function usePlanDayExercises(planDayId: string | null) {
     exact: true,
   });
   const isSaving = pendingMutationCount > 0;
+  const exerciseSets = useMemo(() => exercisesQuery.data ?? [], [exercisesQuery.data]);
+  const getExerciseSetsWithPendingPatches = useCallback(() => {
+    const pendingPatches = getPendingPatches();
+    if (pendingPatches.length === 0) return exerciseSets;
+
+    const patchesBySetId = new Map(
+      pendingPatches.map(({ setId, patch }) => [setId, patch]),
+    );
+    return exerciseSets.map((set) => {
+      const patch = patchesBySetId.get(set.id);
+      return patch ? ({ ...set, ...patch } as ExerciseSet) : set;
+    });
+  }, [exerciseSets, getPendingPatches]);
 
   return {
-    exerciseSets: exercisesQuery.data ?? [],
+    exerciseSets,
+    getExerciseSetsWithPendingPatches,
     isLoading: exercisesQuery.isLoading,
     isSaving,
     lastSavedAt,

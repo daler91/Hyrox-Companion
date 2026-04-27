@@ -61,7 +61,6 @@ interface WorkoutComposerProps {
   ) => void;
   readonly isParsingImage?: boolean;
 }
-
 /**
  * Unified input surface for the Log Workout page. Structured exercises
  * are the long-term source of truth; the free-text area sits inside a
@@ -117,9 +116,7 @@ export function WorkoutComposer({
       if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
     };
   }, []);
-  const [panelOpen, setPanelOpen] = useState(
-    () => defaultPanelOpen ?? freeText.trim().length > 0,
-  );
+  const [panelOpen, setPanelOpen] = useState(() => defaultPanelOpen ?? freeText.trim().length > 0);
   // Reconcile panel visibility with external changes to `freeText`.
   // The panel can only receive typed input while it's open — anything
   // that mutates `freeText` while we're collapsed is necessarily an
@@ -181,11 +178,7 @@ export function WorkoutComposer({
 
   return (
     <div className="space-y-4" data-testid="workout-composer">
-      <ParseStatusStrip
-        parsing={autoParsing}
-        error={autoParseError}
-        hasText={hasDescription}
-      />
+      <ParseStatusStrip parsing={autoParsing} error={autoParseError} hasText={hasDescription} />
 
       <WorkoutContentsStatus
         exerciseCount={exerciseBlocks.length}
@@ -294,12 +287,10 @@ export function WorkoutComposer({
     </div>
   );
 }
-
 interface WorkoutContentsStatusProps {
   readonly exerciseCount: number;
   readonly hasDescription: boolean;
 }
-
 function WorkoutContentsStatus({ exerciseCount, hasDescription }: WorkoutContentsStatusProps) {
   let label = "Empty";
   let detail = "Add exercise rows or a description";
@@ -319,9 +310,7 @@ function WorkoutContentsStatus({ exerciseCount, hasDescription }: WorkoutContent
       data-testid="workout-contents-status"
     >
       <div className="min-w-0">
-        <div className="text-xs font-medium uppercase text-muted-foreground">
-          Workout contents
-        </div>
+        <div className="text-xs font-medium uppercase text-muted-foreground">Workout contents</div>
         <div className="truncate font-medium">{label}</div>
       </div>
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -333,4 +322,3 @@ function WorkoutContentsStatus({ exerciseCount, hasDescription }: WorkoutContent
     </div>
   );
 }
-

@@ -12,6 +12,7 @@ interface BuildWorkoutSavePayloadInput {
   readonly freeText: string;
   readonly notes: string;
   readonly rpe: number | null;
+  readonly planDayId?: string | null;
   readonly exerciseBlocks: string[];
   readonly exerciseData: Record<string, StructuredExercise>;
   readonly weightLabel: string;
@@ -42,6 +43,7 @@ export function buildWorkoutSavePayload({
   freeText,
   notes,
   rpe,
+  planDayId,
   exerciseBlocks,
   exerciseData,
   weightLabel,
@@ -67,6 +69,7 @@ export function buildWorkoutSavePayload({
         mainWorkout: freeText,
         notes: notes || null,
         rpe: rpe || null,
+        ...(planDayId ? { planDayId } : {}),
       },
     };
   }
@@ -94,6 +97,7 @@ export function buildWorkoutSavePayload({
       mainWorkout,
       notes: notes || null,
       rpe: rpe || null,
+      ...(planDayId ? { planDayId } : {}),
       exercises: exercises.map(exerciseToPayload) as ParsedExercise[],
     },
   };

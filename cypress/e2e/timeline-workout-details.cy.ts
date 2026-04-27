@@ -73,12 +73,18 @@ describe("Timeline Workout Details Interactions", () => {
     cy.contains("Workout logged").should("exist");
   });
 
-  it("can mark a planned workout as complete from the dialog's CTA", () => {
+  it("opens the guided log workout flow from the dialog's CTA", () => {
     cy.getBySel(`card-timeline-entry-${workoutId}`).click();
-    cy.getBySel("workout-detail-mark-complete").click();
+    cy.wait("@getPlanDaySets");
+    cy.getBySel("workout-detail-log-workout").click();
 
-    cy.wait("@logWorkoutFromPlan");
-    cy.contains("Workout logged").should("exist");
+    cy.url().should("include", "/log");
+    cy.getBySel("stepper-step-2").should("have.attr", "aria-current", "step");
+    cy.getBySel("button-show-original").click();
+    cy.getBySel("text-original-description")
+      .should("contain", "4x8 bench press at 60kg")
+      .and("contain", "3x12 lateral raises")
+      .and("contain", "Focus on form");
   });
 
   it("can mark a workout as missed from the v2 overflow menu", () => {

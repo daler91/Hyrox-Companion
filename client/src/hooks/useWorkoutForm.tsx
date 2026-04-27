@@ -37,6 +37,7 @@ export function useWorkoutForm({
       freeText: form.freeText,
       notes: form.notes,
       rpe: form.rpe,
+      planDayId: form.planDayId,
       exerciseBlocks,
       exerciseData,
       weightLabel,

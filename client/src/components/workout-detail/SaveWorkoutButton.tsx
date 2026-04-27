@@ -27,6 +27,7 @@ interface SaveWorkoutButtonProps {
    */
   readonly showCoachNoteHint: boolean;
   readonly emphasis?: "primary" | "secondary";
+  readonly label?: string;
   readonly disabled?: boolean;
   readonly onClick: () => void;
 }
@@ -43,11 +44,12 @@ export function SaveWorkoutButton({
   savedAt,
   showCoachNoteHint,
   emphasis = "secondary",
+  label = "Save",
   disabled,
   onClick,
 }: SaveWorkoutButtonProps) {
   const buttonDisabled = isBusy || !!disabled;
-  const label = isBusy ? "Saving…" : "Save";
+  const buttonLabel = isBusy ? "Saving…" : label;
   const hasSaved = savedAt != null;
   const variant = emphasis === "primary" ? "default" : "secondary";
   let IconComponent = Save;
@@ -78,7 +80,7 @@ export function SaveWorkoutButton({
             className={cn("size-4", isBusy && "animate-spin")}
             aria-hidden
           />
-          {label}
+          {buttonLabel}
         </Button>
         {showCoachNoteHint && (
           <span className="mt-1 text-[11px] text-muted-foreground">
