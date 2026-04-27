@@ -15,8 +15,7 @@ export function useTimelineDetailEntry(timelineData: TimelineEntry[]) {
   // This avoids O(N) Array.prototype.find() on potentially large timelines.
   const timelineMap = useMemo(() => {
     const map = new Map<string, TimelineEntry>();
-    for (let i = 0; i < timelineData.length; i++) {
-      const entry = timelineData[i];
+    for (const entry of timelineData) {
       const key = entryId(entry);
       if (key && !map.has(key)) map.set(key, entry);
     }
