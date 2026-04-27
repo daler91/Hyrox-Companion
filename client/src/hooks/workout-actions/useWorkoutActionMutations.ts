@@ -76,29 +76,9 @@ export function useWorkoutActionMutations(
     successToast: "Workout logged!",
     errorToast: "Failed to log workout",
     ...logWorkoutHandlers,
-    onSuccess: (data, variables) => {
+    onSuccess: () => {
       markAutoCoachingActive();
-      // Patch the cached timeline entry with the freshly-created
-      // workoutLogId so the detail dialog can stay open and re-render in
-      // logged state. entryId() prefers workoutLogId over planDayId, so
-      // without rebinding the URL the dialog's openWorkoutId (still the
-      // planDayId) no longer matches any entry and the dialog closes.
-      const queryKey = [...QUERY_KEYS.timeline, selectedPlanId];
-      let updatedEntry: TimelineEntry | null = null;
-      queryClient.setQueryData<TimelineEntry[]>(queryKey, (old) => {
-        if (!old) return old;
-        return old.map((entry) => {
-          if (entry.planDayId !== variables.planDayId) return entry;
-          const next: TimelineEntry = { ...entry, workoutLogId: data.workout.id };
-          updatedEntry = next;
-          return next;
-        });
-      });
-      if (updatedEntry) {
-        setDetailEntry(updatedEntry);
-      } else {
-        setDetailEntry(null);
-      }
+      setDetailEntry(null);
     },
   });
 
