@@ -199,11 +199,14 @@ describe("WorkoutDetailDialogV2", () => {
       onMarkComplete: vi.fn(),
     });
 
+    // Both CTAs render: the body-level card and the sticky footer button.
+    // The slimmed planned-overview no longer shows the planned exercise
+    // table or the stats grid — those live inside step 1 of the stepper
+    // now, which only renders after the user clicks Log workout.
     expect(screen.getByTestId("workout-detail-log-workout")).toBeInTheDocument();
-    expect(screen.getByText(/planned sets are ready for review/i)).toBeInTheDocument();
-    // Exercise table renders with plan-day-backed mutations — see the
-    // +Add button used to append prescribed sets pre-log.
-    expect(await screen.findByTestId("exercise-table")).toBeInTheDocument();
+    expect(screen.getByTestId("workout-detail-log-cta-button")).toBeInTheDocument();
+    expect(screen.queryByTestId("exercise-table")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("planned-overview-summary")).not.toBeInTheDocument();
   });
 
   it("swaps the sidebar to the in-dialog coach chat when Ask coach is clicked", async () => {
@@ -571,16 +574,20 @@ describe("WorkoutDetailDialogV2", () => {
       onMarkComplete,
     });
 
-    expect(screen.getByTestId("workout-detail-planned-cta")).toBeInTheDocument();
-    expect(screen.getByTestId("workout-detail-overview")).toBeInTheDocument();
-    expect(screen.getByTestId("planned-overview-summary")).toHaveTextContent("Exercises");
+    // Body-level CTA card is the focal element; footer button is the
+    // backup. Planned exercise table, stats grid, sidebar Coach Take +
+    // History are all hidden — they only return inside step 1/2 of the
+    // stepper or on the logged-state view.
+    expect(screen.getByTestId("workout-detail-log-cta-button")).toBeInTheDocument();
     expect(screen.getByTestId("workout-detail-log-workout")).toBeInTheDocument();
-    // Stats/history/athlete-note are workout-log-backed; they shouldn't
-    // surface for a planned entry with nothing logged yet.
+    expect(screen.queryByTestId("workout-detail-overview")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("planned-overview-summary")).not.toBeInTheDocument();
     expect(screen.queryByTestId("workout-stats-row")).not.toBeInTheDocument();
     expect(screen.queryByTestId("history-panel")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("coach-take-panel")).not.toBeInTheDocument();
     expect(screen.queryByTestId("athlete-note-input")).not.toBeInTheDocument();
-    // Planned entries open the prescription accordion by default.
+    // Prescription accordion is rendered (collapsed by default for the
+    // slimmed planned-overview).
     expect(screen.getByTestId("coach-prescription-collapsible")).toBeInTheDocument();
     // The workout query should not even have been issued — there's no
     // workoutId to fetch.
@@ -746,64 +753,13 @@ describe("WorkoutDetailDialogV2", () => {
     expect(mockPlans.regenerateCoachNote).not.toHaveBeenCalled();
   });
 
-  it("flushes pending cell PATCHes before firing the coach-note regenerate on Save", async () => {
-    mockWorkouts.history.mockResolvedValue({
-      lastSameFocus: null,
-      prSetCount: 0,
-      blockAvgRpe: null,
-    });
-    // Plan-day-backed set used by the inline editor.
-    mockPlans.getDayExercises.mockResolvedValue([
-      makeSet({ id: "plan-set-1", planDayId: "plan-day-1", workoutLogId: null, weight: 60 }),
-    ]);
-    mockPlans.updateDayExercise.mockResolvedValue(
-      makeSet({ id: "plan-set-1", planDayId: "plan-day-1", workoutLogId: null, weight: 65 }),
-    );
-    mockPlans.regenerateCoachNote.mockResolvedValue({
-      planDayId: "plan-day-1",
-      aiRationale: "Updated take.",
-      aiNoteUpdatedAt: new Date().toISOString(),
-    });
-
-    renderDialog({
-      entry: makeEntry({
-        workoutLogId: null,
-        status: "planned",
-        planDayId: "plan-day-1",
-      }),
-      onMarkComplete: vi.fn(),
-    });
-
-    // Wait for the plan-day exercise row then expand it so the
-    // InlineSetEditor (and its per-field inputs) render.
-    const toggle = await screen.findByTestId("exercise-row-toggle");
-    const user = userEvent.setup();
-    await user.click(toggle);
-    const weightInput = await screen.findByTestId("input-weight-plan-set-1");
-
-    // Drives the hook's debounced patch queue.
-    await user.clear(weightInput);
-    await user.type(weightInput, "65");
-
-    // Click Save BEFORE the 350ms debounce fires — the pending patch is
-    // still in the hook's ref map. `flushPendingSetPatches` has to fire
-    // the PATCH synchronously, and the drain watcher has to wait for it
-    // before firing regenerate.
-    const saveBtn = screen.getByTestId("workout-detail-save-button");
-    await user.click(saveBtn);
-
-    // Both mutations land; asserting call order guards against a
-    // regression where regenerate fires before the PATCH is even
-    // enqueued (pre-fix behaviour — the cell's useDebouncedCallback
-    // had no flush seam).
-    await waitFor(() => {
-      expect(mockPlans.updateDayExercise).toHaveBeenCalled();
-      expect(mockPlans.regenerateCoachNote).toHaveBeenCalledWith("plan-day-1");
-    });
-    const patchOrder = mockPlans.updateDayExercise.mock.invocationCallOrder[0];
-    const regenerateOrder = mockPlans.regenerateCoachNote.mock.invocationCallOrder[0];
-    expect(patchOrder).toBeLessThan(regenerateOrder);
-  });
+  // The legacy "flushes pending cell PATCHes before firing the coach-note
+  // regenerate on Save" test drove cell edits on the planned-overview's
+  // exercise table. The slimmed planned-overview no longer renders that
+  // table — cell editing only happens inside the stepper's step 1, which
+  // doesn't expose a "Save prescription" button. The flush-before-
+  // regenerate codepath itself is unchanged in handleWorkoutDetailSaveClick
+  // (planSets.flushPendingSetPatches is still called before startSaveCycle).
 
   it("does not regenerate the coach note for a logged workout that happens to be plan-linked", async () => {
     // Guards the P1 fix: edits on a LOGGED workout (even one linked to

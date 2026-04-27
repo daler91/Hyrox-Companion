@@ -13,20 +13,28 @@ export function WorkoutDetailGuidedLayout({
   sidebar,
   chatOpen,
 }: WorkoutDetailGuidedLayoutProps) {
+  // Drop the second column entirely when there's no sidebar content (the
+  // slimmed planned-overview hides Coach Take + History to keep the
+  // primary CTA the focal point). Without this, the grid still reserves
+  // the 300px sidebar track and the body is artificially narrow.
+  const hasSidebar = sidebar != null && sidebar !== false;
   return (
     <div
       className={cn(
         "grid grid-cols-1 items-start gap-4 px-4 py-4 sm:px-6",
-        chatOpen
-          ? "md:grid-cols-[minmax(0,1fr)_380px] lg:grid-cols-[minmax(0,1fr)_420px]"
-          : "md:grid-cols-[minmax(0,1fr)_300px]",
+        hasSidebar &&
+          (chatOpen
+            ? "md:grid-cols-[minmax(0,1fr)_380px] lg:grid-cols-[minmax(0,1fr)_420px]"
+            : "md:grid-cols-[minmax(0,1fr)_300px]"),
       )}
       data-testid="workout-detail-guided-layout"
     >
       <div className="flex min-w-0 flex-col gap-4">{children}</div>
-      <aside className="flex min-h-0 self-start flex-col gap-3" data-testid="workout-detail-coach-section">
-        {sidebar}
-      </aside>
+      {hasSidebar && (
+        <aside className="flex min-h-0 self-start flex-col gap-3" data-testid="workout-detail-coach-section">
+          {sidebar}
+        </aside>
+      )}
     </div>
   );
 }

@@ -89,11 +89,16 @@ export function useWorkoutActionMutations(
         if (!old) return old;
         return old.map((entry) => {
           if (entry.planDayId !== variables.planDayId) return entry;
-          const next: TimelineEntry = { ...entry, workoutLogId: data.workout.id };
+          const next: TimelineEntry = { ...entry, workoutLogId: data.id };
           updatedEntry = next;
           return next;
         });
       });
+      // Prime the workout-detail cache so the in-dialog stepper renders
+      // the seeded sets / RPE / notes immediately on its first paint —
+      // without this, useWorkoutDetail(workoutId) starts loading and the
+      // user sees an empty step 1 until the GET round-trip lands.
+      queryClient.setQueryData(QUERY_KEYS.workout(data.id), data);
       if (updatedEntry) {
         setDetailEntry(updatedEntry);
       } else {

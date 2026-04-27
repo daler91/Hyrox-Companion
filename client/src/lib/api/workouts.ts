@@ -77,8 +77,10 @@ export interface AddExerciseSetPayload {
 }
 
 export const workouts = {
+  // Server returns the bare WorkoutLog with `exerciseSets` embedded when
+  // a `planDayId` is supplied (see workoutService.copyPrescribedSetsIntoLog).
   create: (data: Omit<InsertWorkoutLog, "userId"> & { title?: string; exercises?: ParsedExercise[] }) =>
-    typedRequest<{ message: string; workout: WorkoutLog }>("POST", "/api/v1/workouts", data),
+    typedRequest<WorkoutLog & { exerciseSets?: ExerciseSet[] }>("POST", "/api/v1/workouts", data),
 
   list: (params?: { limit?: number; offset?: number }) => {
     const qs = params
