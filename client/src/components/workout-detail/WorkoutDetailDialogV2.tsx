@@ -19,7 +19,12 @@ import { usePlanDayCoachNote } from "@/hooks/usePlanDayCoachNote";
 import { usePlanDayExercises } from "@/hooks/usePlanDayExercises";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { useWorkoutDetail } from "@/hooks/useWorkoutDetail";
-import type { ParseFromImagePayload, ReparseResponse } from "@/lib/api";
+import type {
+  ParseFromImagePayload,
+  ReparseResponse,
+  ReparseWorkoutTextPayload,
+  WorkoutReferenceTextPayload,
+} from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 import { AthleteNoteInput } from "./AthleteNoteInput";
@@ -171,6 +176,7 @@ export function WorkoutDetailDialogV2({
     reparseFreeText,
     reparseFromImage,
     updateNote,
+    updateReference,
     updateFocus,
     updateRpe,
   } = useWorkoutDetail(workoutId);
@@ -392,6 +398,7 @@ export function WorkoutDetailDialogV2({
             planSets={planSets}
             planCoachNote={planCoachNote}
             onDraftPrescriptionChange={handleDraftPrescriptionChange}
+            onSaveLoggedReference={updateReference.mutate}
             onSaveNote={handleSaveNote}
             loggingStep={loggingStep}
             onLogWorkout={handleFooterMarkComplete}
@@ -462,6 +469,7 @@ export function WorkoutDetailDialogV2({
 }
 
 type PlanPrescriptionDraft = Record<PrescriptionField, string | null>;
+type LoggedReferenceDraft = Record<PrescriptionField, string | null>;
 
 function buildPlanPrescriptionDraft(
   entry: TimelineEntry | null | undefined,
@@ -475,6 +483,45 @@ function buildPlanPrescriptionDraft(
 
 function normalizePrescriptionDraft(value: string | null | undefined): string | null {
   return value && value.trim().length > 0 ? value : null;
+}
+
+function buildLoggedReferenceDraft(
+  mainWorkout: string | null | undefined,
+  accessory: string | null | undefined,
+  notes: string | null | undefined,
+): LoggedReferenceDraft {
+  return {
+    mainWorkout: mainWorkout ?? null,
+    accessory: accessory ?? null,
+    notes: notes ?? null,
+  };
+}
+
+function buildLoggedReferencePatch(
+  field: PrescriptionField,
+  value: string | null,
+): WorkoutReferenceTextPayload {
+  switch (field) {
+    case "mainWorkout":
+      return { prescribedMainWorkout: value };
+    case "accessory":
+      return { prescribedAccessory: value };
+    case "notes":
+      return { prescribedNotes: value };
+  }
+}
+
+function buildLoggedReferenceParsePayload(
+  draft: LoggedReferenceDraft,
+): ReparseWorkoutTextPayload {
+  return {
+    prescribedMainWorkout: normalizePrescriptionDraft(draft.mainWorkout),
+    prescribedAccessory: normalizePrescriptionDraft(draft.accessory),
+  };
+}
+
+function hasReferenceParseText(draft: LoggedReferenceDraft): boolean {
+  return hasPrescriptionText(draft.mainWorkout) || hasPrescriptionText(draft.accessory);
 }
 
 type PlanSetsController = ReturnType<typeof usePlanDayExercises>;
@@ -666,11 +713,11 @@ function buildSaveNoteHandler(workoutId: string | null, saveNote: (note: string 
 
 function buildLoggedFreeTextParser(
   workoutId: string | null,
-  parse: (variables: undefined, opts?: ReparseTextOptions) => void,
+  parse: (payload?: ReparseWorkoutTextPayload, opts?: ReparseTextOptions) => void,
 ) {
-  return (opts?: ReparseTextOptions) => {
+  return (payload?: ReparseWorkoutTextPayload, opts?: ReparseTextOptions) => {
     if (!workoutId) return;
-    parse(undefined, opts);
+    parse(payload, opts);
   };
 }
 
@@ -963,6 +1010,7 @@ interface DialogBodyProps {
    * back through the timeline cache.
    */
   readonly onDraftPrescriptionChange: (field: PrescriptionField, value: string) => void;
+  readonly onSaveLoggedReference: (patch: WorkoutReferenceTextPayload) => void;
   readonly onSaveNote: (note: string | null) => void;
   /**
    * Active in-dialog logging step, or null when the user is not in the
@@ -983,7 +1031,10 @@ interface DialogBodyProps {
    * Parse trigger for the logged-workout free-text prescription when
    * available. Planned entries parse via usePlanDayExercises.
    */
-  readonly onParseLoggedFreeText: (opts?: { onSuccess?: () => void }) => void;
+  readonly onParseLoggedFreeText: (
+    payload?: ReparseWorkoutTextPayload,
+    opts?: { onSuccess?: () => void },
+  ) => void;
   readonly isParsingLogged: boolean;
   readonly onParseLoggedFromImage: (
     payload: ParseFromImagePayload,
@@ -1119,6 +1170,7 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     planSets,
     planCoachNote,
     onDraftPrescriptionChange,
+    onSaveLoggedReference,
     onSaveNote,
     loggingStep,
     onLogWorkout,
@@ -1153,36 +1205,8 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     displayNoteUpdatedAt != null &&
     planSets.lastSavedAt > displayNoteUpdatedAt.getTime();
 
-  // Route free-text edits to the right mutation based on which branch is open.
-  const onSavePrescriptionField = (field: PrescriptionField, value: string) => {
-    const normalized = value.trim().length === 0 ? null : value;
-    if (isPlanned && planDayId) {
-      planSets.updatePrescription.mutate({ [field]: normalized });
-    }
-  };
-  // Keep parse available for logged workouts so legacy/imported entries
-  // with free text but no structured sets can reach the Parse path.
-  const parseReady =
-    (isPlanned && planDayId != null) || (!isPlanned && workoutId != null);
   const currentSets = isPlanned ? planSets.exerciseSets : exerciseSets;
   const hasSets = currentSets.length > 0;
-
-  const parseControls = useDialogParseControls({
-    entryId: entry.id,
-    isPlanned,
-    hasSets,
-    planSets,
-    onParseLoggedFreeText,
-    isParsingLogged,
-    onParseLoggedFromImage,
-    isParsingLoggedImage,
-  });
-
-  // Empty-state nudge: when the prescription has text but no structured rows
-  // exist yet, point the user at Parse instead of Add.
-  const hasUnparsedText =
-    hasPrescriptionText(entry.mainWorkout) || hasPrescriptionText(entry.accessory);
-
   const {
     focusLabel,
     referenceMainWorkout,
@@ -1202,6 +1226,85 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
     loggedSets: exerciseSets,
     showAdherenceInsights,
   });
+  const latestLoggedReferenceRef = useRef<LoggedReferenceDraft>(
+    buildLoggedReferenceDraft(referenceMainWorkout, referenceAccessory, referenceNotes),
+  );
+  useEffect(() => {
+    latestLoggedReferenceRef.current = buildLoggedReferenceDraft(
+      referenceMainWorkout,
+      referenceAccessory,
+      referenceNotes,
+    );
+  }, [referenceMainWorkout, referenceAccessory, referenceNotes, workoutId]);
+
+  // Route free-text edits to the right mutation based on which branch is open.
+  const onSavePrescriptionField = (field: PrescriptionField, value: string) => {
+    const normalized = value.trim().length === 0 ? null : value;
+    if (isPlanned && planDayId) {
+      planSets.updatePrescription.mutate({ [field]: normalized });
+      return;
+    }
+    if (!isPlanned && workoutId) {
+      onSaveLoggedReference(buildLoggedReferencePatch(field, normalized));
+    }
+  };
+  const onDraftReferenceChange = (field: PrescriptionField, value: string) => {
+    latestLoggedReferenceRef.current = {
+      ...latestLoggedReferenceRef.current,
+      [field]: value,
+    };
+  };
+  // Keep parse available for logged workouts so legacy/imported entries
+  // with free text but no structured sets can reach the Parse path.
+  const parseReady =
+    (isPlanned && planDayId != null) || (!isPlanned && workoutId != null);
+  const parseLoggedFreeTextWithDraft = (opts?: ReparseTextOptions) => {
+    onParseLoggedFreeText(
+      buildLoggedReferenceParsePayload(latestLoggedReferenceRef.current),
+      opts,
+    );
+  };
+
+  const parseControls = useDialogParseControls({
+    entryId: entry.id,
+    isPlanned,
+    hasSets,
+    planSets,
+    onParseLoggedFreeText: parseLoggedFreeTextWithDraft,
+    isParsingLogged,
+    onParseLoggedFromImage,
+    isParsingLoggedImage,
+  });
+
+  const isAutoParsePending = parseControls.isParsing;
+  const triggerAutoParse = parseControls.onParseClicked;
+  const autoParsedWorkoutIdsRef = useRef<Set<string>>(new Set());
+  // Stepper-only auto-parse: when Log workout creates a workoutLog from
+  // free-text prescription and no structured rows came back, immediately
+  // hydrate step 1 from Main + Accessory. Manual Parse remains the retry
+  // path and the guard keeps refetches from repeatedly spending AI budget.
+  useEffect(() => {
+    if (loggingStep !== 1) return;
+    if (isPlanned || !workoutId || hasSets || !hasReferenceParseText(latestLoggedReferenceRef.current)) return;
+    if (isAutoParsePending) return;
+    if (autoParsedWorkoutIdsRef.current.has(workoutId)) return;
+    autoParsedWorkoutIdsRef.current.add(workoutId);
+    triggerAutoParse();
+  }, [
+    loggingStep,
+    isPlanned,
+    workoutId,
+    hasSets,
+    referenceMainWorkout,
+    referenceAccessory,
+    isAutoParsePending,
+    triggerAutoParse,
+  ]);
+
+  // Empty-state nudge: when the prescription has text but no structured rows
+  // exist yet, point the user at Parse instead of Add.
+  const hasUnparsedText =
+    hasPrescriptionText(referenceMainWorkout) || hasPrescriptionText(referenceAccessory);
 
   const prescriptionPanel = (
     <CoachPrescriptionCollapsible
@@ -1212,8 +1315,8 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
       notes={referenceNotes}
       open={parseControls.prescriptionOpen}
       onOpenChange={parseControls.setPrescriptionOpen}
-      onSaveField={isPlanned ? onSavePrescriptionField : undefined}
-      onDraftFieldChange={isPlanned ? onDraftPrescriptionChange : undefined}
+      onSaveField={parseReady ? onSavePrescriptionField : undefined}
+      onDraftFieldChange={isPlanned ? onDraftPrescriptionChange : onDraftReferenceChange}
       onParse={parseReady ? parseControls.onParseClicked : undefined}
       isParsing={parseControls.isParsing}
       onCapture={parseReady ? parseControls.onCapture : undefined}

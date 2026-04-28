@@ -154,7 +154,11 @@ export const insertWorkoutLogSchema = createInsertSchema(workoutLogs).omit({
   rpe: z.number().int().min(1, "RPE must be at least 1").max(10, "RPE must be at most 10").optional().nullable(),
 });
 
-export const updateWorkoutLogSchema = insertWorkoutLogSchema.partial();
+export const updateWorkoutLogSchema = insertWorkoutLogSchema.partial().extend({
+  prescribedMainWorkout: z.string().optional().nullable(),
+  prescribedAccessory: z.string().optional().nullable(),
+  prescribedNotes: z.string().optional().nullable(),
+});
 
 export type InsertWorkoutLog = z.infer<typeof insertWorkoutLogSchema>;
 export type UpdateWorkoutLog = z.infer<typeof updateWorkoutLogSchema>;

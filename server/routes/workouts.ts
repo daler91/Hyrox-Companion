@@ -25,8 +25,13 @@ const createWorkoutRouteSchema = insertWorkoutLogSchema.extend({
 const updateWorkoutRouteSchema = updateWorkoutLogSchema.extend({
   exercises: exercisesPayloadSchema.optional(),
 });
+const reparseWorkoutRouteSchema = z.object({
+  prescribedMainWorkout: z.string().nullable().optional(),
+  prescribedAccessory: z.string().nullable().optional(),
+}).strict();
 type CreateWorkoutRoutePayload = z.infer<typeof createWorkoutRouteSchema>;
 type UpdateWorkoutRoutePayload = z.infer<typeof updateWorkoutRouteSchema>;
+type ReparseWorkoutRoutePayload = z.infer<typeof reparseWorkoutRouteSchema>;
 
 // Custom-exercise endpoint now uses the shared `validateBody` middleware
 // for a uniform VALIDATION_ERROR contract (CODEBASE_AUDIT.md §4). The table
@@ -43,9 +48,17 @@ router.get("/api/v1/workouts/unstructured", isAuthenticated, rateLimiter("workou
     res.json(workouts);
   }));
 
-router.post("/api/v1/workouts/:id/reparse", ...protectedMutationGuards, rateLimiter("reparse", 5), aiBudgetCheck, asyncHandler(async (req: Request<{ id: string }>, res: Response) => {
+router.post("/api/v1/workouts/:id/reparse", ...protectedMutationGuards, rateLimiter("reparse", 5), aiBudgetCheck, asyncHandler(async (req: Request<{ id: string }, unknown, ReparseWorkoutRoutePayload>, res: Response) => {
     const userId = getUserId(req);
     const workoutId = req.params.id;
+    const parsedBody = reparseWorkoutRouteSchema.safeParse(req.body ?? {});
+    if (!parsedBody.success) {
+      throw new AppError(
+        ErrorCode.VALIDATION_ERROR,
+        parsedBody.error.issues.map((issue) => issue.message).join(", "),
+        400,
+      );
+    }
     // ⚡ Perf: Parallelize independent DB queries — getWorkoutLog and getUser
     // don't depend on each other, so run them concurrently to halve latency.
     const [workout, user] = await Promise.all([
@@ -56,7 +69,24 @@ router.post("/api/v1/workouts/:id/reparse", ...protectedMutationGuards, rateLimi
       return sendNotFound(res, "Workout not found");
     }
     const weightUnit = user?.weightUnit || "kg";
-    const result = await reparseWorkout(workout, weightUnit);
+    const referencePatch: Partial<z.infer<typeof updateWorkoutLogSchema>> = {};
+    const parseTarget: { id: string; mainWorkout?: string | null; accessory?: string | null } = {
+      id: workout.id,
+      mainWorkout: workout.prescribedMainWorkout ?? workout.mainWorkout,
+      accessory: workout.prescribedAccessory ?? workout.accessory,
+    };
+    if (parsedBody.data.prescribedMainWorkout !== undefined) {
+      referencePatch.prescribedMainWorkout = parsedBody.data.prescribedMainWorkout;
+      parseTarget.mainWorkout = parsedBody.data.prescribedMainWorkout;
+    }
+    if (parsedBody.data.prescribedAccessory !== undefined) {
+      referencePatch.prescribedAccessory = parsedBody.data.prescribedAccessory;
+      parseTarget.accessory = parsedBody.data.prescribedAccessory;
+    }
+    if (Object.keys(referencePatch).length > 0) {
+      await storage.workouts.updateWorkoutLog(workoutId, referencePatch, userId);
+    }
+    const result = await reparseWorkout(parseTarget, weightUnit);
     if (!result) {
       return res.json({ exercises: [], saved: false });
     }

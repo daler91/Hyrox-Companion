@@ -56,6 +56,9 @@ describe("Timeline Workout Details Interactions", () => {
     mainWorkout: "4x8 bench press at 60kg\n3x10 overhead press",
     accessory: "3x12 lateral raises",
     notes: null,
+    prescribedMainWorkout: "4x8 bench press at 60kg\n3x10 overhead press",
+    prescribedAccessory: "3x12 lateral raises",
+    prescribedNotes: "Focus on form",
     duration: null,
     rpe: null,
     planDayId,
@@ -101,9 +104,14 @@ describe("Timeline Workout Details Interactions", () => {
       },
     }).as("getLoggedWorkoutHistory");
 
-    cy.intercept("PATCH", `/api/v1/workouts/${loggedWorkoutId}`, {
-      statusCode: 200,
-      body: { ...loggedWorkout, rpe: 8 },
+    cy.intercept("PATCH", `/api/v1/workouts/${loggedWorkoutId}`, (req) => {
+      if (Object.prototype.hasOwnProperty.call(req.body, "rpe")) {
+        req.alias = "updateLoggedWorkoutRpe";
+      }
+      req.reply({
+        statusCode: 200,
+        body: { ...loggedWorkout, ...req.body },
+      });
     }).as("updateLoggedWorkout");
 
     cy.intercept("DELETE", `/api/v1/plans/days/${planDayId}`, {
@@ -163,7 +171,61 @@ describe("Timeline Workout Details Interactions", () => {
     cy.contains("Workout logged").should("exist");
   });
 
-  it("opens the in-dialog guided logging stepper from the body CTA", () => {
+  it("auto-parses free text after Log workout when the logged response has no rows", () => {
+    const refreshedExerciseSets = [
+      {
+        ...seededExerciseSets[0],
+        id: "logged-set-refreshed-1",
+        exerciseName: "thruster",
+        reps: 15,
+        weight: 30,
+        plannedReps: 15,
+        plannedWeight: 30,
+      },
+      {
+        ...seededExerciseSets[1],
+        id: "logged-set-refreshed-2",
+        exerciseName: "run",
+        category: "conditioning",
+        reps: null,
+        weight: null,
+        distance: 200,
+        plannedReps: null,
+        plannedWeight: null,
+        plannedDistance: 200,
+      },
+    ];
+    let loggedWorkoutDetail = { ...loggedWorkout, exerciseSets: [] };
+    let parseCount = 0;
+
+    cy.intercept("POST", "/api/v1/workouts", {
+      statusCode: 200,
+      body: loggedWorkoutDetail,
+    }).as("logWorkoutFromPlan");
+
+    cy.intercept("GET", `/api/v1/workouts/${loggedWorkoutId}`, (req) => {
+      req.reply({ statusCode: 200, body: loggedWorkoutDetail });
+    }).as("getLoggedWorkout");
+
+    cy.intercept("POST", `/api/v1/workouts/${loggedWorkoutId}/reparse`, (req) => {
+      parseCount += 1;
+      expect(req.body).to.have.property("prescribedMainWorkout");
+      expect(req.body).to.have.property("prescribedAccessory");
+      expect(req.body).not.to.have.property("prescribedNotes");
+      loggedWorkoutDetail = {
+        ...loggedWorkout,
+        exerciseSets: parseCount === 1 ? seededExerciseSets : refreshedExerciseSets,
+      };
+      req.reply({
+        statusCode: 200,
+        body: {
+          saved: true,
+          exercises: [],
+          setCount: loggedWorkoutDetail.exerciseSets.length,
+        },
+      });
+    }).as("reparseLoggedWorkout");
+
     cy.getBySel(`card-timeline-entry-${workoutId}`).click();
     cy.wait("@getPlanDaySets");
 
@@ -180,10 +242,25 @@ describe("Timeline Workout Details Interactions", () => {
     cy.getBySel("workout-detail-dialog-v2").should("exist");
     cy.getBySel("workout-logging-stepper").should("exist");
     cy.getBySel("workout-logging-step-1").should("have.attr", "aria-current", "step");
+    cy.getBySel("coach-prescription-photo").should("be.visible");
+    cy.getBySel("coach-prescription-parse").should("be.visible");
+    cy.wait("@reparseLoggedWorkout");
+    cy.wait("@getLoggedWorkout");
     cy.getBySel("exercise-table").should("be.visible");
     cy.getBySel("exercise-row").should("have.length", 2);
     cy.contains("Bench Press").should("exist");
     cy.contains("Overhead Press").should("exist");
+
+    cy.getBySel("coach-prescription-toggle").click();
+    cy.getBySel("prescription-textarea-mainWorkout").clear().type("2x15 thrusters at 30kg");
+    cy.getBySel("prescription-textarea-accessory").clear().type("4x200m run");
+    cy.getBySel("coach-prescription-parse").click();
+    cy.contains("Replace existing exercises?").should("exist");
+    cy.getBySel("coach-prescription-parse-confirm").click();
+    cy.wait("@reparseLoggedWorkout");
+    cy.wait("@getLoggedWorkout");
+    cy.contains("thruster").should("exist");
+
     // Step 2 puts the reflection fields front and center once workoutId is
     // bound. The mutation onSuccess primes the workout-detail cache from
     // the API response so the inputs render without a separate GET.
@@ -192,11 +269,30 @@ describe("Timeline Workout Details Interactions", () => {
     cy.getBySel("workout-reflect-context-row").should("contain", "2 exercises | 2 sets");
     cy.getBySel("input-rpe-selector").should("be.visible");
     cy.getBySel("button-rpe-8").click();
-    cy.wait("@updateLoggedWorkout").its("request.body").should("deep.include", { rpe: 8 });
+    cy.wait("@updateLoggedWorkoutRpe").its("request.body").should("deep.include", { rpe: 8 });
     cy.getBySel("athlete-note-input").should("have.attr", "data-mode", "form");
     cy.get("textarea#athlete-note-textarea").should("be.visible").and("not.be.disabled");
     cy.getBySel("workout-logging-step-finish").click();
     cy.getBySel("workout-logging-stepper").should("not.exist");
+  });
+
+  it("does not auto-parse when Log workout already returns structured rows", () => {
+    let reparseCalls = 0;
+    cy.intercept("POST", `/api/v1/workouts/${loggedWorkoutId}/reparse`, (req) => {
+      reparseCalls += 1;
+      req.reply({ statusCode: 200, body: { saved: true, exercises: [], setCount: 0 } });
+    });
+
+    cy.getBySel(`card-timeline-entry-${workoutId}`).click();
+    cy.wait("@getPlanDaySets");
+    cy.getBySel("workout-detail-log-cta-button").click();
+    cy.wait("@logWorkoutFromPlan");
+
+    cy.getBySel("workout-logging-stepper").should("exist");
+    cy.getBySel("exercise-row").should("have.length", 2);
+    cy.then(() => {
+      expect(reparseCalls).to.equal(0);
+    });
   });
 
   it("can mark a workout as missed from the v2 overflow menu", () => {
