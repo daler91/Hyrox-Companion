@@ -355,9 +355,12 @@ export class WorkoutStorage {
 
   async deleteExerciseSet(workoutLogId: string, setId: string, userId: string): Promise<boolean> {
     const owned = await this.getExerciseSetOwned(setId, userId);
-    if (owned?.workoutLogId !== workoutLogId) return false;
-    const result = await db.delete(exerciseSets).where(eq(exerciseSets.id, setId));
-    return (result.rowCount ?? 0) > 0;
+    // DELETE is idempotent: if the row is already gone (or not visible to
+    // this user), the caller's collection no longer contains it.
+    if (!owned) return true;
+    if (owned.workoutLogId !== workoutLogId) return false;
+    await db.delete(exerciseSets).where(eq(exerciseSets.id, setId));
+    return true;
   }
 
   /**
@@ -459,9 +462,11 @@ export class WorkoutStorage {
 
   async deleteExerciseSetForPlanDay(planDayId: string, setId: string, userId: string): Promise<boolean> {
     const owned = await this.getExerciseSetOwned(setId, userId);
-    if (owned?.planDayId !== planDayId) return false;
-    const result = await db.delete(exerciseSets).where(eq(exerciseSets.id, setId));
-    return (result.rowCount ?? 0) > 0;
+    // Missing/stale row IDs are already absent from the caller's plan day.
+    if (!owned) return true;
+    if (owned.planDayId !== planDayId) return false;
+    await db.delete(exerciseSets).where(eq(exerciseSets.id, setId));
+    return true;
   }
 
   private async fetchLastSameFocus(

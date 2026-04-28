@@ -9,6 +9,7 @@ vi.mock("../../db", () => {
   const db: Record<string, unknown> = {
     insert: vi.fn(),
     update: vi.fn(),
+    delete: vi.fn(),
     select: vi.fn().mockReturnValue({ from: vi.fn().mockReturnValue({ where: vi.fn().mockReturnValue([]) }) }),
   };
   // createWorkoutLog and deleteWorkoutLog both wrap their DB calls in a
@@ -17,6 +18,68 @@ vi.mock("../../db", () => {
   // setups on db.insert/db.update continue to apply.
   db.transaction = vi.fn((cb: (tx: typeof db) => Promise<unknown>) => cb(db));
   return { db };
+});
+
+describe("WorkoutStorage.deleteExerciseSet", () => {
+  let storage: WorkoutStorage;
+
+  beforeEach(() => {
+    storage = new WorkoutStorage();
+    vi.clearAllMocks();
+  });
+
+  it("treats a missing workout set as already removed", async () => {
+    vi.spyOn(storage, "getExerciseSetOwned").mockResolvedValue(undefined);
+
+    const result = await storage.deleteExerciseSet("workout-1", "stale-set", "user-1");
+
+    expect(result).toBe(true);
+    expect(db.delete).not.toHaveBeenCalled();
+  });
+
+  it("rejects a set owned by another workout from the nested workout route", async () => {
+    vi.spyOn(storage, "getExerciseSetOwned").mockResolvedValue({
+      id: "set-1",
+      workoutLogId: "other-workout",
+      planDayId: null,
+    } as never);
+
+    const result = await storage.deleteExerciseSet("workout-1", "set-1", "user-1");
+
+    expect(result).toBe(false);
+    expect(db.delete).not.toHaveBeenCalled();
+  });
+});
+
+describe("WorkoutStorage.deleteExerciseSetForPlanDay", () => {
+  let storage: WorkoutStorage;
+
+  beforeEach(() => {
+    storage = new WorkoutStorage();
+    vi.clearAllMocks();
+  });
+
+  it("treats a missing plan-day set as already removed", async () => {
+    vi.spyOn(storage, "getExerciseSetOwned").mockResolvedValue(undefined);
+
+    const result = await storage.deleteExerciseSetForPlanDay("plan-day-1", "stale-set", "user-1");
+
+    expect(result).toBe(true);
+    expect(db.delete).not.toHaveBeenCalled();
+  });
+
+  it("rejects a set owned by another plan day from the nested plan-day route", async () => {
+    vi.spyOn(storage, "getExerciseSetOwned").mockResolvedValue({
+      id: "set-1",
+      workoutLogId: null,
+      planDayId: "other-plan-day",
+    } as never);
+
+    const result = await storage.deleteExerciseSetForPlanDay("plan-day-1", "set-1", "user-1");
+
+    expect(result).toBe(false);
+    expect(db.delete).not.toHaveBeenCalled();
+  });
 });
 
 describe("WorkoutStorage.createWorkoutLog", () => {

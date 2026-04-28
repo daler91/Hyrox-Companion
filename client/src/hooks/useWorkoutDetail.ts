@@ -170,7 +170,9 @@ export function useWorkoutDetail(workoutId: string | null) {
       }
     },
     errorToast: "Couldn't remove that set",
-    invalidateQueries: workoutId ? [QUERY_KEYS.workoutHistory(workoutId)] : undefined,
+    invalidateQueries: workoutId
+      ? [QUERY_KEYS.workout(workoutId), QUERY_KEYS.workoutHistory(workoutId)]
+      : undefined,
   });
 
   const pendingSetMutations = useIsMutating({

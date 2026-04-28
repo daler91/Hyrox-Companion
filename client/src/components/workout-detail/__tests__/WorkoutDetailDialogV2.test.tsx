@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { api, QUERY_KEYS } from "@/lib/api";
+import { queryClient as appQueryClient } from "@/lib/queryClient";
 
 import { WorkoutDetailDialogV2 } from "../WorkoutDetailDialogV2";
 
@@ -246,6 +247,7 @@ describe("WorkoutDetailDialogV2", () => {
   beforeEach(() => {
     showAdherenceInsights = true;
     vi.clearAllMocks();
+    appQueryClient.clear();
     mockPlans.updateDayWithoutPlan.mockResolvedValue({});
   });
 
@@ -563,6 +565,38 @@ describe("WorkoutDetailDialogV2", () => {
     expect(screen.getByTestId("planned-actual-summary")).toHaveTextContent(
       "Removed: walking lunge ×1",
     );
+  });
+
+  it("refetches logged exercise rows after removing a set", async () => {
+    const firstSet = makeSet({ id: "set-1", setNumber: 1, sortOrder: 0 });
+    const removedSet = makeSet({ id: "set-2", setNumber: 2, sortOrder: 1 });
+    mockWorkouts.get
+      .mockResolvedValueOnce(makeWorkout({ exerciseSets: [firstSet, removedSet] }))
+      .mockResolvedValueOnce(makeWorkout({ exerciseSets: [firstSet] }));
+    mockWorkouts.history.mockResolvedValue({
+      lastSameFocus: null,
+      prSetCount: 0,
+      blockAvgRpe: null,
+    });
+    mockWorkouts.deleteSet.mockResolvedValue({ success: true });
+
+    renderDialogWithClient(appQueryClient, {
+      entry: makeEntry(),
+      onClose: vi.fn(),
+    });
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByTestId("exercise-row-toggle"));
+    expect(await screen.findByTestId("set-row-set-2")).toBeInTheDocument();
+
+    await user.click(screen.getByTestId("button-remove-set-set-2"));
+
+    await waitFor(() => {
+      expect(mockWorkouts.deleteSet).toHaveBeenCalledWith("log-1", "set-2");
+      expect(mockWorkouts.get).toHaveBeenCalledTimes(2);
+      expect(screen.queryByTestId("set-row-set-2")).not.toBeInTheDocument();
+    });
+    expect(screen.getByTestId("set-row-set-1")).toBeInTheDocument();
   });
 
   it("shows adherence in the History panel for logged workouts when available", async () => {

@@ -151,6 +151,7 @@ export function usePlanDayExercises(planDayId: string | null) {
       }
     },
     errorToast: "Couldn't remove that set",
+    invalidateQueries: planDayId ? [QUERY_KEYS.planDayExercises(planDayId)] : undefined,
   });
 
   // Plan-day Parse: POST /reparse → Gemini parses mainWorkout/accessory into
