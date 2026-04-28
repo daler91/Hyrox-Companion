@@ -10,6 +10,8 @@ import {
   type ParseFromImagePayload,
   type PatchExerciseSetPayload,
   QUERY_KEYS,
+  type ReparseWorkoutTextPayload,
+  type WorkoutReferenceTextPayload,
 } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
 
@@ -193,7 +195,8 @@ export function useWorkoutDetail(workoutId: string | null) {
   // workoutId, coordinated from WorkoutDetailDialogV2's hydration
   // useEffect. Errors surface through the `useApiMutation` toast layer.
   const reparseFreeText = useApiMutation({
-    mutationFn: () => api.workouts.reparse(workoutId!),
+    mutationFn: (payload?: ReparseWorkoutTextPayload) =>
+      api.workouts.reparse(workoutId!, payload),
     invalidateQueries: workoutId
       ? [QUERY_KEYS.workout(workoutId), QUERY_KEYS.workoutHistory(workoutId)]
       : undefined,
@@ -322,6 +325,31 @@ export function useWorkoutDetail(workoutId: string | null) {
         : { title: "Couldn't save prescription" },
   });
 
+  const updateReference = useApiMutation({
+    mutationFn: (patch: WorkoutReferenceTextPayload) =>
+      api.workouts.update(workoutId!, patch),
+    onMutate: async (patch) => {
+      if (!workoutId) return undefined;
+      await queryClient.cancelQueries({ queryKey: QUERY_KEYS.workout(workoutId) });
+      const prev = queryClient.getQueryData<WorkoutWithSets>(QUERY_KEYS.workout(workoutId));
+      patchCachedWorkout(patch);
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      const prev = (ctx as { prev?: WorkoutWithSets } | undefined)?.prev;
+      if (workoutId && prev) {
+        queryClient.setQueryData(QUERY_KEYS.workout(workoutId), prev);
+      }
+    },
+    errorToast: (error) =>
+      isWorkoutNotFoundError(error)
+        ? {
+            title: "That workout was just changed",
+            description: "Refresh to sync the latest entry, then try again.",
+          }
+        : { title: "Couldn't save reference notes" },
+  });
+
   // Inline RPE edit from the stats row. Non-optimistic — rollback
   // snapshots from concurrent edits can stomp newer successful
   // values, and invalidating the whole workout query on success
@@ -389,6 +417,7 @@ export function useWorkoutDetail(workoutId: string | null) {
     reparseFromImage,
     updateNote,
     updatePrescription,
+    updateReference,
     updateFocus,
     updateRpe,
   };

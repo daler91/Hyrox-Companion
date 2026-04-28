@@ -28,6 +28,17 @@ export interface ReparseResponse {
   setCount?: number;
 }
 
+export interface WorkoutReferenceTextPayload {
+  prescribedMainWorkout?: string | null;
+  prescribedAccessory?: string | null;
+  prescribedNotes?: string | null;
+}
+
+export type ReparseWorkoutTextPayload = Pick<
+  WorkoutReferenceTextPayload,
+  "prescribedMainWorkout" | "prescribedAccessory"
+>;
+
 export interface WorkoutHistoryStats {
   lastSameFocus: { date: string; focus: string } | null;
   prSetCount: number;
@@ -109,8 +120,10 @@ export const workouts = {
 
   getUnstructured: () => typedRequest<WorkoutLog[]>("GET", "/api/v1/workouts/unstructured"),
 
-  reparse: (id: string) =>
-    typedRequest<ReparseResponse>("POST", `/api/v1/workouts/${id}/reparse`),
+  reparse: (id: string, payload?: ReparseWorkoutTextPayload) =>
+    payload === undefined
+      ? typedRequest<ReparseResponse>("POST", `/api/v1/workouts/${id}/reparse`)
+      : typedRequest<ReparseResponse>("POST", `/api/v1/workouts/${id}/reparse`, payload),
 
   reparseFromImage: (id: string, payload: ParseFromImagePayload) =>
     typedRequest<ReparseResponse>(

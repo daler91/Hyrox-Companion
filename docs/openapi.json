@@ -864,6 +864,18 @@
                 "nullable": true,
                 "minimum": -2147483648,
                 "maximum": 2147483647
+              },
+              "prescribedMainWorkout": {
+                "type": "string",
+                "nullable": true
+              },
+              "prescribedAccessory": {
+                "type": "string",
+                "nullable": true
+              },
+              "prescribedNotes": {
+                "type": "string",
+                "nullable": true
               }
             }
           },

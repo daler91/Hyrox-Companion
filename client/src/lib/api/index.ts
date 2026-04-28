@@ -13,7 +13,9 @@ export type {
   BatchReparseResponse,
   PatchExerciseSetPayload,
   ReparseResponse,
+  ReparseWorkoutTextPayload,
   WorkoutHistoryStats,
+  WorkoutReferenceTextPayload,
 } from "./workouts";
 export { workouts } from "./workouts";
 

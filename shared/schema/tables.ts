@@ -92,9 +92,9 @@ export const workoutLogs = pgTable("workout_logs", {
   mainWorkout: text("main_workout").notNull(),
   accessory: text("accessory"),
   notes: text("notes"),
-  // Immutable snapshot of the free-text prescription at initial log create.
-  // Used by completed-workout UI to show original coach intent even if the
-  // mutable log text fields are later edited.
+  // Snapshot of the free-text prescription copied at initial log create.
+  // Completed-workout UI lets athletes edit this reference text when they
+  // need to re-parse structured rows from the coach prescription.
   prescribedMainWorkout: text("prescribed_main_workout"),
   prescribedAccessory: text("prescribed_accessory"),
   prescribedNotes: text("prescribed_notes"),
