@@ -101,6 +101,11 @@ describe("Timeline Workout Details Interactions", () => {
       },
     }).as("getLoggedWorkoutHistory");
 
+    cy.intercept("PATCH", `/api/v1/workouts/${loggedWorkoutId}`, {
+      statusCode: 200,
+      body: { ...loggedWorkout, rpe: 8 },
+    }).as("updateLoggedWorkout");
+
     cy.intercept("DELETE", `/api/v1/plans/days/${planDayId}`, {
       statusCode: 200,
       body: { success: true },
@@ -184,9 +189,11 @@ describe("Timeline Workout Details Interactions", () => {
     // the API response so the inputs render without a separate GET.
     cy.getBySel("workout-logging-step-continue").click();
     cy.getBySel("workout-logging-step-2").should("have.attr", "aria-current", "step");
-    cy.getBySel("workout-stats-rpe-focus-panel").should("be.visible");
-    cy.getBySel("workout-stats-rpe-input").should("be.visible");
-    cy.getBySel("athlete-note-input").should("have.attr", "data-emphasis", "reflect");
+    cy.getBySel("workout-reflect-context-row").should("contain", "2 exercises | 2 sets");
+    cy.getBySel("input-rpe-selector").should("be.visible");
+    cy.getBySel("button-rpe-8").click();
+    cy.wait("@updateLoggedWorkout").its("request.body").should("deep.include", { rpe: 8 });
+    cy.getBySel("athlete-note-input").should("have.attr", "data-mode", "form");
     cy.get("textarea#athlete-note-textarea").should("be.visible").and("not.be.disabled");
     cy.getBySel("workout-logging-step-finish").click();
     cy.getBySel("workout-logging-stepper").should("not.exist");
