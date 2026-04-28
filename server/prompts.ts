@@ -1,5 +1,6 @@
-import type { TrainingContext } from "./gemini/types";
 import { exerciseNames } from "@shared/schema/exercises";
+
+import type { TrainingContext } from "./gemini/types";
 import {
   buildExerciseFocus,
   buildOverallStats,

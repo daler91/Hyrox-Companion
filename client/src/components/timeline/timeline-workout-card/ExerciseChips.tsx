@@ -1,6 +1,7 @@
 import { HelpCircle,Trophy } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { categoryChipColors, formatExerciseSummary } from "@/lib/exerciseUtils";
 
 import type { ExerciseChipsProps } from "./types";
@@ -33,22 +34,29 @@ export function ExerciseChips({
         }
         const summaryText = formatExerciseSummary(group, weightLabel, distanceUnit);
         return (
-          <Badge
-            key={`${group.exerciseName}-${idx}`}
-            variant="secondary"
-            className={`text-xs font-normal max-w-full truncate ${categoryChipColors[group.category] || ""} ${isPR ? "ring-1 ring-yellow-500/50" : ""}`}
-            data-testid={isPR ? `badge-pr-${entryId}-${idx}` : `badge-exercise-${entryId}-${idx}`}
-            title={summaryText}
-          >
-            {isPR && <Trophy className="h-3 w-3 mr-0.5 text-yellow-500" />}
-            {summaryText}
-            {showConfidence && (
-              <span className={`ml-1 text-[10px] font-medium ${confColor}`} data-testid={`confidence-score-${entryId}-${idx}`}>
-                {conf}%
-              </span>
-            )}
-            {isCustom && <HelpCircle className="h-3 w-3 ml-0.5 text-muted-foreground/60" />}
-          </Badge>
+          <TooltipProvider key={`${group.exerciseName}-${idx}`}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge
+                  variant="secondary"
+                  className={`text-xs font-normal max-w-full truncate ${categoryChipColors[group.category] || ""} ${isPR ? "ring-1 ring-yellow-500/50" : ""}`}
+                  data-testid={isPR ? `badge-pr-${entryId}-${idx}` : `badge-exercise-${entryId}-${idx}`}
+                >
+                  {isPR && <Trophy className="h-3 w-3 mr-0.5 text-yellow-500" />}
+                  {summaryText}
+                  {showConfidence && (
+                    <span className={`ml-1 text-[10px] font-medium ${confColor}`} data-testid={`confidence-score-${entryId}-${idx}`}>
+                      {conf}%
+                    </span>
+                  )}
+                  {isCustom && <HelpCircle className="h-3 w-3 ml-0.5 text-muted-foreground/60" />}
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{summaryText}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         );
       })}
     </div>
