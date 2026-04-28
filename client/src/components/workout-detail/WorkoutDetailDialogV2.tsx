@@ -515,9 +515,14 @@ function buildLoggedReferenceParsePayload(
   draft: LoggedReferenceDraft,
 ): ReparseWorkoutTextPayload {
   return {
-    prescribedMainWorkout: normalizePrescriptionDraft(draft.mainWorkout),
-    prescribedAccessory: normalizePrescriptionDraft(draft.accessory),
+    prescribedMainWorkout: normalizeLoggedReferenceForParse(draft.mainWorkout),
+    prescribedAccessory: normalizeLoggedReferenceForParse(draft.accessory),
   };
+}
+
+function normalizeLoggedReferenceForParse(value: string | null): string | null {
+  if (value === null) return null;
+  return value.trim().length > 0 ? value : "";
 }
 
 function hasReferenceParseText(draft: LoggedReferenceDraft): boolean {
