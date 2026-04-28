@@ -9,6 +9,8 @@ import { api, QUERY_KEYS } from "@/lib/api";
 import { WorkoutDetailDialogV2 } from "../WorkoutDetailDialogV2";
 
 let showAdherenceInsights = true;
+const AUTO_PARSE_MAIN = "4 rounds: 1000m SkiErg, 20 wall balls";
+const AUTO_PARSE_ACCESSORY = "3x12 walking lunges";
 
 vi.mock("@/hooks/useUnitPreferences", () => ({
   useUnitPreferences: () => ({
@@ -143,18 +145,101 @@ function makeSet(overrides: Partial<ExerciseSet> = {}): ExerciseSet {
 }
 
 function renderDialog(props: Partial<React.ComponentProps<typeof WorkoutDetailDialogV2>> = {}) {
-  const queryClient = new QueryClient({
+  const queryClient = makeTestQueryClient();
+  return renderDialogWithClient(queryClient, {
+    entry: makeEntry(),
+    onClose: vi.fn(),
+    ...props,
+  });
+}
+
+function makeTestQueryClient() {
+  return new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  return render(
+}
+
+function renderDialogWithClient(
+  queryClient: QueryClient,
+  props: React.ComponentProps<typeof WorkoutDetailDialogV2>,
+) {
+  return render(wrapDialog(queryClient, props));
+}
+
+function renderDialogRerender(
+  rerender: ReturnType<typeof render>["rerender"],
+  queryClient: QueryClient,
+  props: React.ComponentProps<typeof WorkoutDetailDialogV2>,
+) {
+  rerender(wrapDialog(queryClient, props));
+}
+
+function wrapDialog(
+  queryClient: QueryClient,
+  props: React.ComponentProps<typeof WorkoutDetailDialogV2>,
+) {
+  return (
     <QueryClientProvider client={queryClient}>
-      <WorkoutDetailDialogV2
-        entry={makeEntry()}
-        onClose={vi.fn()}
-        {...props}
-      />
-    </QueryClientProvider>,
+      <WorkoutDetailDialogV2 {...props} />
+    </QueryClientProvider>
   );
+}
+
+function makeStepperEntry(
+  state: "planned" | "logged",
+  overrides: Partial<TimelineEntry> = {},
+): TimelineEntry {
+  const logged = state === "logged";
+  return makeEntry({
+    id: logged ? "log-logged-workout-1" : "plan-plan-day-1",
+    type: state,
+    status: logged ? "completed" : "planned",
+    workoutLogId: logged ? "logged-workout-1" : null,
+    planDayId: "plan-day-1",
+    ...overrides,
+  });
+}
+
+function makeStepperPlannedEntry(overrides: Partial<TimelineEntry> = {}): TimelineEntry {
+  return makeStepperEntry("planned", overrides);
+}
+
+function makeStepperLoggedEntry(overrides: Partial<TimelineEntry> = {}): TimelineEntry {
+  return makeStepperEntry("logged", overrides);
+}
+
+function mockEmptyHistory() {
+  mockWorkouts.history.mockResolvedValue({
+    lastSameFocus: null,
+    prSetCount: 0,
+    blockAvgRpe: null,
+  });
+}
+
+async function openStepperAndRebind(args: {
+  readonly plannedEntry: TimelineEntry;
+  readonly loggedEntry: TimelineEntry;
+  readonly queryClient?: QueryClient;
+  readonly onMarkComplete?: ReturnType<typeof vi.fn>;
+}) {
+  const queryClient = args.queryClient ?? makeTestQueryClient();
+  const onMarkComplete = args.onMarkComplete ?? vi.fn();
+  const view = renderDialogWithClient(queryClient, {
+    entry: args.plannedEntry,
+    onClose: vi.fn(),
+    onMarkComplete,
+  });
+
+  const user = userEvent.setup();
+  await user.click(screen.getByTestId("workout-detail-log-cta-button"));
+
+  renderDialogRerender(view.rerender, queryClient, {
+    entry: args.loggedEntry,
+    onClose: vi.fn(),
+    onMarkComplete,
+  });
+
+  return { ...view, queryClient, onMarkComplete, user };
 }
 
 describe("WorkoutDetailDialogV2", () => {
@@ -300,11 +385,7 @@ describe("WorkoutDetailDialogV2", () => {
         exerciseSets: [],
       }),
     );
-    mockWorkouts.history.mockResolvedValue({
-      lastSameFocus: null,
-      prSetCount: 0,
-      blockAvgRpe: null,
-    });
+    mockEmptyHistory();
     mockWorkouts.update.mockResolvedValue(makeWorkout());
     mockWorkouts.reparse.mockResolvedValue({ exercises: [], saved: false, setCount: 0 });
 
@@ -342,6 +423,47 @@ describe("WorkoutDetailDialogV2", () => {
     expect(mockWorkouts.reparse.mock.calls.at(-1)?.[1]).not.toHaveProperty("prescribedNotes");
   });
 
+  it("preserves explicit clears for logged Reference/Notes instead of falling back to timeline text", async () => {
+    mockWorkouts.get.mockResolvedValue(
+      makeWorkout({
+        mainWorkout: "Timeline main should not reappear",
+        prescribedMainWorkout: "Coach original prescription",
+        exerciseSets: [],
+      }),
+    );
+    mockEmptyHistory();
+    mockWorkouts.update.mockResolvedValue(
+      makeWorkout({
+        mainWorkout: "Timeline main should not reappear",
+        prescribedMainWorkout: "",
+        exerciseSets: [],
+      }),
+    );
+
+    renderDialog({
+      entry: makeEntry({
+        mainWorkout: "Timeline main should not reappear",
+        accessory: null,
+        notes: null,
+      }),
+    });
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByTestId("coach-prescription-toggle"));
+
+    const main = await screen.findByTestId("prescription-textarea-mainWorkout");
+    await user.clear(main);
+    fireEvent.blur(main);
+
+    await waitFor(() => {
+      expect(mockWorkouts.update).toHaveBeenCalledWith("log-1", {
+        prescribedMainWorkout: "",
+      });
+    });
+    expect(main).toHaveValue("");
+    expect(screen.queryByDisplayValue("Timeline main should not reappear")).not.toBeInTheDocument();
+  });
+
   it("keeps the replace confirmation when manual Parse would overwrite existing rows", async () => {
     mockWorkouts.get.mockResolvedValue(
       makeWorkout({
@@ -350,11 +472,7 @@ describe("WorkoutDetailDialogV2", () => {
         exerciseSets: [makeSet()],
       }),
     );
-    mockWorkouts.history.mockResolvedValue({
-      lastSameFocus: null,
-      prSetCount: 0,
-      blockAvgRpe: null,
-    });
+    mockEmptyHistory();
     mockWorkouts.reparse.mockResolvedValue({ exercises: [], saved: false, setCount: 0 });
 
     renderDialog();
@@ -710,23 +828,6 @@ describe("WorkoutDetailDialogV2", () => {
 
   it("keeps the logging stepper open when a plan day rebinds to its logged workout", async () => {
     const onMarkComplete = vi.fn();
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-    });
-    const plannedEntry = makeEntry({
-      id: "plan-plan-day-1",
-      type: "planned",
-      status: "planned",
-      workoutLogId: null,
-      planDayId: "plan-day-1",
-    });
-    const loggedEntry = makeEntry({
-      id: "log-logged-workout-1",
-      type: "logged",
-      status: "completed",
-      workoutLogId: "logged-workout-1",
-      planDayId: "plan-day-1",
-    });
     mockWorkouts.get.mockResolvedValue(
       makeWorkout({
         id: "logged-workout-1",
@@ -743,35 +844,13 @@ describe("WorkoutDetailDialogV2", () => {
         exerciseSets: [makeSet({ id: "set-logged", workoutLogId: "logged-workout-1" })],
       }),
     );
-    mockWorkouts.history.mockResolvedValue({
-      lastSameFocus: null,
-      prSetCount: 0,
-      blockAvgRpe: null,
+    mockEmptyHistory();
+
+    const { user } = await openStepperAndRebind({
+      plannedEntry: makeStepperPlannedEntry(),
+      loggedEntry: makeStepperLoggedEntry(),
+      onMarkComplete,
     });
-
-    const { rerender } = render(
-      <QueryClientProvider client={queryClient}>
-        <WorkoutDetailDialogV2
-          entry={plannedEntry}
-          onClose={vi.fn()}
-          onMarkComplete={onMarkComplete}
-        />
-      </QueryClientProvider>,
-    );
-
-    const user = userEvent.setup();
-    await user.click(screen.getByTestId("workout-detail-log-cta-button"));
-    expect(screen.getByTestId("workout-logging-stepper")).toBeInTheDocument();
-
-    rerender(
-      <QueryClientProvider client={queryClient}>
-        <WorkoutDetailDialogV2
-          entry={loggedEntry}
-          onClose={vi.fn()}
-          onMarkComplete={onMarkComplete}
-        />
-      </QueryClientProvider>,
-    );
 
     expect(screen.getByTestId("workout-logging-stepper")).toBeInTheDocument();
     expect(screen.getByTestId("workout-logging-step-1")).toHaveAttribute("aria-current", "step");
@@ -799,33 +878,20 @@ describe("WorkoutDetailDialogV2", () => {
   });
 
   it("auto-parses free text once after the stepper rebinds to a logged workout with zero rows", async () => {
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    const plannedEntry = makeStepperPlannedEntry({
+      mainWorkout: AUTO_PARSE_MAIN,
+      accessory: AUTO_PARSE_ACCESSORY,
     });
-    const plannedEntry = makeEntry({
-      id: "plan-plan-day-1",
-      type: "planned",
-      status: "planned",
-      workoutLogId: null,
-      planDayId: "plan-day-1",
-      mainWorkout: "4 rounds: 1000m SkiErg, 20 wall balls",
-      accessory: "3x12 walking lunges",
-    });
-    const loggedEntry = makeEntry({
-      id: "log-logged-workout-1",
-      type: "logged",
-      status: "completed",
-      workoutLogId: "logged-workout-1",
-      planDayId: "plan-day-1",
-      mainWorkout: "4 rounds: 1000m SkiErg, 20 wall balls",
-      accessory: "3x12 walking lunges",
+    const loggedEntry = makeStepperLoggedEntry({
+      mainWorkout: AUTO_PARSE_MAIN,
+      accessory: AUTO_PARSE_ACCESSORY,
     });
     mockWorkouts.get.mockResolvedValue(
       makeWorkout({
         id: "logged-workout-1",
         planDayId: "plan-day-1",
-        prescribedMainWorkout: "4 rounds: 1000m SkiErg, 20 wall balls",
-        prescribedAccessory: "3x12 walking lunges",
+        prescribedMainWorkout: AUTO_PARSE_MAIN,
+        prescribedAccessory: AUTO_PARSE_ACCESSORY,
         exerciseSets: [],
       }),
     );
@@ -836,68 +902,28 @@ describe("WorkoutDetailDialogV2", () => {
     });
     mockWorkouts.reparse.mockResolvedValue({ exercises: [], saved: false, setCount: 0 });
 
-    const { rerender } = render(
-      <QueryClientProvider client={queryClient}>
-        <WorkoutDetailDialogV2
-          entry={plannedEntry}
-          onClose={vi.fn()}
-          onMarkComplete={vi.fn()}
-        />
-      </QueryClientProvider>,
-    );
-
-    const user = userEvent.setup();
-    await user.click(screen.getByTestId("workout-detail-log-cta-button"));
-
-    rerender(
-      <QueryClientProvider client={queryClient}>
-        <WorkoutDetailDialogV2
-          entry={loggedEntry}
-          onClose={vi.fn()}
-          onMarkComplete={vi.fn()}
-        />
-      </QueryClientProvider>,
-    );
+    const view = await openStepperAndRebind({ plannedEntry, loggedEntry });
 
     await waitFor(() => {
       expect(mockWorkouts.reparse).toHaveBeenCalledWith("logged-workout-1", {
-        prescribedMainWorkout: "4 rounds: 1000m SkiErg, 20 wall balls",
-        prescribedAccessory: "3x12 walking lunges",
+        prescribedMainWorkout: AUTO_PARSE_MAIN,
+        prescribedAccessory: AUTO_PARSE_ACCESSORY,
       });
     });
     expect(mockWorkouts.reparse).toHaveBeenCalledTimes(1);
 
-    rerender(
-      <QueryClientProvider client={queryClient}>
-        <WorkoutDetailDialogV2
-          entry={loggedEntry}
-          onClose={vi.fn()}
-          onMarkComplete={vi.fn()}
-        />
-      </QueryClientProvider>,
-    );
+    renderDialogRerender(view.rerender, view.queryClient, {
+      entry: loggedEntry,
+      onClose: vi.fn(),
+      onMarkComplete: view.onMarkComplete,
+    });
     await act(async () => {});
     expect(mockWorkouts.reparse).toHaveBeenCalledTimes(1);
   });
 
   it("does not auto-parse after rebind when structured rows are already cached", async () => {
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-    });
-    const plannedEntry = makeEntry({
-      id: "plan-plan-day-1",
-      type: "planned",
-      status: "planned",
-      workoutLogId: null,
-      planDayId: "plan-day-1",
-    });
-    const loggedEntry = makeEntry({
-      id: "log-logged-workout-1",
-      type: "logged",
-      status: "completed",
-      workoutLogId: "logged-workout-1",
-      planDayId: "plan-day-1",
-    });
+    const queryClient = makeTestQueryClient();
+    const loggedEntry = makeStepperLoggedEntry();
     const seededWorkout = makeWorkout({
       id: "logged-workout-1",
       planDayId: "plan-day-1",
@@ -912,28 +938,11 @@ describe("WorkoutDetailDialogV2", () => {
     });
     mockWorkouts.reparse.mockResolvedValue({ exercises: [], saved: false, setCount: 0 });
 
-    const { rerender } = render(
-      <QueryClientProvider client={queryClient}>
-        <WorkoutDetailDialogV2
-          entry={plannedEntry}
-          onClose={vi.fn()}
-          onMarkComplete={vi.fn()}
-        />
-      </QueryClientProvider>,
-    );
-
-    const user = userEvent.setup();
-    await user.click(screen.getByTestId("workout-detail-log-cta-button"));
-
-    rerender(
-      <QueryClientProvider client={queryClient}>
-        <WorkoutDetailDialogV2
-          entry={loggedEntry}
-          onClose={vi.fn()}
-          onMarkComplete={vi.fn()}
-        />
-      </QueryClientProvider>,
-    );
+    await openStepperAndRebind({
+      plannedEntry: makeStepperPlannedEntry(),
+      loggedEntry,
+      queryClient,
+    });
 
     expect(await screen.findByTestId("exercise-table")).toBeInTheDocument();
     await act(async () => {});
@@ -941,47 +950,25 @@ describe("WorkoutDetailDialogV2", () => {
   });
 
   it("clears the logging stepper when the dialog switches to a different owner", async () => {
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-    });
-    const firstEntry = makeEntry({
-      id: "plan-plan-day-1",
-      type: "planned",
-      status: "planned",
-      workoutLogId: null,
-      planDayId: "plan-day-1",
-    });
-    const secondEntry = makeEntry({
+    const queryClient = makeTestQueryClient();
+    const secondEntry = makeStepperPlannedEntry({
       id: "plan-plan-day-2",
-      type: "planned",
-      status: "planned",
-      workoutLogId: null,
       planDayId: "plan-day-2",
     });
 
-    const { rerender } = render(
-      <QueryClientProvider client={queryClient}>
-        <WorkoutDetailDialogV2
-          entry={firstEntry}
-          onClose={vi.fn()}
-          onMarkComplete={vi.fn()}
-        />
-      </QueryClientProvider>,
-    );
-
-    const user = userEvent.setup();
-    await user.click(screen.getByTestId("workout-detail-log-cta-button"));
+    const view = renderDialogWithClient(queryClient, {
+      entry: makeStepperPlannedEntry(),
+      onClose: vi.fn(),
+      onMarkComplete: vi.fn(),
+    });
+    await userEvent.setup().click(screen.getByTestId("workout-detail-log-cta-button"));
     expect(screen.getByTestId("workout-logging-stepper")).toBeInTheDocument();
 
-    rerender(
-      <QueryClientProvider client={queryClient}>
-        <WorkoutDetailDialogV2
-          entry={secondEntry}
-          onClose={vi.fn()}
-          onMarkComplete={vi.fn()}
-        />
-      </QueryClientProvider>,
-    );
+    renderDialogRerender(view.rerender, queryClient, {
+      entry: secondEntry,
+      onClose: vi.fn(),
+      onMarkComplete: vi.fn(),
+    });
 
     await waitFor(() => {
       expect(screen.queryByTestId("workout-logging-stepper")).not.toBeInTheDocument();

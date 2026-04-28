@@ -1245,7 +1245,8 @@ function DialogBody(props: Readonly<DialogBodyProps>) {
       return;
     }
     if (!isPlanned && workoutId) {
-      onSaveLoggedReference(buildLoggedReferencePatch(field, normalized));
+      const loggedReferenceValue = normalized ?? "";
+      onSaveLoggedReference(buildLoggedReferencePatch(field, loggedReferenceValue));
     }
   };
   const onDraftReferenceChange = (field: PrescriptionField, value: string) => {

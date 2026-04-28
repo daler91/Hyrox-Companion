@@ -121,7 +121,9 @@ export const workouts = {
   getUnstructured: () => typedRequest<WorkoutLog[]>("GET", "/api/v1/workouts/unstructured"),
 
   reparse: (id: string, payload?: ReparseWorkoutTextPayload) =>
-    typedRequest<ReparseResponse>("POST", `/api/v1/workouts/${id}/reparse`, payload ?? {}),
+    payload === undefined
+      ? typedRequest<ReparseResponse>("POST", `/api/v1/workouts/${id}/reparse`)
+      : typedRequest<ReparseResponse>("POST", `/api/v1/workouts/${id}/reparse`, payload),
 
   reparseFromImage: (id: string, payload: ParseFromImagePayload) =>
     typedRequest<ReparseResponse>(
