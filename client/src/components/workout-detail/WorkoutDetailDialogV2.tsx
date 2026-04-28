@@ -2,6 +2,7 @@ import type { ExerciseSet, TimelineEntry, WorkoutStatus } from "@shared/schema";
 import { Check, CheckCircle2, Loader2 } from "lucide-react";
 import { type MutableRefObject,type ReactNode,useEffect, useRef, useState } from "react";
 
+import { RpeSelector } from "@/components/RpeSelector";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -1512,29 +1513,113 @@ function StepperReflect({
   rpeResetSignal,
   onSaveNote,
 }: Readonly<StepperReflectProps>) {
+  const contextParts = workout ? buildReflectContextParts(workout, exerciseSets) : [];
   return (
-    <div className={cn("grid gap-4", workout && "lg:grid-cols-2")}>
-      {workout && (
-        <WorkoutDetailOverview>
-          <WorkoutStatsRow
-            workout={workout}
-            exerciseSets={exerciseSets}
-            onChangeRpe={onChangeRpe}
-            variant="reflect"
-            rpeResetSignal={rpeResetSignal}
-          />
-        </WorkoutDetailOverview>
+    <div
+      className="mx-auto flex w-full max-w-3xl flex-col gap-5"
+      data-testid="workout-logging-reflect-form"
+    >
+      {contextParts.length > 0 && (
+        <p
+          className="text-sm font-medium text-muted-foreground"
+          data-testid="workout-reflect-context-row"
+        >
+          {contextParts.join(" | ")}
+        </p>
       )}
-      <WorkoutDetailReflection emphasized>
+
+      <section
+        className="flex flex-col gap-3 rounded-md border border-border bg-background px-4 py-4"
+        data-testid="workout-reflect-rpe-section"
+      >
+        <div className="space-y-1">
+          <h3 className="text-base font-semibold text-foreground">How hard was that?</h3>
+          <p className="text-sm text-muted-foreground">
+            Pick the RPE that best matches how the workout felt.
+          </p>
+        </div>
+        <ReflectRpeSelector
+          key={`${workout?.id ?? "pending"}:${rpeResetSignal}`}
+          value={workout?.rpe ?? null}
+          onChange={onChangeRpe}
+          disabled={!workoutId || !onChangeRpe}
+        />
+      </section>
+
+      <section
+        className="rounded-md border border-border bg-background px-4 py-4"
+        data-testid="workout-reflect-note-section"
+      >
         <AthleteNoteInput
           value={workout?.notes}
           onSave={onSaveNote}
           disabled={!workoutId}
-          emphasized
+          mode="form"
         />
-      </WorkoutDetailReflection>
+      </section>
     </div>
   );
+}
+
+function ReflectRpeSelector({
+  value,
+  onChange,
+  disabled,
+}: Readonly<{
+  value: number | null;
+  onChange?: (rpe: number | null) => void;
+  disabled: boolean;
+}>) {
+  const [selectedRpe, setSelectedRpe] = useState<number | null>(value);
+
+  useEffect(() => {
+    setSelectedRpe(value);
+  }, [value]);
+
+  const handleChange = (nextRpe: number | null) => {
+    if (disabled) return;
+    setSelectedRpe(nextRpe);
+    onChange?.(nextRpe);
+  };
+
+  return (
+    <div
+      className={cn(disabled && "pointer-events-none opacity-60")}
+      aria-disabled={disabled}
+      data-testid="workout-reflect-rpe-selector"
+    >
+      <RpeSelector
+        value={selectedRpe}
+        onChange={handleChange}
+        showLabel={false}
+      />
+    </div>
+  );
+}
+
+function buildReflectContextParts(
+  workout: import("@shared/schema").WorkoutLog,
+  exerciseSets: ExerciseSet[],
+): string[] {
+  const uniqueExercises = new Set<string>();
+  let summedMinutes = 0;
+
+  for (const set of exerciseSets) {
+    const exerciseKey = set.exerciseName === "custom" && set.customLabel
+      ? `custom:${set.customLabel}`
+      : set.exerciseName;
+    uniqueExercises.add(exerciseKey);
+    if (set.time != null && set.time > 0) {
+      summedMinutes += set.time;
+    }
+  }
+
+  const duration = workout.duration ?? (summedMinutes > 0 ? Math.round(summedMinutes) : null);
+  return [
+    duration == null ? null : `${duration} min`,
+    `${uniqueExercises.size} ${uniqueExercises.size === 1 ? "exercise" : "exercises"}`,
+    `${exerciseSets.length} ${exerciseSets.length === 1 ? "set" : "sets"}`,
+  ].filter((part): part is string => part != null);
 }
 
 interface LoggedPrescriptionDiffInput {

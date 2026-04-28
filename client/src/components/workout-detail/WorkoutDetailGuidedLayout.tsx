@@ -75,20 +75,10 @@ export function WorkoutDetailOverview({ children }: Readonly<{ children: ReactNo
   );
 }
 
-export function WorkoutDetailReflection({
-  children,
-  emphasized = false,
-}: Readonly<{ children: ReactNode; emphasized?: boolean }>) {
+export function WorkoutDetailReflection({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <WorkoutDetailSection title="Reflection" testId="workout-detail-reflection">
-      <div
-        className={cn(
-          "rounded-lg border px-3 py-3",
-          emphasized
-            ? "border-foreground/15 bg-muted/20 px-4 py-4"
-            : "border-border bg-background",
-        )}
-      >
+      <div className="rounded-lg border border-border bg-background px-3 py-3">
         {children}
       </div>
     </WorkoutDetailSection>

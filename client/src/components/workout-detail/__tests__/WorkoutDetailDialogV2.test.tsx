@@ -643,6 +643,15 @@ describe("WorkoutDetailDialogV2", () => {
       makeWorkout({
         id: "logged-workout-1",
         planDayId: "plan-day-1",
+        rpe: null,
+        exerciseSets: [makeSet({ id: "set-logged", workoutLogId: "logged-workout-1" })],
+      }),
+    );
+    mockWorkouts.update.mockResolvedValue(
+      makeWorkout({
+        id: "logged-workout-1",
+        planDayId: "plan-day-1",
+        rpe: 8,
         exerciseSets: [makeSet({ id: "set-logged", workoutLogId: "logged-workout-1" })],
       }),
     );
@@ -681,10 +690,24 @@ describe("WorkoutDetailDialogV2", () => {
 
     await user.click(screen.getByTestId("workout-logging-step-continue"));
     expect(screen.getByTestId("workout-logging-step-2")).toHaveAttribute("aria-current", "step");
-    expect(await screen.findByTestId("workout-stats-rpe-focus-panel")).toBeInTheDocument();
-    expect(screen.getByTestId("workout-stats-rpe-input")).toBeInTheDocument();
-    expect(screen.getByTestId("athlete-note-input")).toHaveAttribute("data-emphasis", "reflect");
+    expect(await screen.findByTestId("workout-reflect-context-row")).toHaveTextContent(
+      "52 min | 1 exercise | 1 set",
+    );
+    expect(screen.getByTestId("input-rpe-selector")).toBeInTheDocument();
+    expect(screen.queryByTestId("workout-stats-rpe-focus-panel")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("workout-stats-rpe-input")).not.toBeInTheDocument();
+
+    await user.click(screen.getByTestId("button-rpe-8"));
+    await waitFor(() => {
+      expect(mockWorkouts.update).toHaveBeenCalledWith("logged-workout-1", { rpe: 8 });
+    });
+
+    expect(screen.getByTestId("athlete-note-input")).toHaveAttribute("data-mode", "form");
     expect(screen.getByLabelText(/athlete note/i)).toBeEnabled();
+    expect(screen.getByLabelText(/athlete note/i)).toHaveAttribute(
+      "placeholder",
+      "How did it feel? Anything the coach should know?",
+    );
   });
 
   it("clears the logging stepper when the dialog switches to a different owner", async () => {
