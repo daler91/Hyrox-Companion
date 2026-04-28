@@ -428,6 +428,7 @@ describe("WorkoutDetailDialogV2", () => {
       makeWorkout({
         mainWorkout: "Timeline main should not reappear",
         prescribedMainWorkout: "Coach original prescription",
+        prescribedAccessory: "Keep accessory parseable",
         exerciseSets: [],
       }),
     );
@@ -436,9 +437,11 @@ describe("WorkoutDetailDialogV2", () => {
       makeWorkout({
         mainWorkout: "Timeline main should not reappear",
         prescribedMainWorkout: "",
+        prescribedAccessory: "Keep accessory parseable",
         exerciseSets: [],
       }),
     );
+    mockWorkouts.reparse.mockResolvedValue({ exercises: [], saved: false, setCount: 0 });
 
     renderDialog({
       entry: makeEntry({
@@ -462,6 +465,15 @@ describe("WorkoutDetailDialogV2", () => {
     });
     expect(main).toHaveValue("");
     expect(screen.queryByDisplayValue("Timeline main should not reappear")).not.toBeInTheDocument();
+
+    await user.click(screen.getByTestId("coach-prescription-parse"));
+
+    await waitFor(() => {
+      expect(mockWorkouts.reparse).toHaveBeenCalledWith("log-1", {
+        prescribedMainWorkout: "",
+        prescribedAccessory: "Keep accessory parseable",
+      });
+    });
   });
 
   it("keeps the replace confirmation when manual Parse would overwrite existing rows", async () => {
