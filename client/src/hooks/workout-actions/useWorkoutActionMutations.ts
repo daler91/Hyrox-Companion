@@ -140,10 +140,15 @@ export function useWorkoutActionMutations(
       // without this, useWorkoutDetail(workoutId) starts loading and the
       // user sees an empty step 1 until the GET round-trip lands.
       queryClient.setQueryData(QUERY_KEYS.workout(data.id), data);
-      // Tier-1 quick-log from the new LogSheet sets `skipDetailReopen` so
-      // we don't pop the legacy dialog right after the sheet closes.
+      // Always patch the timeline cache: the patch flips the entry from
+      // `planned` to `completed` and attaches the new workoutLogId, so a
+      // second tap on the same card before the timeline refetch lands
+      // can't re-enter the planned path and submit a duplicate log. Only
+      // the visible side effect (priming the legacy in-dialog stepper)
+      // is gated by `skipDetailReopen` for the LogSheet Tier-1 flow.
+      const patchedEntry = patchTimelineEntriesForLoggedWorkout(data, variables);
       if (!variables.skipDetailReopen) {
-        setDetailEntry(patchTimelineEntriesForLoggedWorkout(data, variables));
+        setDetailEntry(patchedEntry);
       }
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }),
