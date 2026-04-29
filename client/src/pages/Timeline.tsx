@@ -38,6 +38,7 @@ import {
 } from "@/components/timeline";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { LogSheet } from "@/components/workout-detail/LogSheet";
 import { PreviewSheet } from "@/components/workout-detail/PreviewSheet";
 import { WorkoutDetailDialogV2 } from "@/components/workout-detail/WorkoutDetailDialogV2";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -60,6 +61,13 @@ function isFuturePlanned(entry: TimelineEntry): boolean {
   if (entry.status !== "planned") return false;
   const todayStr = format(new Date(), "yyyy-MM-dd");
   return entry.date > todayStr;
+}
+
+function isLoggablePlanned(entry: TimelineEntry): boolean {
+  if (entry.status !== "planned") return false;
+  if (!entry.planDayId) return false;
+  const todayStr = format(new Date(), "yyyy-MM-dd");
+  return entry.date <= todayStr;
 }
 
 type TimelineState = ReturnType<typeof useTimelineState>;
@@ -277,19 +285,28 @@ export default function Timeline() {
   const { combiningEntry, setCombiningEntry, combineSecondEntry, setCombineSecondEntry, showCombineDialog, setShowCombineDialog, handleCombine, handleConfirmCombine, combineWorkoutsMutation } = combine;
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showAIConsent, setShowAIConsent] = useState(false);
-  // Slice-1 state: PreviewSheet for future-dated planned cards. Mutually
-  // exclusive with detailEntry — openSurface always nulls the other slot
-  // so we never render two surfaces at once.
+  // Slice-1/2 state: PreviewSheet for future planned, LogSheet for today/past
+  // planned. All three surfaces (preview / log / legacy detail) are mutually
+  // exclusive — openSurface always nulls the others so we never stack them.
   const [previewEntry, setPreviewEntry] = useState<TimelineEntry | null>(null);
+  const [logEntry, setLogEntry] = useState<TimelineEntry | null>(null);
 
   const openSurface = useCallback(
     (entry: TimelineEntry) => {
       if (NEW_TIMELINE_FLOW_ENABLED && isFuturePlanned(entry)) {
         setDetailEntry(null);
+        setLogEntry(null);
         setPreviewEntry(entry);
         return;
       }
+      if (NEW_TIMELINE_FLOW_ENABLED && isLoggablePlanned(entry)) {
+        setDetailEntry(null);
+        setPreviewEntry(null);
+        setLogEntry(entry);
+        return;
+      }
       setPreviewEntry(null);
+      setLogEntry(null);
       openDetailDialog(entry);
     },
     [openDetailDialog, setDetailEntry],
@@ -506,7 +523,7 @@ export default function Timeline() {
         />
       </DndContext>
 
-          {!detailEntry && !previewEntry && (
+          {!detailEntry && !previewEntry && !logEntry && (
             <FloatingActionButton coachPanelOpen={coachOpen} onCoachToggle={() => handleCoachToggle(!coachOpen)} />
           )}
 
@@ -520,6 +537,35 @@ export default function Timeline() {
               schedulePlanMutation.mutate({ planId: schedulingPlanId, startDate })
             }
             isPending={schedulePlanMutation.isPending}
+          />
+
+          <LogSheet
+            entry={logEntry}
+            onClose={() => setLogEntry(null)}
+            isLogging={logWorkoutMutation.isPending}
+            onLogAsPlanned={(entry, rpeOverride) => {
+              setLogEntry(null);
+              // Match the legacy dialog's pattern: only fan a fresh
+              // entry through onMarkComplete when something actually
+              // changed, so we don't churn the cache for a no-op.
+              if (rpeOverride !== entry.rpe) {
+                handleMarkComplete({ ...entry, rpe: rpeOverride ?? null });
+              } else {
+                handleMarkComplete(entry);
+              }
+            }}
+            onEditDetails={(entry) => {
+              setLogEntry(null);
+              setDetailEntry(entry);
+            }}
+            onSkip={(entry) => {
+              setLogEntry(null);
+              setSkipConfirmEntry(entry);
+            }}
+            onAskCoach={() => {
+              setLogEntry(null);
+              handleCoachToggle(true);
+            }}
           />
 
           <PreviewSheet
@@ -623,7 +669,7 @@ export default function Timeline() {
       </div>
       
       {coachOpen && !isMobile && (
-        <div className={detailEntry || previewEntry ? "hidden" : "w-80 lg:w-96 flex-shrink-0"}>
+        <div className={detailEntry || previewEntry || logEntry ? "hidden" : "w-80 lg:w-96 flex-shrink-0"}>
           <FeatureErrorBoundaryWrapper featureName="Coach">
             <CoachPanel
               isOpen={coachOpen}
@@ -640,7 +686,7 @@ export default function Timeline() {
         // see the top of their timeline while chatting with the coach.
         // Hidden (display:none) rather than unmounted while a workout detail
         // is open so in-flight chat streams and local message state survive.
-        <div className={detailEntry || previewEntry ? "hidden" : "fixed inset-x-0 bottom-0 z-50 h-[70vh]"}>
+        <div className={detailEntry || previewEntry || logEntry ? "hidden" : "fixed inset-x-0 bottom-0 z-50 h-[70vh]"}>
           <div
             data-testid="coach-panel-mobile-sheet"
             className="relative h-full bg-background shadow-2xl rounded-t-2xl border-t border-x"
