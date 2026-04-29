@@ -5,6 +5,7 @@ import { TYPE_COLORS, TYPE_LABELS } from "@/components/timeline/annotation-style
 import { AnnotationTypeIcon } from "@/components/timeline/AnnotationTypeIcon";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface AnnotationListProps {
   readonly annotations: TimelineAnnotation[] | undefined;
@@ -34,6 +35,7 @@ export function AnnotationList({
     );
   }
   return (
+    <TooltipProvider>
     <ul className="space-y-2" data-testid="annotations-list">
       {annotations.map((annotation) => {
         const annotationType = annotation.type as TimelineAnnotationType;
@@ -57,19 +59,27 @@ export function AnnotationList({
                 <p className="mt-1 text-sm text-foreground">{annotation.note}</p>
               ) : null}
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => onDelete(annotation.id)}
-              disabled={isDeleting}
-              data-testid={`button-delete-annotation-${annotation.id}`}
-              aria-label={`Delete ${TYPE_LABELS[annotationType]} annotation`}
-            >
-              <Trash2 className="h-4 w-4" aria-hidden="true" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => onDelete(annotation.id)}
+                  disabled={isDeleting}
+                  data-testid={`button-delete-annotation-${annotation.id}`}
+                  aria-label={`Delete ${TYPE_LABELS[annotationType]} annotation`}
+                >
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Delete {TYPE_LABELS[annotationType]}</p>
+              </TooltipContent>
+            </Tooltip>
           </li>
         );
       })}
     </ul>
+    </TooltipProvider>
   );
 }

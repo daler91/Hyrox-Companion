@@ -1,0 +1,3 @@
+## 2024-05-18 - Added Tooltips to Icon-Only Action Buttons
+**Learning:** Icon-only action buttons within lists and timeline cards (like "Edit" and "Delete") often lack descriptive tooltips, even when they possess `aria-label`s. This forces sighted users to rely on visual recognition alone, potentially leading to accidental clicks or confusion. Using Radix UI Tooltip components provides a semantic and accessible way to reveal these labels on hover or focus.
+**Action:** When adding or reviewing icon-only buttons (`size="icon"`), proactively wrap them in Radix Tooltip components to ensure clarity for all users, not just screen reader users. Ensure `TooltipProvider` is used at an appropriate ancestral level to manage tooltip behavior efficiently.
