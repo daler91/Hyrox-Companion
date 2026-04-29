@@ -106,7 +106,7 @@ export function usePlanDayExercises(planDayId: string | null) {
     cancelPending,
     getPendingPatches,
   } = useDebouncedSetPatches<PatchExerciseSetPayload>(
-    updateSet.mutate,
+    updateSet.mutateAsync,
     CELL_SAVE_DEBOUNCE_MS,
   );
 

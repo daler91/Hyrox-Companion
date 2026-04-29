@@ -125,7 +125,7 @@ export function useWorkoutDetail(workoutId: string | null) {
   // Save button flushes pending patches synchronously via
   // `flushPendingSetPatches` before any downstream drain-waiters settle.
   const { patchSetDebounced, flushPendingSetPatches, cancelPending } = useDebouncedSetPatches<PatchExerciseSetPayload>(
-    updateSet.mutate,
+    updateSet.mutateAsync,
     CELL_SAVE_DEBOUNCE_MS,
   );
 

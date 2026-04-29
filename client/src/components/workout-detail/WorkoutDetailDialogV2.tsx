@@ -313,20 +313,23 @@ export function WorkoutDetailDialogV2({
   const handleSaveNote = buildSaveNoteHandler(workoutId, updateNote.mutate);
   const handleParseLoggedFreeText = buildLoggedFreeTextParser(workoutId, reparseFreeText.mutate);
   const handleParseLoggedFromImage = buildLoggedImageParser(workoutId, reparseFromImage.mutate);
-  const handleSaveClick = () => handleWorkoutDetailSaveClick({
-    isPlanned,
-    planDayId: entry.planDayId ?? null,
-    planSets,
-    flushLoggedSetPatches,
-    startSaveCycle,
-  });
+  const handleSaveClick = () => {
+    void handleWorkoutDetailSaveClick({
+      isPlanned,
+      planDayId: entry.planDayId ?? null,
+      planSets,
+      flushLoggedSetPatches,
+      startSaveCycle,
+    });
+  };
   const handleFooterMarkComplete = () => {
-    // Flush any debounced ExerciseTable edits before the mutation runs.
-    // logWorkoutMutation creates the workoutLog by copying persisted
-    // plan-day rows on the server, so a row edit still in the debounce
-    // queue would be missing from the new log.
-    planSets.flushPendingSetPatches();
-    handleWorkoutDetailMarkComplete({
+    void (async () => {
+      // Flush any debounced ExerciseTable edits before the mutation runs.
+      // logWorkoutMutation creates the workoutLog by copying persisted
+      // plan-day rows on the server, so a row edit still in the debounce
+      // queue would be missing from the new log.
+      await planSets.flushPendingSetPatches();
+      handleWorkoutDetailMarkComplete({
       entry,
       latestFocus: latestFocusRef.current,
       latestPrescription: latestPrescriptionRef.current,
@@ -337,7 +340,8 @@ export function WorkoutDetailDialogV2({
     // view (or worse, redirected to /log as the previous flow did). The
     // mutation onSuccess re-binds the URL to the new workoutLogId so this
     // local state survives the planned→logged transition.
-    setLoggingStep(1);
+      setLoggingStep(1);
+    })();
   };
   const handleConfirmDelete = () => handleWorkoutDetailDeleteConfirm({
     entry,
@@ -614,11 +618,11 @@ interface WorkoutDetailSaveClickArgs {
   readonly isPlanned: boolean;
   readonly planDayId: string | null;
   readonly planSets: PlanSetsController;
-  readonly flushLoggedSetPatches: () => void;
+  readonly flushLoggedSetPatches: () => Promise<void>;
   readonly startSaveCycle: (targetPlanDayId: string | null) => void;
 }
 
-function handleWorkoutDetailSaveClick({
+async function handleWorkoutDetailSaveClick({
   isPlanned,
   planDayId,
   planSets,
@@ -626,8 +630,8 @@ function handleWorkoutDetailSaveClick({
   startSaveCycle,
 }: WorkoutDetailSaveClickArgs) {
   blurActiveElement();
-  planSets.flushPendingSetPatches();
-  flushLoggedSetPatches();
+  await planSets.flushPendingSetPatches();
+  await flushLoggedSetPatches();
   startSaveCycle(isPlanned ? planDayId : null);
 }
 
