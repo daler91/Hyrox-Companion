@@ -557,10 +557,6 @@ export default function Timeline() {
                 handleMarkComplete(entry, opts);
               }
             }}
-            onEditDetails={(entry) => {
-              setLogEntry(null);
-              setDetailEntry(entry);
-            }}
             onSkip={(entry) => {
               setLogEntry(null);
               setSkipConfirmEntry(entry);

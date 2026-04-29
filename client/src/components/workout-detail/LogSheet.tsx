@@ -1,5 +1,6 @@
 import type { TimelineEntry } from "@shared/schema";
 import {
+  ChevronDown,
   Gauge,
   ListChecks,
   MessageSquare,
@@ -12,8 +13,13 @@ import { RpeSelector } from "@/components/RpeSelector";
 import { Button } from "@/components/ui/button";
 import { ResponsiveSheet } from "@/components/ui/responsive-sheet";
 import { Separator } from "@/components/ui/separator";
+import { usePlanDayExercises } from "@/hooks/usePlanDayExercises";
+import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { formatScheduledDate } from "@/lib/timelineEntryFormat";
+import { cn } from "@/lib/utils";
 
+import { ExerciseTable } from "./ExerciseTable";
+import { SaveStatePill } from "./SaveStatePill";
 import { WorkoutPrescriptionSummary } from "./shared/WorkoutPrescriptionSummary";
 
 interface LogSheetProps {
@@ -21,41 +27,58 @@ interface LogSheetProps {
   readonly onClose: () => void;
   /** Tier 1: log the workout exactly as prescribed, with an optional RPE override. */
   readonly onLogAsPlanned: (entry: TimelineEntry, rpe: number | null) => void;
-  /** Tier 2 escape hatch — hands off to the legacy dialog's full editor. */
-  readonly onEditDetails: (entry: TimelineEntry) => void;
   readonly onSkip?: (entry: TimelineEntry) => void;
   readonly onAskCoach?: (entry: TimelineEntry) => void;
   readonly isLogging?: boolean;
 }
 
 /**
- * Tier-1 log surface for today/past planned cards. Replaces the
- * 2,000-line WorkoutDetailDialogV2 for the common "I did the workout
- * basically as prescribed" path: one primary CTA + an inline RPE
- * picker. Per-exercise edits and free-text paste live behind
- * "Edit details…", which hands off to the legacy dialog until those
- * affordances are ported to a sheet-native editor.
+ * Sheet-native log surface for today/past planned cards. Replaces the
+ * 2,000-line WorkoutDetailDialogV2 for the common path:
+ *  - Tier 1: one-tap "Log as planned" with an optional RPE pick.
+ *  - Tier 2: inline "Edit prescription" disclosure that mounts the
+ *    same ExerciseTable as the legacy dialog, wired to
+ *    usePlanDayExercises mutations so per-set tweaks autosave to the
+ *    plan day before the log mutation copies them into a workoutLog.
+ *
+ * Free-text paste / image upload still live in the legacy dialog —
+ * those affordances need the parse-confirm flow which is its own
+ * port and out of scope for Slice 2.
  */
 export function LogSheet({
   entry,
   onClose,
   onLogAsPlanned,
-  onEditDetails,
   onSkip,
   onAskCoach,
   isLogging,
 }: LogSheetProps) {
+  const { weightUnit: prefWeightUnit, distanceUnit } = useUnitPreferences();
+  const weightUnit: "kg" | "lb" = prefWeightUnit === "kg" ? "kg" : "lb";
   const [rpe, setRpe] = useState<number | null>(entry?.rpe ?? null);
+  const [editorOpen, setEditorOpen] = useState(false);
   const [lastEntryId, setLastEntryId] = useState<string | null>(entry?.id ?? null);
 
-  // Reseed RPE when a different entry opens the sheet — avoids carrying
-  // a previous workout's RPE choice into the next one.
+  const planSets = usePlanDayExercises(entry?.planDayId ?? null);
+
+  // Reseed transient state when a different entry opens the sheet so we
+  // don't carry one workout's RPE / open editor into the next.
   if (entry && entry.id !== lastEntryId) {
     setLastEntryId(entry.id);
     setRpe(entry.rpe ?? null);
+    setEditorOpen(false);
   }
 
   if (!entry) return null;
+
+  const handleLog = () => {
+    // Flush any debounced cell edits before the log mutation runs — the
+    // server's createWorkoutInTx copies persisted plan-day rows into
+    // the new workoutLog, so a row edit still queued in the debounce
+    // coordinator would be missing from the snapshot.
+    planSets.flushPendingSetPatches();
+    onLogAsPlanned(entry, rpe);
+  };
 
   return (
     <ResponsiveSheet
@@ -63,6 +86,7 @@ export function LogSheet({
       onOpenChange={(open) => !open && onClose()}
       title={entry.focus || "Log workout"}
       description={formatScheduledDate(entry.date)}
+      contentClassName="sm:max-w-2xl"
       testId={`log-sheet-${entry.id}`}
     >
       <div className="space-y-4">
@@ -78,27 +102,71 @@ export function LogSheet({
           <RpeSelector value={rpe} onChange={setRpe} showLabel={false} compact />
         </div>
 
+        {entry.planDayId ? (
+          <div className="rounded-md border">
+            <button
+              type="button"
+              className="flex w-full items-center justify-between gap-2 p-3 text-left hover:bg-accent/50"
+              onClick={() => setEditorOpen((v) => !v)}
+              aria-expanded={editorOpen}
+              data-testid={`log-edit-prescription-${entry.id}`}
+            >
+              <span className="flex items-center gap-2 text-sm font-medium">
+                <Pencil className="h-4 w-4" />
+                Edit prescription
+              </span>
+              <span className="flex items-center gap-2">
+                <SaveStatePill
+                  state={{ isSaving: planSets.isSaving, lastSavedAt: planSets.lastSavedAt }}
+                  testId={`log-edit-save-state-${entry.id}`}
+                />
+                <ChevronDown
+                  className={cn(
+                    "h-4 w-4 text-muted-foreground transition-transform",
+                    editorOpen && "rotate-180",
+                  )}
+                  aria-hidden
+                />
+              </span>
+            </button>
+            {editorOpen ? (
+              <div className="border-t p-3">
+                <ExerciseTable
+                  workoutId={entry.planDayId}
+                  exerciseSets={planSets.exerciseSets}
+                  weightUnit={weightUnit}
+                  distanceUnit={distanceUnit}
+                  onUpdateSet={planSets.patchSetDebounced}
+                  onAddSet={planSets.addSet.mutate}
+                  onDeleteSet={planSets.deleteSet.mutate}
+                  saveState={{
+                    isSaving: planSets.isSaving,
+                    lastSavedAt: planSets.lastSavedAt,
+                  }}
+                  defaultExpanded
+                />
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
         <div className="space-y-2">
           <Button
             className="w-full"
             size="lg"
-            onClick={() => onLogAsPlanned(entry, rpe)}
-            disabled={isLogging}
+            onClick={handleLog}
+            disabled={isLogging || planSets.isSaving}
             data-testid={`log-as-planned-${entry.id}`}
           >
             <ListChecks className="mr-2 h-4 w-4" />
-            {isLogging ? "Logging…" : "Log as planned"}
+            {planSets.isSaving
+              ? "Saving edits…"
+              : isLogging
+                ? "Logging…"
+                : "Log as planned"}
           </Button>
 
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <Button
-              variant="outline"
-              onClick={() => onEditDetails(entry)}
-              data-testid={`log-edit-details-${entry.id}`}
-            >
-              <Pencil className="mr-2 h-4 w-4" />
-              Edit details…
-            </Button>
             {onAskCoach ? (
               <Button
                 variant="outline"
