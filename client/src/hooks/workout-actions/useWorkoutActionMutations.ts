@@ -140,7 +140,11 @@ export function useWorkoutActionMutations(
       // without this, useWorkoutDetail(workoutId) starts loading and the
       // user sees an empty step 1 until the GET round-trip lands.
       queryClient.setQueryData(QUERY_KEYS.workout(data.id), data);
-      setDetailEntry(patchTimelineEntriesForLoggedWorkout(data, variables));
+      // Tier-1 quick-log from the new LogSheet sets `skipDetailReopen` so
+      // we don't pop the legacy dialog right after the sheet closes.
+      if (!variables.skipDetailReopen) {
+        setDetailEntry(patchTimelineEntriesForLoggedWorkout(data, variables));
+      }
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }),
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.personalRecords }),

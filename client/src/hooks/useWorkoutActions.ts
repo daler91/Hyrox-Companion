@@ -68,7 +68,7 @@ export function useWorkoutActions(
   );
 
   const handleMarkComplete = useCallback(
-    (entry: TimelineEntry) => {
+    (entry: TimelineEntry, options?: { skipDetailReopen?: boolean }) => {
       if (!entry.planDayId) return;
       logWorkoutMutation.mutate({
         planDayId: entry.planDayId,
@@ -79,6 +79,7 @@ export function useWorkoutActions(
         notes: entry.notes || undefined,
         rpe: entry.rpe ?? undefined,
         sourceEntry: entry,
+        skipDetailReopen: options?.skipDetailReopen,
       });
     },
     [logWorkoutMutation],

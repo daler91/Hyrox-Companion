@@ -1,12 +1,10 @@
 import type { TimelineEntry } from "@shared/schema";
-import { format, parseISO } from "date-fns";
 import {
   Gauge,
   ListChecks,
   MessageSquare,
   Pencil,
   SkipForward,
-  Sparkles,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -14,10 +12,9 @@ import { RpeSelector } from "@/components/RpeSelector";
 import { Button } from "@/components/ui/button";
 import { ResponsiveSheet } from "@/components/ui/responsive-sheet";
 import { Separator } from "@/components/ui/separator";
-import { useUnitPreferences } from "@/hooks/useUnitPreferences";
-import { groupExerciseSets } from "@/lib/exerciseUtils";
+import { formatScheduledDate } from "@/lib/timelineEntryFormat";
 
-import { ExerciseChips } from "../timeline/timeline-workout-card/ExerciseChips";
+import { WorkoutPrescriptionSummary } from "./shared/WorkoutPrescriptionSummary";
 
 interface LogSheetProps {
   readonly entry: TimelineEntry | null;
@@ -48,7 +45,6 @@ export function LogSheet({
   onAskCoach,
   isLogging,
 }: LogSheetProps) {
-  const { distanceUnit, weightLabel } = useUnitPreferences();
   const [rpe, setRpe] = useState<number | null>(entry?.rpe ?? null);
   const [lastEntryId, setLastEntryId] = useState<string | null>(entry?.id ?? null);
 
@@ -61,67 +57,16 @@ export function LogSheet({
 
   if (!entry) return null;
 
-  const groupedExercises = entry.exerciseSets && entry.exerciseSets.length > 0
-    ? groupExerciseSets(entry.exerciseSets)
-    : [];
-
-  const scheduled = (() => {
-    try {
-      return format(parseISO(entry.date), "EEEE, MMM d");
-    } catch {
-      return entry.date;
-    }
-  })();
-
   return (
     <ResponsiveSheet
       open={!!entry}
       onOpenChange={(open) => !open && onClose()}
       title={entry.focus || "Log workout"}
-      description={scheduled}
+      description={formatScheduledDate(entry.date)}
       testId={`log-sheet-${entry.id}`}
     >
       <div className="space-y-4">
-        {groupedExercises.length > 0 ? (
-          <div>
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Prescribed
-            </p>
-            <ExerciseChips
-              entryId={entry.id}
-              groupedExercises={groupedExercises}
-              workoutLogId={undefined}
-              weightLabel={weightLabel}
-              distanceUnit={distanceUnit}
-            />
-          </div>
-        ) : entry.mainWorkout ? (
-          <div>
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Prescribed
-            </p>
-            <p className="text-sm text-muted-foreground">{entry.mainWorkout}</p>
-          </div>
-        ) : null}
-
-        {entry.accessory ? (
-          <div>
-            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Accessory
-            </p>
-            <p className="text-sm text-muted-foreground">{entry.accessory}</p>
-          </div>
-        ) : null}
-
-        {entry.aiRationale ? (
-          <details className="rounded-md border border-primary/30 bg-primary/5 p-3">
-            <summary className="cursor-pointer text-xs font-medium text-primary">
-              <Sparkles className="mr-1.5 inline h-3.5 w-3.5" />
-              Why this workout
-            </summary>
-            <p className="mt-2 text-sm text-foreground/80">{entry.aiRationale}</p>
-          </details>
-        ) : null}
+        <WorkoutPrescriptionSummary entry={entry} rationaleVariant="collapsed" />
 
         <Separator />
 

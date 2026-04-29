@@ -545,13 +545,16 @@ export default function Timeline() {
             isLogging={logWorkoutMutation.isPending}
             onLogAsPlanned={(entry, rpeOverride) => {
               setLogEntry(null);
-              // Match the legacy dialog's pattern: only fan a fresh
-              // entry through onMarkComplete when something actually
-              // changed, so we don't churn the cache for a no-op.
+              // Tier-1 path: suppress the legacy in-dialog stepper that
+              // logWorkoutMutation.onSuccess otherwise pops open after
+              // every successful log. We only fan a fresh entry through
+              // when RPE actually changed so we don't churn the cache
+              // for a no-op.
+              const opts = { skipDetailReopen: true };
               if (rpeOverride !== entry.rpe) {
-                handleMarkComplete({ ...entry, rpe: rpeOverride ?? null });
+                handleMarkComplete({ ...entry, rpe: rpeOverride ?? null }, opts);
               } else {
-                handleMarkComplete(entry);
+                handleMarkComplete(entry, opts);
               }
             }}
             onEditDetails={(entry) => {

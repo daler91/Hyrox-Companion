@@ -10,6 +10,14 @@ export type LogWorkoutVariables = {
   rpe?: number;
   exercises?: ParsedExercise[];
   sourceEntry?: TimelineEntry;
+  /**
+   * When true, suppresses the post-log `setDetailEntry(...)` side effect
+   * that primes the legacy in-dialog stepper. The new sheet-based flow
+   * (LogSheet Tier-1) closes its own surface eagerly and would otherwise
+   * see the legacy WorkoutDetailDialogV2 pop open right after a one-tap
+   * "Log as planned" — defeating the whole point of the quick path.
+   */
+  skipDetailReopen?: boolean;
 };
 
 export type UpdateDayVariables = {
