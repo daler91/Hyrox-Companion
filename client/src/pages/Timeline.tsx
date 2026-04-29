@@ -38,6 +38,7 @@ import {
 } from "@/components/timeline";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PreviewSheet } from "@/components/workout-detail/PreviewSheet";
 import { WorkoutDetailDialogV2 } from "@/components/workout-detail/WorkoutDetailDialogV2";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
@@ -46,6 +47,20 @@ import { useMoveTimelineEntry } from "@/hooks/useMoveTimelineEntry";
 import { useTimelineState } from "@/hooks/useTimelineState";
 import { api, QUERY_KEYS } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
+
+// Slice 1 of the new workout-flow redesign: future-dated planned cards open
+// a read-only PreviewSheet instead of the legacy WorkoutDetailDialogV2. All
+// other states (today/past planned, logged) still go through the dialog
+// while the LogSheet (Slice 2) and ReviewSurface (Slice 3) are built.
+// Toggle with VITE_NEW_TIMELINE_FLOW=true.
+const NEW_TIMELINE_FLOW_ENABLED =
+  import.meta.env.VITE_NEW_TIMELINE_FLOW === "true";
+
+function isFuturePlanned(entry: TimelineEntry): boolean {
+  if (entry.status !== "planned") return false;
+  const todayStr = format(new Date(), "yyyy-MM-dd");
+  return entry.date > todayStr;
+}
 
 type TimelineState = ReturnType<typeof useTimelineState>;
 type TimelineData = TimelineState["data"];
@@ -262,6 +277,23 @@ export default function Timeline() {
   const { combiningEntry, setCombiningEntry, combineSecondEntry, setCombineSecondEntry, showCombineDialog, setShowCombineDialog, handleCombine, handleConfirmCombine, combineWorkoutsMutation } = combine;
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showAIConsent, setShowAIConsent] = useState(false);
+  // Slice-1 state: PreviewSheet for future-dated planned cards. Mutually
+  // exclusive with detailEntry — openSurface always nulls the other slot
+  // so we never render two surfaces at once.
+  const [previewEntry, setPreviewEntry] = useState<TimelineEntry | null>(null);
+
+  const openSurface = useCallback(
+    (entry: TimelineEntry) => {
+      if (NEW_TIMELINE_FLOW_ENABLED && isFuturePlanned(entry)) {
+        setDetailEntry(null);
+        setPreviewEntry(entry);
+        return;
+      }
+      setPreviewEntry(null);
+      openDetailDialog(entry);
+    },
+    [openDetailDialog, setDetailEntry],
+  );
   const [annotationsDialogOpen, setAnnotationsDialogOpen] = useState(false);
   // Seeds the create form in AnnotationsDialog when the user clicks a row's
   // inline "+ Note" chip, so they don't have to re-pick the date.
@@ -459,7 +491,7 @@ export default function Timeline() {
           rowVirtualizer={rowVirtualizer}
           todayRef={todayRef}
           handleMarkComplete={handleMarkComplete}
-          openDetailDialog={openDetailDialog}
+          openDetailDialog={openSurface}
           handleCombine={handleCombine}
           combiningEntry={combiningEntry}
           personalRecords={personalRecords}
@@ -474,7 +506,7 @@ export default function Timeline() {
         />
       </DndContext>
 
-          {!detailEntry && (
+          {!detailEntry && !previewEntry && (
             <FloatingActionButton coachPanelOpen={coachOpen} onCoachToggle={() => handleCoachToggle(!coachOpen)} />
           )}
 
@@ -488,6 +520,36 @@ export default function Timeline() {
               schedulePlanMutation.mutate({ planId: schedulingPlanId, startDate })
             }
             isPending={schedulePlanMutation.isPending}
+          />
+
+          <PreviewSheet
+            entry={previewEntry}
+            onClose={() => setPreviewEntry(null)}
+            onAskCoach={() => {
+              setPreviewEntry(null);
+              handleCoachToggle(true);
+            }}
+            onMove={(entry) => {
+              setPreviewEntry(null);
+              // The MoveEntryMenu lives on the card itself, so the simplest
+              // honest action here is to close the sheet — the user can
+              // then use the card's own move affordance. Wiring a date
+              // picker into this sheet is Slice 2's concern; until then
+              // we don't pretend to offer it.
+              toast({
+                title: "Use the move icon on the card",
+                description: "Drag, or use the calendar menu in the card's top corner.",
+              });
+              void entry;
+            }}
+            onSkip={(entry) => {
+              setPreviewEntry(null);
+              setSkipConfirmEntry(entry);
+            }}
+            onLogNow={(entry) => {
+              setPreviewEntry(null);
+              setDetailEntry(entry);
+            }}
           />
 
           <WorkoutDetailDialogV2
@@ -561,7 +623,7 @@ export default function Timeline() {
       </div>
       
       {coachOpen && !isMobile && (
-        <div className={detailEntry ? "hidden" : "w-80 lg:w-96 flex-shrink-0"}>
+        <div className={detailEntry || previewEntry ? "hidden" : "w-80 lg:w-96 flex-shrink-0"}>
           <FeatureErrorBoundaryWrapper featureName="Coach">
             <CoachPanel
               isOpen={coachOpen}
@@ -578,7 +640,7 @@ export default function Timeline() {
         // see the top of their timeline while chatting with the coach.
         // Hidden (display:none) rather than unmounted while a workout detail
         // is open so in-flight chat streams and local message state survive.
-        <div className={detailEntry ? "hidden" : "fixed inset-x-0 bottom-0 z-50 h-[70vh]"}>
+        <div className={detailEntry || previewEntry ? "hidden" : "fixed inset-x-0 bottom-0 z-50 h-[70vh]"}>
           <div
             data-testid="coach-panel-mobile-sheet"
             className="relative h-full bg-background shadow-2xl rounded-t-2xl border-t border-x"
