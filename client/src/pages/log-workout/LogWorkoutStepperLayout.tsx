@@ -50,6 +50,8 @@ const STEP_LABELS: Record<WorkoutStep, string> = {
   2: "Confirm",
   3: "Reflect",
 };
+const AUTO_PARSE_MIN_CHARS = 8;
+const AUTO_PARSE_SIGNAL_RE = /\d|[xX×]/;
 
 export function LogWorkoutStepperLayout({
   step,
@@ -114,13 +116,22 @@ export function LogWorkoutStepperLayout({
   }, [autoParsing, autoParseError]);
 
   const advanceFromCapture = () => {
-    const hasText = freeText.trim().length > 0;
+    const trimmedFreeText = freeText.trim();
+    const hasText = trimmedFreeText.length > 0;
     const hasBlocks = exerciseBlocks.length > 0;
     const needsParse =
       hasText && (freeText !== lastParsedTextRef.current || !hasBlocks);
+    const canAutoParse =
+      trimmedFreeText.length >= AUTO_PARSE_MIN_CHARS &&
+      AUTO_PARSE_SIGNAL_RE.test(trimmedFreeText);
     if (needsParse) {
       pendingParseTextRef.current = freeText;
-      setIsReparsePending(true);
+      // Keep Confirm blocked only when this immediate parse request can
+      // actually enter the auto-parse pipeline. If parseNow short-circuits
+      // (e.g. text below minimum chars or missing parse signals), no
+      // autoParsing transition occurs, so we must avoid setting the pending
+      // gate or Confirm would stay disabled indefinitely.
+      setIsReparsePending(canAutoParse);
       parseNow(freeText);
     }
     setStep(2);
