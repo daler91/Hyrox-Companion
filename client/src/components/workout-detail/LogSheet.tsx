@@ -71,12 +71,12 @@ export function LogSheet({
 
   if (!entry) return null;
 
-  const handleLog = () => {
+  const handleLog = async () => {
     // Flush any debounced cell edits before the log mutation runs — the
     // server's createWorkoutInTx copies persisted plan-day rows into
     // the new workoutLog, so a row edit still queued in the debounce
     // coordinator would be missing from the snapshot.
-    planSets.flushPendingSetPatches();
+    await planSets.flushPendingSetPatches();
     onLogAsPlanned(entry, rpe);
   };
 

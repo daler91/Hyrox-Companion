@@ -20,23 +20,23 @@ interface PendingSetPatch<TPatch> {
  * the debounce lived inside each cell input.
  */
 export function useDebouncedSetPatches<TPatch extends object>(
-  mutate: (args: { setId: string; data: TPatch }) => void,
+  mutate: (args: { setId: string; data: TPatch }) => Promise<unknown>,
   debounceMs: number,
 ) {
   const pendingRef = useRef<Map<string, PendingSetPatch<TPatch>>>(new Map());
-  const fireRef = useRef<(setId: string) => void>(() => {});
+  const fireRef = useRef<(setId: string) => Promise<unknown>>(() => Promise.resolve());
 
   // Keep `fireRef` bound to the latest `mutate` from an effect rather
   // than assigning to `.current` during render (which trips
   // react-hooks/refs). react-query's mutate is stable, so this effect
   // runs once on mount in practice.
   useEffect(() => {
-    fireRef.current = (setId) => {
+    fireRef.current = async (setId) => {
       const entry = pendingRef.current.get(setId);
       if (!entry) return;
       clearTimeout(entry.timer);
       pendingRef.current.delete(setId);
-      mutate({ setId, data: entry.patch });
+      await mutate({ setId, data: entry.patch });
     };
   }, [mutate]);
 
@@ -56,9 +56,9 @@ export function useDebouncedSetPatches<TPatch extends object>(
     pendingRef.current.set(setId, { timer, patch: merged });
   }, [debounceMs]);
 
-  const flushPendingSetPatches = useCallback(() => {
+  const flushPendingSetPatches = useCallback(async () => {
     const ids = Array.from(pendingRef.current.keys());
-    for (const setId of ids) fireRef.current(setId);
+    await Promise.all(ids.map((setId) => fireRef.current(setId)));
   }, []);
 
   const getPendingPatches = useCallback(() => {
@@ -86,7 +86,7 @@ export function useDebouncedSetPatches<TPatch extends object>(
     const fire = fireRef;
     return () => {
       const ids = Array.from(pending.keys());
-      for (const setId of ids) fire.current(setId);
+      void Promise.all(ids.map((setId) => fire.current(setId)));
     };
   }, []);
 
