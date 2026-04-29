@@ -52,7 +52,9 @@ export function useDebouncedSetPatches<TPatch extends object>(
     const merged: TPatch = existing
       ? { ...existing.patch, ...patch }
       : patch;
-    const timer = setTimeout(() => fireRef.current(setId), debounceMs);
+    const timer = setTimeout(() => {
+      void fireRef.current(setId);
+    }, debounceMs);
     pendingRef.current.set(setId, { timer, patch: merged });
   }, [debounceMs]);
 
