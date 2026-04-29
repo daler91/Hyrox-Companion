@@ -20,11 +20,11 @@ interface PendingSetPatch<TPatch> {
  * the debounce lived inside each cell input.
  */
 export function useDebouncedSetPatches<TPatch extends object>(
-  mutate: (args: { setId: string; data: TPatch }) => Promise<unknown>,
+  mutate: (args: { setId: string; data: TPatch }) => void | Promise<unknown>,
   debounceMs: number,
 ) {
   const pendingRef = useRef<Map<string, PendingSetPatch<TPatch>>>(new Map());
-  const fireRef = useRef<(setId: string) => Promise<unknown>>(() => Promise.resolve());
+  const fireRef = useRef<(setId: string) => Promise<void>>(() => Promise.resolve());
 
   // Keep `fireRef` bound to the latest `mutate` from an effect rather
   // than assigning to `.current` during render (which trips
@@ -36,7 +36,7 @@ export function useDebouncedSetPatches<TPatch extends object>(
       if (!entry) return;
       clearTimeout(entry.timer);
       pendingRef.current.delete(setId);
-      await mutate({ setId, data: entry.patch });
+      await Promise.resolve(mutate({ setId, data: entry.patch })).catch(() => undefined);
     };
   }, [mutate]);
 
