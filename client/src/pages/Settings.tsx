@@ -89,6 +89,19 @@ export default function Settings() {
   const [showAdherenceInsights, setShowAdherenceInsights] = useState(true);
   const [aiCoachEnabled, setAiCoachEnabled] = useState(true);
   const [hasChanges, setHasChanges] = useState(false);
+  // Snapshot of initial local defaults. Used as a fallback baseline if
+  // remote preferences never load (e.g. query error) so edits can still
+  // surface the sticky save bar.
+  const defaultSnapshotRef = useRef<PreferencesSnapshot>({
+    weightUnit: "kg",
+    distanceUnit: "km",
+    weeklyGoal: "5",
+    emailNotifications: true,
+    emailWeeklySummary: true,
+    emailMissedReminder: true,
+    showAdherenceInsights: true,
+    aiCoachEnabled: true,
+  });
   // Snapshot of the last server-committed values used as the baseline for
   // dirty-state computation.
   const baselineSnapshotRef = useRef<PreferencesSnapshot | null>(null);
@@ -163,8 +176,7 @@ export default function Settings() {
   }, [preferences]);
 
   useEffect(() => {
-    const baseline = baselineSnapshotRef.current;
-    if (!baseline) return;
+    const baseline = baselineSnapshotRef.current ?? defaultSnapshotRef.current;
     setHasChanges(JSON.stringify(currentSnapshot()) !== JSON.stringify(baseline));
   }, [currentSnapshot]);
 
