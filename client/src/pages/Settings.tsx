@@ -118,7 +118,13 @@ export default function Settings() {
     }
   }, [search, toast, setLocation]);
 
-  const { data: preferences, isLoading } = useQuery<Preferences>({
+  const {
+    data: preferences,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery<Preferences>({
     queryKey: QUERY_KEYS.preferences,
   });
 
@@ -238,6 +244,29 @@ export default function Settings() {
     return (
       <div className="flex items-center justify-center h-64">
         <LoadingSpinner label="Loading settings" />
+      </div>
+    );
+  }
+
+  if (isError) {
+    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
+
+    return (
+      <div className="p-4 md:p-8 max-w-2xl mx-auto">
+        <Card className="border-destructive/40">
+          <CardHeader>
+            <CardTitle className="text-destructive">Couldn't load settings</CardTitle>
+            <CardDescription>
+              We couldn't load your preferences right now. Please try again.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">{errorMessage}</p>
+            <Button onClick={() => refetch()} data-testid="button-retry-load-settings">
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
