@@ -7,9 +7,7 @@ import { useApiMutation } from "../useApiMutation";
 import { buildOptimisticTimelineHandlers } from "./optimisticTimeline";
 import type {
   LogWorkoutVariables,
-  UpdateDayVariables,
   UpdateStatusVariables,
-  UpdateWorkoutVariables,
 } from "./types";
 
 function markAutoCoachingActive() {
@@ -58,32 +56,28 @@ function buildLoggedTimelineEntry(workout: CreatedWorkout, sourceEntry?: Timelin
   };
 }
 
+// Patches the timeline cache so the freshly-logged entry flips from
+// `planned` to `completed` and gains its workoutLogId before the
+// invalidate→refetch round-trip lands. Closing this gap stops a fast
+// second tap on the same card from re-entering the planned path and
+// submitting a duplicate log against the same plan day.
 function patchTimelineEntriesForLoggedWorkout(
   workout: CreatedWorkout,
   variables: LogWorkoutVariables,
-): TimelineEntry {
-  let detailEntry = buildLoggedTimelineEntry(workout, variables.sourceEntry);
-
+): void {
   queryClient.setQueriesData<TimelineEntry[]>({ queryKey: QUERY_KEYS.timeline }, (old) => {
     if (!old) return old;
     let patched = false;
     const nextEntries = old.map((entry) => {
       if (entry.planDayId !== variables.planDayId) return entry;
       patched = true;
-      const nextEntry = buildLoggedTimelineEntry(workout, entry);
-      detailEntry = nextEntry;
-      return nextEntry;
+      return buildLoggedTimelineEntry(workout, entry);
     });
     return patched ? nextEntries : old;
   });
-
-  return detailEntry;
 }
 
-export function useWorkoutActionMutations(
-  selectedPlanId: string | null,
-  setDetailEntry: (entry: TimelineEntry | null) => void,
-) {
+export function useWorkoutActionMutations(selectedPlanId: string | null) {
   const updateStatusHandlers = buildOptimisticTimelineHandlers<UpdateStatusVariables>(
     selectedPlanId,
     (old, { dayId, status }) =>
@@ -102,17 +96,6 @@ export function useWorkoutActionMutations(
       if (variables.status === "completed") {
         markAutoCoachingActive();
       }
-    },
-  });
-
-  const updateDayMutation = useApiMutation({
-    mutationFn: ({ dayId, updates }: UpdateDayVariables) =>
-      api.plans.updateDay(selectedPlanId!, dayId, updates),
-    invalidateQueries: [QUERY_KEYS.timeline],
-    successToast: "Entry updated",
-    errorToast: "Failed to update entry",
-    onSuccess: () => {
-      setDetailEntry(null);
     },
   });
 
@@ -135,63 +118,18 @@ export function useWorkoutActionMutations(
     ...logWorkoutHandlers,
     onSuccess: async (data, variables) => {
       markAutoCoachingActive();
-      // Prime the workout-detail cache so the in-dialog stepper renders
-      // the seeded sets / RPE / notes immediately on its first paint —
-      // without this, useWorkoutDetail(workoutId) starts loading and the
-      // user sees an empty step 1 until the GET round-trip lands.
+      // Prime the workout-detail cache so the ReviewSurface (mounted via
+      // the URL→state effect after the timeline patch flips the entry to
+      // completed + workoutLogId) renders seeded sets / RPE / notes
+      // immediately on its first paint without waiting for the
+      // useWorkoutDetail(workoutId) GET round-trip.
       queryClient.setQueryData(QUERY_KEYS.workout(data.id), data);
-      // Always patch the timeline cache: the patch flips the entry from
-      // `planned` to `completed` and attaches the new workoutLogId, so a
-      // second tap on the same card before the timeline refetch lands
-      // can't re-enter the planned path and submit a duplicate log. Only
-      // the visible side effect (priming the legacy in-dialog stepper)
-      // is gated by `skipDetailReopen` for the LogSheet Tier-1 flow.
-      const patchedEntry = patchTimelineEntriesForLoggedWorkout(data, variables);
-      if (!variables.skipDetailReopen) {
-        setDetailEntry(patchedEntry);
-      }
+      patchTimelineEntriesForLoggedWorkout(data, variables);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }),
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.personalRecords }),
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.exerciseAnalytics }),
       ]);
-    },
-  });
-
-  const updateWorkoutHandlers = buildOptimisticTimelineHandlers<UpdateWorkoutVariables>(
-    selectedPlanId,
-    (old, { workoutId, updates }) =>
-      old.map((entry) =>
-        entry.workoutLogId === workoutId
-          ? {
-              ...entry,
-              ...(updates.focus != null && { focus: updates.focus }),
-              ...(updates.mainWorkout != null && {
-                mainWorkout: updates.mainWorkout,
-              }),
-              ...(updates.accessory !== undefined && {
-                accessory: updates.accessory,
-              }),
-              ...(updates.notes !== undefined && { notes: updates.notes }),
-              ...(updates.rpe !== undefined && { rpe: updates.rpe }),
-            }
-          : entry,
-      ),
-  );
-  const updateWorkoutMutation = useApiMutation({
-    mutationFn: ({ workoutId, updates }: UpdateWorkoutVariables) =>
-      api.workouts.update(workoutId, updates),
-    invalidateQueries: [
-      QUERY_KEYS.timeline,
-      QUERY_KEYS.workouts,
-      QUERY_KEYS.personalRecords,
-      QUERY_KEYS.exerciseAnalytics,
-    ],
-    successToast: "Workout updated",
-    errorToast: "Failed to update workout",
-    ...updateWorkoutHandlers,
-    onSuccess: () => {
-      setDetailEntry(null);
     },
   });
 
@@ -210,9 +148,6 @@ export function useWorkoutActionMutations(
     successToast: "Workout deleted",
     errorToast: "Failed to delete workout",
     ...deleteWorkoutHandlers,
-    onSuccess: () => {
-      setDetailEntry(null);
-    },
   });
 
   const deletePlanDayHandlers = buildOptimisticTimelineHandlers<string>(
@@ -225,16 +160,11 @@ export function useWorkoutActionMutations(
     successToast: "Workout removed from plan",
     errorToast: "Failed to delete workout",
     ...deletePlanDayHandlers,
-    onSuccess: () => {
-      setDetailEntry(null);
-    },
   });
 
   return {
     updateStatusMutation,
-    updateDayMutation,
     logWorkoutMutation,
-    updateWorkoutMutation,
     deleteWorkoutMutation,
     deletePlanDayMutation,
   };
