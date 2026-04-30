@@ -41,6 +41,7 @@ import { Input } from "@/components/ui/input";
 import { LogSheet } from "@/components/workout-detail/LogSheet";
 import { PreviewSheet } from "@/components/workout-detail/PreviewSheet";
 import { ReviewSurface } from "@/components/workout-detail/ReviewSurface";
+import { SkippedSheet } from "@/components/workout-detail/SkippedSheet";
 import { WorkoutDetailDialogV2 } from "@/components/workout-detail/WorkoutDetailDialogV2";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
@@ -53,9 +54,8 @@ import { queryClient } from "@/lib/queryClient";
 // Slices 1–3 of the new workout-flow redesign route timeline-card clicks
 // to intent-specific surfaces instead of the 2,000-line
 // WorkoutDetailDialogV2: PreviewSheet (future planned), LogSheet
-// (today/past planned), ReviewSurface (already logged). Skipped cards
-// still fall through to the legacy dialog. Toggle with
-// VITE_NEW_TIMELINE_FLOW=true.
+// (today/past planned), ReviewSurface (already logged), SkippedSheet
+// (status=skipped). Toggle with VITE_NEW_TIMELINE_FLOW=true.
 const NEW_TIMELINE_FLOW_ENABLED =
   import.meta.env.VITE_NEW_TIMELINE_FLOW === "true";
 
@@ -75,9 +75,13 @@ function isLoggablePlanned(entry: TimelineEntry): boolean {
 function isReviewable(entry: TimelineEntry): boolean {
   // Routed to ReviewSurface: anything with a workoutLogId and a
   // non-skipped status (Strava-source entries are workouts too, so
-  // they qualify). Skipped cards keep using the legacy dialog for
-  // now — they need a different read-only-with-undo layout.
+  // they qualify). Skipped cards take a different read-only-with-undo
+  // path via isSkipped.
   return Boolean(entry.workoutLogId) && entry.status !== "skipped";
+}
+
+function isSkipped(entry: TimelineEntry): boolean {
+  return entry.status === "skipped";
 }
 
 type TimelineState = ReturnType<typeof useTimelineState>;
@@ -296,42 +300,52 @@ export default function Timeline() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showAIConsent, setShowAIConsent] = useState(false);
   // Slice-1/2/3 state: PreviewSheet (future planned), LogSheet (today/past
-  // planned), ReviewSurface (already logged). All four surfaces (preview /
-  // log / review / legacy detail) are mutually exclusive — openSurface
-  // always nulls the others so we never stack them.
+  // planned), ReviewSurface (already logged), SkippedSheet (skipped).
+  // All five surfaces (preview / log / review / skipped / legacy detail)
+  // are mutually exclusive — openSurface always nulls the others so we
+  // never stack them.
   const [previewEntry, setPreviewEntry] = useState<TimelineEntry | null>(null);
   const [logEntry, setLogEntry] = useState<TimelineEntry | null>(null);
   const [reviewEntry, setReviewEntry] = useState<TimelineEntry | null>(null);
+  const [skippedEntry, setSkippedEntry] = useState<TimelineEntry | null>(null);
+
+  const closeAllNewSurfaces = useCallback(() => {
+    setPreviewEntry(null);
+    setLogEntry(null);
+    setReviewEntry(null);
+    setSkippedEntry(null);
+  }, []);
 
   const openSurface = useCallback(
     (entry: TimelineEntry) => {
       if (NEW_TIMELINE_FLOW_ENABLED && isFuturePlanned(entry)) {
         setDetailEntry(null);
-        setLogEntry(null);
-        setReviewEntry(null);
+        closeAllNewSurfaces();
         setPreviewEntry(entry);
         return;
       }
       if (NEW_TIMELINE_FLOW_ENABLED && isLoggablePlanned(entry)) {
         setDetailEntry(null);
-        setPreviewEntry(null);
-        setReviewEntry(null);
+        closeAllNewSurfaces();
         setLogEntry(entry);
         return;
       }
       if (NEW_TIMELINE_FLOW_ENABLED && isReviewable(entry)) {
         setDetailEntry(null);
-        setPreviewEntry(null);
-        setLogEntry(null);
+        closeAllNewSurfaces();
         setReviewEntry(entry);
         return;
       }
-      setPreviewEntry(null);
-      setLogEntry(null);
-      setReviewEntry(null);
+      if (NEW_TIMELINE_FLOW_ENABLED && isSkipped(entry)) {
+        setDetailEntry(null);
+        closeAllNewSurfaces();
+        setSkippedEntry(entry);
+        return;
+      }
+      closeAllNewSurfaces();
       openDetailDialog(entry);
     },
-    [openDetailDialog, setDetailEntry],
+    [openDetailDialog, setDetailEntry, closeAllNewSurfaces],
   );
   const [annotationsDialogOpen, setAnnotationsDialogOpen] = useState(false);
   // Seeds the create form in AnnotationsDialog when the user clicks a row's
@@ -545,7 +559,7 @@ export default function Timeline() {
         />
       </DndContext>
 
-          {!detailEntry && !previewEntry && !logEntry && !reviewEntry && (
+          {!detailEntry && !previewEntry && !logEntry && !reviewEntry && !skippedEntry && (
             <FloatingActionButton coachPanelOpen={coachOpen} onCoachToggle={() => handleCoachToggle(!coachOpen)} />
           )}
 
@@ -586,6 +600,23 @@ export default function Timeline() {
             onAskCoach={() => {
               setLogEntry(null);
               handleCoachToggle(true);
+            }}
+          />
+
+          <SkippedSheet
+            entry={skippedEntry}
+            onClose={() => setSkippedEntry(null)}
+            onAskCoach={() => {
+              setSkippedEntry(null);
+              handleCoachToggle(true);
+            }}
+            onUndoSkip={(entry) => {
+              setSkippedEntry(null);
+              handleChangeStatus(entry, "planned");
+            }}
+            onDelete={(entry) => {
+              setSkippedEntry(null);
+              handleDelete(entry);
             }}
           />
 
@@ -707,7 +738,7 @@ export default function Timeline() {
       </div>
       
       {coachOpen && !isMobile && (
-        <div className={detailEntry || previewEntry || logEntry || reviewEntry ? "hidden" : "w-80 lg:w-96 flex-shrink-0"}>
+        <div className={detailEntry || previewEntry || logEntry || reviewEntry || skippedEntry ? "hidden" : "w-80 lg:w-96 flex-shrink-0"}>
           <FeatureErrorBoundaryWrapper featureName="Coach">
             <CoachPanel
               isOpen={coachOpen}
@@ -724,7 +755,7 @@ export default function Timeline() {
         // see the top of their timeline while chatting with the coach.
         // Hidden (display:none) rather than unmounted while a workout detail
         // is open so in-flight chat streams and local message state survive.
-        <div className={detailEntry || previewEntry || logEntry || reviewEntry ? "hidden" : "fixed inset-x-0 bottom-0 z-50 h-[70vh]"}>
+        <div className={detailEntry || previewEntry || logEntry || reviewEntry || skippedEntry ? "hidden" : "fixed inset-x-0 bottom-0 z-50 h-[70vh]"}>
           <div
             data-testid="coach-panel-mobile-sheet"
             className="relative h-full bg-background shadow-2xl rounded-t-2xl border-t border-x"

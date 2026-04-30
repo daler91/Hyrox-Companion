@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { AthleteNoteInput } from "./AthleteNoteInput";
 import { ExerciseTable } from "./ExerciseTable";
 import { SaveStatePill } from "./SaveStatePill";
+import { PrescriptionEditor } from "./shared/PrescriptionEditor";
 
 interface ReviewSurfaceProps {
   readonly entry: TimelineEntry | null;
@@ -178,7 +179,31 @@ export function ReviewSurface({
               </span>
             </button>
             {editorOpen && workoutLogId ? (
-              <div className="border-t p-3">
+              <div className="space-y-3 border-t p-3">
+                <PrescriptionEditor
+                  entryId={entry.id}
+                  hasSets={exerciseSets.length > 0}
+                  mainWorkout={workout?.mainWorkout ?? entry.mainWorkout}
+                  accessory={workout?.accessory ?? entry.accessory}
+                  notes={null}
+                  showNotes={false}
+                  onSaveField={(field, value) => {
+                    // Notes are owned by AthleteNoteInput below
+                    // (writes through updateNote with optimistic
+                    // patches); ignore any stray notes saves so we
+                    // can't double-write to the same column.
+                    if (field === "notes") return;
+                    detail.updatePrescription.mutate({
+                      [field]: value.trim().length === 0 ? null : value,
+                    });
+                  }}
+                  onParseText={() => detail.reparseFreeText.mutate(undefined)}
+                  onParseImage={(payload) => detail.reparseFromImage.mutate(payload)}
+                  isParsingText={detail.reparseFreeText.isPending}
+                  isParsingImage={detail.reparseFromImage.isPending}
+                  title="Workout description"
+                  compact
+                />
                 <ExerciseTable
                   workoutId={workoutLogId}
                   exerciseSets={exerciseSets}

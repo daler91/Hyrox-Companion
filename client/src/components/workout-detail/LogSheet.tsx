@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 
 import { ExerciseTable } from "./ExerciseTable";
 import { SaveStatePill } from "./SaveStatePill";
+import { PrescriptionEditor } from "./shared/PrescriptionEditor";
 import { WorkoutPrescriptionSummary } from "./shared/WorkoutPrescriptionSummary";
 
 interface LogSheetProps {
@@ -130,7 +131,25 @@ export function LogSheet({
               </span>
             </button>
             {editorOpen ? (
-              <div className="border-t p-3">
+              <div className="space-y-3 border-t p-3">
+                <PrescriptionEditor
+                  entryId={entry.id}
+                  hasSets={planSets.exerciseSets.length > 0}
+                  mainWorkout={entry.mainWorkout}
+                  accessory={entry.accessory}
+                  notes={entry.notes}
+                  onSaveField={(field, value) =>
+                    planSets.updatePrescription.mutate({
+                      [field]: value.trim().length === 0 ? null : value,
+                    })
+                  }
+                  onParseText={() => planSets.reparseFreeText.mutate(undefined)}
+                  onParseImage={(payload) => planSets.reparseFromImage.mutate(payload)}
+                  isParsingText={planSets.reparseFreeText.isPending}
+                  isParsingImage={planSets.reparseFromImage.isPending}
+                  title="Coach's prescription"
+                  compact
+                />
                 <ExerciseTable
                   workoutId={entry.planDayId}
                   exerciseSets={planSets.exerciseSets}
