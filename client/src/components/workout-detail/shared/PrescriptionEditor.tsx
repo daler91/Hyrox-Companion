@@ -33,6 +33,13 @@ export interface PrescriptionEditorProps {
   readonly isParsingImage: boolean;
   readonly title?: string;
   readonly compact?: boolean;
+  /**
+   * Pass false when the parent surface owns notes editing through a
+   * different mutation (e.g. ReviewSurface uses AthleteNoteInput for
+   * `notes`). Forwarded to CoachPrescriptionCollapsible. Defaults to
+   * true.
+   */
+  readonly showNotes?: boolean;
 }
 
 type PendingParseSource = "text" | "image" | null;
@@ -71,6 +78,7 @@ export function PrescriptionEditor({
   isParsingImage,
   title,
   compact,
+  showNotes = true,
 }: PrescriptionEditorProps) {
   const [imagePreview, setImagePreview] = useState<ImagePreviewState | null>(null);
   const [confirmingParse, setConfirmingParse] = useState(false);
@@ -163,6 +171,7 @@ export function PrescriptionEditor({
         mainWorkout={mainWorkout}
         accessory={accessory}
         notes={notes}
+        showNotes={showNotes}
         onSaveField={onSaveField}
         onParse={handleParseTextClicked}
         isParsing={isParsingText}

@@ -67,6 +67,13 @@ interface CoachPrescriptionCollapsibleProps {
   readonly onRetakeImage?: () => void;
   readonly onParseImage?: () => void;
   readonly isParsingImage?: boolean;
+  /**
+   * When false, suppresses the Notes section so a parent surface that
+   * already owns notes editing (e.g. a separate AthleteNoteInput wired
+   * to a different mutation) doesn't end up with two editors writing
+   * to the same `notes` column. Defaults to true.
+   */
+  readonly showNotes?: boolean;
 }
 
 /**
@@ -98,6 +105,7 @@ export function CoachPrescriptionCollapsible({
   onRetakeImage,
   onParseImage,
   isParsingImage,
+  showNotes = true,
 }: CoachPrescriptionCollapsibleProps) {
   const hasContent = hasText(mainWorkout) || hasText(accessory) || hasText(notes);
   const editable = typeof onSaveField === "function";
@@ -198,15 +206,17 @@ export function CoachPrescriptionCollapsible({
               onDraftFieldChange={onDraftFieldChange}
               compact={compact}
             />
-            <PrescriptionSection
-              field="notes"
-              label="Notes"
-              text={notes ?? ""}
-              editable={editable}
-              onSaveField={onSaveField}
-              onDraftFieldChange={onDraftFieldChange}
-              compact={compact}
-            />
+            {showNotes ? (
+              <PrescriptionSection
+                field="notes"
+                label="Notes"
+                text={notes ?? ""}
+                editable={editable}
+                onSaveField={onSaveField}
+                onDraftFieldChange={onDraftFieldChange}
+                compact={compact}
+              />
+            ) : null}
           </>
         )}
       </CollapsibleContent>

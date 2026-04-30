@@ -186,11 +186,17 @@ export function ReviewSurface({
                   mainWorkout={workout?.mainWorkout ?? entry.mainWorkout}
                   accessory={workout?.accessory ?? entry.accessory}
                   notes={null}
-                  onSaveField={(field, value) =>
+                  showNotes={false}
+                  onSaveField={(field, value) => {
+                    // Notes are owned by AthleteNoteInput below
+                    // (writes through updateNote with optimistic
+                    // patches); ignore any stray notes saves so we
+                    // can't double-write to the same column.
+                    if (field === "notes") return;
                     detail.updatePrescription.mutate({
                       [field]: value.trim().length === 0 ? null : value,
-                    })
-                  }
+                    });
+                  }}
                   onParseText={() => detail.reparseFreeText.mutate(undefined)}
                   onParseImage={(payload) => detail.reparseFromImage.mutate(payload)}
                   isParsingText={detail.reparseFreeText.isPending}
