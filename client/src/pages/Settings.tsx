@@ -248,7 +248,7 @@ export default function Settings() {
     );
   }
 
-  if (isError) {
+  if (isError && !preferences) {
     const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
 
     return (
