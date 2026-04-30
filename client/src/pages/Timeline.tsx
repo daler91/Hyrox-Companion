@@ -40,6 +40,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LogSheet } from "@/components/workout-detail/LogSheet";
 import { PreviewSheet } from "@/components/workout-detail/PreviewSheet";
+import { ReviewSurface } from "@/components/workout-detail/ReviewSurface";
 import { WorkoutDetailDialogV2 } from "@/components/workout-detail/WorkoutDetailDialogV2";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
@@ -49,11 +50,12 @@ import { useTimelineState } from "@/hooks/useTimelineState";
 import { api, QUERY_KEYS } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
 
-// Slice 1 of the new workout-flow redesign: future-dated planned cards open
-// a read-only PreviewSheet instead of the legacy WorkoutDetailDialogV2. All
-// other states (today/past planned, logged) still go through the dialog
-// while the LogSheet (Slice 2) and ReviewSurface (Slice 3) are built.
-// Toggle with VITE_NEW_TIMELINE_FLOW=true.
+// Slices 1–3 of the new workout-flow redesign route timeline-card clicks
+// to intent-specific surfaces instead of the 2,000-line
+// WorkoutDetailDialogV2: PreviewSheet (future planned), LogSheet
+// (today/past planned), ReviewSurface (already logged). Skipped cards
+// still fall through to the legacy dialog. Toggle with
+// VITE_NEW_TIMELINE_FLOW=true.
 const NEW_TIMELINE_FLOW_ENABLED =
   import.meta.env.VITE_NEW_TIMELINE_FLOW === "true";
 
@@ -68,6 +70,14 @@ function isLoggablePlanned(entry: TimelineEntry): boolean {
   if (!entry.planDayId) return false;
   const todayStr = format(new Date(), "yyyy-MM-dd");
   return entry.date <= todayStr;
+}
+
+function isReviewable(entry: TimelineEntry): boolean {
+  // Routed to ReviewSurface: anything with a workoutLogId and a
+  // non-skipped status (Strava-source entries are workouts too, so
+  // they qualify). Skipped cards keep using the legacy dialog for
+  // now — they need a different read-only-with-undo layout.
+  return Boolean(entry.workoutLogId) && entry.status !== "skipped";
 }
 
 type TimelineState = ReturnType<typeof useTimelineState>;
@@ -285,28 +295,40 @@ export default function Timeline() {
   const { combiningEntry, setCombiningEntry, combineSecondEntry, setCombineSecondEntry, showCombineDialog, setShowCombineDialog, handleCombine, handleConfirmCombine, combineWorkoutsMutation } = combine;
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showAIConsent, setShowAIConsent] = useState(false);
-  // Slice-1/2 state: PreviewSheet for future planned, LogSheet for today/past
-  // planned. All three surfaces (preview / log / legacy detail) are mutually
-  // exclusive — openSurface always nulls the others so we never stack them.
+  // Slice-1/2/3 state: PreviewSheet (future planned), LogSheet (today/past
+  // planned), ReviewSurface (already logged). All four surfaces (preview /
+  // log / review / legacy detail) are mutually exclusive — openSurface
+  // always nulls the others so we never stack them.
   const [previewEntry, setPreviewEntry] = useState<TimelineEntry | null>(null);
   const [logEntry, setLogEntry] = useState<TimelineEntry | null>(null);
+  const [reviewEntry, setReviewEntry] = useState<TimelineEntry | null>(null);
 
   const openSurface = useCallback(
     (entry: TimelineEntry) => {
       if (NEW_TIMELINE_FLOW_ENABLED && isFuturePlanned(entry)) {
         setDetailEntry(null);
         setLogEntry(null);
+        setReviewEntry(null);
         setPreviewEntry(entry);
         return;
       }
       if (NEW_TIMELINE_FLOW_ENABLED && isLoggablePlanned(entry)) {
         setDetailEntry(null);
         setPreviewEntry(null);
+        setReviewEntry(null);
         setLogEntry(entry);
+        return;
+      }
+      if (NEW_TIMELINE_FLOW_ENABLED && isReviewable(entry)) {
+        setDetailEntry(null);
+        setPreviewEntry(null);
+        setLogEntry(null);
+        setReviewEntry(entry);
         return;
       }
       setPreviewEntry(null);
       setLogEntry(null);
+      setReviewEntry(null);
       openDetailDialog(entry);
     },
     [openDetailDialog, setDetailEntry],
@@ -523,7 +545,7 @@ export default function Timeline() {
         />
       </DndContext>
 
-          {!detailEntry && !previewEntry && !logEntry && (
+          {!detailEntry && !previewEntry && !logEntry && !reviewEntry && (
             <FloatingActionButton coachPanelOpen={coachOpen} onCoachToggle={() => handleCoachToggle(!coachOpen)} />
           )}
 
@@ -564,6 +586,23 @@ export default function Timeline() {
             onAskCoach={() => {
               setLogEntry(null);
               handleCoachToggle(true);
+            }}
+          />
+
+          <ReviewSurface
+            entry={reviewEntry}
+            onClose={() => setReviewEntry(null)}
+            onAskCoach={() => {
+              setReviewEntry(null);
+              handleCoachToggle(true);
+            }}
+            onMarkPlanned={(entry) => {
+              setReviewEntry(null);
+              handleChangeStatus(entry, "planned");
+            }}
+            onDelete={(entry) => {
+              setReviewEntry(null);
+              handleDelete(entry);
             }}
           />
 
@@ -668,7 +707,7 @@ export default function Timeline() {
       </div>
       
       {coachOpen && !isMobile && (
-        <div className={detailEntry || previewEntry || logEntry ? "hidden" : "w-80 lg:w-96 flex-shrink-0"}>
+        <div className={detailEntry || previewEntry || logEntry || reviewEntry ? "hidden" : "w-80 lg:w-96 flex-shrink-0"}>
           <FeatureErrorBoundaryWrapper featureName="Coach">
             <CoachPanel
               isOpen={coachOpen}
@@ -685,7 +724,7 @@ export default function Timeline() {
         // see the top of their timeline while chatting with the coach.
         // Hidden (display:none) rather than unmounted while a workout detail
         // is open so in-flight chat streams and local message state survive.
-        <div className={detailEntry || previewEntry || logEntry ? "hidden" : "fixed inset-x-0 bottom-0 z-50 h-[70vh]"}>
+        <div className={detailEntry || previewEntry || logEntry || reviewEntry ? "hidden" : "fixed inset-x-0 bottom-0 z-50 h-[70vh]"}>
           <div
             data-testid="coach-panel-mobile-sheet"
             className="relative h-full bg-background shadow-2xl rounded-t-2xl border-t border-x"
