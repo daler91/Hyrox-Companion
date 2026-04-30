@@ -310,6 +310,14 @@ export default function Timeline() {
 
   const { openWorkoutId, setOpenWorkoutId } = useOpenWorkoutId();
 
+  // Tracks whether any sheet has been opened in this session. We can't
+  // rely on `openSheetEntryId` alone for the state→URL sync because on
+  // initial mount with a deep-link URL, openSheetEntryId is null but
+  // the URL is non-null — clearing the URL there would wipe the deep
+  // link before URL→state can read it. The ref flips to true the first
+  // time openSurface puts a sheet on screen.
+  const sheetEverOpenedRef = useRef(false);
+
   const closeAllSurfaces = useCallback(() => {
     setPreviewEntry(null);
     setLogEntry(null);
@@ -319,6 +327,7 @@ export default function Timeline() {
 
   const openSurface = useCallback(
     (entry: TimelineEntry) => {
+      sheetEverOpenedRef.current = true;
       closeAllSurfaces();
       if (isFuturePlanned(entry)) {
         setPreviewEntry(entry);
@@ -350,30 +359,41 @@ export default function Timeline() {
     previewEntry ?? logEntry ?? reviewEntry ?? skippedEntry ?? null;
   const openSheetEntryId = openSheetEntry ? entryId(openSheetEntry) : null;
 
-  // State → URL: when one of the sheets opens or closes, mirror the
-  // active workout id into the ?workout= query string so deep links
-  // and browser back/forward stay in sync. setOpenWorkoutId has its
-  // own idempotency guard so this is safe to fire on every render.
+  // State → URL: when a sheet opens or closes, mirror the active
+  // workout id into the ?workout= query string. Skip writing on the
+  // initial mount before any sheet has been opened — otherwise we'd
+  // wipe a deep-link URL before URL→state can read it.
   useEffect(() => {
-    setOpenWorkoutId(openSheetEntryId);
+    if (openSheetEntryId !== null) {
+      sheetEverOpenedRef.current = true;
+      setOpenWorkoutId(openSheetEntryId);
+      return;
+    }
+    if (sheetEverOpenedRef.current) {
+      setOpenWorkoutId(null);
+    }
   }, [openSheetEntryId, setOpenWorkoutId]);
 
   // URL → state: deep links (`/?workout=<id>`) and browser back/forward
   // need to populate the right surface based on the entry's status.
   // Resolves the id against `timelineData` and dispatches through
-  // openSurface, which already classifies entries by status. Skips when
-  // the URL matches the current displayed surface to avoid loops with
-  // the state→URL effect above.
+  // openSurface, which already classifies entries by status. The
+  // `openSheetEntryId === openWorkoutId` early return is what stops
+  // this from looping with the state→URL effect — once the sheet's id
+  // matches the URL we have nothing to do, even if `timelineData`
+  // produced a fresh array reference (the `[]` default in
+  // useTimelineData makes that happen on every render before the
+  // first fetch resolves).
   useEffect(() => {
     if (!openWorkoutId) {
-      if (openSheetEntry) closeAllSurfaces();
+      if (openSheetEntryId !== null) closeAllSurfaces();
       return;
     }
     if (openSheetEntryId === openWorkoutId) return;
     const target = timelineData.find((e) => entryId(e) === openWorkoutId);
     if (!target) return; // entry not in cache yet — wait for refetch
     openSurface(target);
-  }, [openWorkoutId, openSheetEntryId, openSheetEntry, timelineData, openSurface, closeAllSurfaces]);
+  }, [openWorkoutId, openSheetEntryId, timelineData, openSurface, closeAllSurfaces]);
   const [annotationsDialogOpen, setAnnotationsDialogOpen] = useState(false);
   // Seeds the create form in AnnotationsDialog when the user clicks a row's
   // inline "+ Note" chip, so they don't have to re-pick the date.
