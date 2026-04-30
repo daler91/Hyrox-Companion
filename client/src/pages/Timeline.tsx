@@ -15,7 +15,7 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
-import { useCallback,useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AIConsentDialog } from "@/components/coach/AIConsentDialog";
 import { CoachPanel } from "@/components/CoachPanel";
@@ -47,7 +47,9 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useMoveTimelineEntry } from "@/hooks/useMoveTimelineEntry";
+import { useOpenWorkoutId } from "@/hooks/useOpenWorkoutId";
 import { useTimelineState } from "@/hooks/useTimelineState";
+import { entryId } from "@/hooks/workout-actions/timelineEntry";
 import { api, QUERY_KEYS } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
 
@@ -309,6 +311,8 @@ export default function Timeline() {
   const [reviewEntry, setReviewEntry] = useState<TimelineEntry | null>(null);
   const [skippedEntry, setSkippedEntry] = useState<TimelineEntry | null>(null);
 
+  const { openWorkoutId, setOpenWorkoutId } = useOpenWorkoutId();
+
   const closeAllNewSurfaces = useCallback(() => {
     setPreviewEntry(null);
     setLogEntry(null);
@@ -347,6 +351,53 @@ export default function Timeline() {
     },
     [openDetailDialog, setDetailEntry, closeAllNewSurfaces],
   );
+
+  // The currently-open entry across all five surfaces. The legacy
+  // setDetailEntry already mirrors itself to ?workout= via
+  // useTimelineDetailEntry; the four new sheets are pure local state
+  // until the effects below sync them.
+  const openSheetEntry =
+    previewEntry ?? logEntry ?? reviewEntry ?? skippedEntry ?? null;
+  const openSheetEntryId = openSheetEntry ? entryId(openSheetEntry) : null;
+
+  // State → URL: when one of the new sheets opens or closes, mirror the
+  // active workout id into the ?workout= query string so deep links and
+  // browser back/forward work the same way they do for the legacy dialog.
+  // No-ops when the URL already reflects the same id (setOpenWorkoutId
+  // has its own idempotency guard) so this doesn't fight the legacy
+  // setDetailEntry path on the rare moments both touch it.
+  useEffect(() => {
+    if (openSheetEntryId) {
+      setOpenWorkoutId(openSheetEntryId);
+      return;
+    }
+    // Only clear the URL when nothing else is open. The legacy detail
+    // dialog manages its own URL writes, so we ignore that slot here.
+    if (!detailEntry) {
+      setOpenWorkoutId(null);
+    }
+  }, [openSheetEntryId, detailEntry, setOpenWorkoutId]);
+
+  // URL → state: deep links (`/?workout=<id>`) and browser back/forward
+  // need to populate the right surface based on the entry's status.
+  // Resolves the id against `timelineData` and dispatches through
+  // openSurface, which already classifies entries by status. Skips when
+  // the URL matches the current displayed surface to avoid loops with
+  // the state→URL effect above.
+  useEffect(() => {
+    if (!openWorkoutId) {
+      // Only clear new sheets when the URL is empty AND the legacy
+      // dialog is closed — useTimelineDetailEntry handles the legacy
+      // close path via the same URL change.
+      if (openSheetEntry) closeAllNewSurfaces();
+      return;
+    }
+    const currentlyOpenId = openSheetEntryId ?? (detailEntry ? entryId(detailEntry) : null);
+    if (currentlyOpenId === openWorkoutId) return;
+    const target = timelineData.find((e) => entryId(e) === openWorkoutId);
+    if (!target) return; // entry not in cache yet — wait for refetch
+    openSurface(target);
+  }, [openWorkoutId, openSheetEntryId, openSheetEntry, detailEntry, timelineData, openSurface, closeAllNewSurfaces]);
   const [annotationsDialogOpen, setAnnotationsDialogOpen] = useState(false);
   // Seeds the create form in AnnotationsDialog when the user clicks a row's
   // inline "+ Note" chip, so they don't have to re-pick the date.
@@ -663,7 +714,14 @@ export default function Timeline() {
             }}
             onLogNow={(entry) => {
               setPreviewEntry(null);
-              setDetailEntry(entry);
+              // "Log this now" means the user did the workout today
+              // regardless of its planned future date. Open LogSheet
+              // with the date overridden to today so handleMarkComplete
+              // creates a workoutLog dated today; the underlying plan
+              // day's date stays put on its scheduled row in case the
+              // user later wants to view the original prescription.
+              const todayStr = format(new Date(), "yyyy-MM-dd");
+              setLogEntry({ ...entry, date: todayStr });
             }}
           />
 
