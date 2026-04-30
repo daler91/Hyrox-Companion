@@ -42,7 +42,6 @@ import { LogSheet } from "@/components/workout-detail/LogSheet";
 import { PreviewSheet } from "@/components/workout-detail/PreviewSheet";
 import { ReviewSurface } from "@/components/workout-detail/ReviewSurface";
 import { SkippedSheet } from "@/components/workout-detail/SkippedSheet";
-import { WorkoutDetailDialogV2 } from "@/components/workout-detail/WorkoutDetailDialogV2";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -53,13 +52,11 @@ import { entryId } from "@/hooks/workout-actions/timelineEntry";
 import { api, QUERY_KEYS } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
 
-// Slices 1–3 of the new workout-flow redesign route timeline-card clicks
-// to intent-specific surfaces instead of the 2,000-line
-// WorkoutDetailDialogV2: PreviewSheet (future planned), LogSheet
-// (today/past planned), ReviewSurface (already logged), SkippedSheet
-// (status=skipped). Toggle with VITE_NEW_TIMELINE_FLOW=true.
-const NEW_TIMELINE_FLOW_ENABLED =
-  import.meta.env.VITE_NEW_TIMELINE_FLOW === "true";
+// Click-routing for timeline cards: PreviewSheet (future planned),
+// LogSheet (today/past planned), ReviewSurface (already logged),
+// SkippedSheet (status=skipped). One sheet per status; click events
+// in TimelineWorkoutCard call openSurface which classifies the entry
+// and opens the right one.
 
 function isFuturePlanned(entry: TimelineEntry): boolean {
   if (entry.status !== "planned") return false;
@@ -113,7 +110,7 @@ interface TimelineContentProps {
   rowVirtualizer: Virtualizer<HTMLDivElement, Element>;
   todayRef: TimelineData["todayRef"];
   handleMarkComplete: ReturnType<typeof useTimelineState>["workoutActions"]["handleMarkComplete"];
-  openDetailDialog: (entry: Parameters<ReturnType<typeof useTimelineState>["workoutActions"]["openDetailDialog"]>[0]) => void;
+  onCardClick: (entry: TimelineEntry) => void;
   handleCombine: ReturnType<typeof useTimelineState>["combine"]["handleCombine"];
   combiningEntry: ReturnType<typeof useTimelineState>["combine"]["combiningEntry"];
   personalRecords: TimelineData["personalRecords"];
@@ -149,7 +146,7 @@ function TimelineContent({
   rowVirtualizer,
   todayRef,
   handleMarkComplete,
-  openDetailDialog,
+  onCardClick,
   handleCombine,
   combiningEntry,
   personalRecords,
@@ -239,7 +236,7 @@ function TimelineContent({
                   entries={entries}
                   annotations={annotationsByDate[date]}
                   onMarkComplete={handleMarkComplete}
-                  onClick={openDetailDialog}
+                  onClick={onCardClick}
                   onCombineSelect={handleCombine}
                   isCombining={!!combiningEntry}
                   combiningEntryId={combiningEntry?.id || null}
@@ -297,15 +294,15 @@ export default function Timeline() {
   const { filterStatus, setFilterStatus, showAllPast, setShowAllPast, showAllFuture, setShowAllFuture, pastGroups, futureGroups, visiblePastGroups, visibleFutureGroups, hiddenPastCount, hiddenFutureCount } = filters;
   const { showOnboarding, coachOpen, setCoachOpen, handleOnboardingComplete } = onboarding;
   const { csvPreview, setCsvPreview, schedulingPlanId, setSchedulingPlanId, startDate, setStartDate, fileInputRef, handleFileUpload, confirmImport, importMutation, samplePlanMutation, renamePlanMutation, schedulePlanMutation, updatePlanGoalMutation } = planImport;
-  const { detailEntry, setDetailEntry, skipConfirmEntry, setSkipConfirmEntry, openDetailDialog, handleMarkComplete, handleChangeStatus, handleDelete, confirmSkip, logWorkoutMutation } = workoutActions;
+  const { skipConfirmEntry, setSkipConfirmEntry, handleMarkComplete, handleChangeStatus, handleDelete, confirmSkip, logWorkoutMutation } = workoutActions;
   const { combiningEntry, setCombiningEntry, combineSecondEntry, setCombineSecondEntry, showCombineDialog, setShowCombineDialog, handleCombine, handleConfirmCombine, combineWorkoutsMutation } = combine;
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showAIConsent, setShowAIConsent] = useState(false);
-  // Slice-1/2/3 state: PreviewSheet (future planned), LogSheet (today/past
-  // planned), ReviewSurface (already logged), SkippedSheet (skipped).
-  // All five surfaces (preview / log / review / skipped / legacy detail)
-  // are mutually exclusive — openSurface always nulls the others so we
-  // never stack them.
+  // Sheet-native surfaces for every timeline-card click: PreviewSheet
+  // (future planned), LogSheet (today/past planned), ReviewSurface
+  // (already logged), SkippedSheet (skipped). All four are mutually
+  // exclusive — openSurface always nulls the others so we never stack
+  // them.
   const [previewEntry, setPreviewEntry] = useState<TimelineEntry | null>(null);
   const [logEntry, setLogEntry] = useState<TimelineEntry | null>(null);
   const [reviewEntry, setReviewEntry] = useState<TimelineEntry | null>(null);
@@ -313,7 +310,7 @@ export default function Timeline() {
 
   const { openWorkoutId, setOpenWorkoutId } = useOpenWorkoutId();
 
-  const closeAllNewSurfaces = useCallback(() => {
+  const closeAllSurfaces = useCallback(() => {
     setPreviewEntry(null);
     setLogEntry(null);
     setReviewEntry(null);
@@ -322,61 +319,44 @@ export default function Timeline() {
 
   const openSurface = useCallback(
     (entry: TimelineEntry) => {
-      if (NEW_TIMELINE_FLOW_ENABLED && isFuturePlanned(entry)) {
-        setDetailEntry(null);
-        closeAllNewSurfaces();
+      closeAllSurfaces();
+      if (isFuturePlanned(entry)) {
         setPreviewEntry(entry);
         return;
       }
-      if (NEW_TIMELINE_FLOW_ENABLED && isLoggablePlanned(entry)) {
-        setDetailEntry(null);
-        closeAllNewSurfaces();
+      if (isLoggablePlanned(entry)) {
         setLogEntry(entry);
         return;
       }
-      if (NEW_TIMELINE_FLOW_ENABLED && isReviewable(entry)) {
-        setDetailEntry(null);
-        closeAllNewSurfaces();
+      if (isReviewable(entry)) {
         setReviewEntry(entry);
         return;
       }
-      if (NEW_TIMELINE_FLOW_ENABLED && isSkipped(entry)) {
-        setDetailEntry(null);
-        closeAllNewSurfaces();
+      if (isSkipped(entry)) {
         setSkippedEntry(entry);
         return;
       }
-      closeAllNewSurfaces();
-      openDetailDialog(entry);
+      // No surface matched — header rows or annotation-only entries
+      // don't have a click destination. Leave everything closed.
     },
-    [openDetailDialog, setDetailEntry, closeAllNewSurfaces],
+    [closeAllSurfaces],
   );
 
-  // The currently-open entry across all five surfaces. The legacy
-  // setDetailEntry already mirrors itself to ?workout= via
-  // useTimelineDetailEntry; the four new sheets are pure local state
-  // until the effects below sync them.
+  // The currently-open entry across all four surfaces. Drives the
+  // ?workout= URL sync (state→URL effect below) and lets the URL→state
+  // effect detect when a deep link or browser navigation needs to
+  // populate a different sheet.
   const openSheetEntry =
     previewEntry ?? logEntry ?? reviewEntry ?? skippedEntry ?? null;
   const openSheetEntryId = openSheetEntry ? entryId(openSheetEntry) : null;
 
-  // State → URL: when one of the new sheets opens or closes, mirror the
-  // active workout id into the ?workout= query string so deep links and
-  // browser back/forward work the same way they do for the legacy dialog.
-  // No-ops when the URL already reflects the same id (setOpenWorkoutId
-  // has its own idempotency guard) so this doesn't fight the legacy
-  // setDetailEntry path on the rare moments both touch it.
+  // State → URL: when one of the sheets opens or closes, mirror the
+  // active workout id into the ?workout= query string so deep links
+  // and browser back/forward stay in sync. setOpenWorkoutId has its
+  // own idempotency guard so this is safe to fire on every render.
   useEffect(() => {
-    if (openSheetEntryId) {
-      setOpenWorkoutId(openSheetEntryId);
-      return;
-    }
-    // Only clear the URL when nothing else is open. The legacy detail
-    // dialog manages its own URL writes, so we ignore that slot here.
-    if (!detailEntry) {
-      setOpenWorkoutId(null);
-    }
-  }, [openSheetEntryId, detailEntry, setOpenWorkoutId]);
+    setOpenWorkoutId(openSheetEntryId);
+  }, [openSheetEntryId, setOpenWorkoutId]);
 
   // URL → state: deep links (`/?workout=<id>`) and browser back/forward
   // need to populate the right surface based on the entry's status.
@@ -386,18 +366,14 @@ export default function Timeline() {
   // the state→URL effect above.
   useEffect(() => {
     if (!openWorkoutId) {
-      // Only clear new sheets when the URL is empty AND the legacy
-      // dialog is closed — useTimelineDetailEntry handles the legacy
-      // close path via the same URL change.
-      if (openSheetEntry) closeAllNewSurfaces();
+      if (openSheetEntry) closeAllSurfaces();
       return;
     }
-    const currentlyOpenId = openSheetEntryId ?? (detailEntry ? entryId(detailEntry) : null);
-    if (currentlyOpenId === openWorkoutId) return;
+    if (openSheetEntryId === openWorkoutId) return;
     const target = timelineData.find((e) => entryId(e) === openWorkoutId);
     if (!target) return; // entry not in cache yet — wait for refetch
     openSurface(target);
-  }, [openWorkoutId, openSheetEntryId, openSheetEntry, detailEntry, timelineData, openSurface, closeAllNewSurfaces]);
+  }, [openWorkoutId, openSheetEntryId, openSheetEntry, timelineData, openSurface, closeAllSurfaces]);
   const [annotationsDialogOpen, setAnnotationsDialogOpen] = useState(false);
   // Seeds the create form in AnnotationsDialog when the user clicks a row's
   // inline "+ Note" chip, so they don't have to re-pick the date.
@@ -595,7 +571,7 @@ export default function Timeline() {
           rowVirtualizer={rowVirtualizer}
           todayRef={todayRef}
           handleMarkComplete={handleMarkComplete}
-          openDetailDialog={openSurface}
+          onCardClick={openSurface}
           handleCombine={handleCombine}
           combiningEntry={combiningEntry}
           personalRecords={personalRecords}
@@ -610,7 +586,7 @@ export default function Timeline() {
         />
       </DndContext>
 
-          {!detailEntry && !previewEntry && !logEntry && !reviewEntry && !skippedEntry && (
+          {!previewEntry && !logEntry && !reviewEntry && !skippedEntry && (
             <FloatingActionButton coachPanelOpen={coachOpen} onCoachToggle={() => handleCoachToggle(!coachOpen)} />
           )}
 
@@ -632,16 +608,12 @@ export default function Timeline() {
             isLogging={logWorkoutMutation.isPending}
             onLogAsPlanned={(entry, rpeOverride) => {
               setLogEntry(null);
-              // Tier-1 path: suppress the legacy in-dialog stepper that
-              // logWorkoutMutation.onSuccess otherwise pops open after
-              // every successful log. We only fan a fresh entry through
-              // when RPE actually changed so we don't churn the cache
-              // for a no-op.
-              const opts = { skipDetailReopen: true };
+              // Only fan a fresh entry through when RPE actually
+              // changed so we don't churn the cache for a no-op.
               if (rpeOverride !== entry.rpe) {
-                handleMarkComplete({ ...entry, rpe: rpeOverride ?? null }, opts);
+                handleMarkComplete({ ...entry, rpe: rpeOverride ?? null });
               } else {
-                handleMarkComplete(entry, opts);
+                handleMarkComplete(entry);
               }
             }}
             onSkip={(entry) => {
@@ -725,35 +697,6 @@ export default function Timeline() {
             }}
           />
 
-          <WorkoutDetailDialogV2
-            entry={detailEntry}
-            onClose={() => setDetailEntry(null)}
-            onDelete={handleDelete}
-            onChangeStatus={(entry, status) => {
-              handleChangeStatus(entry, status);
-              setDetailEntry(null);
-            }}
-            onMarkComplete={handleMarkComplete}
-            isMarkingComplete={logWorkoutMutation.isPending}
-            onCombine={(entry) => {
-              setDetailEntry(null);
-              handleCombine(entry);
-            }}
-            weightUnit={user?.weightUnit === "lbs" ? "lb" : "kg"}
-            distanceUnit={user?.distanceUnit === "miles" ? "miles" : "km"}
-            // Close the global coach rail when the in-dialog chat
-            // opens so the two chat surfaces never coexist with
-            // independent session state (see the comment in the
-            // dialog's onOpenChat handler).
-            onAskCoachOpen={() => setCoachOpen(false)}
-            // Gate Ask-coach on the same AI-coach consent that the
-            // global FAB flow runs through `handleCoachToggle`.
-            // Users who haven't opted in get the AIConsentDialog
-            // instead of the chat auto-opening.
-            aiCoachEnabled={!!user?.aiCoachEnabled}
-            onRequestCoachConsent={() => setShowAIConsent(true)}
-          />
-
           <SkipConfirmDialog
             entry={skipConfirmEntry}
             onOpenChange={() => setSkipConfirmEntry(null)}
@@ -796,7 +739,7 @@ export default function Timeline() {
       </div>
       
       {coachOpen && !isMobile && (
-        <div className={detailEntry || previewEntry || logEntry || reviewEntry || skippedEntry ? "hidden" : "w-80 lg:w-96 flex-shrink-0"}>
+        <div className={previewEntry || logEntry || reviewEntry || skippedEntry ? "hidden" : "w-80 lg:w-96 flex-shrink-0"}>
           <FeatureErrorBoundaryWrapper featureName="Coach">
             <CoachPanel
               isOpen={coachOpen}
@@ -813,7 +756,7 @@ export default function Timeline() {
         // see the top of their timeline while chatting with the coach.
         // Hidden (display:none) rather than unmounted while a workout detail
         // is open so in-flight chat streams and local message state survive.
-        <div className={detailEntry || previewEntry || logEntry || reviewEntry || skippedEntry ? "hidden" : "fixed inset-x-0 bottom-0 z-50 h-[70vh]"}>
+        <div className={previewEntry || logEntry || reviewEntry || skippedEntry ? "hidden" : "fixed inset-x-0 bottom-0 z-50 h-[70vh]"}>
           <div
             data-testid="coach-panel-mobile-sheet"
             className="relative h-full bg-background shadow-2xl rounded-t-2xl border-t border-x"

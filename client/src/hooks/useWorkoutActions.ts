@@ -1,74 +1,19 @@
 import { type TimelineEntry, type WorkoutStatus } from "@shared/schema";
 import { useCallback, useState } from "react";
 
-import type { SaveFromDetailUpdates } from "./workout-actions/types";
-import { useTimelineDetailEntry } from "./workout-actions/useTimelineDetailEntry";
 import { useWorkoutActionMutations } from "./workout-actions/useWorkoutActionMutations";
 
-export function useWorkoutActions(
-  selectedPlanId: string | null,
-  timelineData: TimelineEntry[] = [],
-) {
+export function useWorkoutActions(selectedPlanId: string | null) {
   const [skipConfirmEntry, setSkipConfirmEntry] = useState<TimelineEntry | null>(null);
-  const { detailEntry, setDetailEntry } = useTimelineDetailEntry(timelineData);
   const {
     updateStatusMutation,
-    updateDayMutation,
     logWorkoutMutation,
-    updateWorkoutMutation,
     deleteWorkoutMutation,
     deletePlanDayMutation,
-  } = useWorkoutActionMutations(selectedPlanId, setDetailEntry);
-
-  const openDetailDialog = useCallback(
-    (entry: TimelineEntry) => {
-      setDetailEntry(entry);
-    },
-    [setDetailEntry],
-  );
-
-  const handleSaveFromDetail = useCallback(
-    (updates: SaveFromDetailUpdates) => {
-      if (!detailEntry) return;
-
-      if (detailEntry.workoutLogId) {
-        updateWorkoutMutation.mutate({
-          workoutId: detailEntry.workoutLogId,
-          updates: { ...updates, exercises: updates.exercises },
-        });
-        return;
-      }
-
-      if (!detailEntry.planDayId) return;
-
-      const hasExercises = updates.exercises && updates.exercises.length > 0;
-      const hasWorkoutLogFields = updates.rpe != null;
-
-      if (hasExercises || hasWorkoutLogFields) {
-        logWorkoutMutation.mutate({
-          planDayId: detailEntry.planDayId,
-          date: detailEntry.date,
-          focus: updates.focus,
-          mainWorkout: updates.mainWorkout,
-          accessory: updates.accessory || undefined,
-          notes: updates.notes || undefined,
-          rpe: updates.rpe ?? undefined,
-          exercises: updates.exercises,
-          sourceEntry: detailEntry,
-        });
-        return;
-      }
-
-      updateDayMutation.mutate({
-        dayId: detailEntry.planDayId,
-        updates,
-      });
-    },
-    [detailEntry, updateWorkoutMutation, logWorkoutMutation, updateDayMutation],
-  );
+  } = useWorkoutActionMutations(selectedPlanId);
 
   const handleMarkComplete = useCallback(
-    (entry: TimelineEntry, options?: { skipDetailReopen?: boolean }) => {
+    (entry: TimelineEntry) => {
       if (!entry.planDayId) return;
       logWorkoutMutation.mutate({
         planDayId: entry.planDayId,
@@ -79,7 +24,6 @@ export function useWorkoutActions(
         notes: entry.notes || undefined,
         rpe: entry.rpe ?? undefined,
         sourceEntry: entry,
-        skipDetailReopen: options?.skipDetailReopen,
       });
     },
     [logWorkoutMutation],
@@ -118,21 +62,15 @@ export function useWorkoutActions(
   );
 
   return {
-    detailEntry,
-    setDetailEntry,
     skipConfirmEntry,
     setSkipConfirmEntry,
-    openDetailDialog,
-    handleSaveFromDetail,
     handleMarkComplete,
     handleSkip,
     confirmSkip,
     handleChangeStatus,
     handleDelete,
     updateStatusMutation,
-    updateDayMutation,
     logWorkoutMutation,
-    updateWorkoutMutation,
     deleteWorkoutMutation,
     deletePlanDayMutation,
   };
