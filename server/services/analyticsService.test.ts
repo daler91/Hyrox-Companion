@@ -262,6 +262,19 @@ describe("calculateTrainingOverview", () => {
     expect(week2.workoutCount).toBe(1);
   });
 
+
+
+  it("groups Sunday logs into the same Monday-start week (UTC date semantics)", () => {
+    const logs = [
+      makeWorkoutLog({ id: "w1", date: "2026-01-11" }), // Sunday
+      makeWorkoutLog({ id: "w2", date: "2026-01-10" }), // Saturday
+    ];
+    const result = calculateTrainingOverview(logs, []);
+    expect(result.weeklySummaries).toHaveLength(1);
+    expect(result.weeklySummaries[0].weekStart).toBe("2026-01-05");
+    expect(result.weeklySummaries[0].workoutCount).toBe(2);
+  });
+
   it("collects workout dates", () => {
     const logs = [
       makeWorkoutLog({ id: "w1", date: "2026-01-13" }),

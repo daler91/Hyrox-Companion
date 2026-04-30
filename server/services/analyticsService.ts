@@ -144,16 +144,21 @@ export function calculateExerciseAnalytics(allSets: ExerciseSetWithDate[]): Reco
 }
 
 const mondayCache = new Map<string, string>();
+const MONDAY_CACHE_MAX_SIZE = 1000;
 function getMonday(dateStr: string): string {
   let res = mondayCache.get(dateStr);
   if (res) return res;
 
-  const d = new Date(dateStr + "T00:00:00");
+  const d = new Date(dateStr + "T00:00:00Z");
   const day = d.getDay();
   const diff = day === 0 ? -6 : 1 - day;
   d.setDate(d.getDate() + diff);
   res = d.toISOString().split("T")[0];
   mondayCache.set(dateStr, res);
+  if (mondayCache.size > MONDAY_CACHE_MAX_SIZE) {
+    const oldestKey = mondayCache.keys().next().value;
+    if (oldestKey) mondayCache.delete(oldestKey);
+  }
   return res;
 }
 
