@@ -1,6 +1,6 @@
 import type { TimelineEntry } from "@shared/schema";
 import { MessageSquare, RotateCcw, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { getStatusBadge } from "@/components/timeline/timeline-workout-card/utils";
 import { Button } from "@/components/ui/button";
@@ -37,11 +37,6 @@ export function SkippedSheet({
 }: SkippedSheetProps) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
-  // Reset destructive-action arm state whenever a different entry is selected.
-  // Keeping this in an effect avoids render-time state updates.
-  useEffect(() => {
-    setConfirmingDelete(false);
-  }, [entry?.id]);
 
   const handleSheetOpenChange = (open: boolean) => {
     if (open) return;

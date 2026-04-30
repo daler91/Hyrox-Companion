@@ -668,6 +668,7 @@ export default function Timeline() {
           />
 
           <SkippedSheet
+            key={skippedEntry?.id ?? "skipped-sheet"}
             entry={skippedEntry}
             onClose={() => setSkippedEntry(null)}
             onAskCoach={() => {
@@ -685,6 +686,7 @@ export default function Timeline() {
           />
 
           <ReviewSurface
+            key={reviewEntry?.id ?? "review-surface"}
             entry={reviewEntry}
             onClose={() => setReviewEntry(null)}
             onAskCoach={() => {
