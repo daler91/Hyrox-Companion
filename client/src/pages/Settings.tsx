@@ -89,15 +89,26 @@ export default function Settings() {
   const [showAdherenceInsights, setShowAdherenceInsights] = useState(true);
   const [aiCoachEnabled, setAiCoachEnabled] = useState(true);
   const [hasChanges, setHasChanges] = useState(false);
+  // Snapshot of the last server-committed values used as the baseline for
+  // dirty-state computation.
+  const baselineSnapshotRef = useRef<PreferencesSnapshot | null>(null);
   // Snapshot of values before the most recent save, used to offer an
   // "Undo" action on the post-save toast.
   const undoSnapshotRef = useRef<PreferencesSnapshot | null>(null);
-  // Tracks the last values we know the server has committed. Initialized
-  // from the preferences query once it loads, and kept in sync by
-  // saveMutation.onSuccess. Reading from here for the undo snapshot avoids
-  // the stale-query race where `preferences` lags behind back-to-back saves
-  // while invalidation is still refetching.
-  const lastCommittedRef = useRef<PreferencesSnapshot | null>(null);
+
+  const currentSnapshot = useCallback(
+    (): PreferencesSnapshot => ({
+      weightUnit,
+      distanceUnit,
+      weeklyGoal,
+      emailNotifications,
+      emailWeeklySummary,
+      emailMissedReminder,
+      showAdherenceInsights,
+      aiCoachEnabled,
+    }),
+    [weightUnit, distanceUnit, weeklyGoal, emailNotifications, emailWeeklySummary, emailMissedReminder, showAdherenceInsights, aiCoachEnabled],
+  );
 
   useEffect(() => {
     const params = new URLSearchParams(search);
@@ -143,24 +154,27 @@ export default function Settings() {
       setEmailMissedReminder(preferences.emailMissedReminder ?? true);
       setShowAdherenceInsights(preferences.showAdherenceInsights ?? true);
       setAiCoachEnabled(preferences.aiCoachEnabled ?? true);
-      // Seed the committed-state tracker the first time preferences load.
-      // Subsequent updates come from saveMutation.onSuccess so we don't
-      // clobber an in-flight undo target with a query refetch.
-      if (!lastCommittedRef.current) {
-        lastCommittedRef.current = preferencesToSnapshot(preferences);
+      // Seed the baseline snapshot on first load. After saves, onSuccess
+      // keeps the baseline in sync with committed values.
+      if (!baselineSnapshotRef.current) {
+        baselineSnapshotRef.current = preferencesToSnapshot(preferences);
       }
     }
   }, [preferences]);
+
+  useEffect(() => {
+    const baseline = baselineSnapshotRef.current;
+    if (!baseline) return;
+    setHasChanges(JSON.stringify(currentSnapshot()) !== JSON.stringify(baseline));
+  }, [currentSnapshot]);
 
   const saveMutation = useMutation({
     mutationFn: (data: SavePayload) => api.preferences.update(data),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.preferences }).catch(() => {});
-      // Promote the values we just persisted to the committed-state
-      // tracker so the NEXT save's undo snapshot sees these — not
-      // whatever the (still-invalidating) preferences query happens to
-      // return in the meantime.
-      lastCommittedRef.current = savePayloadToSnapshot(variables);
+      // Promote the saved values to the dirty-state baseline so we don't
+      // depend on the invalidating preferences query timing.
+      baselineSnapshotRef.current = savePayloadToSnapshot(variables);
       setHasChanges(false);
       const previous = undoSnapshotRef.current;
       toast({
@@ -211,12 +225,9 @@ export default function Settings() {
   }, [hasChanges]);
 
   const handleSave = useCallback(() => {
-    // Capture the pre-save values from the committed-state tracker so the
-    // post-save toast can offer Undo. Using lastCommittedRef instead of
-    // the `preferences` query means back-to-back saves don't race against
-    // a still-pending refetch.
-    undoSnapshotRef.current = lastCommittedRef.current
-      ? { ...lastCommittedRef.current }
+    // Capture the pre-save baseline so the post-save toast can offer Undo.
+    undoSnapshotRef.current = baselineSnapshotRef.current
+      ? { ...baselineSnapshotRef.current }
       : null;
     saveMutation.mutate({
       weightUnit,
@@ -229,8 +240,6 @@ export default function Settings() {
       aiCoachEnabled,
     });
   }, [saveMutation, weightUnit, distanceUnit, weeklyGoal, emailNotifications, emailWeeklySummary, emailMissedReminder, showAdherenceInsights, aiCoachEnabled]);
-
-  const markChanged = () => setHasChanges(true);
 
   const userName = getUserDisplayName(user);
 
@@ -274,35 +283,27 @@ export default function Settings() {
         aiCoachEnabled={aiCoachEnabled}
         onWeightUnitChange={(v) => {
           setWeightUnit(v);
-          markChanged();
         }}
         onDistanceUnitChange={(v) => {
           setDistanceUnit(v);
-          markChanged();
         }}
         onWeeklyGoalChange={(v) => {
           setWeeklyGoal(v);
-          markChanged();
         }}
         onEmailNotificationsChange={(v) => {
           setEmailNotifications(v);
-          markChanged();
         }}
         onEmailWeeklySummaryChange={(v) => {
           setEmailWeeklySummary(v);
-          markChanged();
         }}
         onEmailMissedReminderChange={(v) => {
           setEmailMissedReminder(v);
-          markChanged();
         }}
         onShowAdherenceInsightsChange={(v) => {
           setShowAdherenceInsights(v);
-          markChanged();
         }}
         onAiCoachEnabledChange={(v) => {
           setAiCoachEnabled(v);
-          markChanged();
         }}
       />
 
