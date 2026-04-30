@@ -34,7 +34,17 @@ function structuredExercises(
   exerciseBlocks: readonly string[],
   exerciseData: Readonly<Record<string, StructuredExercise>>,
 ): StructuredExercise[] {
-  return exerciseBlocks.map((id) => exerciseData[id]).filter(Boolean);
+  const result: StructuredExercise[] = [];
+  // ⚡ Bolt Performance Optimization:
+  // Replaced chained `.map(...).filter(...)` with a single for...of loop.
+  // This avoids an intermediate array allocation and a double O(N) traversal.
+  for (const id of exerciseBlocks) {
+    const ex = exerciseData[id];
+    if (ex) {
+      result.push(ex);
+    }
+  }
+  return result;
 }
 
 export function buildWorkoutSavePayload({

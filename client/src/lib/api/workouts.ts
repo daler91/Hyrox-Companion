@@ -94,9 +94,20 @@ export const workouts = {
     typedRequest<WorkoutLog & { exerciseSets?: ExerciseSet[] }>("POST", "/api/v1/workouts", data),
 
   list: (params?: { limit?: number; offset?: number }) => {
-    const qs = params
-      ? `?${new URLSearchParams(Object.entries(params).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)])).toString()}`
-      : "";
+    let qs = "";
+    if (params) {
+      // ⚡ Bolt Performance Optimization:
+      // Replaced chained `.filter(...).map(...)` on `Object.entries` with a single for...of loop.
+      // This eliminates an intermediate array allocation and a double O(N) traversal.
+      const searchParams = new URLSearchParams();
+      for (const [k, v] of Object.entries(params)) {
+        if (v != null) {
+          searchParams.append(k, String(v));
+        }
+      }
+      const searchString = searchParams.toString();
+      qs = searchString ? `?${searchString}` : "";
+    }
     return typedRequest<WorkoutLog[]>("GET", `/api/v1/workouts${qs}`);
   },
 

@@ -59,14 +59,20 @@ export function CategoryBreakdownTab({ dateParams }: CategoryBreakdownTabProps) 
 
   const pieData = useMemo(() => {
     if (!overview) return [];
-    return Object.entries(overview.categoryTotals)
-      .filter(([, v]) => v.count > 0)
-      .map(([cat, v]) => ({
-        name: categoryLabels[cat] ?? cat,
-        value: v.count,
-        fill: CATEGORY_COLORS[cat] ?? CATEGORY_COLORS.other,
-      }))
-      .sort((a, b) => b.value - a.value);
+    const result = [];
+    // ⚡ Bolt Performance Optimization:
+    // Replaced chained `.filter(...).map(...)` with a single for...of loop.
+    // This avoids an intermediate array allocation and a double O(N) traversal.
+    for (const [cat, v] of Object.entries(overview.categoryTotals)) {
+      if (v.count > 0) {
+        result.push({
+          name: categoryLabels[cat] ?? cat,
+          value: v.count,
+          fill: CATEGORY_COLORS[cat] ?? CATEGORY_COLORS.other,
+        });
+      }
+    }
+    return result.sort((a, b) => b.value - a.value);
   }, [overview]);
 
   if (isLoading) {
