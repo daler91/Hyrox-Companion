@@ -335,6 +335,19 @@ export default function Timeline() {
 
   const openSurface = useCallback(
     (entry: TimelineEntry) => {
+      const id = entryId(entry);
+      // If the exact same entry/surface is already open, keep the current
+      // sheet mounted. Re-closing and re-opening the same surface can cause
+      // mount loops in the detail view (observed as repeated refresh/reflow).
+      if (
+        (isFuturePlanned(entry) && previewEntry && entryId(previewEntry) === id) ||
+        (isLoggablePlanned(entry) && logEntry && entryId(logEntry) === id) ||
+        (isReviewable(entry) && reviewEntry && entryId(reviewEntry) === id) ||
+        (isSkipped(entry) && skippedEntry && entryId(skippedEntry) === id)
+      ) {
+        return;
+      }
+
       sheetEverOpenedRef.current = true;
       closeAllSurfaces();
       if (isFuturePlanned(entry)) {
@@ -356,7 +369,7 @@ export default function Timeline() {
       // No surface matched — header rows or annotation-only entries
       // don't have a click destination. Leave everything closed.
     },
-    [closeAllSurfaces],
+    [closeAllSurfaces, logEntry, previewEntry, reviewEntry, skippedEntry],
   );
 
   // The currently-open entry across all four surfaces. Drives the

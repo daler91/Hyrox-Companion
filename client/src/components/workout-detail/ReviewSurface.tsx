@@ -8,7 +8,7 @@ import {
   Sparkles,
   Trash2,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { RpeSelector } from "@/components/RpeSelector";
 import { getStatusBadge } from "@/components/timeline/timeline-workout-card/utils";
@@ -61,15 +61,13 @@ export function ReviewSurface({
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [lastEntryId, setLastEntryId] = useState<string | null>(entry?.id ?? null);
 
-  // Reseed transient state when a different entry opens the surface
-  // so we don't carry an open editor / arming-confirm across workouts.
-  if (entry && entry.id !== lastEntryId) {
-    setLastEntryId(entry.id);
+  // Reset transient UI state when the selected entry changes.
+  // Doing this in an effect avoids setState-during-render loops.
+  useEffect(() => {
     setEditorOpen(false);
     setConfirmingDelete(false);
-  }
+  }, [entry?.id]);
 
   if (!entry) return null;
 
