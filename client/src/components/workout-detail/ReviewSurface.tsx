@@ -103,10 +103,23 @@ export function ReviewSurface({
     onDelete?.(entry);
   };
 
+  const handleSheetOpenChange = (open: boolean) => {
+    if (open) return;
+    // Reset transient UI state on close so reopening the SAME card
+    // doesn't carry an armed delete-confirm or stale open editor
+    // across sessions — the entry-id reseed below only catches
+    // open transitions to a *different* card. Without this, a user
+    // who armed delete, dismissed the sheet, and reopened the same
+    // workout would delete on the very first tap.
+    setConfirmingDelete(false);
+    setEditorOpen(false);
+    onClose();
+  };
+
   return (
     <ResponsiveSheet
       open={!!entry}
-      onOpenChange={(open) => !open && onClose()}
+      onOpenChange={handleSheetOpenChange}
       title={
         <span className="flex flex-wrap items-center gap-2">
           {getStatusBadge(entry.status)}
