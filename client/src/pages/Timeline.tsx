@@ -44,7 +44,7 @@ import { ReviewSurface } from "@/components/workout-detail/ReviewSurface";
 import { SkippedSheet } from "@/components/workout-detail/SkippedSheet";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/hooks/useAuth";
+import { useIsAiCoachEnabled, useIsAuthUserLoaded, useIsAutoCoaching } from "@/hooks/useAuth";
 import { useMoveTimelineEntry } from "@/hooks/useMoveTimelineEntry";
 import { useOpenWorkoutId } from "@/hooks/useOpenWorkoutId";
 import { useTimelineState } from "@/hooks/useTimelineState";
@@ -285,10 +285,18 @@ function TimelineContent({
 
 
 export default function Timeline() {
-  const { user } = useAuth();
+  // Subscribe to specific user fields via primitive-returning selectors
+  // instead of the full useAuth() so the auto-coach polling (every 2s
+  // for up to 5min after a log) doesn't drag the entire timeline +
+  // virtualizer through a re-render on every poll. The polling is
+  // still driven by useAuth() callers higher up the tree (App,
+  // AppSidebar); we just don't subscribe to it here.
+  const aiCoachEnabled = useIsAiCoachEnabled();
+  const isAutoCoaching = useIsAutoCoaching();
+  const isAuthUserLoaded = useIsAuthUserLoaded();
   const { toast } = useToast();
   const isMobile = useIsMobile();
-  const { data, filters, onboarding, planImport, workoutActions, combine, selectedPlanId, setSelectedPlanId } = useTimelineState({ aiCoachEnabled: !!user?.aiCoachEnabled });
+  const { data, filters, onboarding, planImport, workoutActions, combine, selectedPlanId, setSelectedPlanId } = useTimelineState({ aiCoachEnabled });
 
   const { plans, plansLoading, personalRecords, timelineData, timelineLoading, annotations, isNewUser, todayRef, scrollToToday } = data;
   const { filterStatus, setFilterStatus, showAllPast, setShowAllPast, showAllFuture, setShowAllFuture, pastGroups, futureGroups, visiblePastGroups, visibleFutureGroups, hiddenPastCount, hiddenFutureCount } = filters;
@@ -402,12 +410,12 @@ export default function Timeline() {
   // Gate the AI Coach behind an explicit consent prompt when the user has
   // not yet opted in (aiCoachEnabled defaults to false for new users).
   const handleCoachToggle = useCallback((open: boolean) => {
-    if (open && user && !user.aiCoachEnabled) {
+    if (open && isAuthUserLoaded && !aiCoachEnabled) {
       setShowAIConsent(true);
       return;
     }
     setCoachOpen(open);
-  }, [user, setCoachOpen]);
+  }, [isAuthUserLoaded, aiCoachEnabled, setCoachOpen]);
 
   const handleAIConsentAccept = useCallback(() => {
     setShowAIConsent(false);
@@ -543,7 +551,7 @@ export default function Timeline() {
         <div className="max-w-5xl mx-auto space-y-6">
           <TimelineHeader />
 
-          <CoachReviewingIndicator isActive={!!user?.isAutoCoaching} />
+          <CoachReviewingIndicator isActive={isAutoCoaching} />
 
           <TimelineFilters
         plans={plans}
@@ -595,7 +603,7 @@ export default function Timeline() {
           handleCombine={handleCombine}
           combiningEntry={combiningEntry}
           personalRecords={personalRecords}
-          isAutoCoaching={!!user?.isAutoCoaching}
+          isAutoCoaching={isAutoCoaching}
           annotationsByDate={annotationsByDate}
           onAddAnnotation={handleAddAnnotation}
           onEditAnnotation={handleEditAnnotation}
