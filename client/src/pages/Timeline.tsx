@@ -44,7 +44,7 @@ import { ReviewSurface } from "@/components/workout-detail/ReviewSurface";
 import { SkippedSheet } from "@/components/workout-detail/SkippedSheet";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/hooks/useAuth";
+import { useIsAiCoachEnabled, useIsAuthUserLoaded, useIsAutoCoaching } from "@/hooks/useAuth";
 import { useMoveTimelineEntry } from "@/hooks/useMoveTimelineEntry";
 import { useOpenWorkoutId } from "@/hooks/useOpenWorkoutId";
 import { useTimelineState } from "@/hooks/useTimelineState";
@@ -285,10 +285,18 @@ function TimelineContent({
 
 
 export default function Timeline() {
-  const { user } = useAuth();
+  // Subscribe to specific user fields via primitive-returning selectors
+  // instead of the full useAuth() so the auto-coach polling (every 2s
+  // for up to 5min after a log) doesn't drag the entire timeline +
+  // virtualizer through a re-render on every poll. The polling is
+  // still driven by useAuth() callers higher up the tree (App,
+  // AppSidebar); we just don't subscribe to it here.
+  const aiCoachEnabled = useIsAiCoachEnabled();
+  const isAutoCoaching = useIsAutoCoaching();
+  const isAuthUserLoaded = useIsAuthUserLoaded();
   const { toast } = useToast();
   const isMobile = useIsMobile();
-  const { data, filters, onboarding, planImport, workoutActions, combine, selectedPlanId, setSelectedPlanId } = useTimelineState({ aiCoachEnabled: !!user?.aiCoachEnabled });
+  const { data, filters, onboarding, planImport, workoutActions, combine, selectedPlanId, setSelectedPlanId } = useTimelineState({ aiCoachEnabled });
 
   const { plans, plansLoading, personalRecords, timelineData, timelineLoading, annotations, isNewUser, todayRef, scrollToToday } = data;
   const { filterStatus, setFilterStatus, showAllPast, setShowAllPast, showAllFuture, setShowAllFuture, pastGroups, futureGroups, visiblePastGroups, visibleFutureGroups, hiddenPastCount, hiddenFutureCount } = filters;
@@ -310,6 +318,14 @@ export default function Timeline() {
 
   const { openWorkoutId, setOpenWorkoutId } = useOpenWorkoutId();
 
+  // Tracks whether any sheet has been opened in this session. We can't
+  // rely on `openSheetEntryId` alone for the state→URL sync because on
+  // initial mount with a deep-link URL, openSheetEntryId is null but
+  // the URL is non-null — clearing the URL there would wipe the deep
+  // link before URL→state can read it. The ref flips to true the first
+  // time openSurface puts a sheet on screen.
+  const sheetEverOpenedRef = useRef(false);
+
   const closeAllSurfaces = useCallback(() => {
     setPreviewEntry(null);
     setLogEntry(null);
@@ -319,6 +335,7 @@ export default function Timeline() {
 
   const openSurface = useCallback(
     (entry: TimelineEntry) => {
+      sheetEverOpenedRef.current = true;
       closeAllSurfaces();
       if (isFuturePlanned(entry)) {
         setPreviewEntry(entry);
@@ -350,30 +367,41 @@ export default function Timeline() {
     previewEntry ?? logEntry ?? reviewEntry ?? skippedEntry ?? null;
   const openSheetEntryId = openSheetEntry ? entryId(openSheetEntry) : null;
 
-  // State → URL: when one of the sheets opens or closes, mirror the
-  // active workout id into the ?workout= query string so deep links
-  // and browser back/forward stay in sync. setOpenWorkoutId has its
-  // own idempotency guard so this is safe to fire on every render.
+  // State → URL: when a sheet opens or closes, mirror the active
+  // workout id into the ?workout= query string. Skip writing on the
+  // initial mount before any sheet has been opened — otherwise we'd
+  // wipe a deep-link URL before URL→state can read it.
   useEffect(() => {
-    setOpenWorkoutId(openSheetEntryId);
+    if (openSheetEntryId !== null) {
+      sheetEverOpenedRef.current = true;
+      setOpenWorkoutId(openSheetEntryId);
+      return;
+    }
+    if (sheetEverOpenedRef.current) {
+      setOpenWorkoutId(null);
+    }
   }, [openSheetEntryId, setOpenWorkoutId]);
 
   // URL → state: deep links (`/?workout=<id>`) and browser back/forward
   // need to populate the right surface based on the entry's status.
   // Resolves the id against `timelineData` and dispatches through
-  // openSurface, which already classifies entries by status. Skips when
-  // the URL matches the current displayed surface to avoid loops with
-  // the state→URL effect above.
+  // openSurface, which already classifies entries by status. The
+  // `openSheetEntryId === openWorkoutId` early return is what stops
+  // this from looping with the state→URL effect — once the sheet's id
+  // matches the URL we have nothing to do, even if `timelineData`
+  // produced a fresh array reference (the `[]` default in
+  // useTimelineData makes that happen on every render before the
+  // first fetch resolves).
   useEffect(() => {
     if (!openWorkoutId) {
-      if (openSheetEntry) closeAllSurfaces();
+      if (openSheetEntryId !== null) closeAllSurfaces();
       return;
     }
     if (openSheetEntryId === openWorkoutId) return;
     const target = timelineData.find((e) => entryId(e) === openWorkoutId);
     if (!target) return; // entry not in cache yet — wait for refetch
     openSurface(target);
-  }, [openWorkoutId, openSheetEntryId, openSheetEntry, timelineData, openSurface, closeAllSurfaces]);
+  }, [openWorkoutId, openSheetEntryId, timelineData, openSurface, closeAllSurfaces]);
   const [annotationsDialogOpen, setAnnotationsDialogOpen] = useState(false);
   // Seeds the create form in AnnotationsDialog when the user clicks a row's
   // inline "+ Note" chip, so they don't have to re-pick the date.
@@ -382,12 +410,12 @@ export default function Timeline() {
   // Gate the AI Coach behind an explicit consent prompt when the user has
   // not yet opted in (aiCoachEnabled defaults to false for new users).
   const handleCoachToggle = useCallback((open: boolean) => {
-    if (open && user && !user.aiCoachEnabled) {
+    if (open && isAuthUserLoaded && !aiCoachEnabled) {
       setShowAIConsent(true);
       return;
     }
     setCoachOpen(open);
-  }, [user, setCoachOpen]);
+  }, [isAuthUserLoaded, aiCoachEnabled, setCoachOpen]);
 
   const handleAIConsentAccept = useCallback(() => {
     setShowAIConsent(false);
@@ -523,7 +551,7 @@ export default function Timeline() {
         <div className="max-w-5xl mx-auto space-y-6">
           <TimelineHeader />
 
-          <CoachReviewingIndicator isActive={!!user?.isAutoCoaching} />
+          <CoachReviewingIndicator isActive={isAutoCoaching} />
 
           <TimelineFilters
         plans={plans}
@@ -575,7 +603,7 @@ export default function Timeline() {
           handleCombine={handleCombine}
           combiningEntry={combiningEntry}
           personalRecords={personalRecords}
-          isAutoCoaching={!!user?.isAutoCoaching}
+          isAutoCoaching={isAutoCoaching}
           annotationsByDate={annotationsByDate}
           onAddAnnotation={handleAddAnnotation}
           onEditAnnotation={handleEditAnnotation}

@@ -125,3 +125,47 @@ function useTestAuthImpl() {
 }
 
 export const useAuth = shouldBypassAuth ? useTestAuthImpl : useClerkAuthImpl;
+
+/**
+ * Subscribes to a single boolean field on the auth user via React
+ * Query's `select` option. Because the query result is a primitive,
+ * structural sharing by-default doesn't apply — but a primitive's
+ * `===` is what determines whether useQuery re-renders the consumer,
+ * so subscribers only re-render when the boolean *actually* changes
+ * value. This matters during the 5-minute auto-coach polling window:
+ * the user query refetches every 2 seconds, but consumers of this
+ * helper stay stable until the field flips.
+ */
+function useAuthUserBoolean(field: "isAutoCoaching" | "aiCoachEnabled"): boolean {
+  // We can't use `enabled: !!isSignedIn` here without re-reading the
+  // Clerk hook, but every other useAuth call already gates the query;
+  // this subscriber just rides on the existing cache entry. When the
+  // user is signed out, the query has no data and select returns
+  // `false`, which is the right default.
+  const { data } = useQuery<User, Error, boolean>({
+    queryKey: QUERY_KEYS.authUser,
+    select: (user) => !!user?.[field],
+  });
+  return data ?? false;
+}
+
+export function useIsAutoCoaching(): boolean {
+  return useAuthUserBoolean("isAutoCoaching");
+}
+
+export function useIsAiCoachEnabled(): boolean {
+  return useAuthUserBoolean("aiCoachEnabled");
+}
+
+/**
+ * True once the auth-user query has data. Cheap subscription that
+ * doesn't churn on every poll — the boolean only flips on sign-in /
+ * sign-out, not on every refetch.
+ */
+export function useIsAuthUserLoaded(): boolean {
+  const { data } = useQuery<User, Error, boolean>({
+    queryKey: QUERY_KEYS.authUser,
+    select: (user) => !!user,
+  });
+  return data ?? false;
+}
