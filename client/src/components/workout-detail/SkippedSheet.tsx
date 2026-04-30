@@ -36,15 +36,7 @@ export function SkippedSheet({
   onDelete,
 }: SkippedSheetProps) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [lastEntryId, setLastEntryId] = useState<string | null>(entry?.id ?? null);
 
-  // Same close-vs-entry-change reset as ReviewSurface: id-only checks miss
-  // the close→reopen-same-card case, so the destructive button has to clear
-  // its arm state on close too.
-  if (entry && entry.id !== lastEntryId) {
-    setLastEntryId(entry.id);
-    setConfirmingDelete(false);
-  }
 
   const handleSheetOpenChange = (open: boolean) => {
     if (open) return;

@@ -61,15 +61,7 @@ export function ReviewSurface({
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [lastEntryId, setLastEntryId] = useState<string | null>(entry?.id ?? null);
 
-  // Reseed transient state when a different entry opens the surface
-  // so we don't carry an open editor / arming-confirm across workouts.
-  if (entry && entry.id !== lastEntryId) {
-    setLastEntryId(entry.id);
-    setEditorOpen(false);
-    setConfirmingDelete(false);
-  }
 
   if (!entry) return null;
 
