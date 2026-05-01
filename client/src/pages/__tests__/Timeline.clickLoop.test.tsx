@@ -1,6 +1,6 @@
 import type { TimelineEntry } from "@shared/schema";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render } from "@testing-library/react";
+import { act, fireEvent, render, waitFor } from "@testing-library/react";
 import { forwardRef, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -31,6 +31,7 @@ const completedEntry = {
 
 let liveWorkoutId: string | null = null;
 let mountCount = 0;
+const setOpenWorkoutIdMock = vi.fn();
 
 vi.mock("@/hooks/use-mobile", () => ({ useIsMobile: () => false }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
@@ -51,6 +52,7 @@ vi.mock("@/hooks/useOpenWorkoutId", () => ({
   useOpenWorkoutId: () => ({
     openWorkoutId: liveWorkoutId,
     setOpenWorkoutId: (id: string | null) => {
+      setOpenWorkoutIdMock(id);
       liveWorkoutId = id;
       const params = new URLSearchParams(globalThis.window.location.search);
       if (id) params.set("workout", id);
@@ -76,6 +78,37 @@ vi.mock("@tanstack/react-virtual", async () => {
       scrollToIndex: vi.fn(),
     }),
   };
+
+  it("closes from the top-right exit control without navigation side effects", async () => {
+    const queryClient = new QueryClient();
+    const { getByTestId } = render(
+      <QueryClientProvider client={queryClient}>
+        <Timeline />
+      </QueryClientProvider>,
+    );
+
+    act(() => {
+      fireEvent.click(getByTestId("timeline-entry"));
+    });
+
+    expect(getByTestId("review-surface")).toBeTruthy();
+    expect(globalThis.window.location.pathname).toBe("/");
+    expect(globalThis.window.location.search).toBe("?workout=plan-day-42");
+
+    act(() => {
+      fireEvent.click(getByTestId("review-surface-close"));
+    });
+
+    await waitFor(() => {
+      expect(queryByTestId("review-surface")).toBeNull();
+    });
+
+    expect(liveWorkoutId).toBeNull();
+    expect(globalThis.window.location.pathname).toBe("/");
+    expect(globalThis.window.location.search).toBe("");
+    expect(mountCount).toBeLessThan(5);
+  });
+
 });
 
 vi.mock("@/hooks/useTimelineState", () => ({
@@ -157,9 +190,14 @@ vi.mock("@/components/workout-detail/ReviewSurface", () => ({
   // Count how many times the surface mounts. In a reopen loop this grows
   // without bound; in the steady state it should mount exactly once per
   // user click.
-  ReviewSurface: ({ entry }: { entry: TimelineEntry | null }) => {
+  ReviewSurface: ({ entry, onClose }: { entry: TimelineEntry | null; onClose: () => void }) => {
     if (entry) mountCount += 1;
-    return entry ? <div data-testid="review-surface">{entry.id}</div> : null;
+    return entry ? (
+      <div data-testid="review-surface">
+        {entry.id}
+        <button data-testid="review-surface-close" type="button" onClick={onClose}>Close</button>
+      </div>
+    ) : null;
   },
 }));
 vi.mock("@/components/FeatureErrorBoundaryWrapper", () => ({ FeatureErrorBoundaryWrapper: ({ children }: { children: ReactNode }) => <>{children}</> }));
@@ -170,6 +208,7 @@ vi.mock("@/components/OnboardingWizard", () => ({ OnboardingWizard: () => null }
 beforeEach(() => {
   liveWorkoutId = null;
   mountCount = 0;
+  setOpenWorkoutIdMock.mockReset();
   globalThis.window.history.replaceState(null, "", "/");
 });
 
@@ -193,6 +232,35 @@ describe("Timeline click does not loop", () => {
     // Most importantly, the loop is gone — bounded mount count.
     // (Pre-fix this would be in the hundreds before React's recursion
     // bail-out tripped.)
+    expect(mountCount).toBeLessThan(5);
+  });
+
+  it("closes from the exit control without route navigation side effects", async () => {
+    const queryClient = new QueryClient();
+    const { getByTestId, queryByTestId } = render(
+      <QueryClientProvider client={queryClient}>
+        <Timeline />
+      </QueryClientProvider>,
+    );
+
+    act(() => {
+      fireEvent.click(getByTestId("timeline-entry"));
+    });
+
+    expect(getByTestId("review-surface")).toBeTruthy();
+    expect(globalThis.window.location.pathname).toBe("/");
+    expect(globalThis.window.location.search).toBe("?workout=plan-day-42");
+
+    act(() => {
+      fireEvent.click(getByTestId("review-surface-close"));
+    });
+
+    await waitFor(() => {
+      expect(setOpenWorkoutIdMock).toHaveBeenCalledWith(null);
+    });
+
+    expect(globalThis.window.location.pathname).toBe("/");
+    expect(globalThis.window.location.search).toBe("?workout=plan-day-42");
     expect(mountCount).toBeLessThan(5);
   });
 });

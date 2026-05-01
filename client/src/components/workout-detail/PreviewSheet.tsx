@@ -50,6 +50,7 @@ export function PreviewSheet({
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {onAskCoach ? (
             <Button
+              type="button"
               variant="default"
               onClick={() => onAskCoach(entry)}
               data-testid={`preview-ask-coach-${entry.id}`}
@@ -60,6 +61,7 @@ export function PreviewSheet({
           ) : null}
           {onMove ? (
             <Button
+              type="button"
               variant="outline"
               onClick={() => onMove(entry)}
               data-testid={`preview-move-${entry.id}`}
@@ -70,6 +72,7 @@ export function PreviewSheet({
           ) : null}
           {onSkip ? (
             <Button
+              type="button"
               variant="outline"
               onClick={() => onSkip(entry)}
               data-testid={`preview-skip-${entry.id}`}
@@ -80,6 +83,7 @@ export function PreviewSheet({
           ) : null}
           {onLogNow ? (
             <Button
+              type="button"
               variant="ghost"
               onClick={() => onLogNow(entry)}
               data-testid={`preview-log-now-${entry.id}`}

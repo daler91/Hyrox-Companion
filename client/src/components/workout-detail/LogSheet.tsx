@@ -171,6 +171,7 @@ export function LogSheet({
 
         <div className="space-y-2">
           <Button
+            type="button"
             className="w-full"
             size="lg"
             onClick={handleLog}
@@ -188,6 +189,7 @@ export function LogSheet({
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {onAskCoach ? (
               <Button
+                type="button"
                 variant="outline"
                 onClick={() => onAskCoach(entry)}
                 data-testid={`log-ask-coach-${entry.id}`}
@@ -198,6 +200,7 @@ export function LogSheet({
             ) : null}
             {onSkip ? (
               <Button
+                type="button"
                 variant="ghost"
                 onClick={() => onSkip(entry)}
                 data-testid={`log-skip-${entry.id}`}
