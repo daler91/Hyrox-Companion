@@ -78,37 +78,6 @@ vi.mock("@tanstack/react-virtual", async () => {
       scrollToIndex: vi.fn(),
     }),
   };
-
-  it("closes from the top-right exit control without navigation side effects", async () => {
-    const queryClient = new QueryClient();
-    const { getByTestId } = render(
-      <QueryClientProvider client={queryClient}>
-        <Timeline />
-      </QueryClientProvider>,
-    );
-
-    act(() => {
-      fireEvent.click(getByTestId("timeline-entry"));
-    });
-
-    expect(getByTestId("review-surface")).toBeTruthy();
-    expect(globalThis.window.location.pathname).toBe("/");
-    expect(globalThis.window.location.search).toBe("?workout=plan-day-42");
-
-    act(() => {
-      fireEvent.click(getByTestId("review-surface-close"));
-    });
-
-    await waitFor(() => {
-      expect(queryByTestId("review-surface")).toBeNull();
-    });
-
-    expect(liveWorkoutId).toBeNull();
-    expect(globalThis.window.location.pathname).toBe("/");
-    expect(globalThis.window.location.search).toBe("");
-    expect(mountCount).toBeLessThan(5);
-  });
-
 });
 
 vi.mock("@/hooks/useTimelineState", () => ({
@@ -237,7 +206,7 @@ describe("Timeline click does not loop", () => {
 
   it("closes from the exit control without route navigation side effects", async () => {
     const queryClient = new QueryClient();
-    const { getByTestId, queryByTestId } = render(
+    const { getByTestId } = render(
       <QueryClientProvider client={queryClient}>
         <Timeline />
       </QueryClientProvider>,
@@ -260,7 +229,8 @@ describe("Timeline click does not loop", () => {
     });
 
     expect(globalThis.window.location.pathname).toBe("/");
-    expect(globalThis.window.location.search).toBe("?workout=plan-day-42");
+    expect(setOpenWorkoutIdMock).toHaveBeenCalledWith("plan-day-42");
+    expect(setOpenWorkoutIdMock).toHaveBeenCalledWith(null);
     expect(mountCount).toBeLessThan(5);
   });
 });
