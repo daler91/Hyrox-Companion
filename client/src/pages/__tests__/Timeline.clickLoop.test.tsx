@@ -181,18 +181,25 @@ beforeEach(() => {
   globalThis.window.history.replaceState(null, "", "/");
 });
 
+function renderTimeline() {
+  const queryClient = new QueryClient();
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <Timeline />
+    </QueryClientProvider>,
+  );
+}
+
+function openCompletedWorkout(getByTestId: (id: string) => HTMLElement) {
+  act(() => {
+    fireEvent.click(getByTestId("timeline-entry"));
+  });
+}
+
 describe("Timeline click does not loop", () => {
   it("opens a completed workout exactly once and stays open", () => {
-    const queryClient = new QueryClient();
-    const { getByTestId } = render(
-      <QueryClientProvider client={queryClient}>
-        <Timeline />
-      </QueryClientProvider>,
-    );
-
-    act(() => {
-      fireEvent.click(getByTestId("timeline-entry"));
-    });
+    const { getByTestId } = renderTimeline();
+    openCompletedWorkout(getByTestId);
 
     // The surface should be on screen.
     expect(getByTestId("review-surface")).toBeTruthy();
@@ -205,16 +212,8 @@ describe("Timeline click does not loop", () => {
   });
 
   it("closes from the exit control without route navigation side effects", async () => {
-    const queryClient = new QueryClient();
-    const { getByTestId } = render(
-      <QueryClientProvider client={queryClient}>
-        <Timeline />
-      </QueryClientProvider>,
-    );
-
-    act(() => {
-      fireEvent.click(getByTestId("timeline-entry"));
-    });
+    const { getByTestId } = renderTimeline();
+    openCompletedWorkout(getByTestId);
 
     expect(getByTestId("review-surface")).toBeTruthy();
     expect(globalThis.window.location.pathname).toBe("/");
