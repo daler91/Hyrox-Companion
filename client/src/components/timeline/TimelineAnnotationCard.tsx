@@ -4,12 +4,9 @@ import { Pencil, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
-import {
-  TYPE_BORDER_COLORS,
-  TYPE_COLORS,
-  TYPE_LABELS,
-} from "./annotation-style";
+import { TYPE_BORDER_COLORS, TYPE_COLORS, TYPE_LABELS } from "./annotation-style";
 import { AnnotationTypeIcon } from "./AnnotationTypeIcon";
 
 interface TimelineAnnotationCardProps {
@@ -35,8 +32,7 @@ export function TimelineAnnotationCard({
   const label = TYPE_LABELS[type];
 
   // Inclusive day count — a single-day rest still reads as "1 day".
-  const days =
-    differenceInDays(parseISO(annotation.endDate), parseISO(annotation.startDate)) + 1;
+  const days = differenceInDays(parseISO(annotation.endDate), parseISO(annotation.startDate)) + 1;
   const dayLabel = days === 1 ? "1 day" : `${days} days`;
   const rangeLabel =
     annotation.startDate === annotation.endDate
@@ -61,29 +57,42 @@ export function TimelineAnnotationCard({
           <p className="mt-1 text-sm text-foreground break-words">{annotation.note}</p>
         ) : null}
       </div>
-      <div className="flex items-center gap-1 shrink-0">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={() => onEdit(annotation)}
-          aria-label={`Edit ${label} annotation`}
-          data-testid={`button-edit-annotation-${annotation.id}`}
-        >
-          <Pencil className="h-4 w-4" aria-hidden="true" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={() => onDelete(annotation.id)}
-          disabled={isDeleting}
-          aria-label={`Delete ${label} annotation`}
-          data-testid={`button-delete-annotation-${annotation.id}`}
-        >
-          <Trash2 className="h-4 w-4" aria-hidden="true" />
-        </Button>
-      </div>
+      <TooltipProvider delayDuration={300}>
+        <div className="flex items-center gap-1 shrink-0">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => onEdit(annotation)}
+                aria-label={`Edit ${label} annotation`}
+                data-testid={`button-edit-annotation-${annotation.id}`}
+              >
+                <Pencil className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Edit annotation</TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => onDelete(annotation.id)}
+                disabled={isDeleting}
+                aria-label={`Delete ${label} annotation`}
+                data-testid={`button-delete-annotation-${annotation.id}`}
+              >
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Delete annotation</TooltipContent>
+          </Tooltip>
+        </div>
+      </TooltipProvider>
     </article>
   );
 }
