@@ -76,6 +76,7 @@ export function SkippedSheet({
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {onUndoSkip && entry.planDayId ? (
             <Button
+              type="button"
               variant="default"
               onClick={() => onUndoSkip(entry)}
               data-testid={`skipped-undo-${entry.id}`}
@@ -86,6 +87,7 @@ export function SkippedSheet({
           ) : null}
           {onAskCoach ? (
             <Button
+              type="button"
               variant="outline"
               onClick={() => onAskCoach(entry)}
               data-testid={`skipped-ask-coach-${entry.id}`}
@@ -96,6 +98,7 @@ export function SkippedSheet({
           ) : null}
           {onDelete ? (
             <Button
+              type="button"
               variant={confirmingDelete ? "destructive" : "ghost"}
               onClick={handleDeleteClick}
               data-testid={`skipped-delete-${entry.id}`}

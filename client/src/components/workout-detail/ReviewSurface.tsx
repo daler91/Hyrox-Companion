@@ -243,6 +243,7 @@ export function ReviewSurface({
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {onAskCoach ? (
             <Button
+              type="button"
               variant="outline"
               onClick={() => onAskCoach(entry)}
               data-testid={`review-ask-coach-${entry.id}`}
@@ -253,6 +254,7 @@ export function ReviewSurface({
           ) : null}
           {onMarkPlanned && entry.planDayId ? (
             <Button
+              type="button"
               variant="outline"
               onClick={() => onMarkPlanned(entry)}
               data-testid={`review-mark-planned-${entry.id}`}
@@ -263,6 +265,7 @@ export function ReviewSurface({
           ) : null}
           {onDelete ? (
             <Button
+              type="button"
               variant={confirmingDelete ? "destructive" : "ghost"}
               onClick={handleDeleteClick}
               data-testid={`review-delete-${entry.id}`}
