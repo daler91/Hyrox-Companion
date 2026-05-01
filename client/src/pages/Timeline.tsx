@@ -48,7 +48,7 @@ import { useIsAiCoachEnabled, useIsAuthUserLoaded, useIsAutoCoaching } from "@/h
 import { useMoveTimelineEntry } from "@/hooks/useMoveTimelineEntry";
 import { useOpenWorkoutId } from "@/hooks/useOpenWorkoutId";
 import { useTimelineState } from "@/hooks/useTimelineState";
-import { entryId } from "@/hooks/workout-actions/timelineEntry";
+import { entryId, surfaceId } from "@/hooks/workout-actions/timelineEntry";
 import { api, QUERY_KEYS } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
 
@@ -339,16 +339,23 @@ export default function Timeline() {
 
   const openSurface = useCallback(
     (entry: TimelineEntry) => {
-      const id = entryId(entry);
+      const id = surfaceId(entry);
       // If the exact same entry/surface is already open, keep the current
       // sheet mounted. Re-closing and re-opening the same surface can cause
       // mount loops in the detail view (observed as repeated refresh/reflow).
       if (
+<<<<<<< codex/update-click-routing-for-missed-entries
         (isFuturePlanned(entry) && previewEntry && entryId(previewEntry) === id) ||
         (isLoggablePlanned(entry) && logEntry && entryId(logEntry) === id) ||
         (isMissed(entry) && logEntry && entryId(logEntry) === id) ||
         (isReviewable(entry) && reviewEntry && entryId(reviewEntry) === id) ||
         (isSkipped(entry) && skippedEntry && entryId(skippedEntry) === id)
+=======
+        (isFuturePlanned(entry) && previewEntry && surfaceId(previewEntry) === id) ||
+        (isLoggablePlanned(entry) && logEntry && surfaceId(logEntry) === id) ||
+        (isReviewable(entry) && reviewEntry && surfaceId(reviewEntry) === id) ||
+        (isSkipped(entry) && skippedEntry && surfaceId(skippedEntry) === id)
+>>>>>>> main
       ) {
         return;
       }
@@ -387,7 +394,7 @@ export default function Timeline() {
   // populate a different sheet.
   const openSheetEntry =
     previewEntry ?? logEntry ?? reviewEntry ?? skippedEntry ?? null;
-  const openSheetEntryId = openSheetEntry ? entryId(openSheetEntry) : null;
+  const openSheetEntryId = openSheetEntry ? surfaceId(openSheetEntry) : null;
 
   // State → URL: when a sheet opens or closes, mirror the active
   // workout id into the ?workout= query string. Skip writing on the
@@ -396,13 +403,15 @@ export default function Timeline() {
   useEffect(() => {
     if (openSheetEntryId !== null) {
       sheetEverOpenedRef.current = true;
-      setOpenWorkoutId(openSheetEntryId);
+      if (openWorkoutId !== openSheetEntryId) {
+        setOpenWorkoutId(openSheetEntryId);
+      }
       return;
     }
-    if (sheetEverOpenedRef.current) {
+    if (sheetEverOpenedRef.current && openWorkoutId !== null) {
       setOpenWorkoutId(null);
     }
-  }, [openSheetEntryId, setOpenWorkoutId]);
+  }, [openSheetEntryId, openWorkoutId, setOpenWorkoutId]);
 
   // URL → state: deep links (`/?workout=<id>`) and browser back/forward
   // need to populate the right surface based on the entry's status.
@@ -420,10 +429,11 @@ export default function Timeline() {
       return;
     }
     if (openSheetEntryId === openWorkoutId) return;
-    const target = timelineData.find((e) => entryId(e) === openWorkoutId);
+    const target = timelineData.find((e) => surfaceId(e) === openWorkoutId || entryId(e) === openWorkoutId);
     if (!target) return; // entry not in cache yet — wait for refetch
+    if (openSheetEntry && surfaceId(openSheetEntry) === surfaceId(target)) return;
     openSurface(target);
-  }, [openWorkoutId, openSheetEntryId, timelineData, openSurface, closeAllSurfaces]);
+  }, [openWorkoutId, openSheetEntry, openSheetEntryId, timelineData, openSurface, closeAllSurfaces]);
   const [annotationsDialogOpen, setAnnotationsDialogOpen] = useState(false);
   // Seeds the create form in AnnotationsDialog when the user clicks a row's
   // inline "+ Note" chip, so they don't have to re-pick the date.
