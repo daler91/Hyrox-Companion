@@ -344,11 +344,11 @@ export default function Timeline() {
       // sheet mounted. Re-closing and re-opening the same surface can cause
       // mount loops in the detail view (observed as repeated refresh/reflow).
       if (
-        (isFuturePlanned(entry) && previewEntry && entryId(previewEntry) === id) ||
-        (isLoggablePlanned(entry) && logEntry && entryId(logEntry) === id) ||
-        (isMissed(entry) && logEntry && entryId(logEntry) === id) ||
-        (isReviewable(entry) && reviewEntry && entryId(reviewEntry) === id) ||
-        (isSkipped(entry) && skippedEntry && entryId(skippedEntry) === id)
+        (isFuturePlanned(entry) && previewEntry && surfaceId(previewEntry) === id) ||
+        (isLoggablePlanned(entry) && logEntry && surfaceId(logEntry) === id) ||
+        (isMissed(entry) && logEntry && surfaceId(logEntry) === id) ||
+        (isReviewable(entry) && reviewEntry && surfaceId(reviewEntry) === id) ||
+        (isSkipped(entry) && skippedEntry && surfaceId(skippedEntry) === id)
       ) {
         return;
       }
@@ -418,6 +418,20 @@ export default function Timeline() {
   // first fetch resolves).
   useEffect(() => {
     if (!openWorkoutId) {
+      // The state→URL effect runs first in this same effect cycle and
+      // may have just called setOpenWorkoutId(openSheetEntryId) via
+      // wouter (which mutates window.history synchronously). Our closure
+      // still sees the pre-write null, so a naive close here would race
+      // with the click that just opened the sheet, ping-ponging with
+      // state→URL into an infinite reopen loop. Re-read the URL
+      // synchronously to detect that pending write before discarding
+      // open surfaces.
+      if (typeof globalThis.window !== "undefined") {
+        const liveWorkoutId = new URLSearchParams(
+          globalThis.window.location.search,
+        ).get("workout");
+        if (liveWorkoutId !== null) return;
+      }
       if (openSheetEntryId !== null) closeAllSurfaces();
       return;
     }
