@@ -52,3 +52,6 @@
 ## 2026-04-26 - Module-level React Array Caching for getFields
 **Learning:** Returning fresh array references derived from `.filter()` or inline literal arrays (e.g., `['reps', 'weight']`) on every call to configuration helper functions like `getFields(exerciseName)` breaks React memoization. When these arrays are passed to child components or dependency arrays, they cause complete re-renders of list items (like `ExerciseRow` and `InlineSetEditor`) even when state hasn't conceptually changed.
 **Action:** Use a module-level `Map` cache and module-scoped `DEFAULT_FIELDS` constants to securely memoize and return the same memory references for static configurations. Replace `.filter` with `for...of` internally to remove multiple O(N) Array passes.
+## 2026-04-30 - Replace Array map/filter chains with single loops
+**Learning:** In Javascript, chaining array methods like `.filter().map()` or `.map().filter()` causes the engine to iterate over the array multiple times and create intermediate array objects that are immediately discarded. In high-frequency React hooks, this strains garbage collection and wastes CPU.
+**Action:** Consolidate sequential `.map` and `.filter` operations into a single standard `for...of` loop or `.reduce()`. This guarantees a single pass over the array and prevents temporary array allocations.
