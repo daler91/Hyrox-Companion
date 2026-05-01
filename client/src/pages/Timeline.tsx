@@ -83,6 +83,10 @@ function isSkipped(entry: TimelineEntry): boolean {
   return entry.status === "skipped";
 }
 
+function isMissed(entry: TimelineEntry): boolean {
+  return entry.status === "missed" && Boolean(entry.planDayId);
+}
+
 type TimelineState = ReturnType<typeof useTimelineState>;
 type TimelineData = TimelineState["data"];
 type TimelineFiltersState = TimelineState["filters"];
@@ -342,6 +346,7 @@ export default function Timeline() {
       if (
         (isFuturePlanned(entry) && previewEntry && entryId(previewEntry) === id) ||
         (isLoggablePlanned(entry) && logEntry && entryId(logEntry) === id) ||
+        (isMissed(entry) && logEntry && entryId(logEntry) === id) ||
         (isReviewable(entry) && reviewEntry && entryId(reviewEntry) === id) ||
         (isSkipped(entry) && skippedEntry && entryId(skippedEntry) === id)
       ) {
@@ -355,6 +360,10 @@ export default function Timeline() {
         return;
       }
       if (isLoggablePlanned(entry)) {
+        setLogEntry(entry);
+        return;
+      }
+      if (isMissed(entry)) {
         setLogEntry(entry);
         return;
       }
