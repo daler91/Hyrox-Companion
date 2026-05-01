@@ -337,6 +337,13 @@ export default function Timeline() {
     setSkippedEntry(null);
   }, []);
 
+  const closeAllSurfacesAndClearUrl = useCallback(() => {
+    closeAllSurfaces();
+    if (openWorkoutId !== null) {
+      setOpenWorkoutId(null);
+    }
+  }, [closeAllSurfaces, openWorkoutId, setOpenWorkoutId]);
+
   const openSurface = useCallback(
     (entry: TimelineEntry) => {
       const id = surfaceId(entry);
@@ -671,7 +678,7 @@ export default function Timeline() {
 
           <LogSheet
             entry={logEntry}
-            onClose={() => setLogEntry(null)}
+            onClose={closeAllSurfacesAndClearUrl}
             isLogging={logWorkoutMutation.isPending}
             onLogAsPlanned={(entry, rpeOverride) => {
               setLogEntry(null);
@@ -696,7 +703,7 @@ export default function Timeline() {
           <SkippedSheet
             key={skippedEntry?.id ?? "skipped-sheet"}
             entry={skippedEntry}
-            onClose={() => setSkippedEntry(null)}
+            onClose={closeAllSurfacesAndClearUrl}
             onAskCoach={() => {
               setSkippedEntry(null);
               handleCoachToggle(true);
@@ -714,7 +721,7 @@ export default function Timeline() {
           <ReviewSurface
             key={reviewEntry?.id ?? "review-surface"}
             entry={reviewEntry}
-            onClose={() => setReviewEntry(null)}
+            onClose={closeAllSurfacesAndClearUrl}
             onAskCoach={() => {
               setReviewEntry(null);
               handleCoachToggle(true);
@@ -731,7 +738,7 @@ export default function Timeline() {
 
           <PreviewSheet
             entry={previewEntry}
-            onClose={() => setPreviewEntry(null)}
+            onClose={closeAllSurfacesAndClearUrl}
             onAskCoach={() => {
               setPreviewEntry(null);
               handleCoachToggle(true);
