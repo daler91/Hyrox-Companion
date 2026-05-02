@@ -12,16 +12,6 @@ CREATE TABLE IF NOT EXISTS "data_remediation_log" (
 );
 --> statement-breakpoint
 
--- Hard safety checks that legacy imports may violate.
-ALTER TABLE "maf_profile"
-  ADD CONSTRAINT "maf_profile_final_hr_positive_check"
-  CHECK ("final_hr" > 0);
---> statement-breakpoint
-ALTER TABLE "maf_workout_analysis"
-  ADD CONSTRAINT "maf_workout_analysis_compliance_pct_range_check"
-  CHECK ("compliance_pct" IS NULL OR ("compliance_pct" BETWEEN 0 AND 100));
---> statement-breakpoint
-
 -- Validation view: rows indicate violations that should be investigated.
 CREATE OR REPLACE VIEW "v_maf_post_migration_validation" AS
 SELECT 'missing_fk_user_training_style' AS check_name, uts.id::text AS record_id,
@@ -149,3 +139,18 @@ BEGIN
       AND id <> kept_id;
   END LOOP;
 END $$;
+--> statement-breakpoint
+
+-- Add constraints only after remediation, and defer row validation until now.
+ALTER TABLE "maf_profile"
+  ADD CONSTRAINT "maf_profile_final_hr_positive_check"
+  CHECK ("final_hr" > 0) NOT VALID;
+--> statement-breakpoint
+ALTER TABLE "maf_workout_analysis"
+  ADD CONSTRAINT "maf_workout_analysis_compliance_pct_range_check"
+  CHECK ("compliance_pct" IS NULL OR ("compliance_pct" BETWEEN 0 AND 100)) NOT VALID;
+--> statement-breakpoint
+ALTER TABLE "maf_profile" VALIDATE CONSTRAINT "maf_profile_final_hr_positive_check";
+--> statement-breakpoint
+ALTER TABLE "maf_workout_analysis" VALIDATE CONSTRAINT "maf_workout_analysis_compliance_pct_range_check";
+
