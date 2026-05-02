@@ -509,6 +509,9 @@ describe("coachService", () => {
         undefined,
         undefined,
         "user-1",
+        expect.objectContaining({
+          promptSuffix: expect.stringContaining("Training style:"),
+        }),
       );
       expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
         "day-2",
@@ -610,6 +613,9 @@ describe("coachService", () => {
         undefined,
         undefined,
         "user-1",
+        expect.objectContaining({
+          promptSuffix: expect.stringContaining("Training style:"),
+        }),
       );
     });
   });

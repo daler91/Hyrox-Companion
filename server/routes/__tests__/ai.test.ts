@@ -616,6 +616,9 @@ describe("POST /api/timeline/ai-suggestions", () => {
       undefined,
       undefined,
       "test_user_id",
+      expect.objectContaining({
+        promptSuffix: expect.stringContaining("Training style:"),
+      }),
     );
   });
 
