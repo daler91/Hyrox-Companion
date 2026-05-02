@@ -66,12 +66,11 @@ export class UserStorage {
       .returning();
 
     if (
-      user &&
-      user.trainingStyleId === "maf_method" &&
+      user?.trainingStyleId === "maf_method" &&
       user.mafAge != null &&
       user.mafConsistency != null &&
       user.mafTrend != null &&
-      user?.mafInjuryIllnessMedication != null
+      user.mafInjuryIllnessMedication != null
     ) {
       const maf = calculateMafHr({
         age: user.mafAge,

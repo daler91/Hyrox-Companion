@@ -51,9 +51,16 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     const days = Math.floor((Date.now() - new Date(w.date).getTime()) / (1000 * 60 * 60 * 24));
     return days >= 0 && days <= 7;
   }).length;
+  const experienceLevel: "beginner" | "intermediate" | "advanced" =
+    totalWorkouts < 20
+      ? "beginner"
+      : totalWorkouts < 80
+        ? "intermediate"
+        : "advanced";
+
   const decisionTree = decideTrainingState({
     profile: {
-      experienceLevel: totalWorkouts < 20 ? "beginner" : totalWorkouts < 80 ? "intermediate" : "advanced",
+      experienceLevel,
       primaryGoal: "improve",
     },
     latestWorkouts: { completedLast7d, avgRpeLast3: rpeTrend.avgRpeLast3 },
