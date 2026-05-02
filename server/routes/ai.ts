@@ -313,6 +313,26 @@ router.post("/api/v1/timeline/ai-suggestions", ...protectedMutationGuards, rateL
     }
   }));
 
+
+router.get("/api/v1/timeline/ai-suggestions/debug/:workoutId", ...protectedMutationGuards, asyncHandler(async (req: ExpressRequest<{workoutId: string}>, res: Response) => {
+    const userId = getUserId(req);
+    const day = await storage.plans.getPlanDay(req.params.workoutId, userId);
+    if (!day) {
+      sendNotFound(res, "Plan day not found");
+      return;
+    }
+    res.json({
+      workoutId: day.id,
+      focus: day.focus,
+      aiSource: day.aiSource,
+      aiRationale: day.aiRationale,
+      aiNoteUpdatedAt: day.aiNoteUpdatedAt,
+      trace: day.aiInputsUsed?.recommendationTrace ?? null,
+      debugSummary: day.aiInputsUsed?.recommendationTrace
+        ? `Generated for style ${day.aiInputsUsed.recommendationTrace.trainingStyleId} in phase ${day.aiInputsUsed.recommendationTrace.phase} using ${day.aiInputsUsed.recommendationTrace.strategyRuleVersion} and ${day.aiInputsUsed.recommendationTrace.promptBundleVersion}.`
+        : null,
+    });
+  }));
 router.post("/api/v1/timeline/ai-suggestions/apply", ...protectedMutationGuards, rateLimiter("suggestionApply", 10), aiConsentCheck, validateBody(applyTimelineSuggestionSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof applyTimelineSuggestionSchema>>, res: Response) => {
     const userId = getUserId(req);
     const result = await applyTimelineAiSuggestion(userId, req.body, reqLogger(req));

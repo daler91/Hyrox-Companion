@@ -28,10 +28,19 @@ export interface TimelineSuggestion {
   priority: "low" | "medium" | "high";
 }
 
+export interface RecommendationTraceMetadata {
+  trainingStyleId: string;
+  phase: string;
+  strategyRuleVersion: string;
+  promptBundleVersion: string;
+  rationaleCodes?: string[];
+}
+
 export interface TimelineSuggestionsResult {
   suggestions: TimelineSuggestion[];
   ragInfo?: ReturnType<typeof sanitizeRagInfo>;
   message?: string;
+  responseMetadata?: Record<string, RecommendationTraceMetadata>;
 }
 
 export interface ApplyTimelineSuggestionInput {
@@ -86,6 +95,37 @@ function buildTextUpdateValue(
 
 function normalizeAiSource(source: ApplyTimelineSuggestionInput["aiSource"]): "rag" | "legacy" | null {
   return source === "rag" || source === "legacy" ? source : null;
+}
+
+const STRATEGY_RULE_VERSION = "training-decision-engine@v1";
+const PROMPT_BUNDLE_VERSION = "timeline-suggestion@v1";
+
+function resolveTrainingPhaseLabel(trainingContext: Awaited<ReturnType<typeof buildAIContext>>["trainingContext"]): string {
+  return trainingContext.coachingInsights?.decisionTree?.currentPhase
+    ?? trainingContext.coachingInsights?.planPhase?.phaseLabel
+    ?? "unknown";
+}
+
+async function persistRecommendationTraceForSuggestions(
+  userId: string,
+  suggestions: TimelineSuggestion[],
+  traceMetadata: RecommendationTraceMetadata,
+  log: Logger,
+): Promise<void> {
+  await Promise.all(suggestions.map(async (suggestion) => {
+    try {
+      const day = await storage.plans.getPlanDay(suggestion.workoutId, userId);
+      if (!day) return;
+      await storage.plans.updatePlanDay(suggestion.workoutId, {
+        aiInputsUsed: {
+          ...(day.aiInputsUsed ?? {}),
+          recommendationTrace: traceMetadata,
+        },
+      }, userId);
+    } catch (err) {
+      log.warn({ err, userId, workoutId: suggestion.workoutId }, "[timeline] Failed to persist recommendation trace metadata");
+    }
+  }));
 }
 
 function buildUnappliedStructuredResult(
@@ -212,6 +252,14 @@ export async function generateTimelineAiSuggestions(
     return acc;
   }, []);
 
+  const traceMetadata: RecommendationTraceMetadata = {
+    trainingStyleId: resolvedStyle.trainingStyleId,
+    phase: resolveTrainingPhaseLabel(aiContext.trainingContext),
+    strategyRuleVersion: STRATEGY_RULE_VERSION,
+    promptBundleVersion: PROMPT_BUNDLE_VERSION,
+    rationaleCodes: aiContext.trainingContext.coachingInsights?.decisionTree?.rationaleCodes ?? undefined,
+  };
+
   const forcedSafetyMessage = buildSafetyReviewNote(safetySignals);
   const surfacedSuggestions = forcedSafetyMessage && suggestions.length === 0
     ? [{
@@ -226,9 +274,12 @@ export async function generateTimelineAiSuggestions(
       }]
     : suggestions;
 
+  await persistRecommendationTraceForSuggestions(userId, surfacedSuggestions, traceMetadata, log);
+
   return {
     suggestions: surfacedSuggestions,
     ragInfo: sanitizeRagInfo(aiContext.ragInfo),
+    responseMetadata: Object.fromEntries(surfacedSuggestions.map((s) => [s.workoutId, traceMetadata])),
     ...(forcedSafetyMessage ? { message: forcedSafetyMessage } : {}),
   };
 }
@@ -248,10 +299,21 @@ export async function applyTimelineAiSuggestion(
     return undefined;
   }
 
+  const serverTrace: RecommendationTraceMetadata = day.aiInputsUsed?.recommendationTrace ?? {
+    trainingStyleId: resolveTrainingStyle(user?.trainingStyleId).trainingStyleId,
+    phase: day.aiInputsUsed?.planPhase ?? "unknown",
+    strategyRuleVersion: STRATEGY_RULE_VERSION,
+    promptBundleVersion: PROMPT_BUNDLE_VERSION,
+  };
+
   const aiMetadata: UpdatePlanDay = {
     aiSource: normalizeAiSource(input.aiSource),
     aiRationale: input.rationale ? input.rationale.slice(0, 400) : null,
     aiNoteUpdatedAt: new Date(),
+    aiInputsUsed: {
+      ...(day.aiInputsUsed ?? {}),
+      recommendationTrace: serverTrace,
+    },
   };
 
   const shouldWriteStructuredRows = existingExerciseSets.length > 0 && input.targetField !== "notes";

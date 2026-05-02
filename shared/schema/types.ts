@@ -108,6 +108,13 @@ export const coachNoteInputsSchema = z.object({
   ragUsed: z.boolean().optional(),
   recentWorkoutCount: z.number().int().nonnegative().optional(),
   planGoalPresent: z.boolean().optional(),
+  recommendationTrace: z.object({
+    trainingStyleId: z.string(),
+    phase: z.string(),
+    strategyRuleVersion: z.string(),
+    promptBundleVersion: z.string(),
+    rationaleCodes: z.array(z.string()).optional(),
+  }).optional(),
 });
 export type CoachNoteInputs = z.infer<typeof coachNoteInputsSchema>;
 
