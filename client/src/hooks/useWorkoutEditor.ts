@@ -1,6 +1,6 @@
 import { type DragEndEvent,KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { arrayMove,sortableKeyboardCoordinates } from "@dnd-kit/sortable";
-import { EXERCISE_DEFINITIONS, type ExerciseName,type ParsedExercise } from "@shared/schema";
+import { EXERCISE_DEFINITIONS, normalizeExerciseName, type ExerciseName,type ParsedExercise } from "@shared/schema";
 import { useMutation } from "@tanstack/react-query";
 import type { MutableRefObject } from "react";
 import { useCallback,useEffect, useRef, useState } from "react";
@@ -111,9 +111,9 @@ interface ParsedBlockBuild {
 }
 
 function buildBlockFromParsed(ex: ParsedExercise): ParsedBlockBuild {
-  const rawName = ex.exerciseName as ExerciseName;
-  const isKnown = rawName in EXERCISE_DEFINITIONS;
-  const exName = isKnown ? rawName : ("custom" as ExerciseName);
+  const normalizedName = normalizeExerciseName(ex.exerciseName);
+  const isKnown = normalizedName !== null;
+  const exName = (normalizedName ?? "custom") as ExerciseName;
   const customLabel = isKnown ? undefined : (ex.customLabel || ex.exerciseName);
   const blockKey = exName === "custom" ? `custom:${customLabel ?? ""}` : exName;
 
@@ -122,7 +122,7 @@ function buildBlockFromParsed(ex: ParsedExercise): ParsedBlockBuild {
     blockKey,
     data: {
       exerciseName: exName,
-      category: isKnown ? EXERCISE_DEFINITIONS[rawName].category : ex.category,
+      category: isKnown ? EXERCISE_DEFINITIONS[exName].category : ex.category,
       customLabel,
       confidence: ex.confidence,
       missingFields: ex.missingFields,
