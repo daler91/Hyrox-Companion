@@ -7,6 +7,12 @@ import { formatExerciseSetsForPrompt, type PromptExerciseSet } from "../prompts/
 import { GEMINI_SUGGESTIONS_MODEL, getAiClient, retryWithBackoff, trackUsageFromResponse } from "./client";
 import type { TrainingContext } from "./types";
 
+export interface SuggestionPromptOptions {
+  promptPrefix?: string;
+  promptSuffix?: string;
+  systemInstructionAppendix?: string;
+}
+
 
 export interface UpcomingWorkout {
   id: string;
@@ -235,6 +241,7 @@ export function buildSuggestionsPrompt(
   upcomingWorkouts: UpcomingWorkout[],
   planGoal?: string,
   coachingMaterials?: string,
+  promptOptions?: SuggestionPromptOptions,
 ): string {
   const sections = buildPromptDataSections(
     trainingContext,
@@ -244,7 +251,9 @@ export function buildSuggestionsPrompt(
   );
   sections.push(
     `Analyze the coaching analysis and athlete data above. Make modifications that actively improve this athlete's training. Return [] ONLY if the plan genuinely needs zero adjustments.`,
+    ...(promptOptions?.promptSuffix ? [promptOptions.promptSuffix] : []),
   );
+  if (promptOptions?.promptPrefix) sections.unshift(promptOptions.promptPrefix);
   return sections.filter(Boolean).join("\n");
 }
 
@@ -253,6 +262,7 @@ function buildReviewNotesPrompt(
   upcomingWorkouts: UpcomingWorkout[],
   planGoal?: string,
   coachingMaterials?: string,
+  promptOptions?: SuggestionPromptOptions,
 ): string {
   const sections = buildPromptDataSections(
     trainingContext,
@@ -262,7 +272,9 @@ function buildReviewNotesPrompt(
   );
   sections.push(
     `Write exactly one review note per upcoming workout ID listed above. Do NOT propose a modification, do NOT return suggestions, and do NOT return an empty array. Return a JSON array of objects with exactly two fields: { "workoutId": string, "note": string }.`,
+    ...(promptOptions?.promptSuffix ? [promptOptions.promptSuffix] : []),
   );
+  if (promptOptions?.promptPrefix) sections.unshift(promptOptions.promptPrefix);
   return sections.filter(Boolean).join("\n");
 }
 
@@ -318,6 +330,7 @@ export async function generateReviewNotes(
   planGoal?: string,
   coachingMaterials?: string,
   userId?: string,
+  promptOptions?: SuggestionPromptOptions,
 ): Promise<ReviewNote[]> {
   try {
     if (upcomingWorkouts.length === 0) return [];
@@ -327,6 +340,7 @@ export async function generateReviewNotes(
       upcomingWorkouts,
       planGoal,
       coachingMaterials,
+      promptOptions,
     );
 
     const response = await retryWithBackoff(
@@ -334,7 +348,9 @@ export async function generateReviewNotes(
         getAiClient().models.generateContent({
           model: GEMINI_SUGGESTIONS_MODEL,
           config: {
-            systemInstruction: REVIEW_NOTES_SYSTEM_PROMPT,
+            systemInstruction: [REVIEW_NOTES_SYSTEM_PROMPT, promptOptions?.systemInstructionAppendix]
+              .filter(Boolean)
+              .join("\n\n"),
             responseMimeType: "application/json",
             thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
           },
@@ -358,20 +374,23 @@ export async function generateWorkoutSuggestions(
   planGoal?: string,
   coachingMaterials?: string,
   userId?: string,
+  promptOptions?: SuggestionPromptOptions,
 ): Promise<WorkoutSuggestion[]> {
   try {
     if (upcomingWorkouts.length === 0) {
       return [];
     }
 
-    const prompt = buildSuggestionsPrompt(trainingContext, upcomingWorkouts, planGoal, coachingMaterials);
+    const prompt = buildSuggestionsPrompt(trainingContext, upcomingWorkouts, planGoal, coachingMaterials, promptOptions);
 
     const response = await retryWithBackoff(
       () =>
         getAiClient().models.generateContent({
           model: GEMINI_SUGGESTIONS_MODEL,
           config: {
-            systemInstruction: SUGGESTIONS_PROMPT,
+            systemInstruction: [SUGGESTIONS_PROMPT, promptOptions?.systemInstructionAppendix]
+              .filter(Boolean)
+              .join("\n\n"),
             responseMimeType: "application/json",
             thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
           },

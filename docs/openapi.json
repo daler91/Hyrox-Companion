@@ -350,6 +350,11 @@
           },
           "aiCoachEnabled": {
             "type": "boolean"
+          },
+          "trainingStyleId": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 100
           }
         },
         "title": "UpdateUserPreferences",
@@ -1509,7 +1514,8 @@
                 "emailWeeklySummary": true,
                 "emailMissedReminder": true,
                 "showAdherenceInsights": true,
-                "aiCoachEnabled": true
+                "aiCoachEnabled": true,
+                "trainingStyleId": "balanced_default"
               }
             }
           }
@@ -1530,7 +1536,8 @@
                   "emailWeeklySummary": true,
                   "emailMissedReminder": true,
                   "showAdherenceInsights": true,
-                  "aiCoachEnabled": true
+                  "aiCoachEnabled": true,
+                  "trainingStyleId": "balanced_default"
                 }
               }
             }

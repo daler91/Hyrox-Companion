@@ -48,6 +48,7 @@ export const updateUserPreferencesSchema = z.object({
   emailMissedReminder: z.boolean().optional(),
   showAdherenceInsights: z.boolean().optional(),
   aiCoachEnabled: z.boolean().optional(),
+  trainingStyleId: z.string().max(100).nullable().optional(),
 });
 
 export type UpdateUserPreferences = z.infer<typeof updateUserPreferencesSchema>;

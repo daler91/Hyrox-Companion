@@ -15,6 +15,7 @@ import { storage } from "../storage";
 import { buildTrainingContext } from "./ai";
 import { checkAiBudget } from "./aiUsageService";
 import { retrieveCoachingText } from "./ragRetrieval";
+import { resolveTrainingStyle } from "./training_styles";
 import {
   applyStructuredPlanDaySuggestionRows,
   parseStructuredPlanDaySuggestionRows,
@@ -278,6 +279,9 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
         ...(w.exerciseDetails && w.exerciseDetails.length > 0 ? { exerciseDetails: w.exerciseDetails } : {}),
       }));
 
+    const resolvedStyle = resolveTrainingStyle(user.trainingStyleId);
+    const stylePromptContext = resolvedStyle.strategy.buildPromptContext(trainingContext, upcomingWorkouts);
+
     if (upcomingWorkouts.length === 0) {
       // Legitimate no-op: user has no active plan or the plan has no future
       // planned days. Log so support can distinguish this from an AI/API
@@ -302,6 +306,7 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
       activePlanGoal,
       coachingContext.text,
       userId,
+      stylePromptContext,
     );
     const preparedSuggestions = await Promise.all(
       suggestions.map((s) => prepareSuggestion(s, upcomingWorkouts, user.weightUnit || "kg", userId)),
@@ -331,6 +336,7 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
           activePlanGoal,
           coachingContext.text,
           userId,
+          stylePromptContext,
         )
       : [];
     // Drop any review note whose workoutId isn't actually an unchanged day:
@@ -426,6 +432,7 @@ export async function regenerateCoachNoteForPlanDay(
   planDayId: string,
   userId: string,
 ): Promise<RegeneratedCoachNote | RegenerateCooldown> {
+  const user = await storage.users.getUser(userId);
   const day: PlanDay | undefined = await storage.plans.getPlanDay(planDayId, userId);
   if (!day) {
     throw new AppError(ErrorCode.NOT_FOUND, "Plan day not found", 404);
@@ -468,6 +475,8 @@ export async function regenerateCoachNoteForPlanDay(
   };
 
   const coachingContext = await getCoachingMaterialsString(userId, [workoutInput], trainingContext.weightUnit);
+  const resolvedStyle = resolveTrainingStyle(user?.trainingStyleId);
+  const stylePromptContext = resolvedStyle.strategy.buildPromptContext(trainingContext, [workoutInput]);
   const inputsUsed = buildCoachNoteInputs(
     trainingContext,
     coachingContext.source === "rag",
@@ -480,6 +489,7 @@ export async function regenerateCoachNoteForPlanDay(
     activePlanGoal,
     coachingContext.text,
     userId,
+    stylePromptContext,
   );
   const note = notes.find((n) => n.workoutId === day.id);
   if (!note?.note) {
