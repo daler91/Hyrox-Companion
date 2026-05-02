@@ -15,6 +15,7 @@ import { batchReparseWorkouts,reparseWorkout, reparseWorkoutFromImage } from "..
 import { createWorkout, updateWorkoutUseCase } from "../services/workoutUseCases";
 import { storage } from "../storage";
 import { getUserId } from "../types";
+import { protectedPost } from "./_helpers/protectedRouteBuilder";
 
 // Route schemas — combine core table schema with the optional exercises payload
 // so a single validateBody() middleware covers both in one pass and emits a
@@ -114,11 +115,11 @@ router.post("/api/v1/workouts/:id/reparse-from-image", ...protectedMutationGuard
   }));
 
 
-router.post("/api/v1/workouts/batch-reparse", ...protectedMutationGuards, rateLimiter("batchReparse", 2), aiBudgetCheck, asyncHandler(async (req: Request, res: Response) => {
+protectedPost(router, "/api/v1/workouts/batch-reparse", { limiter: rateLimiter("batchReparse", 2), middleware: [aiBudgetCheck] }, async (req: Request, res: Response) => {
     const userId = getUserId(req);
     const { total, parsed, failed } = await batchReparseWorkouts(userId);
     res.json({ total, parsed, failed });
-  }));
+  });
 
 router.get("/api/v1/custom-exercises", isAuthenticated, rateLimiter("customExercise", 60), asyncHandler(async (req: Request, res: Response) => {
     const userId = getUserId(req);
@@ -126,7 +127,7 @@ router.get("/api/v1/custom-exercises", isAuthenticated, rateLimiter("customExerc
     res.json(exercises);
   }));
 
-router.post("/api/v1/custom-exercises", ...protectedMutationGuards, rateLimiter("customExercise", 20), validateBody(createCustomExerciseSchema), asyncHandler(async (req: Request<Record<string, never>, Record<string, never>, CreateCustomExercisePayload>, res: Response) => {
+protectedPost(router, "/api/v1/custom-exercises", { limiter: rateLimiter("customExercise", 20), middleware: [validateBody(createCustomExerciseSchema)] }, async (req: Request<Record<string, never>, Record<string, never>, CreateCustomExercisePayload>, res: Response) => {
     const userId = getUserId(req);
     const { name, category } = req.body;
     const exercise = await storage.users.upsertCustomExercise({
@@ -135,7 +136,7 @@ router.post("/api/v1/custom-exercises", ...protectedMutationGuards, rateLimiter(
       category: category || "conditioning",
     });
     res.json(exercise);
-  }));
+  });
 
 router.get("/api/v1/workouts", isAuthenticated, rateLimiter("workoutList", 60), asyncHandler(async (req: Request<Record<string, never>, Record<string, never>, Record<string, never>, { limit?: string; offset?: string }>, res: Response) => {
     const userId = getUserId(req);
@@ -271,11 +272,11 @@ router.get("/api/v1/workouts/:id", isAuthenticated, rateLimiter("workout", 60), 
     res.json({ ...log, exerciseSets });
   }));
 
-router.post("/api/v1/workouts", ...protectedMutationGuards, rateLimiter("workout", 40), validateBody(createWorkoutRouteSchema), asyncHandler(async (req: Request<Record<string, never>, Record<string, never>, CreateWorkoutRoutePayload>, res: Response) => {
+protectedPost(router, "/api/v1/workouts", { limiter: rateLimiter("workout", 40), middleware: [validateBody(createWorkoutRouteSchema)] }, async (req: Request<Record<string, never>, Record<string, never>, CreateWorkoutRoutePayload>, res: Response) => {
     const userId = getUserId(req);
     const result = await createWorkout({ userId, payload: req.body });
     res.json(result);
-  }));
+  });
 
 router.patch("/api/v1/workouts/:id", ...protectedMutationGuards, rateLimiter("workout", 40), validateBody(updateWorkoutRouteSchema), asyncHandler(async (req: Request<{ id: string }, Record<string, never>, UpdateWorkoutRoutePayload>, res: Response) => {
     const userId = getUserId(req);

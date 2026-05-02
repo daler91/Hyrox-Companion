@@ -9,6 +9,7 @@ import { reqLogger } from "../logger";
 import { aiBudgetCheck } from "../middleware/aibudget";
 import { aiConsentCheck } from "../middleware/aiConsent";
 import { protectedMutationGuards } from "../routeGuards";
+import { protectedDelete, protectedPost } from "./_helpers/protectedRouteBuilder";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody, validateQuery } from "../routeUtils";
 import { type AIContext, buildAIContext, type ChatInput } from "../services/aiContextService";
 import { applyTimelineAiSuggestion, generateTimelineAiSuggestions } from "../services/aiSuggestionService";
@@ -28,7 +29,7 @@ const applyTimelineSuggestionSchema = z.object({
   aiSource: z.enum(["rag", "legacy", "none"]).nullable().optional(),
 });
 
-router.post("/api/v1/parse-exercises", ...protectedMutationGuards, rateLimiter("parse", 5), aiConsentCheck, aiBudgetCheck, validateBody(parseExercisesRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof parseExercisesRequestSchema>>, res: Response) => {
+protectedPost(router, "/api/v1/parse-exercises", { limiter: rateLimiter("parse", 5), middleware: [aiConsentCheck, aiBudgetCheck, validateBody(parseExercisesRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof parseExercisesRequestSchema>>, res: Response) => {
     const { text } = req.body;
     const userId = getUserId(req);
     // ⚡ Perf: Parallelize independent DB queries to cut latency from
@@ -41,7 +42,7 @@ router.post("/api/v1/parse-exercises", ...protectedMutationGuards, rateLimiter("
     const customNames = userCustomExercises.map(e => e.name);
     const exercises = await parseExercisesFromText(text.trim(), weightUnit, customNames, userId);
     res.json(exercises);
-  }));
+  });
 
 // Photo-parse sibling. Shares the "parse" rate bucket and AI-budget gates
 // with the text route so total parse-family spend stays capped per user.
@@ -77,12 +78,12 @@ async function prepareChatContext(
   return { input: { message, history: history || [] }, aiContext };
 }
 
-router.post("/api/v1/chat", ...protectedMutationGuards, rateLimiter("chat", 10), aiConsentCheck, aiBudgetCheck, validateBody(chatRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof chatRequestSchema>>, res: Response) => {
+protectedPost(router, "/api/v1/chat", { limiter: rateLimiter("chat", 10), middleware: [aiConsentCheck, aiBudgetCheck, validateBody(chatRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof chatRequestSchema>>, res: Response) => {
     const userId = getUserId(req);
     const { input, aiContext } = await prepareChatContext(req);
     const response = await chatWithCoach(input.message, input.history, aiContext.trainingContext, aiContext.coachingMaterials, aiContext.retrievedChunks, userId);
     res.json({ response, ragInfo: sanitizeRagInfo(aiContext.ragInfo) });
-  }));
+  });
 
 // Belt-and-suspenders ceiling for SSE stream duration. Both caps fire
 // via controller.abort() so the existing drain/finally path runs cleanly:
@@ -277,11 +278,11 @@ router.post("/api/v1/chat/message", ...protectedMutationGuards, rateLimiter("cha
     res.json(message);
   }));
 
-router.delete("/api/v1/chat/history", ...protectedMutationGuards, rateLimiter("chatHistoryDelete", 5), asyncHandler(async (req: ExpressRequest, res: Response) => {
+protectedDelete(router, "/api/v1/chat/history", { limiter: rateLimiter("chatHistoryDelete", 5) }, async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     await storage.users.clearChatHistory(userId);
     res.json({ success: true });
-  }));
+  });
 
 router.post("/api/v1/timeline/ai-suggestions", ...protectedMutationGuards, rateLimiter("suggestions", 3), aiConsentCheck, aiBudgetCheck, asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);

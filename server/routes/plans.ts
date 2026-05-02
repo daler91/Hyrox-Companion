@@ -6,6 +6,7 @@ import { isAuthenticated } from "../clerkAuth";
 import { reqLogger } from "../logger";
 import { aiBudgetCheck } from "../middleware/aibudget";
 import { protectedMutationGuards } from "../routeGuards";
+import { protectedDelete, protectedPatch, protectedPost } from "./_helpers/protectedRouteBuilder";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody } from "../routeUtils";
 import { regenerateCoachNoteForPlanDay } from "../services/coachService";
 import { generatePlan } from "../services/planGenerationService";
@@ -56,7 +57,7 @@ router.get("/api/v1/plans", isAuthenticated, asyncHandler(async (req: ExpressReq
 
 router.get("/api/v1/plans/:id", isAuthenticated, handleGetOrDeletePlan(storage.plans.getTrainingPlan.bind(storage)));
 
-router.post("/api/v1/plans/import", ...protectedMutationGuards, rateLimiter("planImport", 5), validateBody(importPlanRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof importPlanRequestSchema>>, res: Response) => {
+protectedPost(router, "/api/v1/plans/import", { limiter: rateLimiter("planImport", 5), middleware: [validateBody(importPlanRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof importPlanRequestSchema>>, res: Response) => {
     const { csvContent, fileName, planName } = req.body;
     const userId = getUserId(req);
     try {
@@ -66,7 +67,7 @@ router.post("/api/v1/plans/import", ...protectedMutationGuards, rateLimiter("pla
       reqLogger(req).error({ err: error }, "Failed to import plan from CSV");
       return res.status(400).json({ error: "Failed to parse CSV content. Please ensure it follows the expected template format.", code: "INVALID_CSV" });
     }
-  }));
+  });
 
 router.post("/api/v1/plans/sample", ...protectedMutationGuards, rateLimiter("planSample", 5), asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
@@ -93,14 +94,14 @@ const renameTrainingPlanSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(255, "Name must be 255 characters or less"),
 });
 
-router.patch("/api/v1/plans/:id", ...protectedMutationGuards, rateLimiter("planUpdate", 20), validateBody(renameTrainingPlanSchema), asyncHandler(async (req: ExpressRequest<{ id: string }, unknown, { name: string }>, res: Response) => {
+protectedPatch(router, "/api/v1/plans/:id", { limiter: rateLimiter("planUpdate", 20), middleware: [validateBody(renameTrainingPlanSchema)] }, async (req: ExpressRequest<{ id: string }, unknown, { name: string }>, res: Response) => {
     const userId = getUserId(req);
     const updated = await storage.plans.renameTrainingPlan(req.params.id, req.body.name, userId);
     if (!updated) {
       return sendNotFound(res, "Training plan not found");
     }
     res.json(updated);
-  }));
+  });
 
 router.patch("/api/v1/plans/:id/goal", ...protectedMutationGuards, rateLimiter("planUpdate", 20), validateBody(updateTrainingPlanGoalSchema), asyncHandler(async (req: ExpressRequest<{ id: string }, unknown, UpdateTrainingPlanGoal>, res: Response) => {
     const userId = getUserId(req);
@@ -111,7 +112,7 @@ router.patch("/api/v1/plans/:id/goal", ...protectedMutationGuards, rateLimiter("
     res.json(updated);
   }));
 
-router.delete("/api/v1/plans/:id", ...protectedMutationGuards, rateLimiter("planDelete", 10), handleGetOrDeletePlan(async (id, userId) => { const deleted = await storage.plans.deleteTrainingPlan(id, userId); return deleted ? { success: true } : null; }, "true"));
+protectedDelete(router, "/api/v1/plans/:id", { limiter: rateLimiter("planDelete", 10) }, handleGetOrDeletePlan(async (id, userId) => { const deleted = await storage.plans.deleteTrainingPlan(id, userId); return deleted ? { success: true } : null; }, "true"));
 
 router.post("/api/v1/plans/:planId/schedule", ...protectedMutationGuards, rateLimiter("planSchedule", 10), validateBody(schedulePlanRequestSchema), asyncHandler(async (req: ExpressRequest<{ planId: string }, unknown, z.infer<typeof schedulePlanRequestSchema>>, res: Response) => {
     const { startDate } = req.body;
