@@ -50,7 +50,6 @@ export interface ApplyTimelineSuggestionInput {
   recommendation: string;
   rationale?: string | null;
   aiSource?: "rag" | "legacy" | "none" | null;
-  responseMetadata?: RecommendationTraceMetadata | null;
 }
 
 export type ApplyTimelineSuggestionFailureReason =
@@ -276,11 +275,21 @@ export async function applyTimelineAiSuggestion(
     return undefined;
   }
 
+  const serverTrace: RecommendationTraceMetadata = {
+    trainingStyleId: resolveTrainingStyle(user?.trainingStyleId).trainingStyleId,
+    phase: day.aiInputsUsed?.planPhase ?? "unknown",
+    strategyRuleVersion: STRATEGY_RULE_VERSION,
+    promptBundleVersion: PROMPT_BUNDLE_VERSION,
+  };
+
   const aiMetadata: UpdatePlanDay = {
     aiSource: normalizeAiSource(input.aiSource),
     aiRationale: input.rationale ? input.rationale.slice(0, 400) : null,
     aiNoteUpdatedAt: new Date(),
-    aiInputsUsed: input.responseMetadata ? { recommendationTrace: input.responseMetadata } : undefined,
+    aiInputsUsed: {
+      ...(day.aiInputsUsed ?? {}),
+      recommendationTrace: serverTrace,
+    },
   };
 
   const shouldWriteStructuredRows = existingExerciseSets.length > 0 && input.targetField !== "notes";

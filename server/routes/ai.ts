@@ -19,14 +19,6 @@ import { getUserId } from "../types";
 
 const router = Router();
 
-const recommendationTraceSchema = z.object({
-  trainingStyleId: z.string().min(1),
-  phase: z.string().min(1),
-  strategyRuleVersion: z.string().min(1),
-  promptBundleVersion: z.string().min(1),
-  rationaleCodes: z.array(z.string()).optional(),
-});
-
 const applyTimelineSuggestionSchema = z.object({
   workoutId: z.string().min(1),
   targetField: z.enum(["notes", "mainWorkout", "accessory"]),
@@ -34,7 +26,6 @@ const applyTimelineSuggestionSchema = z.object({
   recommendation: z.string().min(1).max(10_000),
   rationale: z.string().max(2_000).nullable().optional(),
   aiSource: z.enum(["rag", "legacy", "none"]).nullable().optional(),
-  responseMetadata: recommendationTraceSchema.nullable().optional(),
 });
 
 router.post("/api/v1/parse-exercises", ...protectedMutationGuards, rateLimiter("parse", 5), aiConsentCheck, aiBudgetCheck, validateBody(parseExercisesRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof parseExercisesRequestSchema>>, res: Response) => {
