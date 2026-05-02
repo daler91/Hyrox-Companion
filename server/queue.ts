@@ -7,6 +7,7 @@ import { logger } from "./logger";
 import { triggerAutoCoach } from "./services/coachService";
 import { embedCoachingMaterial } from "./services/ragService";
 import { storage } from "./storage";
+import { getEmbedJobIdentifiers, getUserIdFromJob } from "./queue.utils";
 
 if (!env.DATABASE_URL) {
   throw new Error("DATABASE_URL must be set. Did you forget to provision a database?");
@@ -122,6 +123,47 @@ async function runBatch<T>(
   }
 }
 
+async function requireUserFromJob(job: Job, queueName: string) {
+  const userId = getUserIdFromJob(job);
+  if (!userId) {
+    logger.warn({ jobId: job.id, data: job.data }, `[pg-boss] Missing userId on ${queueName} job, skipping`);
+    return null;
+  }
+
+  const user = await storage.users.getUser(userId);
+  if (!user) {
+    logger.warn({ jobId: job.id, userId }, `[pg-boss] User not found, skipping ${queueName} job`);
+    return null;
+  }
+
+  return { userId, user };
+}
+
+async function registerUserEmailWorker({
+  queueName,
+  process,
+}: {
+  readonly queueName: "send-weekly-summary" | "send-missed-reminder";
+  readonly process: (context: Awaited<ReturnType<typeof requireUserFromJob>>) => Promise<boolean>;
+}) {
+  await queue.createQueue(queueName);
+  await queue.work(queueName, async (jobs: Job[]) => {
+    await runBatch(queueName, jobs, async (job) => {
+      logger.info({ jobId: job.id }, `[pg-boss] Processing ${queueName} job`);
+      try {
+        const userContext = await requireUserFromJob(job, queueName);
+        if (!userContext) return;
+
+        const sent = await runWithTimeout(queueName, () => process(userContext));
+        logger.info({ jobId: job.id, userId: userContext.userId, sent }, `[pg-boss] Completed ${queueName} job`);
+      } catch (error) {
+        logger.error({ err: error, jobId: job.id }, `[pg-boss] Failed ${queueName} job`);
+        throw error;
+      }
+    });
+  });
+}
+
 const QUEUE_START_TIMEOUT_MS = 30_000;
 
 export async function startQueue() {
@@ -157,7 +199,11 @@ export async function startQueue() {
     await runBatch("auto-coach", jobs, async (job) => {
       logger.info({ jobId: job.id, data: job.data }, "[pg-boss] Processing auto-coach job");
       try {
-        const { userId } = job.data as { userId: string };
+        const userId = getUserIdFromJob(job);
+        if (!userId) {
+          logger.warn({ jobId: job.id, data: job.data }, "[pg-boss] Missing userId on auto-coach job, skipping");
+          return;
+        }
         const result = await runWithTimeout("auto-coach", () => triggerAutoCoach(userId));
         logger.info({ jobId: job.id, adjusted: result.adjusted }, "[pg-boss] Completed auto-coach job");
       } catch (error) {
@@ -171,7 +217,12 @@ export async function startQueue() {
   // Register worker for embed-coaching-material
   await queue.work("embed-coaching-material", async (jobs: Job[]) => {
     await runBatch("embed-coaching-material", jobs, async (job) => {
-      const { materialId, userId } = job.data as { materialId: string; userId: string };
+      const identifiers = getEmbedJobIdentifiers(job);
+      if (!identifiers) {
+        logger.warn({ jobId: job.id, data: job.data }, "[pg-boss] Missing embed-coaching-material identifiers, skipping");
+        return;
+      }
+      const { materialId, userId } = identifiers;
       logger.info({ jobId: job.id, materialId }, "[pg-boss] Processing embed-coaching-material job");
       try {
         const material = await storage.coaching.getCoachingMaterial(materialId, userId);
@@ -188,52 +239,16 @@ export async function startQueue() {
     });
   });
 
-  // Register worker for send-weekly-summary
-  await queue.createQueue("send-weekly-summary");
-  await queue.work("send-weekly-summary", async (jobs: Job[]) => {
-    await runBatch("send-weekly-summary", jobs, async (job) => {
-      const { userId } = job.data as { userId: string };
-      logger.info({ jobId: job.id, userId }, "[pg-boss] Processing send-weekly-summary job");
-      try {
-        const user = await storage.users.getUser(userId);
-        if (!user) {
-          logger.warn({ jobId: job.id, userId }, "[pg-boss] User not found, skipping send-weekly-summary job");
-          return;
-        }
-        const sent = await runWithTimeout(
-          "send-weekly-summary",
-          () => processWeeklySummary(storage, user, new Date()),
-        );
-        logger.info({ jobId: job.id, userId, sent }, "[pg-boss] Completed send-weekly-summary job");
-      } catch (error) {
-        logger.error({ err: error, jobId: job.id, userId }, "[pg-boss] Failed send-weekly-summary job");
-        throw error; // Let pg-boss handle the retry
-      }
-    });
+  await registerUserEmailWorker({
+    queueName: "send-weekly-summary",
+    process: async (context) =>
+      context ? processWeeklySummary(storage, context.user, new Date()) : false,
   });
 
-  // Register worker for send-missed-reminder
-  await queue.createQueue("send-missed-reminder");
-  await queue.work("send-missed-reminder", async (jobs: Job[]) => {
-    await runBatch("send-missed-reminder", jobs, async (job) => {
-      const { userId } = job.data as { userId: string };
-      logger.info({ jobId: job.id, userId }, "[pg-boss] Processing send-missed-reminder job");
-      try {
-        const user = await storage.users.getUser(userId);
-        if (!user) {
-          logger.warn({ jobId: job.id, userId }, "[pg-boss] User not found, skipping send-missed-reminder job");
-          return;
-        }
-        const sent = await runWithTimeout(
-          "send-missed-reminder",
-          () => processMissedWorkoutReminder(storage, user, new Date()),
-        );
-        logger.info({ jobId: job.id, userId, sent }, "[pg-boss] Completed send-missed-reminder job");
-      } catch (error) {
-        logger.error({ err: error, jobId: job.id, userId }, "[pg-boss] Failed send-missed-reminder job");
-        throw error; // Let pg-boss handle the retry
-      }
-    });
+  await registerUserEmailWorker({
+    queueName: "send-missed-reminder",
+    process: async (context) =>
+      context ? processMissedWorkoutReminder(storage, context.user, new Date()) : false,
   });
 
   logger.info("pg-boss queue started and workers registered");

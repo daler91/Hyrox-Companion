@@ -7,9 +7,8 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { useToast } from "@/hooks/use-toast";
 import { api, QUERY_KEYS } from "@/lib/api";
-import { queryClient } from "@/lib/queryClient";
 
-import { TYPE_LABELS } from "../annotation-style";
+import { handleCreateAnnotationSuccess, handleDeleteAnnotationSuccess, handleMutationError } from "./timelineAnnotationMutations.utils";
 
 export function useTimelineAnnotations(open: boolean) {
   return useQuery<TimelineAnnotation[]>({
@@ -30,36 +29,19 @@ export function useTimelineAnnotationMutations({
 
   const createMutation = useMutation({
     mutationFn: (data: InsertTimelineAnnotation) => api.timelineAnnotations.create(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timelineAnnotations }).catch(() => {});
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.trainingOverview }).catch(() => {});
-      toast({
-        title: "Annotation added",
-        description: `${TYPE_LABELS[type]} saved to your timeline.`,
-      });
-      onCreated();
-    },
-    onError: () =>
-      toast({
-        title: "Couldn't add annotation",
-        description: "Please try again.",
-        variant: "destructive",
+    onSuccess: () =>
+      handleCreateAnnotationSuccess({
+        toast,
+        type,
+        onCreated,
       }),
+    onError: () => handleMutationError(toast, "Couldn't add annotation"),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.timelineAnnotations.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timelineAnnotations }).catch(() => {});
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.trainingOverview }).catch(() => {});
-      toast({ title: "Annotation removed" });
-    },
-    onError: () =>
-      toast({
-        title: "Couldn't delete annotation",
-        description: "Please try again.",
-        variant: "destructive",
-      }),
+    onSuccess: () => handleDeleteAnnotationSuccess(toast),
+    onError: () => handleMutationError(toast, "Couldn't delete annotation"),
   });
 
   return {
