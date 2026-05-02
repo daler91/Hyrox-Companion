@@ -156,6 +156,7 @@ export default function Settings() {
   // Snapshot of values before the most recent save, used to offer an
   // "Undo" action on the post-save toast.
   const undoSnapshotRef = useRef<PreferencesSnapshot | null>(null);
+  const pendingStyleAuditRef = useRef<StyleAuditEntry | null>(null);
 
   const currentSnapshot = useCallback(
     (): PreferencesSnapshot => ({
@@ -245,6 +246,12 @@ export default function Settings() {
       // depend on the invalidating preferences query timing.
       baselineSnapshotRef.current = savePayloadToSnapshot(variables);
       setHasChanges(false);
+      if (pendingStyleAuditRef.current) {
+        const nextAudit = [pendingStyleAuditRef.current, ...styleAuditEntries].slice(0, 10);
+        setStyleAuditEntries(nextAudit);
+        localStorage.setItem("fitai-settings-style-audit", JSON.stringify(nextAudit));
+        pendingStyleAuditRef.current = null;
+      }
       const previous = undoSnapshotRef.current;
       toast({
         title: "Settings saved",
@@ -275,6 +282,7 @@ export default function Settings() {
       });
     },
     onError: () => {
+      pendingStyleAuditRef.current = null;
       toast({
         title: "Error",
         description: "Failed to save settings. Please try again.",
@@ -306,17 +314,14 @@ export default function Settings() {
       consistency: (preferences?.mafConsistency as "low" | "moderate" | "high") ?? "moderate",
       trend: (preferences?.mafTrend as "improving" | "flat" | "declining") ?? "flat",
     }) : null;
-    if (styleChanged) {
-      const nextAuditEntry: StyleAuditEntry = {
-        changedAtIso: new Date().toISOString(),
-        fromStyleId: committedStyleId,
-        toStyleId: trainingStyleId,
-        recalculations: buildRecalculationSummary(trainingStyleId),
-      };
-      const nextAudit = [nextAuditEntry, ...styleAuditEntries].slice(0, 10);
-      setStyleAuditEntries(nextAudit);
-      localStorage.setItem("fitai-settings-style-audit", JSON.stringify(nextAudit));
-    }
+    pendingStyleAuditRef.current = styleChanged
+      ? {
+          changedAtIso: new Date().toISOString(),
+          fromStyleId: committedStyleId,
+          toStyleId: trainingStyleId,
+          recalculations: buildRecalculationSummary(trainingStyleId),
+        }
+      : null;
     saveMutation.mutate({
       weightUnit,
       distanceUnit,
@@ -333,7 +338,7 @@ export default function Settings() {
       mafHr: styleChanged && trainingStyleId === "maf_method" ? maf?.ceiling : undefined,
       mafBaselineTestScheduledAt: styleChanged && trainingStyleId === "maf_method" ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() : undefined,
     });
-  }, [saveMutation, weightUnit, distanceUnit, weeklyGoal, emailNotifications, emailWeeklySummary, emailMissedReminder, showAdherenceInsights, aiCoachEnabled, trainingStyleId, preferences?.mafAge, preferences?.mafInjuryIllnessMedication, preferences?.mafConsistency, preferences?.mafTrend, styleAuditEntries]);
+  }, [saveMutation, weightUnit, distanceUnit, weeklyGoal, emailNotifications, emailWeeklySummary, emailMissedReminder, showAdherenceInsights, aiCoachEnabled, trainingStyleId, preferences?.mafAge, preferences?.mafInjuryIllnessMedication, preferences?.mafConsistency, preferences?.mafTrend]);
 
   const userName = getUserDisplayName(user);
 
