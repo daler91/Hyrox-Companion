@@ -48,7 +48,9 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
         ? "declining"
         : rpeTrend.rpeTrend === "falling"
           ? "improving"
-          : rpeTrend.rpeTrend,
+          : rpeTrend.rpeTrend === "stable"
+            ? "flat"
+            : rpeTrend.rpeTrend,
     },
     raceContext: { hasRace: false, daysToRace: null },
     recoveryMarkers: {
