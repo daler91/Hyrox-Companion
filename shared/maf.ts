@@ -27,13 +27,13 @@ export function calculateMafHr(input: MafInput): MafResult {
     adjustment = -10;
     warning = "Under-16 athletes should use clinician-guided override; conservative default applied.";
     reasonCodes.push("age_under_16_manual_override_recommended", "adjustment_-10");
+  } else if (input.injuryIllnessMedication) {
+    adjustment = -10;
+    reasonCodes.push("injury_illness_medication", "adjustment_-10");
   } else if (input.age > 65) {
     adjustment = -5;
     warning = "Over-65 athletes should confirm with clinician; conservative default applied.";
     reasonCodes.push("age_over_65_conservative_default", "adjustment_-5");
-  } else if (input.injuryIllnessMedication) {
-    adjustment = -10;
-    reasonCodes.push("injury_illness_medication", "adjustment_-10");
   } else if (input.consistency === "low" || input.trend === "declining") {
     adjustment = -5;
     reasonCodes.push("low_consistency_or_declining_trend", "adjustment_-5");

@@ -1,3 +1,4 @@
+import { calculateMafHr } from "@shared/maf";
 import { useMutation,useQuery } from "@tanstack/react-query";
 import { Loader2, RotateCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -11,14 +12,13 @@ import { PreferencesSection } from "@/components/settings/PreferencesSection";
 import { ProfileSection } from "@/components/settings/ProfileSection";
 import { PushNotificationSection } from "@/components/settings/PushNotificationSection";
 import { StravaSection } from "@/components/settings/StravaSection";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { ToastAction } from "@/components/ui/toast";
 import { useToast } from "@/hooks/use-toast";
-import { calculateMafHr } from "@shared/maf";
 import { useAuth } from "@/hooks/useAuth";
 import { api, type GarminStatus, QUERY_KEYS, type StravaStatus, type UserPreferences } from "@/lib/api";
 import { getUserDisplayName } from "@/lib/authUtils";
@@ -283,7 +283,7 @@ export default function Settings() {
       mafHr: styleChanged && trainingStyleId === "maf_method" ? maf?.ceiling : undefined,
       mafBaselineTestScheduledAt: styleChanged && trainingStyleId === "maf_method" ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() : undefined,
     });
-  }, [saveMutation, weightUnit, distanceUnit, weeklyGoal, emailNotifications, emailWeeklySummary, emailMissedReminder, showAdherenceInsights, aiCoachEnabled, trainingStyleId, preferences?.mafAge]);
+  }, [saveMutation, weightUnit, distanceUnit, weeklyGoal, emailNotifications, emailWeeklySummary, emailMissedReminder, showAdherenceInsights, aiCoachEnabled, trainingStyleId, preferences?.mafAge, preferences?.mafInjuryIllnessMedication, preferences?.mafConsistency, preferences?.mafTrend]);
 
   const userName = getUserDisplayName(user);
 

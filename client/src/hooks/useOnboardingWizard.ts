@@ -1,3 +1,4 @@
+import { calculateMafHr } from "@shared/maf";
 import { useMutation } from "@tanstack/react-query";
 import { addDays, format } from "date-fns";
 import { useState } from "react";
@@ -6,7 +7,6 @@ import type { OnboardingCompletionChoice, OnboardingWizardStep } from "@/hooks/o
 import { useToast } from "@/hooks/use-toast";
 import { api, QUERY_KEYS } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
-import { calculateMafHr } from "@shared/maf";
 
 const STEPS: OnboardingWizardStep[] = ["welcome", "units", "goal", "plan", "schedule"];
 const PREV: Partial<Record<OnboardingWizardStep, OnboardingWizardStep>> = {

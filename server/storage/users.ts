@@ -1,3 +1,4 @@
+import { calculateMafHr } from "@shared/maf";
 import {
   type ChatMessage,
   chatMessages,
@@ -9,15 +10,14 @@ import {
   type InsertCustomExercise,
   type InsertGarminConnection,
   type InsertStravaConnection,
+  mafProfile,
   type StravaConnection,
   stravaConnections,
   type UpdateUserPreferences,
   type UpsertUser,
   type User,
   users,
-  mafProfile,
 } from "@shared/schema";
-import { calculateMafHr } from "@shared/maf";
 import { and, desc, eq, isNotNull, lt, or } from "drizzle-orm";
 
 import { decryptToken,encryptToken } from "../crypto";
