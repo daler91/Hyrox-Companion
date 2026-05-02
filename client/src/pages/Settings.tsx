@@ -1,6 +1,6 @@
 import { calculateMafHr } from "@shared/maf";
 import { useMutation,useQuery } from "@tanstack/react-query";
-import { Loader2, RotateCw } from "lucide-react";
+import { Info, Loader2, RotateCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 
@@ -26,6 +26,34 @@ import { queryClient } from "@/lib/queryClient";
 
 // Local alias so callsites that refer to `Preferences` still read naturally.
 // Shape is maintained by the api/user.ts export contract.
+interface StyleAuditEntry {
+  changedAtIso: string;
+  fromStyleId: string;
+  toStyleId: string;
+  recalculations: string[];
+}
+
+const STYLE_LABELS: Record<string, string> = {
+  balanced_default: "Balanced",
+  maf_method: "MAF Method",
+};
+
+function getStyleLabel(styleId: string): string {
+  return STYLE_LABELS[styleId] ?? "Balanced";
+}
+
+function buildRecalculationSummary(styleId: string): string[] {
+  const summary = [
+    "Coach recommendation prompt context switched to the selected style.",
+    "Future plan generation uses the updated style constraints.",
+    "Training-style recompute flag set for downstream AI calculations.",
+  ];
+  if (styleId === "maf_method") {
+    summary.push("MAF heart-rate ceiling recomputed and baseline test reminder scheduled.");
+  }
+  return summary;
+}
+
 type Preferences = UserPreferences;
 
 // The save mutation sends weeklyGoal as a number; local form state stores
@@ -97,6 +125,17 @@ export default function Settings() {
   const [confirmStyleOpen, setConfirmStyleOpen] = useState(false);
   const [pendingStyleId, setPendingStyleId] = useState<string | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
+  const [styleTransitionNotice, setStyleTransitionNotice] = useState<string | null>(null);
+  const [styleAuditEntries, setStyleAuditEntries] = useState<StyleAuditEntry[]>(() => {
+    try {
+      const raw = localStorage.getItem("fitai-settings-style-audit");
+      if (!raw) return [];
+      const parsed = JSON.parse(raw) as StyleAuditEntry[];
+      return Array.isArray(parsed) ? parsed.slice(0, 10) : [];
+    } catch {
+      return [];
+    }
+  });
   // Snapshot of initial local defaults. Used as a fallback baseline if
   // remote preferences never load (e.g. query error) so edits can still
   // surface the sticky save bar.
@@ -267,6 +306,17 @@ export default function Settings() {
       consistency: (preferences?.mafConsistency as "low" | "moderate" | "high") ?? "moderate",
       trend: (preferences?.mafTrend as "improving" | "flat" | "declining") ?? "flat",
     }) : null;
+    if (styleChanged) {
+      const nextAuditEntry: StyleAuditEntry = {
+        changedAtIso: new Date().toISOString(),
+        fromStyleId: committedStyleId,
+        toStyleId: trainingStyleId,
+        recalculations: buildRecalculationSummary(trainingStyleId),
+      };
+      const nextAudit = [nextAuditEntry, ...styleAuditEntries].slice(0, 10);
+      setStyleAuditEntries(nextAudit);
+      localStorage.setItem("fitai-settings-style-audit", JSON.stringify(nextAudit));
+    }
     saveMutation.mutate({
       weightUnit,
       distanceUnit,
@@ -283,7 +333,7 @@ export default function Settings() {
       mafHr: styleChanged && trainingStyleId === "maf_method" ? maf?.ceiling : undefined,
       mafBaselineTestScheduledAt: styleChanged && trainingStyleId === "maf_method" ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() : undefined,
     });
-  }, [saveMutation, weightUnit, distanceUnit, weeklyGoal, emailNotifications, emailWeeklySummary, emailMissedReminder, showAdherenceInsights, aiCoachEnabled, trainingStyleId, preferences?.mafAge, preferences?.mafInjuryIllnessMedication, preferences?.mafConsistency, preferences?.mafTrend]);
+  }, [saveMutation, weightUnit, distanceUnit, weeklyGoal, emailNotifications, emailWeeklySummary, emailMissedReminder, showAdherenceInsights, aiCoachEnabled, trainingStyleId, preferences?.mafAge, preferences?.mafInjuryIllnessMedication, preferences?.mafConsistency, preferences?.mafTrend, styleAuditEntries]);
 
   const userName = getUserDisplayName(user);
 
@@ -382,8 +432,40 @@ export default function Settings() {
           </Select>
         </CardContent>
       </Card>
+      {styleTransitionNotice && (
+        <Card className="border-primary/40">
+          <CardHeader>
+            <CardTitle className="text-base">Style transition notice</CardTitle>
+            <CardDescription>{styleTransitionNotice}</CardDescription>
+          </CardHeader>
+        </Card>
+      )}
+      <Card>
+        <CardHeader>
+          <CardTitle>Why this recommendation</CardTitle>
+          <CardDescription>
+            Active style: <strong>{getStyleLabel(trainingStyleId)}</strong>. Current phase: style transition.
+            Key constraints: {trainingStyleId === "maf_method" ? "MAF uses HR ceiling framing (stay at or under your ceiling; it is not a target to chase)." : "Balanced style blends aerobic work, quality sessions, and recovery constraints."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="text-sm text-muted-foreground">
+          <div className="flex gap-2"><Info className="h-4 w-4 mt-0.5" /><p>Recommendations are explained using your current style first, then filtered by saved constraints and available baseline data.</p></div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader><CardTitle>Settings audit</CardTitle><CardDescription>Tracks training-style changes and triggered downstream recalculations.</CardDescription></CardHeader>
+        <CardContent className="space-y-3">
+          {styleAuditEntries.length === 0 ? <p className="text-sm text-muted-foreground">No training-style changes recorded yet.</p> : styleAuditEntries.map((entry) => (
+            <div key={entry.changedAtIso} className="rounded-md border p-3 text-sm">
+              <p className="font-medium">{new Date(entry.changedAtIso).toLocaleString()} — {getStyleLabel(entry.fromStyleId)} → {getStyleLabel(entry.toStyleId)}</p>
+              <ul className="list-disc pl-5 text-muted-foreground">{entry.recalculations.map((item) => <li key={item}>{item}</li>)}</ul>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
       <AlertDialog open={confirmStyleOpen} onOpenChange={setConfirmStyleOpen}>
-        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Change training style?</AlertDialogTitle><AlertDialogDescription>This will change how your AI analysis works and affect future plans. We’ll re-baseline MAF settings when needed.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => pendingStyleId && setTrainingStyleId(pendingStyleId)}>Confirm</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
+        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Change training style?</AlertDialogTitle><AlertDialogDescription>This will change how your AI analysis works and affect future plans. We’ll re-baseline MAF settings when needed.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => { if (!pendingStyleId) return; setTrainingStyleId(pendingStyleId); setStyleTransitionNotice(`Switched to ${getStyleLabel(pendingStyleId)}. Immediate: coaching language and new recommendations update now. After re-baseline: future trend analysis and longer-horizon plan adjustments will settle once new baseline data is captured.`); }}>Confirm</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
       </AlertDialog>
 
       <PushNotificationSection />
