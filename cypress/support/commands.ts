@@ -34,12 +34,23 @@ Cypress.Commands.add("advanceLogWorkoutToReflect", (text: string) => {
   cy.getBySel("button-step-continue").should("not.be.disabled").click();
 });
 
+
+// From step 3 (Reflect): optionally type notes, skip RPE, then save.
+Cypress.Commands.add("completeReflectAndSaveWorkout", (notes?: string) => {
+  if (notes && notes.length > 0) {
+    cy.getBySel("input-workout-notes").type(notes);
+  }
+  cy.getBySel("button-skip-rpe").click();
+  cy.getBySel("button-save-workout").should("not.be.disabled").click();
+});
+
 declare global {
   namespace Cypress {
     interface Chainable {
       getBySel(selector: string): Chainable<JQuery<HTMLElement>>;
       ensureConsentDismissed(): Chainable<void>;
       advanceLogWorkoutToReflect(text: string): Chainable<void>;
+      completeReflectAndSaveWorkout(notes?: string): Chainable<void>;
     }
   }
 }

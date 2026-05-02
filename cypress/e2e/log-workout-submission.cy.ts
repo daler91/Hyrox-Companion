@@ -1,41 +1,22 @@
-import { setupAuthIntercepts } from "../support/authIntercepts";
+import {
+  stubParseExercisesEmpty,
+  stubSaveWorkout,
+  visitLogWorkoutPage,
+} from "../support/logWorkoutHelpers";
 
 describe("Log Workout Submission", () => {
   beforeEach(() => {
-    setupAuthIntercepts();
-
-    // Intercept the POST request to save the workout
-    cy.intercept("POST", "/api/v1/workouts", {
-      statusCode: 200,
-      body: { id: "new-workout-1", title: "My New Workout", date: new Date().toISOString() },
-    }).as("saveWorkout");
-
-    // Stub auto-parse to return no structured rows so the composer
-    // stays in "text-only" mode for these submission tests. Without
-    // this, a successful Gemini parse would populate exerciseBlocks
-    // and flip the save path to structured.
-    cy.intercept("POST", "/api/v1/parse-exercises", {
-      statusCode: 200,
-      body: [],
-    }).as("parseExercises");
-
-    cy.visit("/log");
-    cy.wait("@authUser");
-    cy.getBySel("input-workout-title").should("exist");
-    cy.ensureConsentDismissed();
+    stubSaveWorkout();
+    stubParseExercisesEmpty();
+    visitLogWorkoutPage();
   });
 
   it("successfully logs a workout via free text", () => {
     cy.getBySel("input-workout-title").type("Morning Training Run");
     cy.advanceLogWorkoutToReflect("5km tempo run\n4x10 pushups");
 
-    // Step 3: add notes, skip RPE, then save
-    cy.getBySel("input-workout-notes").type("Felt really good today!");
-    cy.getBySel("button-skip-rpe").click();
+    cy.completeReflectAndSaveWorkout("Felt really good today!");
 
-    cy.getBySel("button-save-workout").should("not.be.disabled").click();
-
-    // Wait for the save request to be made and check the payload
     cy.wait("@saveWorkout").then((interception) => {
       expect(interception.request.body).to.include({
         title: "Morning Training Run",
@@ -44,7 +25,6 @@ describe("Log Workout Submission", () => {
       });
     });
 
-    // It should redirect to home/timeline
     cy.location("pathname").should("eq", "/");
     cy.contains("Workout logged").should("exist");
   });
@@ -52,11 +32,8 @@ describe("Log Workout Submission", () => {
   it("saves with fallback title when no title is provided", () => {
     // Text must include a digit/x to pass auto-parse signal gate.
     cy.advanceLogWorkoutToReflect("3x10 squats");
-    cy.getBySel("button-skip-rpe").click();
+    cy.completeReflectAndSaveWorkout();
 
-    cy.getBySel("button-save-workout").should("not.be.disabled").click();
-
-    // Should save with fallback title "Workout"
     cy.wait("@saveWorkout").then((interception) => {
       expect(interception.request.body.title).to.eq("Workout");
     });
@@ -65,7 +42,6 @@ describe("Log Workout Submission", () => {
   });
 
   it("blocks progression with no exercises and no free text", () => {
-    // Title alone is not enough to proceed — Continue must be disabled
     cy.getBySel("input-workout-title").type("Title Only");
     cy.getBySel("button-step-continue").should("be.disabled");
   });
@@ -73,46 +49,29 @@ describe("Log Workout Submission", () => {
 
 describe("Log Workout Exercise Mode Submission", () => {
   beforeEach(() => {
-    setupAuthIntercepts();
-    cy.intercept("POST", "/api/v1/workouts", {
-      statusCode: 200,
-      body: { id: "new-workout-2", title: "Exercise Mode Workout", date: new Date().toISOString() },
-    }).as("saveWorkout");
-    cy.intercept("POST", "/api/v1/parse-exercises", {
-      statusCode: 200,
-      body: [],
-    }).as("parseExercises");
-
-    cy.visit("/log");
-    cy.wait("@authUser");
-    cy.getBySel("input-workout-title").should("exist");
-    cy.ensureConsentDismissed();
+    stubSaveWorkout({
+      body: { id: "new-workout-2", title: "Exercise Mode Workout" },
+    });
+    stubParseExercisesEmpty();
+    visitLogWorkoutPage();
   });
 
   it("successfully logs a workout with selected exercises", () => {
-    // Fill the basic details
     cy.getBySel("input-workout-title").type("Leg Day");
 
-    // Add Back Squat via the exercise picker (available in step 1)
     cy.getBySel("exercise-table-add").click();
     cy.getBySel("exercise-add-dialog").should("exist");
     cy.getBySel("button-exercise-back_squat").click();
 
-    // Navigate through Confirm to Reflect (no text → no parse triggered)
     cy.advanceLogWorkoutToReflect("");
 
-    // Step 3: add notes, skip RPE, then save
-    cy.getBySel("button-skip-rpe").click();
-    cy.getBySel("input-workout-notes").type("Squats felt heavy");
-
-    cy.getBySel("button-save-workout").should("not.be.disabled").click();
+    cy.completeReflectAndSaveWorkout("Squats felt heavy");
 
     cy.wait("@saveWorkout").then((interception) => {
       expect(interception.request.body).to.include({
         title: "Leg Day",
         notes: "Squats felt heavy",
       });
-      // Ensure exercises array is present and contains back_squat
       expect(interception.request.body.exercises[0]).to.include({
         exerciseName: "back_squat",
       });
@@ -123,7 +82,6 @@ describe("Log Workout Exercise Mode Submission", () => {
   });
 
   it("blocks progression without any exercises or free text", () => {
-    // Title alone is not enough — Continue stays disabled
     cy.getBySel("input-workout-title").type("Leg Day");
     cy.getBySel("button-step-continue").should("be.disabled");
   });
