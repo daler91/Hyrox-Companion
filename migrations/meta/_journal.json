@@ -246,6 +246,13 @@
       "when": 1777744984949,
       "tag": "0034_sticky_diamondback",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1777746419896,
+      "tag": "0035_maf_artifacts",
+      "breakpoints": true
     }
   ]
 }

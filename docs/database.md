@@ -36,6 +36,17 @@ User accounts and preferences.
 | `email_weekly_summary` | `boolean` | default `false` — per-type toggle for the weekly training summary |
 | `email_missed_reminder` | `boolean` | default `false` — per-type toggle for the missed-workout reminder |
 | `ai_coach_enabled` | `boolean` | default `false` — **AI consent gate**; no workout data is sent to Gemini while this is `false` |
+| `training_style_id` | `text` | default `'balanced_default'` |
+| `training_style_previous_id` | `text` | nullable |
+| `training_style_changed_at` | `timestamp with time zone` | nullable |
+| `training_style_recompute_now` | `boolean` | default `false` |
+| `maf_age` | `integer` | nullable |
+| `maf_injury_illness_medication` | `boolean` | nullable |
+| `maf_consistency` | `text` | nullable |
+| `maf_trend` | `text` | nullable |
+| `maf_hr_data_available` | `boolean` | nullable |
+| `maf_hr` | `integer` | nullable |
+| `maf_baseline_test_scheduled_at` | `timestamp with time zone` | nullable |
 | `is_auto_coaching` | `boolean` | default `false` |
 | `last_weekly_summary_at` | `timestamp` | nullable |
 | `last_missed_reminder_at` | `timestamp` | nullable |
@@ -50,6 +61,75 @@ No additional indexes (queries are by PK).
 - No Gemini call is issued unless `ai_coach_enabled = true`. The auto-coach service short-circuits (`server/services/coachService.ts`) and the chat / parsing routes check the flag before composing a prompt.
 
 ---
+
+
+### user_training_style
+
+Historical training-style selections per user.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `varchar(255)` | PK, default `gen_random_uuid()` |
+| `user_id` | `varchar(255)` | NOT NULL, FK -> `users.id` ON DELETE CASCADE |
+| `style` | `text` | NOT NULL |
+| `effective_date` | `date` | NOT NULL |
+| `source` | `text` | NOT NULL, CHECK in (`onboarding`, `settings`, `migration_default`) |
+| `created_at` | `timestamp` | default `now()` |
+
+**Indexes:**
+- `idx_user_training_style_user_effective` on (`user_id`, `effective_date`)
+
+**Migration default behavior:** existing users without an explicit style history receive one backfilled row with:
+- `style = COALESCE(users.training_style_id, 'balanced_default')`
+- `effective_date = CURRENT_DATE` (migration run date)
+- `source = 'migration_default'`
+
+### maf_profile
+
+Versioned MAF heart-rate profile snapshots for reproducible calculations.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `varchar(255)` | PK, default `gen_random_uuid()` |
+| `user_id` | `varchar(255)` | NOT NULL, FK -> `users.id` ON DELETE CASCADE |
+| `base_hr` | `integer` | NOT NULL |
+| `adjustment` | `integer` | NOT NULL, default `0` |
+| `final_hr` | `integer` | NOT NULL |
+| `reason` | `text` | nullable |
+| `phase` | `text` | nullable |
+| `strict_mode` | `boolean` | NOT NULL, default `false` |
+| `version` | `integer` | NOT NULL, default `1` |
+| `calculated_at` | `timestamp with time zone` | NOT NULL, default `now()` |
+
+### maf_test_results
+
+Versioned MAF test executions and output metrics.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `varchar(255)` | PK, default `gen_random_uuid()` |
+| `user_id` | `varchar(255)` | NOT NULL, FK -> `users.id` ON DELETE CASCADE |
+| `protocol_type` | `text` | NOT NULL |
+| `conditions` | `jsonb` | nullable |
+| `metrics` | `jsonb` | nullable |
+| `notes` | `text` | nullable |
+| `version` | `integer` | NOT NULL, default `1` |
+
+### maf_workout_analysis
+
+Versioned workout-level MAF compliance and action recommendations.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `varchar(255)` | PK, default `gen_random_uuid()` |
+| `user_id` | `varchar(255)` | NOT NULL, FK -> `users.id` ON DELETE CASCADE |
+| `workout_log_id` | `varchar(255)` | nullable, FK -> `workout_logs.id` ON DELETE SET NULL |
+| `compliance_pct` | `integer` | nullable |
+| `classification` | `text` | nullable |
+| `next_action` | `text` | nullable |
+| `analysis_details` | `jsonb` | nullable |
+| `version` | `integer` | NOT NULL, default `1` |
+
 
 ### training_plans
 

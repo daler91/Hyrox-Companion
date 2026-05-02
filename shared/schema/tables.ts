@@ -375,6 +375,65 @@ export const pushSubscriptions = pgTable("push_subscriptions", {
   uniqueIndex("idx_push_subscriptions_user_endpoint").on(table.userId, table.endpoint),
 ]);
 
+// User training-style history. Stores where a style came from (onboarding or
+// settings) and when it became effective so downstream analysis can use the
+// style active at a given workout/test date.
+export const userTrainingStyle = pgTable("user_training_style", {
+  id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 255 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  style: text("style").notNull(),
+  effectiveDate: date("effective_date").notNull(),
+  source: text("source").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_user_training_style_user_effective").on(table.userId, table.effectiveDate),
+  check("user_training_style_source_check", sql`source IN ('onboarding', 'settings', 'migration_default')`),
+]);
+
+export const mafProfile = pgTable("maf_profile", {
+  id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 255 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  baseHr: integer("base_hr").notNull(),
+  adjustment: integer("adjustment").notNull().default(0),
+  finalHr: integer("final_hr").notNull(),
+  reason: text("reason"),
+  phase: text("phase"),
+  strictMode: boolean("strict_mode").notNull().default(false),
+  version: integer("version").notNull().default(1),
+  calculatedAt: timestamp("calculated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_maf_profile_user_calculated").on(table.userId, table.calculatedAt),
+]);
+
+export const mafTestResults = pgTable("maf_test_results", {
+  id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 255 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  protocolType: text("protocol_type").notNull(),
+  conditions: jsonb("conditions"),
+  metrics: jsonb("metrics"),
+  notes: text("notes"),
+  version: integer("version").notNull().default(1),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_maf_test_results_user_created").on(table.userId, table.createdAt),
+]);
+
+export const mafWorkoutAnalysis = pgTable("maf_workout_analysis", {
+  id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 255 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  workoutLogId: varchar("workout_log_id", { length: 255 }).references(() => workoutLogs.id, { onDelete: "set null" }),
+  compliancePct: integer("compliance_pct"),
+  classification: text("classification"),
+  nextAction: text("next_action"),
+  analysisDetails: jsonb("analysis_details"),
+  version: integer("version").notNull().default(1),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_maf_workout_analysis_user_created").on(table.userId, table.createdAt),
+  index("idx_maf_workout_analysis_workout_log_id").on(table.workoutLogId),
+]);
+
 // ---------------------------------------------------------------------------
 // Drizzle relations — enables `db.query.<table>.findMany({ with: { ... } })`
 // for type-safe nested queries in the storage layer.
@@ -397,6 +456,10 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   documentChunks: many(documentChunks),
   aiUsageLogs: many(aiUsageLogs),
   pushSubscriptions: many(pushSubscriptions),
+  trainingStyles: many(userTrainingStyle),
+  mafProfiles: many(mafProfile),
+  mafTestResults: many(mafTestResults),
+  mafWorkoutAnalyses: many(mafWorkoutAnalysis),
 }));
 
 export const trainingPlansRelations = relations(trainingPlans, ({ one, many }) => ({
@@ -502,5 +565,37 @@ export const pushSubscriptionsRelations = relations(pushSubscriptions, ({ one })
   user: one(users, {
     fields: [pushSubscriptions.userId],
     references: [users.id],
+  }),
+}));
+
+export const userTrainingStyleRelations = relations(userTrainingStyle, ({ one }) => ({
+  user: one(users, {
+    fields: [userTrainingStyle.userId],
+    references: [users.id],
+  }),
+}));
+
+export const mafProfileRelations = relations(mafProfile, ({ one }) => ({
+  user: one(users, {
+    fields: [mafProfile.userId],
+    references: [users.id],
+  }),
+}));
+
+export const mafTestResultsRelations = relations(mafTestResults, ({ one }) => ({
+  user: one(users, {
+    fields: [mafTestResults.userId],
+    references: [users.id],
+  }),
+}));
+
+export const mafWorkoutAnalysisRelations = relations(mafWorkoutAnalysis, ({ one }) => ({
+  user: one(users, {
+    fields: [mafWorkoutAnalysis.userId],
+    references: [users.id],
+  }),
+  workoutLog: one(workoutLogs, {
+    fields: [mafWorkoutAnalysis.workoutLogId],
+    references: [workoutLogs.id],
   }),
 }));
