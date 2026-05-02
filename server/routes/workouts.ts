@@ -6,6 +6,7 @@ import { z } from "zod";
 import { isAuthenticated } from "../clerkAuth";
 import { DEFAULT_PAGE_LIMIT, DEFAULT_TIMELINE_LIMIT, MAX_PAGE_LIMIT } from "../constants";
 import { db } from "../db";
+import { AppError, ErrorCode } from "../errors";
 import { aiBudgetCheck } from "../middleware/aibudget";
 import { protectedMutationGuards } from "../routeGuards";
 import { asyncHandler, parsePagination, rateLimiter, sendNotFound, validateBody, validateParams } from "../routeUtils";

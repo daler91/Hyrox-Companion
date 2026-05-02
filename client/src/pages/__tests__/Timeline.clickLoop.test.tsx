@@ -1,5 +1,5 @@
-import { act, fireEvent, waitFor } from "@testing-library/react";
 import type { TimelineEntry } from "@shared/schema";
+import { act, fireEvent, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { buildTimelineEntry, buildTimelineStatePayload, renderTimelineWithState, setHarnessOpenWorkoutId } from "./timelineTestHarness";

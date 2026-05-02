@@ -13,7 +13,7 @@ import type { ParseFromImagePayload } from "@/lib/api";
 import type { CompressedImage } from "@/lib/image";
 import { cn } from "@/lib/utils";
 
-import { buildParseImagePayload, shouldRetainImagePreview, type ImagePreviewState } from "./workoutComposer.utils";
+import { buildParseImagePayload, type ImagePreviewState,shouldRetainImagePreview } from "./workoutComposer.utils";
 
 interface WorkoutComposerProps {
   readonly freeText: string;

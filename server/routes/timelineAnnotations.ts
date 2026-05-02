@@ -3,6 +3,7 @@ import {
   updateTimelineAnnotationSchema,
 } from "@shared/schema";
 import { type Request, type Response, Router } from "express";
+import { z } from "zod";
 
 import { isAuthenticated } from "../clerkAuth";
 import { protectedMutationGuards } from "../routeGuards";
@@ -20,7 +21,7 @@ router.get(
   "/api/v1/timeline-annotations",
   isAuthenticated,
   rateLimiter("annotations", 60),
-  asyncHandler(async (req: Request, res: Response) => {
+  asyncHandler(async (req: Request<Record<string, never>, unknown, z.infer<typeof insertTimelineAnnotationSchema>>, res: Response) => {
     const userId = getUserId(req);
     const annotations = await storage.timelineAnnotations.list(userId);
     res.json(annotations);
@@ -36,7 +37,7 @@ router.post(
   ...protectedMutationGuards,
   rateLimiter("annotations", 20),
   validateBody(insertTimelineAnnotationSchema),
-  asyncHandler(async (req: Request, res: Response) => {
+  asyncHandler(async (req: Request<Record<string, never>, unknown, z.infer<typeof insertTimelineAnnotationSchema>>, res: Response) => {
     const userId = getUserId(req);
     const row = await storage.timelineAnnotations.create(userId, req.body);
     res.status(201).json(row);
@@ -53,7 +54,7 @@ router.patch(
   ...protectedMutationGuards,
   rateLimiter("annotations", 20),
   validateBody(updateTimelineAnnotationSchema),
-  asyncHandler(async (req: Request<{ id: string }>, res: Response) => {
+  asyncHandler(async (req: Request<{ id: string }, unknown, z.infer<typeof updateTimelineAnnotationSchema>>, res: Response) => {
     const userId = getUserId(req);
 
     // Merge-then-validate: the schema `.refine` only runs when both dates
@@ -91,7 +92,7 @@ router.delete(
   "/api/v1/timeline-annotations/:id",
   ...protectedMutationGuards,
   rateLimiter("annotations", 20),
-  asyncHandler(async (req: Request<{ id: string }>, res: Response) => {
+  asyncHandler(async (req: Request<{ id: string }, unknown, z.infer<typeof updateTimelineAnnotationSchema>>, res: Response) => {
     const userId = getUserId(req);
     const deleted = await storage.timelineAnnotations.delete(userId, req.params.id);
     if (!deleted) {
