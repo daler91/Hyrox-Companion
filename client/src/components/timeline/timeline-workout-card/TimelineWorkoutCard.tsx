@@ -1,6 +1,15 @@
 import { useDraggable } from "@dnd-kit/core";
 import { addDays, format } from "date-fns";
-import { BookOpen, CalendarClock, CheckCircle2, Circle, Database, FileText,Loader2, Move } from "lucide-react";
+import {
+  BookOpen,
+  CalendarClock,
+  CheckCircle2,
+  Circle,
+  Database,
+  FileText,
+  Loader2,
+  Move,
+} from "lucide-react";
 import React, { useMemo, useState } from "react";
 
 import { StravaIcon } from "@/components/icons/StravaIcon";
@@ -24,7 +33,7 @@ import { cn } from "@/lib/utils";
 import { CoachNote } from "./CoachNote";
 import { ExerciseChips } from "./ExerciseChips";
 import type { TimelineWorkoutCardProps } from "./types";
-import { getCardClasses,getStatusBadge } from "./utils";
+import { getCardClasses, getStatusBadge } from "./utils";
 import { WorkoutStravaStats } from "./WorkoutStravaStats";
 
 const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
@@ -270,7 +279,9 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
                 {[
                   entry.duration ? `Duration: ${entry.duration} min` : null,
                   entry.rpe ? `RPE: ${entry.rpe}` : null,
-                ].filter(Boolean).join(" | ")}
+                ]
+                  .filter(Boolean)
+                  .join(" | ")}
               </p>
             )}
             <WorkoutStravaStats entry={entry} distanceUnit={distanceUnit} />
@@ -296,23 +307,28 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
 // This reduces unnecessary re-renders in a potentially long list.
 export default TimelineWorkoutCard;
 
-function getAdherenceBadge(compliancePct: number | null): { label: string; className: string } | null {
+function getAdherenceBadge(
+  compliancePct: number | null,
+): { label: string; className: string } | null {
   if (compliancePct == null) return null;
   if (compliancePct >= 85) {
     return {
       label: `Adherence ${compliancePct}%`,
-      className: "border-emerald-300 text-emerald-700 bg-emerald-50 dark:border-emerald-800 dark:text-emerald-300 dark:bg-emerald-950",
+      className:
+        "border-emerald-300 text-emerald-700 bg-emerald-50 dark:border-emerald-800 dark:text-emerald-300 dark:bg-emerald-950",
     };
   }
   if (compliancePct >= 60) {
     return {
       label: `Adherence ${compliancePct}%`,
-      className: "border-amber-300 text-amber-700 bg-amber-50 dark:border-amber-800 dark:text-amber-300 dark:bg-amber-950",
+      className:
+        "border-amber-300 text-amber-700 bg-amber-50 dark:border-amber-800 dark:text-amber-300 dark:bg-amber-950",
     };
   }
   return {
     label: `Adherence ${compliancePct}%`,
-    className: "border-rose-300 text-rose-700 bg-rose-50 dark:border-rose-800 dark:text-rose-300 dark:bg-rose-950",
+    className:
+      "border-rose-300 text-rose-700 bg-rose-50 dark:border-rose-800 dark:text-rose-300 dark:bg-rose-950",
   };
 }
 
@@ -404,19 +420,28 @@ function MoveEntryMenu({
         </Tooltip>
       </TooltipProvider>
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            aria-label={`Move ${entry.focus || "workout"} to another day`}
-            data-testid={`move-menu-${entry.id}`}
-            disabled={isMoving}
-            onClick={stop}
-            onMouseDown={stop}
-          >
-            <CalendarClock className="h-3.5 w-3.5" />
-          </button>
-        </DropdownMenuTrigger>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label={`Move ${entry.focus || "workout"} to another day`}
+                  data-testid={`move-menu-${entry.id}`}
+                  disabled={isMoving}
+                  onClick={stop}
+                  onMouseDown={stop}
+                >
+                  <CalendarClock className="h-3.5 w-3.5" />
+                </button>
+              </DropdownMenuTrigger>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Move to another day</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
         <DropdownMenuContent align="end" onClick={stop} onMouseDown={stop}>
           {entry.date !== todayIso && (
             <DropdownMenuItem
