@@ -10,6 +10,7 @@ import { useSaveMessageMutation } from "@/hooks/useChatMutations";
 import { type Message,useChatSession } from "@/hooks/useChatSession";
 import { getCurrentTimeString } from "@/lib/dateUtils";
 import { calculateStats } from "@/lib/statsUtils";
+import { useAuth } from "@/hooks/useAuth";
 
 const WELCOME_TEXT = "Welcome to fitai.coach! I'm your AI training coach, here to help you reach your fitness goals.\n\nTo get started, you can:\n- **Use our 8-week fitness plan** - a structured program covering running, strength, and functional exercises\n- **Import your own plan** - if you have a CSV training plan\n- **Log individual workouts** - track sessions as you complete them\n\nOnce you have some training data, I can analyze your progress, suggest improvements, and help optimize your training. What are you working towards?";
 
@@ -45,6 +46,7 @@ interface CoachPanelProps {
 }
 
 export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }: Readonly<CoachPanelProps>) {
+  const { user } = useAuth();
   const [localMessages, setLocalMessages] = useState<Message[]>([]);
   const [hasShownWelcome, setHasShownWelcome] = useState(false);
 
@@ -144,6 +146,7 @@ export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }
         onClose={onClose}
         isClearingHistory={isClearingHistory}
         canClearHistory={messages.length > 1}
+        activeStyleLabel={user?.trainingStyleId === "maf_method" ? "MAF Method" : "Balanced"}
       />
       <CoachPanelStats stats={stats} />
       <CoachPanelChatArea

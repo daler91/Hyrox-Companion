@@ -3,6 +3,7 @@ import { useState } from "react";
 
 import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface CoachPanelHeaderProps {
@@ -10,6 +11,7 @@ interface CoachPanelHeaderProps {
   readonly onClose: () => void;
   readonly isClearingHistory: boolean;
   readonly canClearHistory: boolean;
+  readonly activeStyleLabel: string;
 }
 
 export function CoachPanelHeader({
@@ -17,6 +19,7 @@ export function CoachPanelHeader({
   onClose,
   isClearingHistory,
   canClearHistory,
+  activeStyleLabel,
 }: Readonly<CoachPanelHeaderProps>) {
   const [confirmOpen, setConfirmOpen] = useState(false);
 
@@ -31,6 +34,7 @@ export function CoachPanelHeader({
         <div className="flex items-center gap-2">
           <MessageSquare className="h-4 w-4 text-primary" />
           <span className="font-semibold text-sm">AI Coach</span>
+          <Badge variant="secondary" data-testid="badge-active-style">Active style: {activeStyleLabel}</Badge>
         </div>
         <div className="flex items-center gap-1">
           {canClearHistory && (

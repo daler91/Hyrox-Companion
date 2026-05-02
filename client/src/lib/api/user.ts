@@ -31,6 +31,17 @@ export interface UserPreferences {
   /** Whether adherence indicators are shown in timeline/detail UI surfaces. */
   showAdherenceInsights: boolean;
   aiCoachEnabled: boolean;
+  trainingStyleId?: string | null;
+  trainingStylePreviousId?: string | null;
+  trainingStyleChangedAt?: string | null;
+  trainingStyleRecomputeNow?: boolean;
+  mafAge?: number | null;
+  mafInjuryIllnessMedication?: boolean | null;
+  mafConsistency?: "low" | "moderate" | "high" | null;
+  mafTrend?: "improving" | "flat" | "declining" | null;
+  mafHrDataAvailable?: boolean | null;
+  mafHr?: number | null;
+  mafBaselineTestScheduledAt?: string | null;
 }
 
 export type UpdateUserPreferencesPayload = Partial<UserPreferences>;

@@ -1,7 +1,10 @@
 import { Activity, Check, Dumbbell, Target, TrendingDown,Zap } from "lucide-react";
 
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 
 const goals = [
   { id: "strength", label: "Build strength", icon: Dumbbell, description: "Get stronger with progressive resistance training" },
@@ -14,15 +17,25 @@ const goals = [
 interface GoalStepProps {
   readonly selectedGoal: string;
   readonly onGoalChange: (goal: string) => void;
+  readonly trainingStyleId: string;
+  readonly onTrainingStyleChange: (style: string) => void;
+  readonly mafAge: string;
+  readonly onMafAgeChange: (age: string) => void;
+  readonly mafInjuryIllnessMedication: boolean;
+  readonly onMafInjuryIllnessMedicationChange: (value: boolean) => void;
+  readonly mafConsistency: string;
+  readonly onMafConsistencyChange: (value: string) => void;
+  readonly mafTrend: string;
+  readonly onMafTrendChange: (value: string) => void;
+  readonly mafHrDataAvailable: boolean;
+  readonly onMafHrDataAvailableChange: (value: boolean) => void;
 }
 
-export function GoalStep({ selectedGoal, onGoalChange }: Readonly<GoalStepProps>) {
+export function GoalStep(props: Readonly<GoalStepProps>) {
+  const { selectedGoal, onGoalChange, trainingStyleId } = props;
   return (
-    <RadioGroup
-      value={selectedGoal}
-      onValueChange={onGoalChange}
-      className="space-y-3"
-    >
+    <div className="space-y-4">
+    <RadioGroup value={selectedGoal} onValueChange={onGoalChange} className="space-y-3">
       {goals.map((goal) => (
         <button
           type="button"
@@ -48,5 +61,24 @@ export function GoalStep({ selectedGoal, onGoalChange }: Readonly<GoalStepProps>
         </button>
       ))}
     </RadioGroup>
+    <div className="space-y-2">
+      <Label>Training style</Label>
+      <Select value={trainingStyleId} onValueChange={props.onTrainingStyleChange}>
+        <SelectTrigger><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="balanced_default">Balanced</SelectItem>
+          <SelectItem value="maf_method">MAF Method</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+    {trainingStyleId === "maf_method" && <div className="space-y-3 rounded-md border p-3">
+      <Label>MAF onboarding</Label>
+      <Input placeholder="Age" value={props.mafAge} onChange={(e) => props.onMafAgeChange(e.target.value)} />
+      <div className="flex items-center justify-between"><Label>Injury/illness/medication?</Label><Switch checked={props.mafInjuryIllnessMedication} onCheckedChange={props.onMafInjuryIllnessMedicationChange} /></div>
+      <Select value={props.mafConsistency} onValueChange={props.onMafConsistencyChange}><SelectTrigger><SelectValue placeholder="Training consistency" /></SelectTrigger><SelectContent><SelectItem value="low">Low</SelectItem><SelectItem value="moderate">Moderate</SelectItem><SelectItem value="high">High</SelectItem></SelectContent></Select>
+      <Select value={props.mafTrend} onValueChange={props.onMafTrendChange}><SelectTrigger><SelectValue placeholder="Recent trend" /></SelectTrigger><SelectContent><SelectItem value="improving">Improving</SelectItem><SelectItem value="flat">Flat</SelectItem><SelectItem value="declining">Declining</SelectItem></SelectContent></Select>
+      <div className="flex items-center justify-between"><Label>HR data available?</Label><Switch checked={props.mafHrDataAvailable} onCheckedChange={props.onMafHrDataAvailableChange} /></div>
+    </div>}
+    </div>
   );
 }

@@ -14,6 +14,8 @@ import { StravaSection } from "@/components/settings/StravaSection";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { ToastAction } from "@/components/ui/toast";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -32,11 +34,10 @@ type Preferences = UserPreferences;
 type SavePayload = Omit<UserPreferences, "weeklyGoal"> & { weeklyGoal: number };
 interface PreferencesSnapshot extends Omit<UserPreferences, "weeklyGoal"> {
   weeklyGoal: string;
+  trainingStyleId: string;
 }
 
-function preferencesToSnapshot(
-  preferences: Pick<Preferences, "weightUnit" | "distanceUnit" | "weeklyGoal" | "emailNotifications" | "emailWeeklySummary" | "emailMissedReminder" | "showAdherenceInsights" | "aiCoachEnabled">,
-): PreferencesSnapshot {
+function preferencesToSnapshot(preferences: Preferences): PreferencesSnapshot {
   return {
     weightUnit: preferences.weightUnit || "kg",
     distanceUnit: preferences.distanceUnit || "km",
@@ -46,6 +47,7 @@ function preferencesToSnapshot(
     emailMissedReminder: preferences.emailMissedReminder ?? true,
     showAdherenceInsights: preferences.showAdherenceInsights ?? true,
     aiCoachEnabled: preferences.aiCoachEnabled ?? true,
+    trainingStyleId: preferences.trainingStyleId ?? "balanced_default",
   };
 }
 
@@ -59,6 +61,7 @@ function savePayloadToSnapshot(payload: SavePayload): PreferencesSnapshot {
     emailMissedReminder: payload.emailMissedReminder,
     showAdherenceInsights: payload.showAdherenceInsights,
     aiCoachEnabled: payload.aiCoachEnabled,
+    trainingStyleId: payload.trainingStyleId ?? "balanced_default",
   };
 }
 
@@ -72,6 +75,7 @@ function snapshotToSavePayload(snapshot: PreferencesSnapshot): SavePayload {
     emailMissedReminder: snapshot.emailMissedReminder,
     showAdherenceInsights: snapshot.showAdherenceInsights,
     aiCoachEnabled: snapshot.aiCoachEnabled,
+    trainingStyleId: snapshot.trainingStyleId,
   };
 }
 
@@ -88,6 +92,9 @@ export default function Settings() {
   const [emailMissedReminder, setEmailMissedReminder] = useState(true);
   const [showAdherenceInsights, setShowAdherenceInsights] = useState(true);
   const [aiCoachEnabled, setAiCoachEnabled] = useState(true);
+  const [trainingStyleId, setTrainingStyleId] = useState("balanced_default");
+  const [confirmStyleOpen, setConfirmStyleOpen] = useState(false);
+  const [pendingStyleId, setPendingStyleId] = useState<string | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
   // Snapshot of initial local defaults. Used as a fallback baseline if
   // remote preferences never load (e.g. query error) so edits can still
@@ -101,6 +108,7 @@ export default function Settings() {
     emailMissedReminder: true,
     showAdherenceInsights: true,
     aiCoachEnabled: true,
+    trainingStyleId: "balanced_default",
   });
   // Snapshot of the last server-committed values used as the baseline for
   // dirty-state computation.
@@ -119,8 +127,9 @@ export default function Settings() {
       emailMissedReminder,
       showAdherenceInsights,
       aiCoachEnabled,
+      trainingStyleId,
     }),
-    [weightUnit, distanceUnit, weeklyGoal, emailNotifications, emailWeeklySummary, emailMissedReminder, showAdherenceInsights, aiCoachEnabled],
+    [weightUnit, distanceUnit, weeklyGoal, emailNotifications, emailWeeklySummary, emailMissedReminder, showAdherenceInsights, aiCoachEnabled, trainingStyleId],
   );
 
   useEffect(() => {
@@ -173,6 +182,7 @@ export default function Settings() {
       setEmailMissedReminder(preferences.emailMissedReminder ?? true);
       setShowAdherenceInsights(preferences.showAdherenceInsights ?? true);
       setAiCoachEnabled(preferences.aiCoachEnabled ?? true);
+      setTrainingStyleId(preferences.trainingStyleId ?? "balanced_default");
       // Seed the baseline snapshot on first load. After saves, onSuccess
       // keeps the baseline in sync with committed values.
       if (!baselineSnapshotRef.current) {
@@ -190,6 +200,7 @@ export default function Settings() {
     mutationFn: (data: SavePayload) => api.preferences.update(data),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.preferences }).catch(() => {});
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.authUser }).catch(() => {});
       // Promote the saved values to the dirty-state baseline so we don't
       // depend on the invalidating preferences query timing.
       baselineSnapshotRef.current = savePayloadToSnapshot(variables);
@@ -247,6 +258,8 @@ export default function Settings() {
     undoSnapshotRef.current = baselineSnapshotRef.current
       ? { ...baselineSnapshotRef.current }
       : null;
+    const committedStyleId = baselineSnapshotRef.current?.trainingStyleId ?? "balanced_default";
+    const styleChanged = trainingStyleId !== committedStyleId;
     saveMutation.mutate({
       weightUnit,
       distanceUnit,
@@ -256,8 +269,14 @@ export default function Settings() {
       emailMissedReminder,
       showAdherenceInsights,
       aiCoachEnabled,
+      trainingStyleId,
+      trainingStylePreviousId: styleChanged ? committedStyleId : undefined,
+      trainingStyleChangedAt: styleChanged ? new Date().toISOString() : undefined,
+      trainingStyleRecomputeNow: styleChanged,
+      mafHr: styleChanged && trainingStyleId === "maf_method" ? (180 - Number(preferences?.mafAge ?? 35)) : undefined,
+      mafBaselineTestScheduledAt: styleChanged && trainingStyleId === "maf_method" ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() : undefined,
     });
-  }, [saveMutation, weightUnit, distanceUnit, weeklyGoal, emailNotifications, emailWeeklySummary, emailMissedReminder, showAdherenceInsights, aiCoachEnabled]);
+  }, [saveMutation, weightUnit, distanceUnit, weeklyGoal, emailNotifications, emailWeeklySummary, emailMissedReminder, showAdherenceInsights, aiCoachEnabled, trainingStyleId, preferences?.mafAge]);
 
   const userName = getUserDisplayName(user);
 
@@ -347,6 +366,18 @@ export default function Settings() {
           setAiCoachEnabled(v);
         }}
       />
+      <Card>
+        <CardHeader><CardTitle>Training style</CardTitle><CardDescription>Changing style updates future analysis and plan generation behavior.</CardDescription></CardHeader>
+        <CardContent>
+          <Select value={trainingStyleId} onValueChange={(v) => { setPendingStyleId(v); setConfirmStyleOpen(true); }}>
+            <SelectTrigger className="max-w-xs"><SelectValue /></SelectTrigger>
+            <SelectContent><SelectItem value="balanced_default">Balanced</SelectItem><SelectItem value="maf_method">MAF Method</SelectItem></SelectContent>
+          </Select>
+        </CardContent>
+      </Card>
+      <AlertDialog open={confirmStyleOpen} onOpenChange={setConfirmStyleOpen}>
+        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Change training style?</AlertDialogTitle><AlertDialogDescription>This will change how your AI analysis works and affect future plans. We’ll re-baseline MAF settings when needed.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => pendingStyleId && setTrainingStyleId(pendingStyleId)}>Confirm</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
+      </AlertDialog>
 
       <PushNotificationSection />
 
