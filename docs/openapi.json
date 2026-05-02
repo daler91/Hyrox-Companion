@@ -355,6 +355,64 @@
             "type": "string",
             "nullable": true,
             "maxLength": 100
+          },
+          "trainingStylePreviousId": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 100
+          },
+          "trainingStyleChangedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "trainingStyleRecomputeNow": {
+            "type": "boolean"
+          },
+          "mafAge": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 16,
+            "maximum": 99
+          },
+          "mafInjuryIllnessMedication": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "mafConsistency": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "low",
+              "moderate",
+              "high",
+              null
+            ]
+          },
+          "mafTrend": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "improving",
+              "flat",
+              "declining",
+              null
+            ]
+          },
+          "mafHrDataAvailable": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "mafHr": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 90,
+            "maximum": 220
+          },
+          "mafBaselineTestScheduledAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
           }
         },
         "title": "UpdateUserPreferences",

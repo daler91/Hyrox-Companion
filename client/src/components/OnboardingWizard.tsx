@@ -44,6 +44,18 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
     setDistanceUnit,
     selectedGoal,
     setSelectedGoal,
+    trainingStyleId,
+    setTrainingStyleId,
+    mafAge,
+    setMafAge,
+    mafInjuryIllnessMedication,
+    setMafInjuryIllnessMedication,
+    mafConsistency,
+    setMafConsistency,
+    mafTrend,
+    setMafTrend,
+    mafHrDataAvailable,
+    setMafHrDataAvailable,
     startDate,
     setStartDate,
     handleNext,
@@ -96,7 +108,7 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
           onDistanceUnitChange={setDistanceUnit}
         />
       )}
-      {step === "goal" && <GoalStep selectedGoal={selectedGoal} onGoalChange={setSelectedGoal} />}
+      {step === "goal" && <GoalStep selectedGoal={selectedGoal} onGoalChange={setSelectedGoal} trainingStyleId={trainingStyleId} onTrainingStyleChange={setTrainingStyleId} mafAge={mafAge} onMafAgeChange={setMafAge} mafInjuryIllnessMedication={mafInjuryIllnessMedication} onMafInjuryIllnessMedicationChange={setMafInjuryIllnessMedication} mafConsistency={mafConsistency} onMafConsistencyChange={setMafConsistency} mafTrend={mafTrend} onMafTrendChange={setMafTrend} mafHrDataAvailable={mafHrDataAvailable} onMafHrDataAvailableChange={setMafHrDataAvailable} />}
       {step === "plan" && (
         <>
           <PlanStep

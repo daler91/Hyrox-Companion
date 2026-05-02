@@ -9,6 +9,50 @@ import { getUserId } from "../types";
 
 const router = Router();
 
+function serializePreferences(user: {
+  weightUnit: string | null;
+  distanceUnit: string | null;
+  weeklyGoal: number | null;
+  emailNotifications: boolean | null;
+  emailWeeklySummary: boolean | null;
+  emailMissedReminder: boolean | null;
+  showAdherenceInsights: boolean | null;
+  aiCoachEnabled: boolean | null;
+  trainingStyleId: string | null;
+  trainingStylePreviousId: string | null;
+  trainingStyleChangedAt: Date | null;
+  trainingStyleRecomputeNow: boolean | null;
+  mafAge: number | null;
+  mafInjuryIllnessMedication: boolean | null;
+  mafConsistency: string | null;
+  mafTrend: string | null;
+  mafHrDataAvailable: boolean | null;
+  mafHr: number | null;
+  mafBaselineTestScheduledAt: Date | null;
+}) {
+  return {
+    weightUnit: user.weightUnit ?? "kg",
+    distanceUnit: user.distanceUnit ?? "km",
+    weeklyGoal: user.weeklyGoal ?? 5,
+    emailNotifications: user.emailNotifications ?? true,
+    emailWeeklySummary: user.emailWeeklySummary ?? true,
+    emailMissedReminder: user.emailMissedReminder ?? true,
+    showAdherenceInsights: user.showAdherenceInsights ?? true,
+    aiCoachEnabled: user.aiCoachEnabled ?? true,
+    trainingStyleId: user.trainingStyleId ?? "balanced_default",
+    trainingStylePreviousId: user.trainingStylePreviousId ?? null,
+    trainingStyleChangedAt: user.trainingStyleChangedAt ?? null,
+    trainingStyleRecomputeNow: user.trainingStyleRecomputeNow ?? false,
+    mafAge: user.mafAge ?? null,
+    mafInjuryIllnessMedication: user.mafInjuryIllnessMedication ?? null,
+    mafConsistency: user.mafConsistency ?? null,
+    mafTrend: user.mafTrend ?? null,
+    mafHrDataAvailable: user.mafHrDataAvailable ?? null,
+    mafHr: user.mafHr ?? null,
+    mafBaselineTestScheduledAt: user.mafBaselineTestScheduledAt ?? null,
+  };
+}
+
 router.get('/api/v1/preferences', isAuthenticated, asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const user = await storage.users.getUser(userId);
@@ -37,17 +81,10 @@ router.get('/api/v1/preferences', isAuthenticated, asyncHandler(async (req: Expr
       : undefined;
 
     res.json({
-      weightUnit: user.weightUnit ?? "kg",
-      distanceUnit: user.distanceUnit ?? "km",
-      weeklyGoal,
+      ...serializePreferences(user),
       planWeeklyDensity: planWeeklyDensity ?? null,
       weeklyGoalExceedsPlan:
         planWeeklyDensity !== undefined && weeklyGoal > planWeeklyDensity,
-      emailNotifications: user.emailNotifications ?? true,
-      emailWeeklySummary: user.emailWeeklySummary ?? true,
-      emailMissedReminder: user.emailMissedReminder ?? true,
-      showAdherenceInsights: user.showAdherenceInsights ?? true,
-      aiCoachEnabled: user.aiCoachEnabled ?? true,
     });
   }));
 
@@ -62,16 +99,7 @@ router.patch('/api/v1/preferences', ...protectedMutationGuards, rateLimiter("pre
     if (!user) {
       return sendNotFound(res, "User not found");
     }
-    res.json({
-      weightUnit: user.weightUnit,
-      distanceUnit: user.distanceUnit,
-      weeklyGoal: user.weeklyGoal,
-      emailNotifications: user.emailNotifications ?? true,
-      emailWeeklySummary: user.emailWeeklySummary ?? true,
-      emailMissedReminder: user.emailMissedReminder ?? true,
-      showAdherenceInsights: user.showAdherenceInsights ?? true,
-      aiCoachEnabled: user.aiCoachEnabled ?? true,
-    });
+    res.json(serializePreferences(user));
   }));
 
 export default router;
