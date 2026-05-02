@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { ToastAction } from "@/components/ui/toast";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -126,6 +127,13 @@ export default function Settings() {
   const [pendingStyleId, setPendingStyleId] = useState<string | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
   const [styleTransitionNotice, setStyleTransitionNotice] = useState<string | null>(null);
+  const [styleSwitchBlockedMessage, setStyleSwitchBlockedMessage] = useState<string | null>(null);
+  const [mafSetupOpen, setMafSetupOpen] = useState(false);
+  const [mafAgeInput, setMafAgeInput] = useState("");
+  const [mafConsistencyInput, setMafConsistencyInput] = useState<"" | "low" | "moderate" | "high">("");
+  const [mafTrendInput, setMafTrendInput] = useState<"" | "improving" | "flat" | "declining">("");
+  const [mafHrDataAvailableInput, setMafHrDataAvailableInput] = useState<"" | "yes" | "no">("");
+  const [mafSetupError, setMafSetupError] = useState<string | null>(null);
   const [styleAuditEntries, setStyleAuditEntries] = useState<StyleAuditEntry[]>(() => {
     try {
       const raw = localStorage.getItem("fitai-settings-style-audit");
@@ -341,6 +349,10 @@ export default function Settings() {
   }, [saveMutation, weightUnit, distanceUnit, weeklyGoal, emailNotifications, emailWeeklySummary, emailMissedReminder, showAdherenceInsights, aiCoachEnabled, trainingStyleId, preferences?.mafAge, preferences?.mafInjuryIllnessMedication, preferences?.mafConsistency, preferences?.mafTrend]);
 
   const userName = getUserDisplayName(user);
+  const hasRequiredMafInputs = useCallback(() => {
+    const age = preferences?.mafAge;
+    return Number.isInteger(age) && age! >= 16 && age! <= 99 && Boolean(preferences?.mafConsistency) && Boolean(preferences?.mafTrend);
+  }, [preferences?.mafAge, preferences?.mafConsistency, preferences?.mafTrend]);
 
   if (isLoading) {
     return (
@@ -431,7 +443,7 @@ export default function Settings() {
       <Card>
         <CardHeader><CardTitle>Training style</CardTitle><CardDescription>Changing style updates future analysis and plan generation behavior.</CardDescription></CardHeader>
         <CardContent>
-          <Select value={trainingStyleId} onValueChange={(v) => { setPendingStyleId(v); setConfirmStyleOpen(true); }}>
+          <Select value={trainingStyleId} onValueChange={(v) => { setStyleSwitchBlockedMessage(null); setPendingStyleId(v); setConfirmStyleOpen(true); }}>
             <SelectTrigger className="max-w-xs"><SelectValue /></SelectTrigger>
             <SelectContent><SelectItem value="balanced_default">Balanced</SelectItem><SelectItem value="maf_method">MAF Method</SelectItem></SelectContent>
           </Select>
@@ -444,6 +456,9 @@ export default function Settings() {
             <CardDescription>{styleTransitionNotice}</CardDescription>
           </CardHeader>
         </Card>
+      )}
+      {styleSwitchBlockedMessage && (
+        <p className="text-sm text-destructive" data-testid="maf-switch-blocked">{styleSwitchBlockedMessage}</p>
       )}
       <Card>
         <CardHeader>
@@ -470,7 +485,41 @@ export default function Settings() {
       </Card>
 
       <AlertDialog open={confirmStyleOpen} onOpenChange={setConfirmStyleOpen}>
-        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Change training style?</AlertDialogTitle><AlertDialogDescription>This will change how your AI analysis works and affect future plans. We’ll re-baseline MAF settings when needed.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => { if (!pendingStyleId) return; setTrainingStyleId(pendingStyleId); setStyleTransitionNotice(`Switched to ${getStyleLabel(pendingStyleId)}. Immediate: coaching language and new recommendations update now. After re-baseline: future trend analysis and longer-horizon plan adjustments will settle once new baseline data is captured.`); }}>Confirm</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
+        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Change training style?</AlertDialogTitle><AlertDialogDescription>This will change how your AI analysis works and affect future plans. We’ll re-baseline MAF settings when needed.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => { if (!pendingStyleId) return; if (pendingStyleId === "maf_method" && !hasRequiredMafInputs()) { setStyleSwitchBlockedMessage("Complete MAF setup to switch styles"); setMafSetupOpen(true); return; } setTrainingStyleId(pendingStyleId); setStyleTransitionNotice(`Switched to ${getStyleLabel(pendingStyleId)}. Immediate: coaching language and new recommendations update now. After re-baseline: future trend analysis and longer-horizon plan adjustments will settle once new baseline data is captured.`); }}>Confirm</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog open={mafSetupOpen} onOpenChange={setMafSetupOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader><AlertDialogTitle>Complete MAF setup</AlertDialogTitle><AlertDialogDescription>Required fields are marked. Optional field: HR data available.</AlertDialogDescription></AlertDialogHeader>
+          <div className="space-y-3">
+            <Input placeholder="Age (required)" value={mafAgeInput} onChange={(e) => setMafAgeInput(e.target.value)} data-testid="maf-age-input" />
+            <Select value={mafConsistencyInput} onValueChange={(v: "low" | "moderate" | "high") => setMafConsistencyInput(v)}><SelectTrigger><SelectValue placeholder="Consistency (required)" /></SelectTrigger><SelectContent><SelectItem value="low">Low</SelectItem><SelectItem value="moderate">Moderate</SelectItem><SelectItem value="high">High</SelectItem></SelectContent></Select>
+            <Select value={mafTrendInput} onValueChange={(v: "improving" | "flat" | "declining") => setMafTrendInput(v)}><SelectTrigger><SelectValue placeholder="Trend (required)" /></SelectTrigger><SelectContent><SelectItem value="improving">Improving</SelectItem><SelectItem value="flat">Flat</SelectItem><SelectItem value="declining">Declining</SelectItem></SelectContent></Select>
+            <Select value={mafHrDataAvailableInput} onValueChange={(v: "yes" | "no") => setMafHrDataAvailableInput(v)}><SelectTrigger><SelectValue placeholder="HR data available (optional)" /></SelectTrigger><SelectContent><SelectItem value="yes">Yes</SelectItem><SelectItem value="no">No</SelectItem></SelectContent></Select>
+            {mafSetupError && <p className="text-sm text-destructive">{mafSetupError}</p>}
+          </div>
+          <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => {
+            const parsedAge = Number.parseInt(mafAgeInput, 10);
+            if (!Number.isInteger(parsedAge) || parsedAge < 16 || parsedAge > 99 || !mafConsistencyInput || !mafTrendInput) {
+              setMafSetupError("Enter a valid age and select required MAF fields.");
+              return;
+            }
+            setMafSetupError(null);
+            if (!pendingStyleId) return;
+            const committedStyleId = baselineSnapshotRef.current?.trainingStyleId ?? "balanced_default";
+            const styleChanged = pendingStyleId !== committedStyleId;
+            const maf = calculateMafHr({ age: parsedAge, injuryIllnessMedication: Boolean(preferences?.mafInjuryIllnessMedication), consistency: mafConsistencyInput, trend: mafTrendInput });
+            saveMutation.mutate({
+              weightUnit, distanceUnit, weeklyGoal: Number.parseInt(weeklyGoal, 10), emailNotifications, emailWeeklySummary, emailMissedReminder, showAdherenceInsights, aiCoachEnabled,
+              trainingStyleId: pendingStyleId, mafAge: parsedAge, mafConsistency: mafConsistencyInput, mafTrend: mafTrendInput,
+              mafHrDataAvailable: mafHrDataAvailableInput ? mafHrDataAvailableInput === "yes" : undefined,
+              trainingStylePreviousId: styleChanged ? committedStyleId : undefined, trainingStyleChangedAt: styleChanged ? new Date().toISOString() : undefined, trainingStyleRecomputeNow: styleChanged,
+              mafHr: styleChanged ? maf.ceiling : undefined, mafBaselineTestScheduledAt: styleChanged ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() : undefined,
+            });
+            setTrainingStyleId(pendingStyleId);
+            setMafSetupOpen(false);
+            setStyleSwitchBlockedMessage(null);
+          }}>Save MAF setup</AlertDialogAction></AlertDialogFooter>
+        </AlertDialogContent>
       </AlertDialog>
 
       <PushNotificationSection />

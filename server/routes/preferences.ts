@@ -9,6 +9,32 @@ import { getUserId } from "../types";
 
 const router = Router();
 
+function hasOwn<T extends object>(obj: T, key: keyof T): boolean {
+  return Object.prototype.hasOwnProperty.call(obj, key);
+}
+
+function validateMafTransition(payload: UpdateUserPreferences, current: Awaited<ReturnType<typeof storage.users.getUser>>) {
+  if (!current) return null;
+  const switchingToMaf = payload.trainingStyleId === "maf_method";
+  if (!switchingToMaf) return null;
+
+  const nextMafAge = hasOwn(payload, "mafAge") ? payload.mafAge ?? null : current.mafAge ?? null;
+  const nextMafConsistency = hasOwn(payload, "mafConsistency") ? payload.mafConsistency ?? null : current.mafConsistency ?? null;
+  const nextMafTrend = hasOwn(payload, "mafTrend") ? payload.mafTrend ?? null : current.mafTrend ?? null;
+
+  const missing: string[] = [];
+  if (nextMafAge == null) missing.push("mafAge");
+  if (nextMafConsistency == null) missing.push("mafConsistency");
+  if (nextMafTrend == null) missing.push("mafTrend");
+
+  if (missing.length === 0) return null;
+  return {
+    error: "MAF setup is incomplete",
+    code: "MAF_SETUP_REQUIRED",
+    details: missing.map((field) => ({ field, message: `${field} is required when trainingStyleId is maf_method` })),
+  };
+}
+
 function serializePreferences(user: {
   weightUnit: string | null;
   distanceUnit: string | null;
@@ -93,6 +119,12 @@ router.patch('/api/v1/preferences', ...protectedMutationGuards, rateLimiter("pre
     const parseResult = updateUserPreferencesSchema.safeParse(req.body);
     if (!parseResult.success) {
       return res.status(400).json({ error: "Invalid preferences data", code: "VALIDATION_ERROR", details: formatValidationErrors(parseResult.error) });
+    }
+
+    const current = await storage.users.getUser(userId);
+    const mafValidationError = validateMafTransition(parseResult.data, current);
+    if (mafValidationError) {
+      return res.status(400).json(mafValidationError);
     }
 
     const user = await storage.users.updateUserPreferences(userId, parseResult.data);
