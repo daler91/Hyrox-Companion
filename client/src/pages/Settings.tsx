@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { ToastAction } from "@/components/ui/toast";
 import { useToast } from "@/hooks/use-toast";
+import { calculateMafHr } from "@shared/maf";
 import { useAuth } from "@/hooks/useAuth";
 import { api, type GarminStatus, QUERY_KEYS, type StravaStatus, type UserPreferences } from "@/lib/api";
 import { getUserDisplayName } from "@/lib/authUtils";
@@ -260,6 +261,12 @@ export default function Settings() {
       : null;
     const committedStyleId = baselineSnapshotRef.current?.trainingStyleId ?? "balanced_default";
     const styleChanged = trainingStyleId !== committedStyleId;
+    const maf = trainingStyleId === "maf_method" ? calculateMafHr({
+      age: Number(preferences?.mafAge ?? 35),
+      injuryIllnessMedication: Boolean(preferences?.mafInjuryIllnessMedication),
+      consistency: (preferences?.mafConsistency as "low" | "moderate" | "high") ?? "moderate",
+      trend: (preferences?.mafTrend as "improving" | "flat" | "declining") ?? "flat",
+    }) : null;
     saveMutation.mutate({
       weightUnit,
       distanceUnit,
@@ -273,7 +280,7 @@ export default function Settings() {
       trainingStylePreviousId: styleChanged ? committedStyleId : undefined,
       trainingStyleChangedAt: styleChanged ? new Date().toISOString() : undefined,
       trainingStyleRecomputeNow: styleChanged,
-      mafHr: styleChanged && trainingStyleId === "maf_method" ? (180 - Number(preferences?.mafAge ?? 35)) : undefined,
+      mafHr: styleChanged && trainingStyleId === "maf_method" ? maf?.ceiling : undefined,
       mafBaselineTestScheduledAt: styleChanged && trainingStyleId === "maf_method" ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() : undefined,
     });
   }, [saveMutation, weightUnit, distanceUnit, weeklyGoal, emailNotifications, emailWeeklySummary, emailMissedReminder, showAdherenceInsights, aiCoachEnabled, trainingStyleId, preferences?.mafAge]);
