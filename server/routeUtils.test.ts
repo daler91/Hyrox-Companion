@@ -498,8 +498,9 @@ describe("validateBody", () => {
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
-        error: expect.stringMatching(/expected string, received undefined/),
-        details: expect.any(Object),
+        code: "VALIDATION_ERROR",
+        message: expect.stringMatching(/expected string, received undefined/),
+        details: expect.objectContaining({ issues: expect.any(Array) }),
       })
     );
   });
