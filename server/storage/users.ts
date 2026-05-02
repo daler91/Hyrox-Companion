@@ -109,6 +109,7 @@ export class UserStorage {
 
     if (before && user) {
       const styleChanged = before.trainingStyleId !== user.trainingStyleId;
+      const styleProvidedInPatch = Object.prototype.hasOwnProperty.call(preferences, "trainingStyleId");
       if (styleChanged) {
         logger.info({
           context: "health-metrics",
@@ -118,7 +119,7 @@ export class UserStorage {
           nextStyleId: user.trainingStyleId,
           changedAt: user.trainingStyleChangedAt?.toISOString() ?? null,
         }, "Training style changed");
-      } else {
+      } else if (styleProvidedInPatch) {
         logger.info({
           context: "health-metrics",
           event: "training_style_selected",
