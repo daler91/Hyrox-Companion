@@ -106,6 +106,28 @@ function resolveTrainingPhaseLabel(trainingContext: Awaited<ReturnType<typeof bu
     ?? "unknown";
 }
 
+async function persistRecommendationTraceForSuggestions(
+  userId: string,
+  suggestions: TimelineSuggestion[],
+  traceMetadata: RecommendationTraceMetadata,
+  log: Logger,
+): Promise<void> {
+  await Promise.all(suggestions.map(async (suggestion) => {
+    try {
+      const day = await storage.plans.getPlanDay(suggestion.workoutId, userId);
+      if (!day) return;
+      await storage.plans.updatePlanDay(suggestion.workoutId, {
+        aiInputsUsed: {
+          ...(day.aiInputsUsed ?? {}),
+          recommendationTrace: traceMetadata,
+        },
+      }, userId);
+    } catch (err) {
+      log.warn({ err, userId, workoutId: suggestion.workoutId }, "[timeline] Failed to persist recommendation trace metadata");
+    }
+  }));
+}
+
 function buildUnappliedStructuredResult(
   reason: ApplyTimelineSuggestionFailureReason,
 ): UnappliedTimelineSuggestionResult {
@@ -252,6 +274,8 @@ export async function generateTimelineAiSuggestions(
       }]
     : suggestions;
 
+  await persistRecommendationTraceForSuggestions(userId, surfacedSuggestions, traceMetadata, log);
+
   return {
     suggestions: surfacedSuggestions,
     ragInfo: sanitizeRagInfo(aiContext.ragInfo),
@@ -275,7 +299,7 @@ export async function applyTimelineAiSuggestion(
     return undefined;
   }
 
-  const serverTrace: RecommendationTraceMetadata = {
+  const serverTrace: RecommendationTraceMetadata = day.aiInputsUsed?.recommendationTrace ?? {
     trainingStyleId: resolveTrainingStyle(user?.trainingStyleId).trainingStyleId,
     phase: day.aiInputsUsed?.planPhase ?? "unknown",
     strategyRuleVersion: STRATEGY_RULE_VERSION,
