@@ -13,13 +13,14 @@ import { logger } from "../logger";
 import { buildWorkoutSearchText } from "../prompts/exerciseSetFormatter";
 import { storage } from "../storage";
 import { buildTrainingContext } from "./ai";
+import { analyzeSafetySignals, applySafetyLayerToSuggestions, buildSafetyReviewNote } from "./aiSafety";
 import { checkAiBudget } from "./aiUsageService";
 import { retrieveCoachingText } from "./ragRetrieval";
-import { resolveTrainingStyle } from "./training_styles";
 import {
   applyStructuredPlanDaySuggestionRows,
   parseStructuredPlanDaySuggestionRows,
 } from "./structuredPlanDaySuggestion";
+import { resolveTrainingStyle } from "./training_styles";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -300,7 +301,9 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
       Boolean(activePlanGoal),
     );
 
-    const suggestions = await generateWorkoutSuggestions(
+    const safetySignals = analyzeSafetySignals(trainingContext, upcomingWorkouts);
+
+    const rawSuggestions = await generateWorkoutSuggestions(
       trainingContext,
       upcomingWorkouts,
       activePlanGoal,
@@ -308,6 +311,7 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
       userId,
       stylePromptContext,
     );
+    const suggestions = applySafetyLayerToSuggestions(rawSuggestions, safetySignals);
     const preparedSuggestions = await Promise.all(
       suggestions.map((s) => prepareSuggestion(s, upcomingWorkouts, user.weightUnit || "kg", userId)),
     );
@@ -329,8 +333,11 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
     );
     const unchangedWorkouts = upcomingWorkouts.filter(w => !modifiedIds.has(w.id));
     const unchangedIds = new Set(unchangedWorkouts.map(w => w.id));
+    const forcedSafetyNote = buildSafetyReviewNote(safetySignals);
     const rawReviewNotes = unchangedWorkouts.length > 0
-      ? await generateReviewNotes(
+      ? forcedSafetyNote
+        ? unchangedWorkouts.map((w) => ({ workoutId: w.id, note: forcedSafetyNote }))
+        : await generateReviewNotes(
           trainingContext,
           unchangedWorkouts,
           activePlanGoal,
@@ -483,7 +490,12 @@ export async function regenerateCoachNoteForPlanDay(
     Boolean(activePlanGoal),
   );
 
-  const notes = await generateReviewNotes(
+  const safetySignals = analyzeSafetySignals(trainingContext, [workoutInput]);
+  const forcedSafetyNote = buildSafetyReviewNote(safetySignals);
+
+  const notes = forcedSafetyNote
+    ? [{ workoutId: day.id, note: forcedSafetyNote }]
+    : await generateReviewNotes(
     trainingContext,
     [workoutInput],
     activePlanGoal,

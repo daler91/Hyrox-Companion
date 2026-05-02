@@ -6,11 +6,11 @@ import { CoachPanelFooter } from "@/components/coach/CoachPanelFooter";
 import { CoachPanelHeader } from "@/components/coach/CoachPanelHeader";
 import { CoachPanelStats } from "@/components/coach/CoachPanelStats";
 import { useSuggestions } from "@/components/coach/SuggestionsTab";
+import { useAuth } from "@/hooks/useAuth";
 import { useSaveMessageMutation } from "@/hooks/useChatMutations";
 import { type Message,useChatSession } from "@/hooks/useChatSession";
 import { getCurrentTimeString } from "@/lib/dateUtils";
 import { calculateStats } from "@/lib/statsUtils";
-import { useAuth } from "@/hooks/useAuth";
 
 const WELCOME_TEXT = "Welcome to fitai.coach! I'm your AI training coach, here to help you reach your fitness goals.\n\nTo get started, you can:\n- **Use our 8-week fitness plan** - a structured program covering running, strength, and functional exercises\n- **Import your own plan** - if you have a CSV training plan\n- **Log individual workouts** - track sessions as you complete them\n\nOnce you have some training data, I can analyze your progress, suggest improvements, and help optimize your training. What are you working towards?";
 

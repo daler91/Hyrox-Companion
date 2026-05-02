@@ -1,5 +1,4 @@
 import type { TrainingContext, UpcomingWorkout, WorkoutSuggestion } from "../../gemini";
-
 import type { ResolvedTrainingStyle, TrainingStyleStrategy } from "./types";
 
 const DEFAULT_TRAINING_STYLE_ID = "balanced_default";

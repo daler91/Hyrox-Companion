@@ -2,8 +2,8 @@ import { Loader2, MessageSquare, Trash2, X } from "lucide-react";
 import { useState } from "react";
 
 import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface CoachPanelHeaderProps {
