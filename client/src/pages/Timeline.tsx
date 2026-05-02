@@ -433,7 +433,7 @@ export default function Timeline() {
       // state→URL into an infinite reopen loop. Re-read the URL
       // synchronously to detect that pending write before discarding
       // open surfaces.
-      if (typeof globalThis.window !== "undefined") {
+      if (globalThis.window !== undefined) {
         const liveWorkoutId = new URLSearchParams(
           globalThis.window.location.search,
         ).get("workout");
@@ -568,11 +568,12 @@ export default function Timeline() {
     const todayStr = format(new Date(), "yyyy-MM-dd");
     const todayIndex = allVisibleGroups.findIndex(([dateGroupStr]) => dateGroupStr === todayStr);
 
-    if (todayIndex >= 0) {
-      rowVirtualizer.scrollToIndex(todayIndex, { align: 'start', behavior: 'smooth' });
-    } else {
+    if (todayIndex < 0) {
       scrollToToday();
+      return;
     }
+
+    rowVirtualizer.scrollToIndex(todayIndex, { align: "start", behavior: "smooth" });
   }, [allVisibleGroups, rowVirtualizer, scrollToToday]);
 
 

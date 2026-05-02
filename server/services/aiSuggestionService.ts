@@ -118,7 +118,7 @@ async function persistRecommendationTraceForSuggestions(
       if (!day) return;
       await storage.plans.updatePlanDay(suggestion.workoutId, {
         aiInputsUsed: {
-          ...(day.aiInputsUsed ?? {}),
+          ...day.aiInputsUsed,
           recommendationTrace: traceMetadata,
         },
       }, userId);
@@ -311,7 +311,7 @@ export async function applyTimelineAiSuggestion(
     aiRationale: input.rationale ? input.rationale.slice(0, 400) : null,
     aiNoteUpdatedAt: new Date(),
     aiInputsUsed: {
-      ...(day.aiInputsUsed ?? {}),
+      ...day.aiInputsUsed,
       recommendationTrace: serverTrace,
     },
   };

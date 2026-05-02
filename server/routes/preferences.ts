@@ -10,7 +10,7 @@ import { getUserId } from "../types";
 const router = Router();
 
 function hasOwn<T extends object>(obj: T, key: keyof T): boolean {
-  return Object.prototype.hasOwnProperty.call(obj, key);
+  return Object.hasOwn(obj, key);
 }
 
 function validateMafTransition(payload: UpdateUserPreferences, current: Awaited<ReturnType<typeof storage.users.getUser>>) {
