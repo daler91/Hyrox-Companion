@@ -1,0 +1,1 @@
+export { WorkoutStorage } from "../workouts";
