@@ -68,11 +68,53 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
     onError: () => toast({ title: "Failed to schedule plan", variant: "destructive" }),
   });
 
+  const isMafMethod = trainingStyleId === "maf_method";
+
+  const hasValidMafProfile = () => {
+    if (!isMafMethod) return true;
+    if (!mafAge || !mafConsistency || !mafTrend) {
+      toast({ title: "Complete required MAF profile fields", variant: "destructive" });
+      return false;
+    }
+    const parsedMafAge = Number(mafAge);
+    if (!Number.isInteger(parsedMafAge) || parsedMafAge < 16 || parsedMafAge > 99) {
+      toast({
+        title: "Enter a valid MAF age",
+        description: "MAF age must be a whole number between 16 and 99.",
+        variant: "destructive",
+      });
+      return false;
+    }
+    return true;
+  };
+
+  const buildTrainingStylePayload = (): Record<string, unknown> => {
+    const payload: Record<string, unknown> = { trainingStyleId };
+    if (!isMafMethod) return payload;
+
+    const age = Number(mafAge);
+    payload.mafAge = age;
+    payload.mafInjuryIllnessMedication = mafInjuryIllnessMedication;
+    payload.mafConsistency = mafConsistency;
+    payload.mafTrend = mafTrend;
+    payload.mafHrDataAvailable = mafHrDataAvailable;
+
+    const maf = calculateMafHr({
+      age,
+      injuryIllnessMedication: mafInjuryIllnessMedication,
+      consistency: mafConsistency as "low" | "moderate" | "high",
+      trend: mafTrend as "improving" | "flat" | "declining",
+    });
+    payload.mafHr = maf.ceiling;
+    return payload;
+  };
+
   const handleNext = async () => {
     if (step === "welcome") {
       setStep("units");
       return;
     }
+
     if (step === "units") {
       try {
         await prefsMutation.mutateAsync({ weightUnit, distanceUnit });
@@ -86,47 +128,19 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
       setStep("goal");
       return;
     }
-    if (step === "goal") {
-      if (trainingStyleId === "maf_method" && (!mafAge || !mafConsistency || !mafTrend)) {
-        toast({ title: "Complete required MAF profile fields", variant: "destructive" });
-        return;
-      }
-      if (trainingStyleId === "maf_method") {
-        const parsedMafAge = Number(mafAge);
-        if (!Number.isInteger(parsedMafAge) || parsedMafAge < 16 || parsedMafAge > 99) {
-          toast({
-            title: "Enter a valid MAF age",
-            description: "MAF age must be a whole number between 16 and 99.",
-            variant: "destructive",
-          });
-          return;
-        }
-      }
-      const payload: Record<string, unknown> = { trainingStyleId };
-      if (trainingStyleId === "maf_method") {
-        payload.mafAge = Number(mafAge);
-        payload.mafInjuryIllnessMedication = mafInjuryIllnessMedication;
-        payload.mafConsistency = mafConsistency;
-        payload.mafTrend = mafTrend;
-        payload.mafHrDataAvailable = mafHrDataAvailable;
-        const maf = calculateMafHr({
-          age: Number(mafAge),
-          injuryIllnessMedication: mafInjuryIllnessMedication,
-          consistency: mafConsistency as "low" | "moderate" | "high",
-          trend: mafTrend as "improving" | "flat" | "declining",
-        });
-        payload.mafHr = maf.ceiling;
-      }
-      try {
-        await prefsMutation.mutateAsync(payload);
-        setStep("plan");
-      } catch {
-        toast({
-          title: "Could not save training style",
-          description: "Please try again. You can also update this later in settings.",
-          variant: "destructive",
-        });
-      }
+
+    if (step !== "goal") return;
+    if (!hasValidMafProfile()) return;
+
+    try {
+      await prefsMutation.mutateAsync(buildTrainingStylePayload());
+      setStep("plan");
+    } catch {
+      toast({
+        title: "Could not save training style",
+        description: "Please try again. You can also update this later in settings.",
+        variant: "destructive",
+      });
     }
   };
 

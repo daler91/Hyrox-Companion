@@ -743,7 +743,7 @@ export default function Timeline() {
               setPreviewEntry(null);
               handleCoachToggle(true);
             }}
-            onMove={(entry) => {
+            onMove={() => {
               setPreviewEntry(null);
               // The MoveEntryMenu lives on the card itself, so the simplest
               // honest action here is to close the sheet — the user can
@@ -754,7 +754,6 @@ export default function Timeline() {
                 title: "Use the move icon on the card",
                 description: "Drag, or use the calendar menu in the card's top corner.",
               });
-              void entry;
             }}
             onSkip={(entry) => {
               setPreviewEntry(null);
