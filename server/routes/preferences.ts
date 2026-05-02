@@ -3,7 +3,7 @@ import { type Request as ExpressRequest, type Response,Router } from "express";
 
 import { isAuthenticated } from "../clerkAuth";
 import { protectedMutationGuards } from "../routeGuards";
-import { asyncHandler, formatValidationErrors,rateLimiter, sendNotFound } from "../routeUtils";
+import { asyncHandler, rateLimiter, sendNotFound, validateBody } from "../routeUtils";
 import { storage } from "../storage";
 import { getUserId } from "../types";
 
@@ -114,20 +114,16 @@ router.get('/api/v1/preferences', isAuthenticated, asyncHandler(async (req: Expr
     });
   }));
 
-router.patch('/api/v1/preferences', ...protectedMutationGuards, rateLimiter("preferences", 20), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, UpdateUserPreferences>, res: Response) => {
+router.patch('/api/v1/preferences', ...protectedMutationGuards, rateLimiter("preferences", 20), validateBody(updateUserPreferencesSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, UpdateUserPreferences>, res: Response) => {
     const userId = getUserId(req);
-    const parseResult = updateUserPreferencesSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      return res.status(400).json({ error: "Invalid preferences data", code: "VALIDATION_ERROR", details: formatValidationErrors(parseResult.error) });
-    }
 
     const current = await storage.users.getUser(userId);
-    const mafValidationError = validateMafTransition(parseResult.data, current);
+    const mafValidationError = validateMafTransition(req.body, current);
     if (mafValidationError) {
       return res.status(400).json(mafValidationError);
     }
 
-    const user = await storage.users.updateUserPreferences(userId, parseResult.data);
+    const user = await storage.users.updateUserPreferences(userId, req.body);
     if (!user) {
       return sendNotFound(res, "User not found");
     }

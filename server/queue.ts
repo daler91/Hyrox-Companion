@@ -4,10 +4,10 @@ import { type Job,PgBoss } from "pg-boss";
 import { processMissedWorkoutReminder,processWeeklySummary } from "./emailScheduler";
 import { env } from "./env";
 import { logger } from "./logger";
+import { getEmbedJobIdentifiers, getUserIdFromJob } from "./queue.utils";
 import { triggerAutoCoach } from "./services/coachService";
 import { embedCoachingMaterial } from "./services/ragService";
 import { storage } from "./storage";
-import { getEmbedJobIdentifiers, getUserIdFromJob } from "./queue.utils";
 
 if (!env.DATABASE_URL) {
   throw new Error("DATABASE_URL must be set. Did you forget to provision a database?");

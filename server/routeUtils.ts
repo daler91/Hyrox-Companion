@@ -109,10 +109,23 @@ export function calculateStreak(completedDates: Set<string>): number {
 }
 
 
+
 import { z } from "zod";
 
+/**
+ * Validation error contract used by all Zod-based route middleware.
+ *
+ * Response shape (HTTP 400):
+ * `{ code: "VALIDATION_ERROR", message: string, details: { issues: [{ path, message }] } }`
+ */
+export interface ValidationErrorResponse {
+  code: "VALIDATION_ERROR";
+  message: string;
+  details: { issues: Array<{ path: string; message: string }> };
+}
+
 /** Project safe validation issues from a Zod error — never leak raw internals. */
-export function formatValidationErrors(error: z.ZodError): { issues: Array<{ path: string; message: string }> } {
+export function formatValidationErrors(error: z.ZodError): ValidationErrorResponse["details"] {
   return {
     issues: error.issues.map((e) => ({
       path: e.path.join("."),
@@ -121,17 +134,38 @@ export function formatValidationErrors(error: z.ZodError): { issues: Array<{ pat
   };
 }
 
-export function validateBody(schema: z.ZodType) {
+function sendValidationError(res: Response, error: z.ZodError): void {
+  const message = error.issues[0]?.message || "Invalid request data";
+  const payload: ValidationErrorResponse = {
+    code: "VALIDATION_ERROR",
+    message,
+    details: formatValidationErrors(error),
+  };
+  res.status(400).json(payload);
+}
+
+function makeValidator<T>(schema: z.ZodType<T>, picker: (req: Request) => unknown, writer: (req: Request, value: T) => void) {
   return (req: Request, res: Response, next: NextFunction) => {
-    const parsed = schema.safeParse(req.body);
+    const parsed = schema.safeParse(picker(req));
     if (!parsed.success) {
-      const errorMessage = parsed.error.issues[0]?.message || "Invalid request data";
-      res.status(400).json({ error: errorMessage, code: "VALIDATION_ERROR", details: formatValidationErrors(parsed.error) });
+      sendValidationError(res, parsed.error);
       return;
     }
-    req.body = parsed.data;
+    writer(req, parsed.data);
     next();
   };
+}
+
+export function validateBody<T>(schema: z.ZodType<T>) {
+  return makeValidator(schema, (req) => req.body, (req, value) => { req.body = value; });
+}
+
+export function validateQuery<T>(schema: z.ZodType<T>) {
+  return makeValidator(schema, (req) => req.query, (req, value) => { req.query = value as Request["query"]; });
+}
+
+export function validateParams<T>(schema: z.ZodType<T>) {
+  return makeValidator(schema, (req) => req.params, (req, value) => { req.params = value as Request["params"]; });
 }
 
 export const asyncHandler = <Req extends Request>(fn: (req: Req, res: Response, next: NextFunction) => Promise<unknown>) => (req: Request, res: Response, next: NextFunction): void => {

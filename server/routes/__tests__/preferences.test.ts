@@ -90,6 +90,13 @@ describe("PATCH /api/v1/preferences", () => {
     } as never);
   });
 
+
+  it("returns shared validation contract on invalid body", async () => {
+    const response = await request(app).patch("/api/v1/preferences").send({ weeklyGoal: "nope" });
+    expect(response.status).toBe(400);
+    expect(response.body).toMatchObject({ code: "VALIDATION_ERROR", message: expect.any(String), details: { issues: expect.any(Array) } });
+  });
+
   it("fails validation when switching to MAF without required MAF fields", async () => {
     const response = await request(app).patch("/api/v1/preferences").send({ trainingStyleId: "maf_method" });
     expect(response.status).toBe(400);

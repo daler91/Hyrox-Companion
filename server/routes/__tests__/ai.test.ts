@@ -139,7 +139,7 @@ describe("POST /api/parse-exercises", () => {
       .send({});
 
     expect(response.status).toBe(400);
-    expect(response.body.error).toMatch(/expected string, received undefined/);
+    expect(response.body.message).toMatch(/expected string, received undefined/);
   });
 
 
@@ -519,7 +519,7 @@ describe("Chat History and Messages Routes", () => {
       .send({ role: "user" });
 
     expect(response.status).toBe(400);
-    expect(response.body.error).toMatch(/expected string, received undefined/);
+    expect(response.body.message).toMatch(/expected string, received undefined/);
   });
 
   it("should clear chat history", async () => {

@@ -3,10 +3,11 @@ import {
   updateTimelineAnnotationSchema,
 } from "@shared/schema";
 import { type Request, type Response, Router } from "express";
+import { z } from "zod";
 
 import { isAuthenticated } from "../clerkAuth";
 import { protectedMutationGuards } from "../routeGuards";
-import { asyncHandler, formatValidationErrors, rateLimiter, sendNotFound } from "../routeUtils";
+import { asyncHandler, rateLimiter, sendNotFound, validateBody } from "../routeUtils";
 import { storage } from "../storage";
 import { getUserId } from "../types";
 
@@ -20,7 +21,7 @@ router.get(
   "/api/v1/timeline-annotations",
   isAuthenticated,
   rateLimiter("annotations", 60),
-  asyncHandler(async (req: Request, res: Response) => {
+  asyncHandler(async (req: Request<Record<string, never>, unknown, z.infer<typeof insertTimelineAnnotationSchema>>, res: Response) => {
     const userId = getUserId(req);
     const annotations = await storage.timelineAnnotations.list(userId);
     res.json(annotations);
@@ -35,17 +36,10 @@ router.post(
   "/api/v1/timeline-annotations",
   ...protectedMutationGuards,
   rateLimiter("annotations", 20),
-  asyncHandler(async (req: Request, res: Response) => {
+  validateBody(insertTimelineAnnotationSchema),
+  asyncHandler(async (req: Request<Record<string, never>, unknown, z.infer<typeof insertTimelineAnnotationSchema>>, res: Response) => {
     const userId = getUserId(req);
-    const parseResult = insertTimelineAnnotationSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      return res.status(400).json({
-        error: "Invalid annotation",
-        code: "VALIDATION_ERROR",
-        details: formatValidationErrors(parseResult.error),
-      });
-    }
-    const row = await storage.timelineAnnotations.create(userId, parseResult.data);
+    const row = await storage.timelineAnnotations.create(userId, req.body);
     res.status(201).json(row);
   }),
 );
@@ -59,16 +53,9 @@ router.patch(
   "/api/v1/timeline-annotations/:id",
   ...protectedMutationGuards,
   rateLimiter("annotations", 20),
-  asyncHandler(async (req: Request<{ id: string }>, res: Response) => {
+  validateBody(updateTimelineAnnotationSchema),
+  asyncHandler(async (req: Request<{ id: string }, unknown, z.infer<typeof updateTimelineAnnotationSchema>>, res: Response) => {
     const userId = getUserId(req);
-    const parseResult = updateTimelineAnnotationSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      return res.status(400).json({
-        error: "Invalid annotation update",
-        code: "VALIDATION_ERROR",
-        details: formatValidationErrors(parseResult.error),
-      });
-    }
 
     // Merge-then-validate: the schema `.refine` only runs when both dates
     // are present in the request body, so a single-field PATCH could slip
@@ -80,8 +67,8 @@ router.patch(
       return sendNotFound(res, "Annotation not found");
     }
 
-    const mergedStart = parseResult.data.startDate ?? existing.startDate;
-    const mergedEnd = parseResult.data.endDate ?? existing.endDate;
+    const mergedStart = req.body.startDate ?? existing.startDate;
+    const mergedEnd = req.body.endDate ?? existing.endDate;
     if (mergedEnd < mergedStart) {
       return res.status(400).json({
         error: "Invalid annotation update",
@@ -90,7 +77,7 @@ router.patch(
       });
     }
 
-    const row = await storage.timelineAnnotations.update(userId, req.params.id, parseResult.data);
+    const row = await storage.timelineAnnotations.update(userId, req.params.id, req.body);
     if (!row) {
       return sendNotFound(res, "Annotation not found");
     }
@@ -105,7 +92,7 @@ router.delete(
   "/api/v1/timeline-annotations/:id",
   ...protectedMutationGuards,
   rateLimiter("annotations", 20),
-  asyncHandler(async (req: Request<{ id: string }>, res: Response) => {
+  asyncHandler(async (req: Request<{ id: string }, unknown, z.infer<typeof updateTimelineAnnotationSchema>>, res: Response) => {
     const userId = getUserId(req);
     const deleted = await storage.timelineAnnotations.delete(userId, req.params.id);
     if (!deleted) {
