@@ -24,6 +24,11 @@ vi.mock("../../storage", () => ({
   storage: {
     users: {
       getUser: vi.fn(),
+      updateUserPreferences: vi.fn(),
+    },
+    plans: {
+      getActivePlan: vi.fn(),
+      getPlanWeeklyDensity: vi.fn(),
     },
   },
 }));
@@ -47,5 +52,63 @@ describe("GET /api/preferences", () => {
     expect(response.status).toBe(500);
     expect(response.body).toEqual({ error: "Internal Server Error", code: "INTERNAL_SERVER_ERROR" });
     expect(storage.users.getUser).toHaveBeenCalledWith("test_user_id");
+  });
+});
+
+describe("PATCH /api/v1/preferences", () => {
+  let app: express.Express;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    app = createTestApp(preferencesRouter);
+    vi.mocked(storage.users.getUser).mockResolvedValue({
+      id: "test_user_id",
+      mafAge: null,
+      mafConsistency: null,
+      mafTrend: null,
+    } as never);
+    vi.mocked(storage.users.updateUserPreferences).mockResolvedValue({
+      weightUnit: "kg",
+      distanceUnit: "km",
+      weeklyGoal: 5,
+      emailNotifications: true,
+      emailWeeklySummary: true,
+      emailMissedReminder: true,
+      showAdherenceInsights: true,
+      aiCoachEnabled: true,
+      trainingStyleId: "maf_method",
+      trainingStylePreviousId: null,
+      trainingStyleChangedAt: null,
+      trainingStyleRecomputeNow: false,
+      mafAge: 39,
+      mafInjuryIllnessMedication: false,
+      mafConsistency: "moderate",
+      mafTrend: "flat",
+      mafHrDataAvailable: null,
+      mafHr: null,
+      mafBaselineTestScheduledAt: null,
+    } as never);
+  });
+
+  it("fails validation when switching to MAF without required MAF fields", async () => {
+    const response = await request(app).patch("/api/v1/preferences").send({ trainingStyleId: "maf_method" });
+    expect(response.status).toBe(400);
+    expect(response.body.code).toBe("MAF_SETUP_REQUIRED");
+  });
+
+  it("succeeds when switching to MAF with required MAF fields", async () => {
+    const response = await request(app).patch("/api/v1/preferences").send({
+      trainingStyleId: "maf_method",
+      mafAge: 39,
+      mafConsistency: "moderate",
+      mafTrend: "flat",
+    });
+    expect(response.status).toBe(200);
+    expect(storage.users.updateUserPreferences).toHaveBeenCalled();
+  });
+
+  it("allows non-MAF style switch without MAF fields", async () => {
+    const response = await request(app).patch("/api/v1/preferences").send({ trainingStyleId: "balanced_default" });
+    expect(response.status).toBe(200);
   });
 });
