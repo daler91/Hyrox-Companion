@@ -380,7 +380,6 @@ export default function Timeline() {
       }
       if (isSkipped(entry)) {
         setSkippedEntry(entry);
-        return;
       }
       // No surface matched — header rows or annotation-only entries
       // don't have a click destination. Leave everything closed.
@@ -685,10 +684,10 @@ export default function Timeline() {
               setLogEntry(null);
               // Only fan a fresh entry through when RPE actually
               // changed so we don't churn the cache for a no-op.
-              if (rpeOverride !== entry.rpe) {
-                handleMarkComplete({ ...entry, rpe: rpeOverride ?? null });
-              } else {
+              if (rpeOverride === entry.rpe) {
                 handleMarkComplete(entry);
+              } else {
+                handleMarkComplete({ ...entry, rpe: rpeOverride ?? null });
               }
             }}
             onSkip={(entry) => {
