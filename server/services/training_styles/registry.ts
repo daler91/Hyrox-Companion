@@ -41,8 +41,10 @@ function getPhaseKey(trainingContext: TrainingContext): keyof typeof PHASE_CONST
 function buildStructuredFields(trainingContext: TrainingContext, styleId: string, upcomingWorkouts: UpcomingWorkout[]) {
   const phase = getPhaseKey(trainingContext);
   const completed = trainingContext.completedWorkouts ?? 0;
-  const total = trainingContext.totalWorkouts ?? 0;
-  const completionRate = total > 0 ? Math.round((completed / total) * 100) : Math.round(trainingContext.completionRate ?? 0);
+  const attempted = completed + (trainingContext.missedWorkouts ?? 0) + (trainingContext.skippedWorkouts ?? 0);
+  const completionRate = attempted > 0
+    ? Math.round((completed / attempted) * 100)
+    : Math.round(trainingContext.completionRate ?? 0);
 
   return {
     trainingStyleId: styleId,
