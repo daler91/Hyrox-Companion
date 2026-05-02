@@ -49,6 +49,16 @@ export const updateUserPreferencesSchema = z.object({
   showAdherenceInsights: z.boolean().optional(),
   aiCoachEnabled: z.boolean().optional(),
   trainingStyleId: z.string().max(100).nullable().optional(),
+  trainingStylePreviousId: z.string().max(100).nullable().optional(),
+  trainingStyleChangedAt: z.coerce.date().nullable().optional(),
+  trainingStyleRecomputeNow: z.boolean().optional(),
+  mafAge: z.number().int().min(16).max(99).nullable().optional(),
+  mafInjuryIllnessMedication: z.boolean().nullable().optional(),
+  mafConsistency: z.enum(["low", "moderate", "high"]).nullable().optional(),
+  mafTrend: z.enum(["improving", "flat", "declining"]).nullable().optional(),
+  mafHrDataAvailable: z.boolean().nullable().optional(),
+  mafHr: z.number().int().min(90).max(220).nullable().optional(),
+  mafBaselineTestScheduledAt: z.coerce.date().nullable().optional(),
 });
 
 export type UpdateUserPreferences = z.infer<typeof updateUserPreferencesSchema>;

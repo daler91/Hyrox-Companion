@@ -14,6 +14,8 @@ import { StravaSection } from "@/components/settings/StravaSection";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { ToastAction } from "@/components/ui/toast";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -88,6 +90,9 @@ export default function Settings() {
   const [emailMissedReminder, setEmailMissedReminder] = useState(true);
   const [showAdherenceInsights, setShowAdherenceInsights] = useState(true);
   const [aiCoachEnabled, setAiCoachEnabled] = useState(true);
+  const [trainingStyleId, setTrainingStyleId] = useState("balanced_default");
+  const [confirmStyleOpen, setConfirmStyleOpen] = useState(false);
+  const [pendingStyleId, setPendingStyleId] = useState<string | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
   // Snapshot of initial local defaults. Used as a fallback baseline if
   // remote preferences never load (e.g. query error) so edits can still
@@ -173,6 +178,7 @@ export default function Settings() {
       setEmailMissedReminder(preferences.emailMissedReminder ?? true);
       setShowAdherenceInsights(preferences.showAdherenceInsights ?? true);
       setAiCoachEnabled(preferences.aiCoachEnabled ?? true);
+      setTrainingStyleId(preferences.trainingStyleId ?? "balanced_default");
       // Seed the baseline snapshot on first load. After saves, onSuccess
       // keeps the baseline in sync with committed values.
       if (!baselineSnapshotRef.current) {
@@ -256,8 +262,14 @@ export default function Settings() {
       emailMissedReminder,
       showAdherenceInsights,
       aiCoachEnabled,
+      trainingStyleId,
+      trainingStylePreviousId: preferences?.trainingStyleId ?? null,
+      trainingStyleChangedAt: new Date().toISOString(),
+      trainingStyleRecomputeNow: true,
+      mafHr: trainingStyleId === "maf_method" ? (180 - Number(preferences?.mafAge ?? 35)) : null,
+      mafBaselineTestScheduledAt: trainingStyleId === "maf_method" ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() : null,
     });
-  }, [saveMutation, weightUnit, distanceUnit, weeklyGoal, emailNotifications, emailWeeklySummary, emailMissedReminder, showAdherenceInsights, aiCoachEnabled]);
+  }, [saveMutation, weightUnit, distanceUnit, weeklyGoal, emailNotifications, emailWeeklySummary, emailMissedReminder, showAdherenceInsights, aiCoachEnabled, trainingStyleId, preferences?.trainingStyleId, preferences?.mafAge]);
 
   const userName = getUserDisplayName(user);
 
@@ -347,6 +359,18 @@ export default function Settings() {
           setAiCoachEnabled(v);
         }}
       />
+      <Card>
+        <CardHeader><CardTitle>Training style</CardTitle><CardDescription>Changing style updates future analysis and plan generation behavior.</CardDescription></CardHeader>
+        <CardContent>
+          <Select value={trainingStyleId} onValueChange={(v) => { setPendingStyleId(v); setConfirmStyleOpen(true); }}>
+            <SelectTrigger className="max-w-xs"><SelectValue /></SelectTrigger>
+            <SelectContent><SelectItem value="balanced_default">Balanced</SelectItem><SelectItem value="maf_method">MAF Method</SelectItem></SelectContent>
+          </Select>
+        </CardContent>
+      </Card>
+      <AlertDialog open={confirmStyleOpen} onOpenChange={setConfirmStyleOpen}>
+        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Change training style?</AlertDialogTitle><AlertDialogDescription>This will change how your AI analysis works and affect future plans. We’ll re-baseline MAF settings when needed.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => pendingStyleId && setTrainingStyleId(pendingStyleId)}>Confirm</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
+      </AlertDialog>
 
       <PushNotificationSection />
 

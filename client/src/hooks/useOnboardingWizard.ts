@@ -23,11 +23,17 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
   const [weightUnit, setWeightUnit] = useState<"kg" | "lbs">("kg");
   const [distanceUnit, setDistanceUnit] = useState<"km" | "miles">("km");
   const [selectedGoal, setSelectedGoal] = useState("first");
+  const [trainingStyleId, setTrainingStyleId] = useState("balanced_default");
+  const [mafAge, setMafAge] = useState("");
+  const [mafInjuryIllnessMedication, setMafInjuryIllnessMedication] = useState(false);
+  const [mafConsistency, setMafConsistency] = useState("");
+  const [mafTrend, setMafTrend] = useState("");
+  const [mafHrDataAvailable, setMafHrDataAvailable] = useState(false);
   const [createdPlanId, setCreatedPlanId] = useState<string | null>(null);
   const [startDate, setStartDate] = useState<Date>(addDays(new Date(), 1));
 
   const prefsMutation = useMutation({
-    mutationFn: (prefs: { weightUnit: string; distanceUnit: string }) =>
+    mutationFn: (prefs: Record<string, unknown>) =>
       api.preferences.update(prefs),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.preferences }).catch(() => {});
@@ -79,7 +85,21 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
       setStep("goal");
       return;
     }
-    if (step === "goal") setStep("plan");
+    if (step === "goal") {
+      if (trainingStyleId === "maf_method" && (!mafAge || !mafConsistency || !mafTrend)) {
+        toast({ title: "Complete required MAF profile fields", variant: "destructive" });
+        return;
+      }
+      await prefsMutation.mutateAsync({
+        trainingStyleId,
+        mafAge: mafAge ? Number(mafAge) : undefined,
+        mafInjuryIllnessMedication,
+        mafConsistency: mafConsistency as "low" | "moderate" | "high",
+        mafTrend: mafTrend as "improving" | "flat" | "declining",
+        mafHrDataAvailable,
+      });
+      setStep("plan");
+    }
   };
 
   const handleSkip = () => {
@@ -131,6 +151,18 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
     setDistanceUnit,
     selectedGoal,
     setSelectedGoal,
+    trainingStyleId,
+    setTrainingStyleId,
+    mafAge,
+    setMafAge,
+    mafInjuryIllnessMedication,
+    setMafInjuryIllnessMedication,
+    mafConsistency,
+    setMafConsistency,
+    mafTrend,
+    setMafTrend,
+    mafHrDataAvailable,
+    setMafHrDataAvailable,
     startDate,
     setStartDate,
     handleNext,

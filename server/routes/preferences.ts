@@ -48,6 +48,17 @@ router.get('/api/v1/preferences', isAuthenticated, asyncHandler(async (req: Expr
       emailMissedReminder: user.emailMissedReminder ?? true,
       showAdherenceInsights: user.showAdherenceInsights ?? true,
       aiCoachEnabled: user.aiCoachEnabled ?? true,
+      trainingStyleId: user.trainingStyleId ?? "balanced_default",
+      trainingStylePreviousId: user.trainingStylePreviousId ?? null,
+      trainingStyleChangedAt: user.trainingStyleChangedAt ?? null,
+      trainingStyleRecomputeNow: user.trainingStyleRecomputeNow ?? false,
+      mafAge: user.mafAge ?? null,
+      mafInjuryIllnessMedication: user.mafInjuryIllnessMedication ?? null,
+      mafConsistency: user.mafConsistency ?? null,
+      mafTrend: user.mafTrend ?? null,
+      mafHrDataAvailable: user.mafHrDataAvailable ?? null,
+      mafHr: user.mafHr ?? null,
+      mafBaselineTestScheduledAt: user.mafBaselineTestScheduledAt ?? null,
     });
   }));
 
@@ -71,6 +82,17 @@ router.patch('/api/v1/preferences', ...protectedMutationGuards, rateLimiter("pre
       emailMissedReminder: user.emailMissedReminder ?? true,
       showAdherenceInsights: user.showAdherenceInsights ?? true,
       aiCoachEnabled: user.aiCoachEnabled ?? true,
+      trainingStyleId: user.trainingStyleId ?? "balanced_default",
+      trainingStylePreviousId: user.trainingStylePreviousId ?? null,
+      trainingStyleChangedAt: user.trainingStyleChangedAt ?? null,
+      trainingStyleRecomputeNow: user.trainingStyleRecomputeNow ?? false,
+      mafAge: user.mafAge ?? null,
+      mafInjuryIllnessMedication: user.mafInjuryIllnessMedication ?? null,
+      mafConsistency: user.mafConsistency ?? null,
+      mafTrend: user.mafTrend ?? null,
+      mafHrDataAvailable: user.mafHrDataAvailable ?? null,
+      mafHr: user.mafHr ?? null,
+      mafBaselineTestScheduledAt: user.mafBaselineTestScheduledAt ?? null,
     });
   }));
 
