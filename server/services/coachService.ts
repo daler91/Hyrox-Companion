@@ -279,7 +279,7 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
         ...(w.exerciseDetails && w.exerciseDetails.length > 0 ? { exerciseDetails: w.exerciseDetails } : {}),
       }));
 
-    const resolvedStyle = resolveTrainingStyle();
+    const resolvedStyle = resolveTrainingStyle((user as { trainingStyleId?: string | null }).trainingStyleId);
     const stylePromptContext = resolvedStyle.strategy.buildPromptContext(trainingContext, upcomingWorkouts);
 
     if (upcomingWorkouts.length === 0) {
@@ -432,6 +432,7 @@ export async function regenerateCoachNoteForPlanDay(
   planDayId: string,
   userId: string,
 ): Promise<RegeneratedCoachNote | RegenerateCooldown> {
+  const user = await storage.users.getUser(userId);
   const day: PlanDay | undefined = await storage.plans.getPlanDay(planDayId, userId);
   if (!day) {
     throw new AppError(ErrorCode.NOT_FOUND, "Plan day not found", 404);
@@ -474,7 +475,7 @@ export async function regenerateCoachNoteForPlanDay(
   };
 
   const coachingContext = await getCoachingMaterialsString(userId, [workoutInput], trainingContext.weightUnit);
-  const resolvedStyle = resolveTrainingStyle();
+  const resolvedStyle = resolveTrainingStyle((user as { trainingStyleId?: string | null } | null)?.trainingStyleId);
   const stylePromptContext = resolvedStyle.strategy.buildPromptContext(trainingContext, [workoutInput]);
   const inputsUsed = buildCoachNoteInputs(
     trainingContext,
