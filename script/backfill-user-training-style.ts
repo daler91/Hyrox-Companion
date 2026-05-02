@@ -76,7 +76,9 @@ async function main() {
   );
 }
 
-main().catch((error) => {
+try {
+  await main();
+} catch (error) {
   logger.error({ err: error }, "[backfill:user_training_style] failed");
   process.exit(1);
-});
+}

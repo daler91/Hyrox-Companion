@@ -334,18 +334,21 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
     const unchangedWorkouts = upcomingWorkouts.filter(w => !modifiedIds.has(w.id));
     const unchangedIds = new Set(unchangedWorkouts.map(w => w.id));
     const forcedSafetyNote = buildSafetyReviewNote(safetySignals);
-    const rawReviewNotes = unchangedWorkouts.length > 0
-      ? forcedSafetyNote
-        ? unchangedWorkouts.map((w) => ({ workoutId: w.id, note: forcedSafetyNote }))
-        : await generateReviewNotes(
+    let rawReviewNotes: Array<{ workoutId: string; note: string }> = [];
+    if (unchangedWorkouts.length > 0) {
+      if (forcedSafetyNote) {
+        rawReviewNotes = unchangedWorkouts.map((w) => ({ workoutId: w.id, note: forcedSafetyNote }));
+      } else {
+        rawReviewNotes = await generateReviewNotes(
           trainingContext,
           unchangedWorkouts,
           activePlanGoal,
           coachingContext.text,
           userId,
           stylePromptContext,
-        )
-      : [];
+        );
+      }
+    }
     // Drop any review note whose workoutId isn't actually an unchanged day:
     // Gemini occasionally hallucinates IDs, and a review-note write against
     // a modified day would overwrite its aiSource/aiRationale and mislabel

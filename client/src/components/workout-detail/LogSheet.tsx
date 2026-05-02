@@ -179,11 +179,11 @@ export function LogSheet({
             data-testid={`log-as-planned-${entry.id}`}
           >
             <ListChecks className="mr-2 h-4 w-4" />
-            {planSets.isSaving
-              ? "Saving edits…"
-              : isLogging
-                ? "Logging…"
-                : "Log as planned"}
+            {(() => {
+              if (planSets.isSaving) return "Saving edits…";
+              if (isLogging) return "Logging…";
+              return "Log as planned";
+            })()}
           </Button>
 
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
