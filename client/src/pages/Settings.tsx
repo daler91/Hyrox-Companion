@@ -257,7 +257,8 @@ export default function Settings() {
     undoSnapshotRef.current = baselineSnapshotRef.current
       ? { ...baselineSnapshotRef.current }
       : null;
-    const styleChanged = trainingStyleId !== (preferences?.trainingStyleId ?? "balanced_default");
+    const committedStyleId = baselineSnapshotRef.current?.trainingStyleId ?? "balanced_default";
+    const styleChanged = trainingStyleId !== committedStyleId;
     saveMutation.mutate({
       weightUnit,
       distanceUnit,
@@ -268,13 +269,13 @@ export default function Settings() {
       showAdherenceInsights,
       aiCoachEnabled,
       trainingStyleId,
-      trainingStylePreviousId: styleChanged ? (preferences?.trainingStyleId ?? null) : undefined,
+      trainingStylePreviousId: styleChanged ? committedStyleId : undefined,
       trainingStyleChangedAt: styleChanged ? new Date().toISOString() : undefined,
       trainingStyleRecomputeNow: styleChanged,
       mafHr: styleChanged && trainingStyleId === "maf_method" ? (180 - Number(preferences?.mafAge ?? 35)) : undefined,
       mafBaselineTestScheduledAt: styleChanged && trainingStyleId === "maf_method" ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() : undefined,
     });
-  }, [saveMutation, weightUnit, distanceUnit, weeklyGoal, emailNotifications, emailWeeklySummary, emailMissedReminder, showAdherenceInsights, aiCoachEnabled, trainingStyleId, preferences?.trainingStyleId, preferences?.mafAge]);
+  }, [saveMutation, weightUnit, distanceUnit, weeklyGoal, emailNotifications, emailWeeklySummary, emailMissedReminder, showAdherenceInsights, aiCoachEnabled, trainingStyleId, preferences?.mafAge]);
 
   const userName = getUserDisplayName(user);
 

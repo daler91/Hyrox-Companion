@@ -90,6 +90,17 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
         toast({ title: "Complete required MAF profile fields", variant: "destructive" });
         return;
       }
+      if (trainingStyleId === "maf_method") {
+        const parsedMafAge = Number(mafAge);
+        if (!Number.isInteger(parsedMafAge) || parsedMafAge < 16 || parsedMafAge > 99) {
+          toast({
+            title: "Enter a valid MAF age",
+            description: "MAF age must be a whole number between 16 and 99.",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
       const payload: Record<string, unknown> = { trainingStyleId };
       if (trainingStyleId === "maf_method") {
         payload.mafAge = Number(mafAge);
