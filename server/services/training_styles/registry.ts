@@ -9,7 +9,7 @@ type AnalysisClass = "compliant" | "mostly" | "non-compliant" | "concerning";
 const STYLE_CORE_FRAGMENTS: Record<string, string> = {
   balanced_default: "Style core: balance progression, recovery, and consistency. Prefer sustainable overload and avoid abrupt spikes.",
   maf_method:
-    "Style core (MAF): prioritize aerobic base development, low-intensity durability, and strict intensity discipline around the MAF ceiling.",
+    "Style core (MAF): prioritize aerobic base development, low-intensity durability, and strict intensity discipline around the MAF ceiling (ceiling, not target). Recommend a monthly MAF test to validate trend.",
 };
 
 const PHASE_CONSTRAINTS: Record<string, string> = {
