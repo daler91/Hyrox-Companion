@@ -14,27 +14,36 @@ CREATE TABLE IF NOT EXISTS "data_remediation_log" (
 
 -- Validation view: rows indicate violations that should be investigated.
 CREATE OR REPLACE VIEW "v_maf_post_migration_validation" AS
+WITH validation_keys AS (
+  SELECT
+    'user_id'::text AS user_id_key,
+    'effective_date'::text AS effective_date_key
+)
 SELECT 'missing_fk_user_training_style' AS check_name, uts.id::text AS record_id,
-       jsonb_build_object('user_id', uts.user_id) AS details
+       jsonb_build_object(vk.user_id_key, uts.user_id) AS details
 FROM user_training_style uts
+CROSS JOIN validation_keys vk
 LEFT JOIN users u ON u.id = uts.user_id
 WHERE u.id IS NULL
 UNION ALL
 SELECT 'missing_fk_maf_profile_user', mp.id::text,
-       jsonb_build_object('user_id', mp.user_id)
+       jsonb_build_object(vk.user_id_key, mp.user_id)
 FROM maf_profile mp
+CROSS JOIN validation_keys vk
 LEFT JOIN users u ON u.id = mp.user_id
 WHERE u.id IS NULL
 UNION ALL
 SELECT 'missing_fk_maf_test_results_user', mtr.id::text,
-       jsonb_build_object('user_id', mtr.user_id)
+       jsonb_build_object(vk.user_id_key, mtr.user_id)
 FROM maf_test_results mtr
+CROSS JOIN validation_keys vk
 LEFT JOIN users u ON u.id = mtr.user_id
 WHERE u.id IS NULL
 UNION ALL
 SELECT 'missing_fk_maf_workout_analysis_user', mwa.id::text,
-       jsonb_build_object('user_id', mwa.user_id)
+       jsonb_build_object(vk.user_id_key, mwa.user_id)
 FROM maf_workout_analysis mwa
+CROSS JOIN validation_keys vk
 LEFT JOIN users u ON u.id = mwa.user_id
 WHERE u.id IS NULL
 UNION ALL
@@ -45,13 +54,14 @@ LEFT JOIN workout_logs wl ON wl.id = mwa.workout_log_id
 WHERE mwa.workout_log_id IS NOT NULL AND wl.id IS NULL
 UNION ALL
 SELECT 'duplicate_effective_date_per_user', x.id::text,
-       jsonb_build_object('user_id', x.user_id, 'effective_date', x.effective_date, 'rows_on_date', x.rows_on_date)
+       jsonb_build_object(vk.user_id_key, x.user_id, vk.effective_date_key, x.effective_date, 'rows_on_date', x.rows_on_date)
 FROM (
   SELECT min(id) AS id, user_id, effective_date, count(*) AS rows_on_date
   FROM user_training_style
   GROUP BY user_id, effective_date
   HAVING count(*) > 1
 ) x
+CROSS JOIN validation_keys vk
 UNION ALL
 SELECT 'multiple_active_styles_per_user', y.user_id::text,
        jsonb_build_object('active_row_ids', y.active_ids, 'active_count', y.active_count, 'today', CURRENT_DATE)
@@ -92,6 +102,7 @@ DECLARE
   kept_id varchar(255);
   ISSUE_NULL_OR_BLANK_STYLE_FIELDS constant text := 'null_or_blank_style_fields';
   ISSUE_DUPLICATE_EFFECTIVE_DATE_PER_USER constant text := 'duplicate_effective_date_per_user';
+  TABLE_USER_TRAINING_STYLE constant text := 'user_training_style';
 BEGIN
   -- Normalize nullable/blank training style fields.
   FOR rec IN
@@ -99,7 +110,7 @@ BEGIN
     WHERE style IS NULL OR btrim(style) = '' OR effective_date IS NULL OR source IS NULL
   LOOP
     INSERT INTO data_remediation_log(table_name, record_id, issue, action, before_data)
-    VALUES ('user_training_style', rec.id, ISSUE_NULL_OR_BLANK_STYLE_FIELDS,
+    VALUES (TABLE_USER_TRAINING_STYLE, rec.id, ISSUE_NULL_OR_BLANK_STYLE_FIELDS,
             'normalize style/source/effective_date', to_jsonb(rec));
 
     UPDATE user_training_style
@@ -109,7 +120,7 @@ BEGIN
     WHERE id = rec.id;
 
     INSERT INTO data_remediation_log(table_name, record_id, issue, action, after_data)
-    SELECT 'user_training_style', rec.id, ISSUE_NULL_OR_BLANK_STYLE_FIELDS,
+    SELECT TABLE_USER_TRAINING_STYLE, rec.id, ISSUE_NULL_OR_BLANK_STYLE_FIELDS,
            'normalized', to_jsonb(uts)
     FROM user_training_style uts WHERE uts.id = rec.id;
   END LOOP;
@@ -128,7 +139,7 @@ BEGIN
     LIMIT 1;
 
     INSERT INTO data_remediation_log(table_name, record_id, issue, action, before_data)
-    SELECT 'user_training_style', uts.id, ISSUE_DUPLICATE_EFFECTIVE_DATE_PER_USER,
+    SELECT TABLE_USER_TRAINING_STYLE, uts.id, ISSUE_DUPLICATE_EFFECTIVE_DATE_PER_USER,
            'delete_duplicate_keep_newest', to_jsonb(uts)
     FROM user_training_style uts
     WHERE uts.user_id = rec.user_id
