@@ -109,7 +109,7 @@ export class UserStorage {
 
     if (before && user) {
       const styleChanged = before.trainingStyleId !== user.trainingStyleId;
-      const styleProvidedInPatch = Object.prototype.hasOwnProperty.call(preferences, "trainingStyleId");
+      const styleProvidedInPatch = Object.hasOwn(preferences, "trainingStyleId");
       if (styleChanged) {
         logger.info({
           context: "health-metrics",

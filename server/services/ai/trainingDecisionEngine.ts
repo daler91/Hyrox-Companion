@@ -133,8 +133,8 @@ export function decideTrainingState(input: TrainingDecisionInput): TrainingDecis
 
   const intensityPermitted = phase === "bridge" || phase === "performance";
   const intensityAllowedAfterGuards = intensityPermitted && !softRecoveryLoad;
-  if (!intensityAllowedAfterGuards) codes.push("S8_INTENSITY_BLOCKED");
-  else codes.push("S8_INTENSITY_ALLOWED");
+  if (intensityAllowedAfterGuards) codes.push("S8_INTENSITY_ALLOWED");
+  else codes.push("S8_INTENSITY_BLOCKED");
 
   return {
     phase,
