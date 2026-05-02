@@ -90,14 +90,15 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
         toast({ title: "Complete required MAF profile fields", variant: "destructive" });
         return;
       }
-      await prefsMutation.mutateAsync({
-        trainingStyleId,
-        mafAge: mafAge ? Number(mafAge) : undefined,
-        mafInjuryIllnessMedication,
-        mafConsistency: mafConsistency as "low" | "moderate" | "high",
-        mafTrend: mafTrend as "improving" | "flat" | "declining",
-        mafHrDataAvailable,
-      });
+      const payload: Record<string, unknown> = { trainingStyleId };
+      if (trainingStyleId === "maf_method") {
+        payload.mafAge = Number(mafAge);
+        payload.mafInjuryIllnessMedication = mafInjuryIllnessMedication;
+        payload.mafConsistency = mafConsistency;
+        payload.mafTrend = mafTrend;
+        payload.mafHrDataAvailable = mafHrDataAvailable;
+      }
+      await prefsMutation.mutateAsync(payload);
       setStep("plan");
     }
   };

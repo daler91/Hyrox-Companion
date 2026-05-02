@@ -34,11 +34,10 @@ type Preferences = UserPreferences;
 type SavePayload = Omit<UserPreferences, "weeklyGoal"> & { weeklyGoal: number };
 interface PreferencesSnapshot extends Omit<UserPreferences, "weeklyGoal"> {
   weeklyGoal: string;
+  trainingStyleId: string;
 }
 
-function preferencesToSnapshot(
-  preferences: Pick<Preferences, "weightUnit" | "distanceUnit" | "weeklyGoal" | "emailNotifications" | "emailWeeklySummary" | "emailMissedReminder" | "showAdherenceInsights" | "aiCoachEnabled">,
-): PreferencesSnapshot {
+function preferencesToSnapshot(preferences: Preferences): PreferencesSnapshot {
   return {
     weightUnit: preferences.weightUnit || "kg",
     distanceUnit: preferences.distanceUnit || "km",
@@ -48,6 +47,7 @@ function preferencesToSnapshot(
     emailMissedReminder: preferences.emailMissedReminder ?? true,
     showAdherenceInsights: preferences.showAdherenceInsights ?? true,
     aiCoachEnabled: preferences.aiCoachEnabled ?? true,
+    trainingStyleId: preferences.trainingStyleId ?? "balanced_default",
   };
 }
 
@@ -61,6 +61,7 @@ function savePayloadToSnapshot(payload: SavePayload): PreferencesSnapshot {
     emailMissedReminder: payload.emailMissedReminder,
     showAdherenceInsights: payload.showAdherenceInsights,
     aiCoachEnabled: payload.aiCoachEnabled,
+    trainingStyleId: payload.trainingStyleId ?? "balanced_default",
   };
 }
 
@@ -74,6 +75,7 @@ function snapshotToSavePayload(snapshot: PreferencesSnapshot): SavePayload {
     emailMissedReminder: snapshot.emailMissedReminder,
     showAdherenceInsights: snapshot.showAdherenceInsights,
     aiCoachEnabled: snapshot.aiCoachEnabled,
+    trainingStyleId: snapshot.trainingStyleId,
   };
 }
 
@@ -106,6 +108,7 @@ export default function Settings() {
     emailMissedReminder: true,
     showAdherenceInsights: true,
     aiCoachEnabled: true,
+    trainingStyleId: "balanced_default",
   });
   // Snapshot of the last server-committed values used as the baseline for
   // dirty-state computation.
@@ -124,8 +127,9 @@ export default function Settings() {
       emailMissedReminder,
       showAdherenceInsights,
       aiCoachEnabled,
+      trainingStyleId,
     }),
-    [weightUnit, distanceUnit, weeklyGoal, emailNotifications, emailWeeklySummary, emailMissedReminder, showAdherenceInsights, aiCoachEnabled],
+    [weightUnit, distanceUnit, weeklyGoal, emailNotifications, emailWeeklySummary, emailMissedReminder, showAdherenceInsights, aiCoachEnabled, trainingStyleId],
   );
 
   useEffect(() => {
@@ -253,6 +257,7 @@ export default function Settings() {
     undoSnapshotRef.current = baselineSnapshotRef.current
       ? { ...baselineSnapshotRef.current }
       : null;
+    const styleChanged = trainingStyleId !== (preferences?.trainingStyleId ?? "balanced_default");
     saveMutation.mutate({
       weightUnit,
       distanceUnit,
@@ -263,11 +268,11 @@ export default function Settings() {
       showAdherenceInsights,
       aiCoachEnabled,
       trainingStyleId,
-      trainingStylePreviousId: preferences?.trainingStyleId ?? null,
-      trainingStyleChangedAt: new Date().toISOString(),
-      trainingStyleRecomputeNow: true,
-      mafHr: trainingStyleId === "maf_method" ? (180 - Number(preferences?.mafAge ?? 35)) : null,
-      mafBaselineTestScheduledAt: trainingStyleId === "maf_method" ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() : null,
+      trainingStylePreviousId: styleChanged ? (preferences?.trainingStyleId ?? null) : undefined,
+      trainingStyleChangedAt: styleChanged ? new Date().toISOString() : undefined,
+      trainingStyleRecomputeNow: styleChanged,
+      mafHr: styleChanged && trainingStyleId === "maf_method" ? (180 - Number(preferences?.mafAge ?? 35)) : undefined,
+      mafBaselineTestScheduledAt: styleChanged && trainingStyleId === "maf_method" ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() : undefined,
     });
   }, [saveMutation, weightUnit, distanceUnit, weeklyGoal, emailNotifications, emailWeeklySummary, emailMissedReminder, showAdherenceInsights, aiCoachEnabled, trainingStyleId, preferences?.trainingStyleId, preferences?.mafAge]);
 
