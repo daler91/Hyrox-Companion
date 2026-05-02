@@ -177,7 +177,7 @@ export async function generateTimelineAiSuggestions(
   const aiContext = await buildAIContext(userId, suggestionQuery, log);
   const coachingMaterials = extractCoachingMaterialsText(aiContext);
 
-  const resolvedStyle = resolveTrainingStyle((user as { trainingStyleId?: string | null } | null)?.trainingStyleId);
+  const resolvedStyle = resolveTrainingStyle(user?.trainingStyleId);
   const stylePromptContext = resolvedStyle.strategy.buildPromptContext(aiContext.trainingContext, upcomingWorkouts);
 
   const rawSuggestions = await generateWorkoutSuggestions(

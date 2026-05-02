@@ -279,7 +279,7 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
         ...(w.exerciseDetails && w.exerciseDetails.length > 0 ? { exerciseDetails: w.exerciseDetails } : {}),
       }));
 
-    const resolvedStyle = resolveTrainingStyle((user as { trainingStyleId?: string | null }).trainingStyleId);
+    const resolvedStyle = resolveTrainingStyle(user.trainingStyleId);
     const stylePromptContext = resolvedStyle.strategy.buildPromptContext(trainingContext, upcomingWorkouts);
 
     if (upcomingWorkouts.length === 0) {
@@ -475,7 +475,7 @@ export async function regenerateCoachNoteForPlanDay(
   };
 
   const coachingContext = await getCoachingMaterialsString(userId, [workoutInput], trainingContext.weightUnit);
-  const resolvedStyle = resolveTrainingStyle((user as { trainingStyleId?: string | null } | null)?.trainingStyleId);
+  const resolvedStyle = resolveTrainingStyle(user?.trainingStyleId);
   const stylePromptContext = resolvedStyle.strategy.buildPromptContext(trainingContext, [workoutInput]);
   const inputsUsed = buildCoachNoteInputs(
     trainingContext,

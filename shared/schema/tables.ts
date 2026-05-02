@@ -40,6 +40,7 @@ export const users = pgTable("users", {
   // AI coach requires explicit consent before first use because workout
   // data is sent to Google Gemini for processing.
   aiCoachEnabled: boolean("ai_coach_enabled").default(false),
+  trainingStyleId: text("training_style_id").default("balanced_default"),
   isAutoCoaching: boolean("is_auto_coaching").default(false),
   lastWeeklySummaryAt: timestamp("last_weekly_summary_at"),
   lastMissedReminderAt: timestamp("last_missed_reminder_at"),

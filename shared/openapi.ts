@@ -106,6 +106,7 @@ const EXAMPLE_PREFERENCES = {
   emailMissedReminder: true,
   showAdherenceInsights: true,
   aiCoachEnabled: true,
+  trainingStyleId: "balanced_default",
 };
 
 // Register base schemas as reusable components
