@@ -1,7 +1,7 @@
 import type { ExerciseSet } from "@shared/schema";
 import { describe, expect, it } from "vitest";
 
-import { expandExercisesToSetRows, summarizeSetAdherence } from "./workoutService";
+import { classifyWorkoutCompliance, expandExercisesToSetRows, summarizeSetAdherence } from "./workoutService";
 
 function makeSet(exerciseName: string, overrides: Partial<ExerciseSet> = {}): ExerciseSet {
   return {
@@ -253,6 +253,24 @@ describe("expandExercisesToSetRows", () => {
       distance: 5000,
       time: 1200,
     });
+  });
+});
+
+describe("classifyWorkoutCompliance", () => {
+  it("classifies null as unknown", () => {
+    expect(classifyWorkoutCompliance(null)).toBe("unknown");
+  });
+
+  it("classifies high compliance as compliant", () => {
+    expect(classifyWorkoutCompliance(92)).toBe("compliant");
+  });
+
+  it("classifies mid compliance as mostly", () => {
+    expect(classifyWorkoutCompliance(75)).toBe("mostly");
+  });
+
+  it("classifies low compliance as non_compliant", () => {
+    expect(classifyWorkoutCompliance(45)).toBe("non_compliant");
   });
 });
 
