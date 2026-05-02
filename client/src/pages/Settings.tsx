@@ -200,6 +200,7 @@ export default function Settings() {
     mutationFn: (data: SavePayload) => api.preferences.update(data),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.preferences }).catch(() => {});
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.authUser }).catch(() => {});
       // Promote the saved values to the dirty-state baseline so we don't
       // depend on the invalidating preferences query timing.
       baselineSnapshotRef.current = savePayloadToSnapshot(variables);

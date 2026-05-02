@@ -109,8 +109,16 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
         payload.mafTrend = mafTrend;
         payload.mafHrDataAvailable = mafHrDataAvailable;
       }
-      await prefsMutation.mutateAsync(payload);
-      setStep("plan");
+      try {
+        await prefsMutation.mutateAsync(payload);
+        setStep("plan");
+      } catch {
+        toast({
+          title: "Could not save training style",
+          description: "Please try again. You can also update this later in settings.",
+          variant: "destructive",
+        });
+      }
     }
   };
 
