@@ -6,6 +6,19 @@ import { computeCurrentWeek,computeExerciseGaps, computePlanPhase, computeProgre
 import { decideTrainingState } from "./trainingDecisionEngine";
 import { calculateTrainingStats, collectRecentWorkouts, getExerciseBreakdown, getStructuredExerciseStats } from "./trainingStats";
 
+function mapTestTrendDirection(
+  trend: ReturnType<typeof computeRpeTrend>["rpeTrend"],
+): "declining" | "improving" | "flat" | "insufficient_data" {
+  const trendDirectionMap: Record<ReturnType<typeof computeRpeTrend>["rpeTrend"], "declining" | "improving" | "flat" | "insufficient_data"> = {
+    rising: "declining",
+    falling: "improving",
+    stable: "flat",
+    insufficient_data: "insufficient_data",
+  };
+
+  return trendDirectionMap[trend];
+}
+
 export async function buildTrainingContext(userId: string): Promise<TrainingContext> {
   const [timeline, activePlanRecord, user, upcomingDays] = await Promise.all([
     storage.timeline.getTimeline(userId),
@@ -45,13 +58,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     },
     latestWorkouts: { completedLast7d, avgRpeLast3: rpeTrend.avgRpeLast3 },
     testTrend: {
-      direction: rpeTrend.rpeTrend === "rising"
-        ? "declining"
-        : rpeTrend.rpeTrend === "falling"
-          ? "improving"
-          : rpeTrend.rpeTrend === "stable"
-            ? "flat"
-            : rpeTrend.rpeTrend,
+      direction: mapTestTrendDirection(rpeTrend.rpeTrend),
     },
     raceContext: { hasRace: false, daysToRace: null },
     recoveryMarkers: {

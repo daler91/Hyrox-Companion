@@ -90,6 +90,8 @@ DO $$
 DECLARE
   rec record;
   kept_id varchar(255);
+  ISSUE_NULL_OR_BLANK_STYLE_FIELDS constant text := 'null_or_blank_style_fields';
+  ISSUE_DUPLICATE_EFFECTIVE_DATE_PER_USER constant text := 'duplicate_effective_date_per_user';
 BEGIN
   -- Normalize nullable/blank training style fields.
   FOR rec IN
@@ -97,7 +99,7 @@ BEGIN
     WHERE style IS NULL OR btrim(style) = '' OR effective_date IS NULL OR source IS NULL
   LOOP
     INSERT INTO data_remediation_log(table_name, record_id, issue, action, before_data)
-    VALUES ('user_training_style', rec.id, 'null_or_blank_style_fields',
+    VALUES ('user_training_style', rec.id, ISSUE_NULL_OR_BLANK_STYLE_FIELDS,
             'normalize style/source/effective_date', to_jsonb(rec));
 
     UPDATE user_training_style
@@ -107,7 +109,7 @@ BEGIN
     WHERE id = rec.id;
 
     INSERT INTO data_remediation_log(table_name, record_id, issue, action, after_data)
-    SELECT 'user_training_style', rec.id, 'null_or_blank_style_fields',
+    SELECT 'user_training_style', rec.id, ISSUE_NULL_OR_BLANK_STYLE_FIELDS,
            'normalized', to_jsonb(uts)
     FROM user_training_style uts WHERE uts.id = rec.id;
   END LOOP;
@@ -126,7 +128,7 @@ BEGIN
     LIMIT 1;
 
     INSERT INTO data_remediation_log(table_name, record_id, issue, action, before_data)
-    SELECT 'user_training_style', uts.id, 'duplicate_effective_date_per_user',
+    SELECT 'user_training_style', uts.id, ISSUE_DUPLICATE_EFFECTIVE_DATE_PER_USER,
            'delete_duplicate_keep_newest', to_jsonb(uts)
     FROM user_training_style uts
     WHERE uts.user_id = rec.user_id
