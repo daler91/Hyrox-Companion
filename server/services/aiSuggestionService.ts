@@ -213,7 +213,24 @@ export async function generateTimelineAiSuggestions(
   }, []);
 
   const forcedSafetyMessage = buildSafetyReviewNote(safetySignals);
-  return { suggestions, ragInfo: sanitizeRagInfo(aiContext.ragInfo), ...(forcedSafetyMessage ? { message: forcedSafetyMessage } : {}) };
+  const surfacedSuggestions = forcedSafetyMessage && suggestions.length === 0
+    ? [{
+        workoutId: upcomingWorkouts[0].id,
+        date: upcomingWorkouts[0].date,
+        focus: upcomingWorkouts[0].focus,
+        targetField: "notes" as const,
+        action: "append" as const,
+        recommendation: forcedSafetyMessage,
+        rationale: "Safety escalation triggered from symptom/medication screening.",
+        priority: "high" as const,
+      }]
+    : suggestions;
+
+  return {
+    suggestions: surfacedSuggestions,
+    ragInfo: sanitizeRagInfo(aiContext.ragInfo),
+    ...(forcedSafetyMessage ? { message: forcedSafetyMessage } : {}),
+  };
 }
 
 export async function applyTimelineAiSuggestion(
