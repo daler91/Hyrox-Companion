@@ -1,10 +1,9 @@
-import { setupAuthIntercepts } from "../support/authIntercepts";
+import { stubParseExercisesEmpty, visitLogWorkoutPage } from "../support/logWorkoutHelpers";
 
 describe("Log Workout Page", () => {
   beforeEach(() => {
-    setupAuthIntercepts();
-    cy.visit("/log");
-    cy.wait("@authUser");
+    stubParseExercisesEmpty();
+    visitLogWorkoutPage();
   });
 
   it("shows the workout form with title input", () => {
@@ -19,7 +18,6 @@ describe("Log Workout Page", () => {
     // Notes live on step 3 — navigate there via the stepper.
     // Text must be ≥8 chars AND contain a digit/x to satisfy
     // the auto-parse signal gate (useWorkoutEditor#AUTO_PARSE_SIGNAL_RE).
-    cy.intercept("POST", "/api/v1/parse-exercises", { statusCode: 200, body: [] }).as("parseExercises");
     cy.advanceLogWorkoutToReflect("3x10 squats");
     cy.getBySel("input-workout-notes").should("exist");
   });
@@ -40,7 +38,6 @@ describe("Log Workout Page", () => {
 
   it("shows save workout button", () => {
     // Save button lives on step 3 — navigate there
-    cy.intercept("POST", "/api/v1/parse-exercises", { statusCode: 200, body: [] }).as("parseExercises");
     cy.advanceLogWorkoutToReflect("3x10 squats");
     cy.getBySel("button-save-workout").should("exist");
   });
