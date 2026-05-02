@@ -38,7 +38,6 @@ export function calculateMafHr(input: MafInput): MafResult {
     adjustment = -5;
     reasonCodes.push("low_consistency_or_declining_trend", "adjustment_-5");
   } else if (input.consistency === "moderate" || input.trend === "flat") {
-    adjustment = 0;
     reasonCodes.push("moderate_consistency_or_flat_trend", "adjustment_0");
   } else {
     adjustment = 5;

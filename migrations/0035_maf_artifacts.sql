@@ -58,8 +58,5 @@ ALTER TABLE "user_training_style" ADD CONSTRAINT "user_training_style_source_che
 INSERT INTO "user_training_style" ("user_id", "style", "effective_date", "source")
 SELECT "id", COALESCE("training_style_id", 'balanced_default'), CURRENT_DATE, 'migration_default'
 FROM "users"
-WHERE NOT EXISTS (
-  SELECT 1
-  FROM "user_training_style" uts
-  WHERE uts."user_id" = "users"."id"
-);
+LEFT JOIN "user_training_style" uts ON uts."user_id" = "users"."id"
+WHERE uts."user_id" IS NULL;

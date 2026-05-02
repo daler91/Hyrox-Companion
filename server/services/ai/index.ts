@@ -1,7 +1,7 @@
 import type { TrainingContext } from "../../gemini/index";
+import { logger } from "../../logger";
 import { calculateStreak } from "../../routeUtils";
 import { storage } from "../../storage";
-import { logger } from "../../logger";
 import { computeCurrentWeek,computeExerciseGaps, computePlanPhase, computeProgressionFlags, computeRpeTrend, computeWeeklyVolume } from "./coachingInsights";
 import { decideTrainingState } from "./trainingDecisionEngine";
 import { calculateTrainingStats, collectRecentWorkouts, getExerciseBreakdown, getStructuredExerciseStats } from "./trainingStats";

@@ -15,9 +15,9 @@ import { StravaSection } from "@/components/settings/StravaSection";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
 import { ToastAction } from "@/components/ui/toast";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -501,7 +501,24 @@ export default function Settings() {
       </Card>
 
       <AlertDialog open={confirmStyleOpen} onOpenChange={setConfirmStyleOpen}>
-        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Change training style?</AlertDialogTitle><AlertDialogDescription>This will change how your AI analysis works and affect future plans. We’ll re-baseline MAF settings when needed.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => { if (!pendingStyleId) return; if (pendingStyleId === "maf_method" && !hasRequiredMafInputs()) { setStyleSwitchBlockedMessage("Complete MAF setup to switch styles"); setMafSetupOpen(true); return; } setTrainingStyleId(pendingStyleId); setStyleTransitionNotice(`Switched to ${getStyleLabel(pendingStyleId)}. Immediate: coaching language and new recommendations update now. After re-baseline: future trend analysis and longer-horizon plan adjustments will settle once new baseline data is captured.`); }}>Confirm</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
+        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Change training style?</AlertDialogTitle><AlertDialogDescription>This will change how your AI analysis works and affect future plans. We’ll re-baseline MAF settings when needed.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction
+              onClick={() => {
+                if (!pendingStyleId) {
+                  return;
+                }
+                if (pendingStyleId === "maf_method" && !hasRequiredMafInputs()) {
+                  setStyleSwitchBlockedMessage("Complete MAF setup to switch styles");
+                  setMafSetupOpen(true);
+                  return;
+                }
+                setTrainingStyleId(pendingStyleId);
+                setStyleTransitionNotice(
+                  `Switched to ${getStyleLabel(pendingStyleId)}. Immediate: coaching language and new recommendations update now. After re-baseline: future trend analysis and longer-horizon plan adjustments will settle once new baseline data is captured.`,
+                );
+              }}
+            >
+              Confirm
+            </AlertDialogAction></AlertDialogFooter></AlertDialogContent>
       </AlertDialog>
       <AlertDialog open={mafSetupOpen} onOpenChange={setMafSetupOpen}>
         <AlertDialogContent>
