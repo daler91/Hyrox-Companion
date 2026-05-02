@@ -83,6 +83,11 @@ describe("Workouts Routes", () => {
   });
 
   describe("GET /api/workouts", () => {
+    it("returns shared validation contract on invalid query", async () => {
+      const response = await request(app).get("/api/v1/workouts?limit=0");
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ error: "Invalid limit", code: "BAD_REQUEST" });
+    });
     it("should return a list of workout logs for a user", async () => {
       // Mock the storage response
       const { storage } = await import("../../storage");

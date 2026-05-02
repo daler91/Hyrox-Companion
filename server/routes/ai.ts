@@ -9,7 +9,7 @@ import { reqLogger } from "../logger";
 import { aiBudgetCheck } from "../middleware/aibudget";
 import { aiConsentCheck } from "../middleware/aiConsent";
 import { protectedMutationGuards } from "../routeGuards";
-import { asyncHandler, rateLimiter, sendNotFound, validateBody } from "../routeUtils";
+import { asyncHandler, rateLimiter, sendNotFound, validateBody, validateQuery } from "../routeUtils";
 import { type AIContext, buildAIContext, type ChatInput } from "../services/aiContextService";
 import { applyTimelineAiSuggestion, generateTimelineAiSuggestions } from "../services/aiSuggestionService";
 import { sanitizeRagInfo } from "../services/ragRetrieval";
@@ -253,13 +253,9 @@ const chatHistoryQuerySchema = z
     { message: "before and beforeId must be provided together" },
   );
 
-router.get("/api/v1/chat/history", isAuthenticated, asyncHandler(async (req: ExpressRequest, res: Response) => {
+router.get("/api/v1/chat/history", isAuthenticated, validateQuery(chatHistoryQuerySchema), asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
-    const parsed = chatHistoryQuerySchema.safeParse(req.query);
-    if (!parsed.success) {
-      return res.status(400).json({ error: "Invalid pagination params", code: "VALIDATION_ERROR" });
-    }
-    const { limit, before, beforeId } = parsed.data;
+    const { limit, before, beforeId } = req.query as z.infer<typeof chatHistoryQuerySchema>;
     const messages = await storage.users.getChatMessages(userId, {
       limit,
       beforeTimestamp: before ? new Date(before) : undefined,

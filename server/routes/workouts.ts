@@ -6,10 +6,9 @@ import { z } from "zod";
 import { isAuthenticated } from "../clerkAuth";
 import { DEFAULT_PAGE_LIMIT, DEFAULT_TIMELINE_LIMIT, MAX_PAGE_LIMIT } from "../constants";
 import { db } from "../db";
-import { AppError, ErrorCode } from "../errors";
 import { aiBudgetCheck } from "../middleware/aibudget";
 import { protectedMutationGuards } from "../routeGuards";
-import { asyncHandler, parsePagination, rateLimiter, sendNotFound, validateBody } from "../routeUtils";
+import { asyncHandler, parsePagination, rateLimiter, sendNotFound, validateBody, validateParams } from "../routeUtils";
 import { generateCSV, generateJSON } from "../services/exportService";
 import { batchReparseWorkouts,reparseWorkout, reparseWorkoutFromImage } from "../services/workoutService";
 import { createWorkout, updateWorkoutUseCase } from "../services/workoutUseCases";
@@ -25,6 +24,7 @@ const createWorkoutRouteSchema = insertWorkoutLogSchema.extend({
 const updateWorkoutRouteSchema = updateWorkoutLogSchema.extend({
   exercises: exercisesPayloadSchema.optional(),
 });
+const reparseWorkoutParamsSchema = z.object({ id: z.string().min(1) });
 const reparseWorkoutRouteSchema = z.object({
   prescribedMainWorkout: z.string().nullable().optional(),
   prescribedAccessory: z.string().nullable().optional(),
@@ -48,17 +48,9 @@ router.get("/api/v1/workouts/unstructured", isAuthenticated, rateLimiter("workou
     res.json(workouts);
   }));
 
-router.post("/api/v1/workouts/:id/reparse", ...protectedMutationGuards, rateLimiter("reparse", 5), aiBudgetCheck, asyncHandler(async (req: Request<{ id: string }, unknown, ReparseWorkoutRoutePayload>, res: Response) => {
+router.post("/api/v1/workouts/:id/reparse", ...protectedMutationGuards, rateLimiter("reparse", 5), aiBudgetCheck, validateParams(reparseWorkoutParamsSchema), validateBody(reparseWorkoutRouteSchema), asyncHandler(async (req: Request<{ id: string }, unknown, ReparseWorkoutRoutePayload>, res: Response) => {
     const userId = getUserId(req);
     const workoutId = req.params.id;
-    const parsedBody = reparseWorkoutRouteSchema.safeParse(req.body ?? {});
-    if (!parsedBody.success) {
-      throw new AppError(
-        ErrorCode.VALIDATION_ERROR,
-        parsedBody.error.issues.map((issue) => issue.message).join(", "),
-        400,
-      );
-    }
     // ⚡ Perf: Parallelize independent DB queries — getWorkoutLog and getUser
     // don't depend on each other, so run them concurrently to halve latency.
     const [workout, user] = await Promise.all([
@@ -75,13 +67,13 @@ router.post("/api/v1/workouts/:id/reparse", ...protectedMutationGuards, rateLimi
       mainWorkout: workout.prescribedMainWorkout ?? workout.mainWorkout,
       accessory: workout.prescribedAccessory ?? workout.accessory,
     };
-    if (parsedBody.data.prescribedMainWorkout !== undefined) {
-      referencePatch.prescribedMainWorkout = parsedBody.data.prescribedMainWorkout;
-      parseTarget.mainWorkout = parsedBody.data.prescribedMainWorkout;
+    if (req.body.prescribedMainWorkout !== undefined) {
+      referencePatch.prescribedMainWorkout = req.body.prescribedMainWorkout;
+      parseTarget.mainWorkout = req.body.prescribedMainWorkout;
     }
-    if (parsedBody.data.prescribedAccessory !== undefined) {
-      referencePatch.prescribedAccessory = parsedBody.data.prescribedAccessory;
-      parseTarget.accessory = parsedBody.data.prescribedAccessory;
+    if (req.body.prescribedAccessory !== undefined) {
+      referencePatch.prescribedAccessory = req.body.prescribedAccessory;
+      parseTarget.accessory = req.body.prescribedAccessory;
     }
     if (Object.keys(referencePatch).length > 0) {
       await storage.workouts.updateWorkoutLog(workoutId, referencePatch, userId);

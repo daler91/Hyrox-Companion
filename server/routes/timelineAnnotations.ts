@@ -6,7 +6,7 @@ import { type Request, type Response, Router } from "express";
 
 import { isAuthenticated } from "../clerkAuth";
 import { protectedMutationGuards } from "../routeGuards";
-import { asyncHandler, formatValidationErrors, rateLimiter, sendNotFound } from "../routeUtils";
+import { asyncHandler, rateLimiter, sendNotFound, validateBody } from "../routeUtils";
 import { storage } from "../storage";
 import { getUserId } from "../types";
 
@@ -35,17 +35,10 @@ router.post(
   "/api/v1/timeline-annotations",
   ...protectedMutationGuards,
   rateLimiter("annotations", 20),
+  validateBody(insertTimelineAnnotationSchema),
   asyncHandler(async (req: Request, res: Response) => {
     const userId = getUserId(req);
-    const parseResult = insertTimelineAnnotationSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      return res.status(400).json({
-        error: "Invalid annotation",
-        code: "VALIDATION_ERROR",
-        details: formatValidationErrors(parseResult.error),
-      });
-    }
-    const row = await storage.timelineAnnotations.create(userId, parseResult.data);
+    const row = await storage.timelineAnnotations.create(userId, req.body);
     res.status(201).json(row);
   }),
 );
@@ -59,16 +52,9 @@ router.patch(
   "/api/v1/timeline-annotations/:id",
   ...protectedMutationGuards,
   rateLimiter("annotations", 20),
+  validateBody(updateTimelineAnnotationSchema),
   asyncHandler(async (req: Request<{ id: string }>, res: Response) => {
     const userId = getUserId(req);
-    const parseResult = updateTimelineAnnotationSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      return res.status(400).json({
-        error: "Invalid annotation update",
-        code: "VALIDATION_ERROR",
-        details: formatValidationErrors(parseResult.error),
-      });
-    }
 
     // Merge-then-validate: the schema `.refine` only runs when both dates
     // are present in the request body, so a single-field PATCH could slip
@@ -80,8 +66,8 @@ router.patch(
       return sendNotFound(res, "Annotation not found");
     }
 
-    const mergedStart = parseResult.data.startDate ?? existing.startDate;
-    const mergedEnd = parseResult.data.endDate ?? existing.endDate;
+    const mergedStart = req.body.startDate ?? existing.startDate;
+    const mergedEnd = req.body.endDate ?? existing.endDate;
     if (mergedEnd < mergedStart) {
       return res.status(400).json({
         error: "Invalid annotation update",
@@ -90,7 +76,7 @@ router.patch(
       });
     }
 
-    const row = await storage.timelineAnnotations.update(userId, req.params.id, parseResult.data);
+    const row = await storage.timelineAnnotations.update(userId, req.params.id, req.body);
     if (!row) {
       return sendNotFound(res, "Annotation not found");
     }
