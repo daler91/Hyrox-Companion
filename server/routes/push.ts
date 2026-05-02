@@ -4,10 +4,10 @@ import { z } from "zod";
 import { isAuthenticated } from "../clerkAuth";
 import { env } from "../env";
 import { isPushEnabled, sendPushToUser } from "../pushNotifications";
-import { protectedDelete, protectedPost } from "./_helpers/protectedRouteBuilder";
-import { asyncHandler, rateLimiter, validateBody } from "../routeUtils";
+import { rateLimiter, validateBody } from "../routeUtils";
 import { storage } from "../storage";
 import { getUserId } from "../types";
+import { protectedDelete, protectedPost } from "./_helpers/protectedRouteBuilder";
 
 const router = Router();
 

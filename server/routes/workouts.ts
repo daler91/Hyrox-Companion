@@ -9,13 +9,13 @@ import { db } from "../db";
 import { AppError, ErrorCode } from "../errors";
 import { aiBudgetCheck } from "../middleware/aibudget";
 import { protectedMutationGuards } from "../routeGuards";
-import { protectedDelete, protectedPatch, protectedPost } from "./_helpers/protectedRouteBuilder";
 import { asyncHandler, parsePagination, rateLimiter, sendNotFound, validateBody, validateParams } from "../routeUtils";
 import { generateCSV, generateJSON } from "../services/exportService";
 import { batchReparseWorkouts,reparseWorkout, reparseWorkoutFromImage } from "../services/workoutService";
 import { createWorkout, updateWorkoutUseCase } from "../services/workoutUseCases";
 import { storage } from "../storage";
 import { getUserId } from "../types";
+import { protectedPost } from "./_helpers/protectedRouteBuilder";
 
 // Route schemas — combine core table schema with the optional exercises payload
 // so a single validateBody() middleware covers both in one pass and emits a
