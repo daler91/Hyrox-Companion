@@ -16,11 +16,11 @@ import { buildTrainingContext } from "./ai";
 import { analyzeSafetySignals, applySafetyLayerToSuggestions, buildSafetyReviewNote } from "./aiSafety";
 import { checkAiBudget } from "./aiUsageService";
 import { retrieveCoachingText } from "./ragRetrieval";
-import { resolveTrainingStyle } from "./training_styles";
 import {
   applyStructuredPlanDaySuggestionRows,
   parseStructuredPlanDaySuggestionRows,
 } from "./structuredPlanDaySuggestion";
+import { resolveTrainingStyle } from "./training_styles";
 
 // ---------------------------------------------------------------------------
 // Helpers

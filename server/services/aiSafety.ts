@@ -1,4 +1,5 @@
-import type { TrainingContext, UpcomingWorkout, WorkoutSuggestion } from "../gemini/types";
+import type { UpcomingWorkout, WorkoutSuggestion } from "../gemini/suggestionService";
+import type { TrainingContext } from "../gemini/types";
 
 const PROHIBITED_MEDICAL_ACTION_PATTERNS = [
   /\bdiagnos(?:e|is|ed|ing)\b/i,

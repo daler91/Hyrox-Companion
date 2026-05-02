@@ -8,14 +8,14 @@ import { logger as defaultLogger } from "../logger";
 import { buildWorkoutSearchText } from "../prompts/exerciseSetFormatter";
 import { storage } from "../storage";
 import { buildAIContext, extractCoachingMaterialsText } from "./aiContextService";
+import { analyzeSafetySignals, applySafetyLayerToSuggestions, buildSafetyReviewNote } from "./aiSafety";
 import { checkAiBudget } from "./aiUsageService";
 import { sanitizeRagInfo } from "./ragRetrieval";
-import { resolveTrainingStyle } from "./training_styles";
-import { analyzeSafetySignals, applySafetyLayerToSuggestions, buildSafetyReviewNote } from "./aiSafety";
 import {
   applyStructuredPlanDaySuggestionRows,
   parseStructuredPlanDaySuggestionRows,
 } from "./structuredPlanDaySuggestion";
+import { resolveTrainingStyle } from "./training_styles";
 
 export interface TimelineSuggestion {
   workoutId: string;
