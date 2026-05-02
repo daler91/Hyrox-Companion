@@ -1,4 +1,4 @@
-import type { AllowedImageMimeType, ExerciseName, ParsedExercise } from "@shared/schema";
+import type { ExerciseName, ParsedExercise } from "@shared/schema";
 import { CheckCircle2, ChevronDown, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -12,6 +12,8 @@ import type { toast as toastFn } from "@/hooks/use-toast";
 import type { ParseFromImagePayload } from "@/lib/api";
 import type { CompressedImage } from "@/lib/image";
 import { cn } from "@/lib/utils";
+
+import { buildParseImagePayload, shouldRetainImagePreview, type ImagePreviewState } from "./workoutComposer.utils";
 
 interface WorkoutComposerProps {
   readonly freeText: string;
@@ -95,11 +97,7 @@ export function WorkoutComposer({
   onParseImage,
   isParsingImage,
 }: WorkoutComposerProps) {
-  const [imagePreview, setImagePreview] = useState<{
-    url: string;
-    base64: string;
-    mimeType: AllowedImageMimeType;
-  } | null>(null);
+  const [imagePreview, setImagePreview] = useState<ImagePreviewState | null>(null);
 
   // Mirror the active preview URL into a ref so a single unmount-only
   // cleanup effect can revoke it without re-running on every preview swap
@@ -247,10 +245,7 @@ export function WorkoutComposer({
                     cancelAutoParse();
                     const capturedPreview = imagePreview;
                     onParseImage(
-                      {
-                        imageBase64: capturedPreview.base64,
-                        mimeType: capturedPreview.mimeType,
-                      },
+                      buildParseImagePayload(capturedPreview),
                       {
                         onSuccess: (parsed) => {
                           // Soft-failure guard: parseFromImage resolves
@@ -258,7 +253,7 @@ export function WorkoutComposer({
                           // Gemini extracted nothing. Keep the preview
                           // so the user can retake/retry without losing
                           // the capture.
-                          if (!parsed || parsed.length === 0) return;
+                          if (shouldRetainImagePreview(parsed)) return;
                           URL.revokeObjectURL(capturedPreview.url);
                           setImagePreview((current) =>
                             current?.url === capturedPreview.url ? null : current,
