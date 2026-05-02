@@ -7,7 +7,7 @@ import { logger } from "./logger";
 import { triggerAutoCoach } from "./services/coachService";
 import { embedCoachingMaterial } from "./services/ragService";
 import { storage } from "./storage";
-import { getJobData, hasIdentifier } from "./queue.utils";
+import { getEmbedJobIdentifiers, getUserIdFromJob } from "./queue.utils";
 
 if (!env.DATABASE_URL) {
   throw new Error("DATABASE_URL must be set. Did you forget to provision a database?");
@@ -158,8 +158,8 @@ export async function startQueue() {
     await runBatch("auto-coach", jobs, async (job) => {
       logger.info({ jobId: job.id, data: job.data }, "[pg-boss] Processing auto-coach job");
       try {
-        const { userId } = getJobData<{ userId?: unknown }>(job);
-        if (!hasIdentifier(userId)) {
+        const userId = getUserIdFromJob(job);
+        if (!userId) {
           logger.warn({ jobId: job.id, data: job.data }, "[pg-boss] Missing userId on auto-coach job, skipping");
           return;
         }
@@ -176,11 +176,12 @@ export async function startQueue() {
   // Register worker for embed-coaching-material
   await queue.work("embed-coaching-material", async (jobs: Job[]) => {
     await runBatch("embed-coaching-material", jobs, async (job) => {
-      const { materialId, userId } = getJobData<{ materialId?: unknown; userId?: unknown }>(job);
-      if (!hasIdentifier(materialId) || !hasIdentifier(userId)) {
+      const identifiers = getEmbedJobIdentifiers(job);
+      if (!identifiers) {
         logger.warn({ jobId: job.id, data: job.data }, "[pg-boss] Missing embed-coaching-material identifiers, skipping");
         return;
       }
+      const { materialId, userId } = identifiers;
       logger.info({ jobId: job.id, materialId }, "[pg-boss] Processing embed-coaching-material job");
       try {
         const material = await storage.coaching.getCoachingMaterial(materialId, userId);
@@ -201,8 +202,8 @@ export async function startQueue() {
   await queue.createQueue("send-weekly-summary");
   await queue.work("send-weekly-summary", async (jobs: Job[]) => {
     await runBatch("send-weekly-summary", jobs, async (job) => {
-      const { userId } = getJobData<{ userId?: unknown }>(job);
-      if (!hasIdentifier(userId)) {
+      const userId = getUserIdFromJob(job);
+      if (!userId) {
         logger.warn({ jobId: job.id, data: job.data }, "[pg-boss] Missing userId on send-weekly-summary job, skipping");
         return;
       }
@@ -229,8 +230,8 @@ export async function startQueue() {
   await queue.createQueue("send-missed-reminder");
   await queue.work("send-missed-reminder", async (jobs: Job[]) => {
     await runBatch("send-missed-reminder", jobs, async (job) => {
-      const { userId } = getJobData<{ userId?: unknown }>(job);
-      if (!hasIdentifier(userId)) {
+      const userId = getUserIdFromJob(job);
+      if (!userId) {
         logger.warn({ jobId: job.id, data: job.data }, "[pg-boss] Missing userId on send-missed-reminder job, skipping");
         return;
       }
