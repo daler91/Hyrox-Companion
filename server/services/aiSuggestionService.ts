@@ -10,6 +10,7 @@ import { storage } from "../storage";
 import { buildAIContext, extractCoachingMaterialsText } from "./aiContextService";
 import { checkAiBudget } from "./aiUsageService";
 import { sanitizeRagInfo } from "./ragRetrieval";
+import { resolveTrainingStyle } from "./training_styles";
 import {
   applyStructuredPlanDaySuggestionRows,
   parseStructuredPlanDaySuggestionRows,
@@ -176,16 +177,20 @@ export async function generateTimelineAiSuggestions(
   const aiContext = await buildAIContext(userId, suggestionQuery, log);
   const coachingMaterials = extractCoachingMaterialsText(aiContext);
 
+  const resolvedStyle = resolveTrainingStyle((user as { trainingStyleId?: string | null } | null)?.trainingStyleId);
+  const stylePromptContext = resolvedStyle.strategy.buildPromptContext(aiContext.trainingContext, upcomingWorkouts);
+
   const rawSuggestions = await generateWorkoutSuggestions(
     aiContext.trainingContext,
     upcomingWorkouts,
     undefined,
     coachingMaterials,
     userId,
+    stylePromptContext,
   );
 
   const workoutMap = new Map(upcomingWorkouts.map((w) => [w.id, w]));
-  const suggestions = rawSuggestions.reduce<TimelineSuggestion[]>((acc, s) => {
+  const suggestions = resolvedStyle.strategy.prescribeNext({ suggestions: rawSuggestions, trainingContext: aiContext.trainingContext }).reduce<TimelineSuggestion[]>((acc, s) => {
     const workout = workoutMap.get(s.workoutId);
     const mapped: TimelineSuggestion = {
       workoutId: s.workoutId,
