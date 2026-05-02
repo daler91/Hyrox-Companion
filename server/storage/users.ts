@@ -1,3 +1,4 @@
+import { calculateMafHr } from "@shared/maf";
 import {
   type ChatMessage,
   chatMessages,
@@ -9,6 +10,7 @@ import {
   type InsertCustomExercise,
   type InsertGarminConnection,
   type InsertStravaConnection,
+  mafProfile,
   type StravaConnection,
   stravaConnections,
   type UpdateUserPreferences,
@@ -60,6 +62,29 @@ export class UserStorage {
       })
       .where(eq(users.id, userId))
       .returning();
+
+    if (
+      user &&
+      user.trainingStyleId === "maf_method" &&
+      user.mafAge != null &&
+      user.mafConsistency != null &&
+      user.mafTrend != null &&
+      user.mafInjuryIllnessMedication != null
+    ) {
+      const maf = calculateMafHr({
+        age: user.mafAge,
+        injuryIllnessMedication: user.mafInjuryIllnessMedication,
+        consistency: user.mafConsistency as "low" | "moderate" | "high",
+        trend: user.mafTrend as "improving" | "flat" | "declining",
+      });
+      await db.insert(mafProfile).values({
+        userId,
+        baseHr: maf.base,
+        adjustment: maf.adjustment,
+        finalHr: maf.ceiling,
+        reason: JSON.stringify({ reasonCodes: maf.reasonCodes, explanation: maf.explanation, warning: maf.warning }),
+      });
+    }
     return user;
   }
 

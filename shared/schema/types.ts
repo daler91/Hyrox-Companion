@@ -57,7 +57,7 @@ export const updateUserPreferencesSchema = z.object({
   mafConsistency: z.enum(["low", "moderate", "high"]).nullable().optional(),
   mafTrend: z.enum(["improving", "flat", "declining"]).nullable().optional(),
   mafHrDataAvailable: z.boolean().nullable().optional(),
-  mafHr: z.number().int().min(90).max(220).nullable().optional(),
+  mafHr: z.number().int().min(70).max(220).nullable().optional(),
   mafBaselineTestScheduledAt: z.coerce.date().nullable().optional(),
 });
 

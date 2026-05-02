@@ -1,3 +1,4 @@
+import { calculateMafHr } from "@shared/maf";
 import { useMutation } from "@tanstack/react-query";
 import { addDays, format } from "date-fns";
 import { useState } from "react";
@@ -108,6 +109,13 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
         payload.mafConsistency = mafConsistency;
         payload.mafTrend = mafTrend;
         payload.mafHrDataAvailable = mafHrDataAvailable;
+        const maf = calculateMafHr({
+          age: Number(mafAge),
+          injuryIllnessMedication: mafInjuryIllnessMedication,
+          consistency: mafConsistency as "low" | "moderate" | "high",
+          trend: mafTrend as "improving" | "flat" | "declining",
+        });
+        payload.mafHr = maf.ceiling;
       }
       try {
         await prefsMutation.mutateAsync(payload);

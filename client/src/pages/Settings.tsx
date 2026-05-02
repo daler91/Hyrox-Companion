@@ -1,3 +1,4 @@
+import { calculateMafHr } from "@shared/maf";
 import { useMutation,useQuery } from "@tanstack/react-query";
 import { Loader2, RotateCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -11,11 +12,11 @@ import { PreferencesSection } from "@/components/settings/PreferencesSection";
 import { ProfileSection } from "@/components/settings/ProfileSection";
 import { PushNotificationSection } from "@/components/settings/PushNotificationSection";
 import { StravaSection } from "@/components/settings/StravaSection";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { ToastAction } from "@/components/ui/toast";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -260,6 +261,12 @@ export default function Settings() {
       : null;
     const committedStyleId = baselineSnapshotRef.current?.trainingStyleId ?? "balanced_default";
     const styleChanged = trainingStyleId !== committedStyleId;
+    const maf = trainingStyleId === "maf_method" ? calculateMafHr({
+      age: Number(preferences?.mafAge ?? 35),
+      injuryIllnessMedication: Boolean(preferences?.mafInjuryIllnessMedication),
+      consistency: (preferences?.mafConsistency as "low" | "moderate" | "high") ?? "moderate",
+      trend: (preferences?.mafTrend as "improving" | "flat" | "declining") ?? "flat",
+    }) : null;
     saveMutation.mutate({
       weightUnit,
       distanceUnit,
@@ -273,10 +280,10 @@ export default function Settings() {
       trainingStylePreviousId: styleChanged ? committedStyleId : undefined,
       trainingStyleChangedAt: styleChanged ? new Date().toISOString() : undefined,
       trainingStyleRecomputeNow: styleChanged,
-      mafHr: styleChanged && trainingStyleId === "maf_method" ? (180 - Number(preferences?.mafAge ?? 35)) : undefined,
+      mafHr: styleChanged && trainingStyleId === "maf_method" ? maf?.ceiling : undefined,
       mafBaselineTestScheduledAt: styleChanged && trainingStyleId === "maf_method" ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() : undefined,
     });
-  }, [saveMutation, weightUnit, distanceUnit, weeklyGoal, emailNotifications, emailWeeklySummary, emailMissedReminder, showAdherenceInsights, aiCoachEnabled, trainingStyleId, preferences?.mafAge]);
+  }, [saveMutation, weightUnit, distanceUnit, weeklyGoal, emailNotifications, emailWeeklySummary, emailMissedReminder, showAdherenceInsights, aiCoachEnabled, trainingStyleId, preferences?.mafAge, preferences?.mafInjuryIllnessMedication, preferences?.mafConsistency, preferences?.mafTrend]);
 
   const userName = getUserDisplayName(user);
 
