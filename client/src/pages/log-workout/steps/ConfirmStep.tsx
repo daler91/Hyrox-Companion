@@ -1,28 +1,17 @@
-import type { ExerciseName } from "@shared/schema";
 import { ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
 import { useCallback, useState } from "react";
 
-import type { StructuredExercise } from "@/components/ExerciseInput";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { DraftExerciseTable } from "@/components/workout/DraftExerciseTable";
 import { ParseStatusStrip } from "@/components/workout/ParseStatusStrip";
 
+import type { ComposerExerciseProps } from "../sharedComposerProps";
 import { StepFooter } from "../StepFooter";
 
-interface ConfirmStepProps {
+interface ConfirmStepProps extends ComposerExerciseProps {
   readonly freeText: string;
-  readonly exerciseBlocks: string[];
-  readonly exerciseData: Record<string, StructuredExercise>;
-  readonly addExercise: (name: ExerciseName, customLabel?: string) => void;
-  readonly updateBlock: (blockId: string, data: StructuredExercise) => void;
-  readonly removeBlock: (blockId: string) => void;
-  readonly reorderBlocks: (nextOrder: string[]) => void;
-  readonly weightUnit: "kg" | "lbs";
-  readonly distanceUnit: "km" | "miles";
-  readonly autoParsing: boolean;
-  readonly cancelAutoParse: () => void;
   readonly onBack: () => void;
   readonly onContinue: () => void;
 }
@@ -53,28 +42,32 @@ export function ConfirmStep({
   // Cancel any in-flight parse before mutating the exercise list so a
   // late parse response can't overwrite the user's in-progress edits.
   const handleAddExercise = useCallback(
-    (name: ExerciseName, customLabel?: string) => {
+    (...args: Parameters<ComposerExerciseProps["addExercise"]>) => {
+      const [name, customLabel] = args;
       cancelAutoParse();
       addExercise(name, customLabel);
     },
     [cancelAutoParse, addExercise],
   );
   const handleUpdateBlock = useCallback(
-    (blockId: string, ex: StructuredExercise) => {
+    (...args: Parameters<ComposerExerciseProps["updateBlock"]>) => {
+      const [blockId, ex] = args;
       cancelAutoParse();
       updateBlock(blockId, ex);
     },
     [cancelAutoParse, updateBlock],
   );
   const handleRemoveBlock = useCallback(
-    (blockId: string) => {
+    (...args: Parameters<ComposerExerciseProps["removeBlock"]>) => {
+      const [blockId] = args;
       cancelAutoParse();
       removeBlock(blockId);
     },
     [cancelAutoParse, removeBlock],
   );
   const handleReorderBlocks = useCallback(
-    (nextOrder: string[]) => {
+    (...args: Parameters<ComposerExerciseProps["reorderBlocks"]>) => {
+      const [nextOrder] = args;
       cancelAutoParse();
       reorderBlocks(nextOrder);
     },

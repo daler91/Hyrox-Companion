@@ -9,12 +9,12 @@ import type { WorkoutStep } from "@/hooks/useLogWorkoutDraft";
 import type { ParseFromImagePayload } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-import type { SharedComposerProps } from "./sharedComposerProps";
+import type { ComposerAutoParseProps, ComposerExerciseProps, ComposerTextProps, ComposerVoiceProps } from "./sharedComposerProps";
 import { CaptureStep } from "./steps/CaptureStep";
 import { ConfirmStep } from "./steps/ConfirmStep";
 import { ReflectStep } from "./steps/ReflectStep";
 
-interface LogWorkoutStepperLayoutProps extends SharedComposerProps {
+interface LogWorkoutStepperLayoutProps extends ComposerTextProps, ComposerExerciseProps, ComposerAutoParseProps, ComposerVoiceProps {
   readonly parseNow: (text: string) => void;
   readonly step: WorkoutStep;
   readonly setStep: (step: WorkoutStep) => void;

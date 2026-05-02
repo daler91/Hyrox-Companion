@@ -8,10 +8,10 @@ import { WorkoutDateFields } from "@/components/workout/WorkoutDateFields";
 import type { useToast } from "@/hooks/use-toast";
 import type { ParseFromImagePayload } from "@/lib/api";
 
-import type { SharedComposerProps } from "../sharedComposerProps";
+import type { ComposerAutoParseProps, ComposerExerciseProps, ComposerTextProps, ComposerVoiceProps } from "../sharedComposerProps";
 import { StepFooter } from "../StepFooter";
 
-interface CaptureStepProps extends SharedComposerProps {
+interface CaptureStepProps extends ComposerTextProps, ComposerExerciseProps, ComposerAutoParseProps, ComposerVoiceProps {
   readonly title: string;
   readonly setTitle: (value: string) => void;
   readonly date: string;
