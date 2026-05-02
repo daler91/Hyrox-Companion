@@ -50,7 +50,7 @@ function stripAiInjectedSafetyText(text: string): string {
     .replaceAll(ESCALATION_MESSAGE, "")
     .replaceAll(HR_MED_DISCLAIMER, "")
     .split("\n")
-    .filter((line) => !/^\s*(?:\[AI Coach\]|AI suggestion:)\b/i.test(line.trim()))
+    .filter((line) => !/^\s*(?:\[AI Coach\]|AI suggestion:)\s*/i.test(line))
     .join(" ");
 }
 

@@ -82,4 +82,22 @@ describe("aiSafety", () => {
     expect(safety.redFlagDetected).toBe(false);
   });
 
+  it("ignores AI-prefixed lines with trailing spaces when scanning for red flags", () => {
+    const safety = analyzeSafetySignals(
+      {
+        ...baseTrainingContext,
+        recentWorkouts: [{ date: "2026-05-01", focus: "run", mainWorkout: "easy", status: "done", athleteNote: null }],
+      },
+      [{
+        id: "w1",
+        date: "2026-05-02",
+        focus: "run",
+        mainWorkout: "easy",
+        notes: "AI suggestion: chest pain warning copied from prior output",
+      }],
+    );
+
+    expect(safety.redFlagDetected).toBe(false);
+  });
+
 });
