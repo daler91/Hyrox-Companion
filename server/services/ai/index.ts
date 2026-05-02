@@ -51,12 +51,14 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     const days = Math.floor((Date.now() - new Date(w.date).getTime()) / (1000 * 60 * 60 * 24));
     return days >= 0 && days <= 7;
   }).length;
-  const experienceLevel: "beginner" | "intermediate" | "advanced" =
-    totalWorkouts < 20
-      ? "beginner"
-      : totalWorkouts < 80
-        ? "intermediate"
-        : "advanced";
+  let experienceLevel: "beginner" | "intermediate" | "advanced";
+  if (totalWorkouts < 20) {
+    experienceLevel = "beginner";
+  } else if (totalWorkouts < 80) {
+    experienceLevel = "intermediate";
+  } else {
+    experienceLevel = "advanced";
+  }
 
   const decisionTree = decideTrainingState({
     profile: {
