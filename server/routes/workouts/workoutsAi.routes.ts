@@ -25,7 +25,7 @@ export function registerWorkoutAiRoutes(router: Router): void {
     if (!workout) return sendNotFound(res, "Workout not found");
     const weightUnit = user?.weightUnit || "kg";
     const referencePatch: Partial<z.infer<typeof updateWorkoutLogSchema>> = {};
-    const parseTarget = { id: workout.id, mainWorkout: workout.prescribedMainWorkout ?? workout.mainWorkout, accessory: workout.prescribedAccessory ?? workout.accessory };
+    const parseTarget: { id: string; mainWorkout?: string | null; accessory?: string | null } = { id: workout.id, mainWorkout: workout.prescribedMainWorkout ?? workout.mainWorkout, accessory: workout.prescribedAccessory ?? workout.accessory };
     if (req.body.prescribedMainWorkout !== undefined) { referencePatch.prescribedMainWorkout = req.body.prescribedMainWorkout; parseTarget.mainWorkout = req.body.prescribedMainWorkout; }
     if (req.body.prescribedAccessory !== undefined) { referencePatch.prescribedAccessory = req.body.prescribedAccessory; parseTarget.accessory = req.body.prescribedAccessory; }
     if (Object.keys(referencePatch).length > 0) await storage.workouts.updateWorkoutLog(workoutId, referencePatch, userId);
