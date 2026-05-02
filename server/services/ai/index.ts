@@ -1,6 +1,7 @@
 import type { TrainingContext } from "../../gemini/index";
 import { calculateStreak } from "../../routeUtils";
 import { storage } from "../../storage";
+import { logger } from "../../logger";
 import { computeCurrentWeek,computeExerciseGaps, computePlanPhase, computeProgressionFlags, computeRpeTrend, computeWeeklyVolume } from "./coachingInsights";
 import { decideTrainingState } from "./trainingDecisionEngine";
 import { calculateTrainingStats, collectRecentWorkouts, getExerciseBreakdown, getStructuredExerciseStats } from "./trainingStats";
@@ -74,6 +75,24 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
       rationaleCodes: decisionTree.rationaleCodes,
     },
   };
+
+  logger.info({
+    context: "health-metrics",
+    event: "phase_state_evaluated",
+    userId,
+    phase: decisionTree.phase,
+    intensityPermitted: decisionTree.intensityPermitted,
+    rationaleCodes: decisionTree.rationaleCodes,
+  }, "Training phase decision evaluated");
+
+  if (!decisionTree.intensityPermitted && decisionTree.phase === "performance") {
+    logger.info({
+      context: "health-metrics",
+      event: "strict_phase_intensity_blocked",
+      userId,
+      phase: decisionTree.phase,
+    }, "Intensity recommendation blocked in strict phase");
+  }
 
   return {
     totalWorkouts,

@@ -539,6 +539,13 @@ export function summarizeSetAdherence(planned: ExerciseSet[], actual: ExerciseSe
   };
 }
 
+export function classifyWorkoutCompliance(compliancePct: number | null): "compliant" | "mostly" | "non_compliant" | "unknown" {
+  if (compliancePct == null) return "unknown";
+  if (compliancePct >= 85) return "compliant";
+  if (compliancePct >= 60) return "mostly";
+  return "non_compliant";
+}
+
 async function persistAdherenceSnapshot(
   tx: WorkoutTx,
   workoutLogId: string,
@@ -552,7 +559,18 @@ async function persistAdherenceSnapshot(
     .orderBy(asc(exerciseSets.sortOrder));
 
   const snapshot = summarizeSetAdherence(plannedSets, actualSets);
+  const classification = classifyWorkoutCompliance(snapshot.compliancePct);
   await tx.update(workoutLogs).set(snapshot).where(eq(workoutLogs.id, workoutLogId));
+  logger.info({
+    context: "health-metrics",
+    event: "workout_compliance_classified",
+    workoutLogId,
+    planDayId,
+    classification,
+    compliancePct: snapshot.compliancePct,
+    plannedSetCount: snapshot.plannedSetCount,
+    actualSetCount: snapshot.actualSetCount,
+  }, "Workout compliance classification recorded");
 }
 
 async function createWorkoutInTx(

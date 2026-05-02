@@ -1,4 +1,5 @@
 import type { TrainingContext, UpcomingWorkout, WorkoutSuggestion } from "../../gemini";
+import { logger } from "../../logger";
 import type { ResolvedTrainingStyle, TrainingStyleStrategy } from "./types";
 
 const DEFAULT_TRAINING_STYLE_ID = "balanced_default";
@@ -125,6 +126,14 @@ const strategies = new Map<string, TrainingStyleStrategy>([
 
 export function resolveTrainingStyle(trainingStyleId?: string | null): ResolvedTrainingStyle {
   const strategy = (trainingStyleId && strategies.get(trainingStyleId)) || strategies.get(DEFAULT_TRAINING_STYLE_ID)!;
+  if (trainingStyleId && !strategies.has(trainingStyleId)) {
+    logger.warn({
+      context: "health-alert",
+      event: "training_style_resolution_failed",
+      requestedTrainingStyleId: trainingStyleId,
+      fallbackTrainingStyleId: strategy.id,
+    }, "Training style resolution failed; default fallback used");
+  }
   return { trainingStyleId: strategy.id, strategy };
 }
 

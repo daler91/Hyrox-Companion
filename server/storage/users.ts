@@ -22,6 +22,7 @@ import { and, desc, eq, isNotNull, lt, or } from "drizzle-orm";
 
 import { decryptToken,encryptToken } from "../crypto";
 import { db } from "../db";
+import { logger } from "../logger";
 
 export class UserStorage {
   async getUser(id: string): Promise<User | undefined> {
@@ -54,6 +55,7 @@ export class UserStorage {
     userId: string,
     preferences: UpdateUserPreferences,
   ): Promise<User | undefined> {
+    const before = await this.getUser(userId);
     const [user] = await db
       .update(users)
       .set({
@@ -84,6 +86,46 @@ export class UserStorage {
         finalHr: maf.ceiling,
         reason: JSON.stringify({ reasonCodes: maf.reasonCodes, explanation: maf.explanation, warning: maf.warning }),
       });
+      logger.info({
+        context: "health-metrics",
+        event: "maf_hr_calculated",
+        userId,
+        trainingStyleId: user.trainingStyleId,
+        mafHr: maf.ceiling,
+        mafBaseHr: maf.base,
+        mafAdjustment: maf.adjustment,
+      }, "MAF HR calculated and persisted");
+    } else if (user?.trainingStyleId === "maf_method") {
+      logger.warn({
+        context: "health-alert",
+        event: "missing_maf_hr_inputs",
+        userId,
+        hasAge: user.mafAge != null,
+        hasConsistency: user.mafConsistency != null,
+        hasTrend: user.mafTrend != null,
+        hasInjuryIllnessMedication: user.mafInjuryIllnessMedication != null,
+      }, "MAF style selected without full MAF HR inputs");
+    }
+
+    if (before && user) {
+      const styleChanged = before.trainingStyleId !== user.trainingStyleId;
+      if (styleChanged) {
+        logger.info({
+          context: "health-metrics",
+          event: "training_style_changed",
+          userId,
+          previousStyleId: before.trainingStyleId,
+          nextStyleId: user.trainingStyleId,
+          changedAt: user.trainingStyleChangedAt?.toISOString() ?? null,
+        }, "Training style changed");
+      } else {
+        logger.info({
+          context: "health-metrics",
+          event: "training_style_selected",
+          userId,
+          styleId: user.trainingStyleId,
+        }, "Training style selected");
+      }
     }
     return user;
   }
