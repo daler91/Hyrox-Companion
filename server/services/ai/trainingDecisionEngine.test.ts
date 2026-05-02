@@ -11,6 +11,23 @@ const baseInput: TrainingDecisionInput = {
 };
 
 describe("decideTrainingState", () => {
+  it("covers phase-assignment transitions across reset -> base -> bridge -> performance", () => {
+    const reset = decideTrainingState({ ...baseInput, latestWorkouts: { completedLast7d: 1, avgRpeLast3: 5 }, profile: { experienceLevel: "beginner", primaryGoal: "finish" } });
+    const base = decideTrainingState({ ...baseInput, testTrend: { direction: "declining" } });
+    const bridge = decideTrainingState({ ...baseInput, raceContext: { hasRace: true, daysToRace: 21 } });
+    const performance = decideTrainingState({
+      ...baseInput,
+      profile: { experienceLevel: "advanced", primaryGoal: "podium" },
+      testTrend: { direction: "improving" },
+      raceContext: { hasRace: true, daysToRace: 20 },
+    });
+
+    expect(reset.phase).toBe("reset_repair");
+    expect(base.phase).toBe("aerobic_base");
+    expect(bridge.phase).toBe("bridge");
+    expect(performance.phase).toBe("performance");
+  });
+
   it("returns reset_repair with intensity blocked on hard recovery stop", () => {
     const result = decideTrainingState({ ...baseInput, recoveryMarkers: { ...baseInput.recoveryMarkers, illnessFlag: true } });
     expect(result.phase).toBe("reset_repair");
@@ -36,5 +53,19 @@ describe("decideTrainingState", () => {
     expect(result.phase).toBe("performance");
     expect(result.intensityPermitted).toBe(true);
     expect(result.rationaleCodes).toContain("S8_INTENSITY_ALLOWED");
+  });
+
+  it("suppresses intensity in strict/guarded states", () => {
+    const softRecovery = decideTrainingState({
+      ...baseInput,
+      raceContext: { hasRace: true, daysToRace: 21 },
+      recoveryMarkers: { ...baseInput.recoveryMarkers, sleepQuality: "poor" },
+      testTrend: { direction: "improving" },
+    });
+
+    expect(softRecovery.phase).toBe("aerobic_base");
+    expect(softRecovery.intensityPermitted).toBe(false);
+    expect(softRecovery.rationaleCodes).toContain("S2_SOFT_RECOVERY_GUARD");
+    expect(softRecovery.rationaleCodes).toContain("S8_INTENSITY_BLOCKED");
   });
 });
