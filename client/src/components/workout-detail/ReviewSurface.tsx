@@ -89,11 +89,11 @@ export function ReviewSurface({
   };
 
   const handleDeleteClick = () => {
-    if (!confirmingDelete) {
-      setConfirmingDelete(true);
+    if (confirmingDelete) {
+      onDelete?.(entry);
       return;
     }
-    onDelete?.(entry);
+    setConfirmingDelete(true);
   };
 
   const handleSheetOpenChange = (open: boolean) => {
@@ -124,16 +124,16 @@ export function ReviewSurface({
       testId={`review-surface-${entry.id}`}
     >
       <div className="space-y-4">
-        {isStrava ? (
+        {isStrava && (
           <div>
             <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Strava session
             </p>
             <WorkoutStravaStats entry={entry} distanceUnit={distanceUnit} />
           </div>
-        ) : null}
+        )}
 
-        {!isStrava ? (
+        {!isStrava && (
           <div>
             <p className="mb-2 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
               <Gauge className="h-3.5 w-3.5" />
@@ -141,9 +141,9 @@ export function ReviewSurface({
             </p>
             <RpeSelector value={rpe} onChange={handleRpeChange} showLabel={false} compact />
           </div>
-        ) : null}
+        )}
 
-        {canEditActuals ? (
+        {canEditActuals && (
           <div className="rounded-md border">
             <button
               type="button"
@@ -170,7 +170,7 @@ export function ReviewSurface({
                 />
               </span>
             </button>
-            {editorOpen && workoutLogId ? (
+            {editorOpen && workoutLogId && (
               <div className="space-y-3 border-t p-3">
                 <PrescriptionEditor
                   entryId={entry.id}
@@ -211,11 +211,11 @@ export function ReviewSurface({
                   defaultExpanded
                 />
               </div>
-            ) : null}
+            )}
           </div>
-        ) : null}
+        )}
 
-        {!isStrava ? (
+        {!isStrava && (
           <div>
             <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Notes
@@ -226,7 +226,7 @@ export function ReviewSurface({
               mode="form"
             />
           </div>
-        ) : null}
+        )}
 
         {entry.aiRationale ? (
           <details className="rounded-md border border-primary/30 bg-primary/5 p-3">

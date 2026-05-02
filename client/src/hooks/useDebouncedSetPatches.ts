@@ -53,7 +53,7 @@ export function useDebouncedSetPatches<TPatch extends object>(
       ? { ...existing.patch, ...patch }
       : patch;
     const timer = setTimeout(() => {
-      void fireRef.current(setId);
+      fireRef.current(setId).catch(() => undefined);
     }, debounceMs);
     pendingRef.current.set(setId, { timer, patch: merged });
   }, [debounceMs]);
@@ -88,7 +88,7 @@ export function useDebouncedSetPatches<TPatch extends object>(
     const fire = fireRef;
     return () => {
       const ids = Array.from(pending.keys());
-      void Promise.all(ids.map((setId) => fire.current(setId)));
+      Promise.all(ids.map((setId) => fire.current(setId))).catch(() => undefined);
     };
   }, []);
 
