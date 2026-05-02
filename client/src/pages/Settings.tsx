@@ -347,6 +347,22 @@ export default function Settings() {
       mafBaselineTestScheduledAt: styleChanged && trainingStyleId === "maf_method" ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() : undefined,
     });
   }, [saveMutation, weightUnit, distanceUnit, weeklyGoal, emailNotifications, emailWeeklySummary, emailMissedReminder, showAdherenceInsights, aiCoachEnabled, trainingStyleId, preferences?.mafAge, preferences?.mafInjuryIllnessMedication, preferences?.mafConsistency, preferences?.mafTrend]);
+  const stageSaveAuditState = useCallback((nextStyleId: string) => {
+    undoSnapshotRef.current = baselineSnapshotRef.current
+      ? { ...baselineSnapshotRef.current }
+      : null;
+    const committedStyleId = baselineSnapshotRef.current?.trainingStyleId ?? "balanced_default";
+    const styleChanged = nextStyleId !== committedStyleId;
+    pendingStyleAuditRef.current = styleChanged
+      ? {
+          changedAtIso: new Date().toISOString(),
+          fromStyleId: committedStyleId,
+          toStyleId: nextStyleId,
+          recalculations: buildRecalculationSummary(nextStyleId),
+        }
+      : null;
+    return { committedStyleId, styleChanged };
+  }, []);
 
   const userName = getUserDisplayName(user);
   const hasRequiredMafInputs = useCallback(() => {
@@ -497,16 +513,16 @@ export default function Settings() {
             <Select value={mafHrDataAvailableInput} onValueChange={(v: "yes" | "no") => setMafHrDataAvailableInput(v)}><SelectTrigger><SelectValue placeholder="HR data available (optional)" /></SelectTrigger><SelectContent><SelectItem value="yes">Yes</SelectItem><SelectItem value="no">No</SelectItem></SelectContent></Select>
             {mafSetupError && <p className="text-sm text-destructive">{mafSetupError}</p>}
           </div>
-          <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => {
+          <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={(e) => {
             const parsedAge = Number.parseInt(mafAgeInput, 10);
             if (!Number.isInteger(parsedAge) || parsedAge < 16 || parsedAge > 99 || !mafConsistencyInput || !mafTrendInput) {
+              e.preventDefault();
               setMafSetupError("Enter a valid age and select required MAF fields.");
               return;
             }
             setMafSetupError(null);
             if (!pendingStyleId) return;
-            const committedStyleId = baselineSnapshotRef.current?.trainingStyleId ?? "balanced_default";
-            const styleChanged = pendingStyleId !== committedStyleId;
+            const { committedStyleId, styleChanged } = stageSaveAuditState(pendingStyleId);
             const maf = calculateMafHr({ age: parsedAge, injuryIllnessMedication: Boolean(preferences?.mafInjuryIllnessMedication), consistency: mafConsistencyInput, trend: mafTrendInput });
             saveMutation.mutate({
               weightUnit, distanceUnit, weeklyGoal: Number.parseInt(weeklyGoal, 10), emailNotifications, emailWeeklySummary, emailMissedReminder, showAdherenceInsights, aiCoachEnabled,
