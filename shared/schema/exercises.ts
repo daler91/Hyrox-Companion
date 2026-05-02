@@ -123,7 +123,26 @@ export const EXERCISE_NAME_ALIASES: Record<string, ExerciseName> = {
 };
 
 export function normalizeExerciseName(raw: string): ExerciseName | null {
-  const normalized = raw.trim().toLowerCase().replace(/['’]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  const lower = raw.trim().toLowerCase();
+  let normalized = "";
+  let previousWasSeparator = false;
+
+  for (const char of lower) {
+    if ((char >= "a" && char <= "z") || (char >= "0" && char <= "9")) {
+      normalized += char;
+      previousWasSeparator = false;
+      continue;
+    }
+
+    if (char === "'" || char === "’") continue;
+
+    if (!previousWasSeparator && normalized.length > 0) {
+      normalized += "_";
+      previousWasSeparator = true;
+    }
+  }
+
+  if (normalized.endsWith("_")) normalized = normalized.slice(0, -1);
   if (!normalized) return null;
   if (normalized in EXERCISE_DEFINITIONS) return normalized as ExerciseName;
   return EXERCISE_NAME_ALIASES[normalized] ?? null;
