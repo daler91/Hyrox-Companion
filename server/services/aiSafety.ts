@@ -55,7 +55,7 @@ function stripAiInjectedSafetyText(text: string): string {
 }
 
 function collectSafetySignalCorpus(trainingContext: TrainingContext, upcomingWorkouts: UpcomingWorkout[]): string {
-  const recentWorkoutText = trainingContext.recentWorkouts.flatMap((w) => [
+  const recentWorkoutText = (trainingContext.recentWorkouts ?? []).flatMap((w) => [
     w.mainWorkout,
     w.athleteNote ?? "",
   ]);
