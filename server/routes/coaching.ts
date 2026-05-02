@@ -6,7 +6,7 @@ import { isAuthenticated } from "../clerkAuth";
 import { reqLogger } from "../logger";
 import { aiBudgetCheck } from "../middleware/aibudget";
 import { sendJob } from "../queue";
-import { protectedMutationGuards } from "../routeGuards";
+import { protectedDelete, protectedPatch, protectedPost } from "./_helpers/protectedRouteBuilder";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody } from "../routeUtils";
 import { getRagStatus, reembedAllMaterials } from "../services/ragService";
 import { storage } from "../storage";
@@ -30,7 +30,7 @@ router.get("/api/v1/coaching-materials", isAuthenticated, asyncHandler(async (re
   }));
 
 const createMaterialSchema = insertCoachingMaterialSchema.omit({ userId: true });
-router.post("/api/v1/coaching-materials", ...protectedMutationGuards, rateLimiter("coaching", 10), aiBudgetCheck, validateBody(createMaterialSchema), asyncHandler(async (req: ExpressRequest, res: Response) => {
+protectedPost(router, "/api/v1/coaching-materials", { limiter: rateLimiter("coaching", 10), middleware: [aiBudgetCheck, validateBody(createMaterialSchema)] }, async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const body = req.body as CreateMaterialBody;
     const material = await storage.coaching.createCoachingMaterial({ ...body, userId });
@@ -39,9 +39,9 @@ router.post("/api/v1/coaching-materials", ...protectedMutationGuards, rateLimite
     sendJob("embed-coaching-material", { materialId: material.id, userId }).catch(err => reqLogger(req).error({ err }, "Failed to queue coaching material embedding"));
 
     res.status(201).json(material);
-  }));
+  });
 
-router.patch("/api/v1/coaching-materials/:id", ...protectedMutationGuards, rateLimiter("coaching", 10), validateBody(updateCoachingMaterialSchema), asyncHandler(async (req: ExpressRequest, res: Response) => {
+protectedPatch(router, "/api/v1/coaching-materials/:id", { limiter: rateLimiter("coaching", 10), middleware: [validateBody(updateCoachingMaterialSchema)] }, async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const body = req.body as UpdateMaterialBody;
     const material = await storage.coaching.updateCoachingMaterial(req.params.id, body, userId);
@@ -55,7 +55,7 @@ router.patch("/api/v1/coaching-materials/:id", ...protectedMutationGuards, rateL
     }
 
     res.json(material);
-  }));
+  });
 
 router.get("/api/v1/coaching-materials/rag-status", isAuthenticated, asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
@@ -63,13 +63,13 @@ router.get("/api/v1/coaching-materials/rag-status", isAuthenticated, asyncHandle
     res.json(result);
   }));
 
-router.post("/api/v1/coaching-materials/re-embed", ...protectedMutationGuards, rateLimiter("coaching", 5), aiBudgetCheck, asyncHandler(async (req: ExpressRequest, res: Response) => {
+protectedPost(router, "/api/v1/coaching-materials/re-embed", { limiter: rateLimiter("coaching", 5), middleware: [aiBudgetCheck] }, async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const result = await reembedAllMaterials(userId);
     res.json(result);
-  }));
+  });
 
-router.delete("/api/v1/coaching-materials/:id", ...protectedMutationGuards, rateLimiter("coaching", 10), asyncHandler(async (req: ExpressRequest, res: Response) => {
+protectedDelete(router, "/api/v1/coaching-materials/:id", { limiter: rateLimiter("coaching", 10) }, async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     // Chunks are cascade-deleted via FK, no manual cleanup needed
     const deleted = await storage.coaching.deleteCoachingMaterial(req.params.id, userId);
@@ -77,6 +77,6 @@ router.delete("/api/v1/coaching-materials/:id", ...protectedMutationGuards, rate
       return sendNotFound(res, "Coaching material not found");
     }
     res.json({ success: true });
-  }));
+  });
 
 export default router;
