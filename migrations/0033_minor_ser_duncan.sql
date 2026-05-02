@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "training_style_id" text DEFAULT 'balanced_default';
