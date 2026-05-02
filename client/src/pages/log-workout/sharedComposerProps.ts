@@ -28,3 +28,33 @@ export interface SharedComposerProps {
   readonly toggleListening: () => void;
   readonly stopListening: () => void;
 }
+
+export interface ComposerTextProps {
+  readonly freeText: string;
+  readonly setFreeText: (value: string) => void;
+}
+
+export interface ComposerExerciseProps {
+  readonly exerciseBlocks: string[];
+  readonly exerciseData: Record<string, StructuredExercise>;
+  readonly addExercise: (name: ExerciseName, customLabel?: string) => void;
+  readonly updateBlock: (blockId: string, data: StructuredExercise) => void;
+  readonly removeBlock: (blockId: string) => void;
+  readonly reorderBlocks: (nextOrder: string[]) => void;
+  readonly weightUnit: "kg" | "lbs";
+  readonly distanceUnit: "km" | "miles";
+  readonly autoParsing: boolean;
+  readonly cancelAutoParse: () => void;
+}
+
+export interface ComposerAutoParseProps {
+  readonly autoParseError: boolean;
+}
+
+export interface ComposerVoiceProps {
+  readonly isListening: boolean;
+  readonly isSupported: boolean;
+  readonly interimTranscript: string;
+  readonly toggleListening: () => void;
+  readonly stopListening: () => void;
+}
