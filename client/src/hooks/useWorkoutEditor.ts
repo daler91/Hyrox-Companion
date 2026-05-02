@@ -1,6 +1,6 @@
 import { type DragEndEvent,KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { arrayMove,sortableKeyboardCoordinates } from "@dnd-kit/sortable";
-import { EXERCISE_DEFINITIONS, normalizeExerciseName, type ExerciseName,type ParsedExercise } from "@shared/schema";
+import { EXERCISE_DEFINITIONS, type ExerciseName,normalizeExerciseName, type ParsedExercise } from "@shared/schema";
 import { useMutation } from "@tanstack/react-query";
 import type { MutableRefObject } from "react";
 import { useCallback,useEffect, useRef, useState } from "react";
@@ -113,7 +113,7 @@ interface ParsedBlockBuild {
 function buildBlockFromParsed(ex: ParsedExercise): ParsedBlockBuild {
   const normalizedName = normalizeExerciseName(ex.exerciseName);
   const isKnown = normalizedName !== null;
-  const exName = (normalizedName ?? "custom") as ExerciseName;
+  const exName = (normalizedName ?? "custom");
   const customLabel = isKnown ? undefined : (ex.customLabel || ex.exerciseName);
   const blockKey = exName === "custom" ? `custom:${customLabel ?? ""}` : exName;
 
