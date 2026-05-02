@@ -406,7 +406,7 @@
           "mafHr": {
             "type": "integer",
             "nullable": true,
-            "minimum": 90,
+            "minimum": 70,
             "maximum": 220
           },
           "mafBaselineTestScheduledAt": {
