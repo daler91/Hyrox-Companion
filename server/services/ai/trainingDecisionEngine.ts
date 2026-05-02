@@ -48,6 +48,21 @@ const BASE_ALLOWED: Record<TrainingPhase, WorkoutType[]> = {
   performance: ["mobility", "easy_aerobic", "strength", "threshold", "race_pace", "hyrox_simulation"],
 };
 
+
+function resolvePhase(input: TrainingDecisionInput, signals: {
+  raceSoon: boolean;
+  softRecoveryLoad: boolean;
+  highRecentStrain: boolean;
+  lowLoad: boolean;
+  beginner: boolean;
+}): TrainingPhase {
+  if (signals.lowLoad && signals.beginner) return "reset_repair";
+  if (signals.softRecoveryLoad || signals.highRecentStrain || input.testTrend.direction === "declining") return "aerobic_base";
+  if (!signals.softRecoveryLoad && !signals.highRecentStrain && input.testTrend.direction === "improving" && !signals.beginner) return "performance";
+  if (signals.raceSoon || input.testTrend.direction === "improving") return "bridge";
+  return "aerobic_base";
+}
+
 /**
  * Deterministic 8-step training-state decision tree.
  * The returned outputs are intended to be the single source of truth for
@@ -108,11 +123,13 @@ export function decideTrainingState(input: TrainingDecisionInput): TrainingDecis
   if (beginner) codes.push("S7_BEGINNER_PROFILE");
 
   // STEP 8 — Final phase assignment.
-  let phase: TrainingPhase = "aerobic_base";
-  if (raceSoon || input.testTrend.direction === "improving") phase = "bridge";
-  if (!softRecoveryLoad && !highRecentStrain && input.testTrend.direction === "improving" && !beginner) phase = "performance";
-  if (softRecoveryLoad || highRecentStrain || input.testTrend.direction === "declining") phase = "aerobic_base";
-  if (lowLoad && beginner) phase = "reset_repair";
+  const phase = resolvePhase(input, {
+    raceSoon,
+    softRecoveryLoad,
+    highRecentStrain,
+    lowLoad,
+    beginner,
+  });
 
   const intensityPermitted = phase === "bridge" || phase === "performance";
   const intensityAllowedAfterGuards = intensityPermitted && !softRecoveryLoad;
