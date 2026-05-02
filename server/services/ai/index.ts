@@ -3,6 +3,7 @@ import { calculateStreak } from "../../routeUtils";
 import { storage } from "../../storage";
 import { computeCurrentWeek,computeExerciseGaps, computePlanPhase, computeProgressionFlags, computeRpeTrend, computeWeeklyVolume } from "./coachingInsights";
 import { calculateTrainingStats, collectRecentWorkouts, getExerciseBreakdown, getStructuredExerciseStats } from "./trainingStats";
+import { decideTrainingState } from "./trainingDecisionEngine";
 
 export async function buildTrainingContext(userId: string): Promise<TrainingContext> {
   const [timeline, activePlanRecord, user, upcomingDays] = await Promise.all([
@@ -32,6 +33,33 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     : undefined;
   const weeklyVolume = weeklyGoal > 0 ? computeWeeklyVolume(timeline, weeklyGoal) : undefined;
   const progressionFlags = computeProgressionFlags(timeline);
+  const completedLast7d = recentWorkouts.filter((w) => {
+    const days = Math.floor((Date.now() - new Date(w.date).getTime()) / (1000 * 60 * 60 * 24));
+    return days >= 0 && days <= 7;
+  }).length;
+  const decisionTree = decideTrainingState({
+    profile: {
+      experienceLevel: totalWorkouts < 20 ? "beginner" : totalWorkouts < 80 ? "intermediate" : "advanced",
+      primaryGoal: "improve",
+    },
+    latestWorkouts: { completedLast7d, avgRpeLast3: rpeTrend.avgRpeLast3 },
+    testTrend: {
+      direction: rpeTrend.rpeTrend === "rising"
+        ? "declining"
+        : rpeTrend.rpeTrend === "falling"
+          ? "improving"
+          : rpeTrend.rpeTrend === "stable"
+            ? "flat"
+            : rpeTrend.rpeTrend,
+    },
+    raceContext: { hasRace: false, daysToRace: null },
+    recoveryMarkers: {
+      sleepQuality: "ok",
+      soreness: rpeTrend.fatigueFlag ? "high" : "low",
+      restingHrDelta: 0,
+      illnessFlag: false,
+    },
+  });
 
   const coachingInsights: TrainingContext["coachingInsights"] = {
     ...rpeTrend,
@@ -39,6 +67,12 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     planPhase,
     weeklyVolume,
     progressionFlags,
+    decisionTree: {
+      currentPhase: decisionTree.phase,
+      allowedWorkoutTypes: decisionTree.allowedWorkoutTypes,
+      intensityPermitted: decisionTree.intensityPermitted,
+      rationaleCodes: decisionTree.rationaleCodes,
+    },
   };
 
   return {

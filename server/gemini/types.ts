@@ -75,5 +75,11 @@ export interface TrainingContext {
       flag: "plateau" | "progressing" | "regressing" | "new";
       detail: string;
     }>;
+    decisionTree?: {
+      currentPhase: "reset_repair" | "aerobic_base" | "bridge" | "performance";
+      allowedWorkoutTypes: Array<"rest" | "mobility" | "easy_aerobic" | "skill_technique" | "strength" | "threshold" | "race_pace" | "hyrox_simulation">;
+      intensityPermitted: boolean;
+      rationaleCodes: string[];
+    };
   };
 }
