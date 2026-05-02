@@ -64,4 +64,22 @@ describe("aiSafety", () => {
     expect(out[0].rationale).not.toMatch(/prescribe/i);
   });
 
+  it("does not self-trigger red flags from prior AI escalation text", () => {
+    const safety = analyzeSafetySignals(
+      {
+        ...baseTrainingContext,
+        recentWorkouts: [{ date: "2026-05-01", focus: "run", mainWorkout: "easy", status: "done", athleteNote: null }],
+      },
+      [{
+        id: "w1",
+        date: "2026-05-02",
+        focus: "run",
+        mainWorkout: "easy",
+        notes: "[AI Coach] I noticed symptoms that can signal a potentially serious medical issue. Pause hard training and seek prompt medical care. If symptoms are severe, worsening, or include chest pain, fainting, or trouble breathing, seek emergency care now.",
+      }],
+    );
+
+    expect(safety.redFlagDetected).toBe(false);
+  });
+
 });

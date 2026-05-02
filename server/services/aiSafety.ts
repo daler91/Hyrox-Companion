@@ -44,14 +44,38 @@ export function postProcessSuggestionText(text: string): string {
   return output;
 }
 
+
+function stripAiInjectedSafetyText(text: string): string {
+  return text
+    .replaceAll(ESCALATION_MESSAGE, "")
+    .replaceAll(HR_MED_DISCLAIMER, "")
+    .split("\n")
+    .filter((line) => !/^\s*(?:\[AI Coach\]|AI suggestion:)\b/i.test(line.trim()))
+    .join(" ");
+}
+
+function collectSafetySignalCorpus(trainingContext: TrainingContext, upcomingWorkouts: UpcomingWorkout[]): string {
+  const recentWorkoutText = trainingContext.recentWorkouts.flatMap((w) => [
+    w.mainWorkout,
+    w.athleteNote ?? "",
+  ]);
+
+  const upcomingWorkoutText = upcomingWorkouts.flatMap((w) => [
+    w.mainWorkout,
+    w.accessory ?? "",
+    w.notes ?? "",
+  ]);
+
+  return [...recentWorkoutText, ...upcomingWorkoutText]
+    .map((text) => stripAiInjectedSafetyText(text))
+    .join("\n");
+}
+
 export function analyzeSafetySignals(trainingContext: TrainingContext, upcomingWorkouts: UpcomingWorkout[]): {
   redFlagDetected: boolean;
   hrMedicationDetected: boolean;
 } {
-  const blob = [
-    JSON.stringify(trainingContext ?? {}),
-    ...upcomingWorkouts.map((w) => `${w.mainWorkout} ${w.accessory ?? ""} ${w.notes ?? ""}`),
-  ].join("\n");
+  const blob = collectSafetySignalCorpus(trainingContext, upcomingWorkouts);
 
   return {
     redFlagDetected: RED_FLAG_SYMPTOM_PATTERNS.some((p) => p.test(blob)),
