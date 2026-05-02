@@ -253,6 +253,13 @@
       "when": 1777746419896,
       "tag": "0035_maf_artifacts",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1777754990358,
+      "tag": "0036_maf_post_migration_validation",
+      "breakpoints": true
     }
   ]
 }
