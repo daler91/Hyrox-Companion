@@ -19,6 +19,14 @@ import { getUserId } from "../types";
 
 const router = Router();
 
+const recommendationTraceSchema = z.object({
+  trainingStyleId: z.string().min(1),
+  phase: z.string().min(1),
+  strategyRuleVersion: z.string().min(1),
+  promptBundleVersion: z.string().min(1),
+  rationaleCodes: z.array(z.string()).optional(),
+});
+
 const applyTimelineSuggestionSchema = z.object({
   workoutId: z.string().min(1),
   targetField: z.enum(["notes", "mainWorkout", "accessory"]),
@@ -26,6 +34,7 @@ const applyTimelineSuggestionSchema = z.object({
   recommendation: z.string().min(1).max(10_000),
   rationale: z.string().max(2_000).nullable().optional(),
   aiSource: z.enum(["rag", "legacy", "none"]).nullable().optional(),
+  responseMetadata: recommendationTraceSchema.nullable().optional(),
 });
 
 router.post("/api/v1/parse-exercises", ...protectedMutationGuards, rateLimiter("parse", 5), aiConsentCheck, aiBudgetCheck, validateBody(parseExercisesRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof parseExercisesRequestSchema>>, res: Response) => {
@@ -313,6 +322,26 @@ router.post("/api/v1/timeline/ai-suggestions", ...protectedMutationGuards, rateL
     }
   }));
 
+
+router.get("/api/v1/timeline/ai-suggestions/debug/:workoutId", ...protectedMutationGuards, asyncHandler(async (req: ExpressRequest<{workoutId: string}>, res: Response) => {
+    const userId = getUserId(req);
+    const day = await storage.plans.getPlanDay(req.params.workoutId, userId);
+    if (!day) {
+      sendNotFound(res, "Plan day not found");
+      return;
+    }
+    res.json({
+      workoutId: day.id,
+      focus: day.focus,
+      aiSource: day.aiSource,
+      aiRationale: day.aiRationale,
+      aiNoteUpdatedAt: day.aiNoteUpdatedAt,
+      trace: day.aiInputsUsed?.recommendationTrace ?? null,
+      debugSummary: day.aiInputsUsed?.recommendationTrace
+        ? `Generated for style ${day.aiInputsUsed.recommendationTrace.trainingStyleId} in phase ${day.aiInputsUsed.recommendationTrace.phase} using ${day.aiInputsUsed.recommendationTrace.strategyRuleVersion} and ${day.aiInputsUsed.recommendationTrace.promptBundleVersion}.`
+        : null,
+    });
+  }));
 router.post("/api/v1/timeline/ai-suggestions/apply", ...protectedMutationGuards, rateLimiter("suggestionApply", 10), aiConsentCheck, validateBody(applyTimelineSuggestionSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof applyTimelineSuggestionSchema>>, res: Response) => {
     const userId = getUserId(req);
     const result = await applyTimelineAiSuggestion(userId, req.body, reqLogger(req));

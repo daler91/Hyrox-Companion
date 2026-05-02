@@ -28,10 +28,19 @@ export interface TimelineSuggestion {
   priority: "low" | "medium" | "high";
 }
 
+export interface RecommendationTraceMetadata {
+  trainingStyleId: string;
+  phase: string;
+  strategyRuleVersion: string;
+  promptBundleVersion: string;
+  rationaleCodes?: string[];
+}
+
 export interface TimelineSuggestionsResult {
   suggestions: TimelineSuggestion[];
   ragInfo?: ReturnType<typeof sanitizeRagInfo>;
   message?: string;
+  responseMetadata?: Record<string, RecommendationTraceMetadata>;
 }
 
 export interface ApplyTimelineSuggestionInput {
@@ -41,6 +50,7 @@ export interface ApplyTimelineSuggestionInput {
   recommendation: string;
   rationale?: string | null;
   aiSource?: "rag" | "legacy" | "none" | null;
+  responseMetadata?: RecommendationTraceMetadata | null;
 }
 
 export type ApplyTimelineSuggestionFailureReason =
@@ -86,6 +96,15 @@ function buildTextUpdateValue(
 
 function normalizeAiSource(source: ApplyTimelineSuggestionInput["aiSource"]): "rag" | "legacy" | null {
   return source === "rag" || source === "legacy" ? source : null;
+}
+
+const STRATEGY_RULE_VERSION = "training-decision-engine@v1";
+const PROMPT_BUNDLE_VERSION = "timeline-suggestion@v1";
+
+function resolveTrainingPhaseLabel(trainingContext: Awaited<ReturnType<typeof buildAIContext>>["trainingContext"]): string {
+  return trainingContext.coachingInsights?.decisionTree?.currentPhase
+    ?? trainingContext.coachingInsights?.planPhase?.phaseLabel
+    ?? "unknown";
 }
 
 function buildUnappliedStructuredResult(
@@ -212,6 +231,14 @@ export async function generateTimelineAiSuggestions(
     return acc;
   }, []);
 
+  const traceMetadata: RecommendationTraceMetadata = {
+    trainingStyleId: resolvedStyle.trainingStyleId,
+    phase: resolveTrainingPhaseLabel(aiContext.trainingContext),
+    strategyRuleVersion: STRATEGY_RULE_VERSION,
+    promptBundleVersion: PROMPT_BUNDLE_VERSION,
+    rationaleCodes: aiContext.trainingContext.coachingInsights?.decisionTree?.rationaleCodes ?? undefined,
+  };
+
   const forcedSafetyMessage = buildSafetyReviewNote(safetySignals);
   const surfacedSuggestions = forcedSafetyMessage && suggestions.length === 0
     ? [{
@@ -229,6 +256,7 @@ export async function generateTimelineAiSuggestions(
   return {
     suggestions: surfacedSuggestions,
     ragInfo: sanitizeRagInfo(aiContext.ragInfo),
+    responseMetadata: Object.fromEntries(surfacedSuggestions.map((s) => [s.workoutId, traceMetadata])),
     ...(forcedSafetyMessage ? { message: forcedSafetyMessage } : {}),
   };
 }
@@ -252,6 +280,7 @@ export async function applyTimelineAiSuggestion(
     aiSource: normalizeAiSource(input.aiSource),
     aiRationale: input.rationale ? input.rationale.slice(0, 400) : null,
     aiNoteUpdatedAt: new Date(),
+    aiInputsUsed: input.responseMetadata ? { recommendationTrace: input.responseMetadata } : undefined,
   };
 
   const shouldWriteStructuredRows = existingExerciseSets.length > 0 && input.targetField !== "notes";
