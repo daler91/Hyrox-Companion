@@ -39,7 +39,7 @@ async function insertMissingUsers(): Promise<number> {
       INSERT INTO user_training_style (user_id, style, effective_date, source)
       SELECT
         u.id,
-        'balanced_default',
+        COALESCE(u.training_style_id, 'balanced_default'),
         COALESCE(u.created_at::date, CURRENT_DATE),
         'migration_default'
       FROM users u

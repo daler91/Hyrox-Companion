@@ -75,7 +75,7 @@ For users who existed before style selection launched and have no `user_training
 3. Idempotency check:
    - immediate second run should report `inserted=0`.
 4. Data integrity spot checks:
-   - `style='balanced_default'`
+   - `style = COALESCE(users.training_style_id, 'balanced_default')`
    - `source='migration_default'`
    - `effective_date` is deterministic (`COALESCE(users.created_at::date, CURRENT_DATE)`).
 
