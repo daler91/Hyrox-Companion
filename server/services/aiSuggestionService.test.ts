@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { parseExercisesFromText } from "../gemini/index";
+import { generateWorkoutSuggestions, parseExercisesFromText } from "../gemini/index";
 import { storage } from "../storage";
-import { applyTimelineAiSuggestion } from "./aiSuggestionService";
+import { buildAIContext, extractCoachingMaterialsText } from "./aiContextService";
+import { applyTimelineAiSuggestion,generateTimelineAiSuggestions } from "./aiSuggestionService";
 
 const dbMockState = vi.hoisted(() => {
   const deleteWhere = vi.fn().mockResolvedValue(undefined);
@@ -239,5 +240,45 @@ describe("applyTimelineAiSuggestion", () => {
     });
     expect(parseExercisesFromText).not.toHaveBeenCalled();
     expect(storage.plans.updatePlanDay).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("generateTimelineAiSuggestions safety surfacing", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(storage.timeline.getUpcomingPlannedDays).mockResolvedValue([
+      {
+        planDayId: "day-1",
+        date: "2026-05-02",
+        focus: "run",
+        mainWorkout: "easy run",
+        accessory: null,
+        notes: "chest pain during warmup",
+        exerciseSets: [],
+      },
+    ] as never);
+    vi.mocked(storage.users.getUser).mockResolvedValue({ trainingStyleId: null, weightUnit: "kg" } as never);
+    vi.mocked(buildAIContext).mockResolvedValue({
+      trainingContext: {
+        totalWorkouts: 0, completedWorkouts: 0, plannedWorkouts: 0, missedWorkouts: 0, skippedWorkouts: 0, completionRate: 0, currentStreak: 0, recentWorkouts: [], exerciseBreakdown: {},
+      },
+      ragInfo: { source: "none" },
+    } as never);
+    vi.mocked(extractCoachingMaterialsText).mockReturnValue(undefined);
+    vi.mocked(generateWorkoutSuggestions).mockResolvedValue([] as never);
+  });
+
+  it("returns a surfaced safety suggestion when forced alert exists and model suggestions are empty", async () => {
+    const result = await generateTimelineAiSuggestions("user-1", testLog);
+
+    expect(result.suggestions).toHaveLength(1);
+    expect(result.suggestions[0]).toEqual(expect.objectContaining({
+      workoutId: "day-1",
+      targetField: "notes",
+      action: "append",
+      priority: "high",
+    }));
+    expect(result.message).toMatch(/potentially serious medical issue/i);
   });
 });

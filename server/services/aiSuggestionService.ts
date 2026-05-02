@@ -8,13 +8,14 @@ import { logger as defaultLogger } from "../logger";
 import { buildWorkoutSearchText } from "../prompts/exerciseSetFormatter";
 import { storage } from "../storage";
 import { buildAIContext, extractCoachingMaterialsText } from "./aiContextService";
+import { analyzeSafetySignals, applySafetyLayerToSuggestions, buildSafetyReviewNote } from "./aiSafety";
 import { checkAiBudget } from "./aiUsageService";
 import { sanitizeRagInfo } from "./ragRetrieval";
-import { resolveTrainingStyle } from "./training_styles";
 import {
   applyStructuredPlanDaySuggestionRows,
   parseStructuredPlanDaySuggestionRows,
 } from "./structuredPlanDaySuggestion";
+import { resolveTrainingStyle } from "./training_styles";
 
 export interface TimelineSuggestion {
   workoutId: string;
@@ -180,6 +181,8 @@ export async function generateTimelineAiSuggestions(
   const resolvedStyle = resolveTrainingStyle(user?.trainingStyleId);
   const stylePromptContext = resolvedStyle.strategy.buildPromptContext(aiContext.trainingContext, upcomingWorkouts);
 
+  const safetySignals = analyzeSafetySignals(aiContext.trainingContext, upcomingWorkouts);
+
   const rawSuggestions = await generateWorkoutSuggestions(
     aiContext.trainingContext,
     upcomingWorkouts,
@@ -189,8 +192,9 @@ export async function generateTimelineAiSuggestions(
     stylePromptContext,
   );
 
+  const safetyAdjustedSuggestions = applySafetyLayerToSuggestions(rawSuggestions, safetySignals);
   const workoutMap = new Map(upcomingWorkouts.map((w) => [w.id, w]));
-  const suggestions = resolvedStyle.strategy.prescribeNext({ suggestions: rawSuggestions, trainingContext: aiContext.trainingContext }).reduce<TimelineSuggestion[]>((acc, s) => {
+  const suggestions = resolvedStyle.strategy.prescribeNext({ suggestions: safetyAdjustedSuggestions, trainingContext: aiContext.trainingContext }).reduce<TimelineSuggestion[]>((acc, s) => {
     const workout = workoutMap.get(s.workoutId);
     const mapped: TimelineSuggestion = {
       workoutId: s.workoutId,
@@ -208,7 +212,25 @@ export async function generateTimelineAiSuggestions(
     return acc;
   }, []);
 
-  return { suggestions, ragInfo: sanitizeRagInfo(aiContext.ragInfo) };
+  const forcedSafetyMessage = buildSafetyReviewNote(safetySignals);
+  const surfacedSuggestions = forcedSafetyMessage && suggestions.length === 0
+    ? [{
+        workoutId: upcomingWorkouts[0].id,
+        date: upcomingWorkouts[0].date,
+        focus: upcomingWorkouts[0].focus,
+        targetField: "notes" as const,
+        action: "append" as const,
+        recommendation: forcedSafetyMessage,
+        rationale: "Safety escalation triggered from symptom/medication screening.",
+        priority: "high" as const,
+      }]
+    : suggestions;
+
+  return {
+    suggestions: surfacedSuggestions,
+    ragInfo: sanitizeRagInfo(aiContext.ragInfo),
+    ...(forcedSafetyMessage ? { message: forcedSafetyMessage } : {}),
+  };
 }
 
 export async function applyTimelineAiSuggestion(
