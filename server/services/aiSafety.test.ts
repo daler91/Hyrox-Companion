@@ -49,4 +49,19 @@ describe("aiSafety", () => {
     expect(out[0].recommendation).not.toMatch(/increase your medication dose/i);
     expect(out[0].rationale).not.toMatch(/Prescribe/i);
   });
+
+  it("removes repeated prohibited medical phrases", () => {
+    const safety = { redFlagDetected: false, hrMedicationDetected: false };
+    const repeatedSuggestion: WorkoutSuggestion = {
+      ...baseSuggestion,
+      recommendation: "Diagnose this. Diagnose again. Increase your medication dose and increase your medication dose.",
+      rationale: "Prescribe therapy and prescribe therapy.",
+    };
+
+    const out = applySafetyLayerToSuggestions([repeatedSuggestion], safety);
+    expect(out[0].recommendation).not.toMatch(/diagnose/i);
+    expect(out[0].recommendation).not.toMatch(/increase your medication dose/i);
+    expect(out[0].rationale).not.toMatch(/prescribe/i);
+  });
+
 });

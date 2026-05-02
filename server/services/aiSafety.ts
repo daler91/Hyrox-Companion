@@ -38,7 +38,8 @@ const HR_MED_DISCLAIMER =
 export function postProcessSuggestionText(text: string): string {
   let output = text;
   for (const pattern of PROHIBITED_MEDICAL_ACTION_PATTERNS) {
-    output = output.replace(pattern, "medical guidance removed");
+    const globalPattern = new RegExp(pattern.source, "gi");
+    output = output.replace(globalPattern, "medical guidance removed");
   }
   return output;
 }
