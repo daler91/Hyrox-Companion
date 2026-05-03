@@ -8,6 +8,8 @@ import {
   type UpdateWorkoutLog,
   type WorkoutLog,
   workoutLogs,
+  workoutStructureBlocks,
+  workoutStructureSteps,
 } from "@shared/schema";
 import { and, asc, desc, eq, inArray,isNotNull, isNull, or, sql } from "drizzle-orm";
 
@@ -162,6 +164,20 @@ export class WorkoutStorage {
       .from(workoutLogs)
       .where(and(eq(workoutLogs.id, logId), eq(workoutLogs.userId, userId)));
     return log;
+  }
+
+  async getWorkoutStructureByWorkoutLog(workoutLogId: string) {
+    const blocks = await db.select().from(workoutStructureBlocks).where(eq(workoutStructureBlocks.workoutLogId, workoutLogId)).orderBy(asc(workoutStructureBlocks.sortOrder));
+    if (blocks.length === 0) return [];
+    const blockIds = blocks.map((b) => b.id);
+    const steps = await db.select().from(workoutStructureSteps).where(inArray(workoutStructureSteps.blockId, blockIds)).orderBy(asc(workoutStructureSteps.stepNumber));
+    const stepsByBlock = new Map<string, typeof steps>();
+    for (const step of steps) {
+      const arr = stepsByBlock.get(step.blockId) ?? [];
+      arr.push(step);
+      stepsByBlock.set(step.blockId, arr);
+    }
+    return blocks.map((b) => ({ ...b, steps: stepsByBlock.get(b.id) ?? [] }));
   }
 
   // ⚡ Bolt Performance Optimization:

@@ -74,7 +74,8 @@ export function registerWorkoutCrudRoutes(router: Router): void {
       return sendNotFound(res, "No workouts found");
     }
     const exerciseSets = await storage.workouts.getExerciseSetsByWorkoutLog(latest.id);
-    res.json({ ...latest, exerciseSets });
+    const structureBlocks = await storage.workouts.getWorkoutStructureByWorkoutLog(latest.id);
+    res.json({ ...latest, exerciseSets, structureBlocks });
   }));
 
   protectedPatch(router, "/api/v1/workouts/:id/sets/:setId", { limiter: rateLimiter("workoutSet", 120), middleware: [validateBody(patchExerciseSetSchema)] }, async (req: Request<{ id: string; setId: string }, Record<string, never>, PatchExerciseSetBody>, res: Response) => {
@@ -130,7 +131,8 @@ export function registerWorkoutCrudRoutes(router: Router): void {
         // Best effort on read-path hydration; preserve detail availability.
       }
     }
-    res.json({ ...log, exerciseSets });
+    const structureBlocks = await storage.workouts.getWorkoutStructureByWorkoutLog(log.id);
+    res.json({ ...log, exerciseSets, structureBlocks });
   }));
 
   protectedPost(router, "/api/v1/workouts", { limiter: rateLimiter("workout", 40), middleware: [validateBody(createWorkoutRouteSchema)] }, async (req: Request, res: Response) => {

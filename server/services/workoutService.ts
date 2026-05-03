@@ -6,11 +6,14 @@ import {
   type InsertWorkoutLog,
   type ParsedExercise,
   planDays,
+  type StructureBlockInput,
   trainingPlans,
   type UpdateWorkoutLog,
   users,
   type WorkoutLog,
   workoutLogs,
+  workoutStructureBlocks,
+  workoutStructureSteps,
 } from "@shared/schema";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import pLimit from "p-limit";
@@ -610,6 +613,51 @@ async function insertClientSuppliedExercises(
   return savedSets;
 }
 
+function synthesizeDefaultStructureBlocks(exercises: ParsedExercise[]): StructureBlockInput[] {
+  if (exercises.length === 0) return [];
+  const steps = exercises.map((ex, i) => ({
+    stepNumber: i + 1,
+    exerciseName: ex.exerciseName,
+    category: ex.category,
+    customLabel: ex.customLabel ?? null,
+    stepRole: ex.stepRole ?? "steady",
+    groupId: ex.groupId ?? null,
+    groupMeta: null,
+    targets: null,
+  }));
+  return [{ sectionType: "main", formatType: "steady", sortOrder: 0, steps }];
+}
+
+async function replaceWorkoutStructure(tx: WorkoutTx, workoutLogId: string, structureBlocks: StructureBlockInput[] | undefined): Promise<void> {
+  await tx.delete(workoutStructureBlocks).where(eq(workoutStructureBlocks.workoutLogId, workoutLogId));
+  if (!structureBlocks || structureBlocks.length === 0) return;
+  for (const [idx, block] of structureBlocks.entries()) {
+    const [savedBlock] = await tx.insert(workoutStructureBlocks).values({
+      workoutLogId,
+      planDayId: null,
+      sectionType: block.sectionType,
+      formatType: block.formatType,
+      durationSeconds: block.durationSeconds ?? null,
+      rounds: block.rounds ?? null,
+      workSeconds: block.workSeconds ?? null,
+      restSeconds: block.restSeconds ?? null,
+      sortOrder: block.sortOrder ?? idx,
+    }).returning();
+    if (!block.steps?.length) continue;
+    await tx.insert(workoutStructureSteps).values(block.steps.map((s) => ({
+      blockId: savedBlock.id,
+      stepNumber: s.stepNumber,
+      exerciseName: s.exerciseName,
+      category: s.category,
+      customLabel: s.customLabel ?? null,
+      stepRole: s.stepRole ?? null,
+      groupId: s.groupId ?? null,
+      groupMeta: s.groupMeta ?? null,
+      targets: s.targets ?? null,
+    })));
+  }
+}
+
 /**
  * When a workout is logged against a plan day and the client didn't supply
  * exercises, copy the plan day's prescribed exerciseSets into the new log
@@ -709,6 +757,7 @@ async function createWorkoutInTx(
   tx: WorkoutTx,
   enrichedData: InsertWorkoutLog,
   exercises: ParsedExercise[] | undefined,
+  structureBlocks: StructureBlockInput[] | undefined,
   userId: string,
 ): Promise<CreateWorkoutResult> {
   const [log] = await tx
@@ -736,6 +785,7 @@ async function createWorkoutInTx(
   if (enrichedData.planDayId) {
     await persistAdherenceSnapshot(tx, log.id, enrichedData.planDayId, savedSets);
   }
+  await replaceWorkoutStructure(tx, log.id, structureBlocks ?? (exercises?.length ? synthesizeDefaultStructureBlocks(exercises) : undefined));
 
   if (savedSets.length > 0) return { ...log, exerciseSets: savedSets };
   return log;
@@ -745,6 +795,7 @@ export async function createWorkout(
   workoutData: InsertWorkoutLog,
   exercises: ParsedExercise[] | undefined,
   userId: string,
+  structureBlocks?: StructureBlockInput[],
 ): Promise<CreateWorkoutResult> {
   // Resolve plan linkage before creating the workout
   const planLinks = await resolveActivePlanLinks(workoutData, userId);
@@ -754,7 +805,7 @@ export async function createWorkout(
     ...(planLinks.planDayId !== undefined && { planDayId: planLinks.planDayId }),
   };
 
-  return await db.transaction((tx) => createWorkoutInTx(tx, enrichedData, exercises, userId));
+  return await db.transaction((tx) => createWorkoutInTx(tx, enrichedData, exercises, structureBlocks, userId));
 }
 
 /**
@@ -774,6 +825,7 @@ export async function createWorkoutAndScheduleCoaching(
   workoutData: InsertWorkoutLog,
   exercises: ParsedExercise[] | undefined,
   userId: string,
+  structureBlocks?: StructureBlockInput[],
 ): Promise<CreateWorkoutResult> {
   const planLinks = await resolveActivePlanLinks(workoutData, userId);
   const enrichedData = {
@@ -783,7 +835,7 @@ export async function createWorkoutAndScheduleCoaching(
   };
 
   const { workout, shouldCoach } = await db.transaction(async (tx) => {
-    const created = await createWorkoutInTx(tx, enrichedData, exercises, userId);
+    const created = await createWorkoutInTx(tx, enrichedData, exercises, structureBlocks, userId);
 
     const [user] = await tx
       .select({ aiCoachEnabled: users.aiCoachEnabled })
@@ -829,6 +881,7 @@ export async function updateWorkout(
   updateData: UpdateWorkoutLog,
   exercises: ParsedExercise[] | undefined,
   userId: string,
+  structureBlocks?: StructureBlockInput[],
 ): Promise<UpdateWorkoutResult | null> {
   if (exercises && Array.isArray(exercises)) {
     const result = await db.transaction(async (tx) => {
@@ -858,9 +911,14 @@ export async function updateWorkout(
           await tx.insert(customExercises).values(uniqueCustomExs).onConflictDoNothing();
         }
 
+        if (structureBlocks !== undefined) {
+          await replaceWorkoutStructure(tx, log.id, structureBlocks);
+        }
         return { log: { ...log, exerciseSets: savedSets } as UpdateWorkoutResult, previousDate };
       }
-
+      if (structureBlocks !== undefined) {
+        await replaceWorkoutStructure(tx, log.id, structureBlocks);
+      }
       return { log, previousDate };
     });
 
@@ -871,10 +929,21 @@ export async function updateWorkout(
 
   const previous = await storage.workouts.getWorkoutLog(workoutId, userId);
   if (!previous) return null;
-  const log = await storage.workouts.updateWorkoutLog(workoutId, updateData, userId);
-  if (!log) return null;
+  const result = await db.transaction(async (tx) => {
+    const [log] = await tx
+      .update(workoutLogs)
+      .set(updateData)
+      .where(and(eq(workoutLogs.id, workoutId), eq(workoutLogs.userId, userId)))
+      .returning();
+    if (!log) return null;
+    if (structureBlocks !== undefined) {
+      await replaceWorkoutStructure(tx, log.id, structureBlocks);
+    }
+    return log;
+  });
+  if (!result) return null;
   maybeEnqueueAutoCoachOnDateChange(userId, previous.date, updateData.date);
-  return log;
+  return result;
 }
 
 // When the athlete moves a logged workout to a different day, its position in

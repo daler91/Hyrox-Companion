@@ -1,4 +1,4 @@
-import type { exercisesPayloadSchema, InsertWorkoutLog, insertWorkoutLogSchema, ParsedExercise, UpdateWorkoutLog, updateWorkoutLogSchema } from "@shared/schema";
+import type { exercisesPayloadSchema, InsertWorkoutLog, insertWorkoutLogSchema, ParsedExercise, StructureBlockInput, UpdateWorkoutLog, updateWorkoutLogSchema } from "@shared/schema";
 import type { z } from "zod";
 
 import { env } from "../env";
@@ -9,18 +9,21 @@ import { createWorkoutAndScheduleCoaching, updateWorkout } from "./workoutServic
 
 type CreateWorkoutPayload = z.infer<typeof insertWorkoutLogSchema> & {
   exercises?: z.infer<typeof exercisesPayloadSchema>;
+  structureBlocks?: StructureBlockInput[];
 };
 type UpdateWorkoutPayload = z.infer<typeof updateWorkoutLogSchema> & {
   exercises?: z.infer<typeof exercisesPayloadSchema>;
+  structureBlocks?: StructureBlockInput[];
 };
 
 export async function createWorkout(input: {
   userId: string;
   payload: CreateWorkoutPayload;
 }) {
-  const { exercises, ...workoutData } = input.payload;
+  const { exercises, structureBlocks, ...workoutData } = input.payload;
   let structured = exercises as ParsedExercise[] | undefined;
-  if ((!structured || structured.length === 0) && env.GEMINI_API_KEY) {
+  const hasStructureBlocks = Array.isArray(structureBlocks) && structureBlocks.length > 0;
+  if ((!structured || structured.length === 0) && !hasStructureBlocks && env.GEMINI_API_KEY) {
     const textToParse = [workoutData.mainWorkout, workoutData.accessory].filter(Boolean).join("\n").trim();
     if (textToParse) {
       const user = await storage.users.getUser(input.userId);
@@ -30,7 +33,7 @@ export async function createWorkout(input: {
       }
     }
   }
-  return createWorkoutAndScheduleCoaching(workoutData as InsertWorkoutLog, structured, input.userId);
+  return createWorkoutAndScheduleCoaching(workoutData as InsertWorkoutLog, structured, input.userId, structureBlocks);
 }
 
 export async function updateWorkoutUseCase(input: {
@@ -38,10 +41,11 @@ export async function updateWorkoutUseCase(input: {
   workoutId: string;
   payload: UpdateWorkoutPayload;
 }) {
-  const { exercises, ...updateData } = input.payload;
+  const { exercises, structureBlocks, ...updateData } = input.payload;
   let structured = exercises as ParsedExercise[] | undefined;
+  const hasStructureBlocks = Array.isArray(structureBlocks) && structureBlocks.length > 0;
 
-  if ((!structured || structured.length === 0) && env.GEMINI_API_KEY) {
+  if ((!structured || structured.length === 0) && !hasStructureBlocks && env.GEMINI_API_KEY) {
     const existing = await storage.workouts.getWorkoutLog(input.workoutId, input.userId);
     if (!existing) return null;
 
@@ -57,5 +61,5 @@ export async function updateWorkoutUseCase(input: {
     }
   }
 
-  return updateWorkout(input.workoutId, updateData as UpdateWorkoutLog, structured, input.userId);
+  return updateWorkout(input.workoutId, updateData as UpdateWorkoutLog, structured, input.userId, structureBlocks);
 }
