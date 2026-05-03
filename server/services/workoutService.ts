@@ -354,7 +354,7 @@ async function reparseFromText(
 
   const setRows = expandExercisesToRows(exercises, owner, context);
   const setCount = await replaceExerciseSetsByOwner(owner, setRows);
-  await incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", context === "plan" ? "manual" : "manual", "manual_fix_completed");
+  await incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", "manual", "manual_fix_completed");
   return { exercises, setCount };
 }
 
@@ -409,7 +409,7 @@ async function reparseFromImage(
 
   const setRows = expandExercisesToRows(exercises, owner, context);
   const setCount = await replaceExerciseSetsByOwner(owner, setRows);
-  await incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", context === "plan" ? "manual" : "manual", "manual_fix_completed");
+  await incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", "manual", "manual_fix_completed");
   return { exercises, setCount };
 }
 

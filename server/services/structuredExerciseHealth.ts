@@ -1,5 +1,5 @@
-import { structuredExerciseBackfillReviews, structuredExerciseHealthCounters, structuredExerciseHealthDailyRollups } from "@shared/schema";
-import { and, eq, sql } from "drizzle-orm";
+import { structuredExerciseHealthDailyRollups } from "@shared/schema";
+import { sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { logger } from "../logger";
