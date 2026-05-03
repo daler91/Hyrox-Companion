@@ -46,9 +46,10 @@ import { useToast } from "@/hooks/use-toast";
 import { useIsAiCoachEnabled, useIsAuthUserLoaded, useIsAutoCoaching } from "@/hooks/useAuth";
 import { useTimelineState } from "@/hooks/useTimelineState";
 import { api, QUERY_KEYS } from "@/lib/api";
+import { queryClient } from "@/lib/queryClient";
 import { useTimelineDialogState } from "@/pages/timeline/useTimelineDialogState";
-import { useTimelineSurfaceSelection } from "@/pages/timeline/useTimelineSurfaceSelection";
 import { useTimelinePageController } from "@/pages/timeline/useTimelinePageController";
+import { useTimelineSurfaceSelection } from "@/pages/timeline/useTimelineSurfaceSelection";
 
 // Click-routing for timeline cards: PreviewSheet (future planned),
 // LogSheet (today/past planned), ReviewSurface (already logged),

@@ -17,7 +17,7 @@ describe("ExerciseTable state units", () => {
     const initial = new Set(["a"]);
     const next = toggleExerciseRow(initial, "b");
     expect([...initial]).toEqual(["a"]);
-    expect([...next].sort()).toEqual(["a", "b"]);
+    expect([...next].sort((a, b) => a.localeCompare(b))).toEqual(["a", "b"]);
     expect(toggleExerciseRow(next, "a").has("a")).toBe(false);
   });
 
