@@ -37,6 +37,25 @@ function countPrSets(
   return prs;
 }
 
+type MutationOwnerContext =
+  | { kind: "workout"; id: string; userId: string }
+  | { kind: "planDay"; id: string; userId: string };
+
+type NormalizedSetCreateInput = Omit<InsertExerciseSet, "id" | "workoutLogId" | "planDayId" | "sortOrder">;
+type NormalizedSetUpdateInput = Partial<Omit<InsertExerciseSet, "id" | "workoutLogId" | "planDayId">>;
+
+type MutationOwnerAdapter = {
+  getContainerId: (set: ExerciseSet) => string | null;
+  ownsContainer: (containerId: string, userId: string) => Promise<boolean>;
+  buildInsertValues: (
+    containerId: string,
+    set: NormalizedSetCreateInput,
+    sortOrder: number,
+  ) => InsertExerciseSet;
+  scopeWhere: (containerId: string) => ReturnType<typeof eq>;
+};
+
+
 export class WorkoutStorage {
   private getPlanDayCompletionCondition(planDayIds: string | string[], userId: string) {
     const ids = Array.isArray(planDayIds) ? planDayIds : [planDayIds];
@@ -310,6 +329,80 @@ export class WorkoutStorage {
     return await queryExerciseSetsWithDates(userId, { exerciseName });
   }
 
+  private getMutationOwnerAdapter(context: MutationOwnerContext): MutationOwnerAdapter {
+    if (context.kind === "workout") {
+      return {
+        getContainerId: (set) => set.workoutLogId,
+        ownsContainer: (containerId, userId) => this.getWorkoutLog(containerId, userId).then(Boolean),
+        buildInsertValues: (containerId, set, sortOrder) => ({
+          ...set,
+          workoutLogId: containerId,
+          planDayId: null,
+          sortOrder,
+        }),
+        scopeWhere: (containerId) => eq(exerciseSets.workoutLogId, containerId),
+      };
+    }
+
+    return {
+      getContainerId: (set) => set.planDayId,
+      ownsContainer: (containerId, userId) => this.ownsPlanDay(containerId, userId),
+      buildInsertValues: (containerId, set, sortOrder) => ({
+        ...set,
+        planDayId: containerId,
+        workoutLogId: null,
+        sortOrder,
+      }),
+      scopeWhere: (containerId) => eq(exerciseSets.planDayId, containerId),
+    };
+  }
+
+  async addExerciseSetNormalized(
+    context: MutationOwnerContext,
+    set: NormalizedSetCreateInput,
+    adapter: MutationOwnerAdapter = this.getMutationOwnerAdapter(context),
+  ): Promise<ExerciseSet | undefined> {
+    if (!(await adapter.ownsContainer(context.id, context.userId))) return undefined;
+    const [max] = await db
+      .select({ maxOrder: sql<number | null>`max(${exerciseSets.sortOrder})` })
+      .from(exerciseSets)
+      .where(adapter.scopeWhere(context.id));
+    const nextOrder = (max?.maxOrder ?? -1) + 1;
+    const [created] = await db
+      .insert(exerciseSets)
+      .values(adapter.buildInsertValues(context.id, set, nextOrder))
+      .returning();
+    return created;
+  }
+
+  async updateExerciseSetNormalized(
+    context: MutationOwnerContext,
+    setId: string,
+    updates: NormalizedSetUpdateInput,
+    adapter: MutationOwnerAdapter = this.getMutationOwnerAdapter(context),
+  ): Promise<ExerciseSet | undefined> {
+    const owned = await this.getExerciseSetOwned(setId, context.userId);
+    if (!owned || adapter.getContainerId(owned) !== context.id) return undefined;
+    const [updated] = await db
+      .update(exerciseSets)
+      .set(updates)
+      .where(eq(exerciseSets.id, setId))
+      .returning();
+    return updated;
+  }
+
+  async deleteExerciseSetNormalized(
+    context: MutationOwnerContext,
+    setId: string,
+    adapter: MutationOwnerAdapter = this.getMutationOwnerAdapter(context),
+  ): Promise<boolean> {
+    const owned = await this.getExerciseSetOwned(setId, context.userId);
+    if (!owned) return true;
+    if (adapter.getContainerId(owned) !== context.id) return false;
+    await db.delete(exerciseSets).where(eq(exerciseSets.id, setId));
+    return true;
+  }
+
   /**
    * Fetches a single exercise set and verifies the requesting user owns the
    * parent row — either the workoutLog or the planDay via its trainingPlan.
@@ -336,31 +429,14 @@ export class WorkoutStorage {
   async updateExerciseSet(
     workoutLogId: string,
     setId: string,
-    updates: Partial<Omit<InsertExerciseSet, "id" | "workoutLogId" | "planDayId">>,
+    updates: NormalizedSetUpdateInput,
     userId: string,
   ): Promise<ExerciseSet | undefined> {
-    const owned = await this.getExerciseSetOwned(setId, userId);
-    // Reject when the set doesn't exist, belongs to someone else, or belongs
-    // to a different workoutLog than the nested route's :id segment. Without
-    // the parent-id check, /workouts/<A>/sets/<setId-from-B> could silently
-    // mutate B's set when the caller owns both (Codex P2).
-    if (owned?.workoutLogId !== workoutLogId) return undefined;
-    const [updated] = await db
-      .update(exerciseSets)
-      .set(updates)
-      .where(eq(exerciseSets.id, setId))
-      .returning();
-    return updated;
+    return this.updateExerciseSetNormalized({ kind: "workout", id: workoutLogId, userId }, setId, updates);
   }
 
   async deleteExerciseSet(workoutLogId: string, setId: string, userId: string): Promise<boolean> {
-    const owned = await this.getExerciseSetOwned(setId, userId);
-    // DELETE is idempotent: if the row is already gone (or not visible to
-    // this user), the caller's collection no longer contains it.
-    if (!owned) return true;
-    if (owned.workoutLogId !== workoutLogId) return false;
-    await db.delete(exerciseSets).where(eq(exerciseSets.id, setId));
-    return true;
+    return this.deleteExerciseSetNormalized({ kind: "workout", id: workoutLogId, userId }, setId);
   }
 
   /**
@@ -370,21 +446,10 @@ export class WorkoutStorage {
    */
   async addExerciseSetToWorkoutLog(
     workoutLogId: string,
-    set: Omit<InsertExerciseSet, "id" | "workoutLogId" | "planDayId" | "sortOrder">,
+    set: NormalizedSetCreateInput,
     userId: string,
   ): Promise<ExerciseSet | undefined> {
-    const log = await this.getWorkoutLog(workoutLogId, userId);
-    if (!log) return undefined;
-    const [max] = await db
-      .select({ maxOrder: sql<number | null>`max(${exerciseSets.sortOrder})` })
-      .from(exerciseSets)
-      .where(eq(exerciseSets.workoutLogId, workoutLogId));
-    const nextOrder = (max?.maxOrder ?? -1) + 1;
-    const [created] = await db
-      .insert(exerciseSets)
-      .values({ ...set, workoutLogId, planDayId: null, sortOrder: nextOrder })
-      .returning();
-    return created;
+    return this.addExerciseSetNormalized({ kind: "workout", id: workoutLogId, userId }, set);
   }
 
   // -------------------------------------------------------------------
@@ -425,48 +490,23 @@ export class WorkoutStorage {
 
   async addExerciseSetToPlanDay(
     planDayId: string,
-    set: Omit<InsertExerciseSet, "id" | "workoutLogId" | "planDayId" | "sortOrder">,
+    set: NormalizedSetCreateInput,
     userId: string,
   ): Promise<ExerciseSet | undefined> {
-    if (!(await this.ownsPlanDay(planDayId, userId))) return undefined;
-    const [max] = await db
-      .select({ maxOrder: sql<number | null>`max(${exerciseSets.sortOrder})` })
-      .from(exerciseSets)
-      .where(eq(exerciseSets.planDayId, planDayId));
-    const nextOrder = (max?.maxOrder ?? -1) + 1;
-    const [created] = await db
-      .insert(exerciseSets)
-      .values({ ...set, planDayId, workoutLogId: null, sortOrder: nextOrder })
-      .returning();
-    return created;
+    return this.addExerciseSetNormalized({ kind: "planDay", id: planDayId, userId }, set);
   }
 
   async updateExerciseSetForPlanDay(
     planDayId: string,
     setId: string,
-    updates: Partial<Omit<InsertExerciseSet, "id" | "workoutLogId" | "planDayId">>,
+    updates: NormalizedSetUpdateInput,
     userId: string,
   ): Promise<ExerciseSet | undefined> {
-    const owned = await this.getExerciseSetOwned(setId, userId);
-    // Same IDOR guard pattern as updateExerciseSet: reject when the set
-    // doesn't exist, belongs to someone else, or belongs to a different
-    // plan day than the nested-route segment.
-    if (owned?.planDayId !== planDayId) return undefined;
-    const [updated] = await db
-      .update(exerciseSets)
-      .set(updates)
-      .where(eq(exerciseSets.id, setId))
-      .returning();
-    return updated;
+    return this.updateExerciseSetNormalized({ kind: "planDay", id: planDayId, userId }, setId, updates);
   }
 
   async deleteExerciseSetForPlanDay(planDayId: string, setId: string, userId: string): Promise<boolean> {
-    const owned = await this.getExerciseSetOwned(setId, userId);
-    // Missing/stale row IDs are already absent from the caller's plan day.
-    if (!owned) return true;
-    if (owned.planDayId !== planDayId) return false;
-    await db.delete(exerciseSets).where(eq(exerciseSets.id, setId));
-    return true;
+    return this.deleteExerciseSetNormalized({ kind: "planDay", id: planDayId, userId }, setId);
   }
 
   private async fetchLastSameFocus(
