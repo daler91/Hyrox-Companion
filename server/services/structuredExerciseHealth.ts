@@ -8,17 +8,17 @@ type OwnerType = "workout_log" | "plan_day";
 type SourceType = "manual" | "voice" | "photo" | "import";
 type CounterName = "text_only_rows_detected" | "auto_hydration_attempted" | "auto_hydration_succeeded" | "auto_hydration_failed" | "manual_fix_completed";
 
-export async function incrementStructuredExerciseCounter(ownerType: OwnerType, source: SourceType, counterName: CounterName, amount = 1): Promise<void> {
+export async function incrementStructuredExerciseCounter(ownerType: OwnerType, source: SourceType, counterName: CounterName, amount = 1, day: string | null = null): Promise<void> {
   await db.execute(sql`
     insert into structured_exercise_health_counters (day, owner_type, source, counter_name, value, updated_at)
-    values (current_date, ${ownerType}, ${source}, ${counterName}, ${amount}, now())
+    values (coalesce(${day}::date, current_date), ${ownerType}, ${source}, ${counterName}, ${amount}, now())
     on conflict (day, owner_type, source, counter_name)
     do update set value = structured_exercise_health_counters.value + ${amount}, updated_at = now()
   `);
 }
 
 export async function runStructuredExerciseDailyRollup(day: string): Promise<void> {
-  const rowResult = await db.execute<{ total_rows: number; structured_rows: number; legacy_only_rows: number; failed_hydration_backlog: number }>(sql`
+  const rowResult = await db.execute<{ total_rows: number; structured_rows: number; legacy_only_rows: number; legacy_workout_rows: number; legacy_plan_rows: number; failed_hydration_backlog: number }>(sql`
     with owners as (
       select 'workout_log'::text as owner_type, wl.id as owner_id, wl.date as owner_day,
              case when wl.source in ('strava','garmin') then 'import' when wl.source in ('voice','photo') then wl.source else 'manual' end as source,
@@ -37,6 +37,8 @@ export async function runStructuredExerciseDailyRollup(day: string): Promise<voi
       count(*)::int as total_rows,
       sum(case when has_structured then 1 else 0 end)::int as structured_rows,
       sum(case when has_structured = false and btrim(text_blob) <> '' then 1 else 0 end)::int as legacy_only_rows,
+      sum(case when owner_type = 'workout_log' and has_structured = false and btrim(text_blob) <> '' then 1 else 0 end)::int as legacy_workout_rows,
+      sum(case when owner_type = 'plan_day' and has_structured = false and btrim(text_blob) <> '' then 1 else 0 end)::int as legacy_plan_rows,
       (select count(*)::int from structured_exercise_backfill_reviews where status = 'needs_manual_review') as failed_hydration_backlog
     from owners
     where owner_day = ${day}::date
@@ -77,8 +79,12 @@ export async function runStructuredExerciseDailyRollup(day: string): Promise<voi
     logger.warn({ context: "health-alert", event: "legacy_only_pct_wow_rise", currentPct, prevPct, day }, "Legacy-only percentage rose >10% week-over-week");
   }
 
-  const textOnlyDetected = Math.max(0, legacyOnly);
-  if (textOnlyDetected > 0) {
-    await incrementStructuredExerciseCounter("workout_log", "manual", "text_only_rows_detected", textOnlyDetected);
+  const legacyWorkout = Number(row?.legacy_workout_rows ?? 0);
+  const legacyPlan = Number(row?.legacy_plan_rows ?? 0);
+  if (legacyWorkout > 0) {
+    await incrementStructuredExerciseCounter("workout_log", "manual", "text_only_rows_detected", legacyWorkout, day);
+  }
+  if (legacyPlan > 0) {
+    await incrementStructuredExerciseCounter("plan_day", "manual", "text_only_rows_detected", legacyPlan, day);
   }
 }

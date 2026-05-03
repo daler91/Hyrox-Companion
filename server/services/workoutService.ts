@@ -374,7 +374,9 @@ async function reparseFromText(
 
   const setRows = expandExercisesToRows(exercises, owner, context);
   const setCount = await replaceExerciseSetsByOwner(owner, setRows);
-  await incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", source, "manual_fix_completed");
+  void incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", source, "manual_fix_completed").catch((err: unknown) => {
+    logger.warn({ context: "health-metrics", event: "manual_fix_counter_failed", owner, err }, "Manual fix telemetry increment failed");
+  });
   return { exercises, setCount };
 }
 
@@ -430,7 +432,9 @@ async function reparseFromImage(
 
   const setRows = expandExercisesToRows(exercises, owner, context);
   const setCount = await replaceExerciseSetsByOwner(owner, setRows);
-  await incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", source, "manual_fix_completed");
+  void incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", source, "manual_fix_completed").catch((err: unknown) => {
+    logger.warn({ context: "health-metrics", event: "manual_fix_counter_failed", owner, err }, "Manual fix telemetry increment failed");
+  });
   return { exercises, setCount };
 }
 
