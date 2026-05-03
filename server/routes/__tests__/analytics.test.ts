@@ -258,6 +258,30 @@ describe("Analytics Routes", () => {
       expect(calculateTrainingOverview).toHaveBeenCalled();
     });
 
+
+    it("treats exercise_sets as authoritative for mixed records (legacy text + sets)", async () => {
+      vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([
+        { id: "log-1", userId: "test_user_id", date: "2026-02-01", mainWorkout: "Legacy: row 3x500m" },
+      ] as never);
+      vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([
+        { id: "set-1", workoutLogId: "log-1", exerciseName: "SkiErg", reps: null, distance: "1000", date: "2026-02-01" },
+      ] as never);
+      vi.mocked(calculateTrainingOverview).mockReturnValue({
+        weeklySummaries: [],
+        workoutDates: ["2026-02-01"],
+        categoryTotals: {},
+        stationCoverage: [],
+        currentStats: zeroStats,
+      } as never);
+
+      const response = await request(app).get("/api/v1/training-overview");
+      expect(response.status).toBe(200);
+      expect(calculateTrainingOverview).toHaveBeenCalledWith(
+        expect.any(Array),
+        expect.arrayContaining([expect.objectContaining({ exerciseName: "SkiErg" })]),
+        undefined,
+      );
+    });
     it("should pass date params to storage", async () => {
       vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([]);
       vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([]);

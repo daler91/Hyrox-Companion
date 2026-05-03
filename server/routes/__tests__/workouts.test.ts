@@ -49,6 +49,7 @@ vi.mock("../../services/workoutService", () => ({
   reparseWorkout: vi.fn(),
   reparseWorkoutFromImage: vi.fn(),
   batchReparseWorkouts: vi.fn(),
+  autoHydrateExerciseSetsFromTextIfNeeded: vi.fn(),
 }));
 
 vi.mock("../../services/exportService", () => ({
@@ -137,6 +138,60 @@ describe("Workouts Routes", () => {
     expect(reparseNotFound.body).toEqual({ error: "Workout not found", code: "NOT_FOUND" });
   });
 
+
+  it("prefers structured exercise_sets for workout reads when both legacy text and sets exist", async () => {
+    const { storage } = await import("../../storage");
+    vi.mocked(storage.workouts.getWorkoutLog).mockResolvedValueOnce({
+      id: "workout-legacy-mixed",
+      userId: "test_user_id",
+      mainWorkout: "Back squat 5x5 @ 100kg",
+    } as never);
+    vi.mocked(storage.workouts.getExerciseSetsByWorkoutLog).mockResolvedValueOnce([
+      { id: "set-1", workoutLogId: "workout-legacy-mixed", exerciseName: "Back Squat", reps: 5, weight: "110", setNumber: 1, sortOrder: 0 },
+    ] as never);
+
+    const response = await request(app).get("/api/v1/workouts/workout-legacy-mixed");
+
+    expect(response.status).toBe(200);
+    expect(response.body.mainWorkout).toBe("Back squat 5x5 @ 100kg");
+    expect(response.body.exerciseSets).toHaveLength(1);
+    expect(response.body.exerciseSets[0].exerciseName).toBe("Back Squat");
+  });
+
+  it("editing legacy text does not mutate sets unless parse is explicitly invoked", async () => {
+    const [{ storage }, { updateWorkoutUseCase }, { reparseWorkout }] = await Promise.all([
+      import("../../storage"),
+      import("../../services/workoutUseCases"),
+      import("../../services/workoutService"),
+    ]);
+    vi.mocked(updateWorkoutUseCase).mockResolvedValueOnce({ id: "workout-1", notes: "edited text" } as never);
+
+    const patchResponse = await request(app).patch("/api/v1/workouts/workout-1").send({ mainWorkout: "edited legacy text" });
+    expect(patchResponse.status).toBe(200);
+    expect(storage.workouts.getExerciseSetsByWorkoutLog).not.toHaveBeenCalledWith("workout-1");
+    expect(reparseWorkout).not.toHaveBeenCalled();
+
+    const reparseResponse = await request(app).post("/api/v1/workouts/workout-1/reparse").send({});
+    expect(reparseResponse.status).toBe(200);
+    expect(reparseWorkout).toHaveBeenCalledTimes(1);
+  });
+
+  it("lazy hydration on repeated reads is idempotent (no duplicate set creation)", async () => {
+    const [{ storage }, { autoHydrateExerciseSetsFromTextIfNeeded }] = await Promise.all([
+      import("../../storage"),
+      import("../../services/workoutService"),
+    ]);
+
+    vi.mocked(storage.workouts.getExerciseSetsByWorkoutLog)
+      .mockResolvedValueOnce([] as never)
+      .mockResolvedValueOnce([{ id: "set-1", workoutLogId: "workout-1", exerciseName: "Run", setNumber: 1, sortOrder: 0 }] as never)
+      .mockResolvedValueOnce([{ id: "set-1", workoutLogId: "workout-1", exerciseName: "Run", setNumber: 1, sortOrder: 0 }] as never);
+
+    await request(app).get("/api/v1/workouts/workout-1");
+    await request(app).get("/api/v1/workouts/workout-1");
+
+    expect(autoHydrateExerciseSetsFromTextIfNeeded).toHaveBeenCalledTimes(1);
+  });
   it("captures representative high-frequency endpoint timings", async () => {
     const samples = 6;
     const timings: Array<{ endpoint: string; elapsedMs: number }> = [];
