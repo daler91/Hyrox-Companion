@@ -1,11 +1,10 @@
-import { type AddExerciseSetBody, addExerciseSetBodySchema, dateStringSchema, type GeneratePlanInput,generatePlanInputSchema, importPlanRequestSchema, parseExercisesFromImageRequestSchema, type PatchExerciseSetBody,patchExerciseSetBodySchema, type PlanDay, schedulePlanRequestSchema, type UpdatePlanDay, updatePlanDaySchema, type UpdateTrainingPlanGoal, updateTrainingPlanGoalSchema, workoutStatusEnum } from "@shared/schema";
+import { type AddExerciseSetBody, addExerciseSetBodySchema, dateStringSchema, type GeneratePlanInput,generatePlanInputSchema, importPlanRequestSchema, parseExercisesFromImageRequestSchema, type PatchExerciseSetBody,patchExerciseSetBodySchema, schedulePlanRequestSchema, type UpdatePlanDay, updatePlanDaySchema, type UpdateTrainingPlanGoal, updateTrainingPlanGoalSchema, workoutStatusEnum } from "@shared/schema";
 import { type Request as ExpressRequest,type Response, Router } from "express";
 import { z } from "zod";
 
 import { isAuthenticated } from "../clerkAuth";
 import { reqLogger } from "../logger";
 import { aiBudgetCheck } from "../middleware/aibudget";
-import { protectedMutationGuards } from "../routeGuards";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody } from "../routeUtils";
 import { regenerateCoachNoteForPlanDay } from "../services/coachService";
 import { generatePlan } from "../services/planGenerationService";
@@ -28,23 +27,6 @@ const planDaySetUseCase = createMutateExerciseSetUseCase({
   addSet: (dayId, body, userId) => storage.workouts.addExerciseSetToPlanDay(dayId, body, userId),
   deleteSet: (dayId, setId, userId) => storage.workouts.deleteExerciseSetForPlanDay(dayId, setId, userId),
 });
-
-const handlePlanDayUpdate = (updateFn: (dayId: string, data: UpdatePlanDay, userId: string) => Promise<PlanDay | null | undefined>) => [
-  validateBody(updatePlanDaySchema),
-  asyncHandler(async (
-    req: ExpressRequest<{ dayId: string } | { planId: string; dayId: string }, unknown, UpdatePlanDay>,
-    res: Response
-  ) => {
-    const { dayId } = req.params;
-    const userId = getUserId(req);
-    const updatedDay = await updateFn(dayId, req.body, userId);
-  if (!updatedDay) {
-    return sendNotFound(res, "Day not found");
-  }
-
-  res.json(updatedDay);
-  })
-]
 
 const handleGetOrDeletePlan = (
   actionFn: (id: string, userId: string) => Promise<Record<string, unknown> | null | undefined>,
@@ -81,13 +63,13 @@ protectedPost(router, "/api/v1/plans/import", { limiter: rateLimiter("planImport
     }
   });
 
-router.post("/api/v1/plans/sample", ...protectedMutationGuards, rateLimiter("planSample", 5), asyncHandler(async (req: ExpressRequest, res: Response) => {
+protectedPost(router, "/api/v1/plans/sample", { limiter: rateLimiter("planSample", 5) }, async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const fullPlan = await createSamplePlan(userId);
     res.json(fullPlan);
-  }));
+  });
 
-router.post("/api/v1/plans/generate", ...protectedMutationGuards, rateLimiter("planGenerate", 3), aiBudgetCheck, validateBody(generatePlanInputSchema), asyncHandler(async (req: ExpressRequest, res: Response) => {
+protectedPost(router, "/api/v1/plans/generate", { limiter: rateLimiter("planGenerate", 3), middleware: [aiBudgetCheck, validateBody(generatePlanInputSchema)] }, async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     try {
       const fullPlan = await generatePlan(req.body as GeneratePlanInput, userId);
@@ -96,11 +78,21 @@ router.post("/api/v1/plans/generate", ...protectedMutationGuards, rateLimiter("p
       reqLogger(req).error({ err: error }, "Failed to generate AI training plan");
       return res.status(500).json({ error: "Failed to generate training plan. Please try again.", code: "GENERATION_FAILED" });
     }
-  }));
+  });
 
-router.patch("/api/v1/plans/:planId/days/:dayId", ...protectedMutationGuards, rateLimiter("planDayUpdate", 20), handlePlanDayUpdate((dayId, data, userId) => updateStoredPlanDay({ dayId, data, userId })));
+protectedPatch(router, "/api/v1/plans/:planId/days/:dayId", { limiter: rateLimiter("planDayUpdate", 20), middleware: [validateBody(updatePlanDaySchema)] }, async (req: ExpressRequest<{ planId: string; dayId: string }, unknown, UpdatePlanDay>, res: Response) => {
+  const userId = getUserId(req);
+  const updatedDay = await updateStoredPlanDay({ dayId: req.params.dayId, data: req.body, userId });
+  if (!updatedDay) return sendNotFound(res, "Day not found");
+  res.json(updatedDay);
+});
 
-router.patch("/api/v1/plans/days/:dayId", ...protectedMutationGuards, rateLimiter("planDayUpdate", 20), handlePlanDayUpdate(updatePlanDayWithCleanup));
+protectedPatch(router, "/api/v1/plans/days/:dayId", { limiter: rateLimiter("planDayUpdate", 20), middleware: [validateBody(updatePlanDaySchema)] }, async (req: ExpressRequest<{ dayId: string }, unknown, UpdatePlanDay>, res: Response) => {
+  const userId = getUserId(req);
+  const updatedDay = await updatePlanDayWithCleanup(req.params.dayId, req.body, userId);
+  if (!updatedDay) return sendNotFound(res, "Day not found");
+  res.json(updatedDay);
+});
 
 const renameTrainingPlanSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(255, "Name must be 255 characters or less"),
@@ -115,18 +107,18 @@ protectedPatch(router, "/api/v1/plans/:id", { limiter: rateLimiter("planUpdate",
     res.json(updated);
   });
 
-router.patch("/api/v1/plans/:id/goal", ...protectedMutationGuards, rateLimiter("planUpdate", 20), validateBody(updateTrainingPlanGoalSchema), asyncHandler(async (req: ExpressRequest<{ id: string }, unknown, UpdateTrainingPlanGoal>, res: Response) => {
+protectedPatch(router, "/api/v1/plans/:id/goal", { limiter: rateLimiter("planUpdate", 20), middleware: [validateBody(updateTrainingPlanGoalSchema)] }, async (req: ExpressRequest<{ id: string }, unknown, UpdateTrainingPlanGoal>, res: Response) => {
     const userId = getUserId(req);
     const updated = await storage.plans.updateTrainingPlanGoal(req.params.id, req.body.goal, userId);
     if (!updated) {
       return sendNotFound(res, "Training plan not found");
     }
     res.json(updated);
-  }));
+  });
 
 protectedDelete(router, "/api/v1/plans/:id", { limiter: rateLimiter("planDelete", 10) }, handleGetOrDeletePlan(async (id, userId) => { const deleted = await storage.plans.deleteTrainingPlan(id, userId); return deleted ? { success: true } : null; }, "true"));
 
-router.post("/api/v1/plans/:planId/schedule", ...protectedMutationGuards, rateLimiter("planSchedule", 10), validateBody(schedulePlanRequestSchema), asyncHandler(async (req: ExpressRequest<{ planId: string }, unknown, z.infer<typeof schedulePlanRequestSchema>>, res: Response) => {
+protectedPost(router, "/api/v1/plans/:planId/schedule", { limiter: rateLimiter("planSchedule", 10), middleware: [validateBody(schedulePlanRequestSchema)] }, async (req: ExpressRequest<{ planId: string }, unknown, z.infer<typeof schedulePlanRequestSchema>>, res: Response) => {
     const { startDate } = req.body;
     const userId = getUserId(req);
     const { planId } = req.params;
@@ -137,14 +129,14 @@ router.post("/api/v1/plans/:planId/schedule", ...protectedMutationGuards, rateLi
     }
 
     res.json({ success: true });
-  }));
+  });
 
 const patchDayStatusSchema = z.object({
   status: z.enum(workoutStatusEnum).optional(),
   scheduledDate: dateStringSchema.nullable().optional(),
 });
 
-router.patch("/api/v1/plans/days/:dayId/status", ...protectedMutationGuards, rateLimiter("planDayStatus", 20), validateBody(patchDayStatusSchema), asyncHandler(async (req: ExpressRequest<{ dayId: string }, unknown, z.infer<typeof patchDayStatusSchema>>, res: Response) => {
+protectedPatch(router, "/api/v1/plans/days/:dayId/status", { limiter: rateLimiter("planDayStatus", 20), middleware: [validateBody(patchDayStatusSchema)] }, async (req: ExpressRequest<{ dayId: string }, unknown, z.infer<typeof patchDayStatusSchema>>, res: Response) => {
     const { dayId } = req.params;
     const userId = getUserId(req);
     const { status, scheduledDate } = req.body;
@@ -155,9 +147,9 @@ router.patch("/api/v1/plans/days/:dayId/status", ...protectedMutationGuards, rat
     }
 
     res.json(updatedDay);
-  }));
+  });
 
-router.delete("/api/v1/plans/days/:dayId", ...protectedMutationGuards, rateLimiter("planDayDelete", 10), asyncHandler(async (req: ExpressRequest<{ dayId: string }>, res: Response) => {
+protectedDelete(router, "/api/v1/plans/days/:dayId", { limiter: rateLimiter("planDayDelete", 10) }, async (req: ExpressRequest<{ dayId: string }>, res: Response) => {
     const { dayId } = req.params;
     const userId = getUserId(req);
     const deleted = await storage.plans.deletePlanDay(dayId, userId);
@@ -165,7 +157,7 @@ router.delete("/api/v1/plans/days/:dayId", ...protectedMutationGuards, rateLimit
       return sendNotFound(res, "Plan day not found");
     }
     res.json({ success: true });
-  }));
+  });
 
 // -----------------------------------------------------------------------------
 // Plan-day exercise-set CRUD — used by the v2 workout detail dialog when a
@@ -196,60 +188,57 @@ router.get(
   }),
 );
 
-router.post(
+protectedPost(
+  router,
   "/api/v1/plans/days/:dayId/sets",
-  ...protectedMutationGuards,
-  rateLimiter("planDaySet", 60),
-  validateBody(addExerciseSetBodySchema),
-  asyncHandler(async (req: ExpressRequest<{ dayId: string }, Record<string, never>, AddPlanDaySetPayload>, res: Response) => {
+  { limiter: rateLimiter("planDaySet", 60), middleware: [validateBody(addExerciseSetBodySchema)] },
+  async (req: ExpressRequest<{ dayId: string }, Record<string, never>, AddPlanDaySetPayload>, res: Response) => {
     const userId = getUserId(req);
     const created = await planDaySetUseCase.addSet(req.params.dayId, req.body, userId);
     if (!created) {
       return sendNotFound(res, PLAN_DAY_NOT_FOUND);
     }
     res.status(201).json(created);
-  }),
+  },
 );
 
-router.patch(
+protectedPatch(
+  router,
   "/api/v1/plans/days/:dayId/sets/:setId",
-  ...protectedMutationGuards,
-  rateLimiter("planDaySet", 120),
-  validateBody(patchExerciseSetBodySchema),
-  asyncHandler(async (req: ExpressRequest<{ dayId: string; setId: string }, Record<string, never>, PatchPlanDaySetPayload>, res: Response) => {
+  { limiter: rateLimiter("planDaySet", 120), middleware: [validateBody(patchExerciseSetBodySchema)] },
+  async (req: ExpressRequest<{ dayId: string; setId: string }, Record<string, never>, PatchPlanDaySetPayload>, res: Response) => {
     const userId = getUserId(req);
     const updated = await planDaySetUseCase.updateSet(req.params.dayId, req.params.setId, req.body, userId);
     if (!updated) {
       return sendNotFound(res, PLAN_DAY_SET_NOT_FOUND);
     }
     res.json(updated);
-  }),
+  },
 );
 
-router.delete(
+protectedDelete(
+  router,
   "/api/v1/plans/days/:dayId/sets/:setId",
-  ...protectedMutationGuards,
-  rateLimiter("planDaySet", 60),
-  asyncHandler(async (req: ExpressRequest<{ dayId: string; setId: string }>, res: Response) => {
+  { limiter: rateLimiter("planDaySet", 60) },
+  async (req: ExpressRequest<{ dayId: string; setId: string }>, res: Response) => {
     const userId = getUserId(req);
     const deleted = await planDaySetUseCase.deleteSet(req.params.dayId, req.params.setId, userId);
     if (!deleted) {
       return sendNotFound(res, PLAN_DAY_SET_NOT_FOUND);
     }
     res.json({ success: true });
-  }),
+  },
 );
 
 // Parse the plan day's mainWorkout/accessory free text into structured
 // exercise_sets via Gemini. Replaces the plan day's existing prescribed
 // rows so repeated Parse presses don't accumulate duplicates. Guarded by
 // aiBudgetCheck because each call is a Gemini roundtrip.
-router.post(
+protectedPost(
+  router,
   "/api/v1/plans/days/:dayId/reparse",
-  ...protectedMutationGuards,
-  rateLimiter("planDayReparse", 5),
-  aiBudgetCheck,
-  asyncHandler(async (req: ExpressRequest<{ dayId: string }>, res: Response) => {
+  { limiter: rateLimiter("planDayReparse", 5), middleware: [aiBudgetCheck] },
+  async (req: ExpressRequest<{ dayId: string }>, res: Response) => {
     const userId = getUserId(req);
     const [planDay, user] = await Promise.all([
       storage.plans.getPlanDay(req.params.dayId, userId),
@@ -264,19 +253,17 @@ router.post(
       return res.json({ exercises: [], saved: false, setCount: 0 });
     }
     res.json({ exercises: result.exercises, saved: true, setCount: result.setCount });
-  }),
+  },
 );
 
 // Photo sibling of /reparse for plan days. Same replace semantics, same
 // rate bucket — only the input modality differs. Body size enforced by
 // the route-scoped 10MB express.json() in server/index.ts.
-router.post(
+protectedPost(
+  router,
   "/api/v1/plans/days/:dayId/reparse-from-image",
-  ...protectedMutationGuards,
-  rateLimiter("planDayReparse", 5),
-  aiBudgetCheck,
-  validateBody(parseExercisesFromImageRequestSchema),
-  asyncHandler(async (req: ExpressRequest<{ dayId: string }, unknown, z.infer<typeof parseExercisesFromImageRequestSchema>>, res: Response) => {
+  { limiter: rateLimiter("planDayReparse", 5), middleware: [aiBudgetCheck, validateBody(parseExercisesFromImageRequestSchema)] },
+  async (req: ExpressRequest<{ dayId: string }, unknown, z.infer<typeof parseExercisesFromImageRequestSchema>>, res: Response) => {
     const userId = getUserId(req);
     const [planDay, user, customExercises] = await Promise.all([
       storage.plans.getPlanDay(req.params.dayId, userId),
@@ -293,7 +280,7 @@ router.post(
       return res.json({ exercises: [], saved: false, setCount: 0 });
     }
     res.json({ exercises: result.exercises, saved: true, setCount: result.setCount });
-  }),
+  },
 );
 
 // Manual coach-note refresh for a planned day. Triggered from the workout
@@ -302,12 +289,11 @@ router.post(
 // it burns a Gemini call per invocation; the service itself enforces a
 // 30-second cooldown to prevent Refresh-mashing. Low per-IP/user rate
 // limit stacks on top of that.
-router.post(
+protectedPost(
+  router,
   "/api/v1/plans/days/:dayId/coach-note/regenerate",
-  ...protectedMutationGuards,
-  rateLimiter("coachNoteRegenerate", 10),
-  aiBudgetCheck,
-  asyncHandler(async (req: ExpressRequest<{ dayId: string }>, res: Response) => {
+  { limiter: rateLimiter("coachNoteRegenerate", 10), middleware: [aiBudgetCheck] },
+  async (req: ExpressRequest<{ dayId: string }>, res: Response) => {
     const userId = getUserId(req);
     const result = await regenerateCoachNoteForPlanDay(req.params.dayId, userId);
     if ("retryAfterMs" in result) {
@@ -320,7 +306,7 @@ router.post(
       });
     }
     res.json(result);
-  }),
+  },
 );
 
 export default router;

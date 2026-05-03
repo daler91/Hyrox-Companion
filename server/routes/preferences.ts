@@ -2,10 +2,10 @@ import { type UpdateUserPreferences,updateUserPreferencesSchema } from "@shared/
 import { type Request as ExpressRequest, type Response,Router } from "express";
 
 import { isAuthenticated } from "../clerkAuth";
-import { protectedMutationGuards } from "../routeGuards";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody } from "../routeUtils";
 import { storage } from "../storage";
 import { getUserId } from "../types";
+import { protectedPatch } from "./_helpers/protectedRouteBuilder";
 
 const router = Router();
 
@@ -114,7 +114,7 @@ router.get('/api/v1/preferences', isAuthenticated, asyncHandler(async (req: Expr
     });
   }));
 
-router.patch('/api/v1/preferences', ...protectedMutationGuards, rateLimiter("preferences", 20), validateBody(updateUserPreferencesSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, UpdateUserPreferences>, res: Response) => {
+protectedPatch(router, '/api/v1/preferences', { limiter: rateLimiter("preferences", 20), middleware: [validateBody(updateUserPreferencesSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, UpdateUserPreferences>, res: Response) => {
     const userId = getUserId(req);
 
     const current = await storage.users.getUser(userId);
@@ -128,6 +128,6 @@ router.patch('/api/v1/preferences', ...protectedMutationGuards, rateLimiter("pre
       return sendNotFound(res, "User not found");
     }
     res.json(serializePreferences(user));
-  }));
+  });
 
 export default router;
