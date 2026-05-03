@@ -67,7 +67,7 @@ type ContractCase = {
 
 const endpointFixtureCases: ContractCase[] = [
   { name: "workouts list", method: "get", path: "/api/v1/workouts", expectedStatus: 200, expectedFields: ["0.id"] },
-  { name: "workouts create", method: "post", path: "/api/v1/workouts", body: { date: "2026-01-02", mainWorkout: "Engine Session", notes: "tempo" }, expectedStatus: 400, expectedFields: ["code", "message"] },
+  { name: "workouts create", method: "post", path: "/api/v1/workouts", body: { date: "2026-01-02", focus: "Conditioning", mainWorkout: "Engine Session", notes: "tempo" }, expectedStatus: 200, expectedFields: ["id", "date"] },
   { name: "workout update", method: "patch", path: "/api/v1/workouts/workout-1", body: { notes: "updated" }, expectedStatus: 200, expectedFields: ["id", "notes"] },
   { name: "workout delete", method: "delete", path: "/api/v1/workouts/workout-1", expectedStatus: 200, expectedFields: ["success"] },
   { name: "workout reparse", method: "post", path: "/api/v1/workouts/workout-1/reparse", body: {}, expectedStatus: 200, expectedFields: ["saved", "setCount", "exercises"] },
