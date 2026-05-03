@@ -2,22 +2,64 @@ import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
 
 export type FieldKey = "reps" | "weight" | "distance" | "time";
 
+export interface FieldContext {
+  weightUnit: "kg" | "lbs";
+  distanceUnit: "km" | "miles";
+}
+
+type LabelResolver = {
+  (context: FieldContext): string;
+  (weightUnit: string, distanceUnit: string): string;
+};
+
 interface FieldSpec {
-  label: (weightUnit: string, distanceUnit: string) => string;
+  label: LabelResolver;
   defaultStep: number;
   stepOptions: readonly number[];
+  shortLabel: string;
+  validationHint: string;
+  prefersMultiSet: boolean;
 }
 
 export const fieldMeta: Record<FieldKey, FieldSpec> = {
-  reps: { label: () => "Reps", defaultStep: 1, stepOptions: [1, 5] },
-  weight: { label: (wu) => `Weight (${wu})`, defaultStep: 2.5, stepOptions: [1, 2.5, 5, 10] },
+  reps: {
+    label: withLegacyLabel(() => "Reps"),
+    shortLabel: "Reps",
+    defaultStep: 1,
+    stepOptions: [1, 5],
+    validationHint: "Whole number count",
+    prefersMultiSet: true,
+  },
+  weight: {
+    label: withLegacyLabel(({ weightUnit }) => `Weight (${weightUnit})`),
+    shortLabel: "Wt",
+    defaultStep: 2.5,
+    stepOptions: [1, 2.5, 5, 10],
+    validationHint: "Load per set",
+    prefersMultiSet: true,
+  },
   distance: {
-    label: (_, du) => `Distance (${du === "km" ? "m" : "ft"})`,
+    label: withLegacyLabel(({ distanceUnit }) => `Distance (${distanceUnit === "km" ? "m" : "ft"})`),
+    shortLabel: "Dist",
     defaultStep: 50,
     stepOptions: [10, 50, 100, 500],
+    validationHint: "Numeric distance",
+    prefersMultiSet: false,
   },
-  time: { label: () => "Time (min)", defaultStep: 1, stepOptions: [1, 5, 10] },
+  time: {
+    label: withLegacyLabel(() => "Time (min)"),
+    shortLabel: "Time",
+    defaultStep: 1,
+    stepOptions: [1, 5, 10],
+    validationHint: "Duration in minutes",
+    prefersMultiSet: false,
+  },
 };
+
+function withLegacyLabel(getLabel: (context: FieldContext) => string): LabelResolver {
+  return ((contextOrWeightUnit: FieldContext | string, distanceUnit?: string) =>
+    getLabel(normalizeLabelContext(contextOrWeightUnit, distanceUnit))) as LabelResolver;
+}
 
 // ⚡ Bolt: Cache array references to guarantee referential stability during re-renders.
 const fieldsCache = new Map<string, FieldKey[]>();
@@ -38,4 +80,40 @@ export function getFields(exerciseName: string): FieldKey[] {
   }
   fieldsCache.set(exerciseName, out);
   return out;
+}
+
+export function getFieldSpec(field: FieldKey): FieldSpec {
+  return fieldMeta[field];
+}
+
+function normalizeLabelContext(
+  contextOrWeightUnit: FieldContext | string,
+  distanceUnit?: string,
+): FieldContext {
+  if (typeof contextOrWeightUnit === "string") {
+    return {
+      weightUnit: contextOrWeightUnit === "lbs" ? "lbs" : "kg",
+      distanceUnit: distanceUnit === "miles" ? "miles" : "km",
+    };
+  }
+  return contextOrWeightUnit;
+}
+
+export function getFieldLabel(field: FieldKey, context: FieldContext): string;
+export function getFieldLabel(field: FieldKey, weightUnit: string, distanceUnit: string): string;
+export function getFieldLabel(
+  field: FieldKey,
+  contextOrWeightUnit: FieldContext | string,
+  distanceUnit?: string,
+): string {
+  const context = normalizeLabelContext(contextOrWeightUnit, distanceUnit);
+  return fieldMeta[field].label(context);
+}
+
+export function isFieldEditableForExercise(exerciseName: string, field: FieldKey): boolean {
+  return getFields(exerciseName).includes(field);
+}
+
+export function shouldUseMultiSetForFields(fields: readonly FieldKey[]): boolean {
+  return fields.some((field) => fieldMeta[field].prefersMultiSet);
 }

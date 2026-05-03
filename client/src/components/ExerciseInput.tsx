@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { categoryBorderColors } from "@/lib/exerciseUtils";
 import { getExerciseMissingFields } from "@/lib/exerciseWarnings";
+import { getFieldLabel, getFields, shouldUseMultiSetForFields } from "@/components/exercise-row/fieldMeta";
 
 import type { FieldConfig, FieldKey } from "./exercise-input";
 import { ExerciseHeader, ExerciseWarnings, MultiSetTable, SingleSetFields } from "./exercise-input";
@@ -42,40 +43,15 @@ export interface StructuredExercise {
 }
 
 const fieldConfig: Record<FieldKey, FieldConfig> = {
-  reps: { icon: Hash, getLabel: () => "Reps", short: "Reps" },
-  weight: { icon: Weight, getLabel: (wu) => `Weight (${wu})`, short: "Wt" },
+  reps: { icon: Hash, getLabel: (wu, du) => getFieldLabel("reps", { weightUnit: wu as "kg" | "lbs", distanceUnit: du as "km" | "miles" }), short: "Reps" },
+  weight: { icon: Weight, getLabel: (wu, du) => getFieldLabel("weight", { weightUnit: wu as "kg" | "lbs", distanceUnit: du as "km" | "miles" }), short: "Wt" },
   distance: {
     icon: Ruler,
-    getLabel: (_, du) => `Distance (${du === "km" ? "m" : "ft"})`,
+    getLabel: (wu, du) => getFieldLabel("distance", { weightUnit: wu as "kg" | "lbs", distanceUnit: du as "km" | "miles" }),
     short: "Dist",
   },
-  time: { icon: Timer, getLabel: () => "Time (min)", short: "Time" },
+  time: { icon: Timer, getLabel: (wu, du) => getFieldLabel("time", { weightUnit: wu as "kg" | "lbs", distanceUnit: du as "km" | "miles" }), short: "Time" },
 };
-
-// ⚡ Bolt: Cache calculated field keys to guarantee array reference stability between renders.
-// This prevents unnecessary O(N) array allocations via `.filter()` during every component render,
-// reducing garbage collection overhead and preventing unnecessary child component updates.
-const fieldsCache = new Map<string, FieldKey[]>();
-const DEFAULT_FIELDS: FieldKey[] = ["reps", "weight", "distance", "time"];
-
-function getFields(exerciseName: ExerciseName): FieldKey[] {
-  const cached = fieldsCache.get(exerciseName);
-  if (cached) return cached;
-
-  const def = EXERCISE_DEFINITIONS[exerciseName];
-  if (!def) return DEFAULT_FIELDS;
-  const defFields = def.fields as readonly string[];
-
-  const result: FieldKey[] = [];
-  for (const f of defFields) {
-    if (f !== "sets" && f in fieldConfig) {
-      result.push(f as FieldKey);
-    }
-  }
-
-  fieldsCache.set(exerciseName, result);
-  return result;
-}
 
 export function createDefaultSet(setNumber: number): SetData {
   return { setNumber };
@@ -182,7 +158,7 @@ export function ExerciseInput({
     onChange({ ...exercise, sets: newSets });
   };
 
-  const showMultiSetView = fields.includes("reps") || fields.includes("weight");
+  const showMultiSetView = shouldUseMultiSetForFields(fields);
 
   return (
     <Card
