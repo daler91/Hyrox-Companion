@@ -255,6 +255,24 @@ export const exerciseSets = pgTable("exercise_sets", {
   ),
 ]);
 
+export const structuredExerciseBackfillReviews = pgTable("structured_exercise_backfill_reviews", {
+  id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+  ownerType: text("owner_type").notNull(),
+  ownerId: varchar("owner_id", { length: 255 }).notNull(),
+  userId: varchar("user_id", { length: 255 }).references(() => users.id, { onDelete: "set null" }),
+  status: text("status").notNull(),
+  reason: text("reason"),
+  firstSeenAt: timestamp("first_seen_at").defaultNow(),
+  lastSeenAt: timestamp("last_seen_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  check("structured_exercise_backfill_owner_type_check", sql`${table.ownerType} IN ('planDay', 'workoutLog')`),
+  check("structured_exercise_backfill_status_check", sql`${table.status} IN ('needs_manual_review', 'resolved')`),
+  uniqueIndex("idx_structured_exercise_backfill_owner_unique").on(table.ownerType, table.ownerId),
+  index("idx_structured_exercise_backfill_status").on(table.status),
+  index("idx_structured_exercise_backfill_user_id").on(table.userId),
+]);
+
 // User-authored annotations on date ranges in their training timeline —
 // typically injuries, illness, or travel periods that explain volume dips
 // when a user looks back at their history or shares Analytics with a

@@ -33,6 +33,7 @@ import {
   exerciseSets,
   type InsertExerciseSet,
   planDays,
+  structuredExerciseBackfillReviews,
   trainingPlans,
   users,
   workoutLogs,
@@ -56,6 +57,8 @@ interface Flags {
   since?: string;
   planDaysOnly: boolean;
   workoutsOnly: boolean;
+  reportFile?: string;
+  offset: number;
 }
 
 interface PassResult {
@@ -64,10 +67,12 @@ interface PassResult {
   written: number;
   skipped: number;
   failed: number;
+  emptyParse: number;
+  alreadyStructured: number;
 }
 
 function emptyResult(): PassResult {
-  return { scanned: 0, parsed: 0, written: 0, skipped: 0, failed: 0 };
+  return { scanned: 0, parsed: 0, written: 0, skipped: 0, failed: 0, emptyParse: 0, alreadyStructured: 0 };
 }
 
 function parseFlagValue(args: string[], index: number, name: string): string {
@@ -86,6 +91,7 @@ function parseFlags(): Flags {
     batchSize: 500,
     planDaysOnly: false,
     workoutsOnly: false,
+    offset: 0,
   };
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -108,6 +114,12 @@ function parseFlags(): Flags {
       case "--workouts-only":
         flags.workoutsOnly = true;
         break;
+      case "--report-file":
+        flags.reportFile = parseFlagValue(args, ++i, arg);
+        break;
+      case "--offset":
+        flags.offset = Number.parseInt(parseFlagValue(args, ++i, arg), 10);
+        break;
       default:
         console.error(`Unknown flag: ${arg}`);
         process.exit(1);
@@ -117,8 +129,14 @@ function parseFlags(): Flags {
     console.error("--batch-size must be a positive integer");
     process.exit(1);
   }
+  if (Number.isNaN(flags.offset) || flags.offset < 0) {
+    console.error("--offset must be a non-negative integer");
+    process.exit(1);
+  }
   return flags;
 }
+type ParseStatus = "success" | "failed_parse" | "empty_parse" | "already_structured";
+interface BackfillReportRow { ownerType: "planDay" | "workoutLog"; ownerId: string; userId: string | null; status: ParseStatus; reason?: string; }
 
 async function userWeightUnit(userId: string | null | undefined): Promise<string> {
   if (!userId) return DEFAULT_WEIGHT_UNIT;
@@ -146,10 +164,13 @@ async function processCandidate(
   cand: BackfillCandidate,
   flags: Flags,
   result: PassResult,
+  reportRows: BackfillReportRow[],
 ): Promise<void> {
   const text = [cand.mainWorkout, cand.accessory].filter(Boolean).join("\n").trim();
   if (!text) {
     result.skipped++;
+    result.emptyParse++;
+    reportRows.push({ ownerType: cand.logKey === "planDayId" ? "planDay" : "workoutLog", ownerId: cand.ownerId, userId: cand.userId, status: "empty_parse", reason: "empty_text" });
     return;
   }
   try {
@@ -157,6 +178,8 @@ async function processCandidate(
     const exercises = await parseExercisesFromText(text, unit);
     if (exercises.length === 0) {
       result.skipped++;
+      result.emptyParse++;
+      reportRows.push({ ownerType: cand.logKey === "planDayId" ? "planDay" : "workoutLog", ownerId: cand.ownerId, userId: cand.userId, status: "empty_parse", reason: "parser_returned_no_exercises" });
       return;
     }
     const setRows = cand.expand(exercises);
@@ -170,8 +193,26 @@ async function processCandidate(
     }
     await db.insert(exerciseSets).values(setRows);
     result.written += setRows.length;
+    reportRows.push({ ownerType: cand.logKey === "planDayId" ? "planDay" : "workoutLog", ownerId: cand.ownerId, userId: cand.userId, status: "success" });
+    await db.delete(structuredExerciseBackfillReviews).where(and(
+      eq(structuredExerciseBackfillReviews.ownerType, cand.logKey === "planDayId" ? "planDay" : "workoutLog"),
+      eq(structuredExerciseBackfillReviews.ownerId, cand.ownerId),
+    ));
   } catch (err) {
     result.failed++;
+    reportRows.push({ ownerType: cand.logKey === "planDayId" ? "planDay" : "workoutLog", ownerId: cand.ownerId, userId: cand.userId, status: "failed_parse", reason: err instanceof Error ? err.message : "parse_error" });
+    if (!flags.dryRun) {
+      await db.insert(structuredExerciseBackfillReviews).values({
+        ownerType: cand.logKey === "planDayId" ? "planDay" : "workoutLog",
+        ownerId: cand.ownerId,
+        userId: cand.userId,
+        status: "needs_manual_review",
+        reason: err instanceof Error ? err.message.slice(0, 1000) : "parse_error",
+      }).onConflictDoUpdate({
+        target: [structuredExerciseBackfillReviews.ownerType, structuredExerciseBackfillReviews.ownerId],
+        set: { status: "needs_manual_review", reason: err instanceof Error ? err.message.slice(0, 1000) : "parse_error", lastSeenAt: sql`now()`, updatedAt: sql`now()` },
+      });
+    }
     logger.error(
       { err, [cand.logKey]: cand.ownerId },
       `[backfill:${cand.label}] parse/insert failed`,
@@ -186,9 +227,14 @@ async function runPass(
 ): Promise<PassResult> {
   const result = emptyResult();
   const candidates = await loader();
+  const reportRows: BackfillReportRow[] = [];
   for (const cand of candidates) {
     result.scanned++;
-    await processCandidate(cand, flags, result);
+    await processCandidate(cand, flags, result, reportRows);
+  }
+  if (flags.reportFile) {
+    const fs = await import("node:fs/promises");
+    await fs.writeFile(flags.reportFile.replace(".json", `-${label}.json`), JSON.stringify(reportRows, null, 2), "utf8");
   }
   logger.info({ pass: label, ...result }, "[backfill] pass complete");
   return result;
@@ -218,7 +264,8 @@ async function loadPlanDayCandidates(flags: Flags): Promise<BackfillCandidate[]>
     .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
     .leftJoin(exerciseSets, eq(exerciseSets.planDayId, planDays.id))
     .where(and(...whereClauses))
-    .limit(flags.batchSize);
+    .limit(flags.batchSize)
+    .offset(flags.offset);
 
   return rows.map((pd) => ({
     label: "planDays",
@@ -229,6 +276,18 @@ async function loadPlanDayCandidates(flags: Flags): Promise<BackfillCandidate[]>
     accessory: pd.accessory,
     expand: (exercises) => expandExercisesToPlanDaySetRows(exercises, pd.id),
   }));
+}
+
+async function countPlanDayAlreadyStructured(flags: Flags): Promise<number> {
+  const whereClauses = [isNotNull(planDays.mainWorkout), sql`TRIM(${planDays.mainWorkout}) <> ''`, isNotNull(exerciseSets.id)];
+  if (flags.userId) whereClauses.push(eq(trainingPlans.userId, flags.userId));
+  const [row] = await db
+    .select({ count: sql<number>`count(distinct ${planDays.id})` })
+    .from(planDays)
+    .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
+    .leftJoin(exerciseSets, eq(exerciseSets.planDayId, planDays.id))
+    .where(and(...whereClauses));
+  return Number(row?.count ?? 0);
 }
 
 async function loadWorkoutLogCandidates(flags: Flags): Promise<BackfillCandidate[]> {
@@ -244,7 +303,8 @@ async function loadWorkoutLogCandidates(flags: Flags): Promise<BackfillCandidate
     .from(workoutLogs)
     .leftJoin(exerciseSets, eq(workoutLogs.id, exerciseSets.workoutLogId))
     .where(and(...whereClauses, isNull(exerciseSets.id)))
-    .limit(flags.batchSize);
+    .limit(flags.batchSize)
+    .offset(flags.offset);
 
   return rows.map(({ log }) => ({
     label: "workoutLogs",
@@ -257,15 +317,31 @@ async function loadWorkoutLogCandidates(flags: Flags): Promise<BackfillCandidate
   }));
 }
 
+async function countWorkoutAlreadyStructured(flags: Flags): Promise<number> {
+  const whereClauses = [isNotNull(workoutLogs.mainWorkout), sql`TRIM(${workoutLogs.mainWorkout}) <> ''`, isNotNull(exerciseSets.id)];
+  if (flags.userId) whereClauses.push(eq(workoutLogs.userId, flags.userId));
+  if (flags.since) whereClauses.push(gte(workoutLogs.date, flags.since));
+  const [row] = await db
+    .select({ count: sql<number>`count(distinct ${workoutLogs.id})` })
+    .from(workoutLogs)
+    .leftJoin(exerciseSets, eq(workoutLogs.id, exerciseSets.workoutLogId))
+    .where(and(...whereClauses));
+  return Number(row?.count ?? 0);
+}
+
 async function main(): Promise<void> {
   const flags = parseFlags();
   logger.info({ flags }, "[backfill] starting structured-exercise backfill");
 
   if (!flags.workoutsOnly) {
-    await runPass("planDays", () => loadPlanDayCandidates(flags), flags);
+    const res = await runPass("planDays", () => loadPlanDayCandidates(flags), flags);
+    res.alreadyStructured = await countPlanDayAlreadyStructured(flags);
+    logger.info({ pass: "planDays", totalCandidates: res.scanned, successfullyParsed: res.parsed, failedOrEmptyParse: res.failed + res.emptyParse, alreadyStructured: res.alreadyStructured }, "[backfill] dry-run counts");
   }
   if (!flags.planDaysOnly) {
-    await runPass("workoutLogs", () => loadWorkoutLogCandidates(flags), flags);
+    const res = await runPass("workoutLogs", () => loadWorkoutLogCandidates(flags), flags);
+    res.alreadyStructured = await countWorkoutAlreadyStructured(flags);
+    logger.info({ pass: "workoutLogs", totalCandidates: res.scanned, successfullyParsed: res.parsed, failedOrEmptyParse: res.failed + res.emptyParse, alreadyStructured: res.alreadyStructured }, "[backfill] dry-run counts");
   }
 }
 
