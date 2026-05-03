@@ -95,4 +95,21 @@ describe("protectedRouteBuilder", () => {
     app.use(router);
     await request(app).post("/probe").send({}).expect(200);
   });
+
+  it("rejects AI middleware when auth is disabled", () => {
+    const app = express();
+    const router = express.Router();
+
+    expect(() => {
+      protectedPost(router, "/probe", {
+        auth: false,
+        rateLimit: false,
+        aiBudget: true,
+      } as unknown as Parameters<typeof protectedPost>[2], async (_req, res) => {
+        res.json({ ok: true });
+      });
+    }).toThrowError("AI guard middleware requires auth to be enabled");
+
+    app.use(router);
+  });
 });

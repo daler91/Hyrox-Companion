@@ -7,10 +7,18 @@ import { asyncHandler, rateLimiter } from "../../routeUtils";
 
 type AsyncRouteHandler<Req extends Request = Request> = (req: Req, res: Response) => Promise<unknown>;
 
-interface BaseProtectedRouteOptions {
-  readonly auth?: boolean;
+interface AuthenticatedProtectedRouteOptions {
+  readonly auth?: true;
   readonly aiConsent?: boolean;
   readonly aiBudget?: boolean;
+  readonly validation?: RequestHandler[];
+  readonly middleware?: RequestHandler[];
+}
+
+interface UnauthenticatedProtectedRouteOptions {
+  readonly auth: false;
+  readonly aiConsent?: never;
+  readonly aiBudget?: never;
   readonly validation?: RequestHandler[];
   readonly middleware?: RequestHandler[];
 }
@@ -25,7 +33,7 @@ type NonRateLimitedProtectedRouteOptions = {
   readonly limiter?: never;
 };
 
-type ProtectedRouteOptions = BaseProtectedRouteOptions &
+type ProtectedRouteOptions = (AuthenticatedProtectedRouteOptions | UnauthenticatedProtectedRouteOptions) &
   (RateLimitedProtectedRouteOptions | NonRateLimitedProtectedRouteOptions);
 
 function buildProtectedStack<Req extends Request>(
@@ -33,6 +41,10 @@ function buildProtectedStack<Req extends Request>(
   handler: AsyncRouteHandler<Req> | RequestHandler,
 ): RequestHandler[] {
   const stack: RequestHandler[] = [];
+
+  if (options.auth === false && (options.aiConsent || options.aiBudget)) {
+    throw new Error("AI guard middleware requires auth to be enabled");
+  }
 
   if (options.auth ?? true) {
     stack.push(...protectedMutationGuards);
