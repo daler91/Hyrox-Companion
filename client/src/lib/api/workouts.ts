@@ -8,7 +8,7 @@ import type {
 
 import { typedRequest } from "./client";
 import type { ReparseResponse } from "./constants";
-import { IMAGE_REPARSE_TIMEOUT_MS } from "./constants";
+import { IMAGE_REPARSE_REQUEST_OPTIONS } from "./constants";
 import type { ParseFromImagePayload } from "./exercises";
 import { createExerciseSetMutationApi } from "./exerciseSetMutations";
 
@@ -94,7 +94,7 @@ export const workouts = {
       "POST",
       `/api/v1/workouts/${id}/reparse-from-image`,
       payload,
-      { timeoutMs: IMAGE_REPARSE_TIMEOUT_MS },
+      IMAGE_REPARSE_REQUEST_OPTIONS,
     ),
 
   batchReparse: () => typedRequest<BatchReparseResponse>("POST", "/api/v1/workouts/batch-reparse"),

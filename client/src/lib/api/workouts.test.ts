@@ -1,6 +1,7 @@
 import { beforeEach,describe, expect, it, vi } from 'vitest';
 
 import { typedRequest } from './client';
+import { IMAGE_REPARSE_REQUEST_OPTIONS } from './constants';
 import { workouts } from './workouts';
 
 vi.mock('./client', () => ({
@@ -67,5 +68,16 @@ describe('workouts API client', () => {
   it('batchReparse() calls typedRequest with POST', () => {
     workouts.batchReparse();
     expect(typedRequest).toHaveBeenCalledWith('POST', '/api/v1/workouts/batch-reparse');
+  });
+
+  it('reparseFromImage() uses shared timeout request options', () => {
+    const payload = { imageData: 'base64' } as Parameters<typeof workouts.reparseFromImage>[1];
+    workouts.reparseFromImage('123', payload);
+    expect(typedRequest).toHaveBeenCalledWith(
+      'POST',
+      '/api/v1/workouts/123/reparse-from-image',
+      payload,
+      IMAGE_REPARSE_REQUEST_OPTIONS,
+    );
   });
 });

@@ -2,6 +2,7 @@ export type { Suggestion } from "./analytics";
 export { analytics, timeline } from "./analytics";
 export type { RagInfo, RagStatus } from "./coaching";
 export { chat, coaching } from "./coaching";
+export { IMAGE_REPARSE_REQUEST_OPTIONS, IMAGE_REPARSE_TIMEOUT_MS, isTimeoutLikeApiError } from "./constants";
 export type { ReparseResponse } from "./constants";
 export type { ParseFromImagePayload } from "./exercises";
 export { exercises } from "./exercises";

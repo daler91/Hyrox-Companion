@@ -1,7 +1,7 @@
 import type { ExerciseSet, GeneratePlanInput, PlanDay, TrainingPlan, TrainingPlanWithDays } from "@shared/schema";
 
 import { rawRequest,typedRequest } from "./client";
-import { IMAGE_REPARSE_TIMEOUT_MS } from "./constants";
+import { IMAGE_REPARSE_REQUEST_OPTIONS } from "./constants";
 import type { ParseFromImagePayload } from "./exercises";
 import { type AddExerciseSetPayload, createExerciseSetMutationApi, type PatchExerciseSetPayload } from "./exerciseSetMutations";
 
@@ -82,6 +82,6 @@ export const plans = {
       "POST",
       `/api/v1/plans/days/${dayId}/reparse-from-image`,
       payload,
-      { timeoutMs: IMAGE_REPARSE_TIMEOUT_MS },
+      IMAGE_REPARSE_REQUEST_OPTIONS,
     ),
 } as const;
