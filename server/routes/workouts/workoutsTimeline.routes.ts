@@ -2,8 +2,8 @@ import { type Request, type Response, Router } from "express";
 
 import { isAuthenticated } from "../../clerkAuth";
 import { DEFAULT_TIMELINE_LIMIT } from "../../constants";
-import { asyncHandler, rateLimiter } from "../../routeUtils";
 import { parseOffsetPagination } from "../../pagination";
+import { asyncHandler, rateLimiter } from "../../routeUtils";
 import { storage } from "../../storage";
 import { getUserId } from "../../types";
 

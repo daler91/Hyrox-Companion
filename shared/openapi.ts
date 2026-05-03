@@ -190,7 +190,7 @@ export const WorkoutIdParam = registry.registerParameter(
   })
 );
 
-const PageInfoSchema = registry.register(
+const _PageInfoSchema = registry.register(
   "PageInfo",
   z.object({
     limit: z.number().int(),

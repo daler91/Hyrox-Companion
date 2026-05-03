@@ -8,16 +8,16 @@ import { chatWithCoach, parseExercisesFromImage, parseExercisesFromText,streamCh
 import { reqLogger } from "../logger";
 import { aiBudgetCheck } from "../middleware/aibudget";
 import { aiConsentCheck } from "../middleware/aiConsent";
-import { protectedMutationGuards } from "../routeGuards";
-import { protectedDelete, protectedPost } from "./_helpers/protectedRouteBuilder";
-import { asyncHandler, rateLimiter, sendNotFound, validateBody, validateQuery } from "../routeUtils";
 import { parseCursorPagination } from "../pagination";
+import { protectedMutationGuards } from "../routeGuards";
+import { asyncHandler, rateLimiter, sendNotFound, validateBody, validateQuery } from "../routeUtils";
 import { type AIContext, buildAIContext, type ChatInput } from "../services/aiContextService";
 import { applyTimelineAiSuggestion, generateTimelineAiSuggestions } from "../services/aiSuggestionService";
 import { sanitizeRagInfo } from "../services/ragRetrieval";
 import { registerSseStream } from "../sseRegistry";
 import { storage } from "../storage";
 import { getUserId } from "../types";
+import { protectedDelete, protectedPost } from "./_helpers/protectedRouteBuilder";
 
 const router = Router();
 
