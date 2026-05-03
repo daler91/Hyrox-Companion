@@ -281,7 +281,7 @@ function useExerciseDndHandler(
     const newIndex = rowKeys.indexOf(over.id as string);
     if (oldIndex < 0 || newIndex < 0) return;
 
-    const nextGroups = arrayMove(groups, oldIndex, newIndex);
+    const nextGroups = arrayMove([...groups], oldIndex, newIndex);
     let order = 0;
     for (const g of nextGroups) {
       for (const s of g.sets) {
