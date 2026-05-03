@@ -9,7 +9,9 @@ export type WorkoutSetStorage = Pick<
 
 export const createMutateWorkoutSetUseCase = (storage: WorkoutSetStorage) => {
   const ownerUseCase = createMutateExerciseSetByOwnerUseCase({
-    ...storage,
+    updateExerciseSet: storage.updateExerciseSet.bind(storage),
+    addExerciseSetToWorkoutLog: storage.addExerciseSetToWorkoutLog.bind(storage),
+    deleteExerciseSet: storage.deleteExerciseSet.bind(storage),
     updateExerciseSetForPlanDay: async () => null,
     addExerciseSetToPlanDay: async () => null,
     deleteExerciseSetForPlanDay: async () => false,
