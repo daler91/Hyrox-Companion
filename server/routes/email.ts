@@ -4,14 +4,14 @@ import { type Request as ExpressRequest, type Response,Router } from "express";
 
 import { checkAndSendEmailsForUser, runEmailCronJob } from "../emailScheduler";
 import { env } from "../env";
-import { protectedMutationGuards } from "../routeGuards";
 import { asyncHandler, rateLimiter } from "../routeUtils";
 import { storage } from "../storage";
 import { getUserId } from "../types";
+import { protectedPost } from "./_helpers/protectedRouteBuilder";
 
 const router = Router();
 
-router.post("/api/v1/emails/check", ...protectedMutationGuards, rateLimiter("emailCheck", 5), asyncHandler(async (req: ExpressRequest, res: Response) => {
+protectedPost(router, "/api/v1/emails/check", { limiter: rateLimiter("emailCheck", 5) }, async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const user = await storage.users.getUser(userId);
     if (!user) {
@@ -19,7 +19,7 @@ router.post("/api/v1/emails/check", ...protectedMutationGuards, rateLimiter("ema
     }
     const sent = await checkAndSendEmailsForUser(storage, user);
     res.json({ sent });
-  }));
+  });
 
 router.get("/api/v1/cron/emails", asyncHandler(async (req: ExpressRequest, res: Response) => {
   const secret = req.headers["x-cron-secret"] as string;

@@ -212,6 +212,41 @@ sequenceDiagram
 
 ---
 
+
+## Route Declaration Convention (Protected Mutations)
+
+All protected mutating endpoints in `server/routes/` and `server/routes/workouts/` must be declared with `protectedRouteBuilder` helpers, not direct middleware stacks.
+
+**Required builder usage**
+- `protectedPost(router, path, options, handler)` for protected `POST` mutations.
+- `protectedPatch(router, path, options, handler)` for protected `PATCH` mutations.
+- `protectedDelete(router, path, options, handler)` for protected `DELETE` mutations.
+
+**Canonical guard order (enforced by tests):**
+1. auth/idempotency guards (`protectedMutationGuards`)
+2. rate limiter
+3. AI consent/budget guards (when enabled)
+4. validation middleware
+5. custom middleware
+6. async handler wrapper
+
+```ts
+// ✅ Required pattern
+protectedPost(router, "/api/v1/workouts", {
+  limiter: rateLimiter("workout", 40),
+  middleware: [validateBody(createWorkoutRouteSchema)],
+}, async (req, res) => {
+  // handler body
+});
+
+// ❌ Avoid direct stacking on protected mutations
+router.post("/api/v1/workouts", isAuthenticated, rateLimiter("workout", 40), asyncHandler(handler));
+```
+
+A compliance test in `server/routes/__tests__/protectedRouteBuilderCompliance.test.ts` fails CI if protected mutating routes bypass the builder.
+
+---
+
 ## 4. RAG Retrieval Decision Tree
 
 The RAG retrieval system (`server/services/ragRetrieval.ts`) determines whether to use vector search, legacy full-text materials, or neither when building coaching context.
