@@ -45,10 +45,19 @@ export async function probePool(pool: Pool): Promise<boolean> {
 export function registerHealthEndpoint(app: Express, deps: { state: StartupHealthState; probeDatabase: () => Promise<boolean>; probeVectorDatabase: () => Promise<boolean>; }): void {
   app.get("/api/v1/health", (_req, res) => {
     const uptimeMs = Date.now() - deps.state.startupBeganAt;
-    if (deps.state.startupError) return void res.status(503).json({ status: "error", error: "startup_error", phase: deps.state.startupPhase, uptimeMs, message: deps.state.startupError, timestamp: Date.now() });
-    if (!deps.state.isReady) return void res.status(503).json({ status: "starting", phase: deps.state.startupPhase, uptimeMs, timestamp: Date.now() });
+    if (deps.state.startupError) {
+      res.status(503).json({ status: "error", error: "startup_error", phase: deps.state.startupPhase, uptimeMs, message: deps.state.startupError, timestamp: Date.now() });
+      return;
+    }
+    if (!deps.state.isReady) {
+      res.status(503).json({ status: "starting", phase: deps.state.startupPhase, uptimeMs, timestamp: Date.now() });
+      return;
+    }
     Promise.all([deps.probeDatabase(), deps.probeVectorDatabase()]).then(([dbOk, vectorDbOk]) => {
-      if (!dbOk || !vectorDbOk) return void res.status(503).json({ status: "degraded", db: dbOk, vectorDb: vectorDbOk, uptimeMs, timestamp: Date.now() });
+      if (!dbOk || !vectorDbOk) {
+        res.status(503).json({ status: "degraded", db: dbOk, vectorDb: vectorDbOk, uptimeMs, timestamp: Date.now() });
+        return;
+      }
       res.json({ status: "ok", uptimeMs, timestamp: Date.now() });
     }).catch((err) => {
       logger.error({ err }, "Health check probe failed unexpectedly");
