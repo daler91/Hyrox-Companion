@@ -22,7 +22,8 @@ export async function createWorkout(input: {
 }) {
   const { exercises, structureBlocks, ...workoutData } = input.payload;
   let structured = exercises as ParsedExercise[] | undefined;
-  if ((!structured || structured.length === 0) && env.GEMINI_API_KEY) {
+  const hasStructureBlocks = Array.isArray(structureBlocks) && structureBlocks.length > 0;
+  if ((!structured || structured.length === 0) && !hasStructureBlocks && env.GEMINI_API_KEY) {
     const textToParse = [workoutData.mainWorkout, workoutData.accessory].filter(Boolean).join("\n").trim();
     if (textToParse) {
       const user = await storage.users.getUser(input.userId);
@@ -42,8 +43,9 @@ export async function updateWorkoutUseCase(input: {
 }) {
   const { exercises, structureBlocks, ...updateData } = input.payload;
   let structured = exercises as ParsedExercise[] | undefined;
+  const hasStructureBlocks = Array.isArray(structureBlocks) && structureBlocks.length > 0;
 
-  if ((!structured || structured.length === 0) && env.GEMINI_API_KEY) {
+  if ((!structured || structured.length === 0) && !hasStructureBlocks && env.GEMINI_API_KEY) {
     const existing = await storage.workouts.getWorkoutLog(input.workoutId, input.userId);
     if (!existing) return null;
 

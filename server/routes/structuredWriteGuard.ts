@@ -27,8 +27,10 @@ export async function rejectTextOnlyWriteIfNeeded(req: Request, res: Response, o
     reqLogger(req).info({ context: "structured-write-guard", route: req.path, ownerType }, "Legacy import allowlist route used");
     return false;
   }
-  const body = req.body as { exercises?: unknown[]; mainWorkout?: string | null; accessory?: string | null };
-  const hasRows = Array.isArray(body.exercises) && body.exercises.length > 0;
+  const body = req.body as { exercises?: unknown[]; structureBlocks?: unknown[]; mainWorkout?: string | null; accessory?: string | null };
+  const hasExerciseRows = Array.isArray(body.exercises) && body.exercises.length > 0;
+  const hasStructureBlocks = Array.isArray(body.structureBlocks) && body.structureBlocks.length > 0;
+  const hasRows = hasExerciseRows || hasStructureBlocks;
   const hasText = Boolean((body.mainWorkout ?? "").trim() || (body.accessory ?? "").trim());
   if (!hasRows && hasText) {
     void incrementStructuredExerciseCounter(ownerType, "manual", "rejected_text_only_write").catch(() => undefined);
