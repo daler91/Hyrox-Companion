@@ -1,6 +1,5 @@
-import { useCallback, useState } from "react";
-
 import type { TimelineAnnotation } from "@shared/schema";
+import { useCallback, useState } from "react";
 
 export function useTimelineDialogState() {
   const [showAIConsent, setShowAIConsent] = useState(false);

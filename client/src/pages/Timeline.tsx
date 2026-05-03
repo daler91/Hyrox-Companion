@@ -296,7 +296,7 @@ export default function Timeline() {
       return;
     }
     setCoachOpen(open);
-  }, [isAuthUserLoaded, aiCoachEnabled, setCoachOpen]);
+  }, [isAuthUserLoaded, aiCoachEnabled, setCoachOpen, setShowAIConsent]);
 
   const handleAIConsentAccept = useCallback(() => {
     setShowAIConsent(false);
@@ -308,7 +308,7 @@ export default function Timeline() {
       .catch(() => {
         toast({ title: "Could not enable AI Coach", description: "Please try again." });
       });
-  }, [setCoachOpen, toast]);
+  }, [setCoachOpen, setShowAIConsent, toast]);
 
   // O(1) lookup by start date for the virtualized row renderer. Rebuilds
   // only when the annotations array itself changes.

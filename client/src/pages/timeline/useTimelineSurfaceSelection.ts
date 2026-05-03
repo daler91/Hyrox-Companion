@@ -1,9 +1,9 @@
+import type { TimelineEntry } from "@shared/schema";
 import { format } from "date-fns";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import type { TimelineEntry } from "@shared/schema";
-import { entryId, surfaceId } from "@/hooks/workout-actions/timelineEntry";
 import { useOpenWorkoutId } from "@/hooks/useOpenWorkoutId";
+import { entryId, surfaceId } from "@/hooks/workout-actions/timelineEntry";
 
 function isFuturePlanned(entry: TimelineEntry): boolean {
   if (entry.status !== "planned") return false;
@@ -86,14 +86,14 @@ export function useTimelineSurfaceSelection(timelineData: TimelineEntry[]) {
         const liveWorkoutId = new URLSearchParams(globalThis.window.location.search).get("workout");
         if (liveWorkoutId !== null) return;
       }
-      if (openSheetEntryId !== null) closeAllSurfaces();
+      if (openSheetEntryId !== null) queueMicrotask(closeAllSurfaces);
       return;
     }
     if (openSheetEntryId === openWorkoutId) return;
     const target = timelineData.find((e) => surfaceId(e) === openWorkoutId || entryId(e) === openWorkoutId);
     if (!target) return;
     if (openSheetEntry && surfaceId(openSheetEntry) === surfaceId(target)) return;
-    openSurface(target);
+    queueMicrotask(() => openSurface(target));
   }, [openWorkoutId, openSheetEntry, openSheetEntryId, timelineData, openSurface, closeAllSurfaces]);
 
   return {
