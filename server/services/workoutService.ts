@@ -87,6 +87,17 @@ interface SetMeasurements {
   plannedWeight: number | null;
   plannedDistance: number | null;
   plannedTime: number | null;
+  blockId: string | null;
+  stepNumber: number | null;
+  intervalMinute: number | null;
+  cycleNumber: number | null;
+  stepRole: string | null;
+  groupId: string | null;
+  intensity: Record<string, unknown> | null;
+  load: Record<string, unknown> | null;
+  repMode: "total" | "per_side" | null;
+  tempo: Record<string, unknown> | null;
+  standards: Record<string, unknown> | null;
   notes: string | null;
 }
 
@@ -110,6 +121,17 @@ function buildExerciseSetRow(
     plannedWeight: measurements.plannedWeight,
     plannedDistance: measurements.plannedDistance,
     plannedTime: measurements.plannedTime,
+    blockId: measurements.blockId,
+    stepNumber: measurements.stepNumber,
+    intervalMinute: measurements.intervalMinute,
+    cycleNumber: measurements.cycleNumber,
+    stepRole: measurements.stepRole,
+    groupId: measurements.groupId,
+    intensity: measurements.intensity,
+    load: measurements.load,
+    repMode: measurements.repMode,
+    tempo: measurements.tempo,
+    standards: measurements.standards,
     confidence: ex.confidence ?? null,
     notes: measurements.notes,
     sortOrder,
@@ -127,6 +149,17 @@ function measurementsFromExplicit(set: ParsedExercise["sets"][number]): SetMeasu
     plannedWeight: set.plannedWeight ?? null,
     plannedDistance: set.plannedDistance ?? null,
     plannedTime: set.plannedTime ?? null,
+    blockId: set.blockId ?? null,
+    stepNumber: set.stepNumber ?? null,
+    intervalMinute: set.intervalMinute ?? null,
+    cycleNumber: set.cycleNumber ?? null,
+    stepRole: set.stepRole ?? null,
+    groupId: set.groupId ?? null,
+    intensity: set.intensity ?? null,
+    load: set.load ?? null,
+    repMode: set.repMode ?? null,
+    tempo: set.tempo ?? null,
+    standards: set.standards ?? null,
     notes: set.notes || null,
   };
 }
@@ -142,6 +175,17 @@ function measurementsFromAggregate(ex: ParsedExercise, setNumber: number): SetMe
     plannedWeight: ex.plannedWeight ?? null,
     plannedDistance: ex.plannedDistance ?? null,
     plannedTime: ex.plannedTime ?? null,
+    blockId: ex.blockId ?? null,
+    stepNumber: ex.stepNumber ?? null,
+    intervalMinute: ex.intervalMinute ?? null,
+    cycleNumber: ex.cycleNumber ?? null,
+    stepRole: ex.stepRole ?? null,
+    groupId: ex.groupId ?? null,
+    intensity: ex.intensity ?? null,
+    load: ex.load ?? null,
+    repMode: ex.repMode ?? null,
+    tempo: ex.tempo ?? null,
+    standards: ex.standards ?? null,
     notes: ex.notes || null,
   };
 }

@@ -231,6 +231,17 @@ export const exerciseSets = pgTable("exercise_sets", {
   plannedWeight: real("planned_weight"),
   plannedDistance: real("planned_distance"),
   plannedTime: real("planned_time"),
+  blockId: varchar("block_id", { length: 255 }),
+  stepNumber: integer("step_number"),
+  intervalMinute: integer("interval_minute"),
+  cycleNumber: integer("cycle_number"),
+  stepRole: varchar("step_role", { length: 50 }),
+  groupId: varchar("group_id", { length: 255 }),
+  intensity: jsonb("intensity"),
+  load: jsonb("load"),
+  repMode: varchar("rep_mode", { length: 50 }),
+  tempo: jsonb("tempo"),
+  standards: jsonb("standards"),
   notes: text("notes"),
   confidence: integer("confidence"),
   sortOrder: integer("sort_order").default(0),
@@ -248,11 +259,56 @@ export const exerciseSets = pgTable("exercise_sets", {
   check("planned_weight_non_negative_check", sql`planned_weight IS NULL OR planned_weight >= 0`),
   check("planned_distance_non_negative_check", sql`planned_distance IS NULL OR planned_distance >= 0`),
   check("planned_time_non_negative_check", sql`planned_time IS NULL OR planned_time >= 0`),
+  check("step_number_positive_check", sql`step_number IS NULL OR step_number > 0`),
+  check("interval_minute_non_negative_check", sql`interval_minute IS NULL OR interval_minute >= 0`),
+  check("cycle_number_positive_check", sql`cycle_number IS NULL OR cycle_number > 0`),
+  check("rep_mode_check", sql`rep_mode IS NULL OR rep_mode IN ('total', 'per_side')`),
+  check("exercise_set_block_step_pair_check", sql`(block_id IS NULL) = (step_number IS NULL)`),
   // Exactly one owner — prescribed (planDay) xor logged (workoutLog).
   check(
     "exercise_set_single_owner_check",
     sql`(workout_log_id IS NULL) <> (plan_day_id IS NULL)`,
   ),
+]);
+
+export const workoutStructureBlocks = pgTable("workout_structure_blocks", {
+  id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+  workoutLogId: varchar("workout_log_id", { length: 255 }).references(() => workoutLogs.id, { onDelete: "cascade" }),
+  planDayId: varchar("plan_day_id", { length: 255 }).references(() => planDays.id, { onDelete: "cascade" }),
+  sectionType: varchar("section_type", { length: 50 }).notNull(),
+  formatType: varchar("format_type", { length: 50 }).notNull(),
+  durationSeconds: integer("duration_seconds"),
+  rounds: integer("rounds"),
+  workSeconds: integer("work_seconds"),
+  restSeconds: integer("rest_seconds"),
+  sortOrder: integer("sort_order").notNull().default(0),
+}, (table) => [
+  index("idx_workout_structure_blocks_workout_log_id").on(table.workoutLogId),
+  index("idx_workout_structure_blocks_plan_day_id").on(table.planDayId),
+  index("idx_workout_structure_blocks_workout_sort").on(table.workoutLogId, table.sortOrder),
+  index("idx_workout_structure_blocks_plan_day_sort").on(table.planDayId, table.sortOrder),
+  check("workout_structure_block_single_owner_check", sql`(workout_log_id IS NULL) <> (plan_day_id IS NULL)`),
+  check("workout_structure_block_duration_non_negative_check", sql`duration_seconds IS NULL OR duration_seconds >= 0`),
+  check("workout_structure_block_rounds_positive_check", sql`rounds IS NULL OR rounds > 0`),
+  check("workout_structure_block_work_non_negative_check", sql`work_seconds IS NULL OR work_seconds >= 0`),
+  check("workout_structure_block_rest_non_negative_check", sql`rest_seconds IS NULL OR rest_seconds >= 0`),
+]);
+
+export const workoutStructureSteps = pgTable("workout_structure_steps", {
+  id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+  blockId: varchar("block_id", { length: 255 }).notNull().references(() => workoutStructureBlocks.id, { onDelete: "cascade" }),
+  stepNumber: integer("step_number").notNull(),
+  exerciseName: varchar("exercise_name", { length: 255 }).notNull(),
+  category: varchar("category", { length: 255 }).notNull(),
+  customLabel: text("custom_label"),
+  targets: jsonb("targets"),
+  stepRole: varchar("step_role", { length: 50 }),
+  groupId: varchar("group_id", { length: 255 }),
+  groupMeta: jsonb("group_meta"),
+}, (table) => [
+  index("idx_workout_structure_steps_block_id").on(table.blockId),
+  uniqueIndex("idx_workout_structure_steps_block_step_unique").on(table.blockId, table.stepNumber),
+  check("workout_structure_step_number_positive_check", sql`step_number > 0`),
 ]);
 
 export const structuredExerciseBackfillReviews = pgTable("structured_exercise_backfill_reviews", {
