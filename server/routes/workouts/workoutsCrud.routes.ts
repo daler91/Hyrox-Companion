@@ -23,6 +23,7 @@ import { storage } from "../../storage";
 import { getUserId } from "../../types";
 import { createMutateExerciseSetUseCase } from "../../usecases/workouts/mutateExerciseSet.usecase";
 import { protectedDelete, protectedPatch, protectedPost } from "../_helpers/protectedRouteBuilder";
+import { rejectTextOnlyWriteIfNeeded } from "../structuredWriteGuard";
 import { createCustomExerciseSchema, createWorkoutRouteSchema, updateWorkoutRouteSchema } from "./shared";
 
 const patchExerciseSetSchema = patchExerciseSetBodySchema;
@@ -133,11 +134,13 @@ export function registerWorkoutCrudRoutes(router: Router): void {
   }));
 
   protectedPost(router, "/api/v1/workouts", { limiter: rateLimiter("workout", 40), middleware: [validateBody(createWorkoutRouteSchema)] }, async (req: Request, res: Response) => {
+    if (await rejectTextOnlyWriteIfNeeded(req, res, "workout_log")) return;
     const result = await createWorkout({ userId: getUserId(req), payload: req.body as never });
     res.json(result);
   });
 
   protectedPatch(router, "/api/v1/workouts/:id", { limiter: rateLimiter("workout", 40), middleware: [validateBody(updateWorkoutRouteSchema)] }, async (req: Request<{ id: string }>, res: Response) => {
+    if (await rejectTextOnlyWriteIfNeeded(req, res, "workout_log")) return;
     const result = await updateWorkoutUseCase({ userId: getUserId(req), workoutId: req.params.id, payload: req.body as never });
     if (!result) {
       return sendNotFound(res, WORKOUT_NOT_FOUND);

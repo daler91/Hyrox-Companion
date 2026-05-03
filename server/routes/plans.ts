@@ -9,6 +9,7 @@ import { asyncHandler, rateLimiter, sendNotFound, validateBody } from "../routeU
 import { regenerateCoachNoteForPlanDay } from "../services/coachService";
 import { generatePlan } from "../services/planGenerationService";
 import { createSamplePlan, importPlanFromCSV, updatePlanDayStatus,updatePlanDayWithCleanup } from "../services/planService";
+import { incrementStructuredExerciseCounter } from "../services/structuredExerciseHealth";
 import { autoHydrateExerciseSetsFromTextIfNeeded, reparsePlanDay, reparsePlanDayFromImage } from "../services/workoutService";
 import { storage } from "../storage";
 import { getUserId } from "../types";
@@ -17,6 +18,21 @@ import { createMutateExerciseSetUseCase } from "../usecases/workouts/mutateExerc
 import { protectedDelete, protectedPatch, protectedPost } from "./_helpers/protectedRouteBuilder";
 
 const router = Router();
+
+
+function sendParseWriteThroughResponse(
+  res: Response,
+  ownerType: "plan_day",
+  source: "voice" | "photo",
+  result: { exercises: unknown[]; setCount: number } | null,
+): Response {
+  if (!result || result.setCount === 0) {
+    void incrementStructuredExerciseCounter(ownerType, source, source === "voice" ? "parse_text_failed" : "parse_photo_failed").catch(() => undefined);
+    return res.status(422).json({ error: "Parsing did not produce persisted exercise sets.", code: "PARSE_WRITE_THROUGH_REQUIRED" });
+  }
+  void incrementStructuredExerciseCounter(ownerType, source, source === "voice" ? "parse_text_succeeded" : "parse_photo_succeeded").catch(() => undefined);
+  return res.json({ exercises: result.exercises, saved: true, setCount: result.setCount });
+}
 
 const updateStoredPlanDay = createUpdatePlanDayUseCase({
   updatePlanDay: (dayId, data, userId) => storage.plans.updatePlanDay(dayId, data, userId),
@@ -262,11 +278,9 @@ protectedPost(
       return sendNotFound(res, PLAN_DAY_NOT_FOUND);
     }
     const weightUnit = user?.weightUnit || "kg";
+    void incrementStructuredExerciseCounter("plan_day", "voice", "parse_text_attempted").catch(() => undefined);
     const result = await reparsePlanDay(planDay, weightUnit);
-    if (!result) {
-      return res.json({ exercises: [], saved: false, setCount: 0 });
-    }
-    res.json({ exercises: result.exercises, saved: true, setCount: result.setCount });
+    return sendParseWriteThroughResponse(res, "plan_day", "voice", result);
   },
 );
 
@@ -289,11 +303,9 @@ protectedPost(
     }
     const weightUnit = user?.weightUnit || "kg";
     const customNames = customExercises.map((e) => e.name);
+    void incrementStructuredExerciseCounter("plan_day", "photo", "parse_photo_attempted").catch(() => undefined);
     const result = await reparsePlanDayFromImage(planDay, req.body, weightUnit, userId, customNames);
-    if (!result) {
-      return res.json({ exercises: [], saved: false, setCount: 0 });
-    }
-    res.json({ exercises: result.exercises, saved: true, setCount: result.setCount });
+    return sendParseWriteThroughResponse(res, "plan_day", "photo", result);
   },
 );
 

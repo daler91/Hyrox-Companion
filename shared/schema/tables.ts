@@ -284,7 +284,7 @@ export const structuredExerciseHealthCounters = pgTable("structured_exercise_hea
   primaryKey({ columns: [table.day, table.ownerType, table.source, table.counterName] }),
   check("structured_exercise_health_owner_type_check", sql`${table.ownerType} IN ('workout_log', 'plan_day')`),
   check("structured_exercise_health_source_check", sql`${table.source} IN ('manual', 'voice', 'photo', 'import')`),
-  check("structured_exercise_health_counter_name_check", sql`${table.counterName} IN ('text_only_rows_detected', 'auto_hydration_attempted', 'auto_hydration_succeeded', 'auto_hydration_failed', 'manual_fix_completed')`),
+  check("structured_exercise_health_counter_name_check", sql`${table.counterName} IN ('text_only_rows_detected', 'auto_hydration_attempted', 'auto_hydration_succeeded', 'auto_hydration_failed', 'manual_fix_completed', 'rejected_text_only_write', 'parse_text_attempted', 'parse_text_succeeded', 'parse_text_failed', 'parse_photo_attempted', 'parse_photo_succeeded', 'parse_photo_failed')`),
 ]);
 
 export const structuredExerciseHealthDailyRollups = pgTable("structured_exercise_health_daily_rollups", {

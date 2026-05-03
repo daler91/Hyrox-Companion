@@ -271,6 +271,7 @@ describe("Production Smoke Test", { timeout: 90_000 }, () => {
           notes: "Smoke test workout",
           duration: 30,
           rpe: 6,
+          exercises: [{ exerciseName: "Run", category: "running", sets: [{ setNumber: 1, distance: 5000, time: 1800 }] }],
         }),
       });
       expect(res.status).toBe(200);

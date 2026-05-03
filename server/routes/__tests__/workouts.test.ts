@@ -52,6 +52,8 @@ vi.mock("../../services/workoutService", () => ({
   autoHydrateExerciseSetsFromTextIfNeeded: vi.fn(),
 }));
 
+vi.mock("../../services/structuredExerciseHealth", () => ({ incrementStructuredExerciseCounter: vi.fn().mockResolvedValue(undefined) }));
+
 vi.mock("../../services/exportService", () => ({
   generateCSV: vi.fn(),
   generateJSON: vi.fn(),
@@ -68,8 +70,7 @@ type ContractCase = {
 
 const endpointFixtureCases: ContractCase[] = [
   { name: "workouts list", method: "get", path: "/api/v1/workouts", expectedStatus: 200, expectedFields: ["0.id"] },
-  { name: "workouts create", method: "post", path: "/api/v1/workouts", body: { date: "2026-01-02", focus: "Conditioning", mainWorkout: "Engine Session", notes: "tempo" }, expectedStatus: 200, expectedFields: ["id", "date"] },
-  { name: "workout update", method: "patch", path: "/api/v1/workouts/workout-1", body: { notes: "updated" }, expectedStatus: 200, expectedFields: ["id", "notes"] },
+    { name: "workout update", method: "patch", path: "/api/v1/workouts/workout-1", body: { notes: "updated" }, expectedStatus: 200, expectedFields: ["id", "notes"] },
   { name: "workout delete", method: "delete", path: "/api/v1/workouts/workout-1", expectedStatus: 200, expectedFields: ["success"] },
   { name: "workout reparse", method: "post", path: "/api/v1/workouts/workout-1/reparse", body: {}, expectedStatus: 200, expectedFields: ["saved", "setCount", "exercises"] },
   { name: "timeline list", method: "get", path: "/api/v1/timeline", expectedStatus: 200, expectedFields: ["0.id", "0.type"] },
@@ -158,7 +159,7 @@ describe("Workouts Routes", () => {
     expect(response.body.exerciseSets[0].exerciseName).toBe("Back Squat");
   });
 
-  it("editing legacy text does not mutate sets unless parse is explicitly invoked", async () => {
+  it("text-only patch is rejected and parse remains explicit", async () => {
     const [{ storage }, { updateWorkoutUseCase }, { reparseWorkout }] = await Promise.all([
       import("../../storage"),
       import("../../services/workoutUseCases"),
@@ -167,7 +168,7 @@ describe("Workouts Routes", () => {
     vi.mocked(updateWorkoutUseCase).mockResolvedValueOnce({ id: "workout-1", notes: "edited text" } as never);
 
     const patchResponse = await request(app).patch("/api/v1/workouts/workout-1").send({ mainWorkout: "edited legacy text" });
-    expect(patchResponse.status).toBe(200);
+    expect(patchResponse.status).toBe(422);
     expect(storage.workouts.getExerciseSetsByWorkoutLog).not.toHaveBeenCalledWith("workout-1");
     expect(reparseWorkout).not.toHaveBeenCalled();
 
@@ -192,7 +193,55 @@ describe("Workouts Routes", () => {
 
     expect(autoHydrateExerciseSetsFromTextIfNeeded).toHaveBeenCalledTimes(1);
   });
-  it("captures representative high-frequency endpoint timings", async () => {
+  
+
+  it("rejects text-only workout create/update on non-legacy routes", async () => {
+    const createRes = await request(app).post("/api/v1/workouts").send({ date: "2026-01-02", focus: "Conditioning", mainWorkout: "just text" });
+    expect(createRes.status).toBe(422);
+    expect(createRes.body.code).toBe("STRUCTURED_ROWS_REQUIRED");
+
+    const updateRes = await request(app).patch("/api/v1/workouts/workout-1").send({ accessory: "also text-only" });
+    expect(updateRes.status).toBe(422);
+    expect(updateRes.body.code).toBe("STRUCTURED_ROWS_REQUIRED");
+  });
+
+  it("accepts text/photo parse when rows are persisted (write-through)", async () => {
+    const { reparseWorkout, reparseWorkoutFromImage } = await import("../../services/workoutService");
+    vi.mocked(reparseWorkout).mockResolvedValueOnce({ exercises: [{ exerciseName: "row" }], setCount: 2 } as never);
+    vi.mocked(reparseWorkoutFromImage).mockResolvedValueOnce({ exercises: [{ exerciseName: "wall ball" }], setCount: 1 } as never);
+
+    const textRes = await request(app).post("/api/v1/workouts/workout-1/reparse").send({});
+    expect(textRes.status).toBe(200);
+    expect(textRes.body.saved).toBe(true);
+    expect(textRes.body.setCount).toBeGreaterThan(0);
+
+    const photoRes = await request(app).post("/api/v1/workouts/workout-1/reparse-from-image").send({ imageBase64: "Zm9v", mimeType: "image/png" });
+    expect(photoRes.status).toBe(200);
+    expect(photoRes.body.saved).toBe(true);
+    expect(photoRes.body.setCount).toBeGreaterThan(0);
+  });
+
+
+  it("does not persist prescribed text overrides when parse write-through fails", async () => {
+    const [{ storage }, { reparseWorkout }] = await Promise.all([
+      import("../../storage"),
+      import("../../services/workoutService"),
+    ]);
+    vi.mocked(reparseWorkout).mockResolvedValueOnce(null as never);
+
+    const response = await request(app)
+      .post("/api/v1/workouts/workout-1/reparse")
+      .send({ prescribedMainWorkout: "new prescribed text" });
+
+    expect(response.status).toBe(422);
+    expect(response.body.code).toBe("PARSE_WRITE_THROUGH_REQUIRED");
+    expect(storage.workouts.updateWorkoutLog).not.toHaveBeenCalledWith(
+      "workout-1",
+      expect.objectContaining({ prescribedMainWorkout: "new prescribed text" }),
+      "test_user_id",
+    );
+  });
+it("captures representative high-frequency endpoint timings", async () => {
     const samples = 6;
     const timings: Array<{ endpoint: string; elapsedMs: number }> = [];
 

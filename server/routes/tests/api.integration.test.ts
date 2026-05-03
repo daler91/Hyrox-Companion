@@ -71,6 +71,13 @@ describe("API Integration Tests", () => {
           mainWorkout: "5x5 Squats",
           duration: 30,
           completed: true,
+          exercises: [
+            {
+              exerciseName: "Back Squat",
+              category: "strength",
+              sets: [{ setNumber: 1, reps: 5, weight: 100 }],
+            },
+          ],
         });
 
       expect(response.body?.error || response.error?.message).toBeUndefined();
@@ -87,6 +94,7 @@ describe("API Integration Tests", () => {
           date: new Date().toISOString().split("T")[0],
           focus: "conditioning",
           mainWorkout: "Hyrox Simulator",
+          exercises: [{ exerciseName: "SkiErg", category: "conditioning", sets: [{ setNumber: 1, distance: 1000 }] }],
         });
 
       const response = await agent.get("/api/v1/workouts");

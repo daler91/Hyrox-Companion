@@ -6,7 +6,7 @@ import { logger } from "../logger";
 
 type OwnerType = "workout_log" | "plan_day";
 type SourceType = "manual" | "voice" | "photo" | "import";
-type CounterName = "text_only_rows_detected" | "auto_hydration_attempted" | "auto_hydration_succeeded" | "auto_hydration_failed" | "manual_fix_completed";
+type CounterName = "text_only_rows_detected" | "auto_hydration_attempted" | "auto_hydration_succeeded" | "auto_hydration_failed" | "manual_fix_completed" | "rejected_text_only_write" | "parse_text_attempted" | "parse_text_succeeded" | "parse_text_failed" | "parse_photo_attempted" | "parse_photo_succeeded" | "parse_photo_failed";
 
 export async function incrementStructuredExerciseCounter(ownerType: OwnerType, source: SourceType, counterName: CounterName, amount = 1, day: string | null = null): Promise<void> {
   await db.execute(sql`
@@ -77,6 +77,16 @@ export async function runStructuredExerciseDailyRollup(day: string): Promise<voi
   const prevPct = Number(wow?.prev_pct ?? 0);
   if (prevPct > 0 && currentPct > prevPct * 1.1) {
     logger.warn({ context: "health-alert", event: "legacy_only_pct_wow_rise", currentPct, prevPct, day }, "Legacy-only percentage rose >10% week-over-week");
+  }
+
+  const rejectedWrites = await db.execute<{ total: number }>(sql`
+    select coalesce(sum(value), 0)::int as total
+    from structured_exercise_health_counters
+    where day = ${day}::date and counter_name = 'rejected_text_only_write'
+  `);
+  const rejectedTotal = Number(rejectedWrites.rows[0]?.total ?? 0);
+  if (rejectedTotal >= 20) {
+    logger.warn({ context: "health-alert", event: "rejected_text_only_write_spike", day, rejectedTotal }, "Rejected text-only writes spiked; verify non-legacy clients are sending exercise_sets");
   }
 
   const legacyBreakdown = await db.execute<{ owner_type: OwnerType; source: SourceType; legacy_count: number }>(sql`
