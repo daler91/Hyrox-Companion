@@ -334,6 +334,17 @@ function withBlockStepPairing<T extends { blockId?: string | null; stepNumber?: 
   );
 }
 
+function withPatchBlockStepPresencePairing<T extends Record<string, unknown>>(schema: z.ZodType<T>) {
+  return schema.refine((value) => {
+    const hasBlockId = Object.prototype.hasOwnProperty.call(value, "blockId");
+    const hasStepNumber = Object.prototype.hasOwnProperty.call(value, "stepNumber");
+    return hasBlockId === hasStepNumber;
+  }, {
+    message: "PATCH updates must include both blockId and stepNumber together.",
+    path: ["stepNumber"],
+  });
+}
+
 export const exerciseSetSchema = withBlockStepPairing(z.object({
   setNumber: z.number().min(1).max(100).optional().nullable(),
   reps: z.number().min(0).max(10_000).optional().nullable(),
@@ -410,14 +421,14 @@ export type ExerciseSetOwner =
 // workout-log routes (server/routes/workouts.ts) and the plan-day routes
 // (server/routes/plans.ts) so a single numeric-bounds contract covers
 // both paths — one schema, one Sonar-visible definition.
-export const patchExerciseSetBodySchema = withBlockStepPairing(z.object({
+export const patchExerciseSetBodySchema = withPatchBlockStepPresencePairing(withBlockStepPairing(z.object({
   exerciseName: z.string().min(1).max(255).optional(),
   customLabel: z.string().max(255).nullable().optional(),
   category: z.string().max(50).optional(),
   setNumber: z.number().int().min(1).max(100).optional(),
   ...measurableSetFields,
   sortOrder: z.number().int().nullable().optional(),
-}));
+})));
 export type PatchExerciseSetBody = z.infer<typeof patchExerciseSetBodySchema>;
 
 export const addExerciseSetBodySchema = withBlockStepPairing(z.object({
