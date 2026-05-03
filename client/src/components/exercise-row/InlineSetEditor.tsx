@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import type { AddExerciseSetPayload, PatchExerciseSetPayload } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-import { type FieldKey, fieldMeta, getFieldLabel, getFields } from "./fieldMeta";
+import { type FieldKey, getFieldLabel, getFields } from "./fieldMeta";
 
 interface InlineSetEditorProps {
   readonly sets: ExerciseSet[];
@@ -284,7 +284,6 @@ interface FieldInputProps {
 }
 
 const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUnit, onUpdate, showPlannedDiffs }: FieldInputProps) {
-  const meta = fieldMeta[field];
   const label = getFieldLabel(field, { weightUnit: weightUnit as "kg" | "lbs", distanceUnit: distanceUnit as "km" | "miles" });
   const current = set[field] ?? undefined;
   const planned = getPlannedValue(set, field);
