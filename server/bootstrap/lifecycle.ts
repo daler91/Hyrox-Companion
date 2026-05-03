@@ -11,11 +11,18 @@ export interface ShutdownDeps {
   exit: (code: number) => void;
 }
 
+const SHUTDOWN_TIMEOUT_MS = 60_000;
+
 export function registerShutdownHandlers(httpServer: Server, deps: ShutdownDeps): () => void {
   let shuttingDown = false;
   const shutdown = () => {
     if (shuttingDown) return;
     shuttingDown = true;
+    const forceExit = setTimeout(() => {
+      logger.error({ timeoutMs: SHUTDOWN_TIMEOUT_MS }, "Graceful shutdown timed out. Forcing exit.");
+      deps.exit(1);
+    }, SHUTDOWN_TIMEOUT_MS);
+    forceExit.unref();
     void (async () => {
       try {
         deps.stopCron();
@@ -24,9 +31,11 @@ export function registerShutdownHandlers(httpServer: Server, deps: ShutdownDeps)
         await deps.stopQueue();
         await deps.drainPools();
         await deps.flushSentry(10_000);
+        clearTimeout(forceExit);
         deps.exit(0);
       } catch (err) {
         logger.error({ err }, "Unexpected error during graceful shutdown. Exiting.");
+        clearTimeout(forceExit);
         deps.exit(1);
       }
     })();

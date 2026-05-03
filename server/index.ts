@@ -3,10 +3,6 @@ import { createServer } from "node:http";
 
 import { getAuth } from "@clerk/express";
 import * as Sentry from "@sentry/node";
-import { configureApp } from "./bootstrap/appConfig";
-import { probePool, registerHealthEndpoint, type StartupHealthState } from "./bootstrap/health";
-import { registerShutdownHandlers } from "./bootstrap/lifecycle";
-import { configureObservability, registerProcessErrorHandlers } from "./bootstrap/observability";
 import compression from "compression";
 import cookieParser from "cookie-parser";
 import cors from "cors";
@@ -15,6 +11,10 @@ import helmet from "helmet";
 import pinoHttp from "pino-http";
 
 import { generateOpenApiDocument } from "../shared/openapi";
+import { configureApp } from "./bootstrap/appConfig";
+import { probePool, registerHealthEndpoint, type StartupHealthState } from "./bootstrap/health";
+import { registerShutdownHandlers } from "./bootstrap/lifecycle";
+import { configureObservability, registerProcessErrorHandlers } from "./bootstrap/observability";
 import { startCron, stopCron } from "./cron";
 import { pool } from "./db";
 import { env } from "./env";
