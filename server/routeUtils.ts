@@ -273,10 +273,11 @@ export function setOffsetPaginationHeaders(
 export function setCursorPaginationHeaders(
   res: Response,
   limit: number,
+  hasMore: boolean,
   nextCursor?: { timestamp: string; id: string } | null,
 ): void {
   res.setHeader("X-Page-Limit", String(limit));
-  res.setHeader("X-Has-More", String(Boolean(nextCursor)));
+  res.setHeader("X-Has-More", String(hasMore));
   if (nextCursor) {
     res.setHeader("X-Next-Cursor", nextCursor.timestamp);
     res.setHeader("X-Next-Cursor-Id", nextCursor.id);

@@ -258,8 +258,8 @@ const chatHistoryQuerySchema = z
 router.get("/api/v1/chat/history", isAuthenticated, validateQuery(chatHistoryQuerySchema), asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const { limit, before, beforeId } = req.query as z.infer<typeof chatHistoryQuerySchema>;
-    const { messages, nextCursor } = await getChatHistoryUseCase(storage.users, { userId, limit, before, beforeId });
-    setCursorPaginationHeaders(res, limit ?? 50, nextCursor);
+    const { messages, hasMore, nextCursor } = await getChatHistoryUseCase(storage.users, { userId, limit, before, beforeId });
+    setCursorPaginationHeaders(res, limit ?? 50, hasMore, nextCursor);
     res.json(messages);
   }));
 

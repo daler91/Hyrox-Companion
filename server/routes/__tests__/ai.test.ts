@@ -443,10 +443,11 @@ describe("Chat History and Messages Routes", () => {
     expect(response.status).toBe(200);
     expect(response.body).toEqual(mockMessages.map((m) => ({ ...m, timestamp: m.timestamp.toISOString() })));
     expect(storage.users.getChatMessages).toHaveBeenCalledWith("test_user_id", {
-      limit: undefined,
+      limit: 51,
       beforeTimestamp: undefined,
       beforeId: undefined,
     });
+    expect(response.headers["x-has-more"]).toBe("false");
     expect(response.headers["x-next-cursor"]).toBe("2025-01-01T00:00:00.000Z");
     expect(response.headers["x-next-cursor-id"]).toBe("m1");
   });
@@ -461,7 +462,7 @@ describe("Chat History and Messages Routes", () => {
 
     expect(response.status).toBe(200);
     expect(storage.users.getChatMessages).toHaveBeenCalledWith("test_user_id", {
-      limit: 20,
+      limit: 21,
       beforeTimestamp: new Date(before),
       beforeId: "m2",
     });
