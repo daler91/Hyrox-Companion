@@ -441,9 +441,10 @@ describe("Chat History and Messages Routes", () => {
     const response = await request(app).get(CHAT_HISTORY_ENDPOINT);
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual(mockMessages.map((m) => ({ ...m, timestamp: m.timestamp.toISOString() })));
+    expect(response.body.data).toEqual(mockMessages.map((m) => ({ ...m, timestamp: m.timestamp.toISOString() })));
+    expect(response.body.pageInfo).toMatchObject({ limit: 50, hasMore: false });
     expect(storage.users.getChatMessages).toHaveBeenCalledWith("test_user_id", {
-      limit: undefined,
+      limit: 50,
       beforeTimestamp: undefined,
       beforeId: undefined,
     });

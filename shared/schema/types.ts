@@ -574,3 +574,6 @@ export const updateTimelineAnnotationSchema = z
   );
 
 export type UpdateTimelineAnnotation = z.infer<typeof updateTimelineAnnotationSchema>;
+
+export interface PageInfo { limit: number; hasMore: boolean; nextCursor?: string; total?: number; offset?: number; }
+

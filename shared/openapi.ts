@@ -190,6 +190,17 @@ export const WorkoutIdParam = registry.registerParameter(
   })
 );
 
+const PageInfoSchema = registry.register(
+  "PageInfo",
+  z.object({
+    limit: z.number().int(),
+    hasMore: z.boolean(),
+    nextCursor: z.string().optional(),
+    total: z.number().int().optional(),
+    offset: z.number().int().optional(),
+  }).openapi({ description: "Pagination metadata contract used by list endpoints." }),
+);
+
 // Register Security Scheme
 const bearerAuth = registry.registerComponent("securitySchemes", "BearerAuth", {
   type: "http",
@@ -255,8 +266,8 @@ registry.registerPath({
       description: "A list of workout logs",
       content: {
         "application/json": {
-          schema: z.array(InsertWorkoutLogSchema),
-          example: [EXAMPLE_WORKOUT_RESPONSE],
+          schema: z.object({ data: z.array(InsertWorkoutLogSchema), pageInfo: PageInfoSchema }),
+          example: { data: [EXAMPLE_WORKOUT_RESPONSE], pageInfo: { limit: 50, offset: 0, hasMore: false } },
         },
       },
     },

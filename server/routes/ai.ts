@@ -11,6 +11,7 @@ import { aiConsentCheck } from "../middleware/aiConsent";
 import { protectedMutationGuards } from "../routeGuards";
 import { protectedDelete, protectedPost } from "./_helpers/protectedRouteBuilder";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody, validateQuery } from "../routeUtils";
+import { parseCursorPagination } from "../pagination";
 import { type AIContext, buildAIContext, type ChatInput } from "../services/aiContextService";
 import { applyTimelineAiSuggestion, generateTimelineAiSuggestions } from "../services/aiSuggestionService";
 import { sanitizeRagInfo } from "../services/ragRetrieval";
@@ -257,17 +258,20 @@ const chatHistoryQuerySchema = z
 router.get("/api/v1/chat/history", isAuthenticated, validateQuery(chatHistoryQuerySchema), asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const { limit, before, beforeId } = req.query as z.infer<typeof chatHistoryQuerySchema>;
+    const pagination = parseCursorPagination({ limit: limit?.toString(), cursor: beforeId ? `${before}|${beforeId}` : undefined }, { defaultLimit: 50, maxLimit: 200 });
+    if (!pagination.ok) return res.status(400).json(pagination.error);
     const messages = await storage.users.getChatMessages(userId, {
-      limit,
+      limit: pagination.value.limit,
       beforeTimestamp: before ? new Date(before) : undefined,
       beforeId,
     });
     const oldest = messages[0];
+    const nextCursor = oldest?.timestamp ? `${oldest.timestamp.toISOString()}|${oldest.id}` : undefined;
     if (oldest?.timestamp) {
       res.setHeader("X-Next-Cursor", oldest.timestamp.toISOString());
       res.setHeader("X-Next-Cursor-Id", oldest.id);
     }
-    res.json(messages);
+    res.json({ data: messages, pageInfo: { limit: pagination.value.limit, hasMore: messages.length === pagination.value.limit, nextCursor } });
   }));
 
 router.post("/api/v1/chat/message", ...protectedMutationGuards, rateLimiter("chatMessage", 20), validateBody(insertChatMessageSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, InsertChatMessage>, res: Response) => {

@@ -17,7 +17,8 @@ import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from "../../constants";
 import { db } from "../../db";
 import { AppError, ErrorCode } from "../../errors";
 import { protectedMutationGuards } from "../../routeGuards";
-import { asyncHandler, parsePagination, rateLimiter, sendNotFound, validateBody } from "../../routeUtils";
+import { asyncHandler, rateLimiter, sendNotFound, validateBody } from "../../routeUtils";
+import { parseOffsetPagination } from "../../pagination";
 import { createWorkout, updateWorkoutUseCase } from "../../services/workoutUseCases";
 import { storage } from "../../storage";
 import { getUserId } from "../../types";
@@ -51,17 +52,16 @@ export function registerWorkoutCrudRoutes(router: Router): void {
 
   router.get("/api/v1/workouts", isAuthenticated, rateLimiter("workoutList", 60), asyncHandler(async (req: Request<Record<string, never>, Record<string, never>, Record<string, never>, { limit?: string; offset?: string }>, res: Response) => {
     const userId = getUserId(req);
-    const pagination = parsePagination(req.query, res, { defaultLimit: DEFAULT_PAGE_LIMIT, maxLimit: MAX_PAGE_LIMIT });
-    if (!pagination) {
-      return;
-    }
-    const logs = await storage.workouts.listWorkoutLogs(userId, pagination.limit, pagination.offset);
-    res.json(logs);
+    const pagination = parseOffsetPagination(req.query, { defaultLimit: DEFAULT_PAGE_LIMIT, maxLimit: MAX_PAGE_LIMIT });
+    if (!pagination.ok) return res.status(400).json(pagination.error);
+    const logs = await storage.workouts.listWorkoutLogs(userId, { limit: pagination.value.limit, offset: pagination.value.offset });
+    const hasMore = logs.length === pagination.value.limit;
+    res.json({ data: logs, pageInfo: { limit: pagination.value.limit, offset: pagination.value.offset, hasMore } });
   }));
 
   router.get("/api/v1/workouts/latest", isAuthenticated, rateLimiter("workout", 60), asyncHandler(async (req: Request, res: Response) => {
     const userId = getUserId(req);
-    const [latest] = await storage.workouts.listWorkoutLogs(userId, 1);
+    const [latest] = await storage.workouts.listWorkoutLogs(userId, { limit: 1 });
     if (!latest) {
       return sendNotFound(res, "No workouts found");
     }
