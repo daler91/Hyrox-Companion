@@ -22,6 +22,8 @@
  *   --since <date>     Only rows with date ≥ YYYY-MM-DD (workout_logs only).
  *   --plan-days-only   Skip the workout_logs pass.
  *   --workouts-only    Skip the plan_days pass.
+ *   --after-id <id>    Keyset pagination cursor (process IDs greater than this).
+ *   --report-file <p>  Write per-pass JSON reports (<name>-planDays/ext, <name>-workoutLogs/ext).
  *
  * The script is idempotent — rows that already have sets are skipped — so
  * it can be re-run safely. Rate-limited by the existing Gemini client
@@ -38,7 +40,7 @@ import {
   users,
   workoutLogs,
 } from "@shared/schema";
-import { and, eq, gte, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, eq, gt, gte, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { db } from "../server/db";
 import { parseExercisesFromText } from "../server/gemini";
@@ -58,7 +60,7 @@ interface Flags {
   planDaysOnly: boolean;
   workoutsOnly: boolean;
   reportFile?: string;
-  offset: number;
+  afterId?: string;
 }
 
 interface PassResult {
@@ -91,7 +93,6 @@ function parseFlags(): Flags {
     batchSize: 500,
     planDaysOnly: false,
     workoutsOnly: false,
-    offset: 0,
   };
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -117,8 +118,8 @@ function parseFlags(): Flags {
       case "--report-file":
         flags.reportFile = parseFlagValue(args, ++i, arg);
         break;
-      case "--offset":
-        flags.offset = Number.parseInt(parseFlagValue(args, ++i, arg), 10);
+      case "--after-id":
+        flags.afterId = parseFlagValue(args, ++i, arg);
         break;
       default:
         console.error(`Unknown flag: ${arg}`);
@@ -127,10 +128,6 @@ function parseFlags(): Flags {
   }
   if (Number.isNaN(flags.batchSize) || flags.batchSize < 1) {
     console.error("--batch-size must be a positive integer");
-    process.exit(1);
-  }
-  if (Number.isNaN(flags.offset) || flags.offset < 0) {
-    console.error("--offset must be a non-negative integer");
     process.exit(1);
   }
   return flags;
@@ -180,6 +177,18 @@ async function processCandidate(
       result.skipped++;
       result.emptyParse++;
       reportRows.push({ ownerType: cand.logKey === "planDayId" ? "planDay" : "workoutLog", ownerId: cand.ownerId, userId: cand.userId, status: "empty_parse", reason: "parser_returned_no_exercises" });
+      if (!flags.dryRun) {
+        await db.insert(structuredExerciseBackfillReviews).values({
+          ownerType: cand.logKey === "planDayId" ? "planDay" : "workoutLog",
+          ownerId: cand.ownerId,
+          userId: cand.userId,
+          status: "needs_manual_review",
+          reason: "parser_returned_no_exercises",
+        }).onConflictDoUpdate({
+          target: [structuredExerciseBackfillReviews.ownerType, structuredExerciseBackfillReviews.ownerId],
+          set: { status: "needs_manual_review", reason: "parser_returned_no_exercises", lastSeenAt: sql`now()`, updatedAt: sql`now()` },
+        });
+      }
       return;
     }
     const setRows = cand.expand(exercises);
@@ -266,6 +275,7 @@ async function loadPlanDayCandidates(flags: Flags): Promise<BackfillCandidate[]>
     isNull(exerciseSets.id),
   ];
   if (flags.userId) whereClauses.push(eq(trainingPlans.userId, flags.userId));
+  if (flags.afterId) whereClauses.push(gt(planDays.id, flags.afterId));
 
   const rows = await db
     .select({
@@ -279,8 +289,7 @@ async function loadPlanDayCandidates(flags: Flags): Promise<BackfillCandidate[]>
     .leftJoin(exerciseSets, eq(exerciseSets.planDayId, planDays.id))
     .where(and(...whereClauses))
     .orderBy(planDays.id)
-    .limit(flags.batchSize)
-    .offset(flags.offset);
+    .limit(flags.batchSize);
 
   return rows.map((pd) => ({
     label: "planDays",
@@ -312,6 +321,7 @@ async function loadWorkoutLogCandidates(flags: Flags): Promise<BackfillCandidate
   ];
   if (flags.userId) whereClauses.push(eq(workoutLogs.userId, flags.userId));
   if (flags.since) whereClauses.push(gte(workoutLogs.date, flags.since));
+  if (flags.afterId) whereClauses.push(gt(workoutLogs.id, flags.afterId));
 
   const rows = await db
     .select({ log: workoutLogs })
@@ -319,8 +329,7 @@ async function loadWorkoutLogCandidates(flags: Flags): Promise<BackfillCandidate
     .leftJoin(exerciseSets, eq(workoutLogs.id, exerciseSets.workoutLogId))
     .where(and(...whereClauses, isNull(exerciseSets.id)))
     .orderBy(workoutLogs.id)
-    .limit(flags.batchSize)
-    .offset(flags.offset);
+    .limit(flags.batchSize);
 
   return rows.map(({ log }) => ({
     label: "workoutLogs",
