@@ -11,10 +11,12 @@ import { generatePlan } from "../services/planGenerationService";
 import { createSamplePlan, importPlanFromCSV, updatePlanDayStatus,updatePlanDayWithCleanup } from "../services/planService";
 import { autoHydrateExerciseSetsFromTextIfNeeded, reparsePlanDay, reparsePlanDayFromImage } from "../services/workoutService";
 import { storage } from "../storage";
+import { incrementStructuredExerciseCounter } from "../services/structuredExerciseHealth";
 import { getUserId } from "../types";
 import { createUpdatePlanDayUseCase } from "../usecases/plans/updatePlanDay.usecase";
 import { createMutateExerciseSetUseCase } from "../usecases/workouts/mutateExerciseSet.usecase";
 import { protectedDelete, protectedPatch, protectedPost } from "./_helpers/protectedRouteBuilder";
+import { rejectTextOnlyWriteIfNeeded } from "./structuredWriteGuard";
 
 const router = Router();
 
@@ -82,6 +84,7 @@ protectedPost(router, "/api/v1/plans/generate", { limiter: rateLimiter("planGene
 
 protectedPatch(router, "/api/v1/plans/:planId/days/:dayId", { limiter: rateLimiter("planDayUpdate", 20), middleware: [validateBody(updatePlanDaySchema)] }, async (req: ExpressRequest<{ planId: string; dayId: string }, unknown, UpdatePlanDay>, res: Response) => {
   const userId = getUserId(req);
+  if (await rejectTextOnlyWriteIfNeeded(req, res, "plan_day")) return;
   const updatedDay = await updateStoredPlanDay({ dayId: req.params.dayId, data: req.body, userId });
   if (!updatedDay) return sendNotFound(res, "Day not found");
   res.json(updatedDay);
@@ -89,6 +92,7 @@ protectedPatch(router, "/api/v1/plans/:planId/days/:dayId", { limiter: rateLimit
 
 protectedPatch(router, "/api/v1/plans/days/:dayId", { limiter: rateLimiter("planDayUpdate", 20), middleware: [validateBody(updatePlanDaySchema)] }, async (req: ExpressRequest<{ dayId: string }, unknown, UpdatePlanDay>, res: Response) => {
   const userId = getUserId(req);
+  if (await rejectTextOnlyWriteIfNeeded(req, res, "plan_day")) return;
   const updatedDay = await updatePlanDayWithCleanup(req.params.dayId, req.body, userId);
   if (!updatedDay) return sendNotFound(res, "Day not found");
   res.json(updatedDay);
@@ -262,10 +266,13 @@ protectedPost(
       return sendNotFound(res, PLAN_DAY_NOT_FOUND);
     }
     const weightUnit = user?.weightUnit || "kg";
+    void incrementStructuredExerciseCounter("plan_day", "voice", "parse_text_attempted").catch(() => undefined);
     const result = await reparsePlanDay(planDay, weightUnit);
-    if (!result) {
-      return res.json({ exercises: [], saved: false, setCount: 0 });
+    if (!result || result.setCount === 0) {
+      void incrementStructuredExerciseCounter("plan_day", "voice", "parse_text_failed").catch(() => undefined);
+      return res.status(422).json({ error: "Parsing did not produce persisted exercise sets.", code: "PARSE_WRITE_THROUGH_REQUIRED" });
     }
+    void incrementStructuredExerciseCounter("plan_day", "voice", "parse_text_succeeded").catch(() => undefined);
     res.json({ exercises: result.exercises, saved: true, setCount: result.setCount });
   },
 );
@@ -289,10 +296,13 @@ protectedPost(
     }
     const weightUnit = user?.weightUnit || "kg";
     const customNames = customExercises.map((e) => e.name);
+    void incrementStructuredExerciseCounter("plan_day", "photo", "parse_photo_attempted").catch(() => undefined);
     const result = await reparsePlanDayFromImage(planDay, req.body, weightUnit, userId, customNames);
-    if (!result) {
-      return res.json({ exercises: [], saved: false, setCount: 0 });
+    if (!result || result.setCount === 0) {
+      void incrementStructuredExerciseCounter("plan_day", "photo", "parse_photo_failed").catch(() => undefined);
+      return res.status(422).json({ error: "Parsing did not produce persisted exercise sets.", code: "PARSE_WRITE_THROUGH_REQUIRED" });
     }
+    void incrementStructuredExerciseCounter("plan_day", "photo", "parse_photo_succeeded").catch(() => undefined);
     res.json({ exercises: result.exercises, saved: true, setCount: result.setCount });
   },
 );

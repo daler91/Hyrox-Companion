@@ -38,6 +38,8 @@ vi.mock("../../storage", () => ({
   },
 }));
 
+vi.mock("../../services/structuredExerciseHealth", () => ({ incrementStructuredExerciseCounter: vi.fn().mockResolvedValue(undefined) }));
+
 // Mock the planService functions
 vi.mock("../../queue", () => ({ queue: { send: vi.fn().mockResolvedValue(undefined) } }));
 vi.mock("../../services/planService", () => ({
