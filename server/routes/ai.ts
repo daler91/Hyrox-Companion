@@ -9,7 +9,6 @@ import { reqLogger } from "../logger";
 import { aiBudgetCheck } from "../middleware/aibudget";
 import { aiConsentCheck } from "../middleware/aiConsent";
 import { protectedMutationGuards } from "../routeGuards";
-import { protectedDelete, protectedPost } from "./_helpers/protectedRouteBuilder";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody, validateQuery } from "../routeUtils";
 import { type AIContext, buildAIContext, type ChatInput } from "../services/aiContextService";
 import { applyTimelineAiSuggestion, generateTimelineAiSuggestions } from "../services/aiSuggestionService";
@@ -17,6 +16,8 @@ import { sanitizeRagInfo } from "../services/ragRetrieval";
 import { registerSseStream } from "../sseRegistry";
 import { storage } from "../storage";
 import { getUserId } from "../types";
+import { getChatHistoryUseCase } from "../usecases/ai/chatHistory.usecase";
+import { protectedDelete, protectedPost } from "./_helpers/protectedRouteBuilder";
 
 const router = Router();
 
@@ -257,15 +258,10 @@ const chatHistoryQuerySchema = z
 router.get("/api/v1/chat/history", isAuthenticated, validateQuery(chatHistoryQuerySchema), asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const { limit, before, beforeId } = req.query as z.infer<typeof chatHistoryQuerySchema>;
-    const messages = await storage.users.getChatMessages(userId, {
-      limit,
-      beforeTimestamp: before ? new Date(before) : undefined,
-      beforeId,
-    });
-    const oldest = messages[0];
-    if (oldest?.timestamp) {
-      res.setHeader("X-Next-Cursor", oldest.timestamp.toISOString());
-      res.setHeader("X-Next-Cursor-Id", oldest.id);
+    const { messages, nextCursor } = await getChatHistoryUseCase(storage.users, { userId, limit, before, beforeId });
+    if (nextCursor) {
+      res.setHeader("X-Next-Cursor", nextCursor.timestamp);
+      res.setHeader("X-Next-Cursor-Id", nextCursor.id);
     }
     res.json(messages);
   }));

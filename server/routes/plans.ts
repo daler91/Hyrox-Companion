@@ -6,7 +6,6 @@ import { isAuthenticated } from "../clerkAuth";
 import { reqLogger } from "../logger";
 import { aiBudgetCheck } from "../middleware/aibudget";
 import { protectedMutationGuards } from "../routeGuards";
-import { protectedDelete, protectedPatch, protectedPost } from "./_helpers/protectedRouteBuilder";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody } from "../routeUtils";
 import { regenerateCoachNoteForPlanDay } from "../services/coachService";
 import { generatePlan } from "../services/planGenerationService";
@@ -14,8 +13,14 @@ import { createSamplePlan, importPlanFromCSV, updatePlanDayStatus,updatePlanDayW
 import { reparsePlanDay, reparsePlanDayFromImage } from "../services/workoutService";
 import { storage } from "../storage";
 import { getUserId } from "../types";
+import { createUpdatePlanDayUseCase } from "../usecases/plans/updatePlanDay.usecase";
+import { protectedDelete, protectedPatch, protectedPost } from "./_helpers/protectedRouteBuilder";
 
 const router = Router();
+
+const updateStoredPlanDay = createUpdatePlanDayUseCase({
+  updatePlanDay: (dayId, data, userId) => storage.plans.updatePlanDay(dayId, data, userId),
+});
 
 const handlePlanDayUpdate = (updateFn: (dayId: string, data: UpdatePlanDay, userId: string) => Promise<PlanDay | null | undefined>) => [
   validateBody(updatePlanDaySchema),
@@ -86,7 +91,7 @@ router.post("/api/v1/plans/generate", ...protectedMutationGuards, rateLimiter("p
     }
   }));
 
-router.patch("/api/v1/plans/:planId/days/:dayId", ...protectedMutationGuards, rateLimiter("planDayUpdate", 20), handlePlanDayUpdate((dayId, data, userId) => storage.plans.updatePlanDay(dayId, data, userId)));
+router.patch("/api/v1/plans/:planId/days/:dayId", ...protectedMutationGuards, rateLimiter("planDayUpdate", 20), handlePlanDayUpdate((dayId, data, userId) => updateStoredPlanDay({ dayId, data, userId })));
 
 router.patch("/api/v1/plans/days/:dayId", ...protectedMutationGuards, rateLimiter("planDayUpdate", 20), handlePlanDayUpdate(updatePlanDayWithCleanup));
 
