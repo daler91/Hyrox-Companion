@@ -203,6 +203,76 @@
             "minimum": 0,
             "maximum": 86400
           },
+          "blockId": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "stepNumber": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "intervalMinute": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "cycleNumber": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "stepRole": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 50
+          },
+          "groupId": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "intensity": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "nullable": true
+            }
+          },
+          "load": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "nullable": true
+            }
+          },
+          "repMode": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "total",
+              "per_side",
+              null
+            ]
+          },
+          "tempo": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "nullable": true
+            }
+          },
+          "standards": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "nullable": true
+            }
+          },
           "notes": {
             "type": "string",
             "nullable": true,
@@ -289,6 +359,156 @@
             "nullable": true,
             "minimum": -8388608,
             "maximum": 8388607
+          },
+          "blockId": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "stepNumber": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "intervalMinute": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "cycleNumber": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "stepRole": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 50
+          },
+          "groupId": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "intensity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "nullable": true
+              },
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "nullable": true
+                }
+              },
+              {
+                "type": "array",
+                "items": {
+                  "nullable": true
+                }
+              }
+            ]
+          },
+          "load": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "nullable": true
+              },
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "nullable": true
+                }
+              },
+              {
+                "type": "array",
+                "items": {
+                  "nullable": true
+                }
+              }
+            ]
+          },
+          "repMode": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 50
+          },
+          "tempo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "nullable": true
+              },
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "nullable": true
+                }
+              },
+              {
+                "type": "array",
+                "items": {
+                  "nullable": true
+                }
+              }
+            ]
+          },
+          "standards": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "nullable": true
+              },
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "nullable": true
+                }
+              },
+              {
+                "type": "array",
+                "items": {
+                  "nullable": true
+                }
+              }
+            ]
           },
           "notes": {
             "type": "string",
@@ -716,6 +936,76 @@
                       "minimum": 0,
                       "maximum": 86400
                     },
+                    "blockId": {
+                      "type": "string",
+                      "nullable": true,
+                      "maxLength": 255
+                    },
+                    "stepNumber": {
+                      "type": "integer",
+                      "nullable": true,
+                      "minimum": 1,
+                      "maximum": 10000
+                    },
+                    "intervalMinute": {
+                      "type": "integer",
+                      "nullable": true,
+                      "minimum": 0,
+                      "maximum": 10000
+                    },
+                    "cycleNumber": {
+                      "type": "integer",
+                      "nullable": true,
+                      "minimum": 1,
+                      "maximum": 10000
+                    },
+                    "stepRole": {
+                      "type": "string",
+                      "nullable": true,
+                      "maxLength": 50
+                    },
+                    "groupId": {
+                      "type": "string",
+                      "nullable": true,
+                      "maxLength": 255
+                    },
+                    "intensity": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "load": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "repMode": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "total",
+                        "per_side",
+                        null
+                      ]
+                    },
+                    "tempo": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "standards": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
                     "confidence": {
                       "type": "number",
                       "nullable": true,
@@ -786,6 +1076,76 @@
                             "nullable": true,
                             "minimum": 0,
                             "maximum": 86400
+                          },
+                          "blockId": {
+                            "type": "string",
+                            "nullable": true,
+                            "maxLength": 255
+                          },
+                          "stepNumber": {
+                            "type": "integer",
+                            "nullable": true,
+                            "minimum": 1,
+                            "maximum": 10000
+                          },
+                          "intervalMinute": {
+                            "type": "integer",
+                            "nullable": true,
+                            "minimum": 0,
+                            "maximum": 10000
+                          },
+                          "cycleNumber": {
+                            "type": "integer",
+                            "nullable": true,
+                            "minimum": 1,
+                            "maximum": 10000
+                          },
+                          "stepRole": {
+                            "type": "string",
+                            "nullable": true,
+                            "maxLength": 50
+                          },
+                          "groupId": {
+                            "type": "string",
+                            "nullable": true,
+                            "maxLength": 255
+                          },
+                          "intensity": {
+                            "type": "object",
+                            "nullable": true,
+                            "additionalProperties": {
+                              "nullable": true
+                            }
+                          },
+                          "load": {
+                            "type": "object",
+                            "nullable": true,
+                            "additionalProperties": {
+                              "nullable": true
+                            }
+                          },
+                          "repMode": {
+                            "type": "string",
+                            "nullable": true,
+                            "enum": [
+                              "total",
+                              "per_side",
+                              null
+                            ]
+                          },
+                          "tempo": {
+                            "type": "object",
+                            "nullable": true,
+                            "additionalProperties": {
+                              "nullable": true
+                            }
+                          },
+                          "standards": {
+                            "type": "object",
+                            "nullable": true,
+                            "additionalProperties": {
+                              "nullable": true
+                            }
                           },
                           "notes": {
                             "type": "string",
@@ -1019,6 +1379,76 @@
                       "minimum": 0,
                       "maximum": 86400
                     },
+                    "blockId": {
+                      "type": "string",
+                      "nullable": true,
+                      "maxLength": 255
+                    },
+                    "stepNumber": {
+                      "type": "integer",
+                      "nullable": true,
+                      "minimum": 1,
+                      "maximum": 10000
+                    },
+                    "intervalMinute": {
+                      "type": "integer",
+                      "nullable": true,
+                      "minimum": 0,
+                      "maximum": 10000
+                    },
+                    "cycleNumber": {
+                      "type": "integer",
+                      "nullable": true,
+                      "minimum": 1,
+                      "maximum": 10000
+                    },
+                    "stepRole": {
+                      "type": "string",
+                      "nullable": true,
+                      "maxLength": 50
+                    },
+                    "groupId": {
+                      "type": "string",
+                      "nullable": true,
+                      "maxLength": 255
+                    },
+                    "intensity": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "load": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "repMode": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "total",
+                        "per_side",
+                        null
+                      ]
+                    },
+                    "tempo": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "standards": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
                     "confidence": {
                       "type": "number",
                       "nullable": true,
@@ -1089,6 +1519,76 @@
                             "nullable": true,
                             "minimum": 0,
                             "maximum": 86400
+                          },
+                          "blockId": {
+                            "type": "string",
+                            "nullable": true,
+                            "maxLength": 255
+                          },
+                          "stepNumber": {
+                            "type": "integer",
+                            "nullable": true,
+                            "minimum": 1,
+                            "maximum": 10000
+                          },
+                          "intervalMinute": {
+                            "type": "integer",
+                            "nullable": true,
+                            "minimum": 0,
+                            "maximum": 10000
+                          },
+                          "cycleNumber": {
+                            "type": "integer",
+                            "nullable": true,
+                            "minimum": 1,
+                            "maximum": 10000
+                          },
+                          "stepRole": {
+                            "type": "string",
+                            "nullable": true,
+                            "maxLength": 50
+                          },
+                          "groupId": {
+                            "type": "string",
+                            "nullable": true,
+                            "maxLength": 255
+                          },
+                          "intensity": {
+                            "type": "object",
+                            "nullable": true,
+                            "additionalProperties": {
+                              "nullable": true
+                            }
+                          },
+                          "load": {
+                            "type": "object",
+                            "nullable": true,
+                            "additionalProperties": {
+                              "nullable": true
+                            }
+                          },
+                          "repMode": {
+                            "type": "string",
+                            "nullable": true,
+                            "enum": [
+                              "total",
+                              "per_side",
+                              null
+                            ]
+                          },
+                          "tempo": {
+                            "type": "object",
+                            "nullable": true,
+                            "additionalProperties": {
+                              "nullable": true
+                            }
+                          },
+                          "standards": {
+                            "type": "object",
+                            "nullable": true,
+                            "additionalProperties": {
+                              "nullable": true
+                            }
                           },
                           "notes": {
                             "type": "string",
