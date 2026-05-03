@@ -16,13 +16,12 @@ import { isAuthenticated } from "../../clerkAuth";
 import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from "../../constants";
 import { db } from "../../db";
 import { AppError, ErrorCode } from "../../errors";
-import { protectedMutationGuards } from "../../routeGuards";
 import { asyncHandler, parsePagination, rateLimiter, sendNotFound, validateBody } from "../../routeUtils";
 import { createWorkout, updateWorkoutUseCase } from "../../services/workoutUseCases";
 import { storage } from "../../storage";
 import { getUserId } from "../../types";
 import { createMutateExerciseSetUseCase } from "../../usecases/workouts/mutateExerciseSet.usecase";
-import { protectedPost } from "../_helpers/protectedRouteBuilder";
+import { protectedDelete, protectedPatch, protectedPost } from "../_helpers/protectedRouteBuilder";
 import { createCustomExerciseSchema, createWorkoutRouteSchema, updateWorkoutRouteSchema } from "./shared";
 
 const patchExerciseSetSchema = patchExerciseSetBodySchema;
@@ -76,29 +75,29 @@ export function registerWorkoutCrudRoutes(router: Router): void {
     res.json({ ...latest, exerciseSets });
   }));
 
-  router.patch("/api/v1/workouts/:id/sets/:setId", ...protectedMutationGuards, rateLimiter("workoutSet", 120), validateBody(patchExerciseSetSchema), asyncHandler(async (req: Request<{ id: string; setId: string }, Record<string, never>, PatchExerciseSetBody>, res: Response) => {
+  protectedPatch(router, "/api/v1/workouts/:id/sets/:setId", { limiter: rateLimiter("workoutSet", 120), middleware: [validateBody(patchExerciseSetSchema)] }, async (req: Request<{ id: string; setId: string }, Record<string, never>, PatchExerciseSetBody>, res: Response) => {
     const updated = await workoutSetUseCase.updateSet(req.params.id, req.params.setId, req.body, getUserId(req));
     if (!updated) {
       return sendNotFound(res, EXERCISE_SET_NOT_FOUND);
     }
     res.json(updated);
-  }));
+  });
 
-  router.post("/api/v1/workouts/:id/sets", ...protectedMutationGuards, rateLimiter("workoutSet", 60), validateBody(addExerciseSetSchema), asyncHandler(async (req: Request<{ id: string }, Record<string, never>, AddExerciseSetBody>, res: Response) => {
+  protectedPost(router, "/api/v1/workouts/:id/sets", { limiter: rateLimiter("workoutSet", 60), middleware: [validateBody(addExerciseSetSchema)] }, async (req: Request<{ id: string }, Record<string, never>, AddExerciseSetBody>, res: Response) => {
     const created = await workoutSetUseCase.addSet(req.params.id, req.body, getUserId(req));
     if (!created) {
       return sendNotFound(res, WORKOUT_NOT_FOUND);
     }
     res.status(201).json(created);
-  }));
+  });
 
-  router.delete("/api/v1/workouts/:id/sets/:setId", ...protectedMutationGuards, rateLimiter("workoutSet", 60), asyncHandler(async (req: Request<{ id: string; setId: string }>, res: Response) => {
+  protectedDelete(router, "/api/v1/workouts/:id/sets/:setId", { limiter: rateLimiter("workoutSet", 60) }, async (req: Request<{ id: string; setId: string }>, res: Response) => {
     const deleted = await workoutSetUseCase.deleteSet(req.params.id, req.params.setId, getUserId(req));
     if (!deleted) {
       return sendNotFound(res, EXERCISE_SET_NOT_FOUND);
     }
     res.json({ success: true });
-  }));
+  });
 
   router.get("/api/v1/workouts/:id/history", isAuthenticated, rateLimiter("workoutHistory", 60), asyncHandler(async (req: Request<{ id: string }>, res: Response) => {
     const stats = await storage.workouts.getWorkoutHistoryStats(req.params.id, getUserId(req));
@@ -108,10 +107,10 @@ export function registerWorkoutCrudRoutes(router: Router): void {
     res.json(stats);
   }));
 
-  router.post("/api/v1/workouts/:id/seed-from-plan", ...protectedMutationGuards, rateLimiter("workoutSet", 20), asyncHandler(async (req: Request<{ id: string }>, res: Response) => {
+  protectedPost(router, "/api/v1/workouts/:id/seed-from-plan", { limiter: rateLimiter("workoutSet", 20) }, async (req: Request<{ id: string }>, res: Response) => {
     const seeded = await storage.workouts.seedExerciseSetsFromPlanDay(req.params.id, getUserId(req));
     res.json({ seededCount: seeded });
-  }));
+  });
 
   router.get("/api/v1/workouts/:id", isAuthenticated, rateLimiter("workout", 60), asyncHandler(async (req: Request<{ id: string }>, res: Response) => {
     const log = await storage.workouts.getWorkoutLog(req.params.id, getUserId(req));
@@ -127,23 +126,23 @@ export function registerWorkoutCrudRoutes(router: Router): void {
     res.json(result);
   });
 
-  router.patch("/api/v1/workouts/:id", ...protectedMutationGuards, rateLimiter("workout", 40), validateBody(updateWorkoutRouteSchema), asyncHandler(async (req: Request<{ id: string }>, res: Response) => {
+  protectedPatch(router, "/api/v1/workouts/:id", { limiter: rateLimiter("workout", 40), middleware: [validateBody(updateWorkoutRouteSchema)] }, async (req: Request<{ id: string }>, res: Response) => {
     const result = await updateWorkoutUseCase({ userId: getUserId(req), workoutId: req.params.id, payload: req.body as never });
     if (!result) {
       return sendNotFound(res, WORKOUT_NOT_FOUND);
     }
     res.json(result);
-  }));
+  });
 
-  router.delete("/api/v1/workouts/:id", ...protectedMutationGuards, rateLimiter("workout", 40), asyncHandler(async (req: Request<{ id: string }>, res: Response) => {
+  protectedDelete(router, "/api/v1/workouts/:id", { limiter: rateLimiter("workout", 40) }, async (req: Request<{ id: string }>, res: Response) => {
     const deleted = await storage.workouts.deleteWorkoutLog(req.params.id, getUserId(req));
     if (!deleted) {
       return sendNotFound(res, WORKOUT_NOT_FOUND);
     }
     res.json({ success: true });
-  }));
+  });
 
-  router.post("/api/v1/workouts/combine", ...protectedMutationGuards, rateLimiter("workout", 10), validateBody(combineWorkoutsSchema), asyncHandler(async (req: Request, res: Response) => {
+  protectedPost(router, "/api/v1/workouts/combine", { limiter: rateLimiter("workout", 10), middleware: [validateBody(combineWorkoutsSchema)] }, async (req: Request, res: Response) => {
     const userId = getUserId(req);
     const { newWorkout, deleteWorkoutIds, skipPlanDayIds } = req.body as z.infer<typeof combineWorkoutsSchema>;
 
@@ -191,7 +190,7 @@ export function registerWorkoutCrudRoutes(router: Router): void {
     });
 
     res.status(201).json(result);
-  }));
+  });
 
   router.get("/api/v1/exercises/:exerciseName/history", isAuthenticated, rateLimiter("workoutHistory", 60), asyncHandler(async (req: Request<{ exerciseName: string }>, res: Response) => {
     const history = await storage.workouts.getExerciseHistory(getUserId(req), req.params.exerciseName);
