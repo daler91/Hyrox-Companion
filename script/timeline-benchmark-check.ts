@@ -33,7 +33,7 @@ for (const [name, t] of Object.entries(thresholds)) {
   if (!row) throw new Error(`missing benchmark row: ${name}`);
   if (row.parity !== 'true') throw new Error(`${name} parity check failed`);
   if (!Number.isFinite(row.ms) || !Number.isFinite(row.heapMb)) {
-    throw new Error(`${name} benchmark output parse failure (ms=${row.ms}, heapMb=${row.heapMb})`);
+    throw new TypeError(`${name} benchmark output parse failure (ms=${row.ms}, heapMb=${row.heapMb})`);
   }
   if (row.ms > t.maxMs) throw new Error(`${name} latency ${row.ms}ms exceeded ${t.maxMs}ms`);
   if (row.heapMb > t.maxHeapMb) throw new Error(`${name} heap ${row.heapMb}MB exceeded ${t.maxHeapMb}MB`);
