@@ -8,10 +8,13 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import express, { NextFunction,type Request, Response } from "express";
 import helmet from "helmet";
-import type { Pool, PoolClient } from "pg";
 import pinoHttp from "pino-http";
 
 import { generateOpenApiDocument } from "../shared/openapi";
+import { configureApp } from "./bootstrap/appConfig";
+import { probePool, registerHealthEndpoint, type StartupHealthState } from "./bootstrap/health";
+import { registerShutdownHandlers } from "./bootstrap/lifecycle";
+import { configureObservability, registerProcessErrorHandlers } from "./bootstrap/observability";
 import { startCron, stopCron } from "./cron";
 import { pool } from "./db";
 import { env } from "./env";
@@ -37,78 +40,11 @@ if (env.ALLOW_DEV_AUTH_BYPASS === "true") {
   }
 }
 
-if (env.SENTRY_DSN) {
-  Sentry.init({
-    dsn: env.SENTRY_DSN,
-    environment: env.NODE_ENV || "development",
-    sendDefaultPii: false,
-    tracesSampleRate: env.NODE_ENV === "production" ? 0.1 : 1,
-    // 🛡️ Sentinel: Strip PII-bearing fields from error payloads before
-    // transmission (CODEBASE_REVIEW_2026-04-12.md #2). Even with
-    // sendDefaultPii=false, manually captured errors can carry request
-    // bodies, query strings, cookies, or auth headers that contain user
-    // email/name/biometrics.
-    beforeSend(event) {
-      if (event.request) {
-        delete event.request.data;
-        delete event.request.query_string;
-        delete event.request.cookies;
-        if (event.request.headers) {
-          delete event.request.headers.authorization;
-          delete event.request.headers.cookie;
-          delete event.request.headers["x-csrf-token"];
-          delete event.request.headers["x-idempotency-key"];
-        }
-      }
-      if (event.user) {
-        delete event.user.email;
-        delete event.user.username;
-        delete event.user.ip_address;
-      }
-      return event;
-    },
-  });
-  // Operator sanity check: emit a structured boot log so deploy logs can
-  // confirm Sentry is wired without spraying a fake error into the issue
-  // tracker. Log a masked DSN prefix + environment; a silent failure to
-  // initialise otherwise only shows up the next time an error fires,
-  // which can be days later (CODEBASE_AUDIT.md Suggestion-11).
-  const client = Sentry.getClient();
-  // Mask the `user:pass@` portion of the DSN via index arithmetic rather
-  // than a regex. The previous /\/\/[^@]+@/ was linear in practice (no
-  // overlapping alternatives), but SonarCloud flagged it as S5852 since
-  // the greedy class could be misread as backtracking-prone. indexOf is
-  // O(n) worst-case with no regex engine involved, which sidesteps the
-  // hotspot and is easier to reason about.
-  const dsn = env.SENTRY_DSN;
-  const schemeEnd = dsn.indexOf("//");
-  const atIdx = schemeEnd >= 0 ? dsn.indexOf("@", schemeEnd + 2) : -1;
-  const maskedDsn = atIdx > schemeEnd + 2
-    ? `${dsn.slice(0, schemeEnd + 2)}***${dsn.slice(atIdx)}`
-    : dsn;
-  if (client) {
-    logger.info({ context: "sentry", environment: env.NODE_ENV || "development", dsn: maskedDsn }, "Sentry error reporting initialised");
-  } else {
-    logger.warn({ context: "sentry", dsn: maskedDsn }, "Sentry.init returned without a client — error reports will be dropped");
-  }
-} else {
-  logger.info({ context: "sentry" }, "SENTRY_DSN not set — error reports disabled");
-}
+configureObservability();
 
 const app = express();
 
-// Drive "trust proxy" from validated env config so req.ip is not derived
-// from attacker-controlled forwarded headers in misconfigured deployments
-// (CODEBASE_AUDIT.md §2).
-let trustProxy: boolean | string | number = 1;
-if (env.TRUST_PROXY === "0") {
-  trustProxy = false;
-} else if (env.TRUST_PROXY === "loopback") {
-  trustProxy = "loopback";
-}
-app.set("trust proxy", trustProxy);
-
-app.disable("x-powered-by");
+const { isDev } = configureApp(app);
 const httpServer = createServer(app);
 
 // Re-export AppError class from errors module; also keep a loose interface
@@ -144,61 +80,14 @@ app.use(
   }),
 );
 
-const isDev = env.NODE_ENV !== "production";
-
 // Health endpoint — registered BEFORE CORS so platform healthchecks
 // (server-to-server requests with no Origin header) always work.
-let isReady = false;
-let startupError: string | null = null;
-let startupPhase = "initializing";
-const startupBeganAt = Date.now();
-
-const HEALTH_PROBE_TIMEOUT_MS = 3000;
-
-/**
- * Probe DB connectivity within a single 3s budget covering BOTH pool
- * acquisition and the SELECT 1 query. Under pool saturation, waiting only
- * on the query would let /api/v1/health block on pool.connect() until the
- * pool's own connectionTimeoutMillis — defeats the fast-fail intent.
- */
-async function probePool(pool: Pool): Promise<boolean> {
-  // Track the client through a shared reference so the timeout path can
-  // still release it if pool.connect() resolves AFTER the race rejects.
-  // Without this, a slow pool under saturation leaks a connection per
-  // timed-out probe (P1 from PR review).
-  const clientRef: { current: PoolClient | undefined } = { current: undefined };
-  let timedOut = false;
-
-  const connectAndQuery = (async () => {
-    const c = await pool.connect();
-    clientRef.current = c;
-    // If the race already timed out by the time we got a connection,
-    // release it immediately so it returns to the pool (or is destroyed).
-    if (timedOut) {
-      c.release(new Error("health check timeout"));
-      clientRef.current = undefined;
-      throw new Error("timeout");
-    }
-    await c.query("SELECT 1");
-  })();
-
-  try {
-    await Promise.race([
-      connectAndQuery,
-      new Promise((_, reject) => setTimeout(() => {
-        timedOut = true;
-        reject(new Error("timeout"));
-      }, HEALTH_PROBE_TIMEOUT_MS)),
-    ]);
-    return true;
-  } catch {
-    return false;
-  } finally {
-    // Release whichever path left the client checked out. On timeout we
-    // destroy the connection so any hung SELECT 1 is discarded.
-    clientRef.current?.release(timedOut ? new Error("health check timeout") : undefined);
-  }
-}
+const startupState: StartupHealthState = {
+  isReady: false,
+  startupError: null,
+  startupPhase: "initializing",
+  startupBeganAt: Date.now(),
+};
 
 // Main transactional DB probe.
 const probeDatabase = (): Promise<boolean> => probePool(pool);
@@ -210,33 +99,10 @@ const probeDatabase = (): Promise<boolean> => probePool(pool);
 const probeVectorDatabase = (): Promise<boolean> =>
   isVectorDbSeparate ? probePool(vectorPool) : Promise.resolve(true);
 
-// Health endpoint — intentionally unthrottled because platform probes
-// (Railway, load balancers) poll frequently and must never be rejected.
-// The handler is O(1) and short-circuits before any DB call while not
-// ready; the probe itself has a 3s total budget (see probeDatabase).
-// lgtm[js/missing-rate-limiting]
-app.get("/api/v1/health", (_req, res) => {
-  const uptimeMs = Date.now() - startupBeganAt;
-  if (startupError) {
-    res.status(503).json({ status: "error", error: "startup_error", phase: startupPhase, uptimeMs, message: startupError, timestamp: Date.now() });
-    return;
-  }
-  if (!isReady) {
-    res.status(503).json({ status: "starting", phase: startupPhase, uptimeMs, timestamp: Date.now() });
-    return;
-  }
-  Promise.all([probeDatabase(), probeVectorDatabase()])
-    .then(([dbOk, vectorDbOk]) => {
-      if (!dbOk || !vectorDbOk) {
-        res.status(503).json({ status: "degraded", db: dbOk, vectorDb: vectorDbOk, uptimeMs, timestamp: Date.now() });
-        return;
-      }
-      res.json({ status: "ok", uptimeMs, timestamp: Date.now() });
-    })
-    .catch((err) => {
-      logger.error({ err }, "Health check probe failed unexpectedly");
-      res.status(503).json({ status: "error", uptimeMs, timestamp: Date.now() });
-    });
+registerHealthEndpoint(app, {
+  state: startupState,
+  probeDatabase,
+  probeVectorDatabase,
 });
 
 // CORS — restrict cross-origin API access to known origins
@@ -440,22 +306,22 @@ await new Promise<void>((resolve, reject) => {
 logger.info({ port }, `HTTP server listening on port ${port} — running startup tasks...`);
 
 try {
-  startupPhase = "db_maintenance";
+  startupState.startupPhase = "db_maintenance";
   logger.info("Startup phase: db_maintenance");
   await runStartupMaintenance(storage);
 
-  startupPhase = "queue";
+  startupState.startupPhase = "queue";
   logger.info("Startup phase: queue");
   await startQueue();
 
-  startupPhase = "cron";
+  startupState.startupPhase = "cron";
   logger.info("Startup phase: cron");
   startCron(storage);
   if (!env.RESEND_API_KEY) {
     logger.warn({ context: "email" }, "RESEND_API_KEY is not set — email delivery is disabled");
   }
 
-  startupPhase = "routes";
+  startupState.startupPhase = "routes";
   logger.info("Startup phase: routes");
   await registerRoutes(httpServer, app);
 
@@ -535,108 +401,30 @@ try {
     logger.warn({ context: "ratelimit" }, "Rate limiter uses in-memory store — limits are per-instance only. Consider rate-limit-redis for multi-instance deployments.");
   }
 
-  startupPhase = "ready";
-  isReady = true;
-  logger.info({ port, uptimeMs: Date.now() - startupBeganAt }, `startup complete — serving on port ${port}`);
+  startupState.startupPhase = "ready";
+  startupState.isReady = true;
+  logger.info({ port, uptimeMs: Date.now() - startupState.startupBeganAt }, `startup complete — serving on port ${port}`);
 } catch (err) {
-  startupError = err instanceof Error ? err.message : String(err);
-  logger.fatal({ err, phase: startupPhase }, `Startup failed during phase '${startupPhase}' — server is running but not ready`);
+  startupState.startupError = err instanceof Error ? err.message : String(err);
+  logger.fatal({ err, phase: startupState.startupPhase }, `Startup failed during phase '${startupState.startupPhase}' — server is running but not ready`);
   Sentry.captureException(err);
 }
 
-// Graceful shutdown. Ordered phases:
-//   1. stop cron/queue intake (no new jobs or scheduled work)
-//   2. abort in-flight SSE streams so long-lived connections release
-//   3. httpServer.close() then closeAllConnections() for idle keepalive sockets
-//   4. await queue.stop() so pg-boss finishes its current batch
-//   5. drain DB pools
-//   6. flush Sentry last so errors captured during shutdown get reported
-// 60s total budget covers a full auto-coach batch + queue drain; force
-// exit runs if any phase wedges beyond that.
-const SHUTDOWN_TIMEOUT_MS = 60_000;
-const SSE_DRAIN_TIMEOUT_MS = 5_000;
-const SENTRY_FLUSH_TIMEOUT_MS = 10_000;
-let shuttingDown = false;
-
-const shutdown = () => {
-  if (shuttingDown) return;
-  shuttingDown = true;
-  logger.info("Received shutdown signal. Starting graceful shutdown...");
-
-  const forceExit = setTimeout(() => {
-    logger.error({ timeoutMs: SHUTDOWN_TIMEOUT_MS }, "Graceful shutdown timed out. Forcing exit.");
-    process.exit(1);
-  }, SHUTDOWN_TIMEOUT_MS);
-  forceExit.unref();
-
-  void (async () => {
-    try {
-      stopCron();
-
-      const remaining = await drainSseStreams(SSE_DRAIN_TIMEOUT_MS);
-      if (remaining > 0) {
-        logger.warn({ remaining }, "Some SSE streams did not finish within drain window");
-      }
-
-      await new Promise<void>((resolve, reject) => {
-        httpServer.close((err) => (err ? reject(err) : resolve()));
-        // Node 18.2+: severs idle keep-alive sockets so server.close()
-        // doesn't wait on them. Guarded for older runtimes.
-        const closeAll = (httpServer as unknown as { closeAllConnections?: () => void }).closeAllConnections;
-        if (typeof closeAll === "function") closeAll.call(httpServer);
-      });
-      logger.info("HTTP server closed.");
-
-      logger.info("Stopping queue...");
-      try {
-        await queue.stop();
-        logger.info("Queue stopped.");
-      } catch (err) {
-        logger.error({ err }, "Error stopping queue");
-      }
-
-      logger.info("Draining database pools...");
-      const drainResults = await Promise.allSettled([pool.end(), vectorPool.end()]);
-      for (const r of drainResults) {
-        if (r.status === "rejected") {
-          logger.error({ err: r.reason }, "Error draining a database pool");
-        }
-      }
-      logger.info("Database pools drained.");
-
-      await Sentry.close(SENTRY_FLUSH_TIMEOUT_MS).catch((err) => {
-        logger.error({ err }, "Error flushing Sentry");
-      });
-
-      clearTimeout(forceExit);
-      logger.info("Graceful shutdown complete. Exiting process.");
-      process.exit(0);
-    } catch (err) {
-      logger.error({ err }, "Unexpected error during graceful shutdown. Exiting.");
-      clearTimeout(forceExit);
-      process.exit(1);
-    }
-  })();
-};
-
-process.on("SIGTERM", shutdown);
-process.on("SIGINT", shutdown);
-
-// Global error handlers — catch async errors that escape startup/request handling.
-// These log the error and set startupError so the health endpoint reports it,
-// rather than silently crashing the process.
-process.on("uncaughtException", (err) => {
-  logger.fatal({ err }, "Uncaught exception in server process");
-  if (!startupError) {
-    startupError = `uncaught_exception: ${err.message}`;
-  }
-  Sentry.captureException(err);
+registerShutdownHandlers(httpServer, {
+  stopCron,
+  drainSseStreams,
+  stopQueue: () => queue.stop(),
+  drainPools: async () => {
+    await Promise.allSettled([pool.end(), vectorPool.end()]);
+  },
+  flushSentry: (timeoutMs) => Sentry.close(timeoutMs).then(() => undefined),
+  exit: (code) => process.exit(code),
 });
 
-process.on("unhandledRejection", (reason) => {
-  logger.fatal({ err: reason }, "Unhandled rejection in server process");
-  if (!startupError) {
-    startupError = `unhandled_rejection: ${reason instanceof Error ? reason.message : String(reason)}`;
-  }
-  Sentry.captureException(reason);
+registerProcessErrorHandlers({
+  onUncaught: (cb) => process.on("uncaughtException", cb),
+  onUnhandled: (cb) => process.on("unhandledRejection", cb),
+  setStartupError: (message) => {
+    if (!startupState.startupError) startupState.startupError = message;
+  },
 });
