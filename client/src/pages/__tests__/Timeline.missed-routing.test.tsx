@@ -15,7 +15,7 @@ beforeEach(() => {
 });
 
 describe("Timeline missed click routing", () => {
-  it("routes deep-linked missed entry id to LogSheet", () => {
+  it("routes deep-linked missed entry id to LogSheet", async () => {
     renderTimelineWithState({
       timelineState: buildTimelineStatePayload([missedEntry]),
       openWorkoutId: missedEntry.planDayId ?? null,
@@ -23,6 +23,6 @@ describe("Timeline missed click routing", () => {
       logSheetImpl: ({ entry }) => (entry ? <div data-testid="log-sheet">{entry.status}</div> : null),
     });
 
-    expect(screen.getByTestId("log-sheet")).toHaveTextContent("missed");
+    expect(await screen.findByTestId("log-sheet")).toHaveTextContent("missed");
   });
 });

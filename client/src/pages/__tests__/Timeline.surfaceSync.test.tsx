@@ -1,6 +1,6 @@
 import type { TimelineEntry } from "@shared/schema";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import Timeline from "../Timeline";
@@ -76,14 +76,15 @@ describe("Timeline surface sync", () => {
     timelineData = [makeEntry({})];
   });
 
-  it("keeps sheet identity stable across refetch/state transitions", () => {
+  it("keeps sheet identity stable across refetch/state transitions", async () => {
     const qc = new QueryClient();
     const { rerender } = render(<QueryClientProvider client={qc}><Timeline /></QueryClientProvider>);
+    await act(async () => { await Promise.resolve(); });
     // simulate refetch changing object reference + adding workoutLogId (planned->completed lifecycle)
     timelineData = [makeEntry({ id: "e2", workoutLogId: "wl1", status: "completed" })];
     rerender(<QueryClientProvider client={qc}><Timeline /></QueryClientProvider>);
 
-    expect(screen.getByTestId("log-sheet")).toHaveTextContent("e1");
+    await waitFor(() => expect(screen.getByTestId("log-sheet")).toHaveTextContent("e1"));
     expect(logSheetMounts).toBeGreaterThan(0);
     // No close/reopen loop via URL writes.
     expect(setOpenWorkoutId).toHaveBeenCalledTimes(0);
