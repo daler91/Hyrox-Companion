@@ -929,10 +929,21 @@ export async function updateWorkout(
 
   const previous = await storage.workouts.getWorkoutLog(workoutId, userId);
   if (!previous) return null;
-  const log = await storage.workouts.updateWorkoutLog(workoutId, updateData, userId);
-  if (!log) return null;
+  const result = await db.transaction(async (tx) => {
+    const [log] = await tx
+      .update(workoutLogs)
+      .set(updateData)
+      .where(and(eq(workoutLogs.id, workoutId), eq(workoutLogs.userId, userId)))
+      .returning();
+    if (!log) return null;
+    if (structureBlocks !== undefined) {
+      await replaceWorkoutStructure(tx, log.id, structureBlocks);
+    }
+    return log;
+  });
+  if (!result) return null;
   maybeEnqueueAutoCoachOnDateChange(userId, previous.date, updateData.date);
-  return log;
+  return result;
 }
 
 // When the athlete moves a logged workout to a different day, its position in
