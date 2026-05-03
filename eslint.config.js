@@ -174,6 +174,30 @@ export default tseslint.config(
     },
   },
 
+
+  // Guardrails for timeline + workout-detail surfaces to prevent bloat
+  {
+    files: [
+      "client/src/pages/Timeline.tsx",
+      "client/src/components/timeline/**/*.{ts,tsx}",
+      "client/src/components/workout-detail/**/*.{ts,tsx}",
+      "!client/src/components/**/__tests__/**/*.{ts,tsx}",
+      "client/src/hooks/useTimeline*.ts",
+      "client/src/hooks/useWorkoutDetail.ts",
+    ],
+    rules: {
+      "max-lines": [
+        "warn",
+        { max: 800, skipBlankLines: true, skipComments: true },
+      ],
+      "max-lines-per-function": [
+        "warn",
+        { max: 500, skipBlankLines: true, skipComments: true },
+      ],
+      complexity: ["warn", 45],
+    },
+  },
+
   // Server-side: no console (use pino logger)
   {
     files: ["server/**/*.ts"],

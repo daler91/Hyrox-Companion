@@ -50,6 +50,8 @@ import { useTimelineState } from "@/hooks/useTimelineState";
 import { useTimelineSurfaces } from "@/hooks/useTimelineSurfaces";
 import { api, QUERY_KEYS } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
+import { useTimelineDialogState } from "@/pages/timeline/useTimelineDialogState";
+import { useTimelineSurfaceSelection } from "@/pages/timeline/useTimelineSurfaceSelection";
 
 type TimelineState = ReturnType<typeof useTimelineState>;
 type TimelineData = TimelineState["data"];
@@ -300,7 +302,7 @@ export default function Timeline() {
       return;
     }
     setCoachOpen(open);
-  }, [isAuthUserLoaded, aiCoachEnabled, setCoachOpen]);
+  }, [isAuthUserLoaded, aiCoachEnabled, setCoachOpen, setShowAIConsent]);
 
   const handleAIConsentAccept = useCallback(() => {
     setShowAIConsent(false);
@@ -312,7 +314,7 @@ export default function Timeline() {
       .catch(() => {
         toast({ title: "Could not enable AI Coach", description: "Please try again." });
       });
-  }, [setCoachOpen, toast]);
+  }, [setCoachOpen, setShowAIConsent, toast]);
 
   // O(1) lookup by start date for the virtualized row renderer. Rebuilds
   // only when the annotations array itself changes.
@@ -343,17 +345,6 @@ export default function Timeline() {
       }),
   });
 
-  const handleAddAnnotation = useCallback((date: string) => {
-    setAnnotationInitialDate(date);
-    setAnnotationsDialogOpen(true);
-  }, []);
-
-  // Edit just opens the dialog (scoped to the existing list). The dialog
-  // does not yet support per-entry edit mode — users delete and re-create.
-  const handleEditAnnotation = useCallback((_annotation: TimelineAnnotation) => {
-    setAnnotationInitialDate(undefined);
-    setAnnotationsDialogOpen(true);
-  }, []);
 
   const handleDeleteAnnotation = useCallback((id: string) => {
     deleteAnnotationMutation.mutate(id);
