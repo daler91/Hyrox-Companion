@@ -30,9 +30,9 @@ const WORKOUT_NOT_FOUND = "Workout not found";
 const EXERCISE_SET_NOT_FOUND = "Exercise set not found";
 
 const workoutSetUseCase = createMutateExerciseSetUseCase({
-  updateSet: (workoutId, setId, body, userId) => storage.workouts.updateExerciseSet(workoutId, setId, body, userId),
-  addSet: (workoutId, body, userId) => storage.workouts.addExerciseSetToWorkoutLog(workoutId, body, userId),
-  deleteSet: (workoutId, setId, userId) => storage.workouts.deleteExerciseSet(workoutId, setId, userId),
+  updateSet: (owner, setId, body, userId) => storage.workouts.mutateExerciseSetUpdate(owner, setId, body, userId),
+  addSet: (owner, body, userId) => storage.workouts.mutateExerciseSetAdd(owner, body, userId),
+  deleteSet: (owner, setId, userId) => storage.workouts.mutateExerciseSetDelete(owner, setId, userId),
 });
 
 const combineWorkoutsSchema = z.object({
@@ -76,7 +76,7 @@ export function registerWorkoutCrudRoutes(router: Router): void {
   }));
 
   protectedPatch(router, "/api/v1/workouts/:id/sets/:setId", { limiter: rateLimiter("workoutSet", 120), middleware: [validateBody(patchExerciseSetSchema)] }, async (req: Request<{ id: string; setId: string }, Record<string, never>, PatchExerciseSetBody>, res: Response) => {
-    const updated = await workoutSetUseCase.updateSet(req.params.id, req.params.setId, req.body, getUserId(req));
+    const updated = await workoutSetUseCase.updateSet({ kind: "workoutLog", ownerId: req.params.id }, req.params.setId, req.body, getUserId(req));
     if (!updated) {
       return sendNotFound(res, EXERCISE_SET_NOT_FOUND);
     }
@@ -84,7 +84,7 @@ export function registerWorkoutCrudRoutes(router: Router): void {
   });
 
   protectedPost(router, "/api/v1/workouts/:id/sets", { limiter: rateLimiter("workoutSet", 60), middleware: [validateBody(addExerciseSetSchema)] }, async (req: Request<{ id: string }, Record<string, never>, AddExerciseSetBody>, res: Response) => {
-    const created = await workoutSetUseCase.addSet(req.params.id, req.body, getUserId(req));
+    const created = await workoutSetUseCase.addSet({ kind: "workoutLog", ownerId: req.params.id }, req.body, getUserId(req));
     if (!created) {
       return sendNotFound(res, WORKOUT_NOT_FOUND);
     }
@@ -92,7 +92,7 @@ export function registerWorkoutCrudRoutes(router: Router): void {
   });
 
   protectedDelete(router, "/api/v1/workouts/:id/sets/:setId", { limiter: rateLimiter("workoutSet", 60) }, async (req: Request<{ id: string; setId: string }>, res: Response) => {
-    const deleted = await workoutSetUseCase.deleteSet(req.params.id, req.params.setId, getUserId(req));
+    const deleted = await workoutSetUseCase.deleteSet({ kind: "workoutLog", ownerId: req.params.id }, req.params.setId, getUserId(req));
     if (!deleted) {
       return sendNotFound(res, EXERCISE_SET_NOT_FOUND);
     }

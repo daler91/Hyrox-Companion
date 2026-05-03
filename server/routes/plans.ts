@@ -23,9 +23,9 @@ const updateStoredPlanDay = createUpdatePlanDayUseCase({
 });
 
 const planDaySetUseCase = createMutateExerciseSetUseCase({
-  updateSet: (dayId, setId, body, userId) => storage.workouts.updateExerciseSetForPlanDay(dayId, setId, body, userId),
-  addSet: (dayId, body, userId) => storage.workouts.addExerciseSetToPlanDay(dayId, body, userId),
-  deleteSet: (dayId, setId, userId) => storage.workouts.deleteExerciseSetForPlanDay(dayId, setId, userId),
+  updateSet: (owner, setId, body, userId) => storage.workouts.mutateExerciseSetUpdate(owner, setId, body, userId),
+  addSet: (owner, body, userId) => storage.workouts.mutateExerciseSetAdd(owner, body, userId),
+  deleteSet: (owner, setId, userId) => storage.workouts.mutateExerciseSetDelete(owner, setId, userId),
 });
 
 const handleGetOrDeletePlan = (
@@ -194,7 +194,7 @@ protectedPost(
   { limiter: rateLimiter("planDaySet", 60), middleware: [validateBody(addExerciseSetBodySchema)] },
   async (req: ExpressRequest<{ dayId: string }, Record<string, never>, AddPlanDaySetPayload>, res: Response) => {
     const userId = getUserId(req);
-    const created = await planDaySetUseCase.addSet(req.params.dayId, req.body, userId);
+    const created = await planDaySetUseCase.addSet({ kind: "planDay", ownerId: req.params.dayId }, req.body, userId);
     if (!created) {
       return sendNotFound(res, PLAN_DAY_NOT_FOUND);
     }
@@ -208,7 +208,7 @@ protectedPatch(
   { limiter: rateLimiter("planDaySet", 120), middleware: [validateBody(patchExerciseSetBodySchema)] },
   async (req: ExpressRequest<{ dayId: string; setId: string }, Record<string, never>, PatchPlanDaySetPayload>, res: Response) => {
     const userId = getUserId(req);
-    const updated = await planDaySetUseCase.updateSet(req.params.dayId, req.params.setId, req.body, userId);
+    const updated = await planDaySetUseCase.updateSet({ kind: "planDay", ownerId: req.params.dayId }, req.params.setId, req.body, userId);
     if (!updated) {
       return sendNotFound(res, PLAN_DAY_SET_NOT_FOUND);
     }
@@ -222,7 +222,7 @@ protectedDelete(
   { limiter: rateLimiter("planDaySet", 60) },
   async (req: ExpressRequest<{ dayId: string; setId: string }>, res: Response) => {
     const userId = getUserId(req);
-    const deleted = await planDaySetUseCase.deleteSet(req.params.dayId, req.params.setId, userId);
+    const deleted = await planDaySetUseCase.deleteSet({ kind: "planDay", ownerId: req.params.dayId }, req.params.setId, userId);
     if (!deleted) {
       return sendNotFound(res, PLAN_DAY_SET_NOT_FOUND);
     }

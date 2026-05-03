@@ -69,3 +69,5 @@ export const QUERY_KEYS = {
   stravaStatus: ["/api/v1/strava/status"] as const,
   garminStatus: ["/api/v1/garmin/status"] as const,
 } as const;
+
+export type { AddExerciseSetPayload, PatchExerciseSetPayload } from "./exerciseSetMutations";
