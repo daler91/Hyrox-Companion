@@ -79,12 +79,42 @@ export async function runStructuredExerciseDailyRollup(day: string): Promise<voi
     logger.warn({ context: "health-alert", event: "legacy_only_pct_wow_rise", currentPct, prevPct, day }, "Legacy-only percentage rose >10% week-over-week");
   }
 
-  const legacyWorkout = Number(row?.legacy_workout_rows ?? 0);
-  const legacyPlan = Number(row?.legacy_plan_rows ?? 0);
-  if (legacyWorkout > 0) {
-    await incrementStructuredExerciseCounter("workout_log", "manual", "text_only_rows_detected", legacyWorkout, day);
-  }
-  if (legacyPlan > 0) {
-    await incrementStructuredExerciseCounter("plan_day", "manual", "text_only_rows_detected", legacyPlan, day);
+  const legacyBreakdown = await db.execute<{ owner_type: OwnerType; source: SourceType; legacy_count: number }>(sql`
+    with owners as (
+      select 'workout_log'::text as owner_type, wl.date as owner_day,
+             case when wl.source in ('strava','garmin') then 'import' when wl.source in ('voice','photo') then wl.source else 'manual' end as source,
+             coalesce(wl.main_workout,'') || ' ' || coalesce(wl.accessory,'') as text_blob,
+             exists(select 1 from exercise_sets es where es.workout_log_id = wl.id) as has_structured
+      from workout_logs wl
+      union all
+      select 'plan_day'::text as owner_type, pd.scheduled_date as owner_day,
+             'manual'::text as source,
+             coalesce(pd.main_workout,'') || ' ' || coalesce(pd.accessory,'') as text_blob,
+             exists(select 1 from exercise_sets es where es.plan_day_id = pd.id) as has_structured
+      from plan_days pd
+      where pd.scheduled_date is not null
+    )
+    select owner_type::text as owner_type, source::text as source, count(*)::int as legacy_count
+    from owners
+    where owner_day = ${day}::date
+      and has_structured = false
+      and btrim(text_blob) <> ''
+    group by owner_type, source
+  `);
+
+  await db.execute(sql`
+    delete from structured_exercise_health_counters
+    where day = ${day}::date
+      and counter_name = 'text_only_rows_detected'
+  `);
+
+  for (const item of legacyBreakdown.rows) {
+    if ((item.legacy_count ?? 0) <= 0) continue;
+    await db.execute(sql`
+      insert into structured_exercise_health_counters (day, owner_type, source, counter_name, value, updated_at)
+      values (${day}::date, ${item.owner_type}, ${item.source}, 'text_only_rows_detected', ${item.legacy_count}, now())
+      on conflict (day, owner_type, source, counter_name)
+      do update set value = excluded.value, updated_at = now()
+    `);
   }
 }
