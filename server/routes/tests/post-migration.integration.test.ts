@@ -360,6 +360,26 @@ describe("Post-Migration Verification: Railway + Neon", () => {
       }
     });
 
+
+
+    it("structured exercise health counter check allows new parse/rejection counters", async () => {
+      const client = await pool.connect();
+      try {
+        const result = await client.query(
+          `SELECT pg_get_constraintdef(oid) AS def
+           FROM pg_constraint
+           WHERE conname = 'structured_exercise_health_counter_name_check'`,
+        );
+        expect(result.rowCount).toBeGreaterThan(0);
+        const def = String(result.rows[0]?.def ?? "");
+        expect(def).toContain("rejected_text_only_write");
+        expect(def).toContain("parse_text_attempted");
+        expect(def).toContain("parse_photo_failed");
+      } finally {
+        client.release();
+      }
+    });
+
     it("foreign keys exist with correct ON DELETE behavior", async () => {
       const client = await pool.connect();
       try {
