@@ -178,7 +178,7 @@ function App() {
   );
 }
 
-function BaseProviders({ children }: { children: React.ReactNode }) {
+function BaseProviders({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>

@@ -52,11 +52,11 @@ describe("App providers", () => {
     showSpy.mockClear();
     vi.resetModules();
     vi.unstubAllEnvs();
-    delete (window as Window & { Cypress?: unknown }).Cypress;
+    delete (globalThis as typeof globalThis & { Cypress?: unknown }).Cypress;
   });
 
   it("renders the same base provider stack when auth is bypassed", async () => {
-    (window as Window & { Cypress?: unknown }).Cypress = {};
+    (globalThis as typeof globalThis & { Cypress?: unknown }).Cypress = {};
     const App = await loadApp();
 
     render(<App />);
