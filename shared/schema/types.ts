@@ -306,6 +306,20 @@ export const schedulePlanRequestSchema = z.object({
 // AI-parsed output so reps uses .min(0) (Gemini may legitimately emit a
 // zero-rep "failed attempt" row); incomingExerciseSchema is user-submitted
 // and uses .min(1) on reps since a zero-rep user log is meaningless.
+const setStructureMetadataFieldsOptional = {
+  blockId: z.string().max(255).optional().nullable(),
+  stepNumber: z.number().int().min(1).max(10_000).optional().nullable(),
+  intervalMinute: z.number().int().min(0).max(10_000).optional().nullable(),
+  cycleNumber: z.number().int().min(1).max(10_000).optional().nullable(),
+  stepRole: z.string().max(50).optional().nullable(),
+  groupId: z.string().max(255).optional().nullable(),
+  intensity: z.record(z.string(), z.unknown()).optional().nullable(),
+  load: z.record(z.string(), z.unknown()).optional().nullable(),
+  repMode: z.enum(["total", "per_side"]).optional().nullable(),
+  tempo: z.record(z.string(), z.unknown()).optional().nullable(),
+  standards: z.record(z.string(), z.unknown()).optional().nullable(),
+};
+
 export const exerciseSetSchema = z.object({
   setNumber: z.number().min(1).max(100).optional().nullable(),
   reps: z.number().min(0).max(10_000).optional().nullable(),
@@ -319,17 +333,7 @@ export const exerciseSetSchema = z.object({
   plannedWeight: z.number().min(0).max(2_000).optional().nullable(),
   plannedDistance: z.number().min(0).max(1_000_000).optional().nullable(),
   plannedTime: z.number().min(0).max(86_400).optional().nullable(),
-  blockId: z.string().max(255).optional().nullable(),
-  stepNumber: z.number().int().min(1).max(10_000).optional().nullable(),
-  intervalMinute: z.number().int().min(0).max(10_000).optional().nullable(),
-  cycleNumber: z.number().int().min(1).max(10_000).optional().nullable(),
-  stepRole: z.string().max(50).optional().nullable(),
-  groupId: z.string().max(255).optional().nullable(),
-  intensity: z.record(z.string(), z.unknown()).optional().nullable(),
-  load: z.record(z.string(), z.unknown()).optional().nullable(),
-  repMode: z.enum(["total", "per_side"]).optional().nullable(),
-  tempo: z.record(z.string(), z.unknown()).optional().nullable(),
-  standards: z.record(z.string(), z.unknown()).optional().nullable(),
+  ...setStructureMetadataFieldsOptional,
   notes: z.string().max(1000).optional().nullable(),
 }).strip();
 
@@ -346,17 +350,7 @@ export const incomingExerciseSchema = z.object({
   plannedWeight: z.number().min(0).max(2_000).optional().nullable(),
   plannedDistance: z.number().min(0).max(1_000_000).optional().nullable(),
   plannedTime: z.number().min(0).max(86_400).optional().nullable(),
-  blockId: z.string().max(255).optional().nullable(),
-  stepNumber: z.number().int().min(1).max(10_000).optional().nullable(),
-  intervalMinute: z.number().int().min(0).max(10_000).optional().nullable(),
-  cycleNumber: z.number().int().min(1).max(10_000).optional().nullable(),
-  stepRole: z.string().max(50).optional().nullable(),
-  groupId: z.string().max(255).optional().nullable(),
-  intensity: z.record(z.string(), z.unknown()).optional().nullable(),
-  load: z.record(z.string(), z.unknown()).optional().nullable(),
-  repMode: z.enum(["total", "per_side"]).optional().nullable(),
-  tempo: z.record(z.string(), z.unknown()).optional().nullable(),
-  standards: z.record(z.string(), z.unknown()).optional().nullable(),
+  ...setStructureMetadataFieldsOptional,
   confidence: z.number().min(0).max(100).optional().nullable(),
   notes: z.string().max(1000).optional().nullable(),
   sets: z.array(exerciseSetSchema).max(50).optional().nullable(),
@@ -378,17 +372,7 @@ const measurableSetFields = {
   weight: z.number().min(0).max(2_000).nullable().optional(),
   distance: z.number().min(0).max(1_000_000).nullable().optional(),
   time: z.number().min(0).max(86_400).nullable().optional(),
-  blockId: z.string().max(255).nullable().optional(),
-  stepNumber: z.number().int().min(1).max(10_000).nullable().optional(),
-  intervalMinute: z.number().int().min(0).max(10_000).nullable().optional(),
-  cycleNumber: z.number().int().min(1).max(10_000).nullable().optional(),
-  stepRole: z.string().max(50).nullable().optional(),
-  groupId: z.string().max(255).nullable().optional(),
-  intensity: z.record(z.string(), z.unknown()).nullable().optional(),
-  load: z.record(z.string(), z.unknown()).nullable().optional(),
-  repMode: z.enum(["total", "per_side"]).nullable().optional(),
-  tempo: z.record(z.string(), z.unknown()).nullable().optional(),
-  standards: z.record(z.string(), z.unknown()).nullable().optional(),
+  ...setStructureMetadataFieldsOptional,
   notes: z.string().max(1000).nullable().optional(),
 };
 
