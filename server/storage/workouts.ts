@@ -41,12 +41,15 @@ type MutationOwnerContext =
   | { kind: "workout"; id: string; userId: string }
   | { kind: "planDay"; id: string; userId: string };
 
+type NormalizedSetCreateInput = Omit<InsertExerciseSet, "id" | "workoutLogId" | "planDayId" | "sortOrder">;
+type NormalizedSetUpdateInput = Partial<Omit<InsertExerciseSet, "id" | "workoutLogId" | "planDayId">>;
+
 type MutationOwnerAdapter = {
   getContainerId: (set: ExerciseSet) => string | null;
   ownsContainer: (containerId: string, userId: string) => Promise<boolean>;
   buildInsertValues: (
     containerId: string,
-    set: Omit<InsertExerciseSet, "id" | "workoutLogId" | "planDayId" | "sortOrder">,
+    set: NormalizedSetCreateInput,
     sortOrder: number,
   ) => InsertExerciseSet;
   scopeWhere: (containerId: string) => ReturnType<typeof eq>;
@@ -356,7 +359,7 @@ export class WorkoutStorage {
 
   async addExerciseSetNormalized(
     context: MutationOwnerContext,
-    set: Omit<InsertExerciseSet, "id" | "workoutLogId" | "planDayId" | "sortOrder">,
+    set: NormalizedSetCreateInput,
     adapter: MutationOwnerAdapter = this.getMutationOwnerAdapter(context),
   ): Promise<ExerciseSet | undefined> {
     if (!(await adapter.ownsContainer(context.id, context.userId))) return undefined;
@@ -375,7 +378,7 @@ export class WorkoutStorage {
   async updateExerciseSetNormalized(
     context: MutationOwnerContext,
     setId: string,
-    updates: Partial<Omit<InsertExerciseSet, "id" | "workoutLogId" | "planDayId">>,
+    updates: NormalizedSetUpdateInput,
     adapter: MutationOwnerAdapter = this.getMutationOwnerAdapter(context),
   ): Promise<ExerciseSet | undefined> {
     const owned = await this.getExerciseSetOwned(setId, context.userId);
@@ -426,7 +429,7 @@ export class WorkoutStorage {
   async updateExerciseSet(
     workoutLogId: string,
     setId: string,
-    updates: Partial<Omit<InsertExerciseSet, "id" | "workoutLogId" | "planDayId">>,
+    updates: NormalizedSetUpdateInput,
     userId: string,
   ): Promise<ExerciseSet | undefined> {
     return this.updateExerciseSetNormalized({ kind: "workout", id: workoutLogId, userId }, setId, updates);
@@ -443,7 +446,7 @@ export class WorkoutStorage {
    */
   async addExerciseSetToWorkoutLog(
     workoutLogId: string,
-    set: Omit<InsertExerciseSet, "id" | "workoutLogId" | "planDayId" | "sortOrder">,
+    set: NormalizedSetCreateInput,
     userId: string,
   ): Promise<ExerciseSet | undefined> {
     return this.addExerciseSetNormalized({ kind: "workout", id: workoutLogId, userId }, set);
@@ -487,7 +490,7 @@ export class WorkoutStorage {
 
   async addExerciseSetToPlanDay(
     planDayId: string,
-    set: Omit<InsertExerciseSet, "id" | "workoutLogId" | "planDayId" | "sortOrder">,
+    set: NormalizedSetCreateInput,
     userId: string,
   ): Promise<ExerciseSet | undefined> {
     return this.addExerciseSetNormalized({ kind: "planDay", id: planDayId, userId }, set);
@@ -496,7 +499,7 @@ export class WorkoutStorage {
   async updateExerciseSetForPlanDay(
     planDayId: string,
     setId: string,
-    updates: Partial<Omit<InsertExerciseSet, "id" | "workoutLogId" | "planDayId">>,
+    updates: NormalizedSetUpdateInput,
     userId: string,
   ): Promise<ExerciseSet | undefined> {
     return this.updateExerciseSetNormalized({ kind: "planDay", id: planDayId, userId }, setId, updates);
