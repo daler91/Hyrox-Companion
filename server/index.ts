@@ -12,6 +12,7 @@ import type { Pool, PoolClient } from "pg";
 import pinoHttp from "pino-http";
 
 import { generateOpenApiDocument } from "../shared/openapi";
+import { initObservability } from "./bootstrap/observability";
 import { startCron, stopCron } from "./cron";
 import { pool } from "./db";
 import { env } from "./env";
@@ -37,63 +38,7 @@ if (env.ALLOW_DEV_AUTH_BYPASS === "true") {
   }
 }
 
-if (env.SENTRY_DSN) {
-  Sentry.init({
-    dsn: env.SENTRY_DSN,
-    environment: env.NODE_ENV || "development",
-    sendDefaultPii: false,
-    tracesSampleRate: env.NODE_ENV === "production" ? 0.1 : 1,
-    // 🛡️ Sentinel: Strip PII-bearing fields from error payloads before
-    // transmission (CODEBASE_REVIEW_2026-04-12.md #2). Even with
-    // sendDefaultPii=false, manually captured errors can carry request
-    // bodies, query strings, cookies, or auth headers that contain user
-    // email/name/biometrics.
-    beforeSend(event) {
-      if (event.request) {
-        delete event.request.data;
-        delete event.request.query_string;
-        delete event.request.cookies;
-        if (event.request.headers) {
-          delete event.request.headers.authorization;
-          delete event.request.headers.cookie;
-          delete event.request.headers["x-csrf-token"];
-          delete event.request.headers["x-idempotency-key"];
-        }
-      }
-      if (event.user) {
-        delete event.user.email;
-        delete event.user.username;
-        delete event.user.ip_address;
-      }
-      return event;
-    },
-  });
-  // Operator sanity check: emit a structured boot log so deploy logs can
-  // confirm Sentry is wired without spraying a fake error into the issue
-  // tracker. Log a masked DSN prefix + environment; a silent failure to
-  // initialise otherwise only shows up the next time an error fires,
-  // which can be days later (CODEBASE_AUDIT.md Suggestion-11).
-  const client = Sentry.getClient();
-  // Mask the `user:pass@` portion of the DSN via index arithmetic rather
-  // than a regex. The previous /\/\/[^@]+@/ was linear in practice (no
-  // overlapping alternatives), but SonarCloud flagged it as S5852 since
-  // the greedy class could be misread as backtracking-prone. indexOf is
-  // O(n) worst-case with no regex engine involved, which sidesteps the
-  // hotspot and is easier to reason about.
-  const dsn = env.SENTRY_DSN;
-  const schemeEnd = dsn.indexOf("//");
-  const atIdx = schemeEnd >= 0 ? dsn.indexOf("@", schemeEnd + 2) : -1;
-  const maskedDsn = atIdx > schemeEnd + 2
-    ? `${dsn.slice(0, schemeEnd + 2)}***${dsn.slice(atIdx)}`
-    : dsn;
-  if (client) {
-    logger.info({ context: "sentry", environment: env.NODE_ENV || "development", dsn: maskedDsn }, "Sentry error reporting initialised");
-  } else {
-    logger.warn({ context: "sentry", dsn: maskedDsn }, "Sentry.init returned without a client — error reports will be dropped");
-  }
-} else {
-  logger.info({ context: "sentry" }, "SENTRY_DSN not set — error reports disabled");
-}
+initObservability();
 
 const app = express();
 
