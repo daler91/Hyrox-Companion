@@ -18,15 +18,31 @@ vi.mock("../../routeGuards", () => ({
 }));
 
 describe("protected routes guard order matrix", () => {
+  const withCalls = (): { app: express.Express; router: express.Router; calls: string[] } => {
+    const app = express();
+    const router = express.Router();
+    const calls: string[] = [];
+    app.use((_req, res, next) => {
+      res.locals.calls = calls;
+      next();
+    });
+    return { app, router, calls };
+  };
+
+  const recordLimiter: express.RequestHandler = (_req, res, next) => {
+    (res.locals.calls as string[]).push("limiter");
+    next();
+  };
+
+  const okHandler = async (_req: express.Request, res: express.Response): Promise<void> => {
+    (res.locals.calls as string[]).push("handler");
+    res.status(200).json({ ok: true });
+  };
+
   const matrix = [
     {
       name: "email check protected post",
-      register: (router: express.Router) => protectedPost(router, "/emails/check", {
-        limiter: (_req, res, next) => { (res.locals.calls as string[]).push("limiter"); next(); },
-      }, async (_req, res) => {
-        (res.locals.calls as string[]).push("handler");
-        res.status(200).json({ ok: true });
-      }),
+      register: (router: express.Router) => protectedPost(router, "/emails/check", { limiter: recordLimiter }, okHandler),
       method: "post" as const,
       path: "/emails/check",
       expectedStatus: 200,
@@ -34,12 +50,7 @@ describe("protected routes guard order matrix", () => {
     },
     {
       name: "account delete protected delete",
-      register: (router: express.Router) => protectedDelete(router, "/account", {
-        limiter: (_req, res, next) => { (res.locals.calls as string[]).push("limiter"); next(); },
-      }, async (_req, res) => {
-        (res.locals.calls as string[]).push("handler");
-        res.status(200).json({ ok: true });
-      }),
+      register: (router: express.Router) => protectedDelete(router, "/account", { limiter: recordLimiter }, okHandler),
       method: "delete" as const,
       path: "/account",
       expectedStatus: 200,
@@ -49,14 +60,7 @@ describe("protected routes guard order matrix", () => {
 
   for (const entry of matrix) {
     it(`enforces canonical middleware sequence for ${entry.name}`, async () => {
-      const app = express();
-      const router = express.Router();
-      const calls: string[] = [];
-
-      app.use((_req, res, next) => {
-        res.locals.calls = calls;
-        next();
-      });
+      const { app, router, calls } = withCalls();
 
       entry.register(router);
       app.use(router);
@@ -71,17 +75,10 @@ describe("protected routes guard order matrix", () => {
   }
 
   it("stops downstream middleware after rejection and preserves payload", async () => {
-    const app = express();
-    const router = express.Router();
-    const calls: string[] = [];
-
-    app.use((_req, res, next) => {
-      res.locals.calls = calls;
-      next();
-    });
+    const { app, router, calls } = withCalls();
 
     protectedPost(router, "/workouts", {
-      limiter: (_req, res, next) => { (res.locals.calls as string[]).push("limiter"); next(); },
+      limiter: recordLimiter,
       validation: [(_req, res) => {
         (res.locals.calls as string[]).push("validation-reject");
         res.status(400).json({ error: "Invalid payload", code: "VALIDATION_ERROR" });
