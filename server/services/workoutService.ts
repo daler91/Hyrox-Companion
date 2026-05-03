@@ -911,10 +911,14 @@ export async function updateWorkout(
           await tx.insert(customExercises).values(uniqueCustomExs).onConflictDoNothing();
         }
 
-        await replaceWorkoutStructure(tx, log.id, structureBlocks ?? synthesizeDefaultStructureBlocks(exercises));
+        if (structureBlocks !== undefined) {
+          await replaceWorkoutStructure(tx, log.id, structureBlocks);
+        }
         return { log: { ...log, exerciseSets: savedSets } as UpdateWorkoutResult, previousDate };
       }
-      await replaceWorkoutStructure(tx, log.id, structureBlocks);
+      if (structureBlocks !== undefined) {
+        await replaceWorkoutStructure(tx, log.id, structureBlocks);
+      }
       return { log, previousDate };
     });
 

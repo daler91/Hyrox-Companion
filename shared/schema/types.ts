@@ -402,7 +402,7 @@ export const structureBlockSchema = z.object({
   rounds: z.number().int().min(1).max(10_000).optional().nullable(),
   workSeconds: z.number().int().min(0).max(86_400).optional().nullable(),
   restSeconds: z.number().int().min(0).max(86_400).optional().nullable(),
-  sortOrder: z.number().int().min(0).max(10_000).optional().default(0),
+  sortOrder: z.number().int().min(0).max(10_000).optional(),
   steps: z.array(structureStepSchema).min(1).max(200),
 }).superRefine((block, ctx) => {
   if (block.formatType.toLowerCase() === "amrap" && block.rounds != null) {
