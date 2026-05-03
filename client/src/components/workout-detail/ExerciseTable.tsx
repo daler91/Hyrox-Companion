@@ -79,6 +79,26 @@ interface ExerciseTableProps {
   readonly showPlannedDiffs?: boolean;
 }
 
+export function toggleExerciseRow(expanded: ReadonlySet<string>, rowKey: string): Set<string> {
+  const next = new Set(expanded);
+  if (next.has(rowKey)) next.delete(rowKey);
+  else next.add(rowKey);
+  return next;
+}
+
+export function dispatchSortOrderMutations(
+  nextGroups: readonly GroupedExercise[],
+  onUpdateSet: (setId: string, data: PatchExerciseSetPayload) => void,
+) {
+  let order = 0;
+  for (const g of nextGroups) {
+    for (const s of g.sets) {
+      if (s.sortOrder !== order) onUpdateSet(s.id, { sortOrder: order });
+      order += 1;
+    }
+  }
+}
+
 /**
  * Compact one-row-per-exercise table for the detail dialog and the
  * planned-entry CTA. Aggregate cells (Sets / Reps-or-Distance / Load)
@@ -170,12 +190,7 @@ export function ExerciseTable({
   }
 
   const toggleExpanded = useCallback((rowKey: string) => {
-    setExpandedKeys((prev) => {
-      const next = new Set(prev);
-      if (next.has(rowKey)) next.delete(rowKey);
-      else next.add(rowKey);
-      return next;
-    });
+    setExpandedKeys((prev) => toggleExerciseRow(prev, rowKey));
   }, []);
 
   const handlePickFromCatalog = (name: ExerciseName) => {
@@ -282,13 +297,7 @@ function useExerciseDndHandler(
     if (oldIndex < 0 || newIndex < 0) return;
 
     const nextGroups = arrayMove([...groups], oldIndex, newIndex);
-    let order = 0;
-    for (const g of nextGroups) {
-      for (const s of g.sets) {
-        if (s.sortOrder !== order) onUpdateSet(s.id, { sortOrder: order });
-        order += 1;
-      }
-    }
+    dispatchSortOrderMutations(nextGroups, onUpdateSet);
   }, [groups, rowKeys, onUpdateSet]);
 }
 
@@ -954,4 +963,3 @@ function shouldShowLoad(group: GroupedExercise, primaryField: PrimaryField): boo
   if (primaryField === "reps") return true;
   return group.sets.some((s) => s.weight != null);
 }
-

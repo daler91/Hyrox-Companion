@@ -7,7 +7,6 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import type { TimelineAnnotation, TimelineEntry } from "@shared/schema";
-import { useMutation } from "@tanstack/react-query";
 import type { Virtualizer } from "@tanstack/react-virtual";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { format,isToday, parseISO } from "date-fns";
@@ -45,11 +44,11 @@ import { SkippedSheet } from "@/components/workout-detail/SkippedSheet";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
 import { useIsAiCoachEnabled, useIsAuthUserLoaded, useIsAutoCoaching } from "@/hooks/useAuth";
-import { useMoveTimelineEntry } from "@/hooks/useMoveTimelineEntry";
 import { useTimelineState } from "@/hooks/useTimelineState";
 import { api, QUERY_KEYS } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
 import { useTimelineDialogState } from "@/pages/timeline/useTimelineDialogState";
+import { useTimelinePageController } from "@/pages/timeline/useTimelinePageController";
 import { useTimelineSurfaceSelection } from "@/pages/timeline/useTimelineSurfaceSelection";
 
 // Click-routing for timeline cards: PreviewSheet (future planned),
@@ -310,45 +309,12 @@ export default function Timeline() {
       });
   }, [setCoachOpen, setShowAIConsent, toast]);
 
-  // O(1) lookup by start date for the virtualized row renderer. Rebuilds
-  // only when the annotations array itself changes.
-  const annotationsByDate = useMemo(() => {
-    return annotations.reduce<Record<string, TimelineAnnotation[]>>((acc, annotation) => {
-      if (!acc[annotation.startDate]) {
-        acc[annotation.startDate] = [];
-      }
-      acc[annotation.startDate].push(annotation);
-      return acc;
-    }, {});
-  }, [annotations]);
-
-  // Inline-delete mutation for annotation cards. Mirrors the invalidation
-  // set in AnnotationsDialog so the Analytics chart bands stay in sync.
-  const deleteAnnotationMutation = useMutation({
-    mutationFn: (id: string) => api.timelineAnnotations.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timelineAnnotations }).catch(() => {});
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.trainingOverview }).catch(() => {});
-      toast({ title: "Annotation removed" });
-    },
-    onError: () =>
-      toast({
-        title: "Couldn't delete annotation",
-        description: "Please try again.",
-        variant: "destructive",
-      }),
-  });
-
-
-  const handleDeleteAnnotation = useCallback((id: string) => {
-    deleteAnnotationMutation.mutate(id);
-  }, [deleteAnnotationMutation]);
+  const { annotationsByDate, moveEntry, isMoving, handleDeleteAnnotation, isAnnotationDeleting } = useTimelinePageController(selectedPlanId, annotations);
 
   const allVisibleGroups = useMemo(() => {
     return [...visiblePastGroups.slice().reverse(), ...visibleFutureGroups];
   }, [visiblePastGroups, visibleFutureGroups]);
 
-  const { moveEntry, isMoving } = useMoveTimelineEntry(selectedPlanId);
 
   // Require a small activation distance on pointer drag so clicking the
   // drag handle to open a tooltip / focus it doesn't accidentally pick
@@ -479,7 +445,7 @@ export default function Timeline() {
           onAddAnnotation={handleAddAnnotation}
           onEditAnnotation={handleEditAnnotation}
           onDeleteAnnotation={handleDeleteAnnotation}
-          isAnnotationDeleting={deleteAnnotationMutation.isPending}
+          isAnnotationDeleting={isAnnotationDeleting}
           onMoveEntry={moveEntry}
           isMovingEntry={isMoving}
         />
