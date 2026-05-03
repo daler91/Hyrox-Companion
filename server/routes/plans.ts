@@ -190,8 +190,12 @@ router.get(
         storage.users.getUser(userId),
       ]);
       if (planDay) {
-        await autoHydrateExerciseSetsFromTextIfNeeded(planDay, { planDayId: planDay.id }, user?.weightUnit || "kg", "plan");
-        sets = (await storage.workouts.getExerciseSetsByPlanDay(req.params.dayId, userId)) ?? [];
+        try {
+          await autoHydrateExerciseSetsFromTextIfNeeded(planDay, { planDayId: planDay.id }, user?.weightUnit || "kg", "plan");
+          sets = (await storage.workouts.getExerciseSetsByPlanDay(req.params.dayId, userId)) ?? [];
+        } catch {
+          // Best effort on read-path hydration; preserve existing response contract.
+        }
       }
     }
     res.json(sets);

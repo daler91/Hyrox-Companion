@@ -1,16 +1,12 @@
-import type { exercisesPayloadSchema, InsertWorkoutLog, insertWorkoutLogSchema, ParsedExercise,UpdateWorkoutLog, updateWorkoutLogSchema } from "@shared/schema";
+import type { exercisesPayloadSchema, InsertWorkoutLog, insertWorkoutLogSchema, ParsedExercise, UpdateWorkoutLog, updateWorkoutLogSchema } from "@shared/schema";
 import type { z } from "zod";
 
+import { env } from "../env";
 import { AppError, ErrorCode } from "../errors";
 import { parseExercisesFromText } from "../gemini";
 import { storage } from "../storage";
 import { createWorkoutAndScheduleCoaching, updateWorkout } from "./workoutService";
 
-// Route-level payloads carry the core table columns plus an optional parsed
-// `exercises` array. The use-case layer exists to keep route handlers thin
-// (CODEBASE_AUDIT.md §1): transport concerns stay in routes, DB/orchestration
-// stays in workoutService, and these wrappers are the only place where the
-// payload shape is split into its service-level arguments.
 type CreateWorkoutPayload = z.infer<typeof insertWorkoutLogSchema> & {
   exercises?: z.infer<typeof exercisesPayloadSchema>;
 };
@@ -24,7 +20,7 @@ export async function createWorkout(input: {
 }) {
   const { exercises, ...workoutData } = input.payload;
   let structured = exercises as ParsedExercise[] | undefined;
-  if (!structured || structured.length === 0) {
+  if ((!structured || structured.length === 0) && env.GEMINI_API_KEY) {
     const textToParse = [workoutData.mainWorkout, workoutData.accessory].filter(Boolean).join("\n").trim();
     if (textToParse) {
       const user = await storage.users.getUser(input.userId);
@@ -34,11 +30,7 @@ export async function createWorkout(input: {
       }
     }
   }
-  return createWorkoutAndScheduleCoaching(
-    workoutData as InsertWorkoutLog,
-    structured,
-    input.userId,
-  );
+  return createWorkoutAndScheduleCoaching(workoutData as InsertWorkoutLog, structured, input.userId);
 }
 
 export async function updateWorkoutUseCase(input: {
@@ -48,8 +40,14 @@ export async function updateWorkoutUseCase(input: {
 }) {
   const { exercises, ...updateData } = input.payload;
   let structured = exercises as ParsedExercise[] | undefined;
-  if (!structured || structured.length === 0) {
-    const textToParse = [updateData.mainWorkout, updateData.accessory].filter(Boolean).join("\n").trim();
+
+  if ((!structured || structured.length === 0) && env.GEMINI_API_KEY) {
+    const existing = await storage.workouts.getWorkoutLog(input.workoutId, input.userId);
+    if (!existing) return null;
+
+    const mergedMain = updateData.mainWorkout ?? existing.mainWorkout;
+    const mergedAccessory = updateData.accessory ?? existing.accessory;
+    const textToParse = [mergedMain, mergedAccessory].filter(Boolean).join("\n").trim();
     if (textToParse) {
       const user = await storage.users.getUser(input.userId);
       structured = await parseExercisesFromText(textToParse, user?.weightUnit || "kg", undefined, input.userId);
@@ -58,10 +56,6 @@ export async function updateWorkoutUseCase(input: {
       }
     }
   }
-  return updateWorkout(
-    input.workoutId,
-    updateData as UpdateWorkoutLog,
-    structured,
-    input.userId,
-  );
+
+  return updateWorkout(input.workoutId, updateData as UpdateWorkoutLog, structured, input.userId);
 }

@@ -122,8 +122,12 @@ export function registerWorkoutCrudRoutes(router: Router): void {
     let exerciseSets = await storage.workouts.getExerciseSetsByWorkoutLog(log.id);
     if (exerciseSets.length === 0) {
       const user = await storage.users.getUser(userId);
-      await autoHydrateExerciseSetsFromTextIfNeeded(log, { workoutLogId: log.id }, user?.weightUnit || "kg", "workout");
-      exerciseSets = await storage.workouts.getExerciseSetsByWorkoutLog(log.id);
+      try {
+        await autoHydrateExerciseSetsFromTextIfNeeded(log, { workoutLogId: log.id }, user?.weightUnit || "kg", "workout");
+        exerciseSets = await storage.workouts.getExerciseSetsByWorkoutLog(log.id);
+      } catch {
+        // Best effort on read-path hydration; preserve detail availability.
+      }
     }
     res.json({ ...log, exerciseSets });
   }));
