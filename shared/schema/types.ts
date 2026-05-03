@@ -320,7 +320,21 @@ const setStructureMetadataFieldsOptional = {
   standards: z.record(z.string(), z.unknown()).optional().nullable(),
 };
 
-export const exerciseSetSchema = z.object({
+function hasExactlyOne(a: unknown, b: unknown): boolean {
+  return (a == null) !== (b == null);
+}
+
+function withBlockStepPairing<T extends { blockId?: string | null; stepNumber?: number | null }>(schema: z.ZodType<T>) {
+  return schema.refine(
+    (value) => !hasExactlyOne(value.blockId, value.stepNumber),
+    {
+      message: "blockId and stepNumber must be provided together (or both omitted).",
+      path: ["stepNumber"],
+    },
+  );
+}
+
+export const exerciseSetSchema = withBlockStepPairing(z.object({
   setNumber: z.number().min(1).max(100).optional().nullable(),
   reps: z.number().min(0).max(10_000).optional().nullable(),
   weight: z.number().min(0).max(2_000).optional().nullable(),
@@ -335,9 +349,9 @@ export const exerciseSetSchema = z.object({
   plannedTime: z.number().min(0).max(86_400).optional().nullable(),
   ...setStructureMetadataFieldsOptional,
   notes: z.string().max(1000).optional().nullable(),
-}).strip();
+}).strip());
 
-export const incomingExerciseSchema = z.object({
+export const incomingExerciseSchema = withBlockStepPairing(z.object({
   exerciseName: z.string().min(1).max(255),
   customLabel: z.string().max(255).optional().nullable(),
   category: z.string().max(50).optional().nullable(),
@@ -354,7 +368,7 @@ export const incomingExerciseSchema = z.object({
   confidence: z.number().min(0).max(100).optional().nullable(),
   notes: z.string().max(1000).optional().nullable(),
   sets: z.array(exerciseSetSchema).max(50).optional().nullable(),
-}).strip();
+}).strip());
 
 export const exercisesPayloadSchema = z.array(incomingExerciseSchema).max(200);
 
@@ -396,24 +410,24 @@ export type ExerciseSetOwner =
 // workout-log routes (server/routes/workouts.ts) and the plan-day routes
 // (server/routes/plans.ts) so a single numeric-bounds contract covers
 // both paths — one schema, one Sonar-visible definition.
-export const patchExerciseSetBodySchema = z.object({
+export const patchExerciseSetBodySchema = withBlockStepPairing(z.object({
   exerciseName: z.string().min(1).max(255).optional(),
   customLabel: z.string().max(255).nullable().optional(),
   category: z.string().max(50).optional(),
   setNumber: z.number().int().min(1).max(100).optional(),
   ...measurableSetFields,
   sortOrder: z.number().int().nullable().optional(),
-});
+}));
 export type PatchExerciseSetBody = z.infer<typeof patchExerciseSetBodySchema>;
 
-export const addExerciseSetBodySchema = z.object({
+export const addExerciseSetBodySchema = withBlockStepPairing(z.object({
   exerciseName: z.string().min(1).max(255),
   customLabel: z.string().max(255).nullable().optional(),
   category: z.string().max(50),
   setNumber: z.number().int().min(1).max(100).default(1),
   ...measurableSetFields,
   confidence: z.number().int().min(0).max(100).nullable().optional(),
-});
+}));
 export type AddExerciseSetBody = z.infer<typeof addExerciseSetBodySchema>;
 
 export interface ParsedExercise {
@@ -431,6 +445,17 @@ export interface ParsedExercise {
   plannedWeight?: number;
   plannedDistance?: number;
   plannedTime?: number;
+  blockId?: string;
+  stepNumber?: number;
+  intervalMinute?: number;
+  cycleNumber?: number;
+  stepRole?: string;
+  groupId?: string;
+  intensity?: Record<string, unknown>;
+  load?: Record<string, unknown>;
+  repMode?: "total" | "per_side";
+  tempo?: Record<string, unknown>;
+  standards?: Record<string, unknown>;
   notes?: string;
   sets: Array<{
     setNumber: number;
@@ -442,6 +467,17 @@ export interface ParsedExercise {
     plannedWeight?: number;
     plannedDistance?: number;
     plannedTime?: number;
+    blockId?: string;
+    stepNumber?: number;
+    intervalMinute?: number;
+    cycleNumber?: number;
+    stepRole?: string;
+    groupId?: string;
+    intensity?: Record<string, unknown>;
+    load?: Record<string, unknown>;
+    repMode?: "total" | "per_side";
+    tempo?: Record<string, unknown>;
+    standards?: Record<string, unknown>;
     notes?: string;
   }>;
 }
