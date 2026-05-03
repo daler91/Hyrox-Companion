@@ -17,6 +17,14 @@ if (Array.isArray(_res.locals.calls)) (_res.locals.calls as string[]).push("guar
   ],
 }));
 
+vi.mock("../../middleware/aiConsent", () => ({
+  aiConsentCheck: (_req: express.Request, _res: express.Response, next: express.NextFunction) => next(),
+}));
+
+vi.mock("../../middleware/aibudget", () => ({
+  aiBudgetCheck: (_req: express.Request, _res: express.Response, next: express.NextFunction) => next(),
+}));
+
 describe("protectedRouteBuilder", () => {
   it("applies middleware in canonical order", async () => {
     const app = express();
@@ -91,5 +99,59 @@ describe("protectedRouteBuilder", () => {
       code: "VALIDATION_ERROR",
       details: { issues: [{ path: "body.field", message: "Required" }] },
     });
+  });
+
+  it("supports auth/rate/ai/validation/custom middleware composition", async () => {
+    const app = express();
+    const router = express.Router();
+    const calls: string[] = [];
+
+    protectedPost(router, "/probe", {
+      limiter: (_req, _res, next) => { calls.push("limiter"); next(); },
+      aiConsent: true,
+      aiBudget: true,
+      validation: [(_req, _res, next) => { calls.push("validation"); next(); }],
+      middleware: [(_req, _res, next) => { calls.push("custom"); next(); }],
+    }, async (_req, res) => {
+      calls.push("handler");
+      res.json({ ok: true });
+    });
+
+    app.use(router);
+    await request(app).post("/probe").send({}).expect(200);
+
+    expect(calls).toEqual(["limiter", "validation", "custom", "handler"]);
+  });
+
+  it("allows opting out of auth and rate limiting", async () => {
+    const app = express();
+    const router = express.Router();
+
+    protectedPost(router, "/probe", {
+      auth: false,
+      rateLimit: false,
+    }, async (_req, res) => {
+      res.json({ ok: true });
+    });
+
+    app.use(router);
+    await request(app).post("/probe").send({}).expect(200);
+  });
+
+  it("rejects AI middleware when auth is disabled", () => {
+    const app = express();
+    const router = express.Router();
+
+    expect(() => {
+      protectedPost(router, "/probe", {
+        auth: false,
+        rateLimit: false,
+        aiBudget: true,
+      } as unknown as Parameters<typeof protectedPost>[2], async (_req, res) => {
+        res.json({ ok: true });
+      });
+    }).toThrowError("AI guard middleware requires auth to be enabled");
+
+    app.use(router);
   });
 });
