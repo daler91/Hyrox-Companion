@@ -1,12 +1,19 @@
 import type { Request, RequestHandler, Response, Router } from "express";
 
+import { aiBudgetCheck } from "../../middleware/aibudget";
+import { aiConsentCheck } from "../../middleware/aiConsent";
 import { protectedMutationGuards } from "../../routeGuards";
 import { asyncHandler, rateLimiter } from "../../routeUtils";
 
 type AsyncRouteHandler<Req extends Request = Request> = (req: Req, res: Response) => Promise<unknown>;
 
 interface ProtectedRouteOptions {
-  readonly limiter: ReturnType<typeof rateLimiter>;
+  readonly auth?: boolean;
+  readonly rateLimit?: boolean;
+  readonly limiter?: ReturnType<typeof rateLimiter>;
+  readonly aiConsent?: boolean;
+  readonly aiBudget?: boolean;
+  readonly validation?: RequestHandler[];
   readonly middleware?: RequestHandler[];
 }
 
@@ -14,11 +21,23 @@ function buildProtectedStack<Req extends Request>(
   options: ProtectedRouteOptions,
   handler: AsyncRouteHandler<Req> | RequestHandler,
 ): RequestHandler[] {
-  const stack: RequestHandler[] = [
-    ...protectedMutationGuards,
-    options.limiter,
-    ...(options.middleware ?? []),
-  ];
+  const stack: RequestHandler[] = [];
+
+  if (options.auth ?? true) {
+    stack.push(...protectedMutationGuards);
+  }
+
+  if (options.rateLimit ?? true) {
+    if (!options.limiter) {
+      throw new Error("Protected routes with rate limiting enabled require a limiter");
+    }
+    stack.push(options.limiter);
+  }
+
+  if (options.aiConsent) stack.push(aiConsentCheck);
+  if (options.aiBudget) stack.push(aiBudgetCheck);
+
+  stack.push(...(options.validation ?? []), ...(options.middleware ?? []));
 
   if (handler.length >= 3) {
     stack.push(handler as RequestHandler);
