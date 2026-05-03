@@ -1,10 +1,10 @@
 import type { ExerciseSet } from "@shared/schema";
-import { useIsMutating,useQuery } from "@tanstack/react-query";
-import { useCallback, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useCallback, useMemo } from "react";
 
 import { useApiMutation } from "@/hooks/useApiMutation";
-import { useDebouncedSetPatches } from "@/hooks/useDebouncedSetPatches";
-import { type AddExerciseSetPayload, api, type ParseFromImagePayload, type PatchExerciseSetPayload, QUERY_KEYS } from "@/lib/api";
+import { useExerciseSetsForOwner } from "@/hooks/useExerciseSetsForOwner";
+import { api, type ParseFromImagePayload, QUERY_KEYS } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
 
 // Tag every plan-day set mutation with this key family so useIsMutating
@@ -59,100 +59,20 @@ export function usePlanDayExercises(planDayId: string | null) {
     });
   };
 
-  // Epoch-ms timestamp of the most recent successful set mutation. The
-  // ExerciseTable's SaveStatePill uses this to show a fading "Saved" badge
-  // after each debounced PATCH lands, so the athlete has visible proof the
-  // edit persisted — otherwise the only feedback today is an optimistic
-  // cache update that looks identical whether the server saw the change or
-  // not. `ownerId` is a render-time sentinel that resets the timestamp
-  // when the owning plan day changes, so signals from a prior entry (used
-  // by CoachTakePanel staleness + auto-regenerate-on-close) don't bleed
-  // into the next one. Using this pattern instead of a setState-in-effect
-  // satisfies react-hooks/set-state-in-effect.
-  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
-  const [ownerId, setOwnerId] = useState(planDayId);
-  const markSaved = () => setLastSavedAt(Date.now());
-
-  const updateSet = useApiMutation({
-    mutationKey: planDayId ? planDaySetsMutationKey(planDayId) : undefined,
-    mutationFn: ({ setId, data }: { setId: string; data: PatchExerciseSetPayload }) =>
-      api.plans.updateDayExercise(planDayId!, setId, data),
-    onMutate: async ({ setId, data }) => {
-      if (!planDayId) return undefined;
-      await queryClient.cancelQueries({ queryKey: QUERY_KEYS.planDayExercises(planDayId) });
-      const prev = queryClient.getQueryData<ExerciseSet[]>(QUERY_KEYS.planDayExercises(planDayId));
-      patchCachedSets((sets) => sets.map((s) => (s.id === setId ? { ...s, ...data } as ExerciseSet : s)));
-      return { prev };
-    },
-    onSuccess: (serverSet) => {
-      patchCachedSets((sets) => sets.map((s) => (s.id === serverSet.id ? serverSet : s)));
-      markSaved();
-    },
-    onError: (_err, _vars, ctx) => {
-      const prev = (ctx as { prev?: ExerciseSet[] } | undefined)?.prev;
-      if (planDayId && prev) {
-        queryClient.setQueryData(QUERY_KEYS.planDayExercises(planDayId), prev);
-      }
-    },
-    errorToast: "Couldn't save that change",
+  const exerciseSetOps = useExerciseSetsForOwner({
+    ownerId: planDayId,
+    mutationKeyFamily: planDaySetsMutationKey,
+    setsQueryKey: QUERY_KEYS.planDayExercises,
+    patchCachedSets,
+    getSnapshot: (id) => queryClient.getQueryData<ExerciseSet[]>(QUERY_KEYS.planDayExercises(id)),
+    restoreSnapshot: (id, snapshot) => queryClient.setQueryData(QUERY_KEYS.planDayExercises(id), snapshot),
+    updateSetRequest: (id, setId, data) => api.plans.updateDayExercise(id, setId, data),
+    addSetRequest: (id, data) => api.plans.addDayExercise(id, data),
+    deleteSetRequest: (id, setId) => api.plans.deleteDayExercise(id, setId),
+    deleteInvalidateQueries: (id) => [QUERY_KEYS.planDayExercises(id)],
+    cellSaveDebounceMs: CELL_SAVE_DEBOUNCE_MS,
   });
-
-  // Per-set debounce coordinator. Cells call `patchSetDebounced`; Save
-  // calls `flushPendingSetPatches` before firing the coach-note
-  // regenerate so the server snapshots the just-edited prescription.
-  const {
-    patchSetDebounced,
-    flushPendingSetPatches,
-    cancelPending,
-    getPendingPatches,
-  } = useDebouncedSetPatches<PatchExerciseSetPayload>(
-    updateSet.mutateAsync,
-    CELL_SAVE_DEBOUNCE_MS,
-  );
-
-  // Sentinel runs after the debounce coordinator so it can cancel
-  // patches queued against the prior plan day — `updateSet.mutate`
-  // already closes over the new `planDayId`, so firing them would
-  // PATCH the wrong owner.
-  if (planDayId !== ownerId) {
-    setOwnerId(planDayId);
-    setLastSavedAt(null);
-    cancelPending();
-  }
-
-  const addSet = useApiMutation({
-    mutationKey: planDayId ? planDaySetsMutationKey(planDayId) : undefined,
-    mutationFn: (data: AddExerciseSetPayload) => api.plans.addDayExercise(planDayId!, data),
-    onSuccess: (serverSet) => {
-      patchCachedSets((sets) => [...sets, serverSet]);
-      markSaved();
-    },
-    errorToast: "Couldn't add that exercise",
-  });
-
-  const deleteSet = useApiMutation({
-    mutationKey: planDayId ? planDaySetsMutationKey(planDayId) : undefined,
-    mutationFn: (setId: string) =>
-      api.plans.deleteDayExercise(planDayId!, setId).then(() => setId),
-    onMutate: async (setId: string) => {
-      if (!planDayId) return undefined;
-      await queryClient.cancelQueries({ queryKey: QUERY_KEYS.planDayExercises(planDayId) });
-      const prev = queryClient.getQueryData<ExerciseSet[]>(QUERY_KEYS.planDayExercises(planDayId));
-      patchCachedSets((sets) => sets.filter((s) => s.id !== setId));
-      return { prev };
-    },
-    onSuccess: () => {
-      markSaved();
-    },
-    onError: (_err, _vars, ctx) => {
-      const prev = (ctx as { prev?: ExerciseSet[] } | undefined)?.prev;
-      if (planDayId && prev) {
-        queryClient.setQueryData(QUERY_KEYS.planDayExercises(planDayId), prev);
-      }
-    },
-    errorToast: "Couldn't remove that set",
-    invalidateQueries: planDayId ? [QUERY_KEYS.planDayExercises(planDayId)] : undefined,
-  });
+  const { updateSet, patchSetDebounced, flushPendingSetPatches, getPendingPatches, addSet, deleteSet, isSaving, lastSavedAt } = exerciseSetOps;
 
   // Plan-day Parse: POST /reparse → Gemini parses mainWorkout/accessory into
   // structured rows, replacing this day's prescription. React Query's server
@@ -196,24 +116,11 @@ export function usePlanDayExercises(planDayId: string | null) {
       api.plans.updateDayWithoutPlan(planDayId!, patch),
     invalidateQueries: [QUERY_KEYS.timeline, QUERY_KEYS.plans],
     onSuccess: () => {
-      markSaved();
+      exerciseSetOps.markSaved();
     },
     errorToast: "Couldn't save prescription",
   });
 
-  // Count every in-flight mutation tagged with this plan day's key,
-  // not just the most recent mutate() call on a single observer.
-  // Row-level edits fan out to one PATCH per set in the group, so
-  // `updateSet.isPending` alone would read false as soon as the last
-  // call settled — even if earlier calls were still pending — and
-  // Mark complete could fire with partially stale rows on the server.
-  const pendingMutationCount = useIsMutating({
-    mutationKey: planDayId ? planDaySetsMutationKey(planDayId) : ["plan-day-sets-disabled"],
-    // Scope to exact match of this plan day; other plan days' edits
-    // shouldn't block this dialog.
-    exact: true,
-  });
-  const isSaving = pendingMutationCount > 0;
   const exerciseSets = useMemo(() => exercisesQuery.data ?? [], [exercisesQuery.data]);
   const getExerciseSetsWithPendingPatches = useCallback(() => {
     const pendingPatches = getPendingPatches();
