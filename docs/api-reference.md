@@ -155,12 +155,12 @@ Most protected mutation routes now use a shared builder (`protectedPost`, `prote
 
 For builder-backed routes, middleware runs in this order:
 
-1. `protectedMutationGuards` (auth + CSRF + idempotency guard chain)
+1. `protectedMutationGuards` (auth + idempotency guard chain)
 2. route-local limiter (`rateLimiter(...)`)
 3. route-specific middleware list (typically `validateBody(...)`, `validateParams(...)`, and optional feature guards)
 4. handler (wrapped with `asyncHandler` for async routes)
 
-This ordering guarantees security/cost guards execute before validation or business logic, while still letting validation produce the canonical `VALIDATION_ERROR` shape.
+This ordering guarantees auth/idempotency and cost guards execute before validation or business logic, while still letting validation produce the canonical `VALIDATION_ERROR` shape. CSRF is enforced separately at router registration (`app.use("/api/v1", csrfProtection)`).
 
 Endpoints use Zod schemas for request body validation via two patterns:
 
