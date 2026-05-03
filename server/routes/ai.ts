@@ -8,8 +8,8 @@ import { chatWithCoach, parseExercisesFromImage, parseExercisesFromText,streamCh
 import { reqLogger } from "../logger";
 import { aiBudgetCheck } from "../middleware/aibudget";
 import { aiConsentCheck } from "../middleware/aiConsent";
+import { parseCursorPagination } from "../pagination";
 import { protectedMutationGuards } from "../routeGuards";
-import { protectedDelete, protectedPost } from "./_helpers/protectedRouteBuilder";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody, validateQuery } from "../routeUtils";
 import { type AIContext, buildAIContext, type ChatInput } from "../services/aiContextService";
 import { applyTimelineAiSuggestion, generateTimelineAiSuggestions } from "../services/aiSuggestionService";
@@ -17,6 +17,7 @@ import { sanitizeRagInfo } from "../services/ragRetrieval";
 import { registerSseStream } from "../sseRegistry";
 import { storage } from "../storage";
 import { getUserId } from "../types";
+import { protectedDelete, protectedPost } from "./_helpers/protectedRouteBuilder";
 
 const router = Router();
 
@@ -257,17 +258,23 @@ const chatHistoryQuerySchema = z
 router.get("/api/v1/chat/history", isAuthenticated, validateQuery(chatHistoryQuerySchema), asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const { limit, before, beforeId } = req.query as z.infer<typeof chatHistoryQuerySchema>;
+    const pagination = parseCursorPagination({ limit: limit?.toString(), cursor: beforeId ? `${before}|${beforeId}` : undefined }, { defaultLimit: 50, maxLimit: 200 });
+    if (!pagination.ok) return res.status(400).json(pagination.error);
     const messages = await storage.users.getChatMessages(userId, {
-      limit,
+      limit: pagination.value.limit + 1,
       beforeTimestamp: before ? new Date(before) : undefined,
       beforeId,
     });
-    const oldest = messages[0];
+    const hasMore = messages.length > pagination.value.limit;
+    const page = hasMore ? messages.slice(1) : messages;
+    const oldest = page[0];
+    const nextCursor = oldest?.timestamp ? `${oldest.timestamp.toISOString()}|${oldest.id}` : undefined;
     if (oldest?.timestamp) {
       res.setHeader("X-Next-Cursor", oldest.timestamp.toISOString());
       res.setHeader("X-Next-Cursor-Id", oldest.id);
     }
-    res.json(messages);
+    res.setHeader("X-Page-Info", JSON.stringify({ limit: pagination.value.limit, hasMore, nextCursor }));
+    res.json(page);
   }));
 
 router.post("/api/v1/chat/message", ...protectedMutationGuards, rateLimiter("chatMessage", 20), validateBody(insertChatMessageSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, InsertChatMessage>, res: Response) => {

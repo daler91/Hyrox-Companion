@@ -321,14 +321,12 @@ export class TimelineStorage {
 
   async getTimeline(
     userId: string,
-    planId?: string,
-    limit?: number,
-    offset?: number,
+    pagination: { planId?: string; limit?: number; offset?: number } = {},
   ): Promise<TimelineEntry[]> {
     const today = toDateStr();
-    const sqlOverFetch = this.computeSqlOverFetch(limit, offset);
+    const sqlOverFetch = this.computeSqlOverFetch(pagination.limit, pagination.offset);
 
-    const scheduledDays = await this.fetchScheduledDays(userId, planId, sqlOverFetch);
+    const scheduledDays = await this.fetchScheduledDays(userId, pagination.planId, sqlOverFetch);
     const planDayIds = scheduledDays.map((r) => r.planDay.id);
 
     const [linkedWorkouts, standaloneWorkouts] = await Promise.all([
@@ -357,8 +355,8 @@ export class TimelineStorage {
     });
 
     if (sqlOverFetch !== undefined) {
-      const start = offset || 0;
-      const end = limit === undefined ? undefined : start + limit;
+      const start = pagination.offset || 0;
+      const end = pagination.limit === undefined ? undefined : start + pagination.limit;
       return entries.slice(start, end);
     }
     return entries;

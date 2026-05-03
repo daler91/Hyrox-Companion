@@ -442,8 +442,9 @@ describe("Chat History and Messages Routes", () => {
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual(mockMessages.map((m) => ({ ...m, timestamp: m.timestamp.toISOString() })));
+    expect(response.headers["x-page-info"]).toBeDefined();
     expect(storage.users.getChatMessages).toHaveBeenCalledWith("test_user_id", {
-      limit: undefined,
+      limit: 51,
       beforeTimestamp: undefined,
       beforeId: undefined,
     });
@@ -461,7 +462,7 @@ describe("Chat History and Messages Routes", () => {
 
     expect(response.status).toBe(200);
     expect(storage.users.getChatMessages).toHaveBeenCalledWith("test_user_id", {
-      limit: 20,
+      limit: 21,
       beforeTimestamp: new Date(before),
       beforeId: "m2",
     });

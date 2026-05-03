@@ -190,6 +190,17 @@ export const WorkoutIdParam = registry.registerParameter(
   })
 );
 
+const _PageInfoSchema = registry.register(
+  "PageInfo",
+  z.object({
+    limit: z.number().int(),
+    hasMore: z.boolean(),
+    nextCursor: z.string().optional(),
+    total: z.number().int().optional(),
+    offset: z.number().int().optional(),
+  }).openapi({ description: "Pagination metadata contract used by list endpoints." }),
+);
+
 // Register Security Scheme
 const bearerAuth = registry.registerComponent("securitySchemes", "BearerAuth", {
   type: "http",

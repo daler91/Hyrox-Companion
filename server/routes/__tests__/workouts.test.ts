@@ -101,8 +101,9 @@ describe("Workouts Routes", () => {
       const response = await request(app).get("/api/v1/workouts");
 
       expect(response.status).toBe(200);
-      expect(storage.workouts.listWorkoutLogs).toHaveBeenCalledWith("test_user_id", 50, undefined);
+      expect(storage.workouts.listWorkoutLogs).toHaveBeenCalledWith("test_user_id", { limit: 51, offset: 0 });
       expect(response.body).toEqual(mockLogs);
+      expect(response.headers["x-page-info"]).toBeDefined();
     });
 
     it("should return 500 when storage throws an error", async () => {
@@ -139,7 +140,7 @@ describe("Workouts Routes", () => {
       const response = await request(app).get("/api/v1/workouts/latest");
 
       expect(response.status).toBe(200);
-      expect(storage.workouts.listWorkoutLogs).toHaveBeenCalledWith("test_user_id", 1);
+      expect(storage.workouts.listWorkoutLogs).toHaveBeenCalledWith("test_user_id", { limit: 1 });
       expect(storage.workouts.getExerciseSetsByWorkoutLog).toHaveBeenCalledWith("workout-1");
       expect(response.body).toMatchObject({
         id: "workout-1",
@@ -170,7 +171,7 @@ describe("Workouts Routes", () => {
       expect(response.status).toBe(404);
       expect(response.body).toEqual({ error: "No workouts found", code: "NOT_FOUND" });
       // Confirm we went through listWorkoutLogs, not a getWorkoutLog lookup.
-      expect(storage.workouts.listWorkoutLogs).toHaveBeenCalledWith("test_user_id", 1);
+      expect(storage.workouts.listWorkoutLogs).toHaveBeenCalledWith("test_user_id", { limit: 1 });
     });
   });
 });

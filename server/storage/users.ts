@@ -170,7 +170,9 @@ export class UserStorage {
     userId: string,
     options: { limit?: number; beforeTimestamp?: Date; beforeId?: string } = {},
   ): Promise<ChatMessage[]> {
-    const limit = Math.min(Math.max(options.limit ?? 50, 1), 200);
+    // Allow +1 over-fetch so route layers can compute hasMore accurately even
+    // when callers request the max page size.
+    const limit = Math.min(Math.max(options.limit ?? 50, 1), 201);
     const conditions = [eq(chatMessages.userId, userId)];
     if (options.beforeTimestamp && options.beforeId) {
       const cursorClause = or(

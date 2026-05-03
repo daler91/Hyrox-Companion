@@ -119,7 +119,7 @@ export class WorkoutStorage {
     return createdLogs;
   }
 
-  async listWorkoutLogs(userId: string, limit?: number, offset?: number): Promise<WorkoutLog[]> {
+  async listWorkoutLogs(userId: string, pagination: { limit?: number; offset?: number } = {}): Promise<WorkoutLog[]> {
     let query = db
       .select()
       .from(workoutLogs)
@@ -127,11 +127,11 @@ export class WorkoutStorage {
       .orderBy(desc(workoutLogs.date))
       .$dynamic();
 
-    if (limit !== undefined) {
-      query = query.limit(limit);
+    if (pagination.limit !== undefined) {
+      query = query.limit(pagination.limit);
     }
-    if (offset !== undefined) {
-      query = query.offset(offset);
+    if (pagination.offset !== undefined) {
+      query = query.offset(pagination.offset);
     }
 
     return await query;
