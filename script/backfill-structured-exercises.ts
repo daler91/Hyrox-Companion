@@ -240,7 +240,15 @@ async function runPass(
   }
   if (flags.reportFile) {
     const fs = await import("node:fs/promises");
-    await fs.writeFile(flags.reportFile.replace(".json", `-${label}.json`), JSON.stringify(reportRows, null, 2), "utf8");
+    const path = await import("node:path");
+    const parsed = path.parse(flags.reportFile);
+    const ext = parsed.ext || ".json";
+    const reportPath = path.format({
+      dir: parsed.dir,
+      name: `${parsed.name || "backfill-report"}-${label}`,
+      ext,
+    });
+    await fs.writeFile(reportPath, JSON.stringify(reportRows, null, 2), "utf8");
   }
   logger.info({ pass: label, ...result }, "[backfill] pass complete");
   return result;
