@@ -170,7 +170,9 @@ export class UserStorage {
     userId: string,
     options: { limit?: number; beforeTimestamp?: Date; beforeId?: string } = {},
   ): Promise<ChatMessage[]> {
-    const limit = Math.min(Math.max(options.limit ?? 50, 1), 200);
+    // Allow one-row lookahead (201) so callers using `requestedLimit + 1`
+    // can reliably compute `hasMore` even at the public max page size (200).
+    const limit = Math.min(Math.max(options.limit ?? 50, 1), 201);
     const conditions = [eq(chatMessages.userId, userId)];
     if (options.beforeTimestamp && options.beforeId) {
       const cursorClause = or(
