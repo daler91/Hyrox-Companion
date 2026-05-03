@@ -6,7 +6,7 @@ import type {
   IOauth2Token,
 } from "@flow-js/garmin-connect";
 import { type DistanceUnit } from "@shared/unitConversion";
-import type { Express, Request, Response } from "express";
+import type { Request, Response, Router } from "express";
 import { z } from "zod";
 
 // @flow-js/garmin-connect ships as a CommonJS bundle that exposes its class
@@ -607,16 +607,16 @@ async function handleGarminSync(req: Request, res: Response) {
   }
 }
 
-export function registerGarminRoutes(app: Express): void {
-  app.get("/api/v1/garmin/status", isAuthenticated, asyncHandler(handleGarminStatus));
-  app.post(
+export function registerGarminRoutes(router: Router): void {
+  router.get("/api/v1/garmin/status", isAuthenticated, asyncHandler(handleGarminStatus));
+  router.post(
     "/api/v1/garmin/connect",
     ...protectedMutationGuards,
     garminConnectLimiter,
     asyncHandler(handleGarminConnect),
   );
-  app.delete("/api/v1/garmin/disconnect", ...protectedMutationGuards, asyncHandler(handleGarminDisconnect));
-  app.post("/api/v1/garmin/sync", ...protectedMutationGuards, garminSyncLimiter, asyncHandler(handleGarminSync));
+  router.delete("/api/v1/garmin/disconnect", ...protectedMutationGuards, asyncHandler(handleGarminDisconnect));
+  router.post("/api/v1/garmin/sync", ...protectedMutationGuards, garminSyncLimiter, asyncHandler(handleGarminSync));
 }
 
 // Exported for tests only.

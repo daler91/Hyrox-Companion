@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 
 import { type DistanceUnit } from "@shared/unitConversion";
-import type { Express, Request, Response } from "express";
+import type { Request, Response, Router } from "express";
 import rateLimit from "express-rate-limit";
 
 import { isAuthenticated } from "./clerkAuth";
@@ -415,10 +415,10 @@ async function handleStravaSync(req: Request, res: Response) {
   }
 }
 
-export function registerStravaRoutes(app: Express): void {
-  app.get("/api/v1/strava/status", isAuthenticated, asyncHandler(handleStravaStatus));
-  app.get("/api/v1/strava/auth", isAuthenticated, stravaAuthLimiter, asyncHandler(handleStravaAuth));
-  app.get("/api/v1/strava/callback", stravaAuthLimiter, asyncHandler(handleStravaCallback));
-  app.delete("/api/v1/strava/disconnect", ...protectedMutationGuards, asyncHandler(handleStravaDisconnect));
-  app.post("/api/v1/strava/sync", ...protectedMutationGuards, stravaSyncLimiter, asyncHandler(handleStravaSync));
+export function registerStravaRoutes(router: Router): void {
+  router.get("/api/v1/strava/status", isAuthenticated, asyncHandler(handleStravaStatus));
+  router.get("/api/v1/strava/auth", isAuthenticated, stravaAuthLimiter, asyncHandler(handleStravaAuth));
+  router.get("/api/v1/strava/callback", stravaAuthLimiter, asyncHandler(handleStravaCallback));
+  router.delete("/api/v1/strava/disconnect", ...protectedMutationGuards, asyncHandler(handleStravaDisconnect));
+  router.post("/api/v1/strava/sync", ...protectedMutationGuards, stravaSyncLimiter, asyncHandler(handleStravaSync));
 }
