@@ -6,6 +6,7 @@ import {
   type InsertWorkoutLog,
   type ParsedExercise,
   planDays,
+  type StructureBlockInput,
   trainingPlans,
   type UpdateWorkoutLog,
   users,
@@ -33,17 +34,6 @@ const GEMINI_PARSE_CONCURRENCY = 3;
 
 // Drizzle transaction type — any method chain valid on `db` is also valid on `tx`.
 type WorkoutTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
-type StructureBlockInput = {
-  id?: string;
-  sectionType: string;
-  formatType: string;
-  durationSeconds?: number | null;
-  rounds?: number | null;
-  workSeconds?: number | null;
-  restSeconds?: number | null;
-  sortOrder?: number;
-  steps: Array<{ stepNumber: number; exerciseName: string; category: string; customLabel?: string | null; stepRole?: string | null; groupId?: string | null; groupMeta?: Record<string, unknown> | null; targets?: Record<string, unknown> | null }>;
-};
 
 // ⚡ Bolt Performance Optimization:
 // Combined multiple O(N) array traversals (.filter, .map, .map) into a single loop

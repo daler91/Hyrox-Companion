@@ -1,4 +1,4 @@
-import type { exercisesPayloadSchema, InsertWorkoutLog, insertWorkoutLogSchema, ParsedExercise, UpdateWorkoutLog, updateWorkoutLogSchema } from "@shared/schema";
+import type { exercisesPayloadSchema, InsertWorkoutLog, insertWorkoutLogSchema, ParsedExercise, StructureBlockInput, UpdateWorkoutLog, updateWorkoutLogSchema } from "@shared/schema";
 import type { z } from "zod";
 
 import { env } from "../env";
@@ -9,11 +9,11 @@ import { createWorkoutAndScheduleCoaching, updateWorkout } from "./workoutServic
 
 type CreateWorkoutPayload = z.infer<typeof insertWorkoutLogSchema> & {
   exercises?: z.infer<typeof exercisesPayloadSchema>;
-  structureBlocks?: unknown[];
+  structureBlocks?: StructureBlockInput[];
 };
 type UpdateWorkoutPayload = z.infer<typeof updateWorkoutLogSchema> & {
   exercises?: z.infer<typeof exercisesPayloadSchema>;
-  structureBlocks?: unknown[];
+  structureBlocks?: StructureBlockInput[];
 };
 
 export async function createWorkout(input: {

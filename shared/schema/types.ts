@@ -415,6 +415,7 @@ export const structureBlockSchema = z.object({
 });
 
 export const structureBlocksPayloadSchema = z.array(structureBlockSchema).max(100).optional();
+export type StructureBlockInput = z.infer<typeof structureBlockSchema>;
 
 // Shared measurement fields used by both patch and add request bodies.
 // Extracted to a single definition so the 9-line block doesn't duplicate.
