@@ -22,9 +22,10 @@ import { cspNonceMiddleware } from "./middleware/cspNonce";
 import { queue,startQueue } from "./queue";
 import { runWithRequestContext } from "./requestContext";
 import { registerRoutes } from "./routes";
-import { drainSseStreams } from "./sseRegistry";
 import { serveStatic } from "./static";
 import { storage } from "./storage";
+import { registerHealthEndpoint, probeDatabasePool } from "./bootstrap/health";
+import { registerLifecycleHooks } from "./bootstrap/lifecycle";
 import { isVectorDbSeparate, vectorPool } from "./vectorDb";
 
 // 🛡️ Sentinel: Dev Auth Bypass double-guard
@@ -153,90 +154,18 @@ let startupError: string | null = null;
 let startupPhase = "initializing";
 const startupBeganAt = Date.now();
 
-const HEALTH_PROBE_TIMEOUT_MS = 3000;
-
-/**
- * Probe DB connectivity within a single 3s budget covering BOTH pool
- * acquisition and the SELECT 1 query. Under pool saturation, waiting only
- * on the query would let /api/v1/health block on pool.connect() until the
- * pool's own connectionTimeoutMillis — defeats the fast-fail intent.
- */
-async function probePool(pool: Pool): Promise<boolean> {
-  // Track the client through a shared reference so the timeout path can
-  // still release it if pool.connect() resolves AFTER the race rejects.
-  // Without this, a slow pool under saturation leaks a connection per
-  // timed-out probe (P1 from PR review).
-  const clientRef: { current: PoolClient | undefined } = { current: undefined };
-  let timedOut = false;
-
-  const connectAndQuery = (async () => {
-    const c = await pool.connect();
-    clientRef.current = c;
-    // If the race already timed out by the time we got a connection,
-    // release it immediately so it returns to the pool (or is destroyed).
-    if (timedOut) {
-      c.release(new Error("health check timeout"));
-      clientRef.current = undefined;
-      throw new Error("timeout");
-    }
-    await c.query("SELECT 1");
-  })();
-
-  try {
-    await Promise.race([
-      connectAndQuery,
-      new Promise((_, reject) => setTimeout(() => {
-        timedOut = true;
-        reject(new Error("timeout"));
-      }, HEALTH_PROBE_TIMEOUT_MS)),
-    ]);
-    return true;
-  } catch {
-    return false;
-  } finally {
-    // Release whichever path left the client checked out. On timeout we
-    // destroy the connection so any hung SELECT 1 is discarded.
-    clientRef.current?.release(timedOut ? new Error("health check timeout") : undefined);
-  }
-}
-
-// Main transactional DB probe.
-const probeDatabase = (): Promise<boolean> => probePool(pool);
-
-// Probe the vector/RAG pool when it is configured on a separate connection
-// string. When VECTOR_DATABASE_URL is unset both pools share a Neon
-// endpoint, so probing it twice just burns a round trip without adding
-// signal.
+const probeDatabase = (): Promise<boolean> => probeDatabasePool(pool);
 const probeVectorDatabase = (): Promise<boolean> =>
-  isVectorDbSeparate ? probePool(vectorPool) : Promise.resolve(true);
+  isVectorDbSeparate ? probeDatabasePool(vectorPool) : Promise.resolve(true);
 
-// Health endpoint — intentionally unthrottled because platform probes
-// (Railway, load balancers) poll frequently and must never be rejected.
-// The handler is O(1) and short-circuits before any DB call while not
-// ready; the probe itself has a 3s total budget (see probeDatabase).
-// lgtm[js/missing-rate-limiting]
-app.get("/api/v1/health", (_req, res) => {
-  const uptimeMs = Date.now() - startupBeganAt;
-  if (startupError) {
-    res.status(503).json({ status: "error", error: "startup_error", phase: startupPhase, uptimeMs, message: startupError, timestamp: Date.now() });
-    return;
-  }
-  if (!isReady) {
-    res.status(503).json({ status: "starting", phase: startupPhase, uptimeMs, timestamp: Date.now() });
-    return;
-  }
-  Promise.all([probeDatabase(), probeVectorDatabase()])
-    .then(([dbOk, vectorDbOk]) => {
-      if (!dbOk || !vectorDbOk) {
-        res.status(503).json({ status: "degraded", db: dbOk, vectorDb: vectorDbOk, uptimeMs, timestamp: Date.now() });
-        return;
-      }
-      res.json({ status: "ok", uptimeMs, timestamp: Date.now() });
-    })
-    .catch((err) => {
-      logger.error({ err }, "Health check probe failed unexpectedly");
-      res.status(503).json({ status: "error", uptimeMs, timestamp: Date.now() });
-    });
+registerHealthEndpoint({
+  app,
+  getHealthState: () => ({ isReady, startupError, startupPhase, startupBeganAt }),
+  probeDatabase,
+  probeVectorDatabase,
+  onUnexpectedError: (err) => {
+    logger.error({ err }, "Health check probe failed unexpectedly");
+  },
 });
 
 // CORS — restrict cross-origin API access to known origins
@@ -544,99 +473,11 @@ try {
   Sentry.captureException(err);
 }
 
-// Graceful shutdown. Ordered phases:
-//   1. stop cron/queue intake (no new jobs or scheduled work)
-//   2. abort in-flight SSE streams so long-lived connections release
-//   3. httpServer.close() then closeAllConnections() for idle keepalive sockets
-//   4. await queue.stop() so pg-boss finishes its current batch
-//   5. drain DB pools
-//   6. flush Sentry last so errors captured during shutdown get reported
-// 60s total budget covers a full auto-coach batch + queue drain; force
-// exit runs if any phase wedges beyond that.
-const SHUTDOWN_TIMEOUT_MS = 60_000;
-const SSE_DRAIN_TIMEOUT_MS = 5_000;
-const SENTRY_FLUSH_TIMEOUT_MS = 10_000;
-let shuttingDown = false;
 
-const shutdown = () => {
-  if (shuttingDown) return;
-  shuttingDown = true;
-  logger.info("Received shutdown signal. Starting graceful shutdown...");
-
-  const forceExit = setTimeout(() => {
-    logger.error({ timeoutMs: SHUTDOWN_TIMEOUT_MS }, "Graceful shutdown timed out. Forcing exit.");
-    process.exit(1);
-  }, SHUTDOWN_TIMEOUT_MS);
-  forceExit.unref();
-
-  void (async () => {
-    try {
-      stopCron();
-
-      const remaining = await drainSseStreams(SSE_DRAIN_TIMEOUT_MS);
-      if (remaining > 0) {
-        logger.warn({ remaining }, "Some SSE streams did not finish within drain window");
-      }
-
-      await new Promise<void>((resolve, reject) => {
-        httpServer.close((err) => (err ? reject(err) : resolve()));
-        // Node 18.2+: severs idle keep-alive sockets so server.close()
-        // doesn't wait on them. Guarded for older runtimes.
-        const closeAll = (httpServer as unknown as { closeAllConnections?: () => void }).closeAllConnections;
-        if (typeof closeAll === "function") closeAll.call(httpServer);
-      });
-      logger.info("HTTP server closed.");
-
-      logger.info("Stopping queue...");
-      try {
-        await queue.stop();
-        logger.info("Queue stopped.");
-      } catch (err) {
-        logger.error({ err }, "Error stopping queue");
-      }
-
-      logger.info("Draining database pools...");
-      const drainResults = await Promise.allSettled([pool.end(), vectorPool.end()]);
-      for (const r of drainResults) {
-        if (r.status === "rejected") {
-          logger.error({ err: r.reason }, "Error draining a database pool");
-        }
-      }
-      logger.info("Database pools drained.");
-
-      await Sentry.close(SENTRY_FLUSH_TIMEOUT_MS).catch((err) => {
-        logger.error({ err }, "Error flushing Sentry");
-      });
-
-      clearTimeout(forceExit);
-      logger.info("Graceful shutdown complete. Exiting process.");
-      process.exit(0);
-    } catch (err) {
-      logger.error({ err }, "Unexpected error during graceful shutdown. Exiting.");
-      clearTimeout(forceExit);
-      process.exit(1);
-    }
-  })();
-};
-
-process.on("SIGTERM", shutdown);
-process.on("SIGINT", shutdown);
-
-// Global error handlers — catch async errors that escape startup/request handling.
-// These log the error and set startupError so the health endpoint reports it,
-// rather than silently crashing the process.
-process.on("uncaughtException", (err) => {
-  logger.fatal({ err }, "Uncaught exception in server process");
-  if (!startupError) {
-    startupError = `uncaught_exception: ${err.message}`;
-  }
-  Sentry.captureException(err);
-});
-
-process.on("unhandledRejection", (reason) => {
-  logger.fatal({ err: reason }, "Unhandled rejection in server process");
-  if (!startupError) {
-    startupError = `unhandled_rejection: ${reason instanceof Error ? reason.message : String(reason)}`;
-  }
-  Sentry.captureException(reason);
+registerLifecycleHooks({
+  server: httpServer,
+  pools: [pool, vectorPool],
+  setStartupError: (message) => {
+    if (!startupError) startupError = message;
+  },
 });
