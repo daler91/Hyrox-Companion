@@ -441,7 +441,7 @@ export const addExerciseSetBodySchema = withBlockStepPairing(z.object({
 }));
 export type AddExerciseSetBody = z.infer<typeof addExerciseSetBodySchema>;
 
-export interface ParsedExercise {
+export interface ParsedExercise extends ParsedExerciseSetStructureMetadata {
   exerciseName: string;
   category: string;
   customLabel?: string;
@@ -456,6 +456,11 @@ export interface ParsedExercise {
   plannedWeight?: number;
   plannedDistance?: number;
   plannedTime?: number;
+  notes?: string;
+  sets: Array<ParsedExerciseSet>;
+}
+
+interface ParsedExerciseSetStructureMetadata {
   blockId?: string;
   stepNumber?: number;
   intervalMinute?: number;
@@ -467,8 +472,9 @@ export interface ParsedExercise {
   repMode?: "total" | "per_side";
   tempo?: Record<string, unknown>;
   standards?: Record<string, unknown>;
-  notes?: string;
-  sets: Array<{
+}
+
+type ParsedExerciseSet = ParsedExerciseSetStructureMetadata & {
     setNumber: number;
     reps?: number;
     weight?: number;
@@ -478,20 +484,8 @@ export interface ParsedExercise {
     plannedWeight?: number;
     plannedDistance?: number;
     plannedTime?: number;
-    blockId?: string;
-    stepNumber?: number;
-    intervalMinute?: number;
-    cycleNumber?: number;
-    stepRole?: string;
-    groupId?: string;
-    intensity?: Record<string, unknown>;
-    load?: Record<string, unknown>;
-    repMode?: "total" | "per_side";
-    tempo?: Record<string, unknown>;
-    standards?: Record<string, unknown>;
     notes?: string;
-  }>;
-}
+  };
 
 export interface PersonalRecordValue {
   value: number;
