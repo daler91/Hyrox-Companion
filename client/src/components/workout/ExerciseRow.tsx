@@ -13,38 +13,7 @@ import { NumberStepper } from "@/components/ui/number-stepper";
 import { exerciseIcons } from "@/lib/exerciseIcons";
 import { categoryBorderColors } from "@/lib/exerciseUtils";
 import { cn } from "@/lib/utils";
-
-type FieldKey = "reps" | "weight" | "distance" | "time";
-
-const fieldMeta: Record<
-  FieldKey,
-  { label: (wu: string, du: string) => string; defaultStep: number; stepOptions: readonly number[] }
-> = {
-  reps: { label: () => "Reps", defaultStep: 1, stepOptions: [1, 5] },
-  weight: { label: (wu) => `Weight (${wu})`, defaultStep: 2.5, stepOptions: [1, 2.5, 5, 10] },
-  distance: { label: (_, du) => `Distance (${du === "km" ? "m" : "ft"})`, defaultStep: 50, stepOptions: [10, 50, 100, 500] },
-  time: { label: () => "Time (min)", defaultStep: 1, stepOptions: [1, 5, 10] },
-};
-
-// ⚡ Bolt: Cache array references to guarantee referential stability during re-renders.
-const fieldsCache = new Map<ExerciseName, FieldKey[]>();
-const DEFAULT_FIELDS: FieldKey[] = ["reps", "weight"];
-
-function getFields(exerciseName: ExerciseName): FieldKey[] {
-  const cached = fieldsCache.get(exerciseName);
-  if (cached) return cached;
-
-  const def = EXERCISE_DEFINITIONS[exerciseName];
-  if (!def) return DEFAULT_FIELDS;
-
-  const out: FieldKey[] = [];
-  for (const f of def.fields as readonly string[]) {
-    if (f !== "sets" && f in fieldMeta) out.push(f as FieldKey);
-  }
-
-  fieldsCache.set(exerciseName, out);
-  return out;
-}
+import { getFieldLabel, getFields, getFieldSpec, type FieldKey } from "@/components/exercise-row/fieldMeta";
 
 export interface ExerciseRowBlock {
   readonly blockId: string;
@@ -328,18 +297,17 @@ function ExerciseBlockEditor({
               )}
             >
               {fields.map((field) => {
-                const meta = fieldMeta[field];
                 return (
                   <div key={field} className="space-y-1">
                     <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                      {meta.label(weightUnit, distanceUnit)}
+                      {getFieldLabel(field, { weightUnit, distanceUnit })}
                     </Label>
                     <NumberStepper
                       value={set[field]}
-                      defaultStep={meta.defaultStep}
-                      stepOptions={meta.stepOptions}
+                      defaultStep={getFieldSpec(field).defaultStep}
+                      stepOptions={getFieldSpec(field).stepOptions}
                       onChange={(v) => setFieldStep(idx, field, v)}
-                      ariaLabel={`${meta.label(weightUnit, distanceUnit)} for set ${set.setNumber}`}
+                      ariaLabel={`${getFieldLabel(field, { weightUnit, distanceUnit })} for set ${set.setNumber}`}
                       testId={`input-${field}-${block.blockId}-${idx}`}
                     />
                   </div>
