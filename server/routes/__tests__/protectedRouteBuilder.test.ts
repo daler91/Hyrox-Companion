@@ -7,11 +7,15 @@ import { protectedDelete, protectedPost } from "../_helpers/protectedRouteBuilde
 vi.mock("../../routeGuards", () => ({
   protectedMutationGuards: [
     (_req: express.Request, _res: express.Response, next: express.NextFunction) => {
-if (Array.isArray(_res.locals.calls)) (_res.locals.calls as string[]).push("guard:auth");
+      if (Array.isArray(_res.locals.calls)) {
+        (_res.locals.calls as string[]).push("guard:auth");
+      }
       next();
     },
     (_req: express.Request, _res: express.Response, next: express.NextFunction) => {
-if (Array.isArray(_res.locals.calls)) (_res.locals.calls as string[]).push("guard:idempotency");
+      if (Array.isArray(_res.locals.calls)) {
+        (_res.locals.calls as string[]).push("guard:idempotency");
+      }
       next();
     },
   ],
