@@ -107,11 +107,8 @@ export function LogWorkoutStepperLayout({
     if (!autoParsing && !autoParseError && pendingParseTextRef.current !== null) {
       lastParsedTextRef.current = pendingParseTextRef.current;
       pendingParseTextRef.current = null;
-      // Parse succeeded; clear transient capture text so users focus on
-      // structured edits in the table.
-      if (exerciseBlocks.length > 0) setFreeText("");
     }
-  }, [autoParsing, autoParseError, exerciseBlocks.length, setFreeText]);
+  }, [autoParsing, autoParseError]);
 
   const advanceFromCapture = () => {
     const hasText = freeText.trim().length > 0;
