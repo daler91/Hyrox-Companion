@@ -54,10 +54,11 @@ export function registerWorkoutCrudRoutes(router: Router): void {
     const userId = getUserId(req);
     const pagination = parseOffsetPagination(req.query, { defaultLimit: DEFAULT_PAGE_LIMIT, maxLimit: MAX_PAGE_LIMIT });
     if (!pagination.ok) return res.status(400).json(pagination.error);
-    const logs = await storage.workouts.listWorkoutLogs(userId, { limit: pagination.value.limit, offset: pagination.value.offset });
-    const hasMore = logs.length === pagination.value.limit;
+    const logs = await storage.workouts.listWorkoutLogs(userId, { limit: pagination.value.limit + 1, offset: pagination.value.offset });
+    const hasMore = logs.length > pagination.value.limit;
+    const page = hasMore ? logs.slice(0, pagination.value.limit) : logs;
     res.setHeader("X-Page-Info", JSON.stringify({ limit: pagination.value.limit, offset: pagination.value.offset, hasMore }));
-    res.json(logs);
+    res.json(page);
   }));
 
   router.get("/api/v1/workouts/latest", isAuthenticated, rateLimiter("workout", 60), asyncHandler(async (req: Request, res: Response) => {

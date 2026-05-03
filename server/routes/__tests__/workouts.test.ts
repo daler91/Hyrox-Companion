@@ -101,7 +101,7 @@ describe("Workouts Routes", () => {
       const response = await request(app).get("/api/v1/workouts");
 
       expect(response.status).toBe(200);
-      expect(storage.workouts.listWorkoutLogs).toHaveBeenCalledWith("test_user_id", { limit: 50, offset: 0 });
+      expect(storage.workouts.listWorkoutLogs).toHaveBeenCalledWith("test_user_id", { limit: 51, offset: 0 });
       expect(response.body).toEqual(mockLogs);
       expect(response.headers["x-page-info"]).toBeDefined();
     });

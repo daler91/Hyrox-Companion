@@ -261,18 +261,20 @@ router.get("/api/v1/chat/history", isAuthenticated, validateQuery(chatHistoryQue
     const pagination = parseCursorPagination({ limit: limit?.toString(), cursor: beforeId ? `${before}|${beforeId}` : undefined }, { defaultLimit: 50, maxLimit: 200 });
     if (!pagination.ok) return res.status(400).json(pagination.error);
     const messages = await storage.users.getChatMessages(userId, {
-      limit: pagination.value.limit,
+      limit: pagination.value.limit + 1,
       beforeTimestamp: before ? new Date(before) : undefined,
       beforeId,
     });
-    const oldest = messages[0];
+    const hasMore = messages.length > pagination.value.limit;
+    const page = hasMore ? messages.slice(1) : messages;
+    const oldest = page[0];
     const nextCursor = oldest?.timestamp ? `${oldest.timestamp.toISOString()}|${oldest.id}` : undefined;
     if (oldest?.timestamp) {
       res.setHeader("X-Next-Cursor", oldest.timestamp.toISOString());
       res.setHeader("X-Next-Cursor-Id", oldest.id);
     }
-    res.setHeader("X-Page-Info", JSON.stringify({ limit: pagination.value.limit, hasMore: messages.length === pagination.value.limit, nextCursor }));
-    res.json(messages);
+    res.setHeader("X-Page-Info", JSON.stringify({ limit: pagination.value.limit, hasMore, nextCursor }));
+    res.json(page);
   }));
 
 router.post("/api/v1/chat/message", ...protectedMutationGuards, rateLimiter("chatMessage", 20), validateBody(insertChatMessageSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, InsertChatMessage>, res: Response) => {
