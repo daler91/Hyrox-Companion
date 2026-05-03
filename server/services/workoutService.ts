@@ -337,8 +337,16 @@ export async function autoHydrateExerciseSetsFromTextIfNeeded(
 
   const lockPromise = (async () => {
     logger.info({ context: "health-metrics", event: "exercise_set_auto_hydration_attempt", lockKey }, "Auto hydration attempt");
-    const source = await resolveCounterSource(owner);
-    await incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", source, "auto_hydration_attempted");
+    let source: CounterSource = "manual";
+    try {
+      source = await resolveCounterSource(owner);
+    } catch (err) {
+      logger.warn({ context: "health-metrics", event: "auto_hydration_source_resolution_failed", lockKey, err }, "Auto hydration source resolution failed; defaulting to manual source");
+    }
+    void incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", source, "auto_hydration_attempted")
+      .catch((err: unknown) => {
+        logger.warn({ context: "health-metrics", event: "auto_hydration_attempt_counter_failed", lockKey, err }, "Auto hydration attempt telemetry increment failed");
+      });
     return reparseFromText(target, owner, weightUnit, context, source)
       .then((result) => {
         logger.info({ context: "health-metrics", event: "exercise_set_auto_hydration_success", lockKey, setCount: result?.setCount ?? 0 }, "Auto hydration success");
