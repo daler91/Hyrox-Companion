@@ -4,6 +4,7 @@ export type { RagInfo, RagStatus } from "./coaching";
 export { chat, coaching } from "./coaching";
 export type { ParseFromImagePayload } from "./exercises";
 export { exercises } from "./exercises";
+export type { ReparseResponse } from "./constants";
 export { plans } from "./plans";
 export { timelineAnnotations } from "./timelineAnnotations";
 export type { GarminStatus, GarminSyncResponse, StravaStatus, StravaSyncResponse, UserPreferences } from "./user";
@@ -12,7 +13,6 @@ export type {
   AddExerciseSetPayload,
   BatchReparseResponse,
   PatchExerciseSetPayload,
-  ReparseResponse,
   ReparseWorkoutTextPayload,
   WorkoutHistoryStats,
   WorkoutReferenceTextPayload,

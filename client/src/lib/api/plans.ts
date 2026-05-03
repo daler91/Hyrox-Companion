@@ -1,10 +1,9 @@
 import type { ExerciseSet, GeneratePlanInput, PlanDay, TrainingPlan, TrainingPlanWithDays } from "@shared/schema";
 
 import { rawRequest,typedRequest } from "./client";
+import { IMAGE_REPARSE_TIMEOUT_MS } from "./constants";
 import type { ParseFromImagePayload } from "./exercises";
 import type { AddExerciseSetPayload, PatchExerciseSetPayload } from "./workouts";
-
-const IMAGE_REPARSE_TIMEOUT_MS = 60_000;
 
 export const plans = {
   list: () => typedRequest<TrainingPlan[]>("GET", "/api/v1/plans"),
