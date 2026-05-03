@@ -32,12 +32,17 @@ export function ConfirmStep({
   weightUnit,
   distanceUnit,
   autoParsing,
+  parseDiagnostics,
   cancelAutoParse,
   onBack,
   onContinue,
 }: ConfirmStepProps) {
   const [showOriginal, setShowOriginal] = useState(false);
   const hasBlocks = exerciseBlocks.length > 0;
+  const needsReviewBanner =
+    parseDiagnostics.emptyResult ||
+    parseDiagnostics.lowConfidenceCount > 0 ||
+    parseDiagnostics.lastErrorReason !== null;
 
   // Cancel any in-flight parse before mutating the exercise list so a
   // late parse response can't overwrite the user's in-progress edits.
@@ -87,6 +92,17 @@ export function ConfirmStep({
         <CardContent className="space-y-4">
           {autoParsing && <ParseStatusStrip parsing data-testid="confirm-step-parsing" />}
 
+          {!autoParsing && needsReviewBanner && (
+            <div
+              className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-sm text-amber-700 dark:text-amber-400"
+              role="status"
+              aria-live="polite"
+              data-testid="confirm-step-parse-review-banner"
+            >
+              Couldn’t fully structure this workout yet — review and fix.
+            </div>
+          )}
+
           {!autoParsing && !hasBlocks && (
             <div
               className="rounded-md border border-dashed border-border bg-muted/20 px-3 py-4 text-sm text-muted-foreground"
@@ -109,7 +125,7 @@ export function ConfirmStep({
           />
 
           {freeText.trim().length > 0 && (
-            <Collapsible open={showOriginal} onOpenChange={setShowOriginal}>
+            <Collapsible open={needsReviewBanner ? true : showOriginal} onOpenChange={setShowOriginal}>
               <CollapsibleTrigger asChild>
                 <Button
                   type="button"
@@ -118,7 +134,7 @@ export function ConfirmStep({
                   className="text-xs text-muted-foreground"
                   data-testid="button-show-original"
                 >
-                  {showOriginal ? "Hide" : "View"} original description
+                  {(needsReviewBanner || showOriginal) ? "Hide" : "View"} original description (legacy note)
                 </Button>
               </CollapsibleTrigger>
               <CollapsibleContent>

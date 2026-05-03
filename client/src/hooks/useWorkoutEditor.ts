@@ -17,6 +17,13 @@ interface UseWorkoutEditorOptions {
   initialUseTextMode?: boolean;
 }
 
+export interface ParseDiagnostics {
+  readonly lowConfidenceCount: number;
+  readonly emptyResult: boolean;
+  readonly lastErrorReason: string | null;
+  readonly lastConfidenceSummary: string | null;
+}
+
 export function makeBlockId(name: string, counterRef: MutableRefObject<number>) {
   counterRef.current += 1;
   return `${name}__${counterRef.current}`;
@@ -482,6 +489,12 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
   const [autoParsing, setAutoParsing] = useState(false);
   const [autoParseError, setAutoParseError] = useState(false);
   const [lastParsedAt, setLastParsedAt] = useState<number | null>(null);
+  const [parseDiagnostics, setParseDiagnostics] = useState<ParseDiagnostics>({
+    lowConfidenceCount: 0,
+    emptyResult: false,
+    lastErrorReason: null,
+    lastConfidenceSummary: null,
+  });
 
   const runAutoParse = useCallback(async (text: string) => {
     const trimmed = text.trim();
@@ -500,6 +513,16 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
       const parsed = await api.exercises.parse(trimmed, { signal: controller.signal });
       if (controller.signal.aborted) return;
       lastParsedTextRef.current = trimmed;
+      const lowConfidenceCount = parsed.filter((row) => typeof row.confidence === "number" && row.confidence < 80).length;
+      setParseDiagnostics({
+        lowConfidenceCount,
+        emptyResult: parsed.length === 0,
+        lastErrorReason: null,
+        lastConfidenceSummary:
+          parsed.length === 0
+            ? "No exercises were detected in the parse response."
+            : `Parsed ${parsed.length} exercises; ${lowConfidenceCount} below confidence 80.`,
+      });
       const { newBlocks, newData } = mergeParsedWithEdits(
         parsed,
         blockCounterRef,
@@ -512,7 +535,13 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
     } catch (err) {
       if (controller.signal.aborted) return;
       const isAbort = err instanceof DOMException && err.name === "AbortError";
-      if (!isAbort) setAutoParseError(true);
+      if (!isAbort) {
+        setAutoParseError(true);
+        setParseDiagnostics((prev) => ({
+          ...prev,
+          lastErrorReason: err instanceof Error ? err.message : "Unknown parse error",
+        }));
+      }
     } finally {
       // Always clear the spinner. Earlier this was gated on
       // `!controller.signal.aborted`, but that left the state stuck
@@ -607,6 +636,12 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
     }
     setAutoParsing(false);
     setAutoParseError(false);
+    setParseDiagnostics({
+      lowConfidenceCount: 0,
+      emptyResult: false,
+      lastErrorReason: null,
+      lastConfidenceSummary: null,
+    });
 
     // Seed the global block counter to a value higher than any suffix
     // in the hydrated block ids, so subsequent addExercise calls don't
@@ -640,6 +675,7 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
     // Auto-parse surface for the composer.
     autoParsing,
     autoParseError,
+    parseDiagnostics,
     lastParsedAt,
     scheduleAutoParse,
     cancelAutoParse,
