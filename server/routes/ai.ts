@@ -271,7 +271,8 @@ router.get("/api/v1/chat/history", isAuthenticated, validateQuery(chatHistoryQue
       res.setHeader("X-Next-Cursor", oldest.timestamp.toISOString());
       res.setHeader("X-Next-Cursor-Id", oldest.id);
     }
-    res.json({ data: messages, pageInfo: { limit: pagination.value.limit, hasMore: messages.length === pagination.value.limit, nextCursor } });
+    res.setHeader("X-Page-Info", JSON.stringify({ limit: pagination.value.limit, hasMore: messages.length === pagination.value.limit, nextCursor }));
+    res.json(messages);
   }));
 
 router.post("/api/v1/chat/message", ...protectedMutationGuards, rateLimiter("chatMessage", 20), validateBody(insertChatMessageSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, InsertChatMessage>, res: Response) => {

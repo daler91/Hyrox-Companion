@@ -102,8 +102,8 @@ describe("Workouts Routes", () => {
 
       expect(response.status).toBe(200);
       expect(storage.workouts.listWorkoutLogs).toHaveBeenCalledWith("test_user_id", { limit: 50, offset: 0 });
-      expect(response.body.data).toEqual(mockLogs);
-      expect(response.body.pageInfo).toMatchObject({ limit: 50, offset: 0 });
+      expect(response.body).toEqual(mockLogs);
+      expect(response.headers["x-page-info"]).toBeDefined();
     });
 
     it("should return 500 when storage throws an error", async () => {

@@ -266,8 +266,8 @@ registry.registerPath({
       description: "A list of workout logs",
       content: {
         "application/json": {
-          schema: z.object({ data: z.array(InsertWorkoutLogSchema), pageInfo: PageInfoSchema }),
-          example: { data: [EXAMPLE_WORKOUT_RESPONSE], pageInfo: { limit: 50, offset: 0, hasMore: false } },
+          schema: z.array(InsertWorkoutLogSchema),
+          example: [EXAMPLE_WORKOUT_RESPONSE],
         },
       },
     },

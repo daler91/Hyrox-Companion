@@ -14,6 +14,7 @@ export function registerWorkoutTimelineRoutes(router: Router): void {
     if (!pagination.ok) return res.status(400).json(pagination.error);
     const entries = await storage.timeline.getTimeline(userId, { planId: req.query.planId, limit: pagination.value.limit, offset: pagination.value.offset });
     const hasMore = entries.length === pagination.value.limit;
-    res.json({ data: entries, pageInfo: { limit: pagination.value.limit, offset: pagination.value.offset, hasMore } });
+    res.setHeader("X-Page-Info", JSON.stringify({ limit: pagination.value.limit, offset: pagination.value.offset, hasMore }));
+    res.json(entries);
   }));
 }
