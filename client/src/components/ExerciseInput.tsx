@@ -2,12 +2,12 @@ import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
 import { Hash, Pencil, Ruler, Timer, Weight } from "lucide-react";
 import { useId, useMemo } from "react";
 
+import { getFieldLabel, getFields, shouldUseMultiSetForFields } from "@/components/exercise-row/fieldMeta";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { categoryBorderColors } from "@/lib/exerciseUtils";
 import { getExerciseMissingFields } from "@/lib/exerciseWarnings";
-import { getFieldLabel, getFields, shouldUseMultiSetForFields } from "@/components/exercise-row/fieldMeta";
 
 import type { FieldConfig, FieldKey } from "./exercise-input";
 import { ExerciseHeader, ExerciseWarnings, MultiSetTable, SingleSetFields } from "./exercise-input";

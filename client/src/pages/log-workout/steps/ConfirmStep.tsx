@@ -1,5 +1,5 @@
 import { ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -38,21 +38,19 @@ export function ConfirmStep({
   onContinue,
 }: ConfirmStepProps) {
   const [showOriginal, setShowOriginal] = useState(false);
+  const [dismissedAutoOpen, setDismissedAutoOpen] = useState(false);
   const hasBlocks = exerciseBlocks.length > 0;
   const needsReviewBanner =
     parseDiagnostics.emptyResult ||
     parseDiagnostics.lowConfidenceCount > 0 ||
     parseDiagnostics.lastErrorReason !== null;
-  const wasReviewBannerVisibleRef = useRef(false);
+  const shouldAutoOpenLegacyNote = needsReviewBanner && !dismissedAutoOpen;
+  const isLegacyNoteOpen = showOriginal || shouldAutoOpenLegacyNote;
 
-  // Auto-expand once when we ENTER a review-needed state so the user sees
-  // the legacy note, but still allow manual collapse afterward.
-  useEffect(() => {
-    if (needsReviewBanner && !wasReviewBannerVisibleRef.current) {
-      setShowOriginal(true);
-    }
-    wasReviewBannerVisibleRef.current = needsReviewBanner;
-  }, [needsReviewBanner]);
+  const handleLegacyNoteOpenChange = useCallback((open: boolean) => {
+    setShowOriginal(open);
+    if (!open) setDismissedAutoOpen(true);
+  }, []);
 
   // Cancel any in-flight parse before mutating the exercise list so a
   // late parse response can't overwrite the user's in-progress edits.
@@ -135,7 +133,7 @@ export function ConfirmStep({
           />
 
           {freeText.trim().length > 0 && (
-            <Collapsible open={showOriginal} onOpenChange={setShowOriginal}>
+            <Collapsible open={isLegacyNoteOpen} onOpenChange={handleLegacyNoteOpenChange}>
               <CollapsibleTrigger asChild>
                 <Button
                   type="button"
@@ -144,7 +142,7 @@ export function ConfirmStep({
                   className="text-xs text-muted-foreground"
                   data-testid="button-show-original"
                 >
-                  {showOriginal ? "Hide" : "View"} original description (legacy note)
+                  {isLegacyNoteOpen ? "Hide" : "View"} original description (legacy note)
                 </Button>
               </CollapsibleTrigger>
               <CollapsibleContent>
