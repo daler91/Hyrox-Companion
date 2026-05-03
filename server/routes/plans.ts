@@ -16,7 +16,6 @@ import { getUserId } from "../types";
 import { createUpdatePlanDayUseCase } from "../usecases/plans/updatePlanDay.usecase";
 import { createMutateExerciseSetUseCase } from "../usecases/workouts/mutateExerciseSet.usecase";
 import { protectedDelete, protectedPatch, protectedPost } from "./_helpers/protectedRouteBuilder";
-import { rejectTextOnlyWriteIfNeeded } from "./structuredWriteGuard";
 
 const router = Router();
 
@@ -99,7 +98,6 @@ protectedPost(router, "/api/v1/plans/generate", { limiter: rateLimiter("planGene
 
 protectedPatch(router, "/api/v1/plans/:planId/days/:dayId", { limiter: rateLimiter("planDayUpdate", 20), middleware: [validateBody(updatePlanDaySchema)] }, async (req: ExpressRequest<{ planId: string; dayId: string }, unknown, UpdatePlanDay>, res: Response) => {
   const userId = getUserId(req);
-  if (await rejectTextOnlyWriteIfNeeded(req, res, "plan_day")) return;
   const updatedDay = await updateStoredPlanDay({ dayId: req.params.dayId, data: req.body, userId });
   if (!updatedDay) return sendNotFound(res, "Day not found");
   res.json(updatedDay);
@@ -107,7 +105,6 @@ protectedPatch(router, "/api/v1/plans/:planId/days/:dayId", { limiter: rateLimit
 
 protectedPatch(router, "/api/v1/plans/days/:dayId", { limiter: rateLimiter("planDayUpdate", 20), middleware: [validateBody(updatePlanDaySchema)] }, async (req: ExpressRequest<{ dayId: string }, unknown, UpdatePlanDay>, res: Response) => {
   const userId = getUserId(req);
-  if (await rejectTextOnlyWriteIfNeeded(req, res, "plan_day")) return;
   const updatedDay = await updatePlanDayWithCleanup(req.params.dayId, req.body, userId);
   if (!updatedDay) return sendNotFound(res, "Day not found");
   res.json(updatedDay);
