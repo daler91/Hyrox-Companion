@@ -66,14 +66,14 @@ export function ResponsiveSheet({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className={cn("sm:max-w-lg", contentClassName)}
+        className={cn("sm:max-w-lg max-h-[90vh] overflow-hidden", contentClassName)}
         data-testid={testId}
       >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           {description ? <DialogDescription>{description}</DialogDescription> : null}
         </DialogHeader>
-        <div>{children}</div>
+        <div className="max-h-[calc(90vh-7rem)] overflow-y-auto pr-1">{children}</div>
       </DialogContent>
     </Dialog>
   );
