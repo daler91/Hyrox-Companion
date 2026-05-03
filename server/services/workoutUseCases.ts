@@ -1,6 +1,9 @@
 import type { exercisesPayloadSchema, InsertWorkoutLog, insertWorkoutLogSchema, ParsedExercise,UpdateWorkoutLog, updateWorkoutLogSchema } from "@shared/schema";
 import type { z } from "zod";
 
+import { AppError, ErrorCode } from "../errors";
+import { parseExercisesFromText } from "../gemini";
+import { storage } from "../storage";
 import { createWorkoutAndScheduleCoaching, updateWorkout } from "./workoutService";
 
 // Route-level payloads carry the core table columns plus an optional parsed
@@ -20,9 +23,20 @@ export async function createWorkout(input: {
   payload: CreateWorkoutPayload;
 }) {
   const { exercises, ...workoutData } = input.payload;
+  let structured = exercises as ParsedExercise[] | undefined;
+  if (!structured || structured.length === 0) {
+    const textToParse = [workoutData.mainWorkout, workoutData.accessory].filter(Boolean).join("\n").trim();
+    if (textToParse) {
+      const user = await storage.users.getUser(input.userId);
+      structured = await parseExercisesFromText(textToParse, user?.weightUnit || "kg", undefined, input.userId);
+      if (structured.length === 0) {
+        throw new AppError(ErrorCode.VALIDATION_ERROR, "Text/voice/photo workout content must produce structured exercise sets.", 400);
+      }
+    }
+  }
   return createWorkoutAndScheduleCoaching(
     workoutData as InsertWorkoutLog,
-    exercises as ParsedExercise[] | undefined,
+    structured,
     input.userId,
   );
 }
@@ -33,10 +47,21 @@ export async function updateWorkoutUseCase(input: {
   payload: UpdateWorkoutPayload;
 }) {
   const { exercises, ...updateData } = input.payload;
+  let structured = exercises as ParsedExercise[] | undefined;
+  if (!structured || structured.length === 0) {
+    const textToParse = [updateData.mainWorkout, updateData.accessory].filter(Boolean).join("\n").trim();
+    if (textToParse) {
+      const user = await storage.users.getUser(input.userId);
+      structured = await parseExercisesFromText(textToParse, user?.weightUnit || "kg", undefined, input.userId);
+      if (structured.length === 0) {
+        throw new AppError(ErrorCode.VALIDATION_ERROR, "Text/voice/photo workout updates must produce structured exercise sets.", 400);
+      }
+    }
+  }
   return updateWorkout(
     input.workoutId,
     updateData as UpdateWorkoutLog,
-    exercises as ParsedExercise[] | undefined,
+    structured,
     input.userId,
   );
 }

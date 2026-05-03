@@ -18,6 +18,7 @@ import { db } from "../../db";
 import { AppError, ErrorCode } from "../../errors";
 import { asyncHandler, parsePagination, rateLimiter, sendNotFound, validateBody } from "../../routeUtils";
 import { createWorkout, updateWorkoutUseCase } from "../../services/workoutUseCases";
+import { autoHydrateExerciseSetsFromTextIfNeeded } from "../../services/workoutService";
 import { storage } from "../../storage";
 import { getUserId } from "../../types";
 import { createMutateExerciseSetUseCase } from "../../usecases/workouts/mutateExerciseSet.usecase";
@@ -113,11 +114,17 @@ export function registerWorkoutCrudRoutes(router: Router): void {
   });
 
   router.get("/api/v1/workouts/:id", isAuthenticated, rateLimiter("workout", 60), asyncHandler(async (req: Request<{ id: string }>, res: Response) => {
-    const log = await storage.workouts.getWorkoutLog(req.params.id, getUserId(req));
+    const userId = getUserId(req);
+    const log = await storage.workouts.getWorkoutLog(req.params.id, userId);
     if (!log) {
       return sendNotFound(res, WORKOUT_NOT_FOUND);
     }
-    const exerciseSets = await storage.workouts.getExerciseSetsByWorkoutLog(log.id);
+    let exerciseSets = await storage.workouts.getExerciseSetsByWorkoutLog(log.id);
+    if (exerciseSets.length === 0) {
+      const user = await storage.users.getUser(userId);
+      await autoHydrateExerciseSetsFromTextIfNeeded(log, { workoutLogId: log.id }, user?.weightUnit || "kg", "workout");
+      exerciseSets = await storage.workouts.getExerciseSetsByWorkoutLog(log.id);
+    }
     res.json({ ...log, exerciseSets });
   }));
 
