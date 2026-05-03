@@ -1,13 +1,14 @@
 import { clerkClient } from "@clerk/express";
 import { type Request as ExpressRequest, type Response, Router } from "express";
 
-import { evictUserFromSeenCache, isAuthenticated } from "../clerkAuth";
+import { evictUserFromSeenCache } from "../clerkAuth";
 import { EXTERNAL_API_TIMEOUT_MS } from "../constants";
 import { env } from "../env";
 import { logger } from "../logger";
-import { asyncHandler, rateLimiter, sendNotFound } from "../routeUtils";
+import { rateLimiter, sendNotFound } from "../routeUtils";
 import { storage } from "../storage";
 import { getUserId } from "../types";
+import { protectedDelete } from "./_helpers/protectedRouteBuilder";
 
 const router = Router();
 
@@ -28,11 +29,7 @@ const router = Router();
  * 3. Delete DB user row (cascades all child rows).
  * 4. Evict user from auth seen-cache to prevent stale session use.
  */
-router.delete(
-  "/api/v1/account",
-  isAuthenticated,
-  rateLimiter("accountDelete", 3),
-  asyncHandler(async (req: ExpressRequest, res: Response) => {
+protectedDelete(router, "/api/v1/account", { limiter: rateLimiter("accountDelete", 3) }, async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
 
     // Step 1: Delete Clerk identity first. If this fails the DB row must
@@ -79,7 +76,6 @@ router.delete(
     evictUserFromSeenCache(userId);
 
     res.json({ success: true });
-  }),
-);
+  });
 
 export default router;
