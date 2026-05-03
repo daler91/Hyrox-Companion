@@ -65,7 +65,7 @@ export const WorkoutTextMode = ({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-medium text-foreground">Description</span>
+        <span className="text-sm font-medium text-foreground">Parse into exercise table</span>
         <div className="flex items-center gap-2">
           {onCaptureImage && !previewActive && (
             <ImageCaptureButton
@@ -114,7 +114,7 @@ export const WorkoutTextMode = ({
             value={freeText}
             onChange={(e) => setFreeText(e.target.value)}
             className="min-h-[120px]"
-            aria-label="Workout description"
+            aria-label="Parse into exercise table"
             data-testid="input-freetext"
           />
           {isListening && interimTranscript && (
@@ -140,7 +140,7 @@ export const WorkoutTextMode = ({
               ) : (
                 <Sparkles className="h-3.5 w-3.5" aria-hidden />
               )}
-              {isParsingText ? "Parsing..." : "Parse description"}
+              {isParsingText ? "Parsing..." : "Parse into exercise table"}
             </Button>
           )}
           <p className="text-xs text-muted-foreground">
@@ -156,7 +156,7 @@ function getWorkoutTextModeHelperText({
   hasDescription,
   isSupported,
 }: Readonly<{ hasDescription: boolean; isSupported: boolean }>) {
-  if (hasDescription) return "Description captured.";
+  if (hasDescription) return "Ready to parse into the exercise table.";
   if (isSupported) return "Text, voice, and photo input are available here.";
   return "Text and photo input are available here.";
 }

@@ -46,6 +46,12 @@ export function ConfirmStep({
     parseDiagnostics.lastErrorReason !== null;
   const shouldAutoOpenLegacyNote = needsReviewBanner && !dismissedAutoOpen;
   const isLegacyNoteOpen = showOriginal || shouldAutoOpenLegacyNote;
+  const focusManualTableEditor = () => {
+    const firstEditable = document.querySelector<HTMLElement>(
+      '[data-testid="exercise-table"] input, [data-testid="exercise-table"] button, [data-testid="exercise-table"] [role="textbox"]',
+    );
+    firstEditable?.focus();
+  };
 
   const handleLegacyNoteOpenChange = useCallback((open: boolean) => {
     setShowOriginal(open);
@@ -107,7 +113,12 @@ export function ConfirmStep({
               aria-live="polite"
               data-testid="confirm-step-parse-review-banner"
             >
-              Couldn’t fully structure this workout yet — review and fix.
+              <div className="flex items-center justify-between gap-3">
+                <span>Couldn’t fully structure this workout yet — review and fix.</span>
+                <Button type="button" size="sm" variant="outline" onClick={focusManualTableEditor}>
+                  Edit table manually
+                </Button>
+              </div>
             </div>
           )}
 

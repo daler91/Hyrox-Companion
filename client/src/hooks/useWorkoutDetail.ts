@@ -126,6 +126,7 @@ export function useWorkoutDetail(workoutId: string | null) {
     invalidateQueries: workoutId
       ? [QUERY_KEYS.workout(workoutId), QUERY_KEYS.workoutHistory(workoutId)]
       : undefined,
+    successToast: "Legacy workout converted",
     // No error toast — reparse failure is a best-effort fallback, not a
     // user-initiated action. Empty state + coach's prescription remain
     // visible, which is the graceful degradation path.
