@@ -18,7 +18,7 @@ export async function incrementStructuredExerciseCounter(ownerType: OwnerType, s
 }
 
 export async function runStructuredExerciseDailyRollup(day: string): Promise<void> {
-  const [row] = await db.execute(sql`
+  const rowResult = await db.execute<{ total_rows: number; structured_rows: number; legacy_only_rows: number; failed_hydration_backlog: number }>(sql`
     with owners as (
       select 'workout_log'::text as owner_type, wl.id as owner_id, wl.date as owner_day,
              case when wl.source in ('strava','garmin') then 'import' when wl.source in ('voice','photo') then wl.source else 'manual' end as source,
@@ -42,23 +42,24 @@ export async function runStructuredExerciseDailyRollup(day: string): Promise<voi
     where owner_day = ${day}::date
   `);
 
-  const total = Number((row as any).total_rows ?? 0);
-  const legacyOnly = Number((row as any).legacy_only_rows ?? 0);
+  const row = rowResult.rows[0];
+  const total = Number(row?.total_rows ?? 0);
+  const legacyOnly = Number(row?.legacy_only_rows ?? 0);
   const legacyPct = total > 0 ? legacyOnly / total : 0;
 
   await db.insert(structuredExerciseHealthDailyRollups).values({
     day,
     totalRows: total,
-    structuredRows: Number((row as any).structured_rows ?? 0),
+    structuredRows: Number(row?.structured_rows ?? 0),
     legacyOnlyRows: legacyOnly,
-    failedHydrationBacklog: Number((row as any).failed_hydration_backlog ?? 0),
+    failedHydrationBacklog: Number(row?.failed_hydration_backlog ?? 0),
     legacyOnlyPct: legacyPct,
   }).onConflictDoUpdate({
     target: structuredExerciseHealthDailyRollups.day,
-    set: { totalRows: total, structuredRows: Number((row as any).structured_rows ?? 0), legacyOnlyRows: legacyOnly, failedHydrationBacklog: Number((row as any).failed_hydration_backlog ?? 0), legacyOnlyPct: legacyPct, updatedAt: new Date() },
+    set: { totalRows: total, structuredRows: Number(row?.structured_rows ?? 0), legacyOnlyRows: legacyOnly, failedHydrationBacklog: Number(row?.failed_hydration_backlog ?? 0), legacyOnlyPct: legacyPct, updatedAt: new Date() },
   });
 
-  const [wow] = await db.execute(sql`
+  const wowResult = await db.execute<{ current_pct: number; prev_pct: number }>(sql`
     with current_week as (
       select avg(legacy_only_pct)::float as pct from structured_exercise_health_daily_rollups
       where day >= (${day}::date - interval '6 days') and day <= ${day}::date
@@ -69,8 +70,9 @@ export async function runStructuredExerciseDailyRollup(day: string): Promise<voi
     select coalesce((select pct from current_week),0) as current_pct, coalesce((select pct from prev_week),0) as prev_pct
   `);
 
-  const currentPct = Number((wow as any).current_pct ?? 0);
-  const prevPct = Number((wow as any).prev_pct ?? 0);
+  const wow = wowResult.rows[0];
+  const currentPct = Number(wow?.current_pct ?? 0);
+  const prevPct = Number(wow?.prev_pct ?? 0);
   if (prevPct > 0 && currentPct > prevPct * 1.1) {
     logger.warn({ context: "health-alert", event: "legacy_only_pct_wow_rise", currentPct, prevPct, day }, "Legacy-only percentage rose >10% week-over-week");
   }

@@ -18,10 +18,10 @@ import pLimit from "p-limit";
 import { db } from "../db";
 import { AppError, ErrorCode } from "../errors";
 import { logger } from "../logger";
-import { incrementStructuredExerciseCounter } from "./structuredExerciseHealth";
 import { DEFAULT_JOB_OPTIONS, queue } from "../queue";
 import { storage } from "../storage";
 import { prescribedSetToLogRow } from "../storage/shared";
+import { incrementStructuredExerciseCounter } from "./structuredExerciseHealth";
 
 // ⚡ Perf: cap concurrent Gemini parse calls per chunk to protect the
 // quota & circuit breaker (CODEBASE_REVIEW_2026-04-12.md #12). Prior code

@@ -3,8 +3,8 @@ import cron from "node-cron";
 import { runEmailCronJob } from "./emailScheduler";
 import { logger } from "./logger";
 import { queue } from "./queue";
-import type { IStorage } from "./storage";
 import { runStructuredExerciseDailyRollup } from "./services/structuredExerciseHealth";
+import type { IStorage } from "./storage";
 
 let task: ReturnType<typeof cron.schedule> | null = null;
 let idempotencyCleanupTask: ReturnType<typeof cron.schedule> | null = null;
