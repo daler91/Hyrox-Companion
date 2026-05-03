@@ -7,9 +7,9 @@ import type {
 } from "@shared/schema";
 
 import { typedRequest } from "./client";
+import { IMAGE_REPARSE_TIMEOUT_MS } from "./constants";
+import type { ReparseResponse } from "./constants";
 import type { ParseFromImagePayload } from "./exercises";
-
-const IMAGE_REPARSE_TIMEOUT_MS = 60_000;
 
 export interface BatchReparseResponse {
   total: number;
@@ -22,12 +22,6 @@ export interface BatchReparseResponse {
  * the server couldn't extract any exercises from the free text — callers
  * should fall back to the empty-state UX in that case.
  */
-export interface ReparseResponse {
-  exercises: unknown[];
-  saved: boolean;
-  setCount?: number;
-}
-
 export interface WorkoutReferenceTextPayload {
   prescribedMainWorkout?: string | null;
   prescribedAccessory?: string | null;
