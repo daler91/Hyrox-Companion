@@ -28,13 +28,13 @@ export function registerWorkoutAiRoutes(router: Router): void {
     const parseTarget: { id: string; mainWorkout?: string | null; accessory?: string | null } = { id: workout.id, mainWorkout: workout.prescribedMainWorkout ?? workout.mainWorkout, accessory: workout.prescribedAccessory ?? workout.accessory };
     if (req.body.prescribedMainWorkout !== undefined) { referencePatch.prescribedMainWorkout = req.body.prescribedMainWorkout; parseTarget.mainWorkout = req.body.prescribedMainWorkout; }
     if (req.body.prescribedAccessory !== undefined) { referencePatch.prescribedAccessory = req.body.prescribedAccessory; parseTarget.accessory = req.body.prescribedAccessory; }
-    if (Object.keys(referencePatch).length > 0) await storage.workouts.updateWorkoutLog(workoutId, referencePatch, userId);
     void incrementStructuredExerciseCounter("workout_log", "voice", "parse_text_attempted").catch(() => undefined);
     const result = await reparseWorkout(parseTarget, weightUnit);
     if (!result || result.setCount === 0) {
       void incrementStructuredExerciseCounter("workout_log", "voice", "parse_text_failed").catch(() => undefined);
       return res.status(422).json({ error: "Parsing did not produce persisted exercise sets.", code: "PARSE_WRITE_THROUGH_REQUIRED" });
     }
+    if (Object.keys(referencePatch).length > 0) await storage.workouts.updateWorkoutLog(workoutId, referencePatch, userId);
     void incrementStructuredExerciseCounter("workout_log", "voice", "parse_text_succeeded").catch(() => undefined);
     res.json({ exercises: result.exercises, saved: true, setCount: result.setCount });
   });

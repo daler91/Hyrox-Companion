@@ -220,6 +220,27 @@ describe("Workouts Routes", () => {
     expect(photoRes.body.saved).toBe(true);
     expect(photoRes.body.setCount).toBeGreaterThan(0);
   });
+
+
+  it("does not persist prescribed text overrides when parse write-through fails", async () => {
+    const [{ storage }, { reparseWorkout }] = await Promise.all([
+      import("../../storage"),
+      import("../../services/workoutService"),
+    ]);
+    vi.mocked(reparseWorkout).mockResolvedValueOnce(null as never);
+
+    const response = await request(app)
+      .post("/api/v1/workouts/workout-1/reparse")
+      .send({ prescribedMainWorkout: "new prescribed text" });
+
+    expect(response.status).toBe(422);
+    expect(response.body.code).toBe("PARSE_WRITE_THROUGH_REQUIRED");
+    expect(storage.workouts.updateWorkoutLog).not.toHaveBeenCalledWith(
+      "workout-1",
+      expect.objectContaining({ prescribedMainWorkout: "new prescribed text" }),
+      "test_user_id",
+    );
+  });
 it("captures representative high-frequency endpoint timings", async () => {
     const samples = 6;
     const timings: Array<{ endpoint: string; elapsedMs: number }> = [];

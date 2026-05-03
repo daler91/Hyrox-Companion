@@ -281,6 +281,13 @@
       "when": 1777844430704,
       "tag": "0039_structured_exercise_health_counter_expansion",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1777845635188,
+      "tag": "0040_glamorous_pretty_boy",
+      "breakpoints": true
     }
   ]
 }
