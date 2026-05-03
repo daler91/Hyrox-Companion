@@ -46,46 +46,10 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
 import { useIsAiCoachEnabled, useIsAuthUserLoaded, useIsAutoCoaching } from "@/hooks/useAuth";
 import { useMoveTimelineEntry } from "@/hooks/useMoveTimelineEntry";
-import { useOpenWorkoutId } from "@/hooks/useOpenWorkoutId";
 import { useTimelineState } from "@/hooks/useTimelineState";
-import { entryId, surfaceId } from "@/hooks/workout-actions/timelineEntry";
+import { useTimelineSurfaces } from "@/hooks/useTimelineSurfaces";
 import { api, QUERY_KEYS } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
-
-// Click-routing for timeline cards: PreviewSheet (future planned),
-// LogSheet (today/past planned), ReviewSurface (already logged),
-// SkippedSheet (status=skipped). One sheet per status; click events
-// in TimelineWorkoutCard call openSurface which classifies the entry
-// and opens the right one.
-
-function isFuturePlanned(entry: TimelineEntry): boolean {
-  if (entry.status !== "planned") return false;
-  const todayStr = format(new Date(), "yyyy-MM-dd");
-  return entry.date > todayStr;
-}
-
-function isLoggablePlanned(entry: TimelineEntry): boolean {
-  if (entry.status !== "planned") return false;
-  if (!entry.planDayId) return false;
-  const todayStr = format(new Date(), "yyyy-MM-dd");
-  return entry.date <= todayStr;
-}
-
-function isReviewable(entry: TimelineEntry): boolean {
-  // Routed to ReviewSurface: anything with a workoutLogId and a
-  // non-skipped status (Strava-source entries are workouts too, so
-  // they qualify). Skipped cards take a different read-only-with-undo
-  // path via isSkipped.
-  return Boolean(entry.workoutLogId) && entry.status !== "skipped";
-}
-
-function isSkipped(entry: TimelineEntry): boolean {
-  return entry.status === "skipped";
-}
-
-function isMissed(entry: TimelineEntry): boolean {
-  return entry.status === "missed" && Boolean(entry.planDayId);
-}
 
 type TimelineState = ReturnType<typeof useTimelineState>;
 type TimelineData = TimelineState["data"];
@@ -310,143 +274,19 @@ export default function Timeline() {
   const { combiningEntry, setCombiningEntry, combineSecondEntry, setCombineSecondEntry, showCombineDialog, setShowCombineDialog, handleCombine, handleConfirmCombine, combineWorkoutsMutation } = combine;
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showAIConsent, setShowAIConsent] = useState(false);
-  // Sheet-native surfaces for every timeline-card click: PreviewSheet
-  // (future planned), LogSheet (today/past planned), ReviewSurface
-  // (already logged), SkippedSheet (skipped). All four are mutually
-  // exclusive — openSurface always nulls the others so we never stack
-  // them.
-  const [previewEntry, setPreviewEntry] = useState<TimelineEntry | null>(null);
-  const [logEntry, setLogEntry] = useState<TimelineEntry | null>(null);
-  const [reviewEntry, setReviewEntry] = useState<TimelineEntry | null>(null);
-  const [skippedEntry, setSkippedEntry] = useState<TimelineEntry | null>(null);
-
-  const { openWorkoutId, setOpenWorkoutId } = useOpenWorkoutId();
-
-  // Tracks whether any sheet has been opened in this session. We can't
-  // rely on `openSheetEntryId` alone for the state→URL sync because on
-  // initial mount with a deep-link URL, openSheetEntryId is null but
-  // the URL is non-null — clearing the URL there would wipe the deep
-  // link before URL→state can read it. The ref flips to true the first
-  // time openSurface puts a sheet on screen.
-  const sheetEverOpenedRef = useRef(false);
-
-  const closeAllSurfaces = useCallback(() => {
-    setPreviewEntry(null);
-    setLogEntry(null);
-    setReviewEntry(null);
-    setSkippedEntry(null);
-  }, []);
-
-  const closeAllSurfacesAndClearUrl = useCallback(() => {
-    closeAllSurfaces();
-    if (openWorkoutId !== null) {
-      setOpenWorkoutId(null);
-    }
-  }, [closeAllSurfaces, openWorkoutId, setOpenWorkoutId]);
-
-  const openSurface = useCallback(
-    (entry: TimelineEntry) => {
-      const id = surfaceId(entry);
-      // If the exact same entry/surface is already open, keep the current
-      // sheet mounted. Re-closing and re-opening the same surface can cause
-      // mount loops in the detail view (observed as repeated refresh/reflow).
-      if (
-        (isFuturePlanned(entry) && previewEntry && surfaceId(previewEntry) === id) ||
-        (isLoggablePlanned(entry) && logEntry && surfaceId(logEntry) === id) ||
-        (isMissed(entry) && logEntry && surfaceId(logEntry) === id) ||
-        (isReviewable(entry) && reviewEntry && surfaceId(reviewEntry) === id) ||
-        (isSkipped(entry) && skippedEntry && surfaceId(skippedEntry) === id)
-      ) {
-        return;
-      }
-
-      sheetEverOpenedRef.current = true;
-      closeAllSurfaces();
-      if (isFuturePlanned(entry)) {
-        setPreviewEntry(entry);
-        return;
-      }
-      if (isLoggablePlanned(entry)) {
-        setLogEntry(entry);
-        return;
-      }
-      if (isMissed(entry)) {
-        setLogEntry(entry);
-        return;
-      }
-      if (isReviewable(entry)) {
-        setReviewEntry(entry);
-        return;
-      }
-      if (isSkipped(entry)) {
-        setSkippedEntry(entry);
-      }
-      // No surface matched — header rows or annotation-only entries
-      // don't have a click destination. Leave everything closed.
-    },
-    [closeAllSurfaces, logEntry, previewEntry, reviewEntry, skippedEntry],
-  );
-
-  // The currently-open entry across all four surfaces. Drives the
-  // ?workout= URL sync (state→URL effect below) and lets the URL→state
-  // effect detect when a deep link or browser navigation needs to
-  // populate a different sheet.
-  const openSheetEntry =
-    previewEntry ?? logEntry ?? reviewEntry ?? skippedEntry ?? null;
-  const openSheetEntryId = openSheetEntry ? surfaceId(openSheetEntry) : null;
-
-  // State → URL: when a sheet opens or closes, mirror the active
-  // workout id into the ?workout= query string. Skip writing on the
-  // initial mount before any sheet has been opened — otherwise we'd
-  // wipe a deep-link URL before URL→state can read it.
-  useEffect(() => {
-    if (openSheetEntryId !== null) {
-      sheetEverOpenedRef.current = true;
-      if (openWorkoutId !== openSheetEntryId) {
-        setOpenWorkoutId(openSheetEntryId);
-      }
-      return;
-    }
-    if (sheetEverOpenedRef.current && openWorkoutId !== null) {
-      setOpenWorkoutId(null);
-    }
-  }, [openSheetEntryId, openWorkoutId, setOpenWorkoutId]);
-
-  // URL → state: deep links (`/?workout=<id>`) and browser back/forward
-  // need to populate the right surface based on the entry's status.
-  // Resolves the id against `timelineData` and dispatches through
-  // openSurface, which already classifies entries by status. The
-  // `openSheetEntryId === openWorkoutId` early return is what stops
-  // this from looping with the state→URL effect — once the sheet's id
-  // matches the URL we have nothing to do, even if `timelineData`
-  // produced a fresh array reference (the `[]` default in
-  // useTimelineData makes that happen on every render before the
-  // first fetch resolves).
-  useEffect(() => {
-    if (!openWorkoutId) {
-      // The state→URL effect runs first in this same effect cycle and
-      // may have just called setOpenWorkoutId(openSheetEntryId) via
-      // wouter (which mutates window.history synchronously). Our closure
-      // still sees the pre-write null, so a naive close here would race
-      // with the click that just opened the sheet, ping-ponging with
-      // state→URL into an infinite reopen loop. Re-read the URL
-      // synchronously to detect that pending write before discarding
-      // open surfaces.
-      if (globalThis.window !== undefined) {
-        const liveWorkoutId = new URLSearchParams(
-          globalThis.window.location.search,
-        ).get("workout");
-        if (liveWorkoutId !== null) return;
-      }
-      if (openSheetEntryId !== null) closeAllSurfaces();
-      return;
-    }
-    if (openSheetEntryId === openWorkoutId) return;
-    const target = timelineData.find((e) => surfaceId(e) === openWorkoutId || entryId(e) === openWorkoutId);
-    if (!target) return; // entry not in cache yet — wait for refetch
-    if (openSheetEntry && surfaceId(openSheetEntry) === surfaceId(target)) return;
-    openSurface(target);
-  }, [openWorkoutId, openSheetEntry, openSheetEntryId, timelineData, openSurface, closeAllSurfaces]);
+  const {
+    previewEntry,
+    setPreviewEntry,
+    logEntry,
+    setLogEntry,
+    reviewEntry,
+    setReviewEntry,
+    skippedEntry,
+    setSkippedEntry,
+    openSurface,
+    closeAllSurfacesAndClearUrl,
+    anySurfaceOpen,
+  } = useTimelineSurfaces(timelineData);
   const [annotationsDialogOpen, setAnnotationsDialogOpen] = useState(false);
   // Seeds the create form in AnnotationsDialog when the user clicks a row's
   // inline "+ Note" chip, so they don't have to re-pick the date.
@@ -660,7 +500,7 @@ export default function Timeline() {
         />
       </DndContext>
 
-          {!previewEntry && !logEntry && !reviewEntry && !skippedEntry && (
+          {!anySurfaceOpen && (
             <FloatingActionButton coachPanelOpen={coachOpen} onCoachToggle={() => handleCoachToggle(!coachOpen)} />
           )}
 
@@ -814,7 +654,7 @@ export default function Timeline() {
       </div>
       
       {coachOpen && !isMobile && (
-        <div className={previewEntry || logEntry || reviewEntry || skippedEntry ? "hidden" : "w-80 lg:w-96 flex-shrink-0"}>
+        <div className={anySurfaceOpen ? "hidden" : "w-80 lg:w-96 flex-shrink-0"}>
           <FeatureErrorBoundaryWrapper featureName="Coach">
             <CoachPanel
               isOpen={coachOpen}
@@ -831,7 +671,7 @@ export default function Timeline() {
         // see the top of their timeline while chatting with the coach.
         // Hidden (display:none) rather than unmounted while a workout detail
         // is open so in-flight chat streams and local message state survive.
-        <div className={previewEntry || logEntry || reviewEntry || skippedEntry ? "hidden" : "fixed inset-x-0 bottom-0 z-50 h-[70vh]"}>
+        <div className={anySurfaceOpen ? "hidden" : "fixed inset-x-0 bottom-0 z-50 h-[70vh]"}>
           <div
             data-testid="coach-panel-mobile-sheet"
             className="relative h-full bg-background shadow-2xl rounded-t-2xl border-t border-x"

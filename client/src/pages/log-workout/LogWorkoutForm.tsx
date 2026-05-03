@@ -8,7 +8,6 @@ import {
   type WorkoutStep,
 } from "@/hooks/useLogWorkoutDraft";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
-import { useWorkoutEditor } from "@/hooks/useWorkoutEditor";
 import { useWorkoutForm } from "@/hooks/useWorkoutForm";
 
 import { LogWorkoutStepperLayout } from "./LogWorkoutStepperLayout";
@@ -17,6 +16,7 @@ import {
   useInitialLogWorkoutDraft,
   useLogWorkoutDraftPersistence,
 } from "./useLogWorkoutDraftPersistence";
+import { useLogWorkoutEditorController } from "./useLogWorkoutEditorController";
 
 interface LogWorkoutFormProps {
   userKey: string;
@@ -30,24 +30,31 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
   const initialDraft = useInitialLogWorkoutDraft(userKey);
 
   const {
-    exerciseBlocks,
-    exerciseData,
-    useTextMode,
-    addExercise,
-    removeBlock,
-    updateBlock,
-    reorderBlocks,
-    resetEditor,
-    autoParsing,
-    autoParseError,
-    parseNow,
-    cancelAutoParse,
-    parseImageMutation,
-  } = useWorkoutEditor({
-    initialExerciseBlocks: initialDraft?.exerciseBlocks,
-    initialExerciseData: initialDraft?.exerciseData,
-    initialUseTextMode: initialDraft?.useTextMode,
-    initialBlockCounter: initialDraft?.blockCounter,
+    editor: {
+      exerciseBlocks,
+      exerciseData,
+      useTextMode,
+      addExercise,
+      removeBlock,
+      updateBlock,
+      reorderBlocks,
+      resetEditor,
+      autoParsing,
+      autoParseError,
+      parseNow,
+      cancelAutoParse,
+      parseImageMutation,
+    },
+    hasWorkoutBlockDetails,
+  } = useLogWorkoutEditorController({
+    initialDraft: initialDraft
+      ? {
+          exerciseBlocks: initialDraft.exerciseBlocks,
+          exerciseData: initialDraft.exerciseData,
+          useTextMode: initialDraft.useTextMode,
+          blockCounter: initialDraft.blockCounter,
+        }
+      : null,
   });
 
   const {
@@ -125,7 +132,7 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
     toast,
   });
 
-  const hasWorkoutDetails = exerciseBlocks.length > 0 || freeText.trim().length > 0;
+  const hasWorkoutDetails = hasWorkoutBlockDetails || freeText.trim().length > 0;
 
   return (
     <LogWorkoutStepperLayout
