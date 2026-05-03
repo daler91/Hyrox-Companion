@@ -1,5 +1,7 @@
 # Codebase Architecture Review
 
+*Last Updated: May 3, 2026*
+
 ## Executive Summary
 
 Hyrox-Companion is a mature TypeScript full-stack application: a React/Vite PWA in `client/`, an Express REST API in `server/`, and shared Drizzle/Zod contracts in `shared/`. The current architecture is workable and does not need a rewrite. The highest-value path is to finish the modularization already started in the codebase, reduce duplicated workout/exercise-table flows, and harden the operational model for multiple app instances.
@@ -353,7 +355,7 @@ The pattern is not yet enforced consistently. Some routes are thin adapters; oth
 
 - File path: `README.md`, `docs/client.md`, `docs/server.md`, `docs/testing.md`, `docs/api-reference.md`, `shared/openapi.ts`
 - Code area: Toolchain docs, route docs, testing docs, OpenAPI source.
-- Problem: Docs still contain older Vite/TypeScript/test-count references and old route descriptions.
+- Problem: Docs still contain older Vite/TypeScript/test-count references and old route descriptions (e.g., test counts in `docs/testing.md` may lag actuals).
 - Why it matters: Stale docs are a multiplier on future maintenance cost.
 - Recommended refactor: Treat docs as a contract surface and update them after route/use-case composition decisions.
 - Tradeoffs: Low technical risk but should not be mixed with production refactors.
@@ -516,7 +518,11 @@ The pattern is not yet enforced consistently. Some routes are thin adapters; oth
    - For cron locking, test that only one process would run a scheduled job when lock acquisition fails.
 
 8. Keep integration and Cypress tests targeted.
-   - Full Cypress was not needed for this analysis-only pass, but individual specs should be part of UI refactor PR validation.
+   - Leverage the existing testing pyramid (Vitest unit, integration, and Cypress E2E specs) as outlined in `docs/testing.md`.
+   - Full Cypress was not needed for this analysis-only pass, but individual specs (like `cypress/e2e/timeline.cy.ts`) should be part of UI refactor PR validation.
+
+9. Maintain Accessibility (a11y) test coverage.
+   - Continue the practice of pairing UI components with `*.a11y.test.tsx` files using `jest-axe` to prevent regressions during extractions.
 
 ## Suggested Migration Roadmap
 
@@ -859,6 +865,8 @@ The pattern is not yet enforced consistently. Some routes are thin adapters; oth
 - Pass - `Get-Content client\src\components\workout\ExerciseRow.tsx -TotalCount 120`
 - No matches - `git grep -n "TODO\|FIXME" -- client server shared docs | Select-Object -First 80` exited 1 because no matches were found
 
+*Note: During the latest review pass on May 3, 2026, no new terminal commands were executed due to cloud environment restrictions.*
+
 ## Limitations
 
 - `rg --files` could not run in this environment because `rg.exe` returned `Access is denied`; I used `git ls-files`, `git grep`, `Get-Content`, and `Select-String` instead.
@@ -868,3 +876,4 @@ The pattern is not yet enforced consistently. Some routes are thin adapters; oth
 - I did not run database-backed integration tests separately because they require environment setup beyond static/code inspection and the normal Vitest run already exposed current test failures.
 - The full Vitest suite could not run inside the sandbox due `spawn EPERM`; when rerun outside the sandbox, it completed but failed the two OnboardingWizard tests listed above.
 - This review is based on local source inspection and configured read-only analysis commands. I did not inspect production telemetry, database query plans, real data volumes, or deployment topology, so scaling findings that depend on multi-instance deployment are called out as risks rather than current production incidents.
+- **May 3, 2026 Update**: The latest pass was limited to static file inspection (leveraging `docs/testing.md` and module configurations). Shell execution and live command running were unavailable in the current cloud sandbox turn.
