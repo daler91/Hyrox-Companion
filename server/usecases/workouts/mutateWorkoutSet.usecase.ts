@@ -1,8 +1,8 @@
 import { type AddExerciseSetBody, type PatchExerciseSetBody } from "@shared/schema";
 
 export interface WorkoutSetStorage {
-  updateExerciseSet: (workoutId: string, setId: string, body: PatchExerciseSetBody, userId: string) => Promise<unknown | null>;
-  addExerciseSetToWorkoutLog: (workoutId: string, body: AddExerciseSetBody, userId: string) => Promise<unknown | null>;
+  updateExerciseSet: (workoutId: string, setId: string, body: PatchExerciseSetBody, userId: string) => Promise<unknown>;
+  addExerciseSetToWorkoutLog: (workoutId: string, body: AddExerciseSetBody, userId: string) => Promise<unknown>;
   deleteExerciseSet: (workoutId: string, setId: string, userId: string) => Promise<boolean>;
 }
 

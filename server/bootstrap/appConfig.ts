@@ -1,4 +1,5 @@
 import type { Express } from "express";
+
 import { env } from "../env";
 
 export function applyAppConfig(app: Express): void {

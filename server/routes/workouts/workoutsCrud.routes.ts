@@ -19,9 +19,9 @@ import { AppError, ErrorCode } from "../../errors";
 import { protectedMutationGuards } from "../../routeGuards";
 import { asyncHandler, parsePagination, rateLimiter, sendNotFound, validateBody } from "../../routeUtils";
 import { createWorkout, updateWorkoutUseCase } from "../../services/workoutUseCases";
-import { createMutateWorkoutSetUseCase } from "../../usecases/workouts/mutateWorkoutSet.usecase";
 import { storage } from "../../storage";
 import { getUserId } from "../../types";
+import { createMutateWorkoutSetUseCase } from "../../usecases/workouts/mutateWorkoutSet.usecase";
 import { protectedPost } from "../_helpers/protectedRouteBuilder";
 import { createCustomExerciseSchema, createWorkoutRouteSchema, updateWorkoutRouteSchema } from "./shared";
 
