@@ -25,14 +25,12 @@ function collectTsFiles(dir: string): string[] {
 describe("protected route builder compliance", () => {
   it("rejects direct protected middleware stacking on mutating routes", () => {
     const offenders: string[] = [];
+    const directProtectedMutationPattern = /router\.(post|patch|delete)\([\s\S]*?(protectedMutationGuards|isAuthenticated)/;
 
     for (const dir of ROUTE_DIRS) {
       for (const file of collectTsFiles(dir)) {
         const contents = readFileSync(file, "utf8");
-        const hasProtectedStack = /router\.(post|patch|delete)\([^\n]*protectedMutationGuards/.test(contents);
-        const hasLegacyAuthStack = /router\.(post|patch|delete)\([\s\S]*?isAuthenticated[\s\S]*?rateLimiter/.test(contents);
-
-        if (hasProtectedStack || hasLegacyAuthStack) {
+        if (directProtectedMutationPattern.test(contents)) {
           offenders.push(path.relative(process.cwd(), file));
         }
       }
