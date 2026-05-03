@@ -383,6 +383,39 @@ export const incomingExerciseSchema = withBlockStepPairing(z.object({
 
 export const exercisesPayloadSchema = z.array(incomingExerciseSchema).max(200);
 
+const structureStepSchema = z.object({
+  stepNumber: z.number().int().min(1).max(10_000),
+  exerciseName: z.string().min(1).max(255),
+  category: z.string().min(1).max(255),
+  customLabel: z.string().max(255).optional().nullable(),
+  stepRole: z.string().max(50).optional().nullable(),
+  groupId: z.string().max(255).optional().nullable(),
+  groupMeta: z.record(z.string(), z.unknown()).optional().nullable(),
+  targets: z.record(z.string(), z.unknown()).optional().nullable(),
+}).strip();
+
+export const structureBlockSchema = z.object({
+  id: z.string().max(255).optional(),
+  sectionType: z.string().min(1).max(50),
+  formatType: z.string().min(1).max(50),
+  durationSeconds: z.number().int().min(0).max(86_400).optional().nullable(),
+  rounds: z.number().int().min(1).max(10_000).optional().nullable(),
+  workSeconds: z.number().int().min(0).max(86_400).optional().nullable(),
+  restSeconds: z.number().int().min(0).max(86_400).optional().nullable(),
+  sortOrder: z.number().int().min(0).max(10_000).optional().default(0),
+  steps: z.array(structureStepSchema).min(1).max(200),
+}).superRefine((block, ctx) => {
+  if (block.formatType.toLowerCase() === "amrap" && block.rounds != null) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "AMRAP blocks cannot define fixed rounds.", path: ["rounds"] });
+  }
+  const hasCap = block.durationSeconds != null;
+  if (block.formatType.toLowerCase() === "for_time" && !hasCap) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "for_time blocks must define durationSeconds (cap semantics).", path: ["durationSeconds"] });
+  }
+});
+
+export const structureBlocksPayloadSchema = z.array(structureBlockSchema).max(100).optional();
+
 // Shared measurement fields used by both patch and add request bodies.
 // Extracted to a single definition so the 9-line block doesn't duplicate.
 //

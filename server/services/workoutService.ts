@@ -11,6 +11,8 @@ import {
   users,
   type WorkoutLog,
   workoutLogs,
+  workoutStructureBlocks,
+  workoutStructureSteps,
 } from "@shared/schema";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import pLimit from "p-limit";
@@ -31,6 +33,17 @@ const GEMINI_PARSE_CONCURRENCY = 3;
 
 // Drizzle transaction type — any method chain valid on `db` is also valid on `tx`.
 type WorkoutTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+type StructureBlockInput = {
+  id?: string;
+  sectionType: string;
+  formatType: string;
+  durationSeconds?: number | null;
+  rounds?: number | null;
+  workSeconds?: number | null;
+  restSeconds?: number | null;
+  sortOrder?: number;
+  steps: Array<{ stepNumber: number; exerciseName: string; category: string; customLabel?: string | null; stepRole?: string | null; groupId?: string | null; groupMeta?: Record<string, unknown> | null; targets?: Record<string, unknown> | null }>;
+};
 
 // ⚡ Bolt Performance Optimization:
 // Combined multiple O(N) array traversals (.filter, .map, .map) into a single loop
@@ -610,6 +623,51 @@ async function insertClientSuppliedExercises(
   return savedSets;
 }
 
+function synthesizeDefaultStructureBlocks(exercises: ParsedExercise[]): StructureBlockInput[] {
+  if (exercises.length === 0) return [];
+  const steps = exercises.map((ex, i) => ({
+    stepNumber: i + 1,
+    exerciseName: ex.exerciseName,
+    category: ex.category,
+    customLabel: ex.customLabel ?? null,
+    stepRole: ex.stepRole ?? "steady",
+    groupId: ex.groupId ?? null,
+    groupMeta: null,
+    targets: null,
+  }));
+  return [{ sectionType: "main", formatType: "steady", sortOrder: 0, steps }];
+}
+
+async function replaceWorkoutStructure(tx: WorkoutTx, workoutLogId: string, structureBlocks: StructureBlockInput[] | undefined): Promise<void> {
+  await tx.delete(workoutStructureBlocks).where(eq(workoutStructureBlocks.workoutLogId, workoutLogId));
+  if (!structureBlocks || structureBlocks.length === 0) return;
+  for (const [idx, block] of structureBlocks.entries()) {
+    const [savedBlock] = await tx.insert(workoutStructureBlocks).values({
+      workoutLogId,
+      planDayId: null,
+      sectionType: block.sectionType,
+      formatType: block.formatType,
+      durationSeconds: block.durationSeconds ?? null,
+      rounds: block.rounds ?? null,
+      workSeconds: block.workSeconds ?? null,
+      restSeconds: block.restSeconds ?? null,
+      sortOrder: block.sortOrder ?? idx,
+    }).returning();
+    if (!block.steps?.length) continue;
+    await tx.insert(workoutStructureSteps).values(block.steps.map((s) => ({
+      blockId: savedBlock.id,
+      stepNumber: s.stepNumber,
+      exerciseName: s.exerciseName,
+      category: s.category,
+      customLabel: s.customLabel ?? null,
+      stepRole: s.stepRole ?? null,
+      groupId: s.groupId ?? null,
+      groupMeta: s.groupMeta ?? null,
+      targets: s.targets ?? null,
+    })));
+  }
+}
+
 /**
  * When a workout is logged against a plan day and the client didn't supply
  * exercises, copy the plan day's prescribed exerciseSets into the new log
@@ -709,6 +767,7 @@ async function createWorkoutInTx(
   tx: WorkoutTx,
   enrichedData: InsertWorkoutLog,
   exercises: ParsedExercise[] | undefined,
+  structureBlocks: StructureBlockInput[] | undefined,
   userId: string,
 ): Promise<CreateWorkoutResult> {
   const [log] = await tx
@@ -736,6 +795,7 @@ async function createWorkoutInTx(
   if (enrichedData.planDayId) {
     await persistAdherenceSnapshot(tx, log.id, enrichedData.planDayId, savedSets);
   }
+  await replaceWorkoutStructure(tx, log.id, structureBlocks ?? (exercises?.length ? synthesizeDefaultStructureBlocks(exercises) : undefined));
 
   if (savedSets.length > 0) return { ...log, exerciseSets: savedSets };
   return log;
@@ -745,6 +805,7 @@ export async function createWorkout(
   workoutData: InsertWorkoutLog,
   exercises: ParsedExercise[] | undefined,
   userId: string,
+  structureBlocks?: StructureBlockInput[],
 ): Promise<CreateWorkoutResult> {
   // Resolve plan linkage before creating the workout
   const planLinks = await resolveActivePlanLinks(workoutData, userId);
@@ -754,7 +815,7 @@ export async function createWorkout(
     ...(planLinks.planDayId !== undefined && { planDayId: planLinks.planDayId }),
   };
 
-  return await db.transaction((tx) => createWorkoutInTx(tx, enrichedData, exercises, userId));
+  return await db.transaction((tx) => createWorkoutInTx(tx, enrichedData, exercises, structureBlocks, userId));
 }
 
 /**
@@ -774,6 +835,7 @@ export async function createWorkoutAndScheduleCoaching(
   workoutData: InsertWorkoutLog,
   exercises: ParsedExercise[] | undefined,
   userId: string,
+  structureBlocks?: StructureBlockInput[],
 ): Promise<CreateWorkoutResult> {
   const planLinks = await resolveActivePlanLinks(workoutData, userId);
   const enrichedData = {
@@ -783,7 +845,7 @@ export async function createWorkoutAndScheduleCoaching(
   };
 
   const { workout, shouldCoach } = await db.transaction(async (tx) => {
-    const created = await createWorkoutInTx(tx, enrichedData, exercises, userId);
+    const created = await createWorkoutInTx(tx, enrichedData, exercises, structureBlocks, userId);
 
     const [user] = await tx
       .select({ aiCoachEnabled: users.aiCoachEnabled })
@@ -829,6 +891,7 @@ export async function updateWorkout(
   updateData: UpdateWorkoutLog,
   exercises: ParsedExercise[] | undefined,
   userId: string,
+  structureBlocks?: StructureBlockInput[],
 ): Promise<UpdateWorkoutResult | null> {
   if (exercises && Array.isArray(exercises)) {
     const result = await db.transaction(async (tx) => {
@@ -858,9 +921,10 @@ export async function updateWorkout(
           await tx.insert(customExercises).values(uniqueCustomExs).onConflictDoNothing();
         }
 
+        await replaceWorkoutStructure(tx, log.id, structureBlocks ?? synthesizeDefaultStructureBlocks(exercises));
         return { log: { ...log, exerciseSets: savedSets } as UpdateWorkoutResult, previousDate };
       }
-
+      await replaceWorkoutStructure(tx, log.id, structureBlocks);
       return { log, previousDate };
     });
 

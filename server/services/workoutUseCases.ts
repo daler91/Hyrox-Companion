@@ -9,16 +9,18 @@ import { createWorkoutAndScheduleCoaching, updateWorkout } from "./workoutServic
 
 type CreateWorkoutPayload = z.infer<typeof insertWorkoutLogSchema> & {
   exercises?: z.infer<typeof exercisesPayloadSchema>;
+  structureBlocks?: unknown[];
 };
 type UpdateWorkoutPayload = z.infer<typeof updateWorkoutLogSchema> & {
   exercises?: z.infer<typeof exercisesPayloadSchema>;
+  structureBlocks?: unknown[];
 };
 
 export async function createWorkout(input: {
   userId: string;
   payload: CreateWorkoutPayload;
 }) {
-  const { exercises, ...workoutData } = input.payload;
+  const { exercises, structureBlocks, ...workoutData } = input.payload;
   let structured = exercises as ParsedExercise[] | undefined;
   if ((!structured || structured.length === 0) && env.GEMINI_API_KEY) {
     const textToParse = [workoutData.mainWorkout, workoutData.accessory].filter(Boolean).join("\n").trim();
@@ -30,7 +32,7 @@ export async function createWorkout(input: {
       }
     }
   }
-  return createWorkoutAndScheduleCoaching(workoutData as InsertWorkoutLog, structured, input.userId);
+  return createWorkoutAndScheduleCoaching(workoutData as InsertWorkoutLog, structured, input.userId, structureBlocks);
 }
 
 export async function updateWorkoutUseCase(input: {
@@ -38,7 +40,7 @@ export async function updateWorkoutUseCase(input: {
   workoutId: string;
   payload: UpdateWorkoutPayload;
 }) {
-  const { exercises, ...updateData } = input.payload;
+  const { exercises, structureBlocks, ...updateData } = input.payload;
   let structured = exercises as ParsedExercise[] | undefined;
 
   if ((!structured || structured.length === 0) && env.GEMINI_API_KEY) {
@@ -57,5 +59,5 @@ export async function updateWorkoutUseCase(input: {
     }
   }
 
-  return updateWorkout(input.workoutId, updateData as UpdateWorkoutLog, structured, input.userId);
+  return updateWorkout(input.workoutId, updateData as UpdateWorkoutLog, structured, input.userId, structureBlocks);
 }
