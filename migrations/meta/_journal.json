@@ -288,6 +288,13 @@
       "when": 1777845635188,
       "tag": "0040_glamorous_pretty_boy",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1777847740423,
+      "tag": "0041_workout_structure_primitives",
+      "breakpoints": true
     }
   ]
 }
