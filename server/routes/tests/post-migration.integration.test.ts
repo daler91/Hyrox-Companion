@@ -347,31 +347,23 @@ describe("Post-Migration Verification: Railway + Neon", () => {
       }
     });
 
-    it("exercise_sets has set_number CHECK constraint", async () => {
+    it("exercise set and structured-health CHECK constraints are present and current", async () => {
       const client = await pool.connect();
       try {
-        const result = await client.query(
+        const setNumberCheck = await client.query(
           `SELECT 1 FROM information_schema.table_constraints
            WHERE table_name = 'exercise_sets' AND constraint_type = 'CHECK' AND constraint_name = 'set_number_check'`,
         );
-        expect(result.rowCount).toBeGreaterThan(0);
-      } finally {
-        client.release();
-      }
-    });
+        expect(setNumberCheck.rowCount).toBeGreaterThan(0);
 
-
-
-    it("structured exercise health counter check allows new parse/rejection counters", async () => {
-      const client = await pool.connect();
-      try {
-        const result = await client.query(
+        const healthCounterCheck = await client.query(
           `SELECT pg_get_constraintdef(oid) AS def
            FROM pg_constraint
            WHERE conname = 'structured_exercise_health_counter_name_check'`,
         );
-        expect(result.rowCount).toBeGreaterThan(0);
-        const def = String(result.rows[0]?.def ?? "");
+        expect(healthCounterCheck.rowCount).toBeGreaterThan(0);
+
+        const def = String(healthCounterCheck.rows[0]?.def ?? "");
         expect(def).toContain("rejected_text_only_write");
         expect(def).toContain("parse_text_attempted");
         expect(def).toContain("parse_photo_failed");
