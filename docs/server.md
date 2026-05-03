@@ -25,42 +25,23 @@ Source entry point: `server/index.ts`
 The startup sequence in `server/index.ts` proceeds as follows:
 
 1. **Environment validation** -- `server/env.ts` is imported first. It parses `process.env` against a Zod schema and throws immediately on invalid configuration. A structured JSON boot log line is emitted to stdout before any validation runs.
-
 2. **Dev auth bypass guard** -- If `ALLOW_DEV_AUTH_BYPASS` is `"true"` in production, the process exits with `logger.fatal`. In development it logs a warning.
-
 3. **Sentry initialization** -- If `SENTRY_DSN` is set, `@sentry/node` is initialized with the current `NODE_ENV`. PII sending is disabled.
+4. **Express + HTTP server creation** -- `express()` is created, `x-powered-by` is disabled, and a raw `http.Server` is created via `createServer(app)`.
+5. **Core middleware wiring** -- Compression, CORS, CSP/Helmet, body parsers, request logging, CSRF, idempotency, and request-context wiring are registered in deterministic order (see Middleware Stack below).
+6. **Health endpoint registration** -- `GET /api/v1/health` is registered before async startup tasks and before CORS so platform probes are always reachable.
+7. **Early server bind** -- `httpServer.listen()` happens before startup tasks. This keeps `/api/v1/health` reachable while dependencies warm up.
 
-4. **Express app creation** -- `express()` is created, `x-powered-by` header is disabled, and a raw `http.Server` is created via `createServer(app)`.
+After listening, startup advances through explicit phases exposed by the health endpoint's `phase` field:
 
-5. **Middleware stack setup** -- See the Middleware Stack section below.
+8. **`db_maintenance` phase** -- `runStartupMaintenance(storage)` executes DB connectivity checks, migrations, schema/extension guards, and cleanup/backfill tasks.
+9. **`queue` phase** -- `startQueue()` starts pg-boss and registers queue workers.
+10. **`cron` phase** -- `startCron(storage)` schedules recurring jobs.
+11. **`routes` phase** -- `registerRoutes(httpServer, app)` mounts auth + API routes.
+12. **Post-route runtime wiring** -- Dev-only Swagger UI (`/api/docs`), global Express error handler, Sentry Express error handler, and static/Vite serving are attached.
+13. **`ready` phase** -- `isReady` flips to `true`; health transitions from `starting` to `ok`.
 
-6. **Health check endpoint** -- `GET /api/v1/health` is registered before async startup work. It returns `{ status: "starting" }` while startup is in progress, `{ status: "ok" }` once ready, or `503` with `{ status: "error" }` if startup failed. This allows CI tooling (`wait-on`) to poll the health endpoint while the server finishes initializing.
-
-7. **HTTP server listen** -- The server begins listening on `0.0.0.0:<PORT>` (default `5000`) early, so the health endpoint is reachable during the remaining startup steps.
-
-8. **Startup maintenance** -- `runStartupMaintenance(storage)` from `server/maintenance.ts` runs sequentially:
-   - Test database connectivity (15 s timeout)
-   - Run Drizzle migrations
-   - Ensure schema columns are up to date (additive ALTER TABLE statements)
-   - Enable the `pgvector` extension on the vector DB
-   - Create the `document_chunks` table on the vector DB if missing
-   - Clean orphaned data (e.g. dangling `plan_day_id` references)
-   - Backfill plan dates and workout-to-plan links
-   - Mark missed plan days
-
-9. **Queue start** -- `startQueue()` starts pg-boss and registers job workers (`auto-coach`, `embed-coaching-material`).
-
-10. **Cron start** -- `startCron(storage)` schedules recurring tasks via `node-cron`.
-
-11. **Route registration** -- `registerRoutes(httpServer, app)` sets up Clerk auth middleware, Strava routes, and all API route modules.
-
-12. **Swagger UI** (dev only) -- Mounted at `/api/docs`.
-
-13. **Error handler** -- Global Express error handler that sanitizes 500 errors and reports to Sentry.
-
-14. **Static / Vite serving** -- In production, `serveStatic(app)` serves the built SPA from `server/public/`. In development, Vite dev server middleware is attached via `server/vite.ts`.
-
-15. **Ready flag** -- `isReady` is set to `true` and the health endpoint begins returning `"ok"`.
+If any phase throws, `startupError` is set, the process stays bound, and `/api/v1/health` returns `503` with `{ status: "error", phase, ... }`.
 
 ---
 

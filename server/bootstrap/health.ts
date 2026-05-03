@@ -1,1 +1,0 @@
-export const HEALTH_PROBE_TIMEOUT_MS = 3000;
