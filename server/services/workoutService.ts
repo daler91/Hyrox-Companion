@@ -335,21 +335,28 @@ export async function autoHydrateExerciseSetsFromTextIfNeeded(
   const existingLock = hydrationLocks.get(lockKey);
   if (existingLock) return existingLock;
 
-  logger.info({ context: "health-metrics", event: "exercise_set_auto_hydration_attempt", lockKey }, "Auto hydration attempt");
-  const source = await resolveCounterSource(owner);
-  await incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", source, "auto_hydration_attempted");
-  const lockPromise = reparseFromText(target, owner, weightUnit, context, source)
-    .then((result) => {
-      logger.info({ context: "health-metrics", event: "exercise_set_auto_hydration_success", lockKey, setCount: result?.setCount ?? 0 }, "Auto hydration success");
-      void incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", source, "auto_hydration_succeeded");
-      return result;
-    })
-    .catch((err: unknown) => {
-      logger.error({ context: "health-metrics", event: "exercise_set_auto_hydration_failure", lockKey, err }, "Auto hydration failed");
-      void incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", source, "auto_hydration_failed");
-      throw err;
-    })
-    .finally(() => hydrationLocks.delete(lockKey));
+  const lockPromise = (async () => {
+    logger.info({ context: "health-metrics", event: "exercise_set_auto_hydration_attempt", lockKey }, "Auto hydration attempt");
+    const source = await resolveCounterSource(owner);
+    await incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", source, "auto_hydration_attempted");
+    return reparseFromText(target, owner, weightUnit, context, source)
+      .then((result) => {
+        logger.info({ context: "health-metrics", event: "exercise_set_auto_hydration_success", lockKey, setCount: result?.setCount ?? 0 }, "Auto hydration success");
+        void incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", source, "auto_hydration_succeeded")
+          .catch((err: unknown) => {
+            logger.warn({ context: "health-metrics", event: "auto_hydration_success_counter_failed", lockKey, err }, "Auto hydration success telemetry increment failed");
+          });
+        return result;
+      })
+      .catch((err: unknown) => {
+        logger.error({ context: "health-metrics", event: "exercise_set_auto_hydration_failure", lockKey, err }, "Auto hydration failed");
+        void incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", source, "auto_hydration_failed")
+          .catch((counterErr: unknown) => {
+            logger.warn({ context: "health-metrics", event: "auto_hydration_failure_counter_failed", lockKey, err: counterErr }, "Auto hydration failure telemetry increment failed");
+          });
+        throw err;
+      });
+  })().finally(() => hydrationLocks.delete(lockKey));
   hydrationLocks.set(lockKey, lockPromise);
   return lockPromise;
 }
