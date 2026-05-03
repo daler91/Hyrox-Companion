@@ -17,6 +17,7 @@ import { sanitizeRagInfo } from "../services/ragRetrieval";
 import { registerSseStream } from "../sseRegistry";
 import { storage } from "../storage";
 import { getUserId } from "../types";
+import { getChatHistoryUseCase } from "../usecases/ai/chatHistory.usecase";
 import { protectedDelete, protectedPost } from "./_helpers/protectedRouteBuilder";
 
 const router = Router();
@@ -258,20 +259,10 @@ const chatHistoryQuerySchema = z
 router.get("/api/v1/chat/history", isAuthenticated, validateQuery(chatHistoryQuerySchema), asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const { limit, before, beforeId } = req.query as z.infer<typeof chatHistoryQuerySchema>;
-    const pagination = parseCursorPagination({ limit: limit?.toString(), cursor: beforeId ? `${before}|${beforeId}` : undefined }, { defaultLimit: 50, maxLimit: 200 });
-    if (!pagination.ok) return res.status(400).json(pagination.error);
-    const messages = await storage.users.getChatMessages(userId, {
-      limit: pagination.value.limit + 1,
-      beforeTimestamp: before ? new Date(before) : undefined,
-      beforeId,
-    });
-    const hasMore = messages.length > pagination.value.limit;
-    const page = hasMore ? messages.slice(1) : messages;
-    const oldest = page[0];
-    const nextCursor = oldest?.timestamp ? `${oldest.timestamp.toISOString()}|${oldest.id}` : undefined;
-    if (oldest?.timestamp) {
-      res.setHeader("X-Next-Cursor", oldest.timestamp.toISOString());
-      res.setHeader("X-Next-Cursor-Id", oldest.id);
+    const { messages, nextCursor } = await getChatHistoryUseCase(storage.users, { userId, limit, before, beforeId });
+    if (nextCursor) {
+      res.setHeader("X-Next-Cursor", nextCursor.timestamp);
+      res.setHeader("X-Next-Cursor-Id", nextCursor.id);
     }
     res.setHeader("X-Page-Info", JSON.stringify({ limit: pagination.value.limit, hasMore, nextCursor }));
     res.json(page);

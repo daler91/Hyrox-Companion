@@ -22,6 +22,7 @@ import { asyncHandler, rateLimiter, sendNotFound, validateBody } from "../../rou
 import { createWorkout, updateWorkoutUseCase } from "../../services/workoutUseCases";
 import { storage } from "../../storage";
 import { getUserId } from "../../types";
+import { createMutateWorkoutSetUseCase } from "../../usecases/workouts/mutateWorkoutSet.usecase";
 import { protectedPost } from "../_helpers/protectedRouteBuilder";
 import { createCustomExerciseSchema, createWorkoutRouteSchema, updateWorkoutRouteSchema } from "./shared";
 
@@ -29,6 +30,8 @@ const patchExerciseSetSchema = patchExerciseSetBodySchema;
 const addExerciseSetSchema = addExerciseSetBodySchema;
 const WORKOUT_NOT_FOUND = "Workout not found";
 const EXERCISE_SET_NOT_FOUND = "Exercise set not found";
+
+const workoutSetUseCase = createMutateWorkoutSetUseCase(storage.workouts);
 
 const combineWorkoutsSchema = z.object({
   newWorkout: insertWorkoutLogSchema,
@@ -72,7 +75,7 @@ export function registerWorkoutCrudRoutes(router: Router): void {
   }));
 
   router.patch("/api/v1/workouts/:id/sets/:setId", ...protectedMutationGuards, rateLimiter("workoutSet", 120), validateBody(patchExerciseSetSchema), asyncHandler(async (req: Request<{ id: string; setId: string }, Record<string, never>, PatchExerciseSetBody>, res: Response) => {
-    const updated = await storage.workouts.updateExerciseSet(req.params.id, req.params.setId, req.body, getUserId(req));
+    const updated = await workoutSetUseCase.updateSet(req.params.id, req.params.setId, req.body, getUserId(req));
     if (!updated) {
       return sendNotFound(res, EXERCISE_SET_NOT_FOUND);
     }
@@ -80,7 +83,7 @@ export function registerWorkoutCrudRoutes(router: Router): void {
   }));
 
   router.post("/api/v1/workouts/:id/sets", ...protectedMutationGuards, rateLimiter("workoutSet", 60), validateBody(addExerciseSetSchema), asyncHandler(async (req: Request<{ id: string }, Record<string, never>, AddExerciseSetBody>, res: Response) => {
-    const created = await storage.workouts.addExerciseSetToWorkoutLog(req.params.id, req.body, getUserId(req));
+    const created = await workoutSetUseCase.addSet(req.params.id, req.body, getUserId(req));
     if (!created) {
       return sendNotFound(res, WORKOUT_NOT_FOUND);
     }
@@ -88,7 +91,7 @@ export function registerWorkoutCrudRoutes(router: Router): void {
   }));
 
   router.delete("/api/v1/workouts/:id/sets/:setId", ...protectedMutationGuards, rateLimiter("workoutSet", 60), asyncHandler(async (req: Request<{ id: string; setId: string }>, res: Response) => {
-    const deleted = await storage.workouts.deleteExerciseSet(req.params.id, req.params.setId, getUserId(req));
+    const deleted = await workoutSetUseCase.deleteSet(req.params.id, req.params.setId, getUserId(req));
     if (!deleted) {
       return sendNotFound(res, EXERCISE_SET_NOT_FOUND);
     }
