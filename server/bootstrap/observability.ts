@@ -3,7 +3,12 @@ import * as Sentry from "@sentry/node";
 import { env } from "../env";
 import { logger } from "../logger";
 
+let observabilityInitialized = false;
+
 export function initObservability(): void {
+  if (observabilityInitialized) return;
+  observabilityInitialized = true;
+
   if (!env.SENTRY_DSN) {
     logger.info({ context: "sentry" }, "SENTRY_DSN not set — error reports disabled");
     return;
