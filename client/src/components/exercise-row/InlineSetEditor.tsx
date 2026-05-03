@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import type { AddExerciseSetPayload, PatchExerciseSetPayload } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-import { type FieldKey, fieldMeta, getFields } from "./fieldMeta";
+import { type FieldKey, fieldMeta, getFieldLabel, getFields } from "./fieldMeta";
 
 interface InlineSetEditorProps {
   readonly sets: ExerciseSet[];
@@ -153,7 +153,7 @@ function HeaderRow({ fields, weightUnit, distanceUnit, colTemplate }: HeaderRowP
     >
       <span className="text-center">#</span>
       {fields.map((field) => (
-        <span key={field}>{fieldMeta[field].label(weightUnit, distanceUnit)}</span>
+        <span key={field}>{getFieldLabel(field, { weightUnit: weightUnit as "kg" | "lbs", distanceUnit: distanceUnit as "km" | "miles" })}</span>
       ))}
       <span className="sr-only">Note</span>
       <span className="sr-only">Remove</span>
@@ -285,7 +285,7 @@ interface FieldInputProps {
 
 const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUnit, onUpdate, showPlannedDiffs }: FieldInputProps) {
   const meta = fieldMeta[field];
-  const label = meta.label(weightUnit, distanceUnit);
+  const label = getFieldLabel(field, { weightUnit: weightUnit as "kg" | "lbs", distanceUnit: distanceUnit as "km" | "miles" });
   const current = set[field] ?? undefined;
   const planned = getPlannedValue(set, field);
   const hasPlannedValue = showPlannedDiffs && typeof planned === "number";
