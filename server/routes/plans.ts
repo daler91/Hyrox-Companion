@@ -9,7 +9,7 @@ import { asyncHandler, rateLimiter, sendNotFound, validateBody } from "../routeU
 import { regenerateCoachNoteForPlanDay } from "../services/coachService";
 import { generatePlan } from "../services/planGenerationService";
 import { createSamplePlan, importPlanFromCSV, updatePlanDayStatus,updatePlanDayWithCleanup } from "../services/planService";
-import { reparsePlanDay, reparsePlanDayFromImage } from "../services/workoutService";
+import { autoHydrateExerciseSetsFromTextIfNeeded, reparsePlanDay, reparsePlanDayFromImage } from "../services/workoutService";
 import { storage } from "../storage";
 import { getUserId } from "../types";
 import { createUpdatePlanDayUseCase } from "../usecases/plans/updatePlanDay.usecase";
@@ -180,9 +180,23 @@ router.get(
   rateLimiter("planDaySet", 60),
   asyncHandler(async (req: ExpressRequest<{ dayId: string }>, res: Response) => {
     const userId = getUserId(req);
-    const sets = await storage.workouts.getExerciseSetsByPlanDay(req.params.dayId, userId);
+    let sets = await storage.workouts.getExerciseSetsByPlanDay(req.params.dayId, userId);
     if (sets === null) {
       return sendNotFound(res, PLAN_DAY_NOT_FOUND);
+    }
+    if (sets.length === 0) {
+      const [planDay, user] = await Promise.all([
+        storage.plans.getPlanDay(req.params.dayId, userId),
+        storage.users.getUser(userId),
+      ]);
+      if (planDay) {
+        try {
+          await autoHydrateExerciseSetsFromTextIfNeeded(planDay, { planDayId: planDay.id }, user?.weightUnit || "kg", "plan");
+          sets = (await storage.workouts.getExerciseSetsByPlanDay(req.params.dayId, userId)) ?? [];
+        } catch {
+          // Best effort on read-path hydration; preserve existing response contract.
+        }
+      }
     }
     res.json(sets);
   }),

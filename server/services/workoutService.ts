@@ -12,7 +12,7 @@ import {
   type WorkoutLog,
   workoutLogs,
 } from "@shared/schema";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import pLimit from "p-limit";
 
 import { db } from "../db";
@@ -290,6 +290,46 @@ async function replaceExerciseSetsByOwner(
 }
 
 type ReparseTarget = { id: string; mainWorkout?: string | null; accessory?: string | null };
+
+const hydrationLocks = new Map<string, Promise<{ exercises: ParsedExercise[]; setCount: number } | null>>();
+
+function buildHydrationLockKey(owner: SetOwner): string {
+  return "workoutLogId" in owner ? `workout:${owner.workoutLogId}` : `planDay:${owner.planDayId}`;
+}
+
+export async function autoHydrateExerciseSetsFromTextIfNeeded(
+  target: ReparseTarget,
+  owner: SetOwner,
+  weightUnit: string,
+  context: "workout" | "plan",
+): Promise<{ exercises: ParsedExercise[]; setCount: number } | null> {
+  const existingCount = await db
+    .select({ count: sql<number>`cast(count(*) as int)` })
+    .from(exerciseSets)
+    .where("workoutLogId" in owner ? eq(exerciseSets.workoutLogId, owner.workoutLogId) : eq(exerciseSets.planDayId, owner.planDayId));
+  if ((existingCount[0]?.count ?? 0) > 0) return null;
+
+  const textToParse = [target.mainWorkout, target.accessory].filter(Boolean).join("\n").trim();
+  if (!textToParse) return null;
+
+  const lockKey = buildHydrationLockKey(owner);
+  const existingLock = hydrationLocks.get(lockKey);
+  if (existingLock) return existingLock;
+
+  logger.info({ context: "health-metrics", event: "exercise_set_auto_hydration_attempt", lockKey }, "Auto hydration attempt");
+  const lockPromise = reparseFromText(target, owner, weightUnit, context)
+    .then((result) => {
+      logger.info({ context: "health-metrics", event: "exercise_set_auto_hydration_success", lockKey, setCount: result?.setCount ?? 0 }, "Auto hydration success");
+      return result;
+    })
+    .catch((err: unknown) => {
+      logger.error({ context: "health-metrics", event: "exercise_set_auto_hydration_failure", lockKey, err }, "Auto hydration failed");
+      throw err;
+    })
+    .finally(() => hydrationLocks.delete(lockKey));
+  hydrationLocks.set(lockKey, lockPromise);
+  return lockPromise;
+}
 
 // Parse the target's free text with Gemini and REPLACE its structured
 // exerciseSets. Returns null when the combined text is empty or produced

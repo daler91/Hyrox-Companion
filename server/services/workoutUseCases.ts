@@ -1,13 +1,12 @@
-import type { exercisesPayloadSchema, InsertWorkoutLog, insertWorkoutLogSchema, ParsedExercise,UpdateWorkoutLog, updateWorkoutLogSchema } from "@shared/schema";
+import type { exercisesPayloadSchema, InsertWorkoutLog, insertWorkoutLogSchema, ParsedExercise, UpdateWorkoutLog, updateWorkoutLogSchema } from "@shared/schema";
 import type { z } from "zod";
 
+import { env } from "../env";
+import { AppError, ErrorCode } from "../errors";
+import { parseExercisesFromText } from "../gemini";
+import { storage } from "../storage";
 import { createWorkoutAndScheduleCoaching, updateWorkout } from "./workoutService";
 
-// Route-level payloads carry the core table columns plus an optional parsed
-// `exercises` array. The use-case layer exists to keep route handlers thin
-// (CODEBASE_AUDIT.md §1): transport concerns stay in routes, DB/orchestration
-// stays in workoutService, and these wrappers are the only place where the
-// payload shape is split into its service-level arguments.
 type CreateWorkoutPayload = z.infer<typeof insertWorkoutLogSchema> & {
   exercises?: z.infer<typeof exercisesPayloadSchema>;
 };
@@ -20,11 +19,18 @@ export async function createWorkout(input: {
   payload: CreateWorkoutPayload;
 }) {
   const { exercises, ...workoutData } = input.payload;
-  return createWorkoutAndScheduleCoaching(
-    workoutData as InsertWorkoutLog,
-    exercises as ParsedExercise[] | undefined,
-    input.userId,
-  );
+  let structured = exercises as ParsedExercise[] | undefined;
+  if ((!structured || structured.length === 0) && env.GEMINI_API_KEY) {
+    const textToParse = [workoutData.mainWorkout, workoutData.accessory].filter(Boolean).join("\n").trim();
+    if (textToParse) {
+      const user = await storage.users.getUser(input.userId);
+      structured = await parseExercisesFromText(textToParse, user?.weightUnit || "kg", undefined, input.userId);
+      if (structured.length === 0) {
+        throw new AppError(ErrorCode.VALIDATION_ERROR, "Text/voice/photo workout content must produce structured exercise sets.", 400);
+      }
+    }
+  }
+  return createWorkoutAndScheduleCoaching(workoutData as InsertWorkoutLog, structured, input.userId);
 }
 
 export async function updateWorkoutUseCase(input: {
@@ -33,10 +39,23 @@ export async function updateWorkoutUseCase(input: {
   payload: UpdateWorkoutPayload;
 }) {
   const { exercises, ...updateData } = input.payload;
-  return updateWorkout(
-    input.workoutId,
-    updateData as UpdateWorkoutLog,
-    exercises as ParsedExercise[] | undefined,
-    input.userId,
-  );
+  let structured = exercises as ParsedExercise[] | undefined;
+
+  if ((!structured || structured.length === 0) && env.GEMINI_API_KEY) {
+    const existing = await storage.workouts.getWorkoutLog(input.workoutId, input.userId);
+    if (!existing) return null;
+
+    const mergedMain = updateData.mainWorkout ?? existing.mainWorkout;
+    const mergedAccessory = updateData.accessory ?? existing.accessory;
+    const textToParse = [mergedMain, mergedAccessory].filter(Boolean).join("\n").trim();
+    if (textToParse) {
+      const user = await storage.users.getUser(input.userId);
+      structured = await parseExercisesFromText(textToParse, user?.weightUnit || "kg", undefined, input.userId);
+      if (structured.length === 0) {
+        throw new AppError(ErrorCode.VALIDATION_ERROR, "Text/voice/photo workout updates must produce structured exercise sets.", 400);
+      }
+    }
+  }
+
+  return updateWorkout(input.workoutId, updateData as UpdateWorkoutLog, structured, input.userId);
 }
