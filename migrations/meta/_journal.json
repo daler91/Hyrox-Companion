@@ -267,6 +267,13 @@
       "when": 1777836036045,
       "tag": "0037_certain_wolf_cub",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1777839450090,
+      "tag": "0038_structured_exercise_health_metrics",
+      "breakpoints": true
     }
   ]
 }
