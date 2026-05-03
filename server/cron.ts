@@ -143,9 +143,9 @@ export function startCron(storage: IStorage): void {
     "10 2 * * *",
     async () => {
       try {
-        const day = new Date().toISOString().slice(0, 10);
-        await runStructuredExerciseDailyRollup(day);
-        logger.info({ context: "cron", day }, "Structured exercise health rollup complete");
+        const previousUtcDay = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        await runStructuredExerciseDailyRollup(previousUtcDay);
+        logger.info({ context: "cron", day: previousUtcDay }, "Structured exercise health rollup complete");
       } catch (err) {
         logger.error({ context: "cron", err }, "Structured exercise health rollup failed");
       }

@@ -291,11 +291,29 @@ async function replaceExerciseSetsByOwner(
 }
 
 type ReparseTarget = { id: string; mainWorkout?: string | null; accessory?: string | null };
+type CounterSource = "manual" | "voice" | "photo" | "import";
 
 const hydrationLocks = new Map<string, Promise<{ exercises: ParsedExercise[]; setCount: number } | null>>();
 
 function buildHydrationLockKey(owner: SetOwner): string {
   return "workoutLogId" in owner ? `workout:${owner.workoutLogId}` : `planDay:${owner.planDayId}`;
+}
+
+
+async function resolveCounterSource(owner: SetOwner, fallback: CounterSource = "manual"): Promise<CounterSource> {
+  if ("planDayId" in owner) return fallback;
+
+  const [row] = await db
+    .select({ source: workoutLogs.source })
+    .from(workoutLogs)
+    .where(eq(workoutLogs.id, owner.workoutLogId))
+    .limit(1);
+
+  const rawSource = String(row?.source ?? fallback);
+  if (rawSource === "strava" || rawSource === "garmin" || rawSource === "import") return "import";
+  if (rawSource === "voice") return "voice";
+  if (rawSource === "photo") return "photo";
+  return "manual";
 }
 
 export async function autoHydrateExerciseSetsFromTextIfNeeded(
@@ -318,16 +336,17 @@ export async function autoHydrateExerciseSetsFromTextIfNeeded(
   if (existingLock) return existingLock;
 
   logger.info({ context: "health-metrics", event: "exercise_set_auto_hydration_attempt", lockKey }, "Auto hydration attempt");
-  await incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", "manual", "auto_hydration_attempted");
-  const lockPromise = reparseFromText(target, owner, weightUnit, context)
+  const source = await resolveCounterSource(owner);
+  await incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", source, "auto_hydration_attempted");
+  const lockPromise = reparseFromText(target, owner, weightUnit, context, source)
     .then((result) => {
       logger.info({ context: "health-metrics", event: "exercise_set_auto_hydration_success", lockKey, setCount: result?.setCount ?? 0 }, "Auto hydration success");
-      void incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", "manual", "auto_hydration_succeeded");
+      void incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", source, "auto_hydration_succeeded");
       return result;
     })
     .catch((err: unknown) => {
       logger.error({ context: "health-metrics", event: "exercise_set_auto_hydration_failure", lockKey, err }, "Auto hydration failed");
-      void incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", "manual", "auto_hydration_failed");
+      void incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", source, "auto_hydration_failed");
       throw err;
     })
     .finally(() => hydrationLocks.delete(lockKey));
@@ -344,6 +363,7 @@ async function reparseFromText(
   owner: SetOwner,
   weightUnit: string,
   context: "workout" | "plan",
+  source: CounterSource = "manual",
 ): Promise<{ exercises: ParsedExercise[]; setCount: number } | null> {
   const { parseExercisesFromText } = await import("../gemini");
   const textToParse = [target.mainWorkout, target.accessory].filter(Boolean).join("\n");
@@ -354,7 +374,7 @@ async function reparseFromText(
 
   const setRows = expandExercisesToRows(exercises, owner, context);
   const setCount = await replaceExerciseSetsByOwner(owner, setRows);
-  await incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", "manual", "manual_fix_completed");
+  await incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", source, "manual_fix_completed");
   return { exercises, setCount };
 }
 
@@ -362,7 +382,7 @@ export function reparseWorkout(
   workout: { id: string; mainWorkout?: string | null; accessory?: string | null },
   weightUnit: string,
 ): Promise<{ exercises: ParsedExercise[]; setCount: number } | null> {
-  return reparseFromText(workout, { workoutLogId: workout.id }, weightUnit, "workout");
+  return reparseFromText(workout, { workoutLogId: workout.id }, weightUnit, "workout", "manual");
 }
 
 /**
@@ -380,7 +400,7 @@ export function reparsePlanDay(
   planDay: { id: string; mainWorkout?: string | null; accessory?: string | null },
   weightUnit: string,
 ): Promise<{ exercises: ParsedExercise[]; setCount: number } | null> {
-  return reparseFromText(planDay, { planDayId: planDay.id }, weightUnit, "plan");
+  return reparseFromText(planDay, { planDayId: planDay.id }, weightUnit, "plan", "manual");
 }
 
 export interface ReparseFromImageInput {
@@ -396,6 +416,7 @@ async function reparseFromImage(
   userId: string,
   context: "workout" | "plan",
   customExerciseNames?: string[],
+  source: CounterSource = "photo",
 ): Promise<{ exercises: ParsedExercise[]; setCount: number } | null> {
   const { parseExercisesFromImage } = await import("../gemini");
   const exercises = await parseExercisesFromImage({
@@ -409,7 +430,7 @@ async function reparseFromImage(
 
   const setRows = expandExercisesToRows(exercises, owner, context);
   const setCount = await replaceExerciseSetsByOwner(owner, setRows);
-  await incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", "manual", "manual_fix_completed");
+  await incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", source, "manual_fix_completed");
   return { exercises, setCount };
 }
 
@@ -434,6 +455,7 @@ export function reparseWorkoutFromImage(
     userId,
     "workout",
     customExerciseNames,
+    "photo",
   );
 }
 
@@ -451,6 +473,7 @@ export function reparsePlanDayFromImage(
     userId,
     "plan",
     customExerciseNames,
+    "photo",
   );
 }
 

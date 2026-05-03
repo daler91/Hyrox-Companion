@@ -8,12 +8,12 @@ type OwnerType = "workout_log" | "plan_day";
 type SourceType = "manual" | "voice" | "photo" | "import";
 type CounterName = "text_only_rows_detected" | "auto_hydration_attempted" | "auto_hydration_succeeded" | "auto_hydration_failed" | "manual_fix_completed";
 
-export async function incrementStructuredExerciseCounter(ownerType: OwnerType, source: SourceType, counterName: CounterName): Promise<void> {
+export async function incrementStructuredExerciseCounter(ownerType: OwnerType, source: SourceType, counterName: CounterName, amount = 1): Promise<void> {
   await db.execute(sql`
     insert into structured_exercise_health_counters (day, owner_type, source, counter_name, value, updated_at)
-    values (current_date, ${ownerType}, ${source}, ${counterName}, 1, now())
+    values (current_date, ${ownerType}, ${source}, ${counterName}, ${amount}, now())
     on conflict (day, owner_type, source, counter_name)
-    do update set value = structured_exercise_health_counters.value + 1, updated_at = now()
+    do update set value = structured_exercise_health_counters.value + ${amount}, updated_at = now()
   `);
 }
 
@@ -78,12 +78,7 @@ export async function runStructuredExerciseDailyRollup(day: string): Promise<voi
   }
 
   const textOnlyDetected = Math.max(0, legacyOnly);
-  await incrementStructuredExerciseCounter("workout_log", "manual", "text_only_rows_detected");
-  if (textOnlyDetected > 1) {
-    await db.execute(sql`
-      update structured_exercise_health_counters
-      set value = value + ${textOnlyDetected - 1}, updated_at = now()
-      where day = current_date and owner_type = 'workout_log' and source = 'manual' and counter_name = 'text_only_rows_detected'
-    `);
+  if (textOnlyDetected > 0) {
+    await incrementStructuredExerciseCounter("workout_log", "manual", "text_only_rows_detected", textOnlyDetected);
   }
 }
