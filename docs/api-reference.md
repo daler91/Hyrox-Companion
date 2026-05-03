@@ -149,6 +149,19 @@ Mutating endpoints support the `X-Idempotency-Key` header for safe request repla
 
 ## Request Validation
 
+Most protected mutation routes now use a shared builder (`protectedPost`, `protectedPatch`, `protectedDelete`) that codifies middleware order and keeps error responses consistent.
+
+### Protected mutation builder contract
+
+For builder-backed routes, middleware runs in this order:
+
+1. `protectedMutationGuards` (auth + CSRF + idempotency guard chain)
+2. route-local limiter (`rateLimiter(...)`)
+3. route-specific middleware list (typically `validateBody(...)`, `validateParams(...)`, and optional feature guards)
+4. handler (wrapped with `asyncHandler` for async routes)
+
+This ordering guarantees security/cost guards execute before validation or business logic, while still letting validation produce the canonical `VALIDATION_ERROR` shape.
+
 Endpoints use Zod schemas for request body validation via two patterns:
 
 1. **`validateBody(schema)` middleware** — Parses `req.body` with the schema, returns 400 on failure, replaces `req.body` with parsed data on success.
