@@ -19,6 +19,7 @@ type Params<TSnapshot> = {
   updateSetRequest: (ownerId: string, setId: string, data: PatchExerciseSetPayload) => Promise<ExerciseSet>;
   addSetRequest: (ownerId: string, data: AddExerciseSetPayload) => Promise<ExerciseSet>;
   deleteSetRequest: (ownerId: string, setId: string) => Promise<unknown>;
+  addInvalidateQueries?: (ownerId: string) => QueryKey[] | undefined;
   deleteInvalidateQueries?: (ownerId: string) => QueryKey[] | undefined;
   cellSaveDebounceMs?: number;
 };
@@ -33,6 +34,7 @@ export function useExerciseSetsForOwner<TSnapshot>({
   updateSetRequest,
   addSetRequest,
   deleteSetRequest,
+  addInvalidateQueries,
   deleteInvalidateQueries,
   cellSaveDebounceMs = 350,
 }: Params<TSnapshot>) {
@@ -56,7 +58,7 @@ export function useExerciseSetsForOwner<TSnapshot>({
       markSaved();
     },
     onError: (_err, _vars, ctx) => {
-      const prev = (ctx as { prev?: ExerciseSet[] } | undefined)?.prev;
+      const prev = (ctx as { prev?: TSnapshot } | undefined)?.prev;
       if (ownerId && prev) restoreSnapshot(ownerId, prev);
     },
     errorToast: "Couldn't save that change",
@@ -79,6 +81,7 @@ export function useExerciseSetsForOwner<TSnapshot>({
       markSaved();
     },
     errorToast: "Couldn't add that exercise",
+    invalidateQueries: ownerId ? addInvalidateQueries?.(ownerId) : undefined,
   });
 
   const deleteSet = useApiMutation({
@@ -93,7 +96,7 @@ export function useExerciseSetsForOwner<TSnapshot>({
     },
     onSuccess: () => markSaved(),
     onError: (_err, _vars, ctx) => {
-      const prev = (ctx as { prev?: ExerciseSet[] } | undefined)?.prev;
+      const prev = (ctx as { prev?: TSnapshot } | undefined)?.prev;
       if (ownerId && prev) restoreSnapshot(ownerId, prev);
     },
     errorToast: "Couldn't remove that set",

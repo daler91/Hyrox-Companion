@@ -100,6 +100,7 @@ export function useWorkoutDetail(workoutId: string | null) {
     updateSetRequest: (id, setId, data) => api.workouts.updateSet(id, setId, data),
     addSetRequest: (id, data) => api.workouts.addSet(id, data),
     deleteSetRequest: (id, setId) => api.workouts.deleteSet(id, setId),
+    addInvalidateQueries: (id) => [QUERY_KEYS.workoutHistory(id)],
     deleteInvalidateQueries: (id) => [QUERY_KEYS.workout(id), QUERY_KEYS.workoutHistory(id)],
     cellSaveDebounceMs: CELL_SAVE_DEBOUNCE_MS,
   });
