@@ -257,9 +257,22 @@ export class TimelineStorage {
   }
 
   private computeSqlOverFetch(limit?: number, offset?: number): number | undefined {
-    if (limit === undefined && offset === undefined) return undefined;
+    // Keep pagination pressure in SQL first; in-memory slicing only finalizes
+    // the merged multi-source ordering.
     if (limit === undefined) return undefined;
     return (offset || 0) + limit * 3;
+  }
+
+  private sortAndWindowEntries(entries: TimelineEntry[], limit?: number, offset?: number): TimelineEntry[] {
+    entries.sort((a, b) => {
+      if (b.date < a.date) return -1;
+      if (b.date > a.date) return 1;
+      return 0;
+    });
+
+    if (limit === undefined) return entries;
+    const start = offset || 0;
+    return entries.slice(start, start + limit);
   }
 
   private async fetchStandaloneWorkouts(userId: string, sqlLimit?: number): Promise<WorkoutLog[]> {
@@ -349,19 +362,8 @@ export class TimelineStorage {
     );
     await this.attachExerciseSets(entries);
 
-    // Fast string comparison for YYYY-MM-DD dates instead of Date object instantiation
-    entries.sort((a, b) => {
-      if (b.date < a.date) return -1;
-      if (b.date > a.date) return 1;
-      return 0;
-    });
-
-    if (sqlOverFetch !== undefined) {
-      const start = offset || 0;
-      const end = limit === undefined ? undefined : start + limit;
-      return entries.slice(start, end);
-    }
-    return entries;
+    // Unavoidable in-memory step: merge two SQL streams and apply final window.
+    return this.sortAndWindowEntries(entries, limit, offset);
   }
 
   /**
