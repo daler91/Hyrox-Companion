@@ -1,5 +1,5 @@
 import { ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,6 +43,16 @@ export function ConfirmStep({
     parseDiagnostics.emptyResult ||
     parseDiagnostics.lowConfidenceCount > 0 ||
     parseDiagnostics.lastErrorReason !== null;
+  const wasReviewBannerVisibleRef = useRef(false);
+
+  // Auto-expand once when we ENTER a review-needed state so the user sees
+  // the legacy note, but still allow manual collapse afterward.
+  useEffect(() => {
+    if (needsReviewBanner && !wasReviewBannerVisibleRef.current) {
+      setShowOriginal(true);
+    }
+    wasReviewBannerVisibleRef.current = needsReviewBanner;
+  }, [needsReviewBanner]);
 
   // Cancel any in-flight parse before mutating the exercise list so a
   // late parse response can't overwrite the user's in-progress edits.
@@ -125,7 +135,7 @@ export function ConfirmStep({
           />
 
           {freeText.trim().length > 0 && (
-            <Collapsible open={needsReviewBanner ? true : showOriginal} onOpenChange={setShowOriginal}>
+            <Collapsible open={showOriginal} onOpenChange={setShowOriginal}>
               <CollapsibleTrigger asChild>
                 <Button
                   type="button"
@@ -134,7 +144,7 @@ export function ConfirmStep({
                   className="text-xs text-muted-foreground"
                   data-testid="button-show-original"
                 >
-                  {(needsReviewBanner || showOriginal) ? "Hide" : "View"} original description (legacy note)
+                  {showOriginal ? "Hide" : "View"} original description (legacy note)
                 </Button>
               </CollapsibleTrigger>
               <CollapsibleContent>
