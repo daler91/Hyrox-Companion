@@ -4,12 +4,14 @@ import { runEmailCronJob } from "./emailScheduler";
 import { logger } from "./logger";
 import { queue } from "./queue";
 import type { IStorage } from "./storage";
+import { runStructuredExerciseDailyRollup } from "./services/structuredExerciseHealth";
 
 let task: ReturnType<typeof cron.schedule> | null = null;
 let idempotencyCleanupTask: ReturnType<typeof cron.schedule> | null = null;
 let aiUsageCleanupTask: ReturnType<typeof cron.schedule> | null = null;
 let staleAutoCoachTask: ReturnType<typeof cron.schedule> | null = null;
 let queueDepthTask: ReturnType<typeof cron.schedule> | null = null;
+let structuredExerciseRollupTask: ReturnType<typeof cron.schedule> | null = null;
 
 // Flags older than this are considered orphaned (worker crashed mid-job).
 // 15min gives a comfortable margin above the longest expected auto-coach
@@ -137,6 +139,22 @@ export function startCron(storage: IStorage): void {
   );
   logger.info({ context: "cron" }, "Queue-depth telemetry scheduled: every 5 minutes");
 
+  structuredExerciseRollupTask = cron.schedule(
+    "10 2 * * *",
+    async () => {
+      try {
+        const day = new Date().toISOString().slice(0, 10);
+        await runStructuredExerciseDailyRollup(day);
+        logger.info({ context: "cron", day }, "Structured exercise health rollup complete");
+      } catch (err) {
+        logger.error({ context: "cron", err }, "Structured exercise health rollup failed");
+      }
+    },
+    { timezone: "UTC" },
+  );
+  logger.info({ context: "cron" }, "Structured exercise health rollup scheduled: daily at 02:10 UTC");
+
+
   // Run a catch-up if the server started after 09:00 UTC (e.g. Railway restart).
   // The idempotency guards in emailScheduler prevent duplicate sends.
   const currentHour = new Date().getUTCHours();
@@ -178,5 +196,9 @@ export function stopCron(): void {
   if (queueDepthTask) {
     const _stop = queueDepthTask.stop();
     queueDepthTask = null;
+  }
+  if (structuredExerciseRollupTask) {
+    const _stop = structuredExerciseRollupTask.stop();
+    structuredExerciseRollupTask = null;
   }
 }

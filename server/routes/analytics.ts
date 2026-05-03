@@ -199,4 +199,21 @@ router.get("/api/v1/training-overview", isAuthenticated, rateLimiter("analytics"
     res.json(calculateTrainingOverview(workoutLogs, allSets, previousWorkoutLogs));
   }));
 
+
+router.get("/api/v1/analytics/internal/structured-exercise-health", asyncHandler(async (_req, res) => {
+  const rollups = await db.execute(sql`
+    select day, total_rows, structured_rows, legacy_only_rows, failed_hydration_backlog, legacy_only_pct
+    from structured_exercise_health_daily_rollups
+    where day >= (current_date - interval '30 days')
+    order by day desc
+  `);
+  const counters = await db.execute(sql`
+    select day, owner_type, source, counter_name, value
+    from structured_exercise_health_counters
+    where day = current_date
+    order by owner_type, source, counter_name
+  `);
+  res.json({ rollups: rollups.rows, counters: counters.rows });
+}));
+
 export default router;

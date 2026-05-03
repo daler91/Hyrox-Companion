@@ -18,6 +18,7 @@ import pLimit from "p-limit";
 import { db } from "../db";
 import { AppError, ErrorCode } from "../errors";
 import { logger } from "../logger";
+import { incrementStructuredExerciseCounter } from "./structuredExerciseHealth";
 import { DEFAULT_JOB_OPTIONS, queue } from "../queue";
 import { storage } from "../storage";
 import { prescribedSetToLogRow } from "../storage/shared";
@@ -317,13 +318,16 @@ export async function autoHydrateExerciseSetsFromTextIfNeeded(
   if (existingLock) return existingLock;
 
   logger.info({ context: "health-metrics", event: "exercise_set_auto_hydration_attempt", lockKey }, "Auto hydration attempt");
+  await incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", "manual", "auto_hydration_attempted");
   const lockPromise = reparseFromText(target, owner, weightUnit, context)
     .then((result) => {
       logger.info({ context: "health-metrics", event: "exercise_set_auto_hydration_success", lockKey, setCount: result?.setCount ?? 0 }, "Auto hydration success");
+      void incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", "manual", "auto_hydration_succeeded");
       return result;
     })
     .catch((err: unknown) => {
       logger.error({ context: "health-metrics", event: "exercise_set_auto_hydration_failure", lockKey, err }, "Auto hydration failed");
+      void incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", "manual", "auto_hydration_failed");
       throw err;
     })
     .finally(() => hydrationLocks.delete(lockKey));
@@ -350,6 +354,7 @@ async function reparseFromText(
 
   const setRows = expandExercisesToRows(exercises, owner, context);
   const setCount = await replaceExerciseSetsByOwner(owner, setRows);
+  await incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", context === "plan" ? "manual" : "manual", "manual_fix_completed");
   return { exercises, setCount };
 }
 
@@ -404,6 +409,7 @@ async function reparseFromImage(
 
   const setRows = expandExercisesToRows(exercises, owner, context);
   const setCount = await replaceExerciseSetsByOwner(owner, setRows);
+  await incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", context === "plan" ? "manual" : "manual", "manual_fix_completed");
   return { exercises, setCount };
 }
 

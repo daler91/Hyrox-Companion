@@ -273,6 +273,30 @@ export const structuredExerciseBackfillReviews = pgTable("structured_exercise_ba
   index("idx_structured_exercise_backfill_user_id").on(table.userId),
 ]);
 
+export const structuredExerciseHealthCounters = pgTable("structured_exercise_health_counters", {
+  day: date("day").notNull(),
+  ownerType: text("owner_type").notNull(),
+  source: text("source").notNull(),
+  counterName: text("counter_name").notNull(),
+  value: integer("value").notNull().default(0),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  primaryKey({ columns: [table.day, table.ownerType, table.source, table.counterName] }),
+  check("structured_exercise_health_owner_type_check", sql`${table.ownerType} IN ('workout_log', 'plan_day')`),
+  check("structured_exercise_health_source_check", sql`${table.source} IN ('manual', 'voice', 'photo', 'import')`),
+  check("structured_exercise_health_counter_name_check", sql`${table.counterName} IN ('text_only_rows_detected', 'auto_hydration_attempted', 'auto_hydration_succeeded', 'auto_hydration_failed', 'manual_fix_completed')`),
+]);
+
+export const structuredExerciseHealthDailyRollups = pgTable("structured_exercise_health_daily_rollups", {
+  day: date("day").primaryKey(),
+  totalRows: integer("total_rows").notNull().default(0),
+  structuredRows: integer("structured_rows").notNull().default(0),
+  legacyOnlyRows: integer("legacy_only_rows").notNull().default(0),
+  failedHydrationBacklog: integer("failed_hydration_backlog").notNull().default(0),
+  legacyOnlyPct: real("legacy_only_pct").notNull().default(0),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // User-authored annotations on date ranges in their training timeline —
 // typically injuries, illness, or travel periods that explain volume dips
 // when a user looks back at their history or shares Analytics with a
