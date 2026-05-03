@@ -189,6 +189,12 @@ async function processCandidate(
         { [cand.logKey]: cand.ownerId, setCount: setRows.length },
         `[backfill:${cand.label}] would insert (dry-run)`,
       );
+      reportRows.push({
+        ownerType: cand.logKey === "planDayId" ? "planDay" : "workoutLog",
+        ownerId: cand.ownerId,
+        userId: cand.userId,
+        status: "success",
+      });
       return;
     }
     await db.insert(exerciseSets).values(setRows);
@@ -264,6 +270,7 @@ async function loadPlanDayCandidates(flags: Flags): Promise<BackfillCandidate[]>
     .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
     .leftJoin(exerciseSets, eq(exerciseSets.planDayId, planDays.id))
     .where(and(...whereClauses))
+    .orderBy(planDays.id)
     .limit(flags.batchSize)
     .offset(flags.offset);
 
@@ -303,6 +310,7 @@ async function loadWorkoutLogCandidates(flags: Flags): Promise<BackfillCandidate
     .from(workoutLogs)
     .leftJoin(exerciseSets, eq(workoutLogs.id, exerciseSets.workoutLogId))
     .where(and(...whereClauses, isNull(exerciseSets.id)))
+    .orderBy(workoutLogs.id)
     .limit(flags.batchSize)
     .offset(flags.offset);
 
