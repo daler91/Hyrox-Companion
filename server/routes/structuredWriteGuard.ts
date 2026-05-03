@@ -13,8 +13,17 @@ export function isLegacyImportRoute(path: string): boolean {
   return LEGACY_IMPORT_ALLOWLIST.has(path);
 }
 
+function getRoutePath(req: Request): string {
+  const routeCandidate: unknown = req.route;
+  if (routeCandidate && typeof routeCandidate === "object" && "path" in routeCandidate) {
+    const pathValue = (routeCandidate as { path?: unknown }).path;
+    if (typeof pathValue === "string") return pathValue;
+  }
+  return req.path;
+}
+
 export async function rejectTextOnlyWriteIfNeeded(req: Request, res: Response, ownerType: "workout_log" | "plan_day"): Promise<boolean> {
-  if (isLegacyImportRoute(req.route?.path ?? req.path)) {
+  if (isLegacyImportRoute(getRoutePath(req))) {
     reqLogger(req).info({ context: "structured-write-guard", route: req.path, ownerType }, "Legacy import allowlist route used");
     return false;
   }
