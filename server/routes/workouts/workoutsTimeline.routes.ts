@@ -2,7 +2,7 @@ import { type Request, type Response, Router } from "express";
 
 import { isAuthenticated } from "../../clerkAuth";
 import { DEFAULT_TIMELINE_LIMIT } from "../../constants";
-import { asyncHandler, parsePagination, rateLimiter } from "../../routeUtils";
+import { asyncHandler, parsePagination, rateLimiter, setOffsetPaginationHeaders } from "../../routeUtils";
 import { storage } from "../../storage";
 import { getUserId } from "../../types";
 
@@ -12,7 +12,9 @@ export function registerWorkoutTimelineRoutes(router: Router): void {
     const pagination = parsePagination(req.query, res, { defaultLimit: DEFAULT_TIMELINE_LIMIT });
     if (!pagination) return;
     const limit = Math.min(pagination.limit, DEFAULT_TIMELINE_LIMIT);
-    const entries = await storage.timeline.getTimeline(userId, req.query.planId, limit, pagination.offset);
-    res.json(entries);
+    const entries = await storage.timeline.getTimeline(userId, req.query.planId, limit + 1, pagination.offset);
+    const hasMore = entries.length > limit;
+    setOffsetPaginationHeaders(res, { ...pagination, limit }, hasMore);
+    res.json(hasMore ? entries.slice(0, limit) : entries);
   }));
 }

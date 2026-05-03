@@ -190,6 +190,12 @@ export interface ParsedPagination {
   readonly offset: number | undefined;
 }
 
+export interface ParsedCursorPagination {
+  readonly limit: number;
+  readonly before: string | undefined;
+  readonly beforeId: string | undefined;
+}
+
 /**
  * Parse `?limit` and `?offset` query params. On an invalid value, writes the
  * 400 response and returns null so the caller can early-return. When
@@ -223,4 +229,56 @@ export function parsePagination(
   }
 
   return { limit: rawLimit, offset };
+}
+
+export function parseCursorPagination(
+  query: { limit?: string; before?: string; beforeId?: string },
+  res: Response,
+  options: { defaultLimit: number; maxLimit: number },
+): ParsedCursorPagination | null {
+  const rawLimit = query.limit ? Number.parseInt(query.limit, 10) : options.defaultLimit;
+  if (Number.isNaN(rawLimit) || rawLimit < 1) {
+    res.status(400).json({ error: "Invalid limit", code: "BAD_REQUEST" });
+    return null;
+  }
+  if (rawLimit > options.maxLimit) {
+    res.status(412).json({
+      error: `limit exceeds maximum of ${options.maxLimit}`,
+      code: "PRECONDITION_FAILED",
+      maxLimit: options.maxLimit,
+    });
+    return null;
+  }
+
+  const before = query.before;
+  const beforeId = query.beforeId;
+  if ((before == null) !== (beforeId == null)) {
+    res.status(400).json({ error: "before and beforeId must be provided together", code: "BAD_REQUEST" });
+    return null;
+  }
+
+  return { limit: rawLimit, before, beforeId };
+}
+
+export function setOffsetPaginationHeaders(
+  res: Response,
+  pagination: ParsedPagination,
+  hasMore: boolean,
+): void {
+  res.setHeader("X-Page-Limit", String(pagination.limit));
+  res.setHeader("X-Page-Offset", String(pagination.offset ?? 0));
+  res.setHeader("X-Has-More", String(hasMore));
+}
+
+export function setCursorPaginationHeaders(
+  res: Response,
+  limit: number,
+  nextCursor?: { timestamp: string; id: string } | null,
+): void {
+  res.setHeader("X-Page-Limit", String(limit));
+  res.setHeader("X-Has-More", String(Boolean(nextCursor)));
+  if (nextCursor) {
+    res.setHeader("X-Next-Cursor", nextCursor.timestamp);
+    res.setHeader("X-Next-Cursor-Id", nextCursor.id);
+  }
 }

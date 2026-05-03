@@ -9,7 +9,7 @@ import { reqLogger } from "../logger";
 import { aiBudgetCheck } from "../middleware/aibudget";
 import { aiConsentCheck } from "../middleware/aiConsent";
 import { protectedMutationGuards } from "../routeGuards";
-import { asyncHandler, rateLimiter, sendNotFound, validateBody, validateQuery } from "../routeUtils";
+import { asyncHandler, rateLimiter, sendNotFound, setCursorPaginationHeaders, validateBody, validateQuery } from "../routeUtils";
 import { type AIContext, buildAIContext, type ChatInput } from "../services/aiContextService";
 import { applyTimelineAiSuggestion, generateTimelineAiSuggestions } from "../services/aiSuggestionService";
 import { sanitizeRagInfo } from "../services/ragRetrieval";
@@ -259,10 +259,7 @@ router.get("/api/v1/chat/history", isAuthenticated, validateQuery(chatHistoryQue
     const userId = getUserId(req);
     const { limit, before, beforeId } = req.query as z.infer<typeof chatHistoryQuerySchema>;
     const { messages, nextCursor } = await getChatHistoryUseCase(storage.users, { userId, limit, before, beforeId });
-    if (nextCursor) {
-      res.setHeader("X-Next-Cursor", nextCursor.timestamp);
-      res.setHeader("X-Next-Cursor-Id", nextCursor.id);
-    }
+    setCursorPaginationHeaders(res, limit ?? 50, nextCursor);
     res.json(messages);
   }));
 

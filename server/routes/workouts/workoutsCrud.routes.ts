@@ -17,7 +17,7 @@ import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from "../../constants";
 import { db } from "../../db";
 import { AppError, ErrorCode } from "../../errors";
 import { protectedMutationGuards } from "../../routeGuards";
-import { asyncHandler, parsePagination, rateLimiter, sendNotFound, validateBody } from "../../routeUtils";
+import { asyncHandler, parsePagination, rateLimiter, sendNotFound, setOffsetPaginationHeaders, validateBody } from "../../routeUtils";
 import { createWorkout, updateWorkoutUseCase } from "../../services/workoutUseCases";
 import { storage } from "../../storage";
 import { getUserId } from "../../types";
@@ -58,8 +58,10 @@ export function registerWorkoutCrudRoutes(router: Router): void {
     if (!pagination) {
       return;
     }
-    const logs = await storage.workouts.listWorkoutLogs(userId, pagination.limit, pagination.offset);
-    res.json(logs);
+    const logs = await storage.workouts.listWorkoutLogs(userId, pagination.limit + 1, pagination.offset);
+    const hasMore = logs.length > pagination.limit;
+    setOffsetPaginationHeaders(res, pagination, hasMore);
+    res.json(hasMore ? logs.slice(0, pagination.limit) : logs);
   }));
 
   router.get("/api/v1/workouts/latest", isAuthenticated, rateLimiter("workout", 60), asyncHandler(async (req: Request, res: Response) => {
