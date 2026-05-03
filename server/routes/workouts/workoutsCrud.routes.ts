@@ -21,7 +21,7 @@ import { asyncHandler, parsePagination, rateLimiter, sendNotFound, validateBody 
 import { createWorkout, updateWorkoutUseCase } from "../../services/workoutUseCases";
 import { storage } from "../../storage";
 import { getUserId } from "../../types";
-import { createMutateWorkoutSetUseCase } from "../../usecases/workouts/mutateWorkoutSet.usecase";
+import { createMutateExerciseSetUseCase } from "../../usecases/workouts/mutateExerciseSet.usecase";
 import { protectedPost } from "../_helpers/protectedRouteBuilder";
 import { createCustomExerciseSchema, createWorkoutRouteSchema, updateWorkoutRouteSchema } from "./shared";
 
@@ -30,7 +30,11 @@ const addExerciseSetSchema = addExerciseSetBodySchema;
 const WORKOUT_NOT_FOUND = "Workout not found";
 const EXERCISE_SET_NOT_FOUND = "Exercise set not found";
 
-const workoutSetUseCase = createMutateWorkoutSetUseCase(storage.workouts);
+const workoutSetUseCase = createMutateExerciseSetUseCase({
+  updateSet: (workoutId, setId, body, userId) => storage.workouts.updateExerciseSet(workoutId, setId, body, userId),
+  addSet: (workoutId, body, userId) => storage.workouts.addExerciseSetToWorkoutLog(workoutId, body, userId),
+  deleteSet: (workoutId, setId, userId) => storage.workouts.deleteExerciseSet(workoutId, setId, userId),
+});
 
 const combineWorkoutsSchema = z.object({
   newWorkout: insertWorkoutLogSchema,

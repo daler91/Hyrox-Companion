@@ -14,12 +14,19 @@ import { reparsePlanDay, reparsePlanDayFromImage } from "../services/workoutServ
 import { storage } from "../storage";
 import { getUserId } from "../types";
 import { createUpdatePlanDayUseCase } from "../usecases/plans/updatePlanDay.usecase";
+import { createMutateExerciseSetUseCase } from "../usecases/workouts/mutateExerciseSet.usecase";
 import { protectedDelete, protectedPatch, protectedPost } from "./_helpers/protectedRouteBuilder";
 
 const router = Router();
 
 const updateStoredPlanDay = createUpdatePlanDayUseCase({
   updatePlanDay: (dayId, data, userId) => storage.plans.updatePlanDay(dayId, data, userId),
+});
+
+const planDaySetUseCase = createMutateExerciseSetUseCase({
+  updateSet: (dayId, setId, body, userId) => storage.workouts.updateExerciseSetForPlanDay(dayId, setId, body, userId),
+  addSet: (dayId, body, userId) => storage.workouts.addExerciseSetToPlanDay(dayId, body, userId),
+  deleteSet: (dayId, setId, userId) => storage.workouts.deleteExerciseSetForPlanDay(dayId, setId, userId),
 });
 
 const handlePlanDayUpdate = (updateFn: (dayId: string, data: UpdatePlanDay, userId: string) => Promise<PlanDay | null | undefined>) => [
@@ -196,7 +203,7 @@ router.post(
   validateBody(addExerciseSetBodySchema),
   asyncHandler(async (req: ExpressRequest<{ dayId: string }, Record<string, never>, AddPlanDaySetPayload>, res: Response) => {
     const userId = getUserId(req);
-    const created = await storage.workouts.addExerciseSetToPlanDay(req.params.dayId, req.body, userId);
+    const created = await planDaySetUseCase.addSet(req.params.dayId, req.body, userId);
     if (!created) {
       return sendNotFound(res, PLAN_DAY_NOT_FOUND);
     }
@@ -211,12 +218,7 @@ router.patch(
   validateBody(patchExerciseSetBodySchema),
   asyncHandler(async (req: ExpressRequest<{ dayId: string; setId: string }, Record<string, never>, PatchPlanDaySetPayload>, res: Response) => {
     const userId = getUserId(req);
-    const updated = await storage.workouts.updateExerciseSetForPlanDay(
-      req.params.dayId,
-      req.params.setId,
-      req.body,
-      userId,
-    );
+    const updated = await planDaySetUseCase.updateSet(req.params.dayId, req.params.setId, req.body, userId);
     if (!updated) {
       return sendNotFound(res, PLAN_DAY_SET_NOT_FOUND);
     }
@@ -230,11 +232,7 @@ router.delete(
   rateLimiter("planDaySet", 60),
   asyncHandler(async (req: ExpressRequest<{ dayId: string; setId: string }>, res: Response) => {
     const userId = getUserId(req);
-    const deleted = await storage.workouts.deleteExerciseSetForPlanDay(
-      req.params.dayId,
-      req.params.setId,
-      userId,
-    );
+    const deleted = await planDaySetUseCase.deleteSet(req.params.dayId, req.params.setId, userId);
     if (!deleted) {
       return sendNotFound(res, PLAN_DAY_SET_NOT_FOUND);
     }
