@@ -8,6 +8,8 @@ import type { SetData } from "../ExerciseInput";
 import type { FieldConfig,FieldKey } from "./types";
 
 interface MultiSetTableProps {
+  readonly contextChips?: string[];
+  readonly rowLabels?: string[];
   readonly exerciseName: string;
   readonly fields: FieldKey[];
   readonly fieldConfig: Record<FieldKey, FieldConfig>;
@@ -19,7 +21,7 @@ interface MultiSetTableProps {
   readonly onRemoveSet: (idx: number) => void;
 }
 
-export function MultiSetTable({ exerciseName, fields, fieldConfig, sets, weightUnit, distanceUnit, onSetChange, onAddSet, onRemoveSet }: MultiSetTableProps) {
+export function MultiSetTable({ exerciseName, fields, fieldConfig, sets, weightUnit, distanceUnit, onSetChange, onAddSet, onRemoveSet, contextChips, rowLabels }: MultiSetTableProps) {
   const colTemplate = `2rem ${fields.map(() => "1fr").join(" ")} 2rem`;
 
   return (
@@ -36,9 +38,14 @@ export function MultiSetTable({ exerciseName, fields, fieldConfig, sets, weightU
         })}
         <div />
       </div>
+      {contextChips && contextChips.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {contextChips.map((chip) => <span key={chip} className="text-[10px] px-2 py-0.5 rounded-full border text-muted-foreground">{chip}</span>)}
+        </div>
+      )}
       {sets.map((set, idx) => (
         <div key={set.setNumber} className="grid gap-2 items-center" style={{ gridTemplateColumns: colTemplate }} data-testid={`set-row-${exerciseName}-${idx}`}>
-          <span className="text-xs text-muted-foreground text-center">{set.setNumber}</span>
+          <span className="text-xs text-muted-foreground text-center" title={rowLabels?.[idx]}>{rowLabels?.[idx] ?? set.setNumber}</span>
           {fields.map((field) => (
             <Input
               key={field}
