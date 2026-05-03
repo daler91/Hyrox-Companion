@@ -26,6 +26,7 @@ vi.mock("../../storage", () => ({
     workouts: {
       listWorkoutLogs: vi.fn(),
       getExerciseSetsByWorkoutLog: vi.fn(),
+      getWorkoutStructureByWorkoutLog: vi.fn(),
       getWorkoutLog: vi.fn(),
       deleteWorkoutLog: vi.fn(),
       updateWorkoutLog: vi.fn(),
@@ -95,6 +96,7 @@ describe("Workouts Routes", () => {
     vi.mocked(storage.workouts.listWorkoutLogs).mockResolvedValue([{ id: "workout-1", userId: "test_user_id", date: "2026-01-02", notes: "steady" }] as never);
     vi.mocked(storage.workouts.getWorkoutLog).mockResolvedValue({ id: "workout-1", userId: "test_user_id", mainWorkout: "Engine" } as never);
     vi.mocked(storage.workouts.getExerciseSetsByWorkoutLog).mockResolvedValue([] as never);
+    vi.mocked(storage.workouts.getWorkoutStructureByWorkoutLog).mockResolvedValue([] as never);
     vi.mocked(storage.workouts.deleteWorkoutLog).mockResolvedValue(true);
     vi.mocked(storage.workouts.updateWorkoutLog).mockResolvedValue({ id: "workout-1", notes: "updated" } as never);
     vi.mocked(storage.timeline.getTimeline).mockResolvedValue([{ id: "timeline-1", type: "workout", date: "2026-01-02" }] as never);
