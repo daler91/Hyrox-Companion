@@ -7,10 +7,10 @@ import type {
 } from "@shared/schema";
 
 import { typedRequest } from "./client";
-import { type AddExerciseSetPayload, createExerciseSetMutationApi, type PatchExerciseSetPayload } from "./exerciseSetMutations";
-import { IMAGE_REPARSE_TIMEOUT_MS } from "./constants";
 import type { ReparseResponse } from "./constants";
+import { IMAGE_REPARSE_TIMEOUT_MS } from "./constants";
 import type { ParseFromImagePayload } from "./exercises";
+import { createExerciseSetMutationApi } from "./exerciseSetMutations";
 
 export interface BatchReparseResponse {
   total: number;

@@ -126,7 +126,7 @@ export function usePlanDayExercises(planDayId: string | null) {
     const pendingPatches = getPendingPatches();
     if (pendingPatches.length === 0) return exerciseSets;
 
-    const patchesBySetId = new Map(
+    const patchesBySetId = new Map<string, Partial<ExerciseSet>>(
       pendingPatches.map(({ setId, patch }) => [setId, patch]),
     );
     return exerciseSets.map((set) => {

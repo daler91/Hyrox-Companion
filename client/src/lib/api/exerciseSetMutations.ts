@@ -46,10 +46,10 @@ export type ExerciseSetMutationApi = {
 export function createExerciseSetMutationApi(basePath: (ownerId: string) => string): ExerciseSetMutationApi {
   return {
     updateSet: (ownerId, setId, data) =>
-      typedRequest<ExerciseSet>("PATCH", `${basePath(ownerId)}/sets/${setId}`, data, { retries: 1, timeoutMs: 10_000 }),
+      typedRequest<ExerciseSet>("PATCH", `${basePath(ownerId)}/sets/${setId}`, data, { timeoutMs: 10_000 }),
     addSet: (ownerId, data) =>
-      typedRequest<ExerciseSet>("POST", `${basePath(ownerId)}/sets`, data, { retries: 1, timeoutMs: 10_000 }),
+      typedRequest<ExerciseSet>("POST", `${basePath(ownerId)}/sets`, data, { timeoutMs: 10_000 }),
     deleteSet: (ownerId, setId) =>
-      typedRequest<{ success: boolean }>("DELETE", `${basePath(ownerId)}/sets/${setId}`, undefined, { retries: 1, timeoutMs: 10_000 }),
+      typedRequest<{ success: boolean }>("DELETE", `${basePath(ownerId)}/sets/${setId}`, undefined, { timeoutMs: 10_000 }),
   };
 }
