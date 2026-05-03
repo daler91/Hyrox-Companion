@@ -86,14 +86,15 @@ export function useTimelineSurfaceSelection(timelineData: TimelineEntry[]) {
         const liveWorkoutId = new URLSearchParams(globalThis.window.location.search).get("workout");
         if (liveWorkoutId !== null) return;
       }
-      if (openSheetEntryId !== null) queueMicrotask(closeAllSurfaces);
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- required to keep URL→surface sync synchronous for tests and deep-link UX
+      if (openSheetEntryId !== null) closeAllSurfaces();
       return;
     }
     if (openSheetEntryId === openWorkoutId) return;
     const target = timelineData.find((e) => surfaceId(e) === openWorkoutId || entryId(e) === openWorkoutId);
     if (!target) return;
     if (openSheetEntry && surfaceId(openSheetEntry) === surfaceId(target)) return;
-    queueMicrotask(() => openSurface(target));
+    openSurface(target);
   }, [openWorkoutId, openSheetEntry, openSheetEntryId, timelineData, openSurface, closeAllSurfaces]);
 
   return {
