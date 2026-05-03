@@ -158,33 +158,33 @@ function AppContent() {
 }
 
 function App() {
+  const appShell = (
+    <>
+      {isDevPreview() && <DevModeBanner />}
+      <AppContent />
+      <Toaster />
+      <OfflineIndicator />
+    </>
+  );
+
   if (shouldBypassAuth()) {
-    return (
-      <QueryClientProvider client={queryClient}>
-        <ThemeProvider>
-          <TooltipProvider>
-            {isDevPreview() && <DevModeBanner />}
-            <AppContent />
-            <Toaster />
-            <OfflineIndicator />
-          </TooltipProvider>
-        </ThemeProvider>
-      </QueryClientProvider>
-    );
+    return <BaseProviders>{appShell}</BaseProviders>;
   }
 
   return (
     <ClerkProvider publishableKey={clerkPubKey!}>
-      <QueryClientProvider client={queryClient}>
-        <ThemeProvider>
-          <TooltipProvider>
-            <AppContent />
-            <Toaster />
-            <OfflineIndicator />
-          </TooltipProvider>
-        </ThemeProvider>
-      </QueryClientProvider>
+      <BaseProviders>{appShell}</BaseProviders>
     </ClerkProvider>
+  );
+}
+
+function BaseProviders({ children }: Readonly<{ children: React.ReactNode }>) {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        <TooltipProvider>{children}</TooltipProvider>
+      </ThemeProvider>
+    </QueryClientProvider>
   );
 }
 
