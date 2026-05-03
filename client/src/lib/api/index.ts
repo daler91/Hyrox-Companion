@@ -2,21 +2,15 @@ export type { Suggestion } from "./analytics";
 export { analytics, timeline } from "./analytics";
 export type { RagInfo, RagStatus } from "./coaching";
 export { chat, coaching } from "./coaching";
+export { IMAGE_REPARSE_REQUEST_OPTIONS, IMAGE_REPARSE_TIMEOUT_MS, isTimeoutLikeApiError } from "./constants";
+export type { ReparseResponse } from "./constants";
 export type { ParseFromImagePayload } from "./exercises";
 export { exercises } from "./exercises";
 export { plans } from "./plans";
 export { timelineAnnotations } from "./timelineAnnotations";
 export type { GarminStatus, GarminSyncResponse, StravaStatus, StravaSyncResponse, UserPreferences } from "./user";
-export { auth, email,garmin, preferences, strava } from "./user";
-export type {
-  AddExerciseSetPayload,
-  BatchReparseResponse,
-  PatchExerciseSetPayload,
-  ReparseResponse,
-  ReparseWorkoutTextPayload,
-  WorkoutHistoryStats,
-  WorkoutReferenceTextPayload,
-} from "./workouts";
+export { auth, email, garmin, preferences, strava } from "./user";
+export type { BatchReparseResponse, ReparseWorkoutTextPayload, WorkoutHistoryStats, WorkoutReferenceTextPayload } from "./workouts";
 export { workouts } from "./workouts";
 
 // ---------------------------------------------------------------------------
@@ -27,7 +21,7 @@ import { chat, coaching } from "./coaching";
 import { exercises } from "./exercises";
 import { plans } from "./plans";
 import { timelineAnnotations } from "./timelineAnnotations";
-import { auth, email,garmin, preferences, strava } from "./user";
+import { auth, email, garmin, preferences, strava } from "./user";
 import { workouts } from "./workouts";
 
 export const api = {
@@ -69,3 +63,5 @@ export const QUERY_KEYS = {
   stravaStatus: ["/api/v1/strava/status"] as const,
   garminStatus: ["/api/v1/garmin/status"] as const,
 } as const;
+
+export type { AddExerciseSetPayload, PatchExerciseSetPayload } from "./exerciseSetMutations";

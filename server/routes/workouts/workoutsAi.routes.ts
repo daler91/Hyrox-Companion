@@ -4,7 +4,6 @@ import { z } from "zod";
 
 import { isAuthenticated } from "../../clerkAuth";
 import { aiBudgetCheck } from "../../middleware/aibudget";
-import { protectedMutationGuards } from "../../routeGuards";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody, validateParams } from "../../routeUtils";
 import { batchReparseWorkouts, reparseWorkout, reparseWorkoutFromImage } from "../../services/workoutService";
 import { storage } from "../../storage";
@@ -18,7 +17,7 @@ export function registerWorkoutAiRoutes(router: Router): void {
     const workouts = await storage.workouts.getWorkoutsWithoutExerciseSets(userId);
     res.json(workouts);
   }));
-  router.post("/api/v1/workouts/:id/reparse", ...protectedMutationGuards, rateLimiter("reparse", 5), aiBudgetCheck, validateParams(reparseWorkoutParamsSchema), validateBody(reparseWorkoutRouteSchema), asyncHandler(async (req: Request<{ id: string }, unknown, z.infer<typeof reparseWorkoutRouteSchema>>, res: Response) => {
+  protectedPost(router, "/api/v1/workouts/:id/reparse", { limiter: rateLimiter("reparse", 5), middleware: [aiBudgetCheck, validateParams(reparseWorkoutParamsSchema), validateBody(reparseWorkoutRouteSchema)] }, async (req: Request<{ id: string }, unknown, z.infer<typeof reparseWorkoutRouteSchema>>, res: Response) => {
     const userId = getUserId(req);
     const workoutId = req.params.id;
     const [workout, user] = await Promise.all([storage.workouts.getWorkoutLog(workoutId, userId), storage.users.getUser(userId)]);
@@ -32,15 +31,15 @@ export function registerWorkoutAiRoutes(router: Router): void {
     const result = await reparseWorkout(parseTarget, weightUnit);
     if (!result) return res.json({ exercises: [], saved: false });
     res.json({ exercises: result.exercises, saved: true, setCount: result.setCount });
-  }));
-  router.post("/api/v1/workouts/:id/reparse-from-image", ...protectedMutationGuards, rateLimiter("reparse", 5), aiBudgetCheck, validateBody(parseExercisesFromImageRequestSchema), asyncHandler(async (req: Request<{ id: string }, unknown, z.infer<typeof parseExercisesFromImageRequestSchema>>, res: Response) => {
+  });
+  protectedPost(router, "/api/v1/workouts/:id/reparse-from-image", { limiter: rateLimiter("reparse", 5), middleware: [aiBudgetCheck, validateBody(parseExercisesFromImageRequestSchema)] }, async (req: Request<{ id: string }, unknown, z.infer<typeof parseExercisesFromImageRequestSchema>>, res: Response) => {
     const userId = getUserId(req);
     const [workout, user, customExercises] = await Promise.all([storage.workouts.getWorkoutLog(req.params.id, userId), storage.users.getUser(userId), storage.users.getCustomExercises(userId)]);
     if (!workout) return sendNotFound(res, "Workout not found");
     const result = await reparseWorkoutFromImage(workout, req.body, user?.weightUnit || "kg", userId, customExercises.map((e) => e.name));
     if (!result) return res.json({ exercises: [], saved: false });
     res.json({ exercises: result.exercises, saved: true, setCount: result.setCount });
-  }));
+  });
   protectedPost(router, "/api/v1/workouts/batch-reparse", { limiter: rateLimiter("batchReparse", 2), middleware: [aiBudgetCheck] }, async (req: Request, res: Response) => {
     const userId = getUserId(req);
     const { total, parsed, failed } = await batchReparseWorkouts(userId);

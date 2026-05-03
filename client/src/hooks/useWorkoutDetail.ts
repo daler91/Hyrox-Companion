@@ -1,14 +1,12 @@
 import type { ExerciseSet, WorkoutLog } from "@shared/schema";
-import { useIsMutating,useQuery } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useRef } from "react";
 
 import { useApiMutation } from "@/hooks/useApiMutation";
-import { useDebouncedSetPatches } from "@/hooks/useDebouncedSetPatches";
+import { useExerciseSetsForOwner } from "@/hooks/useExerciseSetsForOwner";
 import {
-  type AddExerciseSetPayload,
   api,
   type ParseFromImagePayload,
-  type PatchExerciseSetPayload,
   QUERY_KEYS,
   type ReparseWorkoutTextPayload,
   type WorkoutReferenceTextPayload,
@@ -83,103 +81,29 @@ export function useWorkoutDetail(workoutId: string | null) {
     });
   };
 
-  // See usePlanDayExercises.ts for the rationale — tracked here so the
-  // logged-workout variant of the ExerciseTable can show the same
-  // "Saving… / Saved" feedback the planned variant gets. `ownerId` is a
-  // render-time sentinel that resets the Saved timestamp when the hook's
-  // workoutId changes, so the flash from a previous entry doesn't bleed
-  // into the next dialog open. Using this pattern instead of a
-  // setState-in-effect satisfies react-hooks/set-state-in-effect.
-  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
-  const [ownerId, setOwnerId] = useState(workoutId);
-  const markSaved = () => setLastSavedAt(Date.now());
-
-  const updateSet = useApiMutation({
-    mutationKey: workoutId ? workoutSetsMutationKey(workoutId) : undefined,
-    mutationFn: ({ setId, data }: { setId: string; data: PatchExerciseSetPayload }) =>
-      api.workouts.updateSet(workoutId!, setId, data),
-    // Optimistic patch: merge the payload into the cached row so the table
-    // reflects the edit immediately, then let the server's response
-    // reconcile via the onSuccess replace below.
-    onMutate: async ({ setId, data }) => {
-      if (!workoutId) return undefined;
-      await queryClient.cancelQueries({ queryKey: QUERY_KEYS.workout(workoutId) });
-      const prev = queryClient.getQueryData<WorkoutWithSets>(QUERY_KEYS.workout(workoutId));
-      patchCachedSets((sets) => sets.map((s) => (s.id === setId ? { ...s, ...data } as ExerciseSet : s)));
-      return { prev };
-    },
-    onSuccess: (serverSet) => {
-      patchCachedSets((sets) => sets.map((s) => (s.id === serverSet.id ? serverSet : s)));
-      markSaved();
-    },
-    onError: (_err, _vars, ctx) => {
-      const prev = (ctx as { prev?: WorkoutWithSets } | undefined)?.prev;
-      if (workoutId && prev) {
-        queryClient.setQueryData(QUERY_KEYS.workout(workoutId), prev);
-      }
-    },
-    errorToast: "Couldn't save that change",
+  const {
+    updateSet,
+    patchSetDebounced,
+    flushPendingSetPatches,
+    addSet,
+    deleteSet,
+    isSaving,
+    lastSavedAt,
+    markSaved,
+  } = useExerciseSetsForOwner<WorkoutWithSets>({
+    ownerId: workoutId,
+    mutationKeyFamily: workoutSetsMutationKey,
+    setsQueryKey: QUERY_KEYS.workout,
+    patchCachedSets,
+    getSnapshot: (id) => queryClient.getQueryData<WorkoutWithSets>(QUERY_KEYS.workout(id)),
+    restoreSnapshot: (id, snapshot) => queryClient.setQueryData(QUERY_KEYS.workout(id), snapshot),
+    updateSetRequest: (id, setId, data) => api.workouts.updateSet(id, setId, data),
+    addSetRequest: (id, data) => api.workouts.addSet(id, data),
+    deleteSetRequest: (id, setId) => api.workouts.deleteSet(id, setId),
+    addInvalidateQueries: (id) => [QUERY_KEYS.workoutHistory(id)],
+    deleteInvalidateQueries: (id) => [QUERY_KEYS.workout(id), QUERY_KEYS.workoutHistory(id)],
+    cellSaveDebounceMs: CELL_SAVE_DEBOUNCE_MS,
   });
-
-  // Per-set debounce coordinator. Cells call `patchSetDebounced`; the
-  // Save button flushes pending patches synchronously via
-  // `flushPendingSetPatches` before any downstream drain-waiters settle.
-  const { patchSetDebounced, flushPendingSetPatches, cancelPending } = useDebouncedSetPatches<PatchExerciseSetPayload>(
-    updateSet.mutateAsync,
-    CELL_SAVE_DEBOUNCE_MS,
-  );
-
-  // Sentinel runs after the debounce coordinator so it can cancel
-  // patches queued against the prior workout — `updateSet.mutate`
-  // already closes over the new `workoutId`, so firing them would
-  // PATCH the wrong owner.
-  if (workoutId !== ownerId) {
-    setOwnerId(workoutId);
-    setLastSavedAt(null);
-    cancelPending();
-  }
-
-  const addSet = useApiMutation({
-    mutationKey: workoutId ? workoutSetsMutationKey(workoutId) : undefined,
-    mutationFn: (data: AddExerciseSetPayload) => api.workouts.addSet(workoutId!, data),
-    onSuccess: (serverSet) => {
-      patchCachedSets((sets) => [...sets, serverSet]);
-      markSaved();
-    },
-    errorToast: "Couldn't add that exercise",
-    invalidateQueries: workoutId ? [QUERY_KEYS.workoutHistory(workoutId)] : undefined,
-  });
-
-  const deleteSet = useApiMutation({
-    mutationKey: workoutId ? workoutSetsMutationKey(workoutId) : undefined,
-    mutationFn: (setId: string) => api.workouts.deleteSet(workoutId!, setId).then(() => setId),
-    onMutate: async (setId: string) => {
-      if (!workoutId) return undefined;
-      await queryClient.cancelQueries({ queryKey: QUERY_KEYS.workout(workoutId) });
-      const prev = queryClient.getQueryData<WorkoutWithSets>(QUERY_KEYS.workout(workoutId));
-      patchCachedSets((sets) => sets.filter((s) => s.id !== setId));
-      return { prev };
-    },
-    onSuccess: () => {
-      markSaved();
-    },
-    onError: (_err, _vars, ctx) => {
-      const prev = (ctx as { prev?: WorkoutWithSets } | undefined)?.prev;
-      if (workoutId && prev) {
-        queryClient.setQueryData(QUERY_KEYS.workout(workoutId), prev);
-      }
-    },
-    errorToast: "Couldn't remove that set",
-    invalidateQueries: workoutId
-      ? [QUERY_KEYS.workout(workoutId), QUERY_KEYS.workoutHistory(workoutId)]
-      : undefined,
-  });
-
-  const pendingSetMutations = useIsMutating({
-    mutationKey: workoutId ? workoutSetsMutationKey(workoutId) : ["workout-sets-disabled"],
-    exact: true,
-  });
-  const isSaving = pendingSetMutations > 0;
 
   const seedFromPlan = useApiMutation({
     mutationFn: () => api.workouts.seedFromPlan(workoutId!),

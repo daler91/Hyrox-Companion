@@ -79,6 +79,26 @@ interface ExerciseTableProps {
   readonly showPlannedDiffs?: boolean;
 }
 
+export function toggleExerciseRow(expanded: ReadonlySet<string>, rowKey: string): Set<string> {
+  const next = new Set(expanded);
+  if (next.has(rowKey)) next.delete(rowKey);
+  else next.add(rowKey);
+  return next;
+}
+
+export function dispatchSortOrderMutations(
+  nextGroups: readonly GroupedExercise[],
+  onUpdateSet: (setId: string, data: PatchExerciseSetPayload) => void,
+) {
+  let order = 0;
+  for (const g of nextGroups) {
+    for (const s of g.sets) {
+      if (s.sortOrder !== order) onUpdateSet(s.id, { sortOrder: order });
+      order += 1;
+    }
+  }
+}
+
 /**
  * Compact one-row-per-exercise table for the detail dialog and the
  * planned-entry CTA. Aggregate cells (Sets / Reps-or-Distance / Load)
@@ -128,30 +148,7 @@ export function ExerciseTable({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  const handleDragEnd = useCallback(
-    (event: DragEndEvent) => {
-      const { active, over } = event;
-      if (!over || active.id === over.id) return;
-      const oldIndex = rowKeys.indexOf(active.id as string);
-      const newIndex = rowKeys.indexOf(over.id as string);
-      if (oldIndex < 0 || newIndex < 0) return;
-      // Move a whole group (all its sets) at once. Then walk the flat
-      // set sequence and reassign contiguous `sortOrder` values; only
-      // the sets whose position actually changed get a PATCH so a
-      // two-row swap doesn't fan out across every set in the table.
-      const nextGroups = arrayMove(groups, oldIndex, newIndex);
-      let order = 0;
-      for (const g of nextGroups) {
-        for (const s of g.sets) {
-          if (s.sortOrder !== order) {
-            onUpdateSet(s.id, { sortOrder: order });
-          }
-          order += 1;
-        }
-      }
-    },
-    [groups, rowKeys, onUpdateSet],
-  );
+  const handleDragEnd = useExerciseDndHandler(groups, rowKeys, onUpdateSet);
   // Multiple rows can be expanded at once — matches WorkoutExerciseMode's
   // Set<string> pattern so adding a new row (auto-expanded below) doesn't
   // collapse whatever the user was editing.
@@ -193,12 +190,7 @@ export function ExerciseTable({
   }
 
   const toggleExpanded = useCallback((rowKey: string) => {
-    setExpandedKeys((prev) => {
-      const next = new Set(prev);
-      if (next.has(rowKey)) next.delete(rowKey);
-      else next.add(rowKey);
-      return next;
-    });
+    setExpandedKeys((prev) => toggleExerciseRow(prev, rowKey));
   }, []);
 
   const handlePickFromCatalog = (name: ExerciseName) => {
@@ -263,27 +255,19 @@ export function ExerciseTable({
             onDragEnd={handleDragEnd}
           >
             <SortableContext items={rowKeys} strategy={verticalListSortingStrategy}>
-              {groups.map((group, idx) => {
-                const rowKey = rowKeys[idx];
-                const isExpanded = expandedKeys.has(rowKey);
-
-                return (
-                  <SortableGroupRow
-                    key={rowKey}
-                    rowKey={rowKey}
-                    group={group}
-                    weightUnit={weightUnit}
-                    distanceUnit={distanceUnit}
-                    isExpanded={isExpanded}
-                    onToggle={toggleExpanded}
-                    onUpdateSet={onUpdateSet}
-                    onAddSet={onAddSet}
-                    onDeleteSet={onDeleteSet}
-                    readableSummary={readableSummary}
-                    showPlannedDiffs={showPlannedDiffs}
-                  />
-                );
-              })}
+              <ExerciseRowRenderer
+                groups={groups}
+                rowKeys={rowKeys}
+                expandedKeys={expandedKeys}
+                weightUnit={weightUnit}
+                distanceUnit={distanceUnit}
+                onToggle={toggleExpanded}
+                onUpdateSet={onUpdateSet}
+                onAddSet={onAddSet}
+                onDeleteSet={onDeleteSet}
+                readableSummary={readableSummary}
+                showPlannedDiffs={showPlannedDiffs}
+              />
             </SortableContext>
           </DndContext>
         </div>
@@ -297,6 +281,72 @@ export function ExerciseTable({
       />
     </section>
   );
+}
+
+
+function useExerciseDndHandler(
+  groups: readonly GroupedExercise[],
+  rowKeys: readonly string[],
+  onUpdateSet: (setId: string, data: PatchExerciseSetPayload) => void,
+) {
+  return useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = rowKeys.indexOf(active.id as string);
+    const newIndex = rowKeys.indexOf(over.id as string);
+    if (oldIndex < 0 || newIndex < 0) return;
+
+    const nextGroups = arrayMove([...groups], oldIndex, newIndex);
+    dispatchSortOrderMutations(nextGroups, onUpdateSet);
+  }, [groups, rowKeys, onUpdateSet]);
+}
+
+function ExerciseRowRenderer({
+  groups,
+  rowKeys,
+  expandedKeys,
+  weightUnit,
+  distanceUnit,
+  onToggle,
+  onUpdateSet,
+  onAddSet,
+  onDeleteSet,
+  readableSummary,
+  showPlannedDiffs,
+}: Readonly<{
+  groups: readonly GroupedExercise[];
+  rowKeys: readonly string[];
+  expandedKeys: ReadonlySet<string>;
+  weightUnit: "kg" | "lb";
+  distanceUnit: "km" | "miles";
+  onToggle: (rowKey: string) => void;
+  onUpdateSet: (setId: string, data: PatchExerciseSetPayload) => void;
+  onAddSet: (data: AddExerciseSetPayload) => void;
+  onDeleteSet: (setId: string) => void;
+  readableSummary: boolean;
+  showPlannedDiffs: boolean;
+}>) {
+  return groups.map((group, idx) => {
+    const rowKey = rowKeys[idx];
+    const isExpanded = expandedKeys.has(rowKey);
+
+    return (
+      <SortableGroupRow
+        key={rowKey}
+        rowKey={rowKey}
+        group={group}
+        weightUnit={weightUnit}
+        distanceUnit={distanceUnit}
+        isExpanded={isExpanded}
+        onToggle={onToggle}
+        onUpdateSet={onUpdateSet}
+        onAddSet={onAddSet}
+        onDeleteSet={onDeleteSet}
+        readableSummary={readableSummary}
+        showPlannedDiffs={showPlannedDiffs}
+      />
+    );
+  });
 }
 
 function AddExerciseDialog({
@@ -497,7 +547,7 @@ const GroupRow = memo(function GroupRow({
   // (e.g. battle_ropes) would otherwise fall back to "reps" and
   // silently misroute every edit through the wrong column.
   const metric = useMemo(
-    () => resolvePrimaryMetric(group.exerciseName, uniformity, distanceUnit),
+    () => metricResolver.resolvePrimaryMetric(group.exerciseName, uniformity, distanceUnit),
     [group.exerciseName, uniformity, distanceUnit],
   );
   const hasWeight = useMemo(
@@ -539,7 +589,7 @@ const GroupRow = memo(function GroupRow({
     <PrescriptionSegment key={seg.separator ?? "sets"} segment={seg} />
   ));
   const plannedDiffSummary = showPlannedDiffs
-    ? getPlannedDiffSummary(group.sets, weightUnit, distanceUnit)
+    ? plannedDiffPresenter.getPlannedDiffSummary(group.sets, weightUnit, distanceUnit)
     : null;
 
   const changeExerciseItem = (
@@ -735,7 +785,7 @@ function getUniformPlannedValue(
   };
 }
 
-function getPlannedDiffSummary(
+function buildPlannedDiffSummary(
   sets: readonly ExerciseSet[],
   weightUnit: "kg" | "lb",
   distanceUnit: "km" | "miles",
@@ -856,12 +906,12 @@ const METRIC_PRIORITY: readonly PrimaryField[] = ["reps", "distance", "time"];
  * custom "Interval Run" with reps=1 + distance=5000 rolls up the
  * distance instead of the reps placeholder.
  */
-function resolvePrimaryMetric(
+function buildPrimaryMetric(
   exerciseName: string,
   u: UniformitySummary,
   distanceUnit: "km" | "miles",
 ): PrimaryMetric {
-  const field = pickPrimaryField(exerciseName, u);
+  const field = pickMetricField(exerciseName, u);
   const meta = METRIC_META[field];
   return {
     field,
@@ -872,7 +922,7 @@ function resolvePrimaryMetric(
   };
 }
 
-function pickPrimaryField(exerciseName: string, u: UniformitySummary): PrimaryField {
+function pickMetricField(exerciseName: string, u: UniformitySummary): PrimaryField {
   if (exerciseName === "custom") {
     if (u.distance != null) return "distance";
     if (u.time != null) return "time";
@@ -881,6 +931,16 @@ function pickPrimaryField(exerciseName: string, u: UniformitySummary): PrimaryFi
   const fields: readonly FieldKey[] = getFields(exerciseName);
   return METRIC_PRIORITY.find((m) => fields.includes(m)) ?? "reps";
 }
+
+
+const metricResolver = {
+  resolvePrimaryMetric: buildPrimaryMetric,
+  pickPrimaryField: pickMetricField,
+} as const;
+
+const plannedDiffPresenter = {
+  getPlannedDiffSummary: buildPlannedDiffSummary,
+} as const;
 
 /**
  * Whether the aggregate Load cell should render as an editable input
@@ -903,4 +963,3 @@ function shouldShowLoad(group: GroupedExercise, primaryField: PrimaryField): boo
   if (primaryField === "reps") return true;
   return group.sets.some((s) => s.weight != null);
 }
-

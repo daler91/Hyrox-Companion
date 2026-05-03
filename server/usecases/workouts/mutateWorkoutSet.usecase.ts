@@ -7,7 +7,10 @@ export interface WorkoutSetStorage {
 }
 
 export const createMutateWorkoutSetUseCase = (storage: WorkoutSetStorage) => ({
-  updateSet: (workoutId: string, setId: string, body: PatchExerciseSetBody, userId: string) => storage.updateExerciseSet(workoutId, setId, body, userId),
-  addSet: (workoutId: string, body: AddExerciseSetBody, userId: string) => storage.addExerciseSetToWorkoutLog(workoutId, body, userId),
-  deleteSet: (workoutId: string, setId: string, userId: string) => storage.deleteExerciseSet(workoutId, setId, userId),
+  updateSet: (workoutId: string, setId: string, body: PatchExerciseSetBody, userId: string) =>
+    storage.updateExerciseSet(workoutId, setId, body, userId),
+  addSet: (workoutId: string, body: AddExerciseSetBody, userId: string) =>
+    storage.addExerciseSetToWorkoutLog(workoutId, body, userId),
+  deleteSet: (workoutId: string, setId: string, userId: string) =>
+    storage.deleteExerciseSet(workoutId, setId, userId),
 });

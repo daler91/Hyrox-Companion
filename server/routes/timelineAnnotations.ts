@@ -6,10 +6,10 @@ import { type Request, type Response, Router } from "express";
 import { z } from "zod";
 
 import { isAuthenticated } from "../clerkAuth";
-import { protectedMutationGuards } from "../routeGuards";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody } from "../routeUtils";
 import { storage } from "../storage";
 import { getUserId } from "../types";
+import { protectedDelete, protectedPatch, protectedPost } from "./_helpers/protectedRouteBuilder";
 
 const router = Router();
 
@@ -32,16 +32,15 @@ router.get(
  * POST /api/v1/timeline-annotations
  * Create a new injury/illness/travel/rest annotation spanning [startDate, endDate].
  */
-router.post(
+protectedPost(
+  router,
   "/api/v1/timeline-annotations",
-  ...protectedMutationGuards,
-  rateLimiter("annotations", 20),
-  validateBody(insertTimelineAnnotationSchema),
-  asyncHandler(async (req: Request<Record<string, never>, unknown, z.infer<typeof insertTimelineAnnotationSchema>>, res: Response) => {
+  { limiter: rateLimiter("annotations", 20), middleware: [validateBody(insertTimelineAnnotationSchema)] },
+  async (req: Request<Record<string, never>, unknown, z.infer<typeof insertTimelineAnnotationSchema>>, res: Response) => {
     const userId = getUserId(req);
     const row = await storage.timelineAnnotations.create(userId, req.body);
     res.status(201).json(row);
-  }),
+  },
 );
 
 /**
@@ -49,12 +48,11 @@ router.post(
  * Partial update. The per-user ownership check is enforced at the storage
  * level so a mismatched id silently returns 404 (can't leak existence).
  */
-router.patch(
+protectedPatch(
+  router,
   "/api/v1/timeline-annotations/:id",
-  ...protectedMutationGuards,
-  rateLimiter("annotations", 20),
-  validateBody(updateTimelineAnnotationSchema),
-  asyncHandler(async (req: Request<{ id: string }, unknown, z.infer<typeof updateTimelineAnnotationSchema>>, res: Response) => {
+  { limiter: rateLimiter("annotations", 20), middleware: [validateBody(updateTimelineAnnotationSchema)] },
+  async (req: Request<{ id: string }, unknown, z.infer<typeof updateTimelineAnnotationSchema>>, res: Response) => {
     const userId = getUserId(req);
 
     // Merge-then-validate: the schema `.refine` only runs when both dates
@@ -82,24 +80,24 @@ router.patch(
       return sendNotFound(res, "Annotation not found");
     }
     res.json(row);
-  }),
+  },
 );
 
 /**
  * DELETE /api/v1/timeline-annotations/:id
  */
-router.delete(
+protectedDelete(
+  router,
   "/api/v1/timeline-annotations/:id",
-  ...protectedMutationGuards,
-  rateLimiter("annotations", 20),
-  asyncHandler(async (req: Request<{ id: string }, unknown, z.infer<typeof updateTimelineAnnotationSchema>>, res: Response) => {
+  { limiter: rateLimiter("annotations", 20) },
+  async (req: Request<{ id: string }, unknown, z.infer<typeof updateTimelineAnnotationSchema>>, res: Response) => {
     const userId = getUserId(req);
     const deleted = await storage.timelineAnnotations.delete(userId, req.params.id);
     if (!deleted) {
       return sendNotFound(res, "Annotation not found");
     }
     res.json({ success: true });
-  }),
+  },
 );
 
 export default router;

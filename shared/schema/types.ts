@@ -359,6 +359,22 @@ const measurableSetFields = {
   notes: z.string().max(1000).nullable().optional(),
 };
 
+// Discriminated ownership for set-level routes and callers that may target
+// either a logged workout or a planned day. Exported from shared schema so
+// both server and client code narrow safely via `ownerType`.
+
+export type ExerciseSetOwner =
+  | {
+    ownerType: "workout-log";
+    workoutLogId: string;
+    planDayId?: null;
+  }
+  | {
+    ownerType: "plan-day";
+    planDayId: string;
+    workoutLogId?: null;
+  };
+
 // Request bodies for the set-level CRUD routes. Shared between the
 // workout-log routes (server/routes/workouts.ts) and the plan-day routes
 // (server/routes/plans.ts) so a single numeric-bounds contract covers

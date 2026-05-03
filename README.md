@@ -1,5 +1,5 @@
 <div align="center">
-  <h1>🏃‍♂️ HyroxTracker (Companion App)</h1>
+  <h1>🏃‍♂️ FitAi (Companion App)</h1>
   <p><strong>A fully responsive, AI-powered specialized training planner and analytics suite built exclusively for <a href="https://hyrox.com/" target="_blank">Hyrox</a> athletes.</strong></p>
 
   <p>

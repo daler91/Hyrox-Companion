@@ -1,9 +1,15 @@
 import { Router } from "express";
 
-import legacyRouter from "../workouts";
+import { registerWorkoutAiRoutes } from "./workoutsAi.routes";
+import { registerWorkoutCrudRoutes } from "./workoutsCrud.routes";
+import { registerWorkoutExportRoutes } from "./workoutsExport.routes";
+import { registerWorkoutTimelineRoutes } from "./workoutsTimeline.routes";
 
-// Compatibility composition point for workout route capability modules.
 const router = Router();
-router.use(legacyRouter);
+
+registerWorkoutAiRoutes(router);
+registerWorkoutCrudRoutes(router);
+registerWorkoutTimelineRoutes(router);
+registerWorkoutExportRoutes(router);
 
 export default router;
