@@ -1,3 +1,3 @@
-## 2026-04-22 - Upgraded native `title` to design system `Tooltip` for Send Message button
-**Learning:** Found a button using the native HTML `title` attribute for tooltips (`title="Send message"`) instead of the project's consistent Radix UI / Shadcn `Tooltip` components. Native tooltips lack visual consistency, have delay issues, and behave differently across browsers and operating systems.
-**Action:** Always prefer the design system `Tooltip` over native `title` attributes for icon-only buttons to maintain visual polish and predictable accessibility. When converting, ensure `aria-label` remains on the button for screen readers.
+## 2026-05-02 - Wrap DropdownMenuTrigger with Tooltip
+**Learning:** Icon-only DropdownMenu triggers should be wrapped with TooltipTrigger and TooltipProvider to provide accessible tooltips to users, enhancing discoverability.
+**Action:** Use the `<TooltipProvider><Tooltip><TooltipTrigger asChild><DropdownMenuTrigger asChild><button>...</button></DropdownMenuTrigger></TooltipTrigger><TooltipContent>...</TooltipContent></Tooltip></TooltipProvider>` pattern for icon-only dropdown menus.
