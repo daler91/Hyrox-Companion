@@ -4,7 +4,7 @@ import { useState } from "react";
 
 import { useApiMutation } from "@/hooks/useApiMutation";
 import { useDebouncedSetPatches } from "@/hooks/useDebouncedSetPatches";
-import { type AddExerciseSetPayload, type PatchExerciseSetPayload } from "@/lib/api";
+import { type AddExerciseSetPayload, type PatchExerciseSetPayload } from "@/lib/api/exerciseSetMutations";
 import { queryClient } from "@/lib/queryClient";
 
 type QueryKey = readonly unknown[];

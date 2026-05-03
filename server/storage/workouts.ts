@@ -426,6 +426,19 @@ export class WorkoutStorage {
     return row?.set;
   }
 
+
+  async mutateExerciseSetUpdate(owner: { kind: "workoutLog" | "planDay"; ownerId: string }, setId: string, updates: NormalizedSetUpdateInput, userId: string): Promise<ExerciseSet | undefined> {
+    return this.updateExerciseSetNormalized({ kind: owner.kind === "workoutLog" ? "workout" : "planDay", id: owner.ownerId, userId }, setId, updates);
+  }
+
+  async mutateExerciseSetAdd(owner: { kind: "workoutLog" | "planDay"; ownerId: string }, set: NormalizedSetCreateInput, userId: string): Promise<ExerciseSet | undefined> {
+    return this.addExerciseSetNormalized({ kind: owner.kind === "workoutLog" ? "workout" : "planDay", id: owner.ownerId, userId }, set);
+  }
+
+  async mutateExerciseSetDelete(owner: { kind: "workoutLog" | "planDay"; ownerId: string }, setId: string, userId: string): Promise<boolean> {
+    return this.deleteExerciseSetNormalized({ kind: owner.kind === "workoutLog" ? "workout" : "planDay", id: owner.ownerId, userId }, setId);
+  }
+
   async updateExerciseSet(
     workoutLogId: string,
     setId: string,

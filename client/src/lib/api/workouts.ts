@@ -7,9 +7,10 @@ import type {
 } from "@shared/schema";
 
 import { typedRequest } from "./client";
-import { IMAGE_REPARSE_TIMEOUT_MS } from "./constants";
 import type { ReparseResponse } from "./constants";
+import { IMAGE_REPARSE_TIMEOUT_MS } from "./constants";
 import type { ParseFromImagePayload } from "./exercises";
+import { createExerciseSetMutationApi } from "./exerciseSetMutations";
 
 export interface BatchReparseResponse {
   total: number;
@@ -37,48 +38,6 @@ export interface WorkoutHistoryStats {
   lastSameFocus: { date: string; focus: string } | null;
   prSetCount: number;
   blockAvgRpe: number | null;
-}
-
-export type PatchExerciseSetPayload = Partial<{
-  exerciseName: string;
-  customLabel: string | null;
-  category: string;
-  setNumber: number;
-  reps: number | null;
-  weight: number | null;
-  distance: number | null;
-  time: number | null;
-  plannedReps: number | null;
-  plannedWeight: number | null;
-  plannedDistance: number | null;
-  plannedTime: number | null;
-  notes: string | null;
-  sortOrder: number | null;
-}>;
-
-export interface AddExerciseSetPayload {
-  exerciseName: string;
-  customLabel?: string | null;
-  category: string;
-  setNumber?: number;
-  reps?: number | null;
-  weight?: number | null;
-  distance?: number | null;
-  time?: number | null;
-  plannedReps?: number | null;
-  plannedWeight?: number | null;
-  plannedDistance?: number | null;
-  plannedTime?: number | null;
-  notes?: string | null;
-  confidence?: number | null;
-  /**
-   * Client-only hint: id of the set the add was initiated from (used by
-   * InlineSetEditor's "Add set" button). Stripped by the server's zod
-   * schema, but surfaces the originating row to local adapters that need
-   * to group the new set with its siblings when multiple same-named
-   * groups coexist. Optional so existing callers don't need updating.
-   */
-  sourceSetId?: string | null;
 }
 
 export const workouts = {
@@ -148,12 +107,5 @@ export const workouts = {
   seedFromPlan: (id: string) =>
     typedRequest<{ seededCount: number }>("POST", `/api/v1/workouts/${id}/seed-from-plan`),
 
-  updateSet: (workoutId: string, setId: string, data: PatchExerciseSetPayload) =>
-    typedRequest<ExerciseSet>("PATCH", `/api/v1/workouts/${workoutId}/sets/${setId}`, data),
-
-  addSet: (workoutId: string, data: AddExerciseSetPayload) =>
-    typedRequest<ExerciseSet>("POST", `/api/v1/workouts/${workoutId}/sets`, data),
-
-  deleteSet: (workoutId: string, setId: string) =>
-    typedRequest<{ success: boolean }>("DELETE", `/api/v1/workouts/${workoutId}/sets/${setId}`),
+  ...createExerciseSetMutationApi((workoutId) => `/api/v1/workouts/${workoutId}`),
 } as const;

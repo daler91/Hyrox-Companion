@@ -3,7 +3,7 @@ import type { ExerciseSet, GeneratePlanInput, PlanDay, TrainingPlan, TrainingPla
 import { rawRequest,typedRequest } from "./client";
 import { IMAGE_REPARSE_TIMEOUT_MS } from "./constants";
 import type { ParseFromImagePayload } from "./exercises";
-import type { AddExerciseSetPayload, PatchExerciseSetPayload } from "./workouts";
+import { type AddExerciseSetPayload, createExerciseSetMutationApi, type PatchExerciseSetPayload } from "./exerciseSetMutations";
 
 export const plans = {
   list: () => typedRequest<TrainingPlan[]>("GET", "/api/v1/plans"),
@@ -46,14 +46,14 @@ export const plans = {
   getDayExercises: (dayId: string) =>
     typedRequest<ExerciseSet[]>("GET", `/api/v1/plans/days/${dayId}/sets`),
 
-  addDayExercise: (dayId: string, data: AddExerciseSetPayload) =>
-    typedRequest<ExerciseSet>("POST", `/api/v1/plans/days/${dayId}/sets`, data),
-
-  updateDayExercise: (dayId: string, setId: string, data: PatchExerciseSetPayload) =>
-    typedRequest<ExerciseSet>("PATCH", `/api/v1/plans/days/${dayId}/sets/${setId}`, data),
-
-  deleteDayExercise: (dayId: string, setId: string) =>
-    typedRequest<{ success: boolean }>("DELETE", `/api/v1/plans/days/${dayId}/sets/${setId}`),
+  ...(() => {
+    const mutations = createExerciseSetMutationApi((dayId) => `/api/v1/plans/days/${dayId}`);
+    return {
+      addDayExercise: (dayId: string, data: AddExerciseSetPayload) => mutations.addSet(dayId, data),
+      updateDayExercise: (dayId: string, setId: string, data: PatchExerciseSetPayload) => mutations.updateSet(dayId, setId, data),
+      deleteDayExercise: (dayId: string, setId: string) => mutations.deleteSet(dayId, setId),
+    };
+  })(),
 
   // Manual coach-note refresh for a planned day. Triggered from CoachTakePanel
   // after the athlete edited the day's exercises so the static rationale
