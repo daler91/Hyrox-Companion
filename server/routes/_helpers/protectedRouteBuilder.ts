@@ -7,15 +7,26 @@ import { asyncHandler, rateLimiter } from "../../routeUtils";
 
 type AsyncRouteHandler<Req extends Request = Request> = (req: Req, res: Response) => Promise<unknown>;
 
-interface ProtectedRouteOptions {
+interface BaseProtectedRouteOptions {
   readonly auth?: boolean;
-  readonly rateLimit?: boolean;
-  readonly limiter?: ReturnType<typeof rateLimiter>;
   readonly aiConsent?: boolean;
   readonly aiBudget?: boolean;
   readonly validation?: RequestHandler[];
   readonly middleware?: RequestHandler[];
 }
+
+type RateLimitedProtectedRouteOptions = {
+  readonly rateLimit?: true;
+  readonly limiter: ReturnType<typeof rateLimiter>;
+};
+
+type NonRateLimitedProtectedRouteOptions = {
+  readonly rateLimit: false;
+  readonly limiter?: never;
+};
+
+type ProtectedRouteOptions = BaseProtectedRouteOptions &
+  (RateLimitedProtectedRouteOptions | NonRateLimitedProtectedRouteOptions);
 
 function buildProtectedStack<Req extends Request>(
   options: ProtectedRouteOptions,
@@ -27,10 +38,7 @@ function buildProtectedStack<Req extends Request>(
     stack.push(...protectedMutationGuards);
   }
 
-  if (options.rateLimit ?? true) {
-    if (!options.limiter) {
-      throw new Error("Protected routes with rate limiting enabled require a limiter");
-    }
+  if (options.rateLimit !== false) {
     stack.push(options.limiter);
   }
 
