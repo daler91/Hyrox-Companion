@@ -1,6 +1,14 @@
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 
-const out = execSync('pnpm -s tsx script/timeline-benchmark.ts', { encoding: 'utf8' });
+const safePath = '/usr/bin:/bin';
+const out = execFileSync(
+  process.execPath,
+  ['node_modules/tsx/dist/cli.mjs', 'script/timeline-benchmark.ts'],
+  {
+    encoding: 'utf8',
+    env: { ...process.env, PATH: safePath },
+  },
+);
 process.stdout.write(out);
 
 const lines = out.split('\n').filter((l) => l.includes("│ '") && l.includes('│'));
@@ -14,7 +22,7 @@ const parsed = lines.map((line) => {
   };
 });
 
-const thresholds: Record<string,{maxMs:number;maxHeapMb:number}> = {
+const thresholds: Record<string, { maxMs: number; maxHeapMb: number }> = {
   medium: { maxMs: 180, maxHeapMb: 30 },
   high: { maxMs: 700, maxHeapMb: 90 },
   'high-offset': { maxMs: 700, maxHeapMb: 90 },
