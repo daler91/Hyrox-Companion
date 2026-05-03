@@ -7,8 +7,13 @@ export interface FieldContext {
   distanceUnit: "km" | "miles";
 }
 
+type LabelResolver = {
+  (context: FieldContext): string;
+  (weightUnit: string, distanceUnit: string): string;
+};
+
 interface FieldSpec {
-  label: (context: FieldContext) => string;
+  label: LabelResolver;
   defaultStep: number;
   stepOptions: readonly number[];
   shortLabel: string;
@@ -18,7 +23,7 @@ interface FieldSpec {
 
 export const fieldMeta: Record<FieldKey, FieldSpec> = {
   reps: {
-    label: () => "Reps",
+    label: withLegacyLabel(() => "Reps"),
     shortLabel: "Reps",
     defaultStep: 1,
     stepOptions: [1, 5],
@@ -26,7 +31,7 @@ export const fieldMeta: Record<FieldKey, FieldSpec> = {
     prefersMultiSet: true,
   },
   weight: {
-    label: ({ weightUnit }) => `Weight (${weightUnit})`,
+    label: withLegacyLabel(({ weightUnit }) => `Weight (${weightUnit})`),
     shortLabel: "Wt",
     defaultStep: 2.5,
     stepOptions: [1, 2.5, 5, 10],
@@ -34,7 +39,7 @@ export const fieldMeta: Record<FieldKey, FieldSpec> = {
     prefersMultiSet: true,
   },
   distance: {
-    label: ({ distanceUnit }) => `Distance (${distanceUnit === "km" ? "m" : "ft"})`,
+    label: withLegacyLabel(({ distanceUnit }) => `Distance (${distanceUnit === "km" ? "m" : "ft"})`),
     shortLabel: "Dist",
     defaultStep: 50,
     stepOptions: [10, 50, 100, 500],
@@ -42,7 +47,7 @@ export const fieldMeta: Record<FieldKey, FieldSpec> = {
     prefersMultiSet: false,
   },
   time: {
-    label: () => "Time (min)",
+    label: withLegacyLabel(() => "Time (min)"),
     shortLabel: "Time",
     defaultStep: 1,
     stepOptions: [1, 5, 10],
@@ -50,6 +55,11 @@ export const fieldMeta: Record<FieldKey, FieldSpec> = {
     prefersMultiSet: false,
   },
 };
+
+function withLegacyLabel(getLabel: (context: FieldContext) => string): LabelResolver {
+  return ((contextOrWeightUnit: FieldContext | string, distanceUnit?: string) =>
+    getLabel(normalizeLabelContext(contextOrWeightUnit, distanceUnit))) as LabelResolver;
+}
 
 // ⚡ Bolt: Cache array references to guarantee referential stability during re-renders.
 const fieldsCache = new Map<string, FieldKey[]>();
@@ -76,7 +86,27 @@ export function getFieldSpec(field: FieldKey): FieldSpec {
   return fieldMeta[field];
 }
 
-export function getFieldLabel(field: FieldKey, context: FieldContext): string {
+function normalizeLabelContext(
+  contextOrWeightUnit: FieldContext | string,
+  distanceUnit?: string,
+): FieldContext {
+  if (typeof contextOrWeightUnit === "string") {
+    return {
+      weightUnit: contextOrWeightUnit === "lbs" ? "lbs" : "kg",
+      distanceUnit: distanceUnit === "miles" ? "miles" : "km",
+    };
+  }
+  return contextOrWeightUnit;
+}
+
+export function getFieldLabel(field: FieldKey, context: FieldContext): string;
+export function getFieldLabel(field: FieldKey, weightUnit: string, distanceUnit: string): string;
+export function getFieldLabel(
+  field: FieldKey,
+  contextOrWeightUnit: FieldContext | string,
+  distanceUnit?: string,
+): string {
+  const context = normalizeLabelContext(contextOrWeightUnit, distanceUnit);
   return fieldMeta[field].label(context);
 }
 
