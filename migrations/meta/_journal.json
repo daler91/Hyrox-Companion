@@ -274,6 +274,13 @@
       "when": 1777839450090,
       "tag": "0038_structured_exercise_health_metrics",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1777844430704,
+      "tag": "0039_structured_exercise_health_counter_expansion",
+      "breakpoints": true
     }
   ]
 }
