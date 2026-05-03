@@ -1,6 +1,7 @@
 import type { ExerciseName } from "@shared/schema";
 
 import type { StructuredExercise } from "@/components/ExerciseInput";
+import type { ParseDiagnostics } from "@/hooks/useWorkoutEditor";
 
 /**
  * Composer state shared between CaptureStep (consumer) and
@@ -21,6 +22,7 @@ export interface SharedComposerProps {
   readonly distanceUnit: "km" | "miles";
   readonly autoParsing: boolean;
   readonly autoParseError: boolean;
+  readonly parseDiagnostics: ParseDiagnostics;
   readonly cancelAutoParse: () => void;
   readonly isListening: boolean;
   readonly isSupported: boolean;
@@ -44,6 +46,7 @@ export interface ComposerExerciseProps {
   readonly weightUnit: "kg" | "lbs";
   readonly distanceUnit: "km" | "miles";
   readonly autoParsing: boolean;
+  readonly parseDiagnostics: ParseDiagnostics;
   readonly cancelAutoParse: () => void;
 }
 

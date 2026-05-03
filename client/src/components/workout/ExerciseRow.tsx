@@ -2,6 +2,7 @@ import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
 import { ChevronDown, Copy,Pencil, Plus, Trash2, X } from "lucide-react";
 import React, { useId } from "react";
 
+import { type FieldKey,getFieldLabel, getFields, getFieldSpec } from "@/components/exercise-row/fieldMeta";
 import type { SetData,StructuredExercise } from "@/components/ExerciseInput";
 import { createDefaultSet } from "@/components/ExerciseInput";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +14,6 @@ import { NumberStepper } from "@/components/ui/number-stepper";
 import { exerciseIcons } from "@/lib/exerciseIcons";
 import { categoryBorderColors } from "@/lib/exerciseUtils";
 import { cn } from "@/lib/utils";
-import { getFieldLabel, getFields, getFieldSpec, type FieldKey } from "@/components/exercise-row/fieldMeta";
 
 export interface ExerciseRowBlock {
   readonly blockId: string;

@@ -74,6 +74,7 @@ export function LogWorkoutStepperLayout({
   distanceUnit,
   autoParsing,
   autoParseError,
+  parseDiagnostics,
   parseNow,
   cancelAutoParse,
   isListening,
@@ -133,6 +134,7 @@ export function LogWorkoutStepperLayout({
     weightUnit,
     distanceUnit,
     autoParsing,
+    parseDiagnostics,
     cancelAutoParse,
   };
 

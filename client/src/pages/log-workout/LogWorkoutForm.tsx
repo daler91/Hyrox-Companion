@@ -40,6 +40,7 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
     resetEditor,
     autoParsing,
     autoParseError,
+    parseDiagnostics,
     parseNow,
     cancelAutoParse,
     parseImageMutation,
@@ -151,6 +152,7 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
       distanceUnit={distanceUnit}
       autoParsing={autoParsing}
       autoParseError={autoParseError}
+      parseDiagnostics={parseDiagnostics}
       parseNow={parseNow}
       cancelAutoParse={cancelAutoParse}
       isListening={isListening}
