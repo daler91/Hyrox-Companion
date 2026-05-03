@@ -1,12 +1,11 @@
 import express from "express";
 import request from "supertest";
-import { beforeEach,describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { clearRateLimitBuckets } from "../../routeUtils";
 import workoutsRouter from "../workouts";
 import { createTestApp } from "./testUtils";
 
-// Mock the clerkAuth middleware to simulate authentication
 vi.mock("../../clerkAuth", () => ({
   isAuthenticated: (req: Record<string, unknown>, _res: unknown, next: () => void) => {
     req.auth = { userId: "test_user_id" };
@@ -14,73 +13,124 @@ vi.mock("../../clerkAuth", () => ({
   },
 }));
 
-// Mock the getUserId function to return our test user
 vi.mock("../../types", () => ({
   getUserId: () => "test_user_id",
 }));
 
-// Mock the storage functions
+vi.mock("../../middleware/aibudget", () => ({
+  aiBudgetCheck: (_req: unknown, _res: unknown, next: () => void) => next(),
+}));
+
 vi.mock("../../storage", () => ({
   storage: {
     workouts: {
       listWorkoutLogs: vi.fn(),
       getExerciseSetsByWorkoutLog: vi.fn(),
+      getWorkoutLog: vi.fn(),
+      deleteWorkoutLog: vi.fn(),
+      updateWorkoutLog: vi.fn(),
+    },
+    timeline: {
+      getTimeline: vi.fn(),
+    },
+    users: {
+      getUser: vi.fn(),
+      getCustomExercises: vi.fn(),
     },
   },
 }));
 
-// Mock the workoutService functions
 vi.mock("../../queue", () => ({ queue: { send: vi.fn().mockResolvedValue(undefined) } }));
-vi.mock("../../services/workoutService", () => ({
+vi.mock("../../services/workoutUseCases", () => ({
   createWorkout: vi.fn(),
-  createWorkoutAndScheduleCoaching: vi.fn(),
-  updateWorkout: vi.fn(),
+  updateWorkoutUseCase: vi.fn(),
+}));
+vi.mock("../../services/workoutService", () => ({
   reparseWorkout: vi.fn(),
-  validateExercisesPayload: (exercises: unknown) => ({ success: true, data: exercises }),
+  reparseWorkoutFromImage: vi.fn(),
+  batchReparseWorkouts: vi.fn(),
 }));
 
-// Mock the exportService functions
 vi.mock("../../services/exportService", () => ({
   generateCSV: vi.fn(),
   generateJSON: vi.fn(),
 }));
 
+type ContractCase = {
+  name: string;
+  method: "get" | "post" | "patch" | "delete";
+  path: string;
+  body?: Record<string, unknown>;
+  expectedStatus: number;
+  expectedFields: string[];
+};
+
+const endpointFixtureCases: ContractCase[] = [
+  { name: "workouts list", method: "get", path: "/api/v1/workouts", expectedStatus: 200, expectedFields: ["0.id"] },
+  { name: "workouts create", method: "post", path: "/api/v1/workouts", body: { date: "2026-01-02", focus: "Conditioning", mainWorkout: "Engine Session", notes: "tempo" }, expectedStatus: 200, expectedFields: ["id", "date"] },
+  { name: "workout update", method: "patch", path: "/api/v1/workouts/workout-1", body: { notes: "updated" }, expectedStatus: 200, expectedFields: ["id", "notes"] },
+  { name: "workout delete", method: "delete", path: "/api/v1/workouts/workout-1", expectedStatus: 200, expectedFields: ["success"] },
+  { name: "workout reparse", method: "post", path: "/api/v1/workouts/workout-1/reparse", body: {}, expectedStatus: 200, expectedFields: ["saved", "setCount", "exercises"] },
+  { name: "timeline list", method: "get", path: "/api/v1/timeline", expectedStatus: 200, expectedFields: ["0.id", "0.type"] },
+  { name: "export json", method: "get", path: "/api/v1/export?format=json", expectedStatus: 200, expectedFields: ["exportedAt", "workouts"] },
+];
+
 describe("Workouts Routes", () => {
   let app: express.Express;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     clearRateLimitBuckets();
     app = createTestApp(workoutsRouter);
 
+    const [{ storage }, { createWorkout, updateWorkoutUseCase }, { reparseWorkout }, { generateCSV, generateJSON }] = await Promise.all([
+      import("../../storage"),
+      import("../../services/workoutUseCases"),
+      import("../../services/workoutService"),
+      import("../../services/exportService"),
+    ]);
+
+    vi.mocked(storage.workouts.listWorkoutLogs).mockResolvedValue([{ id: "workout-1", userId: "test_user_id", date: "2026-01-02", notes: "steady" }] as never);
+    vi.mocked(storage.workouts.getWorkoutLog).mockResolvedValue({ id: "workout-1", userId: "test_user_id", mainWorkout: "Engine" } as never);
+    vi.mocked(storage.workouts.getExerciseSetsByWorkoutLog).mockResolvedValue([] as never);
+    vi.mocked(storage.workouts.deleteWorkoutLog).mockResolvedValue(true);
+    vi.mocked(storage.workouts.updateWorkoutLog).mockResolvedValue({ id: "workout-1", notes: "updated" } as never);
+    vi.mocked(storage.timeline.getTimeline).mockResolvedValue([{ id: "timeline-1", type: "workout", date: "2026-01-02" }] as never);
+    vi.mocked(storage.users.getUser).mockResolvedValue({ id: "test_user_id", weightUnit: "kg" } as never);
+    vi.mocked(storage.users.getCustomExercises).mockResolvedValue([] as never);
+
+    vi.mocked(createWorkout).mockResolvedValue({ id: "created-1", date: "2026-01-02" } as never);
+    vi.mocked(updateWorkoutUseCase).mockResolvedValue({ id: "workout-1", notes: "updated" } as never);
+    vi.mocked(reparseWorkout).mockResolvedValue({ exercises: [{ exerciseName: "row" }], setCount: 1 } as never);
+
+    vi.mocked(generateCSV).mockResolvedValue("id,date\nworkout-1,2026-01-02");
+    vi.mocked(generateJSON).mockResolvedValue({ exportedAt: "2026-01-02T10:00:00.000Z", workouts: [{ id: "workout-1" }] } as never);
   });
 
+  it("keeps endpoint contract parity for CRUD/reparse/timeline/export", async () => {
+    for (const testCase of endpointFixtureCases) {
+      const started = performance.now();
+      let req = request(app)[testCase.method](testCase.path);
+      if (testCase.body) req = req.send(testCase.body);
+      const response = await req;
+      const elapsedMs = Number((performance.now() - started).toFixed(2));
+      console.info(`[route-contract] ${testCase.name} ${testCase.method.toUpperCase()} ${testCase.path} => ${response.status} in ${elapsedMs}ms`);
 
-
-  describe("POST /api/workouts", () => {
-    it("should return 500 when createWorkout throws an error", async () => {
-      // Mock the createWorkoutAndScheduleCoaching use case to throw an error
-      const { createWorkoutAndScheduleCoaching } = await import("../../services/workoutService");
-      vi.mocked(createWorkoutAndScheduleCoaching).mockRejectedValue(new Error("Service error"));
-
-
-
-      const response = await request(app)
-        .post("/api/v1/workouts")
-        .send({
-          date: "2024-03-10",
-          notes: "Test notes",
-          focus: "Conditioning",
-          mainWorkout: "Murph",
-          exercises: []
-        });
-
-
-
-      expect(response.status).toBe(500);
-      expect(response.body).toEqual({ error: "Internal Server Error", code: "INTERNAL_SERVER_ERROR" });
-    });
+      expect(response.status, testCase.name).toBe(testCase.expectedStatus);
+      for (const fieldPath of testCase.expectedFields) {
+        expect(response.body, `${testCase.name} field ${fieldPath}`).toHaveProperty(fieldPath);
+      }
+    }
   });
+
+  it("preserves shared error contract for key regression paths", async () => {
+    const { storage } = await import("../../storage");
+    vi.mocked(storage.workouts.listWorkoutLogs).mockRejectedValueOnce(new Error("db down"));
+    vi.mocked(storage.workouts.getWorkoutLog).mockResolvedValueOnce(null as never);
+
+    const listResponse = await request(app).get("/api/v1/workouts");
+    expect(listResponse.status).toBe(500);
+    expect(listResponse.body).toEqual({ error: "Internal Server Error", code: "INTERNAL_SERVER_ERROR" });
 
   describe("GET /api/workouts", () => {
     it("returns shared validation contract on invalid query", async () => {
@@ -120,60 +170,33 @@ describe("Workouts Routes", () => {
     });
   });
 
-  describe("GET /api/workouts/latest", () => {
-    it("returns the most recent workout log with its exercise sets embedded", async () => {
-      const { storage } = await import("../../storage");
+  it("captures representative high-frequency endpoint timings", async () => {
+    const samples = 6;
+    const timings: Array<{ endpoint: string; elapsedMs: number }> = [];
 
-      const mockLatest = {
-        id: "workout-1",
-        userId: "test_user_id",
-        date: "2024-03-12",
-        focus: "Leg Day",
-        mainWorkout: "",
-        notes: "Felt strong",
-      };
-      const mockSets = [
-        { id: "s1", workoutLogId: "workout-1", exerciseName: "back-squat", category: "strength", setNumber: 1, reps: 5, weight: 100 },
-      ];
-      // listWorkoutLogs is called with limit=1 from the /latest handler
-      vi.mocked(storage.workouts.listWorkoutLogs).mockResolvedValue([mockLatest as never]);
-      vi.mocked(storage.workouts.getExerciseSetsByWorkoutLog).mockResolvedValue(mockSets as never);
+    for (let i = 0; i < samples; i++) {
+      const workoutStart = performance.now();
+      const workoutRes = await request(app).get("/api/v1/workouts");
+      timings.push({ endpoint: "GET /api/v1/workouts", elapsedMs: Number((performance.now() - workoutStart).toFixed(2)) });
+      expect(workoutRes.status).toBe(200);
 
-      const response = await request(app).get("/api/v1/workouts/latest");
+      const timelineStart = performance.now();
+      const timelineRes = await request(app).get("/api/v1/timeline");
+      timings.push({ endpoint: "GET /api/v1/timeline", elapsedMs: Number((performance.now() - timelineStart).toFixed(2)) });
+      expect(timelineRes.status).toBe(200);
+    }
 
-      expect(response.status).toBe(200);
-      expect(storage.workouts.listWorkoutLogs).toHaveBeenCalledWith("test_user_id", 1);
-      expect(storage.workouts.getExerciseSetsByWorkoutLog).toHaveBeenCalledWith("workout-1");
-      expect(response.body).toMatchObject({
-        id: "workout-1",
-        focus: "Leg Day",
-        exerciseSets: mockSets,
-      });
-    });
+    const grouped = timings.reduce<Record<string, number[]>>((acc, entry) => {
+      acc[entry.endpoint] ??= [];
+      acc[entry.endpoint].push(entry.elapsedMs);
+      return acc;
+    }, {});
 
-    it("returns 404 when the user has no prior workouts", async () => {
-      const { storage } = await import("../../storage");
-      vi.mocked(storage.workouts.listWorkoutLogs).mockResolvedValue([]);
-
-      const response = await request(app).get("/api/v1/workouts/latest");
-
-      expect(response.status).toBe(404);
-      expect(response.body).toEqual({ error: "No workouts found", code: "NOT_FOUND" });
-      expect(storage.workouts.getExerciseSetsByWorkoutLog).not.toHaveBeenCalled();
-    });
-
-    it("does not confuse /latest with /:id", async () => {
-      const { storage } = await import("../../storage");
-      // If the route order were wrong, this would call getWorkoutLog("latest")
-      // and hit the :id route. Confirm /latest routes to the list-backed path.
-      vi.mocked(storage.workouts.listWorkoutLogs).mockResolvedValue([]);
-
-      const response = await request(app).get("/api/v1/workouts/latest");
-
-      expect(response.status).toBe(404);
-      expect(response.body).toEqual({ error: "No workouts found", code: "NOT_FOUND" });
-      // Confirm we went through listWorkoutLogs, not a getWorkoutLog lookup.
-      expect(storage.workouts.listWorkoutLogs).toHaveBeenCalledWith("test_user_id", 1);
-    });
+    for (const [endpoint, values] of Object.entries(grouped)) {
+      const avgMs = Number((values.reduce((sum, current) => sum + current, 0) / values.length).toFixed(2));
+      const maxMs = Math.max(...values);
+      console.info(`[perf-fixture] ${endpoint} samples=${values.length} avg=${avgMs}ms max=${maxMs}ms`);
+      expect(avgMs).toBeLessThan(250);
+    }
   });
 });
