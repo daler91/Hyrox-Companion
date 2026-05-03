@@ -8,7 +8,6 @@ import { chatWithCoach, parseExercisesFromImage, parseExercisesFromText,streamCh
 import { reqLogger } from "../logger";
 import { aiBudgetCheck } from "../middleware/aibudget";
 import { aiConsentCheck } from "../middleware/aiConsent";
-import { protectedMutationGuards } from "../routeGuards";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody, validateQuery } from "../routeUtils";
 import { type AIContext, buildAIContext, type ChatInput } from "../services/aiContextService";
 import { applyTimelineAiSuggestion, generateTimelineAiSuggestions } from "../services/aiSuggestionService";
@@ -49,7 +48,7 @@ protectedPost(router, "/api/v1/parse-exercises", { limiter: rateLimiter("parse",
 // with the text route so total parse-family spend stays capped per user.
 // Body size is enforced by a route-scoped express.json({ limit: "10mb" })
 // mounted in server/index.ts BEFORE the global 100kb parser.
-router.post("/api/v1/parse-exercises-from-image", ...protectedMutationGuards, rateLimiter("parse", 5), aiConsentCheck, aiBudgetCheck, validateBody(parseExercisesFromImageRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof parseExercisesFromImageRequestSchema>>, res: Response) => {
+protectedPost(router, "/api/v1/parse-exercises-from-image", { limiter: rateLimiter("parse", 5), middleware: [aiConsentCheck, aiBudgetCheck, validateBody(parseExercisesFromImageRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof parseExercisesFromImageRequestSchema>>, res: Response) => {
     const { imageBase64, mimeType } = req.body;
     const userId = getUserId(req);
     const [user, userCustomExercises] = await Promise.all([
@@ -66,7 +65,7 @@ router.post("/api/v1/parse-exercises-from-image", ...protectedMutationGuards, ra
       userId,
     });
     res.json(exercises);
-  }));
+  });
 
 // validateBody(chatRequestSchema) guarantees req.body conforms, so the
 // handler can read it directly without a second safeParse pass.
@@ -131,7 +130,7 @@ export function computeSseDeadlineMs(req: ExpressRequest): number {
   return computeSseDeadline(req).deadlineMs;
 }
 
-router.post("/api/v1/chat/stream", ...protectedMutationGuards, rateLimiter("chat", 10), aiConsentCheck, aiBudgetCheck, validateBody(chatRequestSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof chatRequestSchema>>, res: Response) => {
+protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10), middleware: [aiConsentCheck, aiBudgetCheck, validateBody(chatRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof chatRequestSchema>>, res: Response) => {
     const userId = getUserId(req);
     const { input, aiContext } = await prepareChatContext(req);
 
@@ -236,7 +235,7 @@ router.post("/api/v1/chat/stream", ...protectedMutationGuards, rateLimiter("chat
       clearTimeout(deadlineTimer);
       unregister();
     }
-  }));
+  });
 
 // Cursor-paginated to cap memory/bandwidth growth as chat history accumulates.
 // Response body stays a plain ChatMessage[] for backward compatibility; the
@@ -266,13 +265,13 @@ router.get("/api/v1/chat/history", isAuthenticated, validateQuery(chatHistoryQue
     res.json(messages);
   }));
 
-router.post("/api/v1/chat/message", ...protectedMutationGuards, rateLimiter("chatMessage", 20), validateBody(insertChatMessageSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, InsertChatMessage>, res: Response) => {
+protectedPost(router, "/api/v1/chat/message", { limiter: rateLimiter("chatMessage", 20), middleware: [validateBody(insertChatMessageSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, InsertChatMessage>, res: Response) => {
     const userId = getUserId(req);
     const { role, content } = req.body;
 
     const message = await storage.users.saveChatMessage({ userId, role, content });
     res.json(message);
-  }));
+  });
 
 protectedDelete(router, "/api/v1/chat/history", { limiter: rateLimiter("chatHistoryDelete", 5) }, async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
@@ -280,7 +279,7 @@ protectedDelete(router, "/api/v1/chat/history", { limiter: rateLimiter("chatHist
     res.json({ success: true });
   });
 
-router.post("/api/v1/timeline/ai-suggestions", ...protectedMutationGuards, rateLimiter("suggestions", 3), aiConsentCheck, aiBudgetCheck, asyncHandler(async (req: ExpressRequest, res: Response) => {
+protectedPost(router, "/api/v1/timeline/ai-suggestions", { limiter: rateLimiter("suggestions", 3), middleware: [aiConsentCheck, aiBudgetCheck] }, async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const log = reqLogger(req);
     const startedAt = Date.now();
@@ -304,10 +303,10 @@ router.post("/api/v1/timeline/ai-suggestions", ...protectedMutationGuards, rateL
       );
       throw err;
     }
-  }));
+  });
 
 
-router.get("/api/v1/timeline/ai-suggestions/debug/:workoutId", ...protectedMutationGuards, asyncHandler(async (req: ExpressRequest<{workoutId: string}>, res: Response) => {
+router.get("/api/v1/timeline/ai-suggestions/debug/:workoutId", isAuthenticated, asyncHandler(async (req: ExpressRequest<{workoutId: string}>, res: Response) => {
     const userId = getUserId(req);
     const day = await storage.plans.getPlanDay(req.params.workoutId, userId);
     if (!day) {
@@ -326,7 +325,7 @@ router.get("/api/v1/timeline/ai-suggestions/debug/:workoutId", ...protectedMutat
         : null,
     });
   }));
-router.post("/api/v1/timeline/ai-suggestions/apply", ...protectedMutationGuards, rateLimiter("suggestionApply", 10), aiConsentCheck, validateBody(applyTimelineSuggestionSchema), asyncHandler(async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof applyTimelineSuggestionSchema>>, res: Response) => {
+protectedPost(router, "/api/v1/timeline/ai-suggestions/apply", { limiter: rateLimiter("suggestionApply", 10), middleware: [aiConsentCheck, validateBody(applyTimelineSuggestionSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof applyTimelineSuggestionSchema>>, res: Response) => {
     const userId = getUserId(req);
     const result = await applyTimelineAiSuggestion(userId, req.body, reqLogger(req));
     if (!result) {
@@ -334,6 +333,6 @@ router.post("/api/v1/timeline/ai-suggestions/apply", ...protectedMutationGuards,
       return;
     }
     res.json(result);
-  }));
+  });
 
 export default router;
