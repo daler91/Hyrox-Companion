@@ -12,8 +12,8 @@ import {
 import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, notInArray } from "drizzle-orm";
 
 import { db } from "../db";
-import { sortAndWindowTimelineEntries } from "./timelineWindow";
 import { toDateStr } from "../types";
+import { sortAndWindowTimelineEntries } from "./timelineWindow";
 import type { WorkoutStorage } from "./workouts";
 
 function mapWorkoutLogToTimelineFields(log: WorkoutLog) {

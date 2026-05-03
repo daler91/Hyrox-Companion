@@ -87,14 +87,14 @@ export function useTimelineSurfaces(timelineData: TimelineEntry[]) {
         const liveWorkoutId = new URLSearchParams(globalThis.window.location.search).get("workout");
         if (liveWorkoutId !== null) return;
       }
-      if (openSheetEntryId !== null) closeAllSurfaces();
+      if (openSheetEntryId !== null) queueMicrotask(closeAllSurfaces);
       return;
     }
     if (openSheetEntryId === openWorkoutId) return;
     const target = timelineData.find((e) => surfaceId(e) === openWorkoutId || entryId(e) === openWorkoutId);
     if (!target) return;
     if (openSheetEntry && surfaceId(openSheetEntry) === surfaceId(target)) return;
-    openSurface(target);
+    queueMicrotask(() => openSurface(target));
   }, [openWorkoutId, openSheetEntry, openSheetEntryId, timelineData, openSurface, closeAllSurfaces]);
 
   const anySurfaceOpen = useMemo(() => Boolean(previewEntry || logEntry || reviewEntry || skippedEntry), [previewEntry, logEntry, reviewEntry, skippedEntry]);

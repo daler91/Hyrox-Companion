@@ -7,8 +7,8 @@ import type {
 } from "@shared/schema";
 
 import { typedRequest } from "./client";
-import { IMAGE_REPARSE_TIMEOUT_MS } from "./constants";
 import type { ReparseResponse } from "./constants";
+import { IMAGE_REPARSE_TIMEOUT_MS } from "./constants";
 import type { ParseFromImagePayload } from "./exercises";
 
 export interface BatchReparseResponse {
