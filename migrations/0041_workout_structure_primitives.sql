@@ -55,4 +55,5 @@ ALTER TABLE "exercise_sets" ADD CONSTRAINT "exercise_sets_block_step_fk" FOREIGN
 ALTER TABLE "exercise_sets" ADD CONSTRAINT "step_number_positive_check" CHECK (step_number IS NULL OR step_number > 0);--> statement-breakpoint
 ALTER TABLE "exercise_sets" ADD CONSTRAINT "interval_minute_non_negative_check" CHECK (interval_minute IS NULL OR interval_minute >= 0);--> statement-breakpoint
 ALTER TABLE "exercise_sets" ADD CONSTRAINT "cycle_number_positive_check" CHECK (cycle_number IS NULL OR cycle_number > 0);--> statement-breakpoint
-ALTER TABLE "exercise_sets" ADD CONSTRAINT "rep_mode_check" CHECK (rep_mode IS NULL OR rep_mode IN ('total', 'per_side'));
+ALTER TABLE "exercise_sets" ADD CONSTRAINT "rep_mode_check" CHECK (rep_mode IS NULL OR rep_mode IN ('total', 'per_side'));--> statement-breakpoint
+ALTER TABLE "exercise_sets" ADD CONSTRAINT "exercise_set_block_step_pair_check" CHECK ((block_id IS NULL) = (step_number IS NULL));

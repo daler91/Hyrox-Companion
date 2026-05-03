@@ -263,6 +263,7 @@ export const exerciseSets = pgTable("exercise_sets", {
   check("interval_minute_non_negative_check", sql`interval_minute IS NULL OR interval_minute >= 0`),
   check("cycle_number_positive_check", sql`cycle_number IS NULL OR cycle_number > 0`),
   check("rep_mode_check", sql`rep_mode IS NULL OR rep_mode IN ('total', 'per_side')`),
+  check("exercise_set_block_step_pair_check", sql`(block_id IS NULL) = (step_number IS NULL)`),
   // Exactly one owner — prescribed (planDay) xor logged (workoutLog).
   check(
     "exercise_set_single_owner_check",
