@@ -3,7 +3,7 @@ import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { clearRateLimitBuckets } from "../../routeUtils";
-import workoutsRouter from "../workouts";
+import workoutsRouter from "../workouts/index";
 import { createTestApp } from "./testUtils";
 
 vi.mock("../../clerkAuth", () => ({
