@@ -207,6 +207,30 @@ describe("Workouts Routes", () => {
     expect(updateRes.body.code).toBe("STRUCTURED_ROWS_REQUIRED");
   });
 
+  it("supports mixed payload contract: legacy-only rejected, structured-only accepted, hybrid accepted", async () => {
+    const legacyOnly = await request(app)
+      .post("/api/v1/workouts")
+      .send({ date: "2026-01-02", focus: "Conditioning", mainWorkout: "just text row" });
+    expect(legacyOnly.status).toBe(422);
+    expect(legacyOnly.body.code).toBe("STRUCTURED_ROWS_REQUIRED");
+
+    const structuredOnly = await request(app).post("/api/v1/workouts").send({
+      date: "2026-01-02",
+      focus: "Conditioning",
+      mainWorkout: "Structured row import",
+      exercises: [{ exerciseName: "rowing", category: "functional", sets: [{ setNumber: 1, distance: 500 }] }],
+    });
+    expect(structuredOnly.status).toBe(200);
+
+    const hybrid = await request(app).post("/api/v1/workouts").send({
+      date: "2026-01-02",
+      focus: "Conditioning",
+      mainWorkout: "legacy note",
+      exercises: [{ exerciseName: "rowing", category: "functional", sets: [{ setNumber: 1, distance: 750 }] }],
+    });
+    expect(hybrid.status).toBe(200);
+  });
+
   it("accepts text/photo parse when rows are persisted (write-through)", async () => {
     const { reparseWorkout, reparseWorkoutFromImage } = await import("../../services/workoutService");
     vi.mocked(reparseWorkout).mockResolvedValueOnce({ exercises: [{ exerciseName: "row" }], setCount: 2 } as never);

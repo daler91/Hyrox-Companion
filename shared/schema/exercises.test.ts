@@ -25,6 +25,13 @@ describe("normalizeExerciseName", () => {
     expect(normalizeExerciseName("tricep pushdowns")).toBe("triceps_pushdown");
     expect(normalizeExerciseName("machine chest press")).toBe("chest_press_machine");
     expect(normalizeExerciseName("tbar row")).toBe("t_bar_row");
+    expect(normalizeExerciseName("EMOM")).toBe("emom");
+    expect(normalizeExerciseName("amrap")).toBe("amrap");
+  });
+
+  it("handles punctuation-heavy labels used in mixed parser payloads", () => {
+    expect(normalizeExerciseName("Pull-up")).toBe("pull_up");
+    expect(normalizeExerciseName("Lat   Pull   Down")).toBe("lat_pulldown");
   });
 
   it("returns null for unknown names", () => {
