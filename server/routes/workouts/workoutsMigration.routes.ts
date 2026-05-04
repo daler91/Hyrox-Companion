@@ -16,7 +16,7 @@ const resolveSchema = z.object({
 export function registerWorkoutMigrationRoutes(router: Router) {
   protectedPost(router, "/api/v1/workouts/migration/backfill", {}, async (req, res) => {
     requireUserId(req);
-    const result = await runAssistedMigrationBackfill();
+    const result = await runAssistedMigrationBackfill(requireUserId(req));
     res.json(result);
   });
 

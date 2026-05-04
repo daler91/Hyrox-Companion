@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, gt, isNull, or, sql } from "drizzle-orm";
 
-import { exerciseSets, planDays, structuredExerciseBackfillReviews, workoutLogs } from "@shared/schema";
+import { exerciseSets, planDays, structuredExerciseBackfillReviews, trainingPlans, workoutLogs } from "@shared/schema";
 import { db } from "../db";
 import { parseExercisesFromText } from "../gemini";
 import { expandExercisesToPlanDaySetRows, expandExercisesToSetRows } from "./workoutService/parsing";
@@ -31,30 +31,29 @@ async function upsertReviewFlag(input: { ownerType: OwnerType; ownerId: string; 
   });
 }
 
-export async function runAssistedMigrationBackfill() {
+export async function runAssistedMigrationBackfill(userId: string) {
   const today = new Date().toISOString().slice(0, 10);
   const candidates = await db.select({
     ownerType: sql<OwnerType>`'workoutLog'`,
     ownerId: workoutLogs.id,
     userId: workoutLogs.userId,
-    date: workoutLogs.date,
     text: sql<string>`trim(coalesce(${workoutLogs.mainWorkout}, '') || '\n' || coalesce(${workoutLogs.accessory}, ''))`,
     hasSets: sql<number>`exists(select 1 from ${exerciseSets} es where es.workout_log_id = ${workoutLogs.id})::int`,
   }).from(workoutLogs)
-    .where(and(gt(workoutLogs.date, sql`${today}::date - interval '90 day'`), or(isNull(workoutLogs.mainWorkout), isNull(workoutLogs.accessory), sql`true`)))
+    .where(and(eq(workoutLogs.userId, userId), gt(workoutLogs.date, sql`${today}::date - interval '90 day'`)))
     .orderBy(desc(workoutLogs.date))
     .limit(BATCH_SIZE);
 
   const upcomingPlanCandidates = await db.select({
     ownerType: sql<OwnerType>`'planDay'`,
     ownerId: planDays.id,
-    userId: planDays.userId,
-    date: planDays.date,
+    userId: trainingPlans.userId,
     text: sql<string>`trim(coalesce(${planDays.mainWorkout}, '') || '\n' || coalesce(${planDays.accessory}, ''))`,
     hasSets: sql<number>`exists(select 1 from ${exerciseSets} es where es.plan_day_id = ${planDays.id})::int`,
   }).from(planDays)
-    .where(gt(planDays.date, today))
-    .orderBy(asc(planDays.date))
+    .innerJoin(trainingPlans, eq(trainingPlans.id, planDays.planId))
+    .where(and(eq(trainingPlans.userId, userId), gt(planDays.scheduledDate, today)))
+    .orderBy(asc(planDays.scheduledDate))
     .limit(BATCH_SIZE);
 
   const queue = [...candidates, ...upcomingPlanCandidates].filter((c) => c.hasSets === 0 && c.text.length > 0);
