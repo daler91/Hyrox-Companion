@@ -1,2 +1,2 @@
-export { WorkoutStructureEditor } from "./WorkoutStructureEditor";
 export type { WorkoutStructureConfig } from "./types";
+export { WorkoutStructureEditor } from "./WorkoutStructureEditor";

@@ -154,7 +154,11 @@ function processParsedExercises(parsed: ParsedExercise[], counterRef: MutableRef
 
   for (const ex of parsed) {
     const built = buildBlockFromParsed(ex);
-    const blockId = makeBlockId(built.blockKey, counterRef);
+    const sourceBlockId = ex.sets.find((s) => typeof s.blockId === "string" && s.blockId.length > 0)?.blockId;
+    // Keep ids unique per parsed exercise row. A single parser source block
+    // can contain multiple exercises; reusing one UI id would overwrite rows.
+    const blockKey = sourceBlockId ? `${built.blockKey}::${sourceBlockId}` : built.blockKey;
+    const blockId = makeBlockId(blockKey, counterRef);
     newBlocks.push(blockId);
     newData[blockId] = built.data;
   }
