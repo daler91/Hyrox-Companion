@@ -8,7 +8,7 @@ import {
   Sparkles,
   Trash2,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { RpeSelector } from "@/components/RpeSelector";
 import { getStatusBadge } from "@/components/timeline/timeline-workout-card/utils";
@@ -19,6 +19,7 @@ import { Separator } from "@/components/ui/separator";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { useWorkoutDetail } from "@/hooks/useWorkoutDetail";
 import { formatScheduledDate } from "@/lib/timelineEntryFormat";
+import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 
 import { AthleteNoteInput } from "./AthleteNoteInput";
@@ -61,6 +62,28 @@ export function ReviewSurface({
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  const [reviewFlag, setReviewFlag] = useState<{ status: string; reason: string | null } | null>(null);
+
+  useEffect(() => {
+    if (!workoutLogId) return;
+    let cancelled = false;
+    void fetch(`/api/v1/workouts/migration/reviews`, { credentials: "include" })
+      .then((r) => r.json() as Promise<Array<{ ownerType: string; ownerId: string; status: string; reason: string | null }>>)
+      .then((rows) => {
+        if (cancelled) return;
+        const match = rows.find((r) => r.ownerType === "workoutLog" && r.ownerId === workoutLogId);
+        setReviewFlag(match ? { status: match.status, reason: match.reason } : null);
+      })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [workoutLogId]);
+
+  const resolveReview = async (action: "accept" | "reject" | "edit") => {
+    if (!workoutLogId) return;
+    await apiRequest("POST", "/api/v1/workouts/migration/reviews/resolve", { ownerType: "workoutLog", ownerId: workoutLogId, action });
+    setReviewFlag((prev) => prev ? { ...prev, status: action === "reject" ? "needs_manual_review" : "resolved" } : prev);
+  };
 
 
   if (!entry) return null;
@@ -227,6 +250,18 @@ export function ReviewSurface({
             />
           </div>
         )}
+
+        {reviewFlag ? (
+          <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm">
+            <p className="font-medium">Migration review: {reviewFlag.status}</p>
+            {reviewFlag.reason ? <p className="text-muted-foreground">{reviewFlag.reason}</p> : null}
+            <div className="mt-2 flex gap-2">
+              <Button size="sm" variant="outline" onClick={() => void resolveReview("accept")}>Accept</Button>
+              <Button size="sm" variant="outline" onClick={() => void resolveReview("edit")}>Edited & accept</Button>
+              <Button size="sm" variant="ghost" onClick={() => void resolveReview("reject")}>Reject</Button>
+            </div>
+          </div>
+        ) : null}
 
         {entry.aiRationale ? (
           <details className="rounded-md border border-primary/30 bg-primary/5 p-3">
