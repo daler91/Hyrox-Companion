@@ -93,6 +93,24 @@ export async function listBackfillReviews(userId: string) {
     .limit(100);
 }
 
+async function canUserResolveOwner(ownerType: OwnerType, ownerId: string, userId: string): Promise<boolean> {
+  if (ownerType === "workoutLog") {
+    const row = await db.select({ id: workoutLogs.id }).from(workoutLogs)
+      .where(and(eq(workoutLogs.id, ownerId), eq(workoutLogs.userId, userId)))
+      .limit(1);
+    return row.length > 0;
+  }
+
+  const row = await db.select({ id: planDays.id }).from(planDays)
+    .innerJoin(trainingPlans, eq(trainingPlans.id, planDays.planId))
+    .where(and(eq(planDays.id, ownerId), eq(trainingPlans.userId, userId)))
+    .limit(1);
+  return row.length > 0;
+}
+
 export async function resolveBackfillReview(ownerType: OwnerType, ownerId: string, userId: string, status: "resolved" | "needs_manual_review", reason: string | null) {
+  const allowed = await canUserResolveOwner(ownerType, ownerId, userId);
+  if (!allowed) return false;
   await upsertReviewFlag({ ownerType, ownerId, userId, status, reason });
+  return true;
 }

@@ -28,7 +28,10 @@ export function registerWorkoutMigrationRoutes(router: Router): void {
   protectedPost(router, "/api/v1/workouts/migration/reviews/resolve", { limiter: rateLimiter("migrationReviewResolve", 20), middleware: [validateBody(resolveSchema)] }, async (req: Request<Record<string, never>, unknown, z.infer<typeof resolveSchema>>, res: Response) => {
     const userId = getUserId(req);
     const status = req.body.action === "reject" ? "needs_manual_review" : "resolved";
-    await resolveBackfillReview(req.body.ownerType, req.body.ownerId, userId, status, req.body.reason ?? null);
+    const updated = await resolveBackfillReview(req.body.ownerType, req.body.ownerId, userId, status, req.body.reason ?? null);
+    if (!updated) {
+      return res.status(404).json({ error: "Migration review target not found", code: "NOT_FOUND" });
+    }
     res.json({ ok: true });
   });
 }

@@ -35,6 +35,39 @@ interface ReviewSurfaceProps {
   readonly onDelete?: (entry: TimelineEntry) => void;
 }
 
+
+type MigrationReviewFlag = { status: string; reason: string | null } | null;
+
+function useMigrationReview(workoutLogId: string | null) {
+  const [reviewFlag, setReviewFlag] = useState<MigrationReviewFlag>(null);
+
+  useEffect(() => {
+    if (!workoutLogId) return;
+    let cancelled = false;
+
+    void fetch(`/api/v1/workouts/migration/reviews`, { credentials: "include" })
+      .then((r) => r.json() as Promise<Array<{ ownerType: string; ownerId: string; status: string; reason: string | null }>>)
+      .then((rows) => {
+        if (cancelled) return;
+        const match = rows.find((r) => r.ownerType === "workoutLog" && r.ownerId === workoutLogId);
+        setReviewFlag(match ? { status: match.status, reason: match.reason } : null);
+      })
+      .catch(() => undefined);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [workoutLogId]);
+
+  const resolveReview = async (action: "accept" | "reject" | "edit") => {
+    if (!workoutLogId) return;
+    await apiRequest("POST", "/api/v1/workouts/migration/reviews/resolve", { ownerType: "workoutLog", ownerId: workoutLogId, action });
+    setReviewFlag((prev) => (prev ? { ...prev, status: action === "reject" ? "needs_manual_review" : "resolved" } : prev));
+  };
+
+  return { reviewFlag, resolveReview };
+}
+
 /**
  * Sheet-native review surface for already-logged workouts. Replaces
  * WorkoutDetailDialogV2's "completed workout" path. Shows the actuals
@@ -63,27 +96,7 @@ export function ReviewSurface({
   const [editorOpen, setEditorOpen] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
-  const [reviewFlag, setReviewFlag] = useState<{ status: string; reason: string | null } | null>(null);
-
-  useEffect(() => {
-    if (!workoutLogId) return;
-    let cancelled = false;
-    void fetch(`/api/v1/workouts/migration/reviews`, { credentials: "include" })
-      .then((r) => r.json() as Promise<Array<{ ownerType: string; ownerId: string; status: string; reason: string | null }>>)
-      .then((rows) => {
-        if (cancelled) return;
-        const match = rows.find((r) => r.ownerType === "workoutLog" && r.ownerId === workoutLogId);
-        setReviewFlag(match ? { status: match.status, reason: match.reason } : null);
-      })
-      .catch(() => undefined);
-    return () => { cancelled = true; };
-  }, [workoutLogId]);
-
-  const resolveReview = async (action: "accept" | "reject" | "edit") => {
-    if (!workoutLogId) return;
-    await apiRequest("POST", "/api/v1/workouts/migration/reviews/resolve", { ownerType: "workoutLog", ownerId: workoutLogId, action });
-    setReviewFlag((prev) => prev ? { ...prev, status: action === "reject" ? "needs_manual_review" : "resolved" } : prev);
-  };
+  const { reviewFlag, resolveReview } = useMigrationReview(workoutLogId);
 
 
   if (!entry) return null;
