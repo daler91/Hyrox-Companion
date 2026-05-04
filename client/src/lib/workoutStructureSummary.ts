@@ -21,7 +21,7 @@ function getBlockKey(
   legacySegment: number,
 ): { key: string; nextLegacyLabel: string | null; nextLegacySegment: number } {
   if (set.blockId) {
-    return { key: set.blockId, nextLegacyLabel: previousLegacyLabel, nextLegacySegment: legacySegment };
+    return { key: set.blockId, nextLegacyLabel: null, nextLegacySegment: legacySegment };
   }
   const legacyLabel = getLegacyLabel(set);
   let nextLegacySegment = legacySegment;

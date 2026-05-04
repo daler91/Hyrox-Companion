@@ -32,13 +32,15 @@ function structuredSummary(sets: StructureSetLike[] | null | undefined): string 
   let previousLegacyName: string | null = null;
   for (const set of sets) {
     let key = set.blockId;
-    if (!key) {
+    if (key == null || key.length === 0) {
       const currentLegacyName = set.customLabel || set.exerciseName;
       if (previousLegacyName !== currentLegacyName) {
         legacySegment += 1;
         previousLegacyName = currentLegacyName;
       }
       key = `legacy-${legacySegment}-${currentLegacyName}`;
+    } else {
+      previousLegacyName = null;
     }
     const arr = byBlock.get(key) ?? [];
     arr.push(set);
@@ -50,7 +52,7 @@ function structuredSummary(sets: StructureSetLike[] | null | undefined): string 
     const parts = blockSets.map((s) => {
       const label = s.customLabel || s.exerciseName;
       const targets = [s.reps != null ? `${s.reps} reps` : null, s.weight != null ? `${s.weight}` : null, s.distance != null ? `${s.distance}m` : null, s.time != null ? `${s.time}min` : null].filter(Boolean).join(" · ");
-      if (!targets) return label;
+      if (targets.length === 0) return label;
       return `${label} (${targets})`;
     });
     blocks.push(parts.join(" -> "));
