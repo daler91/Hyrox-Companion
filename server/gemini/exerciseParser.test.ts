@@ -171,4 +171,27 @@ describe("parseExercisesFromText", () => {
     // Derived from "zottman curls" in the input.
     expect(result[0].customLabel!.toLowerCase()).toContain("zottman");
   });
+
+  it("salvages exercises from object-shaped payload when structureBlocks are malformed", async () => {
+    const mockResponse = {
+      text: JSON.stringify({
+        exercises: [
+          {
+            exerciseName: "back_squat",
+            category: "strength",
+            sets: [{ setNumber: 1, reps: 5, weight: 100 }],
+          },
+        ],
+        structureBlocks: [{ sectionType: "main" }], // malformed on purpose
+        warnings: ["ambiguous interval semantics"],
+      }),
+    };
+    vi.mocked(retryWithBackoff).mockResolvedValueOnce(mockResponse);
+
+    const result = await parseExercisesFromText("Back squat 1x5 at 100kg");
+
+    expect(result).toHaveLength(1);
+    expect(result[0].exerciseName).toBe("back_squat");
+    expect(result[0].missingFields).toContain("ambiguous interval semantics");
+  });
 });
