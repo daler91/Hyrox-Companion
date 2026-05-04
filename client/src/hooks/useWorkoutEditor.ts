@@ -98,17 +98,22 @@ function formatExerciseSummary(ex: StructuredExercise, weightUnit: string, distL
 
 export function generateSummary(exercises: StructuredExercise[], weightUnit: string, distanceUnit: string): string {
   const distLabel = distanceUnit === "km" ? "m" : "ft";
-  // ⚡ Bolt Performance Optimization:
-  // Replaced multiple array method allocations (O(N) .map and .every) with single traversal for...of loops.
-  // This reduces memory pressure and function allocations during frequent renders.
-  const summaries: string[] = [];
-
-  for (const ex of exercises) {
-    summaries.push(formatExerciseSummary(ex, weightUnit, distLabel));
+  const hasStructuredHints = exercises.some((ex) => (ex.sets || []).some((set) => Boolean(set.notes)));
+  if (!hasStructuredHints) {
+    const summaries: string[] = [];
+    for (const ex of exercises) summaries.push(formatExerciseSummary(ex, weightUnit, distLabel));
+    return summaries.join("; ");
   }
 
-  return summaries.join("; ");
+  const blocks: string[] = [];
+  for (const ex of exercises) {
+    const headline = formatExerciseSummary(ex, weightUnit, distLabel);
+    const steps = (ex.sets || []).map((set, idx) => `S${idx + 1}${set.notes ? `(cue: ${set.notes})` : ""}`);
+    blocks.push(steps.length > 0 ? `${headline} [${steps.join(" -> ")}]` : headline);
+  }
+  return blocks.join("; ");
 }
+
 
 
 interface ParsedBlockBuild {

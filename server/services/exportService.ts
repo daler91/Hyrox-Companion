@@ -11,6 +11,40 @@ interface TimelineEntry {
   notes?: string | null;
   duration?: number | null;
   rpe?: number | null;
+  exerciseSets?: StructureSetLike[] | null;
+}
+
+interface StructureSetLike {
+  exerciseName: string;
+  customLabel?: string | null;
+  stepNumber?: number | null;
+  blockId?: string | null;
+  reps?: number | null;
+  weight?: number | null;
+  distance?: number | null;
+  time?: number | null;
+}
+
+function structuredSummary(sets: StructureSetLike[] | null | undefined): string | null {
+  if (!sets || sets.length === 0) return null;
+  const byBlock = new Map<string, StructureSetLike[]>();
+  for (const set of sets) {
+    const key = set.blockId ?? `legacy-${set.exerciseName}`;
+    const arr = byBlock.get(key) ?? [];
+    arr.push(set);
+    byBlock.set(key, arr);
+  }
+  const blocks: string[] = [];
+  for (const blockSets of byBlock.values()) {
+    blockSets.sort((a,b)=>(a.stepNumber ?? 0)-(b.stepNumber ?? 0));
+    const parts = blockSets.map((s) => {
+      const label = s.customLabel || s.exerciseName;
+      const targets = [s.reps != null ? `${s.reps} reps` : null, s.weight != null ? `${s.weight}` : null, s.distance != null ? `${s.distance}m` : null, s.time != null ? `${s.time}min` : null].filter(Boolean).join(" · ");
+      return `${label}${targets ? ` (${targets})` : ""}`;
+    });
+    blocks.push(parts.join(" -> "));
+  }
+  return blocks.join(" | ");
 }
 
 interface ExerciseSetRow {
@@ -88,7 +122,7 @@ function generateTimelineCsvRows(timeline: TimelineEntry[]): string[] {
       escapeCsv(entry.type),
       escapeCsv(entry.status),
       escapeCsv(entry.focus),
-      escapeCsv(entry.mainWorkout),
+      escapeCsv(structuredSummary(entry.exerciseSets) ?? entry.mainWorkout),
       escapeCsv(entry.accessory),
       escapeCsv(entry.notes),
       entry.duration == null ? "" : String(entry.duration),

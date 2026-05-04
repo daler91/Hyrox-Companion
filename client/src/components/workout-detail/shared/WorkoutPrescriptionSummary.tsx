@@ -4,6 +4,7 @@ import { Sparkles } from "lucide-react";
 import { ExerciseChips } from "@/components/timeline/timeline-workout-card/ExerciseChips";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { groupExerciseSets } from "@/lib/exerciseUtils";
+import { serializeWorkoutStructure } from "@/lib/workoutStructureSummary";
 
 interface WorkoutPrescriptionSummaryProps {
   readonly entry: TimelineEntry;
@@ -33,6 +34,7 @@ export function WorkoutPrescriptionSummary({
     : [];
 
   const hasStructuredPrescription = groupedExercises.length > 0;
+  const structuredText = serializeWorkoutStructure(entry.exerciseSets);
   const hasMainWorkout = !hasStructuredPrescription && Boolean(entry.mainWorkout);
 
   return (
@@ -49,6 +51,12 @@ export function WorkoutPrescriptionSummary({
             weightLabel={weightLabel}
             distanceUnit={distanceUnit}
           />
+          {structuredText ? (
+            <details className="mt-2">
+              <summary className="cursor-pointer text-xs text-muted-foreground">Full prescription</summary>
+              <p className="mt-1 text-sm text-muted-foreground">{structuredText}</p>
+            </details>
+          ) : null}
         </div>
       ) : null}
 
