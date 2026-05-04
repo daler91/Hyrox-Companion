@@ -217,17 +217,18 @@ describe("Workouts Routes", () => {
     const structuredOnly = await request(app).post("/api/v1/workouts").send({
       date: "2026-01-02",
       focus: "Conditioning",
-      exercises: [{ exerciseName: "rowing", category: "conditioning", sets: [{ setNumber: 1, distance: 500 }] }],
+      mainWorkout: "Structured row import",
+      exercises: [{ exerciseName: "rowing", category: "functional", sets: [{ setNumber: 1, distance: 500 }] }],
     });
-    expect([200, 400]).toContain(structuredOnly.status);
+    expect(structuredOnly.status).toBe(200);
 
     const hybrid = await request(app).post("/api/v1/workouts").send({
       date: "2026-01-02",
       focus: "Conditioning",
       mainWorkout: "legacy note",
-      exercises: [{ exerciseName: "rowing", category: "conditioning", sets: [{ setNumber: 1, distance: 750 }] }],
+      exercises: [{ exerciseName: "rowing", category: "functional", sets: [{ setNumber: 1, distance: 750 }] }],
     });
-    expect([200, 400]).toContain(hybrid.status);
+    expect(hybrid.status).toBe(200);
   });
 
   it("accepts text/photo parse when rows are persisted (write-through)", async () => {
