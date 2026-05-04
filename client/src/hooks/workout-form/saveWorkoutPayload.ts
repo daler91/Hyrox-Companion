@@ -59,7 +59,7 @@ export function buildWorkoutSavePayload({
   planDayId,
   exerciseBlocks,
   exerciseData,
-  structureBlocks,
+  structureBlocks = [],
   weightLabel,
   distanceUnit,
 }: BuildWorkoutSavePayloadInput): SavePayloadResult {
