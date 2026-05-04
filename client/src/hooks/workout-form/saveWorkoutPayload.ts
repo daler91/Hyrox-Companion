@@ -134,7 +134,7 @@ export function buildWorkoutSavePayload({
       rpe: rpe || null,
       ...(planDayId ? { planDayId } : {}),
       exercises: exercises.map(exerciseToPayload) as ParsedExercise[],
-      structureBlocks,
+      ...(structureBlocks.length > 0 ? { structureBlocks } : {}),
     },
   };
 }
