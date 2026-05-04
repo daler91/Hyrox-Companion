@@ -210,4 +210,43 @@ describe("parseExercisesFromText", () => {
     expect(result[0].exerciseName).toBe("back_squat");
     expect(result[0].missingFields).toContain("ambiguous interval semantics");
   });
+
+  it("accepts parser contract payloads for EMOM/AMRAP with warmup-cooldown and scaling warnings", async () => {
+    const mockResponse = {
+      text: JSON.stringify({
+        exercises: [
+          { exerciseName: "emom", category: "conditioning", sets: [{ setNumber: 1, time: 12 }] },
+          { exerciseName: "amrap", category: "conditioning", sets: [{ setNumber: 1, time: 10 }] },
+        ],
+        structureBlocks: [
+          {
+            sectionType: "warmup",
+            formatType: "rounds",
+            rounds: 2,
+            steps: [{ stepNumber: 1, exerciseName: "rowing", category: "conditioning" }],
+          },
+          {
+            sectionType: "main",
+            formatType: "emom",
+            durationSeconds: 720,
+            steps: [{ stepNumber: 1, exerciseName: "emom", category: "conditioning", stepRole: "work" }],
+          },
+          {
+            sectionType: "cooldown",
+            formatType: "amrap",
+            durationSeconds: 600,
+            steps: [{ stepNumber: 1, exerciseName: "amrap", category: "conditioning" }],
+          },
+        ],
+        warnings: ["scaling branch: reduce load 20% if RPE > 8"],
+      }),
+    };
+    vi.mocked(retryWithBackoff).mockResolvedValueOnce(mockResponse);
+
+    const result = await parseExercisesFromText("Warmup rounds then EMOM, finish with cooldown AMRAP");
+    expect(result).toHaveLength(2);
+    expect(result[0].exerciseName).toBe("emom");
+    expect(result[1].exerciseName).toBe("amrap");
+    expect(result[0].missingFields).toContain("scaling branch: reduce load 20% if RPE > 8");
+  });
 });
