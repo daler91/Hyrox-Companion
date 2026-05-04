@@ -19,6 +19,31 @@ export const parsedExerciseSchema = z.object({
   sets: z.array(exerciseSetSchema).min(1),
 });
 
+const parserResponseSchema = z.object({
+  exercises: z.array(parsedExerciseSchema).optional().default([]),
+  structureBlocks: z.array(z.object({
+    sectionType: z.string().min(1),
+    formatType: z.string().min(1),
+    durationSeconds: z.number().optional().nullable(),
+    rounds: z.number().optional().nullable(),
+    workSeconds: z.number().optional().nullable(),
+    restSeconds: z.number().optional().nullable(),
+    steps: z.array(z.object({
+      stepNumber: z.number().int().min(1),
+      exerciseName: z.string().min(1),
+      category: z.string().min(1),
+      customLabel: z.string().optional().nullable(),
+      stepRole: z.string().optional().nullable(),
+      targets: z.record(z.string(), z.unknown()).optional().nullable(),
+    })).min(1),
+  })).optional().default([]),
+  warnings: z.array(z.string()).optional().default([]),
+  confidence: z.object({
+    exerciseMapping: z.number().min(0).max(100).optional().nullable(),
+    structureQuality: z.number().min(0).max(100).optional().nullable(),
+  }).optional().nullable(),
+});
+
 /**
  * Synthesize a human-readable customLabel from the user's original text when
  * the AI returned "custom" without one. Strategy: grab the first 1-4 words
@@ -283,13 +308,29 @@ export async function parseExercisesFromText(
     const responseText = await callGeminiParse(text, weightUnit, customExerciseNames, userId);
     const raw = parseRawResponse(responseText);
     const rawArray = Array.isArray(raw) ? raw : [];
-    const validated = validateRows(rawArray);
+    const normalized = Array.isArray(raw)
+      ? { exercises: raw, structureBlocks: [], warnings: [], confidence: null }
+      : parserResponseSchema.parse(raw);
+    const validated = validateRows(normalized.exercises ?? rawArray);
 
     if (validated.length === 0 && rawArray.length > 0) {
       throw new AppError(ErrorCode.AI_ERROR, "AI returned malformed exercise data", 502);
     }
 
-    return validated.map((ex) => mapValidatedExercise(ex, text));
+    const mapped = validated.map((ex) => mapValidatedExercise(ex, text));
+    const structureWarnings = (normalized.warnings ?? []).filter((w) => typeof w === "string" && w.trim().length > 0);
+    if (normalized.structureBlocks.length === 0) {
+      structureWarnings.push("Structure unresolved: section/format/step sequence not fully identified.");
+    }
+    const structureConfidence = normalized.confidence?.structureQuality;
+    return mapped.map((row, idx) => {
+      if (idx > 0) return row;
+      const addWarnings: string[] = [...(row.missingFields ?? []), ...structureWarnings];
+      if (typeof structureConfidence === "number" && structureConfidence < 70) {
+        addWarnings.push(`Low structure confidence (${Math.round(structureConfidence)}/100).`);
+      }
+      return { ...row, missingFields: addWarnings.length ? addWarnings : row.missingFields };
+    });
   } catch (error) {
     if (error instanceof AppError) {
       throw error;
@@ -327,7 +368,10 @@ export async function parseExercisesFromImage(
     );
     const raw = parseRawResponse(responseText);
     const rawArray = Array.isArray(raw) ? raw : [];
-    const validated = validateRows(rawArray);
+    const normalized = Array.isArray(raw)
+      ? { exercises: raw, structureBlocks: [], warnings: [], confidence: null }
+      : parserResponseSchema.parse(raw);
+    const validated = validateRows(normalized.exercises ?? rawArray);
 
     if (validated.length === 0 && rawArray.length > 0) {
       throw new AppError(ErrorCode.AI_ERROR, "AI returned malformed exercise data", 502);
@@ -337,7 +381,20 @@ export async function parseExercisesFromImage(
     // "custom" row without a label. For image input there's no source text,
     // so the synthesizer falls back to "Unknown exercise" — the correct
     // degraded behavior and what mapValidatedExercise already handles.
-    return validated.map((ex) => mapValidatedExercise(ex, ""));
+    const structureWarnings = (normalized.warnings ?? []).filter((w) => typeof w === "string" && w.trim().length > 0);
+    if (normalized.structureBlocks.length === 0) {
+      structureWarnings.push("Structure unresolved: section/format/step sequence not fully identified.");
+    }
+    const structureConfidence = normalized.confidence?.structureQuality;
+    return validated.map((ex, idx) => {
+      const mapped = mapValidatedExercise(ex, "");
+      if (idx > 0) return mapped;
+      const addWarnings: string[] = [...(mapped.missingFields ?? []), ...structureWarnings];
+      if (typeof structureConfidence === "number" && structureConfidence < 70) {
+        addWarnings.push(`Low structure confidence (${Math.round(structureConfidence)}/100).`);
+      }
+      return { ...mapped, missingFields: addWarnings.length ? addWarnings : mapped.missingFields };
+    });
   } catch (error) {
     if (error instanceof AppError) {
       throw error;

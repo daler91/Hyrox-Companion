@@ -157,16 +157,31 @@ Examples of correct handling:
 - "4x8 turkish get-ups at 20kg" → {"exerciseName": "custom", "customLabel": "Turkish Get-Up", ...}
 - "some random movement" (unclear) → omit entirely rather than emit a blank row.
 
-Return ONLY a valid JSON array with no markdown formatting. Each element should be:
+Return ONLY valid JSON (no markdown) using this contract:
 {
-  "exerciseName": "<key from list above or 'custom'>",
-  "category": "<category>",
-  "customLabel": "<only if exerciseName is 'custom', the actual exercise name>",
-  "confidence": <integer 0-100 representing how confident you are in the exercise mapping>,
-  "missingFields": ["<field names the user did NOT mention that are important for this exercise type>"],
-  "sets": [
-    { "setNumber": 1, "reps": <number or null>, "weight": <number or null>, "distance": <number or null>, "time": <number or null> }
-  ]
+  "exercises": [<legacy exercise rows, same fields as before>],
+  "structureBlocks": [
+    {
+      "sectionType": "<warmup|main|accessory|cooldown|custom>",
+      "formatType": "<straight_sets|for_time|amrap|emom|interval|chipper|other>",
+      "durationSeconds": <number|null>,
+      "rounds": <number|null>,
+      "workSeconds": <number|null>,
+      "restSeconds": <number|null>,
+      "steps": [
+        {
+          "stepNumber": <1-based integer>,
+          "exerciseName": "<key or custom>",
+          "category": "<category>",
+          "customLabel": "<required when custom>",
+          "stepRole": "<work|rest|transition|other>",
+          "targets": { "intensity": "<text>", "standards": "<text>" }
+        }
+      ]
+    }
+  ],
+  "warnings": ["<explicit unresolved semantic warnings for any ambiguity>"],
+  "confidence": { "exerciseMapping": <0-100>, "structureQuality": <0-100> }
 }
 
 CONFIDENCE SCORING:
@@ -175,6 +190,11 @@ CONFIDENCE SCORING:
 - 60-79: Reasonable guess but could be wrong (e.g. "presses" -> bench_press vs overhead_press)
 - 40-59: Weak match, mapped to custom (e.g. unfamiliar abbreviation)
 - 0-39: Very uncertain, likely custom exercise with unclear details
+- Structure quality confidence rubric:
+  - 90-100: clear section assignment + format + ordered work/rest steps, minimal ambiguity
+  - 70-89: mostly clear structure, minor inferred format/step semantics
+  - 40-69: partial structure detected, unresolved sequencing/format details
+  - 0-39: structure largely ambiguous; keep unresolved details in warnings
 
 IMPORTANT RULES:
 1. For "4x8 back squat at 70kg", create 4 set objects each with reps=8, weight=70

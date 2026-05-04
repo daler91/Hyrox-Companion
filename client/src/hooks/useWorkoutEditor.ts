@@ -151,10 +151,18 @@ function buildBlockFromParsed(ex: ParsedExercise): ParsedBlockBuild {
 function processParsedExercises(parsed: ParsedExercise[], counterRef: MutableRefObject<number>) {
   const newBlocks: string[] = [];
   const newData: Record<string, StructuredExercise> = {};
+  const parsedStructureBlockMap = new Map<string, string>();
 
   for (const ex of parsed) {
     const built = buildBlockFromParsed(ex);
-    const blockId = makeBlockId(built.blockKey, counterRef);
+    const sourceBlockId = ex.sets.find((s) => typeof s.blockId === "string" && s.blockId.length > 0)?.blockId;
+    const blockId = sourceBlockId
+      ? (parsedStructureBlockMap.get(sourceBlockId) ?? (() => {
+        const next = makeBlockId(built.blockKey, counterRef);
+        parsedStructureBlockMap.set(sourceBlockId, next);
+        return next;
+      })())
+      : makeBlockId(built.blockKey, counterRef);
     newBlocks.push(blockId);
     newData[blockId] = built.data;
   }
