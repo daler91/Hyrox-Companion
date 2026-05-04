@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, gt, isNull, or, sql } from "drizzle-orm";
 
-import { exerciseSets, planDays, structuredExerciseBackfillReviews, trainingPlans, workoutLogs } from "@shared/schema";
+import { exerciseSets, planDays, structuredExerciseBackfillReviews, trainingPlans, users, workoutLogs } from "@shared/schema";
 import { db } from "../db";
 import { logger } from "../logger";
 import { parseExercisesFromText } from "../gemini";
@@ -34,6 +34,8 @@ async function upsertReviewFlag(input: { ownerType: OwnerType; ownerId: string; 
 
 export async function runAssistedMigrationBackfill(userId: string) {
   const today = new Date().toISOString().slice(0, 10);
+  const user = await db.select({ weightUnit: users.weightUnit }).from(users).where(eq(users.id, userId)).limit(1);
+  const userWeightUnit = user[0]?.weightUnit === "lbs" ? "lbs" : "kg";
   const candidates = await db.select({
     ownerType: sql<OwnerType>`'workoutLog'`,
     ownerId: workoutLogs.id,
@@ -62,7 +64,7 @@ export async function runAssistedMigrationBackfill(userId: string) {
   let processed = 0;
   for (const item of queue) {
     try {
-      const parsed = await parseExercisesFromText(item.text, "kg", undefined, item.userId ?? undefined);
+      const parsed = await parseExercisesFromText(item.text, userWeightUnit, undefined, item.userId ?? undefined);
       if (!parsed.length) {
         await upsertReviewFlag({ ownerType: item.ownerType, ownerId: item.ownerId, userId: item.userId, status: "needs_manual_review", reason: "parse_returned_no_rows" });
         continue;
