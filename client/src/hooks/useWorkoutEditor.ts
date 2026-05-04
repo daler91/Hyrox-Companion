@@ -108,7 +108,11 @@ export function generateSummary(exercises: StructuredExercise[], weightUnit: str
   const blocks: string[] = [];
   for (const ex of exercises) {
     const headline = formatExerciseSummary(ex, weightUnit, distLabel);
-    const steps = (ex.sets || []).map((set, idx) => `S${idx + 1}${set.notes ? `(cue: ${set.notes})` : ""}`);
+    const steps = (ex.sets || []).map((set, idx) => {
+      const stepLabel = `S${idx + 1}`;
+      if (!set.notes) return stepLabel;
+      return `${stepLabel}(cue: ${set.notes})`;
+    });
     blocks.push(steps.length > 0 ? `${headline} [${steps.join(" -> ")}]` : headline);
   }
   return blocks.join("; ");

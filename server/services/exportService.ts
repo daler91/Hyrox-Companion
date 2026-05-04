@@ -26,7 +26,7 @@ interface StructureSetLike {
 }
 
 function structuredSummary(sets: StructureSetLike[] | null | undefined): string | null {
-  if (!sets || sets.length === 0) return null;
+  if (sets == null || sets.length === 0) return null;
   const byBlock = new Map<string, StructureSetLike[]>();
   for (const set of sets) {
     const key = set.blockId ?? `legacy-${set.exerciseName}`;
@@ -40,7 +40,8 @@ function structuredSummary(sets: StructureSetLike[] | null | undefined): string 
     const parts = blockSets.map((s) => {
       const label = s.customLabel || s.exerciseName;
       const targets = [s.reps != null ? `${s.reps} reps` : null, s.weight != null ? `${s.weight}` : null, s.distance != null ? `${s.distance}m` : null, s.time != null ? `${s.time}min` : null].filter(Boolean).join(" · ");
-      return `${label}${targets ? ` (${targets})` : ""}`;
+      if (!targets) return label;
+      return `${label} (${targets})`;
     });
     blocks.push(parts.join(" -> "));
   }

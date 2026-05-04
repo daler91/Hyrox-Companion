@@ -11,12 +11,36 @@ function formatTargets(set: ExerciseSet): string {
   return parts.join(" · ");
 }
 
+function getBlockKey(set: ExerciseSet): string {
+  if (set.blockId) return set.blockId;
+  return `legacy-${set.exerciseName}`;
+}
+
+function appendRestAndCue(first: ExerciseSet, text: string): string {
+  let result = text;
+  if (typeof first.intensity === "object" && first.intensity && "restSeconds" in first.intensity) {
+    result += ` · rest ${String((first.intensity as Record<string, unknown>).restSeconds)}s`;
+  }
+  if (first.notes) {
+    result += ` · cue: ${first.notes}`;
+  }
+  return result;
+}
+
+function formatStepText(stepNo: number, first: ExerciseSet): string {
+  const label = getExerciseLabel(first.exerciseName, first.customLabel);
+  const target = formatTargets(first);
+  let stepText = `S${stepNo} ${label}`;
+  if (target) stepText += ` (${target})`;
+  return appendRestAndCue(first, stepText);
+}
+
 export function serializeWorkoutStructure(exerciseSets: ExerciseSet[] | null | undefined): string | null {
-  if (!exerciseSets || exerciseSets.length === 0) return null;
+  if (exerciseSets == null || exerciseSets.length === 0) return null;
 
   const byBlock = new Map<string, ExerciseSet[]>();
   for (const set of exerciseSets) {
-    const key = set.blockId ?? `legacy-${set.exerciseName}`;
+    const key = getBlockKey(set);
     const list = byBlock.get(key) ?? [];
     list.push(set);
     byBlock.set(key, list);
@@ -36,13 +60,7 @@ export function serializeWorkoutStructure(exerciseSets: ExerciseSet[] | null | u
     const stepTexts: string[] = [];
     for (const [stepNo, stepSets] of byStep.entries()) {
       const first = stepSets[0];
-      const label = getExerciseLabel(first.exerciseName, first.customLabel);
-      const target = formatTargets(first);
-      const rest = typeof first.intensity === "object" && first.intensity && "restSeconds" in first.intensity
-        ? ` · rest ${String((first.intensity as Record<string, unknown>).restSeconds)}s`
-        : "";
-      const cues = first.notes ? ` · cue: ${first.notes}` : "";
-      stepTexts.push(`S${stepNo} ${label}${target ? ` (${target})` : ""}${rest}${cues}`);
+      stepTexts.push(formatStepText(stepNo, first));
     }
     blocks.push(stepTexts.join(" → "));
   }
