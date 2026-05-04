@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 import { workoutStructureFeatureFlags } from "./featureFlags";
@@ -33,6 +34,16 @@ export function WorkoutStructureEditor({ value, onChange }: Props) {
     const [item] = steps.splice(index, 1);
     steps.splice(destination, 0, item);
     update("steps", steps);
+  };
+  const addWorkStep = () => update("steps", [...value.steps, { id: crypto.randomUUID(), type: "work" }]);
+  const enableEmomBlock = () => {
+    onChange({
+      ...value,
+      blockType: "emom",
+      emomDurationMinutes: value.emomDurationMinutes ?? 10,
+      emomAlternating: value.emomAlternating ?? false,
+      steps: value.steps.length > 0 ? value.steps : [{ id: crypto.randomUUID(), type: "work" }],
+    });
   };
 
   const emomDuration = value.emomDurationMinutes ?? 0;
@@ -134,8 +145,15 @@ export function WorkoutStructureEditor({ value, onChange }: Props) {
           </div>
         ))}
         <div className="flex gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={() => update("steps", [...value.steps, { id: crypto.randomUUID(), type: "work" }])}>+ Add Block</Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => update("blockType", "emom")}>EMOM</Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" variant="outline" size="sm">+ Add Block</Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              <DropdownMenuItem onClick={addWorkStep}>Work step</DropdownMenuItem>
+              <DropdownMenuItem onClick={enableEmomBlock}>EMOM</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
