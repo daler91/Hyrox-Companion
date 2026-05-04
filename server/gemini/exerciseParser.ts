@@ -43,19 +43,25 @@ const parserResponseSchema = z.object({
     structureQuality: z.number().min(0).max(100).optional().nullable(),
   }).optional().nullable(),
 });
+const structureBlocksSchema = parserResponseSchema.shape.structureBlocks;
 
-type NormalizedParserPayload = z.infer<typeof parserResponseSchema>;
+type NormalizedParserPayload = {
+  exercises: unknown[];
+  structureBlocks: z.infer<typeof parserResponseSchema.shape.structureBlocks>;
+  warnings: z.infer<typeof parserResponseSchema.shape.warnings>;
+  confidence: z.infer<typeof parserResponseSchema.shape.confidence>;
+};
 
 function normalizeParserPayload(raw: unknown): NormalizedParserPayload {
   if (Array.isArray(raw)) {
-    return { exercises: raw, structureBlocks: [], warnings: [], confidence: null };
+    return { exercises: raw as unknown[], structureBlocks: [], warnings: [], confidence: null };
   }
   if (!raw || typeof raw !== "object") {
     return { exercises: [], structureBlocks: [], warnings: [], confidence: null };
   }
   const shape = raw as Record<string, unknown>;
-  const exercises = Array.isArray(shape.exercises) ? shape.exercises : [];
-  const structureBlocks = z.array(parserResponseSchema.shape.structureBlocks.unwrap().element).safeParse(shape.structureBlocks);
+  const exercises: unknown[] = Array.isArray(shape.exercises) ? (shape.exercises as unknown[]) : [];
+  const structureBlocks = structureBlocksSchema.safeParse(shape.structureBlocks);
   const warnings = z.array(z.string()).safeParse(shape.warnings);
   const confidence = parserResponseSchema.shape.confidence.safeParse(shape.confidence);
   return {

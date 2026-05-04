@@ -11,7 +11,7 @@ import { getExerciseMissingFields } from "@/lib/exerciseWarnings";
 
 import type { FieldConfig, FieldKey } from "./exercise-input";
 import { ExerciseHeader, ExerciseWarnings, MultiSetTable, SingleSetFields } from "./exercise-input";
-import { WorkoutStructureEditor, type WorkoutStructureConfig } from "./workout-structure";
+import { type WorkoutStructureConfig,WorkoutStructureEditor } from "./workout-structure";
 
 export interface SetData {
   setNumber: number;
