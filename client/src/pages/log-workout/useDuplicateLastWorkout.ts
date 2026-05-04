@@ -53,7 +53,9 @@ export function useDuplicateLastWorkout({
       if (hasStructuredExercises || hasStructureBlocks) {
         const { names, data } = exerciseSetsToStructured(latest.exerciseSets);
         resetEditor(names, data, false, structureBlocks);
-        setFreeText("");
+        // Preserve text when structure-only records have no row sets yet;
+        // otherwise duplicate can land in an empty, unsaveable state.
+        setFreeText(hasStructuredExercises ? "" : (latest.mainWorkout ?? ""));
       } else {
         // Older entries / imports / pure free-text logs fall back to the
         // raw main-workout text in the text-mode editor.

@@ -72,6 +72,7 @@ export function useWorkoutForm({
     form,
     exerciseBlocks,
     exerciseData,
+    structureBlocks,
     weightLabel,
     distanceUnit,
     toast,
