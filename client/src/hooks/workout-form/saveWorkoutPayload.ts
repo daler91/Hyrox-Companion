@@ -1,4 +1,4 @@
-import type { ParsedExercise } from "@shared/schema";
+import { lintWorkoutStructure, type ParsedExercise, type StructureLintIssue } from "@shared/schema";
 
 import type { StructuredExercise } from "@/components/ExerciseInput";
 import { exerciseToPayload, generateSummary } from "@/hooks/useWorkoutEditor";
@@ -24,6 +24,8 @@ type SavePayloadResult =
       readonly ok: true;
       readonly payload: SaveWorkoutInput;
       readonly warnings: string[];
+      readonly lintIssues: StructureLintIssue[];
+      readonly structureCompletenessScore: number;
     }
   | {
       readonly ok: false;
@@ -72,6 +74,8 @@ export function buildWorkoutSavePayload({
     return {
       ok: true,
       warnings: [],
+      lintIssues: [],
+      structureCompletenessScore: 100,
       payload: {
         title: effectiveTitle,
         date,
@@ -92,7 +96,24 @@ export function buildWorkoutSavePayload({
     };
   }
 
-  const warnings = [...new Set(exercises.flatMap((exercise) => getMissingFieldWarnings(exercise)))];
+  const missingFieldWarnings = [...new Set(exercises.flatMap((exercise) => getMissingFieldWarnings(exercise)))];
+  const lint = lintWorkoutStructure(undefined, exercises.map(exerciseToPayload) as ParsedExercise[]);
+  const lintIssues: StructureLintIssue[] = [
+    ...lint.warnings,
+    ...missingFieldWarnings.map((message) => ({
+      severity: "warning" as const,
+      code: "MISSING_FIELD",
+      message,
+      fixGuidance: "Fill the missing critical field for clearer tracking.",
+    })),
+  ];
+  const warnings = lintIssues.map((issue) => issue.message);
+  if (lint.schemaErrors.length > 0) {
+    return {
+      ok: false,
+      description: lint.schemaErrors[0]?.message ?? "Structured workout has validation errors.",
+    };
+  }
   const mainWorkout = freeText.trim()
     ? freeText
     : generateSummary(exercises, weightLabel, distanceUnit);
@@ -100,6 +121,8 @@ export function buildWorkoutSavePayload({
   return {
     ok: true,
     warnings,
+    lintIssues,
+    structureCompletenessScore: lint.structureCompletenessScore,
     payload: {
       title: effectiveTitle,
       date,

@@ -1,4 +1,4 @@
-import type { exercisesPayloadSchema, InsertWorkoutLog, insertWorkoutLogSchema, ParsedExercise, StructureBlockInput, UpdateWorkoutLog, updateWorkoutLogSchema } from "@shared/schema";
+import { type exercisesPayloadSchema, type InsertWorkoutLog, type insertWorkoutLogSchema, lintWorkoutStructure, type ParsedExercise, type StructureBlockInput, type UpdateWorkoutLog, type updateWorkoutLogSchema } from "@shared/schema";
 import type { z } from "zod";
 
 import { env } from "../env";
@@ -33,6 +33,12 @@ export async function createWorkout(input: {
       }
     }
   }
+
+  const createLint = lintWorkoutStructure(structureBlocks, structured);
+  if (createLint.schemaErrors.length > 0) {
+    throw new AppError(ErrorCode.VALIDATION_ERROR, createLint.schemaErrors[0]?.message ?? "Structured workout has schema errors.", 400);
+  }
+
   return createWorkoutAndScheduleCoaching(workoutData as InsertWorkoutLog, structured, input.userId, structureBlocks);
 }
 
@@ -59,6 +65,12 @@ export async function updateWorkoutUseCase(input: {
         throw new AppError(ErrorCode.VALIDATION_ERROR, "Text/voice/photo workout updates must produce structured exercise sets.", 400);
       }
     }
+  }
+
+
+  const updateLint = lintWorkoutStructure(structureBlocks, structured);
+  if (updateLint.schemaErrors.length > 0) {
+    throw new AppError(ErrorCode.VALIDATION_ERROR, updateLint.schemaErrors[0]?.message ?? "Structured workout has schema errors.", 400);
   }
 
   return updateWorkout(input.workoutId, updateData as UpdateWorkoutLog, structured, input.userId, structureBlocks);
