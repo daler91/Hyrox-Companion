@@ -162,6 +162,7 @@ export function LogSheet({
                     isSaving: planSets.isSaving,
                     lastSavedAt: planSets.lastSavedAt,
                   }}
+                  onOpenConversionHelper={() => planSets.reparseFreeText.mutate(undefined)}
                   defaultExpanded
                 />
               </div>

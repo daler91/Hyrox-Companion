@@ -77,6 +77,7 @@ interface ExerciseTableProps {
   readonly defaultExpanded?: boolean;
   readonly readableSummary?: boolean;
   readonly showPlannedDiffs?: boolean;
+  readonly onOpenConversionHelper?: () => void;
 }
 
 export function toggleExerciseRow(expanded: ReadonlySet<string>, rowKey: string): Set<string> {
@@ -125,8 +126,10 @@ export function ExerciseTable({
   defaultExpanded = false,
   readableSummary = true,
   showPlannedDiffs = false,
+  onOpenConversionHelper,
 }: ExerciseTableProps) {
   const groups = useMemo(() => groupExerciseSets(exerciseSets), [exerciseSets]);
+  const hasLegacyEmomRow = groupsContainLegacyEmom(groups);
   // Stable per-group identity for @dnd-kit — matches the React `key` used
   // below so `SortableContext` items align with the rendered rows. When a
   // row is brand-new and its first-set id hasn't landed yet we fall back
@@ -242,6 +245,29 @@ export function ExerciseTable({
         </Button>
       </div>
 
+      {hasLegacyEmomRow && (
+        <div
+          className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm"
+          data-testid="exercise-table-legacy-emom-warning"
+        >
+          <div>
+            <p className="font-medium text-destructive">Legacy EMOM row detected</p>
+            <span>EMOM is no longer supported as a row exercise. Convert this workout via Parse to exercises.</span>
+          </div>
+          {onOpenConversionHelper ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={onOpenConversionHelper}
+              data-testid="exercise-table-legacy-emom-cta"
+            >
+              Open conversion helper
+            </Button>
+          ) : null}
+        </div>
+      )}
+
       {groups.length === 0 ? (
         <EmptyExerciseState
           onAdd={() => setAddPickerOpen(true)}
@@ -281,6 +307,14 @@ export function ExerciseTable({
       />
     </section>
   );
+}
+
+function isLegacyEmomName(name: string): boolean {
+  return name.trim().toLowerCase() === "emom";
+}
+
+function groupsContainLegacyEmom(groups: readonly GroupedExercise[]): boolean {
+  return groups.some((group) => isLegacyEmomName(group.exerciseName));
 }
 
 

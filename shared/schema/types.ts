@@ -511,24 +511,33 @@ export type ExerciseSetOwner =
 // workout-log routes (server/routes/workouts.ts) and the plan-day routes
 // (server/routes/plans.ts) so a single numeric-bounds contract covers
 // both paths — one schema, one Sonar-visible definition.
-export const patchExerciseSetBodySchema = withPatchBlockStepPresencePairing(withBlockStepPairing(z.object({
+const disallowLegacyEmomRowName = <T extends z.ZodType<{ exerciseName?: unknown }>>(schema: T) => schema.refine((value) => {
+  const candidate = value.exerciseName;
+  if (typeof candidate !== "string") return true;
+  return candidate.trim().toLowerCase() !== "emom";
+}, {
+  message: "exerciseName 'emom' is not allowed for row payloads. Use structured interval blocks instead.",
+  path: ["exerciseName"],
+});
+
+export const patchExerciseSetBodySchema = disallowLegacyEmomRowName(withPatchBlockStepPresencePairing(withBlockStepPairing(z.object({
   exerciseName: z.string().min(1).max(255).optional(),
   customLabel: z.string().max(255).nullable().optional(),
   category: z.string().max(50).optional(),
   setNumber: z.number().int().min(1).max(100).optional(),
   ...measurableSetFields,
   sortOrder: z.number().int().nullable().optional(),
-})));
+}))));
 export type PatchExerciseSetBody = z.infer<typeof patchExerciseSetBodySchema>;
 
-export const addExerciseSetBodySchema = withBlockStepPairing(z.object({
+export const addExerciseSetBodySchema = disallowLegacyEmomRowName(withBlockStepPairing(z.object({
   exerciseName: z.string().min(1).max(255),
   customLabel: z.string().max(255).nullable().optional(),
   category: z.string().max(50),
   setNumber: z.number().int().min(1).max(100).default(1),
   ...measurableSetFields,
   confidence: z.number().int().min(0).max(100).nullable().optional(),
-}));
+})));
 export type AddExerciseSetBody = z.infer<typeof addExerciseSetBodySchema>;
 
 export interface ParsedExercise extends ParsedExerciseSetStructureMetadata {
