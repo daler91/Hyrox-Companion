@@ -28,8 +28,18 @@ interface StructureSetLike {
 function structuredSummary(sets: StructureSetLike[] | null | undefined): string | null {
   if (sets == null || sets.length === 0) return null;
   const byBlock = new Map<string, StructureSetLike[]>();
+  let legacySegment = 0;
+  let previousLegacyName: string | null = null;
   for (const set of sets) {
-    const key = set.blockId ?? `legacy-${set.exerciseName}`;
+    let key = set.blockId;
+    if (!key) {
+      const currentLegacyName = set.customLabel || set.exerciseName;
+      if (previousLegacyName !== currentLegacyName) {
+        legacySegment += 1;
+        previousLegacyName = currentLegacyName;
+      }
+      key = `legacy-${legacySegment}-${currentLegacyName}`;
+    }
     const arr = byBlock.get(key) ?? [];
     arr.push(set);
     byBlock.set(key, arr);
