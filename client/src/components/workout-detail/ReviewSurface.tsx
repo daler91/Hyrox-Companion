@@ -244,6 +244,7 @@ export function ReviewSurface({
                     isSaving: detail.isSaving,
                     lastSavedAt: detail.lastSavedAt,
                   }}
+                  onOpenConversionHelper={() => detail.reparseFreeText.mutate(undefined)}
                   defaultExpanded
                 />
               </div>

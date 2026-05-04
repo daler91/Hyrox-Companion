@@ -77,6 +77,7 @@ interface ExerciseTableProps {
   readonly defaultExpanded?: boolean;
   readonly readableSummary?: boolean;
   readonly showPlannedDiffs?: boolean;
+  readonly onOpenConversionHelper?: () => void;
 }
 
 export function toggleExerciseRow(expanded: ReadonlySet<string>, rowKey: string): Set<string> {
@@ -125,6 +126,7 @@ export function ExerciseTable({
   defaultExpanded = false,
   readableSummary = true,
   showPlannedDiffs = false,
+  onOpenConversionHelper,
 }: ExerciseTableProps) {
   const groups = useMemo(() => groupExerciseSets(exerciseSets), [exerciseSets]);
   // Stable per-group identity for @dnd-kit — matches the React `key` used
@@ -255,7 +257,13 @@ export function ExerciseTable({
             type="button"
             size="sm"
             variant="outline"
-            onClick={() => setAddPickerOpen(true)}
+            onClick={() => {
+              if (onOpenConversionHelper) {
+                onOpenConversionHelper();
+                return;
+              }
+              setAddPickerOpen(true);
+            }}
             data-testid="exercise-table-legacy-emom-cta"
           >
             Open conversion helper
