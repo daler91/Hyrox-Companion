@@ -44,6 +44,28 @@ const parserResponseSchema = z.object({
   }).optional().nullable(),
 });
 
+type NormalizedParserPayload = z.infer<typeof parserResponseSchema>;
+
+function normalizeParserPayload(raw: unknown): NormalizedParserPayload {
+  if (Array.isArray(raw)) {
+    return { exercises: raw, structureBlocks: [], warnings: [], confidence: null };
+  }
+  if (!raw || typeof raw !== "object") {
+    return { exercises: [], structureBlocks: [], warnings: [], confidence: null };
+  }
+  const shape = raw as Record<string, unknown>;
+  const exercises = Array.isArray(shape.exercises) ? shape.exercises : [];
+  const structureBlocks = z.array(parserResponseSchema.shape.structureBlocks.unwrap().element).safeParse(shape.structureBlocks);
+  const warnings = z.array(z.string()).safeParse(shape.warnings);
+  const confidence = parserResponseSchema.shape.confidence.safeParse(shape.confidence);
+  return {
+    exercises,
+    structureBlocks: structureBlocks.success ? structureBlocks.data : [],
+    warnings: warnings.success ? warnings.data : [],
+    confidence: confidence.success ? confidence.data : null,
+  };
+}
+
 /**
  * Synthesize a human-readable customLabel from the user's original text when
  * the AI returned "custom" without one. Strategy: grab the first 1-4 words
@@ -308,9 +330,7 @@ export async function parseExercisesFromText(
     const responseText = await callGeminiParse(text, weightUnit, customExerciseNames, userId);
     const raw = parseRawResponse(responseText);
     const rawArray = Array.isArray(raw) ? raw : [];
-    const normalized = Array.isArray(raw)
-      ? { exercises: raw, structureBlocks: [], warnings: [], confidence: null }
-      : parserResponseSchema.parse(raw);
+    const normalized = normalizeParserPayload(raw);
     const validated = validateRows(normalized.exercises ?? rawArray);
 
     if (validated.length === 0 && rawArray.length > 0) {
@@ -368,9 +388,7 @@ export async function parseExercisesFromImage(
     );
     const raw = parseRawResponse(responseText);
     const rawArray = Array.isArray(raw) ? raw : [];
-    const normalized = Array.isArray(raw)
-      ? { exercises: raw, structureBlocks: [], warnings: [], confidence: null }
-      : parserResponseSchema.parse(raw);
+    const normalized = normalizeParserPayload(raw);
     const validated = validateRows(normalized.exercises ?? rawArray);
 
     if (validated.length === 0 && rawArray.length > 0) {
