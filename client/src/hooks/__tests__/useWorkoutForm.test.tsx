@@ -370,7 +370,8 @@ describe('useWorkoutForm', () => {
           rpe: null,
           exercises: [
             { exerciseName: 'squat', sets: [{ reps: 10, weight: 100 }] }
-          ]
+          ],
+          structureBlocks: [],
         }, expect.any(AbortSignal));
       });
     });
