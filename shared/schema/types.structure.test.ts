@@ -30,6 +30,18 @@ describe('structureBlockSchema EMOM semantics', () => {
     expect(parsed.success).toBe(false);
   });
 
+  it('rejects EMOM steps without minute index', () => {
+    const parsed = structureBlockSchema.safeParse({
+      sectionType: 'main',
+      formatType: 'emom',
+      durationMinutes: 10,
+      steps: [
+        { stepNumber: 1, stepType: 'work', exerciseName: 'Row' },
+      ],
+    });
+    expect(parsed.success).toBe(false);
+  });
+
   it('rejects rest step with targets', () => {
     const parsed = structureBlockSchema.safeParse({
       sectionType: 'main',
@@ -37,6 +49,30 @@ describe('structureBlockSchema EMOM semantics', () => {
       durationMinutes: 8,
       steps: [
         { stepNumber: 1, minuteIndex: 1, stepType: 'rest', targets: { targetReps: 10 } },
+      ],
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('rejects rest step with alias targets', () => {
+    const parsed = structureBlockSchema.safeParse({
+      sectionType: 'main',
+      formatType: 'emom',
+      durationMinutes: 8,
+      steps: [
+        { stepNumber: 1, minuteIndex: 1, stepType: 'rest', targets: { reps: 10 } },
+      ],
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('rejects rest step with whitespace-only labels', () => {
+    const parsed = structureBlockSchema.safeParse({
+      sectionType: 'main',
+      formatType: 'emom',
+      durationMinutes: 8,
+      steps: [
+        { stepNumber: 1, minuteIndex: 1, stepType: 'rest', customLabel: '   ' },
       ],
     });
     expect(parsed.success).toBe(false);

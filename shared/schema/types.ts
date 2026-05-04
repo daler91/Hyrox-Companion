@@ -416,9 +416,18 @@ const structureStepSchema = z.object({
   targets: structureStepTargetsSchema,
 }).strip().superRefine((step, ctx) => {
   if (step.stepType === "rest") {
-    const hasExercise = Boolean(step.exerciseName?.trim() || step.customLabel?.trim());
+    const hasExercise = step.exerciseName != null || step.customLabel != null;
     const t = step.targets ?? {};
-    const hasTargets = [t.targetReps, t.targetTime, t.targetDistance, t.targetWeight].some((v) => v != null);
+    const hasTargets = [
+      t.targetReps,
+      t.targetTime,
+      t.targetDistance,
+      t.targetWeight,
+      t.reps,
+      t.time,
+      t.distance,
+      t.weight,
+    ].some((v) => v != null);
     if (hasExercise || hasTargets) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Rest steps cannot include exercise or performance targets." });
     }
@@ -454,6 +463,9 @@ export const structureBlockSchema = z.object({
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "EMOM blocks require at least one step.", path: ["steps"] });
     }
     const minuteIndices = block.steps.map((s) => s.minuteIndex).filter((m): m is number => m != null);
+    if (minuteIndices.length !== block.steps.length) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "EMOM steps require minuteIndex.", path: ["steps"] });
+    }
     if (minuteIndices.length !== new Set(minuteIndices).size) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Duplicate minuteIndex values are not allowed in EMOM patterns.", path: ["steps"] });
     }

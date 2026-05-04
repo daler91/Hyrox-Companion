@@ -329,9 +329,21 @@ export const workoutStructureSteps = pgTable("workout_structure_steps", {
 }, (table) => [
   index("idx_workout_structure_steps_block_id").on(table.blockId),
   uniqueIndex("idx_workout_structure_steps_block_step_unique").on(table.blockId, table.stepNumber),
+  uniqueIndex("idx_workout_structure_steps_block_minute_unique").on(table.blockId, table.minuteIndex),
   check("workout_structure_step_number_positive_check", sql`step_number > 0`),
   check("workout_structure_step_minute_index_positive_check", sql`minute_index IS NULL OR minute_index > 0`),
   check("workout_structure_step_type_check", sql`step_type IN ('work', 'rest', 'transition')`),
+  check(
+    "workout_structure_rest_step_target_restrictions_check",
+    sql`step_type <> 'rest' OR (
+      exercise_name IS NULL
+      AND custom_label IS NULL
+      AND target_reps IS NULL
+      AND target_time IS NULL
+      AND target_distance IS NULL
+      AND target_weight IS NULL
+    )`,
+  ),
 ]);
 
 export const structuredExerciseBackfillReviews = pgTable("structured_exercise_backfill_reviews", {
