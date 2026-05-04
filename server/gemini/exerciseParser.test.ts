@@ -151,6 +151,22 @@ describe("parseExercisesFromText", () => {
     );
   });
 
+  it("should throw when object-shaped payload has only malformed exercise rows", async () => {
+    const mockResponse = {
+      text: JSON.stringify({
+        exercises: [
+          { exerciseName: "", category: "strength", sets: [{ reps: 1 }] },
+          { exerciseName: "squat", sets: [] },
+        ],
+      }),
+    };
+    vi.mocked(retryWithBackoff).mockResolvedValueOnce(mockResponse);
+
+    await expect(parseExercisesFromText("garbage input")).rejects.toThrow(
+      "AI returned malformed exercise data",
+    );
+  });
+
   it("should fall back to source text when customLabel and exerciseName are both 'custom'", async () => {
     const mockResponse = {
       text: JSON.stringify([

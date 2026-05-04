@@ -339,7 +339,7 @@ export async function parseExercisesFromText(
     const normalized = normalizeParserPayload(raw);
     const validated = validateRows(normalized.exercises ?? rawArray);
 
-    if (validated.length === 0 && rawArray.length > 0) {
+    if (validated.length === 0 && normalized.exercises.length > 0) {
       throw new AppError(ErrorCode.AI_ERROR, "AI returned malformed exercise data", 502);
     }
 
@@ -397,7 +397,7 @@ export async function parseExercisesFromImage(
     const normalized = normalizeParserPayload(raw);
     const validated = validateRows(normalized.exercises ?? rawArray);
 
-    if (validated.length === 0 && rawArray.length > 0) {
+    if (validated.length === 0 && normalized.exercises.length > 0) {
       throw new AppError(ErrorCode.AI_ERROR, "AI returned malformed exercise data", 502);
     }
 
