@@ -62,4 +62,32 @@ describe("buildWorkoutSavePayload", () => {
     expect(result.warnings).toEqual(["Sandbag Lunges is missing reps"]);
     expect(result.payload.exercises).toHaveLength(1);
   });
+
+  it("includes structureBlocks when editor structure is present", () => {
+    const exercise: StructuredExercise = {
+      exerciseName: "custom",
+      customLabel: "Ski Erg",
+      category: "conditioning",
+      sets: [{ setNumber: 1, time: 60 }],
+      structure: {
+        section: "main",
+        blockType: "emom",
+        emomDurationMinutes: 10,
+        steps: [{ id: "step-1", type: "work", exercise: "Ski Erg", target: "12 cal" }],
+      },
+    };
+    const result = buildWorkoutSavePayload({
+      ...baseInput,
+      exerciseBlocks: ["block-1"],
+      exerciseData: { "block-1": exercise },
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.payload.structureBlocks).toHaveLength(1);
+    expect(result.payload.structureBlocks?.[0]).toMatchObject({
+      sectionType: "main",
+      formatType: "emom",
+      durationMinutes: 10,
+    });
+  });
 });
