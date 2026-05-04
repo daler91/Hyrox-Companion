@@ -231,8 +231,8 @@ export function ExerciseInput({
             onSetChange={handleSetChange}
             onAddSet={addSet}
             onRemoveSet={removeSet}
-            contextChips={structureChips}
-            rowLabels={emomMinuteLabels}
+            contextChips={enableStructureEditor ? structureChips : undefined}
+            rowLabels={enableStructureEditor ? emomMinuteLabels : undefined}
           />
         ) : (
           <SingleSetFields

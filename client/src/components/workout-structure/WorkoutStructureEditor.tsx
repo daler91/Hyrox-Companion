@@ -41,7 +41,7 @@ export function WorkoutStructureEditor({ value, onChange }: Props) {
         <div className="grid gap-3 md:grid-cols-2">
           <div>
             <Label className="text-xs">EMOM duration (min)</Label>
-            <Input type="number" min={1} value={value.emomDurationMinutes ?? 10} onChange={(e) => update("emomDurationMinutes", Number(e.target.value) || undefined)} />
+            <Input type="number" min={1} value={value.emomDurationMinutes ?? ""} placeholder="Minutes" onChange={(e) => update("emomDurationMinutes", Number(e.target.value) || undefined)} />
           </div>
           <Button type="button" variant={value.emomAlternating ? "default" : "outline"} onClick={() => update("emomAlternating", !value.emomAlternating)}>
             Alternating steps
