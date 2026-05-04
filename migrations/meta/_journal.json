@@ -302,6 +302,13 @@
       "when": 1777850485294,
       "tag": "0042_solid_logan",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1777915478528,
+      "tag": "0043_structured_blocks_emom",
+      "breakpoints": true
     }
   ]
 }

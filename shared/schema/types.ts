@@ -383,38 +383,94 @@ export const incomingExerciseSchema = withBlockStepPairing(z.object({
 
 export const exercisesPayloadSchema = z.array(incomingExerciseSchema).max(200);
 
+
+export const sectionTypeSchema = z.enum(["warmup", "activation", "main", "accessory", "cooldown", "mobility"]);
+export const formatTypeSchema = z.enum(["steady", "emom", "amrap", "rounds", "interval", "for_time", "quality"]);
+export const structureStepTypeSchema = z.enum(["work", "rest", "transition"]);
+
+const structureStepTargetsSchema = z.object({
+  targetReps: z.number().int().min(0).max(10_000).optional().nullable(),
+  targetTime: z.number().min(0).max(86_400).optional().nullable(),
+  targetDistance: z.number().min(0).max(1_000_000).optional().nullable(),
+  targetWeight: z.number().min(0).max(2_000).optional().nullable(),
+  reps: z.number().int().min(0).max(10_000).optional().nullable(),
+  time: z.number().min(0).max(86_400).optional().nullable(),
+  distance: z.number().min(0).max(1_000_000).optional().nullable(),
+  weight: z.number().min(0).max(2_000).optional().nullable(),
+}).passthrough().optional().nullable();
 const structureStepSchema = z.object({
   stepNumber: z.number().int().min(1).max(10_000),
-  exerciseName: z.string().min(1).max(255),
-  category: z.string().min(1).max(255),
+  minuteIndex: z.number().int().min(1).max(10_000).optional().nullable(),
+  stepType: structureStepTypeSchema.default("work"),
+  exerciseName: z.string().min(1).max(255).optional().nullable(),
+  category: z.string().max(255).optional().nullable(),
   customLabel: z.string().max(255).optional().nullable(),
   stepRole: z.string().max(50).optional().nullable(),
+  intensity: z.record(z.string(), z.unknown()).optional().nullable(),
+  loadMode: z.string().max(50).optional().nullable(),
+  unilateralMode: z.string().max(50).optional().nullable(),
+  tempo: z.record(z.string(), z.unknown()).optional().nullable(),
+  constraintTags: z.array(z.string().min(1).max(50)).max(20).optional().nullable(),
   groupId: z.string().max(255).optional().nullable(),
   groupMeta: z.record(z.string(), z.unknown()).optional().nullable(),
-  targets: z.record(z.string(), z.unknown()).optional().nullable(),
-}).strip();
+  targets: structureStepTargetsSchema,
+}).strip().superRefine((step, ctx) => {
+  if (step.stepType === "rest") {
+    const hasExercise = Boolean(step.exerciseName?.trim() || step.customLabel?.trim());
+    const t = step.targets ?? {};
+    const hasTargets = [t.targetReps, t.targetTime, t.targetDistance, t.targetWeight].some((v) => v != null);
+    if (hasExercise || hasTargets) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Rest steps cannot include exercise or performance targets." });
+    }
+  }
+  if (step.stepType !== "rest" && !step.exerciseName?.trim()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Work/transition steps require exerciseName.", path: ["exerciseName"] });
+  }
+});
 
 export const structureBlockSchema = z.object({
   id: z.string().max(255).optional(),
-  sectionType: z.string().min(1).max(50),
-  formatType: z.string().min(1).max(50),
+  sectionType: sectionTypeSchema,
+  formatType: formatTypeSchema,
+  durationMinutes: z.number().int().min(1).max(1_440).optional().nullable(),
+  roundCount: z.number().int().min(1).max(10_000).optional().nullable(),
+  timeCapMinutes: z.number().int().min(1).max(1_440).optional().nullable(),
   durationSeconds: z.number().int().min(0).max(86_400).optional().nullable(),
   rounds: z.number().int().min(1).max(10_000).optional().nullable(),
   workSeconds: z.number().int().min(0).max(86_400).optional().nullable(),
   restSeconds: z.number().int().min(0).max(86_400).optional().nullable(),
+  workIntervalSec: z.number().int().min(0).max(86_400).optional().nullable(),
+  restIntervalSec: z.number().int().min(0).max(86_400).optional().nullable(),
+  instructions: z.string().max(2000).optional().nullable(),
+  sequenceOrder: z.number().int().min(0).max(10_000).optional(),
   sortOrder: z.number().int().min(0).max(10_000).optional(),
   steps: z.array(structureStepSchema).min(1).max(200),
 }).superRefine((block, ctx) => {
-  if (block.formatType.toLowerCase() === "amrap" && block.rounds != null) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "AMRAP blocks cannot define fixed rounds.", path: ["rounds"] });
+  if (block.formatType === "emom") {
+    if (!block.durationMinutes) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "EMOM blocks require durationMinutes.", path: ["durationMinutes"] });
+    }
+    if (block.steps.length < 1) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "EMOM blocks require at least one step.", path: ["steps"] });
+    }
+    const minuteIndices = block.steps.map((s) => s.minuteIndex).filter((m): m is number => m != null);
+    if (minuteIndices.length !== new Set(minuteIndices).size) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Duplicate minuteIndex values are not allowed in EMOM patterns.", path: ["steps"] });
+    }
   }
-  const hasCap = block.durationSeconds != null;
-  if (block.formatType.toLowerCase() === "for_time" && !hasCap) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "for_time blocks must define durationSeconds (cap semantics).", path: ["durationSeconds"] });
+  if (block.formatType === "amrap" && block.roundCount != null) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "AMRAP blocks cannot define fixed roundCount.", path: ["roundCount"] });
+  }
+  if (block.formatType === "for_time" && !block.timeCapMinutes && !block.durationSeconds) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "for_time blocks must define timeCapMinutes.", path: ["timeCapMinutes"] });
+  }
+  if (block.roundCount != null && block.durationMinutes != null && block.formatType === "steady") {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "steady blocks cannot define both roundCount and durationMinutes." });
   }
 });
 
 export const structureBlocksPayloadSchema = z.array(structureBlockSchema).max(100).optional();
+
 export type StructureBlockInput = z.infer<typeof structureBlockSchema>;
 
 // Shared measurement fields used by both patch and add request bodies.

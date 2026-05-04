@@ -18,7 +18,14 @@ export interface StructureLintResult {
 }
 
 function hasTarget(step: NonNullable<StructureBlockInput["steps"]>[number], key: string): boolean {
-  return typeof step.targets === "object" && step.targets !== null && step.targets[key] != null;
+  if (typeof step.targets !== "object" || step.targets === null) return false;
+  const alias: Record<string, string> = {
+    reps: "targetReps",
+    time: "targetTime",
+    distance: "targetDistance",
+    weight: "targetWeight",
+  };
+  return step.targets[key] != null || step.targets[alias[key]] != null;
 }
 
 export function lintWorkoutStructure(structureBlocks?: StructureBlockInput[] | null, exercises?: ParsedExercise[] | null): StructureLintResult {
@@ -45,7 +52,7 @@ export function lintWorkoutStructure(structureBlocks?: StructureBlockInput[] | n
         fixGuidance: "Remove rounds or change format type.",
       });
     }
-    if (format === "for_time" && block.durationSeconds == null) {
+    if (format === "for_time" && block.durationSeconds == null && block.timeCapMinutes == null) {
       issues.push({
         severity: "error",
         code: "MISSING_REQUIRED_TARGET_BY_FORMAT",
@@ -53,7 +60,7 @@ export function lintWorkoutStructure(structureBlocks?: StructureBlockInput[] | n
         fixGuidance: "Set a duration cap in seconds.",
       });
     }
-    if (format === "interval" && (block.workSeconds == null || block.restSeconds == null)) {
+    if (format === "interval" && (block.workSeconds == null || block.restSeconds == null) && (block.workIntervalSec == null || block.restIntervalSec == null)) {
       issues.push({
         severity: "error",
         code: "MISSING_REQUIRED_TARGET_BY_FORMAT",
@@ -62,7 +69,7 @@ export function lintWorkoutStructure(structureBlocks?: StructureBlockInput[] | n
       });
     }
 
-    const hasRestStep = block.steps.some((s) => (s.stepRole ?? "").toLowerCase() === "rest");
+    const hasRestStep = block.steps.some((s) => (s.stepRole ?? s.stepType ?? "").toLowerCase() === "rest");
     if (hasRestStep && block.restSeconds != null) {
       issues.push({
         severity: "warning",
