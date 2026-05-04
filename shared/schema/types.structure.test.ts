@@ -54,6 +54,30 @@ describe('structureBlockSchema EMOM semantics', () => {
     expect(parsed.success).toBe(false);
   });
 
+  it('rejects rest step with alias targets', () => {
+    const parsed = structureBlockSchema.safeParse({
+      sectionType: 'main',
+      formatType: 'emom',
+      durationMinutes: 8,
+      steps: [
+        { stepNumber: 1, minuteIndex: 1, stepType: 'rest', targets: { reps: 10 } },
+      ],
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('rejects rest step with whitespace-only labels', () => {
+    const parsed = structureBlockSchema.safeParse({
+      sectionType: 'main',
+      formatType: 'emom',
+      durationMinutes: 8,
+      steps: [
+        { stepNumber: 1, minuteIndex: 1, stepType: 'rest', customLabel: '   ' },
+      ],
+    });
+    expect(parsed.success).toBe(false);
+  });
+
   it('preserves legacy timing and ordering fields for backward compatibility', () => {
     const parsed = structureBlockSchema.safeParse({
       sectionType: 'main',

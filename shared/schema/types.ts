@@ -416,9 +416,18 @@ const structureStepSchema = z.object({
   targets: structureStepTargetsSchema,
 }).strip().superRefine((step, ctx) => {
   if (step.stepType === "rest") {
-    const hasExercise = Boolean(step.exerciseName?.trim() || step.customLabel?.trim());
+    const hasExercise = step.exerciseName != null || step.customLabel != null;
     const t = step.targets ?? {};
-    const hasTargets = [t.targetReps, t.targetTime, t.targetDistance, t.targetWeight].some((v) => v != null);
+    const hasTargets = [
+      t.targetReps,
+      t.targetTime,
+      t.targetDistance,
+      t.targetWeight,
+      t.reps,
+      t.time,
+      t.distance,
+      t.weight,
+    ].some((v) => v != null);
     if (hasExercise || hasTargets) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Rest steps cannot include exercise or performance targets." });
     }
