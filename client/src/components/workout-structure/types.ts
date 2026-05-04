@@ -5,6 +5,7 @@ export type StepType = "work" | "rest" | "transition";
 export interface WorkoutStep {
   id: string;
   type: StepType;
+  exercise?: string;
   target?: string;
   durationSeconds?: number;
 }
