@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, gt, isNull, or, sql } from "drizzle-orm";
 
-import { exerciseSets, planDays, structuredExerciseBackfillReviews, trainingPlans, workoutLogs } from "@shared/schema";
+import { exerciseSets, planDays, structuredExerciseBackfillReviews, trainingPlans, users, workoutLogs } from "@shared/schema";
 import { db } from "../db";
 import { logger } from "../logger";
 import { parseExercisesFromText } from "../gemini";
@@ -40,7 +40,9 @@ export async function runAssistedMigrationBackfill(userId: string) {
     userId: workoutLogs.userId,
     text: sql<string>`trim(coalesce(${workoutLogs.mainWorkout}, '') || '\n' || coalesce(${workoutLogs.accessory}, ''))`,
     hasSets: sql<number>`exists(select 1 from ${exerciseSets} es where es.workout_log_id = ${workoutLogs.id})::int`,
+    weightUnit: users.weightUnit,
   }).from(workoutLogs)
+    .innerJoin(users, eq(users.id, workoutLogs.userId))
     .where(and(eq(workoutLogs.userId, userId), gt(workoutLogs.date, sql`${today}::date - interval '90 day'`)))
     .orderBy(desc(workoutLogs.date))
     .limit(BATCH_SIZE);
@@ -51,8 +53,10 @@ export async function runAssistedMigrationBackfill(userId: string) {
     userId: trainingPlans.userId,
     text: sql<string>`trim(coalesce(${planDays.mainWorkout}, '') || '\n' || coalesce(${planDays.accessory}, ''))`,
     hasSets: sql<number>`exists(select 1 from ${exerciseSets} es where es.plan_day_id = ${planDays.id})::int`,
+    weightUnit: users.weightUnit,
   }).from(planDays)
     .innerJoin(trainingPlans, eq(trainingPlans.id, planDays.planId))
+    .innerJoin(users, eq(users.id, trainingPlans.userId))
     .where(and(eq(trainingPlans.userId, userId), gt(planDays.scheduledDate, today)))
     .orderBy(asc(planDays.scheduledDate))
     .limit(BATCH_SIZE);
@@ -62,7 +66,7 @@ export async function runAssistedMigrationBackfill(userId: string) {
   let processed = 0;
   for (const item of queue) {
     try {
-      const parsed = await parseExercisesFromText(item.text, "kg", undefined, item.userId ?? undefined);
+      const parsed = await parseExercisesFromText(item.text, item.weightUnit ?? "kg", undefined, item.userId ?? undefined);
       if (!parsed.length) {
         await upsertReviewFlag({ ownerType: item.ownerType, ownerId: item.ownerId, userId: item.userId, status: "needs_manual_review", reason: "parse_returned_no_rows" });
         continue;
