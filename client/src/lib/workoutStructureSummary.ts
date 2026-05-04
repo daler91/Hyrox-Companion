@@ -11,9 +11,28 @@ function formatTargets(set: ExerciseSet): string {
   return parts.join(" · ");
 }
 
-function getBlockKey(set: ExerciseSet): string {
-  if (set.blockId) return set.blockId;
-  return `legacy-${set.exerciseName}`;
+function getLegacyLabel(set: ExerciseSet): string {
+  return getExerciseLabel(set.exerciseName, set.customLabel);
+}
+
+function getBlockKey(
+  set: ExerciseSet,
+  previousLegacyLabel: string | null,
+  legacySegment: number,
+): { key: string; nextLegacyLabel: string | null; nextLegacySegment: number } {
+  if (set.blockId) {
+    return { key: set.blockId, nextLegacyLabel: previousLegacyLabel, nextLegacySegment: legacySegment };
+  }
+  const legacyLabel = getLegacyLabel(set);
+  let nextLegacySegment = legacySegment;
+  if (previousLegacyLabel !== legacyLabel) {
+    nextLegacySegment += 1;
+  }
+  return {
+    key: `legacy-${nextLegacySegment}-${legacyLabel}`,
+    nextLegacyLabel: legacyLabel,
+    nextLegacySegment,
+  };
 }
 
 function appendRestAndCue(first: ExerciseSet, text: string): string {
@@ -28,7 +47,7 @@ function appendRestAndCue(first: ExerciseSet, text: string): string {
 }
 
 function formatStepText(stepNo: number, first: ExerciseSet): string {
-  const label = getExerciseLabel(first.exerciseName, first.customLabel);
+  const label = getLegacyLabel(first);
   const target = formatTargets(first);
   let stepText = `S${stepNo} ${label}`;
   if (target) stepText += ` (${target})`;
@@ -39,8 +58,13 @@ export function serializeWorkoutStructure(exerciseSets: ExerciseSet[] | null | u
   if (exerciseSets == null || exerciseSets.length === 0) return null;
 
   const byBlock = new Map<string, ExerciseSet[]>();
+  let previousLegacyLabel: string | null = null;
+  let legacySegment = 0;
   for (const set of exerciseSets) {
-    const key = getBlockKey(set);
+    const keyInfo = getBlockKey(set, previousLegacyLabel, legacySegment);
+    const key = keyInfo.key;
+    previousLegacyLabel = keyInfo.nextLegacyLabel;
+    legacySegment = keyInfo.nextLegacySegment;
     const list = byBlock.get(key) ?? [];
     list.push(set);
     byBlock.set(key, list);
@@ -50,8 +74,13 @@ export function serializeWorkoutStructure(exerciseSets: ExerciseSet[] | null | u
   for (const sets of byBlock.values()) {
     sets.sort((a, b) => (a.stepNumber ?? 0) - (b.stepNumber ?? 0) || a.setNumber - b.setNumber);
     const byStep = new Map<number, ExerciseSet[]>();
+    let syntheticStep = 0;
     for (const s of sets) {
-      const step = s.stepNumber ?? 1;
+      let step = s.stepNumber ?? null;
+      if (step == null) {
+        syntheticStep += 1;
+        step = syntheticStep;
+      }
       const arr = byStep.get(step) ?? [];
       arr.push(s);
       byStep.set(step, arr);
