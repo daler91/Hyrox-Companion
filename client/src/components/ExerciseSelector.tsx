@@ -29,7 +29,7 @@ const exercisesByCategory = categoryOrder.map(cat => ({
   category: cat,
   label: selectorCategoryLabels[cat],
   exercises: (Object.entries(EXERCISE_DEFINITIONS) as [ExerciseName, typeof EXERCISE_DEFINITIONS[ExerciseName]][])
-    .filter(([, def]) => def.category === cat),
+    .filter(([name, def]) => def.category === cat && name !== "emom"),
 }));
 
 export function ExerciseSelector({ selectedExercises, onToggle, onAdd, allowDuplicates = false }: Readonly<ExerciseSelectorProps>) {

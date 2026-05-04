@@ -242,6 +242,27 @@ export function ExerciseTable({
         </Button>
       </div>
 
+      {groups.some((group) => group.exerciseName === "emom") && (
+        <div
+          className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm"
+          data-testid="exercise-table-legacy-emom-warning"
+        >
+          <div>
+            <p className="font-medium text-destructive">Legacy EMOM row detected</p>
+            <span>EMOM is no longer supported as a row exercise. Convert this workout via Parse to exercises.</span>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => setAddPickerOpen(true)}
+            data-testid="exercise-table-legacy-emom-cta"
+          >
+            Open conversion helper
+          </Button>
+        </div>
+      )}
+
       {groups.length === 0 ? (
         <EmptyExerciseState
           onAdd={() => setAddPickerOpen(true)}
