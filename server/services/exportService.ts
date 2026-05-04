@@ -11,6 +11,75 @@ interface TimelineEntry {
   notes?: string | null;
   duration?: number | null;
   rpe?: number | null;
+  exerciseSets?: StructureSetLike[] | null;
+}
+
+interface StructureSetLike {
+  exerciseName: string;
+  customLabel?: string | null;
+  stepNumber?: number | null;
+  blockId?: string | null;
+  reps?: number | null;
+  weight?: number | null;
+  distance?: number | null;
+  time?: number | null;
+}
+
+function structuredSummary(sets: StructureSetLike[] | null | undefined): string | null {
+  if (sets == null || sets.length === 0) return null;
+  const byBlock = new Map<string, StructureSetLike[]>();
+  let legacySegment = 0;
+  let previousLegacyName: string | null = null;
+  for (const set of sets) {
+    let key = set.blockId;
+    if (key == null || key.length === 0) {
+      const currentLegacyName = set.customLabel || set.exerciseName;
+      const hasSameLegacyName = previousLegacyName === currentLegacyName;
+      if (hasSameLegacyName === false) {
+        legacySegment += 1;
+        previousLegacyName = currentLegacyName;
+      }
+      key = `legacy-${legacySegment}-${currentLegacyName}`;
+    } else {
+      previousLegacyName = null;
+    }
+    const arr = byBlock.get(key) ?? [];
+    arr.push(set);
+    byBlock.set(key, arr);
+  }
+  const blocks: string[] = [];
+  for (const blockSets of byBlock.values()) {
+    blockSets.sort((a,b)=>(a.stepNumber ?? 0)-(b.stepNumber ?? 0));
+    const parts = blockSets.map((s) => {
+      const label = s.customLabel || s.exerciseName;
+      const targetParts: string[] = [];
+      if (s.reps == null) {
+        // no-op
+      } else {
+        targetParts.push(`${s.reps} reps`);
+      }
+      if (s.weight == null) {
+        // no-op
+      } else {
+        targetParts.push(`${s.weight}`);
+      }
+      if (s.distance == null) {
+        // no-op
+      } else {
+        targetParts.push(`${s.distance}m`);
+      }
+      if (s.time == null) {
+        // no-op
+      } else {
+        targetParts.push(`${s.time}min`);
+      }
+      const targets = targetParts.join(" · ");
+      if (targets.length === 0) return label;
+      return `${label} (${targets})`;
+    });
+    blocks.push(parts.join(" -> "));
+  }
+  return blocks.join(" | ");
 }
 
 interface ExerciseSetRow {
@@ -88,7 +157,7 @@ function generateTimelineCsvRows(timeline: TimelineEntry[]): string[] {
       escapeCsv(entry.type),
       escapeCsv(entry.status),
       escapeCsv(entry.focus),
-      escapeCsv(entry.mainWorkout),
+      escapeCsv(structuredSummary(entry.exerciseSets) ?? entry.mainWorkout),
       escapeCsv(entry.accessory),
       escapeCsv(entry.notes),
       entry.duration == null ? "" : String(entry.duration),
