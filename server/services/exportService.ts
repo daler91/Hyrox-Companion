@@ -34,7 +34,8 @@ function structuredSummary(sets: StructureSetLike[] | null | undefined): string 
     let key = set.blockId;
     if (key == null || key.length === 0) {
       const currentLegacyName = set.customLabel || set.exerciseName;
-      if (previousLegacyName !== currentLegacyName) {
+      const hasSameLegacyName = previousLegacyName === currentLegacyName;
+      if (hasSameLegacyName === false) {
         legacySegment += 1;
         previousLegacyName = currentLegacyName;
       }
@@ -51,7 +52,28 @@ function structuredSummary(sets: StructureSetLike[] | null | undefined): string 
     blockSets.sort((a,b)=>(a.stepNumber ?? 0)-(b.stepNumber ?? 0));
     const parts = blockSets.map((s) => {
       const label = s.customLabel || s.exerciseName;
-      const targets = [s.reps != null ? `${s.reps} reps` : null, s.weight != null ? `${s.weight}` : null, s.distance != null ? `${s.distance}m` : null, s.time != null ? `${s.time}min` : null].filter(Boolean).join(" · ");
+      const targetParts: string[] = [];
+      if (s.reps == null) {
+        // no-op
+      } else {
+        targetParts.push(`${s.reps} reps`);
+      }
+      if (s.weight == null) {
+        // no-op
+      } else {
+        targetParts.push(`${s.weight}`);
+      }
+      if (s.distance == null) {
+        // no-op
+      } else {
+        targetParts.push(`${s.distance}m`);
+      }
+      if (s.time == null) {
+        // no-op
+      } else {
+        targetParts.push(`${s.time}min`);
+      }
+      const targets = targetParts.join(" · ");
       if (targets.length === 0) return label;
       return `${label} (${targets})`;
     });
