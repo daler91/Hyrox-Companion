@@ -45,7 +45,7 @@ function useMigrationReview(workoutLogId: string | null) {
     if (!workoutLogId) return;
     let cancelled = false;
 
-    void fetch(`/api/v1/workouts/migration/reviews`, { credentials: "include" })
+    void fetch(`/api/v1/workouts/migration/reviews?ownerType=workoutLog&ownerId=${encodeURIComponent(workoutLogId)}`, { credentials: "include" })
       .then((r) => r.json() as Promise<Array<{ ownerType: string; ownerId: string; status: string; reason: string | null }>>)
       .then((rows) => {
         if (cancelled) return;
