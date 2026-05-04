@@ -1,6 +1,6 @@
 import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
 import { Hash, Pencil, Ruler, Timer, Weight } from "lucide-react";
-import { useId, useMemo } from "react";
+import { useId, useMemo, useState } from "react";
 
 import { getFieldLabel, getFields, shouldUseMultiSetForFields } from "@/components/exercise-row/fieldMeta";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,6 +11,7 @@ import { getExerciseMissingFields } from "@/lib/exerciseWarnings";
 
 import type { FieldConfig, FieldKey } from "./exercise-input";
 import { ExerciseHeader, ExerciseWarnings, MultiSetTable, SingleSetFields } from "./exercise-input";
+import { WorkoutStructureEditor, type WorkoutStructureConfig } from "./workout-structure";
 
 export interface SetData {
   setNumber: number;
@@ -98,6 +99,7 @@ interface ExerciseInputProps {
   readonly weightUnit?: "kg" | "lbs";
   readonly distanceUnit?: "km" | "miles";
   readonly blockLabel?: string;
+  readonly enableStructureEditor?: boolean;
 }
 
 export function ExerciseInput({
@@ -107,6 +109,7 @@ export function ExerciseInput({
   weightUnit = "kg",
   distanceUnit = "km",
   blockLabel,
+  enableStructureEditor = true,
 }: Readonly<ExerciseInputProps>) {
   const idPrefix = useId();
   const def = EXERCISE_DEFINITIONS[exercise.exerciseName];
@@ -118,6 +121,24 @@ export function ExerciseInput({
       : def?.label || exercise.exerciseName;
 
   const sets = exercise.sets.length > 0 ? exercise.sets : [createDefaultSet(1)];
+
+  const [structure, setStructure] = useState<WorkoutStructureConfig>({
+    section: "main",
+    blockType: "steady",
+    steps: [{ id: "default-work", type: "work" }],
+  });
+
+  const structureChips = useMemo(() => {
+    const chips = [structure.section, structure.blockType.replace("_", " ")];
+    if (structure.group) chips.push(`${structure.group.kind}${structure.group.restSeconds ? ` · Rest ${structure.group.restSeconds}s` : ""}`);
+    return chips;
+  }, [structure]);
+
+  const emomMinuteLabels = useMemo(() => {
+    if (structure.blockType !== "emom") return undefined;
+    const duration = structure.emomDurationMinutes ?? sets.length;
+    return Array.from({ length: sets.length }, (_, i) => `M${(i % duration) + 1}`);
+  }, [structure.blockType, structure.emomDurationMinutes, sets.length]);
 
   const missingFields = useMemo(() => {
     return getExerciseMissingFields(exercise);
@@ -177,6 +198,8 @@ export function ExerciseInput({
 
         <ExerciseWarnings missingFields={missingFields} exerciseName={exercise.exerciseName} />
 
+        {enableStructureEditor && <WorkoutStructureEditor value={structure} onChange={setStructure} />}
+
         {exercise.exerciseName === "custom" && (
           <div className="mb-4">
             <Label
@@ -208,6 +231,8 @@ export function ExerciseInput({
             onSetChange={handleSetChange}
             onAddSet={addSet}
             onRemoveSet={removeSet}
+            contextChips={enableStructureEditor ? structureChips : undefined}
+            rowLabels={enableStructureEditor ? emomMinuteLabels : undefined}
           />
         ) : (
           <SingleSetFields
