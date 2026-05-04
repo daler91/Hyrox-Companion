@@ -9,6 +9,7 @@ import type { BlockType, StepType, WorkoutSection, WorkoutStructureConfig } from
 const sections: WorkoutSection[] = ["warmup", "main", "accessory", "cooldown", "mobility"];
 const blockTypes: BlockType[] = ["steady", "emom", "rounds", "amrap", "interval", "for_time"];
 const stepTypes: StepType[] = ["work", "rest", "transition"];
+const MAX_EMOM_DURATION_MINUTES = 240;
 
 interface Props {
   readonly value: WorkoutStructureConfig;
@@ -17,6 +18,14 @@ interface Props {
 
 export function WorkoutStructureEditor({ value, onChange }: Props) {
   const update = <K extends keyof WorkoutStructureConfig>(key: K, next: WorkoutStructureConfig[K]) => onChange({ ...value, [key]: next });
+  const parseEmomDurationMinutes = (raw: string): number | undefined => {
+    if (!raw.trim()) return undefined;
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) return undefined;
+    const normalized = Math.trunc(parsed);
+    if (normalized < 1) return undefined;
+    return Math.min(normalized, MAX_EMOM_DURATION_MINUTES);
+  };
   const reorderStep = (index: number, direction: -1 | 1) => {
     const destination = index + direction;
     if (destination < 0 || destination >= value.steps.length) return;
@@ -59,7 +68,7 @@ export function WorkoutStructureEditor({ value, onChange }: Props) {
           <div className="grid gap-3 md:grid-cols-2">
           <div>
             <Label className="text-xs">EMOM duration (min)</Label>
-            <Input type="number" min={1} value={value.emomDurationMinutes ?? ""} placeholder="Minutes" onChange={(e) => update("emomDurationMinutes", Number(e.target.value) || undefined)} />
+            <Input type="number" min={1} max={MAX_EMOM_DURATION_MINUTES} value={value.emomDurationMinutes ?? ""} placeholder="Minutes" onChange={(e) => update("emomDurationMinutes", parseEmomDurationMinutes(e.target.value))} />
           </div>
           <Button type="button" variant={value.emomAlternating ? "default" : "outline"} onClick={() => update("emomAlternating", !value.emomAlternating)}>
             Alternating steps
