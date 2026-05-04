@@ -1,4 +1,4 @@
-import { lintWorkoutStructure, type exercisesPayloadSchema, type InsertWorkoutLog, type insertWorkoutLogSchema, type ParsedExercise, type StructureBlockInput, type UpdateWorkoutLog, type updateWorkoutLogSchema } from "@shared/schema";
+import { type exercisesPayloadSchema, type InsertWorkoutLog, type insertWorkoutLogSchema, lintWorkoutStructure, type ParsedExercise, type StructureBlockInput, type UpdateWorkoutLog, type updateWorkoutLogSchema } from "@shared/schema";
 import type { z } from "zod";
 
 import { env } from "../env";

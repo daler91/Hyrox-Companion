@@ -23,7 +23,8 @@ type SavePayloadResult =
   | {
       readonly ok: true;
       readonly payload: SaveWorkoutInput;
-      readonly warnings: StructureLintIssue[];
+      readonly warnings: string[];
+      readonly lintIssues: StructureLintIssue[];
       readonly structureCompletenessScore: number;
     }
   | {
@@ -73,6 +74,7 @@ export function buildWorkoutSavePayload({
     return {
       ok: true,
       warnings: [],
+      lintIssues: [],
       structureCompletenessScore: 100,
       payload: {
         title: effectiveTitle,
@@ -96,7 +98,7 @@ export function buildWorkoutSavePayload({
 
   const missingFieldWarnings = [...new Set(exercises.flatMap((exercise) => getMissingFieldWarnings(exercise)))];
   const lint = lintWorkoutStructure(undefined, exercises.map(exerciseToPayload) as ParsedExercise[]);
-  const warnings: StructureLintIssue[] = [
+  const lintIssues: StructureLintIssue[] = [
     ...lint.warnings,
     ...missingFieldWarnings.map((message) => ({
       severity: "warning" as const,
@@ -105,6 +107,7 @@ export function buildWorkoutSavePayload({
       fixGuidance: "Fill the missing critical field for clearer tracking.",
     })),
   ];
+  const warnings = lintIssues.map((issue) => issue.message);
   if (lint.schemaErrors.length > 0) {
     return {
       ok: false,
@@ -118,6 +121,7 @@ export function buildWorkoutSavePayload({
   return {
     ok: true,
     warnings,
+    lintIssues,
     structureCompletenessScore: lint.structureCompletenessScore,
     payload: {
       title: effectiveTitle,
