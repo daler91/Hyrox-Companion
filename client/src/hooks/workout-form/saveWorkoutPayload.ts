@@ -1,4 +1,4 @@
-import { lintWorkoutStructure, type ParsedExercise, type StructureLintIssue } from "@shared/schema";
+import { lintWorkoutStructure, type ParsedExercise, type StructureBlockInput, type StructureLintIssue } from "@shared/schema";
 
 import type { StructuredExercise } from "@/components/ExerciseInput";
 import { exerciseToPayload, generateSummary } from "@/hooks/useWorkoutEditor";
@@ -49,6 +49,30 @@ function structuredExercises(
   return result;
 }
 
+function toStructureBlocks(exercises: readonly StructuredExercise[]): StructureBlockInput[] {
+  const blocks: StructureBlockInput[] = [];
+  exercises.forEach((exercise, idx) => {
+    if (!exercise.structure || exercise.structure.steps.length === 0) return;
+    const steps = exercise.structure.steps.map((step, stepIdx) => ({
+      stepNumber: stepIdx + 1,
+      stepType: step.type,
+      exerciseName: step.type === "rest" ? undefined : (step.exercise ?? exercise.customLabel ?? exercise.exerciseName),
+      minuteIndex: exercise.structure?.blockType === "emom" ? stepIdx + 1 : undefined,
+      durationSeconds: step.durationSeconds,
+      instructions: step.target,
+    }));
+    blocks.push({
+      sectionType: exercise.structure.section,
+      formatType: exercise.structure.blockType,
+      durationMinutes: exercise.structure.blockType === "emom" ? exercise.structure.emomDurationMinutes ?? steps.length : undefined,
+      sequenceOrder: idx,
+      sortOrder: idx,
+      steps,
+    });
+  });
+  return blocks;
+}
+
 export function buildWorkoutSavePayload({
   title,
   date,
@@ -97,7 +121,8 @@ export function buildWorkoutSavePayload({
   }
 
   const missingFieldWarnings = [...new Set(exercises.flatMap((exercise) => getMissingFieldWarnings(exercise)))];
-  const lint = lintWorkoutStructure(undefined, exercises.map(exerciseToPayload) as ParsedExercise[]);
+  const structureBlocks = toStructureBlocks(exercises);
+  const lint = lintWorkoutStructure(structureBlocks, exercises.map(exerciseToPayload) as ParsedExercise[]);
   const lintIssues: StructureLintIssue[] = [
     ...lint.warnings,
     ...missingFieldWarnings.map((message) => ({
@@ -132,6 +157,7 @@ export function buildWorkoutSavePayload({
       rpe: rpe || null,
       ...(planDayId ? { planDayId } : {}),
       exercises: exercises.map(exerciseToPayload) as ParsedExercise[],
+      ...(structureBlocks.length > 0 ? { structureBlocks } : {}),
     },
   };
 }

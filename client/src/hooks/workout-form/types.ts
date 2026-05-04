@@ -1,4 +1,4 @@
-import type { InsertWorkoutLog, ParsedExercise } from "@shared/schema";
+import type { InsertWorkoutLog, ParsedExercise, StructureBlockInput } from "@shared/schema";
 
 import type { StructuredExercise } from "@/components/ExerciseInput";
 
@@ -33,4 +33,5 @@ export interface UseWorkoutFormProps {
 export type SaveWorkoutInput = Omit<InsertWorkoutLog, "userId"> & {
   title?: string;
   exercises?: ParsedExercise[];
+  structureBlocks?: StructureBlockInput[];
 };
