@@ -393,7 +393,11 @@ const structureStepTargetsSchema = z.object({
   targetTime: z.number().min(0).max(86_400).optional().nullable(),
   targetDistance: z.number().min(0).max(1_000_000).optional().nullable(),
   targetWeight: z.number().min(0).max(2_000).optional().nullable(),
-}).partial().optional().nullable();
+  reps: z.number().int().min(0).max(10_000).optional().nullable(),
+  time: z.number().min(0).max(86_400).optional().nullable(),
+  distance: z.number().min(0).max(1_000_000).optional().nullable(),
+  weight: z.number().min(0).max(2_000).optional().nullable(),
+}).passthrough().optional().nullable();
 const structureStepSchema = z.object({
   stepNumber: z.number().int().min(1).max(10_000),
   minuteIndex: z.number().int().min(1).max(10_000).optional().nullable(),
