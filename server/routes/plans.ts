@@ -194,7 +194,7 @@ router.get(
   "/api/v1/plans/days/:dayId/sets",
   isAuthenticated,
   rateLimiter("planDaySet", 60),
-  asyncHandler(async (req: ExpressRequest<{ dayId: string }>, res: Response) => {
+  asyncHandler(async (req: ExpressRequest<{ dayId: string }, unknown, unknown, { includeStructure?: string }>, res: Response) => {
     const userId = getUserId(req);
     let sets = await storage.workouts.getExerciseSetsByPlanDay(req.params.dayId, userId);
     if (sets === null) {
@@ -214,7 +214,16 @@ router.get(
         }
       }
     }
-    res.json(sets);
+    const includeStructure = req.query.includeStructure === "true";
+    if (!includeStructure) {
+      res.json(sets);
+      return;
+    }
+    const structureBlocks = await storage.workouts.getWorkoutStructureByPlanDay(req.params.dayId, userId);
+    if (structureBlocks === null) {
+      return sendNotFound(res, PLAN_DAY_NOT_FOUND);
+    }
+    res.json({ exerciseSets: sets, structureBlocks });
   }),
 );
 

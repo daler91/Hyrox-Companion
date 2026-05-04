@@ -180,6 +180,22 @@ export class WorkoutStorage {
     return blocks.map((b) => ({ ...b, steps: stepsByBlock.get(b.id) ?? [] }));
   }
 
+  async getWorkoutStructureByPlanDay(planDayId: string, userId: string) {
+    const owns = await this.ownsPlanDay(planDayId, userId);
+    if (!owns) return null;
+    const blocks = await db.select().from(workoutStructureBlocks).where(eq(workoutStructureBlocks.planDayId, planDayId)).orderBy(asc(workoutStructureBlocks.sortOrder));
+    if (blocks.length === 0) return [];
+    const blockIds = blocks.map((b) => b.id);
+    const steps = await db.select().from(workoutStructureSteps).where(inArray(workoutStructureSteps.blockId, blockIds)).orderBy(asc(workoutStructureSteps.stepNumber));
+    const stepsByBlock = new Map<string, typeof steps>();
+    for (const step of steps) {
+      const arr = stepsByBlock.get(step.blockId) ?? [];
+      arr.push(step);
+      stepsByBlock.set(step.blockId, arr);
+    }
+    return blocks.map((b) => ({ ...b, steps: stepsByBlock.get(b.id) ?? [] }));
+  }
+
   // ⚡ Bolt Performance Optimization:
   // Removed redundant pre-fetch existence check (getWorkoutLog) that duplicated
   // the same WHERE clause used by the UPDATE. The UPDATE + RETURNING already

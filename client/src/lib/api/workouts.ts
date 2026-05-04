@@ -2,6 +2,7 @@ import type {
   ExerciseSet,
   InsertWorkoutLog,
   ParsedExercise,
+  StructureBlockInput,
   UpdateWorkoutLog,
   WorkoutLog,
 } from "@shared/schema";
@@ -43,8 +44,8 @@ export interface WorkoutHistoryStats {
 export const workouts = {
   // Server returns the bare WorkoutLog with `exerciseSets` embedded when
   // a `planDayId` is supplied (see workoutService.copyPrescribedSetsIntoLog).
-  create: (data: Omit<InsertWorkoutLog, "userId"> & { title?: string; exercises?: ParsedExercise[] }) =>
-    typedRequest<WorkoutLog & { exerciseSets?: ExerciseSet[] }>("POST", "/api/v1/workouts", data),
+  create: (data: Omit<InsertWorkoutLog, "userId"> & { title?: string; exercises?: ParsedExercise[]; structureBlocks?: StructureBlockInput[] }) =>
+    typedRequest<WorkoutLog & { exerciseSets?: ExerciseSet[]; structureBlocks?: unknown[] }>("POST", "/api/v1/workouts", data),
 
   list: (params?: { limit?: number; offset?: number }) => {
     let qs = "";
@@ -70,11 +71,11 @@ export const workouts = {
    * Returns 404 when the user has no prior workouts yet.
    */
   latest: () =>
-    typedRequest<WorkoutLog & { exerciseSets: ExerciseSet[] }>("GET", "/api/v1/workouts/latest"),
+    typedRequest<WorkoutLog & { exerciseSets: ExerciseSet[]; structureBlocks?: unknown[] }>("GET", "/api/v1/workouts/latest"),
 
-  get: (id: string) => typedRequest<WorkoutLog & { exerciseSets?: ExerciseSet[] }>("GET", `/api/v1/workouts/${id}`),
+  get: (id: string) => typedRequest<WorkoutLog & { exerciseSets?: ExerciseSet[]; structureBlocks?: unknown[] }>("GET", `/api/v1/workouts/${id}`),
 
-  update: (id: string, data: UpdateWorkoutLog & { exercises?: ParsedExercise[] }) =>
+  update: (id: string, data: UpdateWorkoutLog & { exercises?: ParsedExercise[]; structureBlocks?: StructureBlockInput[] }) =>
     typedRequest<WorkoutLog>("PATCH", `/api/v1/workouts/${id}`, data),
 
   delete: (id: string) => typedRequest<{ success: boolean }>("DELETE", `/api/v1/workouts/${id}`),
