@@ -30,6 +30,18 @@ describe('structureBlockSchema EMOM semantics', () => {
     expect(parsed.success).toBe(false);
   });
 
+  it('rejects EMOM steps without minute index', () => {
+    const parsed = structureBlockSchema.safeParse({
+      sectionType: 'main',
+      formatType: 'emom',
+      durationMinutes: 10,
+      steps: [
+        { stepNumber: 1, stepType: 'work', exerciseName: 'Row' },
+      ],
+    });
+    expect(parsed.success).toBe(false);
+  });
+
   it('rejects rest step with targets', () => {
     const parsed = structureBlockSchema.safeParse({
       sectionType: 'main',

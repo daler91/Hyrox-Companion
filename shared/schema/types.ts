@@ -454,6 +454,9 @@ export const structureBlockSchema = z.object({
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "EMOM blocks require at least one step.", path: ["steps"] });
     }
     const minuteIndices = block.steps.map((s) => s.minuteIndex).filter((m): m is number => m != null);
+    if (minuteIndices.length !== block.steps.length) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "EMOM steps require minuteIndex.", path: ["steps"] });
+    }
     if (minuteIndices.length !== new Set(minuteIndices).size) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Duplicate minuteIndex values are not allowed in EMOM patterns.", path: ["steps"] });
     }
