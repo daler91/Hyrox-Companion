@@ -1,4 +1,4 @@
-import { lintWorkoutStructure, type ParsedExercise, type StructureLintIssue } from "@shared/schema";
+import { lintWorkoutStructure, type ParsedExercise, type StructureBlockInput, type StructureLintIssue } from "@shared/schema";
 
 import type { StructuredExercise } from "@/components/ExerciseInput";
 import { exerciseToPayload, generateSummary } from "@/hooks/useWorkoutEditor";
@@ -15,6 +15,7 @@ interface BuildWorkoutSavePayloadInput {
   readonly planDayId?: string | null;
   readonly exerciseBlocks: string[];
   readonly exerciseData: Record<string, StructuredExercise>;
+  readonly structureBlocks: StructureBlockInput[];
   readonly weightLabel: string;
   readonly distanceUnit: string;
 }
@@ -58,6 +59,7 @@ export function buildWorkoutSavePayload({
   planDayId,
   exerciseBlocks,
   exerciseData,
+  structureBlocks,
   weightLabel,
   distanceUnit,
 }: BuildWorkoutSavePayloadInput): SavePayloadResult {
@@ -132,6 +134,7 @@ export function buildWorkoutSavePayload({
       rpe: rpe || null,
       ...(planDayId ? { planDayId } : {}),
       exercises: exercises.map(exerciseToPayload) as ParsedExercise[],
+      structureBlocks,
     },
   };
 }

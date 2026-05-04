@@ -90,6 +90,7 @@ describe('useWorkoutForm', () => {
     useTextMode: true,
     exerciseBlocks: [],
     exerciseData: {},
+    structureBlocks: [],
     weightLabel: 'kg',
     distanceUnit: 'km',
   };
