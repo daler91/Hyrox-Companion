@@ -41,4 +41,26 @@ describe('structureBlockSchema EMOM semantics', () => {
     });
     expect(parsed.success).toBe(false);
   });
+
+  it('preserves legacy timing and ordering fields for backward compatibility', () => {
+    const parsed = structureBlockSchema.safeParse({
+      sectionType: 'main',
+      formatType: 'steady',
+      durationSeconds: 900,
+      rounds: 3,
+      workSeconds: 45,
+      restSeconds: 15,
+      sortOrder: 2,
+      steps: [
+        { stepNumber: 1, stepType: 'work', exerciseName: 'Row', category: 'conditioning', stepRole: 'steady' },
+      ],
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.durationSeconds).toBe(900);
+      expect(parsed.data.sortOrder).toBe(2);
+      expect(parsed.data.steps[0].category).toBe('conditioning');
+      expect(parsed.data.steps[0].stepRole).toBe('steady');
+    }
+  });
 });

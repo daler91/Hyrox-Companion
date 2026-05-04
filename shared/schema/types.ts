@@ -399,7 +399,9 @@ const structureStepSchema = z.object({
   minuteIndex: z.number().int().min(1).max(10_000).optional().nullable(),
   stepType: structureStepTypeSchema.default("work"),
   exerciseName: z.string().min(1).max(255).optional().nullable(),
+  category: z.string().max(255).optional().nullable(),
   customLabel: z.string().max(255).optional().nullable(),
+  stepRole: z.string().max(50).optional().nullable(),
   intensity: z.record(z.string(), z.unknown()).optional().nullable(),
   loadMode: z.string().max(50).optional().nullable(),
   unilateralMode: z.string().max(50).optional().nullable(),
@@ -429,10 +431,15 @@ export const structureBlockSchema = z.object({
   durationMinutes: z.number().int().min(1).max(1_440).optional().nullable(),
   roundCount: z.number().int().min(1).max(10_000).optional().nullable(),
   timeCapMinutes: z.number().int().min(1).max(1_440).optional().nullable(),
+  durationSeconds: z.number().int().min(0).max(86_400).optional().nullable(),
+  rounds: z.number().int().min(1).max(10_000).optional().nullable(),
+  workSeconds: z.number().int().min(0).max(86_400).optional().nullable(),
+  restSeconds: z.number().int().min(0).max(86_400).optional().nullable(),
   workIntervalSec: z.number().int().min(0).max(86_400).optional().nullable(),
   restIntervalSec: z.number().int().min(0).max(86_400).optional().nullable(),
   instructions: z.string().max(2000).optional().nullable(),
   sequenceOrder: z.number().int().min(0).max(10_000).optional(),
+  sortOrder: z.number().int().min(0).max(10_000).optional(),
   steps: z.array(structureStepSchema).min(1).max(200),
 }).superRefine((block, ctx) => {
   if (block.formatType === "emom") {
@@ -450,7 +457,7 @@ export const structureBlockSchema = z.object({
   if (block.formatType === "amrap" && block.roundCount != null) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "AMRAP blocks cannot define fixed roundCount.", path: ["roundCount"] });
   }
-  if (block.formatType === "for_time" && !block.timeCapMinutes) {
+  if (block.formatType === "for_time" && !block.timeCapMinutes && !block.durationSeconds) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "for_time blocks must define timeCapMinutes.", path: ["timeCapMinutes"] });
   }
   if (block.roundCount != null && block.durationMinutes != null && block.formatType === "steady") {
