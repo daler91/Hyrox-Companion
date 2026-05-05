@@ -50,15 +50,34 @@ export function useSaveWorkoutMutation(onSaveSuccess?: () => void) {
 
 
 function extractApiErrorCode(error: unknown): string | null {
-  if (!(error instanceof Error)) return null;
+  if (!error || typeof error !== "object") return null;
 
-  const jsonStart = error.message.indexOf("{");
+  const asRecord = error as Record<string, unknown>;
+  const directCode = asRecord.code;
+  if (typeof directCode === "string") return directCode;
+
+  const payloadCode = getCodeFromPayload(asRecord.payload);
+  if (payloadCode) return payloadCode;
+
+  const responseDataCode = getCodeFromPayload(asRecord.response && typeof asRecord.response === "object" ? (asRecord.response as Record<string, unknown>).data : null);
+  if (responseDataCode) return responseDataCode;
+
+  const message = asRecord.message;
+  if (typeof message !== "string") return null;
+
+  const jsonStart = message.indexOf("{");
   if (jsonStart < 0) return null;
 
   try {
-    const payload = JSON.parse(error.message.slice(jsonStart)) as { code?: unknown };
-    return typeof payload.code === "string" ? payload.code : null;
+    const parsed = JSON.parse(message.slice(jsonStart)) as { code?: unknown };
+    return typeof parsed.code === "string" ? parsed.code : null;
   } catch {
     return null;
   }
+}
+
+function getCodeFromPayload(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") return null;
+  const code = (payload as Record<string, unknown>).code;
+  return typeof code === "string" ? code : null;
 }
