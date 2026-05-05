@@ -207,6 +207,19 @@ describe("Workouts Routes", () => {
     expect(updateRes.body.code).toBe("STRUCTURED_ROWS_REQUIRED");
   });
 
+  it("allows text-only workout create when linked to a plan day", async () => {
+    const createRes = await request(app)
+      .post("/api/v1/workouts")
+      .send({
+        date: "2026-01-02",
+        focus: "Conditioning",
+        mainWorkout: "just text inherited from plan day",
+        planDayId: "plan-day-1",
+      });
+
+    expect(createRes.status).toBe(200);
+  });
+
   it("supports mixed payload contract: legacy-only rejected, structured-only accepted, hybrid accepted", async () => {
     const legacyOnly = await request(app)
       .post("/api/v1/workouts")
