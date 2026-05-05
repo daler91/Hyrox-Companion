@@ -60,8 +60,11 @@ describe("usePlanDayExercises parse state scoping", () => {
       markSaved: vi.fn(),
     });
 
-    useApiMutationMock.mockImplementation((cfg: { onError?: (...args: unknown[]) => void }) => ({
-      mutate: (...args: unknown[]) => cfg.onError?.(...args),
+    useApiMutationMock.mockImplementation((cfg: { onMutate?: (...args: unknown[]) => unknown; onError?: (...args: unknown[]) => void }) => ({
+      mutate: (...args: unknown[]) => {
+        const context = cfg.onMutate?.(...args);
+        cfg.onError?.(new Error("parse failed"), args[0], context);
+      },
       isPending: false,
     }));
   });

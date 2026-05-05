@@ -1,6 +1,6 @@
 import type { ExerciseSet } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { useApiMutation } from "@/hooks/useApiMutation";
 import { useExerciseSetsForOwner } from "@/hooks/useExerciseSetsForOwner";
@@ -43,16 +43,10 @@ function isTimeoutLikeError(error: unknown): boolean {
  * so these edits are the starting state of the logged workout.
  */
 export function usePlanDayExercises(planDayId: string | null) {
-  const [parseFailed, setParseFailed] = useState(false);
-  const [retryParse, setRetryParse] = useState<null | (() => void)>(null);
-
-  useEffect(() => {
-    // Parse errors are scoped to one plan day. When the sheet points at a
-    // different owner, drop stale warning/retry state immediately so an
-    // unrelated empty plan day doesn't inherit a blocked Save state.
-    setParseFailed(false);
-    setRetryParse(null);
-  }, [planDayId]);
+  const [parseFailureState, setParseFailureState] = useState<{
+    ownerId: string | null;
+    retry: null | (() => void);
+  }>({ ownerId: null, retry: null });
 
   const queryKey = planDayId
     ? QUERY_KEYS.planDayExercises(planDayId)
@@ -93,13 +87,20 @@ export function usePlanDayExercises(planDayId: string | null) {
   const reparseFreeText = useApiMutation({
     mutationFn: () => api.plans.reparseDay(planDayId!),
     invalidateQueries: planDayId ? [QUERY_KEYS.planDayExercises(planDayId)] : undefined,
-    onSuccess: () => {
-      setParseFailed(false);
-      setRetryParse(null);
+    onMutate: () => ({ ownerId: planDayId }),
+    onSuccess: (_data, _variables, context) => {
+      if (!context?.ownerId) return;
+      setParseFailureState((prev) =>
+        prev.ownerId === context.ownerId ? { ownerId: null, retry: null } : prev,
+      );
     },
-    onError: () => {
-      setParseFailed(true);
-      setRetryParse(() => () => reparseFreeText.mutate(undefined));
+    onError: (_error, _variables, context) => {
+      if (!context?.ownerId) return;
+      const ownerId = context.ownerId;
+      setParseFailureState({
+        ownerId,
+        retry: () => reparseFreeText.mutate(undefined),
+      });
     },
     errorToast: "Parse failed — try rewording and retry.",
   });
@@ -111,13 +112,21 @@ export function usePlanDayExercises(planDayId: string | null) {
     mutationFn: (payload: ParseFromImagePayload) =>
       api.plans.reparseDayFromImage(planDayId!, payload),
     invalidateQueries: planDayId ? [QUERY_KEYS.planDayExercises(planDayId)] : undefined,
-    onSuccess: () => {
-      setParseFailed(false);
-      setRetryParse(null);
+    onMutate: (payload) => ({ ownerId: planDayId, payload }),
+    onSuccess: (_data, _variables, context) => {
+      if (!context?.ownerId) return;
+      setParseFailureState((prev) =>
+        prev.ownerId === context.ownerId ? { ownerId: null, retry: null } : prev,
+      );
     },
-    onError: (error, variables) => {
-      setParseFailed(true);
-      setRetryParse(() => () => reparseFromImage.mutate(variables));
+    onError: (error, _variables, context) => {
+      if (!context?.ownerId) return;
+      const ownerId = context.ownerId;
+      const payload = context.payload;
+      setParseFailureState({
+        ownerId,
+        retry: payload ? () => reparseFromImage.mutate(payload) : null,
+      });
     },
     errorToast: (error) =>
       isTimeoutLikeError(error)
@@ -128,12 +137,9 @@ export function usePlanDayExercises(planDayId: string | null) {
         : { title: "Couldn't parse that photo — try a clearer shot." },
   });
 
-  useEffect(() => {
-    if ((exercisesQuery.data?.length ?? 0) > 0) {
-      setParseFailed(false);
-      setRetryParse(null);
-    }
-  }, [exercisesQuery.data]);
+  const hasStructuredRows = (exercisesQuery.data?.length ?? 0) > 0;
+  const parseFailed = !!planDayId && !hasStructuredRows && parseFailureState.ownerId === planDayId;
+  const retryParse = parseFailed ? parseFailureState.retry : null;
 
   // Debounced PATCH of free-text fields (focus / mainWorkout / accessory /
   // notes) on the plan day. Intentionally not optimistic-cached — the
