@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { useLocation } from "wouter";
 
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import {
   clearLogWorkoutDraft,
@@ -10,6 +11,7 @@ import {
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { useWorkoutEditor } from "@/hooks/useWorkoutEditor";
 import { useWorkoutForm } from "@/hooks/useWorkoutForm";
+import { featureFlags } from "@/lib/featureFlags";
 
 import { LogWorkoutStepperLayout } from "./LogWorkoutStepperLayout";
 import { useDuplicateLastWorkout } from "./useDuplicateLastWorkout";
@@ -131,9 +133,18 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
   });
 
   const hasWorkoutDetails = exerciseBlocks.length > 0 || freeText.trim().length > 0;
+  const activeEditorMode = featureFlags.emomBuilderEnabled ? "structured-emom" : "legacy-text";
 
   return (
-    <LogWorkoutStepperLayout
+    <>
+      {!import.meta.env.PROD && (
+        <div className="container max-w-3xl mx-auto px-4 pt-3">
+          <Badge variant="outline" data-testid="badge-editor-mode-diagnostics">
+            Editor mode: {activeEditorMode}
+          </Badge>
+        </div>
+      )}
+      <LogWorkoutStepperLayout
       step={step}
       setStep={setStep}
       title={title}
@@ -179,5 +190,6 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
       onParseImage={(payload, opts) => parseImageMutation.mutate(payload, opts)}
       isParsingImage={parseImageMutation.isPending}
     />
+    </>
   );
 }

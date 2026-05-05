@@ -42,6 +42,19 @@ if (env.ALLOW_DEV_AUTH_BYPASS === "true") {
 
 configureObservability();
 
+const clientEmomFlagRaw = process.env.VITE_EMOM_BUILDER_ENABLED;
+const clientEmomFlag = clientEmomFlagRaw === "true";
+const serverEmomFlag = env.EMOM_BUILDER_ENABLED === "true";
+logger.info({
+  context: "startup-config",
+  nodeEnv: env.NODE_ENV,
+  emomBuilder: {
+    server: serverEmomFlag,
+    clientBuild: clientEmomFlag,
+    matched: serverEmomFlag === clientEmomFlag,
+  },
+}, "Startup config check completed");
+
 const app = express();
 
 const { isDev } = configureApp(app);
