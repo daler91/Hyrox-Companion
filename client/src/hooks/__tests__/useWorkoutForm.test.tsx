@@ -11,6 +11,7 @@ import * as workoutEditorHook from '@/hooks/useWorkoutEditor';
 import * as queryClientLib from '@/lib/queryClient';
 
 import { useWorkoutForm } from '../useWorkoutForm';
+import type { UseWorkoutFormProps } from '../workout-form/types';
 
 vi.mock('wouter', () => ({
   useLocation: vi.fn(),
@@ -86,7 +87,7 @@ describe('useWorkoutForm', () => {
   });
 
 
-  const defaultProps = {
+  const defaultProps: UseWorkoutFormProps = {
     useTextMode: true,
     exerciseBlocks: [],
     exerciseData: {},
@@ -120,7 +121,7 @@ describe('useWorkoutForm', () => {
     };
   };
 
-  const renderFormHook = (props = defaultProps) => renderHook(() => useWorkoutForm(props), { wrapper });
+  const renderFormHook = (props: UseWorkoutFormProps = defaultProps) => renderHook(() => useWorkoutForm(props), { wrapper });
 
 
   it('initializes with default state', () => {
