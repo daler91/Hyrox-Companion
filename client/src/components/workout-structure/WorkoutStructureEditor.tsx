@@ -1,12 +1,12 @@
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
+import { buildEmomPreview } from "./emomPreview";
 import { workoutStructureFeatureFlags } from "./featureFlags";
 import type { BlockType, StepType, WorkoutSection, WorkoutStructureConfig } from "./types";
-import { buildEmomPreview } from "./emomPreview";
 
 const sections: WorkoutSection[] = ["warmup", "main", "accessory", "cooldown", "mobility"];
 const blockTypes: BlockType[] = ["steady", "emom", "rounds", "amrap", "interval", "for_time"];

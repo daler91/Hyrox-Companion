@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { DraftExerciseTable } from "@/components/workout/DraftExerciseTable";
 import { ParseStatusStrip } from "@/components/workout/ParseStatusStrip";
+import { StructureBlocksEditor } from "@/components/workout-structure";
 
 import type { ComposerExerciseProps } from "../sharedComposerProps";
 import { StepFooter } from "../StepFooter";
@@ -195,6 +196,16 @@ export function ConfirmStep({
             weightUnit={weightUnit}
             distanceUnit={distanceUnit}
           />
+
+          <div className="space-y-2">
+            <div>
+              <h3 className="text-sm font-medium">Structured blocks (EMOM, intervals, AMRAP…)</h3>
+              <p className="text-xs text-muted-foreground">
+                Use this for time-domain formats that don't fit into per-set rows.
+              </p>
+            </div>
+            <StructureBlocksEditor value={structureBlocks} onChange={setStructureBlocks} />
+          </div>
 
           {freeText.trim().length > 0 && (
             <Collapsible open={isLegacyNoteOpen} onOpenChange={handleLegacyNoteOpenChange}>

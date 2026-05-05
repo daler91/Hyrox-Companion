@@ -1,6 +1,7 @@
 import { lintWorkoutStructure, type ParsedExercise, type StructureBlockInput, type StructureLintIssue } from "@shared/schema";
 
 import type { StructuredExercise } from "@/components/ExerciseInput";
+import { configToStructureBlock } from "@/components/workout-structure";
 import { exerciseToPayload, generateSummary } from "@/hooks/useWorkoutEditor";
 import { getMissingFieldWarnings } from "@/lib/exerciseWarnings";
 
@@ -63,22 +64,13 @@ function toStructureBlocks(exercises: readonly StructuredExercise[]): StructureB
   const blocks: StructureBlockInput[] = [];
   exercises.forEach((exercise, idx) => {
     if (!exercise.structure || exercise.structure.steps.length === 0) return;
-    const steps = exercise.structure.steps.map((step, stepIdx) => ({
-      stepNumber: stepIdx + 1,
-      stepType: step.type,
-      exerciseName: step.type === "rest" ? undefined : (step.exercise ?? exercise.customLabel ?? exercise.exerciseName),
-      minuteIndex: exercise.structure?.blockType === "emom" ? stepIdx + 1 : undefined,
-      durationSeconds: step.durationSeconds,
-      instructions: step.target,
-    }));
-    blocks.push({
-      sectionType: exercise.structure.section,
-      formatType: exercise.structure.blockType,
-      durationMinutes: exercise.structure.blockType === "emom" ? exercise.structure.emomDurationMinutes ?? steps.length : undefined,
-      sequenceOrder: idx,
-      sortOrder: idx,
-      steps,
-    });
+    blocks.push(
+      configToStructureBlock(exercise.structure, {
+        sequenceOrder: idx,
+        sortOrder: idx,
+        fallbackExerciseName: exercise.customLabel ?? exercise.exerciseName,
+      }),
+    );
   });
   return blocks;
 }
