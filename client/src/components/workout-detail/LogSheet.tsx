@@ -180,7 +180,7 @@ export function LogSheet({
                     {planSets.retryParse ? (
                       <Button
                         type="button"
-                        variant="link"
+                        variant="ghost"
                         className="h-auto p-0 text-amber-900"
                         onClick={planSets.retryParse}
                         data-testid={`log-parse-retry-${entry.id}`}

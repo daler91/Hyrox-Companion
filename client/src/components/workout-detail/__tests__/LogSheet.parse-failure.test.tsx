@@ -20,7 +20,7 @@ vi.mock("@/components/ui/responsive-sheet", () => ({
   ResponsiveSheet: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 
-const baseEntry: TimelineEntry = {
+const baseEntry = {
   id: "entry-1",
   userId: "user-1",
   date: "2026-05-05",
@@ -36,7 +36,7 @@ const baseEntry: TimelineEntry = {
   coachRating: null,
   rpe: null,
   title: null,
-  source: "plan",
+  source: "manual",
   planDayId: "plan-day-1",
   mainWorkout: "5x5 squat",
   accessory: null,
@@ -51,7 +51,7 @@ const baseEntry: TimelineEntry = {
   approvedAt: null,
   createdAt: "2026-05-05T00:00:00.000Z",
   updatedAt: "2026-05-05T00:00:00.000Z",
-};
+} as unknown as TimelineEntry;
 
 describe("LogSheet parse failures", () => {
   it("shows warning and blocks save when reparse fails with no rows", async () => {
