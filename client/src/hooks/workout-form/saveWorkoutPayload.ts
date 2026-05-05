@@ -124,6 +124,15 @@ export function buildWorkoutSavePayload({
   }
 
   const exercises = structuredExercises(exerciseBlocks, exerciseData);
+  const hasStructuredRows = exercises.length > 0 || incomingStructureBlocks.length > 0;
+
+  if (freeText.trim() && !hasStructuredRows) {
+    return {
+      ok: false,
+      description: "Please add at least one structured exercise row or run Parse before saving.",
+    };
+  }
+
   if (exercises.length === 0 && incomingStructureBlocks.length === 0 && !freeText.trim()) {
     return {
       ok: false,
