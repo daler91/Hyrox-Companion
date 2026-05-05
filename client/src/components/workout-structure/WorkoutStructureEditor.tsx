@@ -70,6 +70,9 @@ export function WorkoutStructureEditor({ value, onChange }: Props) {
 
       {value.blockType === "emom" && (
         <div className="space-y-2">
+          <div className="rounded-md border border-primary/25 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
+            EMOM is configured as a block, not a single exercise.
+          </div>
           <div className="grid gap-3 md:grid-cols-2">
           <div>
             <Label className="text-xs">EMOM duration (min)</Label>
@@ -104,7 +107,19 @@ export function WorkoutStructureEditor({ value, onChange }: Props) {
       )}
 
       <div className="space-y-2">
-        <Label className="text-xs">Step editor</Label>
+        <div className="flex items-center justify-between gap-2">
+          <Label className="text-xs">Step editor</Label>
+          {value.blockType !== "emom" && (
+            <Button type="button" variant="secondary" size="sm" onClick={enableEmomBlock}>
+              Add Block → EMOM
+            </Button>
+          )}
+        </div>
+        {value.blockType !== "emom" && (
+          <div className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+            Want an EMOM? Use <span className="font-medium text-foreground">Add Block → EMOM</span> to configure it as a block.
+          </div>
+        )}
         {value.steps.map((step, idx) => (
           <div key={step.id} className="grid grid-cols-12 gap-2 items-center rounded border p-2">
             <span className="col-span-1 text-xs text-muted-foreground">{idx + 1}</span>
@@ -154,7 +169,7 @@ export function WorkoutStructureEditor({ value, onChange }: Props) {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
               <DropdownMenuItem onClick={addWorkStep}>Work step</DropdownMenuItem>
-              <DropdownMenuItem onClick={enableEmomBlock}>EMOM</DropdownMenuItem>
+              <DropdownMenuItem disabled>EMOM is block-only</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

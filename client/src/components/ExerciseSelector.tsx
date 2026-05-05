@@ -45,6 +45,10 @@ export function ExerciseSelector({ selectedExercises, onToggle, onAdd, allowDupl
 
   return (
     <div className="space-y-4" data-testid="exercise-selector">
+      <div className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-xs text-muted-foreground" data-testid="exercise-selector-emom-help">
+        EMOM is configured as a block, not a single exercise.
+      </div>
+
       {exercisesByCategory.map(({ category, label, exercises }) => (
         <div key={category}>
           <p className="text-xs font-medium text-muted-foreground mb-2">{label}</p>
