@@ -7,8 +7,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { categoryBorderColors } from "@/lib/exerciseUtils";
-import { featureFlags } from "@/lib/featureFlags";
 import { getExerciseMissingFields } from "@/lib/exerciseWarnings";
+import { featureFlags } from "@/lib/featureFlags";
 
 import type { FieldConfig, FieldKey } from "./exercise-input";
 import { ExerciseHeader, ExerciseWarnings, MultiSetTable, SingleSetFields } from "./exercise-input";

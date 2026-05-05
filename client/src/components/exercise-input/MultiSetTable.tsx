@@ -1,11 +1,11 @@
-import { Minus,Plus } from "lucide-react";
+import { Minus, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 import type { SetData } from "../ExerciseInput";
-import type { FieldConfig,FieldKey } from "./types";
+import type { FieldConfig, FieldKey } from "./types";
 
 interface MultiSetTableProps {
   readonly contextChips?: string[];
@@ -45,7 +45,24 @@ export function MultiSetTable({ exerciseName, fields, fieldConfig, sets, weightU
       )}
       {sets.map((set, idx) => (
         <div key={set.setNumber} className="grid gap-2 items-center" style={{ gridTemplateColumns: colTemplate }} data-testid={`set-row-${exerciseName}-${idx}`}>
-          <span className="text-xs text-muted-foreground text-center" title={rowLabels?.[idx]}>{rowLabels?.[idx] ?? set.setNumber}</span>
+          {rowLabels?.[idx] ? (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="text-xs text-muted-foreground text-center cursor-help">
+                    {rowLabels?.[idx] ?? set.setNumber}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{rowLabels?.[idx]}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          ) : (
+            <span className="text-xs text-muted-foreground text-center">
+              {rowLabels?.[idx] ?? set.setNumber}
+            </span>
+          )}
           {fields.map((field) => (
             <Input
               key={field}

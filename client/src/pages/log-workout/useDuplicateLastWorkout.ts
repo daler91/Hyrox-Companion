@@ -1,7 +1,6 @@
+import type { StructureBlockInput } from "@shared/schema";
 import { useMutation } from "@tanstack/react-query";
 import { format } from "date-fns";
-
-import type { StructureBlockInput } from "@shared/schema";
 
 import type { StructuredExercise } from "@/components/ExerciseInput";
 import type { useToast } from "@/hooks/use-toast";

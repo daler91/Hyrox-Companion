@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { structureBlockSchema } from './types';
 
 describe('structureBlockSchema EMOM semantics', () => {
