@@ -66,6 +66,10 @@ function toStructureBlocks(exercises: readonly StructuredExercise[]): StructureB
       sectionType: exercise.structure.section,
       formatType: exercise.structure.blockType,
       durationMinutes: exercise.structure.blockType === "emom" ? exercise.structure.emomDurationMinutes ?? steps.length : undefined,
+      rounds: exercise.structure.blockType === "rounds" ? exercise.structure.rounds : undefined,
+      timeCapMinutes: exercise.structure.blockType === "for_time" ? exercise.structure.timeCapMinutes : undefined,
+      workSeconds: exercise.structure.blockType === "interval" ? exercise.structure.intervalWorkSeconds : undefined,
+      restSeconds: exercise.structure.blockType === "interval" ? exercise.structure.intervalRestSeconds : undefined,
       sequenceOrder: idx,
       sortOrder: idx,
       steps,
@@ -123,8 +127,9 @@ export function buildWorkoutSavePayload({
   }
 
   const missingFieldWarnings = [...new Set(exercises.flatMap((exercise) => getMissingFieldWarnings(exercise)))];
-  const structureBlocks = toStructureBlocks(exercises);
-  const lint = lintWorkoutStructure(structureBlocks, exercises.map(exerciseToPayload) as ParsedExercise[]);
+  const generatedStructureBlocks = toStructureBlocks(exercises);
+  const mergedStructureBlocks = generatedStructureBlocks.length > 0 ? generatedStructureBlocks : incomingStructureBlocks;
+  const lint = lintWorkoutStructure(mergedStructureBlocks, exercises.map(exerciseToPayload) as ParsedExercise[]);
   const lintIssues: StructureLintIssue[] = [
     ...lint.warnings,
     ...missingFieldWarnings.map((message) => ({
@@ -159,7 +164,7 @@ export function buildWorkoutSavePayload({
       rpe: rpe || null,
       ...(planDayId ? { planDayId } : {}),
       exercises: exercises.map(exerciseToPayload) as ParsedExercise[],
-      ...(incomingStructureBlocks.length > 0 ? { structureBlocks: incomingStructureBlocks } : {}),
+      ...(mergedStructureBlocks.length > 0 ? { structureBlocks: mergedStructureBlocks } : {}),
     },
   };
 }

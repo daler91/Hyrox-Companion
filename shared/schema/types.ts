@@ -473,8 +473,17 @@ export const structureBlockSchema = z.object({
   if (block.formatType === "amrap" && block.roundCount != null) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "AMRAP blocks cannot define fixed roundCount.", path: ["roundCount"] });
   }
+  if (block.formatType === "amrap" && block.rounds != null) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "AMRAP blocks cannot define fixed rounds.", path: ["rounds"] });
+  }
+  if (block.formatType === "rounds" && block.roundCount == null && block.rounds == null) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "rounds blocks must define rounds.", path: ["rounds"] });
+  }
   if (block.formatType === "for_time" && !block.timeCapMinutes && !block.durationSeconds) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "for_time blocks must define timeCapMinutes.", path: ["timeCapMinutes"] });
+  }
+  if (block.formatType === "interval" && (block.workSeconds == null || block.restSeconds == null) && (block.workIntervalSec == null || block.restIntervalSec == null)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "interval blocks must define work and rest seconds.", path: ["workSeconds"] });
   }
   if (block.roundCount != null && block.durationMinutes != null && block.formatType === "steady") {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "steady blocks cannot define both roundCount and durationMinutes." });

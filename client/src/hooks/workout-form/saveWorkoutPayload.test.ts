@@ -70,11 +70,10 @@ describe("buildWorkoutSavePayload", () => {
       freeText: "EMOM builder",
       structureBlocks: [{
         sectionType: "main",
-        blockType: "emom",
-        orderIndex: 0,
-        label: "Main EMOM",
+        formatType: "emom",
+        sequenceOrder: 0,
         durationMinutes: 12,
-        steps: [{ minuteIndex: 1, exerciseName: "Burpee Broad Jump", target: "10 reps" }],
+        steps: [{ stepNumber: 1, stepType: "work", minuteIndex: 1, exerciseName: "burpees", targets: { targetReps: 10 } }],
       }],
     });
 
@@ -83,8 +82,32 @@ describe("buildWorkoutSavePayload", () => {
     expect(result.payload.structureBlocks).toHaveLength(1);
     expect(result.payload.structureBlocks?.[0]).toMatchObject({
       sectionType: "main",
-      blockType: "emom",
-      label: "Main EMOM",
+      formatType: "emom",
     });
+  });
+
+  it("does not emit fixed rounds for amrap blocks from exercise structure", () => {
+    const exercise: StructuredExercise = {
+      exerciseName: "burpees",
+      category: "conditioning",
+      sets: [{ setNumber: 1, reps: 10 }],
+      structure: {
+        section: "main",
+        blockType: "amrap",
+        rounds: 5,
+        steps: [{ id: "s1", type: "work", exercise: "burpees", target: "10 reps" }],
+      },
+    };
+    const result = buildWorkoutSavePayload({
+      ...baseInput,
+      title: "AMRAP Session",
+      exerciseBlocks: ["b1"],
+      exerciseData: { b1: exercise },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.payload.structureBlocks?.[0]).toMatchObject({ formatType: "amrap" });
+    expect(result.payload.structureBlocks?.[0]?.rounds).toBeUndefined();
   });
 });
