@@ -20,6 +20,7 @@ export interface UseWorkoutFormProps {
   useTextMode: boolean;
   exerciseBlocks: string[];
   exerciseData: Record<string, StructuredExercise>;
+  structureBlocks: StructureBlockInput[];
   weightLabel: string;
   distanceUnit: string;
   initialValues?: WorkoutFormInitialValues;

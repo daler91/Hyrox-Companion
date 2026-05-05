@@ -14,6 +14,7 @@ export function useWorkoutForm({
   useTextMode: _useTextMode,
   exerciseBlocks,
   exerciseData,
+  structureBlocks,
   weightLabel,
   distanceUnit,
   initialValues,
@@ -40,6 +41,7 @@ export function useWorkoutForm({
       planDayId: form.planDayId,
       exerciseBlocks,
       exerciseData,
+      structureBlocks,
       weightLabel,
       distanceUnit,
     });
@@ -70,6 +72,7 @@ export function useWorkoutForm({
     form,
     exerciseBlocks,
     exerciseData,
+    structureBlocks,
     weightLabel,
     distanceUnit,
     toast,

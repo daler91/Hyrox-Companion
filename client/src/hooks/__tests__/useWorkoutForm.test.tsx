@@ -90,6 +90,7 @@ describe('useWorkoutForm', () => {
     useTextMode: true,
     exerciseBlocks: [],
     exerciseData: {},
+    structureBlocks: [],
     weightLabel: 'kg',
     distanceUnit: 'km',
   };
@@ -369,7 +370,7 @@ describe('useWorkoutForm', () => {
           rpe: null,
           exercises: [
             { exerciseName: 'squat', sets: [{ reps: 10, weight: 100 }] }
-          ]
+          ],
         }, expect.any(AbortSignal));
       });
     });

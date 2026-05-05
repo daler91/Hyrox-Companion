@@ -1,4 +1,4 @@
-import type { ExerciseSet, TimelineEntry } from "@shared/schema";
+import type { ExerciseSet, StructureBlockInput, TimelineEntry } from "@shared/schema";
 
 import type { StructuredExercise } from "@/components/ExerciseInput";
 import { getTodayString } from "@/lib/dateUtils";
@@ -30,6 +30,7 @@ export interface LogWorkoutDraft {
   useTextMode: boolean;
   exerciseBlocks: string[];
   exerciseData: Record<string, StructuredExercise>;
+  structureBlocks: StructureBlockInput[];
   blockCounter: number;
   step: WorkoutStep;
 }
@@ -73,6 +74,7 @@ export function loadLogWorkoutDraft(userKey: string): LoadedDraft | null {
       useTextMode: parsed.useTextMode ?? false,
       exerciseBlocks: parsed.exerciseBlocks ?? [],
       exerciseData: parsed.exerciseData ?? {},
+      structureBlocks: parsed.structureBlocks ?? [],
       blockCounter: parsed.blockCounter ?? 0,
       step: parsed.step ?? FIRST_STEP,
     };
@@ -121,6 +123,7 @@ export function saveLogWorkoutDraftFromTimelineEntry(
     useTextMode: structured.names.length === 0,
     exerciseBlocks: structured.names,
     exerciseData: structured.data,
+    structureBlocks: [],
     blockCounter: structured.names.length,
     step: 2,
   });

@@ -64,30 +64,27 @@ describe("buildWorkoutSavePayload", () => {
   });
 
   it("includes structureBlocks when editor structure is present", () => {
-    const exercise: StructuredExercise = {
-      exerciseName: "custom",
-      customLabel: "Ski Erg",
-      category: "conditioning",
-      sets: [{ setNumber: 1, time: 60 }],
-      structure: {
-        section: "main",
-        blockType: "emom",
-        emomDurationMinutes: 10,
-        steps: [{ id: "step-1", type: "work", exercise: "Ski Erg", target: "12 cal" }],
-      },
-    };
     const result = buildWorkoutSavePayload({
       ...baseInput,
-      exerciseBlocks: ["block-1"],
-      exerciseData: { "block-1": exercise },
+      title: "HYROX Blocks",
+      freeText: "EMOM builder",
+      structureBlocks: [{
+        sectionType: "main",
+        blockType: "emom",
+        orderIndex: 0,
+        label: "Main EMOM",
+        durationMinutes: 12,
+        steps: [{ minuteIndex: 1, exerciseName: "Burpee Broad Jump", target: "10 reps" }],
+      }],
     });
+
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.payload.structureBlocks).toHaveLength(1);
     expect(result.payload.structureBlocks?.[0]).toMatchObject({
       sectionType: "main",
-      formatType: "emom",
-      durationMinutes: 10,
+      blockType: "emom",
+      label: "Main EMOM",
     });
   });
 });

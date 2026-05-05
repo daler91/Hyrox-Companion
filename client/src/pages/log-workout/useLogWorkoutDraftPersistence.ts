@@ -10,6 +10,7 @@ import {
   saveLogWorkoutDraft,
   type WorkoutStep,
 } from "@/hooks/useLogWorkoutDraft";
+import type { StructureBlockInput } from "@shared/schema";
 
 const DRAFT_SAVE_DEBOUNCE_MS = 400;
 
@@ -32,6 +33,7 @@ interface UseLogWorkoutDraftPersistenceOptions {
   readonly useTextMode: boolean;
   readonly exerciseBlocks: string[];
   readonly exerciseData: Record<string, StructuredExercise>;
+  readonly structureBlocks: StructureBlockInput[];
   readonly step: WorkoutStep;
   readonly toast: ReturnType<typeof useToast>["toast"];
 }
@@ -48,6 +50,7 @@ export function useLogWorkoutDraftPersistence({
   useTextMode,
   exerciseBlocks,
   exerciseData,
+  structureBlocks,
   step,
   toast,
 }: UseLogWorkoutDraftPersistenceOptions) {
@@ -75,6 +78,7 @@ export function useLogWorkoutDraftPersistence({
         useTextMode,
         exerciseBlocks,
         exerciseData,
+        structureBlocks,
         blockCounter: currentBlockCounter,
         step,
       });
@@ -91,6 +95,7 @@ export function useLogWorkoutDraftPersistence({
     useTextMode,
     exerciseBlocks,
     exerciseData,
+    structureBlocks,
     currentBlockCounter,
     step,
   ]);
