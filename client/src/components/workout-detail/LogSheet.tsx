@@ -81,6 +81,8 @@ export function LogSheet({
     onLogAsPlanned(entry, rpe);
   };
 
+  const parseBlocked = !!entry.planDayId && planSets.parseFailed && planSets.exerciseSets.length === 0;
+
   return (
     <ResponsiveSheet
       open={!!entry}
@@ -165,6 +167,26 @@ export function LogSheet({
                   onOpenConversionHelper={() => planSets.reparseFreeText.mutate(undefined)}
                   defaultExpanded
                 />
+                {parseBlocked ? (
+                  <div
+                    className="rounded-md border border-amber-400/50 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+                    role="alert"
+                    data-testid={`log-parse-failed-${entry.id}`}
+                  >
+                    <p>Parse failed; workout cannot be saved as text-only.</p>
+                    {planSets.retryParse ? (
+                      <Button
+                        type="button"
+                        variant="link"
+                        className="h-auto p-0 text-amber-900"
+                        onClick={planSets.retryParse}
+                        data-testid={`log-parse-retry-${entry.id}`}
+                      >
+                        Retry parse
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -176,7 +198,7 @@ export function LogSheet({
             className="w-full"
             size="lg"
             onClick={handleLog}
-            disabled={isLogging || planSets.isSaving}
+            disabled={isLogging || planSets.isSaving || parseBlocked}
             data-testid={`log-as-planned-${entry.id}`}
           >
             <ListChecks className="mr-2 h-4 w-4" />
