@@ -81,6 +81,11 @@ export function LogSheet({
     onLogAsPlanned(entry, rpe);
   };
 
+  const parseBlocked = !!entry.planDayId && planSets.parseFailed && planSets.exerciseSets.length === 0;
+  const logButtonLabel = planSets.isSaving ? "Saving edits…" : isLogging ? "Logging…" : "Log as planned";
+  const showAskCoach = !!onAskCoach;
+  const showSkip = !!onSkip;
+
   return (
     <ResponsiveSheet
       open={!!entry}
@@ -165,6 +170,26 @@ export function LogSheet({
                   onOpenConversionHelper={() => planSets.reparseFreeText.mutate(undefined)}
                   defaultExpanded
                 />
+                {parseBlocked ? (
+                  <div
+                    className="rounded-md border border-amber-400/50 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+                    role="alert"
+                    data-testid={`log-parse-failed-${entry.id}`}
+                  >
+                    <p>Parse failed; workout cannot be saved as text-only.</p>
+                    {planSets.retryParse ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="h-auto p-0 text-amber-900"
+                        onClick={planSets.retryParse}
+                        data-testid={`log-parse-retry-${entry.id}`}
+                      >
+                        Retry parse
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -176,34 +201,30 @@ export function LogSheet({
             className="w-full"
             size="lg"
             onClick={handleLog}
-            disabled={isLogging || planSets.isSaving}
+            disabled={isLogging || planSets.isSaving || parseBlocked}
             data-testid={`log-as-planned-${entry.id}`}
           >
             <ListChecks className="mr-2 h-4 w-4" />
-            {(() => {
-              if (planSets.isSaving) return "Saving edits…";
-              if (isLogging) return "Logging…";
-              return "Log as planned";
-            })()}
+            {logButtonLabel}
           </Button>
 
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {onAskCoach ? (
+            {showAskCoach ? (
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => onAskCoach(entry)}
+                onClick={() => onAskCoach?.(entry)}
                 data-testid={`log-ask-coach-${entry.id}`}
               >
                 <MessageSquare className="mr-2 h-4 w-4" />
                 Ask coach
               </Button>
             ) : null}
-            {onSkip ? (
+            {showSkip ? (
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => onSkip(entry)}
+                onClick={() => onSkip?.(entry)}
                 data-testid={`log-skip-${entry.id}`}
               >
                 <SkipForward className="mr-2 h-4 w-4" />
