@@ -6,7 +6,7 @@ import { logger } from "../logger";
 
 type OwnerType = "workout_log" | "plan_day";
 type SourceType = "manual" | "voice" | "photo" | "import";
-type CounterName = "text_only_rows_detected" | "auto_hydration_attempted" | "auto_hydration_succeeded" | "auto_hydration_failed" | "manual_fix_completed" | "rejected_text_only_write" | "parse_text_attempted" | "parse_text_succeeded" | "parse_text_failed" | "parse_photo_attempted" | "parse_photo_succeeded" | "parse_photo_failed";
+type CounterName = "text_only_rows_detected" | "auto_hydration_attempted" | "auto_hydration_succeeded" | "auto_hydration_failed" | "manual_fix_completed" | "rejected_text_only_write" | "parse_text_attempted" | "parse_text_succeeded" | "parse_text_failed" | "parse_photo_attempted" | "parse_photo_succeeded" | "parse_photo_failed" | "structured_blocks_fallback" | "structured_blocks_accepted";
 
 export async function incrementStructuredExerciseCounter(ownerType: OwnerType, source: SourceType, counterName: CounterName, amount = 1, day: string | null = null): Promise<void> {
   await db.execute(sql`
