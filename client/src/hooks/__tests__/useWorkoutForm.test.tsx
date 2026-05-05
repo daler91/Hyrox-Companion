@@ -11,6 +11,7 @@ import * as workoutEditorHook from '@/hooks/useWorkoutEditor';
 import * as queryClientLib from '@/lib/queryClient';
 
 import { useWorkoutForm } from '../useWorkoutForm';
+import type { UseWorkoutFormProps } from '../workout-form/types';
 
 vi.mock('wouter', () => ({
   useLocation: vi.fn(),
@@ -86,7 +87,7 @@ describe('useWorkoutForm', () => {
   });
 
 
-  const defaultProps = {
+  const defaultProps: UseWorkoutFormProps = {
     useTextMode: true,
     exerciseBlocks: [],
     exerciseData: {},
@@ -120,7 +121,7 @@ describe('useWorkoutForm', () => {
     };
   };
 
-  const renderFormHook = (props = defaultProps) => renderHook(() => useWorkoutForm(props), { wrapper });
+  const renderFormHook = (props: UseWorkoutFormProps = defaultProps) => renderHook(() => useWorkoutForm(props), { wrapper });
 
 
   it('initializes with default state', () => {
@@ -296,6 +297,25 @@ describe('useWorkoutForm', () => {
       });
       expect(queryClientLib.apiRequest).not.toHaveBeenCalled();
     });
+
+    it('blocks save when text exists but there are no structured rows', () => {
+      const { result } = renderFormHook({ ...defaultProps, useTextMode: false, exerciseBlocks: ['missing-row'] });
+
+      act(() => {
+        result.current.setFreeText('Parsed text that did not create rows');
+      });
+
+      act(() => {
+        result.current.handleSave();
+      });
+
+      expect(mockToast).toHaveBeenCalledWith({
+        title: 'Missing workout details',
+        description: 'Please add at least one structured exercise row or run Parse before saving.',
+        variant: 'destructive',
+      });
+      expect(queryClientLib.apiRequest).not.toHaveBeenCalled();
+    });
   });
 
   describe('Successful Save (handleSave)', () => {
@@ -372,6 +392,43 @@ describe('useWorkoutForm', () => {
             { exerciseName: 'squat', sets: [{ reps: 10, weight: 100 }] }
           ],
         }, expect.any(AbortSignal));
+      });
+    });
+
+    it('allows save when structured rows are present with free text', async () => {
+      const mockExercise = { exerciseName: 'run', sets: [{ reps: 1, duration: 20 }] };
+      vi.mocked(workoutEditorHook.exerciseToPayload).mockReturnValue({
+        exerciseName: 'run',
+        sets: [{ reps: 1, duration: 20 }],
+      } as unknown as ReturnType<typeof workoutEditorHook.exerciseToPayload>);
+
+      const { result } = renderFormHook({
+        ...defaultProps,
+        useTextMode: false,
+        exerciseBlocks: ['block-1'],
+        exerciseData: { 'block-1': mockExercise } as unknown as typeof defaultProps.exerciseData,
+      });
+
+      act(() => {
+        result.current.setTitle('Structured + text');
+        result.current.setFreeText('Use this as main workout text');
+      });
+
+      act(() => {
+        result.current.handleSave();
+      });
+
+      await waitFor(() => {
+        expect(queryClientLib.apiRequest).toHaveBeenCalledWith(
+          'POST',
+          '/api/v1/workouts',
+          expect.objectContaining({
+            title: 'Structured + text',
+            mainWorkout: 'Use this as main workout text',
+            exercises: [{ exerciseName: 'run', sets: [{ reps: 1, duration: 20 }] }],
+          }),
+          expect.any(AbortSignal),
+        );
       });
     });
 
