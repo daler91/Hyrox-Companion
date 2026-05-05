@@ -87,4 +87,26 @@ describe("buildWorkoutSavePayload", () => {
       label: "Main EMOM",
     });
   });
+  it("converts legacy emom exercise rows before persisting payload", () => {
+    const result = buildWorkoutSavePayload({
+      ...baseInput,
+      title: "Legacy",
+      exerciseBlocks: ["block-1"],
+      exerciseData: {
+        "block-1": {
+          exerciseName: "emom",
+          category: "conditioning",
+          sets: [{ setNumber: 1, time: 12 }],
+        } as StructuredExercise,
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.payload.exercises?.[0]).toMatchObject({
+      exerciseName: "custom",
+      customLabel: "EMOM",
+    });
+  });
+
 });

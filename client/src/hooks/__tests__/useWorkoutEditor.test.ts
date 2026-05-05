@@ -414,6 +414,20 @@ describe('useWorkoutEditor initialExerciseData', () => {
     );
     expect(result.current.exerciseData.back_squat__1.hasUserEdits).toBe(true);
   });
+  it('converts EMOM adds into custom rows so new data never stores exerciseName=emom', () => {
+    const { result } = renderHook(() => useWorkoutEditor(), { wrapper: createQueryWrapper() });
+
+    act(() => {
+      result.current.addExercise('emom' as never);
+    });
+
+    const blockId = result.current.exerciseBlocks[0];
+    expect(result.current.exerciseData[blockId]).toMatchObject({
+      exerciseName: 'custom',
+      customLabel: 'EMOM',
+    });
+  });
+
 });
 
 describe('useWorkoutEditor resetEditor', () => {

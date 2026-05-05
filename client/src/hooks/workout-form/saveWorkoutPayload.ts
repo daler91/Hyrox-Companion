@@ -33,6 +33,15 @@ type SavePayloadResult =
       readonly description: string;
     };
 
+function normalizeLegacyExercise(exercise: StructuredExercise): StructuredExercise {
+  if (exercise.exerciseName !== "emom") return exercise;
+  return {
+    ...exercise,
+    exerciseName: "custom",
+    customLabel: exercise.customLabel || "EMOM",
+  };
+}
+
 function structuredExercises(
   exerciseBlocks: readonly string[],
   exerciseData: Readonly<Record<string, StructuredExercise>>,
@@ -44,7 +53,7 @@ function structuredExercises(
   for (const id of exerciseBlocks) {
     const ex = exerciseData[id];
     if (ex) {
-      result.push(ex);
+      result.push(normalizeLegacyExercise(ex));
     }
   }
   return result;
