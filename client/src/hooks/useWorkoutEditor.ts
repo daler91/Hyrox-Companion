@@ -1,6 +1,6 @@
 import { type DragEndEvent,KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { arrayMove,sortableKeyboardCoordinates } from "@dnd-kit/sortable";
-import { EXERCISE_DEFINITIONS, type ExerciseName,normalizeExerciseName, type ParsedExercise } from "@shared/schema";
+import { EXERCISE_DEFINITIONS, type ExerciseName, normalizeExerciseName, type ParsedExercise, type StructureBlockInput } from "@shared/schema";
 import { useMutation } from "@tanstack/react-query";
 import type { MutableRefObject } from "react";
 import { useCallback,useEffect, useRef, useState } from "react";
@@ -15,6 +15,7 @@ interface UseWorkoutEditorOptions {
   initialExerciseBlocks?: string[];
   initialExerciseData?: Record<string, StructuredExercise>;
   initialUseTextMode?: boolean;
+  initialStructureBlocks?: StructureBlockInput[];
 }
 
 export interface ParseDiagnostics {
@@ -399,6 +400,7 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
     () => markInitialDataAsEdited(options.initialExerciseData ?? {}),
   );
   const [useTextMode, setUseTextMode] = useState(options.initialUseTextMode ?? false);
+  const [structureBlocks, setStructureBlocks] = useState<StructureBlockInput[]>(options.initialStructureBlocks ?? []);
 
   // Live refs so the auto-parse callback stays stable across renders but
   // still sees the latest merge inputs when it fires. Without these the
@@ -627,7 +629,7 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
     };
   }, []);
 
-  const resetEditor = useCallback((blocks: string[], data: Record<string, StructuredExercise>, textMode: boolean) => {
+  const resetEditor = useCallback((blocks: string[], data: Record<string, StructuredExercise>, textMode: boolean, nextStructureBlocks: StructureBlockInput[] = []) => {
     // Reseeded blocks came from the server or a duplicate-last flow;
     // treat them as user-confirmed content so a subsequent auto-parse
     // doesn't erase them.
@@ -639,6 +641,7 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
     setExerciseBlocks(blocks);
     setExerciseData(markedData);
     setUseTextMode(textMode);
+    setStructureBlocks(nextStructureBlocks);
     // Clear any in-flight auto-parse state so the freshly reset content
     // isn't overwritten by a debounced call from the previous session.
     lastParsedTextRef.current = "";
@@ -675,6 +678,8 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
     exerciseData,
     useTextMode,
     setUseTextMode,
+    structureBlocks,
+    setStructureBlocks,
     sensors,
     handleDragEnd,
     addExercise,

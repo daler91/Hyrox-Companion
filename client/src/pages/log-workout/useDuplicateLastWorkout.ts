@@ -1,6 +1,8 @@
 import { useMutation } from "@tanstack/react-query";
 import { format } from "date-fns";
 
+import type { StructureBlockInput } from "@shared/schema";
+
 import type { StructuredExercise } from "@/components/ExerciseInput";
 import type { useToast } from "@/hooks/use-toast";
 import { api } from "@/lib/api";
@@ -17,6 +19,7 @@ interface UseDuplicateLastWorkoutOptions {
     blocks: string[],
     data: Record<string, StructuredExercise>,
     textMode: boolean,
+    structureBlocks?: StructureBlockInput[],
   ) => void;
   readonly toast: ReturnType<typeof useToast>["toast"];
 }
@@ -42,15 +45,21 @@ export function useDuplicateLastWorkout({
       setNotes(latest.notes ?? "");
       setPlanDayId(null);
 
+      const structureBlocks = Array.isArray(latest.structureBlocks)
+        ? (latest.structureBlocks as StructureBlockInput[])
+        : [];
+      const hasStructureBlocks = structureBlocks.length > 0;
       const hasStructuredExercises = latest.exerciseSets && latest.exerciseSets.length > 0;
-      if (hasStructuredExercises) {
+      if (hasStructuredExercises || hasStructureBlocks) {
         const { names, data } = exerciseSetsToStructured(latest.exerciseSets);
-        resetEditor(names, data, false);
-        setFreeText("");
+        resetEditor(names, data, false, structureBlocks);
+        // Preserve text when structure-only records have no row sets yet;
+        // otherwise duplicate can land in an empty, unsaveable state.
+        setFreeText(hasStructuredExercises ? "" : (latest.mainWorkout ?? ""));
       } else {
         // Older entries / imports / pure free-text logs fall back to the
         // raw main-workout text in the text-mode editor.
-        resetEditor([], {}, true);
+        resetEditor([], {}, true, []);
         setFreeText(latest.mainWorkout ?? "");
       }
 

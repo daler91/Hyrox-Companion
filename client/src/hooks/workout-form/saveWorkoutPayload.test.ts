@@ -62,4 +62,29 @@ describe("buildWorkoutSavePayload", () => {
     expect(result.warnings).toEqual(["Sandbag Lunges is missing reps"]);
     expect(result.payload.exercises).toHaveLength(1);
   });
+
+  it("includes structureBlocks when editor structure is present", () => {
+    const result = buildWorkoutSavePayload({
+      ...baseInput,
+      title: "HYROX Blocks",
+      freeText: "EMOM builder",
+      structureBlocks: [{
+        sectionType: "main",
+        blockType: "emom",
+        orderIndex: 0,
+        label: "Main EMOM",
+        durationMinutes: 12,
+        steps: [{ minuteIndex: 1, exerciseName: "Burpee Broad Jump", target: "10 reps" }],
+      }],
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.payload.structureBlocks).toHaveLength(1);
+    expect(result.payload.structureBlocks?.[0]).toMatchObject({
+      sectionType: "main",
+      blockType: "emom",
+      label: "Main EMOM",
+    });
+  });
 });

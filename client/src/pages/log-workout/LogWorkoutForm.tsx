@@ -44,11 +44,13 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
     parseNow,
     cancelAutoParse,
     parseImageMutation,
+    structureBlocks,
   } = useWorkoutEditor({
     initialExerciseBlocks: initialDraft?.exerciseBlocks,
     initialExerciseData: initialDraft?.exerciseData,
     initialUseTextMode: initialDraft?.useTextMode,
     initialBlockCounter: initialDraft?.blockCounter,
+    initialStructureBlocks: initialDraft?.structureBlocks,
   });
 
   const {
@@ -72,6 +74,7 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
     useTextMode,
     exerciseBlocks,
     exerciseData,
+    structureBlocks,
     weightLabel,
     distanceUnit,
     initialValues: initialDraft
@@ -122,6 +125,7 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
     useTextMode,
     exerciseBlocks,
     exerciseData,
+    structureBlocks,
     step,
     toast,
   });

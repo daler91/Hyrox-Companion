@@ -1,4 +1,4 @@
-import { lintWorkoutStructure, type ParsedExercise, type StructureLintIssue } from "@shared/schema";
+import { lintWorkoutStructure, type ParsedExercise, type StructureBlockInput, type StructureLintIssue } from "@shared/schema";
 
 import type { StructuredExercise } from "@/components/ExerciseInput";
 import { exerciseToPayload, generateSummary } from "@/hooks/useWorkoutEditor";
@@ -15,6 +15,7 @@ interface BuildWorkoutSavePayloadInput {
   readonly planDayId?: string | null;
   readonly exerciseBlocks: string[];
   readonly exerciseData: Record<string, StructuredExercise>;
+  readonly structureBlocks: StructureBlockInput[];
   readonly weightLabel: string;
   readonly distanceUnit: string;
 }
@@ -58,11 +59,12 @@ export function buildWorkoutSavePayload({
   planDayId,
   exerciseBlocks,
   exerciseData,
+  structureBlocks: incomingStructureBlocks = [],
   weightLabel,
   distanceUnit,
 }: BuildWorkoutSavePayloadInput): SavePayloadResult {
   const effectiveTitle = title.trim() || "Workout";
-  const hasStructured = exerciseBlocks.length > 0;
+  const hasStructured = exerciseBlocks.length > 0 || incomingStructureBlocks.length > 0;
 
   if (!hasStructured) {
     if (!freeText.trim()) {
@@ -89,7 +91,7 @@ export function buildWorkoutSavePayload({
   }
 
   const exercises = structuredExercises(exerciseBlocks, exerciseData);
-  if (exercises.length === 0 && !freeText.trim()) {
+  if (exercises.length === 0 && incomingStructureBlocks.length === 0 && !freeText.trim()) {
     return {
       ok: false,
       description: "Please add at least one exercise or describe your workout.",
@@ -132,6 +134,7 @@ export function buildWorkoutSavePayload({
       rpe: rpe || null,
       ...(planDayId ? { planDayId } : {}),
       exercises: exercises.map(exerciseToPayload) as ParsedExercise[],
+      ...(incomingStructureBlocks.length > 0 ? { structureBlocks: incomingStructureBlocks } : {}),
     },
   };
 }
