@@ -66,7 +66,7 @@ function toStructureBlocks(exercises: readonly StructuredExercise[]): StructureB
       sectionType: exercise.structure.section,
       formatType: exercise.structure.blockType,
       durationMinutes: exercise.structure.blockType === "emom" ? exercise.structure.emomDurationMinutes ?? steps.length : undefined,
-      rounds: exercise.structure.blockType === "rounds" || exercise.structure.blockType === "amrap" ? exercise.structure.rounds : undefined,
+      rounds: exercise.structure.blockType === "rounds" ? exercise.structure.rounds : undefined,
       timeCapMinutes: exercise.structure.blockType === "for_time" ? exercise.structure.timeCapMinutes : undefined,
       workSeconds: exercise.structure.blockType === "interval" ? exercise.structure.intervalWorkSeconds : undefined,
       restSeconds: exercise.structure.blockType === "interval" ? exercise.structure.intervalRestSeconds : undefined,

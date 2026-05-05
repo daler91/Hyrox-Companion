@@ -85,4 +85,29 @@ describe("buildWorkoutSavePayload", () => {
       formatType: "emom",
     });
   });
+
+  it("does not emit fixed rounds for amrap blocks from exercise structure", () => {
+    const exercise: StructuredExercise = {
+      exerciseName: "burpees",
+      category: "conditioning",
+      sets: [{ setNumber: 1, reps: 10 }],
+      structure: {
+        section: "main",
+        blockType: "amrap",
+        rounds: 5,
+        steps: [{ id: "s1", type: "work", exercise: "burpees", target: "10 reps" }],
+      },
+    };
+    const result = buildWorkoutSavePayload({
+      ...baseInput,
+      title: "AMRAP Session",
+      exerciseBlocks: ["b1"],
+      exerciseData: { b1: exercise },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.payload.structureBlocks?.[0]).toMatchObject({ formatType: "amrap" });
+    expect(result.payload.structureBlocks?.[0]?.rounds).toBeUndefined();
+  });
 });

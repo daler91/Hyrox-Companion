@@ -109,7 +109,7 @@ export function WorkoutStructureEditor({ value, onChange }: Props) {
         </div>
       )}
 
-      {(value.blockType === "amrap" || value.blockType === "rounds") && (
+      {value.blockType === "rounds" && (
         <div>
           <Label className="text-xs">Rounds</Label>
           <Input
