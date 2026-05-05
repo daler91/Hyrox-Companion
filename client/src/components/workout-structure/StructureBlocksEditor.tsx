@@ -17,10 +17,7 @@ interface Props {
   readonly onChange: (next: StructureBlockInput[]) => void;
 }
 
-const generateId = () =>
-  typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-    ? crypto.randomUUID()
-    : `block-${Math.random().toString(36).slice(2, 10)}`;
+const generateId = () => crypto.randomUUID();
 
 const emptyEmomConfig = (): WorkoutStructureConfig => ({
   section: "main",

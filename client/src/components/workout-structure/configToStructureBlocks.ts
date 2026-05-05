@@ -38,10 +38,7 @@ export function structureBlockToConfig(block: StructureBlockInput): WorkoutStruc
   const blockType: WorkoutStructureConfig["blockType"] =
     block.formatType === "quality" ? "steady" : block.formatType;
   const steps: WorkoutStep[] = block.steps.map((step) => ({
-    id:
-      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-        ? crypto.randomUUID()
-        : `step-${step.stepNumber}-${Math.random().toString(36).slice(2, 8)}`,
+    id: crypto.randomUUID(),
     type: step.stepType ?? "work",
     exercise: step.exerciseName ?? undefined,
     target: step.customLabel ?? undefined,
