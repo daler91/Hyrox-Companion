@@ -23,7 +23,7 @@ export async function createWorkout(input: {
 }) {
   const { exercises, structureBlocks, ...workoutData } = input.payload;
   let structured = exercises as ParsedExercise[] | undefined;
-  const hasStructureBlocks = Array.isArray(structureBlocks) && structureBlocks.length > 0;
+  const hasStructureBlocks = Array.isArray(structureBlocks);
   if ((!structured || structured.length === 0) && !hasStructureBlocks && env.GEMINI_API_KEY) {
     logger.warn({ context: "workout-structure", event: "legacy_only_parse_fallback_create", userId: input.userId }, "Missing structure-editor payload on create; using legacy parse fallback.");
     const textToParse = [workoutData.mainWorkout, workoutData.accessory].filter(Boolean).join("\n").trim();
@@ -51,7 +51,7 @@ export async function updateWorkoutUseCase(input: {
 }) {
   const { exercises, structureBlocks, ...updateData } = input.payload;
   let structured = exercises as ParsedExercise[] | undefined;
-  const hasStructureBlocks = Array.isArray(structureBlocks) && structureBlocks.length > 0;
+  const hasStructureBlocks = Array.isArray(structureBlocks);
 
   if ((!structured || structured.length === 0) && !hasStructureBlocks && env.GEMINI_API_KEY) {
     logger.warn({ context: "workout-structure", event: "legacy_only_parse_fallback_update", userId: input.userId, workoutId: input.workoutId }, "Missing structure-editor payload on update; using legacy parse fallback.");

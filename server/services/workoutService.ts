@@ -635,7 +635,7 @@ function resolveStructureBlocksForPersist(args: {
   workoutSource: string | null | undefined;
   workoutLogId: string;
 }): { blocks: StructureBlockInput[] | undefined; source: "structure_editor" | "legacy_synthesized" | "none" } {
-  if (args.structureBlocks && args.structureBlocks.length > 0) {
+  if (Array.isArray(args.structureBlocks)) {
     return { blocks: args.structureBlocks, source: "structure_editor" };
   }
   if (args.exercises && args.exercises.length > 0) {
