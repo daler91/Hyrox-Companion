@@ -77,6 +77,8 @@ export function LogWorkoutStepperLayout({
   parseDiagnostics,
   parseNow,
   cancelAutoParse,
+  structureBlocks,
+  setStructureBlocks,
   isListening,
   isSupported,
   interimTranscript,
@@ -136,6 +138,8 @@ export function LogWorkoutStepperLayout({
     autoParsing,
     parseDiagnostics,
     cancelAutoParse,
+    structureBlocks,
+    setStructureBlocks,
   };
 
   return (

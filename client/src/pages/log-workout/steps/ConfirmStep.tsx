@@ -1,5 +1,5 @@
 import { ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,13 +34,22 @@ export function ConfirmStep({
   autoParsing,
   parseDiagnostics,
   cancelAutoParse,
+  structureBlocks,
+  setStructureBlocks,
   onBack,
   onContinue,
 }: ConfirmStepProps) {
   const [showOriginal, setShowOriginal] = useState(false);
   const [dismissedAutoOpen, setDismissedAutoOpen] = useState(false);
   const hasBlocks = exerciseBlocks.length > 0;
-  const hasLegacyEmomRows = exerciseBlocks.some((id) => exerciseData[id]?.exerciseName?.toLowerCase() === "emom");
+  const legacyEmomRowIds = useMemo(
+    () => exerciseBlocks.filter((id) => exerciseData[id]?.exerciseName?.toLowerCase() === "emom"),
+    [exerciseBlocks, exerciseData],
+  );
+  const hasLegacyEmomRows = legacyEmomRowIds.length > 0;
+  const [emomDurationMinutes, setEmomDurationMinutes] = useState<number>(10);
+  const [emomStepLabel, setEmomStepLabel] = useState("Work");
+  const [conversionDone, setConversionDone] = useState(false);
   const needsReviewBanner =
     parseDiagnostics.emptyResult ||
     parseDiagnostics.lowConfidenceCount > 0 ||
@@ -93,6 +102,29 @@ export function ConfirmStep({
     },
     [cancelAutoParse, reorderBlocks],
   );
+  const handleConvertLegacyEmom = useCallback(() => {
+    const firstLegacy = legacyEmomRowIds[0] ? exerciseData[legacyEmomRowIds[0]] : undefined;
+    const guessedDuration =
+      firstLegacy?.sets?.reduce((max, set) => Math.max(max, set.time ?? 0), 0) ||
+      firstLegacy?.sets?.length ||
+      emomDurationMinutes;
+    const guessedStep = firstLegacy?.customLabel || emomStepLabel;
+    const converted = [...structureBlocks, {
+      sectionType: "main" as const,
+      formatType: "emom" as const,
+      durationMinutes: guessedDuration,
+      sequenceOrder: structureBlocks.length,
+      sortOrder: structureBlocks.length,
+      steps: [{ stepNumber: 1, stepType: "work" as const, exerciseName: guessedStep }],
+    }];
+    setStructureBlocks(converted);
+    for (const id of legacyEmomRowIds) {
+      const ex = exerciseData[id];
+      if (!ex) continue;
+      updateBlock(id, { ...ex, exerciseName: "custom", customLabel: ex.customLabel || "EMOM" });
+    }
+    setConversionDone(true);
+  }, [legacyEmomRowIds, exerciseData, emomDurationMinutes, emomStepLabel, structureBlocks, setStructureBlocks, updateBlock]);
 
   return (
     <div className="space-y-6">
@@ -123,10 +155,23 @@ export function ConfirmStep({
             </div>
           )}
 
-          {hasLegacyEmomRows && (
+          {hasLegacyEmomRows && !conversionDone && (
             <div className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm" data-testid="confirm-step-legacy-emom-warning">
               <p className="font-medium text-destructive">Compatibility warning: legacy EMOM rows</p>
               <span>Older EMOM rows are supported for display/editing, but new EMOM should be saved as structured blocks.</span>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <label className="text-xs">
+                  Duration (min)
+                  <input className="mt-1 w-full rounded border px-2 py-1" type="number" min={1} value={emomDurationMinutes} onChange={(e) => setEmomDurationMinutes(Number(e.target.value) || 1)} />
+                </label>
+                <label className="text-xs">
+                  Step label
+                  <input className="mt-1 w-full rounded border px-2 py-1" value={emomStepLabel} onChange={(e) => setEmomStepLabel(e.target.value)} />
+                </label>
+              </div>
+              <Button type="button" size="sm" className="mt-2" onClick={handleConvertLegacyEmom}>
+                Convert to EMOM block
+              </Button>
             </div>
           )}
 
