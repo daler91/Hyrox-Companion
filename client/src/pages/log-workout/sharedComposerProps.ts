@@ -1,4 +1,5 @@
 import type { ExerciseName } from "@shared/schema";
+import type { StructureBlockInput } from "@shared/schema";
 
 import type { StructuredExercise } from "@/components/ExerciseInput";
 import type { ParseDiagnostics } from "@/hooks/useWorkoutEditor";
@@ -48,6 +49,8 @@ export interface ComposerExerciseProps {
   readonly autoParsing: boolean;
   readonly parseDiagnostics: ParseDiagnostics;
   readonly cancelAutoParse: () => void;
+  readonly structureBlocks: StructureBlockInput[];
+  readonly setStructureBlocks: (blocks: StructureBlockInput[]) => void;
 }
 
 export interface ComposerAutoParseProps {

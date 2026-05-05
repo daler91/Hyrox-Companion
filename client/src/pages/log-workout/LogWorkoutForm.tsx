@@ -45,6 +45,7 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
     cancelAutoParse,
     parseImageMutation,
     structureBlocks,
+    setStructureBlocks,
   } = useWorkoutEditor({
     initialExerciseBlocks: initialDraft?.exerciseBlocks,
     initialExerciseData: initialDraft?.exerciseData,
@@ -159,6 +160,8 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
       parseDiagnostics={parseDiagnostics}
       parseNow={parseNow}
       cancelAutoParse={cancelAutoParse}
+      structureBlocks={structureBlocks}
+      setStructureBlocks={setStructureBlocks}
       isListening={isListening}
       isSupported={isSupported}
       interimTranscript={interimTranscript}
