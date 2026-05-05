@@ -178,7 +178,17 @@ function processParsedExercises(parsed: ParsedExercise[], counterRef: MutableRef
 }
 
 function mergeKey(name: string, customLabel: string | null | undefined): string {
-  return `${name}|${customLabel ?? ""}`;
+  const isLegacyEmom = name === "emom";
+  const normalizedName = isLegacyEmom ? "custom" : name;
+  const normalizedLabel = isLegacyEmom
+    ? (customLabel || "EMOM")
+    : customLabel;
+
+  if (normalizedName === "custom") {
+    return `custom|${(normalizedLabel ?? "").trim().toLowerCase()}`;
+  }
+
+  return `${normalizedName}|${normalizedLabel ?? ""}`;
 }
 
 /**

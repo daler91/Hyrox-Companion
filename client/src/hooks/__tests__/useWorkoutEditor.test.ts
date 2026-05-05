@@ -388,6 +388,31 @@ describe('mergeParsedWithEdits', () => {
     expect(newData['back_squat__1'].sets[0].weight).toBe(100);
     expect(newData['back_squat__2'].sets[0].weight).toBe(120);
   });
+
+  it('dedupes parsed EMOM rows against preserved legacy EMOM edited rows', () => {
+    const counterRef = { current: 2 };
+    const existingBlocks = ['emom__1'];
+    const existingData: Record<string, StructuredExercise> = {
+      emom__1: {
+        exerciseName: 'emom' as never,
+        category: 'conditioning',
+        sets: [{ setNumber: 1, time: 12 }],
+        hasUserEdits: true,
+      },
+    };
+
+    const parsed = [
+      {
+        exerciseName: 'EMOM',
+        category: 'conditioning',
+        sets: [{ setNumber: 1, time: 12 }],
+      },
+    ] as unknown as Parameters<typeof mergeParsedWithEdits>[0];
+
+    const { newBlocks } = mergeParsedWithEdits(parsed, counterRef, existingBlocks, existingData);
+
+    expect(newBlocks).toEqual(['emom__1']);
+  });
 });
 
 describe('useWorkoutEditor initialExerciseData', () => {
