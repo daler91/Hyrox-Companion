@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 import { workoutStructureFeatureFlags } from "./featureFlags";
 import type { BlockType, StepType, WorkoutSection, WorkoutStructureConfig } from "./types";
+import { buildEmomPreview } from "./emomPreview";
 
 const sections: WorkoutSection[] = ["warmup", "main", "accessory", "cooldown", "mobility"];
 const blockTypes: BlockType[] = ["steady", "emom", "rounds", "amrap", "interval", "for_time"];
@@ -46,14 +47,7 @@ export function WorkoutStructureEditor({ value, onChange }: Props) {
     });
   };
 
-  const emomDuration = value.emomDurationMinutes ?? 0;
-  const emomMinuteSteps =
-    value.blockType === "emom" && emomDuration > 0 && value.steps.length > 0
-      ? Array.from({ length: emomDuration }, (_, minute) => ({
-          minute: minute + 1,
-          step: value.steps[value.emomAlternating ? minute % value.steps.length : 0],
-        }))
-      : [];
+  const emomPreview = buildEmomPreview(value);
 
   return (
     <div className="space-y-3 mb-4 rounded-md border p-3">
@@ -87,14 +81,23 @@ export function WorkoutStructureEditor({ value, onChange }: Props) {
         </div>
           <div className="rounded border p-2">
             <div className="mb-1 text-xs font-medium text-muted-foreground">Minute-step list</div>
-            {emomMinuteSteps.length === 0 ? (
+            {emomPreview.error ? (
+              <div className="text-xs text-destructive">{emomPreview.error}</div>
+            ) : emomPreview.minutes.length === 0 ? (
               <div className="text-xs text-muted-foreground">Set duration and at least one step to preview minutes.</div>
             ) : (
-              <ul className="space-y-1 text-xs">
-                {emomMinuteSteps.map(({ minute, step }) => (
-                  <li key={`emom-minute-${minute}`}>Min {minute}: {step.type}{step.exercise ? ` · ${step.exercise}` : ""}{step.target ? ` · ${step.target}` : ""}</li>
-                ))}
-              </ul>
+              <>
+                <div className="mb-2 text-xs text-muted-foreground">
+                  Pattern length: {emomPreview.patternLength} min · Cycle count: {emomPreview.cycleCount}
+                </div>
+                <ul className="space-y-1 text-xs">
+                  {emomPreview.minutes.map(({ minute, cycle, step }) => (
+                    <li key={`emom-minute-${minute}`} className={step.type === "rest" ? "font-medium text-amber-700" : undefined}>
+                      Min {minute} (Cycle {cycle}): {step.type.toUpperCase()}{step.exercise ? ` · ${step.exercise}` : ""}{step.target ? ` · ${step.target}` : ""}
+                    </li>
+                  ))}
+                </ul>
+              </>
             )}
           </div>
         </div>
