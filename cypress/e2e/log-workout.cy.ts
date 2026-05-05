@@ -45,4 +45,18 @@ describe("Log Workout Page", () => {
   it("shows back button to return to timeline", () => {
     cy.getBySel("button-back").should("exist");
   });
+
+  it("lets the user proactively add an EMOM block in the confirm step", () => {
+    // Advance from Capture (step 1) to Confirm (step 2). Free text is
+    // required by the continue gate; a parseExercises stub already returns [].
+    cy.getBySel("input-freetext").type("3x10 squats");
+    cy.getBySel("button-step-continue").click();
+    cy.wait("@parseExercises");
+
+    cy.getBySel("structure-blocks-editor").should("exist");
+    cy.getBySel("structure-blocks-add-emom").click();
+
+    cy.getBySel("structure-block-0").should("exist");
+    cy.getBySel("structure-block-0").contains(/EMOM is configured as a block/i);
+  });
 });
