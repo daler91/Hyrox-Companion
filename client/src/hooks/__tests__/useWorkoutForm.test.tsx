@@ -421,6 +421,33 @@ describe('useWorkoutForm', () => {
       });
     });
 
+    it('shows structured rows error toast for STRUCTURED_ROWS_REQUIRED failures', async () => {
+      vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(
+        new Error('422: {"code":"STRUCTURED_ROWS_REQUIRED"}'),
+      );
+
+      const { result } = renderFormHook({ ...defaultProps, useTextMode: true });
+
+      act(() => {
+        result.current.setTitle('Needs Parsing');
+        result.current.setFreeText('Unstructured workout text');
+      });
+
+      act(() => {
+        result.current.handleSave();
+      });
+
+      await waitFor(() => {
+        expect(mockToast).toHaveBeenCalledWith({
+          title: "Workout needs structured rows",
+          description: "Tap Parse or add at least one exercise set before saving.",
+          variant: "destructive",
+        });
+        expect(queryClientLib.queryClient.invalidateQueries).not.toHaveBeenCalled();
+        expect(mockNavigate).not.toHaveBeenCalled();
+      });
+    });
+
     it('triggers error toast on failed save', async () => {
       vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(new Error('Network Error'));
 

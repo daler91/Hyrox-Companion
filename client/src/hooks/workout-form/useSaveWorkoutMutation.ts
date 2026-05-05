@@ -27,7 +27,18 @@ export function useSaveWorkoutMutation(onSaveSuccess?: () => void) {
       });
       navigate("/");
     },
-    onError: () => {
+    onError: (error: unknown) => {
+      const code = extractApiErrorCode(error);
+
+      if (code === "STRUCTURED_ROWS_REQUIRED") {
+        toast({
+          title: "Workout needs structured rows",
+          description: "Tap Parse or add at least one exercise set before saving.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       toast({
         title: "Error",
         description: "Failed to save workout. Please try again.",
@@ -35,4 +46,19 @@ export function useSaveWorkoutMutation(onSaveSuccess?: () => void) {
       });
     },
   });
+}
+
+
+function extractApiErrorCode(error: unknown): string | null {
+  if (!(error instanceof Error)) return null;
+
+  const jsonStart = error.message.indexOf("{");
+  if (jsonStart < 0) return null;
+
+  try {
+    const payload = JSON.parse(error.message.slice(jsonStart)) as { code?: unknown };
+    return typeof payload.code === "string" ? payload.code : null;
+  } catch {
+    return null;
+  }
 }
