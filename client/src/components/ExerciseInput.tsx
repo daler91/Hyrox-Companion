@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { categoryBorderColors } from "@/lib/exerciseUtils";
+import { featureFlags } from "@/lib/featureFlags";
 import { getExerciseMissingFields } from "@/lib/exerciseWarnings";
 
 import type { FieldConfig, FieldKey } from "./exercise-input";
@@ -181,6 +182,7 @@ export function ExerciseInput({
   };
 
   const showMultiSetView = shouldUseMultiSetForFields(fields);
+  const showStructureEditor = enableStructureEditor && featureFlags.emomBuilderEnabled;
 
   return (
     <Card
@@ -199,7 +201,7 @@ export function ExerciseInput({
 
         <ExerciseWarnings missingFields={missingFields} exerciseName={exercise.exerciseName} />
 
-        {enableStructureEditor && <WorkoutStructureEditor value={structure} onChange={(next) => { setStructure(next); onChange({ ...exercise, structure: next }); }} />}
+        {showStructureEditor && <WorkoutStructureEditor value={structure} onChange={(next) => { setStructure(next); onChange({ ...exercise, structure: next }); }} />}
 
         {exercise.exerciseName === "custom" && (
           <div className="mb-4">
@@ -232,8 +234,8 @@ export function ExerciseInput({
             onSetChange={handleSetChange}
             onAddSet={addSet}
             onRemoveSet={removeSet}
-            contextChips={enableStructureEditor ? structureChips : undefined}
-            rowLabels={enableStructureEditor ? emomMinuteLabels : undefined}
+            contextChips={showStructureEditor ? structureChips : undefined}
+            rowLabels={showStructureEditor ? emomMinuteLabels : undefined}
           />
         ) : (
           <SingleSetFields
