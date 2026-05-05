@@ -74,7 +74,7 @@ function normalizeParserPayload(raw: unknown): NormalizedParserPayload {
 }
 
 function parseEmomDurationSeconds(text: string): number | null {
-  const match = text.match(/\bemom\s*(?:for\s*)?(\d{1,3})\s*(?:min|mins|minute|minutes)\b/i);
+  const match = text.match(/\bemom\s*(?:for\s*)?(\d{1,3})(?:\s*(?:min|mins|minute|minutes))?\b/i);
   if (!match) return null;
   const minutes = Number.parseInt(match[1] ?? "", 10);
   if (!Number.isFinite(minutes) || minutes <= 0) return null;
@@ -97,13 +97,19 @@ function mapMinuteRestStepsForEmom(
   const warnings: string[] = [];
   if (minuteMatches.length > 0) {
     const minuteToRole = new Map<number, "work" | "rest">();
+    const seenMinutes = new Set<number>();
+    let hasDuplicateMinutes = false;
     for (const m of minuteMatches) {
       const minute = Number.parseInt(m[1] ?? "", 10);
       const desc = (m[2] ?? "").trim();
       if (!Number.isFinite(minute) || minute <= 0) continue;
+      if (seenMinutes.has(minute)) hasDuplicateMinutes = true;
+      seenMinutes.add(minute);
       minuteToRole.set(minute, /^rest$/i.test(desc) ? "rest" : "work");
     }
-    if (minuteToRole.size !== mappedSteps.length) {
+    const sortedMinutes = [...minuteToRole.keys()].sort((a, b) => a - b);
+    const hasGapsOrOffset = sortedMinutes.some((m, idx) => m !== idx + 1);
+    if (hasDuplicateMinutes || minuteToRole.size !== mappedSteps.length || hasGapsOrOffset) {
       warnings.push("Ambiguous EMOM minute mapping: free-text minute count does not match parsed steps.");
     }
     return {
