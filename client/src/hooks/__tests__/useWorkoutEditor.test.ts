@@ -388,6 +388,31 @@ describe('mergeParsedWithEdits', () => {
     expect(newData['back_squat__1'].sets[0].weight).toBe(100);
     expect(newData['back_squat__2'].sets[0].weight).toBe(120);
   });
+
+  it('dedupes parsed EMOM rows against preserved legacy EMOM edited rows', () => {
+    const counterRef = { current: 2 };
+    const existingBlocks = ['emom__1'];
+    const existingData: Record<string, StructuredExercise> = {
+      emom__1: {
+        exerciseName: 'emom' as never,
+        category: 'conditioning',
+        sets: [{ setNumber: 1, time: 12 }],
+        hasUserEdits: true,
+      },
+    };
+
+    const parsed = [
+      {
+        exerciseName: 'EMOM',
+        category: 'conditioning',
+        sets: [{ setNumber: 1, time: 12 }],
+      },
+    ] as unknown as Parameters<typeof mergeParsedWithEdits>[0];
+
+    const { newBlocks } = mergeParsedWithEdits(parsed, counterRef, existingBlocks, existingData);
+
+    expect(newBlocks).toEqual(['emom__1']);
+  });
 });
 
 describe('useWorkoutEditor initialExerciseData', () => {
@@ -414,6 +439,20 @@ describe('useWorkoutEditor initialExerciseData', () => {
     );
     expect(result.current.exerciseData.back_squat__1.hasUserEdits).toBe(true);
   });
+  it('converts EMOM adds into custom rows so new data never stores exerciseName=emom', () => {
+    const { result } = renderHook(() => useWorkoutEditor(), { wrapper: createQueryWrapper() });
+
+    act(() => {
+      result.current.addExercise('emom' as never);
+    });
+
+    const blockId = result.current.exerciseBlocks[0];
+    expect(result.current.exerciseData[blockId]).toMatchObject({
+      exerciseName: 'custom',
+      customLabel: 'EMOM',
+    });
+  });
+
 });
 
 describe('useWorkoutEditor resetEditor', () => {

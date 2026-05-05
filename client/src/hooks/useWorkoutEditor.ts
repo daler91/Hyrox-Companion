@@ -129,8 +129,9 @@ interface ParsedBlockBuild {
 
 function buildBlockFromParsed(ex: ParsedExercise): ParsedBlockBuild {
   const normalizedName = normalizeExerciseName(ex.exerciseName);
-  const isKnown = normalizedName !== null;
-  const exName = (normalizedName ?? "custom");
+  const isLegacyEmom = normalizedName === "emom";
+  const isKnown = normalizedName !== null && !isLegacyEmom;
+  const exName = (isKnown ? normalizedName : "custom");
   const customLabel = isKnown ? undefined : (ex.customLabel || ex.exerciseName);
   const blockKey = exName === "custom" ? `custom:${customLabel ?? ""}` : exName;
 
@@ -177,7 +178,17 @@ function processParsedExercises(parsed: ParsedExercise[], counterRef: MutableRef
 }
 
 function mergeKey(name: string, customLabel: string | null | undefined): string {
-  return `${name}|${customLabel ?? ""}`;
+  const isLegacyEmom = name === "emom";
+  const normalizedName = isLegacyEmom ? "custom" : name;
+  const normalizedLabel = isLegacyEmom
+    ? (customLabel || "EMOM")
+    : customLabel;
+
+  if (normalizedName === "custom") {
+    return `custom|${(normalizedLabel ?? "").trim().toLowerCase()}`;
+  }
+
+  return `${normalizedName}|${normalizedLabel ?? ""}`;
 }
 
 /**
@@ -418,16 +429,19 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
   const { sensors, handleDragEnd } = useWorkoutSensors(setExerciseBlocks);
 
   const addExercise = useCallback((name: ExerciseName, customLabel?: string) => {
-    const blockKey = name === "custom" && customLabel ? `custom:${customLabel}` : name;
+    const isLegacyEmom = name === "emom";
+    const safeName: ExerciseName = isLegacyEmom ? "custom" : name;
+    const safeCustomLabel = isLegacyEmom ? (customLabel || "EMOM") : customLabel;
+    const blockKey = safeName === "custom" && safeCustomLabel ? `custom:${safeCustomLabel}` : safeName;
     const blockId = makeBlockId(blockKey, blockCounterRef);
-    const def = EXERCISE_DEFINITIONS[name];
+    const def = EXERCISE_DEFINITIONS[safeName];
     setExerciseBlocks(prev => [...prev, blockId]);
     setExerciseData(prev => ({
       ...prev,
       [blockId]: {
-        exerciseName: name,
+        exerciseName: safeName,
         category: def.category,
-        customLabel,
+        customLabel: safeCustomLabel,
         sets: [createDefaultSet(1)],
         // Manually adding an exercise counts as an edit — the user
         // asked for this row, auto-parse shouldn't replace it.
