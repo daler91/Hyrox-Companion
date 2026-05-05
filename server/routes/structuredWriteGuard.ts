@@ -23,9 +23,9 @@ function structuredBlocksGateOpen(): boolean {
   return env.STRUCTURED_BLOCKS_ENABLED === "true" && env.STRUCTURED_BLOCKS_FALLBACK_FORCE_LEGACY !== "true";
 }
 
-async function noteFallback(req: Request, ownerType: "workout_log" | "plan_day", reason: "gate_off" | "error_spike"): Promise<void> {
+function noteFallback(req: Request, ownerType: "workout_log" | "plan_day", reason: "gate_off" | "error_spike"): void {
   reqLogger(req).warn({ context: "structured-write-guard", ownerType, reason }, "Structured blocks fallback to legacy path");
-  await incrementStructuredExerciseCounter(ownerType, "manual", "structured_blocks_fallback", 1).catch(() => undefined);
+  void incrementStructuredExerciseCounter(ownerType, "manual", "structured_blocks_fallback", 1).catch(() => undefined);
 }
 
 function refreshFallbackWindow(): void {
@@ -55,12 +55,12 @@ export async function rejectTextOnlyWriteIfNeeded(req: Request, res: Response, o
   refreshFallbackWindow();
 
   if (!structuredBlocksGateOpen()) {
-    await noteFallback(req, ownerType, "gate_off");
+    noteFallback(req, ownerType, "gate_off");
     return false;
   }
 
   if (fallbackErrorCount >= FALLBACK_ERROR_THRESHOLD) {
-    await noteFallback(req, ownerType, "error_spike");
+    noteFallback(req, ownerType, "error_spike");
     return false;
   }
 
@@ -90,7 +90,7 @@ export async function rejectTextOnlyWriteIfNeeded(req: Request, res: Response, o
   } catch (error) {
     const spike = noteStructuredError();
     reqLogger(req).error({ context: "structured-write-guard", ownerType, spike, error }, "Structured guard failed; using legacy fallback");
-    await noteFallback(req, ownerType, spike ? "error_spike" : "gate_off");
+    noteFallback(req, ownerType, spike ? "error_spike" : "gate_off");
     return false;
   }
 }
