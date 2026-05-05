@@ -70,7 +70,11 @@ export async function rejectTextOnlyWriteIfNeeded(req: Request, res: Response, o
   }
 
   try {
-    const body = req.body as { exercises?: unknown[]; structureBlocks?: unknown[]; mainWorkout?: string | null; accessory?: string | null };
+    const body = req.body as { exercises?: unknown[]; structureBlocks?: unknown[]; mainWorkout?: string | null; accessory?: string | null; planDayId?: string | null };
+    const hasPlanDayLink = typeof body.planDayId === "string" && body.planDayId.trim().length > 0;
+    if (hasPlanDayLink) {
+      return false;
+    }
     const hasExerciseRows = Array.isArray(body.exercises) && body.exercises.length > 0;
     const hasStructureBlocks = Array.isArray(body.structureBlocks) && body.structureBlocks.length > 0;
     const hasRows = hasExerciseRows || hasStructureBlocks;
