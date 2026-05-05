@@ -41,6 +41,7 @@ export interface StructuredExercise {
    * Client-side only — never round-trips to the server.
    */
   hasUserEdits?: boolean;
+  structure?: WorkoutStructureConfig;
 }
 
 const fieldConfig: Record<FieldKey, FieldConfig> = {
@@ -122,7 +123,7 @@ export function ExerciseInput({
 
   const sets = exercise.sets.length > 0 ? exercise.sets : [createDefaultSet(1)];
 
-  const [structure, setStructure] = useState<WorkoutStructureConfig>({
+  const [structure, setStructure] = useState<WorkoutStructureConfig>(() => exercise.structure ?? {
     section: "main",
     blockType: "steady",
     steps: [{ id: "default-work", type: "work" }],
@@ -198,7 +199,7 @@ export function ExerciseInput({
 
         <ExerciseWarnings missingFields={missingFields} exerciseName={exercise.exerciseName} />
 
-        {enableStructureEditor && <WorkoutStructureEditor value={structure} onChange={setStructure} />}
+        {enableStructureEditor && <WorkoutStructureEditor value={structure} onChange={(next) => { setStructure(next); onChange({ ...exercise, structure: next }); }} />}
 
         {exercise.exerciseName === "custom" && (
           <div className="mb-4">

@@ -291,10 +291,18 @@ export function computeOverviewStats(weeklySummaries: WeeklySummary[]): Overview
   // Only average the weeks that actually recorded an RPE, matching the
   // client's existing display logic (otherwise a week of zero-RPE logs
   // would drag the average down).
-  const rpeWeeks = weeklySummaries.filter((w) => w.avgRpe !== null);
-  const avgRpe = rpeWeeks.length > 0
-    ? Math.round((rpeWeeks.reduce((s, w) => s + (w.avgRpe ?? 0), 0) / rpeWeeks.length) * 10) / 10
-    : null;
+  // ⚡ Bolt Performance Optimization:
+  // Replaced chained .filter().reduce() with a single for...of loop
+  // to avoid intermediate array allocations and O(2N) passes.
+  let rpeSum = 0;
+  let rpeCount = 0;
+  for (const w of weeklySummaries) {
+    if (w.avgRpe !== null) {
+      rpeSum += w.avgRpe;
+      rpeCount++;
+    }
+  }
+  const avgRpe = rpeCount > 0 ? Math.round((rpeSum / rpeCount) * 10) / 10 : null;
 
   return { totalWorkouts, avgPerWeek, totalDuration, avgDuration, avgRpe, avgCompliancePct: null };
 }
@@ -308,13 +316,19 @@ export function calculateTrainingOverview(
   const categoryTotals = buildCategoryTotals(exerciseSets);
   const stationCoverage = buildStationCoverage(exerciseSets);
   const currentStats = computeOverviewStats(weeklySummaries);
-  const currentCompliance = workoutLogs
-    .map((w) => w.compliancePct)
-    .filter((v): v is number => typeof v === "number");
-  if (currentCompliance.length > 0) {
-    currentStats.avgCompliancePct = Math.round(
-      currentCompliance.reduce((sum, v) => sum + v, 0) / currentCompliance.length,
-    );
+  // ⚡ Bolt Performance Optimization:
+  // Replaced chained .map().filter().reduce() with a single for...of loop
+  // to avoid intermediate array allocations and O(3N) passes.
+  let complianceSum = 0;
+  let complianceCount = 0;
+  for (const w of workoutLogs) {
+    if (typeof w.compliancePct === "number") {
+      complianceSum += w.compliancePct;
+      complianceCount++;
+    }
+  }
+  if (complianceCount > 0) {
+    currentStats.avgCompliancePct = Math.round(complianceSum / complianceCount);
   }
 
   // Previous-period stats are optional — the route handler omits them
@@ -323,13 +337,19 @@ export function calculateTrainingOverview(
   const previousStats = previousWorkoutLogs
     ? (() => {
       const stats = computeOverviewStats(buildWeeklySummaries(previousWorkoutLogs).summaries);
-      const previousCompliance = previousWorkoutLogs
-        .map((w) => w.compliancePct)
-        .filter((v): v is number => typeof v === "number");
-      if (previousCompliance.length > 0) {
-        stats.avgCompliancePct = Math.round(
-          previousCompliance.reduce((sum, v) => sum + v, 0) / previousCompliance.length,
-        );
+      // ⚡ Bolt Performance Optimization:
+      // Replaced chained .map().filter().reduce() with a single for...of loop
+      // to avoid intermediate array allocations and O(3N) passes.
+      let prevComplianceSum = 0;
+      let prevComplianceCount = 0;
+      for (const w of previousWorkoutLogs) {
+        if (typeof w.compliancePct === "number") {
+          prevComplianceSum += w.compliancePct;
+          prevComplianceCount++;
+        }
+      }
+      if (prevComplianceCount > 0) {
+        stats.avgCompliancePct = Math.round(prevComplianceSum / prevComplianceCount);
       }
       return stats;
     })()

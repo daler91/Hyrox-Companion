@@ -40,6 +40,7 @@ export function ConfirmStep({
   const [showOriginal, setShowOriginal] = useState(false);
   const [dismissedAutoOpen, setDismissedAutoOpen] = useState(false);
   const hasBlocks = exerciseBlocks.length > 0;
+  const hasLegacyEmomRows = exerciseBlocks.some((id) => exerciseData[id]?.exerciseName?.toLowerCase() === "emom");
   const needsReviewBanner =
     parseDiagnostics.emptyResult ||
     parseDiagnostics.lowConfidenceCount > 0 ||
@@ -119,6 +120,13 @@ export function ConfirmStep({
                   Edit table manually
                 </Button>
               </div>
+            </div>
+          )}
+
+          {hasLegacyEmomRows && (
+            <div className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm" data-testid="confirm-step-legacy-emom-warning">
+              <p className="font-medium text-destructive">Compatibility warning: legacy EMOM rows</p>
+              <span>Older EMOM rows are supported for display/editing, but new EMOM should be saved as structured blocks.</span>
             </div>
           )}
 
