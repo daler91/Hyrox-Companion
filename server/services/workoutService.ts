@@ -629,6 +629,28 @@ function synthesizeDefaultStructureBlocks(exercises: ParsedExercise[]): Structur
   return [{ sectionType: "main", formatType: "steady", sortOrder: 0, steps }];
 }
 
+function resolveStructureBlocksForPersist(args: {
+  structureBlocks: StructureBlockInput[] | undefined;
+  exercises: ParsedExercise[] | undefined;
+  workoutSource: string | null | undefined;
+  workoutLogId: string;
+}): { blocks: StructureBlockInput[] | undefined; source: "structure_editor" | "legacy_synthesized" | "none" } {
+  if (args.structureBlocks && args.structureBlocks.length > 0) {
+    return { blocks: args.structureBlocks, source: "structure_editor" };
+  }
+  if (args.exercises && args.exercises.length > 0) {
+    logger.warn({
+      context: "workout-structure",
+      event: "legacy_structure_synthesis_used",
+      workoutLogId: args.workoutLogId,
+      workoutSource: args.workoutSource ?? "manual",
+      source: "legacy_synthesized",
+    }, "Structure editor payload missing; synthesizing structure blocks from legacy exercise rows.");
+    return { blocks: synthesizeDefaultStructureBlocks(args.exercises), source: "legacy_synthesized" };
+  }
+  return { blocks: undefined, source: "none" };
+}
+
 async function replaceWorkoutStructure(tx: WorkoutTx, workoutLogId: string, structureBlocks: StructureBlockInput[] | undefined): Promise<void> {
   await tx.delete(workoutStructureBlocks).where(eq(workoutStructureBlocks.workoutLogId, workoutLogId));
   if (!structureBlocks || structureBlocks.length === 0) return;
@@ -804,7 +826,19 @@ async function createWorkoutInTx(
   if (enrichedData.planDayId) {
     await persistAdherenceSnapshot(tx, log.id, enrichedData.planDayId, savedSets);
   }
-  await replaceWorkoutStructure(tx, log.id, structureBlocks ?? (exercises?.length ? synthesizeDefaultStructureBlocks(exercises) : undefined));
+  const resolvedStructure = resolveStructureBlocksForPersist({
+    structureBlocks,
+    exercises,
+    workoutSource: enrichedData.source,
+    workoutLogId: log.id,
+  });
+  logger.info({
+    context: "workout-structure",
+    event: "structure_blocks_persist_source",
+    workoutLogId: log.id,
+    source: resolvedStructure.source,
+  }, "Persisting workout structure blocks using resolved source.");
+  await replaceWorkoutStructure(tx, log.id, resolvedStructure.blocks);
 
   if (savedSets.length > 0) return { ...log, exerciseSets: savedSets };
   return log;
