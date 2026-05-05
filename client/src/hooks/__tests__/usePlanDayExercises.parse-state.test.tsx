@@ -7,8 +7,6 @@ const useQueryMock = vi.fn();
 const useApiMutationMock = vi.fn();
 const useExerciseSetsForOwnerMock = vi.fn();
 
-const queryDataByKey = new Map<string, unknown>();
-
 vi.mock("@tanstack/react-query", () => ({
   useQuery: (cfg: { queryKey: unknown[] }) => useQueryMock(cfg),
 }));
@@ -23,7 +21,7 @@ vi.mock("@/hooks/useExerciseSetsForOwner", () => ({
 
 vi.mock("@/lib/queryClient", () => ({
   queryClient: {
-    getQueryData: vi.fn((key: unknown[]) => queryDataByKey.get(JSON.stringify(key))),
+    getQueryData: vi.fn(() => undefined),
     setQueryData: vi.fn(),
   },
 }));

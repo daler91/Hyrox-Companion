@@ -82,6 +82,9 @@ export function LogSheet({
   };
 
   const parseBlocked = !!entry.planDayId && planSets.parseFailed && planSets.exerciseSets.length === 0;
+  const logButtonLabel = planSets.isSaving ? "Saving edits…" : isLogging ? "Logging…" : "Log as planned";
+  const showAskCoach = !!onAskCoach;
+  const showSkip = !!onSkip;
 
   return (
     <ResponsiveSheet
@@ -202,30 +205,26 @@ export function LogSheet({
             data-testid={`log-as-planned-${entry.id}`}
           >
             <ListChecks className="mr-2 h-4 w-4" />
-            {(() => {
-              if (planSets.isSaving) return "Saving edits…";
-              if (isLogging) return "Logging…";
-              return "Log as planned";
-            })()}
+            {logButtonLabel}
           </Button>
 
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {onAskCoach ? (
+            {showAskCoach ? (
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => onAskCoach(entry)}
+                onClick={() => onAskCoach?.(entry)}
                 data-testid={`log-ask-coach-${entry.id}`}
               >
                 <MessageSquare className="mr-2 h-4 w-4" />
                 Ask coach
               </Button>
             ) : null}
-            {onSkip ? (
+            {showSkip ? (
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => onSkip(entry)}
+                onClick={() => onSkip?.(entry)}
                 data-testid={`log-skip-${entry.id}`}
               >
                 <SkipForward className="mr-2 h-4 w-4" />
