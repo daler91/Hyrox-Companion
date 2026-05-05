@@ -45,6 +45,15 @@ function isTimeoutLikeError(error: unknown): boolean {
 export function usePlanDayExercises(planDayId: string | null) {
   const [parseFailed, setParseFailed] = useState(false);
   const [retryParse, setRetryParse] = useState<null | (() => void)>(null);
+
+  useEffect(() => {
+    // Parse errors are scoped to one plan day. When the sheet points at a
+    // different owner, drop stale warning/retry state immediately so an
+    // unrelated empty plan day doesn't inherit a blocked Save state.
+    setParseFailed(false);
+    setRetryParse(null);
+  }, [planDayId]);
+
   const queryKey = planDayId
     ? QUERY_KEYS.planDayExercises(planDayId)
     : ["plan-day-exercises-disabled"];
