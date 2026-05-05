@@ -70,11 +70,10 @@ describe("buildWorkoutSavePayload", () => {
       freeText: "EMOM builder",
       structureBlocks: [{
         sectionType: "main",
-        blockType: "emom",
-        orderIndex: 0,
-        label: "Main EMOM",
+        formatType: "emom",
+        sequenceOrder: 0,
         durationMinutes: 12,
-        steps: [{ minuteIndex: 1, exerciseName: "Burpee Broad Jump", target: "10 reps" }],
+        steps: [{ stepNumber: 1, stepType: "work", minuteIndex: 1, exerciseName: "burpees", targets: { targetReps: 10 } }],
       }],
     });
 
@@ -83,8 +82,7 @@ describe("buildWorkoutSavePayload", () => {
     expect(result.payload.structureBlocks).toHaveLength(1);
     expect(result.payload.structureBlocks?.[0]).toMatchObject({
       sectionType: "main",
-      blockType: "emom",
-      label: "Main EMOM",
+      formatType: "emom",
     });
   });
 });

@@ -11,6 +11,7 @@ const sections: WorkoutSection[] = ["warmup", "main", "accessory", "cooldown", "
 const blockTypes: BlockType[] = ["steady", "emom", "rounds", "amrap", "interval", "for_time"];
 const stepTypes: StepType[] = ["work", "rest", "transition"];
 const MAX_EMOM_DURATION_MINUTES = 240;
+const MAX_ROUNDS = 100;
 
 interface Props {
   readonly value: WorkoutStructureConfig;
@@ -47,6 +48,14 @@ export function WorkoutStructureEditor({ value, onChange }: Props) {
   };
 
   const emomDuration = value.emomDurationMinutes ?? 0;
+  const parsePositiveInt = (raw: string, max: number): number | undefined => {
+    if (!raw.trim()) return undefined;
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) return undefined;
+    const normalized = Math.trunc(parsed);
+    if (normalized < 1) return undefined;
+    return Math.min(normalized, max);
+  };
   const emomMinuteSteps =
     value.blockType === "emom" && emomDuration > 0 && value.steps.length > 0
       ? Array.from({ length: emomDuration }, (_, minute) => ({
@@ -96,6 +105,47 @@ export function WorkoutStructureEditor({ value, onChange }: Props) {
                 ))}
               </ul>
             )}
+          </div>
+        </div>
+      )}
+
+      {(value.blockType === "amrap" || value.blockType === "rounds") && (
+        <div>
+          <Label className="text-xs">Rounds</Label>
+          <Input
+            type="number"
+            min={1}
+            max={MAX_ROUNDS}
+            value={value.rounds ?? ""}
+            placeholder="Number of rounds"
+            onChange={(e) => update("rounds", parsePositiveInt(e.target.value, MAX_ROUNDS))}
+          />
+        </div>
+      )}
+
+      {value.blockType === "for_time" && (
+        <div>
+          <Label className="text-xs">Time cap (min)</Label>
+          <Input
+            type="number"
+            min={1}
+            max={1_440}
+            value={value.timeCapMinutes ?? ""}
+            placeholder="e.g. 20"
+            onChange={(e) => update("timeCapMinutes", parsePositiveInt(e.target.value, 1_440))}
+          />
+        </div>
+      )}
+
+      {value.blockType === "interval" && (
+        <div className="grid gap-3 md:grid-cols-2">
+          <div>
+            <Label className="text-xs">Work (sec)</Label>
+            <Input type="number" min={1} max={86_400} value={value.intervalWorkSeconds ?? ""} onChange={(e) => update("intervalWorkSeconds", parsePositiveInt(e.target.value, 86_400))} />
+          </div>
+          <div>
+            <Label className="text-xs">Rest (sec)</Label>
+            <Input type="number" min={1} max={86_400} value={value.intervalRestSeconds ?? ""} onChange={(e) => update("intervalRestSeconds", parsePositiveInt(e.target.value, 86_400))} />
           </div>
         </div>
       )}

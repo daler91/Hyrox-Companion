@@ -19,6 +19,10 @@ export interface WorkoutGroup {
 export interface WorkoutStructureConfig {
   section: WorkoutSection;
   blockType: BlockType;
+  rounds?: number;
+  timeCapMinutes?: number;
+  intervalWorkSeconds?: number;
+  intervalRestSeconds?: number;
   emomDurationMinutes?: number;
   emomAlternating?: boolean;
   steps: WorkoutStep[];
