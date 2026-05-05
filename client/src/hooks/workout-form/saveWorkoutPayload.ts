@@ -59,7 +59,7 @@ export function buildWorkoutSavePayload({
   planDayId,
   exerciseBlocks,
   exerciseData,
-  structureBlocks = [],
+  structureBlocks: incomingStructureBlocks = [],
   weightLabel,
   distanceUnit,
 }: BuildWorkoutSavePayloadInput): SavePayloadResult {
@@ -134,7 +134,7 @@ export function buildWorkoutSavePayload({
       rpe: rpe || null,
       ...(planDayId ? { planDayId } : {}),
       exercises: exercises.map(exerciseToPayload) as ParsedExercise[],
-      ...(structureBlocks.length > 0 ? { structureBlocks } : {}),
+      ...(incomingStructureBlocks.length > 0 ? { structureBlocks: incomingStructureBlocks } : {}),
     },
   };
 }
