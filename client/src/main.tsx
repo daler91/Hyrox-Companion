@@ -22,6 +22,14 @@ import { migrateLegacyKeys } from "./lib/storageMigration";
 
 migrateLegacyKeys();
 
+const emomBuilderEnabled = (import.meta.env.VITE_EMOM_BUILDER_ENABLED as string | undefined) === "true";
+if (!import.meta.env.PROD) {
+  console.warn("[startup-config]", {
+    mode: import.meta.env.MODE,
+    emomBuilderEnabled,
+  });
+}
+
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
     dsn: import.meta.env.VITE_SENTRY_DSN as string,

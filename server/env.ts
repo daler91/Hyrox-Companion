@@ -58,6 +58,7 @@ const envSchema = z.object({
   AI_FEATURES_ENABLED: z.enum(["true", "false"]).default("true"),
   STRUCTURED_BLOCKS_ENABLED: z.enum(["true", "false"]).default("true"),
   STRUCTURED_BLOCKS_FALLBACK_FORCE_LEGACY: z.enum(["true", "false"]).default("false"),
+  EMOM_BUILDER_ENABLED: z.enum(["true", "false"]).default("false"),
 }).refine((data) => !(data.NODE_ENV === "production" && data.ALLOW_DEV_AUTH_BYPASS === "true"), {
   message: "❌ FATAL: ALLOW_DEV_AUTH_BYPASS cannot be enabled in production environment",
   path: ["ALLOW_DEV_AUTH_BYPASS"],
