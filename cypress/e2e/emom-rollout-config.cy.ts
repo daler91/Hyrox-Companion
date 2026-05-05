@@ -10,7 +10,7 @@ describe("EMOM rollout config", () => {
   });
 
   it("shows diagnostics badge in non-production with active editor mode", () => {
-    cy.visit("/log-workout");
+    cy.visit("/log");
     cy.get('[data-testid="badge-editor-mode-diagnostics"]').should("be.visible");
     cy.get('[data-testid="badge-editor-mode-diagnostics"]').invoke("text").should("match", /Editor mode: (structured-emom|legacy-text)/);
   });
