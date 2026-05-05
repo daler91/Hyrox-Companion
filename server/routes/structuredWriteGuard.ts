@@ -28,12 +28,16 @@ async function noteFallback(req: Request, ownerType: "workout_log" | "plan_day",
   await incrementStructuredExerciseCounter(ownerType, "manual", "structured_blocks_fallback", 1).catch(() => undefined);
 }
 
-function noteStructuredError(): boolean {
+function refreshFallbackWindow(): void {
   const now = Date.now();
   if (now - fallbackWindowStartedAt > FALLBACK_WINDOW_MS) {
     fallbackWindowStartedAt = now;
     fallbackErrorCount = 0;
   }
+}
+
+function noteStructuredError(): boolean {
+  refreshFallbackWindow();
   fallbackErrorCount += 1;
   return fallbackErrorCount >= FALLBACK_ERROR_THRESHOLD;
 }
@@ -48,6 +52,8 @@ function getRoutePath(req: Request): string {
 }
 
 export async function rejectTextOnlyWriteIfNeeded(req: Request, res: Response, ownerType: "workout_log" | "plan_day"): Promise<boolean> {
+  refreshFallbackWindow();
+
   if (!structuredBlocksGateOpen()) {
     await noteFallback(req, ownerType, "gate_off");
     return false;
