@@ -30,8 +30,9 @@ const parserResponseSchema = z.object({
     restSeconds: z.number().optional().nullable(),
     steps: z.array(z.object({
       stepNumber: z.number().int().min(1),
-      exerciseName: z.string().min(1),
-      category: z.string().min(1),
+      minuteIndex: z.number().int().min(1).optional().nullable(),
+      exerciseName: z.string().min(1).optional().nullable(),
+      category: z.string().min(1).optional().nullable(),
       customLabel: z.string().optional().nullable(),
       stepRole: z.string().optional().nullable(),
       targets: z.record(z.string(), z.unknown()).optional().nullable(),
@@ -69,6 +70,66 @@ function normalizeParserPayload(raw: unknown): NormalizedParserPayload {
     structureBlocks: structureBlocks.success ? structureBlocks.data : [],
     warnings: warnings.success ? warnings.data : [],
     confidence: confidence.success ? confidence.data : null,
+  };
+}
+
+function parseEmomDurationSeconds(text: string): number | null {
+  const match = text.match(/\bemom\s*(?:for\s*)?(\d{1,3})\s*(?:min|mins|minute|minutes)\b/i);
+  if (!match) return null;
+  const minutes = Number.parseInt(match[1] ?? "", 10);
+  if (!Number.isFinite(minutes) || minutes <= 0) return null;
+  return minutes * 60;
+}
+
+function mapMinuteRestStepsForEmom(
+  text: string,
+  block: NonNullable<NormalizedParserPayload["structureBlocks"]>[number],
+): { block: NonNullable<NormalizedParserPayload["structureBlocks"]>[number]; warnings: string[] } {
+  if (block.formatType.toLowerCase() !== "emom") return { block, warnings: [] };
+  const mappedSteps = block.steps.map((step) => {
+    if (typeof step.exerciseName === "string" && /^rest$/i.test(step.exerciseName.trim())) {
+      return { ...step, stepRole: "rest" };
+    }
+    return step;
+  });
+  const minPattern = /\bmin(?:ute)?\s*(\d{1,3})\s*:\s*([^\n,;]+)/gi;
+  const minuteMatches = [...text.matchAll(minPattern)];
+  const warnings: string[] = [];
+  if (minuteMatches.length > 0) {
+    const minuteToRole = new Map<number, "work" | "rest">();
+    for (const m of minuteMatches) {
+      const minute = Number.parseInt(m[1] ?? "", 10);
+      const desc = (m[2] ?? "").trim();
+      if (!Number.isFinite(minute) || minute <= 0) continue;
+      minuteToRole.set(minute, /^rest$/i.test(desc) ? "rest" : "work");
+    }
+    if (minuteToRole.size !== mappedSteps.length) {
+      warnings.push("Ambiguous EMOM minute mapping: free-text minute count does not match parsed steps.");
+    }
+    return {
+      block: {
+        ...block,
+        steps: mappedSteps.map((step, idx) => ({
+          ...step,
+          minuteIndex: step.minuteIndex ?? (idx + 1),
+          stepRole: step.stepRole ?? minuteToRole.get(idx + 1) ?? "work",
+        })),
+        durationSeconds: block.durationSeconds ?? parseEmomDurationSeconds(text),
+      },
+      warnings,
+    };
+  }
+  return {
+    block: {
+      ...block,
+      steps: mappedSteps.map((step, idx) => ({
+        ...step,
+        minuteIndex: step.minuteIndex ?? (idx + 1),
+        stepRole: step.stepRole ?? "work",
+      })),
+      durationSeconds: block.durationSeconds ?? parseEmomDurationSeconds(text),
+    },
+    warnings,
   };
 }
 
@@ -345,6 +406,8 @@ export async function parseExercisesFromText(
 
     const mapped = validated.map((ex) => mapValidatedExercise(ex, text));
     const structureWarnings = (normalized.warnings ?? []).filter((w) => typeof w === "string" && w.trim().length > 0);
+    const emomMapped = normalized.structureBlocks.map((b) => mapMinuteRestStepsForEmom(text, b));
+    for (const mapped of emomMapped) structureWarnings.push(...mapped.warnings);
     if (normalized.structureBlocks.length === 0) {
       structureWarnings.push("Structure unresolved: section/format/step sequence not fully identified.");
     }
@@ -406,6 +469,8 @@ export async function parseExercisesFromImage(
     // so the synthesizer falls back to "Unknown exercise" — the correct
     // degraded behavior and what mapValidatedExercise already handles.
     const structureWarnings = (normalized.warnings ?? []).filter((w) => typeof w === "string" && w.trim().length > 0);
+    const emomMapped = normalized.structureBlocks.map((b) => mapMinuteRestStepsForEmom("", b));
+    for (const mapped of emomMapped) structureWarnings.push(...mapped.warnings);
     if (normalized.structureBlocks.length === 0) {
       structureWarnings.push("Structure unresolved: section/format/step sequence not fully identified.");
     }
