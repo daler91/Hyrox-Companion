@@ -128,6 +128,7 @@ export function CoachNote({
         }}
         onKeyDown={(e) => e.stopPropagation()}
         className="flex w-full items-center gap-1.5 text-left text-xs font-medium text-primary hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 rounded"
+        aria-label={expanded ? "Collapse coach's note" : "Expand coach's note"}
         aria-expanded={expanded}
         aria-controls={`coach-note-body-${entryId}`}
         data-testid={`coach-note-toggle-${entryId}`}
