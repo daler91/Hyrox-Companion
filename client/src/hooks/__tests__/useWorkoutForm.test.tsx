@@ -421,8 +421,8 @@ describe('useWorkoutForm', () => {
       });
     });
 
-    it('triggers error toast on failed save', async () => {
-      vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(new Error('Network Error'));
+    async function expectFailedSaveToast(error: unknown, expectedToast: { title: string; description: string; variant: "destructive" }) {
+      vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(error);
 
       const { result } = renderFormHook({ ...defaultProps, useTextMode: true });
 
@@ -436,14 +436,32 @@ describe('useWorkoutForm', () => {
       });
 
       await waitFor(() => {
-        expect(mockToast).toHaveBeenCalledWith({
-          title: "Error",
-          description: "Failed to save workout. Please try again.",
-          variant: "destructive",
-        });
+        expect(mockToast).toHaveBeenCalledWith(expectedToast);
         expect(queryClientLib.queryClient.invalidateQueries).not.toHaveBeenCalled();
         expect(mockNavigate).not.toHaveBeenCalled();
       });
+    }
+
+    it('shows structured rows error toast for STRUCTURED_ROWS_REQUIRED failures', async () => {
+      await expectFailedSaveToast(
+        { response: { data: { code: 'STRUCTURED_ROWS_REQUIRED' } } },
+        {
+          title: "Workout needs structured rows",
+          description: "Tap Parse or add at least one exercise set before saving.",
+          variant: "destructive",
+        },
+      );
+    });
+
+    it('triggers generic error toast on failed save', async () => {
+      await expectFailedSaveToast(
+        new Error('Network Error'),
+        {
+          title: "Error",
+          description: "Failed to save workout. Please try again.",
+          variant: "destructive",
+        },
+      );
     });
   });
 });
