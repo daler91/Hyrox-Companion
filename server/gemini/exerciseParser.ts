@@ -260,7 +260,7 @@ function mapValidatedExercise(
 
 
 function canonicalExerciseName(label: string): string {
-  const normalized = sanitizeLabel(label).replace(/\s+/g, "_");
+  const normalized = sanitizeLabel(label).toLowerCase().replace(/\s+/g, "_");
   const aliases: Record<string, string> = {
     "back_squat": "back_squat",
     "squat": "back_squat",
