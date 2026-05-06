@@ -3,6 +3,7 @@ import { type Request as ExpressRequest,type Response, Router } from "express";
 import { z } from "zod";
 
 import { isAuthenticated } from "../clerkAuth";
+import { AppError, classifyAiError, ErrorCode } from "../errors";
 import { reqLogger } from "../logger";
 import { aiBudgetCheck } from "../middleware/aibudget";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody } from "../routeUtils";
@@ -32,6 +33,68 @@ function sendParseWriteThroughResponse(
   }
   void incrementStructuredExerciseCounter(ownerType, source, source === "voice" ? "parse_text_succeeded" : "parse_photo_succeeded").catch(() => undefined);
   return res.json({ exercises: result.exercises, saved: true, setCount: result.setCount });
+}
+
+
+
+function isLikelyAiProviderFailure(error: unknown): boolean {
+  let raw = "";
+  if (error instanceof Error) {
+    raw = error.message;
+  } else if (typeof error === "string") {
+    raw = error;
+  } else if (error != null) {
+    try {
+      raw = JSON.stringify(error);
+    } catch {
+      raw = "";
+    }
+  }
+  const lower = raw.toLowerCase();
+  return /gemini|google\.?genai|\bai\b|quota|rate.?limit|resource.?exhausted|invalid|bad.?request|unsupported|unavailable|502|503|504|deadline|timeout/.test(lower);
+}
+
+function hasStatusAndCode(error: unknown): error is { status: number; code: string; message?: string } {
+  if (!error || typeof error !== "object") return false;
+  const rec = error as Record<string, unknown>;
+  return typeof rec.status === "number" && typeof rec.code === "string";
+}
+
+function sendPlanDayReparseError(
+  req: ExpressRequest<{ dayId: string }>,
+  res: Response,
+  error: unknown,
+  userId: string,
+  mode: "text" | "photo",
+): Response {
+  if (error instanceof AppError) {
+    reqLogger(req).error({ err: error, dayId: req.params.dayId, userId, code: error.code }, `Plan-day ${mode} reparse failed`);
+    const isUpstreamUnavailable = error.code === ErrorCode.AI_UNAVAILABLE;
+    return res.status(isUpstreamUnavailable ? 502 : error.status).json({
+      error: error.message,
+      code: isUpstreamUnavailable ? "AI_UPSTREAM_FAILURE" : error.code,
+    });
+  }
+
+  if (!isLikelyAiProviderFailure(error)) {
+    if (hasStatusAndCode(error)) {
+      reqLogger(req).error({ err: error, dayId: req.params.dayId, userId, code: error.code }, `Plan-day ${mode} reparse failed with structured non-AI error`);
+      return res.status(error.status).json({ error: error.message ?? "Failed to parse plan day. Please try again.", code: error.code });
+    }
+    reqLogger(req).error({ err: error, dayId: req.params.dayId, userId }, `Plan-day ${mode} reparse failed due to non-AI error`);
+    return res.status(500).json({ error: "Failed to parse plan day. Please try again.", code: "INTERNAL_ERROR" });
+  }
+
+  const classified = classifyAiError(error);
+  reqLogger(req).error(
+    { err: error, dayId: req.params.dayId, userId, code: classified.code },
+    `Plan-day ${mode} reparse failed`,
+  );
+  const isUpstreamUnavailable = classified.code === ErrorCode.AI_UNAVAILABLE;
+  return res.status(isUpstreamUnavailable ? 502 : classified.status).json({
+    error: classified.message,
+    code: isUpstreamUnavailable ? "AI_UPSTREAM_FAILURE" : classified.code,
+  });
 }
 
 const updateStoredPlanDay = createUpdatePlanDayUseCase({
@@ -288,8 +351,12 @@ protectedPost(
     }
     const weightUnit = user?.weightUnit || "kg";
     void incrementStructuredExerciseCounter("plan_day", "voice", "parse_text_attempted").catch(() => undefined);
-    const result = await reparsePlanDay(planDay, weightUnit);
-    return sendParseWriteThroughResponse(res, "plan_day", "voice", result);
+    try {
+      const result = await reparsePlanDay(planDay, weightUnit);
+      return sendParseWriteThroughResponse(res, "plan_day", "voice", result);
+    } catch (error: unknown) {
+      return sendPlanDayReparseError(req, res, error, userId, "text");
+    }
   },
 );
 
@@ -313,8 +380,12 @@ protectedPost(
     const weightUnit = user?.weightUnit || "kg";
     const customNames = customExercises.map((e) => e.name);
     void incrementStructuredExerciseCounter("plan_day", "photo", "parse_photo_attempted").catch(() => undefined);
-    const result = await reparsePlanDayFromImage(planDay, req.body, weightUnit, userId, customNames);
-    return sendParseWriteThroughResponse(res, "plan_day", "photo", result);
+    try {
+      const result = await reparsePlanDayFromImage(planDay, req.body, weightUnit, userId, customNames);
+      return sendParseWriteThroughResponse(res, "plan_day", "photo", result);
+    } catch (error: unknown) {
+      return sendPlanDayReparseError(req, res, error, userId, "photo");
+    }
   },
 );
 

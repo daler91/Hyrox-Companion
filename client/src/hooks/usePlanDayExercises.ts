@@ -30,6 +30,51 @@ function isTimeoutLikeError(error: unknown): boolean {
   );
 }
 
+function extractApiErrorStatusAndCode(error: unknown): { status: number | null; code: string | null } {
+  if (!error || typeof error !== "object") return { status: null, code: null };
+  const asRecord = error as Record<string, unknown>;
+
+  const status = typeof asRecord.status === "number"
+    ? asRecord.status
+    : (typeof (asRecord.response as Record<string, unknown> | undefined)?.status === "number"
+      ? ((asRecord.response as Record<string, unknown>).status as number)
+      : null);
+
+  const directCode = typeof asRecord.code === "string" ? asRecord.code : null;
+  if (directCode) return { status, code: directCode };
+
+  const payload = asRecord.payload;
+  if (payload && typeof payload === "object" && typeof (payload as Record<string, unknown>).code === "string") {
+    return { status, code: (payload as Record<string, unknown>).code as string };
+  }
+
+  const message = typeof asRecord.message === "string" ? asRecord.message : "";
+  if (message) {
+    const statusMatch = message.match(/^(\d{3})\s*:/);
+    const parsedStatus = status ?? (statusMatch ? Number.parseInt(statusMatch[1], 10) : null);
+
+    const jsonStart = message.indexOf("{");
+    if (jsonStart >= 0) {
+      try {
+        const parsed = JSON.parse(message.slice(jsonStart)) as { code?: unknown };
+        const parsedCode = typeof parsed.code === "string" ? parsed.code : null;
+        return { status: parsedStatus, code: parsedCode };
+      } catch {
+        return { status: parsedStatus, code: null };
+      }
+    }
+
+    return { status: parsedStatus, code: null };
+  }
+
+  return { status, code: null };
+}
+
+function isUpstreamAiError(error: unknown): boolean {
+  const { status, code } = extractApiErrorStatusAndCode(error);
+  return status === 502 || status === 504 || code === "AI_UPSTREAM_FAILURE" || code === "AI_UPSTREAM_TIMEOUT";
+}
+
 /**
  * Mutation + query bundle for a plan day's prescribed exercise sets.
  * Used by the v2 workout detail dialog when a planned entry is open so
@@ -102,7 +147,13 @@ export function usePlanDayExercises(planDayId: string | null) {
         retry: () => reparseFreeText.mutate(undefined),
       });
     },
-    errorToast: "Parse failed — try rewording and retry.",
+    errorToast: (error) =>
+      isUpstreamAiError(error)
+        ? {
+            title: "AI service temporarily unavailable",
+            description: "Please retry in a moment.",
+          }
+        : { title: "Parse failed — try rewording and retry." },
   });
 
   // Photo sibling — mirrors reparseFreeText but sources the exercises

@@ -7,6 +7,8 @@ const useQueryMock = vi.fn();
 const useApiMutationMock = vi.fn();
 const useExerciseSetsForOwnerMock = vi.fn();
 
+const mutationConfigs: Array<Record<string, unknown>> = [];
+
 vi.mock("@tanstack/react-query", () => ({
   useQuery: (cfg: { queryKey: unknown[] }) => useQueryMock(cfg),
 }));
@@ -47,6 +49,7 @@ vi.mock("@/lib/api", () => ({
 
 describe("usePlanDayExercises parse state scoping", () => {
   beforeEach(() => {
+    mutationConfigs.length = 0;
     useQueryMock.mockImplementation(() => ({ data: [], isLoading: false }));
     useExerciseSetsForOwnerMock.mockReturnValue({
       updateSet: vi.fn(),
@@ -60,13 +63,16 @@ describe("usePlanDayExercises parse state scoping", () => {
       markSaved: vi.fn(),
     });
 
-    useApiMutationMock.mockImplementation((cfg: { onMutate?: (...args: unknown[]) => unknown; onError?: (...args: unknown[]) => void }) => ({
+    useApiMutationMock.mockImplementation((cfg: { onMutate?: (...args: unknown[]) => unknown; onError?: (...args: unknown[]) => void }) => {
+      mutationConfigs.push(cfg as unknown as Record<string, unknown>);
+      return ({
       mutate: (...args: unknown[]) => {
         const context = cfg.onMutate?.(...args);
         cfg.onError?.(new Error("parse failed"), args[0], context);
       },
       isPending: false,
-    }));
+    });
+    });
   });
 
   it("clears parseFailed when plan day id changes to another empty day", () => {
@@ -86,4 +92,33 @@ describe("usePlanDayExercises parse state scoping", () => {
     expect(result.current.parseFailed).toBe(false);
     expect(result.current.retryParse).toBeNull();
   });
+
+  it("shows upstream-specific toast copy for 502 responses on text reparse", () => {
+    renderHook(() => usePlanDayExercises("day-1"));
+    const textMutationCfg = mutationConfigs[0] as { errorToast?: (error: unknown) => { title?: string; description?: string } };
+    const toast = textMutationCfg.errorToast?.({ status: 502 });
+    expect(toast).toEqual({
+      title: "AI service temporarily unavailable",
+      description: "Please retry in a moment.",
+    });
+  });
+
+
+  it("detects upstream failures from plain Error message payload", () => {
+    renderHook(() => usePlanDayExercises("day-1"));
+    const textMutationCfg = mutationConfigs[0] as { errorToast?: (error: unknown) => { title?: string; description?: string } };
+    const toast = textMutationCfg.errorToast?.(new Error('502: {"error":"AI service temporarily unavailable.","code":"AI_UPSTREAM_FAILURE"}'));
+    expect(toast).toEqual({
+      title: "AI service temporarily unavailable",
+      description: "Please retry in a moment.",
+    });
+  });
+
+  it("keeps generic parse toast copy for non-upstream failures", () => {
+    renderHook(() => usePlanDayExercises("day-1"));
+    const textMutationCfg = mutationConfigs[0] as { errorToast?: (error: unknown) => { title?: string; description?: string } };
+    const toast = textMutationCfg.errorToast?.({ status: 422, code: "PARSE_WRITE_THROUGH_REQUIRED" });
+    expect(toast).toEqual({ title: "Parse failed — try rewording and retry." });
+  });
+
 });
