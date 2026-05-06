@@ -35,6 +35,26 @@ function sendParseWriteThroughResponse(
   return res.json({ exercises: result.exercises, saved: true, setCount: result.setCount });
 }
 
+
+function sendPlanDayReparseError(
+  req: ExpressRequest<{ dayId: string }>,
+  res: Response,
+  error: unknown,
+  userId: string,
+  mode: "text" | "photo",
+): Response {
+  const classified = classifyAiError(error);
+  reqLogger(req).error(
+    { err: error, dayId: req.params.dayId, userId, code: classified.code },
+    `Plan-day ${mode} reparse failed`,
+  );
+  const isUpstreamUnavailable = classified.code === ErrorCode.AI_UNAVAILABLE;
+  return res.status(isUpstreamUnavailable ? 502 : classified.status).json({
+    error: classified.message,
+    code: isUpstreamUnavailable ? "AI_UPSTREAM_FAILURE" : classified.code,
+  });
+}
+
 const updateStoredPlanDay = createUpdatePlanDayUseCase({
   updatePlanDay: (dayId, data, userId) => storage.plans.updatePlanDay(dayId, data, userId),
 });
@@ -293,11 +313,7 @@ protectedPost(
       const result = await reparsePlanDay(planDay, weightUnit);
       return sendParseWriteThroughResponse(res, "plan_day", "voice", result);
     } catch (error: unknown) {
-      const classified = classifyAiError(error);
-      reqLogger(req).error({ err: error, dayId: req.params.dayId, userId, code: classified.code }, "Plan-day text reparse failed");
-      const status = classified.code === ErrorCode.AI_UNAVAILABLE ? 502 : classified.status;
-      const code = classified.code === ErrorCode.AI_UNAVAILABLE ? "AI_UPSTREAM_FAILURE" : classified.code;
-      return res.status(status).json({ error: classified.message, code });
+      return sendPlanDayReparseError(req, res, error, userId, "text");
     }
   },
 );
@@ -326,11 +342,7 @@ protectedPost(
       const result = await reparsePlanDayFromImage(planDay, req.body, weightUnit, userId, customNames);
       return sendParseWriteThroughResponse(res, "plan_day", "photo", result);
     } catch (error: unknown) {
-      const classified = classifyAiError(error);
-      reqLogger(req).error({ err: error, dayId: req.params.dayId, userId, code: classified.code }, "Plan-day photo reparse failed");
-      const status = classified.code === ErrorCode.AI_UNAVAILABLE ? 502 : classified.status;
-      const code = classified.code === ErrorCode.AI_UNAVAILABLE ? "AI_UPSTREAM_FAILURE" : classified.code;
-      return res.status(status).json({ error: classified.message, code });
+      return sendPlanDayReparseError(req, res, error, userId, "photo");
     }
   },
 );
