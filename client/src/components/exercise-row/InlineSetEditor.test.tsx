@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { InlineSetEditor } from "./InlineSetEditor";
 
-const baseSet: ExerciseSet = {
+const baseSet = {
   id: "set-1",
   exerciseName: "wall_balls",
   customLabel: null,
@@ -19,7 +19,7 @@ const baseSet: ExerciseSet = {
   plannedWeight: null,
   plannedDistance: null,
   plannedTime: null,
-};
+} as ExerciseSet;
 
 describe("InlineSetEditor field commit flow", () => {
   it("keeps rapid typing local and commits only the final value on blur", () => {
