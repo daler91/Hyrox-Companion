@@ -1,6 +1,6 @@
 import { EXERCISE_DEFINITIONS, type ExerciseName,type ExerciseSet } from "@shared/schema";
 import { MessageSquarePlus, Pencil, Plus, X } from "lucide-react";
-import { memo, useCallback, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -295,45 +295,26 @@ const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUn
   const [committedDraft, setCommittedDraft] = useState<string>(() => formatInitial(current));
   const [pendingCommit, setPendingCommit] = useState<number | undefined>(undefined);
   const [isDirty, setIsDirty] = useState(false);
-
-  const externalGenerationRef = useRef(0);
-  const lastSeenExternalRef = useRef<number | undefined>(current);
-  const commitGenerationRef = useRef<number | null>(null);
-  const pendingSinceRef = useRef<number | null>(null);
-
-  if (current !== lastSeenExternalRef.current) {
-    externalGenerationRef.current += 1;
-    lastSeenExternalRef.current = current;
-  }
+  const [suppressTransientEmpty, setSuppressTransientEmpty] = useState(false);
+  const [commitBaseValue, setCommitBaseValue] = useState<number | undefined>(current);
 
   const hasPending = pendingCommit !== undefined;
-  const now = Date.now();
-  const withinReconciliationWindow =
-    hasPending
-    && pendingCommit !== null
-    && pendingSinceRef.current !== null
-    && now - pendingSinceRef.current < EXTERNAL_RECONCILIATION_GRACE_MS;
+
+  useEffect(() => {
+    if (!suppressTransientEmpty) return;
+    const timeoutId = window.setTimeout(() => {
+      setSuppressTransientEmpty(false);
+    }, EXTERNAL_RECONCILIATION_GRACE_MS);
+    return () => window.clearTimeout(timeoutId);
+  }, [suppressTransientEmpty]);
 
   const shouldIgnoreTransientEmpty =
-    withinReconciliationWindow && (current == null || formatInitial(current) === "");
-
-  const commitGeneration = commitGenerationRef.current;
+    hasPending && suppressTransientEmpty && (current == null || formatInitial(current) === "");
   const commitMatched = hasPending && current === pendingCommit;
-  const newerExternalGeneration =
-    commitGeneration !== null && externalGenerationRef.current > commitGeneration;
+  const externalNewerWhilePending = hasPending && current !== pendingCommit && current !== commitBaseValue;
   const externalNewerAndNotPending = !hasPending && current !== lastCommitted;
-
-  if (!isDirty && !shouldIgnoreTransientEmpty && (commitMatched || newerExternalGeneration || externalNewerAndNotPending)) {
-    const nextDraft = formatInitial(current);
-    setLastCommitted(current);
-    setCommittedDraft(nextDraft);
-    setDraft(nextDraft);
-    if (commitMatched || newerExternalGeneration) {
-      setPendingCommit(undefined);
-      pendingSinceRef.current = null;
-      commitGenerationRef.current = null;
-    }
-  }
+  const shouldUseExternal = !isDirty && !shouldIgnoreTransientEmpty
+    && (commitMatched || externalNewerWhilePending || externalNewerAndNotPending);
 
   const commitDraft = useCallback(() => {
     const parsed = parseDraft(draft);
@@ -344,8 +325,8 @@ const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUn
       setCommittedDraft(nextDraft);
       setDraft(nextDraft);
       setPendingCommit(next);
-      commitGenerationRef.current = externalGenerationRef.current;
-      pendingSinceRef.current = Date.now();
+      setCommitBaseValue(lastCommitted);
+      setSuppressTransientEmpty(nextDraft.trim() !== "");
       if (next !== lastCommitted) {
         onUpdate({ [field]: next ?? null } as PatchExerciseSetPayload);
       }
@@ -358,7 +339,7 @@ const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUn
       <Input
         type="number"
         inputMode="decimal"
-        value={isDirty ? draft : committedDraft}
+        value={shouldUseExternal ? formatInitial(current) : (isDirty ? draft : committedDraft)}
         onChange={(e) => {
           setDraft(e.target.value);
           setIsDirty(true);
