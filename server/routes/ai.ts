@@ -279,6 +279,47 @@ protectedDelete(router, "/api/v1/chat/history", { limiter: rateLimiter("chatHist
     res.json({ success: true });
   });
 
+// Coach Insights — single-shot AI analysis of the user's progress against
+// their stated goal. Reuses the chat surface (chatWithCoach) with a fixed
+// analysis prompt rather than introducing a new generation path. Rate-limited
+// like suggestions because it builds the full training + RAG context.
+const COACH_INSIGHTS_PROMPT = [
+  "Generate a Coach Insights analysis for the athlete using ONLY the training context provided in the system prompt.",
+  "",
+  "Focus the analysis on how the athlete is progressing toward their stated goal (see activePlan.goal). If no goal is set, evaluate progress against their weekly workout goal and overall consistency.",
+  "",
+  "Structure the response in clear Markdown with these sections:",
+  "1. **Goal Progress** — How close is the athlete to their goal? Quantify where possible (race date, plan phase, weeks remaining, completion rate).",
+  "2. **What's Working** — Strengths from recent workouts, RPE trends, progression flags, streaks.",
+  "3. **Watch Outs** — Fatigue flags, station gaps, plateaus, undertraining signals, missed/skipped workouts.",
+  "4. **Recommended Focus (Next 1–2 Weeks)** — 2–4 concrete, actionable priorities tied to the data.",
+  "",
+  "Be specific: cite numbers (RPE, completion %, days since station X, weekly volume vs goal) from the context. Keep tone warm but direct. Do not invent data that isn't in the context.",
+].join("\n");
+
+protectedPost(router, "/api/v1/coach-insights", { limiter: rateLimiter("suggestions", 3), middleware: [aiConsentCheck, aiBudgetCheck] }, async (req: ExpressRequest, res: Response) => {
+    const userId = getUserId(req);
+    const log = reqLogger(req);
+    const startedAt = Date.now();
+    const aiContext = await buildAIContext(userId, COACH_INSIGHTS_PROMPT, log);
+    const response = await chatWithCoach(
+      COACH_INSIGHTS_PROMPT,
+      [],
+      aiContext.trainingContext,
+      aiContext.coachingMaterials,
+      aiContext.retrievedChunks,
+      userId,
+    );
+    // userId is already bound on the child logger via reqLogger; logging
+    // it again here trips Bearer's "leakage of information in logger
+    // message" rule. Stick to per-call metadata only.
+    log.info(
+      { durationMs: Date.now() - startedAt, ragSource: aiContext.ragInfo?.source ?? "none" },
+      "[ai] Coach insights generated",
+    );
+    res.json({ insights: response, ragInfo: sanitizeRagInfo(aiContext.ragInfo), generatedAt: new Date().toISOString() });
+  });
+
 protectedPost(router, "/api/v1/timeline/ai-suggestions", { limiter: rateLimiter("suggestions", 3), middleware: [aiConsentCheck, aiBudgetCheck] }, async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const log = reqLogger(req);
