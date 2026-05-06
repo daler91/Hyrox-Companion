@@ -1,6 +1,6 @@
 import { EXERCISE_DEFINITIONS, type ExerciseName,type ExerciseSet } from "@shared/schema";
 import { MessageSquarePlus, Pencil, Plus, X } from "lucide-react";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -294,49 +294,32 @@ const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUn
   // updates at the same value don't overwrite an in-progress edit. A
   // genuine external change (rollback, server push) DOES propagate.
   const [draft, setDraft] = useState<string>(() => formatInitial(current));
-  const [lastSaved, setLastSaved] = useState<number | undefined>(current);
   const [isEditing, setIsEditing] = useState(false);
-  const editVersionRef = useRef(0);
-  const editHistoryRef = useRef<Array<{ version: number; value: number | undefined }>>([]);
-
-  useEffect(() => {
-    // While actively editing, reject out-of-order echoes from older
-    // local edit generations.
-    if (isEditing) {
-      const matching = editHistoryRef.current
-        .filter((entry) => entry.value === current)
-        .at(-1);
-      if (!matching || matching.version < editVersionRef.current) return;
-    }
-
-    if (current === lastSaved && draft === formatInitial(current)) return;
-
-    setLastSaved(current);
-    setDraft(formatInitial(current));
-  }, [current, draft, isEditing, lastSaved]);
+  const displayValue = isEditing ? draft : formatInitial(current);
 
   return (
     <div className="flex min-w-0 flex-col gap-1">
       <Input
         type="number"
         inputMode="decimal"
-        value={draft}
+        value={displayValue}
         onChange={(e) => {
           const raw = e.target.value;
-          editVersionRef.current += 1;
           setDraft(raw);
           const parsed = parseDraft(raw);
           if (parsed == null || !Number.isNaN(parsed)) {
             const next = parsed ?? undefined;
-            const version = editVersionRef.current;
-            editHistoryRef.current.push({ version, value: next });
-            editHistoryRef.current = editHistoryRef.current.slice(-12);
-            setLastSaved(next);
             onUpdate({ [field]: next ?? null } as PatchExerciseSetPayload);
           }
         }}
-        onFocus={() => setIsEditing(true)}
-        onBlur={() => setIsEditing(false)}
+        onFocus={() => {
+          setDraft(formatInitial(current));
+          setIsEditing(true);
+        }}
+        onBlur={() => {
+          setIsEditing(false);
+          setDraft(formatInitial(current));
+        }}
         placeholder={hasPlannedValue ? String(planned) : "--"}
         className="h-10 text-center text-sm tabular-nums"
         aria-label={`${label} for set ${set.setNumber}`}

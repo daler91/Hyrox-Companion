@@ -61,7 +61,7 @@ describe("InlineSetEditor FieldInput", () => {
           onAddSet={vi.fn()}
           onDeleteSet={vi.fn()}
           onUpdateSet={(setId, data) => {
-            const next = data.reps as number | null | undefined;
+            const next = data.reps;
             const delay = next === 1 ? 40 : 10;
             setTimeout(() => {
               setSets((prev) =>
