@@ -130,7 +130,10 @@ export function usePlanDayExercises(planDayId: string | null) {
   // reconciling in-hand because the response shape (`exercises[]`) is the
   // parsed-exercise DTO, not ExerciseSet rows.
   const reparseFreeText = useApiMutation({
-    mutationFn: () => api.plans.reparseDay(planDayId!),
+    mutationFn: () => {
+      if (!planDayId) return Promise.resolve(null);
+      return api.plans.reparseDay(planDayId);
+    },
     invalidateQueries: planDayId ? [QUERY_KEYS.planDayExercises(planDayId)] : undefined,
     onMutate: () => ({ ownerId: planDayId }),
     onSuccess: (_data, _variables, context) => {
@@ -160,8 +163,10 @@ export function usePlanDayExercises(planDayId: string | null) {
   // from a captured image. Same replace semantics: the plan day's
   // existing structured rows are wiped before the new ones land.
   const reparseFromImage = useApiMutation({
-    mutationFn: (payload: ParseFromImagePayload) =>
-      api.plans.reparseDayFromImage(planDayId!, payload),
+    mutationFn: (payload: ParseFromImagePayload) => {
+      if (!planDayId) return Promise.resolve(null);
+      return api.plans.reparseDayFromImage(planDayId, payload);
+    },
     invalidateQueries: planDayId ? [QUERY_KEYS.planDayExercises(planDayId)] : undefined,
     onMutate: (payload) => ({ ownerId: planDayId, payload }),
     onSuccess: (_data, _variables, context) => {
@@ -203,8 +208,10 @@ export function usePlanDayExercises(planDayId: string | null) {
   // otherwise the user would only see feedback for per-set cell writes.
   const updatePrescription = useApiMutation({
     mutationKey: planDayId ? planDaySetsMutationKey(planDayId) : undefined,
-    mutationFn: (patch: { focus?: string; mainWorkout?: string | null; accessory?: string | null; notes?: string | null }) =>
-      api.plans.updateDayWithoutPlan(planDayId!, patch),
+    mutationFn: (patch: { focus?: string; mainWorkout?: string | null; accessory?: string | null; notes?: string | null }) => {
+      if (!planDayId) return Promise.resolve(null);
+      return api.plans.updateDayWithoutPlan(planDayId, patch);
+    },
     invalidateQueries: [QUERY_KEYS.timeline, QUERY_KEYS.plans],
     onSuccess: () => {
       exerciseSetOps.markSaved();
