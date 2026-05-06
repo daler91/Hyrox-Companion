@@ -101,4 +101,55 @@ describe("InlineSetEditor FieldInput", () => {
 
     expect(input).toHaveDisplayValue("12");
   });
+
+  it("applies a rollback value after blur when it was rejected during active editing", async () => {
+    vi.useFakeTimers();
+
+    function Harness() {
+      const [sets, setSets] = useState<ExerciseSet[]>([makeSet({ reps: 10 })]);
+
+      return (
+        <InlineSetEditor
+          sets={sets}
+          exerciseName="back_squat"
+          customLabel={null}
+          category="strength"
+          weightUnit="kg"
+          onAddSet={vi.fn()}
+          onDeleteSet={vi.fn()}
+          onUpdateSet={(setId) => {
+            setTimeout(() => {
+              setSets((prev) =>
+                prev.map((s) =>
+                  s.id === setId
+                    ? {
+                        ...s,
+                        reps: 7,
+                      }
+                    : s,
+                ),
+              );
+            }, 20);
+          }}
+        />
+      );
+    }
+
+    render(<Harness />);
+
+    const input = screen.getByTestId("input-reps-set-1");
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "12" } });
+    expect(input).toHaveDisplayValue("12");
+
+    await act(async () => {
+      vi.advanceTimersByTime(25);
+    });
+
+    // Still editing: stale/external rollback is gated.
+    expect(input).toHaveDisplayValue("12");
+
+    fireEvent.blur(input);
+    expect(input).toHaveDisplayValue("7");
+  });
 });

@@ -300,10 +300,6 @@ const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUn
   const editHistoryRef = useRef<Array<{ version: number; value: number | undefined }>>([]);
 
   useEffect(() => {
-    if (current === lastSaved) return;
-
-    setLastSaved(current);
-
     // While actively editing, reject out-of-order echoes from older
     // local edit generations.
     if (isEditing) {
@@ -313,8 +309,11 @@ const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUn
       if (!matching || matching.version < editVersionRef.current) return;
     }
 
+    if (current === lastSaved && draft === formatInitial(current)) return;
+
+    setLastSaved(current);
     setDraft(formatInitial(current));
-  }, [current, isEditing, lastSaved]);
+  }, [current, draft, isEditing, lastSaved]);
 
   return (
     <div className="flex min-w-0 flex-col gap-1">
