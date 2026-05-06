@@ -724,30 +724,40 @@ async function copyPrescribedSetsIntoLog(
   return tx.insert(exerciseSets).values(copyRows).returning();
 }
 
+// ⚡ Bolt Optimization: Consolidate arrays into a single Map to prevent intermediate Set array
+// allocations and unnecessary multi-pass iteration loops, improving adherence calculation speed.
 export function summarizeSetAdherence(planned: ExerciseSet[], actual: ExerciseSet[]) {
-  const plannedCounts = new Map<string, number>();
-  const actualCounts = new Map<string, number>();
+  const counts = new Map<string, { planned: number; actual: number }>();
   const keyFor = (s: ExerciseSet) => (s.customLabel || s.exerciseName || "").toLowerCase().trim();
 
   for (const s of planned) {
     const key = keyFor(s);
-    plannedCounts.set(key, (plannedCounts.get(key) ?? 0) + 1);
+    let entry = counts.get(key);
+    if (!entry) {
+      entry = { planned: 0, actual: 0 };
+      counts.set(key, entry);
+    }
+    entry.planned++;
   }
+
   for (const s of actual) {
     const key = keyFor(s);
-    actualCounts.set(key, (actualCounts.get(key) ?? 0) + 1);
+    let entry = counts.get(key);
+    if (!entry) {
+      entry = { planned: 0, actual: 0 };
+      counts.set(key, entry);
+    }
+    entry.actual++;
   }
 
   let matchedSetCount = 0;
   let addedSetCount = 0;
   let removedSetCount = 0;
-  const keys = new Set([...plannedCounts.keys(), ...actualCounts.keys()]);
-  for (const key of keys) {
-    const plannedCount = plannedCounts.get(key) ?? 0;
-    const actualCount = actualCounts.get(key) ?? 0;
-    matchedSetCount += Math.min(plannedCount, actualCount);
-    if (actualCount > plannedCount) addedSetCount += actualCount - plannedCount;
-    if (plannedCount > actualCount) removedSetCount += plannedCount - actualCount;
+
+  for (const { planned, actual } of counts.values()) {
+    matchedSetCount += Math.min(planned, actual);
+    if (actual > planned) addedSetCount += actual - planned;
+    if (planned > actual) removedSetCount += planned - actual;
   }
 
   return {
