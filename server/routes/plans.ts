@@ -38,7 +38,18 @@ function sendParseWriteThroughResponse(
 
 
 function isLikelyAiProviderFailure(error: unknown): boolean {
-  const raw = error instanceof Error ? error.message : String(error ?? "");
+  let raw = "";
+  if (error instanceof Error) {
+    raw = error.message;
+  } else if (typeof error === "string") {
+    raw = error;
+  } else if (error != null) {
+    try {
+      raw = JSON.stringify(error);
+    } catch {
+      raw = "";
+    }
+  }
   const lower = raw.toLowerCase();
   return /gemini|google\.?genai|\bai\b|quota|rate.?limit|resource.?exhausted|invalid|bad.?request|unsupported|unavailable|502|503|504|deadline|timeout/.test(lower);
 }
