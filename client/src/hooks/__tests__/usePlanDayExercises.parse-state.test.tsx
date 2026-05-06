@@ -103,6 +103,17 @@ describe("usePlanDayExercises parse state scoping", () => {
     });
   });
 
+
+  it("detects upstream failures from plain Error message payload", () => {
+    renderHook(() => usePlanDayExercises("day-1"));
+    const textMutationCfg = mutationConfigs[0] as { errorToast?: (error: unknown) => { title?: string; description?: string } };
+    const toast = textMutationCfg.errorToast?.(new Error('502: {"error":"AI service temporarily unavailable.","code":"AI_UPSTREAM_FAILURE"}'));
+    expect(toast).toEqual({
+      title: "AI service temporarily unavailable",
+      description: "Please retry in a moment.",
+    });
+  });
+
   it("keeps generic parse toast copy for non-upstream failures", () => {
     renderHook(() => usePlanDayExercises("day-1"));
     const textMutationCfg = mutationConfigs[0] as { errorToast?: (error: unknown) => { title?: string; description?: string } };

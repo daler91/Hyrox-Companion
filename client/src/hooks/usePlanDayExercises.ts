@@ -48,6 +48,25 @@ function extractApiErrorStatusAndCode(error: unknown): { status: number | null; 
     return { status, code: (payload as Record<string, unknown>).code as string };
   }
 
+  const message = typeof asRecord.message === "string" ? asRecord.message : "";
+  if (message) {
+    const statusMatch = message.match(/^(\d{3})\s*:/);
+    const parsedStatus = status ?? (statusMatch ? Number.parseInt(statusMatch[1], 10) : null);
+
+    const jsonStart = message.indexOf("{");
+    if (jsonStart >= 0) {
+      try {
+        const parsed = JSON.parse(message.slice(jsonStart)) as { code?: unknown };
+        const parsedCode = typeof parsed.code === "string" ? parsed.code : null;
+        return { status: parsedStatus, code: parsedCode };
+      } catch {
+        return { status: parsedStatus, code: null };
+      }
+    }
+
+    return { status: parsedStatus, code: null };
+  }
+
   return { status, code: null };
 }
 

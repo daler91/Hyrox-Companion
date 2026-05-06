@@ -36,6 +36,13 @@ function sendParseWriteThroughResponse(
 }
 
 
+
+function isLikelyAiProviderFailure(error: unknown): boolean {
+  const raw = error instanceof Error ? error.message : String(error ?? "");
+  const lower = raw.toLowerCase();
+  return /gemini|google\.?genai|ai|quota|rate.?limit|resource.?exhausted|invalid|bad.?request|unsupported|unavailable|502|503|504|deadline|timeout/.test(lower);
+}
+
 function sendPlanDayReparseError(
   req: ExpressRequest<{ dayId: string }>,
   res: Response,
@@ -43,6 +50,11 @@ function sendPlanDayReparseError(
   userId: string,
   mode: "text" | "photo",
 ): Response {
+  if (!isLikelyAiProviderFailure(error)) {
+    reqLogger(req).error({ err: error, dayId: req.params.dayId, userId }, `Plan-day ${mode} reparse failed due to non-AI error`);
+    return res.status(500).json({ error: "Failed to parse plan day. Please try again.", code: "INTERNAL_ERROR" });
+  }
+
   const classified = classifyAiError(error);
   reqLogger(req).error(
     { err: error, dayId: req.params.dayId, userId, code: classified.code },
