@@ -40,7 +40,13 @@ function sendParseWriteThroughResponse(
 function isLikelyAiProviderFailure(error: unknown): boolean {
   const raw = error instanceof Error ? error.message : String(error ?? "");
   const lower = raw.toLowerCase();
-  return /gemini|google\.?genai|ai|quota|rate.?limit|resource.?exhausted|invalid|bad.?request|unsupported|unavailable|502|503|504|deadline|timeout/.test(lower);
+  return /gemini|google\.?genai|\bai\b|quota|rate.?limit|resource.?exhausted|invalid|bad.?request|unsupported|unavailable|502|503|504|deadline|timeout/.test(lower);
+}
+
+function hasStatusAndCode(error: unknown): error is { status: number; code: string; message?: string } {
+  if (!error || typeof error !== "object") return false;
+  const rec = error as Record<string, unknown>;
+  return typeof rec.status === "number" && typeof rec.code === "string";
 }
 
 function sendPlanDayReparseError(
@@ -60,6 +66,10 @@ function sendPlanDayReparseError(
   }
 
   if (!isLikelyAiProviderFailure(error)) {
+    if (hasStatusAndCode(error)) {
+      reqLogger(req).error({ err: error, dayId: req.params.dayId, userId, code: error.code }, `Plan-day ${mode} reparse failed with structured non-AI error`);
+      return res.status(error.status).json({ error: error.message ?? "Failed to parse plan day. Please try again.", code: error.code });
+    }
     reqLogger(req).error({ err: error, dayId: req.params.dayId, userId }, `Plan-day ${mode} reparse failed due to non-AI error`);
     return res.status(500).json({ error: "Failed to parse plan day. Please try again.", code: "INTERNAL_ERROR" });
   }
