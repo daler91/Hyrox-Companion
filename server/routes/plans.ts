@@ -51,7 +51,7 @@ function isLikelyAiProviderFailure(error: unknown): boolean {
     }
   }
   const lower = raw.toLowerCase();
-  return /gemini|google\.?genai|\bai\b|quota|rate.?limit|resource.?exhausted|invalid|bad.?request|unsupported|unavailable|502|503|504|deadline|timeout/.test(lower);
+  return /gemini|google\.?genai|\bai\b|quota|rate.?limit|resource.?exhausted|unavailable|502|503|504|deadline|timeout|overloaded|upstream/.test(lower);
 }
 
 function hasStatusAndCode(error: unknown): error is { status: number; code: string; message?: string } {

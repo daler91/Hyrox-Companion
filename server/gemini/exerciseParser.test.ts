@@ -46,15 +46,13 @@ describe("parseExercisesFromText", () => {
     );
   });
 
-  it("should throw a specific error when AI returns valid JSON but invalid schema", async () => {
+  it("returns empty array when AI returns valid JSON but invalid schema", async () => {
     const mockResponse = {
       text: JSON.stringify([{ exerciseName: "squat", sets: [] }]), // Invalid missing fields
     };
     vi.mocked(retryWithBackoff).mockResolvedValueOnce(mockResponse);
 
-    await expect(parseExercisesFromText("Some text")).rejects.toThrow(
-      "AI returned malformed exercise data"
-    );
+    await expect(parseExercisesFromText("Some text")).resolves.toEqual([]);
   });
 
   it("should throw a generic error when the Gemini client throws an unexpected error", async () => {
@@ -137,7 +135,7 @@ describe("parseExercisesFromText", () => {
     expect(result[0].exerciseName).toBe("back_squat");
   });
 
-  it("should throw when every row is malformed", async () => {
+  it("returns empty array when every row is malformed", async () => {
     const mockResponse = {
       text: JSON.stringify([
         { exerciseName: "", category: "strength", sets: [{ reps: 1 }] },
@@ -146,12 +144,10 @@ describe("parseExercisesFromText", () => {
     };
     vi.mocked(retryWithBackoff).mockResolvedValueOnce(mockResponse);
 
-    await expect(parseExercisesFromText("garbage input")).rejects.toThrow(
-      "AI returned malformed exercise data",
-    );
+    await expect(parseExercisesFromText("garbage input")).resolves.toEqual([]);
   });
 
-  it("should throw when object-shaped payload has only malformed exercise rows", async () => {
+  it("returns empty array when object-shaped payload has only malformed exercise rows", async () => {
     const mockResponse = {
       text: JSON.stringify({
         exercises: [
@@ -162,9 +158,25 @@ describe("parseExercisesFromText", () => {
     };
     vi.mocked(retryWithBackoff).mockResolvedValueOnce(mockResponse);
 
-    await expect(parseExercisesFromText("garbage input")).rejects.toThrow(
-      "AI returned malformed exercise data",
-    );
+    await expect(parseExercisesFromText("garbage input")).resolves.toEqual([]);
+  });
+
+  
+  it("recovers common strength+interval patterns via heuristic fallback when AI rows are malformed", async () => {
+    const mockResponse = {
+      text: JSON.stringify([
+        { exerciseName: "", category: "strength", sets: [{ reps: 1 }] },
+      ]),
+    };
+    vi.mocked(retryWithBackoff).mockResolvedValueOnce(mockResponse);
+
+    const input = "Strength: Back Squat 3x4 at 80-85% 1RM. Deadlift 3x5 at 60% 1RM (Technique focus). Rowing: 4x4 minutes strictly at MAF heart rate ceiling with 90 seconds easy active recovery between sets.";
+    const result = await parseExercisesFromText(input);
+
+    expect(result.length).toBeGreaterThan(0);
+    expect(result.some((r) => r.sets.some((s) => s.reps === 4))).toBe(true);
+    expect(result.some((r) => r.sets.some((s) => s.reps === 5))).toBe(true);
+    expect(result.some((r) => (r.missingFields ?? []).some((f) => f.includes("Heuristic fallback parser")))).toBe(true);
   });
 
   it("should fall back to source text when customLabel and exerciseName are both 'custom'", async () => {
