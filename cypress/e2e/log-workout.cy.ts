@@ -46,14 +46,27 @@ describe("Log Workout Page", () => {
     cy.getBySel("button-back").should("exist");
   });
 
+  it("surfaces the structured-blocks card in the capture step", () => {
+    cy.getBySel("structured-blocks-card").should("be.visible");
+    cy.getBySel("structure-blocks-add-emom").should("be.visible");
+  });
+
+  it("lets the user add an EMOM block from the capture step and continue without free text", () => {
+    cy.getBySel("structure-blocks-add-emom").click();
+    cy.getBySel("structure-block-0").should("exist");
+
+    // Continue is enabled purely by the structureBlock — no free text typed.
+    cy.getBySel("button-step-continue").should("not.be.disabled").click();
+    cy.getBySel("structured-blocks-card").should("be.visible");
+    cy.getBySel("structure-block-0").should("exist");
+  });
+
   it("lets the user proactively add an EMOM block in the confirm step", () => {
-    // Advance from Capture (step 1) to Confirm (step 2). Free text is
-    // required by the continue gate; a parseExercises stub already returns [].
     cy.getBySel("input-freetext").type("3x10 squats");
     cy.getBySel("button-step-continue").click();
     cy.wait("@parseExercises");
 
-    cy.getBySel("structure-blocks-editor").should("exist");
+    cy.getBySel("structured-blocks-card").should("be.visible");
     cy.getBySel("structure-blocks-add-emom").click();
 
     cy.getBySel("structure-block-0").should("exist");

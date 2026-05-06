@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { WorkoutComposer } from "@/components/workout/WorkoutComposer";
 import { WorkoutDateFields } from "@/components/workout/WorkoutDateFields";
+import { StructureBlocksEditor } from "@/components/workout-structure";
 import type { useToast } from "@/hooks/use-toast";
 import type { ParseFromImagePayload } from "@/lib/api";
 
@@ -49,12 +50,15 @@ export function CaptureStep({
   defaultPanelOpen,
   onCancel,
   onContinue,
+  structureBlocks,
+  setStructureBlocks,
   ...composerRest
 }: CaptureStepProps) {
   const hasText = freeText.trim().length > 0;
   const hasBlocks = exerciseBlocks.length > 0;
+  const hasStructureBlocks = structureBlocks.length > 0;
   const isWorking = autoParsing || isParsingImage;
-  const canContinue = hasText || hasBlocks;
+  const canContinue = hasText || hasBlocks || hasStructureBlocks;
 
   return (
     <div className="space-y-6">
@@ -69,6 +73,19 @@ export function CaptureStep({
             date={date}
             setDate={setDate}
           />
+        </CardContent>
+      </Card>
+
+      <Card data-testid="structured-blocks-card">
+        <CardHeader>
+          <CardTitle className="text-lg">Structured blocks (EMOM, intervals, AMRAP…)</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Configure interval-based work up front. Each block records minute-by-minute or
+            round-by-round, and you can keep adding free-text exercises below.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <StructureBlocksEditor value={structureBlocks} onChange={setStructureBlocks} />
         </CardContent>
       </Card>
 

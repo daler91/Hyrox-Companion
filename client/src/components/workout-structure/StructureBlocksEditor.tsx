@@ -83,42 +83,55 @@ export function StructureBlocksEditor({ value, onChange }: Props) {
   return (
     <div className="space-y-3" data-testid="structure-blocks-editor">
       {drafts.length === 0 ? (
-        <div className="rounded-md border border-dashed border-border bg-muted/20 px-3 py-4 text-sm text-muted-foreground">
-          No structured blocks yet. Add an EMOM (or other format) below to record interval-based work.
+        <div className="flex flex-col items-start gap-2 rounded-md border border-primary/30 bg-primary/5 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-foreground">
+            Logging an EMOM, AMRAP, or interval block? Configure it here so each minute or round
+            is recorded as a structured step.
+          </p>
+          <Button
+            type="button"
+            size="sm"
+            onClick={handleAddEmom}
+            data-testid="structure-blocks-add-emom"
+          >
+            + Add EMOM block
+          </Button>
         </div>
       ) : (
-        drafts.map((draft, idx) => (
-          <div key={draft.id} className="space-y-2" data-testid={`structure-block-${idx}`}>
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-muted-foreground">Block {idx + 1}</span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => handleRemoveBlock(draft.id)}
-                data-testid={`structure-block-remove-${idx}`}
-              >
-                Remove
-              </Button>
+        <>
+          {drafts.map((draft, idx) => (
+            <div key={draft.id} className="space-y-2" data-testid={`structure-block-${idx}`}>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-muted-foreground">Block {idx + 1}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleRemoveBlock(draft.id)}
+                  data-testid={`structure-block-remove-${idx}`}
+                >
+                  Remove
+                </Button>
+              </div>
+              <WorkoutStructureEditor
+                value={draft.config}
+                onChange={(next) => handleUpdateBlock(draft.id, next)}
+              />
             </div>
-            <WorkoutStructureEditor
-              value={draft.config}
-              onChange={(next) => handleUpdateBlock(draft.id, next)}
-            />
+          ))}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleAddEmom}
+              data-testid="structure-blocks-add-emom"
+            >
+              + Add another block
+            </Button>
           </div>
-        ))
+        </>
       )}
-      <div className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={handleAddEmom}
-          data-testid="structure-blocks-add-emom"
-        >
-          + Add EMOM block
-        </Button>
-      </div>
     </div>
   );
 }

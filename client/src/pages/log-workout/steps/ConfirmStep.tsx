@@ -129,6 +129,18 @@ export function ConfirmStep({
 
   return (
     <div className="space-y-6">
+      <Card data-testid="structured-blocks-card">
+        <CardHeader>
+          <CardTitle className="text-lg">Structured blocks (EMOM, intervals, AMRAP…)</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Use this for time-domain formats that don't fit into per-set rows.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <StructureBlocksEditor value={structureBlocks} onChange={setStructureBlocks} />
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">Confirm exercises</CardTitle>
@@ -196,16 +208,6 @@ export function ConfirmStep({
             weightUnit={weightUnit}
             distanceUnit={distanceUnit}
           />
-
-          <div className="space-y-2">
-            <div>
-              <h3 className="text-sm font-medium">Structured blocks (EMOM, intervals, AMRAP…)</h3>
-              <p className="text-xs text-muted-foreground">
-                Use this for time-domain formats that don't fit into per-set rows.
-              </p>
-            </div>
-            <StructureBlocksEditor value={structureBlocks} onChange={setStructureBlocks} />
-          </div>
 
           {freeText.trim().length > 0 && (
             <Collapsible open={isLegacyNoteOpen} onOpenChange={handleLegacyNoteOpenChange}>

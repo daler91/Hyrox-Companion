@@ -19,9 +19,10 @@ const readSnapshot = (): StructureBlockInput[] =>
   JSON.parse(screen.getByTestId("harness-snapshot").textContent || "[]");
 
 describe("StructureBlocksEditor", () => {
-  it("renders an empty-state hint when no blocks exist", () => {
+  it("renders a primary CTA when no blocks exist", () => {
     render(<Harness />);
-    expect(screen.getByText(/No structured blocks yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/Logging an EMOM, AMRAP, or interval block/i)).toBeInTheDocument();
+    expect(screen.getByTestId("structure-blocks-add-emom")).toBeInTheDocument();
   });
 
   it("adds an EMOM block via the add button and surfaces it in onChange", () => {
