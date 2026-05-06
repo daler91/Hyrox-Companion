@@ -3,7 +3,7 @@ import { type Request as ExpressRequest,type Response, Router } from "express";
 import { z } from "zod";
 
 import { isAuthenticated } from "../clerkAuth";
-import { classifyAiError, ErrorCode } from "../errors";
+import { AppError, classifyAiError, ErrorCode } from "../errors";
 import { reqLogger } from "../logger";
 import { aiBudgetCheck } from "../middleware/aibudget";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody } from "../routeUtils";
@@ -50,6 +50,15 @@ function sendPlanDayReparseError(
   userId: string,
   mode: "text" | "photo",
 ): Response {
+  if (error instanceof AppError) {
+    reqLogger(req).error({ err: error, dayId: req.params.dayId, userId, code: error.code }, `Plan-day ${mode} reparse failed`);
+    const isUpstreamUnavailable = error.code === ErrorCode.AI_UNAVAILABLE;
+    return res.status(isUpstreamUnavailable ? 502 : error.status).json({
+      error: error.message,
+      code: isUpstreamUnavailable ? "AI_UPSTREAM_FAILURE" : error.code,
+    });
+  }
+
   if (!isLikelyAiProviderFailure(error)) {
     reqLogger(req).error({ err: error, dayId: req.params.dayId, userId }, `Plan-day ${mode} reparse failed due to non-AI error`);
     return res.status(500).json({ error: "Failed to parse plan day. Please try again.", code: "INTERNAL_ERROR" });
