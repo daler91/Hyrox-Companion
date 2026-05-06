@@ -310,8 +310,11 @@ protectedPost(router, "/api/v1/coach-insights", { limiter: rateLimiter("suggesti
       aiContext.retrievedChunks,
       userId,
     );
+    // userId is already bound on the child logger via reqLogger; logging
+    // it again here trips Bearer's "leakage of information in logger
+    // message" rule. Stick to per-call metadata only.
     log.info(
-      { userId, durationMs: Date.now() - startedAt, ragSource: aiContext.ragInfo?.source ?? "none" },
+      { durationMs: Date.now() - startedAt, ragSource: aiContext.ragInfo?.source ?? "none" },
       "[ai] Coach insights generated",
     );
     res.json({ insights: response, ragInfo: sanitizeRagInfo(aiContext.ragInfo), generatedAt: new Date().toISOString() });
