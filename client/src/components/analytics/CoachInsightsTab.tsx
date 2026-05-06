@@ -1,7 +1,6 @@
-import { useMutation } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { Loader2, RefreshCw, Sparkles } from "lucide-react";
-import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 
 import { Button } from "@/components/ui/button";
@@ -10,10 +9,11 @@ import { api } from "@/lib/api";
 import type { CoachInsightsResponse } from "@/lib/api/coaching";
 import { AiBudgetExceededError, RateLimitError } from "@/lib/queryClient";
 
-interface CachedInsights {
-  insights: string;
-  generatedAt: string;
-}
+// Stable query key so the cached result survives Radix TabsContent
+// unmounting this component when the user switches analytics tabs. With
+// component-local useState the cache evaporated on every tab switch and
+// users had to re-spend AI budget to view their last insights.
+const COACH_INSIGHTS_QUERY_KEY = ["/api/v1/coach-insights"] as const;
 
 function describeError(error: unknown): string {
   if (error instanceof AiBudgetExceededError) {
@@ -38,26 +38,27 @@ function describeError(error: unknown): string {
 }
 
 export function CoachInsightsTab() {
-  const [cached, setCached] = useState<CachedInsights | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  const mutation = useMutation<CoachInsightsResponse, unknown>({
-    mutationFn: () => api.chat.getCoachInsights(),
-    onSuccess: (data) => {
-      setCached({ insights: data.insights, generatedAt: data.generatedAt });
-      setErrorMessage(null);
-    },
-    onError: (error) => {
-      setErrorMessage(describeError(error));
-    },
+  const query = useQuery<CoachInsightsResponse>({
+    queryKey: COACH_INSIGHTS_QUERY_KEY,
+    queryFn: () => api.chat.getCoachInsights(),
+    // Manual generation only — never auto-fetch on mount.
+    enabled: false,
+    // Insights are an explicit user action, not a derived view of changing
+    // server state. Treat the cached result as fresh until the user
+    // explicitly regenerates so re-mounts (tab switches) don't refetch.
+    staleTime: Infinity,
+    gcTime: Infinity,
+    retry: false,
   });
 
-  const isLoading = mutation.isPending;
-  const hasInsights = cached !== null;
+  const data = query.data;
+  const isLoading = query.isFetching;
+  const hasInsights = data !== undefined;
+  const errorMessage = query.error ? describeError(query.error) : null;
 
-  const generatedLabel = cached?.generatedAt
+  const generatedLabel = data?.generatedAt
     ? (() => {
-        const parsed = new Date(cached.generatedAt);
+        const parsed = new Date(data.generatedAt);
         return Number.isNaN(parsed.getTime()) ? null : format(parsed, "MMM d, yyyy 'at' h:mm a");
       })()
     : null;
@@ -72,7 +73,7 @@ export function CoachInsightsTab() {
           </div>
           <Button
             variant={hasInsights ? "outline" : "default"}
-            onClick={() => mutation.mutate()}
+            onClick={() => { void query.refetch(); }}
             disabled={isLoading}
             data-testid="button-generate-coach-insights"
           >
@@ -153,7 +154,7 @@ export function CoachInsightsTab() {
                 className="prose prose-sm dark:prose-invert max-w-none prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-1 prose-headings:my-3"
                 data-testid="text-coach-insights-content"
               >
-                <ReactMarkdown>{cached.insights}</ReactMarkdown>
+                <ReactMarkdown>{data.insights}</ReactMarkdown>
               </div>
               {generatedLabel && (
                 <p className="text-xs text-muted-foreground border-t pt-3">
