@@ -258,6 +258,58 @@ function mapValidatedExercise(
   };
 }
 
+
+function canonicalExerciseName(label: string): string {
+  const normalized = sanitizeLabel(label).replace(/\s+/g, "_");
+  const aliases: Record<string, string> = {
+    "back_squat": "back_squat",
+    "squat": "back_squat",
+    "deadlift": "deadlift",
+    "row": "rowing",
+    "rowing": "rowing",
+  };
+  const alias = aliases[normalized];
+  if (alias) return alias;
+  return VALID_EXERCISE_NAMES instanceof Set && VALID_EXERCISE_NAMES.has(normalized) ? normalized : "custom";
+}
+
+function heuristicFallbackRowsFromText(text: string): unknown[] {
+  const chunks = text.split(/[.;\n]+/).map((s) => s.trim()).filter(Boolean);
+  const rows: unknown[] = [];
+  for (const chunk of chunks) {
+    const lead = chunk.match(/^([A-Za-z ]+):\s*(.+)$/);
+    const body = lead ? lead[2] : chunk;
+    const bareSetPattern = body.match(/^(\d+)\s*x\s*(\d+)\s*(?:min|mins|minute|minutes)?/i);
+    const nameMatch = body.match(/^([A-Za-z ]+?)\s+(\d+)\s*x\s*(\d+)/i);
+    const timeMatch = body.match(/^([A-Za-z ]+?)\s+(\d+)\s*x\s*(\d+)\s*(?:min|mins|minute|minutes)/i);
+    const intervalTimeMatch = body.match(/^([A-Za-z ]+?)\s*:\s*(\d+)\s*x\s*(\d+)\s*(?:min|mins|minute|minutes)/i);
+    const match = intervalTimeMatch ?? timeMatch ?? nameMatch;
+    const leadOnlyMatch = (!match && lead && bareSetPattern)
+      ? [lead[1], bareSetPattern[1], bareSetPattern[2]]
+      : null;
+    if (!match && !leadOnlyMatch) continue;
+    const capture = match ?? leadOnlyMatch;
+    const name = (lead && /^\d+\s*x/i.test(body) ? lead[1] : capture?.[1])?.trim() ?? "";
+    const sets = Number.parseInt(capture?.[2] ?? "", 10);
+    const value = Number.parseInt(capture?.[3] ?? "", 10);
+    if (!Number.isFinite(sets) || sets <= 0 || !Number.isFinite(value) || value <= 0) continue;
+    const perSet = Array.from({ length: sets }, (_v, i) => (
+      timeMatch || intervalTimeMatch || (leadOnlyMatch && /min|mins|minute|minutes/i.test(body))
+        ? { setNumber: i + 1, time: value }
+        : { setNumber: i + 1, reps: value }
+    ));
+    const exerciseName = canonicalExerciseName(name);
+    rows.push({
+      exerciseName,
+      category: /(row|run|bike|ski|erg|amrap|emom|interval)/i.test(name) ? "conditioning" : "strength",
+      ...(exerciseName === "custom" ? { customLabel: sanitizeLabel(name) } : {}),
+      missingFields: ["Heuristic fallback parser used after malformed AI rows."],
+      sets: perSet,
+    });
+  }
+  return rows;
+}
+
 function validateRows(rawArray: unknown[]): z.infer<typeof parsedExerciseSchema>[] {
   const validated: z.infer<typeof parsedExerciseSchema>[] = [];
   for (let i = 0; i < rawArray.length; i++) {
@@ -407,7 +459,13 @@ export async function parseExercisesFromText(
     const validated = validateRows(normalized.exercises ?? rawArray);
 
     if (validated.length === 0 && normalized.exercises.length > 0) {
-      throw new AppError(ErrorCode.AI_ERROR, "AI returned malformed exercise data", 502);
+      const fallbackValidated = validateRows(heuristicFallbackRowsFromText(text));
+      if (fallbackValidated.length > 0) {
+        logger.warn({ rawExerciseCount: normalized.exercises.length, fallbackCount: fallbackValidated.length }, "[gemini] exercise-parse recovered rows with heuristic fallback");
+        return fallbackValidated.map((ex) => mapValidatedExercise(ex, text));
+      }
+      logger.warn({ rawExerciseCount: normalized.exercises.length }, "[gemini] exercise-parse no valid rows after validation");
+      return [];
     }
 
     const mapped = validated.map((ex) => mapValidatedExercise(ex, text));
@@ -467,7 +525,8 @@ export async function parseExercisesFromImage(
     const validated = validateRows(normalized.exercises ?? rawArray);
 
     if (validated.length === 0 && normalized.exercises.length > 0) {
-      throw new AppError(ErrorCode.AI_ERROR, "AI returned malformed exercise data", 502);
+      logger.warn({ rawExerciseCount: normalized.exercises.length }, "[gemini] exercise-parse-image no valid rows after validation");
+      return [];
     }
 
     // synthesizeCustomLabel needs the source text when the model returns a

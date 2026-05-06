@@ -103,7 +103,7 @@ describe("parseExercisesFromImage", () => {
     expect(result[0].missingFields).toContain("Name");
   });
 
-  it("throws when object-shaped payload has only malformed exercise rows", async () => {
+  it("returns empty array when object-shaped payload has only malformed exercise rows", async () => {
     generateContentSpy.mockResolvedValueOnce({
       text: JSON.stringify({
         exercises: [
@@ -117,6 +117,6 @@ describe("parseExercisesFromImage", () => {
         imageBase64: "ZmFrZQ==",
         mimeType: "image/png",
       }),
-    ).rejects.toThrow("AI returned malformed exercise data");
+    ).resolves.toEqual([]);
   });
 });
