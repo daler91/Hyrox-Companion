@@ -3,6 +3,7 @@ import { type Request as ExpressRequest,type Response, Router } from "express";
 import { z } from "zod";
 
 import { isAuthenticated } from "../clerkAuth";
+import { classifyAiError, ErrorCode } from "../errors";
 import { reqLogger } from "../logger";
 import { aiBudgetCheck } from "../middleware/aibudget";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody } from "../routeUtils";
@@ -288,8 +289,16 @@ protectedPost(
     }
     const weightUnit = user?.weightUnit || "kg";
     void incrementStructuredExerciseCounter("plan_day", "voice", "parse_text_attempted").catch(() => undefined);
-    const result = await reparsePlanDay(planDay, weightUnit);
-    return sendParseWriteThroughResponse(res, "plan_day", "voice", result);
+    try {
+      const result = await reparsePlanDay(planDay, weightUnit);
+      return sendParseWriteThroughResponse(res, "plan_day", "voice", result);
+    } catch (error: unknown) {
+      const classified = classifyAiError(error);
+      reqLogger(req).error({ err: error, dayId: req.params.dayId, userId, code: classified.code }, "Plan-day text reparse failed");
+      const status = classified.code === ErrorCode.AI_UNAVAILABLE ? 502 : classified.status;
+      const code = classified.code === ErrorCode.AI_UNAVAILABLE ? "AI_UPSTREAM_FAILURE" : classified.code;
+      return res.status(status).json({ error: classified.message, code });
+    }
   },
 );
 
@@ -313,8 +322,16 @@ protectedPost(
     const weightUnit = user?.weightUnit || "kg";
     const customNames = customExercises.map((e) => e.name);
     void incrementStructuredExerciseCounter("plan_day", "photo", "parse_photo_attempted").catch(() => undefined);
-    const result = await reparsePlanDayFromImage(planDay, req.body, weightUnit, userId, customNames);
-    return sendParseWriteThroughResponse(res, "plan_day", "photo", result);
+    try {
+      const result = await reparsePlanDayFromImage(planDay, req.body, weightUnit, userId, customNames);
+      return sendParseWriteThroughResponse(res, "plan_day", "photo", result);
+    } catch (error: unknown) {
+      const classified = classifyAiError(error);
+      reqLogger(req).error({ err: error, dayId: req.params.dayId, userId, code: classified.code }, "Plan-day photo reparse failed");
+      const status = classified.code === ErrorCode.AI_UNAVAILABLE ? 502 : classified.status;
+      const code = classified.code === ErrorCode.AI_UNAVAILABLE ? "AI_UPSTREAM_FAILURE" : classified.code;
+      return res.status(status).json({ error: classified.message, code });
+    }
   },
 );
 
