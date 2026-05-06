@@ -18,8 +18,8 @@ import { ResponsiveSheet } from "@/components/ui/responsive-sheet";
 import { Separator } from "@/components/ui/separator";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { useWorkoutDetail } from "@/hooks/useWorkoutDetail";
-import { formatScheduledDate } from "@/lib/timelineEntryFormat";
 import { apiRequest } from "@/lib/queryClient";
+import { formatScheduledDate } from "@/lib/timelineEntryFormat";
 import { cn } from "@/lib/utils";
 
 import { AthleteNoteInput } from "./AthleteNoteInput";
