@@ -5,15 +5,18 @@ import ReactMarkdown from "react-markdown";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useAuth } from "@/hooks/useAuth";
 import { api } from "@/lib/api";
 import type { CoachInsightsResponse } from "@/lib/api/coaching";
 import { AiBudgetExceededError, RateLimitError } from "@/lib/queryClient";
 
 // Stable query key so the cached result survives Radix TabsContent
-// unmounting this component when the user switches analytics tabs. With
-// component-local useState the cache evaporated on every tab switch and
-// users had to re-spend AI budget to view their last insights.
-const COACH_INSIGHTS_QUERY_KEY = ["/api/v1/coach-insights"] as const;
+// unmounting this component when the user switches analytics tabs.
+// Scoped by userId so signing into a different account in the same tab
+// doesn't render the previous user's insights from cache (the auth flow
+// resets CSRF but does not flush the QueryClient).
+const buildCoachInsightsQueryKey = (userId: string) =>
+  ["/api/v1/coach-insights", userId] as const;
 
 function describeError(error: unknown): string {
   if (error instanceof AiBudgetExceededError) {
@@ -38,8 +41,14 @@ function describeError(error: unknown): string {
 }
 
 export function CoachInsightsTab() {
+  const { user } = useAuth();
+  const userId = user?.id;
   const query = useQuery<CoachInsightsResponse>({
-    queryKey: COACH_INSIGHTS_QUERY_KEY,
+    // queryFn is unreachable while userId is undefined because enabled
+    // gates the request, but the key still has to be a string so the
+    // cache slot is stable. Falling back to "anon" keeps the
+    // pre-sign-in slot isolated from any signed-in user's slot.
+    queryKey: buildCoachInsightsQueryKey(userId ?? "anon"),
     queryFn: () => api.chat.getCoachInsights(),
     // Manual generation only — never auto-fetch on mount.
     enabled: false,
@@ -74,7 +83,7 @@ export function CoachInsightsTab() {
           <Button
             variant={hasInsights ? "outline" : "default"}
             onClick={() => { void query.refetch(); }}
-            disabled={isLoading}
+            disabled={isLoading || !userId}
             data-testid="button-generate-coach-insights"
           >
             {(() => {
