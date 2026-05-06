@@ -294,11 +294,24 @@ const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUn
   // updates at the same value don't overwrite an in-progress edit. A
   // genuine external change (rollback, server push) DOES propagate.
   const [draft, setDraft] = useState<string>(() => formatInitial(current));
-  const [lastSaved, setLastSaved] = useState<number | undefined>(current);
-  if (current !== lastSaved) {
-    setLastSaved(current);
+  const [lastCommitted, setLastCommitted] = useState<number | undefined>(current);
+  const [isDirty, setIsDirty] = useState(false);
+  if (!isDirty && current !== lastCommitted) {
+    setLastCommitted(current);
     setDraft(formatInitial(current));
   }
+
+  const commitDraft = useCallback(() => {
+    const parsed = parseDraft(draft);
+    if (parsed == null || !Number.isNaN(parsed)) {
+      const next = parsed ?? undefined;
+      if (next !== lastCommitted) {
+        setLastCommitted(next);
+        onUpdate({ [field]: next ?? null } as PatchExerciseSetPayload);
+      }
+    }
+    setIsDirty(false);
+  }, [draft, field, lastCommitted, onUpdate]);
 
   return (
     <div className="flex min-w-0 flex-col gap-1">
@@ -307,13 +320,14 @@ const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUn
         inputMode="decimal"
         value={draft}
         onChange={(e) => {
-          const raw = e.target.value;
-          setDraft(raw);
-          const parsed = parseDraft(raw);
-          if (parsed == null || !Number.isNaN(parsed)) {
-            const next = parsed ?? undefined;
-            setLastSaved(next);
-            onUpdate({ [field]: next ?? null } as PatchExerciseSetPayload);
+          setDraft(e.target.value);
+          setIsDirty(true);
+        }}
+        onBlur={commitDraft}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            commitDraft();
+            e.currentTarget.blur();
           }
         }}
         placeholder={hasPlannedValue ? String(planned) : "--"}
