@@ -1,7 +1,6 @@
+import type { ExerciseSet } from "@shared/schema";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-
-import type { ExerciseSet } from "@shared/schema";
 
 import { InlineSetEditor } from "./InlineSetEditor";
 
@@ -38,12 +37,12 @@ describe("InlineSetEditor field commit flow", () => {
       />,
     );
 
-    const input = screen.getByTestId("input-reps-set-1") as HTMLInputElement;
+    const input = screen.getByTestId("input-reps-set-1");
     fireEvent.change(input, { target: { value: "1" } });
     fireEvent.change(input, { target: { value: "12" } });
     fireEvent.change(input, { target: { value: "123" } });
 
-    expect(input.value).toBe("123");
+    expect(input).toHaveValue(123);
     expect(onUpdateSet).not.toHaveBeenCalled();
 
     fireEvent.blur(input);
@@ -67,7 +66,7 @@ describe("InlineSetEditor field commit flow", () => {
       />,
     );
 
-    const input = screen.getByTestId("input-weight-set-1") as HTMLInputElement;
+    const input = screen.getByTestId("input-weight-set-1");
     fireEvent.change(input, { target: { value: "7.5" } });
 
     expect(onUpdateSet).not.toHaveBeenCalled();
