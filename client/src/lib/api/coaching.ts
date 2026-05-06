@@ -34,6 +34,12 @@ interface ChatResponse {
   ragInfo?: RagInfo;
 }
 
+export interface CoachInsightsResponse {
+  insights: string;
+  ragInfo?: RagInfo;
+  generatedAt: string;
+}
+
 export const chat = {
   sendStream: (
     data: { message: string; history?: Array<{ role: string; content: string }> },
@@ -54,6 +60,14 @@ export const chat = {
     typedRequest<ChatMessage>("POST", "/api/v1/chat/message", msg),
 
   clearHistory: () => typedRequest<{ success: boolean }>("DELETE", "/api/v1/chat/history"),
+
+  getCoachInsights: () =>
+    typedRequest<CoachInsightsResponse>("POST", "/api/v1/coach-insights", {}, {
+      // Coach Insights builds full training + RAG context and uses
+      // high-thinking Gemini generation; matches the timeline-suggestions
+      // budget so it doesn't time out before the first token.
+      timeoutMs: 90_000,
+    }),
 } as const;
 
 export const coaching = {

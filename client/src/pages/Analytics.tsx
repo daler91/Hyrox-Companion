@@ -1,9 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { format, subDays } from "date-fns";
-import { Activity, BarChart3, Download, FileJson, FileSpreadsheet, PieChart, Target,Trophy } from "lucide-react";
+import { Activity, BarChart3, Download, FileJson, FileSpreadsheet, PieChart, Sparkles, Target,Trophy } from "lucide-react";
 import { useMemo } from "react";
 
 import { CategoryBreakdownTab } from "@/components/analytics/CategoryBreakdownTab";
+import { CoachInsightsTab } from "@/components/analytics/CoachInsightsTab";
 import { ExerciseProgressionTab } from "@/components/analytics/ExerciseProgressionTab";
 import { PersonalRecordsTab } from "@/components/analytics/PersonalRecordsTab";
 import { TrainingOverviewTab } from "@/components/analytics/TrainingOverviewTab";
@@ -105,7 +106,7 @@ export default function Analytics() {
       </div>
 
       <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="mb-6 flex h-auto w-full gap-1 overflow-x-auto scrollbar-none justify-start sm:grid sm:grid-cols-4 sm:gap-0 sm:overflow-visible">
+        <TabsList className="mb-6 flex h-auto w-full gap-1 overflow-x-auto scrollbar-none justify-start sm:grid sm:grid-cols-5 sm:gap-0 sm:overflow-visible">
           <TabsTrigger value="overview" className="shrink-0 sm:shrink" data-testid="tab-overview">
             <BarChart3 className="h-4 w-4 mr-2 hidden sm:block" />
             Overview
@@ -121,6 +122,10 @@ export default function Analytics() {
           <TabsTrigger value="breakdown" className="shrink-0 sm:shrink" data-testid="tab-breakdown">
             <PieChart className="h-4 w-4 mr-2 hidden sm:block" />
             Breakdown
+          </TabsTrigger>
+          <TabsTrigger value="insights" className="shrink-0 sm:shrink" data-testid="tab-coach-insights">
+            <Sparkles className="h-4 w-4 mr-2 hidden sm:block" />
+            Coach Insights
           </TabsTrigger>
         </TabsList>
 
@@ -138,6 +143,10 @@ export default function Analytics() {
 
         <TabsContent value="breakdown" className="space-y-6">
           <CategoryBreakdownTab dateParams={dateParams} />
+        </TabsContent>
+
+        <TabsContent value="insights" className="space-y-6">
+          <CoachInsightsTab />
         </TabsContent>
       </Tabs>
     </div>
