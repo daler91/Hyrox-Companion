@@ -1,6 +1,6 @@
 import { EXERCISE_DEFINITIONS, type ExerciseName,type ExerciseSet } from "@shared/schema";
 import { MessageSquarePlus, Pencil, Plus, X } from "lucide-react";
-import { memo, useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -290,23 +290,63 @@ const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUn
   const hasPlannedValue = showPlannedDiffs && typeof planned === "number";
   const showPlannedDiff = hasPlannedValue && planned !== current;
 
-  // Local draft + "last saved" snapshot so incoming server / optimistic
-  // updates at the same value don't overwrite an in-progress edit. A
-  // genuine external change (rollback, server push) DOES propagate.
   const [draft, setDraft] = useState<string>(() => formatInitial(current));
   const [lastCommitted, setLastCommitted] = useState<number | undefined>(current);
+  const [committedDraft, setCommittedDraft] = useState<string>(() => formatInitial(current));
+  const [pendingCommit, setPendingCommit] = useState<number | undefined>(undefined);
   const [isDirty, setIsDirty] = useState(false);
-  if (!isDirty && current !== lastCommitted) {
+
+  const externalGenerationRef = useRef(0);
+  const lastSeenExternalRef = useRef<number | undefined>(current);
+  const commitGenerationRef = useRef<number | null>(null);
+  const pendingSinceRef = useRef<number | null>(null);
+
+  if (current !== lastSeenExternalRef.current) {
+    externalGenerationRef.current += 1;
+    lastSeenExternalRef.current = current;
+  }
+
+  const hasPending = pendingCommit !== undefined;
+  const now = Date.now();
+  const withinReconciliationWindow =
+    hasPending
+    && pendingCommit !== null
+    && pendingSinceRef.current !== null
+    && now - pendingSinceRef.current < EXTERNAL_RECONCILIATION_GRACE_MS;
+
+  const shouldIgnoreTransientEmpty =
+    withinReconciliationWindow && (current == null || formatInitial(current) === "");
+
+  const commitGeneration = commitGenerationRef.current;
+  const commitMatched = hasPending && current === pendingCommit;
+  const newerExternalGeneration =
+    commitGeneration !== null && externalGenerationRef.current > commitGeneration;
+  const externalNewerAndNotPending = !hasPending && current !== lastCommitted;
+
+  if (!isDirty && !shouldIgnoreTransientEmpty && (commitMatched || newerExternalGeneration || externalNewerAndNotPending)) {
+    const nextDraft = formatInitial(current);
     setLastCommitted(current);
-    setDraft(formatInitial(current));
+    setCommittedDraft(nextDraft);
+    setDraft(nextDraft);
+    if (commitMatched || newerExternalGeneration) {
+      setPendingCommit(undefined);
+      pendingSinceRef.current = null;
+      commitGenerationRef.current = null;
+    }
   }
 
   const commitDraft = useCallback(() => {
     const parsed = parseDraft(draft);
     if (parsed == null || !Number.isNaN(parsed)) {
       const next = parsed ?? undefined;
+      const nextDraft = formatInitial(next);
+      setLastCommitted(next);
+      setCommittedDraft(nextDraft);
+      setDraft(nextDraft);
+      setPendingCommit(next);
+      commitGenerationRef.current = externalGenerationRef.current;
+      pendingSinceRef.current = Date.now();
       if (next !== lastCommitted) {
-        setLastCommitted(next);
         onUpdate({ [field]: next ?? null } as PatchExerciseSetPayload);
       }
     }
@@ -318,7 +358,7 @@ const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUn
       <Input
         type="number"
         inputMode="decimal"
-        value={draft}
+        value={isDirty ? draft : committedDraft}
         onChange={(e) => {
           setDraft(e.target.value);
           setIsDirty(true);
@@ -386,6 +426,8 @@ function formatInitial(v: number | null | undefined): string {
   if (v == null) return "";
   return String(v);
 }
+
+const EXTERNAL_RECONCILIATION_GRACE_MS = 800;
 
 function parseDraft(raw: string): number | null {
   if (raw.trim() === "") return null;

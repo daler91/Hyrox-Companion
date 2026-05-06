@@ -77,4 +77,58 @@ describe("InlineSetEditor field commit flow", () => {
     expect(onUpdateSet).toHaveBeenCalledTimes(1);
     expect(onUpdateSet).toHaveBeenCalledWith("set-1", { weight: 7.5 });
   });
+
+  it("does not visually blank during blur reconciliation when external value is temporarily empty", () => {
+    const onUpdateSet = vi.fn();
+    const { rerender } = render(
+      <InlineSetEditor
+        sets={[baseSet]}
+        exerciseName="wall_balls"
+        customLabel={null}
+        category="functional"
+        weightUnit="kg"
+        onUpdateSet={onUpdateSet}
+        onAddSet={vi.fn()}
+        onDeleteSet={vi.fn()}
+      />,
+    );
+
+    const input = screen.getByTestId("input-reps-set-1");
+    fireEvent.change(input, { target: { value: "42" } });
+    fireEvent.blur(input);
+
+    expect(onUpdateSet).toHaveBeenCalledWith("set-1", { reps: 42 });
+    expect(input).toHaveValue(42);
+
+    rerender(
+      <InlineSetEditor
+        sets={[{ ...baseSet, reps: null }]}
+        exerciseName="wall_balls"
+        customLabel={null}
+        category="functional"
+        weightUnit="kg"
+        onUpdateSet={onUpdateSet}
+        onAddSet={vi.fn()}
+        onDeleteSet={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("input-reps-set-1")).toHaveValue(42);
+
+    rerender(
+      <InlineSetEditor
+        sets={[{ ...baseSet, reps: 42 }]}
+        exerciseName="wall_balls"
+        customLabel={null}
+        category="functional"
+        weightUnit="kg"
+        onUpdateSet={onUpdateSet}
+        onAddSet={vi.fn()}
+        onDeleteSet={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("input-reps-set-1")).toHaveValue(42);
+  });
+
 });
