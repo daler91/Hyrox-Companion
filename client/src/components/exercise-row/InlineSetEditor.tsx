@@ -1,6 +1,6 @@
 import { EXERCISE_DEFINITIONS, type ExerciseName,type ExerciseSet } from "@shared/schema";
 import { MessageSquarePlus, Pencil, Plus, X } from "lucide-react";
-import { memo, useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -295,10 +295,26 @@ const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUn
   // genuine external change (rollback, server push) DOES propagate.
   const [draft, setDraft] = useState<string>(() => formatInitial(current));
   const [lastSaved, setLastSaved] = useState<number | undefined>(current);
-  if (current !== lastSaved) {
+  const [isEditing, setIsEditing] = useState(false);
+  const editVersionRef = useRef(0);
+  const editHistoryRef = useRef<Array<{ version: number; value: number | undefined }>>([]);
+
+  useEffect(() => {
+    if (current === lastSaved) return;
+
     setLastSaved(current);
+
+    // While actively editing, reject out-of-order echoes from older
+    // local edit generations.
+    if (isEditing) {
+      const matching = editHistoryRef.current
+        .filter((entry) => entry.value === current)
+        .at(-1);
+      if (!matching || matching.version < editVersionRef.current) return;
+    }
+
     setDraft(formatInitial(current));
-  }
+  }, [current, isEditing, lastSaved]);
 
   return (
     <div className="flex min-w-0 flex-col gap-1">
@@ -308,14 +324,20 @@ const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUn
         value={draft}
         onChange={(e) => {
           const raw = e.target.value;
+          editVersionRef.current += 1;
           setDraft(raw);
           const parsed = parseDraft(raw);
           if (parsed == null || !Number.isNaN(parsed)) {
             const next = parsed ?? undefined;
+            const version = editVersionRef.current;
+            editHistoryRef.current.push({ version, value: next });
+            editHistoryRef.current = editHistoryRef.current.slice(-12);
             setLastSaved(next);
             onUpdate({ [field]: next ?? null } as PatchExerciseSetPayload);
           }
         }}
+        onFocus={() => setIsEditing(true)}
+        onBlur={() => setIsEditing(false)}
         placeholder={hasPlannedValue ? String(planned) : "--"}
         className="h-10 text-center text-sm tabular-nums"
         aria-label={`${label} for set ${set.setNumber}`}
