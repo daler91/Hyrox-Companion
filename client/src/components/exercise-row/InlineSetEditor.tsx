@@ -1,6 +1,6 @@
 import { EXERCISE_DEFINITIONS, type ExerciseName,type ExerciseSet } from "@shared/schema";
 import { MessageSquarePlus, Pencil, Plus, X } from "lucide-react";
-import { memo, useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -290,23 +290,44 @@ const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUn
   const hasPlannedValue = showPlannedDiffs && typeof planned === "number";
   const showPlannedDiff = hasPlannedValue && planned !== current;
 
-  // Local draft + "last saved" snapshot so incoming server / optimistic
-  // updates at the same value don't overwrite an in-progress edit. A
-  // genuine external change (rollback, server push) DOES propagate.
   const [draft, setDraft] = useState<string>(() => formatInitial(current));
   const [lastCommitted, setLastCommitted] = useState<number | undefined>(current);
+  const [committedDraft, setCommittedDraft] = useState<string>(() => formatInitial(current));
+  const [pendingCommit, setPendingCommit] = useState<number | undefined>(undefined);
   const [isDirty, setIsDirty] = useState(false);
-  if (!isDirty && current !== lastCommitted) {
-    setLastCommitted(current);
-    setDraft(formatInitial(current));
-  }
+  const [suppressTransientEmpty, setSuppressTransientEmpty] = useState(false);
+  const [commitBaseValue, setCommitBaseValue] = useState<number | undefined>(current);
+
+  const hasPending = pendingCommit !== undefined;
+
+  useEffect(() => {
+    if (!suppressTransientEmpty) return;
+    const timeoutId = window.setTimeout(() => {
+      setSuppressTransientEmpty(false);
+    }, EXTERNAL_RECONCILIATION_GRACE_MS);
+    return () => window.clearTimeout(timeoutId);
+  }, [suppressTransientEmpty]);
+
+  const shouldIgnoreTransientEmpty =
+    hasPending && suppressTransientEmpty && (current == null || formatInitial(current) === "");
+  const commitMatched = hasPending && current === pendingCommit;
+  const externalNewerWhilePending = hasPending && current !== pendingCommit && current !== commitBaseValue;
+  const externalNewerAndNotPending = !hasPending && current !== lastCommitted;
+  const shouldUseExternal = !isDirty && !shouldIgnoreTransientEmpty
+    && (commitMatched || externalNewerWhilePending || externalNewerAndNotPending);
 
   const commitDraft = useCallback(() => {
     const parsed = parseDraft(draft);
     if (parsed == null || !Number.isNaN(parsed)) {
       const next = parsed ?? undefined;
+      const nextDraft = formatInitial(next);
+      setLastCommitted(next);
+      setCommittedDraft(nextDraft);
+      setDraft(nextDraft);
+      setPendingCommit(next);
+      setCommitBaseValue(lastCommitted);
+      setSuppressTransientEmpty(nextDraft.trim() !== "");
       if (next !== lastCommitted) {
-        setLastCommitted(next);
         onUpdate({ [field]: next ?? null } as PatchExerciseSetPayload);
       }
     }
@@ -318,7 +339,7 @@ const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUn
       <Input
         type="number"
         inputMode="decimal"
-        value={draft}
+        value={shouldUseExternal ? formatInitial(current) : (isDirty ? draft : committedDraft)}
         onChange={(e) => {
           setDraft(e.target.value);
           setIsDirty(true);
@@ -386,6 +407,8 @@ function formatInitial(v: number | null | undefined): string {
   if (v == null) return "";
   return String(v);
 }
+
+const EXTERNAL_RECONCILIATION_GRACE_MS = 800;
 
 function parseDraft(raw: string): number | null {
   if (raw.trim() === "") return null;
