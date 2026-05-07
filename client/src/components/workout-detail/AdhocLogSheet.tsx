@@ -15,6 +15,7 @@ import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { api, QUERY_KEYS } from "@/lib/api";
 import type { AddExerciseSetPayload, PatchExerciseSetPayload } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
+import { serializeWorkoutStructure } from "@/lib/workoutStructureSummary";
 
 import { ExerciseTable } from "./ExerciseTable";
 import { PrescriptionEditor } from "./shared/PrescriptionEditor";
@@ -30,6 +31,69 @@ const ADHOC_DRAFT_ID = "adhoc-draft";
 const todayStr = () => format(new Date(), "yyyy-MM-dd");
 
 const newRowId = () => crypto.randomUUID();
+
+interface RowSeed {
+  exerciseName: string;
+  customLabel?: string | null;
+  category: string;
+  setNumber: number;
+  sortOrder: number;
+  reps?: number | null;
+  weight?: number | null;
+  distance?: number | null;
+  time?: number | null;
+  plannedReps?: number | null;
+  plannedWeight?: number | null;
+  plannedDistance?: number | null;
+  plannedTime?: number | null;
+  notes?: string | null;
+  confidence?: number | null;
+  blockId?: string | null;
+  stepNumber?: number | null;
+  intervalMinute?: number | null;
+  cycleNumber?: number | null;
+  stepRole?: string | null;
+  groupId?: string | null;
+  intensity?: Record<string, unknown> | null;
+  load?: Record<string, unknown> | null;
+  repMode?: string | null;
+  tempo?: Record<string, unknown> | null;
+  standards?: Record<string, unknown> | null;
+}
+
+function makeAdhocRow(seed: RowSeed): ExerciseSet {
+  return {
+    id: newRowId(),
+    workoutLogId: null,
+    planDayId: null,
+    exerciseName: seed.exerciseName,
+    customLabel: seed.customLabel ?? null,
+    category: seed.category,
+    setNumber: seed.setNumber,
+    reps: seed.reps ?? null,
+    weight: seed.weight ?? null,
+    distance: seed.distance ?? null,
+    time: seed.time ?? null,
+    plannedReps: seed.plannedReps ?? null,
+    plannedWeight: seed.plannedWeight ?? null,
+    plannedDistance: seed.plannedDistance ?? null,
+    plannedTime: seed.plannedTime ?? null,
+    blockId: seed.blockId ?? null,
+    stepNumber: seed.stepNumber ?? null,
+    intervalMinute: seed.intervalMinute ?? null,
+    cycleNumber: seed.cycleNumber ?? null,
+    stepRole: seed.stepRole ?? null,
+    groupId: seed.groupId ?? null,
+    intensity: seed.intensity ?? null,
+    load: seed.load ?? null,
+    repMode: seed.repMode ?? null,
+    tempo: seed.tempo ?? null,
+    standards: seed.standards ?? null,
+    notes: seed.notes ?? null,
+    confidence: seed.confidence ?? null,
+    sortOrder: seed.sortOrder,
+  } as ExerciseSet;
+}
 
 function flattenParsedToSets(parsed: ParsedExercise[]): ExerciseSet[] {
   const rows: ExerciseSet[] = [];
@@ -51,37 +115,36 @@ function flattenParsedToSets(parsed: ParsedExercise[]): ExerciseSet[] {
         }];
 
     for (const set of sets) {
-      rows.push({
-        id: newRowId(),
-        workoutLogId: null,
-        planDayId: null,
-        exerciseName: exercise.exerciseName,
-        customLabel: exercise.customLabel ?? null,
-        category: exercise.category,
-        setNumber: set.setNumber ?? 1,
-        reps: set.reps ?? null,
-        weight: set.weight ?? null,
-        distance: set.distance ?? null,
-        time: set.time ?? null,
-        plannedReps: set.plannedReps ?? null,
-        plannedWeight: set.plannedWeight ?? null,
-        plannedDistance: set.plannedDistance ?? null,
-        plannedTime: set.plannedTime ?? null,
-        blockId: set.blockId ?? null,
-        stepNumber: set.stepNumber ?? null,
-        intervalMinute: set.intervalMinute ?? null,
-        cycleNumber: set.cycleNumber ?? null,
-        stepRole: set.stepRole ?? null,
-        groupId: set.groupId ?? null,
-        intensity: set.intensity ?? null,
-        load: set.load ?? null,
-        repMode: set.repMode ?? null,
-        tempo: set.tempo ?? null,
-        standards: set.standards ?? null,
-        notes: set.notes ?? null,
-        confidence: exercise.confidence ?? null,
-        sortOrder: sortOrder++,
-      } as ExerciseSet);
+      rows.push(
+        makeAdhocRow({
+          exerciseName: exercise.exerciseName,
+          customLabel: exercise.customLabel,
+          category: exercise.category,
+          setNumber: set.setNumber ?? 1,
+          sortOrder: sortOrder++,
+          reps: set.reps,
+          weight: set.weight,
+          distance: set.distance,
+          time: set.time,
+          plannedReps: set.plannedReps,
+          plannedWeight: set.plannedWeight,
+          plannedDistance: set.plannedDistance,
+          plannedTime: set.plannedTime,
+          notes: set.notes,
+          confidence: exercise.confidence,
+          blockId: set.blockId,
+          stepNumber: set.stepNumber,
+          intervalMinute: set.intervalMinute,
+          cycleNumber: set.cycleNumber,
+          stepRole: set.stepRole,
+          groupId: set.groupId,
+          intensity: set.intensity,
+          load: set.load,
+          repMode: set.repMode,
+          tempo: set.tempo,
+          standards: set.standards,
+        }),
+      );
     }
   }
   return rows;
@@ -171,37 +234,23 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
   const handleAddSet = (data: AddExerciseSetPayload) => {
     setExerciseSets((prev) => [
       ...prev,
-      {
-        id: newRowId(),
-        workoutLogId: null,
-        planDayId: null,
+      makeAdhocRow({
         exerciseName: data.exerciseName,
-        customLabel: data.customLabel ?? null,
+        customLabel: data.customLabel,
         category: data.category,
         setNumber: data.setNumber ?? prev.length + 1,
-        reps: data.reps ?? null,
-        weight: data.weight ?? null,
-        distance: data.distance ?? null,
-        time: data.time ?? null,
-        plannedReps: data.plannedReps ?? null,
-        plannedWeight: data.plannedWeight ?? null,
-        plannedDistance: data.plannedDistance ?? null,
-        plannedTime: data.plannedTime ?? null,
-        blockId: null,
-        stepNumber: null,
-        intervalMinute: null,
-        cycleNumber: null,
-        stepRole: null,
-        groupId: null,
-        intensity: null,
-        load: null,
-        repMode: null,
-        tempo: null,
-        standards: null,
-        notes: data.notes ?? null,
-        confidence: data.confidence ?? null,
         sortOrder: prev.length,
-      } as ExerciseSet,
+        reps: data.reps,
+        weight: data.weight,
+        distance: data.distance,
+        time: data.time,
+        plannedReps: data.plannedReps,
+        plannedWeight: data.plannedWeight,
+        plannedDistance: data.plannedDistance,
+        plannedTime: data.plannedTime,
+        notes: data.notes,
+        confidence: data.confidence,
+      }),
     ]);
   };
 
@@ -266,11 +315,12 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
         return Promise.reject(new Error("Please add at least one exercise or describe your workout."));
       }
 
+      const summary = hasStructured ? serializeWorkoutStructure(exerciseSets) : null;
       return api.workouts.create({
         title: trimmedTitle,
         date,
         focus: trimmedTitle,
-        mainWorkout: hasFreeText ? mainWorkout : trimmedTitle,
+        mainWorkout: hasFreeText ? mainWorkout : (summary ?? trimmedTitle),
         accessory: accessory.trim() || null,
         notes: notes.trim() || null,
         rpe: rpe ?? null,
