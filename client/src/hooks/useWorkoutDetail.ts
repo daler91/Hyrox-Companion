@@ -118,8 +118,8 @@ export function useWorkoutDetail(workoutId: string | null) {
   // nothing (or there's no plan day linked) but the workout has free
   // text in mainWorkout/accessory, call /reparse to hydrate the table
   // via the existing Gemini parse pipeline. Fires at most once per
-  // workoutId, coordinated from WorkoutDetailDialogV2's hydration
-  // useEffect. Errors surface through the `useApiMutation` toast layer.
+  // workoutId via the consumer's hydration effect. Errors surface
+  // through the `useApiMutation` toast layer.
   const reparseFreeText = useApiMutation({
     mutationFn: (payload?: ReparseWorkoutTextPayload) =>
       api.workouts.reparse(workoutId!, payload),

@@ -69,16 +69,14 @@ function useMigrationReview(workoutLogId: string | null) {
 }
 
 /**
- * Sheet-native review surface for already-logged workouts. Replaces
- * WorkoutDetailDialogV2's "completed workout" path. Shows the actuals
- * editor wired to useWorkoutDetail mutations (autosave per cell),
- * inline RPE + notes editors, Strava stats when applicable, and the
- * coach rationale. Action footer covers ask-coach, status-revert
- * (back to planned), and delete (two-step confirm).
+ * Sheet-native review surface for already-logged workouts. Shows the
+ * actuals editor wired to useWorkoutDetail mutations (autosave per
+ * cell), inline RPE + notes editors, Strava stats when applicable,
+ * and the coach rationale. Action footer covers ask-coach,
+ * status-revert (back to planned), and delete (two-step confirm).
  *
- * Skipped cards still hand off to the legacy dialog for now — they
- * need a different read-only-with-undo layout that's out of scope
- * for this slice.
+ * Skipped cards have their own SkippedSheet surface; this component
+ * is only mounted for entries with a workoutLogId.
  */
 export function ReviewSurface({
   entry,
