@@ -262,6 +262,17 @@ app.use(cookieParser());
 
 app.use(pinoHttp({
   logger,
+  serializers: {
+    req(req: Request) {
+      const route = req.url.split("?")[0] || req.originalUrl.split("?")[0];
+      return {
+        method: req.method,
+        url: route,
+        remoteAddress: req.socket.remoteAddress,
+        remotePort: req.socket.remotePort,
+      };
+    },
+  },
   genReqId: (req) => {
     const clientId = req.headers['x-request-id'];
     // 🛡️ Sentinel: Validate client-supplied request IDs to prevent log injection
