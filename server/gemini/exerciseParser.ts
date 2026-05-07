@@ -387,6 +387,7 @@ function validateRows(rawArray: unknown[], context: ParseLogContext = {}): z.inf
         },
         "[gemini] exercise-parse dropped malformed row",
       );
+      rejectedRows.push({ index: i, reason: "schema_validation_failed" });
     }
   }
 
@@ -583,6 +584,26 @@ export async function parseExercisesFromText(
   }
 }
 
+export interface ParseExercisesWithDiagnosticsResult {
+  acceptedRows: ParsedExercise[];
+  rejectedRows: { index: number; reason: string }[];
+}
+
+export async function parseExercisesFromTextWithDiagnostics(
+  text: string,
+  weightUnit: string = "kg",
+  customExerciseNames?: string[],
+  userId?: string,
+): Promise<ParseExercisesWithDiagnosticsResult> {
+  if (!text || text.trim().length === 0) return { acceptedRows: [], rejectedRows: [] };
+  const responseText = await callGeminiParse(text, weightUnit, customExerciseNames, userId);
+  const raw = parseRawResponse(responseText);
+  const rawArray = Array.isArray(raw) ? raw : [];
+  const normalized = normalizeParserPayload(raw);
+  const validated = validateRowsDetailed(normalized.exercises ?? rawArray);
+  return { acceptedRows: validated.acceptedRows.map((ex) => mapValidatedExercise(ex, text)), rejectedRows: validated.rejectedRows };
+}
+
 export interface ParseExercisesFromImageInput {
   readonly imageBase64: string;
   readonly mimeType: string;
@@ -648,4 +669,16 @@ export async function parseExercisesFromImage(
     logger.error({ err: error }, "[gemini] exercise-parse-image error:");
     throw new AppError(ErrorCode.AI_ERROR, "Failed to parse exercises from image", 502);
   }
+}
+
+export async function parseExercisesFromImageWithDiagnostics(
+  input: ParseExercisesFromImageInput,
+): Promise<ParseExercisesWithDiagnosticsResult> {
+  const { imageBase64, mimeType, weightUnit = "kg", customExerciseNames, userId } = input;
+  const responseText = await callGeminiParseImage(imageBase64, mimeType, weightUnit, customExerciseNames, userId);
+  const raw = parseRawResponse(responseText);
+  const rawArray = Array.isArray(raw) ? raw : [];
+  const normalized = normalizeParserPayload(raw);
+  const validated = validateRowsDetailed(normalized.exercises ?? rawArray);
+  return { acceptedRows: validated.acceptedRows.map((ex) => mapValidatedExercise(ex, "")), rejectedRows: validated.rejectedRows };
 }
