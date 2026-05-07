@@ -173,9 +173,19 @@ describe("parsedExerciseSchema", () => {
     expect(parsed.sets).toHaveLength(1);
   });
 
-  it("defaults missing category to conditioning", () => {
+  it("infers category from exerciseName when missing (known key)", () => {
     const { category: _category, ...withoutCategory } = validExercise;
+    // validExercise.exerciseName is a known strength key (back_squat).
     const parsed = parsedExerciseSchema.parse(withoutCategory);
+    expect(parsed.category).toBe("strength");
+  });
+
+  it("falls back to conditioning when exerciseName is unknown/custom", () => {
+    const parsed = parsedExerciseSchema.parse({
+      ...validExercise,
+      exerciseName: "custom",
+      category: undefined,
+    });
     expect(parsed.category).toBe("conditioning");
   });
 

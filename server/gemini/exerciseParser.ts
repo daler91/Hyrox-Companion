@@ -1,4 +1,5 @@
 import { exerciseSetSchema, type ParsedExercise } from "@shared/schema";
+import { EXERCISE_DEFINITIONS } from "@shared/schema/exercises";
 import { z } from "zod";
 
 import { AppError, ErrorCode } from "../errors";
@@ -18,11 +19,21 @@ import { GEMINI_MODEL, GEMINI_VISION_MODEL, getAiClient, retryWithBackoff, track
 // the row survives validation; downstream `mapValidatedExercise` already
 // handles missing per-set fields.
 const defaultSetsForLenience: z.infer<typeof exerciseSetSchema>[] = [{ setNumber: 1 }];
+
+function inferCategoryFromExerciseName(name: unknown): string {
+  if (typeof name !== "string") return "conditioning";
+  const known = (EXERCISE_DEFINITIONS as Record<string, { category: string } | undefined>)[name];
+  return known?.category ?? "conditioning";
+}
+
 export const parsedExerciseSchema = z.preprocess((raw) => {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
   const row = { ...(raw as Record<string, unknown>) };
   if (typeof row.category !== "string" || row.category.trim().length === 0) {
-    row.category = "conditioning";
+    // Prefer the canonical category from EXERCISE_DEFINITIONS so a known
+    // back_squat / easy_run row isn't mislabeled as "conditioning" — that
+    // would break category-scoped analytics (e.g. strength e1RM rollups).
+    row.category = inferCategoryFromExerciseName(row.exerciseName);
   }
   if (!Array.isArray(row.sets) || (row.sets as unknown[]).length === 0) {
     row.sets = defaultSetsForLenience;
