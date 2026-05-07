@@ -1,9 +1,7 @@
 import type { TimelineEntry } from "@shared/schema";
 import {
-  ChevronDown,
   Gauge,
   MessageSquare,
-  Pencil,
   RotateCcw,
   Sparkles,
   Trash2,
@@ -20,7 +18,6 @@ import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { useWorkoutDetail } from "@/hooks/useWorkoutDetail";
 import { formatScheduledDate } from "@/lib/timelineEntryFormat";
 import { apiRequest } from "@/lib/queryClient";
-import { cn } from "@/lib/utils";
 
 import { AthleteNoteInput } from "./AthleteNoteInput";
 import { ExerciseTable } from "./ExerciseTable";
@@ -91,7 +88,6 @@ export function ReviewSurface({
   const workoutLogId = entry?.workoutLogId ?? null;
   const detail = useWorkoutDetail(workoutLogId);
 
-  const [editorOpen, setEditorOpen] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const { reviewFlag, resolveReview } = useMigrationReview(workoutLogId);
@@ -133,13 +129,10 @@ export function ReviewSurface({
   const handleSheetOpenChange = (open: boolean) => {
     if (open) return;
     // Reset transient UI state on close so reopening the SAME card
-    // doesn't carry an armed delete-confirm or stale open editor
-    // across sessions — the entry-id reseed below only catches
-    // open transitions to a *different* card. Without this, a user
-    // who armed delete, dismissed the sheet, and reopened the same
-    // workout would delete on the very first tap.
+    // doesn't carry an armed delete-confirm across sessions — without
+    // this, a user who armed delete, dismissed the sheet, and
+    // reopened the same workout would delete on the very first tap.
     setConfirmingDelete(false);
-    setEditorOpen(false);
     onClose();
   };
 
@@ -177,76 +170,56 @@ export function ReviewSurface({
           </div>
         )}
 
-        {canEditActuals && (
-          <div className="rounded-md border">
-            <button
-              type="button"
-              className="flex w-full items-center justify-between gap-2 p-3 text-left hover:bg-accent/50"
-              onClick={() => setEditorOpen((v) => !v)}
-              aria-expanded={editorOpen}
-              data-testid={`review-edit-actuals-${entry.id}`}
-            >
-              <span className="flex items-center gap-2 text-sm font-medium">
-                <Pencil className="h-4 w-4" />
-                {editorOpen ? "Hide actuals" : "Edit actuals"}
-              </span>
-              <span className="flex items-center gap-2">
-                <SaveStatePill
-                  state={{ isSaving: detail.isSaving, lastSavedAt: detail.lastSavedAt }}
-                  testId={`review-actuals-save-state-${entry.id}`}
-                />
-                <ChevronDown
-                  className={cn(
-                    "h-4 w-4 text-muted-foreground transition-transform",
-                    editorOpen && "rotate-180",
-                  )}
-                  aria-hidden
-                />
-              </span>
-            </button>
-            {editorOpen && workoutLogId && (
-              <div className="space-y-3 border-t p-3">
-                <PrescriptionEditor
-                  entryId={entry.id}
-                  hasSets={exerciseSets.length > 0}
-                  mainWorkout={workout?.mainWorkout ?? entry.mainWorkout}
-                  accessory={workout?.accessory ?? entry.accessory}
-                  notes={null}
-                  showNotes={false}
-                  onSaveField={(field, value) => {
-                    // Notes are owned by AthleteNoteInput below
-                    // (writes through updateNote with optimistic
-                    // patches); ignore any stray notes saves so we
-                    // can't double-write to the same column.
-                    if (field === "notes") return;
-                    detail.updatePrescription.mutate({
-                      [field]: value.trim().length === 0 ? null : value,
-                    });
-                  }}
-                  onParseText={() => detail.reparseFreeText.mutate(undefined)}
-                  onParseImage={(payload) => detail.reparseFromImage.mutate(payload)}
-                  isParsingText={detail.reparseFreeText.isPending}
-                  isParsingImage={detail.reparseFromImage.isPending}
-                  title="Workout description"
-                  compact
-                />
-                <ExerciseTable
-                  workoutId={workoutLogId}
-                  exerciseSets={exerciseSets}
-                  weightUnit={weightUnit}
-                  distanceUnit={distanceUnit}
-                  onUpdateSet={detail.patchSetDebounced}
-                  onAddSet={detail.addSet.mutate}
-                  onDeleteSet={detail.deleteSet.mutate}
-                  saveState={{
-                    isSaving: detail.isSaving,
-                    lastSavedAt: detail.lastSavedAt,
-                  }}
-                  onOpenConversionHelper={() => detail.reparseFreeText.mutate(undefined)}
-                  defaultExpanded
-                />
-              </div>
-            )}
+        {canEditActuals && workoutLogId && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Logged exercises
+              </p>
+              <SaveStatePill
+                state={{ isSaving: detail.isSaving, lastSavedAt: detail.lastSavedAt }}
+                testId={`review-actuals-save-state-${entry.id}`}
+              />
+            </div>
+            <ExerciseTable
+              workoutId={workoutLogId}
+              exerciseSets={exerciseSets}
+              weightUnit={weightUnit}
+              distanceUnit={distanceUnit}
+              onUpdateSet={detail.patchSetDebounced}
+              onAddSet={detail.addSet.mutate}
+              onDeleteSet={detail.deleteSet.mutate}
+              saveState={{
+                isSaving: detail.isSaving,
+                lastSavedAt: detail.lastSavedAt,
+              }}
+              onOpenConversionHelper={() => detail.reparseFreeText.mutate(undefined)}
+              defaultExpanded
+            />
+            <PrescriptionEditor
+              entryId={entry.id}
+              hasSets={exerciseSets.length > 0}
+              mainWorkout={workout?.mainWorkout ?? entry.mainWorkout}
+              accessory={workout?.accessory ?? entry.accessory}
+              notes={null}
+              showNotes={false}
+              onSaveField={(field, value) => {
+                // Notes are owned by AthleteNoteInput below (writes
+                // through updateNote with optimistic patches); ignore
+                // any stray notes saves so we can't double-write to
+                // the same column.
+                if (field === "notes") return;
+                detail.updatePrescription.mutate({
+                  [field]: value.trim().length === 0 ? null : value,
+                });
+              }}
+              onParseText={() => detail.reparseFreeText.mutate(undefined)}
+              onParseImage={(payload) => detail.reparseFromImage.mutate(payload)}
+              isParsingText={detail.reparseFreeText.isPending}
+              isParsingImage={detail.reparseFromImage.isPending}
+              title="Workout description"
+              compact
+            />
           </div>
         )}
 
