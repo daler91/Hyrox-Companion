@@ -387,7 +387,7 @@ function normalizeRowsBeforeValidation(rawArray: unknown[], targetWeightUnit: "k
     if (!row || typeof row !== "object") return row;
     const rec = row as Record<string, unknown>;
     const sets = Array.isArray(rec.sets) ? rec.sets.map((setRow, idx) => {
-      if (!setRow || typeof setRow !== "object") return { setNumber: idx + 1 };
+      if (!setRow || typeof setRow !== "object") return setRow;
       const setRec = { ...(setRow as Record<string, unknown>) };
       const normalizedSet = normalizeSetToken(setRec.setNumber);
       if (normalizedSet) setRec.setNumber = normalizedSet;
