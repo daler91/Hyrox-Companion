@@ -66,7 +66,7 @@ function compactRowPreview(row: unknown): string {
   try {
     const raw = JSON.stringify(row);
     const redacted = raw
-      .replaceAll(/"(?:imageBase64|authorization|token|password|cookie)"\s*:\s*"[^"]*"/gi, '"$1":"[REDACTED]"')
+      .replaceAll(/"(imageBase64|authorization|token|password|cookie)"\s*:\s*"[^"]*"/gi, '"$1":"[REDACTED]"')
       .replaceAll(/[A-Za-z0-9+/=]{24,}/g, "[REDACTED_BLOB]");
     return redacted.length > 220 ? `${redacted.slice(0, 220)}…` : redacted;
   } catch {
@@ -74,7 +74,7 @@ function compactRowPreview(row: unknown): string {
   }
 }
 
-function deriveReasonCode(row: unknown, parsed: z.SafeParseError<z.infer<typeof parsedExerciseSchema>>): RejectionReasonCode {
+function deriveReasonCode(row: unknown, issues: z.ZodIssue[]): RejectionReasonCode {
   const shape = (row && typeof row === "object") ? (row as Record<string, unknown>) : null;
   const ex = typeof shape?.exerciseName === "string" ? shape.exerciseName.trim() : "";
   if (!ex) return "MISSING_EXERCISE_NAME";
@@ -87,7 +87,7 @@ function deriveReasonCode(row: unknown, parsed: z.SafeParseError<z.infer<typeof 
   if (/emom|amrap|tabata/i.test(ex) && !VALID_EXERCISE_NAMES.has(ex)) return "UNSUPPORTED_CARDIO_TOKEN";
   if (!Array.isArray(shape?.sets) || shape.sets.length === 0) return "MISSING_SETS";
   if (!shape) return "INVALID_ROW_SHAPE";
-  if (parsed.error.issues.some((i) => i.path[0] === "sets")) return "MISSING_SETS";
+  if (issues.some((issue) => issue.path[0] === "sets")) return "MISSING_SETS";
   return "SCHEMA_VALIDATION_FAILED";
 }
 
@@ -370,7 +370,7 @@ function validateRows(rawArray: unknown[], context: ParseLogContext = {}): z.inf
       continue;
     }
 
-    const reasonCode = deriveReasonCode(row, parsed);
+    const reasonCode = deriveReasonCode(row, parsed.error.issues);
     rejectedCounts[reasonCode] = (rejectedCounts[reasonCode] ?? 0) + 1;
     if (shouldSampleDetails && emittedDetails < maxDetailLogs) {
       emittedDetails += 1;
