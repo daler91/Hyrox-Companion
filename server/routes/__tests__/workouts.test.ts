@@ -246,8 +246,8 @@ describe("Workouts Routes", () => {
 
   it("accepts text/photo parse when rows are persisted (write-through)", async () => {
     const { reparseWorkout, reparseWorkoutFromImage } = await import("../../services/workoutService");
-    vi.mocked(reparseWorkout).mockResolvedValueOnce({ exercises: [{ exerciseName: "row" }], setCount: 2 } as never);
-    vi.mocked(reparseWorkoutFromImage).mockResolvedValueOnce({ exercises: [{ exerciseName: "wall ball" }], setCount: 1 } as never);
+    vi.mocked(reparseWorkout).mockResolvedValueOnce({ exercises: [{ exerciseName: "row" }], setCount: 2, saved: true, rejectedCount: 0, rejectionReasons: [] } as never);
+    vi.mocked(reparseWorkoutFromImage).mockResolvedValueOnce({ exercises: [{ exerciseName: "wall ball" }], setCount: 1, saved: true, rejectedCount: 0, rejectionReasons: [] } as never);
 
     const textRes = await request(app).post("/api/v1/workouts/workout-1/reparse").send({});
     expect(textRes.status).toBe(200);
@@ -258,6 +258,32 @@ describe("Workouts Routes", () => {
     expect(photoRes.status).toBe(200);
     expect(photoRes.body.saved).toBe(true);
     expect(photoRes.body.setCount).toBeGreaterThan(0);
+  });
+
+  it("returns 200 for mixed valid/invalid parse rows when at least one row is persisted", async () => {
+    const { reparseWorkout } = await import("../../services/workoutService");
+    vi.mocked(reparseWorkout).mockResolvedValueOnce({
+      exercises: [{ exerciseName: "row" }],
+      setCount: 1,
+      saved: true,
+      rejectedCount: 2,
+      rejectionReasons: ["schema_validation_failed"],
+    } as never);
+
+    const response = await request(app).post("/api/v1/workouts/workout-1/reparse").send({});
+    expect(response.status).toBe(200);
+    expect(response.body.saved).toBe(true);
+    expect(response.body.rejectedCount).toBe(2);
+    expect(response.body.rejectionReasons).toEqual(["schema_validation_failed"]);
+  });
+
+  it("returns 422 when all parse rows are invalid", async () => {
+    const { reparseWorkout } = await import("../../services/workoutService");
+    vi.mocked(reparseWorkout).mockResolvedValueOnce(null as never);
+
+    const response = await request(app).post("/api/v1/workouts/workout-1/reparse").send({});
+    expect(response.status).toBe(422);
+    expect(response.body.code).toBe("PARSE_WRITE_THROUGH_REQUIRED");
   });
 
 

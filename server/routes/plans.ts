@@ -25,14 +25,20 @@ function sendParseWriteThroughResponse(
   res: Response,
   ownerType: "plan_day",
   source: "voice" | "photo",
-  result: { exercises: unknown[]; setCount: number } | null,
+  result: { exercises: unknown[]; setCount: number; rejectedCount: number; rejectionReasons: string[] } | null,
 ): Response {
   if (!result || result.setCount === 0) {
     void incrementStructuredExerciseCounter(ownerType, source, source === "voice" ? "parse_text_failed" : "parse_photo_failed").catch(() => undefined);
     return res.status(422).json({ error: "Parsing did not produce persisted exercise sets.", code: "PARSE_WRITE_THROUGH_REQUIRED" });
   }
   void incrementStructuredExerciseCounter(ownerType, source, source === "voice" ? "parse_text_succeeded" : "parse_photo_succeeded").catch(() => undefined);
-  return res.json({ exercises: result.exercises, saved: true, setCount: result.setCount });
+  return res.json({
+    exercises: result.exercises,
+    saved: true,
+    setCount: result.setCount,
+    rejectedCount: result.rejectedCount,
+    rejectionReasons: result.rejectionReasons,
+  });
 }
 
 
