@@ -354,6 +354,11 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workouts }).catch(() => {});
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }).catch(() => {});
+      // Server flips isAutoCoaching on workout create; the auth-user
+      // cache transition is what wakes the coaching-polling effect and
+      // schedules follow-up timeline refreshes for AI notes. Mirrors
+      // useSaveWorkoutMutation's invalidation set.
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.authUser }).catch(() => {});
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.personalRecords }).catch(() => {});
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.exerciseAnalytics }).catch(() => {});
       toast({ title: "Workout logged", description: "Your workout has been saved." });
