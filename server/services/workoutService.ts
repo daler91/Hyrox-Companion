@@ -339,7 +339,7 @@ async function replaceExerciseSetsByOwner(
 
 type ReparseTarget = { id: string; mainWorkout?: string | null; accessory?: string | null };
 type CounterSource = "manual" | "voice" | "photo" | "import";
-type ReparseWriteThroughResult = { exercises: ParsedExercise[]; setCount: number; saved: true; rejectedCount: number; rejectionReasons: string[] };
+type ReparseWriteThroughResult = { exercises: ParsedExercise[]; setCount: number; saved: true; rejectedCount: number; rejectionReasons: string[]; fallbackUsed: boolean };
 
 const hydrationLocks = new Map<string, Promise<ReparseWriteThroughResult | null>>();
 
@@ -397,7 +397,19 @@ export async function autoHydrateExerciseSetsFromTextIfNeeded(
       });
     return reparseFromText(target, owner, weightUnit, context, source)
       .then((result) => {
-        logger.info({ context: "health-metrics", event: "exercise_set_auto_hydration_success", lockKey, setCount: result?.setCount ?? 0 }, "Auto hydration success");
+        const acceptedRowCount = result?.exercises.length ?? 0;
+        const rejectedRowCount = result?.rejectedCount ?? 0;
+        const fallbackUsed = result?.fallbackUsed ?? false;
+        const qualityState: "ok" | "degraded" | "failed" = acceptedRowCount === 0
+          ? "failed"
+          : (rejectedRowCount > acceptedRowCount ? "degraded" : "ok");
+
+        if (qualityState === "ok") {
+          logger.info({ context: "health-metrics", event: "exercise_set_auto_hydration_success", lockKey, setCount: result?.setCount ?? 0, acceptedRowCount, rejectedRowCount, fallbackUsed, qualityState }, "Auto hydration success");
+        } else {
+          logger.warn({ context: "health-metrics", event: "exercise_set_auto_hydration_success_degraded", lockKey, setCount: result?.setCount ?? 0, acceptedRowCount, rejectedRowCount, fallbackUsed, qualityState }, "Auto hydration completed with degraded parse quality");
+        }
+
         void incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", source, "auto_hydration_succeeded")
           .catch((err: unknown) => {
             logger.warn({ context: "health-metrics", event: "auto_hydration_success_counter_failed", lockKey, err }, "Auto hydration success telemetry increment failed");
@@ -432,7 +444,7 @@ async function reparseFromText(
   const textToParse = [target.mainWorkout, target.accessory].filter(Boolean).join("\n");
   if (!textToParse.trim()) return null;
 
-  const { acceptedRows, rejectedRows } = await parseExercisesFromTextWithDiagnostics(textToParse.trim(), weightUnit);
+  const { acceptedRows, rejectedRows, fallbackUsed } = await parseExercisesFromTextWithDiagnostics(textToParse.trim(), weightUnit);
   if (acceptedRows.length === 0) return null;
 
   const setRows = expandExercisesToRows(acceptedRows, owner, context);
@@ -440,13 +452,14 @@ async function reparseFromText(
   void incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", source, "manual_fix_completed").catch((err: unknown) => {
     logger.warn({ context: "health-metrics", event: "manual_fix_counter_failed", owner, err }, "Manual fix telemetry increment failed");
   });
-  return buildReparseWriteThroughResult(acceptedRows, setCount, rejectedRows.length);
+  return buildReparseWriteThroughResult(acceptedRows, setCount, rejectedRows.length, fallbackUsed);
 }
 
 function buildReparseWriteThroughResult(
   acceptedRows: ParsedExercise[],
   setCount: number,
   rejectedCount: number,
+  fallbackUsed: boolean,
 ): ReparseWriteThroughResult {
   return {
     exercises: acceptedRows,
@@ -454,6 +467,7 @@ function buildReparseWriteThroughResult(
     saved: true,
     rejectedCount,
     rejectionReasons: rejectedCount > 0 ? ["schema_validation_failed"] : [],
+    fallbackUsed,
   };
 }
 
@@ -512,7 +526,7 @@ async function reparseFromImage(
   void incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", source, "manual_fix_completed").catch((err: unknown) => {
     logger.warn({ context: "health-metrics", event: "manual_fix_counter_failed", owner, err }, "Manual fix telemetry increment failed");
   });
-  return buildReparseWriteThroughResult(acceptedRows, setCount, rejectedRows.length);
+  return buildReparseWriteThroughResult(acceptedRows, setCount, rejectedRows.length, false);
 }
 
 /**
