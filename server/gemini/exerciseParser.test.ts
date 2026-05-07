@@ -280,7 +280,7 @@ describe("parseExercisesFromText", () => {
           exerciseName: "rowing",
           category: "conditioning",
           distance: "2x2km",
-          sets: [{ setNumber: 1, time: 10 }],
+          sets: [{ setNumber: 1, time: 10 }, { setNumber: "2nd set", time: 11 }],
         },
       ]),
     };
@@ -292,5 +292,25 @@ describe("parseExercisesFromText", () => {
     expect(result.some((r) => r.sets.some((s) => s.setNumber === 2 && s.weight === 60))).toBe(true);
     expect(result.some((r) => r.sets.some((s) => s.setNumber === 1 && s.weight === 80))).toBe(true);
     expect(result.some((r) => r.sets.length === 2 && r.sets.every((s) => s.distance === 2000))).toBe(true);
+    expect(result.some((r) => r.sets.some((s) => s.distance === 2000 && s.time === 10))).toBe(true);
+  });
+
+  it("converts explicit weight-unit suffixes into the requested user unit", async () => {
+    const mockResponse = {
+      text: JSON.stringify([
+        {
+          exerciseName: "back_squat",
+          category: "strength",
+          sets: [{ setNumber: 1, reps: 5, weight: "60kg" }],
+        },
+      ]),
+    };
+    vi.mocked(retryWithBackoff).mockResolvedValueOnce(mockResponse);
+    const lbsResult = await parseExercisesFromText("Back squat 1x5 at 60kg", "lbs");
+    expect(lbsResult[0]?.sets[0]?.weight).toBe(132);
+
+    vi.mocked(retryWithBackoff).mockResolvedValueOnce(mockResponse);
+    const kgResult = await parseExercisesFromText("Back squat 1x5 at 60kg", "kg");
+    expect(kgResult[0]?.sets[0]?.weight).toBe(60);
   });
 });

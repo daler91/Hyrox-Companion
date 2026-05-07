@@ -312,6 +312,7 @@ function heuristicFallbackRowsFromText(text: string): unknown[] {
 
 function validateRows(rawArray: unknown[]): z.infer<typeof parsedExerciseSchema>[] {
   const validated: z.infer<typeof parsedExerciseSchema>[] = [];
+  const sanitizeJsonValue = (v: unknown): unknown => (typeof v === "string" ? sanitizeUserInput(v) : v);
   const explainIssue = (path: (string | number)[], code: string): string => {
     const joined = path.map((p) => String(p)).join(".");
     if (joined === "exerciseName" && code === "too_small") return "missing exerciseName";
@@ -328,7 +329,7 @@ function validateRows(rawArray: unknown[]): z.infer<typeof parsedExerciseSchema>
     } else {
       const firstIssue = parsed.error.issues[0];
       const reason = firstIssue ? explainIssue(firstIssue.path, firstIssue.code) : "validation error";
-      const rawPayload = JSON.stringify(rawArray[i], (_k, v) => (typeof v === "string" ? sanitizeUserInput(v) : v));
+      const rawPayload = JSON.stringify(rawArray[i], (_k, v: unknown) => sanitizeJsonValue(v));
       logger.warn(
         { err: parsed.error, index: i, reason, rawPayload },
         "[gemini] exercise-parse dropped malformed row",
@@ -350,12 +351,24 @@ function normalizeSetToken(value: unknown): number | undefined {
   return undefined;
 }
 
-function normalizeWeightToken(value: unknown): number | undefined {
+function convertWeightToTargetUnit(value: number, sourceUnit: "kg" | "lbs", targetUnit: "kg" | "lbs"): number {
+  if (sourceUnit === targetUnit) return value;
+  return sourceUnit === "kg" ? Math.round(value * 2.2) : Math.round(value / 2.2);
+}
+
+function normalizeWeightToken(value: unknown, targetWeightUnit: "kg" | "lbs"): number | undefined {
   if (typeof value === "number") return Math.abs(value);
   if (typeof value !== "string") return undefined;
   const match = value.trim().toLowerCase().match(/^-?\s*(\d+(?:\.\d+)?)\s*(kg|kgs|lb|lbs)?$/);
   if (!match) return undefined;
-  return Math.abs(Number.parseFloat(match[1] ?? ""));
+  const parsed = Math.abs(Number.parseFloat(match[1] ?? ""));
+  const unitToken = match[2];
+  const sourceUnit: "kg" | "lbs" | null =
+    unitToken === "kg" || unitToken === "kgs" ? "kg"
+      : unitToken === "lb" || unitToken === "lbs" ? "lbs"
+        : null;
+  if (!sourceUnit) return parsed;
+  return convertWeightToTargetUnit(parsed, sourceUnit, targetWeightUnit);
 }
 
 function normalizeIntervalDistance(value: unknown): { sets: number; distance: number } | null {
@@ -369,27 +382,34 @@ function normalizeIntervalDistance(value: unknown): { sets: number; distance: nu
   return { sets, distance: unit === "km" ? Math.round(per * 1000) : Math.round(per) };
 }
 
-function normalizeRowsBeforeValidation(rawArray: unknown[]): unknown[] {
+function normalizeRowsBeforeValidation(rawArray: unknown[], targetWeightUnit: "kg" | "lbs"): unknown[] {
   return rawArray.map((row) => {
     if (!row || typeof row !== "object") return row;
     const rec = row as Record<string, unknown>;
     const sets = Array.isArray(rec.sets) ? rec.sets.map((setRow, idx) => {
-      if (!setRow || typeof setRow !== "object") return setRow;
+      if (!setRow || typeof setRow !== "object") return { setNumber: idx + 1 };
       const setRec = { ...(setRow as Record<string, unknown>) };
       const normalizedSet = normalizeSetToken(setRec.setNumber);
       if (normalizedSet) setRec.setNumber = normalizedSet;
       if (setRec.setNumber == null) setRec.setNumber = idx + 1;
-      const normalizedWeight = normalizeWeightToken(setRec.weight);
+      const normalizedWeight = normalizeWeightToken(setRec.weight, targetWeightUnit);
       if (normalizedWeight != null) setRec.weight = normalizedWeight;
       return setRec;
     }) : rec.sets;
 
     const interval = normalizeIntervalDistance(rec.distance);
     if (interval) {
+      const existingSets = Array.isArray(sets) ? sets : [];
       return {
         ...rec,
         intervalMetadata: { intervalCount: interval.sets, intervalDistance: interval.distance },
-        sets: Array.from({ length: interval.sets }, (_v, i) => ({ setNumber: i + 1, distance: interval.distance })),
+        sets: Array.from({ length: interval.sets }, (_v, i) => {
+          const prior = existingSets[i];
+          if (prior && typeof prior === "object") {
+            return { ...(prior as Record<string, unknown>), setNumber: i + 1, distance: interval.distance };
+          }
+          return { setNumber: i + 1, distance: interval.distance };
+        }),
       };
     }
     return { ...rec, sets };
@@ -526,7 +546,8 @@ export async function parseExercisesFromText(
     const raw = parseRawResponse(responseText);
     const rawArray = Array.isArray(raw) ? raw : [];
     const normalized = normalizeParserPayload(raw);
-    const validated = validateRows(normalizeRowsBeforeValidation(normalized.exercises ?? rawArray));
+    const targetWeightUnit: "kg" | "lbs" = weightUnit === "lbs" ? "lbs" : "kg";
+    const validated = validateRows(normalizeRowsBeforeValidation(normalized.exercises ?? rawArray, targetWeightUnit));
 
     if (validated.length === 0 && normalized.exercises.length > 0) {
       const fallbackValidated = validateRows(heuristicFallbackRowsFromText(text));
@@ -592,7 +613,8 @@ export async function parseExercisesFromImage(
     const raw = parseRawResponse(responseText);
     const rawArray = Array.isArray(raw) ? raw : [];
     const normalized = normalizeParserPayload(raw);
-    const validated = validateRows(normalizeRowsBeforeValidation(normalized.exercises ?? rawArray));
+    const targetWeightUnit: "kg" | "lbs" = weightUnit === "lbs" ? "lbs" : "kg";
+    const validated = validateRows(normalizeRowsBeforeValidation(normalized.exercises ?? rawArray, targetWeightUnit));
 
     if (validated.length === 0 && normalized.exercises.length > 0) {
       logger.warn({ rawExerciseCount: normalized.exercises.length }, "[gemini] exercise-parse-image no valid rows after validation");
