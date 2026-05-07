@@ -36,7 +36,13 @@ export function registerWorkoutAiRoutes(router: Router): void {
     }
     if (Object.keys(referencePatch).length > 0) await storage.workouts.updateWorkoutLog(workoutId, referencePatch, userId);
     void incrementStructuredExerciseCounter("workout_log", "voice", "parse_text_succeeded").catch(() => undefined);
-    res.json({ exercises: result.exercises, saved: true, setCount: result.setCount });
+    res.json({
+      exercises: result.exercises,
+      saved: true,
+      setCount: result.setCount,
+      rejectedCount: result.rejectedCount,
+      rejectionReasons: result.rejectionReasons,
+    });
   });
   protectedPost(router, "/api/v1/workouts/:id/reparse-from-image", { limiter: rateLimiter("reparse", 5), middleware: [aiBudgetCheck, validateBody(parseExercisesFromImageRequestSchema)] }, async (req: Request<{ id: string }, unknown, z.infer<typeof parseExercisesFromImageRequestSchema>>, res: Response) => {
     const userId = getUserId(req);
@@ -49,7 +55,13 @@ export function registerWorkoutAiRoutes(router: Router): void {
       return res.status(422).json({ error: "Parsing did not produce persisted exercise sets.", code: "PARSE_WRITE_THROUGH_REQUIRED" });
     }
     void incrementStructuredExerciseCounter("workout_log", "photo", "parse_photo_succeeded").catch(() => undefined);
-    res.json({ exercises: result.exercises, saved: true, setCount: result.setCount });
+    res.json({
+      exercises: result.exercises,
+      saved: true,
+      setCount: result.setCount,
+      rejectedCount: result.rejectedCount,
+      rejectionReasons: result.rejectionReasons,
+    });
   });
   protectedPost(router, "/api/v1/workouts/batch-reparse", { limiter: rateLimiter("batchReparse", 2), middleware: [aiBudgetCheck] }, async (req: Request, res: Response) => {
     const userId = getUserId(req);

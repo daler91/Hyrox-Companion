@@ -4,7 +4,9 @@ import { useCallback, useMemo, useState } from "react";
 
 import { useApiMutation } from "@/hooks/useApiMutation";
 import { useExerciseSetsForOwner } from "@/hooks/useExerciseSetsForOwner";
+import { useToast } from "@/hooks/use-toast";
 import { api, type ParseFromImagePayload, QUERY_KEYS } from "@/lib/api";
+import type { ReparseResponse } from "@/lib/api/constants";
 import { queryClient } from "@/lib/queryClient";
 
 // Tag every plan-day set mutation with this key family so useIsMutating
@@ -75,6 +77,15 @@ function isUpstreamAiError(error: unknown): boolean {
   return status === 502 || status === 504 || code === "AI_UPSTREAM_FAILURE" || code === "AI_UPSTREAM_TIMEOUT";
 }
 
+function buildPartialParseWarningToast(data: ReparseResponse) {
+  if ((data.rejectedCount ?? 0) <= 0) return undefined;
+  const rejectedCount = data.rejectedCount ?? 0;
+  return {
+    title: `Saved ${data.setCount ?? data.exercises?.length ?? 0} rows`,
+    description: `Skipped ${rejectedCount} line${rejectedCount === 1 ? "" : "s"} that could not be interpreted.`,
+  };
+}
+
 /**
  * Mutation + query bundle for a plan day's prescribed exercise sets.
  * Used by the v2 workout detail dialog when a planned entry is open so
@@ -88,6 +99,7 @@ function isUpstreamAiError(error: unknown): boolean {
  * so these edits are the starting state of the logged workout.
  */
 export function usePlanDayExercises(planDayId: string | null) {
+  const { toast } = useToast();
   const [parseFailureState, setParseFailureState] = useState<{
     ownerId: string | null;
     retry: null | (() => void);
@@ -136,11 +148,13 @@ export function usePlanDayExercises(planDayId: string | null) {
     },
     invalidateQueries: planDayId ? [QUERY_KEYS.planDayExercises(planDayId)] : undefined,
     onMutate: () => ({ ownerId: planDayId }),
-    onSuccess: (_data, _variables, context) => {
+    onSuccess: (data, _variables, context) => {
       if (!context?.ownerId) return;
       setParseFailureState((prev) =>
         prev.ownerId === context.ownerId ? { ownerId: null, retry: null } : prev,
       );
+      const toastData = data ? buildPartialParseWarningToast(data) : undefined;
+      if (toastData) toast(toastData);
     },
     onError: (_error, _variables, context) => {
       if (!context?.ownerId) return;
@@ -169,11 +183,13 @@ export function usePlanDayExercises(planDayId: string | null) {
     },
     invalidateQueries: planDayId ? [QUERY_KEYS.planDayExercises(planDayId)] : undefined,
     onMutate: (payload) => ({ ownerId: planDayId, payload }),
-    onSuccess: (_data, _variables, context) => {
+    onSuccess: (data, _variables, context) => {
       if (!context?.ownerId) return;
       setParseFailureState((prev) =>
         prev.ownerId === context.ownerId ? { ownerId: null, retry: null } : prev,
       );
+      const toastData = data ? buildPartialParseWarningToast(data) : undefined;
+      if (toastData) toast(toastData);
     },
     onError: (error, _variables, context) => {
       if (!context?.ownerId) return;
