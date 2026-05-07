@@ -20,6 +20,12 @@ import { protectedDelete, protectedPost } from "./_helpers/protectedRouteBuilder
 
 const router = Router();
 
+function normalizeCorrelationId(reqId: unknown): string | undefined {
+  if (typeof reqId === "string") return reqId;
+  if (typeof reqId === "number") return Number.isFinite(reqId) ? String(reqId) : undefined;
+  return undefined;
+}
+
 const applyTimelineSuggestionSchema = z.object({
   workoutId: z.string().min(1),
   targetField: z.enum(["notes", "mainWorkout", "accessory"]),
@@ -41,7 +47,7 @@ protectedPost(router, "/api/v1/parse-exercises", { limiter: rateLimiter("parse",
     const weightUnit = user?.weightUnit || "kg";
     const customNames = userCustomExercises.map(e => e.name);
     const exercises = await parseExercisesFromText(text.trim(), weightUnit, customNames, userId, {
-      correlationId: req.id != null ? String(req.id) : undefined,
+      correlationId: normalizeCorrelationId(req.id),
       workoutId: undefined,
       userId,
     });
@@ -67,7 +73,7 @@ protectedPost(router, "/api/v1/parse-exercises-from-image", { limiter: rateLimit
       weightUnit,
       customExerciseNames: customNames,
       userId,
-      logContext: { correlationId: req.id != null ? String(req.id) : undefined, workoutId: undefined, userId },
+      logContext: { correlationId: normalizeCorrelationId(req.id), workoutId: undefined, userId },
     });
     res.json(exercises);
   });
