@@ -14,7 +14,7 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import { AIConsentDialog } from "@/components/coach/AIConsentDialog";
 import { CoachPanel } from "@/components/CoachPanel";
@@ -37,6 +37,7 @@ import {
 } from "@/components/timeline";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { AdhocLogSheet } from "@/components/workout-detail/AdhocLogSheet";
 import { LogSheet } from "@/components/workout-detail/LogSheet";
 import { PreviewSheet } from "@/components/workout-detail/PreviewSheet";
 import { ReviewSurface } from "@/components/workout-detail/ReviewSurface";
@@ -283,6 +284,7 @@ export default function Timeline() {
   const {
     previewEntry, setPreviewEntry, logEntry, setLogEntry, reviewEntry, setReviewEntry, skippedEntry, setSkippedEntry, openSurface, closeAllSurfacesAndClearUrl,
   } = useTimelineSurfaceSelection(timelineData);
+  const [adhocOpen, setAdhocOpen] = useState(false);
   const {
     showAIConsent, setShowAIConsent, annotationsDialogOpen, setAnnotationsDialogOpen, annotationInitialDate, setAnnotationInitialDate, handleAddAnnotation, handleEditAnnotation,
   } = useTimelineDialogState();
@@ -451,9 +453,15 @@ export default function Timeline() {
         />
       </DndContext>
 
-          {!previewEntry && !logEntry && !reviewEntry && !skippedEntry && (
-            <FloatingActionButton coachPanelOpen={coachOpen} onCoachToggle={() => handleCoachToggle(!coachOpen)} />
+          {!previewEntry && !logEntry && !reviewEntry && !skippedEntry && !adhocOpen && (
+            <FloatingActionButton
+              coachPanelOpen={coachOpen}
+              onCoachToggle={() => handleCoachToggle(!coachOpen)}
+              onLogWorkout={() => setAdhocOpen(true)}
+            />
           )}
+
+          <AdhocLogSheet open={adhocOpen} onClose={() => setAdhocOpen(false)} />
 
           <SchedulePlanDialog
             open={!!schedulingPlanId}
@@ -605,7 +613,7 @@ export default function Timeline() {
       </div>
       
       {coachOpen && !isMobile && (
-        <div className={previewEntry || logEntry || reviewEntry || skippedEntry ? "hidden" : "w-80 lg:w-96 flex-shrink-0"}>
+        <div className={previewEntry || logEntry || reviewEntry || skippedEntry || adhocOpen ? "hidden" : "w-80 lg:w-96 flex-shrink-0"}>
           <FeatureErrorBoundaryWrapper featureName="Coach">
             <CoachPanel
               isOpen={coachOpen}
@@ -622,7 +630,7 @@ export default function Timeline() {
         // see the top of their timeline while chatting with the coach.
         // Hidden (display:none) rather than unmounted while a workout detail
         // is open so in-flight chat streams and local message state survive.
-        <div className={previewEntry || logEntry || reviewEntry || skippedEntry ? "hidden" : "fixed inset-x-0 bottom-0 z-50 h-[70vh]"}>
+        <div className={previewEntry || logEntry || reviewEntry || skippedEntry || adhocOpen ? "hidden" : "fixed inset-x-0 bottom-0 z-50 h-[70vh]"}>
           <div
             data-testid="coach-panel-mobile-sheet"
             className="relative h-full bg-background shadow-2xl rounded-t-2xl border-t border-x"
