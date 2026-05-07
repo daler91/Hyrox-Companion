@@ -1,11 +1,10 @@
 import type { AllowedImageMimeType, ExerciseSet, ParsedExercise } from "@shared/schema";
 import { useMutation } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { ExternalLink, Gauge, ListChecks } from "lucide-react";
+import { ExternalLink, ListChecks } from "lucide-react";
 import { useState } from "react";
 import { useLocation } from "wouter";
 
-import { RpeSelector } from "@/components/RpeSelector";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,6 +18,7 @@ import { queryClient } from "@/lib/queryClient";
 
 import { ExerciseTable } from "./ExerciseTable";
 import { PrescriptionEditor } from "./shared/PrescriptionEditor";
+import { RpePrompt } from "./shared/RpePrompt";
 
 interface AdhocLogSheetProps {
   readonly open: boolean;
@@ -380,13 +380,7 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
 
         <Separator />
 
-        <div>
-          <p className="mb-2 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            <Gauge className="h-3.5 w-3.5" />
-            How hard? <span className="normal-case text-muted-foreground/70">(optional)</span>
-          </p>
-          <RpeSelector value={rpe} onChange={setRpe} showLabel={false} compact />
-        </div>
+        <RpePrompt value={rpe} onChange={setRpe} />
 
         <div className="space-y-2">
           <Button

@@ -1,6 +1,5 @@
 import type { TimelineEntry } from "@shared/schema";
 import {
-  Gauge,
   ListChecks,
   MessageSquare,
   Sparkles,
@@ -8,7 +7,6 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
-import { RpeSelector } from "@/components/RpeSelector";
 import { Button } from "@/components/ui/button";
 import { ResponsiveSheet } from "@/components/ui/responsive-sheet";
 import { Separator } from "@/components/ui/separator";
@@ -19,6 +17,7 @@ import { formatScheduledDate } from "@/lib/timelineEntryFormat";
 import { ExerciseTable } from "./ExerciseTable";
 import { SaveStatePill } from "./SaveStatePill";
 import { PrescriptionEditor } from "./shared/PrescriptionEditor";
+import { RpePrompt } from "./shared/RpePrompt";
 import { WorkoutPrescriptionSummary } from "./shared/WorkoutPrescriptionSummary";
 
 interface LogSheetProps {
@@ -180,13 +179,7 @@ export function LogSheet({
 
         <Separator />
 
-        <div>
-          <p className="mb-2 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            <Gauge className="h-3.5 w-3.5" />
-            How hard? <span className="normal-case text-muted-foreground/70">(optional)</span>
-          </p>
-          <RpeSelector value={rpe} onChange={setRpe} showLabel={false} compact />
-        </div>
+        <RpePrompt value={rpe} onChange={setRpe} />
 
         <div className="space-y-2">
           <Button
