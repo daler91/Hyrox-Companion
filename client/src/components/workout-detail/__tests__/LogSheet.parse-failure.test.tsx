@@ -74,7 +74,6 @@ describe("LogSheet parse failures", () => {
     render(<LogSheet entry={baseEntry} onClose={vi.fn()} onLogAsPlanned={vi.fn()} />);
 
     const user = userEvent.setup();
-    await user.click(screen.getByTestId("log-edit-prescription-entry-1"));
 
     expect(screen.getByTestId("log-parse-failed-entry-1")).toHaveTextContent(
       "Parse failed; workout cannot be saved as text-only.",
@@ -119,8 +118,6 @@ describe("LogSheet parse failures", () => {
     const { rerender } = render(
       <LogSheet entry={baseEntry} onClose={vi.fn()} onLogAsPlanned={vi.fn()} />,
     );
-    const user = userEvent.setup();
-    await user.click(screen.getByTestId("log-edit-prescription-entry-1"));
     expect(screen.getByTestId("log-parse-failed-entry-1")).toBeInTheDocument();
 
     parseFailed = false;
