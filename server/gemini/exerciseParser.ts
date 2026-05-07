@@ -383,12 +383,15 @@ function normalizeIntervalDistance(value: unknown): { sets: number; distance: nu
 }
 
 function normalizeRowsBeforeValidation(rawArray: unknown[], targetWeightUnit: "kg" | "lbs"): unknown[] {
+  const isRecord = (value: unknown): value is Record<string, unknown> =>
+    !!value && typeof value === "object" && !Array.isArray(value);
   return rawArray.map((row) => {
-    if (!row || typeof row !== "object") return row;
-    const rec = row as Record<string, unknown>;
-    const sets = Array.isArray(rec.sets) ? rec.sets.map((setRow, idx) => {
-      if (!setRow || typeof setRow !== "object") return setRow;
-      const setRec = { ...(setRow as Record<string, unknown>) };
+    if (!isRecord(row)) return row;
+    const rec = row;
+    const sourceSets: unknown[] | null = Array.isArray(rec.sets) ? rec.sets : null;
+    const sets = sourceSets ? sourceSets.map((setRow, idx): unknown => {
+      if (!isRecord(setRow)) return setRow;
+      const setRec: Record<string, unknown> = { ...setRow };
       const normalizedSet = normalizeSetToken(setRec.setNumber);
       if (normalizedSet) setRec.setNumber = normalizedSet;
       if (setRec.setNumber == null) setRec.setNumber = idx + 1;
@@ -399,14 +402,14 @@ function normalizeRowsBeforeValidation(rawArray: unknown[], targetWeightUnit: "k
 
     const interval = normalizeIntervalDistance(rec.distance);
     if (interval) {
-      const existingSets = Array.isArray(sets) ? sets : [];
+      const existingSets: unknown[] = Array.isArray(sets) ? sets : [];
       return {
         ...rec,
         intervalMetadata: { intervalCount: interval.sets, intervalDistance: interval.distance },
         sets: Array.from({ length: interval.sets }, (_v, i) => {
           const prior = existingSets[i];
-          if (prior && typeof prior === "object") {
-            return { ...(prior as Record<string, unknown>), setNumber: i + 1, distance: interval.distance };
+          if (isRecord(prior)) {
+            return { ...prior, setNumber: i + 1, distance: interval.distance };
           }
           return { setNumber: i + 1, distance: interval.distance };
         }),
