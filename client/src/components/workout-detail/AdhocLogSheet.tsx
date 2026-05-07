@@ -215,57 +215,45 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
     setExerciseSets((prev) => prev.filter((row) => row.id !== setId));
   };
 
-  const parseTextMutation = useMutation({
-    mutationFn: (text: string) => api.exercises.parse(text),
-    onSuccess: (parsed) => {
-      if (!parsed || parsed.length === 0) {
-        toast({
-          title: "Nothing parsed",
-          description: "AI couldn't pull exercises from that text. Add rows manually or refine the text.",
-          variant: "destructive",
-        });
-        return;
-      }
-      setExerciseSets(flattenParsedToSets(parsed));
+  const handleParsed = (source: "text" | "photo", parsed: ParsedExercise[] | undefined) => {
+    if (!parsed || parsed.length === 0) {
       toast({
-        title: "Parsed",
-        description: `Loaded ${parsed.length} exercise${parsed.length === 1 ? "" : "s"} from text.`,
-      });
-    },
-    onError: () => {
-      toast({
-        title: "Parse failed",
-        description: "AI couldn't parse that text. Try a clearer version or add rows manually.",
+        title: "Nothing parsed",
+        description: source === "text"
+          ? "AI couldn't pull exercises from that text. Add rows manually or refine the text."
+          : "AI couldn't identify exercises in that photo. Try a clearer shot.",
         variant: "destructive",
       });
-    },
+      return;
+    }
+    setExerciseSets(flattenParsedToSets(parsed));
+    toast({
+      title: "Parsed",
+      description: `Loaded ${parsed.length} exercise${parsed.length === 1 ? "" : "s"} from ${source}.`,
+    });
+  };
+
+  const handleParseError = (source: "text" | "photo") => () => {
+    toast({
+      title: "Parse failed",
+      description: source === "text"
+        ? "AI couldn't parse that text. Try a clearer version or add rows manually."
+        : "AI couldn't parse that photo. Try a clearer shot.",
+      variant: "destructive",
+    });
+  };
+
+  const parseTextMutation = useMutation({
+    mutationFn: (text: string) => api.exercises.parse(text),
+    onSuccess: (parsed) => handleParsed("text", parsed),
+    onError: handleParseError("text"),
   });
 
   const parseImageMutation = useMutation({
     mutationFn: (payload: { imageBase64: string; mimeType: AllowedImageMimeType }) =>
       api.exercises.parseFromImage(payload),
-    onSuccess: (parsed) => {
-      if (!parsed || parsed.length === 0) {
-        toast({
-          title: "Nothing parsed",
-          description: "AI couldn't identify exercises in that photo. Try a clearer shot.",
-          variant: "destructive",
-        });
-        return;
-      }
-      setExerciseSets(flattenParsedToSets(parsed));
-      toast({
-        title: "Parsed",
-        description: `Loaded ${parsed.length} exercise${parsed.length === 1 ? "" : "s"} from photo.`,
-      });
-    },
-    onError: () => {
-      toast({
-        title: "Parse failed",
-        description: "AI couldn't parse that photo. Try a clearer shot.",
-        variant: "destructive",
-      });
-    },
+    onSuccess: (parsed) => handleParsed("photo", parsed),
+    onError: handleParseError("photo"),
   });
 
   const saveMutation = useMutation({
