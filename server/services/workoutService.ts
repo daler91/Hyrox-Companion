@@ -526,7 +526,7 @@ async function reparseFromImage(
   void incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", source, "manual_fix_completed").catch((err: unknown) => {
     logger.warn({ context: "health-metrics", event: "manual_fix_counter_failed", owner, err }, "Manual fix telemetry increment failed");
   });
-  return buildReparseWriteThroughResult(acceptedRows, setCount, rejectedRows.length, fallbackUsed);
+  return buildReparseWriteThroughResult(acceptedRows, setCount, rejectedRows.length, false);
 }
 
 /**
