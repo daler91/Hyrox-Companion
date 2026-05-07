@@ -339,6 +339,7 @@ async function replaceExerciseSetsByOwner(
 
 type ReparseTarget = { id: string; mainWorkout?: string | null; accessory?: string | null };
 type CounterSource = "manual" | "voice" | "photo" | "import";
+type ReparseWriteThroughResult = { exercises: ParsedExercise[]; setCount: number; saved: true; rejectedCount: number; rejectionReasons: string[] };
 
 const hydrationLocks = new Map<string, Promise<{ exercises: ParsedExercise[]; setCount: number } | null>>();
 
@@ -427,13 +428,11 @@ async function reparseFromText(
   context: "workout" | "plan",
   source: CounterSource = "manual",
 ): Promise<{ exercises: ParsedExercise[]; setCount: number } | null> {
-  const { parseExercisesFromText } = await import("../gemini");
+  const { parseExercisesFromTextWithDiagnostics } = await import("../gemini");
   const textToParse = [target.mainWorkout, target.accessory].filter(Boolean).join("\n");
   if (!textToParse.trim()) return null;
 
-  const exercises = await parseExercisesFromText(textToParse.trim(), weightUnit);
-  const acceptedRows = exercises.filter((row) => (row.exerciseName ?? "").trim().length > 0 && Array.isArray(row.sets) && row.sets.length > 0);
-  const rejectedRows = exercises.filter((row) => !acceptedRows.includes(row));
+  const { acceptedRows, rejectedRows } = await parseExercisesFromTextWithDiagnostics(textToParse.trim(), weightUnit);
   if (acceptedRows.length === 0) return null;
 
   const setRows = expandExercisesToRows(acceptedRows, owner, context);
@@ -441,12 +440,20 @@ async function reparseFromText(
   void incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", source, "manual_fix_completed").catch((err: unknown) => {
     logger.warn({ context: "health-metrics", event: "manual_fix_counter_failed", owner, err }, "Manual fix telemetry increment failed");
   });
+  return buildReparseWriteThroughResult(acceptedRows, setCount, rejectedRows.length);
+}
+
+function buildReparseWriteThroughResult(
+  acceptedRows: ParsedExercise[],
+  setCount: number,
+  rejectedCount: number,
+): ReparseWriteThroughResult {
   return {
     exercises: acceptedRows,
     setCount,
     saved: true,
-    rejectedCount: rejectedRows.length,
-    rejectionReasons: rejectedRows.length > 0 ? ["row_missing_name_or_sets"] : [],
+    rejectedCount,
+    rejectionReasons: rejectedCount > 0 ? ["schema_validation_failed"] : [],
   };
 }
 
@@ -490,16 +497,14 @@ async function reparseFromImage(
   customExerciseNames?: string[],
   source: CounterSource = "photo",
 ): Promise<{ exercises: ParsedExercise[]; setCount: number } | null> {
-  const { parseExercisesFromImage } = await import("../gemini");
-  const exercises = await parseExercisesFromImage({
+  const { parseExercisesFromImageWithDiagnostics } = await import("../gemini");
+  const { acceptedRows, rejectedRows } = await parseExercisesFromImageWithDiagnostics({
     imageBase64: image.imageBase64,
     mimeType: image.mimeType,
     weightUnit,
     customExerciseNames,
     userId,
   });
-  const acceptedRows = exercises.filter((row) => (row.exerciseName ?? "").trim().length > 0 && Array.isArray(row.sets) && row.sets.length > 0);
-  const rejectedRows = exercises.filter((row) => !acceptedRows.includes(row));
   if (acceptedRows.length === 0) return null;
 
   const setRows = expandExercisesToRows(acceptedRows, owner, context);
@@ -507,13 +512,7 @@ async function reparseFromImage(
   void incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", source, "manual_fix_completed").catch((err: unknown) => {
     logger.warn({ context: "health-metrics", event: "manual_fix_counter_failed", owner, err }, "Manual fix telemetry increment failed");
   });
-  return {
-    exercises: acceptedRows,
-    setCount,
-    saved: true,
-    rejectedCount: rejectedRows.length,
-    rejectionReasons: rejectedRows.length > 0 ? ["row_missing_name_or_sets"] : [],
-  };
+  return buildReparseWriteThroughResult(acceptedRows, setCount, rejectedRows.length);
 }
 
 /**

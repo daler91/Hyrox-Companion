@@ -267,14 +267,14 @@ describe("Workouts Routes", () => {
       setCount: 1,
       saved: true,
       rejectedCount: 2,
-      rejectionReasons: ["row_missing_name_or_sets"],
+      rejectionReasons: ["schema_validation_failed"],
     } as never);
 
     const response = await request(app).post("/api/v1/workouts/workout-1/reparse").send({});
     expect(response.status).toBe(200);
     expect(response.body.saved).toBe(true);
     expect(response.body.rejectedCount).toBe(2);
-    expect(response.body.rejectionReasons).toEqual(["row_missing_name_or_sets"]);
+    expect(response.body.rejectionReasons).toEqual(["schema_validation_failed"]);
   });
 
   it("returns 422 when all parse rows are invalid", async () => {
