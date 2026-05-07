@@ -5,9 +5,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AdhocLogSheet } from "../AdhocLogSheet";
 
-const setLocationMock = vi.fn();
-const createWorkoutMock = vi.fn();
-const invalidateQueriesMock = vi.fn().mockResolvedValue(undefined);
+const { setLocationMock, createWorkoutMock, invalidateQueriesMock } = vi.hoisted(() => ({
+  setLocationMock: vi.fn(),
+  createWorkoutMock: vi.fn(),
+  invalidateQueriesMock: vi.fn().mockResolvedValue(undefined),
+}));
 
 vi.mock("wouter", () => ({
   useLocation: () => ["/", setLocationMock] as const,
