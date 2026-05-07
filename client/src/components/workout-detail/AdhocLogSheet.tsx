@@ -2,7 +2,7 @@ import type { AllowedImageMimeType, ExerciseSet, ParsedExercise } from "@shared/
 import { useMutation } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { ExternalLink, ListChecks } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 
 import { Button } from "@/components/ui/button";
@@ -226,19 +226,30 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
     setExerciseSets([]);
   };
 
+  // Re-evaluate todayStr() on every open transition so a long-lived
+  // session that survives midnight doesn't prefill yesterday's date.
+  // Sheet stays mounted in Timeline, toggled by `open` — without this
+  // effect the date set at mount would persist until the user manually
+  // changes it.
+  useEffect(() => {
+    if (open) resetState();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   const handleClose = () => {
     resetState();
     onClose();
   };
 
   const handleAddSet = (data: AddExerciseSetPayload) => {
-    setExerciseSets((prev) => [
-      ...prev,
-      makeAdhocRow({
+    setExerciseSets((prev) => {
+      const newRow = makeAdhocRow({
         exerciseName: data.exerciseName,
         customLabel: data.customLabel,
         category: data.category,
         setNumber: data.setNumber ?? prev.length + 1,
+        // sortOrder is reassigned below once the insertion index is
+        // known; the value here is a placeholder.
         sortOrder: prev.length,
         reps: data.reps,
         weight: data.weight,
@@ -250,8 +261,21 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
         plannedTime: data.plannedTime,
         notes: data.notes,
         confidence: data.confidence,
-      }),
-    ]);
+      });
+
+      // InlineSetEditor's continuation-add path passes sourceSetId so
+      // a "+" tap on an earlier group inserts next to that group
+      // instead of dropping a disconnected duplicate at the end —
+      // setsToParsed groups by consecutive same exerciseName/customLabel,
+      // so position matters for correct grouping at save time.
+      const sourceIdx = data.sourceSetId
+        ? prev.findIndex((row) => row.id === data.sourceSetId)
+        : -1;
+      const next = sourceIdx === -1
+        ? [...prev, newRow]
+        : [...prev.slice(0, sourceIdx + 1), newRow, ...prev.slice(sourceIdx + 1)];
+      return next.map((row, i) => ({ ...row, sortOrder: i }));
+    });
   };
 
   const handleUpdateSet = (setId: string, data: PatchExerciseSetPayload) => {
