@@ -310,16 +310,71 @@ function heuristicFallbackRowsFromText(text: string): unknown[] {
   return rows;
 }
 
-function validateRowsDetailed(rawArray: unknown[]): { acceptedRows: z.infer<typeof parsedExerciseSchema>[]; rejectedRows: { index: number; reason: string }[] } {
+
+function summarizeMalformedRow(row: unknown): { keyCount: number; keys: string[]; exerciseNameType: string; exerciseNamePreview: string | null; categoryType: string; categoryPreview: string | null; setsType: string; setsLength: number | null; rawPreview: string } {
+  const asRecord = row && typeof row == "object" && !Array.isArray(row) ? row as Record<string, unknown> : null
+  const keys = Object.keys(asRecord ?? {}).slice(0, 12);
+  const exerciseName = asRecord && typeof asRecord["exerciseName"] === "string" ? asRecord["exerciseName"] : null;
+  const category = asRecord && typeof asRecord["category"] === "string" ? asRecord["category"] : null;
+  const setsValue = asRecord ? asRecord["sets"] : undefined;
+  const setsType = Array.isArray(setsValue) ? "array" : typeof setsValue;
+  const setsLength = Array.isArray(setsValue) ? setsValue.length : null;
+  const rawPreview = (() => {
+    try {
+      const serialized = JSON.stringify(row);
+      return serialized.length > 300 ? `${serialized.slice(0, 300)}…` : serialized;
+    } catch {
+      return String(row);
+    }
+  })();
+  return {
+    keyCount: keys.length,
+    keys,
+    exerciseNameType: typeof (asRecord ? asRecord["exerciseName"] : undefined),
+    exerciseNamePreview: exerciseName ? exerciseName.slice(0, 80) : null,
+    categoryType: typeof (asRecord ? asRecord["category"] : undefined),
+    categoryPreview: category ? category.slice(0, 80) : null,
+    setsType,
+    setsLength,
+    rawPreview,
+  };
+}
+
+function coerceRecoverableRow(row: unknown): unknown {
+  if (!row || typeof row !== "object" || Array.isArray(row)) return row;
+  const candidate = { ...(row as Record<string, unknown>) };
+
+  if (typeof candidate.exerciseName !== "string" || candidate.exerciseName.trim().length === 0) {
+    const custom = typeof candidate.customLabel === "string" ? candidate.customLabel.trim() : "";
+    candidate.exerciseName = custom.length > 0 ? "custom" : "custom";
+    if (custom.length === 0) candidate.customLabel = "Unknown exercise";
+  }
+
+  if (typeof candidate.category !== "string" || candidate.category.trim().length === 0) {
+    const name = String(candidate.exerciseName ?? "").toLowerCase();
+    candidate.category = /(row|run|bike|ski|erg|interval|emom|amrap)/i.test(name) ? "conditioning" : "strength";
+  }
+
+  if (!Array.isArray(candidate.sets)) {
+    candidate.sets = [{ setNumber: 1, reps: 1 }];
+  } else if (candidate.sets.length === 0) {
+    candidate.sets = [{ setNumber: 1, reps: 1 }];
+  }
+
+  return candidate;
+}
+
+function validateRowsDetailed(rawArray: unknown[], options: { coerceRecoverable?: boolean } = {}): { acceptedRows: z.infer<typeof parsedExerciseSchema>[]; rejectedRows: { index: number; reason: string }[] } {
   const acceptedRows: z.infer<typeof parsedExerciseSchema>[] = [];
   const rejectedRows: { index: number; reason: string }[] = [];
   for (let i = 0; i < rawArray.length; i++) {
-    const parsed = parsedExerciseSchema.safeParse(rawArray[i]);
+    const row = rawArray[i];
+    const parsed = parsedExerciseSchema.safeParse(options.coerceRecoverable ? coerceRecoverableRow(row) : row);
     if (parsed.success) {
       acceptedRows.push(parsed.data);
     } else {
       logger.warn(
-        { err: parsed.error, index: i },
+        { err: parsed.error, index: i, rowSummary: summarizeMalformedRow(row) },
         "[gemini] exercise-parse dropped malformed row",
       );
       rejectedRows.push({ index: i, reason: "schema_validation_failed" });
@@ -328,8 +383,8 @@ function validateRowsDetailed(rawArray: unknown[]): { acceptedRows: z.infer<type
   return { acceptedRows, rejectedRows };
 }
 
-function validateRows(rawArray: unknown[]): z.infer<typeof parsedExerciseSchema>[] {
-  return validateRowsDetailed(rawArray).acceptedRows;
+function validateRows(rawArray: unknown[], options: { coerceRecoverable?: boolean } = {}): z.infer<typeof parsedExerciseSchema>[] {
+  return validateRowsDetailed(rawArray, options).acceptedRows;
 }
 
 function buildUnitNote(weightUnit: string): string {
@@ -462,15 +517,15 @@ export async function parseExercisesFromText(
     const raw = parseRawResponse(responseText);
     const rawArray = Array.isArray(raw) ? raw : [];
     const normalized = normalizeParserPayload(raw);
-    const validated = validateRows(normalized.exercises ?? rawArray);
+    const validated = validateRows(normalized.exercises ?? rawArray, { coerceRecoverable: true });
 
-    if (validated.length === 0 && normalized.exercises.length > 0) {
-      const fallbackValidated = validateRows(heuristicFallbackRowsFromText(text));
+    if (validated.length === 0) {
+      const fallbackValidated = validateRows(heuristicFallbackRowsFromText(text), { coerceRecoverable: true });
       if (fallbackValidated.length > 0) {
-        logger.warn({ rawExerciseCount: normalized.exercises.length, fallbackCount: fallbackValidated.length }, "[gemini] exercise-parse recovered rows with heuristic fallback");
+        logger.warn({ rawExerciseCount: normalized.exercises.length, fallbackCount: fallbackValidated.length, rawTopLevelType: Array.isArray(raw) ? "array" : typeof raw }, "[gemini] exercise-parse recovered rows with heuristic fallback");
         return fallbackValidated.map((ex) => mapValidatedExercise(ex, text));
       }
-      logger.warn({ rawExerciseCount: normalized.exercises.length }, "[gemini] exercise-parse no valid rows after validation");
+      logger.warn({ rawExerciseCount: normalized.exercises.length, rawTopLevelType: Array.isArray(raw) ? "array" : typeof raw }, "[gemini] exercise-parse no valid rows after validation");
       return [];
     }
 
@@ -502,6 +557,7 @@ export async function parseExercisesFromText(
 export interface ParseExercisesWithDiagnosticsResult {
   acceptedRows: ParsedExercise[];
   rejectedRows: { index: number; reason: string }[];
+  fallbackUsed: boolean;
 }
 
 export async function parseExercisesFromTextWithDiagnostics(
@@ -510,13 +566,22 @@ export async function parseExercisesFromTextWithDiagnostics(
   customExerciseNames?: string[],
   userId?: string,
 ): Promise<ParseExercisesWithDiagnosticsResult> {
-  if (!text || text.trim().length === 0) return { acceptedRows: [], rejectedRows: [] };
+  if (!text || text.trim().length === 0) return { acceptedRows: [], rejectedRows: [], fallbackUsed: false };
   const responseText = await callGeminiParse(text, weightUnit, customExerciseNames, userId);
   const raw = parseRawResponse(responseText);
   const rawArray = Array.isArray(raw) ? raw : [];
   const normalized = normalizeParserPayload(raw);
-  const validated = validateRowsDetailed(normalized.exercises ?? rawArray);
-  return { acceptedRows: validated.acceptedRows.map((ex) => mapValidatedExercise(ex, text)), rejectedRows: validated.rejectedRows };
+  const validated = validateRowsDetailed(normalized.exercises ?? rawArray, { coerceRecoverable: true });
+  if (validated.acceptedRows.length > 0) {
+    return { acceptedRows: validated.acceptedRows.map((ex) => mapValidatedExercise(ex, text)), rejectedRows: validated.rejectedRows, fallbackUsed: false };
+  }
+
+  const fallbackValidated = validateRowsDetailed(heuristicFallbackRowsFromText(text), { coerceRecoverable: true });
+  if (fallbackValidated.acceptedRows.length > 0) {
+    return { acceptedRows: fallbackValidated.acceptedRows.map((ex) => mapValidatedExercise(ex, text)), rejectedRows: [...validated.rejectedRows, ...fallbackValidated.rejectedRows], fallbackUsed: true };
+  }
+
+  return { acceptedRows: [], rejectedRows: validated.rejectedRows, fallbackUsed: false };
 }
 
 export interface ParseExercisesFromImageInput {
@@ -550,7 +615,7 @@ export async function parseExercisesFromImage(
     const normalized = normalizeParserPayload(raw);
     const validated = validateRows(normalized.exercises ?? rawArray);
 
-    if (validated.length === 0 && normalized.exercises.length > 0) {
+    if (validated.length === 0) {
       logger.warn({ rawExerciseCount: normalized.exercises.length }, "[gemini] exercise-parse-image no valid rows after validation");
       return [];
     }
@@ -593,5 +658,5 @@ export async function parseExercisesFromImageWithDiagnostics(
   const rawArray = Array.isArray(raw) ? raw : [];
   const normalized = normalizeParserPayload(raw);
   const validated = validateRowsDetailed(normalized.exercises ?? rawArray);
-  return { acceptedRows: validated.acceptedRows.map((ex) => mapValidatedExercise(ex, "")), rejectedRows: validated.rejectedRows };
+  return { acceptedRows: validated.acceptedRows.map((ex) => mapValidatedExercise(ex, "")), rejectedRows: validated.rejectedRows, fallbackUsed: false };
 }
