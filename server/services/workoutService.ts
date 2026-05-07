@@ -341,7 +341,7 @@ type ReparseTarget = { id: string; mainWorkout?: string | null; accessory?: stri
 type CounterSource = "manual" | "voice" | "photo" | "import";
 type ReparseWriteThroughResult = { exercises: ParsedExercise[]; setCount: number; saved: true; rejectedCount: number; rejectionReasons: string[] };
 
-const hydrationLocks = new Map<string, Promise<{ exercises: ParsedExercise[]; setCount: number } | null>>();
+const hydrationLocks = new Map<string, Promise<ReparseWriteThroughResult | null>>();
 
 function buildHydrationLockKey(owner: SetOwner): string {
   return "workoutLogId" in owner ? `workout:${owner.workoutLogId}` : `planDay:${owner.planDayId}`;
@@ -427,7 +427,7 @@ async function reparseFromText(
   weightUnit: string,
   context: "workout" | "plan",
   source: CounterSource = "manual",
-): Promise<{ exercises: ParsedExercise[]; setCount: number } | null> {
+): Promise<ReparseWriteThroughResult | null> {
   const { parseExercisesFromTextWithDiagnostics } = await import("../gemini");
   const textToParse = [target.mainWorkout, target.accessory].filter(Boolean).join("\n");
   if (!textToParse.trim()) return null;
@@ -496,7 +496,7 @@ async function reparseFromImage(
   context: "workout" | "plan",
   customExerciseNames?: string[],
   source: CounterSource = "photo",
-): Promise<{ exercises: ParsedExercise[]; setCount: number } | null> {
+): Promise<ReparseWriteThroughResult | null> {
   const { parseExercisesFromImageWithDiagnostics } = await import("../gemini");
   const { acceptedRows, rejectedRows } = await parseExercisesFromImageWithDiagnostics({
     imageBase64: image.imageBase64,
