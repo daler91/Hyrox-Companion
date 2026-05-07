@@ -108,7 +108,7 @@ describe("parseExercisesFromImage", () => {
       text: JSON.stringify({
         exercises: [
           { exerciseName: "", category: "strength", sets: [{ reps: 1 }] },
-          { exerciseName: "squat", sets: [] },
+          { exerciseName: "" },
         ],
       }),
     });

@@ -48,11 +48,55 @@ describe("parseExercisesFromText", () => {
 
   it("returns empty array when AI returns valid JSON but invalid schema", async () => {
     const mockResponse = {
-      text: JSON.stringify([{ exerciseName: "squat", sets: [] }]), // Invalid missing fields
+      // exerciseName empty — unsalvageable. The lenience layer can synthesize
+      // a default sets array, but a blank name has no signal to recover from.
+      text: JSON.stringify([{ exerciseName: "", category: "strength", sets: [{ reps: 1 }] }]),
     };
     vi.mocked(retryWithBackoff).mockResolvedValueOnce(mockResponse);
 
     await expect(parseExercisesFromText("Some text")).resolves.toEqual([]);
+  });
+
+  it("salvages rows with empty sets by synthesizing a single default set", async () => {
+    const mockResponse = {
+      text: JSON.stringify([
+        { exerciseName: "back_squat", category: "strength", sets: [] },
+      ]),
+    };
+    vi.mocked(retryWithBackoff).mockResolvedValueOnce(mockResponse);
+
+    const result = await parseExercisesFromText("back squat");
+    expect(result).toHaveLength(1);
+    expect(result[0].exerciseName).toBe("back_squat");
+    expect(result[0].sets).toHaveLength(1);
+    expect(result[0].sets[0].setNumber).toBe(1);
+  });
+
+  it("salvages rows with no sets field at all", async () => {
+    const mockResponse = {
+      text: JSON.stringify([
+        { exerciseName: "deadlift", category: "strength" },
+      ]),
+    };
+    vi.mocked(retryWithBackoff).mockResolvedValueOnce(mockResponse);
+
+    const result = await parseExercisesFromText("deadlift session");
+    expect(result).toHaveLength(1);
+    expect(result[0].exerciseName).toBe("deadlift");
+    expect(result[0].sets).toHaveLength(1);
+  });
+
+  it("defaults missing category to conditioning instead of dropping the row", async () => {
+    const mockResponse = {
+      text: JSON.stringify([
+        { exerciseName: "burpees", sets: [{ setNumber: 1, reps: 20 }] },
+      ]),
+    };
+    vi.mocked(retryWithBackoff).mockResolvedValueOnce(mockResponse);
+
+    const result = await parseExercisesFromText("20 burpees");
+    expect(result).toHaveLength(1);
+    expect(result[0].category).toBe("conditioning");
   });
 
   it("should throw a generic error when the Gemini client throws an unexpected error", async () => {
@@ -139,7 +183,7 @@ describe("parseExercisesFromText", () => {
     const mockResponse = {
       text: JSON.stringify([
         { exerciseName: "", category: "strength", sets: [{ reps: 1 }] },
-        { exerciseName: "squat", sets: [] },
+        { exerciseName: "" },
       ]),
     };
     vi.mocked(retryWithBackoff).mockResolvedValueOnce(mockResponse);
@@ -152,7 +196,7 @@ describe("parseExercisesFromText", () => {
       text: JSON.stringify({
         exercises: [
           { exerciseName: "", category: "strength", sets: [{ reps: 1 }] },
-          { exerciseName: "squat", sets: [] },
+          { exerciseName: "" },
         ],
       }),
     };

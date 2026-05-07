@@ -159,7 +159,18 @@ Examples of correct handling:
 
 Return ONLY valid JSON (no markdown) using this contract:
 {
-  "exercises": [<legacy exercise rows, same fields as before; DO NOT emit placeholder rows like "emom", "amrap", "for_time">],
+  "exercises": [
+    {
+      "exerciseName": "<key from EXERCISE KEYS list above, or 'custom' if none match — NEVER empty>",
+      "category": "<functional|running|strength|conditioning>",
+      "customLabel": "<clean human-readable name — required when exerciseName is 'custom', omit otherwise>",
+      "confidence": <0-100>,
+      "missingFields": ["<names of fields the user did not specify, e.g. 'Weight', 'Reps', 'Time', 'Distance'>"],
+      "sets": [
+        { "setNumber": 1, "reps": <number or null>, "weight": <kg or null>, "distance": <meters or null>, "time": <minutes or null> }
+      ]
+    }
+  ],
   "structureBlocks": [
     {
       "sectionType": "<warmup|main|accessory|cooldown|custom>",
@@ -219,7 +230,8 @@ IMPORTANT RULES:
     - Example: "4x8 back squat" with no weight -> missingFields: ["Weight"]
     - Example: "5km run" with no time -> missingFields: ["Time"]
     - If all key fields are present, use an empty array: missingFields: []
-14. EMOM parsing rules:
+14. The "exercises" array MUST be populated with one row per concrete exercise prescription. Every row MUST include exerciseName, category, and a non-empty sets array. NEVER emit placeholder rows like {"exerciseName": "emom"} / {"exerciseName": "amrap"} / {"exerciseName": "for_time"} — the format itself belongs in structureBlocks.formatType, not in exercises. If a workout is purely an EMOM/AMRAP, still emit the underlying movements (burpees, row, etc.) as exercises rows.
+15. EMOM parsing rules:
     - Parse EMOM duration from free text when present (e.g. "EMOM 12", "EMOM for 16 minutes") and populate durationSeconds.
     - Parse explicit minute labels and map them to steps (e.g. "Min 1: Burpees, Min 2: Rest, Min 3: Row").
     - Map "Min X: Rest" to a rest step with stepRole="rest"; exerciseName/category should be omitted for pure rest.
