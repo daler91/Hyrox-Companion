@@ -46,6 +46,51 @@ const parserResponseSchema = z.object({
 });
 const structureBlocksSchema = parserResponseSchema.shape.structureBlocks;
 
+
+
+type RejectionReasonCode =
+  | "MISSING_EXERCISE_NAME"
+  | "INVALID_REPS_TYPE"
+  | "UNSUPPORTED_CARDIO_TOKEN"
+  | "MISSING_SETS"
+  | "INVALID_ROW_SHAPE"
+  | "SCHEMA_VALIDATION_FAILED";
+
+interface ParseLogContext {
+  correlationId?: string;
+  workoutId?: string;
+  userId?: string;
+}
+
+function compactRowPreview(row: unknown): string {
+  try {
+    const raw = JSON.stringify(row);
+    const redacted = raw
+      .replaceAll(/"(?:imageBase64|authorization|token|password|cookie)"\s*:\s*"[^"]*"/gi, '"$1":"[REDACTED]"')
+      .replaceAll(/[A-Za-z0-9+/=]{24,}/g, "[REDACTED_BLOB]");
+    return redacted.length > 220 ? `${redacted.slice(0, 220)}…` : redacted;
+  } catch {
+    return "[unserializable_row]";
+  }
+}
+
+function deriveReasonCode(row: unknown, parsed: z.SafeParseError<z.infer<typeof parsedExerciseSchema>>): RejectionReasonCode {
+  const shape = (row && typeof row === "object") ? (row as Record<string, unknown>) : null;
+  const ex = typeof shape?.exerciseName === "string" ? shape.exerciseName.trim() : "";
+  if (!ex) return "MISSING_EXERCISE_NAME";
+  const repsTypeInvalid = Array.isArray(shape?.sets) && (shape?.sets as unknown[]).some((set) => {
+    if (!set || typeof set !== "object") return false;
+    const reps = (set as Record<string, unknown>).reps;
+    return reps != null && typeof reps !== "number";
+  });
+  if (repsTypeInvalid) return "INVALID_REPS_TYPE";
+  if (/emom|amrap|tabata/i.test(ex) && !VALID_EXERCISE_NAMES.has(ex)) return "UNSUPPORTED_CARDIO_TOKEN";
+  if (!Array.isArray(shape?.sets) || shape.sets.length === 0) return "MISSING_SETS";
+  if (!shape) return "INVALID_ROW_SHAPE";
+  if (parsed.error.issues.some((i) => i.path[0] === "sets")) return "MISSING_SETS";
+  return "SCHEMA_VALIDATION_FAILED";
+}
+
 type NormalizedParserPayload = {
   exercises: unknown[];
   structureBlocks: z.infer<typeof parserResponseSchema.shape.structureBlocks>;
@@ -310,19 +355,53 @@ function heuristicFallbackRowsFromText(text: string): unknown[] {
   return rows;
 }
 
-function validateRows(rawArray: unknown[]): z.infer<typeof parsedExerciseSchema>[] {
+function validateRows(rawArray: unknown[], context: ParseLogContext = {}): z.infer<typeof parsedExerciseSchema>[] {
   const validated: z.infer<typeof parsedExerciseSchema>[] = [];
+  const rejectedCounts: Record<string, number> = {};
+  const shouldSampleDetails = Math.random() < 0.2;
+  const maxDetailLogs = 3;
+  let emittedDetails = 0;
+
   for (let i = 0; i < rawArray.length; i++) {
-    const parsed = parsedExerciseSchema.safeParse(rawArray[i]);
+    const row = rawArray[i];
+    const parsed = parsedExerciseSchema.safeParse(row);
     if (parsed.success) {
       validated.push(parsed.data);
-    } else {
+      continue;
+    }
+
+    const reasonCode = deriveReasonCode(row, parsed);
+    rejectedCounts[reasonCode] = (rejectedCounts[reasonCode] ?? 0) + 1;
+    if (shouldSampleDetails && emittedDetails < maxDetailLogs) {
+      emittedDetails += 1;
       logger.warn(
-        { err: parsed.error, index: i },
+        {
+          reasonCode,
+          rowIndex: i,
+          rowPreview: compactRowPreview(row),
+          correlationId: context.correlationId,
+          workoutId: context.workoutId,
+          userId: context.userId,
+        },
         "[gemini] exercise-parse dropped malformed row",
       );
     }
   }
+
+  if (Object.keys(rejectedCounts).length > 0) {
+    logger.info(
+      {
+        rejectedCount: Object.values(rejectedCounts).reduce((sum, count) => sum + count, 0),
+        rejectedByReasonCode: rejectedCounts,
+        sampledDetailLogs: shouldSampleDetails,
+        correlationId: context.correlationId,
+        workoutId: context.workoutId,
+        userId: context.userId,
+      },
+      "[gemini] exercise-parse rejection summary",
+    );
+  }
+
   return validated;
 }
 
@@ -443,6 +522,7 @@ export async function parseExercisesFromText(
   weightUnit: string = "kg",
   customExerciseNames?: string[],
   userId?: string,
+  logContext: ParseLogContext = {},
 ): Promise<ParsedExercise[]> {
   // 🛡️ Sentinel: empty input is always "no exercises", short-circuit before
   // burning a Gemini call. Route validation already rejects empty strings,
@@ -456,10 +536,10 @@ export async function parseExercisesFromText(
     const raw = parseRawResponse(responseText);
     const rawArray = Array.isArray(raw) ? raw : [];
     const normalized = normalizeParserPayload(raw);
-    const validated = validateRows(normalized.exercises ?? rawArray);
+    const validated = validateRows(normalized.exercises ?? rawArray, { ...logContext, userId: logContext.userId ?? userId });
 
     if (validated.length === 0 && normalized.exercises.length > 0) {
-      const fallbackValidated = validateRows(heuristicFallbackRowsFromText(text));
+      const fallbackValidated = validateRows(heuristicFallbackRowsFromText(text), { ...logContext, userId: logContext.userId ?? userId });
       if (fallbackValidated.length > 0) {
         logger.warn({ rawExerciseCount: normalized.exercises.length, fallbackCount: fallbackValidated.length }, "[gemini] exercise-parse recovered rows with heuristic fallback");
         return fallbackValidated.map((ex) => mapValidatedExercise(ex, text));
@@ -499,6 +579,7 @@ export interface ParseExercisesFromImageInput {
   readonly weightUnit?: string;
   readonly customExerciseNames?: string[];
   readonly userId?: string;
+  readonly logContext?: ParseLogContext;
 }
 
 export async function parseExercisesFromImage(
@@ -510,6 +591,7 @@ export async function parseExercisesFromImage(
     weightUnit = "kg",
     customExerciseNames,
     userId,
+    logContext = {},
   } = input;
   try {
     const responseText = await callGeminiParseImage(
@@ -522,7 +604,7 @@ export async function parseExercisesFromImage(
     const raw = parseRawResponse(responseText);
     const rawArray = Array.isArray(raw) ? raw : [];
     const normalized = normalizeParserPayload(raw);
-    const validated = validateRows(normalized.exercises ?? rawArray);
+    const validated = validateRows(normalized.exercises ?? rawArray, { ...logContext, userId: logContext.userId ?? userId });
 
     if (validated.length === 0 && normalized.exercises.length > 0) {
       logger.warn({ rawExerciseCount: normalized.exercises.length }, "[gemini] exercise-parse-image no valid rows after validation");

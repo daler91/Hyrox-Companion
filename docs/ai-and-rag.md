@@ -565,3 +565,30 @@ Calculated from the earliest plan entry date to today: `max(1, ceil((daysSinceSt
 | `server/services/coachService.ts` | Auto-coach pipeline |
 | `server/services/planGenerationService.ts` | AI training plan generation |
 | `server/prompts.ts` | All prompt templates and context formatters |
+
+
+## Parse-rejection dashboard/query recipe
+
+Use this query pattern in your log platform (Datadog/Loki/CloudWatch) to track top validator rejection reasons over time for Gemini exercise parsing:
+
+- Filter: message = `"[gemini] exercise-parse rejection summary"`
+- Group by: `rejectedByReasonCode.*` (or expand JSON field keys)
+- Timeseries interval: 15m or 1h
+- Aggregation: `sum(rejectedCount)` and `sum(rejectedByReasonCode.<CODE>)`
+
+Example SQL-style query for JSON logs:
+
+```sql
+select
+  date_trunc('hour', ts) as bucket,
+  reason_code,
+  sum(reason_count) as rejects
+from logs
+cross join json_each_text(rejectedByReasonCode) as r(reason_code, reason_count)
+where message = '[gemini] exercise-parse rejection summary'
+  and ts >= now() - interval '14 days'
+group by 1, 2
+order by 1 desc, rejects desc;
+```
+
+Add a "Top 10 reasonCode (24h)" table and a "Reject volume/hour" chart. Break down by `userId` or `workoutId` only for incident triage, not for default dashboard slices.

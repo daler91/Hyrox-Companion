@@ -40,7 +40,11 @@ protectedPost(router, "/api/v1/parse-exercises", { limiter: rateLimiter("parse",
     ]);
     const weightUnit = user?.weightUnit || "kg";
     const customNames = userCustomExercises.map(e => e.name);
-    const exercises = await parseExercisesFromText(text.trim(), weightUnit, customNames, userId);
+    const exercises = await parseExercisesFromText(text.trim(), weightUnit, customNames, userId, {
+      correlationId: req.id,
+      workoutId: undefined,
+      userId,
+    });
     res.json(exercises);
   });
 
@@ -63,6 +67,7 @@ protectedPost(router, "/api/v1/parse-exercises-from-image", { limiter: rateLimit
       weightUnit,
       customExerciseNames: customNames,
       userId,
+      logContext: { correlationId: req.id, workoutId: undefined, userId },
     });
     res.json(exercises);
   });
