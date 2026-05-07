@@ -310,16 +310,47 @@ function heuristicFallbackRowsFromText(text: string): unknown[] {
   return rows;
 }
 
+
+function summarizeMalformedRow(row: unknown): { keyCount: number; keys: string[]; exerciseNameType: string; exerciseNamePreview: string | null; categoryType: string; categoryPreview: string | null; setsType: string; setsLength: number | null; rawPreview: string } {
+  const asRecord = row && typeof row == "object" && !Array.isArray(row) ? row as Record<string, unknown> : null
+  const keys = Object.keys(asRecord ?? {}).slice(0, 12);
+  const exerciseName = asRecord && typeof asRecord["exerciseName"] === "string" ? asRecord["exerciseName"] as string : null;
+  const category = asRecord && typeof asRecord["category"] === "string" ? asRecord["category"] as string : null;
+  const setsValue = asRecord ? asRecord["sets"] : undefined;
+  const setsType = Array.isArray(setsValue) ? "array" : typeof setsValue;
+  const setsLength = Array.isArray(setsValue) ? setsValue.length : null;
+  const rawPreview = (() => {
+    try {
+      const serialized = JSON.stringify(row);
+      return serialized.length > 300 ? `${serialized.slice(0, 300)}…` : serialized;
+    } catch {
+      return String(row);
+    }
+  })();
+  return {
+    keyCount: keys.length,
+    keys,
+    exerciseNameType: typeof (asRecord ? asRecord["exerciseName"] : undefined),
+    exerciseNamePreview: exerciseName ? exerciseName.slice(0, 80) : null,
+    categoryType: typeof (asRecord ? asRecord["category"] : undefined),
+    categoryPreview: category ? category.slice(0, 80) : null,
+    setsType,
+    setsLength,
+    rawPreview,
+  };
+}
+
 function validateRowsDetailed(rawArray: unknown[]): { acceptedRows: z.infer<typeof parsedExerciseSchema>[]; rejectedRows: { index: number; reason: string }[] } {
   const acceptedRows: z.infer<typeof parsedExerciseSchema>[] = [];
   const rejectedRows: { index: number; reason: string }[] = [];
   for (let i = 0; i < rawArray.length; i++) {
-    const parsed = parsedExerciseSchema.safeParse(rawArray[i]);
+    const row = rawArray[i];
+    const parsed = parsedExerciseSchema.safeParse(row);
     if (parsed.success) {
       acceptedRows.push(parsed.data);
     } else {
       logger.warn(
-        { err: parsed.error, index: i },
+        { err: parsed.error, index: i, rowSummary: summarizeMalformedRow(row) },
         "[gemini] exercise-parse dropped malformed row",
       );
       rejectedRows.push({ index: i, reason: "schema_validation_failed" });
@@ -464,13 +495,13 @@ export async function parseExercisesFromText(
     const normalized = normalizeParserPayload(raw);
     const validated = validateRows(normalized.exercises ?? rawArray);
 
-    if (validated.length === 0 && normalized.exercises.length > 0) {
+    if (validated.length === 0) {
       const fallbackValidated = validateRows(heuristicFallbackRowsFromText(text));
       if (fallbackValidated.length > 0) {
-        logger.warn({ rawExerciseCount: normalized.exercises.length, fallbackCount: fallbackValidated.length }, "[gemini] exercise-parse recovered rows with heuristic fallback");
+        logger.warn({ rawExerciseCount: normalized.exercises.length, fallbackCount: fallbackValidated.length, rawTopLevelType: Array.isArray(raw) ? "array" : typeof raw }, "[gemini] exercise-parse recovered rows with heuristic fallback");
         return fallbackValidated.map((ex) => mapValidatedExercise(ex, text));
       }
-      logger.warn({ rawExerciseCount: normalized.exercises.length }, "[gemini] exercise-parse no valid rows after validation");
+      logger.warn({ rawExerciseCount: normalized.exercises.length, rawTopLevelType: Array.isArray(raw) ? "array" : typeof raw }, "[gemini] exercise-parse no valid rows after validation");
       return [];
     }
 
@@ -550,7 +581,7 @@ export async function parseExercisesFromImage(
     const normalized = normalizeParserPayload(raw);
     const validated = validateRows(normalized.exercises ?? rawArray);
 
-    if (validated.length === 0 && normalized.exercises.length > 0) {
+    if (validated.length === 0) {
       logger.warn({ rawExerciseCount: normalized.exercises.length }, "[gemini] exercise-parse-image no valid rows after validation");
       return [];
     }

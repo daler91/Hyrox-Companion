@@ -397,7 +397,19 @@ export async function autoHydrateExerciseSetsFromTextIfNeeded(
       });
     return reparseFromText(target, owner, weightUnit, context, source)
       .then((result) => {
-        logger.info({ context: "health-metrics", event: "exercise_set_auto_hydration_success", lockKey, setCount: result?.setCount ?? 0 }, "Auto hydration success");
+        const acceptedRowCount = result?.exercises.length ?? 0;
+        const rejectedRowCount = result?.rejectedCount ?? 0;
+        const fallbackUsed = result?.rejectionReasons.includes("schema_validation_failed") ?? false;
+        const qualityState: "ok" | "degraded" | "failed" = acceptedRowCount === 0
+          ? "failed"
+          : (rejectedRowCount > acceptedRowCount ? "degraded" : "ok");
+
+        if (qualityState === "ok") {
+          logger.info({ context: "health-metrics", event: "exercise_set_auto_hydration_success", lockKey, setCount: result?.setCount ?? 0, acceptedRowCount, rejectedRowCount, fallbackUsed, qualityState }, "Auto hydration success");
+        } else {
+          logger.warn({ context: "health-metrics", event: "exercise_set_auto_hydration_success_degraded", lockKey, setCount: result?.setCount ?? 0, acceptedRowCount, rejectedRowCount, fallbackUsed, qualityState }, "Auto hydration completed with degraded parse quality");
+        }
+
         void incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", source, "auto_hydration_succeeded")
           .catch((err: unknown) => {
             logger.warn({ context: "health-metrics", event: "auto_hydration_success_counter_failed", lockKey, err }, "Auto hydration success telemetry increment failed");
