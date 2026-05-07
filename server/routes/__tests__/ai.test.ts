@@ -130,7 +130,17 @@ describe("POST /api/parse-exercises", () => {
     expect(response.body).toEqual(mockParsedExercises);
     expect(storage.users.getUser).toHaveBeenCalledWith("test_user_id");
     expect(storage.users.getCustomExercises).toHaveBeenCalledWith("test_user_id");
-    expect(parseExercisesFromText).toHaveBeenCalledWith("Bench press 135x10", "lbs", ["Custom Squat"], "test_user_id");
+    expect(parseExercisesFromText).toHaveBeenCalledWith(
+      "Bench press 135x10",
+      "lbs",
+      ["Custom Squat"],
+      "test_user_id",
+      expect.objectContaining({
+        correlationId: undefined,
+        workoutId: undefined,
+        userId: "test_user_id",
+      }),
+    );
   });
 
   it("should return 400 if text is missing", async () => {
@@ -247,6 +257,11 @@ describe("POST /api/v1/parse-exercises-from-image", () => {
       weightUnit: "kg",
       customExerciseNames: ["Custom Squat"],
       userId: "test_user_id",
+      logContext: expect.objectContaining({
+        correlationId: undefined,
+        workoutId: undefined,
+        userId: "test_user_id",
+      }),
     });
   });
 
