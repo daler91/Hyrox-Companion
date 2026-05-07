@@ -634,5 +634,5 @@ export async function parseExercisesFromImageWithDiagnostics(
   const rawArray = Array.isArray(raw) ? raw : [];
   const normalized = normalizeParserPayload(raw);
   const validated = validateRowsDetailed(normalized.exercises ?? rawArray);
-  return { acceptedRows: validated.acceptedRows.map((ex) => mapValidatedExercise(ex, "")), rejectedRows: validated.rejectedRows };
+  return { acceptedRows: validated.acceptedRows.map((ex) => mapValidatedExercise(ex, "")), rejectedRows: validated.rejectedRows, fallbackUsed: false };
 }
