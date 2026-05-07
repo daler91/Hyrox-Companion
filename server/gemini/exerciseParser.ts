@@ -313,8 +313,8 @@ function heuristicFallbackRowsFromText(text: string): unknown[] {
 function validateRows(rawArray: unknown[]): z.infer<typeof parsedExerciseSchema>[] {
   const validated: z.infer<typeof parsedExerciseSchema>[] = [];
   const sanitizeJsonValue = (v: unknown): unknown => (typeof v === "string" ? sanitizeUserInput(v) : v);
-  const explainIssue = (path: (string | number)[], code: string): string => {
-    const joined = path.map((p) => String(p)).join(".");
+  const explainIssue = (path: readonly PropertyKey[], code: string): string => {
+    const joined = path.filter((p): p is string | number => typeof p === "string" || typeof p === "number").map(String).join(".");
     if (joined === "exerciseName" && code === "too_small") return "missing exerciseName";
     if (joined === "sets") return "invalid sets";
     if (joined.includes("setNumber")) return "invalid setNumber";
@@ -344,9 +344,9 @@ function normalizeSetToken(value: unknown): number | undefined {
   if (typeof value !== "string") return undefined;
   const lower = value.trim().toLowerCase();
   if (/^\d+$/.test(lower)) return Number.parseInt(lower, 10);
-  const ordinal = lower.match(/^(\d+)(?:st|nd|rd|th)\s*set$/);
+  const ordinal = /^(\d+)(?:st|nd|rd|th)\s*set$/.exec(lower);
   if (ordinal) return Number.parseInt(ordinal[1] ?? "", 10);
-  const compact = lower.match(/^(\d+)\s*set$/);
+  const compact = /^(\d+)\s*set$/.exec(lower);
   if (compact) return Number.parseInt(compact[1] ?? "", 10);
   return undefined;
 }
@@ -359,21 +359,20 @@ function convertWeightToTargetUnit(value: number, sourceUnit: "kg" | "lbs", targ
 function normalizeWeightToken(value: unknown, targetWeightUnit: "kg" | "lbs"): number | undefined {
   if (typeof value === "number") return Math.abs(value);
   if (typeof value !== "string") return undefined;
-  const match = value.trim().toLowerCase().match(/^-?\s*(\d+(?:\.\d+)?)\s*(kg|kgs|lb|lbs)?$/);
+  const match = /^-?\s*(\d+(?:\.\d+)?)\s*(kg|kgs|lb|lbs)?$/.exec(value.trim().toLowerCase());
   if (!match) return undefined;
   const parsed = Math.abs(Number.parseFloat(match[1] ?? ""));
   const unitToken = match[2];
-  const sourceUnit: "kg" | "lbs" | null =
-    unitToken === "kg" || unitToken === "kgs" ? "kg"
-      : unitToken === "lb" || unitToken === "lbs" ? "lbs"
-        : null;
+  let sourceUnit: "kg" | "lbs" | null = null;
+  if (unitToken === "kg" || unitToken === "kgs") sourceUnit = "kg";
+  else if (unitToken === "lb" || unitToken === "lbs") sourceUnit = "lbs";
   if (!sourceUnit) return parsed;
   return convertWeightToTargetUnit(parsed, sourceUnit, targetWeightUnit);
 }
 
 function normalizeIntervalDistance(value: unknown): { sets: number; distance: number } | null {
   if (typeof value !== "string") return null;
-  const match = value.trim().toLowerCase().match(/^(\d+)\s*x\s*(\d+(?:\.\d+)?)\s*(km|m)$/);
+  const match = /^(\d+)\s*x\s*(\d+(?:\.\d+)?)\s*(km|m)$/.exec(value.trim().toLowerCase());
   if (!match) return null;
   const sets = Number.parseInt(match[1] ?? "", 10);
   const per = Number.parseFloat(match[2] ?? "");
@@ -394,7 +393,7 @@ function normalizeRowsBeforeValidation(rawArray: unknown[], targetWeightUnit: "k
       const setRec: Record<string, unknown> = { ...setRow };
       const normalizedSet = normalizeSetToken(setRec.setNumber);
       if (normalizedSet) setRec.setNumber = normalizedSet;
-      if (setRec.setNumber == null) setRec.setNumber = idx + 1;
+      setRec.setNumber ??= idx + 1;
       const normalizedWeight = normalizeWeightToken(setRec.weight, targetWeightUnit);
       if (normalizedWeight != null) setRec.weight = normalizedWeight;
       return setRec;
