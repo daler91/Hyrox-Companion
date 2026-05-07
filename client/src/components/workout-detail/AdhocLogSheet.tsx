@@ -29,10 +29,7 @@ const ADHOC_DRAFT_ID = "adhoc-draft";
 
 const todayStr = () => format(new Date(), "yyyy-MM-dd");
 
-const newRowId = () =>
-  typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? crypto.randomUUID()
-    : `adhoc-${Math.random().toString(36).slice(2)}-${Date.now()}`;
+const newRowId = () => crypto.randomUUID();
 
 function flattenParsedToSets(parsed: ParsedExercise[]): ExerciseSet[] {
   const rows: ExerciseSet[] = [];
