@@ -312,18 +312,88 @@ function heuristicFallbackRowsFromText(text: string): unknown[] {
 
 function validateRows(rawArray: unknown[]): z.infer<typeof parsedExerciseSchema>[] {
   const validated: z.infer<typeof parsedExerciseSchema>[] = [];
+  const explainIssue = (path: (string | number)[], code: string): string => {
+    const joined = path.map((p) => String(p)).join(".");
+    if (joined === "exerciseName" && code === "too_small") return "missing exerciseName";
+    if (joined === "sets") return "invalid sets";
+    if (joined.includes("setNumber")) return "invalid setNumber";
+    if (joined.includes("weight")) return "invalid weight";
+    if (joined.includes("distance")) return "invalid distance";
+    return `invalid ${joined || "row"}`;
+  };
   for (let i = 0; i < rawArray.length; i++) {
     const parsed = parsedExerciseSchema.safeParse(rawArray[i]);
     if (parsed.success) {
       validated.push(parsed.data);
     } else {
+      const firstIssue = parsed.error.issues[0];
+      const reason = firstIssue ? explainIssue(firstIssue.path, firstIssue.code) : "validation error";
+      const rawPayload = JSON.stringify(rawArray[i], (_k, v) => (typeof v === "string" ? sanitizeUserInput(v) : v));
       logger.warn(
-        { err: parsed.error, index: i },
+        { err: parsed.error, index: i, reason, rawPayload },
         "[gemini] exercise-parse dropped malformed row",
       );
     }
   }
   return validated;
+}
+
+function normalizeSetToken(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) return Math.trunc(value);
+  if (typeof value !== "string") return undefined;
+  const lower = value.trim().toLowerCase();
+  if (/^\d+$/.test(lower)) return Number.parseInt(lower, 10);
+  const ordinal = lower.match(/^(\d+)(?:st|nd|rd|th)\s*set$/);
+  if (ordinal) return Number.parseInt(ordinal[1] ?? "", 10);
+  const compact = lower.match(/^(\d+)\s*set$/);
+  if (compact) return Number.parseInt(compact[1] ?? "", 10);
+  return undefined;
+}
+
+function normalizeWeightToken(value: unknown): number | undefined {
+  if (typeof value === "number") return Math.abs(value);
+  if (typeof value !== "string") return undefined;
+  const match = value.trim().toLowerCase().match(/^-?\s*(\d+(?:\.\d+)?)\s*(kg|kgs|lb|lbs)?$/);
+  if (!match) return undefined;
+  return Math.abs(Number.parseFloat(match[1] ?? ""));
+}
+
+function normalizeIntervalDistance(value: unknown): { sets: number; distance: number } | null {
+  if (typeof value !== "string") return null;
+  const match = value.trim().toLowerCase().match(/^(\d+)\s*x\s*(\d+(?:\.\d+)?)\s*(km|m)$/);
+  if (!match) return null;
+  const sets = Number.parseInt(match[1] ?? "", 10);
+  const per = Number.parseFloat(match[2] ?? "");
+  const unit = match[3];
+  if (!Number.isFinite(sets) || sets <= 0 || !Number.isFinite(per) || per <= 0) return null;
+  return { sets, distance: unit === "km" ? Math.round(per * 1000) : Math.round(per) };
+}
+
+function normalizeRowsBeforeValidation(rawArray: unknown[]): unknown[] {
+  return rawArray.map((row) => {
+    if (!row || typeof row !== "object") return row;
+    const rec = row as Record<string, unknown>;
+    const sets = Array.isArray(rec.sets) ? rec.sets.map((setRow, idx) => {
+      if (!setRow || typeof setRow !== "object") return setRow;
+      const setRec = { ...(setRow as Record<string, unknown>) };
+      const normalizedSet = normalizeSetToken(setRec.setNumber);
+      if (normalizedSet) setRec.setNumber = normalizedSet;
+      if (setRec.setNumber == null) setRec.setNumber = idx + 1;
+      const normalizedWeight = normalizeWeightToken(setRec.weight);
+      if (normalizedWeight != null) setRec.weight = normalizedWeight;
+      return setRec;
+    }) : rec.sets;
+
+    const interval = normalizeIntervalDistance(rec.distance);
+    if (interval) {
+      return {
+        ...rec,
+        intervalMetadata: { intervalCount: interval.sets, intervalDistance: interval.distance },
+        sets: Array.from({ length: interval.sets }, (_v, i) => ({ setNumber: i + 1, distance: interval.distance })),
+      };
+    }
+    return { ...rec, sets };
+  });
 }
 
 function buildUnitNote(weightUnit: string): string {
@@ -456,7 +526,7 @@ export async function parseExercisesFromText(
     const raw = parseRawResponse(responseText);
     const rawArray = Array.isArray(raw) ? raw : [];
     const normalized = normalizeParserPayload(raw);
-    const validated = validateRows(normalized.exercises ?? rawArray);
+    const validated = validateRows(normalizeRowsBeforeValidation(normalized.exercises ?? rawArray));
 
     if (validated.length === 0 && normalized.exercises.length > 0) {
       const fallbackValidated = validateRows(heuristicFallbackRowsFromText(text));
@@ -522,7 +592,7 @@ export async function parseExercisesFromImage(
     const raw = parseRawResponse(responseText);
     const rawArray = Array.isArray(raw) ? raw : [];
     const normalized = normalizeParserPayload(raw);
-    const validated = validateRows(normalized.exercises ?? rawArray);
+    const validated = validateRows(normalizeRowsBeforeValidation(normalized.exercises ?? rawArray));
 
     if (validated.length === 0 && normalized.exercises.length > 0) {
       logger.warn({ rawExerciseCount: normalized.exercises.length }, "[gemini] exercise-parse-image no valid rows after validation");

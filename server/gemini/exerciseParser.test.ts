@@ -261,4 +261,36 @@ describe("parseExercisesFromText", () => {
     expect(result[1].exerciseName).toBe("amrap");
     expect(result[0].missingFields).toContain("scaling branch: reduce load 20% if RPE > 8");
   });
+
+  it("normalizes ordinal sets, compact set labels, negative load strings, and distance shorthand before validation", async () => {
+    const input = "Back squat: 2nd set 5 reps at -60lbs. Deadlift: 1set 3 reps at -80lbs. Run intervals 2x2km.";
+    const mockResponse = {
+      text: JSON.stringify([
+        {
+          exerciseName: "back_squat",
+          category: "strength",
+          sets: [{ setNumber: "2nd set", reps: 5, weight: "-60lbs" }],
+        },
+        {
+          exerciseName: "deadlift",
+          category: "strength",
+          sets: [{ setNumber: "1set", reps: 3, weight: "-80lbs" }],
+        },
+        {
+          exerciseName: "rowing",
+          category: "conditioning",
+          distance: "2x2km",
+          sets: [{ setNumber: 1, time: 10 }],
+        },
+      ]),
+    };
+    vi.mocked(retryWithBackoff).mockResolvedValueOnce(mockResponse);
+
+    const result = await parseExercisesFromText(input, "lbs");
+
+    expect(result.length).toBeGreaterThan(0);
+    expect(result.some((r) => r.sets.some((s) => s.setNumber === 2 && s.weight === 60))).toBe(true);
+    expect(result.some((r) => r.sets.some((s) => s.setNumber === 1 && s.weight === 80))).toBe(true);
+    expect(result.some((r) => r.sets.length === 2 && r.sets.every((s) => s.distance === 2000))).toBe(true);
+  });
 });
