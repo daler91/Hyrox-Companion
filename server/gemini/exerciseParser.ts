@@ -314,8 +314,8 @@ function heuristicFallbackRowsFromText(text: string): unknown[] {
 function summarizeMalformedRow(row: unknown): { keyCount: number; keys: string[]; exerciseNameType: string; exerciseNamePreview: string | null; categoryType: string; categoryPreview: string | null; setsType: string; setsLength: number | null; rawPreview: string } {
   const asRecord = row && typeof row == "object" && !Array.isArray(row) ? row as Record<string, unknown> : null
   const keys = Object.keys(asRecord ?? {}).slice(0, 12);
-  const exerciseName = asRecord && typeof asRecord["exerciseName"] === "string" ? asRecord["exerciseName"] as string : null;
-  const category = asRecord && typeof asRecord["category"] === "string" ? asRecord["category"] as string : null;
+  const exerciseName = asRecord && typeof asRecord["exerciseName"] === "string" ? asRecord["exerciseName"] : null;
+  const category = asRecord && typeof asRecord["category"] === "string" ? asRecord["category"] : null;
   const setsValue = asRecord ? asRecord["sets"] : undefined;
   const setsType = Array.isArray(setsValue) ? "array" : typeof setsValue;
   const setsLength = Array.isArray(setsValue) ? setsValue.length : null;
@@ -533,6 +533,7 @@ export async function parseExercisesFromText(
 export interface ParseExercisesWithDiagnosticsResult {
   acceptedRows: ParsedExercise[];
   rejectedRows: { index: number; reason: string }[];
+  fallbackUsed: boolean;
 }
 
 export async function parseExercisesFromTextWithDiagnostics(
@@ -541,13 +542,22 @@ export async function parseExercisesFromTextWithDiagnostics(
   customExerciseNames?: string[],
   userId?: string,
 ): Promise<ParseExercisesWithDiagnosticsResult> {
-  if (!text || text.trim().length === 0) return { acceptedRows: [], rejectedRows: [] };
+  if (!text || text.trim().length === 0) return { acceptedRows: [], rejectedRows: [], fallbackUsed: false };
   const responseText = await callGeminiParse(text, weightUnit, customExerciseNames, userId);
   const raw = parseRawResponse(responseText);
   const rawArray = Array.isArray(raw) ? raw : [];
   const normalized = normalizeParserPayload(raw);
   const validated = validateRowsDetailed(normalized.exercises ?? rawArray);
-  return { acceptedRows: validated.acceptedRows.map((ex) => mapValidatedExercise(ex, text)), rejectedRows: validated.rejectedRows };
+  if (validated.acceptedRows.length > 0) {
+    return { acceptedRows: validated.acceptedRows.map((ex) => mapValidatedExercise(ex, text)), rejectedRows: validated.rejectedRows, fallbackUsed: false };
+  }
+
+  const fallbackValidated = validateRowsDetailed(heuristicFallbackRowsFromText(text));
+  if (fallbackValidated.acceptedRows.length > 0) {
+    return { acceptedRows: fallbackValidated.acceptedRows.map((ex) => mapValidatedExercise(ex, text)), rejectedRows: [...validated.rejectedRows, ...fallbackValidated.rejectedRows], fallbackUsed: true };
+  }
+
+  return { acceptedRows: [], rejectedRows: validated.rejectedRows, fallbackUsed: false };
 }
 
 export interface ParseExercisesFromImageInput {
