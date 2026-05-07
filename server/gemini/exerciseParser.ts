@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { exerciseSetSchema, type ParsedExercise } from "@shared/schema";
 import { z } from "zod";
 
@@ -358,7 +360,7 @@ function heuristicFallbackRowsFromText(text: string): unknown[] {
 function validateRows(rawArray: unknown[], context: ParseLogContext = {}): z.infer<typeof parsedExerciseSchema>[] {
   const validated: z.infer<typeof parsedExerciseSchema>[] = [];
   const rejectedCounts: Record<string, number> = {};
-  const shouldSampleDetails = Math.random() < 0.2;
+  const shouldSampleDetails = shouldSampleDetailedLogs(context, rawArray.length);
   const maxDetailLogs = 3;
   let emittedDetails = 0;
 
@@ -403,6 +405,14 @@ function validateRows(rawArray: unknown[], context: ParseLogContext = {}): z.inf
   }
 
   return validated;
+}
+
+function shouldSampleDetailedLogs(context: ParseLogContext, rowCount: number): boolean {
+  const seed = `${context.correlationId ?? "no-correlation"}:${context.userId ?? "no-user"}:${rowCount}`;
+  const firstByte = createHash("sha256").update(seed).digest()[0] ?? 255;
+  // ~20% deterministic sample; avoids per-process PRNG and keeps logs stable
+  // across retries of the same request context.
+  return firstByte < 51;
 }
 
 function buildUnitNote(weightUnit: string): string {
