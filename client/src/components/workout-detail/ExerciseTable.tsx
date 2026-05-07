@@ -70,8 +70,7 @@ interface ExerciseTableProps {
   /**
    * When true and the table is empty, the empty state nudges the user to
    * tap Parse on the prescription panel instead of the Add button. Used
-   * by WorkoutDetailDialogV2 once the prescription has text but no rows
-   * have been extracted yet.
+   * when the prescription has text but no rows have been extracted yet.
    */
   readonly hasUnparsedText?: boolean;
   readonly defaultExpanded?: boolean;
