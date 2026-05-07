@@ -1,27 +1,22 @@
 import { MessageSquare,Plus } from "lucide-react";
 import { createPortal } from "react-dom";
-import { useLocation } from "wouter";
 
 import { Button } from "@/components/ui/button";
 
 interface FloatingActionButtonProps {
   readonly coachPanelOpen?: boolean;
   readonly onCoachToggle?: () => void;
+  readonly onLogWorkout: () => void;
 }
 
 export default function FloatingActionButton({
   coachPanelOpen,
   onCoachToggle,
+  onLogWorkout,
 }: Readonly<FloatingActionButtonProps>) {
-  const [, setLocation] = useLocation();
-
   const rightPosition = coachPanelOpen
     ? "!right-6 md:!right-[calc(20rem+1.5rem)] lg:!right-[calc(24rem+1.5rem)] max-md:hidden"
     : "!right-6";
-
-  const handleNewWorkout = () => {
-    setLocation("/log");
-  };
 
   return createPortal(
     <div
@@ -40,7 +35,7 @@ export default function FloatingActionButton({
       </Button>
       <Button
         className="rounded-full shadow-lg gap-2"
-        onClick={handleNewWorkout}
+        onClick={onLogWorkout}
         data-testid="button-log-workout-fab"
       >
         <Plus className="h-5 w-5" />
