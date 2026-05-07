@@ -150,6 +150,13 @@ export function usePlanDayExercises(planDayId: string | null) {
         retry: () => reparseFreeText.mutate(undefined),
       });
     },
+    successToast: (data) =>
+      data && data.rejectedCount && data.rejectedCount > 0
+        ? {
+            title: `Saved ${data.setCount ?? data.exercises?.length ?? 0} rows`,
+            description: `Skipped ${data.rejectedCount} line${data.rejectedCount === 1 ? "" : "s"} that could not be interpreted.`,
+          }
+        : undefined,
     errorToast: (error) =>
       isUpstreamAiError(error)
         ? {
@@ -184,6 +191,13 @@ export function usePlanDayExercises(planDayId: string | null) {
         retry: payload ? () => reparseFromImage.mutate(payload) : null,
       });
     },
+    successToast: (data) =>
+      data && data.rejectedCount && data.rejectedCount > 0
+        ? {
+            title: `Saved ${data.setCount ?? data.exercises?.length ?? 0} rows`,
+            description: `Skipped ${data.rejectedCount} line${data.rejectedCount === 1 ? "" : "s"} that could not be interpreted.`,
+          }
+        : undefined,
     errorToast: (error) =>
       isTimeoutLikeError(error)
         ? {

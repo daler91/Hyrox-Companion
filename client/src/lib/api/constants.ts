@@ -27,4 +27,6 @@ export interface ReparseResponse {
   exercises: unknown[];
   saved: boolean;
   setCount?: number;
+  rejectedCount?: number;
+  rejectionReasons?: string[];
 }

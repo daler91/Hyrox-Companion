@@ -368,7 +368,7 @@ export async function autoHydrateExerciseSetsFromTextIfNeeded(
   owner: SetOwner,
   weightUnit: string,
   context: "workout" | "plan",
-): Promise<{ exercises: ParsedExercise[]; setCount: number } | null> {
+): Promise<{ exercises: ParsedExercise[]; setCount: number; saved: true; rejectedCount: number; rejectionReasons: string[] } | null> {
   const existingCount = await db
     .select({ count: sql<number>`cast(count(*) as int)` })
     .from(exerciseSets)
@@ -432,20 +432,28 @@ async function reparseFromText(
   if (!textToParse.trim()) return null;
 
   const exercises = await parseExercisesFromText(textToParse.trim(), weightUnit);
-  if (exercises.length === 0) return null;
+  const acceptedRows = exercises.filter((row) => (row.exerciseName ?? "").trim().length > 0 && Array.isArray(row.sets) && row.sets.length > 0);
+  const rejectedRows = exercises.filter((row) => !acceptedRows.includes(row));
+  if (acceptedRows.length === 0) return null;
 
-  const setRows = expandExercisesToRows(exercises, owner, context);
+  const setRows = expandExercisesToRows(acceptedRows, owner, context);
   const setCount = await replaceExerciseSetsByOwner(owner, setRows);
   void incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", source, "manual_fix_completed").catch((err: unknown) => {
     logger.warn({ context: "health-metrics", event: "manual_fix_counter_failed", owner, err }, "Manual fix telemetry increment failed");
   });
-  return { exercises, setCount };
+  return {
+    exercises: acceptedRows,
+    setCount,
+    saved: true,
+    rejectedCount: rejectedRows.length,
+    rejectionReasons: rejectedRows.length > 0 ? ["row_missing_name_or_sets"] : [],
+  };
 }
 
 export function reparseWorkout(
   workout: { id: string; mainWorkout?: string | null; accessory?: string | null },
   weightUnit: string,
-): Promise<{ exercises: ParsedExercise[]; setCount: number } | null> {
+): Promise<{ exercises: ParsedExercise[]; setCount: number; saved: true; rejectedCount: number; rejectionReasons: string[] } | null> {
   return reparseFromText(workout, { workoutLogId: workout.id }, weightUnit, "workout", "manual");
 }
 
@@ -463,7 +471,7 @@ export function reparseWorkout(
 export function reparsePlanDay(
   planDay: { id: string; mainWorkout?: string | null; accessory?: string | null },
   weightUnit: string,
-): Promise<{ exercises: ParsedExercise[]; setCount: number } | null> {
+): Promise<{ exercises: ParsedExercise[]; setCount: number; saved: true; rejectedCount: number; rejectionReasons: string[] } | null> {
   return reparseFromText(planDay, { planDayId: planDay.id }, weightUnit, "plan", "manual");
 }
 
@@ -490,14 +498,22 @@ async function reparseFromImage(
     customExerciseNames,
     userId,
   });
-  if (exercises.length === 0) return null;
+  const acceptedRows = exercises.filter((row) => (row.exerciseName ?? "").trim().length > 0 && Array.isArray(row.sets) && row.sets.length > 0);
+  const rejectedRows = exercises.filter((row) => !acceptedRows.includes(row));
+  if (acceptedRows.length === 0) return null;
 
-  const setRows = expandExercisesToRows(exercises, owner, context);
+  const setRows = expandExercisesToRows(acceptedRows, owner, context);
   const setCount = await replaceExerciseSetsByOwner(owner, setRows);
   void incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", source, "manual_fix_completed").catch((err: unknown) => {
     logger.warn({ context: "health-metrics", event: "manual_fix_counter_failed", owner, err }, "Manual fix telemetry increment failed");
   });
-  return { exercises, setCount };
+  return {
+    exercises: acceptedRows,
+    setCount,
+    saved: true,
+    rejectedCount: rejectedRows.length,
+    rejectionReasons: rejectedRows.length > 0 ? ["row_missing_name_or_sets"] : [],
+  };
 }
 
 /**
@@ -513,7 +529,7 @@ export function reparseWorkoutFromImage(
   weightUnit: string,
   userId: string,
   customExerciseNames?: string[],
-): Promise<{ exercises: ParsedExercise[]; setCount: number } | null> {
+): Promise<{ exercises: ParsedExercise[]; setCount: number; saved: true; rejectedCount: number; rejectionReasons: string[] } | null> {
   return reparseFromImage(
     { workoutLogId: workout.id },
     image,
@@ -531,7 +547,7 @@ export function reparsePlanDayFromImage(
   weightUnit: string,
   userId: string,
   customExerciseNames?: string[],
-): Promise<{ exercises: ParsedExercise[]; setCount: number } | null> {
+): Promise<{ exercises: ParsedExercise[]; setCount: number; saved: true; rejectedCount: number; rejectionReasons: string[] } | null> {
   return reparseFromImage(
     { planDayId: planDay.id },
     image,
