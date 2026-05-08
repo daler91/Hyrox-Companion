@@ -24,7 +24,13 @@ export async function createWorkout(input: {
   const { exercises, structureBlocks, ...workoutData } = input.payload;
   let structured = exercises as ParsedExercise[] | undefined;
   const hasStructureBlocks = Array.isArray(structureBlocks);
-  if ((!structured || structured.length === 0) && !hasStructureBlocks && env.GEMINI_API_KEY) {
+  // Skip the legacy Gemini reparse when the workout is backed by a plan day:
+  // createWorkoutInTx.copyPrescribedSetsIntoLog will seed the new log from the
+  // plan day's already-persisted (possibly edited) exercise rows. Re-parsing
+  // here would supply fresh rows that win over the copy path and overwrite
+  // the athlete's pre-log edits.
+  const canCopyFromPlanDay = !!workoutData.planDayId;
+  if ((!structured || structured.length === 0) && !hasStructureBlocks && !canCopyFromPlanDay && env.GEMINI_API_KEY) {
     logger.warn({ context: "workout-structure", event: "legacy_only_parse_fallback_create", userId: input.userId }, "Missing structure-editor payload on create; using legacy parse fallback.");
     const textToParse = [workoutData.mainWorkout, workoutData.accessory].filter(Boolean).join("\n").trim();
     if (textToParse) {
@@ -50,26 +56,10 @@ export async function updateWorkoutUseCase(input: {
   payload: UpdateWorkoutPayload;
 }) {
   const { exercises, structureBlocks, ...updateData } = input.payload;
-  let structured = exercises as ParsedExercise[] | undefined;
-  const hasStructureBlocks = Array.isArray(structureBlocks);
-
-  if ((!structured || structured.length === 0) && !hasStructureBlocks && env.GEMINI_API_KEY) {
-    logger.warn({ context: "workout-structure", event: "legacy_only_parse_fallback_update", userId: input.userId, workoutId: input.workoutId }, "Missing structure-editor payload on update; using legacy parse fallback.");
-    const existing = await storage.workouts.getWorkoutLog(input.workoutId, input.userId);
-    if (!existing) return null;
-
-    const mergedMain = updateData.mainWorkout ?? existing.mainWorkout;
-    const mergedAccessory = updateData.accessory ?? existing.accessory;
-    const textToParse = [mergedMain, mergedAccessory].filter(Boolean).join("\n").trim();
-    if (textToParse) {
-      const user = await storage.users.getUser(input.userId);
-      structured = await parseExercisesFromText(textToParse, user?.weightUnit || "kg", undefined, input.userId);
-      if (structured.length === 0) {
-        throw new AppError(ErrorCode.VALIDATION_ERROR, "Text/voice/photo workout updates must produce structured exercise sets.", 400);
-      }
-    }
-  }
-
+  const structured = exercises as ParsedExercise[] | undefined;
+  // PATCHes that omit `exercises` / `structureBlocks` preserve existing rows.
+  // The old legacy-parse fallback re-parsed mainWorkout via Gemini and replaced
+  // them, silently destroying edits whenever a text-only field was patched.
 
   const updateLint = lintWorkoutStructure(structureBlocks, structured);
   if (updateLint.schemaErrors.length > 0) {
