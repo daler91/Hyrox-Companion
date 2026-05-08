@@ -2,7 +2,7 @@ import type { TimelineEntry } from "@shared/schema";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { LogSheet } from "../LogSheet";
 
@@ -53,22 +53,34 @@ const baseEntry = {
   updatedAt: "2026-05-05T00:00:00.000Z",
 } as unknown as TimelineEntry;
 
+function mockPlanDayExerciseState(overrides = {}) {
+  mockUsePlanDayExercises.mockReturnValue({
+    exerciseSets: [],
+    parseFailed: false,
+    retryParse: null,
+    isSaving: false,
+    lastSavedAt: null,
+    flushPendingSetPatches: vi.fn().mockResolvedValue(undefined),
+    patchSetDebounced: vi.fn(),
+    addSet: { mutate: vi.fn() },
+    deleteSet: { mutate: vi.fn() },
+    reparseFreeText: { mutate: vi.fn(), isPending: false },
+    reparseFromImage: { mutate: vi.fn(), isPending: false },
+    updatePrescription: { mutate: vi.fn() },
+    ...overrides,
+  });
+}
+
 describe("LogSheet parse failures", () => {
+  beforeEach(() => {
+    mockUsePlanDayExercises.mockReset();
+  });
+
   it("shows warning and blocks save when reparse fails with no rows", async () => {
     const retryParse = vi.fn();
-    mockUsePlanDayExercises.mockReturnValue({
-      exerciseSets: [],
+    mockPlanDayExerciseState({
       parseFailed: true,
       retryParse,
-      isSaving: false,
-      lastSavedAt: null,
-      flushPendingSetPatches: vi.fn().mockResolvedValue(undefined),
-      patchSetDebounced: vi.fn(),
-      addSet: { mutate: vi.fn() },
-      deleteSet: { mutate: vi.fn() },
-      reparseFreeText: { mutate: vi.fn(), isPending: false },
-      reparseFromImage: { mutate: vi.fn(), isPending: false },
-      updatePrescription: { mutate: vi.fn() },
     });
 
     render(<LogSheet entry={baseEntry} onClose={vi.fn()} onLogAsPlanned={vi.fn()} />);
@@ -124,5 +136,24 @@ describe("LogSheet parse failures", () => {
     rerender(<LogSheet entry={baseEntry} onClose={vi.fn()} onLogAsPlanned={vi.fn()} />);
     expect(screen.queryByTestId("log-parse-failed-entry-1")).not.toBeInTheDocument();
     expect(screen.getByTestId("log-as-planned-entry-1")).toBeEnabled();
+  });
+
+  it("hides completion controls in edit mode while keeping the prescription editor", () => {
+    mockPlanDayExerciseState();
+
+    render(<LogSheet mode="edit" entry={baseEntry} onClose={vi.fn()} />);
+
+    expect(screen.getByTestId("coach-prescription-collapsible")).toBeInTheDocument();
+    expect(screen.queryByText(/How hard/i)).not.toBeInTheDocument();
+    expect(screen.queryByTestId("log-as-planned-entry-1")).not.toBeInTheDocument();
+  });
+
+  it("keeps default log mode completion controls", () => {
+    mockPlanDayExerciseState();
+
+    render(<LogSheet entry={baseEntry} onClose={vi.fn()} onLogAsPlanned={vi.fn()} />);
+
+    expect(screen.getByText(/How hard/i)).toBeInTheDocument();
+    expect(screen.getByTestId("log-as-planned-entry-1")).toHaveTextContent("Log as planned");
   });
 });

@@ -32,6 +32,7 @@ function isMissed(entry: TimelineEntry): boolean {
 
 export function useTimelineSurfaceSelection(timelineData: TimelineEntry[]) {
   const [previewEntry, setPreviewEntry] = useState<TimelineEntry | null>(null);
+  const [futureEditEntry, setFutureEditEntry] = useState<TimelineEntry | null>(null);
   const [logEntry, setLogEntry] = useState<TimelineEntry | null>(null);
   const [reviewEntry, setReviewEntry] = useState<TimelineEntry | null>(null);
   const [skippedEntry, setSkippedEntry] = useState<TimelineEntry | null>(null);
@@ -40,6 +41,7 @@ export function useTimelineSurfaceSelection(timelineData: TimelineEntry[]) {
 
   const closeAllSurfaces = useCallback(() => {
     setPreviewEntry(null);
+    setFutureEditEntry(null);
     setLogEntry(null);
     setReviewEntry(null);
     setSkippedEntry(null);
@@ -54,6 +56,7 @@ export function useTimelineSurfaceSelection(timelineData: TimelineEntry[]) {
     const id = surfaceId(entry);
     if (
       (isFuturePlanned(entry) && previewEntry && surfaceId(previewEntry) === id) ||
+      (isFuturePlanned(entry) && futureEditEntry && surfaceId(futureEditEntry) === id) ||
       (isLoggablePlanned(entry) && logEntry && surfaceId(logEntry) === id) ||
       (isMissed(entry) && logEntry && surfaceId(logEntry) === id) ||
       (isReviewable(entry) && reviewEntry && surfaceId(reviewEntry) === id) ||
@@ -66,9 +69,9 @@ export function useTimelineSurfaceSelection(timelineData: TimelineEntry[]) {
     if (isLoggablePlanned(entry) || isMissed(entry)) return setLogEntry(entry);
     if (isReviewable(entry)) return setReviewEntry(entry);
     if (isSkipped(entry)) setSkippedEntry(entry);
-  }, [closeAllSurfaces, logEntry, previewEntry, reviewEntry, skippedEntry]);
+  }, [closeAllSurfaces, futureEditEntry, logEntry, previewEntry, reviewEntry, skippedEntry]);
 
-  const openSheetEntry = useMemo(() => previewEntry ?? logEntry ?? reviewEntry ?? skippedEntry ?? null, [previewEntry, logEntry, reviewEntry, skippedEntry]);
+  const openSheetEntry = useMemo(() => previewEntry ?? futureEditEntry ?? logEntry ?? reviewEntry ?? skippedEntry ?? null, [previewEntry, futureEditEntry, logEntry, reviewEntry, skippedEntry]);
   const openSheetEntryId = openSheetEntry ? surfaceId(openSheetEntry) : null;
 
   useEffect(() => {
@@ -100,6 +103,8 @@ export function useTimelineSurfaceSelection(timelineData: TimelineEntry[]) {
   return {
     previewEntry,
     setPreviewEntry,
+    futureEditEntry,
+    setFutureEditEntry,
     logEntry,
     setLogEntry,
     reviewEntry,

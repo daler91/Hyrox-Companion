@@ -282,7 +282,7 @@ export default function Timeline() {
   const { combiningEntry, setCombiningEntry, combineSecondEntry, setCombineSecondEntry, showCombineDialog, setShowCombineDialog, handleCombine, handleConfirmCombine, combineWorkoutsMutation } = combine;
   const scrollRef = useRef<HTMLDivElement>(null);
   const {
-    previewEntry, setPreviewEntry, logEntry, setLogEntry, reviewEntry, setReviewEntry, skippedEntry, setSkippedEntry, openSurface, closeAllSurfacesAndClearUrl,
+    previewEntry, setPreviewEntry, futureEditEntry, setFutureEditEntry, logEntry, setLogEntry, reviewEntry, setReviewEntry, skippedEntry, setSkippedEntry, openSurface, closeAllSurfacesAndClearUrl,
   } = useTimelineSurfaceSelection(timelineData);
   const [adhocOpen, setAdhocOpen] = useState(false);
   const {
@@ -453,7 +453,7 @@ export default function Timeline() {
         />
       </DndContext>
 
-          {!previewEntry && !logEntry && !reviewEntry && !skippedEntry && !adhocOpen && (
+          {!previewEntry && !futureEditEntry && !logEntry && !reviewEntry && !skippedEntry && !adhocOpen && (
             <FloatingActionButton
               coachPanelOpen={coachOpen}
               onCoachToggle={() => handleCoachToggle(!coachOpen)}
@@ -495,6 +495,20 @@ export default function Timeline() {
             }}
             onAskCoach={() => {
               setLogEntry(null);
+              handleCoachToggle(true);
+            }}
+          />
+
+          <LogSheet
+            mode="edit"
+            entry={futureEditEntry}
+            onClose={closeAllSurfacesAndClearUrl}
+            onSkip={(entry) => {
+              setFutureEditEntry(null);
+              setSkipConfirmEntry(entry);
+            }}
+            onAskCoach={() => {
+              setFutureEditEntry(null);
               handleCoachToggle(true);
             }}
           />
@@ -558,16 +572,9 @@ export default function Timeline() {
               setPreviewEntry(null);
               setSkipConfirmEntry(entry);
             }}
-            onLogNow={(entry) => {
+            onEditWorkout={(entry) => {
               setPreviewEntry(null);
-              // "Log this now" means the user did the workout today
-              // regardless of its planned future date. Open LogSheet
-              // with the date overridden to today so handleMarkComplete
-              // creates a workoutLog dated today; the underlying plan
-              // day's date stays put on its scheduled row in case the
-              // user later wants to view the original prescription.
-              const todayStr = format(new Date(), "yyyy-MM-dd");
-              setLogEntry({ ...entry, date: todayStr });
+              setFutureEditEntry(entry);
             }}
           />
 
@@ -613,7 +620,7 @@ export default function Timeline() {
       </div>
       
       {coachOpen && !isMobile && (
-        <div className={previewEntry || logEntry || reviewEntry || skippedEntry || adhocOpen ? "hidden" : "w-80 lg:w-96 flex-shrink-0"}>
+        <div className={previewEntry || futureEditEntry || logEntry || reviewEntry || skippedEntry || adhocOpen ? "hidden" : "w-80 lg:w-96 flex-shrink-0"}>
           <FeatureErrorBoundaryWrapper featureName="Coach">
             <CoachPanel
               isOpen={coachOpen}
@@ -630,7 +637,7 @@ export default function Timeline() {
         // see the top of their timeline while chatting with the coach.
         // Hidden (display:none) rather than unmounted while a workout detail
         // is open so in-flight chat streams and local message state survive.
-        <div className={previewEntry || logEntry || reviewEntry || skippedEntry || adhocOpen ? "hidden" : "fixed inset-x-0 bottom-0 z-50 h-[70vh]"}>
+        <div className={previewEntry || futureEditEntry || logEntry || reviewEntry || skippedEntry || adhocOpen ? "hidden" : "fixed inset-x-0 bottom-0 z-50 h-[70vh]"}>
           <div
             data-testid="coach-panel-mobile-sheet"
             className="relative h-full bg-background shadow-2xl rounded-t-2xl border-t border-x"

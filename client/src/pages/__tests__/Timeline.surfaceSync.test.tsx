@@ -1,6 +1,7 @@
 import type { TimelineEntry } from "@shared/schema";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import Timeline from "../Timeline";
@@ -55,8 +56,16 @@ vi.mock("@/components/timeline", () => ({
   SkipConfirmDialog: () => <div />,
 }));
 
-vi.mock("@/components/workout-detail/LogSheet", () => ({ LogSheet: ({ entry }: { entry: TimelineEntry | null }) => { if (entry) { logSheetMounts += 1; return <div data-testid="log-sheet">{entry.id}</div>; } return null; } }));
-vi.mock("@/components/workout-detail/PreviewSheet", () => ({ PreviewSheet: () => <div /> }));
+vi.mock("@/components/workout-detail/LogSheet", () => ({ LogSheet: ({ entry, mode }: { entry: TimelineEntry | null; mode?: "log" | "edit" }) => {
+  if (!entry) return null;
+  if (mode === "edit") return <div data-testid="edit-sheet">{`${entry.id}:${entry.date}`}</div>;
+  logSheetMounts += 1;
+  return <div data-testid="log-sheet">{`${entry.id}:${entry.date}`}</div>;
+} }));
+vi.mock("@/components/workout-detail/PreviewSheet", () => ({ PreviewSheet: ({ entry, onEditWorkout }: { entry: TimelineEntry | null; onEditWorkout?: (entry: TimelineEntry) => void }) => {
+  if (!entry) return null;
+  return <button type="button" onClick={() => onEditWorkout?.(entry)} data-testid="preview-edit">Edit workout</button>;
+} }));
 vi.mock("@/components/workout-detail/ReviewSurface", () => ({ ReviewSurface: () => <div /> }));
 vi.mock("@/components/workout-detail/SkippedSheet", () => ({ SkippedSheet: () => <div /> }));
 vi.mock("@/components/coach/AIConsentDialog", () => ({ AIConsentDialog: () => <div /> }));
@@ -87,5 +96,19 @@ describe("Timeline surface sync", () => {
     expect(logSheetMounts).toBeGreaterThan(0);
     // No close/reopen loop via URL writes.
     expect(setOpenWorkoutId).toHaveBeenCalledTimes(0);
+  });
+
+  it("opens future workout edit mode without changing the scheduled date", async () => {
+    const user = userEvent.setup();
+    const qc = new QueryClient();
+    openWorkoutId = "pd1";
+    timelineData = [makeEntry({ date: "2099-01-01" })];
+
+    render(<QueryClientProvider client={qc}><Timeline /></QueryClientProvider>);
+
+    await user.click(await screen.findByTestId("preview-edit"));
+
+    expect(screen.getByTestId("edit-sheet")).toHaveTextContent("e1:2099-01-01");
+    expect(screen.queryByTestId("log-sheet")).not.toBeInTheDocument();
   });
 });

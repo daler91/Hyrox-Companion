@@ -14,15 +14,14 @@ interface PreviewSheetProps {
   readonly onAskCoach?: (entry: TimelineEntry) => void;
   readonly onMove?: (entry: TimelineEntry) => void;
   readonly onSkip?: (entry: TimelineEntry) => void;
-  /** Overflow escape hatch for the rare "I want to log this early" case. */
-  readonly onLogNow?: (entry: TimelineEntry) => void;
+  readonly onEditWorkout?: (entry: TimelineEntry) => void;
 }
 
 /**
  * Read-only preview surface for future-dated planned workouts. Removes the
  * primary log CTA so users can't accidentally log a workout that hasn't
- * happened yet — an explicit "Log this now" overflow exists for the rare
- * case where someone trains a day early.
+ * happened yet. The edit action opens the plan-day prescription editor without
+ * creating a workout log.
  */
 export function PreviewSheet({
   entry,
@@ -30,7 +29,7 @@ export function PreviewSheet({
   onAskCoach,
   onMove,
   onSkip,
-  onLogNow,
+  onEditWorkout,
 }: PreviewSheetProps) {
   if (!entry) return null;
 
@@ -81,15 +80,15 @@ export function PreviewSheet({
               Skip
             </Button>
           ) : null}
-          {onLogNow ? (
+          {onEditWorkout ? (
             <Button
               type="button"
               variant="ghost"
-              onClick={() => onLogNow(entry)}
-              data-testid={`preview-log-now-${entry.id}`}
+              onClick={() => onEditWorkout(entry)}
+              data-testid={`preview-edit-workout-${entry.id}`}
             >
               <Pencil className="mr-2 h-4 w-4" />
-              Log this now
+              Edit workout
             </Button>
           ) : null}
         </div>
