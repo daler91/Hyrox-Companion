@@ -580,7 +580,7 @@ function getReviewSheetContentClassName(coachChatOpen: boolean): string {
 
 function getReviewLayoutClassName(coachChatOpen: boolean): string {
   if (coachChatOpen) {
-    return "grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)]";
+    return "grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)]";
   }
   return "space-y-4";
 }

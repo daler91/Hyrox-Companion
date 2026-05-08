@@ -29,8 +29,12 @@ vi.mock("@/hooks/useChatSession", () => ({
 vi.mock("@/components/coach/CoachPanelChatArea", async () => {
   const React = await import("react");
   return {
-    CoachPanelChatArea: React.forwardRef<HTMLDivElement>((_props, ref) =>
-      React.createElement("div", { ref, "data-testid": "coach-chat-area" }),
+    CoachPanelChatArea: React.forwardRef<HTMLDivElement, { className?: string }>((props, ref) =>
+      React.createElement("div", {
+        ref,
+        "data-testid": "coach-chat-area",
+        className: props.className,
+      }),
     ),
   };
 });
@@ -101,6 +105,8 @@ describe("EmbeddedWorkoutCoachChat", () => {
     expect(screen.getByTestId("input-chat-message")).toHaveValue(
       "Can you walk me through your take on my Long Run workout on Saturday, May 9 (1 exercise, 2 sets)?",
     );
+    expect(screen.getByTestId("embedded-workout-coach-chat")).toHaveClass("self-start");
+    expect(screen.getByTestId("coach-chat-area")).toHaveClass("flex-none", "max-h-[320px]");
 
     await user.click(screen.getByTestId("embedded-workout-coach-chat-back"));
 
