@@ -302,10 +302,10 @@ const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUn
 
   useEffect(() => {
     if (!suppressTransientEmpty) return;
-    const timeoutId = window.setTimeout(() => {
+    const timeoutId = globalThis.setTimeout(() => {
       setSuppressTransientEmpty(false);
     }, EXTERNAL_RECONCILIATION_GRACE_MS);
-    return () => window.clearTimeout(timeoutId);
+    return () => globalThis.clearTimeout(timeoutId);
   }, [suppressTransientEmpty]);
 
   const shouldIgnoreTransientEmpty =
@@ -315,6 +315,9 @@ const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUn
   const externalNewerAndNotPending = !hasPending && current !== lastCommitted;
   const shouldUseExternal = !isDirty && !shouldIgnoreTransientEmpty
     && (commitMatched || externalNewerWhilePending || externalNewerAndNotPending);
+  let inputValue = committedDraft;
+  if (isDirty) inputValue = draft;
+  if (shouldUseExternal) inputValue = formatInitial(current);
 
   const commitDraft = useCallback(() => {
     const parsed = parseDraft(draft);
@@ -339,7 +342,7 @@ const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUn
       <Input
         type="number"
         inputMode="decimal"
-        value={shouldUseExternal ? formatInitial(current) : (isDirty ? draft : committedDraft)}
+        value={inputValue}
         onChange={(e) => {
           setDraft(e.target.value);
           setIsDirty(true);

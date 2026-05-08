@@ -162,11 +162,11 @@ export function ConfirmStep({
               <span>Older EMOM rows are supported for display/editing, but new EMOM should be saved as structured blocks.</span>
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
                 <label className="text-xs">
-                  Duration (min)
+                  <span>Duration (min)</span>
                   <input className="mt-1 w-full rounded border px-2 py-1" type="number" min={1} value={emomDurationMinutes} onChange={(e) => setEmomDurationMinutes(Number(e.target.value) || 1)} />
                 </label>
                 <label className="text-xs">
-                  Step label
+                  <span>Step label</span>
                   <input className="mt-1 w-full rounded border px-2 py-1" value={emomStepLabel} onChange={(e) => setEmomStepLabel(e.target.value)} />
                 </label>
               </div>

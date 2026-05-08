@@ -2,9 +2,9 @@ import type { ExerciseSet } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 
+import { useToast } from "@/hooks/use-toast";
 import { useApiMutation } from "@/hooks/useApiMutation";
 import { useExerciseSetsForOwner } from "@/hooks/useExerciseSetsForOwner";
-import { useToast } from "@/hooks/use-toast";
 import { api, type ParseFromImagePayload, QUERY_KEYS } from "@/lib/api";
 import type { ReparseResponse } from "@/lib/api/constants";
 import { queryClient } from "@/lib/queryClient";
@@ -32,49 +32,66 @@ function isTimeoutLikeError(error: unknown): boolean {
   );
 }
 
-function extractApiErrorStatusAndCode(error: unknown): { status: number | null; code: string | null } {
-  if (!error || typeof error !== "object") return { status: null, code: null };
-  const asRecord = error as Record<string, unknown>;
+type ApiErrorStatusAndCode = { status: number | null; code: string | null };
+type UnknownRecord = Record<string, unknown>;
 
-  const status = typeof asRecord.status === "number"
-    ? asRecord.status
-    : (typeof (asRecord.response as Record<string, unknown> | undefined)?.status === "number"
-      ? ((asRecord.response as Record<string, unknown>).status as number)
-      : null);
+function toUnknownRecord(value: unknown): UnknownRecord | null {
+  return value && typeof value === "object" ? (value as UnknownRecord) : null;
+}
 
-  const directCode = typeof asRecord.code === "string" ? asRecord.code : null;
+function extractApiErrorStatus(error: UnknownRecord): number | null {
+  if (typeof error.status === "number") return error.status;
+
+  const response = toUnknownRecord(error.response);
+  return typeof response?.status === "number" ? response.status : null;
+}
+
+function extractApiErrorCode(error: UnknownRecord): string | null {
+  if (typeof error.code === "string") return error.code;
+
+  const payload = toUnknownRecord(error.payload);
+  return typeof payload?.code === "string" ? payload.code : null;
+}
+
+function parseStatusFromMessage(message: string, fallbackStatus: number | null): number | null {
+  const statusMatch = /^(\d{3})\s*:/.exec(message);
+  return fallbackStatus ?? (statusMatch ? Number.parseInt(statusMatch[1], 10) : null);
+}
+
+function parseCodeFromMessageJson(message: string): string | null {
+  const jsonStart = message.indexOf("{");
+  if (jsonStart < 0) return null;
+
+  try {
+    const parsed = JSON.parse(message.slice(jsonStart)) as { code?: unknown };
+    return typeof parsed.code === "string" ? parsed.code : null;
+  } catch {
+    return null;
+  }
+}
+
+function extractApiErrorStatusAndCode(error: unknown): ApiErrorStatusAndCode {
+  const asRecord = toUnknownRecord(error);
+  if (!asRecord) return { status: null, code: null };
+
+  const status = extractApiErrorStatus(asRecord);
+  const directCode = extractApiErrorCode(asRecord);
   if (directCode) return { status, code: directCode };
 
-  const payload = asRecord.payload;
-  if (payload && typeof payload === "object" && typeof (payload as Record<string, unknown>).code === "string") {
-    return { status, code: (payload as Record<string, unknown>).code as string };
-  }
-
   const message = typeof asRecord.message === "string" ? asRecord.message : "";
-  if (message) {
-    const statusMatch = message.match(/^(\d{3})\s*:/);
-    const parsedStatus = status ?? (statusMatch ? Number.parseInt(statusMatch[1], 10) : null);
+  if (!message) return { status, code: null };
 
-    const jsonStart = message.indexOf("{");
-    if (jsonStart >= 0) {
-      try {
-        const parsed = JSON.parse(message.slice(jsonStart)) as { code?: unknown };
-        const parsedCode = typeof parsed.code === "string" ? parsed.code : null;
-        return { status: parsedStatus, code: parsedCode };
-      } catch {
-        return { status: parsedStatus, code: null };
-      }
-    }
+  const parsedStatus = parseStatusFromMessage(message, status);
+  const parsedCode = parseCodeFromMessageJson(message);
+  return { status: parsedStatus, code: parsedCode };
+}
 
-    return { status: parsedStatus, code: null };
-  }
-
-  return { status, code: null };
+function isUpstreamAiStatusOrCode({ status, code }: ApiErrorStatusAndCode): boolean {
+  return status === 502 || status === 504 || code === "AI_UPSTREAM_FAILURE" || code === "AI_UPSTREAM_TIMEOUT";
 }
 
 function isUpstreamAiError(error: unknown): boolean {
-  const { status, code } = extractApiErrorStatusAndCode(error);
-  return status === 502 || status === 504 || code === "AI_UPSTREAM_FAILURE" || code === "AI_UPSTREAM_TIMEOUT";
+  return isUpstreamAiStatusOrCode(extractApiErrorStatusAndCode(error));
 }
 
 function buildPartialParseWarningToast(data: ReparseResponse) {

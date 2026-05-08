@@ -71,6 +71,9 @@ export function CoachInsightsTab() {
         return Number.isNaN(parsed.getTime()) ? null : format(parsed, "MMM d, yyyy 'at' h:mm a");
       })()
     : null;
+  const handleGenerateInsights = () => {
+    query.refetch().catch(() => undefined);
+  };
 
   return (
     <Card>
@@ -82,7 +85,7 @@ export function CoachInsightsTab() {
           </div>
           <Button
             variant={hasInsights ? "outline" : "default"}
-            onClick={() => { void query.refetch(); }}
+            onClick={handleGenerateInsights}
             disabled={isLoading || !userId}
             data-testid="button-generate-coach-insights"
           >

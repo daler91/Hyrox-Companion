@@ -12,8 +12,8 @@ import { ResponsiveSheet } from "@/components/ui/responsive-sheet";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
-import { api, QUERY_KEYS } from "@/lib/api";
 import type { AddExerciseSetPayload, PatchExerciseSetPayload } from "@/lib/api";
+import { api, QUERY_KEYS } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
 import { serializeWorkoutStructure } from "@/lib/workoutStructureSummary";
 
@@ -155,7 +155,7 @@ function setsToParsed(rows: readonly ExerciseSet[]): ParsedExercise[] {
   // one ParsedExercise (mirrors the server's grouping).
   const grouped: ParsedExercise[] = [];
   for (const row of [...rows].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))) {
-    const last = grouped[grouped.length - 1];
+    const last = grouped.at(-1);
     const sameGroup =
       last &&
       last.exerciseName === row.exerciseName &&
@@ -232,8 +232,8 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
   // effect the date set at mount would persist until the user manually
   // changes it.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (open) resetState();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   const handleClose = () => {
