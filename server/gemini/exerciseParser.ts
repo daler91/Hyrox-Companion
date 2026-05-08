@@ -305,7 +305,6 @@ function canonicalExerciseName(label: string): string {
 }
 
 const HEURISTIC_CHUNK_SPLIT_PATTERN = /[.;\n]+/;
-const HEURISTIC_LEAD_PATTERN = /^([a-z ]+):\s*(.+)$/i;
 const HEURISTIC_BARE_SET_PATTERN = /^(\d+)\s*x\s*(\d+)\s*(?:min|mins|minute|minutes)?/i;
 const HEURISTIC_NAME_SET_PATTERN = /^([a-z ]+?)\s+(\d+)\s*x\s*(\d+)/i;
 const HEURISTIC_TIME_SET_PATTERN = /^([a-z ]+?)\s+(\d+)\s*x\s*(\d+)\s*(?:min|mins|minute|minutes)/i;
@@ -319,6 +318,30 @@ interface HeuristicFallbackCandidate {
   sets: number;
   value: number;
   valueKind: "reps" | "time";
+}
+
+interface HeuristicLead {
+  name: string;
+  body: string;
+}
+
+function hasOnlyAsciiLettersAndSpaces(value: string): boolean {
+  for (const char of value) {
+    const code = char.charCodeAt(0);
+    const isUppercaseLetter = code >= 65 && code <= 90;
+    const isLowercaseLetter = code >= 97 && code <= 122;
+    if (char !== " " && !isUppercaseLetter && !isLowercaseLetter) return false;
+  }
+  return true;
+}
+
+function parseHeuristicLead(chunk: string): HeuristicLead | null {
+  const separatorIndex = chunk.indexOf(":");
+  if (separatorIndex <= 0) return null;
+  const name = chunk.slice(0, separatorIndex).trim();
+  const body = chunk.slice(separatorIndex + 1).trimStart();
+  if (!name || body.length === 0 || !hasOnlyAsciiLettersAndSpaces(name)) return null;
+  return { name, body };
 }
 
 function parsePositiveCount(raw: string | undefined): number | null {
@@ -341,7 +364,7 @@ function parseNamedHeuristicChunk(body: string): HeuristicFallbackCandidate | nu
   };
 }
 
-function parseLeadOnlyHeuristicChunk(lead: RegExpExecArray | null, body: string): HeuristicFallbackCandidate | null {
+function parseLeadOnlyHeuristicChunk(lead: HeuristicLead | null, body: string): HeuristicFallbackCandidate | null {
   if (!lead) return null;
   const bareSetMatch = HEURISTIC_BARE_SET_PATTERN.exec(body);
   if (!bareSetMatch) return null;
@@ -349,7 +372,7 @@ function parseLeadOnlyHeuristicChunk(lead: RegExpExecArray | null, body: string)
   const value = parsePositiveCount(bareSetMatch[2]);
   if (sets == null || value == null) return null;
   return {
-    name: lead[1]?.trim() ?? "",
+    name: lead.name,
     sets,
     value,
     valueKind: HEURISTIC_TIME_UNIT_PATTERN.test(body) ? "time" : "reps",
@@ -357,13 +380,13 @@ function parseLeadOnlyHeuristicChunk(lead: RegExpExecArray | null, body: string)
 }
 
 function parseHeuristicFallbackChunk(chunk: string): HeuristicFallbackCandidate | null {
-  const lead = HEURISTIC_LEAD_PATTERN.exec(chunk);
-  const body = lead ? lead[2] ?? "" : chunk;
+  const lead = parseHeuristicLead(chunk);
+  const body = lead?.body ?? chunk;
   const namedCandidate = parseNamedHeuristicChunk(body);
   if (namedCandidate) {
     return {
       ...namedCandidate,
-      name: lead && HEURISTIC_LEADING_SET_PATTERN.test(body) ? lead[1]?.trim() ?? "" : namedCandidate.name,
+      name: lead && HEURISTIC_LEADING_SET_PATTERN.test(body) ? lead.name : namedCandidate.name,
     };
   }
   return parseLeadOnlyHeuristicChunk(lead, body);
