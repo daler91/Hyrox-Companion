@@ -45,6 +45,51 @@ const wrapper = ({ children }: { children: React.ReactNode }) => (
   <QueryClientProvider client={testQueryClient}>{children}</QueryClientProvider>
 );
 
+interface FailedSaveToast {
+  readonly title: string;
+  readonly description: string;
+  readonly variant: "destructive";
+}
+
+interface ExpectFailedSaveToastArgs {
+  readonly error: unknown;
+  readonly expectedToast: FailedSaveToast;
+  readonly defaultProps: UseWorkoutFormProps;
+  readonly renderFormHook: (props: UseWorkoutFormProps) => {
+    readonly result: { readonly current: ReturnType<typeof useWorkoutForm> };
+  };
+  readonly mockToast: (toast: FailedSaveToast) => void;
+  readonly mockNavigate: (path: string) => void;
+}
+
+async function expectFailedSaveToast({
+  error,
+  expectedToast,
+  defaultProps,
+  renderFormHook,
+  mockToast,
+  mockNavigate,
+}: ExpectFailedSaveToastArgs) {
+  vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(error);
+
+  const { result } = renderFormHook({ ...defaultProps, useTextMode: true });
+
+  act(() => {
+    result.current.setTitle('Failed Workout');
+    result.current.setFreeText('Did things');
+  });
+
+  act(() => {
+    result.current.handleSave();
+  });
+
+  await waitFor(() => {
+    expect(mockToast).toHaveBeenCalledWith(expectedToast);
+    expect(queryClientLib.queryClient.invalidateQueries).not.toHaveBeenCalled();
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+}
+
 describe('useWorkoutForm', () => {
   const mockToast = vi.fn();
   const mockNavigate = vi.fn();
@@ -478,47 +523,34 @@ describe('useWorkoutForm', () => {
       });
     });
 
-    async function expectFailedSaveToast(error: unknown, expectedToast: { title: string; description: string; variant: "destructive" }) {
-      vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(error);
-
-      const { result } = renderFormHook({ ...defaultProps, useTextMode: true });
-
-      act(() => {
-        result.current.setTitle('Failed Workout');
-        result.current.setFreeText('Did things');
-      });
-
-      act(() => {
-        result.current.handleSave();
-      });
-
-      await waitFor(() => {
-        expect(mockToast).toHaveBeenCalledWith(expectedToast);
-        expect(queryClientLib.queryClient.invalidateQueries).not.toHaveBeenCalled();
-        expect(mockNavigate).not.toHaveBeenCalled();
-      });
-    }
-
     it('shows structured rows error toast for STRUCTURED_ROWS_REQUIRED failures', async () => {
-      await expectFailedSaveToast(
-        { response: { data: { code: 'STRUCTURED_ROWS_REQUIRED' } } },
-        {
+      await expectFailedSaveToast({
+        error: { response: { data: { code: 'STRUCTURED_ROWS_REQUIRED' } } },
+        expectedToast: {
           title: "Workout needs structured rows",
           description: "Tap Parse or add at least one exercise set before saving.",
           variant: "destructive",
         },
-      );
+        defaultProps,
+        renderFormHook,
+        mockToast,
+        mockNavigate,
+      });
     });
 
     it('triggers generic error toast on failed save', async () => {
-      await expectFailedSaveToast(
-        new Error('Network Error'),
-        {
+      await expectFailedSaveToast({
+        error: new Error('Network Error'),
+        expectedToast: {
           title: "Error",
           description: "Failed to save workout. Please try again.",
           variant: "destructive",
         },
-      );
+        defaultProps,
+        renderFormHook,
+        mockToast,
+        mockNavigate,
+      });
     });
   });
 });

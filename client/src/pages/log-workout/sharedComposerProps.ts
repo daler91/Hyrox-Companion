@@ -1,5 +1,4 @@
-import type { ExerciseName } from "@shared/schema";
-import type { StructureBlockInput } from "@shared/schema";
+import type { ExerciseName, StructureBlockInput } from "@shared/schema";
 
 import type { StructuredExercise } from "@/components/ExerciseInput";
 import type { ParseDiagnostics } from "@/hooks/useWorkoutEditor";
