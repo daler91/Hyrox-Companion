@@ -134,6 +134,7 @@ function parseFlags(): Flags {
 }
 type ParseStatus = "success" | "failed_parse" | "empty_parse" | "already_structured";
 interface BackfillReportRow { ownerType: "planDay" | "workoutLog"; ownerId: string; userId: string | null; status: ParseStatus; reason?: string; }
+type ParsedExercises = Awaited<ReturnType<typeof parseExercisesFromText>>;
 
 async function userWeightUnit(userId: string | null | undefined): Promise<string> {
   if (!userId) return DEFAULT_WEIGHT_UNIT;
@@ -154,7 +155,115 @@ interface BackfillCandidate {
   userId: string | null;
   mainWorkout: string | null;
   accessory: string | null;
-  expand: (exercises: Awaited<ReturnType<typeof parseExercisesFromText>>) => InsertExerciseSet[];
+  expand: (exercises: ParsedExercises) => InsertExerciseSet[];
+}
+
+function ownerTypeForCandidate(cand: BackfillCandidate): BackfillReportRow["ownerType"] {
+  return cand.logKey === "planDayId" ? "planDay" : "workoutLog";
+}
+
+function candidateText(cand: BackfillCandidate): string {
+  return [cand.mainWorkout, cand.accessory].filter(Boolean).join("\n").trim();
+}
+
+function pushReportRow(
+  reportRows: BackfillReportRow[],
+  cand: BackfillCandidate,
+  status: ParseStatus,
+  reason?: string,
+): void {
+  reportRows.push({
+    ownerType: ownerTypeForCandidate(cand),
+    ownerId: cand.ownerId,
+    userId: cand.userId,
+    status,
+    ...(reason ? { reason } : {}),
+  });
+}
+
+function markEmptyParse(result: PassResult, reportRows: BackfillReportRow[], cand: BackfillCandidate, reason: string): void {
+  result.skipped++;
+  result.emptyParse++;
+  pushReportRow(reportRows, cand, "empty_parse", reason);
+}
+
+function errorReason(err: unknown): string {
+  return err instanceof Error ? err.message : "parse_error";
+}
+
+async function upsertBackfillReview(cand: BackfillCandidate, reason: string): Promise<void> {
+  await db.insert(structuredExerciseBackfillReviews).values({
+    ownerType: ownerTypeForCandidate(cand),
+    ownerId: cand.ownerId,
+    userId: cand.userId,
+    status: "needs_manual_review",
+    reason,
+  }).onConflictDoUpdate({
+    target: [structuredExerciseBackfillReviews.ownerType, structuredExerciseBackfillReviews.ownerId],
+    set: { status: "needs_manual_review", reason, lastSeenAt: sql`now()`, updatedAt: sql`now()` },
+  });
+}
+
+async function clearBackfillReview(cand: BackfillCandidate): Promise<void> {
+  await db.delete(structuredExerciseBackfillReviews).where(and(
+    eq(structuredExerciseBackfillReviews.ownerType, ownerTypeForCandidate(cand)),
+    eq(structuredExerciseBackfillReviews.ownerId, cand.ownerId),
+  ));
+}
+
+async function handleEmptyParsedExercises(
+  cand: BackfillCandidate,
+  flags: Flags,
+  result: PassResult,
+  reportRows: BackfillReportRow[],
+): Promise<void> {
+  const reason = "parser_returned_no_exercises";
+  markEmptyParse(result, reportRows, cand, reason);
+  if (!flags.dryRun) {
+    await upsertBackfillReview(cand, reason);
+  }
+}
+
+async function handleParsedExercises(
+  cand: BackfillCandidate,
+  flags: Flags,
+  result: PassResult,
+  reportRows: BackfillReportRow[],
+  exercises: ParsedExercises,
+): Promise<void> {
+  const setRows = cand.expand(exercises);
+  result.parsed++;
+  if (flags.dryRun) {
+    logger.info(
+      { [cand.logKey]: cand.ownerId, setCount: setRows.length },
+      `[backfill:${cand.label}] would insert (dry-run)`,
+    );
+    pushReportRow(reportRows, cand, "success");
+    return;
+  }
+  await db.insert(exerciseSets).values(setRows);
+  result.written += setRows.length;
+  pushReportRow(reportRows, cand, "success");
+  await clearBackfillReview(cand);
+}
+
+async function handleParseFailure(
+  cand: BackfillCandidate,
+  flags: Flags,
+  result: PassResult,
+  reportRows: BackfillReportRow[],
+  err: unknown,
+): Promise<void> {
+  const reason = errorReason(err);
+  result.failed++;
+  pushReportRow(reportRows, cand, "failed_parse", reason);
+  if (!flags.dryRun) {
+    await upsertBackfillReview(cand, reason.slice(0, 1000));
+  }
+  logger.error(
+    { err, [cand.logKey]: cand.ownerId },
+    `[backfill:${cand.label}] parse/insert failed`,
+  );
 }
 
 async function processCandidate(
@@ -163,75 +272,21 @@ async function processCandidate(
   result: PassResult,
   reportRows: BackfillReportRow[],
 ): Promise<void> {
-  const text = [cand.mainWorkout, cand.accessory].filter(Boolean).join("\n").trim();
+  const text = candidateText(cand);
   if (!text) {
-    result.skipped++;
-    result.emptyParse++;
-    reportRows.push({ ownerType: cand.logKey === "planDayId" ? "planDay" : "workoutLog", ownerId: cand.ownerId, userId: cand.userId, status: "empty_parse", reason: "empty_text" });
+    markEmptyParse(result, reportRows, cand, "empty_text");
     return;
   }
   try {
     const unit = await userWeightUnit(cand.userId);
     const exercises = await parseExercisesFromText(text, unit);
     if (exercises.length === 0) {
-      result.skipped++;
-      result.emptyParse++;
-      reportRows.push({ ownerType: cand.logKey === "planDayId" ? "planDay" : "workoutLog", ownerId: cand.ownerId, userId: cand.userId, status: "empty_parse", reason: "parser_returned_no_exercises" });
-      if (!flags.dryRun) {
-        await db.insert(structuredExerciseBackfillReviews).values({
-          ownerType: cand.logKey === "planDayId" ? "planDay" : "workoutLog",
-          ownerId: cand.ownerId,
-          userId: cand.userId,
-          status: "needs_manual_review",
-          reason: "parser_returned_no_exercises",
-        }).onConflictDoUpdate({
-          target: [structuredExerciseBackfillReviews.ownerType, structuredExerciseBackfillReviews.ownerId],
-          set: { status: "needs_manual_review", reason: "parser_returned_no_exercises", lastSeenAt: sql`now()`, updatedAt: sql`now()` },
-        });
-      }
+      await handleEmptyParsedExercises(cand, flags, result, reportRows);
       return;
     }
-    const setRows = cand.expand(exercises);
-    result.parsed++;
-    if (flags.dryRun) {
-      logger.info(
-        { [cand.logKey]: cand.ownerId, setCount: setRows.length },
-        `[backfill:${cand.label}] would insert (dry-run)`,
-      );
-      reportRows.push({
-        ownerType: cand.logKey === "planDayId" ? "planDay" : "workoutLog",
-        ownerId: cand.ownerId,
-        userId: cand.userId,
-        status: "success",
-      });
-      return;
-    }
-    await db.insert(exerciseSets).values(setRows);
-    result.written += setRows.length;
-    reportRows.push({ ownerType: cand.logKey === "planDayId" ? "planDay" : "workoutLog", ownerId: cand.ownerId, userId: cand.userId, status: "success" });
-    await db.delete(structuredExerciseBackfillReviews).where(and(
-      eq(structuredExerciseBackfillReviews.ownerType, cand.logKey === "planDayId" ? "planDay" : "workoutLog"),
-      eq(structuredExerciseBackfillReviews.ownerId, cand.ownerId),
-    ));
+    await handleParsedExercises(cand, flags, result, reportRows, exercises);
   } catch (err) {
-    result.failed++;
-    reportRows.push({ ownerType: cand.logKey === "planDayId" ? "planDay" : "workoutLog", ownerId: cand.ownerId, userId: cand.userId, status: "failed_parse", reason: err instanceof Error ? err.message : "parse_error" });
-    if (!flags.dryRun) {
-      await db.insert(structuredExerciseBackfillReviews).values({
-        ownerType: cand.logKey === "planDayId" ? "planDay" : "workoutLog",
-        ownerId: cand.ownerId,
-        userId: cand.userId,
-        status: "needs_manual_review",
-        reason: err instanceof Error ? err.message.slice(0, 1000) : "parse_error",
-      }).onConflictDoUpdate({
-        target: [structuredExerciseBackfillReviews.ownerType, structuredExerciseBackfillReviews.ownerId],
-        set: { status: "needs_manual_review", reason: err instanceof Error ? err.message.slice(0, 1000) : "parse_error", lastSeenAt: sql`now()`, updatedAt: sql`now()` },
-      });
-    }
-    logger.error(
-      { err, [cand.logKey]: cand.ownerId },
-      `[backfill:${cand.label}] parse/insert failed`,
-    );
+    await handleParseFailure(cand, flags, result, reportRows, err);
   }
 }
 

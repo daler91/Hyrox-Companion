@@ -347,6 +347,14 @@ function buildHydrationLockKey(owner: SetOwner): string {
   return "workoutLogId" in owner ? `workout:${owner.workoutLogId}` : `planDay:${owner.planDayId}`;
 }
 
+function resolveHydrationQualityState(
+  acceptedRowCount: number,
+  rejectedRowCount: number,
+): "ok" | "degraded" | "failed" {
+  if (acceptedRowCount === 0) return "failed";
+  if (rejectedRowCount > acceptedRowCount) return "degraded";
+  return "ok";
+}
 
 async function resolveCounterSource(owner: SetOwner, fallback: CounterSource = "manual"): Promise<CounterSource> {
   if ("planDayId" in owner) return fallback;
@@ -400,9 +408,7 @@ export async function autoHydrateExerciseSetsFromTextIfNeeded(
         const acceptedRowCount = result?.exercises.length ?? 0;
         const rejectedRowCount = result?.rejectedCount ?? 0;
         const fallbackUsed = result?.fallbackUsed ?? false;
-        const qualityState: "ok" | "degraded" | "failed" = acceptedRowCount === 0
-          ? "failed"
-          : (rejectedRowCount > acceptedRowCount ? "degraded" : "ok");
+        const qualityState = resolveHydrationQualityState(acceptedRowCount, rejectedRowCount);
 
         if (qualityState === "ok") {
           logger.info({ context: "health-metrics", event: "exercise_set_auto_hydration_success", lockKey, setCount: result?.setCount ?? 0, acceptedRowCount, rejectedRowCount, fallbackUsed, qualityState }, "Auto hydration success");

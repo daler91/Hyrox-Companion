@@ -102,8 +102,10 @@ function normalizeParserPayload(raw: unknown): NormalizedParserPayload {
   };
 }
 
+const EMOM_DURATION_PATTERN = /\bemom\s*(?:for\s*)?(\d{1,3})(?:\s*(?:min|mins|minute|minutes))?\b/i;
+
 function parseEmomDurationSeconds(text: string): number | null {
-  const match = text.match(/\bemom\s*(?:for\s*)?(\d{1,3})(?:\s*(?:min|mins|minute|minutes))?\b/i);
+  const match = EMOM_DURATION_PATTERN.exec(text);
   if (!match) return null;
   const minutes = Number.parseInt(match[1] ?? "", 10);
   if (!Number.isFinite(minutes) || minutes <= 0) return null;
@@ -289,7 +291,7 @@ function mapValidatedExercise(
 
 
 function canonicalExerciseName(label: string): string {
-  const normalized = sanitizeLabel(label).toLowerCase().replace(/\s+/g, "_");
+  const normalized = sanitizeLabel(label).toLowerCase().replaceAll(/\s+/g, "_");
   const aliases: Record<string, string> = {
     "back_squat": "back_squat",
     "squat": "back_squat",
@@ -302,41 +304,93 @@ function canonicalExerciseName(label: string): string {
   return VALID_EXERCISE_NAMES instanceof Set && VALID_EXERCISE_NAMES.has(normalized) ? normalized : "custom";
 }
 
-function heuristicFallbackRowsFromText(text: string): unknown[] {
-  const chunks = text.split(/[.;\n]+/).map((s) => s.trim()).filter(Boolean);
-  const rows: unknown[] = [];
-  for (const chunk of chunks) {
-    const lead = chunk.match(/^([A-Za-z ]+):\s*(.+)$/);
-    const body = lead ? lead[2] : chunk;
-    const bareSetPattern = body.match(/^(\d+)\s*x\s*(\d+)\s*(?:min|mins|minute|minutes)?/i);
-    const nameMatch = body.match(/^([A-Za-z ]+?)\s+(\d+)\s*x\s*(\d+)/i);
-    const timeMatch = body.match(/^([A-Za-z ]+?)\s+(\d+)\s*x\s*(\d+)\s*(?:min|mins|minute|minutes)/i);
-    const intervalTimeMatch = body.match(/^([A-Za-z ]+?)\s*:\s*(\d+)\s*x\s*(\d+)\s*(?:min|mins|minute|minutes)/i);
-    const match = intervalTimeMatch ?? timeMatch ?? nameMatch;
-    const leadOnlyMatch = (!match && lead && bareSetPattern)
-      ? [lead[1], bareSetPattern[1], bareSetPattern[2]]
-      : null;
-    if (!match && !leadOnlyMatch) continue;
-    const capture = match ?? leadOnlyMatch;
-    const name = (lead && /^\d+\s*x/i.test(body) ? lead[1] : capture?.[1])?.trim() ?? "";
-    const sets = Number.parseInt(capture?.[2] ?? "", 10);
-    const value = Number.parseInt(capture?.[3] ?? "", 10);
-    if (!Number.isFinite(sets) || sets <= 0 || !Number.isFinite(value) || value <= 0) continue;
-    const perSet = Array.from({ length: sets }, (_v, i) => (
-      timeMatch || intervalTimeMatch || (leadOnlyMatch && /min|mins|minute|minutes/i.test(body))
-        ? { setNumber: i + 1, time: value }
-        : { setNumber: i + 1, reps: value }
-    ));
-    const exerciseName = canonicalExerciseName(name);
-    rows.push({
-      exerciseName,
-      category: /(row|run|bike|ski|erg|amrap|emom|interval)/i.test(name) ? "conditioning" : "strength",
-      ...(exerciseName === "custom" ? { customLabel: sanitizeLabel(name) } : {}),
-      missingFields: ["Heuristic fallback parser used after malformed AI rows."],
-      sets: perSet,
-    });
+const HEURISTIC_CHUNK_SPLIT_PATTERN = /[.;\n]+/;
+const HEURISTIC_LEAD_PATTERN = /^([a-z ]+):\s*(.+)$/i;
+const HEURISTIC_BARE_SET_PATTERN = /^(\d+)\s*x\s*(\d+)\s*(?:min|mins|minute|minutes)?/i;
+const HEURISTIC_NAME_SET_PATTERN = /^([a-z ]+?)\s+(\d+)\s*x\s*(\d+)/i;
+const HEURISTIC_TIME_SET_PATTERN = /^([a-z ]+?)\s+(\d+)\s*x\s*(\d+)\s*(?:min|mins|minute|minutes)/i;
+const HEURISTIC_INTERVAL_TIME_SET_PATTERN = /^([a-z ]+?)\s*:\s*(\d+)\s*x\s*(\d+)\s*(?:min|mins|minute|minutes)/i;
+const HEURISTIC_LEADING_SET_PATTERN = /^\d+\s*x/i;
+const HEURISTIC_TIME_UNIT_PATTERN = /min|mins|minute|minutes/i;
+const CONDITIONING_NAME_PATTERN = /(row|run|bike|ski|erg|amrap|emom|interval)/i;
+
+interface HeuristicFallbackCandidate {
+  name: string;
+  sets: number;
+  value: number;
+  valueKind: "reps" | "time";
+}
+
+function parsePositiveCount(raw: string | undefined): number | null {
+  const count = Number.parseInt(raw ?? "", 10);
+  return Number.isFinite(count) && count > 0 ? count : null;
+}
+
+function parseNamedHeuristicChunk(body: string): HeuristicFallbackCandidate | null {
+  const timeMatch = HEURISTIC_INTERVAL_TIME_SET_PATTERN.exec(body) ?? HEURISTIC_TIME_SET_PATTERN.exec(body);
+  const match = timeMatch ?? HEURISTIC_NAME_SET_PATTERN.exec(body);
+  if (!match) return null;
+  const sets = parsePositiveCount(match[2]);
+  const value = parsePositiveCount(match[3]);
+  if (sets == null || value == null) return null;
+  return {
+    name: match[1]?.trim() ?? "",
+    sets,
+    value,
+    valueKind: timeMatch ? "time" : "reps",
+  };
+}
+
+function parseLeadOnlyHeuristicChunk(lead: RegExpExecArray | null, body: string): HeuristicFallbackCandidate | null {
+  if (!lead) return null;
+  const bareSetMatch = HEURISTIC_BARE_SET_PATTERN.exec(body);
+  if (!bareSetMatch) return null;
+  const sets = parsePositiveCount(bareSetMatch[1]);
+  const value = parsePositiveCount(bareSetMatch[2]);
+  if (sets == null || value == null) return null;
+  return {
+    name: lead[1]?.trim() ?? "",
+    sets,
+    value,
+    valueKind: HEURISTIC_TIME_UNIT_PATTERN.test(body) ? "time" : "reps",
+  };
+}
+
+function parseHeuristicFallbackChunk(chunk: string): HeuristicFallbackCandidate | null {
+  const lead = HEURISTIC_LEAD_PATTERN.exec(chunk);
+  const body = lead ? lead[2] ?? "" : chunk;
+  const namedCandidate = parseNamedHeuristicChunk(body);
+  if (namedCandidate) {
+    return {
+      ...namedCandidate,
+      name: lead && HEURISTIC_LEADING_SET_PATTERN.test(body) ? lead[1]?.trim() ?? "" : namedCandidate.name,
+    };
   }
-  return rows;
+  return parseLeadOnlyHeuristicChunk(lead, body);
+}
+
+function buildHeuristicFallbackRow(candidate: HeuristicFallbackCandidate): unknown {
+  const exerciseName = canonicalExerciseName(candidate.name);
+  return {
+    exerciseName,
+    category: CONDITIONING_NAME_PATTERN.test(candidate.name) ? "conditioning" : "strength",
+    ...(exerciseName === "custom" ? { customLabel: sanitizeLabel(candidate.name) } : {}),
+    missingFields: ["Heuristic fallback parser used after malformed AI rows."],
+    sets: Array.from({ length: candidate.sets }, (_v, i) => ({
+      setNumber: i + 1,
+      [candidate.valueKind]: candidate.value,
+    })),
+  };
+}
+
+function heuristicFallbackRowsFromText(text: string): unknown[] {
+  return text
+    .split(HEURISTIC_CHUNK_SPLIT_PATTERN)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map(parseHeuristicFallbackChunk)
+    .filter((candidate): candidate is HeuristicFallbackCandidate => candidate != null)
+    .map(buildHeuristicFallbackRow);
 }
 
 
