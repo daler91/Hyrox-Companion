@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 
 import { env } from "./env";
+import { AppError, ErrorCode } from "./errors";
 import { logger } from "./logger";
 
 const ALGORITHM = "aes-256-gcm";
@@ -98,6 +99,6 @@ export function decryptToken(encryptedData: string): string {
     return decrypted;
   } catch (error) {
     logger.error({ err: error }, "Failed to decrypt token");
-    throw new Error("Failed to decrypt token");
+    throw new AppError(ErrorCode.INTERNAL_ERROR, "Failed to decrypt token");
   }
 }
