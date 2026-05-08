@@ -1,10 +1,5 @@
 import type { TimelineEntry } from "@shared/schema";
-import {
-  ListChecks,
-  MessageSquare,
-  SkipForward,
-  Sparkles,
-} from "lucide-react";
+import { ListChecks, MessageSquare, SkipForward, Sparkles } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -20,15 +15,27 @@ import { PrescriptionEditor } from "./shared/PrescriptionEditor";
 import { RpePrompt } from "./shared/RpePrompt";
 import { WorkoutPrescriptionSummary } from "./shared/WorkoutPrescriptionSummary";
 
-interface LogSheetProps {
+interface LogSheetBaseProps {
   readonly entry: TimelineEntry | null;
   readonly onClose: () => void;
-  /** Tier 1: log the workout exactly as prescribed, with an optional RPE override. */
-  readonly onLogAsPlanned: (entry: TimelineEntry, rpe: number | null) => void;
   readonly onSkip?: (entry: TimelineEntry) => void;
   readonly onAskCoach?: (entry: TimelineEntry) => void;
-  readonly isLogging?: boolean;
 }
+
+type LogSheetModeProps =
+  | {
+      readonly mode?: "log";
+      /** Tier 1: log the workout exactly as prescribed, with an optional RPE override. */
+      readonly onLogAsPlanned: (entry: TimelineEntry, rpe: number | null) => void;
+      readonly isLogging?: boolean;
+    }
+  | {
+      readonly mode: "edit";
+      readonly onLogAsPlanned?: never;
+      readonly isLogging?: never;
+    };
+
+type LogSheetProps = LogSheetBaseProps & LogSheetModeProps;
 
 type PlanDayExerciseState = ReturnType<typeof usePlanDayExercises>;
 type WorkoutWeightUnit = "kg" | "lb";
@@ -219,12 +226,78 @@ function SecondaryLogActions({ entry, onAskCoach, onSkip }: SecondaryLogActionsP
   );
 }
 
+interface LogCompletionControlsProps {
+  readonly entry: TimelineEntry;
+  readonly rpe: number | null;
+  readonly setRpe: (rpe: number | null) => void;
+  readonly onLog: () => void;
+  readonly isLogging?: boolean;
+  readonly isSaving: boolean;
+  readonly parseBlocked: boolean;
+  readonly onSkip?: (entry: TimelineEntry) => void;
+  readonly onAskCoach?: (entry: TimelineEntry) => void;
+}
+
+function LogCompletionControls({
+  entry,
+  rpe,
+  setRpe,
+  onLog,
+  isLogging,
+  isSaving,
+  parseBlocked,
+  onSkip,
+  onAskCoach,
+}: LogCompletionControlsProps) {
+  return (
+    <>
+      <Separator />
+
+      <RpePrompt value={rpe} onChange={setRpe} />
+
+      <div className="space-y-2">
+        <Button
+          type="button"
+          className="w-full"
+          size="lg"
+          onClick={onLog}
+          disabled={isLogging || isSaving || parseBlocked}
+          data-testid={`log-as-planned-${entry.id}`}
+        >
+          <ListChecks className="mr-2 h-4 w-4" />
+          {getLogButtonLabel(isSaving, isLogging)}
+        </Button>
+
+        <SecondaryLogActions entry={entry} onAskCoach={onAskCoach} onSkip={onSkip} />
+      </div>
+    </>
+  );
+}
+
+interface EditSecondaryActionsProps {
+  readonly entry: TimelineEntry;
+  readonly onSkip?: (entry: TimelineEntry) => void;
+  readonly onAskCoach?: (entry: TimelineEntry) => void;
+}
+
+function EditSecondaryActions({ entry, onAskCoach, onSkip }: EditSecondaryActionsProps) {
+  if (!onAskCoach && !onSkip) return null;
+
+  return (
+    <>
+      <Separator />
+      <SecondaryLogActions entry={entry} onAskCoach={onAskCoach} onSkip={onSkip} />
+    </>
+  );
+}
+
 /**
- * Sheet-native log surface for today/past planned cards. Single-tier:
+ * Sheet-native surface for planned cards. Single-tier:
  * the prescription editor is inline (no disclosure tap) so per-set
- * tweaks are one tap away. Wired to usePlanDayExercises mutations so
- * edits autosave before the log mutation copies them into a
- * workoutLog. The free-text/photo "Replace prescription" affordance
+ * tweaks are one tap away. In log mode, edits autosave before the log
+ * mutation copies them into a workoutLog. In edit mode, the same plan-day
+ * editor saves future prescription changes without creating a workout log.
+ * The free-text/photo "Replace prescription" affordance
  * stays in PrescriptionEditor (self-collapsed when sets exist) since
  * it's destructive and rarely needed for normal logging.
  */
@@ -235,6 +308,7 @@ export function LogSheet({
   onSkip,
   onAskCoach,
   isLogging,
+  mode = "log",
 }: LogSheetProps) {
   const { weightUnit: prefWeightUnit, distanceUnit } = useUnitPreferences();
   const weightUnit: "kg" | "lb" = prefWeightUnit === "kg" ? "kg" : "lb";
@@ -245,6 +319,7 @@ export function LogSheet({
   if (!entry) return null;
 
   const handleLog = async () => {
+    if (!onLogAsPlanned) return;
     // Flush any debounced cell edits before the log mutation runs — the
     // server's createWorkoutInTx copies persisted plan-day rows into
     // the new workoutLog, so a row edit still queued in the debounce
@@ -254,13 +329,14 @@ export function LogSheet({
   };
 
   const parseBlocked = isParseBlocked(entry, planSets);
-  const logButtonLabel = getLogButtonLabel(planSets.isSaving, isLogging);
+  const isEditMode = mode === "edit";
+  const title = entry.focus || (isEditMode ? "Edit workout" : "Log workout");
 
   return (
     <ResponsiveSheet
       open={!!entry}
       onOpenChange={(open) => !open && onClose()}
-      title={entry.focus || "Log workout"}
+      title={title}
       description={formatScheduledDate(entry.date)}
       contentClassName="sm:max-w-2xl"
       testId={`log-sheet-${entry.id}`}
@@ -278,25 +354,21 @@ export function LogSheet({
           <WorkoutPrescriptionSummary entry={entry} rationaleVariant="collapsed" />
         )}
 
-        <Separator />
-
-        <RpePrompt value={rpe} onChange={setRpe} />
-
-        <div className="space-y-2">
-          <Button
-            type="button"
-            className="w-full"
-            size="lg"
-            onClick={handleLog}
-            disabled={isLogging || planSets.isSaving || parseBlocked}
-            data-testid={`log-as-planned-${entry.id}`}
-          >
-            <ListChecks className="mr-2 h-4 w-4" />
-            {logButtonLabel}
-          </Button>
-
-          <SecondaryLogActions entry={entry} onAskCoach={onAskCoach} onSkip={onSkip} />
-        </div>
+        {isEditMode ? (
+          <EditSecondaryActions entry={entry} onAskCoach={onAskCoach} onSkip={onSkip} />
+        ) : (
+          <LogCompletionControls
+            entry={entry}
+            rpe={rpe}
+            setRpe={setRpe}
+            onLog={handleLog}
+            isLogging={isLogging}
+            isSaving={planSets.isSaving}
+            parseBlocked={parseBlocked}
+            onAskCoach={onAskCoach}
+            onSkip={onSkip}
+          />
+        )}
       </div>
     </ResponsiveSheet>
   );
