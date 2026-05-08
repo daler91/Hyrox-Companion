@@ -214,12 +214,13 @@ describe("parseExercisesFromText", () => {
     };
     vi.mocked(retryWithBackoff).mockResolvedValueOnce(mockResponse);
 
-    const input = "Strength: Back Squat 3x4 at 80-85% 1RM. Deadlift 3x5 at 60% 1RM (Technique focus). Rowing: 4x4 minutes strictly at MAF heart rate ceiling with 90 seconds easy active recovery between sets.";
+    const input = "Strength: Back Squat 3x4 at 80-85% 1RM. Deadlift 3 x 5 at 60% 1RM (Technique focus). Rowing: 4x4 minutes strictly at MAF heart rate ceiling with 90 seconds easy active recovery between sets.";
     const result = await parseExercisesFromText(input);
 
     expect(result.length).toBeGreaterThan(0);
     expect(result.some((r) => r.sets.some((s) => s.reps === 4))).toBe(true);
     expect(result.some((r) => r.sets.some((s) => s.reps === 5))).toBe(true);
+    expect(result.some((r) => r.sets.some((s) => s.time === 4))).toBe(true);
     expect(result.some((r) => (r.missingFields ?? []).some((f) => f.includes("Heuristic fallback parser")))).toBe(true);
   });
 

@@ -336,8 +336,8 @@ function withBlockStepPairing<T extends { blockId?: string | null; stepNumber?: 
 
 function withPatchBlockStepPresencePairing<T extends Record<string, unknown>>(schema: z.ZodType<T>) {
   return schema.refine((value) => {
-    const hasBlockId = Object.prototype.hasOwnProperty.call(value, "blockId");
-    const hasStepNumber = Object.prototype.hasOwnProperty.call(value, "stepNumber");
+    const hasBlockId = Object.hasOwn(value, "blockId");
+    const hasStepNumber = Object.hasOwn(value, "stepNumber");
     return hasBlockId === hasStepNumber;
   }, {
     message: "PATCH updates must include both blockId and stepNumber together.",

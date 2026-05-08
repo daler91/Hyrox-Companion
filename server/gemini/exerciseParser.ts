@@ -102,8 +102,10 @@ function normalizeParserPayload(raw: unknown): NormalizedParserPayload {
   };
 }
 
+const EMOM_DURATION_PATTERN = /\bemom\s*(?:for\s*)?(\d{1,3})(?:\s*(?:min|mins|minute|minutes))?\b/i;
+
 function parseEmomDurationSeconds(text: string): number | null {
-  const match = text.match(/\bemom\s*(?:for\s*)?(\d{1,3})(?:\s*(?:min|mins|minute|minutes))?\b/i);
+  const match = EMOM_DURATION_PATTERN.exec(text);
   if (!match) return null;
   const minutes = Number.parseInt(match[1] ?? "", 10);
   if (!Number.isFinite(minutes) || minutes <= 0) return null;
@@ -289,7 +291,7 @@ function mapValidatedExercise(
 
 
 function canonicalExerciseName(label: string): string {
-  const normalized = sanitizeLabel(label).toLowerCase().replace(/\s+/g, "_");
+  const normalized = sanitizeLabel(label).toLowerCase().replaceAll(/\s+/g, "_");
   const aliases: Record<string, string> = {
     "back_squat": "back_squat",
     "squat": "back_squat",
@@ -302,41 +304,150 @@ function canonicalExerciseName(label: string): string {
   return VALID_EXERCISE_NAMES instanceof Set && VALID_EXERCISE_NAMES.has(normalized) ? normalized : "custom";
 }
 
-function heuristicFallbackRowsFromText(text: string): unknown[] {
-  const chunks = text.split(/[.;\n]+/).map((s) => s.trim()).filter(Boolean);
-  const rows: unknown[] = [];
-  for (const chunk of chunks) {
-    const lead = chunk.match(/^([A-Za-z ]+):\s*(.+)$/);
-    const body = lead ? lead[2] : chunk;
-    const bareSetPattern = body.match(/^(\d+)\s*x\s*(\d+)\s*(?:min|mins|minute|minutes)?/i);
-    const nameMatch = body.match(/^([A-Za-z ]+?)\s+(\d+)\s*x\s*(\d+)/i);
-    const timeMatch = body.match(/^([A-Za-z ]+?)\s+(\d+)\s*x\s*(\d+)\s*(?:min|mins|minute|minutes)/i);
-    const intervalTimeMatch = body.match(/^([A-Za-z ]+?)\s*:\s*(\d+)\s*x\s*(\d+)\s*(?:min|mins|minute|minutes)/i);
-    const match = intervalTimeMatch ?? timeMatch ?? nameMatch;
-    const leadOnlyMatch = (!match && lead && bareSetPattern)
-      ? [lead[1], bareSetPattern[1], bareSetPattern[2]]
-      : null;
-    if (!match && !leadOnlyMatch) continue;
-    const capture = match ?? leadOnlyMatch;
-    const name = (lead && /^\d+\s*x/i.test(body) ? lead[1] : capture?.[1])?.trim() ?? "";
-    const sets = Number.parseInt(capture?.[2] ?? "", 10);
-    const value = Number.parseInt(capture?.[3] ?? "", 10);
-    if (!Number.isFinite(sets) || sets <= 0 || !Number.isFinite(value) || value <= 0) continue;
-    const perSet = Array.from({ length: sets }, (_v, i) => (
-      timeMatch || intervalTimeMatch || (leadOnlyMatch && /min|mins|minute|minutes/i.test(body))
-        ? { setNumber: i + 1, time: value }
-        : { setNumber: i + 1, reps: value }
-    ));
-    const exerciseName = canonicalExerciseName(name);
-    rows.push({
-      exerciseName,
-      category: /(row|run|bike|ski|erg|amrap|emom|interval)/i.test(name) ? "conditioning" : "strength",
-      ...(exerciseName === "custom" ? { customLabel: sanitizeLabel(name) } : {}),
-      missingFields: ["Heuristic fallback parser used after malformed AI rows."],
-      sets: perSet,
-    });
+const HEURISTIC_CHUNK_SPLIT_PATTERN = /[.;\n]+/;
+const HEURISTIC_TIME_UNITS = ["minutes", "minute", "mins", "min"] as const;
+const CONDITIONING_NAME_PATTERN = /(row|run|bike|ski|erg|amrap|emom|interval)/i;
+
+interface HeuristicFallbackCandidate {
+  name: string;
+  sets: number;
+  value: number;
+  valueKind: "reps" | "time";
+}
+
+interface HeuristicLead {
+  name: string;
+  body: string;
+}
+
+interface HeuristicSetExpression {
+  sets: number;
+  value: number;
+  endIndex: number;
+}
+
+function hasOnlyAsciiLettersAndSpaces(value: string): boolean {
+  for (const char of value) {
+    const code = char.codePointAt(0);
+    if (code == null) return false;
+    const isUppercaseLetter = code >= 65 && code <= 90;
+    const isLowercaseLetter = code >= 97 && code <= 122;
+    if (char !== " " && !isUppercaseLetter && !isLowercaseLetter) return false;
   }
-  return rows;
+  return true;
+}
+
+function parseHeuristicLead(chunk: string): HeuristicLead | null {
+  const separatorIndex = chunk.indexOf(":");
+  if (separatorIndex <= 0) return null;
+  const name = chunk.slice(0, separatorIndex).trim();
+  const body = chunk.slice(separatorIndex + 1).trimStart();
+  if (!name || body.length === 0 || !hasOnlyAsciiLettersAndSpaces(name)) return null;
+  return { name, body };
+}
+
+function isAsciiDigit(char: string | undefined): boolean {
+  if (!char) return false;
+  const code = char.codePointAt(0);
+  return code != null && code >= 48 && code <= 57;
+}
+
+function isWhitespace(char: string | undefined): boolean {
+  return char === " " || char === "\t" || char === "\r" || char === "\n";
+}
+
+function skipWhitespace(value: string, index: number): number {
+  let cursor = index;
+  while (cursor < value.length && isWhitespace(value[cursor])) cursor++;
+  return cursor;
+}
+
+function readPositiveInteger(value: string, index: number): { value: number; nextIndex: number } | null {
+  let cursor = index;
+  while (cursor < value.length && isAsciiDigit(value[cursor])) cursor++;
+  if (cursor === index) return null;
+  const parsed = Number.parseInt(value.slice(index, cursor), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? { value: parsed, nextIndex: cursor } : null;
+}
+
+function parseSetExpression(value: string, startIndex: number): HeuristicSetExpression | null {
+  const sets = readPositiveInteger(value, startIndex);
+  if (!sets) return null;
+  let cursor = skipWhitespace(value, sets.nextIndex);
+  if (value[cursor]?.toLowerCase() !== "x") return null;
+  cursor = skipWhitespace(value, cursor + 1);
+  const count = readPositiveInteger(value, cursor);
+  if (!count) return null;
+  return { sets: sets.value, value: count.value, endIndex: count.nextIndex };
+}
+
+function hasTimeUnitAt(value: string, index: number): boolean {
+  const unitStart = skipWhitespace(value, index);
+  const suffix = value.slice(unitStart).toLowerCase();
+  return HEURISTIC_TIME_UNITS.some((unit) => suffix.startsWith(unit));
+}
+
+function parseNamedHeuristicChunk(body: string): HeuristicFallbackCandidate | null {
+  for (let index = 1; index < body.length; index++) {
+    if (!isAsciiDigit(body[index]) || !isWhitespace(body[index - 1])) continue;
+    const name = body.slice(0, index).trim();
+    if (!name || !hasOnlyAsciiLettersAndSpaces(name)) return null;
+    const expression = parseSetExpression(body, index);
+    if (!expression) continue;
+    return {
+      name,
+      sets: expression.sets,
+      value: expression.value,
+      valueKind: hasTimeUnitAt(body, expression.endIndex) ? "time" : "reps",
+    };
+  }
+  return null;
+}
+
+function parseLeadOnlyHeuristicChunk(lead: HeuristicLead | null, body: string): HeuristicFallbackCandidate | null {
+  if (!lead) return null;
+  const expression = parseSetExpression(body, 0);
+  if (!expression) return null;
+  return {
+    name: lead.name,
+    sets: expression.sets,
+    value: expression.value,
+    valueKind: hasTimeUnitAt(body, expression.endIndex) ? "time" : "reps",
+  };
+}
+
+function parseHeuristicFallbackChunk(chunk: string): HeuristicFallbackCandidate | null {
+  const lead = parseHeuristicLead(chunk);
+  const body = lead?.body ?? chunk;
+  const namedCandidate = parseNamedHeuristicChunk(body);
+  if (namedCandidate) {
+    return namedCandidate;
+  }
+  return parseLeadOnlyHeuristicChunk(lead, body);
+}
+
+function buildHeuristicFallbackRow(candidate: HeuristicFallbackCandidate): unknown {
+  const exerciseName = canonicalExerciseName(candidate.name);
+  return {
+    exerciseName,
+    category: CONDITIONING_NAME_PATTERN.test(candidate.name) ? "conditioning" : "strength",
+    ...(exerciseName === "custom" ? { customLabel: sanitizeLabel(candidate.name) } : {}),
+    missingFields: ["Heuristic fallback parser used after malformed AI rows."],
+    sets: Array.from({ length: candidate.sets }, (_v, i) => ({
+      setNumber: i + 1,
+      [candidate.valueKind]: candidate.value,
+    })),
+  };
+}
+
+function heuristicFallbackRowsFromText(text: string): unknown[] {
+  return text
+    .split(HEURISTIC_CHUNK_SPLIT_PATTERN)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map(parseHeuristicFallbackChunk)
+    .filter((candidate): candidate is HeuristicFallbackCandidate => candidate != null)
+    .map(buildHeuristicFallbackRow);
 }
 
 
