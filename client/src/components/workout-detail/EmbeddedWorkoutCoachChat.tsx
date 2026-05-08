@@ -22,12 +22,9 @@ export function buildWorkoutCoachSeedMessage(
 ): string {
   const focus = entry.focus?.trim() || "this workout";
   const groups = groupExerciseSets([...exerciseSets]);
-  const stats =
-    groups.length > 0
-      ? ` (${groups.length} ${groups.length === 1 ? "exercise" : "exercises"}, ${exerciseSets.length} ${
-          exerciseSets.length === 1 ? "set" : "sets"
-        })`
-      : "";
+  const exerciseLabel = groups.length === 1 ? "exercise" : "exercises";
+  const setLabel = exerciseSets.length === 1 ? "set" : "sets";
+  const stats = groups.length > 0 ? ` (${groups.length} ${exerciseLabel}, ${exerciseSets.length} ${setLabel})` : "";
 
   return `Can you walk me through your take on my ${focus} workout on ${formatScheduledDate(
     entry.date,
@@ -59,7 +56,7 @@ export function EmbeddedWorkoutCoachChat({
 
   const handleSend = useCallback(
     (message: string) => {
-      void sendMessage(message).catch(() => {});
+      sendMessage(message).catch(ignoreAsyncError);
     },
     [sendMessage],
   );
@@ -116,6 +113,9 @@ function noopSuggestion(): void {
   // Suggestions are not wired inside workout-detail chat.
 }
 
-function noopId(_id: string): void {
-  void _id;
+function noopId(): void {
+}
+
+function ignoreAsyncError(): undefined {
+  return undefined;
 }
