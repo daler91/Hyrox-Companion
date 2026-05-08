@@ -7,8 +7,10 @@ describe("exercise catalog", () => {
     expect(EXERCISE_DEFINITIONS.leg_press.label).toBe("Leg Press");
     expect(EXERCISE_DEFINITIONS.seated_cable_row.label).toBe("Seated Cable Row");
     expect(EXERCISE_DEFINITIONS.dumbbell_bench_press.label).toBe("Dumbbell Bench Press");
+    expect(EXERCISE_DEFINITIONS.decline_bench_press.label).toBe("Decline Bench Press");
     expect(EXERCISE_DEFINITIONS.machine_shoulder_press.label).toBe("Machine Shoulder Press");
     expect(EXERCISE_DEFINITIONS.t_bar_row.label).toBe("T-Bar Row");
+    expect(EXERCISE_DEFINITIONS.stationary_bike.label).toBe("Stationary Bike");
     expect(EXERCISE_DEFINITIONS.jump_rope.label).toBe("Jump Rope");
   });
 });
@@ -16,6 +18,8 @@ describe("exercise catalog", () => {
 describe("normalizeExerciseName", () => {
   it("returns canonical names when already valid", () => {
     expect(normalizeExerciseName("back_squat")).toBe("back_squat");
+    expect(normalizeExerciseName("Decline Bench Press")).toBe("decline_bench_press");
+    expect(normalizeExerciseName("Stationary Bike")).toBe("stationary_bike");
   });
 
   it("normalizes common aliases", () => {
