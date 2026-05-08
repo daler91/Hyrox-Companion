@@ -1,4 +1,5 @@
 import { exerciseSetSchema, type ParsedExercise } from "@shared/schema";
+import { EXERCISE_DEFINITIONS } from "@shared/schema/exercises";
 import { z } from "zod";
 
 import { AppError, ErrorCode } from "../errors";
@@ -10,14 +11,42 @@ import { GEMINI_MODEL, GEMINI_VISION_MODEL, getAiClient, retryWithBackoff, track
 // 🛡️ exerciseName must be non-empty. customLabel must accompany any "custom"
 // row; if the AI misses it we synthesize one in post-validation rather than
 // dropping the row, so a single bad exercise doesn't nuke the whole parse.
-export const parsedExerciseSchema = z.object({
+//
+// Be lenient about `category` and `sets`: Gemini regularly emits rows that
+// only describe the movement (no sets array, or sets:[]) for steady-state /
+// EMOM-style workouts. Dropping those rows wholesale produced "degraded
+// parse quality" telemetry in production. We coerce a default 1-set stub so
+// the row survives validation; downstream `mapValidatedExercise` already
+// handles missing per-set fields.
+const defaultSetsForLenience: z.infer<typeof exerciseSetSchema>[] = [{ setNumber: 1 }];
+
+function inferCategoryFromExerciseName(name: unknown): string {
+  if (typeof name !== "string") return "conditioning";
+  const known = (EXERCISE_DEFINITIONS as Record<string, { category: string } | undefined>)[name];
+  return known?.category ?? "conditioning";
+}
+
+export const parsedExerciseSchema = z.preprocess((raw) => {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
+  const row = { ...(raw as Record<string, unknown>) };
+  if (typeof row.category !== "string" || row.category.trim().length === 0) {
+    // Prefer the canonical category from EXERCISE_DEFINITIONS so a known
+    // back_squat / easy_run row isn't mislabeled as "conditioning" — that
+    // would break category-scoped analytics (e.g. strength e1RM rollups).
+    row.category = inferCategoryFromExerciseName(row.exerciseName);
+  }
+  if (!Array.isArray(row.sets) || (row.sets as unknown[]).length === 0) {
+    row.sets = defaultSetsForLenience;
+  }
+  return row;
+}, z.object({
   exerciseName: z.string().min(1, "exerciseName must not be empty"),
   category: z.string(),
   customLabel: z.string().optional().nullable(),
   confidence: z.number().min(0).max(100).optional().nullable(),
   missingFields: z.array(z.string()).optional().nullable(),
   sets: z.array(exerciseSetSchema).min(1),
-});
+}));
 
 const parserResponseSchema = z.object({
   exercises: z.array(parsedExerciseSchema).optional().default([]),
@@ -340,6 +369,13 @@ function summarizeMalformedRow(row: unknown): { keyCount: number; keys: string[]
   };
 }
 
+function formatZodIssues(error: z.ZodError): string {
+  return error.issues
+    .slice(0, 4)
+    .map((issue) => `${issue.path.join(".") || "<root>"}:${issue.message}`)
+    .join(" | ");
+}
+
 function validateRowsDetailed(rawArray: unknown[]): { acceptedRows: z.infer<typeof parsedExerciseSchema>[]; rejectedRows: { index: number; reason: string }[] } {
   const acceptedRows: z.infer<typeof parsedExerciseSchema>[] = [];
   const rejectedRows: { index: number; reason: string }[] = [];
@@ -349,11 +385,16 @@ function validateRowsDetailed(rawArray: unknown[]): { acceptedRows: z.infer<type
     if (parsed.success) {
       acceptedRows.push(parsed.data);
     } else {
+      // Surface the failing field paths in the message itself — Railway's
+      // collapsed view hides structured fields, and "dropped malformed row"
+      // alone gave us no signal on what Gemini actually returned.
+      const issuesSummary = formatZodIssues(parsed.error);
+      const rowSummary = summarizeMalformedRow(row);
       logger.warn(
-        { err: parsed.error, index: i, rowSummary: summarizeMalformedRow(row) },
-        "[gemini] exercise-parse dropped malformed row",
+        { issues: parsed.error.issues, index: i, rowSummary },
+        `[gemini] exercise-parse dropped malformed row (idx=${i}, issues=${issuesSummary}, rawPreview=${rowSummary.rawPreview})`,
       );
-      rejectedRows.push({ index: i, reason: "schema_validation_failed" });
+      rejectedRows.push({ index: i, reason: `schema_validation_failed: ${issuesSummary}` });
     }
   }
   return { acceptedRows, rejectedRows };

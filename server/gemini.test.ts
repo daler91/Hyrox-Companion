@@ -158,10 +158,35 @@ describe("parsedExerciseSchema", () => {
     expect(() => parsedExerciseSchema.parse(exercise)).not.toThrow();
   });
 
-  it("rejects empty sets array", () => {
-    expect(() =>
-      parsedExerciseSchema.parse({ ...validExercise, sets: [] }),
-    ).toThrow();
+  it("synthesizes a default set when sets array is empty (lenient salvage)", () => {
+    // Gemini frequently emits rows with empty sets for steady-state / EMOM
+    // workouts. The schema preprocessor coerces a single default set so the
+    // row survives validation instead of being silently dropped.
+    const parsed = parsedExerciseSchema.parse({ ...validExercise, sets: [] });
+    expect(parsed.sets).toHaveLength(1);
+    expect(parsed.sets[0].setNumber).toBe(1);
+  });
+
+  it("synthesizes a default set when sets is missing entirely", () => {
+    const { sets: _sets, ...withoutSets } = validExercise;
+    const parsed = parsedExerciseSchema.parse(withoutSets);
+    expect(parsed.sets).toHaveLength(1);
+  });
+
+  it("infers category from exerciseName when missing (known key)", () => {
+    const { category: _category, ...withoutCategory } = validExercise;
+    // validExercise.exerciseName is a known strength key (back_squat).
+    const parsed = parsedExerciseSchema.parse(withoutCategory);
+    expect(parsed.category).toBe("strength");
+  });
+
+  it("falls back to conditioning when exerciseName is unknown/custom", () => {
+    const parsed = parsedExerciseSchema.parse({
+      ...validExercise,
+      exerciseName: "custom",
+      category: undefined,
+    });
+    expect(parsed.category).toBe("conditioning");
   });
 
   it("rejects confidence outside 0-100 range", () => {
