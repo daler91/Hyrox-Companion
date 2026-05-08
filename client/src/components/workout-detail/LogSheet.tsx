@@ -9,6 +9,7 @@ import { usePlanDayExercises } from "@/hooks/usePlanDayExercises";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { formatScheduledDate } from "@/lib/timelineEntryFormat";
 
+import { buildWorkoutCoachSeedMessage, EmbeddedWorkoutCoachChat } from "./EmbeddedWorkoutCoachChat";
 import { ExerciseTable } from "./ExerciseTable";
 import { SaveStatePill } from "./SaveStatePill";
 import { PrescriptionEditor } from "./shared/PrescriptionEditor";
@@ -19,7 +20,11 @@ interface LogSheetBaseProps {
   readonly entry: TimelineEntry | null;
   readonly onClose: () => void;
   readonly onSkip?: (entry: TimelineEntry) => void;
-  readonly onAskCoach?: (entry: TimelineEntry) => void;
+  readonly onAskCoach?: (entry: TimelineEntry, seedText: string) => void;
+  readonly coachChatOpen?: boolean;
+  readonly coachChatNonce?: number;
+  readonly coachSeedText?: string;
+  readonly onCloseCoachChat?: () => void;
 }
 
 type LogSheetModeProps =
@@ -307,6 +312,10 @@ export function LogSheet({
   onLogAsPlanned,
   onSkip,
   onAskCoach,
+  coachChatOpen = false,
+  coachChatNonce,
+  coachSeedText,
+  onCloseCoachChat,
   isLogging,
   mode = "log",
 }: LogSheetProps) {
@@ -331,6 +340,11 @@ export function LogSheet({
   const parseBlocked = isParseBlocked(entry, planSets);
   const isEditMode = mode === "edit";
   const title = entry.focus || (isEditMode ? "Edit workout" : "Log workout");
+  const coachExerciseSets = entry.planDayId ? planSets.exerciseSets : (entry.exerciseSets ?? []);
+  const currentCoachSeedText = buildWorkoutCoachSeedMessage(entry, coachExerciseSets);
+  const handleAskCoach = onAskCoach
+    ? (target: TimelineEntry) => onAskCoach(target, currentCoachSeedText)
+    : undefined;
 
   return (
     <ResponsiveSheet
@@ -338,38 +352,58 @@ export function LogSheet({
       onOpenChange={(open) => !open && onClose()}
       title={title}
       description={formatScheduledDate(entry.date)}
-      contentClassName="sm:max-w-2xl"
+      contentClassName={coachChatOpen ? "sm:max-w-5xl" : "sm:max-w-2xl"}
       testId={`log-sheet-${entry.id}`}
     >
-      <div className="space-y-4">
-        {entry.planDayId ? (
-          <PlannedPrescription
-            entry={entry}
-            planSets={planSets}
-            weightUnit={weightUnit}
-            distanceUnit={distanceUnit}
-            parseBlocked={parseBlocked}
-          />
-        ) : (
-          <WorkoutPrescriptionSummary entry={entry} rationaleVariant="collapsed" />
-        )}
+      <div
+        className={
+          coachChatOpen
+            ? "grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)]"
+            : "space-y-4"
+        }
+      >
+        <div className="min-w-0 space-y-4">
+          {entry.planDayId ? (
+            <PlannedPrescription
+              entry={entry}
+              planSets={planSets}
+              weightUnit={weightUnit}
+              distanceUnit={distanceUnit}
+              parseBlocked={parseBlocked}
+            />
+          ) : (
+            <WorkoutPrescriptionSummary entry={entry} rationaleVariant="collapsed" />
+          )}
 
-        {isEditMode ? (
-          <EditSecondaryActions entry={entry} onAskCoach={onAskCoach} onSkip={onSkip} />
-        ) : (
-          <LogCompletionControls
+          {isEditMode ? (
+            <EditSecondaryActions entry={entry} onAskCoach={handleAskCoach} onSkip={onSkip} />
+          ) : (
+            <LogCompletionControls
+              entry={entry}
+              rpe={rpe}
+              setRpe={setRpe}
+              onLog={handleLog}
+              isLogging={isLogging}
+              isSaving={planSets.isSaving}
+              parseBlocked={parseBlocked}
+              onAskCoach={handleAskCoach}
+              onSkip={onSkip}
+            />
+          )}
+        </div>
+        {coachChatOpen ? (
+          <EmbeddedWorkoutCoachChat
             entry={entry}
-            rpe={rpe}
-            setRpe={setRpe}
-            onLog={handleLog}
-            isLogging={isLogging}
-            isSaving={planSets.isSaving}
-            parseBlocked={parseBlocked}
-            onAskCoach={onAskCoach}
-            onSkip={onSkip}
+            seedText={coachSeedText ?? currentCoachSeedText}
+            seedNonce={coachChatNonce}
+            onBack={onCloseCoachChat ?? noop}
           />
-        )}
+        ) : null}
       </div>
     </ResponsiveSheet>
   );
+}
+
+function noop(): undefined {
+  return undefined;
 }
