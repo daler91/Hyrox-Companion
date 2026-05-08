@@ -328,7 +328,8 @@ interface HeuristicSetExpression {
 
 function hasOnlyAsciiLettersAndSpaces(value: string): boolean {
   for (const char of value) {
-    const code = char.charCodeAt(0);
+    const code = char.codePointAt(0);
+    if (code == null) return false;
     const isUppercaseLetter = code >= 65 && code <= 90;
     const isLowercaseLetter = code >= 97 && code <= 122;
     if (char !== " " && !isUppercaseLetter && !isLowercaseLetter) return false;
@@ -347,8 +348,8 @@ function parseHeuristicLead(chunk: string): HeuristicLead | null {
 
 function isAsciiDigit(char: string | undefined): boolean {
   if (!char) return false;
-  const code = char.charCodeAt(0);
-  return code >= 48 && code <= 57;
+  const code = char.codePointAt(0);
+  return code != null && code >= 48 && code <= 57;
 }
 
 function isWhitespace(char: string | undefined): boolean {
