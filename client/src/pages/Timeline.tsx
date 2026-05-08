@@ -9,11 +9,8 @@ import {
 import type { TimelineAnnotation, TimelineEntry } from "@shared/schema";
 import type { Virtualizer } from "@tanstack/react-virtual";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { format,isToday, parseISO } from "date-fns";
-import {
-  ChevronDown,
-  ChevronUp,
-} from "lucide-react";
+import { format, isToday, parseISO } from "date-fns";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
 
 import { AIConsentDialog } from "@/components/coach/AIConsentDialog";
@@ -46,8 +43,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
 import { useIsAiCoachEnabled, useIsAuthUserLoaded, useIsAutoCoaching } from "@/hooks/useAuth";
 import { useTimelineState } from "@/hooks/useTimelineState";
-import { api, QUERY_KEYS } from "@/lib/api";
-import { queryClient } from "@/lib/queryClient";
+import { useEmbeddedCoachRouting } from "@/pages/timeline/useEmbeddedCoachRouting";
 import { useTimelineDialogState } from "@/pages/timeline/useTimelineDialogState";
 import { useTimelinePageController } from "@/pages/timeline/useTimelinePageController";
 import { useTimelineSurfaceSelection } from "@/pages/timeline/useTimelineSurfaceSelection";
@@ -57,7 +53,6 @@ import { useTimelineSurfaceSelection } from "@/pages/timeline/useTimelineSurface
 // SkippedSheet (status=skipped). One sheet per status; click events
 // in TimelineWorkoutCard call openSurface which classifies the entry
 // and opens the right one.
-
 
 type TimelineState = ReturnType<typeof useTimelineState>;
 type TimelineData = TimelineState["data"];
@@ -172,7 +167,7 @@ function TimelineContent({
           data-testid="button-show-more-past"
         >
           <ChevronUp className="h-4 w-4 mr-2" />
-          Show {hiddenPastCount} more past workout{hiddenPastCount > 1 ? 's' : ''}
+          Show {hiddenPastCount} more past workout{hiddenPastCount > 1 ? "s" : ""}
         </Button>
       )}
 
@@ -188,18 +183,24 @@ function TimelineContent({
         </Button>
       )}
 
-      <div style={{ position: 'relative' }}>
-        <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}>
+      <div style={{ position: "relative" }}>
+        <div
+          style={{
+            height: `${rowVirtualizer.getTotalSize()}px`,
+            width: "100%",
+            position: "relative",
+          }}
+        >
           {rowVirtualizer.getVirtualItems().map((virtualRow) => {
             const [date, entries] = allVisibleGroups[virtualRow.index];
             return (
               <div
                 key={virtualRow.key}
                 style={{
-                  position: 'absolute',
+                  position: "absolute",
                   top: 0,
                   left: 0,
-                  width: '100%',
+                  width: "100%",
                   transform: `translateY(${virtualRow.start}px)`,
                 }}
                 ref={rowVirtualizer.measureElement}
@@ -240,7 +241,7 @@ function TimelineContent({
           data-testid="button-show-more-future"
         >
           <ChevronDown className="h-4 w-4 mr-2" />
-          Show {hiddenFutureCount} more upcoming workout{hiddenFutureCount > 1 ? 's' : ''}
+          Show {hiddenFutureCount} more upcoming workout{hiddenFutureCount > 1 ? "s" : ""}
         </Button>
       )}
 
@@ -259,64 +260,139 @@ function TimelineContent({
   );
 }
 
-
 export default function Timeline() {
-  // Subscribe to specific user fields via primitive-returning selectors
-  // instead of the full useAuth() so the auto-coach polling (every 2s
-  // for up to 5min after a log) doesn't drag the entire timeline +
-  // virtualizer through a re-render on every poll. The polling is
-  // still driven by useAuth() callers higher up the tree (App,
-  // AppSidebar); we just don't subscribe to it here.
+  // Keep Timeline off the full auth object while auto-coach polling is active.
   const aiCoachEnabled = useIsAiCoachEnabled();
   const isAutoCoaching = useIsAutoCoaching();
   const isAuthUserLoaded = useIsAuthUserLoaded();
   const { toast } = useToast();
   const isMobile = useIsMobile();
-  const { data, filters, onboarding, planImport, workoutActions, combine, selectedPlanId, setSelectedPlanId } = useTimelineState({ aiCoachEnabled });
+  const {
+    data,
+    filters,
+    onboarding,
+    planImport,
+    workoutActions,
+    combine,
+    selectedPlanId,
+    setSelectedPlanId,
+  } = useTimelineState({ aiCoachEnabled });
 
-  const { plans, plansLoading, personalRecords, timelineData, timelineLoading, annotations, isNewUser, todayRef, scrollToToday } = data;
-  const { filterStatus, setFilterStatus, showAllPast, setShowAllPast, showAllFuture, setShowAllFuture, pastGroups, futureGroups, visiblePastGroups, visibleFutureGroups, hiddenPastCount, hiddenFutureCount } = filters;
+  const {
+    plans,
+    plansLoading,
+    personalRecords,
+    timelineData,
+    timelineLoading,
+    annotations,
+    isNewUser,
+    todayRef,
+    scrollToToday,
+  } = data;
+  const {
+    filterStatus,
+    setFilterStatus,
+    showAllPast,
+    setShowAllPast,
+    showAllFuture,
+    setShowAllFuture,
+    pastGroups,
+    futureGroups,
+    visiblePastGroups,
+    visibleFutureGroups,
+    hiddenPastCount,
+    hiddenFutureCount,
+  } = filters;
   const { showOnboarding, coachOpen, setCoachOpen, handleOnboardingComplete } = onboarding;
-  const { csvPreview, setCsvPreview, schedulingPlanId, setSchedulingPlanId, startDate, setStartDate, fileInputRef, handleFileUpload, confirmImport, importMutation, samplePlanMutation, renamePlanMutation, schedulePlanMutation, updatePlanGoalMutation } = planImport;
-  const { skipConfirmEntry, setSkipConfirmEntry, handleMarkComplete, handleChangeStatus, handleDelete, confirmSkip, logWorkoutMutation } = workoutActions;
-  const { combiningEntry, setCombiningEntry, combineSecondEntry, setCombineSecondEntry, showCombineDialog, setShowCombineDialog, handleCombine, handleConfirmCombine, combineWorkoutsMutation } = combine;
+  const {
+    csvPreview,
+    setCsvPreview,
+    schedulingPlanId,
+    setSchedulingPlanId,
+    startDate,
+    setStartDate,
+    fileInputRef,
+    handleFileUpload,
+    confirmImport,
+    importMutation,
+    samplePlanMutation,
+    renamePlanMutation,
+    schedulePlanMutation,
+    updatePlanGoalMutation,
+  } = planImport;
+  const {
+    skipConfirmEntry,
+    setSkipConfirmEntry,
+    handleMarkComplete,
+    handleChangeStatus,
+    handleDelete,
+    confirmSkip,
+    logWorkoutMutation,
+  } = workoutActions;
+  const {
+    combiningEntry,
+    setCombiningEntry,
+    combineSecondEntry,
+    setCombineSecondEntry,
+    showCombineDialog,
+    setShowCombineDialog,
+    handleCombine,
+    handleConfirmCombine,
+    combineWorkoutsMutation,
+  } = combine;
   const scrollRef = useRef<HTMLDivElement>(null);
   const {
-    previewEntry, setPreviewEntry, futureEditEntry, setFutureEditEntry, logEntry, setLogEntry, reviewEntry, setReviewEntry, skippedEntry, setSkippedEntry, openSurface, closeAllSurfacesAndClearUrl,
+    previewEntry,
+    setPreviewEntry,
+    futureEditEntry,
+    setFutureEditEntry,
+    logEntry,
+    setLogEntry,
+    reviewEntry,
+    setReviewEntry,
+    skippedEntry,
+    setSkippedEntry,
+    openSurface,
+    closeAllSurfacesAndClearUrl,
   } = useTimelineSurfaceSelection(timelineData);
   const [adhocOpen, setAdhocOpen] = useState(false);
   const {
-    showAIConsent, setShowAIConsent, annotationsDialogOpen, setAnnotationsDialogOpen, annotationInitialDate, setAnnotationInitialDate, handleAddAnnotation, handleEditAnnotation,
+    showAIConsent,
+    setShowAIConsent,
+    annotationsDialogOpen,
+    setAnnotationsDialogOpen,
+    annotationInitialDate,
+    setAnnotationInitialDate,
+    handleAddAnnotation,
+    handleEditAnnotation,
   } = useTimelineDialogState();
+  const {
+    embeddedCoachEntryId,
+    embeddedCoachSeedText,
+    embeddedCoachSeedNonce,
+    handleCoachToggle,
+    openEmbeddedCoach,
+    closeEmbeddedCoach,
+    closeWorkoutSurfaces,
+    openTimelineSurface,
+    clearPendingCoachIntent,
+    handleAIConsentAccept,
+  } = useEmbeddedCoachRouting({
+    aiCoachEnabled,
+    isAuthUserLoaded,
+    setCoachOpen,
+    setShowAIConsent,
+    openSurface,
+    closeAllSurfacesAndClearUrl,
+    toast,
+  });
 
-  // Gate the AI Coach behind an explicit consent prompt when the user has
-  // not yet opted in (aiCoachEnabled defaults to false for new users).
-  const handleCoachToggle = useCallback((open: boolean) => {
-    if (open && isAuthUserLoaded && !aiCoachEnabled) {
-      setShowAIConsent(true);
-      return;
-    }
-    setCoachOpen(open);
-  }, [isAuthUserLoaded, aiCoachEnabled, setCoachOpen, setShowAIConsent]);
-
-  const handleAIConsentAccept = useCallback(() => {
-    setShowAIConsent(false);
-    api.preferences.update({ aiCoachEnabled: true })
-      .then(() => {
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.authUser }).catch(() => {});
-        setCoachOpen(true);
-      })
-      .catch(() => {
-        toast({ title: "Could not enable AI Coach", description: "Please try again." });
-      });
-  }, [setCoachOpen, setShowAIConsent, toast]);
-
-  const { annotationsByDate, moveEntry, isMoving, handleDeleteAnnotation, isAnnotationDeleting } = useTimelinePageController(selectedPlanId, annotations);
+  const { annotationsByDate, moveEntry, isMoving, handleDeleteAnnotation, isAnnotationDeleting } =
+    useTimelinePageController(selectedPlanId, annotations);
 
   const allVisibleGroups = useMemo(() => {
     return [...visiblePastGroups.slice().reverse(), ...visibleFutureGroups];
   }, [visiblePastGroups, visibleFutureGroups]);
-
 
   // Require a small activation distance on pointer drag so clicking the
   // drag handle to open a tooltip / focus it doesn't accidentally pick
@@ -368,15 +444,9 @@ export default function Timeline() {
     rowVirtualizer.scrollToIndex(todayIndex, { align: "start", behavior: "smooth" });
   }, [allVisibleGroups, rowVirtualizer, scrollToToday]);
 
-
-
-
   return (
     <>
-      <OnboardingWizard
-        open={showOnboarding}
-        onComplete={handleOnboardingComplete}
-      />
+      <OnboardingWizard open={showOnboarding} onComplete={handleOnboardingComplete} />
       <Input
         ref={fileInputRef}
         type="file"
@@ -385,266 +455,269 @@ export default function Timeline() {
         onChange={handleFileUpload}
         data-testid="input-csv-upload-onboarding"
       />
-    <div className="flex h-full">
-      <div ref={scrollRef} className="flex-1 overflow-auto p-4 md:p-8 relative">
-        <div className="max-w-5xl mx-auto space-y-6">
-          <TimelineHeader />
+      <div className="flex h-full">
+        <div ref={scrollRef} className="flex-1 overflow-auto p-4 md:p-8 relative">
+          <div className="max-w-5xl mx-auto space-y-6">
+            <TimelineHeader />
 
-          <CoachReviewingIndicator isActive={isAutoCoaching} />
+            <CoachReviewingIndicator isActive={isAutoCoaching} />
 
-          <TimelineFilters
-        plans={plans}
-        plansLoading={plansLoading}
-        selectedPlanId={selectedPlanId}
-        onPlanChange={setSelectedPlanId}
-        filterStatus={filterStatus}
-        onFilterChange={setFilterStatus}
-        onFileUpload={handleFileUpload}
-        isImporting={importMutation.isPending}
-        onRenamePlan={(planId, name) => renamePlanMutation.mutate({ planId, name })}
-        isRenaming={renamePlanMutation.isPending}
-        onGoalSave={(planId, goal) => updatePlanGoalMutation.mutate({ planId, goal })}
-        isUpdatingGoal={updatePlanGoalMutation.isPending}
-        onScheduleClick={(planId) => setSchedulingPlanId(planId)}
-      />
-
-          <TimelineTodayIndicator
-            todayRef={todayRef}
-            scrollRef={scrollRef}
-            onScrollToToday={handleScrollToToday}
-            todayPresent={todayPresent}
-          />
-
-      <DndContext sensors={dragSensors} onDragEnd={handleDragEnd}>
-        <TimelineContent
-          timelineLoading={timelineLoading}
-          filterStatus={filterStatus}
-          selectedPlanId={selectedPlanId}
-          plans={plans}
-          samplePlanMutation={samplePlanMutation}
-          importMutation={importMutation}
-          handleFileUpload={handleFileUpload}
-          setSchedulingPlanId={setSchedulingPlanId}
-          setFilterStatus={setFilterStatus}
-          hiddenPastCount={hiddenPastCount}
-          setShowAllPast={setShowAllPast}
-          showAllPast={showAllPast}
-          pastGroups={pastGroups}
-          hiddenFutureCount={hiddenFutureCount}
-          setShowAllFuture={setShowAllFuture}
-          showAllFuture={showAllFuture}
-          futureGroups={futureGroups}
-          allVisibleGroups={allVisibleGroups}
-          rowVirtualizer={rowVirtualizer}
-          todayRef={todayRef}
-          handleMarkComplete={handleMarkComplete}
-          onCardClick={openSurface}
-          handleCombine={handleCombine}
-          combiningEntry={combiningEntry}
-          personalRecords={personalRecords}
-          isAutoCoaching={isAutoCoaching}
-          annotationsByDate={annotationsByDate}
-          onAddAnnotation={handleAddAnnotation}
-          onEditAnnotation={handleEditAnnotation}
-          onDeleteAnnotation={handleDeleteAnnotation}
-          isAnnotationDeleting={isAnnotationDeleting}
-          onMoveEntry={moveEntry}
-          isMovingEntry={isMoving}
-        />
-      </DndContext>
-
-          {!previewEntry && !futureEditEntry && !logEntry && !reviewEntry && !skippedEntry && !adhocOpen && (
-            <FloatingActionButton
-              coachPanelOpen={coachOpen}
-              onCoachToggle={() => handleCoachToggle(!coachOpen)}
-              onLogWorkout={() => setAdhocOpen(true)}
+            <TimelineFilters
+              plans={plans}
+              plansLoading={plansLoading}
+              selectedPlanId={selectedPlanId}
+              onPlanChange={setSelectedPlanId}
+              filterStatus={filterStatus}
+              onFilterChange={setFilterStatus}
+              onFileUpload={handleFileUpload}
+              isImporting={importMutation.isPending}
+              onRenamePlan={(planId, name) => renamePlanMutation.mutate({ planId, name })}
+              isRenaming={renamePlanMutation.isPending}
+              onGoalSave={(planId, goal) => updatePlanGoalMutation.mutate({ planId, goal })}
+              isUpdatingGoal={updatePlanGoalMutation.isPending}
+              onScheduleClick={(planId) => setSchedulingPlanId(planId)}
             />
-          )}
 
-          <AdhocLogSheet open={adhocOpen} onClose={() => setAdhocOpen(false)} />
-
-          <SchedulePlanDialog
-            open={!!schedulingPlanId}
-            onOpenChange={(open) => !open && setSchedulingPlanId(null)}
-            startDate={startDate}
-            onStartDateChange={setStartDate}
-            onSchedule={() =>
-              schedulingPlanId &&
-              schedulePlanMutation.mutate({ planId: schedulingPlanId, startDate })
-            }
-            isPending={schedulePlanMutation.isPending}
-          />
-
-          <LogSheet
-            entry={logEntry}
-            onClose={closeAllSurfacesAndClearUrl}
-            isLogging={logWorkoutMutation.isPending}
-            onLogAsPlanned={(entry, rpeOverride) => {
-              setLogEntry(null);
-              // Only fan a fresh entry through when RPE actually
-              // changed so we don't churn the cache for a no-op.
-              if (rpeOverride === entry.rpe) {
-                handleMarkComplete(entry);
-              } else {
-                handleMarkComplete({ ...entry, rpe: rpeOverride ?? null });
-              }
-            }}
-            onSkip={(entry) => {
-              setLogEntry(null);
-              setSkipConfirmEntry(entry);
-            }}
-            onAskCoach={() => {
-              setLogEntry(null);
-              handleCoachToggle(true);
-            }}
-          />
-
-          <LogSheet
-            mode="edit"
-            entry={futureEditEntry}
-            onClose={closeAllSurfacesAndClearUrl}
-            onSkip={(entry) => {
-              setFutureEditEntry(null);
-              setSkipConfirmEntry(entry);
-            }}
-            onAskCoach={() => {
-              setFutureEditEntry(null);
-              handleCoachToggle(true);
-            }}
-          />
-
-          <SkippedSheet
-            key={skippedEntry?.id ?? "skipped-sheet"}
-            entry={skippedEntry}
-            onClose={closeAllSurfacesAndClearUrl}
-            onAskCoach={() => {
-              setSkippedEntry(null);
-              handleCoachToggle(true);
-            }}
-            onUndoSkip={(entry) => {
-              setSkippedEntry(null);
-              handleChangeStatus(entry, "planned");
-            }}
-            onDelete={(entry) => {
-              setSkippedEntry(null);
-              handleDelete(entry);
-            }}
-          />
-
-          <ReviewSurface
-            key={reviewEntry?.id ?? "review-surface"}
-            entry={reviewEntry}
-            onClose={closeAllSurfacesAndClearUrl}
-            onAskCoach={() => {
-              setReviewEntry(null);
-              handleCoachToggle(true);
-            }}
-            onMarkPlanned={(entry) => {
-              setReviewEntry(null);
-              handleChangeStatus(entry, "planned");
-            }}
-            onDelete={(entry) => {
-              setReviewEntry(null);
-              handleDelete(entry);
-            }}
-          />
-
-          <PreviewSheet
-            entry={previewEntry}
-            onClose={closeAllSurfacesAndClearUrl}
-            onAskCoach={() => {
-              setPreviewEntry(null);
-              handleCoachToggle(true);
-            }}
-            onMove={() => {
-              setPreviewEntry(null);
-              // The MoveEntryMenu lives on the card itself, so the simplest
-              // honest action here is to close the sheet — the user can
-              // then use the card's own move affordance. Wiring a date
-              // picker into this sheet is Slice 2's concern; until then
-              // we don't pretend to offer it.
-              toast({
-                title: "Use the move icon on the card",
-                description: "Drag, or use the calendar menu in the card's top corner.",
-              });
-            }}
-            onSkip={(entry) => {
-              setPreviewEntry(null);
-              setSkipConfirmEntry(entry);
-            }}
-            onEditWorkout={(entry) => {
-              setPreviewEntry(null);
-              setFutureEditEntry(entry);
-            }}
-          />
-
-          <SkipConfirmDialog
-            entry={skipConfirmEntry}
-            onOpenChange={() => setSkipConfirmEntry(null)}
-            onConfirm={confirmSkip}
-          />
-
-          <ImportPreviewDialog
-            preview={csvPreview}
-            onOpenChange={() => setCsvPreview(null)}
-            onConfirm={confirmImport}
-            isPending={importMutation.isPending}
-          />
-
-          <CombineWorkoutsDialog
-            open={showCombineDialog}
-            onOpenChange={(open) => {
-              setShowCombineDialog(open);
-              if (!open) {
-                setCombiningEntry(null);
-                setCombineSecondEntry(null);
-              }
-            }}
-            entry1={combiningEntry}
-            entry2={combineSecondEntry}
-            onConfirm={handleConfirmCombine}
-            isPending={combineWorkoutsMutation.isPending}
-          />
-
-          <AnnotationsDialog
-            open={annotationsDialogOpen}
-            onOpenChange={(open) => {
-              setAnnotationsDialogOpen(open);
-              if (!open) {
-                setAnnotationInitialDate(undefined);
-              }
-            }}
-            initialDate={annotationInitialDate}
-          />
-        </div>
-      </div>
-      
-      {coachOpen && !isMobile && (
-        <div className={previewEntry || futureEditEntry || logEntry || reviewEntry || skippedEntry || adhocOpen ? "hidden" : "w-80 lg:w-96 flex-shrink-0"}>
-          <FeatureErrorBoundaryWrapper featureName="Coach">
-            <CoachPanel
-              isOpen={coachOpen}
-              onClose={() => setCoachOpen(false)}
-              timeline={timelineData}
-              isNewUser={isNewUser}
+            <TimelineTodayIndicator
+              todayRef={todayRef}
+              scrollRef={scrollRef}
+              onScrollToToday={handleScrollToToday}
+              todayPresent={todayPresent}
             />
-          </FeatureErrorBoundaryWrapper>
-        </div>
-      )}
 
-      {coachOpen && isMobile && (
-        // Mobile coach surface: a bottom sheet at ~70vh so the user can still
-        // see the top of their timeline while chatting with the coach.
-        // Hidden (display:none) rather than unmounted while a workout detail
-        // is open so in-flight chat streams and local message state survive.
-        <div className={previewEntry || futureEditEntry || logEntry || reviewEntry || skippedEntry || adhocOpen ? "hidden" : "fixed inset-x-0 bottom-0 z-50 h-[70vh]"}>
+            <DndContext sensors={dragSensors} onDragEnd={handleDragEnd}>
+              <TimelineContent
+                timelineLoading={timelineLoading}
+                filterStatus={filterStatus}
+                selectedPlanId={selectedPlanId}
+                plans={plans}
+                samplePlanMutation={samplePlanMutation}
+                importMutation={importMutation}
+                handleFileUpload={handleFileUpload}
+                setSchedulingPlanId={setSchedulingPlanId}
+                setFilterStatus={setFilterStatus}
+                hiddenPastCount={hiddenPastCount}
+                setShowAllPast={setShowAllPast}
+                showAllPast={showAllPast}
+                pastGroups={pastGroups}
+                hiddenFutureCount={hiddenFutureCount}
+                setShowAllFuture={setShowAllFuture}
+                showAllFuture={showAllFuture}
+                futureGroups={futureGroups}
+                allVisibleGroups={allVisibleGroups}
+                rowVirtualizer={rowVirtualizer}
+                todayRef={todayRef}
+                handleMarkComplete={handleMarkComplete}
+                onCardClick={openTimelineSurface}
+                handleCombine={handleCombine}
+                combiningEntry={combiningEntry}
+                personalRecords={personalRecords}
+                isAutoCoaching={isAutoCoaching}
+                annotationsByDate={annotationsByDate}
+                onAddAnnotation={handleAddAnnotation}
+                onEditAnnotation={handleEditAnnotation}
+                onDeleteAnnotation={handleDeleteAnnotation}
+                isAnnotationDeleting={isAnnotationDeleting}
+                onMoveEntry={moveEntry}
+                isMovingEntry={isMoving}
+              />
+            </DndContext>
+
+            {!previewEntry &&
+              !futureEditEntry &&
+              !logEntry &&
+              !reviewEntry &&
+              !skippedEntry &&
+              !adhocOpen && (
+                <FloatingActionButton
+                  coachPanelOpen={coachOpen}
+                  onCoachToggle={() => handleCoachToggle(!coachOpen)}
+                  onLogWorkout={() => setAdhocOpen(true)}
+                />
+              )}
+
+            <AdhocLogSheet open={adhocOpen} onClose={() => setAdhocOpen(false)} />
+
+            <SchedulePlanDialog
+              open={!!schedulingPlanId}
+              onOpenChange={(open) => !open && setSchedulingPlanId(null)}
+              startDate={startDate}
+              onStartDateChange={setStartDate}
+              onSchedule={() =>
+                schedulingPlanId &&
+                schedulePlanMutation.mutate({ planId: schedulingPlanId, startDate })
+              }
+              isPending={schedulePlanMutation.isPending}
+            />
+
+            <LogSheet
+              entry={logEntry}
+              onClose={closeWorkoutSurfaces}
+              isLogging={logWorkoutMutation.isPending}
+              onLogAsPlanned={(entry, rpeOverride) => {
+                closeEmbeddedCoach();
+                setLogEntry(null);
+                // Only fan a fresh entry through when RPE actually
+                // changed so we don't churn the cache for a no-op.
+                if (rpeOverride === entry.rpe) {
+                  handleMarkComplete(entry);
+                } else {
+                  handleMarkComplete({ ...entry, rpe: rpeOverride ?? null });
+                }
+              }}
+              onSkip={(entry) => {
+                closeEmbeddedCoach();
+                setLogEntry(null);
+                setSkipConfirmEntry(entry);
+              }}
+              onAskCoach={openEmbeddedCoach}
+              coachChatOpen={embeddedCoachEntryId === logEntry?.id}
+              coachChatNonce={embeddedCoachSeedNonce}
+              coachSeedText={embeddedCoachSeedText}
+              onCloseCoachChat={closeEmbeddedCoach}
+            />
+
+            <LogSheet
+              mode="edit"
+              entry={futureEditEntry}
+              onClose={closeWorkoutSurfaces}
+              onSkip={(entry) => {
+                closeEmbeddedCoach();
+                setFutureEditEntry(null);
+                setSkipConfirmEntry(entry);
+              }}
+              onAskCoach={openEmbeddedCoach}
+              coachChatOpen={embeddedCoachEntryId === futureEditEntry?.id}
+              coachChatNonce={embeddedCoachSeedNonce}
+              coachSeedText={embeddedCoachSeedText}
+              onCloseCoachChat={closeEmbeddedCoach}
+            />
+
+            <SkippedSheet
+              key={skippedEntry?.id ?? "skipped-sheet"}
+              entry={skippedEntry}
+              onClose={closeWorkoutSurfaces}
+              onAskCoach={openEmbeddedCoach}
+              coachChatOpen={embeddedCoachEntryId === skippedEntry?.id}
+              coachChatNonce={embeddedCoachSeedNonce}
+              coachSeedText={embeddedCoachSeedText}
+              onCloseCoachChat={closeEmbeddedCoach}
+              onUndoSkip={(entry) => {
+                closeEmbeddedCoach();
+                setSkippedEntry(null);
+                handleChangeStatus(entry, "planned");
+              }}
+              onDelete={(entry) => {
+                closeEmbeddedCoach();
+                setSkippedEntry(null);
+                handleDelete(entry);
+              }}
+            />
+
+            <ReviewSurface
+              key={reviewEntry?.id ?? "review-surface"}
+              entry={reviewEntry}
+              onClose={closeWorkoutSurfaces}
+              onAskCoach={openEmbeddedCoach}
+              coachChatOpen={embeddedCoachEntryId === reviewEntry?.id}
+              coachChatNonce={embeddedCoachSeedNonce}
+              coachSeedText={embeddedCoachSeedText}
+              onCloseCoachChat={closeEmbeddedCoach}
+              onMarkPlanned={(entry) => {
+                closeEmbeddedCoach();
+                setReviewEntry(null);
+                handleChangeStatus(entry, "planned");
+              }}
+              onDelete={(entry) => {
+                closeEmbeddedCoach();
+                setReviewEntry(null);
+                handleDelete(entry);
+              }}
+            />
+
+            <PreviewSheet
+              entry={previewEntry}
+              onClose={closeWorkoutSurfaces}
+              onAskCoach={openEmbeddedCoach}
+              coachChatOpen={embeddedCoachEntryId === previewEntry?.id}
+              coachChatNonce={embeddedCoachSeedNonce}
+              coachSeedText={embeddedCoachSeedText}
+              onCloseCoachChat={closeEmbeddedCoach}
+              onMove={() => {
+                closeEmbeddedCoach();
+                setPreviewEntry(null);
+                // The card owns the move affordance, so close the sheet and point there.
+                toast({
+                  title: "Use the move icon on the card",
+                  description: "Drag, or use the calendar menu in the card's top corner.",
+                });
+              }}
+              onSkip={(entry) => {
+                closeEmbeddedCoach();
+                setPreviewEntry(null);
+                setSkipConfirmEntry(entry);
+              }}
+              onEditWorkout={(entry) => {
+                closeEmbeddedCoach();
+                setPreviewEntry(null);
+                setFutureEditEntry(entry);
+              }}
+            />
+
+            <SkipConfirmDialog
+              entry={skipConfirmEntry}
+              onOpenChange={() => setSkipConfirmEntry(null)}
+              onConfirm={confirmSkip}
+            />
+
+            <ImportPreviewDialog
+              preview={csvPreview}
+              onOpenChange={() => setCsvPreview(null)}
+              onConfirm={confirmImport}
+              isPending={importMutation.isPending}
+            />
+
+            <CombineWorkoutsDialog
+              open={showCombineDialog}
+              onOpenChange={(open) => {
+                setShowCombineDialog(open);
+                if (!open) {
+                  setCombiningEntry(null);
+                  setCombineSecondEntry(null);
+                }
+              }}
+              entry1={combiningEntry}
+              entry2={combineSecondEntry}
+              onConfirm={handleConfirmCombine}
+              isPending={combineWorkoutsMutation.isPending}
+            />
+
+            <AnnotationsDialog
+              open={annotationsDialogOpen}
+              onOpenChange={(open) => {
+                setAnnotationsDialogOpen(open);
+                if (!open) {
+                  setAnnotationInitialDate(undefined);
+                }
+              }}
+              initialDate={annotationInitialDate}
+            />
+          </div>
+        </div>
+
+        {coachOpen && !isMobile && (
           <div
-            data-testid="coach-panel-mobile-sheet"
-            className="relative h-full bg-background shadow-2xl rounded-t-2xl border-t border-x"
+            className={
+              previewEntry ||
+              futureEditEntry ||
+              logEntry ||
+              reviewEntry ||
+              skippedEntry ||
+              adhocOpen
+                ? "hidden"
+                : "w-80 lg:w-96 flex-shrink-0"
+            }
           >
-            <div className="flex items-center justify-center pt-2" aria-hidden="true">
-              <div className="h-1 w-10 rounded-full bg-muted-foreground/40" />
-            </div>
             <FeatureErrorBoundaryWrapper featureName="Coach">
               <CoachPanel
                 isOpen={coachOpen}
@@ -654,15 +727,47 @@ export default function Timeline() {
               />
             </FeatureErrorBoundaryWrapper>
           </div>
-        </div>
-      )}
+        )}
 
-      <AIConsentDialog
-        open={showAIConsent}
-        onAccept={handleAIConsentAccept}
-        onDecline={() => setShowAIConsent(false)}
-      />
-    </div>
+        {coachOpen && isMobile && (
+          // Hide instead of unmounting so in-flight chat streams survive detail sheets.
+          <div
+            className={
+              previewEntry ||
+              futureEditEntry ||
+              logEntry ||
+              reviewEntry ||
+              skippedEntry ||
+              adhocOpen
+                ? "hidden"
+                : "fixed inset-x-0 bottom-0 z-50 h-[70vh]"
+            }
+          >
+            <div
+              data-testid="coach-panel-mobile-sheet"
+              className="relative h-full bg-background shadow-2xl rounded-t-2xl border-t border-x"
+            >
+              <div className="flex items-center justify-center pt-2" aria-hidden="true">
+                <div className="h-1 w-10 rounded-full bg-muted-foreground/40" />
+              </div>
+              <FeatureErrorBoundaryWrapper featureName="Coach">
+                <CoachPanel
+                  isOpen={coachOpen}
+                  onClose={() => setCoachOpen(false)}
+                  timeline={timelineData}
+                  isNewUser={isNewUser}
+                />
+              </FeatureErrorBoundaryWrapper>
+            </div>
+          </div>
+        )}
+
+        <AIConsentDialog
+          open={showAIConsent}
+          onAccept={handleAIConsentAccept}
+          onDecline={clearPendingCoachIntent}
+        />
+      </div>
     </>
   );
 }
