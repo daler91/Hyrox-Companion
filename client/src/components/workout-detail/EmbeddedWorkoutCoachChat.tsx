@@ -63,7 +63,7 @@ export function EmbeddedWorkoutCoachChat({
 
   return (
     <section
-      className="flex min-h-[420px] min-w-0 flex-col rounded-lg border border-border bg-card"
+      className="flex w-full min-w-0 self-start flex-col rounded-lg border border-border bg-card"
       aria-label="Coach chat about this workout"
       data-testid="embedded-workout-coach-chat"
     >
@@ -92,6 +92,7 @@ export function EmbeddedWorkoutCoachChat({
         pendingSuggestions={[]}
         applyingId={null}
         isProcessing={isLoading}
+        className="max-h-[320px] flex-none"
         onViewportScroll={updateAutoScrollMode}
         onApplySuggestion={noopSuggestion}
         onDismissSuggestion={noopId}

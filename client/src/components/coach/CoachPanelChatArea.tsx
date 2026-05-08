@@ -5,6 +5,7 @@ import { SuggestionsList } from "@/components/coach/SuggestionsTab";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { Message } from "@/hooks/useChatSession";
 import type { RagInfo, Suggestion } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 interface CoachPanelChatAreaProps {
   readonly messages: Message[];
@@ -12,6 +13,7 @@ interface CoachPanelChatAreaProps {
   readonly applyingId: string | null;
   readonly suggestionsRagInfo?: RagInfo;
   readonly isProcessing: boolean;
+  readonly className?: string;
   readonly onViewportScroll?: UIEventHandler<HTMLDivElement>;
   readonly onApplySuggestion: (suggestion: Suggestion) => void;
   readonly onDismissSuggestion: (id: string) => void;
@@ -25,6 +27,7 @@ export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaP
       applyingId,
       suggestionsRagInfo,
       isProcessing,
+      className,
       onViewportScroll,
       onApplySuggestion,
       onDismissSuggestion,
@@ -33,7 +36,7 @@ export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaP
   ) => {
     return (
       <ScrollArea
-        className="min-h-0 flex-1 p-3"
+        className={cn("min-h-0 flex-1 p-3", className)}
         viewportRef={ref}
         viewportProps={{ onScroll: onViewportScroll }}
       >

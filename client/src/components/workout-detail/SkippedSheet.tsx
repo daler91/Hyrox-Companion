@@ -81,7 +81,7 @@ export function SkippedSheet({
       <div
         className={
           coachChatOpen
-            ? "grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)]"
+            ? "grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)]"
             : "space-y-4"
         }
       >
