@@ -51,6 +51,7 @@ vi.mock("../../services/workoutService", () => ({
   reparseWorkoutFromImage: vi.fn(),
   batchReparseWorkouts: vi.fn(),
   autoHydrateExerciseSetsFromTextIfNeeded: vi.fn(),
+  updateWorkoutStructureBlockScore: vi.fn(),
 }));
 
 vi.mock("../../services/structuredExerciseHealth", () => ({ incrementStructuredExerciseCounter: vi.fn().mockResolvedValue(undefined) }));
@@ -86,7 +87,7 @@ describe("Workouts Routes", () => {
     clearRateLimitBuckets();
     app = createTestApp(workoutsRouter);
 
-    const [{ storage }, { createWorkout, updateWorkoutUseCase }, { reparseWorkout }, { generateCSV, generateJSON }] = await Promise.all([
+    const [{ storage }, { createWorkout, updateWorkoutUseCase }, { reparseWorkout, updateWorkoutStructureBlockScore }, { generateCSV, generateJSON }] = await Promise.all([
       import("../../storage"),
       import("../../services/workoutUseCases"),
       import("../../services/workoutService"),
@@ -106,6 +107,7 @@ describe("Workouts Routes", () => {
     vi.mocked(createWorkout).mockResolvedValue({ id: "created-1", date: "2026-01-02" } as never);
     vi.mocked(updateWorkoutUseCase).mockResolvedValue({ id: "workout-1", notes: "updated" } as never);
     vi.mocked(reparseWorkout).mockResolvedValue({ exercises: [{ exerciseName: "row" }], setCount: 1 } as never);
+    vi.mocked(updateWorkoutStructureBlockScore).mockResolvedValue([{ id: "block-1", sectionType: "main", formatType: "amrap", timeCapMinutes: 10, score: { type: "amrap", rounds: 4 }, steps: [{ stepNumber: 1, stepType: "work", exerciseName: "rowing" }] }] as never);
 
     vi.mocked(generateCSV).mockResolvedValue("id,date\nworkout-1,2026-01-02");
     vi.mocked(generateJSON).mockResolvedValue({ exportedAt: "2026-01-02T10:00:00.000Z", workouts: [{ id: "workout-1" }] } as never);
@@ -258,6 +260,23 @@ describe("Workouts Routes", () => {
     expect(photoRes.status).toBe(200);
     expect(photoRes.body.saved).toBe(true);
     expect(photoRes.body.setCount).toBeGreaterThan(0);
+  });
+
+  it("updates logged workout block score through the focused route", async () => {
+    const { updateWorkoutStructureBlockScore } = await import("../../services/workoutService");
+
+    const response = await request(app)
+      .patch("/api/v1/workouts/workout-1/structure-blocks/block-1/score")
+      .send({ score: { type: "amrap", rounds: 4, reps: 12 } });
+
+    expect(response.status).toBe(200);
+    expect(response.body.structureBlocks[0].score).toMatchObject({ type: "amrap", rounds: 4 });
+    expect(updateWorkoutStructureBlockScore).toHaveBeenCalledWith(
+      "workout-1",
+      "block-1",
+      "test_user_id",
+      { type: "amrap", rounds: 4, reps: 12 },
+    );
   });
 
   it("returns 200 for mixed valid/invalid parse rows when at least one row is persisted", async () => {

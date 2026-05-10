@@ -1,3 +1,5 @@
+import type { StructureBlockScore } from "@shared/schema";
+
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -16,9 +18,29 @@ const MAX_EMOM_DURATION_MINUTES = 240;
 interface Props {
   readonly value: WorkoutStructureConfig;
   readonly onChange: (next: WorkoutStructureConfig) => void;
+  readonly showScoreControls?: boolean;
+  readonly onScoreChange?: (blockId: string, score: StructureBlockScore | null) => void;
 }
 
 type EmomPreview = ReturnType<typeof buildEmomPreview>;
+type EmomScore = Extract<StructureBlockScore, { type: "emom" }>;
+type AmrapScore = Extract<StructureBlockScore, { type: "amrap" }>;
+type RoundsScore = Extract<StructureBlockScore, { type: "rounds" }>;
+
+function mergeEmomScore(score: WorkoutStructureConfig["score"], patch: Partial<Omit<EmomScore, "type">>): EmomScore {
+  const base: EmomScore = score?.type === "emom" ? score : { type: "emom", completed: false };
+  return { ...base, ...patch, type: "emom" };
+}
+
+function mergeAmrapScore(score: WorkoutStructureConfig["score"], patch: Partial<Omit<AmrapScore, "type">>): AmrapScore {
+  const base: AmrapScore = score?.type === "amrap" ? score : { type: "amrap", rounds: 0 };
+  return { ...base, ...patch, type: "amrap" };
+}
+
+function mergeRoundsScore(score: WorkoutStructureConfig["score"], patch: Partial<Omit<RoundsScore, "type">>): RoundsScore {
+  const base: RoundsScore = score?.type === "rounds" ? score : { type: "rounds", completedRounds: 0 };
+  return { ...base, ...patch, type: "rounds" };
+}
 
 function EmomPreviewContent({ emomPreview }: { readonly emomPreview: EmomPreview }) {
   if (emomPreview.error) {
@@ -49,8 +71,15 @@ function EmomPreviewContent({ emomPreview }: { readonly emomPreview: EmomPreview
   );
 }
 
-export function WorkoutStructureEditor({ value, onChange }: Props) {
+export function WorkoutStructureEditor({ value, onChange, showScoreControls = false, onScoreChange }: Props) {
   const update = <K extends keyof WorkoutStructureConfig>(key: K, next: WorkoutStructureConfig[K]) => onChange({ ...value, [key]: next });
+  const parsePositiveInt = (raw: string, fallback?: number): number | undefined => {
+    if (!raw.trim()) return fallback;
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) return fallback;
+    const normalized = Math.trunc(parsed);
+    return normalized > 0 ? normalized : fallback;
+  };
   const parseEmomDurationMinutes = (raw: string): number | undefined => {
     if (!raw.trim()) return undefined;
     const parsed = Number(raw);
@@ -76,6 +105,11 @@ export function WorkoutStructureEditor({ value, onChange }: Props) {
       emomAlternating: value.emomAlternating ?? false,
       steps: value.steps.length > 0 ? value.steps : [{ id: crypto.randomUUID(), type: "work" }],
     });
+  };
+  const updateScore = (score: StructureBlockScore | null) => {
+    const next = { ...value, score };
+    onChange(next);
+    if (value.id && onScoreChange) onScoreChange(value.id, score);
   };
 
   const emomPreview = buildEmomPreview(value);
@@ -120,6 +154,42 @@ export function WorkoutStructureEditor({ value, onChange }: Props) {
         </div>
       )}
 
+      {value.blockType === "amrap" && (
+        <div className="grid gap-3 md:grid-cols-2">
+          <div>
+            <Label className="text-xs">AMRAP time cap (min)</Label>
+            <Input
+              type="number"
+              min={1}
+              value={value.timeCapMinutes ?? ""}
+              placeholder="Minutes"
+              onChange={(e) => update("timeCapMinutes", parsePositiveInt(e.target.value))}
+            />
+          </div>
+          <div className="rounded-md border border-primary/25 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
+            Add each movement in the AMRAP as a step below.
+          </div>
+        </div>
+      )}
+
+      {value.blockType === "rounds" && (
+        <div className="grid gap-3 md:grid-cols-2">
+          <div>
+            <Label className="text-xs">Prescribed rounds</Label>
+            <Input
+              type="number"
+              min={1}
+              value={value.roundCount ?? ""}
+              placeholder="Rounds"
+              onChange={(e) => update("roundCount", parsePositiveInt(e.target.value))}
+            />
+          </div>
+          <div className="rounded-md border border-primary/25 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
+            Add the movements that repeat each round as steps below.
+          </div>
+        </div>
+      )}
+
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-2">
           <Label className="text-xs">Step editor</Label>
@@ -141,7 +211,7 @@ export function WorkoutStructureEditor({ value, onChange }: Props) {
               const steps = [...value.steps];
               const nextType = v as StepType;
               const base = { ...steps[idx], type: nextType };
-              steps[idx] = nextType === "work" ? base : { ...base, exercise: undefined, target: undefined };
+              steps[idx] = nextType === "work" ? base : { ...base, exercise: undefined };
               update("steps", steps);
             }}>
               <SelectTrigger className="col-span-3"><SelectValue /></SelectTrigger>
@@ -166,7 +236,7 @@ export function WorkoutStructureEditor({ value, onChange }: Props) {
             <Input className="col-span-3" type="number" placeholder="Sec" value={step.durationSeconds ?? ""} onChange={(e) => {
               const steps = [...value.steps];
               const base = { ...steps[idx], durationSeconds: e.target.value ? Number(e.target.value) : undefined };
-              steps[idx] = base.type === "work" ? base : { ...base, exercise: undefined, target: undefined };
+              steps[idx] = base.type === "work" ? base : { ...base, exercise: undefined };
               update("steps", steps);
             }} />
             <div className="col-span-2 flex gap-1 justify-end">
@@ -201,6 +271,83 @@ export function WorkoutStructureEditor({ value, onChange }: Props) {
         <Input placeholder="Group name" value={value.group?.name ?? ""} onChange={(e) => update("group", value.group ? { ...value.group, name: e.target.value || undefined } : undefined)} />
         <Input type="number" placeholder="Group rest (sec)" value={value.group?.restSeconds ?? ""} onChange={(e) => update("group", value.group ? { ...value.group, restSeconds: e.target.value ? Number(e.target.value) : undefined } : undefined)} />
       </div>
+
+      {showScoreControls && (value.blockType === "emom" || value.blockType === "amrap" || value.blockType === "rounds") && (
+        <div className="space-y-2 rounded-md border p-3">
+          <div className="text-xs font-medium text-muted-foreground">Block result</div>
+          {value.blockType === "emom" && (
+            <div className="grid gap-2 md:grid-cols-3">
+              <Button
+                type="button"
+                variant={value.score?.type === "emom" && value.score.completed ? "default" : "outline"}
+                onClick={() => updateScore(mergeEmomScore(value.score, { completed: !(value.score?.type === "emom" && value.score.completed) }))}
+              >
+                Completed
+              </Button>
+              <Input
+                type="number"
+                min={0}
+                placeholder="Completed min"
+                value={value.score?.type === "emom" ? value.score.completedMinutes ?? "" : ""}
+                onChange={(e) => updateScore(mergeEmomScore(value.score, { completedMinutes: e.target.value ? Number(e.target.value) : null }))}
+              />
+              <Input
+                type="number"
+                min={0}
+                placeholder="Missed reps"
+                value={value.score?.type === "emom" ? value.score.missedReps ?? "" : ""}
+                onChange={(e) => updateScore(mergeEmomScore(value.score, { missedReps: e.target.value ? Number(e.target.value) : null }))}
+              />
+            </div>
+          )}
+          {value.blockType === "amrap" && (
+            <div className="grid gap-2 md:grid-cols-2">
+              <Input
+                type="number"
+                min={0}
+                placeholder="Rounds"
+                value={value.score?.type === "amrap" ? value.score.rounds : ""}
+                onChange={(e) => updateScore(mergeAmrapScore(value.score, { rounds: Number(e.target.value) || 0 }))}
+              />
+              <Input
+                type="number"
+                min={0}
+                placeholder="Extra reps"
+                value={value.score?.type === "amrap" ? value.score.reps ?? "" : ""}
+                onChange={(e) => updateScore(mergeAmrapScore(value.score, { reps: e.target.value ? Number(e.target.value) : null }))}
+              />
+            </div>
+          )}
+          {value.blockType === "rounds" && (
+            <div className="grid gap-2 md:grid-cols-2">
+              <Input
+                type="number"
+                min={0}
+                placeholder="Completed rounds"
+                value={value.score?.type === "rounds" ? value.score.completedRounds : ""}
+                onChange={(e) => updateScore(mergeRoundsScore(value.score, { completedRounds: Number(e.target.value) || 0 }))}
+              />
+              <Input
+                type="number"
+                min={0}
+                placeholder="Elapsed seconds"
+                value={value.score?.type === "rounds" ? value.score.elapsedSeconds ?? "" : ""}
+                onChange={(e) => updateScore(mergeRoundsScore(value.score, { elapsedSeconds: e.target.value ? Number(e.target.value) : null }))}
+              />
+            </div>
+          )}
+          <Input
+            placeholder="Result notes"
+            value={value.score?.notes ?? ""}
+            onChange={(e) => {
+              const notes = e.target.value || null;
+              if (value.blockType === "emom") updateScore(mergeEmomScore(value.score, { notes }));
+              if (value.blockType === "amrap") updateScore(mergeAmrapScore(value.score, { notes }));
+              if (value.blockType === "rounds") updateScore(mergeRoundsScore(value.score, { notes }));
+            }}
+          />
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
         {Object.entries(workoutStructureFeatureFlags).map(([k, enabled]) => (

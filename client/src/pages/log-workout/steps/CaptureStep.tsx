@@ -1,4 +1,3 @@
-import type { ParsedExercise } from "@shared/schema";
 import { ArrowRight, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -6,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { WorkoutComposer } from "@/components/workout/WorkoutComposer";
 import { WorkoutDateFields } from "@/components/workout/WorkoutDateFields";
 import type { useToast } from "@/hooks/use-toast";
-import type { ParseFromImagePayload } from "@/lib/api";
+import type { ParseFromImagePayload, ParseWorkoutStructureResponse } from "@/lib/api";
 
 import type { ComposerAutoParseProps, ComposerExerciseProps, ComposerTextProps, ComposerVoiceProps } from "../sharedComposerProps";
 import { StepFooter } from "../StepFooter";
@@ -20,7 +19,7 @@ interface CaptureStepProps extends ComposerTextProps, ComposerExerciseProps, Com
   readonly defaultPanelOpen?: boolean;
   readonly onParseImage: (
     payload: ParseFromImagePayload,
-    opts?: { onSuccess?: (parsed: ParsedExercise[]) => void },
+    opts?: { onSuccess?: (parsed: ParseWorkoutStructureResponse) => void },
   ) => void;
   readonly isParsingImage: boolean;
   readonly onCancel: () => void;

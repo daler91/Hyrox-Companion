@@ -133,7 +133,7 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
     toast,
   });
 
-  const hasWorkoutDetails = exerciseBlocks.length > 0 || freeText.trim().length > 0;
+  const hasWorkoutDetails = exerciseBlocks.length > 0 || structureBlocks.length > 0 || freeText.trim().length > 0;
   const activeEditorMode = featureFlags.emomBuilderEnabled ? "structured-emom" : "legacy-text";
 
   return (

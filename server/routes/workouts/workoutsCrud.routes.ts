@@ -5,6 +5,7 @@ import {
   type PatchExerciseSetBody,
   patchExerciseSetBodySchema,
   planDays,
+  structureBlockScoreSchema,
   trainingPlans,
   workoutLogs,
 } from "@shared/schema";
@@ -17,7 +18,7 @@ import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from "../../constants";
 import { db } from "../../db";
 import { AppError, ErrorCode } from "../../errors";
 import { asyncHandler, parsePagination, rateLimiter, sendNotFound, validateBody } from "../../routeUtils";
-import { autoHydrateExerciseSetsFromTextIfNeeded } from "../../services/workoutService";
+import { autoHydrateExerciseSetsFromTextIfNeeded, updateWorkoutStructureBlockScore } from "../../services/workoutService";
 import { createWorkout, updateWorkoutUseCase } from "../../services/workoutUseCases";
 import { storage } from "../../storage";
 import { getUserId } from "../../types";
@@ -41,6 +42,10 @@ const combineWorkoutsSchema = z.object({
   newWorkout: insertWorkoutLogSchema,
   deleteWorkoutIds: z.array(z.string().min(1)).min(1).max(10),
   skipPlanDayIds: z.array(z.string().min(1)).max(10).optional(),
+});
+
+const updateBlockScoreBodySchema = z.object({
+  score: structureBlockScoreSchema.nullable(),
 });
 
 export function registerWorkoutCrudRoutes(router: Router): void {
@@ -113,6 +118,14 @@ export function registerWorkoutCrudRoutes(router: Router): void {
   protectedPost(router, "/api/v1/workouts/:id/seed-from-plan", { limiter: rateLimiter("workoutSet", 20) }, async (req: Request<{ id: string }>, res: Response) => {
     const seeded = await storage.workouts.seedExerciseSetsFromPlanDay(req.params.id, getUserId(req));
     res.json({ seededCount: seeded });
+  });
+
+  protectedPatch(router, "/api/v1/workouts/:id/structure-blocks/:blockId/score", { limiter: rateLimiter("workout", 40), middleware: [validateBody(updateBlockScoreBodySchema)] }, async (req: Request<{ id: string; blockId: string }, unknown, z.infer<typeof updateBlockScoreBodySchema>>, res: Response) => {
+    const structureBlocks = await updateWorkoutStructureBlockScore(req.params.id, req.params.blockId, getUserId(req), req.body.score);
+    if (!structureBlocks) {
+      return sendNotFound(res, WORKOUT_NOT_FOUND);
+    }
+    res.json({ structureBlocks });
   });
 
   router.get("/api/v1/workouts/:id", isAuthenticated, rateLimiter("workout", 60), asyncHandler(async (req: Request<{ id: string }>, res: Response) => {

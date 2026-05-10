@@ -5,11 +5,11 @@ import { describe, expect, it } from "vitest";
 
 import { StructureBlocksEditor } from "./StructureBlocksEditor";
 
-function Harness({ initial = [] as StructureBlockInput[] }) {
+function Harness({ initial = [] as StructureBlockInput[], showScoreControls = false }) {
   const [value, setValue] = useState<StructureBlockInput[]>(initial);
   return (
     <>
-      <StructureBlocksEditor value={value} onChange={setValue} />
+      <StructureBlocksEditor value={value} onChange={setValue} showScoreControls={showScoreControls} />
       <pre data-testid="harness-snapshot">{JSON.stringify(value)}</pre>
     </>
   );
@@ -39,6 +39,95 @@ describe("StructureBlocksEditor", () => {
     });
     expect(blocks[0].steps).toHaveLength(1);
     expect(blocks[0].steps[0]).toMatchObject({ stepNumber: 1, stepType: "work", minuteIndex: 1 });
+  });
+
+  it("adds AMRAP and rounds blocks via explicit add buttons", () => {
+    render(<Harness />);
+
+    fireEvent.click(screen.getByTestId("structure-blocks-add-amrap"));
+    fireEvent.click(screen.getByTestId("structure-blocks-add-rounds"));
+
+    const blocks = readSnapshot();
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0]).toMatchObject({
+      sectionType: "main",
+      formatType: "amrap",
+      timeCapMinutes: 10,
+    });
+    expect(blocks[1]).toMatchObject({
+      sectionType: "main",
+      formatType: "rounds",
+      roundCount: 3,
+    });
+  });
+
+  it("hydrates score controls for logged AMRAP blocks", () => {
+    render(
+      <Harness
+        showScoreControls
+        initial={[{
+          id: "block-1",
+          sectionType: "main",
+          formatType: "amrap",
+          timeCapMinutes: 10,
+          score: { type: "amrap", rounds: 3, reps: 8 },
+          steps: [{ stepNumber: 1, stepType: "work", exerciseName: "Row" }],
+        }]}
+      />,
+    );
+
+    expect(screen.getByDisplayValue("3")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("8")).toBeInTheDocument();
+  });
+
+  it("preserves sibling score fields when result notes change", () => {
+    render(
+      <Harness
+        showScoreControls
+        initial={[{
+          id: "block-1",
+          sectionType: "main",
+          formatType: "amrap",
+          timeCapMinutes: 10,
+          score: { type: "amrap", rounds: 3, reps: 8 },
+          steps: [{ stepNumber: 1, stepType: "work", exerciseName: "Row" }],
+        }]}
+      />,
+    );
+
+    fireEvent.change(screen.getByPlaceholderText("Result notes"), { target: { value: "Strong finish" } });
+
+    expect(readSnapshot()[0].score).toEqual({
+      type: "amrap",
+      rounds: 3,
+      reps: 8,
+      notes: "Strong finish",
+    });
+  });
+
+  it("round-trips transition step duration targets", () => {
+    render(
+      <Harness
+        initial={[{
+          sectionType: "main",
+          formatType: "rounds",
+          roundCount: 3,
+          steps: [
+            { stepNumber: 1, stepType: "work", exerciseName: "Sled Push" },
+            { stepNumber: 2, stepType: "transition", targets: { instructions: "Change stations", durationSeconds: 30 } },
+          ],
+        }]}
+      />,
+    );
+
+    const durationInputs = screen.getAllByPlaceholderText("Sec");
+    expect(durationInputs[1]).toHaveValue(30);
+    fireEvent.change(durationInputs[1], { target: { value: "45" } });
+
+    expect(readSnapshot()[0].steps[1].targets).toMatchObject({
+      instructions: "Change stations",
+      durationSeconds: 45,
+    });
   });
 
   it("removes a block when the remove button is clicked", () => {

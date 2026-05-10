@@ -1,4 +1,4 @@
-import { exerciseSetSchema, type ParsedExercise } from "@shared/schema";
+import { exerciseSetSchema, type ParsedExercise, type StructureBlockInput,structureBlockSchema } from "@shared/schema";
 import { EXERCISE_DEFINITIONS } from "@shared/schema/exercises";
 import { z } from "zod";
 
@@ -54,12 +54,16 @@ const parserResponseSchema = z.object({
     sectionType: z.string().min(1),
     formatType: z.string().min(1),
     durationSeconds: z.number().optional().nullable(),
+    durationMinutes: z.number().optional().nullable(),
     rounds: z.number().optional().nullable(),
+    roundCount: z.number().optional().nullable(),
+    timeCapMinutes: z.number().optional().nullable(),
     workSeconds: z.number().optional().nullable(),
     restSeconds: z.number().optional().nullable(),
     steps: z.array(z.object({
       stepNumber: z.number().int().min(1),
       minuteIndex: z.number().int().min(1).optional().nullable(),
+      stepType: z.string().optional().nullable(),
       exerciseName: z.string().min(1).optional().nullable(),
       category: z.string().min(1).optional().nullable(),
       customLabel: z.string().optional().nullable(),
@@ -81,6 +85,13 @@ type NormalizedParserPayload = {
   warnings: z.infer<typeof parserResponseSchema.shape.warnings>;
   confidence: z.infer<typeof parserResponseSchema.shape.confidence>;
 };
+
+export interface ParsedWorkoutStructure {
+  exercises: ParsedExercise[];
+  structureBlocks: StructureBlockInput[];
+  warnings: string[];
+  confidence: NormalizedParserPayload["confidence"];
+}
 
 function normalizeParserPayload(raw: unknown): NormalizedParserPayload {
   if (Array.isArray(raw)) {
@@ -168,6 +179,95 @@ function mapMinuteRestStepsForEmom(
     },
     warnings,
   };
+}
+
+function normalizeSectionType(raw: string): StructureBlockInput["sectionType"] {
+  if (raw === "activation") return "activation";
+  if (raw === "warmup" || raw === "main" || raw === "accessory" || raw === "cooldown" || raw === "mobility") {
+    return raw;
+  }
+  return "main";
+}
+
+function normalizeFormatType(raw: string): StructureBlockInput["formatType"] {
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === "straight_sets") return "steady";
+  if (normalized === "emom" || normalized === "amrap" || normalized === "rounds" || normalized === "interval" || normalized === "for_time" || normalized === "quality") {
+    return normalized;
+  }
+  return "steady";
+}
+
+function normalizeStepType(step: NonNullable<NormalizedParserPayload["structureBlocks"]>[number]["steps"][number]): "work" | "rest" | "transition" {
+  const raw = (step.stepType ?? step.stepRole ?? "work").trim().toLowerCase();
+  if (raw === "rest") return "rest";
+  if (raw === "transition") return "transition";
+  return "work";
+}
+
+function durationMinutesFromBlock(block: NonNullable<NormalizedParserPayload["structureBlocks"]>[number]): number | null {
+  if (typeof block.durationMinutes === "number" && Number.isFinite(block.durationMinutes)) {
+    return Math.max(1, Math.trunc(block.durationMinutes));
+  }
+  if (typeof block.timeCapMinutes === "number" && Number.isFinite(block.timeCapMinutes)) {
+    return Math.max(1, Math.trunc(block.timeCapMinutes));
+  }
+  if (typeof block.durationSeconds === "number" && Number.isFinite(block.durationSeconds) && block.durationSeconds > 0) {
+    return Math.max(1, Math.round(block.durationSeconds / 60));
+  }
+  return null;
+}
+
+function normalizeParserBlock(
+  rawBlock: NonNullable<NormalizedParserPayload["structureBlocks"]>[number],
+): StructureBlockInput | null {
+  const formatType = normalizeFormatType(rawBlock.formatType);
+  const durationMinutes = durationMinutesFromBlock(rawBlock);
+  const block: StructureBlockInput = {
+    sectionType: normalizeSectionType(rawBlock.sectionType),
+    formatType,
+    durationSeconds: rawBlock.durationSeconds ?? null,
+    durationMinutes: formatType === "emom" || formatType === "amrap" ? durationMinutes : rawBlock.durationMinutes ?? null,
+    roundCount: rawBlock.roundCount ?? rawBlock.rounds ?? null,
+    rounds: rawBlock.rounds ?? null,
+    timeCapMinutes: rawBlock.timeCapMinutes ?? (formatType === "amrap" ? durationMinutes : null),
+    workSeconds: rawBlock.workSeconds ?? null,
+    restSeconds: rawBlock.restSeconds ?? null,
+    steps: rawBlock.steps.map((step, idx) => {
+      const stepType = normalizeStepType(step);
+      return {
+        stepNumber: step.stepNumber ?? idx + 1,
+        minuteIndex: formatType === "emom" ? step.minuteIndex ?? idx + 1 : step.minuteIndex ?? null,
+        stepType,
+        exerciseName: stepType === "rest" ? null : step.exerciseName ?? null,
+        category: step.category ?? (stepType === "rest" ? null : "conditioning"),
+        customLabel: step.customLabel ?? null,
+        stepRole: step.stepRole ?? stepType,
+        targets: step.targets ?? null,
+      };
+    }),
+  };
+  const parsed = structureBlockSchema.safeParse(block);
+  return parsed.success ? parsed.data : null;
+}
+
+function normalizeParserBlocks(
+  text: string,
+  rawBlocks: NormalizedParserPayload["structureBlocks"],
+): { structureBlocks: StructureBlockInput[]; warnings: string[] } {
+  const structureBlocks: StructureBlockInput[] = [];
+  const warnings: string[] = [];
+  for (const rawBlock of rawBlocks) {
+    const { block, warnings: emomWarnings } = mapMinuteRestStepsForEmom(text, rawBlock);
+    warnings.push(...emomWarnings);
+    const normalized = normalizeParserBlock(block);
+    if (normalized) {
+      structureBlocks.push(normalized);
+    } else {
+      warnings.push("Structure block skipped: parsed format or steps did not pass validation.");
+    }
+  }
+  return { structureBlocks, warnings };
 }
 
 /**
@@ -682,10 +782,43 @@ export async function parseExercisesFromText(
   }
 }
 
+export async function parseWorkoutStructureFromText(
+  text: string,
+  weightUnit: string = "kg",
+  customExerciseNames?: string[],
+  userId?: string,
+): Promise<ParsedWorkoutStructure> {
+  if (!text || text.trim().length === 0) {
+    return { exercises: [], structureBlocks: [], warnings: [], confidence: null };
+  }
+  const responseText = await callGeminiParse(text, weightUnit, customExerciseNames, userId);
+  const raw = parseRawResponse(responseText);
+  const rawArray = Array.isArray(raw) ? raw : [];
+  const normalized = normalizeParserPayload(raw);
+  const validated = validateRows(normalized.exercises ?? rawArray);
+  const fallbackUsed = validated.length === 0;
+  const fallbackRows = fallbackUsed ? validateRows(heuristicFallbackRowsFromText(text)) : [];
+  const rows = (validated.length > 0 ? validated : fallbackRows).map((ex) => mapValidatedExercise(ex, text));
+  const structureWarnings = (normalized.warnings ?? []).filter((w) => typeof w === "string" && w.trim().length > 0);
+  const { structureBlocks, warnings } = normalizeParserBlocks(text, normalized.structureBlocks);
+  return {
+    exercises: rows,
+    structureBlocks,
+    warnings: [...structureWarnings, ...warnings],
+    confidence: normalized.confidence,
+  };
+}
+
 export interface ParseExercisesWithDiagnosticsResult {
   acceptedRows: ParsedExercise[];
   rejectedRows: { index: number; reason: string }[];
   fallbackUsed: boolean;
+}
+
+export interface ParseWorkoutStructureWithDiagnosticsResult extends ParseExercisesWithDiagnosticsResult {
+  structureBlocks: StructureBlockInput[];
+  warnings: string[];
+  confidence: NormalizedParserPayload["confidence"];
 }
 
 export async function parseExercisesFromTextWithDiagnostics(
@@ -710,6 +843,44 @@ export async function parseExercisesFromTextWithDiagnostics(
   }
 
   return { acceptedRows: [], rejectedRows: validated.rejectedRows, fallbackUsed: false };
+}
+
+export async function parseWorkoutStructureFromTextWithDiagnostics(
+  text: string,
+  weightUnit: string = "kg",
+  customExerciseNames?: string[],
+  userId?: string,
+): Promise<ParseWorkoutStructureWithDiagnosticsResult> {
+  if (!text || text.trim().length === 0) {
+    return { acceptedRows: [], rejectedRows: [], fallbackUsed: false, structureBlocks: [], warnings: [], confidence: null };
+  }
+  const responseText = await callGeminiParse(text, weightUnit, customExerciseNames, userId);
+  const raw = parseRawResponse(responseText);
+  const rawArray = Array.isArray(raw) ? raw : [];
+  const normalized = normalizeParserPayload(raw);
+  const validated = validateRowsDetailed(normalized.exercises ?? rawArray);
+  const { structureBlocks, warnings } = normalizeParserBlocks(text, normalized.structureBlocks);
+  const structureWarnings = (normalized.warnings ?? []).filter((w) => typeof w === "string" && w.trim().length > 0);
+  if (validated.acceptedRows.length > 0) {
+    return {
+      acceptedRows: validated.acceptedRows.map((ex) => mapValidatedExercise(ex, text)),
+      rejectedRows: validated.rejectedRows,
+      fallbackUsed: false,
+      structureBlocks,
+      warnings: [...structureWarnings, ...warnings],
+      confidence: normalized.confidence,
+    };
+  }
+
+  const fallbackValidated = validateRowsDetailed(heuristicFallbackRowsFromText(text));
+  return {
+    acceptedRows: fallbackValidated.acceptedRows.map((ex) => mapValidatedExercise(ex, text)),
+    rejectedRows: [...validated.rejectedRows, ...fallbackValidated.rejectedRows],
+    fallbackUsed: fallbackValidated.acceptedRows.length > 0,
+    structureBlocks,
+    warnings: [...structureWarnings, ...warnings],
+    confidence: normalized.confidence,
+  };
 }
 
 export interface ParseExercisesFromImageInput {
@@ -777,6 +948,38 @@ export async function parseExercisesFromImage(
   }
 }
 
+export async function parseWorkoutStructureFromImage(
+  input: ParseExercisesFromImageInput,
+): Promise<ParsedWorkoutStructure> {
+  const {
+    imageBase64,
+    mimeType,
+    weightUnit = "kg",
+    customExerciseNames,
+    userId,
+  } = input;
+  const responseText = await callGeminiParseImage(
+    imageBase64,
+    mimeType,
+    weightUnit,
+    customExerciseNames,
+    userId,
+  );
+  const raw = parseRawResponse(responseText);
+  const rawArray = Array.isArray(raw) ? raw : [];
+  const normalized = normalizeParserPayload(raw);
+  const validated = validateRows(normalized.exercises ?? rawArray);
+  const rows = validated.map((ex) => mapValidatedExercise(ex, ""));
+  const structureWarnings = (normalized.warnings ?? []).filter((w) => typeof w === "string" && w.trim().length > 0);
+  const { structureBlocks, warnings } = normalizeParserBlocks("", normalized.structureBlocks);
+  return {
+    exercises: rows,
+    structureBlocks,
+    warnings: [...structureWarnings, ...warnings],
+    confidence: normalized.confidence,
+  };
+}
+
 export async function parseExercisesFromImageWithDiagnostics(
   input: ParseExercisesFromImageInput,
 ): Promise<ParseExercisesWithDiagnosticsResult> {
@@ -787,4 +990,25 @@ export async function parseExercisesFromImageWithDiagnostics(
   const normalized = normalizeParserPayload(raw);
   const validated = validateRowsDetailed(normalized.exercises ?? rawArray);
   return { acceptedRows: validated.acceptedRows.map((ex) => mapValidatedExercise(ex, "")), rejectedRows: validated.rejectedRows, fallbackUsed: false };
+}
+
+export async function parseWorkoutStructureFromImageWithDiagnostics(
+  input: ParseExercisesFromImageInput,
+): Promise<ParseWorkoutStructureWithDiagnosticsResult> {
+  const { imageBase64, mimeType, weightUnit = "kg", customExerciseNames, userId } = input;
+  const responseText = await callGeminiParseImage(imageBase64, mimeType, weightUnit, customExerciseNames, userId);
+  const raw = parseRawResponse(responseText);
+  const rawArray = Array.isArray(raw) ? raw : [];
+  const normalized = normalizeParserPayload(raw);
+  const validated = validateRowsDetailed(normalized.exercises ?? rawArray);
+  const structureWarnings = (normalized.warnings ?? []).filter((w) => typeof w === "string" && w.trim().length > 0);
+  const { structureBlocks, warnings } = normalizeParserBlocks("", normalized.structureBlocks);
+  return {
+    acceptedRows: validated.acceptedRows.map((ex) => mapValidatedExercise(ex, "")),
+    rejectedRows: validated.rejectedRows,
+    fallbackUsed: false,
+    structureBlocks,
+    warnings: [...structureWarnings, ...warnings],
+    confidence: normalized.confidence,
+  };
 }

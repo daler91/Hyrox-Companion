@@ -1,4 +1,4 @@
-import type { ExerciseSet, WorkoutLog } from "@shared/schema";
+import type { ExerciseSet, StructureBlockInput, StructureBlockScore, WorkoutLog } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
 import { useRef } from "react";
 
@@ -13,7 +13,7 @@ import {
 } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
 
-type WorkoutWithSets = WorkoutLog & { exerciseSets?: ExerciseSet[] };
+type WorkoutWithSets = WorkoutLog & { exerciseSets?: ExerciseSet[]; structureBlocks?: StructureBlockInput[] };
 
 // Tag every logged-workout set mutation so useIsMutating can count all
 // in-flight writes for the current workout — useMutation.isPending only
@@ -79,6 +79,13 @@ export function useWorkoutDetail(workoutId: string | null) {
       if (!prev) return prev;
       return { ...prev, exerciseSets: updater(prev.exerciseSets ?? []) };
     });
+  };
+
+  const patchCachedStructure = (structureBlocks: StructureBlockInput[]) => {
+    if (!workoutId) return;
+    queryClient.setQueryData<WorkoutWithSets>(QUERY_KEYS.workout(workoutId), (prev) =>
+      prev ? { ...prev, structureBlocks } : prev,
+    );
   };
 
   const {
@@ -252,6 +259,43 @@ export function useWorkoutDetail(workoutId: string | null) {
         : { title: "Couldn't save prescription" },
   });
 
+  const updateStructure = useApiMutation({
+    mutationKey: workoutId ? workoutSetsMutationKey(workoutId) : undefined,
+    mutationFn: (structureBlocks: StructureBlockInput[]) =>
+      api.workouts.update(workoutId!, { structureBlocks }),
+    onMutate: async (structureBlocks) => {
+      if (!workoutId) return undefined;
+      await queryClient.cancelQueries({ queryKey: QUERY_KEYS.workout(workoutId) });
+      const prev = queryClient.getQueryData<WorkoutWithSets>(QUERY_KEYS.workout(workoutId));
+      patchCachedWorkout({ structureBlocks });
+      return { prev };
+    },
+    onSuccess: () => {
+      markSaved();
+      if (workoutId) {
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workout(workoutId) }).catch(() => undefined);
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }).catch(() => undefined);
+      }
+    },
+    onError: (_err, _vars, ctx) => {
+      const prev = (ctx as { prev?: WorkoutWithSets } | undefined)?.prev;
+      if (workoutId && prev) queryClient.setQueryData(QUERY_KEYS.workout(workoutId), prev);
+    },
+    errorToast: "Couldn't save workout blocks",
+  });
+
+  const updateBlockScore = useApiMutation({
+    mutationKey: workoutId ? workoutSetsMutationKey(workoutId) : undefined,
+    mutationFn: ({ blockId, score }: { blockId: string; score: StructureBlockScore | null }) =>
+      api.workouts.updateBlockScore(workoutId!, blockId, score),
+    onSuccess: (data) => {
+      patchCachedStructure(data.structureBlocks);
+      markSaved();
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }).catch(() => undefined);
+    },
+    errorToast: "Couldn't save block score",
+  });
+
   const updateReference = useApiMutation({
     mutationFn: (patch: WorkoutReferenceTextPayload) =>
       api.workouts.update(workoutId!, patch),
@@ -344,6 +388,8 @@ export function useWorkoutDetail(workoutId: string | null) {
     reparseFromImage,
     updateNote,
     updatePrescription,
+    updateStructure,
+    updateBlockScore,
     updateReference,
     updateFocus,
     updateRpe,

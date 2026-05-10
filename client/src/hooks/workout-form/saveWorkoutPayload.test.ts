@@ -70,11 +70,9 @@ describe("buildWorkoutSavePayload", () => {
       freeText: "EMOM builder",
       structureBlocks: [{
         sectionType: "main",
-        blockType: "emom",
-        orderIndex: 0,
-        label: "Main EMOM",
+        formatType: "emom",
         durationMinutes: 12,
-        steps: [{ minuteIndex: 1, exerciseName: "Burpee Broad Jump", target: "10 reps" }],
+        steps: [{ stepNumber: 1, minuteIndex: 1, stepType: "work", exerciseName: "Burpee Broad Jump", targets: { instructions: "10 reps" } }],
       }],
     });
 
@@ -83,9 +81,26 @@ describe("buildWorkoutSavePayload", () => {
     expect(result.payload.structureBlocks).toHaveLength(1);
     expect(result.payload.structureBlocks?.[0]).toMatchObject({
       sectionType: "main",
-      blockType: "emom",
-      label: "Main EMOM",
+      formatType: "emom",
+      durationMinutes: 12,
     });
+  });
+
+  it("allows saving a block-only AMRAP workout", () => {
+    const result = buildWorkoutSavePayload({
+      ...baseInput,
+      title: "AMRAP",
+      structureBlocks: [{
+        sectionType: "main",
+        formatType: "amrap",
+        timeCapMinutes: 10,
+        steps: [{ stepNumber: 1, stepType: "work", exerciseName: "wall_balls", targets: { targetReps: 12 } }],
+      }],
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.payload.structureBlocks?.[0]).toMatchObject({ formatType: "amrap", timeCapMinutes: 10 });
   });
   it("converts legacy emom exercise rows before persisting payload", () => {
     const result = buildWorkoutSavePayload({

@@ -7,7 +7,7 @@ import { useCallback,useEffect, useRef, useState } from "react";
 
 import { createDefaultSet,type StructuredExercise } from "@/components/ExerciseInput";
 import { useToast } from "@/hooks/use-toast";
-import { api, type ParseFromImagePayload } from "@/lib/api";
+import { api, type ParseFromImagePayload, type ParseWorkoutStructureResponse } from "@/lib/api";
 
 
 interface UseWorkoutEditorOptions {
@@ -263,13 +263,13 @@ function getParseSuccessDescription(parsed: ParsedExercise[]): string {
   return description;
 }
 
-export async function parseWorkoutText(text: string): Promise<ParsedExercise[]> {
-  return api.exercises.parse(text);
+export async function parseWorkoutText(text: string): Promise<ParseWorkoutStructureResponse> {
+  return api.exercises.parseStructured(text);
 }
 
 
 interface UseParseWorkoutMutationOptions {
-  onSuccess: (newBlocks: string[], newData: Record<string, StructuredExercise>) => void;
+  onSuccess: (newBlocks: string[], newData: Record<string, StructuredExercise>, structureBlocks: StructureBlockInput[]) => void;
   onError: () => void;
 }
 
@@ -285,15 +285,15 @@ interface ParseCopy {
 function useParseMutationBase<TVariables>(
   blockCounterRef: MutableRefObject<number>,
   options: UseParseWorkoutMutationOptions,
-  mutationFn: (variables: TVariables) => Promise<ParsedExercise[]>,
+  mutationFn: (variables: TVariables) => Promise<ParseWorkoutStructureResponse>,
   copy: ParseCopy,
 ) {
   const { toast } = useToast();
 
-  return useMutation<ParsedExercise[], Error, TVariables>({
+  return useMutation<ParseWorkoutStructureResponse, Error, TVariables>({
     mutationFn,
     onSuccess: (parsed) => {
-      if (parsed.length === 0) {
+      if (parsed.exercises.length === 0 && parsed.structureBlocks.length === 0) {
         toast({
           title: "No exercises found",
           description: copy.emptyDescription,
@@ -302,12 +302,12 @@ function useParseMutationBase<TVariables>(
         return;
       }
 
-      const { newBlocks, newData } = processParsedExercises(parsed, blockCounterRef);
-      options.onSuccess(newBlocks, newData);
+      const { newBlocks, newData } = processParsedExercises(parsed.exercises, blockCounterRef);
+      options.onSuccess(newBlocks, newData, parsed.structureBlocks);
 
       toast({
         title: "Exercises parsed",
-        description: getParseSuccessDescription(parsed),
+        description: getParseSuccessDescription(parsed.exercises),
       });
     },
     onError: () => {
@@ -348,7 +348,7 @@ export function useParseWorkoutFromImageMutation(
   return useParseMutationBase<ParseImagePayload>(
     blockCounterRef,
     options,
-    (payload) => api.exercises.parseFromImage(payload),
+    (payload) => api.exercises.parseStructuredFromImage(payload),
     {
       emptyDescription:
         "AI couldn't identify any exercises in that photo. Try a clearer shot with the workout in frame.",
@@ -489,18 +489,22 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
   }, [exerciseBlocks]);
 
   const parseMutation = useParseWorkoutMutation(blockCounterRef, {
-    onSuccess: (newBlocks, newData) => {
-      setExerciseBlocks(newBlocks);
-      setExerciseData(newData);
+    onSuccess: (newBlocks, newData, newStructureBlocks) => {
+      const parsedStructureBlocks = newStructureBlocks.length > 0;
+      setExerciseBlocks(parsedStructureBlocks ? [] : newBlocks);
+      setExerciseData(parsedStructureBlocks ? {} : newData);
+      if (newStructureBlocks.length > 0) setStructureBlocks(newStructureBlocks);
       setUseTextMode(false);
     },
     onError: () => {},
   });
 
   const parseImageMutation = useParseWorkoutFromImageMutation(blockCounterRef, {
-    onSuccess: (newBlocks, newData) => {
-      setExerciseBlocks(newBlocks);
-      setExerciseData(newData);
+    onSuccess: (newBlocks, newData, newStructureBlocks) => {
+      const parsedStructureBlocks = newStructureBlocks.length > 0;
+      setExerciseBlocks(parsedStructureBlocks ? [] : newBlocks);
+      setExerciseData(parsedStructureBlocks ? {} : newData);
+      if (newStructureBlocks.length > 0) setStructureBlocks(newStructureBlocks);
       // Collapse the text panel on success — the user came in via the
       // photo path, so the structured table is what they want to see now.
       setUseTextMode(false);
@@ -539,27 +543,33 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
     setAutoParseError(false);
 
     try {
-      const parsed = await api.exercises.parse(trimmed, { signal: controller.signal });
+      const parsed = await api.exercises.parseStructured(trimmed, { signal: controller.signal });
       if (controller.signal.aborted) return;
       lastParsedTextRef.current = trimmed;
-      const lowConfidenceCount = parsed.filter((row) => typeof row.confidence === "number" && row.confidence < 80).length;
+      const lowConfidenceCount = parsed.exercises.filter((row) => typeof row.confidence === "number" && row.confidence < 80).length;
       setParseDiagnostics({
         lowConfidenceCount,
-        emptyResult: parsed.length === 0,
+        emptyResult: parsed.exercises.length === 0 && parsed.structureBlocks.length === 0,
         lastErrorReason: null,
         lastConfidenceSummary:
-          parsed.length === 0
+          parsed.exercises.length === 0 && parsed.structureBlocks.length === 0
             ? "No exercises were detected in the parse response."
-            : `Parsed ${parsed.length} exercises; ${lowConfidenceCount} below confidence 80.`,
+            : `Parsed ${parsed.exercises.length} exercises and ${parsed.structureBlocks.length} blocks; ${lowConfidenceCount} below confidence 80.`,
       });
-      const { newBlocks, newData } = mergeParsedWithEdits(
-        parsed,
-        blockCounterRef,
-        blocksRef.current,
-        dataRef.current,
-      );
-      setExerciseBlocks(newBlocks);
-      setExerciseData(newData);
+      if (parsed.structureBlocks.length > 0) {
+        setExerciseBlocks([]);
+        setExerciseData({});
+        setStructureBlocks(parsed.structureBlocks);
+      } else {
+        const { newBlocks, newData } = mergeParsedWithEdits(
+          parsed.exercises,
+          blockCounterRef,
+          blocksRef.current,
+          dataRef.current,
+        );
+        setExerciseBlocks(newBlocks);
+        setExerciseData(newData);
+      }
       setLastParsedAt(Date.now());
     } catch (err) {
       if (controller.signal.aborted) return;

@@ -1,4 +1,4 @@
-import type { StructureBlockInput } from "@shared/schema";
+import type { StructureBlockInput, StructureBlockScore } from "@shared/schema";
 import { useCallback, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,8 @@ interface DraftBlock {
 interface Props {
   readonly value: StructureBlockInput[];
   readonly onChange: (next: StructureBlockInput[]) => void;
+  readonly showScoreControls?: boolean;
+  readonly onScoreChange?: (blockId: string, score: StructureBlockScore | null) => void;
 }
 
 const generateId = () => crypto.randomUUID();
@@ -24,6 +26,20 @@ const emptyEmomConfig = (): WorkoutStructureConfig => ({
   blockType: "emom",
   emomDurationMinutes: 10,
   emomAlternating: false,
+  steps: [{ id: generateId(), type: "work" }],
+});
+
+const emptyAmrapConfig = (): WorkoutStructureConfig => ({
+  section: "main",
+  blockType: "amrap",
+  timeCapMinutes: 10,
+  steps: [{ id: generateId(), type: "work" }],
+});
+
+const emptyRoundsConfig = (): WorkoutStructureConfig => ({
+  section: "main",
+  blockType: "rounds",
+  roundCount: 3,
   steps: [{ id: generateId(), type: "work" }],
 });
 
@@ -37,7 +53,7 @@ function draftsToValue(drafts: readonly DraftBlock[]): StructureBlockInput[] {
   );
 }
 
-export function StructureBlocksEditor({ value, onChange }: Props) {
+export function StructureBlocksEditor({ value, onChange, showScoreControls = false, onScoreChange }: Props) {
   const [drafts, setDrafts] = useState<DraftBlock[]>(() => draftsFromValue(value));
   const [trackedValue, setTrackedValue] = useState(value);
 
@@ -64,6 +80,14 @@ export function StructureBlocksEditor({ value, onChange }: Props) {
 
   const handleAddEmom = useCallback(() => {
     commit([...drafts, { id: generateId(), config: emptyEmomConfig() }]);
+  }, [commit, drafts]);
+
+  const handleAddAmrap = useCallback(() => {
+    commit([...drafts, { id: generateId(), config: emptyAmrapConfig() }]);
+  }, [commit, drafts]);
+
+  const handleAddRounds = useCallback(() => {
+    commit([...drafts, { id: generateId(), config: emptyRoundsConfig() }]);
   }, [commit, drafts]);
 
   const handleUpdateBlock = useCallback(
@@ -104,6 +128,8 @@ export function StructureBlocksEditor({ value, onChange }: Props) {
             <WorkoutStructureEditor
               value={draft.config}
               onChange={(next) => handleUpdateBlock(draft.id, next)}
+              showScoreControls={showScoreControls}
+              onScoreChange={onScoreChange}
             />
           </div>
         ))
@@ -117,6 +143,24 @@ export function StructureBlocksEditor({ value, onChange }: Props) {
           data-testid="structure-blocks-add-emom"
         >
           + Add EMOM block
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={handleAddAmrap}
+          data-testid="structure-blocks-add-amrap"
+        >
+          + Add AMRAP block
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={handleAddRounds}
+          data-testid="structure-blocks-add-rounds"
+        >
+          + Add Rounds block
         </Button>
       </div>
     </div>

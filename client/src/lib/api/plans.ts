@@ -1,4 +1,4 @@
-import type { ExerciseSet, GeneratePlanInput, PlanDay, TrainingPlan, TrainingPlanWithDays } from "@shared/schema";
+import type { ExerciseSet, GeneratePlanInput, PlanDay, StructureBlockInput, TrainingPlan, TrainingPlanWithDays } from "@shared/schema";
 
 import { rawRequest,typedRequest } from "./client";
 import { IMAGE_REPARSE_REQUEST_OPTIONS } from "./constants";
@@ -44,7 +44,17 @@ export const plans = {
   // plan day; Mark complete's server copy-from-plan path picks up
   // whatever the plan day has at mutation time.
   getDayExercises: (dayId: string) =>
-    typedRequest<ExerciseSet[]>("GET", `/api/v1/plans/days/${dayId}/sets`),
+    typedRequest<{ exerciseSets: ExerciseSet[]; structureBlocks: StructureBlockInput[] }>(
+      "GET",
+      `/api/v1/plans/days/${dayId}/sets?includeStructure=true`,
+    ),
+
+  updateDayStructure: (dayId: string, structureBlocks: StructureBlockInput[]) =>
+    typedRequest<{ exerciseSets: ExerciseSet[]; structureBlocks: StructureBlockInput[] }>(
+      "PATCH",
+      `/api/v1/plans/days/${dayId}/structure`,
+      { structureBlocks },
+    ),
 
   ...(() => {
     const mutations = createExerciseSetMutationApi((dayId) => `/api/v1/plans/days/${dayId}`);

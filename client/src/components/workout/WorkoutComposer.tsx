@@ -1,4 +1,4 @@
-import type { ExerciseName, ParsedExercise } from "@shared/schema";
+import type { ExerciseName } from "@shared/schema";
 import { CheckCircle2, ChevronDown, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -9,7 +9,7 @@ import { DraftExerciseTable } from "@/components/workout/DraftExerciseTable";
 import { ParseStatusStrip } from "@/components/workout/ParseStatusStrip";
 import { WorkoutTextMode } from "@/components/workout/WorkoutTextMode";
 import type { toast as toastFn } from "@/hooks/use-toast";
-import type { ParseFromImagePayload } from "@/lib/api";
+import type { ParseFromImagePayload, ParseWorkoutStructureResponse } from "@/lib/api";
 import type { CompressedImage } from "@/lib/image";
 import { cn } from "@/lib/utils";
 
@@ -59,7 +59,7 @@ interface WorkoutComposerProps {
    */
   readonly onParseImage?: (
     payload: ParseFromImagePayload,
-    opts?: { onSuccess?: (parsed: ParsedExercise[]) => void },
+    opts?: { onSuccess?: (parsed: ParseWorkoutStructureResponse) => void },
   ) => void;
   readonly isParsingImage?: boolean;
 }

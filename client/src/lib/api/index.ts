@@ -4,7 +4,7 @@ export type { RagInfo, RagStatus } from "./coaching";
 export { chat, coaching } from "./coaching";
 export type { ReparseResponse } from "./constants";
 export { IMAGE_REPARSE_REQUEST_OPTIONS, IMAGE_REPARSE_TIMEOUT_MS, isTimeoutLikeApiError } from "./constants";
-export type { ParseFromImagePayload } from "./exercises";
+export type { ParseFromImagePayload, ParseWorkoutStructureResponse } from "./exercises";
 export { exercises } from "./exercises";
 export { plans } from "./plans";
 export { timelineAnnotations } from "./timelineAnnotations";
