@@ -148,6 +148,36 @@ describe("buildWorkoutSavePayload", () => {
     });
   });
 
+  it("preserves canonical exerciseName when linked rows have custom labels", () => {
+    const result = buildWorkoutSavePayload({
+      ...baseInput,
+      title: "Labeled canonical row",
+      exerciseBlocks: ["row-1"],
+      exerciseData: {
+        "row-1": {
+          exerciseName: "back_squat",
+          customLabel: "Tempo Squat",
+          category: "strength",
+          sets: [{ setNumber: 1, reps: 5, blockId: "block-rounds", stepNumber: 1 }],
+        },
+      },
+      structureBlocks: [{
+        id: "block-rounds",
+        sectionType: "main",
+        formatType: "rounds",
+        roundCount: 3,
+        steps: [{ stepNumber: 1, stepType: "work", exerciseName: "Unassigned exercise" }],
+      }],
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.payload.structureBlocks?.[0].steps[0]).toMatchObject({
+      exerciseName: "back_squat",
+      customLabel: "Tempo Squat",
+    });
+  });
+
   it("links legacy per-exercise structure configs to the exercise row", () => {
     const result = buildWorkoutSavePayload({
       ...baseInput,

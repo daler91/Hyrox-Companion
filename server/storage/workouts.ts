@@ -562,7 +562,7 @@ export class WorkoutStorage {
     await db
       .update(workoutStructureSteps)
       .set({
-        exerciseName: row.customLabel ?? row.exerciseName,
+        exerciseName: row.exerciseName,
         category: row.category,
         customLabel: row.customLabel,
         targetReps: row.plannedReps ?? row.reps,

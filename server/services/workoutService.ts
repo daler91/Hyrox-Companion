@@ -873,7 +873,7 @@ async function mirrorStructureStepsFromExerciseRows(
       if (!linked) return step;
       return {
         ...step,
-        exerciseName: linked.customLabel ?? linked.exerciseName,
+        exerciseName: linked.exerciseName,
         category: linked.category,
         customLabel: linked.customLabel,
         stepRole: step.stepRole ?? linked.stepRole ?? "work",

@@ -211,4 +211,26 @@ describe('lintWorkoutStructure block links', () => {
       message: 'ROUNDS step 1 must be linked to an exercise row.',
     }));
   });
+
+  it('does not require exercise row links for steps marked rest by stepRole', () => {
+    const lint = lintWorkoutStructure(
+      [{
+        id: 'block-emom',
+        sectionType: 'main',
+        formatType: 'emom',
+        durationMinutes: 10,
+        steps: [
+          { stepNumber: 1, minuteIndex: 1, stepRole: 'rest' },
+          { stepNumber: 2, minuteIndex: 2, stepType: 'work', exerciseName: 'Unassigned exercise' },
+        ],
+      }],
+      [{
+        exerciseName: 'wall_balls',
+        category: 'conditioning',
+        sets: [{ setNumber: 1, blockId: 'block-emom', stepNumber: 2 }],
+      }],
+    );
+
+    expect(lint.schemaErrors).toEqual([]);
+  });
 });

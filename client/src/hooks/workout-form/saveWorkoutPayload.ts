@@ -170,7 +170,7 @@ function enrichStructureBlocksFromRows(
       if (!linked) return step;
       return {
         ...step,
-        exerciseName: linked.exercise.customLabel ?? linked.exercise.exerciseName,
+        exerciseName: linked.exercise.exerciseName,
         category: linked.exercise.category,
         customLabel: linked.exercise.customLabel ?? null,
         stepRole: step.stepRole ?? linked.set.stepRole ?? "work",

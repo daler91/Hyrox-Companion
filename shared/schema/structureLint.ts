@@ -147,6 +147,11 @@ function isComplexBlock(block: StructureBlockInput): boolean {
   return block.formatType === "emom" || block.formatType === "amrap" || block.formatType === "rounds";
 }
 
+function requiresLinkedExerciseRow(step: StructureBlockInput["steps"][number]): boolean {
+  const role = (step.stepRole ?? step.stepType ?? "work").toLowerCase();
+  return role === "work";
+}
+
 function linkedExerciseStepKeys(exercises: ParsedExercise[]): Set<string> {
   const keys = new Set<string>();
   for (const exercise of exercises) {
@@ -174,7 +179,7 @@ function blockLinkIssues(blocks: StructureBlockInput[], exercises: ParsedExercis
       continue;
     }
     for (const step of block.steps) {
-      if ((step.stepType ?? "work") !== "work") continue;
+      if (!requiresLinkedExerciseRow(step)) continue;
       const key = `${block.id}:${step.stepNumber}`;
       if (linkedKeys.has(key)) continue;
       issues.push(structureIssue(
