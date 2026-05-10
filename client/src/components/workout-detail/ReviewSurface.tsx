@@ -381,6 +381,7 @@ function ReviewActualsSection({
         }}
         onOpenConversionHelper={() => detail.reparseFreeText.mutate(undefined)}
         defaultExpanded
+        structureBlocks={structureBlocks}
       />
       <StructureBlocksEditor
         value={structureBlocks}

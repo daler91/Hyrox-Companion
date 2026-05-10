@@ -24,6 +24,12 @@ export interface SetData {
   plannedWeight?: number;
   plannedDistance?: number;
   plannedTime?: number;
+  blockId?: string | null;
+  stepNumber?: number | null;
+  intervalMinute?: number | null;
+  cycleNumber?: number | null;
+  stepRole?: string | null;
+  groupId?: string | null;
   notes?: string;
 }
 

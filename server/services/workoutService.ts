@@ -17,7 +17,7 @@ import {
   workoutStructureBlocks,
   workoutStructureSteps,
 } from "@shared/schema";
-import { and, asc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import pLimit from "p-limit";
 
 import { db } from "../db";
@@ -499,9 +499,12 @@ async function reparseFromText(
     await parseWorkoutStructureFromTextWithDiagnostics(textToParse.trim(), weightUnit);
   if (acceptedRows.length === 0 && structureBlocks.length === 0) return null;
 
-  const useStructureRows = structureBlocks.length > 0;
-  const setRows = useStructureRows ? [] : expandExercisesToRows(acceptedRows, owner, context);
-  const setCount = await replaceExerciseSetsAndStructureByOwner(owner, setRows, useStructureRows ? structureBlocks : undefined);
+  const setRows = acceptedRows.length > 0 ? expandExercisesToRows(acceptedRows, owner, context) : [];
+  const setCount = await replaceExerciseSetsAndStructureByOwner(
+    owner,
+    setRows,
+    structureBlocks.length > 0 ? structureBlocks : undefined,
+  );
   void incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", source, "manual_fix_completed").catch((err: unknown) => {
     logger.warn({ context: "health-metrics", event: "manual_fix_counter_failed", owner, err }, "Manual fix telemetry increment failed");
   });
@@ -574,9 +577,12 @@ async function reparseFromImage(
   });
   if (acceptedRows.length === 0 && structureBlocks.length === 0) return null;
 
-  const useStructureRows = structureBlocks.length > 0;
-  const setRows = useStructureRows ? [] : expandExercisesToRows(acceptedRows, owner, context);
-  const setCount = await replaceExerciseSetsAndStructureByOwner(owner, setRows, useStructureRows ? structureBlocks : undefined);
+  const setRows = acceptedRows.length > 0 ? expandExercisesToRows(acceptedRows, owner, context) : [];
+  const setCount = await replaceExerciseSetsAndStructureByOwner(
+    owner,
+    setRows,
+    structureBlocks.length > 0 ? structureBlocks : undefined,
+  );
   void incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", source, "manual_fix_completed").catch((err: unknown) => {
     logger.warn({ context: "health-metrics", event: "manual_fix_counter_failed", owner, err }, "Manual fix telemetry increment failed");
   });
@@ -809,13 +815,99 @@ async function deleteBlockDerivedExerciseSets(tx: WorkoutTx, owner: SetOwner): P
     .where(and(exerciseSetOwnerCondition(owner), isNotNull(exerciseSets.blockId)));
 }
 
-async function ownerHasExplicitExerciseSets(tx: WorkoutTx, owner: SetOwner): Promise<boolean> {
+async function ownerHasExerciseSets(tx: WorkoutTx, owner: SetOwner): Promise<boolean> {
   const [row] = await tx
     .select({ id: exerciseSets.id })
     .from(exerciseSets)
-    .where(and(exerciseSetOwnerCondition(owner), isNull(exerciseSets.blockId)))
+    .where(exerciseSetOwnerCondition(owner))
     .limit(1);
   return !!row;
+}
+
+function structureStepKey(blockId: string | null, stepNumber: number | null): string | null {
+  if (!blockId || stepNumber == null) return null;
+  return `${blockId}:${stepNumber}`;
+}
+
+async function linkedExerciseRowsByStep(tx: WorkoutTx, owner: SetOwner) {
+  const rows = await tx
+    .select()
+    .from(exerciseSets)
+    .where(and(exerciseSetOwnerCondition(owner), isNotNull(exerciseSets.blockId)))
+    .orderBy(asc(exerciseSets.sortOrder));
+  const byStep = new Map<string, ExerciseSet>();
+  for (const row of rows) {
+    const key = structureStepKey(row.blockId, row.stepNumber);
+    if (key && !byStep.has(key)) byStep.set(key, row as ExerciseSet);
+  }
+  return byStep;
+}
+
+function targetsFromLinkedExerciseSet(row: ExerciseSet): NonNullable<StructureBlockInput["steps"][number]["targets"]> | null {
+  const targets: Record<string, unknown> = {};
+  const reps = row.plannedReps ?? row.reps;
+  const weight = row.plannedWeight ?? row.weight;
+  const distance = row.plannedDistance ?? row.distance;
+  const time = row.plannedTime ?? row.time;
+  if (reps != null) targets.targetReps = reps;
+  if (weight != null) targets.targetWeight = weight;
+  if (distance != null) targets.targetDistance = distance;
+  if (time != null) targets.targetTime = time;
+  return Object.keys(targets).length > 0
+    ? (targets as NonNullable<StructureBlockInput["steps"][number]["targets"]>)
+    : null;
+}
+
+async function mirrorStructureStepsFromExerciseRows(
+  tx: WorkoutTx,
+  owner: SetOwner,
+  blocks: StructureBlockInput[],
+): Promise<StructureBlockInput[]> {
+  const linkedRows = await linkedExerciseRowsByStep(tx, owner);
+  if (linkedRows.size === 0) return blocks;
+  return blocks.map((block) => ({
+    ...block,
+    steps: block.steps.map((step) => {
+      if ((step.stepType ?? "work") !== "work" || !block.id) return step;
+      const linked = linkedRows.get(`${block.id}:${step.stepNumber}`);
+      if (!linked) return step;
+      return {
+        ...step,
+        exerciseName: linked.customLabel ?? linked.exerciseName,
+        category: linked.category,
+        customLabel: linked.customLabel,
+        stepRole: step.stepRole ?? linked.stepRole ?? "work",
+        groupId: step.groupId ?? linked.groupId,
+        targets: step.targets ?? targetsFromLinkedExerciseSet(linked),
+      };
+    }),
+  }));
+}
+
+async function clearStaleStructureSetLinks(
+  tx: WorkoutTx,
+  owner: SetOwner,
+  validStepKeys: ReadonlySet<string>,
+): Promise<void> {
+  const rows = await tx
+    .select({ id: exerciseSets.id, blockId: exerciseSets.blockId, stepNumber: exerciseSets.stepNumber })
+    .from(exerciseSets)
+    .where(and(exerciseSetOwnerCondition(owner), isNotNull(exerciseSets.blockId)));
+  for (const row of rows) {
+    const key = structureStepKey(row.blockId, row.stepNumber);
+    if (key && validStepKeys.has(key)) continue;
+    await tx
+      .update(exerciseSets)
+      .set({
+        blockId: null,
+        stepNumber: null,
+        intervalMinute: null,
+        cycleNumber: null,
+        stepRole: null,
+        groupId: null,
+      })
+      .where(eq(exerciseSets.id, row.id));
+  }
 }
 
 async function replaceStructureForOwner(
@@ -824,15 +916,23 @@ async function replaceStructureForOwner(
   structureBlocks: StructureBlockInput[],
   options: ReplaceStructureOptions = {},
 ): Promise<number> {
-  await deleteBlockDerivedExerciseSets(tx, owner);
+  const deriveExerciseSets = options.deriveExerciseSets ?? !(await ownerHasExerciseSets(tx, owner));
+  if (deriveExerciseSets) await deleteBlockDerivedExerciseSets(tx, owner);
+  const blocksForPersist = deriveExerciseSets
+    ? structureBlocks
+    : await mirrorStructureStepsFromExerciseRows(tx, owner, structureBlocks);
   await tx.delete(workoutStructureBlocks).where(structureBlockOwnerCondition(owner));
-  if (structureBlocks.length === 0) return 0;
+  if (blocksForPersist.length === 0) {
+    if (!deriveExerciseSets) await clearStaleStructureSetLinks(tx, owner, new Set());
+    return 0;
+  }
 
-  const deriveExerciseSets = options.deriveExerciseSets ?? !(await ownerHasExplicitExerciseSets(tx, owner));
   let sortOrder = deriveExerciseSets ? await nextSortOrderForOwner(tx, owner) : 0;
   const derivedRows: InsertExerciseSet[] = [];
-  for (const [idx, block] of structureBlocks.entries()) {
+  const validStepKeys = new Set<string>();
+  for (const [idx, block] of blocksForPersist.entries()) {
     const [savedBlock] = await tx.insert(workoutStructureBlocks).values({
+      ...(block.id ? { id: block.id } : {}),
       ...ownerForeignKeys(owner),
       sectionType: block.sectionType,
       formatType: block.formatType,
@@ -851,6 +951,9 @@ async function replaceStructureForOwner(
       sortOrder: block.sortOrder ?? idx,
     }).returning();
     if (!block.steps?.length) continue;
+    for (const step of block.steps) {
+      validStepKeys.add(`${savedBlock.id}:${step.stepNumber}`);
+    }
     await tx.insert(workoutStructureSteps).values(block.steps.map((s) => ({
       blockId: savedBlock.id,
       stepNumber: s.stepNumber,
@@ -886,6 +989,7 @@ async function replaceStructureForOwner(
   if (derivedRows.length > 0) {
     await tx.insert(exerciseSets).values(derivedRows);
   }
+  if (!deriveExerciseSets) await clearStaleStructureSetLinks(tx, owner, validStepKeys);
   return derivedRows.length;
 }
 
@@ -920,20 +1024,18 @@ async function copyPrescribedSetsIntoLog(
     .orderBy(asc(exerciseSets.sortOrder));
   if (prescribed.length === 0) return [];
 
-  const copyRows = prescribed.map((p) => ({
-    ...prescribedSetToLogRow(p, workoutLogId),
-    blockId: p.blockId ? blockIdMap.get(p.blockId) ?? null : null,
-    stepNumber: p.stepNumber,
-    intervalMinute: p.intervalMinute,
-    cycleNumber: p.cycleNumber,
-    stepRole: p.stepRole,
-    groupId: p.groupId,
-    intensity: p.intensity,
-    load: p.load,
-    repMode: p.repMode,
-    tempo: p.tempo,
-    standards: p.standards,
-  }));
+  const copyRows = prescribed.map((p) => {
+    const mappedBlockId = p.blockId ? blockIdMap.get(p.blockId) ?? null : null;
+    return {
+      ...prescribedSetToLogRow(p, workoutLogId),
+      blockId: mappedBlockId,
+      stepNumber: mappedBlockId ? p.stepNumber : null,
+      intervalMinute: mappedBlockId ? p.intervalMinute : null,
+      cycleNumber: mappedBlockId ? p.cycleNumber : null,
+      stepRole: mappedBlockId ? p.stepRole : null,
+      groupId: mappedBlockId ? p.groupId : null,
+    };
+  });
   return tx.insert(exerciseSets).values(copyRows).returning();
 }
 
@@ -1318,6 +1420,44 @@ export async function replacePlanDayStructure(
     exerciseSets: exerciseSetsForDay ?? [],
     structureBlocks: savedStructure ?? [],
   };
+}
+
+async function deriveMissingExerciseSetsFromStructure(
+  owner: SetOwner,
+  structureBlocks: StructureBlockInput[],
+): Promise<number> {
+  const existing = await db
+    .select({ count: sql<number>`cast(count(*) as int)` })
+    .from(exerciseSets)
+    .where(exerciseSetOwnerCondition(owner));
+  if ((existing[0]?.count ?? 0) > 0) return 0;
+  if (structureBlocks.length === 0) return 0;
+  await db.transaction((tx) => replaceStructureForOwner(tx, owner, structureBlocks, { deriveExerciseSets: true }));
+  const after = await db
+    .select({ count: sql<number>`cast(count(*) as int)` })
+    .from(exerciseSets)
+    .where(exerciseSetOwnerCondition(owner));
+  return after[0]?.count ?? 0;
+}
+
+export async function deriveMissingPlanDaySetsFromStructure(
+  planDayId: string,
+  userId: string,
+): Promise<number | null> {
+  const planDay = await storage.plans.getPlanDay(planDayId, userId);
+  if (!planDay) return null;
+  const structureBlocks = await storage.workouts.getWorkoutStructureByPlanDay(planDayId, userId);
+  return deriveMissingExerciseSetsFromStructure({ planDayId }, structureBlocks ?? []);
+}
+
+export async function deriveMissingWorkoutSetsFromStructure(
+  workoutLogId: string,
+  userId: string,
+): Promise<number | null> {
+  const log = await storage.workouts.getWorkoutLog(workoutLogId, userId);
+  if (!log) return null;
+  const structureBlocks = await storage.workouts.getWorkoutStructureByWorkoutLog(workoutLogId);
+  return deriveMissingExerciseSetsFromStructure({ workoutLogId }, structureBlocks);
 }
 
 export async function updateWorkoutStructureBlockScore(

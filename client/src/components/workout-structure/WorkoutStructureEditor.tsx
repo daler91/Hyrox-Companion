@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 import { buildEmomPreview } from "./emomPreview";
 import { workoutStructureFeatureFlags } from "./featureFlags";
-import type { BlockType, StepType, WorkoutSection, WorkoutStructureConfig } from "./types";
+import { type BlockType, type StepType, UNASSIGNED_WORK_STEP_LABEL, type WorkoutSection, type WorkoutStructureConfig } from "./types";
 
 const sections: WorkoutSection[] = ["warmup", "main", "accessory", "cooldown", "mobility"];
 const blockTypes: BlockType[] = ["steady", "emom", "rounds", "amrap", "interval", "for_time"];
@@ -96,14 +96,19 @@ export function WorkoutStructureEditor({ value, onChange, showScoreControls = fa
     steps.splice(destination, 0, item);
     update("steps", steps);
   };
-  const addWorkStep = () => update("steps", [...value.steps, { id: crypto.randomUUID(), type: "work" }]);
+  const addWorkStep = () => update("steps", [
+    ...value.steps,
+    { id: crypto.randomUUID(), type: "work", exercise: UNASSIGNED_WORK_STEP_LABEL },
+  ]);
   const enableEmomBlock = () => {
     onChange({
       ...value,
       blockType: "emom",
       emomDurationMinutes: value.emomDurationMinutes ?? 10,
       emomAlternating: value.emomAlternating ?? false,
-      steps: value.steps.length > 0 ? value.steps : [{ id: crypto.randomUUID(), type: "work" }],
+      steps: value.steps.length > 0
+        ? value.steps
+        : [{ id: crypto.randomUUID(), type: "work", exercise: UNASSIGNED_WORK_STEP_LABEL }],
     });
   };
   const updateScore = (score: StructureBlockScore | null) => {
@@ -221,22 +226,16 @@ export function WorkoutStructureEditor({ value, onChange, showScoreControls = fa
               <SelectContent>{stepTypes.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
             </Select>
             {step.type === "work" ? (
-              <>
-                <Input className="col-span-3" placeholder="Exercise" value={step.exercise ?? ""} onChange={(e) => {
-                  const steps = [...value.steps];
-                  steps[idx] = { ...steps[idx], exercise: e.target.value || undefined };
-                  update("steps", steps);
-                }} />
-                <Input className="col-span-3" placeholder="Target" value={step.target ?? ""} onChange={(e) => {
-                  const steps = [...value.steps];
-                  steps[idx] = { ...steps[idx], target: e.target.value || undefined };
-                  update("steps", steps);
-                }} />
-              </>
+              <div className="col-span-4 min-w-0 text-xs text-muted-foreground">
+                {step.exercise && step.exercise !== UNASSIGNED_WORK_STEP_LABEL
+                  ? step.exercise
+                  : "Assign an exercise row from the table"}
+                {step.target ? <span className="block truncate">{step.target}</span> : null}
+              </div>
             ) : (
-              <div className="col-span-6 text-xs text-muted-foreground">{step.type === "rest" ? "Rest step: no exercise/target" : "Transition step"}</div>
+              <div className="col-span-4 text-xs text-muted-foreground">{step.type === "rest" ? "Rest step" : "Transition step"}</div>
             )}
-            <Input className="col-span-3" type="number" placeholder="Sec" value={step.durationSeconds ?? ""} onChange={(e) => {
+            <Input className="col-span-2" type="number" placeholder="Sec" value={step.durationSeconds ?? ""} onChange={(e) => {
               const steps = [...value.steps];
               const base = { ...steps[idx], durationSeconds: e.target.value ? Number(e.target.value) : undefined };
               steps[idx] = base.type === "work" ? base : { ...base, exercise: undefined };

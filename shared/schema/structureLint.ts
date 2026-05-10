@@ -143,6 +143,51 @@ function blockIssues(block: StructureBlockInput): StructureLintIssue[] {
   ];
 }
 
+function isComplexBlock(block: StructureBlockInput): boolean {
+  return block.formatType === "emom" || block.formatType === "amrap" || block.formatType === "rounds";
+}
+
+function linkedExerciseStepKeys(exercises: ParsedExercise[]): Set<string> {
+  const keys = new Set<string>();
+  for (const exercise of exercises) {
+    for (const set of exercise.sets ?? []) {
+      if (!set.blockId || set.stepNumber == null) continue;
+      keys.add(`${set.blockId}:${set.stepNumber}`);
+    }
+  }
+  return keys;
+}
+
+function blockLinkIssues(blocks: StructureBlockInput[], exercises: ParsedExercise[]): StructureLintIssue[] {
+  if (exercises.length === 0) return [];
+  const linkedKeys = linkedExerciseStepKeys(exercises);
+  const issues: StructureLintIssue[] = [];
+  for (const block of blocks) {
+    if (!isComplexBlock(block)) continue;
+    if (!block.id) {
+      issues.push(structureIssue(
+        "error",
+        "MISSING_BLOCK_ID",
+        `${block.formatType.toUpperCase()} blocks require a stable id for exercise row links.`,
+        "Save the block with an id and link exercise rows to its steps.",
+      ));
+      continue;
+    }
+    for (const step of block.steps) {
+      if ((step.stepType ?? "work") !== "work") continue;
+      const key = `${block.id}:${step.stepNumber}`;
+      if (linkedKeys.has(key)) continue;
+      issues.push(structureIssue(
+        "error",
+        "MISSING_LINKED_EXERCISE_ROW",
+        `${block.formatType.toUpperCase()} step ${step.stepNumber} must be linked to an exercise row.`,
+        "Assign an exercise table row to this block step.",
+      ));
+    }
+  }
+  return issues;
+}
+
 function buildLintResult(issues: StructureLintIssue[], total: number): StructureLintResult {
   const schemaErrors = issues.filter((i) => i.severity === "error");
   const warnings = issues.filter((i) => i.severity === "warning");
@@ -165,6 +210,7 @@ export function lintWorkoutStructure(structureBlocks?: StructureBlockInput[] | n
   const issues = [
     ...exerciseIssues(exList),
     ...blocks.flatMap(blockIssues),
+    ...blockLinkIssues(blocks, exList),
   ];
   return buildLintResult(issues, blocks.length + exList.length);
 }

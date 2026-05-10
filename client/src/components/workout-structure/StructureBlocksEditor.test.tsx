@@ -37,13 +37,19 @@ describe("StructureBlocksEditor", () => {
     const blocks = readSnapshot();
     expect(blocks).toHaveLength(1);
     expect(blocks[0]).toMatchObject({
+      id: expect.any(String),
       sectionType: "main",
       formatType: "emom",
       durationMinutes: 10,
       sequenceOrder: 0,
     });
     expect(blocks[0].steps).toHaveLength(1);
-    expect(blocks[0].steps[0]).toMatchObject({ stepNumber: 1, stepType: "work", minuteIndex: 1 });
+    expect(blocks[0].steps[0]).toMatchObject({
+      stepNumber: 1,
+      stepType: "work",
+      minuteIndex: 1,
+      exerciseName: "Unassigned exercise",
+    });
   });
 
   it("adds AMRAP and rounds blocks via explicit add buttons", () => {
@@ -204,7 +210,7 @@ describe("StructureBlocksEditor", () => {
     );
 
     expect(screen.getByTestId("structure-block-0")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("Box Jumps")).toBeInTheDocument();
+    expect(screen.getByText("Box Jumps")).toBeInTheDocument();
     expect(screen.getByDisplayValue("7")).toBeInTheDocument();
   });
 });

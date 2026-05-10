@@ -15,6 +15,12 @@ export type PatchExerciseSetPayload = Partial<{
   plannedWeight: number | null;
   plannedDistance: number | null;
   plannedTime: number | null;
+  blockId: string | null;
+  stepNumber: number | null;
+  intervalMinute: number | null;
+  cycleNumber: number | null;
+  stepRole: string | null;
+  groupId: string | null;
   notes: string | null;
   sortOrder: number | null;
 }>;
@@ -32,6 +38,12 @@ export interface AddExerciseSetPayload {
   plannedWeight?: number | null;
   plannedDistance?: number | null;
   plannedTime?: number | null;
+  blockId?: string | null;
+  stepNumber?: number | null;
+  intervalMinute?: number | null;
+  cycleNumber?: number | null;
+  stepRole?: string | null;
+  groupId?: string | null;
   notes?: string | null;
   confidence?: number | null;
   sourceSetId?: string | null;

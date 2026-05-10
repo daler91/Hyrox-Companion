@@ -76,6 +76,19 @@ function mapStructureBlockRows(
   }));
 }
 
+function setTargetsForStructureMirror(row: ExerciseSet): Record<string, unknown> | null {
+  const targets: Record<string, unknown> = {};
+  const reps = row.plannedReps ?? row.reps;
+  const weight = row.plannedWeight ?? row.weight;
+  const distance = row.plannedDistance ?? row.distance;
+  const time = row.plannedTime ?? row.time;
+  if (reps != null) targets.targetReps = reps;
+  if (weight != null) targets.targetWeight = weight;
+  if (distance != null) targets.targetDistance = distance;
+  if (time != null) targets.targetTime = time;
+  return Object.keys(targets).length > 0 ? targets : null;
+}
+
 // Count distinct exercises in a logged workout whose best weight matches the
 // user's all-time max for that exercise. "Conservative PR" — we only credit
 // exercises that include a weighted set; running/time/distance PRs are not
@@ -510,6 +523,7 @@ export class WorkoutStorage {
       .insert(exerciseSets)
       .values(adapter.buildInsertValues(context.id, set, nextOrder))
       .returning();
+    if (created) await this.syncStructureStepMirror(created);
     return created;
   }
 
@@ -526,7 +540,43 @@ export class WorkoutStorage {
       .set(updates)
       .where(eq(exerciseSets.id, setId))
       .returning();
+    if (updated) await this.syncStructureStepMirror(updated);
     return updated;
+  }
+
+  private async syncStructureStepMirror(row: ExerciseSet): Promise<void> {
+    if (!row.blockId || row.stepNumber == null) return;
+    let ownerCondition = null;
+    if (row.workoutLogId) {
+      ownerCondition = eq(workoutStructureBlocks.workoutLogId, row.workoutLogId);
+    } else if (row.planDayId) {
+      ownerCondition = eq(workoutStructureBlocks.planDayId, row.planDayId);
+    }
+    if (!ownerCondition) return;
+    const [block] = await db
+      .select({ id: workoutStructureBlocks.id })
+      .from(workoutStructureBlocks)
+      .where(and(eq(workoutStructureBlocks.id, row.blockId), ownerCondition))
+      .limit(1);
+    if (!block) return;
+    await db
+      .update(workoutStructureSteps)
+      .set({
+        exerciseName: row.customLabel ?? row.exerciseName,
+        category: row.category,
+        customLabel: row.customLabel,
+        targetReps: row.plannedReps ?? row.reps,
+        targetWeight: row.plannedWeight ?? row.weight,
+        targetDistance: row.plannedDistance ?? row.distance,
+        targetTime: row.plannedTime ?? row.time,
+        stepRole: row.stepRole ?? "work",
+        groupId: row.groupId,
+        targets: setTargetsForStructureMirror(row),
+      })
+      .where(and(
+        eq(workoutStructureSteps.blockId, row.blockId),
+        eq(workoutStructureSteps.stepNumber, row.stepNumber),
+      ));
   }
 
   async deleteExerciseSetNormalized(

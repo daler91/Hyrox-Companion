@@ -62,9 +62,13 @@ export function groupExerciseSets(dbSets: ExerciseSet[]): GroupedExercise[] {
   let currentKey: string | null = null;
   let currentGroup: GroupedExercise | null = null;
   for (const s of sorted) {
-    const key = s.exerciseName === "custom" && s.customLabel
+    const exerciseKey = s.exerciseName === "custom" && s.customLabel
       ? `custom:${s.customLabel}`
       : s.exerciseName;
+    const blockKey = s.blockId && s.stepNumber != null
+      ? `block:${s.blockId}:${s.stepNumber}`
+      : "unblocked";
+    const key = `${blockKey}|${exerciseKey}`;
     if (key !== currentKey) {
       currentGroup = { exerciseName: s.exerciseName, customLabel: s.customLabel, category: s.category, confidence: s.confidence, sets: [] };
       groups.push(currentGroup);
@@ -158,6 +162,12 @@ function structuredSetFromExerciseSet(
     weight: set.weight ?? undefined,
     distance: set.distance ?? undefined,
     time: set.time ?? undefined,
+    blockId: set.blockId,
+    stepNumber: set.stepNumber,
+    intervalMinute: set.intervalMinute,
+    cycleNumber: set.cycleNumber,
+    stepRole: set.stepRole,
+    groupId: set.groupId,
     notes: set.notes ?? undefined,
   };
   const plannedReps = plannedValue(set.plannedReps, set.reps, snapshotActualsAsPlanned);

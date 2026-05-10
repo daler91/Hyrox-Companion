@@ -1,9 +1,28 @@
-import type { ExerciseSet } from "@shared/schema";
+import type { ExerciseSet, StructureBlockInput } from "@shared/schema";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { ExerciseTable } from "../ExerciseTable";
+
+const originalHasPointerCapture = HTMLElement.prototype.hasPointerCapture;
+const originalSetPointerCapture = HTMLElement.prototype.setPointerCapture;
+const originalReleasePointerCapture = HTMLElement.prototype.releasePointerCapture;
+const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+
+beforeAll(() => {
+  HTMLElement.prototype.hasPointerCapture = vi.fn().mockReturnValue(false);
+  HTMLElement.prototype.setPointerCapture = vi.fn();
+  HTMLElement.prototype.releasePointerCapture = vi.fn();
+  HTMLElement.prototype.scrollIntoView = vi.fn();
+});
+
+afterAll(() => {
+  HTMLElement.prototype.hasPointerCapture = originalHasPointerCapture;
+  HTMLElement.prototype.setPointerCapture = originalSetPointerCapture;
+  HTMLElement.prototype.releasePointerCapture = originalReleasePointerCapture;
+  HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
+});
 
 function makeSet(overrides: Partial<ExerciseSet> = {}): ExerciseSet {
   return {
@@ -179,5 +198,57 @@ describe("ExerciseTable drag handle", () => {
       order += 1;
     }
     expect(onUpdateSet).not.toHaveBeenCalled();
+  });
+
+  it("fans block assignment metadata across every set in the exercise row", async () => {
+    const user = userEvent.setup();
+    const onUpdateSet = vi.fn();
+    const structureBlocks: StructureBlockInput[] = [{
+      id: "block-emom",
+      sectionType: "main",
+      formatType: "emom",
+      durationMinutes: 10,
+      steps: [
+        { stepNumber: 1, stepType: "work", minuteIndex: 1, exerciseName: "Unassigned exercise" },
+        { stepNumber: 2, stepType: "work", minuteIndex: 2, exerciseName: "Unassigned exercise" },
+      ],
+    }];
+    const sets: ExerciseSet[] = [
+      makeSet({ id: "set-1", setNumber: 1, sortOrder: 0 }),
+      makeSet({ id: "set-2", setNumber: 2, sortOrder: 1 }),
+    ];
+
+    render(
+      <ExerciseTable
+        workoutId="log-1"
+        exerciseSets={sets}
+        weightUnit="kg"
+        onUpdateSet={onUpdateSet}
+        onAddSet={vi.fn()}
+        onDeleteSet={vi.fn()}
+        structureBlocks={structureBlocks}
+      />,
+    );
+
+    await user.click(screen.getByRole("combobox", { name: /Block assignment for Back Squat/i }));
+    await user.click(await screen.findByRole("option", { name: /min 2/i }));
+
+    expect(onUpdateSet).toHaveBeenCalledTimes(2);
+    expect(onUpdateSet).toHaveBeenNthCalledWith(1, "set-1", {
+      blockId: "block-emom",
+      stepNumber: 2,
+      intervalMinute: 2,
+      cycleNumber: null,
+      stepRole: "work",
+      groupId: null,
+    });
+    expect(onUpdateSet).toHaveBeenNthCalledWith(2, "set-2", {
+      blockId: "block-emom",
+      stepNumber: 2,
+      intervalMinute: 2,
+      cycleNumber: null,
+      stepRole: "work",
+      groupId: null,
+    });
   });
 });
