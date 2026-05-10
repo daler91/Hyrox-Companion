@@ -68,24 +68,21 @@ const MAX_SET_ROWS_PER_WORKOUT = 1000;
 // by the exercise_set_single_owner_check DB constraint.
 type SetOwner = { workoutLogId: string } | { planDayId: string };
 
-function ownerColumns(owner: SetOwner): Partial<InsertExerciseSet> {
+function ownerForeignKeys(owner: SetOwner) {
   if ("workoutLogId" in owner) {
     return { workoutLogId: owner.workoutLogId, planDayId: null };
   }
   return { workoutLogId: null, planDayId: owner.planDayId };
+}
+
+function ownerColumns(owner: SetOwner): Partial<InsertExerciseSet> {
+  return ownerForeignKeys(owner);
 }
 
 function exerciseSetOwnerCondition(owner: SetOwner) {
   return "workoutLogId" in owner
     ? eq(exerciseSets.workoutLogId, owner.workoutLogId)
     : eq(exerciseSets.planDayId, owner.planDayId);
-}
-
-function structureBlockOwnerColumns(owner: SetOwner) {
-  if ("workoutLogId" in owner) {
-    return { workoutLogId: owner.workoutLogId, planDayId: null };
-  }
-  return { workoutLogId: null, planDayId: owner.planDayId };
 }
 
 function structureBlockOwnerCondition(owner: SetOwner) {
@@ -805,7 +802,7 @@ async function replaceStructureForOwner(tx: WorkoutTx, owner: SetOwner, structur
   const derivedRows: InsertExerciseSet[] = [];
   for (const [idx, block] of structureBlocks.entries()) {
     const [savedBlock] = await tx.insert(workoutStructureBlocks).values({
-      ...structureBlockOwnerColumns(owner),
+      ...ownerForeignKeys(owner),
       sectionType: block.sectionType,
       formatType: block.formatType,
       durationSeconds: block.durationSeconds ?? null,

@@ -402,6 +402,36 @@ function markInitialDataAsEdited(
   return marked;
 }
 
+function shouldRunAutoParse(trimmed: string, lastParsedText: string): boolean {
+  return (
+    trimmed.length > 0 &&
+    trimmed !== lastParsedText &&
+    trimmed.length >= AUTO_PARSE_MIN_CHARS &&
+    AUTO_PARSE_SIGNAL_RE.test(trimmed)
+  );
+}
+
+function buildAutoParseDiagnostics(parsed: ParseWorkoutStructureResponse): ParseDiagnostics {
+  const lowConfidenceCount = parsed.exercises.filter((row) => typeof row.confidence === "number" && row.confidence < 80).length;
+  const emptyResult = parsed.exercises.length === 0 && parsed.structureBlocks.length === 0;
+  return {
+    lowConfidenceCount,
+    emptyResult,
+    lastErrorReason: null,
+    lastConfidenceSummary: emptyResult
+      ? "No exercises were detected in the parse response."
+      : `Parsed ${parsed.exercises.length} exercises and ${parsed.structureBlocks.length} blocks; ${lowConfidenceCount} below confidence 80.`,
+  };
+}
+
+function shouldIgnoreAutoParseError(err: unknown, signal: AbortSignal): boolean {
+  return signal.aborted || (err instanceof DOMException && err.name === "AbortError");
+}
+
+function parseErrorReason(err: unknown): string {
+  return err instanceof Error ? err.message : "Unknown parse error";
+}
+
 export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
   const blockCounterRef = useRef(options.initialBlockCounter ?? 0);
   const [exerciseBlocks, setExerciseBlocks] = useState<string[]>(
@@ -528,13 +558,26 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
     lastErrorReason: null,
     lastConfidenceSummary: null,
   });
+  const applyAutoParseResult = useCallback((parsed: ParseWorkoutStructureResponse) => {
+    if (parsed.structureBlocks.length > 0) {
+      setExerciseBlocks([]);
+      setExerciseData({});
+      setStructureBlocks(parsed.structureBlocks);
+      return;
+    }
+    const { newBlocks, newData } = mergeParsedWithEdits(
+      parsed.exercises,
+      blockCounterRef,
+      blocksRef.current,
+      dataRef.current,
+    );
+    setExerciseBlocks(newBlocks);
+    setExerciseData(newData);
+  }, []);
 
   const runAutoParse = useCallback(async (text: string) => {
     const trimmed = text.trim();
-    if (!trimmed) return;
-    if (trimmed === lastParsedTextRef.current) return;
-    if (trimmed.length < AUTO_PARSE_MIN_CHARS) return;
-    if (!AUTO_PARSE_SIGNAL_RE.test(trimmed)) return;
+    if (!shouldRunAutoParse(trimmed, lastParsedTextRef.current)) return;
 
     abortRef.current?.abort();
     const controller = new AbortController();
@@ -546,41 +589,16 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
       const parsed = await api.exercises.parseStructured(trimmed, { signal: controller.signal });
       if (controller.signal.aborted) return;
       lastParsedTextRef.current = trimmed;
-      const lowConfidenceCount = parsed.exercises.filter((row) => typeof row.confidence === "number" && row.confidence < 80).length;
-      setParseDiagnostics({
-        lowConfidenceCount,
-        emptyResult: parsed.exercises.length === 0 && parsed.structureBlocks.length === 0,
-        lastErrorReason: null,
-        lastConfidenceSummary:
-          parsed.exercises.length === 0 && parsed.structureBlocks.length === 0
-            ? "No exercises were detected in the parse response."
-            : `Parsed ${parsed.exercises.length} exercises and ${parsed.structureBlocks.length} blocks; ${lowConfidenceCount} below confidence 80.`,
-      });
-      if (parsed.structureBlocks.length > 0) {
-        setExerciseBlocks([]);
-        setExerciseData({});
-        setStructureBlocks(parsed.structureBlocks);
-      } else {
-        const { newBlocks, newData } = mergeParsedWithEdits(
-          parsed.exercises,
-          blockCounterRef,
-          blocksRef.current,
-          dataRef.current,
-        );
-        setExerciseBlocks(newBlocks);
-        setExerciseData(newData);
-      }
+      setParseDiagnostics(buildAutoParseDiagnostics(parsed));
+      applyAutoParseResult(parsed);
       setLastParsedAt(Date.now());
     } catch (err) {
-      if (controller.signal.aborted) return;
-      const isAbort = err instanceof DOMException && err.name === "AbortError";
-      if (!isAbort) {
-        setAutoParseError(true);
-        setParseDiagnostics((prev) => ({
-          ...prev,
-          lastErrorReason: err instanceof Error ? err.message : "Unknown parse error",
-        }));
-      }
+      if (shouldIgnoreAutoParseError(err, controller.signal)) return;
+      setAutoParseError(true);
+      setParseDiagnostics((prev) => ({
+        ...prev,
+        lastErrorReason: parseErrorReason(err),
+      }));
     } finally {
       // Always clear the spinner. Earlier this was gated on
       // `!controller.signal.aborted`, but that left the state stuck
@@ -591,7 +609,7 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
       // so there's no visible flicker.
       setAutoParsing(false);
     }
-  }, []);
+  }, [applyAutoParseResult]);
 
   // Schedule a trailing-debounced auto-parse whenever the free-text
   // changes. Any pending parse gets cancelled on the next call so only

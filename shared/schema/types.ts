@@ -463,7 +463,7 @@ export const structureBlockScoreSchema = z.discriminatedUnion("type", [
 ]);
 export type StructureBlockScore = z.infer<typeof structureBlockScoreSchema>;
 
-export const structureBlockSchema = z.object({
+const structureBlockBaseSchema = z.object({
   id: z.string().max(255).optional(),
   sectionType: sectionTypeSchema,
   formatType: formatTypeSchema,
@@ -481,31 +481,43 @@ export const structureBlockSchema = z.object({
   sequenceOrder: z.number().int().min(0).max(10_000).optional(),
   sortOrder: z.number().int().min(0).max(10_000).optional(),
   steps: z.array(structureStepSchema).min(1).max(200),
-}).superRefine((block, ctx) => {
-  if (block.formatType === "emom") {
-    if (!block.durationMinutes) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "EMOM blocks require durationMinutes.", path: ["durationMinutes"] });
-    }
-    if (block.steps.length < 1) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "EMOM blocks require at least one step.", path: ["steps"] });
-    }
-    const minuteIndices = block.steps.map((s) => s.minuteIndex).filter((m): m is number => m != null);
-    if (minuteIndices.length !== block.steps.length) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "EMOM steps require minuteIndex.", path: ["steps"] });
-    }
-    if (minuteIndices.length !== new Set(minuteIndices).size) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Duplicate minuteIndex values are not allowed in EMOM patterns.", path: ["steps"] });
-    }
+});
+type StructureBlockDraft = z.infer<typeof structureBlockBaseSchema>;
+type StructureBlockValidator = (block: StructureBlockDraft, ctx: z.RefinementCtx) => void;
+
+function validateEmomBlock(block: StructureBlockDraft, ctx: z.RefinementCtx): void {
+  if (block.formatType !== "emom") return;
+  if (!block.durationMinutes) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "EMOM blocks require durationMinutes.", path: ["durationMinutes"] });
   }
+  if (block.steps.length < 1) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "EMOM blocks require at least one step.", path: ["steps"] });
+  }
+  const minuteIndices = block.steps.map((s) => s.minuteIndex).filter((m): m is number => m != null);
+  if (minuteIndices.length !== block.steps.length) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "EMOM steps require minuteIndex.", path: ["steps"] });
+  }
+  if (minuteIndices.length !== new Set(minuteIndices).size) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Duplicate minuteIndex values are not allowed in EMOM patterns.", path: ["steps"] });
+  }
+}
+
+function validateAmrapBlock(block: StructureBlockDraft, ctx: z.RefinementCtx): void {
   if (block.formatType === "amrap" && block.roundCount != null) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "AMRAP blocks cannot define fixed roundCount.", path: ["roundCount"] });
   }
   if (block.formatType === "amrap" && !block.timeCapMinutes && !block.durationSeconds && !block.durationMinutes) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "AMRAP blocks require a time cap or duration.", path: ["timeCapMinutes"] });
   }
+}
+
+function validateRoundsBlock(block: StructureBlockDraft, ctx: z.RefinementCtx): void {
   if (block.formatType === "rounds" && block.roundCount == null && block.rounds == null) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Rounds blocks require roundCount.", path: ["roundCount"] });
   }
+}
+
+function validateTimedBlock(block: StructureBlockDraft, ctx: z.RefinementCtx): void {
   if (block.formatType === "for_time" && !block.timeCapMinutes && !block.durationSeconds) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "for_time blocks must define timeCapMinutes.", path: ["timeCapMinutes"] });
   }
@@ -515,6 +527,17 @@ export const structureBlockSchema = z.object({
   if (block.score && block.score.type !== block.formatType) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Block score type must match the block format.", path: ["score"] });
   }
+}
+
+const structureBlockValidators: StructureBlockValidator[] = [
+  validateEmomBlock,
+  validateAmrapBlock,
+  validateRoundsBlock,
+  validateTimedBlock,
+];
+
+export const structureBlockSchema = structureBlockBaseSchema.superRefine((block, ctx) => {
+  for (const validate of structureBlockValidators) validate(block, ctx);
 });
 
 export const structureBlocksPayloadSchema = z.array(structureBlockSchema).max(100).optional();
