@@ -838,7 +838,7 @@ async function linkedExerciseRowsByStep(tx: WorkoutTx, owner: SetOwner) {
   const byStep = new Map<string, ExerciseSet>();
   for (const row of rows) {
     const key = structureStepKey(row.blockId, row.stepNumber);
-    if (key && !byStep.has(key)) byStep.set(key, row as ExerciseSet);
+    if (key && !byStep.has(key)) byStep.set(key, row);
   }
   return byStep;
 }
@@ -910,6 +910,82 @@ async function clearStaleStructureSetLinks(
   }
 }
 
+function structureBlockInsertValues(owner: SetOwner, block: StructureBlockInput, idx: number) {
+  return {
+    ...(block.id ? { id: block.id } : {}),
+    ...ownerForeignKeys(owner),
+    sectionType: block.sectionType,
+    formatType: block.formatType,
+    durationSeconds: block.durationSeconds ?? null,
+    rounds: block.rounds ?? null,
+    workSeconds: block.workSeconds ?? null,
+    restSeconds: block.restSeconds ?? null,
+    durationMinutes: block.durationMinutes ?? null,
+    roundCount: block.roundCount ?? null,
+    timeCapMinutes: block.timeCapMinutes ?? null,
+    workIntervalSec: block.workIntervalSec ?? null,
+    restIntervalSec: block.restIntervalSec ?? null,
+    score: block.score ?? null,
+    sequenceOrder: block.sequenceOrder ?? idx,
+    instructions: block.instructions ?? null,
+    sortOrder: block.sortOrder ?? idx,
+  };
+}
+
+function structureStepInsertValues(blockId: string, steps: StructureBlockInput["steps"]) {
+  return steps.map((s) => ({
+    blockId,
+    stepNumber: s.stepNumber,
+    minuteIndex: s.minuteIndex ?? null,
+    stepType: s.stepType ?? "work",
+    exerciseName: s.exerciseName,
+    category: s.category,
+    customLabel: s.customLabel ?? null,
+    stepRole: s.stepRole ?? null,
+    targetReps: s.targets?.targetReps ?? s.targets?.reps ?? null,
+    targetTime: s.targets?.targetTime ?? s.targets?.time ?? null,
+    targetDistance: s.targets?.targetDistance ?? s.targets?.distance ?? null,
+    targetWeight: s.targets?.targetWeight ?? s.targets?.weight ?? null,
+    groupId: s.groupId ?? null,
+    groupMeta: s.groupMeta ?? null,
+    intensity: s.intensity ?? null,
+    loadMode: s.loadMode ?? null,
+    unilateralMode: s.unilateralMode ?? null,
+    tempo: s.tempo ?? null,
+    constraintTags: s.constraintTags ?? null,
+    targets: s.targets ?? null,
+  }));
+}
+
+async function insertStructureBlock(
+  tx: WorkoutTx,
+  owner: SetOwner,
+  block: StructureBlockInput,
+  idx: number,
+) {
+  const [savedBlock] = await tx.insert(workoutStructureBlocks).values(
+    structureBlockInsertValues(owner, block, idx),
+  ).returning();
+  return savedBlock;
+}
+
+function collectDerivedRowsForBlock(args: {
+  owner: SetOwner;
+  blockId: string;
+  block: StructureBlockInput;
+  startSortOrder: number;
+}): { rows: InsertExerciseSet[]; nextSortOrder: number } {
+  const rows: InsertExerciseSet[] = [];
+  let sortOrder = args.startSortOrder;
+  for (const step of args.block.steps) {
+    const row = derivedSetRowFromStep(args.owner, args.blockId, args.block, step, sortOrder);
+    if (!row) continue;
+    rows.push(row);
+    sortOrder += 1;
+  }
+  return { rows, nextSortOrder: sortOrder };
+}
+
 async function replaceStructureForOwner(
   tx: WorkoutTx,
   owner: SetOwner,
@@ -931,58 +1007,17 @@ async function replaceStructureForOwner(
   const derivedRows: InsertExerciseSet[] = [];
   const validStepKeys = new Set<string>();
   for (const [idx, block] of blocksForPersist.entries()) {
-    const [savedBlock] = await tx.insert(workoutStructureBlocks).values({
-      ...(block.id ? { id: block.id } : {}),
-      ...ownerForeignKeys(owner),
-      sectionType: block.sectionType,
-      formatType: block.formatType,
-      durationSeconds: block.durationSeconds ?? null,
-      rounds: block.rounds ?? null,
-      workSeconds: block.workSeconds ?? null,
-      restSeconds: block.restSeconds ?? null,
-      durationMinutes: block.durationMinutes ?? null,
-      roundCount: block.roundCount ?? null,
-      timeCapMinutes: block.timeCapMinutes ?? null,
-      workIntervalSec: block.workIntervalSec ?? null,
-      restIntervalSec: block.restIntervalSec ?? null,
-      score: block.score ?? null,
-      sequenceOrder: block.sequenceOrder ?? idx,
-      instructions: block.instructions ?? null,
-      sortOrder: block.sortOrder ?? idx,
-    }).returning();
-    if (!block.steps?.length) continue;
-    for (const step of block.steps) {
+    const savedBlock = await insertStructureBlock(tx, owner, block, idx);
+    const steps = block.steps ?? [];
+    if (steps.length === 0) continue;
+    for (const step of steps) {
       validStepKeys.add(`${savedBlock.id}:${step.stepNumber}`);
     }
-    await tx.insert(workoutStructureSteps).values(block.steps.map((s) => ({
-      blockId: savedBlock.id,
-      stepNumber: s.stepNumber,
-      minuteIndex: s.minuteIndex ?? null,
-      stepType: s.stepType ?? "work",
-      exerciseName: s.exerciseName,
-      category: s.category,
-      customLabel: s.customLabel ?? null,
-      stepRole: s.stepRole ?? null,
-      targetReps: s.targets?.targetReps ?? s.targets?.reps ?? null,
-      targetTime: s.targets?.targetTime ?? s.targets?.time ?? null,
-      targetDistance: s.targets?.targetDistance ?? s.targets?.distance ?? null,
-      targetWeight: s.targets?.targetWeight ?? s.targets?.weight ?? null,
-      groupId: s.groupId ?? null,
-      groupMeta: s.groupMeta ?? null,
-      intensity: s.intensity ?? null,
-      loadMode: s.loadMode ?? null,
-      unilateralMode: s.unilateralMode ?? null,
-      tempo: s.tempo ?? null,
-      constraintTags: s.constraintTags ?? null,
-      targets: s.targets ?? null,
-    })));
+    await tx.insert(workoutStructureSteps).values(structureStepInsertValues(savedBlock.id, steps));
     if (deriveExerciseSets) {
-      for (const step of block.steps) {
-        const row = derivedSetRowFromStep(owner, savedBlock.id, block, step, sortOrder);
-        if (!row) continue;
-        derivedRows.push(row);
-        sortOrder += 1;
-      }
+      const derived = collectDerivedRowsForBlock({ owner, blockId: savedBlock.id, block, startSortOrder: sortOrder });
+      derivedRows.push(...derived.rows);
+      sortOrder = derived.nextSortOrder;
     }
   }
 

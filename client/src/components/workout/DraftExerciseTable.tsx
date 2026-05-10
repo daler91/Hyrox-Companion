@@ -23,26 +23,51 @@ interface BlockSetLocation {
   readonly setIdx: number;
 }
 
-function applySetPatch(target: SetData, patch: PatchExerciseSetPayload): SetData {
-  const next: SetData = { ...target };
-  if ("reps" in patch) next.reps = patch.reps ?? undefined;
-  if ("weight" in patch) next.weight = patch.weight ?? undefined;
-  if ("distance" in patch) next.distance = patch.distance ?? undefined;
-  if ("time" in patch) next.time = patch.time ?? undefined;
-  if ("plannedReps" in patch) next.plannedReps = patch.plannedReps ?? undefined;
-  if ("plannedWeight" in patch) next.plannedWeight = patch.plannedWeight ?? undefined;
-  if ("plannedDistance" in patch) next.plannedDistance = patch.plannedDistance ?? undefined;
-  if ("plannedTime" in patch) next.plannedTime = patch.plannedTime ?? undefined;
-  if ("blockId" in patch) next.blockId = patch.blockId ?? null;
-  if ("stepNumber" in patch) next.stepNumber = patch.stepNumber ?? null;
-  if ("intervalMinute" in patch) next.intervalMinute = patch.intervalMinute ?? null;
-  if ("cycleNumber" in patch) next.cycleNumber = patch.cycleNumber ?? null;
-  if ("stepRole" in patch) next.stepRole = patch.stepRole ?? null;
-  if ("groupId" in patch) next.groupId = patch.groupId ?? null;
-  if ("notes" in patch) next.notes = patch.notes ?? undefined;
+const OPTIONAL_NUMBER_SET_FIELDS = [
+  "reps",
+  "weight",
+  "distance",
+  "time",
+  "plannedReps",
+  "plannedWeight",
+  "plannedDistance",
+  "plannedTime",
+] as const;
+
+const NULLABLE_NUMBER_SET_FIELDS = ["stepNumber", "intervalMinute", "cycleNumber"] as const;
+const NULLABLE_STRING_SET_FIELDS = ["blockId", "stepRole", "groupId"] as const;
+
+function applyOptionalNumberPatch(next: SetData, patch: PatchExerciseSetPayload): void {
+  for (const field of OPTIONAL_NUMBER_SET_FIELDS) {
+    if (field in patch) next[field] = patch[field] ?? undefined;
+  }
+}
+
+function applyNullableNumberPatch(next: SetData, patch: PatchExerciseSetPayload): void {
+  for (const field of NULLABLE_NUMBER_SET_FIELDS) {
+    if (field in patch) next[field] = patch[field] ?? null;
+  }
+}
+
+function applyNullableStringPatch(next: SetData, patch: PatchExerciseSetPayload): void {
+  for (const field of NULLABLE_STRING_SET_FIELDS) {
+    if (field in patch) next[field] = patch[field] ?? null;
+  }
+}
+
+function applySetNumberPatch(next: SetData, patch: PatchExerciseSetPayload): void {
   if ("setNumber" in patch && typeof patch.setNumber === "number") {
     next.setNumber = patch.setNumber;
   }
+}
+
+function applySetPatch(target: SetData, patch: PatchExerciseSetPayload): SetData {
+  const next: SetData = { ...target };
+  applyOptionalNumberPatch(next, patch);
+  applyNullableNumberPatch(next, patch);
+  applyNullableStringPatch(next, patch);
+  if ("notes" in patch) next.notes = patch.notes ?? undefined;
+  applySetNumberPatch(next, patch);
   return next;
 }
 

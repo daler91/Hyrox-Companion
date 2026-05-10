@@ -164,7 +164,7 @@ describe("buildWorkoutSavePayload", () => {
             emomDurationMinutes: 10,
             steps: [{ id: "step-1", type: "work", exercise: "wall_balls" }],
           },
-        } as StructuredExercise,
+        },
       },
     });
 
@@ -189,7 +189,7 @@ describe("buildWorkoutSavePayload", () => {
           exerciseName: "wall_balls",
           category: "conditioning",
           sets: [{ setNumber: 1, reps: 12 }],
-        } as StructuredExercise,
+        },
       },
       structureBlocks: [{
         id: "block-emom",

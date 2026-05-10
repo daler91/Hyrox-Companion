@@ -1,6 +1,7 @@
+import { randomUUID } from "node:crypto";
+
 import { exerciseSetSchema, type ParsedExercise, type StructureBlockInput,structureBlockSchema } from "@shared/schema";
 import { EXERCISE_DEFINITIONS } from "@shared/schema/exercises";
-import { randomUUID } from "crypto";
 import { z } from "zod";
 
 import { AppError, ErrorCode } from "../errors";
