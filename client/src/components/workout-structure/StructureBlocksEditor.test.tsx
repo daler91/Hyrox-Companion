@@ -24,6 +24,11 @@ describe("StructureBlocksEditor", () => {
     expect(screen.getByText(/No structured blocks yet/i)).toBeInTheDocument();
   });
 
+  it("treats an omitted value as an empty block list", () => {
+    render(<StructureBlocksEditor onChange={vi.fn()} />);
+    expect(screen.getByText(/No structured blocks yet/i)).toBeInTheDocument();
+  });
+
   it("adds an EMOM block via the add button and surfaces it in onChange", () => {
     render(<Harness />);
 

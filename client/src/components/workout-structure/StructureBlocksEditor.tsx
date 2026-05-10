@@ -13,13 +13,14 @@ interface DraftBlock {
 }
 
 interface Props {
-  readonly value: StructureBlockInput[];
+  readonly value?: StructureBlockInput[];
   readonly onChange: (next: StructureBlockInput[]) => void;
   readonly showScoreControls?: boolean;
   readonly onScoreChange?: (blockId: string, score: StructureBlockScore | null) => void;
 }
 
 const generateId = () => crypto.randomUUID();
+const EMPTY_STRUCTURE_BLOCKS: readonly StructureBlockInput[] = [];
 
 const emptyEmomConfig = (): WorkoutStructureConfig => ({
   section: "main",
@@ -43,7 +44,11 @@ const emptyRoundsConfig = (): WorkoutStructureConfig => ({
   steps: [{ id: generateId(), type: "work" }],
 });
 
-function draftsFromValue(value: StructureBlockInput[]): DraftBlock[] {
+function normalizeValue(value: StructureBlockInput[] | undefined): readonly StructureBlockInput[] {
+  return Array.isArray(value) ? value : EMPTY_STRUCTURE_BLOCKS;
+}
+
+function draftsFromValue(value: readonly StructureBlockInput[]): DraftBlock[] {
   return value.map((block) => ({ id: generateId(), config: structureBlockToConfig(block) }));
 }
 
@@ -54,19 +59,20 @@ function draftsToValue(drafts: readonly DraftBlock[]): StructureBlockInput[] {
 }
 
 export function StructureBlocksEditor({ value, onChange, showScoreControls = false, onScoreChange }: Props) {
-  const [drafts, setDrafts] = useState<DraftBlock[]>(() => draftsFromValue(value));
-  const [trackedValue, setTrackedValue] = useState(value);
+  const normalizedValue = normalizeValue(value);
+  const [drafts, setDrafts] = useState<DraftBlock[]>(() => draftsFromValue(normalizedValue));
+  const [trackedValue, setTrackedValue] = useState(normalizedValue);
 
   // Re-hydrate drafts only when the external `value` reference changes AND
   // its serialized form differs from what our drafts would emit. This keeps
   // step IDs stable across re-renders (so inputs don't lose focus) while
   // still picking up out-of-band updates such as legacy-EMOM conversion.
-  if (value !== trackedValue) {
-    setTrackedValue(value);
-    const externalSnapshot = JSON.stringify(value);
+  if (normalizedValue !== trackedValue) {
+    setTrackedValue(normalizedValue);
+    const externalSnapshot = JSON.stringify(normalizedValue);
     const localSnapshot = JSON.stringify(draftsToValue(drafts));
     if (externalSnapshot !== localSnapshot) {
-      setDrafts(draftsFromValue(value));
+      setDrafts(draftsFromValue(normalizedValue));
     }
   }
 
