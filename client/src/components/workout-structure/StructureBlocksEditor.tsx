@@ -97,6 +97,18 @@ export function StructureBlocksEditor({ value, onChange, showScoreControls = fal
     [commit, drafts],
   );
 
+  const handleUpdateScore = useCallback(
+    (draftId: string, blockId: string, score: StructureBlockScore | null) => {
+      setDrafts((prev) =>
+        prev.map((draft) =>
+          draft.id === draftId ? { ...draft, config: { ...draft.config, score } } : draft,
+        ),
+      );
+      onScoreChange?.(blockId, score);
+    },
+    [onScoreChange],
+  );
+
   const handleRemoveBlock = useCallback(
     (id: string) => {
       commit(drafts.filter((draft) => draft.id !== id));
@@ -129,7 +141,7 @@ export function StructureBlocksEditor({ value, onChange, showScoreControls = fal
               value={draft.config}
               onChange={(next) => handleUpdateBlock(draft.id, next)}
               showScoreControls={showScoreControls}
-              onScoreChange={onScoreChange}
+              onScoreChange={onScoreChange ? (blockId, score) => handleUpdateScore(draft.id, blockId, score) : undefined}
             />
           </div>
         ))

@@ -108,8 +108,11 @@ export function WorkoutStructureEditor({ value, onChange, showScoreControls = fa
   };
   const updateScore = (score: StructureBlockScore | null) => {
     const next = { ...value, score };
+    if (value.id && onScoreChange) {
+      onScoreChange(value.id, score);
+      return;
+    }
     onChange(next);
-    if (value.id && onScoreChange) onScoreChange(value.id, score);
   };
 
   const emomPreview = buildEmomPreview(value);

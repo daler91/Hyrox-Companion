@@ -1,7 +1,7 @@
 import type { StructureBlockInput } from "@shared/schema";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { StructureBlocksEditor } from "./StructureBlocksEditor";
 
@@ -103,6 +103,36 @@ describe("StructureBlocksEditor", () => {
       reps: 8,
       notes: "Strong finish",
     });
+  });
+
+  it("routes persisted score edits through the focused score callback", () => {
+    const onChange = vi.fn();
+    const onScoreChange = vi.fn();
+    render(
+      <StructureBlocksEditor
+        value={[{
+          id: "block-1",
+          sectionType: "main",
+          formatType: "amrap",
+          timeCapMinutes: 10,
+          score: { type: "amrap", rounds: 3, reps: 8 },
+          steps: [{ stepNumber: 1, stepType: "work", exerciseName: "Row" }],
+        }]}
+        onChange={onChange}
+        showScoreControls
+        onScoreChange={onScoreChange}
+      />,
+    );
+
+    fireEvent.change(screen.getByPlaceholderText("Result notes"), { target: { value: "Strong finish" } });
+
+    expect(onScoreChange).toHaveBeenCalledWith("block-1", {
+      type: "amrap",
+      rounds: 3,
+      reps: 8,
+      notes: "Strong finish",
+    });
+    expect(onChange).not.toHaveBeenCalled();
   });
 
   it("round-trips transition step duration targets", () => {

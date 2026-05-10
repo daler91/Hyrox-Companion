@@ -737,6 +737,10 @@ function stringTarget(targets: StructureBlockInput["steps"][number]["targets"], 
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }
 
+export function resolveStructureStepTimeTarget(targets: StructureBlockInput["steps"][number]["targets"]): number | null {
+  return numericTarget(targets, "targetTime", "time", "durationSeconds");
+}
+
 function isWorkStep(step: StructureBlockInput["steps"][number]): boolean {
   const type = (step.stepType ?? step.stepRole ?? "work").toLowerCase();
   return type !== "rest" && !!step.exerciseName?.trim();
@@ -752,7 +756,7 @@ function derivedSetRowFromStep(
   if (!isWorkStep(step)) return null;
   const targets = step.targets;
   const reps = numericTarget(targets, "targetReps", "reps");
-  const time = numericTarget(targets, "targetTime", "time");
+  const time = resolveStructureStepTimeTarget(targets);
   const distance = numericTarget(targets, "targetDistance", "distance");
   const weight = numericTarget(targets, "targetWeight", "weight");
   return {
