@@ -3,6 +3,7 @@ import type {
   InsertWorkoutLog,
   ParsedExercise,
   StructureBlockInput,
+  StructureBlockScore,
   UpdateWorkoutLog,
   WorkoutLog,
 } from "@shared/schema";
@@ -45,7 +46,7 @@ export const workouts = {
   // Server returns the bare WorkoutLog with `exerciseSets` embedded when
   // a `planDayId` is supplied (see workoutService.copyPrescribedSetsIntoLog).
   create: (data: Omit<InsertWorkoutLog, "userId"> & { title?: string; exercises?: ParsedExercise[]; structureBlocks?: StructureBlockInput[] }) =>
-    typedRequest<WorkoutLog & { exerciseSets?: ExerciseSet[]; structureBlocks?: unknown[] }>("POST", "/api/v1/workouts", data),
+    typedRequest<WorkoutLog & { exerciseSets?: ExerciseSet[]; structureBlocks?: StructureBlockInput[] }>("POST", "/api/v1/workouts", data),
 
   list: (params?: { limit?: number; offset?: number }) => {
     let qs = "";
@@ -71,12 +72,19 @@ export const workouts = {
    * Returns 404 when the user has no prior workouts yet.
    */
   latest: () =>
-    typedRequest<WorkoutLog & { exerciseSets: ExerciseSet[]; structureBlocks?: unknown[] }>("GET", "/api/v1/workouts/latest"),
+    typedRequest<WorkoutLog & { exerciseSets: ExerciseSet[]; structureBlocks?: StructureBlockInput[] }>("GET", "/api/v1/workouts/latest"),
 
-  get: (id: string) => typedRequest<WorkoutLog & { exerciseSets?: ExerciseSet[]; structureBlocks?: unknown[] }>("GET", `/api/v1/workouts/${id}`),
+  get: (id: string) => typedRequest<WorkoutLog & { exerciseSets?: ExerciseSet[]; structureBlocks?: StructureBlockInput[] }>("GET", `/api/v1/workouts/${id}`),
 
   update: (id: string, data: UpdateWorkoutLog & { exercises?: ParsedExercise[]; structureBlocks?: StructureBlockInput[] }) =>
     typedRequest<WorkoutLog>("PATCH", `/api/v1/workouts/${id}`, data),
+
+  updateBlockScore: (id: string, blockId: string, score: StructureBlockScore | null) =>
+    typedRequest<{ structureBlocks: StructureBlockInput[] }>(
+      "PATCH",
+      `/api/v1/workouts/${id}/structure-blocks/${blockId}/score`,
+      { score },
+    ),
 
   delete: (id: string) => typedRequest<{ success: boolean }>("DELETE", `/api/v1/workouts/${id}`),
 

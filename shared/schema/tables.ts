@@ -286,6 +286,7 @@ export const workoutStructureBlocks = pgTable("workout_structure_blocks", {
   timeCapMinutes: integer("time_cap_minutes"),
   workIntervalSec: integer("work_interval_sec"),
   restIntervalSec: integer("rest_interval_sec"),
+  score: jsonb("score"),
   sequenceOrder: integer("sequence_order").notNull().default(0),
   instructions: text("instructions"),
   sortOrder: integer("sort_order").notNull().default(0),

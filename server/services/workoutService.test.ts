@@ -1,7 +1,13 @@
 import type { ExerciseSet } from "@shared/schema";
 import { describe, expect, it } from "vitest";
 
-import { classifyWorkoutCompliance, expandExercisesToSetRows, summarizeSetAdherence } from "./workoutService";
+import {
+  classifyWorkoutCompliance,
+  expandExercisesToSetRows,
+  resolveStructureStepTimeTarget,
+  shouldDeriveStructureExerciseSets,
+  summarizeSetAdherence,
+} from "./workoutService";
 
 function makeSet(exerciseName: string, overrides: Partial<ExerciseSet> = {}): ExerciseSet {
   return {
@@ -271,6 +277,26 @@ describe("classifyWorkoutCompliance", () => {
 
   it("classifies low compliance as non_compliant", () => {
     expect(classifyWorkoutCompliance(45)).toBe("non_compliant");
+  });
+});
+
+describe("resolveStructureStepTimeTarget", () => {
+  it("uses durationSeconds when no explicit targetTime is present", () => {
+    expect(resolveStructureStepTimeTarget({ durationSeconds: 45 })).toBe(45);
+  });
+
+  it("prefers explicit targetTime over durationSeconds", () => {
+    expect(resolveStructureStepTimeTarget({ targetTime: 30, durationSeconds: 45 })).toBe(30);
+  });
+});
+
+describe("shouldDeriveStructureExerciseSets", () => {
+  it("derives movement rows when blocks are the only movement source", () => {
+    expect(shouldDeriveStructureExerciseSets(0)).toBe(true);
+  });
+
+  it("does not derive duplicate movement rows when explicit sets already exist", () => {
+    expect(shouldDeriveStructureExerciseSets(2)).toBe(false);
   });
 });
 

@@ -23,6 +23,15 @@ export const stubParseExercisesEmpty = () => {
     statusCode: 200,
     body: [],
   }).as("parseExercises");
+  cy.intercept("POST", "/api/v1/parse-workout-structure", {
+    statusCode: 200,
+    body: {
+      exercises: [],
+      structureBlocks: [],
+      warnings: [],
+      confidence: null,
+    },
+  }).as("parseExercises");
 };
 
 export const stubSaveWorkout = (responseOverride?: Partial<SaveWorkoutResponse>) => {

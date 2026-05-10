@@ -1,4 +1,4 @@
-import type { StructureBlockInput } from "@shared/schema";
+import type { StructureBlockInput, StructureBlockScore } from "@shared/schema";
 import { useCallback, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -13,11 +13,14 @@ interface DraftBlock {
 }
 
 interface Props {
-  readonly value: StructureBlockInput[];
+  readonly value?: StructureBlockInput[];
   readonly onChange: (next: StructureBlockInput[]) => void;
+  readonly showScoreControls?: boolean;
+  readonly onScoreChange?: (blockId: string, score: StructureBlockScore | null) => void;
 }
 
 const generateId = () => crypto.randomUUID();
+const EMPTY_STRUCTURE_BLOCKS: readonly StructureBlockInput[] = [];
 
 const emptyEmomConfig = (): WorkoutStructureConfig => ({
   section: "main",
@@ -27,7 +30,25 @@ const emptyEmomConfig = (): WorkoutStructureConfig => ({
   steps: [{ id: generateId(), type: "work" }],
 });
 
-function draftsFromValue(value: StructureBlockInput[]): DraftBlock[] {
+const emptyAmrapConfig = (): WorkoutStructureConfig => ({
+  section: "main",
+  blockType: "amrap",
+  timeCapMinutes: 10,
+  steps: [{ id: generateId(), type: "work" }],
+});
+
+const emptyRoundsConfig = (): WorkoutStructureConfig => ({
+  section: "main",
+  blockType: "rounds",
+  roundCount: 3,
+  steps: [{ id: generateId(), type: "work" }],
+});
+
+function normalizeValue(value: StructureBlockInput[] | undefined): readonly StructureBlockInput[] {
+  return Array.isArray(value) ? value : EMPTY_STRUCTURE_BLOCKS;
+}
+
+function draftsFromValue(value: readonly StructureBlockInput[]): DraftBlock[] {
   return value.map((block) => ({ id: generateId(), config: structureBlockToConfig(block) }));
 }
 
@@ -37,20 +58,21 @@ function draftsToValue(drafts: readonly DraftBlock[]): StructureBlockInput[] {
   );
 }
 
-export function StructureBlocksEditor({ value, onChange }: Props) {
-  const [drafts, setDrafts] = useState<DraftBlock[]>(() => draftsFromValue(value));
-  const [trackedValue, setTrackedValue] = useState(value);
+export function StructureBlocksEditor({ value, onChange, showScoreControls = false, onScoreChange }: Props) {
+  const normalizedValue = normalizeValue(value);
+  const [drafts, setDrafts] = useState<DraftBlock[]>(() => draftsFromValue(normalizedValue));
+  const [trackedValue, setTrackedValue] = useState(normalizedValue);
 
   // Re-hydrate drafts only when the external `value` reference changes AND
   // its serialized form differs from what our drafts would emit. This keeps
   // step IDs stable across re-renders (so inputs don't lose focus) while
   // still picking up out-of-band updates such as legacy-EMOM conversion.
-  if (value !== trackedValue) {
-    setTrackedValue(value);
-    const externalSnapshot = JSON.stringify(value);
+  if (normalizedValue !== trackedValue) {
+    setTrackedValue(normalizedValue);
+    const externalSnapshot = JSON.stringify(normalizedValue);
     const localSnapshot = JSON.stringify(draftsToValue(drafts));
     if (externalSnapshot !== localSnapshot) {
-      setDrafts(draftsFromValue(value));
+      setDrafts(draftsFromValue(normalizedValue));
     }
   }
 
@@ -66,11 +88,31 @@ export function StructureBlocksEditor({ value, onChange }: Props) {
     commit([...drafts, { id: generateId(), config: emptyEmomConfig() }]);
   }, [commit, drafts]);
 
+  const handleAddAmrap = useCallback(() => {
+    commit([...drafts, { id: generateId(), config: emptyAmrapConfig() }]);
+  }, [commit, drafts]);
+
+  const handleAddRounds = useCallback(() => {
+    commit([...drafts, { id: generateId(), config: emptyRoundsConfig() }]);
+  }, [commit, drafts]);
+
   const handleUpdateBlock = useCallback(
     (id: string, next: WorkoutStructureConfig) => {
       commit(drafts.map((draft) => (draft.id === id ? { ...draft, config: next } : draft)));
     },
     [commit, drafts],
+  );
+
+  const handleUpdateScore = useCallback(
+    (draftId: string, blockId: string, score: StructureBlockScore | null) => {
+      setDrafts((prev) =>
+        prev.map((draft) =>
+          draft.id === draftId ? { ...draft, config: { ...draft.config, score } } : draft,
+        ),
+      );
+      onScoreChange?.(blockId, score);
+    },
+    [onScoreChange],
   );
 
   const handleRemoveBlock = useCallback(
@@ -104,6 +146,8 @@ export function StructureBlocksEditor({ value, onChange }: Props) {
             <WorkoutStructureEditor
               value={draft.config}
               onChange={(next) => handleUpdateBlock(draft.id, next)}
+              showScoreControls={showScoreControls}
+              onScoreChange={onScoreChange ? (blockId, score) => handleUpdateScore(draft.id, blockId, score) : undefined}
             />
           </div>
         ))
@@ -117,6 +161,24 @@ export function StructureBlocksEditor({ value, onChange }: Props) {
           data-testid="structure-blocks-add-emom"
         >
           + Add EMOM block
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={handleAddAmrap}
+          data-testid="structure-blocks-add-amrap"
+        >
+          + Add AMRAP block
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={handleAddRounds}
+          data-testid="structure-blocks-add-rounds"
+        >
+          + Add Rounds block
         </Button>
       </div>
     </div>

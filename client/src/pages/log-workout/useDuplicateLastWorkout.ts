@@ -1,7 +1,6 @@
+import type { StructureBlockInput } from "@shared/schema";
 import { useMutation } from "@tanstack/react-query";
 import { format } from "date-fns";
-
-import type { StructureBlockInput } from "@shared/schema";
 
 import type { StructuredExercise } from "@/components/ExerciseInput";
 import type { useToast } from "@/hooks/use-toast";
@@ -45,9 +44,7 @@ export function useDuplicateLastWorkout({
       setNotes(latest.notes ?? "");
       setPlanDayId(null);
 
-      const structureBlocks = Array.isArray(latest.structureBlocks)
-        ? (latest.structureBlocks as StructureBlockInput[])
-        : [];
+      const structureBlocks = Array.isArray(latest.structureBlocks) ? latest.structureBlocks : [];
       const hasStructureBlocks = structureBlocks.length > 0;
       const hasStructuredExercises = latest.exerciseSets && latest.exerciseSets.length > 0;
       if (hasStructuredExercises || hasStructureBlocks) {

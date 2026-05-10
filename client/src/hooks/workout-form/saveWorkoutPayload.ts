@@ -133,7 +133,7 @@ export function buildWorkoutSavePayload({
   }
 
   const missingFieldWarnings = [...new Set(exercises.flatMap((exercise) => getMissingFieldWarnings(exercise)))];
-  const structureBlocks = toStructureBlocks(exercises);
+  const structureBlocks = [...incomingStructureBlocks, ...toStructureBlocks(exercises)];
   const lint = lintWorkoutStructure(structureBlocks, exercises.map(exerciseToPayload) as ParsedExercise[]);
   const lintIssues: StructureLintIssue[] = [
     ...lint.warnings,
@@ -169,7 +169,7 @@ export function buildWorkoutSavePayload({
       rpe: rpe || null,
       ...(planDayId ? { planDayId } : {}),
       exercises: exercises.map(exerciseToPayload) as ParsedExercise[],
-      ...(incomingStructureBlocks.length > 0 ? { structureBlocks: incomingStructureBlocks } : {}),
+      ...(structureBlocks.length > 0 ? { structureBlocks } : {}),
     },
   };
 }

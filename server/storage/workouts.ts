@@ -4,6 +4,7 @@ import {
   type InsertExerciseSet,
   type InsertWorkoutLog,
   planDays,
+  type StructureBlockInput,
   trainingPlans,
   type UpdateWorkoutLog,
   type WorkoutLog,
@@ -16,6 +17,64 @@ import { and, asc, desc, eq, inArray,isNotNull, isNull, or, sql } from "drizzle-
 import { db } from "../db";
 import { syncPlanDayStatusFromWorkouts } from "./planDayStatus";
 import { prescribedSetToLogRow, queryExerciseSetsWithDates } from "./shared";
+
+type WorkoutStructureBlockRow = typeof workoutStructureBlocks.$inferSelect;
+type WorkoutStructureStepRow = typeof workoutStructureSteps.$inferSelect;
+
+function stepTargets(step: WorkoutStructureStepRow): NonNullable<StructureBlockInput["steps"][number]["targets"]> | null {
+  const targets: Record<string, unknown> =
+    step.targets && typeof step.targets === "object" && !Array.isArray(step.targets)
+      ? { ...(step.targets as Record<string, unknown>) }
+      : {};
+  if (step.targetReps != null) targets.targetReps = step.targetReps;
+  if (step.targetTime != null) targets.targetTime = step.targetTime;
+  if (step.targetDistance != null) targets.targetDistance = step.targetDistance;
+  if (step.targetWeight != null) targets.targetWeight = step.targetWeight;
+  return Object.keys(targets).length > 0
+    ? (targets as NonNullable<StructureBlockInput["steps"][number]["targets"]>)
+    : null;
+}
+
+function mapStructureBlockRows(
+  blocks: WorkoutStructureBlockRow[],
+  stepsByBlock: Map<string, WorkoutStructureStepRow[]>,
+): StructureBlockInput[] {
+  return blocks.map((block) => ({
+    id: block.id,
+    sectionType: block.sectionType as StructureBlockInput["sectionType"],
+    formatType: block.formatType as StructureBlockInput["formatType"],
+    durationSeconds: block.durationSeconds,
+    rounds: block.rounds,
+    workSeconds: block.workSeconds,
+    restSeconds: block.restSeconds,
+    durationMinutes: block.durationMinutes,
+    roundCount: block.roundCount,
+    timeCapMinutes: block.timeCapMinutes,
+    workIntervalSec: block.workIntervalSec,
+    restIntervalSec: block.restIntervalSec,
+    instructions: block.instructions,
+    score: block.score as StructureBlockInput["score"],
+    sequenceOrder: block.sequenceOrder,
+    sortOrder: block.sortOrder,
+    steps: (stepsByBlock.get(block.id) ?? []).map((step) => ({
+      stepNumber: step.stepNumber,
+      minuteIndex: step.minuteIndex,
+      stepType: step.stepType as StructureBlockInput["steps"][number]["stepType"],
+      exerciseName: step.exerciseName,
+      category: step.category,
+      customLabel: step.customLabel,
+      stepRole: step.stepRole,
+      intensity: step.intensity as StructureBlockInput["steps"][number]["intensity"],
+      loadMode: step.loadMode,
+      unilateralMode: step.unilateralMode,
+      tempo: step.tempo as StructureBlockInput["steps"][number]["tempo"],
+      constraintTags: step.constraintTags as StructureBlockInput["steps"][number]["constraintTags"],
+      groupId: step.groupId,
+      groupMeta: step.groupMeta as StructureBlockInput["steps"][number]["groupMeta"],
+      targets: stepTargets(step),
+    })),
+  }));
+}
 
 // Count distinct exercises in a logged workout whose best weight matches the
 // user's all-time max for that exercise. "Conservative PR" — we only credit
@@ -59,26 +118,51 @@ type MutationOwnerAdapter = {
 
 
 export class WorkoutStorage {
-  private async loadWorkoutStructure(whereClause: ReturnType<typeof eq>) {
+  private async loadStepsForBlocks(blockIds: string[]): Promise<Map<string, WorkoutStructureStepRow[]>> {
+    if (blockIds.length === 0) return new Map();
+    const steps = await db
+      .select()
+      .from(workoutStructureSteps)
+      .where(inArray(workoutStructureSteps.blockId, blockIds))
+      .orderBy(asc(workoutStructureSteps.stepNumber));
+    const stepsByBlock = new Map<string, WorkoutStructureStepRow[]>();
+    for (const step of steps) {
+      const arr = stepsByBlock.get(step.blockId) ?? [];
+      arr.push(step);
+      stepsByBlock.set(step.blockId, arr);
+    }
+    return stepsByBlock;
+  }
+
+  private async loadWorkoutStructure(whereClause: ReturnType<typeof eq>): Promise<StructureBlockInput[]> {
     const blocks = await db
       .select()
       .from(workoutStructureBlocks)
       .where(whereClause)
       .orderBy(asc(workoutStructureBlocks.sortOrder));
     if (blocks.length === 0) return [];
-    const blockIds = blocks.map((b) => b.id);
-    const steps = await db
-      .select()
-      .from(workoutStructureSteps)
-      .where(inArray(workoutStructureSteps.blockId, blockIds))
-      .orderBy(asc(workoutStructureSteps.stepNumber));
-    const stepsByBlock = new Map<string, typeof steps>();
-    for (const step of steps) {
-      const arr = stepsByBlock.get(step.blockId) ?? [];
-      arr.push(step);
-      stepsByBlock.set(step.blockId, arr);
+    return mapStructureBlockRows(blocks, await this.loadStepsForBlocks(blocks.map((b) => b.id)));
+  }
+
+  private async groupWorkoutStructuresByOwner(
+    blocks: WorkoutStructureBlockRow[],
+    getOwnerId: (block: WorkoutStructureBlockRow) => string | null,
+  ): Promise<Map<string, StructureBlockInput[]>> {
+    if (blocks.length === 0) return new Map();
+    const stepsByBlock = await this.loadStepsForBlocks(blocks.map((b) => b.id));
+    const blocksByOwner = new Map<string, WorkoutStructureBlockRow[]>();
+    for (const block of blocks) {
+      const ownerId = getOwnerId(block);
+      if (!ownerId) continue;
+      const ownerBlocks = blocksByOwner.get(ownerId) ?? [];
+      ownerBlocks.push(block);
+      blocksByOwner.set(ownerId, ownerBlocks);
     }
-    return blocks.map((b) => ({ ...b, steps: stepsByBlock.get(b.id) ?? [] }));
+    const result = new Map<string, StructureBlockInput[]>();
+    for (const [ownerId, ownerBlocks] of blocksByOwner.entries()) {
+      result.set(ownerId, mapStructureBlockRows(ownerBlocks, stepsByBlock));
+    }
+    return result;
   }
 
   private getPlanDayCompletionCondition(planDayIds: string | string[], userId: string) {
@@ -196,6 +280,26 @@ export class WorkoutStorage {
     const owns = await this.ownsPlanDay(planDayId, userId);
     if (!owns) return null;
     return this.loadWorkoutStructure(eq(workoutStructureBlocks.planDayId, planDayId));
+  }
+
+  async getWorkoutStructuresByWorkoutLogs(workoutLogIds: string[]): Promise<Map<string, StructureBlockInput[]>> {
+    if (workoutLogIds.length === 0) return new Map();
+    const blocks = await db
+      .select()
+      .from(workoutStructureBlocks)
+      .where(inArray(workoutStructureBlocks.workoutLogId, workoutLogIds))
+      .orderBy(asc(workoutStructureBlocks.workoutLogId), asc(workoutStructureBlocks.sortOrder));
+    return this.groupWorkoutStructuresByOwner(blocks, (block) => block.workoutLogId);
+  }
+
+  async getWorkoutStructuresByPlanDays(planDayIds: string[]): Promise<Map<string, StructureBlockInput[]>> {
+    if (planDayIds.length === 0) return new Map();
+    const blocks = await db
+      .select()
+      .from(workoutStructureBlocks)
+      .where(inArray(workoutStructureBlocks.planDayId, planDayIds))
+      .orderBy(asc(workoutStructureBlocks.planDayId), asc(workoutStructureBlocks.sortOrder));
+    return this.groupWorkoutStructuresByOwner(blocks, (block) => block.planDayId);
   }
 
   // ⚡ Bolt Performance Optimization:

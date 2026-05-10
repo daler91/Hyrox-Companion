@@ -27,6 +27,7 @@ import {
   trainingPlans,
   users,
   workoutLogs,
+  workoutStructureBlocks,
 } from "./tables";
 
 // User types and schemas
@@ -181,6 +182,7 @@ export const updateWorkoutLogSchema = insertWorkoutLogSchema.partial().extend({
 export type InsertWorkoutLog = z.infer<typeof insertWorkoutLogSchema>;
 export type UpdateWorkoutLog = z.infer<typeof updateWorkoutLogSchema>;
 export type WorkoutLog = typeof workoutLogs.$inferSelect;
+export type WorkoutStructureBlock = typeof workoutStructureBlocks.$inferSelect;
 
 // Exercise set types and schemas
 export const insertExerciseSetSchema = createInsertSchema(exerciseSets).omit({
@@ -213,6 +215,7 @@ export type TimelineEntry = {
   aiNoteUpdatedAt?: string | Date | null;
   aiInputsUsed?: CoachNoteInputs | null;
   exerciseSets?: ExerciseSet[];
+  structureBlocks?: StructureBlockInput[];
   calories?: number | null;
   distanceMeters?: number | null;
   elevationGain?: number | null;
@@ -432,12 +435,35 @@ const structureStepSchema = z.object({
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Rest steps cannot include exercise or performance targets." });
     }
   }
-  if (step.stepType !== "rest" && !step.exerciseName?.trim()) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Work/transition steps require exerciseName.", path: ["exerciseName"] });
+  if (step.stepType === "work" && !step.exerciseName?.trim()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Work steps require exerciseName.", path: ["exerciseName"] });
   }
 });
 
-export const structureBlockSchema = z.object({
+export const structureBlockScoreSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("emom"),
+    completed: z.boolean(),
+    completedMinutes: z.number().int().min(0).max(1_440).optional().nullable(),
+    missedReps: z.number().int().min(0).max(10_000).optional().nullable(),
+    notes: z.string().max(1000).optional().nullable(),
+  }).strip(),
+  z.object({
+    type: z.literal("amrap"),
+    rounds: z.number().int().min(0).max(10_000),
+    reps: z.number().int().min(0).max(10_000).optional().nullable(),
+    notes: z.string().max(1000).optional().nullable(),
+  }).strip(),
+  z.object({
+    type: z.literal("rounds"),
+    completedRounds: z.number().int().min(0).max(10_000),
+    elapsedSeconds: z.number().int().min(0).max(86_400).optional().nullable(),
+    notes: z.string().max(1000).optional().nullable(),
+  }).strip(),
+]);
+export type StructureBlockScore = z.infer<typeof structureBlockScoreSchema>;
+
+const structureBlockBaseSchema = z.object({
   id: z.string().max(255).optional(),
   sectionType: sectionTypeSchema,
   formatType: formatTypeSchema,
@@ -451,34 +477,67 @@ export const structureBlockSchema = z.object({
   workIntervalSec: z.number().int().min(0).max(86_400).optional().nullable(),
   restIntervalSec: z.number().int().min(0).max(86_400).optional().nullable(),
   instructions: z.string().max(2000).optional().nullable(),
+  score: structureBlockScoreSchema.optional().nullable(),
   sequenceOrder: z.number().int().min(0).max(10_000).optional(),
   sortOrder: z.number().int().min(0).max(10_000).optional(),
   steps: z.array(structureStepSchema).min(1).max(200),
-}).superRefine((block, ctx) => {
-  if (block.formatType === "emom") {
-    if (!block.durationMinutes) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "EMOM blocks require durationMinutes.", path: ["durationMinutes"] });
-    }
-    if (block.steps.length < 1) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "EMOM blocks require at least one step.", path: ["steps"] });
-    }
-    const minuteIndices = block.steps.map((s) => s.minuteIndex).filter((m): m is number => m != null);
-    if (minuteIndices.length !== block.steps.length) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "EMOM steps require minuteIndex.", path: ["steps"] });
-    }
-    if (minuteIndices.length !== new Set(minuteIndices).size) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Duplicate minuteIndex values are not allowed in EMOM patterns.", path: ["steps"] });
-    }
+});
+type StructureBlockDraft = z.infer<typeof structureBlockBaseSchema>;
+type StructureBlockValidator = (block: StructureBlockDraft, ctx: z.RefinementCtx) => void;
+
+function validateEmomBlock(block: StructureBlockDraft, ctx: z.RefinementCtx): void {
+  if (block.formatType !== "emom") return;
+  if (!block.durationMinutes) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "EMOM blocks require durationMinutes.", path: ["durationMinutes"] });
   }
+  if (block.steps.length < 1) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "EMOM blocks require at least one step.", path: ["steps"] });
+  }
+  const minuteIndices = block.steps.map((s) => s.minuteIndex).filter((m): m is number => m != null);
+  if (minuteIndices.length !== block.steps.length) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "EMOM steps require minuteIndex.", path: ["steps"] });
+  }
+  if (minuteIndices.length !== new Set(minuteIndices).size) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Duplicate minuteIndex values are not allowed in EMOM patterns.", path: ["steps"] });
+  }
+}
+
+function validateAmrapBlock(block: StructureBlockDraft, ctx: z.RefinementCtx): void {
   if (block.formatType === "amrap" && block.roundCount != null) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "AMRAP blocks cannot define fixed roundCount.", path: ["roundCount"] });
   }
+  if (block.formatType === "amrap" && !block.timeCapMinutes && !block.durationSeconds && !block.durationMinutes) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "AMRAP blocks require a time cap or duration.", path: ["timeCapMinutes"] });
+  }
+}
+
+function validateRoundsBlock(block: StructureBlockDraft, ctx: z.RefinementCtx): void {
+  if (block.formatType === "rounds" && block.roundCount == null && block.rounds == null) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Rounds blocks require roundCount.", path: ["roundCount"] });
+  }
+}
+
+function validateTimedBlock(block: StructureBlockDraft, ctx: z.RefinementCtx): void {
   if (block.formatType === "for_time" && !block.timeCapMinutes && !block.durationSeconds) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "for_time blocks must define timeCapMinutes.", path: ["timeCapMinutes"] });
   }
   if (block.roundCount != null && block.durationMinutes != null && block.formatType === "steady") {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "steady blocks cannot define both roundCount and durationMinutes." });
   }
+  if (block.score && block.score.type !== block.formatType) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Block score type must match the block format.", path: ["score"] });
+  }
+}
+
+const structureBlockValidators: StructureBlockValidator[] = [
+  validateEmomBlock,
+  validateAmrapBlock,
+  validateRoundsBlock,
+  validateTimedBlock,
+];
+
+export const structureBlockSchema = structureBlockBaseSchema.superRefine((block, ctx) => {
+  for (const validate of structureBlockValidators) validate(block, ctx);
 });
 
 export const structureBlocksPayloadSchema = z.array(structureBlockSchema).max(100).optional();

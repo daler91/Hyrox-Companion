@@ -65,6 +65,22 @@ function blockFormatIssues(block: StructureBlockInput, format: string): Structur
       "Remove rounds or change format type.",
     ));
   }
+  if (format === "amrap" && block.durationSeconds == null && block.durationMinutes == null && block.timeCapMinutes == null) {
+    issues.push(structureIssue(
+      "error",
+      "MISSING_REQUIRED_TARGET_BY_FORMAT",
+      "AMRAP blocks require a time cap or duration.",
+      "Set a time cap or duration on the block.",
+    ));
+  }
+  if (format === "rounds" && block.roundCount == null && block.rounds == null) {
+    issues.push(structureIssue(
+      "error",
+      "MISSING_REQUIRED_TARGET_BY_FORMAT",
+      "Rounds blocks require a round count.",
+      "Set the number of prescribed rounds.",
+    ));
+  }
   if (format === "for_time" && block.durationSeconds == null && block.timeCapMinutes == null) {
     issues.push(structureIssue(
       "error",

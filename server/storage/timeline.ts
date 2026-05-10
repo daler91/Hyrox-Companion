@@ -208,6 +208,20 @@ function hydrateTimelineExerciseSets(
   }
 }
 
+function hydrateTimelineStructureBlocks(
+  entries: TimelineEntry[],
+  blocksByWorkoutId: Map<string, TimelineEntry["structureBlocks"]>,
+  blocksByPlanDayId: Map<string, TimelineEntry["structureBlocks"]>,
+): void {
+  for (const entry of entries) {
+    if (entry.workoutLogId) {
+      entry.structureBlocks = blocksByWorkoutId.get(entry.workoutLogId) ?? [];
+    } else if (entry.planDayId) {
+      entry.structureBlocks = blocksByPlanDayId.get(entry.planDayId) ?? [];
+    }
+  }
+}
+
 
 export class TimelineStorage {
   constructor(private readonly workoutStorage: WorkoutStorage) {}
@@ -217,14 +231,17 @@ export class TimelineStorage {
 
     if (workoutLogIds.length === 0 && planDayIds.length === 0) return;
 
-    const [allSets, setsByPlanDayId] = await Promise.all([
+    const [allSets, setsByPlanDayId, blocksByWorkoutId, blocksByPlanDayId] = await Promise.all([
       workoutLogIds.length > 0
         ? this.workoutStorage.getExerciseSetsByWorkoutLogs(workoutLogIds)
         : Promise.resolve([]),
       fetchPlanDayExerciseSets(planDayIds),
+      this.workoutStorage.getWorkoutStructuresByWorkoutLogs(workoutLogIds),
+      this.workoutStorage.getWorkoutStructuresByPlanDays(planDayIds),
     ]);
 
     hydrateTimelineExerciseSets(entries, groupExerciseSetsByWorkoutLogId(allSets), setsByPlanDayId);
+    hydrateTimelineStructureBlocks(entries, blocksByWorkoutId, blocksByPlanDayId);
   }
 
   private async fetchScheduledDays(userId: string, planId?: string, sqlLimit?: number) {
@@ -376,6 +393,7 @@ export class TimelineStorage {
       accessory: string | null;
       notes: string | null;
       exerciseSets?: ExerciseSet[];
+      structureBlocks?: TimelineEntry["structureBlocks"];
     }>
   > {
     const today = toDateStr();
@@ -410,7 +428,11 @@ export class TimelineStorage {
       limit,
     });
 
-    const setsByPlanDayId = await fetchPlanDayExerciseSets(rows.map((r) => r.id));
+    const planDayIds = rows.map((r) => r.id);
+    const [setsByPlanDayId, blocksByPlanDayId] = await Promise.all([
+      fetchPlanDayExerciseSets(planDayIds),
+      this.workoutStorage.getWorkoutStructuresByPlanDays(planDayIds),
+    ]);
 
     const upcoming: Array<{
       planDayId: string;
@@ -420,6 +442,7 @@ export class TimelineStorage {
       accessory: string | null;
       notes: string | null;
       exerciseSets: ExerciseSet[];
+      structureBlocks: TimelineEntry["structureBlocks"];
     }> = [];
 
     for (const r of rows) {
@@ -432,6 +455,7 @@ export class TimelineStorage {
           accessory: r.accessory,
           notes: r.notes,
           exerciseSets: setsByPlanDayId.get(r.id) ?? [],
+          structureBlocks: blocksByPlanDayId.get(r.id) ?? [],
         });
       }
     }

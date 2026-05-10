@@ -1,4 +1,3 @@
-import type { ParsedExercise } from "@shared/schema";
 import { Check } from "lucide-react";
 import { useEffect, useRef } from "react";
 
@@ -6,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { WorkoutHeader } from "@/components/workout/WorkoutHeader";
 import type { useToast } from "@/hooks/use-toast";
 import type { WorkoutStep } from "@/hooks/useLogWorkoutDraft";
-import type { ParseFromImagePayload } from "@/lib/api";
+import type { ParseFromImagePayload, ParseWorkoutStructureResponse } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 import type { ComposerAutoParseProps, ComposerExerciseProps, ComposerTextProps, ComposerVoiceProps } from "./sharedComposerProps";
@@ -40,7 +39,7 @@ interface LogWorkoutStepperLayoutProps extends ComposerTextProps, ComposerExerci
   readonly toast: ReturnType<typeof useToast>["toast"];
   readonly onParseImage: (
     payload: ParseFromImagePayload,
-    opts?: { onSuccess?: (parsed: ParsedExercise[]) => void },
+    opts?: { onSuccess?: (parsed: ParseWorkoutStructureResponse) => void },
   ) => void;
   readonly isParsingImage: boolean;
 }

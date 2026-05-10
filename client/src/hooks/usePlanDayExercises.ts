@@ -1,4 +1,4 @@
-import type { ExerciseSet } from "@shared/schema";
+import type { ExerciseSet, StructureBlockInput } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 
@@ -21,6 +21,18 @@ const planDaySetsMutationKey = (planDayId: string) => ["plan-day-sets", planDayI
 // synchronously before regenerating the coach note; a per-component
 // debounce has no flush seam.
 const CELL_SAVE_DEBOUNCE_MS = 350;
+
+type PlanDayExerciseData = {
+  exerciseSets: ExerciseSet[];
+  structureBlocks: StructureBlockInput[];
+};
+
+type PlanDayExerciseQueryData = PlanDayExerciseData | ExerciseSet[];
+
+function normalizePlanDayExerciseData(data: PlanDayExerciseQueryData | undefined): PlanDayExerciseData | undefined {
+  if (!data) return undefined;
+  return Array.isArray(data) ? { exerciseSets: data, structureBlocks: [] } : data;
+}
 
 function isTimeoutLikeError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
@@ -125,7 +137,7 @@ export function usePlanDayExercises(planDayId: string | null) {
   const queryKey = planDayId
     ? QUERY_KEYS.planDayExercises(planDayId)
     : ["plan-day-exercises-disabled"];
-  const exercisesQuery = useQuery({
+  const exercisesQuery = useQuery<PlanDayExerciseQueryData>({
     queryKey,
     queryFn: () => api.plans.getDayExercises(planDayId!),
     enabled: !!planDayId,
@@ -133,8 +145,9 @@ export function usePlanDayExercises(planDayId: string | null) {
 
   const patchCachedSets = (updater: (sets: ExerciseSet[]) => ExerciseSet[]) => {
     if (!planDayId) return;
-    queryClient.setQueryData<ExerciseSet[]>(QUERY_KEYS.planDayExercises(planDayId), (prev) => {
-      return updater(prev ?? []);
+    queryClient.setQueryData<PlanDayExerciseData>(QUERY_KEYS.planDayExercises(planDayId), (prev) => {
+      const data = prev ?? { exerciseSets: [], structureBlocks: [] };
+      return { ...data, exerciseSets: updater(data.exerciseSets) };
     });
   };
 
@@ -143,7 +156,7 @@ export function usePlanDayExercises(planDayId: string | null) {
     mutationKeyFamily: planDaySetsMutationKey,
     setsQueryKey: QUERY_KEYS.planDayExercises,
     patchCachedSets,
-    getSnapshot: (id) => queryClient.getQueryData<ExerciseSet[]>(QUERY_KEYS.planDayExercises(id)),
+    getSnapshot: (id) => queryClient.getQueryData<PlanDayExerciseData>(QUERY_KEYS.planDayExercises(id)),
     restoreSnapshot: (id, snapshot) => queryClient.setQueryData(QUERY_KEYS.planDayExercises(id), snapshot),
     updateSetRequest: (id, setId, data) => api.plans.updateDayExercise(id, setId, data),
     addSetRequest: (id, data) => api.plans.addDayExercise(id, data),
@@ -226,7 +239,8 @@ export function usePlanDayExercises(planDayId: string | null) {
         : { title: "Couldn't parse that photo — try a clearer shot." },
   });
 
-  const hasStructuredRows = (exercisesQuery.data?.length ?? 0) > 0;
+  const planData = useMemo(() => normalizePlanDayExerciseData(exercisesQuery.data), [exercisesQuery.data]);
+  const hasStructuredRows = (planData?.exerciseSets.length ?? 0) > 0;
   const parseFailed = !!planDayId && !hasStructuredRows && parseFailureState.ownerId === planDayId;
   const retryParse = parseFailed ? parseFailureState.retry : null;
 
@@ -252,7 +266,24 @@ export function usePlanDayExercises(planDayId: string | null) {
     errorToast: "Couldn't save prescription",
   });
 
-  const exerciseSets = useMemo(() => exercisesQuery.data ?? [], [exercisesQuery.data]);
+  const updateStructure = useApiMutation({
+    mutationKey: planDayId ? planDaySetsMutationKey(planDayId) : undefined,
+    mutationFn: (next: StructureBlockInput[]) => {
+      if (!planDayId) return Promise.resolve({ exerciseSets: [], structureBlocks: [] });
+      return api.plans.updateDayStructure(planDayId, next);
+    },
+    onSuccess: (data) => {
+      if (planDayId) {
+        queryClient.setQueryData(QUERY_KEYS.planDayExercises(planDayId), data);
+      }
+      exerciseSetOps.markSaved();
+    },
+    invalidateQueries: [QUERY_KEYS.timeline, QUERY_KEYS.plans],
+    errorToast: "Couldn't save workout blocks",
+  });
+
+  const exerciseSets = useMemo(() => planData?.exerciseSets ?? [], [planData]);
+  const structureBlocks = useMemo(() => planData?.structureBlocks ?? [], [planData]);
   const getExerciseSetsWithPendingPatches = useCallback(() => {
     const pendingPatches = getPendingPatches();
     if (pendingPatches.length === 0) return exerciseSets;
@@ -268,6 +299,7 @@ export function usePlanDayExercises(planDayId: string | null) {
 
   return {
     exerciseSets,
+    structureBlocks,
     getExerciseSetsWithPendingPatches,
     isLoading: exercisesQuery.isLoading,
     isSaving,
@@ -282,5 +314,6 @@ export function usePlanDayExercises(planDayId: string | null) {
     parseFailed,
     retryParse,
     updatePrescription,
+    updateStructure,
   };
 }

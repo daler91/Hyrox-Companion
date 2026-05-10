@@ -8,6 +8,7 @@ import { WorkoutStravaStats } from "@/components/timeline/timeline-workout-card/
 import { Button } from "@/components/ui/button";
 import { ResponsiveSheet } from "@/components/ui/responsive-sheet";
 import { Separator } from "@/components/ui/separator";
+import { StructureBlocksEditor } from "@/components/workout-structure";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { useWorkoutDetail } from "@/hooks/useWorkoutDetail";
 import { apiRequest } from "@/lib/queryClient";
@@ -122,6 +123,7 @@ export function ReviewSurface({
   // workoutQuery resolves.
   const workout = detail.workout;
   const exerciseSets = workout?.exerciseSets ?? entry.exerciseSets ?? [];
+  const structureBlocks = workout?.structureBlocks ?? entry.structureBlocks ?? [];
   const rpe = workout?.rpe ?? entry.rpe ?? null;
   const notes = workout?.notes ?? entry.notes ?? null;
 
@@ -179,6 +181,7 @@ export function ReviewSurface({
           detail={detail}
           workoutLogId={workoutLogId}
           exerciseSets={exerciseSets}
+          structureBlocks={structureBlocks}
           rpe={rpe}
           notes={notes}
           isStrava={isStrava}
@@ -214,6 +217,7 @@ interface ReviewDetailsColumnProps {
   readonly detail: WorkoutDetailState;
   readonly workoutLogId: string | null;
   readonly exerciseSets: ExerciseSet[];
+  readonly structureBlocks: TimelineEntry["structureBlocks"];
   readonly rpe: number | null;
   readonly notes: string | null;
   readonly isStrava: boolean;
@@ -237,6 +241,7 @@ function ReviewDetailsColumn({
   detail,
   workoutLogId,
   exerciseSets,
+  structureBlocks,
   rpe,
   notes,
   isStrava,
@@ -263,6 +268,7 @@ function ReviewDetailsColumn({
         detail={detail}
         workoutLogId={workoutLogId}
         exerciseSets={exerciseSets}
+        structureBlocks={structureBlocks ?? []}
         canEditActuals={canEditActuals}
         weightUnit={weightUnit}
         distanceUnit={distanceUnit}
@@ -330,6 +336,7 @@ interface ReviewActualsSectionProps {
   readonly detail: WorkoutDetailState;
   readonly workoutLogId: string | null;
   readonly exerciseSets: ExerciseSet[];
+  readonly structureBlocks: TimelineEntry["structureBlocks"];
   readonly canEditActuals: boolean;
   readonly weightUnit: WeightUnit;
   readonly distanceUnit: DistanceUnitPreference;
@@ -340,6 +347,7 @@ function ReviewActualsSection({
   detail,
   workoutLogId,
   exerciseSets,
+  structureBlocks = [],
   canEditActuals,
   weightUnit,
   distanceUnit,
@@ -373,6 +381,12 @@ function ReviewActualsSection({
         }}
         onOpenConversionHelper={() => detail.reparseFreeText.mutate(undefined)}
         defaultExpanded
+      />
+      <StructureBlocksEditor
+        value={structureBlocks}
+        onChange={(next) => detail.updateStructure.mutate(next)}
+        showScoreControls
+        onScoreChange={(blockId, score) => detail.updateBlockScore.mutate({ blockId, score })}
       />
       <PrescriptionEditor
         entryId={entry.id}

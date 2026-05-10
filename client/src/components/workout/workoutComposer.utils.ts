@@ -1,6 +1,6 @@
-import type { AllowedImageMimeType, ParsedExercise } from "@shared/schema";
+import type { AllowedImageMimeType } from "@shared/schema";
 
-import type { ParseFromImagePayload } from "@/lib/api";
+import type { ParseFromImagePayload, ParseWorkoutStructureResponse } from "@/lib/api";
 
 export interface ImagePreviewState {
   readonly url: string;
@@ -15,6 +15,6 @@ export function buildParseImagePayload(preview: ImagePreviewState): ParseFromIma
   };
 }
 
-export function shouldRetainImagePreview(parsed: ParsedExercise[] | null | undefined): boolean {
-  return !parsed || parsed.length === 0;
+export function shouldRetainImagePreview(parsed: ParseWorkoutStructureResponse | null | undefined): boolean {
+  return !parsed || (parsed.exercises.length === 0 && parsed.structureBlocks.length === 0);
 }

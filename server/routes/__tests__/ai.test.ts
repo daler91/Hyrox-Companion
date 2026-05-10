@@ -2,7 +2,7 @@ import express from "express";
 import request from "supertest";
 import { afterEach,beforeEach, describe, expect, it, vi } from "vitest";
 
-import { chatWithCoach, generateWorkoutSuggestions,parseExercisesFromImage, parseExercisesFromText, streamChatWithCoach } from "../../gemini";
+import { chatWithCoach, generateWorkoutSuggestions,parseExercisesFromImage, parseExercisesFromText, parseWorkoutStructureFromText, streamChatWithCoach } from "../../gemini";
 import { buildTrainingContext } from "../../services/ai";
 import { retrieveRelevantChunks } from "../../services/ragService";
 import { storage } from "../../storage";
@@ -71,6 +71,8 @@ vi.mock("../../storage", () => ({
 vi.mock("../../gemini", () => ({
   parseExercisesFromText: vi.fn(),
   parseExercisesFromImage: vi.fn(),
+  parseWorkoutStructureFromText: vi.fn(),
+  parseWorkoutStructureFromImage: vi.fn(),
   chatWithCoach: vi.fn(),
   streamChatWithCoach: vi.fn(),
   generateWorkoutSuggestions: vi.fn(),
@@ -131,6 +133,30 @@ describe("POST /api/parse-exercises", () => {
     expect(storage.users.getUser).toHaveBeenCalledWith("test_user_id");
     expect(storage.users.getCustomExercises).toHaveBeenCalledWith("test_user_id");
     expect(parseExercisesFromText).toHaveBeenCalledWith("Bench press 135x10", "lbs", ["Custom Squat"], "test_user_id");
+  });
+
+  it("should parse structured workout blocks without changing the legacy parse contract", async () => {
+    vi.mocked(storage.users.getUser).mockResolvedValue({ weightUnit: "kg", aiCoachEnabled: true });
+    vi.mocked(storage.users.getCustomExercises).mockResolvedValue([]);
+    vi.mocked(parseWorkoutStructureFromText).mockResolvedValue({
+      exercises: [],
+      structureBlocks: [{
+        sectionType: "main",
+        formatType: "amrap",
+        timeCapMinutes: 10,
+        steps: [{ stepNumber: 1, stepType: "work", exerciseName: "rowing" }],
+      }],
+      warnings: [],
+      confidence: { structureQuality: 92 },
+    });
+
+    const response = await request(app)
+      .post("/api/v1/parse-workout-structure")
+      .send({ text: "10 min AMRAP row and burpees" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.structureBlocks[0]).toMatchObject({ formatType: "amrap", timeCapMinutes: 10 });
+    expect(parseWorkoutStructureFromText).toHaveBeenCalledWith("10 min AMRAP row and burpees", "kg", [], "test_user_id");
   });
 
   it("should return 400 if text is missing", async () => {

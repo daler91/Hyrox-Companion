@@ -4,7 +4,7 @@ import { type Request as ExpressRequest, type Response,Router } from "express";
 import { z } from "zod";
 
 import { isAuthenticated } from "../clerkAuth";
-import { chatWithCoach, parseExercisesFromImage, parseExercisesFromText,streamChatWithCoach } from "../gemini/index";
+import { chatWithCoach, parseExercisesFromImage, parseExercisesFromText, parseWorkoutStructureFromImage, parseWorkoutStructureFromText,streamChatWithCoach } from "../gemini/index";
 import { reqLogger } from "../logger";
 import { aiBudgetCheck } from "../middleware/aibudget";
 import { aiConsentCheck } from "../middleware/aiConsent";
@@ -44,6 +44,19 @@ protectedPost(router, "/api/v1/parse-exercises", { limiter: rateLimiter("parse",
     res.json(exercises);
   });
 
+protectedPost(router, "/api/v1/parse-workout-structure", { limiter: rateLimiter("parse", 5), middleware: [aiConsentCheck, aiBudgetCheck, validateBody(parseExercisesRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof parseExercisesRequestSchema>>, res: Response) => {
+    const { text } = req.body;
+    const userId = getUserId(req);
+    const [user, userCustomExercises] = await Promise.all([
+      storage.users.getUser(userId),
+      storage.users.getCustomExercises(userId),
+    ]);
+    const weightUnit = user?.weightUnit || "kg";
+    const customNames = userCustomExercises.map(e => e.name);
+    const parsed = await parseWorkoutStructureFromText(text.trim(), weightUnit, customNames, userId);
+    res.json(parsed);
+  });
+
 // Photo-parse sibling. Shares the "parse" rate bucket and AI-budget gates
 // with the text route so total parse-family spend stays capped per user.
 // Body size is enforced by a route-scoped express.json({ limit: "10mb" })
@@ -65,6 +78,25 @@ protectedPost(router, "/api/v1/parse-exercises-from-image", { limiter: rateLimit
       userId,
     });
     res.json(exercises);
+  });
+
+protectedPost(router, "/api/v1/parse-workout-structure-from-image", { limiter: rateLimiter("parse", 5), middleware: [aiConsentCheck, aiBudgetCheck, validateBody(parseExercisesFromImageRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof parseExercisesFromImageRequestSchema>>, res: Response) => {
+    const { imageBase64, mimeType } = req.body;
+    const userId = getUserId(req);
+    const [user, userCustomExercises] = await Promise.all([
+      storage.users.getUser(userId),
+      storage.users.getCustomExercises(userId),
+    ]);
+    const weightUnit = user?.weightUnit || "kg";
+    const customNames = userCustomExercises.map(e => e.name);
+    const parsed = await parseWorkoutStructureFromImage({
+      imageBase64,
+      mimeType,
+      weightUnit,
+      customExerciseNames: customNames,
+      userId,
+    });
+    res.json(parsed);
   });
 
 // validateBody(chatRequestSchema) guarantees req.body conforms, so the

@@ -1,4 +1,4 @@
-import { type AddExerciseSetBody, addExerciseSetBodySchema, dateStringSchema, type GeneratePlanInput,generatePlanInputSchema, importPlanRequestSchema, parseExercisesFromImageRequestSchema, type PatchExerciseSetBody,patchExerciseSetBodySchema, schedulePlanRequestSchema, type UpdatePlanDay, updatePlanDaySchema, type UpdateTrainingPlanGoal, updateTrainingPlanGoalSchema, workoutStatusEnum } from "@shared/schema";
+import { type AddExerciseSetBody, addExerciseSetBodySchema, dateStringSchema, type GeneratePlanInput,generatePlanInputSchema, importPlanRequestSchema, parseExercisesFromImageRequestSchema, type PatchExerciseSetBody,patchExerciseSetBodySchema, schedulePlanRequestSchema, structureBlocksPayloadSchema, type UpdatePlanDay, updatePlanDaySchema, type UpdateTrainingPlanGoal, updateTrainingPlanGoalSchema, workoutStatusEnum } from "@shared/schema";
 import { type Request as ExpressRequest,type Response, Router } from "express";
 import { z } from "zod";
 
@@ -11,7 +11,7 @@ import { regenerateCoachNoteForPlanDay } from "../services/coachService";
 import { generatePlan } from "../services/planGenerationService";
 import { createSamplePlan, importPlanFromCSV, updatePlanDayStatus,updatePlanDayWithCleanup } from "../services/planService";
 import { incrementStructuredExerciseCounter } from "../services/structuredExerciseHealth";
-import { autoHydrateExerciseSetsFromTextIfNeeded, reparsePlanDay, reparsePlanDayFromImage } from "../services/workoutService";
+import { autoHydrateExerciseSetsFromTextIfNeeded, reparsePlanDay, reparsePlanDayFromImage, replacePlanDayStructure } from "../services/workoutService";
 import { storage } from "../storage";
 import { getUserId } from "../types";
 import { createUpdatePlanDayUseCase } from "../usecases/plans/updatePlanDay.usecase";
@@ -19,6 +19,10 @@ import { createMutateExerciseSetUseCase } from "../usecases/workouts/mutateExerc
 import { protectedDelete, protectedPatch, protectedPost } from "./_helpers/protectedRouteBuilder";
 
 const router = Router();
+
+const planDayStructureBodySchema = z.object({
+  structureBlocks: structureBlocksPayloadSchema.default([]),
+});
 
 
 function sendParseWriteThroughResponse(
@@ -294,6 +298,23 @@ router.get(
     }
     res.json({ exerciseSets: sets, structureBlocks });
   }),
+);
+
+protectedPatch(
+  router,
+  "/api/v1/plans/days/:dayId/structure",
+  { limiter: rateLimiter("planDaySet", 60), middleware: [validateBody(planDayStructureBodySchema)] },
+  async (req: ExpressRequest<{ dayId: string }, unknown, z.infer<typeof planDayStructureBodySchema>>, res: Response) => {
+    const result = await replacePlanDayStructure(
+      req.params.dayId,
+      getUserId(req),
+      req.body.structureBlocks ?? [],
+    );
+    if (!result) {
+      return sendNotFound(res, PLAN_DAY_NOT_FOUND);
+    }
+    res.json(result);
+  },
 );
 
 protectedPost(

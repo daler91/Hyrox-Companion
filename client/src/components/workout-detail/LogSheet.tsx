@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ResponsiveSheet } from "@/components/ui/responsive-sheet";
 import { Separator } from "@/components/ui/separator";
+import { StructureBlocksEditor } from "@/components/workout-structure";
 import { usePlanDayExercises } from "@/hooks/usePlanDayExercises";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { formatScheduledDate } from "@/lib/timelineEntryFormat";
@@ -112,6 +113,10 @@ function PlannedPrescription({
           }}
           onOpenConversionHelper={() => planSets.reparseFreeText.mutate(undefined)}
           defaultExpanded
+        />
+        <StructureBlocksEditor
+          value={planSets.structureBlocks}
+          onChange={(next) => planSets.updateStructure.mutate(next)}
         />
         <ParseFailureAlert
           entryId={entry.id}

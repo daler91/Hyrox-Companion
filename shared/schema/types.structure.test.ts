@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { structureBlockSchema } from './types';
 
 describe('structureBlockSchema EMOM semantics', () => {
@@ -98,5 +99,72 @@ describe('structureBlockSchema EMOM semantics', () => {
       expect(parsed.data.steps[0].category).toBe('conditioning');
       expect(parsed.data.steps[0].stepRole).toBe('steady');
     }
+  });
+
+  it('accepts AMRAP blocks with a time cap and score', () => {
+    const parsed = structureBlockSchema.safeParse({
+      sectionType: 'main',
+      formatType: 'amrap',
+      timeCapMinutes: 12,
+      score: { type: 'amrap', rounds: 4, reps: 12 },
+      steps: [
+        { stepNumber: 1, stepType: 'work', exerciseName: 'Burpee Broad Jump', targets: { targetReps: 8 } },
+        { stepNumber: 2, stepType: 'work', exerciseName: 'Wall Balls', targets: { targetReps: 12 } },
+      ],
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('rejects AMRAP blocks without a time cap or duration', () => {
+    const parsed = structureBlockSchema.safeParse({
+      sectionType: 'main',
+      formatType: 'amrap',
+      steps: [{ stepNumber: 1, stepType: 'work', exerciseName: 'Row' }],
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('accepts transition steps without movement rows', () => {
+    const parsed = structureBlockSchema.safeParse({
+      sectionType: 'main',
+      formatType: 'rounds',
+      roundCount: 3,
+      steps: [
+        { stepNumber: 1, stepType: 'work', exerciseName: 'Sled Push' },
+        { stepNumber: 2, stepType: 'transition', targets: { instructions: 'Change stations', durationSeconds: 30 } },
+      ],
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('accepts rounds blocks with completed-round score data', () => {
+    const parsed = structureBlockSchema.safeParse({
+      sectionType: 'main',
+      formatType: 'rounds',
+      roundCount: 5,
+      score: { type: 'rounds', completedRounds: 5, elapsedSeconds: 930 },
+      steps: [{ stepNumber: 1, stepType: 'work', exerciseName: 'Sandbag Lunges', targets: { targetReps: 20 } }],
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('rejects rounds blocks without a round count', () => {
+    const parsed = structureBlockSchema.safeParse({
+      sectionType: 'main',
+      formatType: 'rounds',
+      steps: [{ stepNumber: 1, stepType: 'work', exerciseName: 'Sandbag Lunges' }],
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('rejects mismatched block score types', () => {
+    const parsed = structureBlockSchema.safeParse({
+      sectionType: 'main',
+      formatType: 'amrap',
+      timeCapMinutes: 10,
+      score: { type: 'rounds', completedRounds: 3 },
+      steps: [{ stepNumber: 1, stepType: 'work', exerciseName: 'Row' }],
+    });
+    expect(parsed.success).toBe(false);
   });
 });
