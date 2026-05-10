@@ -15,6 +15,29 @@ import { queryClient } from "@/lib/queryClient";
 
 type WorkoutWithSets = WorkoutLog & { exerciseSets?: ExerciseSet[]; structureBlocks?: StructureBlockInput[] };
 
+export function isLatestMutationSequence(seq: number, latestSeq: number | undefined): boolean {
+  return seq === latestSeq;
+}
+
+export function mergeServerStructureBlock(
+  currentBlocks: StructureBlockInput[] | undefined,
+  serverBlocks: StructureBlockInput[],
+  blockId: string,
+): StructureBlockInput[] {
+  const serverBlock = serverBlocks.find((block) => block.id === blockId);
+  if (!serverBlock) return serverBlocks;
+  const current = currentBlocks ?? [];
+  if (current.length === 0) return serverBlocks;
+
+  let replaced = false;
+  const next = current.map((block) => {
+    if (block.id !== blockId) return block;
+    replaced = true;
+    return serverBlock;
+  });
+  return replaced ? next : serverBlocks;
+}
+
 // Tag every logged-workout set mutation so useIsMutating can count all
 // in-flight writes for the current workout — useMutation.isPending only
 // reflects the latest mutate() call, which would hide concurrent PATCHes
@@ -81,10 +104,15 @@ export function useWorkoutDetail(workoutId: string | null) {
     });
   };
 
-  const patchCachedStructure = (structureBlocks: StructureBlockInput[]) => {
-    if (!workoutId) return;
-    queryClient.setQueryData<WorkoutWithSets>(QUERY_KEYS.workout(workoutId), (prev) =>
-      prev ? { ...prev, structureBlocks } : prev,
+  const patchCachedStructureBlock = (
+    targetWorkoutId: string,
+    blockId: string,
+    serverBlocks: StructureBlockInput[],
+  ) => {
+    queryClient.setQueryData<WorkoutWithSets>(QUERY_KEYS.workout(targetWorkoutId), (prev) =>
+      prev
+        ? { ...prev, structureBlocks: mergeServerStructureBlock(prev.structureBlocks, serverBlocks, blockId) }
+        : prev,
     );
   };
 
@@ -284,12 +312,28 @@ export function useWorkoutDetail(workoutId: string | null) {
     errorToast: "Couldn't save workout blocks",
   });
 
-  const updateBlockScore = useApiMutation({
+  const blockScoreSeqByKeyRef = useRef(new Map<string, number>());
+  const blockScoreSeqCounterRef = useRef(0);
+  const updateBlockScore = useApiMutation<
+    { structureBlocks: StructureBlockInput[] },
+    Error,
+    { blockId: string; score: StructureBlockScore | null },
+    { blockId: string; seq: number; sequenceKey: string; workoutId: string }
+  >({
     mutationKey: workoutId ? workoutSetsMutationKey(workoutId) : undefined,
     mutationFn: ({ blockId, score }: { blockId: string; score: StructureBlockScore | null }) =>
       api.workouts.updateBlockScore(workoutId!, blockId, score),
-    onSuccess: (data) => {
-      patchCachedStructure(data.structureBlocks);
+    onMutate: ({ blockId }) => {
+      const activeWorkoutId = workoutId!;
+      blockScoreSeqCounterRef.current += 1;
+      const seq = blockScoreSeqCounterRef.current;
+      const sequenceKey = `${activeWorkoutId}:${blockId}`;
+      blockScoreSeqByKeyRef.current.set(sequenceKey, seq);
+      return { blockId, seq, sequenceKey, workoutId: activeWorkoutId };
+    },
+    onSuccess: (data, _vars, ctx) => {
+      if (!isLatestMutationSequence(ctx.seq, blockScoreSeqByKeyRef.current.get(ctx.sequenceKey))) return;
+      patchCachedStructureBlock(ctx.workoutId, ctx.blockId, data.structureBlocks);
       markSaved();
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }).catch(() => undefined);
     },
@@ -358,7 +402,7 @@ export function useWorkoutDetail(workoutId: string | null) {
       return { seq };
     },
     onSuccess: async (serverWorkout, { forWorkoutId }, ctx) => {
-      if (ctx.seq !== rpeSeqPerWorkoutRef.current.get(forWorkoutId)) return;
+      if (!isLatestMutationSequence(ctx.seq, rpeSeqPerWorkoutRef.current.get(forWorkoutId))) return;
       queryClient.setQueryData<WorkoutWithSets>(QUERY_KEYS.workout(forWorkoutId), (p) =>
         p ? { ...p, rpe: serverWorkout.rpe } : p,
       );
