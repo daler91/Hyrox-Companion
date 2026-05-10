@@ -17,7 +17,7 @@ import {
   workoutStructureBlocks,
   workoutStructureSteps,
 } from "@shared/schema";
-import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import pLimit from "p-limit";
 
 import { db } from "../db";
@@ -67,6 +67,18 @@ const MAX_SET_ROWS_PER_WORKOUT = 1000;
 // (logged) or a planDay (prescribed). Exactly one id is set per row, enforced
 // by the exercise_set_single_owner_check DB constraint.
 type SetOwner = { workoutLogId: string } | { planDayId: string };
+
+interface ReplaceStructureOptions {
+  readonly deriveExerciseSets?: boolean;
+}
+
+export function shouldDeriveStructureExerciseSets(explicitSetCount: number): boolean {
+  return explicitSetCount <= 0;
+}
+
+function structureReplacementOptions(explicitSetCount: number): ReplaceStructureOptions {
+  return { deriveExerciseSets: shouldDeriveStructureExerciseSets(explicitSetCount) };
+}
 
 function ownerForeignKeys(owner: SetOwner) {
   if ("workoutLogId" in owner) {
@@ -364,7 +376,7 @@ async function replaceExerciseSetsAndStructureByOwner(
       await tx.insert(exerciseSets).values(setRows);
     }
     if (structureBlocks !== undefined) {
-      structureSetCount = await replaceStructureForOwner(tx, owner, structureBlocks);
+      structureSetCount = await replaceStructureForOwner(tx, owner, structureBlocks, structureReplacementOptions(setRows.length));
     }
   });
   return setRows.length + structureSetCount;
@@ -797,12 +809,27 @@ async function deleteBlockDerivedExerciseSets(tx: WorkoutTx, owner: SetOwner): P
     .where(and(exerciseSetOwnerCondition(owner), isNotNull(exerciseSets.blockId)));
 }
 
-async function replaceStructureForOwner(tx: WorkoutTx, owner: SetOwner, structureBlocks: StructureBlockInput[]): Promise<number> {
+async function ownerHasExplicitExerciseSets(tx: WorkoutTx, owner: SetOwner): Promise<boolean> {
+  const [row] = await tx
+    .select({ id: exerciseSets.id })
+    .from(exerciseSets)
+    .where(and(exerciseSetOwnerCondition(owner), isNull(exerciseSets.blockId)))
+    .limit(1);
+  return !!row;
+}
+
+async function replaceStructureForOwner(
+  tx: WorkoutTx,
+  owner: SetOwner,
+  structureBlocks: StructureBlockInput[],
+  options: ReplaceStructureOptions = {},
+): Promise<number> {
   await deleteBlockDerivedExerciseSets(tx, owner);
   await tx.delete(workoutStructureBlocks).where(structureBlockOwnerCondition(owner));
   if (structureBlocks.length === 0) return 0;
 
-  let sortOrder = await nextSortOrderForOwner(tx, owner);
+  const deriveExerciseSets = options.deriveExerciseSets ?? !(await ownerHasExplicitExerciseSets(tx, owner));
+  let sortOrder = deriveExerciseSets ? await nextSortOrderForOwner(tx, owner) : 0;
   const derivedRows: InsertExerciseSet[] = [];
   for (const [idx, block] of structureBlocks.entries()) {
     const [savedBlock] = await tx.insert(workoutStructureBlocks).values({
@@ -846,11 +873,13 @@ async function replaceStructureForOwner(tx: WorkoutTx, owner: SetOwner, structur
       constraintTags: s.constraintTags ?? null,
       targets: s.targets ?? null,
     })));
-    for (const step of block.steps) {
-      const row = derivedSetRowFromStep(owner, savedBlock.id, block, step, sortOrder);
-      if (!row) continue;
-      derivedRows.push(row);
-      sortOrder += 1;
+    if (deriveExerciseSets) {
+      for (const step of block.steps) {
+        const row = derivedSetRowFromStep(owner, savedBlock.id, block, step, sortOrder);
+        if (!row) continue;
+        derivedRows.push(row);
+        sortOrder += 1;
+      }
     }
   }
 
@@ -860,8 +889,13 @@ async function replaceStructureForOwner(tx: WorkoutTx, owner: SetOwner, structur
   return derivedRows.length;
 }
 
-async function replaceWorkoutStructure(tx: WorkoutTx, workoutLogId: string, structureBlocks: StructureBlockInput[]): Promise<number> {
-  return replaceStructureForOwner(tx, { workoutLogId }, structureBlocks);
+async function replaceWorkoutStructure(
+  tx: WorkoutTx,
+  workoutLogId: string,
+  structureBlocks: StructureBlockInput[],
+  options?: ReplaceStructureOptions,
+): Promise<number> {
+  return replaceStructureForOwner(tx, { workoutLogId }, structureBlocks, options);
 }
 
 /**
@@ -1081,8 +1115,10 @@ async function createWorkoutInTx(
   }
 
   let savedSets: ExerciseSet[] = [];
+  let clientSuppliedSetCount = 0;
   if (exercises && Array.isArray(exercises) && exercises.length > 0) {
     savedSets = await insertClientSuppliedExercises(tx, exercises, log.id, userId);
+    clientSuppliedSetCount = savedSets.length;
   } else if (enrichedData.planDayId) {
     const blockIdMap = await copyPrescribedStructureIntoLog(tx, enrichedData.planDayId, log.id);
     savedSets = await copyPrescribedSetsIntoLog(tx, enrichedData.planDayId, log.id, blockIdMap);
@@ -1104,7 +1140,7 @@ async function createWorkoutInTx(
     source: resolvedStructure.source,
   }, "Persisting workout structure blocks using resolved source.");
   if (resolvedStructure.blocks !== undefined) {
-    await replaceWorkoutStructure(tx, log.id, resolvedStructure.blocks);
+    await replaceWorkoutStructure(tx, log.id, resolvedStructure.blocks, structureReplacementOptions(clientSuppliedSetCount));
   }
 
   if (savedSets.length > 0) return { ...log, exerciseSets: savedSets };
@@ -1232,7 +1268,7 @@ export async function updateWorkout(
         }
 
         if (structureBlocks !== undefined) {
-          await replaceWorkoutStructure(tx, log.id, structureBlocks);
+          await replaceWorkoutStructure(tx, log.id, structureBlocks, structureReplacementOptions(savedSets.length));
         }
         return { log: { ...log, exerciseSets: savedSets } as UpdateWorkoutResult, previousDate };
       }

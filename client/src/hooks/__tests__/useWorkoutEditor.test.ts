@@ -1,9 +1,11 @@
+import type { StructureBlockInput } from '@shared/schema';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook } from '@testing-library/react';
 import React from 'react';
-import { describe, expect,it } from 'vitest';
+import { afterEach, describe, expect,it, vi } from 'vitest';
 
 import type { StructuredExercise } from '@/components/ExerciseInput';
+import { api, type ParseWorkoutStructureResponse } from '@/lib/api';
 
 import { exerciseToPayload,generateSummary, getBlockExerciseName, makeBlockId, mergeParsedWithEdits, useWorkoutEditor } from '../useWorkoutEditor';
 
@@ -16,6 +18,37 @@ function createQueryWrapper() {
   return ({ children }: { children: React.ReactNode }) =>
     React.createElement(QueryClientProvider, { client: queryClient }, children);
 }
+
+const staleStructureBlock: StructureBlockInput = {
+  sectionType: 'main',
+  formatType: 'emom',
+  durationMinutes: 10,
+  steps: [
+    {
+      stepNumber: 1,
+      minuteIndex: 1,
+      stepType: 'work',
+      exerciseName: 'wall_balls',
+      targets: { targetReps: 12 },
+    },
+  ],
+};
+
+const flatParseResponse: ParseWorkoutStructureResponse = {
+  exercises: [
+    {
+      exerciseName: 'rowing',
+      category: 'functional',
+      sets: [{ setNumber: 1, distance: 500 }],
+    },
+  ],
+  structureBlocks: [],
+  warnings: [],
+};
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe('generateSummary', () => {
   it('should handle exercises with no sets', () => {
@@ -453,6 +486,46 @@ describe('useWorkoutEditor initialExerciseData', () => {
     });
   });
 
+});
+
+describe('useWorkoutEditor parse results', () => {
+  it('clears stale structure blocks when a text parse returns flat exercises', async () => {
+    vi.spyOn(api.exercises, 'parseStructured').mockResolvedValueOnce(flatParseResponse);
+    const { result } = renderHook(
+      () => useWorkoutEditor({ initialStructureBlocks: [staleStructureBlock] }),
+      { wrapper: createQueryWrapper() },
+    );
+
+    expect(result.current.structureBlocks).toHaveLength(1);
+
+    await act(async () => {
+      await result.current.parseMutation.mutateAsync('500m row');
+    });
+
+    expect(result.current.structureBlocks).toEqual([]);
+    expect(result.current.exerciseBlocks).toHaveLength(1);
+    expect(Object.values(result.current.exerciseData)[0]).toMatchObject({
+      exerciseName: 'rowing',
+    });
+  });
+
+  it('clears stale structure blocks when a photo parse returns flat exercises', async () => {
+    vi.spyOn(api.exercises, 'parseStructuredFromImage').mockResolvedValueOnce(flatParseResponse);
+    const { result } = renderHook(
+      () => useWorkoutEditor({ initialStructureBlocks: [staleStructureBlock] }),
+      { wrapper: createQueryWrapper() },
+    );
+
+    await act(async () => {
+      await result.current.parseImageMutation.mutateAsync({
+        imageBase64: 'abc123',
+        mimeType: 'image/png',
+      });
+    });
+
+    expect(result.current.structureBlocks).toEqual([]);
+    expect(result.current.exerciseBlocks).toHaveLength(1);
+  });
 });
 
 describe('useWorkoutEditor resetEditor', () => {

@@ -518,27 +518,25 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
     return exerciseBlocks.map(blockId => getBlockExerciseName(blockId) as ExerciseName);
   }, [exerciseBlocks]);
 
+  const applyManualParseResult = useCallback((
+    newBlocks: string[],
+    newData: Record<string, StructuredExercise>,
+    newStructureBlocks: StructureBlockInput[],
+  ) => {
+    const parsedStructureBlocks = newStructureBlocks.length > 0;
+    setExerciseBlocks(parsedStructureBlocks ? [] : newBlocks);
+    setExerciseData(parsedStructureBlocks ? {} : newData);
+    setStructureBlocks(parsedStructureBlocks ? newStructureBlocks : []);
+    setUseTextMode(false);
+  }, []);
+
   const parseMutation = useParseWorkoutMutation(blockCounterRef, {
-    onSuccess: (newBlocks, newData, newStructureBlocks) => {
-      const parsedStructureBlocks = newStructureBlocks.length > 0;
-      setExerciseBlocks(parsedStructureBlocks ? [] : newBlocks);
-      setExerciseData(parsedStructureBlocks ? {} : newData);
-      if (newStructureBlocks.length > 0) setStructureBlocks(newStructureBlocks);
-      setUseTextMode(false);
-    },
+    onSuccess: applyManualParseResult,
     onError: () => {},
   });
 
   const parseImageMutation = useParseWorkoutFromImageMutation(blockCounterRef, {
-    onSuccess: (newBlocks, newData, newStructureBlocks) => {
-      const parsedStructureBlocks = newStructureBlocks.length > 0;
-      setExerciseBlocks(parsedStructureBlocks ? [] : newBlocks);
-      setExerciseData(parsedStructureBlocks ? {} : newData);
-      if (newStructureBlocks.length > 0) setStructureBlocks(newStructureBlocks);
-      // Collapse the text panel on success — the user came in via the
-      // photo path, so the structured table is what they want to see now.
-      setUseTextMode(false);
-    },
+    onSuccess: applyManualParseResult,
     onError: () => {},
   });
 
@@ -573,6 +571,7 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
     );
     setExerciseBlocks(newBlocks);
     setExerciseData(newData);
+    setStructureBlocks([]);
   }, []);
 
   const runAutoParse = useCallback(async (text: string) => {

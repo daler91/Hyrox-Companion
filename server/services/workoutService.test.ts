@@ -5,6 +5,7 @@ import {
   classifyWorkoutCompliance,
   expandExercisesToSetRows,
   resolveStructureStepTimeTarget,
+  shouldDeriveStructureExerciseSets,
   summarizeSetAdherence,
 } from "./workoutService";
 
@@ -286,6 +287,16 @@ describe("resolveStructureStepTimeTarget", () => {
 
   it("prefers explicit targetTime over durationSeconds", () => {
     expect(resolveStructureStepTimeTarget({ targetTime: 30, durationSeconds: 45 })).toBe(30);
+  });
+});
+
+describe("shouldDeriveStructureExerciseSets", () => {
+  it("derives movement rows when blocks are the only movement source", () => {
+    expect(shouldDeriveStructureExerciseSets(0)).toBe(true);
+  });
+
+  it("does not derive duplicate movement rows when explicit sets already exist", () => {
+    expect(shouldDeriveStructureExerciseSets(2)).toBe(false);
   });
 });
 
