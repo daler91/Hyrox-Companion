@@ -1,4 +1,4 @@
-import type { ExerciseName, ExerciseSet } from "@shared/schema";
+import type { ExerciseName, ExerciseSet, StructureBlockInput } from "@shared/schema";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { createDefaultSet, type SetData, type StructuredExercise } from "@/components/ExerciseInput";
@@ -15,6 +15,7 @@ interface DraftExerciseTableProps {
   readonly reorderBlocks: (nextOrder: string[]) => void;
   readonly weightUnit: "kg" | "lbs";
   readonly distanceUnit: "km" | "miles";
+  readonly structureBlocks?: StructureBlockInput[];
 }
 
 interface BlockSetLocation {
@@ -22,20 +23,51 @@ interface BlockSetLocation {
   readonly setIdx: number;
 }
 
-function applySetPatch(target: SetData, patch: PatchExerciseSetPayload): SetData {
-  const next: SetData = { ...target };
-  if ("reps" in patch) next.reps = patch.reps ?? undefined;
-  if ("weight" in patch) next.weight = patch.weight ?? undefined;
-  if ("distance" in patch) next.distance = patch.distance ?? undefined;
-  if ("time" in patch) next.time = patch.time ?? undefined;
-  if ("plannedReps" in patch) next.plannedReps = patch.plannedReps ?? undefined;
-  if ("plannedWeight" in patch) next.plannedWeight = patch.plannedWeight ?? undefined;
-  if ("plannedDistance" in patch) next.plannedDistance = patch.plannedDistance ?? undefined;
-  if ("plannedTime" in patch) next.plannedTime = patch.plannedTime ?? undefined;
-  if ("notes" in patch) next.notes = patch.notes ?? undefined;
+const OPTIONAL_NUMBER_SET_FIELDS = [
+  "reps",
+  "weight",
+  "distance",
+  "time",
+  "plannedReps",
+  "plannedWeight",
+  "plannedDistance",
+  "plannedTime",
+] as const;
+
+const NULLABLE_NUMBER_SET_FIELDS = ["stepNumber", "intervalMinute", "cycleNumber"] as const;
+const NULLABLE_STRING_SET_FIELDS = ["blockId", "stepRole", "groupId"] as const;
+
+function applyOptionalNumberPatch(next: SetData, patch: PatchExerciseSetPayload): void {
+  for (const field of OPTIONAL_NUMBER_SET_FIELDS) {
+    if (field in patch) next[field] = patch[field] ?? undefined;
+  }
+}
+
+function applyNullableNumberPatch(next: SetData, patch: PatchExerciseSetPayload): void {
+  for (const field of NULLABLE_NUMBER_SET_FIELDS) {
+    if (field in patch) next[field] = patch[field] ?? null;
+  }
+}
+
+function applyNullableStringPatch(next: SetData, patch: PatchExerciseSetPayload): void {
+  for (const field of NULLABLE_STRING_SET_FIELDS) {
+    if (field in patch) next[field] = patch[field] ?? null;
+  }
+}
+
+function applySetNumberPatch(next: SetData, patch: PatchExerciseSetPayload): void {
   if ("setNumber" in patch && typeof patch.setNumber === "number") {
     next.setNumber = patch.setNumber;
   }
+}
+
+function applySetPatch(target: SetData, patch: PatchExerciseSetPayload): SetData {
+  const next: SetData = { ...target };
+  applyOptionalNumberPatch(next, patch);
+  applyNullableNumberPatch(next, patch);
+  applyNullableStringPatch(next, patch);
+  if ("notes" in patch) next.notes = patch.notes ?? undefined;
+  applySetNumberPatch(next, patch);
   return next;
 }
 
@@ -71,6 +103,7 @@ export function DraftExerciseTable({
   reorderBlocks,
   weightUnit,
   distanceUnit,
+  structureBlocks = [],
 }: DraftExerciseTableProps) {
   const { syntheticSets, locationById, sortOrderById } = useMemo(() => {
     const sets: ExerciseSet[] = [];
@@ -102,12 +135,12 @@ export function DraftExerciseTable({
           plannedWeight: s.plannedWeight ?? null,
           plannedDistance: s.plannedDistance ?? null,
           plannedTime: s.plannedTime ?? null,
-          blockId: null,
-          stepNumber: null,
-          intervalMinute: null,
-          cycleNumber: null,
-          stepRole: null,
-          groupId: null,
+          blockId: s.blockId ?? null,
+          stepNumber: s.stepNumber ?? null,
+          intervalMinute: s.intervalMinute ?? null,
+          cycleNumber: s.cycleNumber ?? null,
+          stepRole: s.stepRole ?? null,
+          groupId: s.groupId ?? null,
           intensity: null,
           load: null,
           repMode: null,
@@ -276,6 +309,12 @@ export function DraftExerciseTable({
                 weight: payload.weight ?? undefined,
                 distance: payload.distance ?? undefined,
                 time: payload.time ?? undefined,
+                blockId: payload.blockId ?? data.sets[0]?.blockId ?? null,
+                stepNumber: payload.stepNumber ?? data.sets[0]?.stepNumber ?? null,
+                intervalMinute: payload.intervalMinute ?? data.sets[0]?.intervalMinute ?? null,
+                cycleNumber: payload.cycleNumber ?? data.sets[0]?.cycleNumber ?? null,
+                stepRole: payload.stepRole ?? data.sets[0]?.stepRole ?? null,
+                groupId: payload.groupId ?? data.sets[0]?.groupId ?? null,
                 notes: payload.notes ?? undefined,
               },
             ];
@@ -324,6 +363,7 @@ export function DraftExerciseTable({
       onUpdateSet={handleUpdateSet}
       onAddSet={handleAddSet}
       onDeleteSet={handleDeleteSet}
+      structureBlocks={structureBlocks}
     />
   );
 }

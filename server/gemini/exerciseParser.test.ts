@@ -1,7 +1,7 @@
 import { beforeEach,describe, expect, it, vi } from "vitest";
 
 import { retryWithBackoff } from "./client";
-import { parseExercisesFromText } from "./exerciseParser";
+import { parseExercisesFromText, parseWorkoutStructureFromText } from "./exerciseParser";
 
 vi.mock("./client", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./client")>();
@@ -305,5 +305,39 @@ describe("parseExercisesFromText", () => {
     expect(result[0].exerciseName).toBe("emom");
     expect(result[1].exerciseName).toBe("amrap");
     expect(result[0].missingFields).toContain("scaling branch: reduce load 20% if RPE > 8");
+  });
+
+  it("links structured parser exercise rows to generated block ids", async () => {
+    const mockResponse = {
+      text: JSON.stringify({
+        exercises: [
+          {
+            exerciseName: "wall_balls",
+            category: "conditioning",
+            sets: [{ setNumber: 1, reps: 12 }],
+          },
+        ],
+        structureBlocks: [
+          {
+            sectionType: "main",
+            formatType: "emom",
+            durationMinutes: 10,
+            steps: [{ stepNumber: 1, minuteIndex: 1, stepType: "work", exerciseName: "wall_balls" }],
+          },
+        ],
+      }),
+    };
+    vi.mocked(retryWithBackoff).mockResolvedValueOnce(mockResponse);
+
+    const result = await parseWorkoutStructureFromText("10 min EMOM: 12 wall balls");
+    const blockId = result.structureBlocks[0].id;
+
+    expect(blockId).toEqual(expect.any(String));
+    expect(result.exercises[0].sets[0]).toMatchObject({
+      blockId,
+      stepNumber: 1,
+      intervalMinute: 1,
+      stepRole: "work",
+    });
   });
 });

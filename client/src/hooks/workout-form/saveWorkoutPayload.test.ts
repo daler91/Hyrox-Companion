@@ -102,6 +102,140 @@ describe("buildWorkoutSavePayload", () => {
     if (!result.ok) return;
     expect(result.payload.structureBlocks?.[0]).toMatchObject({ formatType: "amrap", timeCapMinutes: 10 });
   });
+
+  it("persists explicit exercise rows as the source for linked block work steps", () => {
+    const result = buildWorkoutSavePayload({
+      ...baseInput,
+      title: "EMOM rows",
+      exerciseBlocks: ["row-1"],
+      exerciseData: {
+        "row-1": {
+          exerciseName: "wall_balls",
+          customLabel: null,
+          category: "conditioning",
+          sets: [{
+            setNumber: 1,
+            reps: 12,
+            blockId: "block-emom",
+            stepNumber: 1,
+            intervalMinute: 1,
+            stepRole: "work",
+          }],
+        } as StructuredExercise,
+      },
+      structureBlocks: [{
+        id: "block-emom",
+        sectionType: "main",
+        formatType: "emom",
+        durationMinutes: 10,
+        steps: [{ stepNumber: 1, minuteIndex: 1, stepType: "work", exerciseName: "Unassigned exercise" }],
+      }],
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.payload.exercises?.[0].sets[0]).toMatchObject({
+      blockId: "block-emom",
+      stepNumber: 1,
+      intervalMinute: 1,
+      stepRole: "work",
+      reps: 12,
+    });
+    expect(result.payload.structureBlocks?.[0].steps[0]).toMatchObject({
+      exerciseName: "wall_balls",
+      category: "conditioning",
+      targets: { targetReps: 12 },
+    });
+  });
+
+  it("preserves canonical exerciseName when linked rows have custom labels", () => {
+    const result = buildWorkoutSavePayload({
+      ...baseInput,
+      title: "Labeled canonical row",
+      exerciseBlocks: ["row-1"],
+      exerciseData: {
+        "row-1": {
+          exerciseName: "back_squat",
+          customLabel: "Tempo Squat",
+          category: "strength",
+          sets: [{ setNumber: 1, reps: 5, blockId: "block-rounds", stepNumber: 1 }],
+        },
+      },
+      structureBlocks: [{
+        id: "block-rounds",
+        sectionType: "main",
+        formatType: "rounds",
+        roundCount: 3,
+        steps: [{ stepNumber: 1, stepType: "work", exerciseName: "Unassigned exercise" }],
+      }],
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.payload.structureBlocks?.[0].steps[0]).toMatchObject({
+      exerciseName: "back_squat",
+      customLabel: "Tempo Squat",
+    });
+  });
+
+  it("links legacy per-exercise structure configs to the exercise row", () => {
+    const result = buildWorkoutSavePayload({
+      ...baseInput,
+      title: "Legacy row structure",
+      exerciseBlocks: ["row-1"],
+      exerciseData: {
+        "row-1": {
+          exerciseName: "wall_balls",
+          category: "conditioning",
+          sets: [{ setNumber: 1, reps: 12 }],
+          structure: {
+            section: "main",
+            blockType: "emom",
+            emomDurationMinutes: 10,
+            steps: [{ id: "step-1", type: "work", exercise: "wall_balls" }],
+          },
+        },
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const blockId = result.payload.structureBlocks?.[0].id;
+    expect(blockId).toEqual(expect.any(String));
+    expect(result.payload.exercises?.[0].sets[0]).toMatchObject({
+      blockId,
+      stepNumber: 1,
+      intervalMinute: 1,
+    });
+  });
+
+  it("blocks saves when complex block work steps have no linked exercise row", () => {
+    const result = buildWorkoutSavePayload({
+      ...baseInput,
+      title: "Unlinked EMOM",
+      exerciseBlocks: ["row-1"],
+      exerciseData: {
+        "row-1": {
+          exerciseName: "wall_balls",
+          category: "conditioning",
+          sets: [{ setNumber: 1, reps: 12 }],
+        },
+      },
+      structureBlocks: [{
+        id: "block-emom",
+        sectionType: "main",
+        formatType: "emom",
+        durationMinutes: 10,
+        steps: [{ stepNumber: 1, minuteIndex: 1, stepType: "work", exerciseName: "Unassigned exercise" }],
+      }],
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      description: "EMOM step 1 must be linked to an exercise row.",
+    });
+  });
+
   it("converts legacy emom exercise rows before persisting payload", () => {
     const result = buildWorkoutSavePayload({
       ...baseInput,

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { lintWorkoutStructure } from './structureLint';
 import { structureBlockSchema } from './types';
 
 describe('structureBlockSchema EMOM semantics', () => {
@@ -166,5 +167,70 @@ describe('structureBlockSchema EMOM semantics', () => {
       steps: [{ stepNumber: 1, stepType: 'work', exerciseName: 'Row' }],
     });
     expect(parsed.success).toBe(false);
+  });
+});
+
+describe('lintWorkoutStructure block links', () => {
+  it('accepts complex work steps when a matching exercise row link exists', () => {
+    const lint = lintWorkoutStructure(
+      [{
+        id: 'block-emom',
+        sectionType: 'main',
+        formatType: 'emom',
+        durationMinutes: 10,
+        steps: [{ stepNumber: 1, minuteIndex: 1, stepType: 'work', exerciseName: 'Unassigned exercise' }],
+      }],
+      [{
+        exerciseName: 'wall_balls',
+        category: 'conditioning',
+        sets: [{ setNumber: 1, reps: 12, blockId: 'block-emom', stepNumber: 1, intervalMinute: 1 }],
+      }],
+    );
+
+    expect(lint.schemaErrors).toEqual([]);
+  });
+
+  it('rejects complex work steps without a matching exercise row link', () => {
+    const lint = lintWorkoutStructure(
+      [{
+        id: 'block-rounds',
+        sectionType: 'main',
+        formatType: 'rounds',
+        roundCount: 3,
+        steps: [{ stepNumber: 1, stepType: 'work', exerciseName: 'Unassigned exercise' }],
+      }],
+      [{
+        exerciseName: 'sled_push',
+        category: 'conditioning',
+        sets: [{ setNumber: 1, distance: 50 }],
+      }],
+    );
+
+    expect(lint.schemaErrors).toContainEqual(expect.objectContaining({
+      code: 'MISSING_LINKED_EXERCISE_ROW',
+      message: 'ROUNDS step 1 must be linked to an exercise row.',
+    }));
+  });
+
+  it('does not require exercise row links for steps marked rest by stepRole', () => {
+    const lint = lintWorkoutStructure(
+      [{
+        id: 'block-emom',
+        sectionType: 'main',
+        formatType: 'emom',
+        durationMinutes: 10,
+        steps: [
+          { stepNumber: 1, minuteIndex: 1, stepRole: 'rest' },
+          { stepNumber: 2, minuteIndex: 2, stepType: 'work', exerciseName: 'Unassigned exercise' },
+        ],
+      }],
+      [{
+        exerciseName: 'wall_balls',
+        category: 'conditioning',
+        sets: [{ setNumber: 1, blockId: 'block-emom', stepNumber: 2 }],
+      }],
+    );
+
+    expect(lint.schemaErrors).toEqual([]);
   });
 });

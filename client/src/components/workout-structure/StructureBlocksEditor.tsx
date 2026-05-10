@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 import { Button } from "@/components/ui/button";
 
 import { configToStructureBlock, structureBlockToConfig } from "./configToStructureBlocks";
-import type { WorkoutStructureConfig } from "./types";
+import { UNASSIGNED_WORK_STEP_LABEL, type WorkoutStructureConfig } from "./types";
 import { WorkoutStructureEditor } from "./WorkoutStructureEditor";
 
 interface DraftBlock {
@@ -23,25 +23,28 @@ const generateId = () => crypto.randomUUID();
 const EMPTY_STRUCTURE_BLOCKS: readonly StructureBlockInput[] = [];
 
 const emptyEmomConfig = (): WorkoutStructureConfig => ({
+  id: generateId(),
   section: "main",
   blockType: "emom",
   emomDurationMinutes: 10,
   emomAlternating: false,
-  steps: [{ id: generateId(), type: "work" }],
+  steps: [{ id: generateId(), type: "work", exercise: UNASSIGNED_WORK_STEP_LABEL }],
 });
 
 const emptyAmrapConfig = (): WorkoutStructureConfig => ({
+  id: generateId(),
   section: "main",
   blockType: "amrap",
   timeCapMinutes: 10,
-  steps: [{ id: generateId(), type: "work" }],
+  steps: [{ id: generateId(), type: "work", exercise: UNASSIGNED_WORK_STEP_LABEL }],
 });
 
 const emptyRoundsConfig = (): WorkoutStructureConfig => ({
+  id: generateId(),
   section: "main",
   blockType: "rounds",
   roundCount: 3,
-  steps: [{ id: generateId(), type: "work" }],
+  steps: [{ id: generateId(), type: "work", exercise: UNASSIGNED_WORK_STEP_LABEL }],
 });
 
 function normalizeValue(value: StructureBlockInput[] | undefined): readonly StructureBlockInput[] {
@@ -49,12 +52,15 @@ function normalizeValue(value: StructureBlockInput[] | undefined): readonly Stru
 }
 
 function draftsFromValue(value: readonly StructureBlockInput[]): DraftBlock[] {
-  return value.map((block) => ({ id: generateId(), config: structureBlockToConfig(block) }));
+  return value.map((block) => ({ id: block.id ?? generateId(), config: structureBlockToConfig(block) }));
 }
 
 function draftsToValue(drafts: readonly DraftBlock[]): StructureBlockInput[] {
   return drafts.map((draft, idx) =>
-    configToStructureBlock(draft.config, { sequenceOrder: idx, sortOrder: idx }),
+    configToStructureBlock(
+      { ...draft.config, id: draft.config.id ?? draft.id },
+      { sequenceOrder: idx, sortOrder: idx },
+    ),
   );
 }
 

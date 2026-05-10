@@ -1,6 +1,7 @@
 export type WorkoutSection = "warmup" | "main" | "accessory" | "cooldown" | "mobility";
 export type BlockType = "steady" | "emom" | "rounds" | "amrap" | "interval" | "for_time";
 export type StepType = "work" | "rest" | "transition";
+export const UNASSIGNED_WORK_STEP_LABEL = "Unassigned exercise";
 
 export interface WorkoutStep {
   id: string;

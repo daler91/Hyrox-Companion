@@ -272,11 +272,25 @@ export function usePlanDayExercises(planDayId: string | null) {
       if (!planDayId) return Promise.resolve({ exerciseSets: [], structureBlocks: [] });
       return api.plans.updateDayStructure(planDayId, next);
     },
+    onMutate: async (next) => {
+      if (!planDayId) return undefined;
+      await queryClient.cancelQueries({ queryKey: QUERY_KEYS.planDayExercises(planDayId) });
+      const prev = queryClient.getQueryData<PlanDayExerciseData>(QUERY_KEYS.planDayExercises(planDayId));
+      queryClient.setQueryData<PlanDayExerciseData>(QUERY_KEYS.planDayExercises(planDayId), (current) => ({
+        exerciseSets: current?.exerciseSets ?? [],
+        structureBlocks: next,
+      }));
+      return { prev };
+    },
     onSuccess: (data) => {
       if (planDayId) {
         queryClient.setQueryData(QUERY_KEYS.planDayExercises(planDayId), data);
       }
       exerciseSetOps.markSaved();
+    },
+    onError: (_err, _variables, context) => {
+      const prev = (context as { prev?: PlanDayExerciseData } | undefined)?.prev;
+      if (planDayId && prev) queryClient.setQueryData(QUERY_KEYS.planDayExercises(planDayId), prev);
     },
     invalidateQueries: [QUERY_KEYS.timeline, QUERY_KEYS.plans],
     errorToast: "Couldn't save workout blocks",

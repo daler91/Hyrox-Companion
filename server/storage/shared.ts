@@ -18,6 +18,7 @@ export function prescribedSetToLogRow(
   p: ExerciseSet,
   workoutLogId: string,
 ): InsertExerciseSet {
+  const jsonValue = (value: unknown) => value as InsertExerciseSet["intensity"];
   return {
     workoutLogId,
     planDayId: null,
@@ -33,6 +34,17 @@ export function prescribedSetToLogRow(
     plannedWeight: p.plannedWeight ?? p.weight,
     plannedDistance: p.plannedDistance ?? p.distance,
     plannedTime: p.plannedTime ?? p.time,
+    blockId: p.blockId,
+    stepNumber: p.stepNumber,
+    intervalMinute: p.intervalMinute,
+    cycleNumber: p.cycleNumber,
+    stepRole: p.stepRole,
+    groupId: p.groupId,
+    intensity: jsonValue(p.intensity),
+    load: jsonValue(p.load),
+    repMode: p.repMode,
+    tempo: jsonValue(p.tempo),
+    standards: jsonValue(p.standards),
     notes: p.notes,
     confidence: p.confidence,
     sortOrder: p.sortOrder,

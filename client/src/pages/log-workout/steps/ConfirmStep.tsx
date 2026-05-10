@@ -110,7 +110,9 @@ export function ConfirmStep({
       firstLegacy?.sets?.length ||
       emomDurationMinutes;
     const guessedStep = firstLegacy?.customLabel || emomStepLabel;
+    const blockId = crypto.randomUUID();
     const converted = [...structureBlocks, {
+      id: blockId,
       sectionType: "main" as const,
       formatType: "emom" as const,
       durationMinutes: guessedDuration,
@@ -122,7 +124,18 @@ export function ConfirmStep({
     for (const id of legacyEmomRowIds) {
       const ex = exerciseData[id];
       if (!ex) continue;
-      updateBlock(id, { ...ex, exerciseName: "custom", customLabel: ex.customLabel || "EMOM" });
+      updateBlock(id, {
+        ...ex,
+        exerciseName: "custom",
+        customLabel: ex.customLabel || "EMOM",
+        sets: ex.sets.map((set) => ({
+          ...set,
+          blockId,
+          stepNumber: 1,
+          intervalMinute: 1,
+          stepRole: "work",
+        })),
+      });
     }
     setConversionDone(true);
   }, [legacyEmomRowIds, exerciseData, emomDurationMinutes, emomStepLabel, structureBlocks, setStructureBlocks, updateBlock]);
@@ -195,6 +208,7 @@ export function ConfirmStep({
             reorderBlocks={handleReorderBlocks}
             weightUnit={weightUnit}
             distanceUnit={distanceUnit}
+            structureBlocks={structureBlocks}
           />
 
           <div className="space-y-2">

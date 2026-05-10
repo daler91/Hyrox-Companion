@@ -76,6 +76,12 @@ export const InlineSetEditor = memo(function InlineSetEditor({
       weight: lastSet?.weight ?? undefined,
       distance: lastSet?.distance ?? undefined,
       time: lastSet?.time ?? undefined,
+      blockId: lastSet?.blockId ?? null,
+      stepNumber: lastSet?.stepNumber ?? null,
+      intervalMinute: lastSet?.intervalMinute ?? null,
+      cycleNumber: lastSet?.cycleNumber ?? null,
+      stepRole: lastSet?.stepRole ?? null,
+      groupId: lastSet?.groupId ?? null,
       // Forward the originating row's id so client-side adapters that
       // manage multiple independent groups with the same
       // exerciseName+customLabel can append the new set to the right

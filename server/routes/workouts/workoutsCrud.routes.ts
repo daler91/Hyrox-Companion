@@ -18,7 +18,7 @@ import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from "../../constants";
 import { db } from "../../db";
 import { AppError, ErrorCode } from "../../errors";
 import { asyncHandler, parsePagination, rateLimiter, sendNotFound, validateBody } from "../../routeUtils";
-import { autoHydrateExerciseSetsFromTextIfNeeded, updateWorkoutStructureBlockScore } from "../../services/workoutService";
+import { autoHydrateExerciseSetsFromTextIfNeeded, deriveMissingWorkoutSetsFromStructure, updateWorkoutStructureBlockScore } from "../../services/workoutService";
 import { createWorkout, updateWorkoutUseCase } from "../../services/workoutUseCases";
 import { storage } from "../../storage";
 import { getUserId } from "../../types";
@@ -144,7 +144,12 @@ export function registerWorkoutCrudRoutes(router: Router): void {
         // Best effort on read-path hydration; preserve detail availability.
       }
     }
-    const structureBlocks = await storage.workouts.getWorkoutStructureByWorkoutLog(log.id);
+    let structureBlocks = await storage.workouts.getWorkoutStructureByWorkoutLog(log.id);
+    if (exerciseSets.length === 0 && structureBlocks.length > 0) {
+      await deriveMissingWorkoutSetsFromStructure(log.id, userId);
+      exerciseSets = await storage.workouts.getExerciseSetsByWorkoutLog(log.id);
+      structureBlocks = await storage.workouts.getWorkoutStructureByWorkoutLog(log.id);
+    }
     res.json({ ...log, exerciseSets, structureBlocks });
   }));
 

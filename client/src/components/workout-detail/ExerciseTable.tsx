@@ -15,7 +15,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { EXERCISE_DEFINITIONS, type ExerciseName, type ExerciseSet } from "@shared/schema";
+import { EXERCISE_DEFINITIONS, type ExerciseName, type ExerciseSet, type StructureBlockInput } from "@shared/schema";
 import { ChevronDown, GripVertical, MoreVertical, Plus, Repeat, Trash2 } from "lucide-react";
 import { type CSSProperties,memo, useCallback, useMemo, useState } from "react";
 
@@ -41,6 +41,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { AddExerciseSetPayload, PatchExerciseSetPayload } from "@/lib/api";
 import { categoryColor } from "@/lib/categoryColors";
 import { getExerciseLabel, type GroupedExercise,groupExerciseSets } from "@/lib/exerciseUtils";
@@ -77,7 +78,20 @@ interface ExerciseTableProps {
   readonly readableSummary?: boolean;
   readonly showPlannedDiffs?: boolean;
   readonly onOpenConversionHelper?: () => void;
+  readonly structureBlocks?: StructureBlockInput[];
 }
+
+interface BlockAssignmentOption {
+  readonly value: string;
+  readonly label: string;
+  readonly blockId: string;
+  readonly stepNumber: number;
+  readonly intervalMinute: number | null;
+  readonly stepRole: string | null;
+  readonly groupId: string | null;
+}
+
+const UNASSIGNED_BLOCK_VALUE = "none";
 
 export function toggleExerciseRow(expanded: ReadonlySet<string>, rowKey: string): Set<string> {
   const next = new Set(expanded);
@@ -126,8 +140,13 @@ export function ExerciseTable({
   readableSummary = true,
   showPlannedDiffs = false,
   onOpenConversionHelper,
+  structureBlocks = [],
 }: ExerciseTableProps) {
   const groups = useMemo(() => groupExerciseSets(exerciseSets), [exerciseSets]);
+  const blockAssignmentOptions = useMemo(
+    () => buildBlockAssignmentOptions(structureBlocks),
+    [structureBlocks],
+  );
   const hasLegacyEmomRow = groupsContainLegacyEmom(groups);
   // Stable per-group identity for @dnd-kit — matches the React `key` used
   // below so `SortableContext` items align with the rendered rows. When a
@@ -292,6 +311,7 @@ export function ExerciseTable({
                 onDeleteSet={onDeleteSet}
                 readableSummary={readableSummary}
                 showPlannedDiffs={showPlannedDiffs}
+                blockAssignmentOptions={blockAssignmentOptions}
               />
             </SortableContext>
           </DndContext>
@@ -346,6 +366,7 @@ function ExerciseRowRenderer({
   onDeleteSet,
   readableSummary,
   showPlannedDiffs,
+  blockAssignmentOptions,
 }: Readonly<{
   groups: readonly GroupedExercise[];
   rowKeys: readonly string[];
@@ -358,6 +379,7 @@ function ExerciseRowRenderer({
   onDeleteSet: (setId: string) => void;
   readableSummary: boolean;
   showPlannedDiffs: boolean;
+  blockAssignmentOptions: readonly BlockAssignmentOption[];
 }>) {
   return groups.map((group, idx) => {
     const rowKey = rowKeys[idx];
@@ -377,6 +399,7 @@ function ExerciseRowRenderer({
         onDeleteSet={onDeleteSet}
         readableSummary={readableSummary}
         showPlannedDiffs={showPlannedDiffs}
+        blockAssignmentOptions={blockAssignmentOptions}
       />
     );
   });
@@ -485,6 +508,7 @@ interface GroupRowProps {
   readonly onDeleteSet: (setId: string) => void;
   readonly readableSummary: boolean;
   readonly showPlannedDiffs: boolean;
+  readonly blockAssignmentOptions: readonly BlockAssignmentOption[];
   /**
    * Sortable attrs + listeners forwarded from `SortableGroupRow`. Applied
    * to the leading `GripVertical` button so the handle — and only the
@@ -553,6 +577,115 @@ function DragHandle({
   );
 }
 
+function isAssignableBlock(block: StructureBlockInput): boolean {
+  return block.formatType === "emom" || block.formatType === "amrap" || block.formatType === "rounds";
+}
+
+function isAssignableStep(step: StructureBlockInput["steps"][number]): boolean {
+  return (step.stepType ?? "work") === "work";
+}
+
+function blockStepValue(blockId: string, stepNumber: number): string {
+  return `${blockId}:${stepNumber}`;
+}
+
+function blockLabel(block: StructureBlockInput, blockIndex: number): string {
+  const type = block.formatType.toUpperCase();
+  return `${type} ${blockIndex + 1}`;
+}
+
+function stepLabel(block: StructureBlockInput, step: StructureBlockInput["steps"][number], blockIndex: number): string {
+  const prefix = blockLabel(block, blockIndex);
+  if (block.formatType === "emom") {
+    return `${prefix} · min ${step.minuteIndex ?? step.stepNumber}`;
+  }
+  return `${prefix} · step ${step.stepNumber}`;
+}
+
+function buildBlockAssignmentOptions(blocks: readonly StructureBlockInput[]): BlockAssignmentOption[] {
+  const options: BlockAssignmentOption[] = [];
+  blocks.forEach((block, blockIndex) => {
+    if (!block.id || !isAssignableBlock(block)) return;
+    for (const step of block.steps) {
+      if (!isAssignableStep(step)) continue;
+      options.push({
+        value: blockStepValue(block.id, step.stepNumber),
+        label: stepLabel(block, step, blockIndex),
+        blockId: block.id,
+        stepNumber: step.stepNumber,
+        intervalMinute: step.minuteIndex ?? null,
+        stepRole: step.stepRole ?? step.stepType ?? "work",
+        groupId: step.groupId ?? null,
+      });
+    }
+  });
+  return options;
+}
+
+function assignmentValueForGroup(group: GroupedExercise, options: readonly BlockAssignmentOption[]): string {
+  const first = group.sets[0];
+  if (!first?.blockId || first.stepNumber == null) return UNASSIGNED_BLOCK_VALUE;
+  const value = blockStepValue(first.blockId, first.stepNumber);
+  return options.some((option) => option.value === value) ? value : UNASSIGNED_BLOCK_VALUE;
+}
+
+function assignmentPatchForValue(
+  value: string,
+  options: readonly BlockAssignmentOption[],
+): PatchExerciseSetPayload {
+  if (value === UNASSIGNED_BLOCK_VALUE) {
+    return {
+      blockId: null,
+      stepNumber: null,
+      intervalMinute: null,
+      cycleNumber: null,
+      stepRole: null,
+      groupId: null,
+    };
+  }
+  const option = options.find((candidate) => candidate.value === value);
+  if (!option) return {};
+  return {
+    blockId: option.blockId,
+    stepNumber: option.stepNumber,
+    intervalMinute: option.intervalMinute,
+    cycleNumber: null,
+    stepRole: option.stepRole,
+    groupId: option.groupId,
+  };
+}
+
+function BlockAssignmentSelect({
+  group,
+  options,
+  onAssign,
+}: Readonly<{
+  group: GroupedExercise;
+  options: readonly BlockAssignmentOption[];
+  onAssign: (value: string) => void;
+}>) {
+  if (options.length === 0) return null;
+  return (
+    <Select value={assignmentValueForGroup(group, options)} onValueChange={onAssign}>
+      <SelectTrigger
+        className="h-8 w-[132px] shrink-0 text-xs"
+        aria-label={`Block assignment for ${getExerciseLabel(group.exerciseName, group.customLabel)}`}
+        data-testid="exercise-row-block-assignment"
+      >
+        <SelectValue placeholder="No block" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={UNASSIGNED_BLOCK_VALUE}>No block</SelectItem>
+        {options.map((option) => (
+          <SelectItem key={option.value} value={option.value}>
+            {option.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
 const GroupRow = memo(function GroupRow({
   rowKey,
   group,
@@ -565,6 +698,7 @@ const GroupRow = memo(function GroupRow({
   onDeleteSet,
   readableSummary,
   showPlannedDiffs,
+  blockAssignmentOptions,
   dragHandleProps,
 }: GroupRowProps) {
   const handleToggle = useCallback(() => onToggle(rowKey), [onToggle, rowKey]);
@@ -606,6 +740,10 @@ const GroupRow = memo(function GroupRow({
       });
     }
     setChangeExerciseOpen(false);
+  };
+  const handleAssignBlock = (value: string) => {
+    const patch = assignmentPatchForValue(value, blockAssignmentOptions);
+    for (const s of group.sets) onUpdateSet(s.id, patch);
   };
 
   const prescription = formatPrescription({
@@ -664,6 +802,11 @@ const GroupRow = memo(function GroupRow({
           >
             {label}
           </span>
+          <BlockAssignmentSelect
+            group={group}
+            options={blockAssignmentOptions}
+            onAssign={handleAssignBlock}
+          />
           <Button
             type="button"
             variant="ghost"

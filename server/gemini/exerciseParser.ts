@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { exerciseSetSchema, type ParsedExercise, type StructureBlockInput,structureBlockSchema } from "@shared/schema";
 import { EXERCISE_DEFINITIONS } from "@shared/schema/exercises";
 import { z } from "zod";
@@ -51,6 +53,7 @@ export const parsedExerciseSchema = z.preprocess((raw) => {
 const parserResponseSchema = z.object({
   exercises: z.array(parsedExerciseSchema).optional().default([]),
   structureBlocks: z.array(z.object({
+    id: z.string().optional().nullable(),
     sectionType: z.string().min(1),
     formatType: z.string().min(1),
     durationSeconds: z.number().optional().nullable(),
@@ -224,6 +227,7 @@ function normalizeParserBlock(
   const formatType = normalizeFormatType(rawBlock.formatType);
   const durationMinutes = durationMinutesFromBlock(rawBlock);
   const block: StructureBlockInput = {
+    id: rawBlock.id ?? randomUUID(),
     sectionType: normalizeSectionType(rawBlock.sectionType),
     formatType,
     durationSeconds: rawBlock.durationSeconds ?? null,
@@ -268,6 +272,44 @@ function normalizeParserBlocks(
     }
   }
   return { structureBlocks, warnings };
+}
+
+function parserStepKey(name: string | null | undefined, label?: string | null): string {
+  return `${(name ?? "").trim().toLowerCase()}|${(label ?? "").trim().toLowerCase()}`;
+}
+
+function rowMatchesStructureStep(row: ParsedExercise, step: StructureBlockInput["steps"][number]): boolean {
+  const stepName = step.exerciseName ?? step.customLabel;
+  if (!stepName) return false;
+  return parserStepKey(row.exerciseName, row.customLabel) === parserStepKey(stepName, step.customLabel);
+}
+
+function linkRowsToStructureBlocks(
+  rows: readonly ParsedExercise[],
+  blocks: readonly StructureBlockInput[],
+): ParsedExercise[] {
+  if (rows.some((row) => row.sets.some((set) => set.blockId))) return [...rows];
+  const nextRows = rows.map((row) => ({ ...row, sets: row.sets.map((set) => ({ ...set })) }));
+  const usedRows = new Set<number>();
+  for (const block of blocks) {
+    if (!block.id) continue;
+    for (const step of block.steps) {
+      if ((step.stepType ?? "work") !== "work") continue;
+      let rowIndex = nextRows.findIndex((row, idx) => !usedRows.has(idx) && rowMatchesStructureStep(row, step));
+      if (rowIndex < 0) rowIndex = nextRows.findIndex((_row, idx) => !usedRows.has(idx));
+      if (rowIndex < 0) return nextRows;
+      usedRows.add(rowIndex);
+      nextRows[rowIndex].sets = nextRows[rowIndex].sets.map((set) => ({
+        ...set,
+        blockId: block.id,
+        stepNumber: step.stepNumber,
+        intervalMinute: step.minuteIndex ?? undefined,
+        stepRole: step.stepRole ?? step.stepType ?? "work",
+        groupId: step.groupId ?? undefined,
+      }));
+    }
+  }
+  return nextRows;
 }
 
 /**
@@ -798,9 +840,12 @@ export async function parseWorkoutStructureFromText(
   const validated = validateRows(normalized.exercises ?? rawArray);
   const fallbackUsed = validated.length === 0;
   const fallbackRows = fallbackUsed ? validateRows(heuristicFallbackRowsFromText(text)) : [];
-  const rows = (validated.length > 0 ? validated : fallbackRows).map((ex) => mapValidatedExercise(ex, text));
   const structureWarnings = (normalized.warnings ?? []).filter((w) => typeof w === "string" && w.trim().length > 0);
   const { structureBlocks, warnings } = normalizeParserBlocks(text, normalized.structureBlocks);
+  const rows = linkRowsToStructureBlocks(
+    (validated.length > 0 ? validated : fallbackRows).map((ex) => mapValidatedExercise(ex, text)),
+    structureBlocks,
+  );
   return {
     exercises: rows,
     structureBlocks,
@@ -863,7 +908,10 @@ export async function parseWorkoutStructureFromTextWithDiagnostics(
   const structureWarnings = (normalized.warnings ?? []).filter((w) => typeof w === "string" && w.trim().length > 0);
   if (validated.acceptedRows.length > 0) {
     return {
-      acceptedRows: validated.acceptedRows.map((ex) => mapValidatedExercise(ex, text)),
+      acceptedRows: linkRowsToStructureBlocks(
+        validated.acceptedRows.map((ex) => mapValidatedExercise(ex, text)),
+        structureBlocks,
+      ),
       rejectedRows: validated.rejectedRows,
       fallbackUsed: false,
       structureBlocks,
@@ -874,7 +922,10 @@ export async function parseWorkoutStructureFromTextWithDiagnostics(
 
   const fallbackValidated = validateRowsDetailed(heuristicFallbackRowsFromText(text));
   return {
-    acceptedRows: fallbackValidated.acceptedRows.map((ex) => mapValidatedExercise(ex, text)),
+    acceptedRows: linkRowsToStructureBlocks(
+      fallbackValidated.acceptedRows.map((ex) => mapValidatedExercise(ex, text)),
+      structureBlocks,
+    ),
     rejectedRows: [...validated.rejectedRows, ...fallbackValidated.rejectedRows],
     fallbackUsed: fallbackValidated.acceptedRows.length > 0,
     structureBlocks,
@@ -969,9 +1020,12 @@ export async function parseWorkoutStructureFromImage(
   const rawArray = Array.isArray(raw) ? raw : [];
   const normalized = normalizeParserPayload(raw);
   const validated = validateRows(normalized.exercises ?? rawArray);
-  const rows = validated.map((ex) => mapValidatedExercise(ex, ""));
   const structureWarnings = (normalized.warnings ?? []).filter((w) => typeof w === "string" && w.trim().length > 0);
   const { structureBlocks, warnings } = normalizeParserBlocks("", normalized.structureBlocks);
+  const rows = linkRowsToStructureBlocks(
+    validated.map((ex) => mapValidatedExercise(ex, "")),
+    structureBlocks,
+  );
   return {
     exercises: rows,
     structureBlocks,
@@ -1004,7 +1058,10 @@ export async function parseWorkoutStructureFromImageWithDiagnostics(
   const structureWarnings = (normalized.warnings ?? []).filter((w) => typeof w === "string" && w.trim().length > 0);
   const { structureBlocks, warnings } = normalizeParserBlocks("", normalized.structureBlocks);
   return {
-    acceptedRows: validated.acceptedRows.map((ex) => mapValidatedExercise(ex, "")),
+    acceptedRows: linkRowsToStructureBlocks(
+      validated.acceptedRows.map((ex) => mapValidatedExercise(ex, "")),
+      structureBlocks,
+    ),
     rejectedRows: validated.rejectedRows,
     fallbackUsed: false,
     structureBlocks,

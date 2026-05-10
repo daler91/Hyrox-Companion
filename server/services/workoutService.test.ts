@@ -260,6 +260,34 @@ describe("expandExercisesToSetRows", () => {
       time: 1200,
     });
   });
+
+  it("preserves block metadata from explicit exercise rows", () => {
+    const exercises = [
+      {
+        exerciseName: "wall_balls",
+        category: "conditioning",
+        sets: [{
+          setNumber: 1,
+          reps: 12,
+          blockId: "block-emom",
+          stepNumber: 1,
+          intervalMinute: 1,
+          stepRole: "work",
+          groupId: "round-a",
+        }],
+      },
+    ];
+
+    const result = expandExercisesToSetRows(exercises, workoutLogId);
+
+    expect(result[0]).toMatchObject({
+      blockId: "block-emom",
+      stepNumber: 1,
+      intervalMinute: 1,
+      stepRole: "work",
+      groupId: "round-a",
+    });
+  });
 });
 
 describe("classifyWorkoutCompliance", () => {

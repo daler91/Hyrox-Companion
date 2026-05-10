@@ -113,6 +113,7 @@ function PlannedPrescription({
           }}
           onOpenConversionHelper={() => planSets.reparseFreeText.mutate(undefined)}
           defaultExpanded
+          structureBlocks={planSets.structureBlocks}
         />
         <StructureBlocksEditor
           value={planSets.structureBlocks}

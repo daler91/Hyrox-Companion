@@ -11,7 +11,7 @@ import { regenerateCoachNoteForPlanDay } from "../services/coachService";
 import { generatePlan } from "../services/planGenerationService";
 import { createSamplePlan, importPlanFromCSV, updatePlanDayStatus,updatePlanDayWithCleanup } from "../services/planService";
 import { incrementStructuredExerciseCounter } from "../services/structuredExerciseHealth";
-import { autoHydrateExerciseSetsFromTextIfNeeded, reparsePlanDay, reparsePlanDayFromImage, replacePlanDayStructure } from "../services/workoutService";
+import { autoHydrateExerciseSetsFromTextIfNeeded, deriveMissingPlanDaySetsFromStructure, reparsePlanDay, reparsePlanDayFromImage, replacePlanDayStructure } from "../services/workoutService";
 import { storage } from "../storage";
 import { getUserId } from "../types";
 import { createUpdatePlanDayUseCase } from "../usecases/plans/updatePlanDay.usecase";
@@ -292,9 +292,14 @@ router.get(
       res.json(sets);
       return;
     }
-    const structureBlocks = await storage.workouts.getWorkoutStructureByPlanDay(req.params.dayId, userId);
+    let structureBlocks = await storage.workouts.getWorkoutStructureByPlanDay(req.params.dayId, userId);
     if (structureBlocks === null) {
       return sendNotFound(res, PLAN_DAY_NOT_FOUND);
+    }
+    if (sets.length === 0 && structureBlocks.length > 0) {
+      await deriveMissingPlanDaySetsFromStructure(req.params.dayId, userId);
+      sets = (await storage.workouts.getExerciseSetsByPlanDay(req.params.dayId, userId)) ?? [];
+      structureBlocks = await storage.workouts.getWorkoutStructureByPlanDay(req.params.dayId, userId) ?? [];
     }
     res.json({ exerciseSets: sets, structureBlocks });
   }),
