@@ -670,6 +670,14 @@ export class WorkoutStorage {
         .limit(1);
       if (log?.planDayId == null) return 0;
 
+      const [ownedPlanDay] = await tx
+        .select({ id: planDays.id })
+        .from(planDays)
+        .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
+        .where(and(eq(planDays.id, log.planDayId), eq(trainingPlans.userId, userId)))
+        .limit(1);
+      if (!ownedPlanDay) return 0;
+
       const existing = await tx
         .select({ id: exerciseSets.id })
         .from(exerciseSets)
