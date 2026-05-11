@@ -27,7 +27,7 @@ import { isAuthenticated } from "./clerkAuth";
 import { RATE_LIMIT_WINDOW_15M_MS } from "./constants";
 import { logger, reqLogger } from "./logger";
 import { protectedMutationGuards } from "./routeGuards";
-import { asyncHandler, rateLimiter } from "./routeUtils";
+import { asyncHandler, rateLimiter, validateBody } from "./routeUtils";
 import { type GarminActivity,mapGarminActivityToWorkout } from "./services/garminMapper";
 import { storage } from "./storage";
 import { getUserId } from "./types";
@@ -344,7 +344,7 @@ async function handleGarminStatus(req: Request, res: Response) {
   }
 }
 
-async function handleGarminConnect(req: Request, res: Response) {
+async function handleGarminConnect(req: Request<Record<string, never>, unknown, z.infer<typeof garminConnectBodySchema>>, res: Response) {
   // Layer 5 — refuse before we even validate inputs if Garmin has us in jail.
   if (garminCircuitBreaker.isOpen()) {
     return res.status(503).json({
@@ -353,14 +353,7 @@ async function handleGarminConnect(req: Request, res: Response) {
     });
   }
 
-  const parsed = garminConnectBodySchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({
-      error: parsed.error.issues[0]?.message ?? "Invalid request",
-      code: "BAD_REQUEST",
-    });
-  }
-  const { email, password } = parsed.data;
+  const { email, password } = req.body;
 
   const userId = getUserId(req);
   const reqLog = reqLogger(req);
@@ -613,6 +606,7 @@ export function registerGarminRoutes(router: Router): void {
     "/api/v1/garmin/connect",
     ...protectedMutationGuards,
     garminConnectLimiter,
+    validateBody(garminConnectBodySchema),
     asyncHandler(handleGarminConnect),
   );
   router.delete("/api/v1/garmin/disconnect", ...protectedMutationGuards, asyncHandler(handleGarminDisconnect));
