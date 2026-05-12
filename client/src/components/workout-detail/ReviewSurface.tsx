@@ -18,6 +18,7 @@ import { AthleteNoteInput } from "./AthleteNoteInput";
 import { buildWorkoutCoachSeedMessage, EmbeddedWorkoutCoachChat } from "./EmbeddedWorkoutCoachChat";
 import { ExerciseTable } from "./ExerciseTable";
 import { SaveStatePill } from "./SaveStatePill";
+import type { PrescriptionTextPayload } from "./shared/PrescriptionEditor";
 import { PrescriptionEditor } from "./shared/PrescriptionEditor";
 
 interface ReviewSurfaceProps {
@@ -104,7 +105,7 @@ export function ReviewSurface({
   onMarkPlanned,
   onDelete,
 }: ReviewSurfaceProps) {
-  const { weightUnit: prefWeightUnit, distanceUnit } = useUnitPreferences();
+  const { weightUnit: prefWeightUnit, distanceUnit, showAdherenceInsights } = useUnitPreferences();
   const weightUnit = getWeightUnit(prefWeightUnit);
 
   const workoutLogId = entry?.workoutLogId ?? null;
@@ -188,6 +189,7 @@ export function ReviewSurface({
           canEditActuals={canEditActuals}
           weightUnit={weightUnit}
           distanceUnit={distanceUnit}
+          showPlannedDiffs={showAdherenceInsights}
           reviewFlag={reviewFlag}
           confirmingDelete={confirmingDelete}
           currentCoachSeedText={currentCoachSeedText}
@@ -224,6 +226,7 @@ interface ReviewDetailsColumnProps {
   readonly canEditActuals: boolean;
   readonly weightUnit: WeightUnit;
   readonly distanceUnit: DistanceUnitPreference;
+  readonly showPlannedDiffs: boolean;
   readonly reviewFlag: MigrationReviewFlag;
   readonly confirmingDelete: boolean;
   readonly currentCoachSeedText: string;
@@ -248,6 +251,7 @@ function ReviewDetailsColumn({
   canEditActuals,
   weightUnit,
   distanceUnit,
+  showPlannedDiffs,
   reviewFlag,
   confirmingDelete,
   currentCoachSeedText,
@@ -272,6 +276,7 @@ function ReviewDetailsColumn({
         canEditActuals={canEditActuals}
         weightUnit={weightUnit}
         distanceUnit={distanceUnit}
+        showPlannedDiffs={showPlannedDiffs}
       />
       <ReviewNotesSection isStrava={isStrava} notes={notes} onSaveNote={onSaveNote} />
       <MigrationReviewCallout reviewFlag={reviewFlag} onResolveReview={onResolveReview} />
@@ -340,6 +345,7 @@ interface ReviewActualsSectionProps {
   readonly canEditActuals: boolean;
   readonly weightUnit: WeightUnit;
   readonly distanceUnit: DistanceUnitPreference;
+  readonly showPlannedDiffs: boolean;
 }
 
 function ReviewActualsSection({
@@ -351,10 +357,26 @@ function ReviewActualsSection({
   canEditActuals,
   weightUnit,
   distanceUnit,
+  showPlannedDiffs,
 }: ReviewActualsSectionProps) {
   if (!canEditActuals || !workoutLogId) return null;
 
   const workout = detail.workout;
+  const referenceMainWorkout = workout?.prescribedMainWorkout ?? workout?.mainWorkout ?? entry.mainWorkout;
+  const referenceAccessory = workout?.prescribedAccessory ?? workout?.accessory ?? entry.accessory;
+  const hasReferenceText = hasText(referenceMainWorkout) || hasText(referenceAccessory);
+  const handleExplicitTextParse = (payload: PrescriptionTextPayload) => {
+    detail.reparseFreeText.mutate({
+      prescribedMainWorkout: payload.mainWorkout,
+      prescribedAccessory: payload.accessory,
+    });
+  };
+  const parseVisibleReference = () => {
+    handleExplicitTextParse({
+      mainWorkout: referenceMainWorkout ?? null,
+      accessory: referenceAccessory ?? null,
+    });
+  };
 
   return (
     <div className="space-y-3">
@@ -379,8 +401,10 @@ function ReviewActualsSection({
           isSaving: detail.isSaving,
           lastSavedAt: detail.lastSavedAt,
         }}
-        onOpenConversionHelper={() => detail.reparseFreeText.mutate(undefined)}
+        hasUnparsedText={hasReferenceText && exerciseSets.length === 0}
+        onOpenConversionHelper={parseVisibleReference}
         defaultExpanded
+        showPlannedDiffs={showPlannedDiffs}
         structureBlocks={structureBlocks}
       />
       <StructureBlocksEditor
@@ -392,8 +416,8 @@ function ReviewActualsSection({
       <PrescriptionEditor
         entryId={entry.id}
         hasSets={exerciseSets.length > 0}
-        mainWorkout={workout?.mainWorkout ?? entry.mainWorkout}
-        accessory={workout?.accessory ?? entry.accessory}
+        mainWorkout={referenceMainWorkout}
+        accessory={referenceAccessory}
         notes={null}
         showNotes={false}
         onSaveField={(field, value) => {
@@ -402,11 +426,14 @@ function ReviewActualsSection({
           // any stray notes saves so we can't double-write to
           // the same column.
           if (field === "notes") return;
-          detail.updatePrescription.mutate({
-            [field]: value.trim().length === 0 ? null : value,
-          });
+          const normalized = value.trim().length === 0 ? null : value;
+          detail.updateReference.mutate(
+            field === "mainWorkout"
+              ? { prescribedMainWorkout: normalized }
+              : { prescribedAccessory: normalized },
+          );
         }}
-        onParseText={() => detail.reparseFreeText.mutate(undefined)}
+        onParseText={handleExplicitTextParse}
         onParseImage={(payload) => detail.reparseFromImage.mutate(payload)}
         isParsingText={detail.reparseFreeText.isPending}
         isParsingImage={detail.reparseFromImage.isPending}
@@ -434,6 +461,10 @@ function ReviewNotesSection({ isStrava, notes, onSaveNote }: ReviewNotesSectionP
       <AthleteNoteInput value={notes} onSave={onSaveNote} mode="form" />
     </div>
   );
+}
+
+function hasText(value: string | null | undefined): boolean {
+  return !!value && value.trim().length > 0;
 }
 
 interface MigrationReviewCalloutProps {

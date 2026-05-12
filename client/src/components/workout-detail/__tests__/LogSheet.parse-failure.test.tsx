@@ -1,5 +1,5 @@
 import type { TimelineEntry } from "@shared/schema";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -60,6 +60,7 @@ function mockPlanDayExerciseState(overrides = {}) {
     retryParse: null,
     isSaving: false,
     lastSavedAt: null,
+    structureBlocks: [],
     flushPendingSetPatches: vi.fn().mockResolvedValue(undefined),
     patchSetDebounced: vi.fn(),
     addSet: { mutate: vi.fn() },
@@ -67,6 +68,7 @@ function mockPlanDayExerciseState(overrides = {}) {
     reparseFreeText: { mutate: vi.fn(), isPending: false },
     reparseFromImage: { mutate: vi.fn(), isPending: false },
     updatePrescription: { mutate: vi.fn() },
+    updateStructure: { mutate: vi.fn() },
     ...overrides,
   });
 }
@@ -76,24 +78,30 @@ describe("LogSheet parse failures", () => {
     mockUsePlanDayExercises.mockReset();
   });
 
-  it("shows warning and blocks save when reparse fails with no rows", async () => {
+  it("shows a non-blocking helper when reparse fails with no rows", async () => {
     const retryParse = vi.fn();
+    const onLogAsPlanned = vi.fn();
     mockPlanDayExerciseState({
       parseFailed: true,
       retryParse,
     });
 
-    render(<LogSheet entry={baseEntry} onClose={vi.fn()} onLogAsPlanned={vi.fn()} />);
+    render(<LogSheet entry={baseEntry} onClose={vi.fn()} onLogAsPlanned={onLogAsPlanned} />);
 
     const user = userEvent.setup();
 
     expect(screen.getByTestId("log-parse-failed-entry-1")).toHaveTextContent(
-      "Parse failed; workout cannot be saved as text-only.",
+      "Parse did not create exercise rows. You can still log this workout text-only.",
     );
-    expect(screen.getByTestId("log-as-planned-entry-1")).toBeDisabled();
+    expect(screen.getByTestId("log-as-planned-entry-1")).toBeEnabled();
 
     await user.click(screen.getByTestId("log-parse-retry-entry-1"));
     expect(retryParse).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByTestId("log-as-planned-entry-1"));
+    await waitFor(() => {
+      expect(onLogAsPlanned).toHaveBeenCalledWith(baseEntry, null);
+    });
   });
 
   it("clears warning and enables save after retry succeeds", async () => {
@@ -118,6 +126,7 @@ describe("LogSheet parse failures", () => {
       retryParse: vi.fn(),
       isSaving: false,
       lastSavedAt: null,
+      structureBlocks: [],
       flushPendingSetPatches: vi.fn().mockResolvedValue(undefined),
       patchSetDebounced: vi.fn(),
       addSet: { mutate: vi.fn() },
@@ -125,6 +134,7 @@ describe("LogSheet parse failures", () => {
       reparseFreeText: { mutate: vi.fn(), isPending: false },
       reparseFromImage: { mutate: vi.fn(), isPending: false },
       updatePrescription: { mutate: vi.fn() },
+      updateStructure: { mutate: vi.fn() },
     }));
 
     const { rerender } = render(

@@ -25,8 +25,8 @@ export interface PrescriptionEditorProps {
   readonly notes: string | null | undefined;
   /** Single-field debounced save from the textarea. */
   readonly onSaveField: (field: PrescriptionField, value: string) => void;
-  /** Fire the text-parse mutation. */
-  readonly onParseText: () => void;
+  /** Fire the text-parse mutation with the current visible text. */
+  readonly onParseText: (payload: PrescriptionTextPayload) => void;
   /** Fire the image-parse mutation. */
   readonly onParseImage: (payload: { imageBase64: string; mimeType: AllowedImageMimeType }) => void;
   readonly isParsingText: boolean;
@@ -44,10 +44,19 @@ export interface PrescriptionEditorProps {
 
 type PendingParseSource = "text" | "image" | null;
 
+export interface PrescriptionTextPayload {
+  readonly mainWorkout: string | null;
+  readonly accessory: string | null;
+}
+
 interface ImagePreviewState {
   readonly url: string;
   readonly base64: string;
   readonly mimeType: AllowedImageMimeType;
+}
+
+function normalizeText(value: string | null | undefined): string {
+  return value ?? "";
 }
 
 /**
@@ -84,6 +93,10 @@ export function PrescriptionEditor({
   const [confirmingParse, setConfirmingParse] = useState(false);
   const [pendingParseSource, setPendingParseSource] = useState<PendingParseSource>(null);
   const [lastEntryId, setLastEntryId] = useState(entryId);
+  const [draftText, setDraftText] = useState(() => ({
+    mainWorkout: normalizeText(mainWorkout),
+    accessory: normalizeText(accessory),
+  }));
 
   // Mirror the active preview URL so the unmount cleanup can revoke it
   // without re-running on every render. Other revoke paths (retake /
@@ -109,6 +122,10 @@ export function PrescriptionEditor({
     }
     setConfirmingParse(false);
     setPendingParseSource(null);
+    setDraftText({
+      mainWorkout: normalizeText(mainWorkout),
+      accessory: normalizeText(accessory),
+    });
   }
 
   const clearImagePreview = () => {
@@ -124,7 +141,10 @@ export function PrescriptionEditor({
   };
 
   const triggerParseText = () => {
-    onParseText();
+    onParseText({
+      mainWorkout: draftText.mainWorkout.trim().length > 0 ? draftText.mainWorkout : null,
+      accessory: draftText.accessory.trim().length > 0 ? draftText.accessory : null,
+    });
   };
 
   const triggerParseImage = () => {
@@ -173,6 +193,11 @@ export function PrescriptionEditor({
         notes={notes}
         showNotes={showNotes}
         onSaveField={onSaveField}
+        onDraftFieldChange={(field, value) => {
+          if (field === "mainWorkout" || field === "accessory") {
+            setDraftText((prev) => ({ ...prev, [field]: value }));
+          }
+        }}
         onParse={handleParseTextClicked}
         isParsing={isParsingText}
         onCapture={handleCapture}

@@ -16,7 +16,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { EXERCISE_DEFINITIONS, type ExerciseName, type ExerciseSet, type StructureBlockInput } from "@shared/schema";
-import { ChevronDown, GripVertical, MoreVertical, Plus, Repeat, Trash2 } from "lucide-react";
+import { ChevronDown, GripVertical, MoreVertical, Plus, Repeat, Sparkles, Trash2 } from "lucide-react";
 import { type CSSProperties,memo, useCallback, useMemo, useState } from "react";
 
 import { type FieldKey, getFields } from "@/components/exercise-row/fieldMeta";
@@ -289,6 +289,7 @@ export function ExerciseTable({
       {groups.length === 0 ? (
         <EmptyExerciseState
           onAdd={() => setAddPickerOpen(true)}
+          onParseText={onOpenConversionHelper}
           hasUnparsedText={hasUnparsedText ?? false}
         />
       ) : (
@@ -450,25 +451,40 @@ function AddExerciseDialog({
 
 function EmptyExerciseState({
   onAdd,
+  onParseText,
   hasUnparsedText,
-}: Readonly<{ onAdd: () => void; hasUnparsedText: boolean }>) {
+}: Readonly<{ onAdd: () => void; onParseText?: () => void; hasUnparsedText: boolean }>) {
   if (hasUnparsedText) {
     return (
       <div
         className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground"
         data-testid="exercise-table-empty-parse-hint"
       >
-        <span><strong className="font-medium text-foreground">Description captured.</strong> No exercise rows yet.</span>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={onAdd}
-          data-testid="exercise-table-empty-add"
-        >
-          <Plus className="mr-1 size-3.5" aria-hidden />
-          Add manually
-        </Button>
+        <span><strong className="font-medium text-foreground">Text prescription saved.</strong> No exercise rows yet.</span>
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <Button
+            type="button"
+            variant="default"
+            size="sm"
+            onClick={onAdd}
+            data-testid="exercise-table-empty-add"
+          >
+            <Plus className="mr-1 size-3.5" aria-hidden />
+            Add exercise
+          </Button>
+          {onParseText ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onParseText}
+              data-testid="exercise-table-empty-parse"
+            >
+              <Sparkles className="mr-1 size-3.5" aria-hidden />
+              Parse text
+            </Button>
+          ) : null}
+        </div>
       </div>
     );
   }

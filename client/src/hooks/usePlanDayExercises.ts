@@ -5,7 +5,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useApiMutation } from "@/hooks/useApiMutation";
 import { useExerciseSetsForOwner } from "@/hooks/useExerciseSetsForOwner";
-import { api, type ParseFromImagePayload, QUERY_KEYS } from "@/lib/api";
+import { api, type ParseFromImagePayload, type PlanDayReparseTextPayload, QUERY_KEYS } from "@/lib/api";
 import type { ReparseResponse } from "@/lib/api/constants";
 import { queryClient } from "@/lib/queryClient";
 
@@ -172,9 +172,9 @@ export function usePlanDayExercises(planDayId: string | null) {
   // reconciling in-hand because the response shape (`exercises[]`) is the
   // parsed-exercise DTO, not ExerciseSet rows.
   const reparseFreeText = useApiMutation({
-    mutationFn: () => {
+    mutationFn: (payload?: PlanDayReparseTextPayload) => {
       if (!planDayId) return Promise.resolve(null);
-      return api.plans.reparseDay(planDayId);
+      return api.plans.reparseDay(planDayId, payload);
     },
     invalidateQueries: planDayId ? [QUERY_KEYS.planDayExercises(planDayId)] : undefined,
     onMutate: () => ({ ownerId: planDayId }),

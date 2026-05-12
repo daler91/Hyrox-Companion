@@ -1,9 +1,14 @@
 import type { ExerciseSet, GeneratePlanInput, PlanDay, StructureBlockInput, TrainingPlan, TrainingPlanWithDays } from "@shared/schema";
 
 import { rawRequest,typedRequest } from "./client";
-import { IMAGE_REPARSE_REQUEST_OPTIONS } from "./constants";
+import { IMAGE_REPARSE_REQUEST_OPTIONS, type ReparseResponse } from "./constants";
 import type { ParseFromImagePayload } from "./exercises";
 import { type AddExerciseSetPayload, createExerciseSetMutationApi, type PatchExerciseSetPayload } from "./exerciseSetMutations";
+
+export interface PlanDayReparseTextPayload {
+  mainWorkout?: string | null;
+  accessory?: string | null;
+}
 
 export const plans = {
   list: () => typedRequest<TrainingPlan[]>("GET", "/api/v1/plans"),
@@ -80,15 +85,15 @@ export const plans = {
   // Parse the plan day's free-text mainWorkout/accessory into structured
   // exercise_sets. Replaces the existing prescription. Used by the Parse
   // button in the workout detail dialog on planned entries.
-  reparseDay: (dayId: string) =>
-    typedRequest<{ exercises: unknown[]; saved: boolean; setCount: number }>(
+  reparseDay: (dayId: string, payload?: PlanDayReparseTextPayload) =>
+    typedRequest<ReparseResponse>(
       "POST",
       `/api/v1/plans/days/${dayId}/reparse`,
-      {},
+      payload ?? {},
     ),
 
   reparseDayFromImage: (dayId: string, payload: ParseFromImagePayload) =>
-    typedRequest<{ exercises: unknown[]; saved: boolean; setCount: number }>(
+    typedRequest<ReparseResponse>(
       "POST",
       `/api/v1/plans/days/${dayId}/reparse-from-image`,
       payload,
