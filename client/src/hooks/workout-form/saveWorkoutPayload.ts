@@ -120,7 +120,13 @@ function clearLinksToMissingBlocks(
   exercises: readonly StructuredExercise[],
   blocks: readonly StructureBlockInput[],
 ): StructuredExercise[] {
-  const validBlockIds = new Set(blocks.map((block) => block.id).filter((id): id is string => !!id));
+  // ⚡ Bolt Performance Optimization:
+  // Replaced chained `.map(...).filter(...)` with a single loop.
+  // This avoids intermediate array allocations and double O(N) traversals.
+  const validBlockIds = new Set<string>();
+  for (const block of blocks) {
+    if (block.id) validBlockIds.add(block.id);
+  }
   return exercises.map((exercise) => ({
     ...exercise,
     sets: exercise.sets.map((set) => {
