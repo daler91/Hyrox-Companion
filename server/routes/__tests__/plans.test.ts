@@ -69,6 +69,13 @@ vi.mock("../../services/workoutService", () => ({
   replacePlanDayStructure: vi.fn(),
 }));
 
+const emptyPlanDayRowsResponse = { exerciseSets: [], structureBlocks: [] };
+
+function mockEmptyPlanDayRows() {
+  vi.mocked(storage.workouts.getExerciseSetsByPlanDay).mockResolvedValue([] as never);
+  vi.mocked(storage.workouts.getWorkoutStructureByPlanDay).mockResolvedValue([] as never);
+}
+
 describe("POST /api/plans/import Rate Limiting", () => {
   let app: express.Express;
 
@@ -152,13 +159,12 @@ describe("plan-day exercise routes", () => {
   });
 
   it("does not auto-hydrate plan-day rows on read", async () => {
-    vi.mocked(storage.workouts.getExerciseSetsByPlanDay).mockResolvedValue([] as never);
-    vi.mocked(storage.workouts.getWorkoutStructureByPlanDay).mockResolvedValue([] as never);
+    mockEmptyPlanDayRows();
 
     const response = await request(app).get("/api/v1/plans/days/day-1/sets?includeStructure=true");
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ exerciseSets: [], structureBlocks: [] });
+    expect(response.body).toEqual(emptyPlanDayRowsResponse);
     expect(storage.plans.getPlanDay).not.toHaveBeenCalled();
   });
 

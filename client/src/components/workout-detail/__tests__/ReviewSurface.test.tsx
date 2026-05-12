@@ -110,19 +110,24 @@ function makeSet(overrides: Partial<ExerciseSet> = {}): ExerciseSet {
   };
 }
 
+function makeWorkout(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "workout-1",
+    mainWorkout: "Logged text",
+    accessory: null,
+    prescribedMainWorkout: "Prescribed text",
+    prescribedAccessory: null,
+    exerciseSets: [],
+    structureBlocks: [],
+    rpe: null,
+    notes: null,
+    ...overrides,
+  };
+}
+
 function makeDetail(overrides: Record<string, unknown> = {}) {
   return {
-    workout: {
-      id: "workout-1",
-      mainWorkout: "Logged text",
-      accessory: null,
-      prescribedMainWorkout: "Prescribed text",
-      prescribedAccessory: null,
-      exerciseSets: [],
-      structureBlocks: [],
-      rpe: null,
-      notes: null,
-    },
+    workout: makeWorkout(),
     isSaving: false,
     lastSavedAt: null,
     patchSetDebounced: vi.fn(),
@@ -152,15 +157,7 @@ describe("ReviewSurface", () => {
   it("surfaces planned differences when adherence guidance is enabled", () => {
     mockUseWorkoutDetail.mockReturnValue(
       makeDetail({
-        workout: {
-          id: "workout-1",
-          mainWorkout: "Logged text",
-          prescribedMainWorkout: "Prescribed text",
-          exerciseSets: [makeSet()],
-          structureBlocks: [],
-          rpe: null,
-          notes: null,
-        },
+        workout: makeWorkout({ exerciseSets: [makeSet()] }),
       }),
     );
 
@@ -177,17 +174,12 @@ describe("ReviewSurface", () => {
       makeDetail({
         updateReference,
         reparseFreeText,
-        workout: {
-          id: "workout-1",
-          mainWorkout: "Logged text",
+        workout: makeWorkout({
           accessory: null,
           prescribedMainWorkout: "Original prescription",
           prescribedAccessory: "Accessory text",
           exerciseSets: [],
-          structureBlocks: [],
-          rpe: null,
-          notes: null,
-        },
+        }),
       }),
     );
 

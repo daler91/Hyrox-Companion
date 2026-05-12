@@ -53,8 +53,22 @@ const baseEntry = {
   updatedAt: "2026-05-05T00:00:00.000Z",
 } as unknown as TimelineEntry;
 
-function mockPlanDayExerciseState(overrides = {}) {
-  mockUsePlanDayExercises.mockReturnValue({
+function makeExerciseSet() {
+  return {
+    id: "set-1",
+    exerciseName: "back_squat",
+    category: "strength",
+    setNumber: 1,
+    reps: 5,
+    weight: 100,
+    distance: null,
+    time: null,
+    sortOrder: 0,
+  };
+}
+
+function makePlanDayExerciseState(overrides = {}) {
+  return {
     exerciseSets: [],
     parseFailed: false,
     retryParse: null,
@@ -70,7 +84,11 @@ function mockPlanDayExerciseState(overrides = {}) {
     updatePrescription: { mutate: vi.fn() },
     updateStructure: { mutate: vi.fn() },
     ...overrides,
-  });
+  };
+}
+
+function mockPlanDayExerciseState(overrides = {}) {
+  mockUsePlanDayExercises.mockReturnValue(makePlanDayExerciseState(overrides));
 }
 
 describe("LogSheet parse failures", () => {
@@ -106,36 +124,12 @@ describe("LogSheet parse failures", () => {
 
   it("clears warning and enables save after retry succeeds", async () => {
     let parseFailed = true;
-    mockUsePlanDayExercises.mockImplementation(() => ({
-      exerciseSets: parseFailed
-        ? []
-        : [
-            {
-              id: "set-1",
-              exerciseName: "back_squat",
-              category: "strength",
-              setNumber: 1,
-              reps: 5,
-              weight: 100,
-              distance: null,
-              time: null,
-              sortOrder: 0,
-            },
-          ],
-      parseFailed,
-      retryParse: vi.fn(),
-      isSaving: false,
-      lastSavedAt: null,
-      structureBlocks: [],
-      flushPendingSetPatches: vi.fn().mockResolvedValue(undefined),
-      patchSetDebounced: vi.fn(),
-      addSet: { mutate: vi.fn() },
-      deleteSet: { mutate: vi.fn() },
-      reparseFreeText: { mutate: vi.fn(), isPending: false },
-      reparseFromImage: { mutate: vi.fn(), isPending: false },
-      updatePrescription: { mutate: vi.fn() },
-      updateStructure: { mutate: vi.fn() },
-    }));
+    mockUsePlanDayExercises.mockImplementation(() =>
+      makePlanDayExerciseState({
+        exerciseSets: parseFailed ? [] : [makeExerciseSet()],
+        parseFailed,
+      }),
+    );
 
     const { rerender } = render(
       <LogSheet entry={baseEntry} onClose={vi.fn()} onLogAsPlanned={vi.fn()} />,
