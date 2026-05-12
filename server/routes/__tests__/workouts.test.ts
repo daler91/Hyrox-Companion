@@ -181,21 +181,21 @@ describe("Workouts Routes", () => {
     expect(reparseWorkout).toHaveBeenCalledTimes(1);
   });
 
-  it("lazy hydration on repeated reads is idempotent (no duplicate set creation)", async () => {
+  it("does not auto-hydrate text-only workout reads", async () => {
     const [{ storage }, { autoHydrateExerciseSetsFromTextIfNeeded }] = await Promise.all([
       import("../../storage"),
       import("../../services/workoutService"),
     ]);
 
     vi.mocked(storage.workouts.getExerciseSetsByWorkoutLog)
-      .mockResolvedValueOnce([] as never)
-      .mockResolvedValueOnce([{ id: "set-1", workoutLogId: "workout-1", exerciseName: "Run", setNumber: 1, sortOrder: 0 }] as never)
-      .mockResolvedValueOnce([{ id: "set-1", workoutLogId: "workout-1", exerciseName: "Run", setNumber: 1, sortOrder: 0 }] as never);
+      .mockResolvedValueOnce([] as never);
 
-    await request(app).get("/api/v1/workouts/workout-1");
-    await request(app).get("/api/v1/workouts/workout-1");
+    const response = await request(app).get("/api/v1/workouts/workout-1");
 
-    expect(autoHydrateExerciseSetsFromTextIfNeeded).toHaveBeenCalledTimes(1);
+    expect(response.status).toBe(200);
+    expect(response.body.exerciseSets).toEqual([]);
+    expect(autoHydrateExerciseSetsFromTextIfNeeded).not.toHaveBeenCalled();
+    expect(storage.workouts.getExerciseSetsByWorkoutLog).toHaveBeenCalledTimes(1);
   });
   
 

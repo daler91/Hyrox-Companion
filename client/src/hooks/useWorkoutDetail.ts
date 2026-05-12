@@ -341,6 +341,7 @@ export function useWorkoutDetail(workoutId: string | null) {
   });
 
   const updateReference = useApiMutation({
+    mutationKey: workoutId ? workoutSetsMutationKey(workoutId) : undefined,
     mutationFn: (patch: WorkoutReferenceTextPayload) =>
       api.workouts.update(workoutId!, patch),
     onMutate: async (patch) => {
@@ -355,6 +356,9 @@ export function useWorkoutDetail(workoutId: string | null) {
       if (workoutId && prev) {
         queryClient.setQueryData(QUERY_KEYS.workout(workoutId), prev);
       }
+    },
+    onSuccess: () => {
+      markSaved();
     },
     errorToast: (error) =>
       isWorkoutNotFoundError(error)

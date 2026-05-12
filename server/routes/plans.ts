@@ -11,7 +11,7 @@ import { regenerateCoachNoteForPlanDay } from "../services/coachService";
 import { generatePlan } from "../services/planGenerationService";
 import { createSamplePlan, importPlanFromCSV, updatePlanDayStatus,updatePlanDayWithCleanup } from "../services/planService";
 import { incrementStructuredExerciseCounter } from "../services/structuredExerciseHealth";
-import { autoHydrateExerciseSetsFromTextIfNeeded, deriveMissingPlanDaySetsFromStructure, reparsePlanDay, reparsePlanDayFromImage, replacePlanDayStructure } from "../services/workoutService";
+import { deriveMissingPlanDaySetsFromStructure, reparsePlanDay, reparsePlanDayFromImage, replacePlanDayStructure } from "../services/workoutService";
 import { storage } from "../storage";
 import { getUserId } from "../types";
 import { createUpdatePlanDayUseCase } from "../usecases/plans/updatePlanDay.usecase";
@@ -24,6 +24,10 @@ const planDayStructureBodySchema = z.object({
   structureBlocks: structureBlocksPayloadSchema.default([]),
 });
 
+const planDayReparseBodySchema = z.object({
+  mainWorkout: z.string().nullable().optional(),
+  accessory: z.string().nullable().optional(),
+}).strict();
 
 function sendParseWriteThroughResponse(
   res: Response,
@@ -273,20 +277,6 @@ router.get(
     if (sets === null) {
       return sendNotFound(res, PLAN_DAY_NOT_FOUND);
     }
-    if (sets.length === 0) {
-      const [planDay, user] = await Promise.all([
-        storage.plans.getPlanDay(req.params.dayId, userId),
-        storage.users.getUser(userId),
-      ]);
-      if (planDay) {
-        try {
-          await autoHydrateExerciseSetsFromTextIfNeeded(planDay, { planDayId: planDay.id }, user?.weightUnit || "kg", "plan");
-          sets = (await storage.workouts.getExerciseSetsByPlanDay(req.params.dayId, userId)) ?? [];
-        } catch {
-          // Best effort on read-path hydration; preserve existing response contract.
-        }
-      }
-    }
     const includeStructure = req.query.includeStructure === "true";
     if (!includeStructure) {
       res.json(sets);
@@ -371,8 +361,11 @@ protectedDelete(
 protectedPost(
   router,
   "/api/v1/plans/days/:dayId/reparse",
-  { limiter: rateLimiter("planDayReparse", 5), middleware: [aiBudgetCheck] },
-  async (req: ExpressRequest<{ dayId: string }>, res: Response) => {
+  { limiter: rateLimiter("planDayReparse", 5), middleware: [aiBudgetCheck, validateBody(planDayReparseBodySchema)] },
+  async (
+    req: ExpressRequest<{ dayId: string }, unknown, z.infer<typeof planDayReparseBodySchema>>,
+    res: Response,
+  ) => {
     const userId = getUserId(req);
     const [planDay, user] = await Promise.all([
       storage.plans.getPlanDay(req.params.dayId, userId),
@@ -382,9 +375,26 @@ protectedPost(
       return sendNotFound(res, PLAN_DAY_NOT_FOUND);
     }
     const weightUnit = user?.weightUnit || "kg";
+    const referencePatch: { mainWorkout?: string; accessory?: string | null } = {};
+    const parseTarget: { id: string; mainWorkout?: string | null; accessory?: string | null } = {
+      id: planDay.id,
+      mainWorkout: planDay.mainWorkout,
+      accessory: planDay.accessory,
+    };
+    if (req.body.mainWorkout !== undefined) {
+      referencePatch.mainWorkout = req.body.mainWorkout ?? "";
+      parseTarget.mainWorkout = req.body.mainWorkout;
+    }
+    if (req.body.accessory !== undefined) {
+      referencePatch.accessory = req.body.accessory;
+      parseTarget.accessory = req.body.accessory;
+    }
     void incrementStructuredExerciseCounter("plan_day", "voice", "parse_text_attempted").catch(() => undefined);
     try {
-      const result = await reparsePlanDay(planDay, weightUnit);
+      const result = await reparsePlanDay(parseTarget, weightUnit);
+      if (result && Object.keys(referencePatch).length > 0) {
+        await storage.plans.updatePlanDay(planDay.id, referencePatch, userId);
+      }
       return sendParseWriteThroughResponse(res, "plan_day", "voice", result);
     } catch (error: unknown) {
       return sendPlanDayReparseError(req, res, error, userId, "text");

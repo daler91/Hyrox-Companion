@@ -64,6 +64,32 @@ function makeSet(overrides: Partial<ExerciseSet> = {}): ExerciseSet {
 // reorder math lives in the inline `handleDragEnd` and is easy to cover
 // by invoking the same arrayMove-based sequence on the rendered groups.
 describe("ExerciseTable drag handle", () => {
+  it("renders a table-first empty state for text prescriptions", async () => {
+    const user = userEvent.setup();
+    const onParseText = vi.fn();
+
+    render(
+      <ExerciseTable
+        workoutId="plan-day-1"
+        exerciseSets={[]}
+        weightUnit="kg"
+        onUpdateSet={vi.fn()}
+        onAddSet={vi.fn()}
+        onDeleteSet={vi.fn()}
+        hasUnparsedText
+        onOpenConversionHelper={onParseText}
+      />,
+    );
+
+    expect(screen.getByTestId("exercise-table-empty-parse-hint")).toHaveTextContent(
+      "Text prescription saved. No exercise rows yet.",
+    );
+    expect(screen.getByTestId("exercise-table-empty-add")).toHaveTextContent("Add exercise");
+
+    await user.click(screen.getByTestId("exercise-table-empty-parse"));
+    expect(onParseText).toHaveBeenCalledTimes(1);
+  });
+
   it("renders a drag handle for every group", () => {
     const sets: ExerciseSet[] = [
       makeSet({ id: "a1", exerciseName: "back_squat", sortOrder: 0 }),

@@ -20,20 +20,34 @@ vi.mock("../../types", () => ({
   getUserId: () => "test_user_id",
 }));
 
+vi.mock("../../middleware/aibudget", () => ({
+  aiBudgetCheck: (_req: unknown, _res: unknown, next: () => void) => next(),
+}));
+
 // Mock the storage functions
 vi.mock("../../storage", () => ({
   storage: {
     workouts: {
       deleteWorkoutLogByPlanDayId: vi.fn(),
+      getExerciseSetsByPlanDay: vi.fn(),
+      getWorkoutStructureByPlanDay: vi.fn(),
+      mutateExerciseSetUpdate: vi.fn(),
+      mutateExerciseSetAdd: vi.fn(),
+      mutateExerciseSetDelete: vi.fn(),
     },
     plans: {
       listTrainingPlans: vi.fn(),
       getTrainingPlan: vi.fn(),
+      getPlanDay: vi.fn(),
       updatePlanDay: vi.fn(),
       renameTrainingPlan: vi.fn(),
       deleteTrainingPlan: vi.fn(),
       schedulePlan: vi.fn(),
       deletePlanDay: vi.fn(),
+    },
+    users: {
+      getUser: vi.fn(),
+      getCustomExercises: vi.fn(),
     },
   },
 }));
@@ -47,6 +61,20 @@ vi.mock("../../services/planService", () => ({
   createSamplePlan: vi.fn(),
   updatePlanDayWithCleanup: vi.fn(),
 }));
+
+vi.mock("../../services/workoutService", () => ({
+  deriveMissingPlanDaySetsFromStructure: vi.fn(),
+  reparsePlanDay: vi.fn(),
+  reparsePlanDayFromImage: vi.fn(),
+  replacePlanDayStructure: vi.fn(),
+}));
+
+const emptyPlanDayRowsResponse = { exerciseSets: [], structureBlocks: [] };
+
+function mockEmptyPlanDayRows() {
+  vi.mocked(storage.workouts.getExerciseSetsByPlanDay).mockResolvedValue([] as never);
+  vi.mocked(storage.workouts.getWorkoutStructureByPlanDay).mockResolvedValue([] as never);
+}
 
 describe("POST /api/plans/import Rate Limiting", () => {
   let app: express.Express;
@@ -117,5 +145,59 @@ describe("DELETE /api/v1/plans/:id", () => {
 
     expect(response.status).toBe(404);
     expect(response.body).toEqual({ error: "Training plan not found", code: "NOT_FOUND" });
+  });
+});
+
+describe("plan-day exercise routes", () => {
+  let app: express.Express;
+
+  beforeEach(() => {
+    vi.useRealTimers();
+    vi.clearAllMocks();
+    clearRateLimitBuckets();
+    app = createTestApp(plansRouter);
+  });
+
+  it("does not auto-hydrate plan-day rows on read", async () => {
+    mockEmptyPlanDayRows();
+
+    const response = await request(app).get("/api/v1/plans/days/day-1/sets?includeStructure=true");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(emptyPlanDayRowsResponse);
+    expect(storage.plans.getPlanDay).not.toHaveBeenCalled();
+  });
+
+  it("parses the current plan-day text payload and saves it on success", async () => {
+    const { reparsePlanDay } = await import("../../services/workoutService");
+    vi.mocked(storage.plans.getPlanDay).mockResolvedValue({
+      id: "day-1",
+      mainWorkout: "old text",
+      accessory: "old accessory",
+    } as never);
+    vi.mocked(storage.users.getUser).mockResolvedValue({ id: "test_user_id", weightUnit: "lb" } as never);
+    vi.mocked(reparsePlanDay).mockResolvedValue({
+      exercises: [{ exerciseName: "back_squat" }],
+      saved: true,
+      setCount: 1,
+      rejectedCount: 0,
+      rejectionReasons: [],
+    } as never);
+    vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({ id: "day-1" } as never);
+
+    const response = await request(app)
+      .post("/api/v1/plans/days/day-1/reparse")
+      .send({ mainWorkout: "new text", accessory: null });
+
+    expect(response.status).toBe(200);
+    expect(reparsePlanDay).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "day-1", mainWorkout: "new text", accessory: null }),
+      "lb",
+    );
+    expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
+      "day-1",
+      { mainWorkout: "new text", accessory: null },
+      "test_user_id",
+    );
   });
 });

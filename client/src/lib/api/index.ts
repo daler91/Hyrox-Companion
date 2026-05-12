@@ -6,6 +6,7 @@ export type { ReparseResponse } from "./constants";
 export { IMAGE_REPARSE_REQUEST_OPTIONS, IMAGE_REPARSE_TIMEOUT_MS, isTimeoutLikeApiError } from "./constants";
 export type { ParseFromImagePayload, ParseWorkoutStructureResponse } from "./exercises";
 export { exercises } from "./exercises";
+export type { PlanDayReparseTextPayload } from "./plans";
 export { plans } from "./plans";
 export { timelineAnnotations } from "./timelineAnnotations";
 export type { GarminStatus, GarminSyncResponse, StravaStatus, StravaSyncResponse, UserPreferences } from "./user";

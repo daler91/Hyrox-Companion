@@ -13,6 +13,7 @@ import { formatScheduledDate } from "@/lib/timelineEntryFormat";
 import { buildWorkoutCoachSeedMessage, EmbeddedWorkoutCoachChat } from "./EmbeddedWorkoutCoachChat";
 import { ExerciseTable } from "./ExerciseTable";
 import { SaveStatePill } from "./SaveStatePill";
+import type { PrescriptionTextPayload } from "./shared/PrescriptionEditor";
 import { PrescriptionEditor } from "./shared/PrescriptionEditor";
 import { RpePrompt } from "./shared/RpePrompt";
 import { WorkoutPrescriptionSummary } from "./shared/WorkoutPrescriptionSummary";
@@ -65,7 +66,15 @@ function getLogButtonLabel(isSaving: boolean, isLogging?: boolean): string {
   return "Log as planned";
 }
 
-function isParseBlocked(entry: TimelineEntry, planSets: PlanDayExerciseState): boolean {
+function hasText(value: string | null | undefined): boolean {
+  return !!value && value.trim().length > 0;
+}
+
+function hasPrescriptionText(entry: TimelineEntry): boolean {
+  return hasText(entry.mainWorkout) || hasText(entry.accessory) || hasText(entry.notes);
+}
+
+function isParseHelperVisible(entry: TimelineEntry, planSets: PlanDayExerciseState): boolean {
   return !!entry.planDayId && planSets.parseFailed && planSets.exerciseSets.length === 0;
 }
 
@@ -74,7 +83,7 @@ interface PlannedPrescriptionProps {
   readonly planSets: PlanDayExerciseState;
   readonly weightUnit: WorkoutWeightUnit;
   readonly distanceUnit: WorkoutDistanceUnit;
-  readonly parseBlocked: boolean;
+  readonly parseHelperVisible: boolean;
 }
 
 function PlannedPrescription({
@@ -82,8 +91,9 @@ function PlannedPrescription({
   planSets,
   weightUnit,
   distanceUnit,
-  parseBlocked,
+  parseHelperVisible,
 }: PlannedPrescriptionProps) {
+  const hasUnparsedText = hasPrescriptionText(entry) && planSets.exerciseSets.length === 0;
   return (
     <>
       <PlanRationale rationale={entry.aiRationale} />
@@ -113,6 +123,7 @@ function PlannedPrescription({
           }}
           onOpenConversionHelper={() => planSets.reparseFreeText.mutate(undefined)}
           defaultExpanded
+          hasUnparsedText={hasUnparsedText}
           structureBlocks={planSets.structureBlocks}
         />
         <StructureBlocksEditor
@@ -121,7 +132,7 @@ function PlannedPrescription({
         />
         <ParseFailureAlert
           entryId={entry.id}
-          parseBlocked={parseBlocked}
+          visible={parseHelperVisible}
           retryParse={planSets.retryParse}
         />
         <PrescriptionEditor
@@ -135,7 +146,7 @@ function PlannedPrescription({
               [field]: value.trim().length === 0 ? null : value,
             })
           }
-          onParseText={() => planSets.reparseFreeText.mutate(undefined)}
+          onParseText={(payload: PrescriptionTextPayload) => planSets.reparseFreeText.mutate(payload)}
           onParseImage={(payload) => planSets.reparseFromImage.mutate(payload)}
           isParsingText={planSets.reparseFreeText.isPending}
           isParsingImage={planSets.reparseFromImage.isPending}
@@ -174,19 +185,19 @@ function AccessoryNote({ accessory }: { readonly accessory: string | null }) {
 
 interface ParseFailureAlertProps {
   readonly entryId: string;
-  readonly parseBlocked: boolean;
+  readonly visible: boolean;
   readonly retryParse: (() => void) | null;
 }
 
-function ParseFailureAlert({ entryId, parseBlocked, retryParse }: ParseFailureAlertProps) {
-  if (!parseBlocked) return null;
+function ParseFailureAlert({ entryId, visible, retryParse }: ParseFailureAlertProps) {
+  if (!visible) return null;
   return (
     <div
       className="rounded-md border border-amber-400/50 bg-amber-50 px-3 py-2 text-sm text-amber-900"
-      role="alert"
+      role="status"
       data-testid={`log-parse-failed-${entryId}`}
     >
-      <p>Parse failed; workout cannot be saved as text-only.</p>
+      <p>Parse did not create exercise rows. You can still log this workout text-only.</p>
       {retryParse ? (
         <Button
           type="button"
@@ -244,7 +255,6 @@ interface LogCompletionControlsProps {
   readonly onLog: () => void;
   readonly isLogging?: boolean;
   readonly isSaving: boolean;
-  readonly parseBlocked: boolean;
   readonly onSkip?: (entry: TimelineEntry) => void;
   readonly onAskCoach?: (entry: TimelineEntry) => void;
 }
@@ -256,7 +266,6 @@ function LogCompletionControls({
   onLog,
   isLogging,
   isSaving,
-  parseBlocked,
   onSkip,
   onAskCoach,
 }: LogCompletionControlsProps) {
@@ -272,7 +281,7 @@ function LogCompletionControls({
           className="w-full"
           size="lg"
           onClick={onLog}
-          disabled={isLogging || isSaving || parseBlocked}
+          disabled={isLogging || isSaving}
           data-testid={`log-as-planned-${entry.id}`}
         >
           <ListChecks className="mr-2 h-4 w-4" />
@@ -343,7 +352,7 @@ export function LogSheet({
     onLogAsPlanned(entry, rpe);
   };
 
-  const parseBlocked = isParseBlocked(entry, planSets);
+  const parseHelperVisible = isParseHelperVisible(entry, planSets);
   const isEditMode = mode === "edit";
   const title = entry.focus || (isEditMode ? "Edit workout" : "Log workout");
   const coachExerciseSets = entry.planDayId ? planSets.exerciseSets : (entry.exerciseSets ?? []);
@@ -375,7 +384,7 @@ export function LogSheet({
               planSets={planSets}
               weightUnit={weightUnit}
               distanceUnit={distanceUnit}
-              parseBlocked={parseBlocked}
+              parseHelperVisible={parseHelperVisible}
             />
           ) : (
             <WorkoutPrescriptionSummary entry={entry} rationaleVariant="collapsed" />
@@ -391,7 +400,6 @@ export function LogSheet({
               onLog={handleLog}
               isLogging={isLogging}
               isSaving={planSets.isSaving}
-              parseBlocked={parseBlocked}
               onAskCoach={handleAskCoach}
               onSkip={onSkip}
             />

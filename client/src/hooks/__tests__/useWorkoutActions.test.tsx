@@ -131,6 +131,35 @@ describe('useWorkoutActions', () => {
           }, expect.any(AbortSignal));
         });
       });
+
+      it('quick-completes a rowless text prescription without parse payloads', async () => {
+        mockLoggedWorkoutResponse({ mainWorkout: 'Run 30 minutes', accessory: 'Mobility' });
+        const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
+        const mockEntry = createMockTimelineEntry({
+          planDayId: 'pd-1',
+          date: '2024-01-01',
+          focus: 'conditioning',
+          mainWorkout: 'Run 30 minutes',
+          accessory: 'Mobility',
+          exerciseSets: [],
+        });
+
+        act(() => {
+          result.current.handleMarkComplete(mockEntry);
+        });
+
+        await waitFor(() => {
+          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('POST', '/api/v1/workouts', {
+            planDayId: 'pd-1',
+            date: '2024-01-01',
+            focus: 'conditioning',
+            mainWorkout: 'Run 30 minutes',
+            accessory: 'Mobility',
+            notes: undefined,
+            rpe: undefined,
+          }, expect.any(AbortSignal));
+        });
+      });
     });
 
     describe('confirmSkip', () => {
