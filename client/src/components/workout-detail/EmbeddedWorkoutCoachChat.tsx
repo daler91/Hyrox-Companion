@@ -77,18 +77,18 @@ export function EmbeddedWorkoutCoachChat({
       hidden={isHidden}
       className={cn(
         "flex w-full min-w-0 self-start flex-col rounded-lg border border-border bg-card",
-        isPanelView && "min-h-[65vh]",
+        isPanelView && "min-h-0",
         className,
       )}
       aria-label="Coach chat about this workout"
       data-testid="embedded-workout-coach-chat"
     >
-      <header className="flex items-center gap-2 border-b border-border px-3 py-2">
+      <header className="flex min-w-0 shrink-0 items-center gap-2 border-b border-border px-3 py-2">
         <Button
           type="button"
           variant="ghost"
           size={backButtonText ? "sm" : "icon"}
-          className={cn("text-muted-foreground", backButtonText ? "h-8 px-2" : "size-7")}
+          className={cn("shrink-0 text-muted-foreground", backButtonText ? "h-8 px-2" : "size-7")}
           onClick={onBack}
           aria-label="Back to workout details"
           data-testid="embedded-workout-coach-chat-back"
@@ -96,10 +96,10 @@ export function EmbeddedWorkoutCoachChat({
           <ArrowLeft className="size-4" aria-hidden="true" />
           {backButtonText ? <span>{backButtonText}</span> : null}
         </Button>
-        <Sparkles className="size-3.5 text-primary" aria-hidden="true" />
+        <Sparkles className="size-3.5 shrink-0 text-primary" aria-hidden="true" />
         <div className="min-w-0 text-xs font-medium uppercase text-muted-foreground">
           <span className="sr-only">Asking about </span>
-          <span className="truncate text-foreground">{entry.focus?.trim() || "This workout"}</span>
+          <span className="block truncate text-foreground">{entry.focus?.trim() || "This workout"}</span>
         </div>
       </header>
 
@@ -115,7 +115,7 @@ export function EmbeddedWorkoutCoachChat({
         onDismissSuggestion={noopId}
       />
 
-      <div className="border-t border-border p-2">
+      <div className="shrink-0 border-t border-border p-2">
         <ChatInput
           onSend={handleSend}
           onStop={isStreaming ? cancelStream : undefined}

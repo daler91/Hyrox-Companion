@@ -11,14 +11,16 @@ const viewportState = vi.hoisted(() => ({ isMobile: false }));
 vi.mock("@/components/ui/responsive-sheet", () => ({
   ResponsiveSheet: ({
     children,
+    mobileFullHeight,
     title,
     description,
   }: {
     children: ReactNode;
+    mobileFullHeight?: boolean;
     title: ReactNode;
     description?: ReactNode;
   }) => (
-    <section>
+    <section data-testid="responsive-sheet" data-mobile-full-height={String(!!mobileFullHeight)}>
       <h1>{title}</h1>
       {description ? <p>{description}</p> : null}
       {children}
@@ -106,6 +108,10 @@ describe("PreviewSheet", () => {
     );
 
     expect(screen.getByTestId("preview-details-entry-1")).toHaveAttribute("hidden");
+    expect(screen.getByTestId("responsive-sheet")).toHaveAttribute(
+      "data-mobile-full-height",
+      "true",
+    );
     expect(screen.getByTestId("embedded-workout-coach-chat")).not.toHaveAttribute("hidden");
     expect(screen.getByTestId("embedded-workout-coach-chat")).toHaveAttribute(
       "data-panel-view",
@@ -137,6 +143,10 @@ describe("PreviewSheet", () => {
     );
 
     expect(screen.getByTestId("preview-details-entry-1")).not.toHaveAttribute("hidden");
+    expect(screen.getByTestId("responsive-sheet")).toHaveAttribute(
+      "data-mobile-full-height",
+      "false",
+    );
     expect(screen.getByTestId("embedded-workout-coach-chat")).toHaveAttribute("hidden");
 
     await user.click(screen.getByTestId("preview-return-to-coach-entry-1"));

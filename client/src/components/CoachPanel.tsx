@@ -140,7 +140,7 @@ export function CoachPanel({ isOpen, onClose, timeline = [], isNewUser = false }
   if (!isOpen) return null;
 
   return (
-    <div className="flex flex-col h-full border-l bg-background">
+    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden border-l bg-background">
       <CoachPanelHeader
         onClearHistory={handleClearHistory}
         onClose={onClose}
