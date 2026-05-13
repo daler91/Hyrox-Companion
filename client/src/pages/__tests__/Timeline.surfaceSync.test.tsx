@@ -9,6 +9,7 @@ import Timeline from "../Timeline";
 const authState = vi.hoisted(() => ({ aiCoachEnabled: true }));
 const timelineMocks = vi.hoisted(() => ({ setCoachOpen: vi.fn() }));
 const apiMocks = vi.hoisted(() => ({ updatePreferences: vi.fn() }));
+const viewportState = vi.hoisted(() => ({ isMobile: false }));
 
 const setOpenWorkoutId = vi.fn();
 let openWorkoutId: string | null = null;
@@ -25,7 +26,7 @@ vi.mock("@/hooks/useAuth", () => ({
   useIsAutoCoaching: () => false,
 }));
 
-vi.mock("@/hooks/use-mobile", () => ({ useIsMobile: () => false }));
+vi.mock("@/hooks/use-mobile", () => ({ useIsMobile: () => viewportState.isMobile }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
 vi.mock("@/hooks/useMoveTimelineEntry", () => ({
   useMoveTimelineEntry: () => ({ moveEntry: vi.fn(), isMoving: false }),
@@ -154,27 +155,56 @@ vi.mock("@/components/workout-detail/PreviewSheet", () => ({
     onEditWorkout,
     onAskCoach,
     coachChatOpen,
+    coachChatNonce,
+    mobileCoachPanelOpen,
     onCloseCoachChat,
+    onShowCoachPanel,
+    onShowWorkoutDetails,
   }: {
     entry: TimelineEntry | null;
     onEditWorkout?: (entry: TimelineEntry) => void;
     onAskCoach?: (entry: TimelineEntry) => void;
     coachChatOpen?: boolean;
+    coachChatNonce?: number;
+    mobileCoachPanelOpen?: boolean;
     onCloseCoachChat?: () => void;
+    onShowCoachPanel?: () => void;
+    onShowWorkoutDetails?: () => void;
   }) => {
     if (!entry) return null;
     return (
       <section data-testid="preview-sheet">
-        <button type="button" onClick={() => onEditWorkout?.(entry)} data-testid="preview-edit">
-          Edit workout
-        </button>
-        <button type="button" onClick={() => onAskCoach?.(entry)} data-testid="preview-ask">
-          Ask coach
-        </button>
+        {!mobileCoachPanelOpen ? (
+          <div data-testid="preview-details">
+            <button type="button" onClick={() => onEditWorkout?.(entry)} data-testid="preview-edit">
+              Edit workout
+            </button>
+            <button type="button" onClick={() => onAskCoach?.(entry)} data-testid="preview-ask">
+              Ask coach
+            </button>
+            {coachChatOpen ? (
+              <button
+                type="button"
+                onClick={onShowCoachPanel}
+                data-testid="return-to-coach-chat"
+              >
+                Return to coach chat
+              </button>
+            ) : null}
+          </div>
+        ) : null}
         {coachChatOpen ? (
-          <div data-testid="embedded-chat">
-            <button type="button" onClick={onCloseCoachChat} data-testid="embedded-back">
-              Back
+          <div
+            data-testid="embedded-chat"
+            data-nonce={String(coachChatNonce ?? "")}
+            data-visible={String(!!mobileCoachPanelOpen)}
+          >
+            <button
+              type="button"
+              onClick={mobileCoachPanelOpen ? onShowWorkoutDetails : onCloseCoachChat}
+              data-testid="embedded-back"
+            >
+              Workout details
             </button>
           </div>
         ) : null}
@@ -243,6 +273,7 @@ describe("Timeline surface sync", () => {
     logSheetMounts = 0;
     timelineData = [makeEntry({})];
     authState.aiCoachEnabled = true;
+    viewportState.isMobile = false;
     timelineMocks.setCoachOpen.mockReset();
     apiMocks.updatePreferences.mockReset();
     apiMocks.updatePreferences.mockResolvedValue({});
@@ -298,6 +329,42 @@ describe("Timeline surface sync", () => {
     expect(screen.getByTestId("preview-sheet")).toBeInTheDocument();
   });
 
+  it("swaps mobile workout detail to a workout coach panel and back", async () => {
+    const user = userEvent.setup();
+    const qc = new QueryClient();
+    viewportState.isMobile = true;
+    timelineData = [makeEntry({ date: "2099-01-01" })];
+
+    renderTimeline(qc);
+
+    await user.click(await screen.findByTestId("preview-ask"));
+
+    expect(screen.getByTestId("preview-sheet")).toBeInTheDocument();
+    expect(screen.queryByTestId("preview-details")).not.toBeInTheDocument();
+    expect(screen.getByTestId("embedded-chat")).toHaveAttribute("data-visible", "true");
+    expect(timelineMocks.setCoachOpen).toHaveBeenCalledWith(false);
+    expect(timelineMocks.setCoachOpen).not.toHaveBeenCalledWith(true);
+
+    await user.click(screen.getByTestId("embedded-back"));
+
+    expect(screen.getByTestId("preview-details")).toBeInTheDocument();
+    expect(screen.getByTestId("embedded-chat")).toHaveAttribute("data-visible", "false");
+    expect(screen.getByTestId("embedded-chat")).toHaveAttribute("data-nonce", "1");
+
+    await user.click(screen.getByTestId("preview-ask"));
+
+    expect(screen.queryByTestId("preview-details")).not.toBeInTheDocument();
+    expect(screen.getByTestId("embedded-chat")).toHaveAttribute("data-visible", "true");
+    expect(screen.getByTestId("embedded-chat")).toHaveAttribute("data-nonce", "1");
+
+    await user.click(screen.getByTestId("embedded-back"));
+    await user.click(screen.getByTestId("return-to-coach-chat"));
+
+    expect(screen.queryByTestId("preview-details")).not.toBeInTheDocument();
+    expect(screen.getByTestId("embedded-chat")).toHaveAttribute("data-visible", "true");
+    expect(timelineMocks.setCoachOpen).not.toHaveBeenCalledWith(true);
+  });
+
   it("opens embedded coach chat after AI consent instead of the global panel", async () => {
     const user = userEvent.setup();
     const qc = new QueryClient();
@@ -316,6 +383,30 @@ describe("Timeline surface sync", () => {
     );
     expect(screen.getByTestId("preview-sheet")).toBeInTheDocument();
     expect(screen.getByTestId("embedded-chat")).toBeInTheDocument();
+    expect(timelineMocks.setCoachOpen).toHaveBeenCalledWith(false);
+    expect(timelineMocks.setCoachOpen).not.toHaveBeenCalledWith(true);
+  });
+
+  it("opens the mobile workout coach panel after AI consent instead of the global panel", async () => {
+    const user = userEvent.setup();
+    const qc = new QueryClient();
+    viewportState.isMobile = true;
+    authState.aiCoachEnabled = false;
+    timelineData = [makeEntry({ date: "2099-01-01" })];
+
+    renderTimeline(qc);
+
+    await user.click(await screen.findByTestId("preview-ask"));
+    expect(screen.getByTestId("ai-consent-dialog")).toBeInTheDocument();
+
+    await user.click(screen.getByText("Enable"));
+
+    await waitFor(() =>
+      expect(apiMocks.updatePreferences).toHaveBeenCalledWith({ aiCoachEnabled: true }),
+    );
+    expect(screen.getByTestId("preview-sheet")).toBeInTheDocument();
+    expect(screen.queryByTestId("preview-details")).not.toBeInTheDocument();
+    expect(screen.getByTestId("embedded-chat")).toHaveAttribute("data-visible", "true");
     expect(timelineMocks.setCoachOpen).toHaveBeenCalledWith(false);
     expect(timelineMocks.setCoachOpen).not.toHaveBeenCalledWith(true);
   });

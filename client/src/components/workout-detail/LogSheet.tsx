@@ -13,6 +13,7 @@ import { formatScheduledDate } from "@/lib/timelineEntryFormat";
 
 import { buildWorkoutCoachSeedMessage, EmbeddedWorkoutCoachChat } from "./EmbeddedWorkoutCoachChat";
 import { ExerciseTable } from "./ExerciseTable";
+import { MobileCoachToggle } from "./MobileCoachToggle";
 import { SaveStatePill } from "./SaveStatePill";
 import type { PrescriptionTextPayload } from "./shared/PrescriptionEditor";
 import { PrescriptionEditor } from "./shared/PrescriptionEditor";
@@ -27,7 +28,10 @@ interface LogSheetBaseProps {
   readonly coachChatOpen?: boolean;
   readonly coachChatNonce?: number;
   readonly coachSeedText?: string;
+  readonly mobileCoachPanelOpen?: boolean;
   readonly onCloseCoachChat?: () => void;
+  readonly onShowCoachPanel?: () => void;
+  readonly onShowWorkoutDetails?: () => void;
 }
 
 type LogSheetModeProps =
@@ -331,7 +335,10 @@ export function LogSheet({
   coachChatOpen = false,
   coachChatNonce,
   coachSeedText,
+  mobileCoachPanelOpen = false,
   onCloseCoachChat,
+  onShowCoachPanel,
+  onShowWorkoutDetails,
   isLogging,
   mode = "log",
 }: LogSheetProps) {
@@ -362,6 +369,13 @@ export function LogSheet({
   const handleAskCoach = onAskCoach
     ? (target: TimelineEntry) => onAskCoach(target, currentCoachSeedText)
     : undefined;
+  const showMobileCoachPanel = isMobile && coachChatOpen && mobileCoachPanelOpen;
+  const showReturnToCoachChat = isMobile && coachChatOpen && !mobileCoachPanelOpen;
+  const hideMobileCoachChat = isMobile && coachChatOpen && !mobileCoachPanelOpen;
+  const layoutClassName =
+    coachChatOpen && !isMobile
+      ? "grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)]"
+      : "space-y-4";
 
   return (
     <ResponsiveSheet
@@ -372,14 +386,17 @@ export function LogSheet({
       contentClassName={coachChatOpen ? "sm:max-w-5xl" : "sm:max-w-2xl"}
       testId={`log-sheet-${entry.id}`}
     >
-      <div
-        className={
-          coachChatOpen
-            ? "grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)]"
-            : "space-y-4"
-        }
-      >
-        <div className="min-w-0 space-y-4">
+      <div className={layoutClassName}>
+        <div
+          className="min-w-0 space-y-4"
+          hidden={showMobileCoachPanel}
+          data-testid={`log-details-${entry.id}`}
+        >
+          <MobileCoachToggle
+            visible={showReturnToCoachChat}
+            onClick={onShowCoachPanel}
+            testId={`log-return-to-coach-${entry.id}`}
+          />
           {entry.planDayId ? (
             <PlannedPrescription
               entry={entry}
@@ -412,8 +429,11 @@ export function LogSheet({
             entry={entry}
             seedText={coachSeedText ?? currentCoachSeedText}
             seedNonce={coachChatNonce}
-            onBack={onCloseCoachChat ?? noop}
-            autoScrollIntoView={coachChatOpen && isMobile}
+            onBack={showMobileCoachPanel ? (onShowWorkoutDetails ?? noop) : (onCloseCoachChat ?? noop)}
+            backButtonText={showMobileCoachPanel ? "Workout details" : undefined}
+            chatAreaClassName={showMobileCoachPanel ? "max-h-none flex-1" : undefined}
+            isHidden={hideMobileCoachChat}
+            isPanelView={showMobileCoachPanel}
           />
         ) : null}
       </div>

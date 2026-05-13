@@ -18,6 +18,7 @@ import { formatScheduledDate } from "@/lib/timelineEntryFormat";
 import { AthleteNoteInput } from "./AthleteNoteInput";
 import { buildWorkoutCoachSeedMessage, EmbeddedWorkoutCoachChat } from "./EmbeddedWorkoutCoachChat";
 import { ExerciseTable } from "./ExerciseTable";
+import { MobileCoachToggle } from "./MobileCoachToggle";
 import { SaveStatePill } from "./SaveStatePill";
 import type { PrescriptionTextPayload } from "./shared/PrescriptionEditor";
 import { PrescriptionEditor } from "./shared/PrescriptionEditor";
@@ -29,7 +30,10 @@ interface ReviewSurfaceProps {
   readonly coachChatOpen?: boolean;
   readonly coachChatNonce?: number;
   readonly coachSeedText?: string;
+  readonly mobileCoachPanelOpen?: boolean;
   readonly onCloseCoachChat?: () => void;
+  readonly onShowCoachPanel?: () => void;
+  readonly onShowWorkoutDetails?: () => void;
   readonly onMarkPlanned?: (entry: TimelineEntry) => void;
   readonly onDelete?: (entry: TimelineEntry) => void;
 }
@@ -102,7 +106,10 @@ export function ReviewSurface({
   coachChatOpen = false,
   coachChatNonce,
   coachSeedText,
+  mobileCoachPanelOpen = false,
   onCloseCoachChat,
+  onShowCoachPanel,
+  onShowWorkoutDetails,
   onMarkPlanned,
   onDelete,
 }: ReviewSurfaceProps) {
@@ -134,7 +141,10 @@ export function ReviewSurface({
   const canEditActuals = !isStrava && !!workoutLogId;
   const currentCoachSeedText = buildWorkoutCoachSeedMessage(entry, exerciseSets);
   const sheetContentClassName = getReviewSheetContentClassName(coachChatOpen);
-  const layoutClassName = getReviewLayoutClassName(coachChatOpen);
+  const showMobileCoachPanel = isMobile && coachChatOpen && mobileCoachPanelOpen;
+  const showReturnToCoachChat = isMobile && coachChatOpen && !mobileCoachPanelOpen;
+  const hideMobileCoachChat = isMobile && coachChatOpen && !mobileCoachPanelOpen;
+  const layoutClassName = getReviewLayoutClassName(coachChatOpen, isMobile);
 
   const handleRpeChange = (next: number | null) => {
     if (!workoutLogId) return;
@@ -195,9 +205,12 @@ export function ReviewSurface({
           reviewFlag={reviewFlag}
           confirmingDelete={confirmingDelete}
           currentCoachSeedText={currentCoachSeedText}
+          hidden={showMobileCoachPanel}
+          returnToCoachVisible={showReturnToCoachChat}
           onRpeChange={handleRpeChange}
           onSaveNote={handleSaveNote}
           onAskCoach={onAskCoach}
+          onShowCoachPanel={onShowCoachPanel}
           onMarkPlanned={onMarkPlanned}
           onDelete={onDelete}
           onDeleteClick={handleDeleteClick}
@@ -210,7 +223,9 @@ export function ReviewSurface({
           coachChatNonce={coachChatNonce}
           coachSeedText={coachSeedText}
           onCloseCoachChat={onCloseCoachChat}
-          autoScrollIntoView={coachChatOpen && isMobile}
+          onShowWorkoutDetails={onShowWorkoutDetails}
+          isHidden={hideMobileCoachChat}
+          isPanelView={showMobileCoachPanel}
         />
       </div>
     </ResponsiveSheet>
@@ -233,9 +248,12 @@ interface ReviewDetailsColumnProps {
   readonly reviewFlag: MigrationReviewFlag;
   readonly confirmingDelete: boolean;
   readonly currentCoachSeedText: string;
+  readonly hidden: boolean;
+  readonly returnToCoachVisible: boolean;
   readonly onRpeChange: (next: number | null) => void;
   readonly onSaveNote: (next: string | null) => void;
   readonly onAskCoach?: (entry: TimelineEntry, seedText: string) => void;
+  readonly onShowCoachPanel?: () => void;
   readonly onMarkPlanned?: (entry: TimelineEntry) => void;
   readonly onDelete?: (entry: TimelineEntry) => void;
   readonly onDeleteClick: () => void;
@@ -258,16 +276,24 @@ function ReviewDetailsColumn({
   reviewFlag,
   confirmingDelete,
   currentCoachSeedText,
+  hidden,
+  returnToCoachVisible,
   onRpeChange,
   onSaveNote,
   onAskCoach,
+  onShowCoachPanel,
   onMarkPlanned,
   onDelete,
   onDeleteClick,
   onResolveReview,
 }: ReviewDetailsColumnProps) {
   return (
-    <div className="min-w-0 space-y-4">
+    <div className="min-w-0 space-y-4" hidden={hidden} data-testid={`review-details-${entry.id}`}>
+      <MobileCoachToggle
+        visible={returnToCoachVisible}
+        onClick={onShowCoachPanel}
+        testId={`review-return-to-coach-${entry.id}`}
+      />
       <ReviewStravaSection entry={entry} distanceUnit={distanceUnit} isStrava={isStrava} />
       <ReviewEffortSection isStrava={isStrava} rpe={rpe} onRpeChange={onRpeChange} />
       <ReviewActualsSection
@@ -595,7 +621,9 @@ interface ReviewCoachChatProps {
   readonly coachChatNonce?: number;
   readonly coachSeedText?: string;
   readonly onCloseCoachChat?: () => void;
-  readonly autoScrollIntoView: boolean;
+  readonly onShowWorkoutDetails?: () => void;
+  readonly isHidden: boolean;
+  readonly isPanelView: boolean;
 }
 
 function ReviewCoachChat({
@@ -605,7 +633,9 @@ function ReviewCoachChat({
   coachChatNonce,
   coachSeedText,
   onCloseCoachChat,
-  autoScrollIntoView,
+  onShowWorkoutDetails,
+  isHidden,
+  isPanelView,
 }: ReviewCoachChatProps) {
   if (!coachChatOpen) return null;
 
@@ -614,8 +644,11 @@ function ReviewCoachChat({
       entry={entry}
       seedText={coachSeedText ?? currentCoachSeedText}
       seedNonce={coachChatNonce}
-      onBack={onCloseCoachChat ?? noop}
-      autoScrollIntoView={autoScrollIntoView}
+      onBack={isPanelView ? (onShowWorkoutDetails ?? noop) : (onCloseCoachChat ?? noop)}
+      backButtonText={isPanelView ? "Workout details" : undefined}
+      chatAreaClassName={isPanelView ? "max-h-none flex-1" : undefined}
+      isHidden={isHidden}
+      isPanelView={isPanelView}
     />
   );
 }
@@ -630,8 +663,8 @@ function getReviewSheetContentClassName(coachChatOpen: boolean): string {
   return "sm:max-w-2xl";
 }
 
-function getReviewLayoutClassName(coachChatOpen: boolean): string {
-  if (coachChatOpen) {
+function getReviewLayoutClassName(coachChatOpen: boolean, isMobile: boolean): string {
+  if (coachChatOpen && !isMobile) {
     return "grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)]";
   }
   return "space-y-4";

@@ -34,6 +34,7 @@ export function useEmbeddedCoachRouting({
   const [embeddedCoachEntryId, setEmbeddedCoachEntryId] = useState<string | null>(null);
   const [embeddedCoachSeedText, setEmbeddedCoachSeedText] = useState("");
   const [embeddedCoachSeedNonce, setEmbeddedCoachSeedNonce] = useState(0);
+  const [mobileCoachPanelOpen, setMobileCoachPanelOpen] = useState(false);
   const [pendingCoachIntent, setPendingCoachIntent] = useState<CoachIntent | null>(null);
 
   const handleCoachToggle = useCallback(
@@ -55,30 +56,44 @@ export function useEmbeddedCoachRouting({
         setShowAIConsent(true);
         return;
       }
-      setEmbeddedCoachEntryId(entry.id);
-      setEmbeddedCoachSeedText(seedText);
-      setEmbeddedCoachSeedNonce((nonce) => nonce + 1);
+      if (embeddedCoachEntryId !== entry.id) {
+        setEmbeddedCoachEntryId(entry.id);
+        setEmbeddedCoachSeedText(seedText);
+        setEmbeddedCoachSeedNonce((nonce) => nonce + 1);
+      }
+      setMobileCoachPanelOpen(true);
       setCoachOpen(false);
     },
-    [aiCoachEnabled, isAuthUserLoaded, setCoachOpen, setShowAIConsent],
+    [aiCoachEnabled, embeddedCoachEntryId, isAuthUserLoaded, setCoachOpen, setShowAIConsent],
   );
 
   const closeEmbeddedCoach = useCallback(() => {
     setEmbeddedCoachEntryId(null);
+    setMobileCoachPanelOpen(false);
   }, []);
 
   const closeWorkoutSurfaces = useCallback(() => {
     setEmbeddedCoachEntryId(null);
+    setMobileCoachPanelOpen(false);
     closeAllSurfacesAndClearUrl();
   }, [closeAllSurfacesAndClearUrl]);
 
   const openTimelineSurface = useCallback(
     (entry: TimelineEntry) => {
       setEmbeddedCoachEntryId(null);
+      setMobileCoachPanelOpen(false);
       openSurface(entry);
     },
     [openSurface],
   );
+
+  const showMobileCoachPanel = useCallback(() => {
+    setMobileCoachPanelOpen(true);
+  }, []);
+
+  const showWorkoutDetails = useCallback(() => {
+    setMobileCoachPanelOpen(false);
+  }, []);
 
   const clearPendingCoachIntent = useCallback(() => {
     setPendingCoachIntent(null);
@@ -95,6 +110,7 @@ export function useEmbeddedCoachRouting({
           setEmbeddedCoachEntryId(pendingCoachIntent.entryId);
           setEmbeddedCoachSeedText(pendingCoachIntent.seedText);
           setEmbeddedCoachSeedNonce((nonce) => nonce + 1);
+          setMobileCoachPanelOpen(true);
           setCoachOpen(false);
         } else {
           setCoachOpen(true);
@@ -110,11 +126,14 @@ export function useEmbeddedCoachRouting({
     embeddedCoachEntryId,
     embeddedCoachSeedText,
     embeddedCoachSeedNonce,
+    mobileCoachPanelOpen,
     handleCoachToggle,
     openEmbeddedCoach,
     closeEmbeddedCoach,
     closeWorkoutSurfaces,
     openTimelineSurface,
+    showMobileCoachPanel,
+    showWorkoutDetails,
     clearPendingCoachIntent,
     handleAIConsentAccept,
   };

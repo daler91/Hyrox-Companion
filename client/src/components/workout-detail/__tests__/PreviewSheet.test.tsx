@@ -36,11 +36,26 @@ vi.mock("@/hooks/useUnitPreferences", () => ({
 
 vi.mock("../EmbeddedWorkoutCoachChat", () => ({
   buildWorkoutCoachSeedMessage: () => "Seeded coach prompt",
-  EmbeddedWorkoutCoachChat: ({ autoScrollIntoView }: { autoScrollIntoView?: boolean }) => (
+  EmbeddedWorkoutCoachChat: ({
+    backButtonText,
+    isHidden,
+    isPanelView,
+    onBack,
+  }: {
+    backButtonText?: string;
+    isHidden?: boolean;
+    isPanelView?: boolean;
+    onBack: () => void;
+  }) => (
     <div
       data-testid="embedded-workout-coach-chat"
-      data-auto-scroll={String(autoScrollIntoView)}
-    />
+      data-panel-view={String(isPanelView)}
+      hidden={isHidden}
+    >
+      <button type="button" onClick={onBack} data-testid="embedded-workout-coach-chat-back">
+        {backButtonText}
+      </button>
+    </div>
   ),
 }));
 
@@ -74,8 +89,10 @@ describe("PreviewSheet", () => {
     expect(onEditWorkout).toHaveBeenCalledWith(baseEntry);
   });
 
-  it("requests auto-scroll for embedded coach chat on mobile", () => {
+  it("shows the mobile coach panel instead of workout details", async () => {
+    const user = userEvent.setup();
     viewportState.isMobile = true;
+    const onShowWorkoutDetails = vi.fn();
 
     render(
       <PreviewSheet
@@ -83,12 +100,47 @@ describe("PreviewSheet", () => {
         onClose={vi.fn()}
         coachChatOpen
         coachChatNonce={1}
+        mobileCoachPanelOpen
+        onShowWorkoutDetails={onShowWorkoutDetails}
       />,
     );
 
+    expect(screen.getByTestId("preview-details-entry-1")).toHaveAttribute("hidden");
+    expect(screen.getByTestId("embedded-workout-coach-chat")).not.toHaveAttribute("hidden");
     expect(screen.getByTestId("embedded-workout-coach-chat")).toHaveAttribute(
-      "data-auto-scroll",
+      "data-panel-view",
       "true",
     );
+    expect(screen.getByTestId("embedded-workout-coach-chat-back")).toHaveTextContent(
+      "Workout details",
+    );
+
+    await user.click(screen.getByTestId("embedded-workout-coach-chat-back"));
+
+    expect(onShowWorkoutDetails).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the mobile coach chat mounted while showing workout details", async () => {
+    const user = userEvent.setup();
+    viewportState.isMobile = true;
+    const onShowCoachPanel = vi.fn();
+
+    render(
+      <PreviewSheet
+        entry={baseEntry}
+        onClose={vi.fn()}
+        coachChatOpen
+        coachChatNonce={1}
+        mobileCoachPanelOpen={false}
+        onShowCoachPanel={onShowCoachPanel}
+      />,
+    );
+
+    expect(screen.getByTestId("preview-details-entry-1")).not.toHaveAttribute("hidden");
+    expect(screen.getByTestId("embedded-workout-coach-chat")).toHaveAttribute("hidden");
+
+    await user.click(screen.getByTestId("preview-return-to-coach-entry-1"));
+
+    expect(onShowCoachPanel).toHaveBeenCalledTimes(1);
   });
 });

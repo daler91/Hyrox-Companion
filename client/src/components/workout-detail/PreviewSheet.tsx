@@ -8,6 +8,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { formatScheduledDate } from "@/lib/timelineEntryFormat";
 
 import { buildWorkoutCoachSeedMessage, EmbeddedWorkoutCoachChat } from "./EmbeddedWorkoutCoachChat";
+import { MobileCoachToggle } from "./MobileCoachToggle";
 import { WorkoutPrescriptionSummary } from "./shared/WorkoutPrescriptionSummary";
 
 interface PreviewSheetProps {
@@ -17,7 +18,10 @@ interface PreviewSheetProps {
   readonly coachChatOpen?: boolean;
   readonly coachChatNonce?: number;
   readonly coachSeedText?: string;
+  readonly mobileCoachPanelOpen?: boolean;
   readonly onCloseCoachChat?: () => void;
+  readonly onShowCoachPanel?: () => void;
+  readonly onShowWorkoutDetails?: () => void;
   readonly onMove?: (entry: TimelineEntry) => void;
   readonly onSkip?: (entry: TimelineEntry) => void;
   readonly onEditWorkout?: (entry: TimelineEntry) => void;
@@ -36,7 +40,10 @@ export function PreviewSheet({
   coachChatOpen = false,
   coachChatNonce,
   coachSeedText,
+  mobileCoachPanelOpen = false,
   onCloseCoachChat,
+  onShowCoachPanel,
+  onShowWorkoutDetails,
   onMove,
   onSkip,
   onEditWorkout,
@@ -45,6 +52,13 @@ export function PreviewSheet({
 
   if (!entry) return null;
   const currentCoachSeedText = buildWorkoutCoachSeedMessage(entry, entry.exerciseSets ?? []);
+  const showMobileCoachPanel = isMobile && coachChatOpen && mobileCoachPanelOpen;
+  const showReturnToCoachChat = isMobile && coachChatOpen && !mobileCoachPanelOpen;
+  const hideMobileCoachChat = isMobile && coachChatOpen && !mobileCoachPanelOpen;
+  const layoutClassName =
+    coachChatOpen && !isMobile
+      ? "grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)]"
+      : "space-y-4";
 
   return (
     <ResponsiveSheet
@@ -55,14 +69,17 @@ export function PreviewSheet({
       contentClassName={coachChatOpen ? "sm:max-w-5xl" : undefined}
       testId={`preview-sheet-${entry.id}`}
     >
-      <div
-        className={
-          coachChatOpen
-            ? "grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)]"
-            : "space-y-4"
-        }
-      >
-        <div className="min-w-0 space-y-4">
+      <div className={layoutClassName}>
+        <div
+          className="min-w-0 space-y-4"
+          hidden={showMobileCoachPanel}
+          data-testid={`preview-details-${entry.id}`}
+        >
+          <MobileCoachToggle
+            visible={showReturnToCoachChat}
+            onClick={onShowCoachPanel}
+            testId={`preview-return-to-coach-${entry.id}`}
+          />
           <WorkoutPrescriptionSummary entry={entry} rationaleVariant="open" />
 
           <Separator />
@@ -119,8 +136,11 @@ export function PreviewSheet({
             entry={entry}
             seedText={coachSeedText ?? currentCoachSeedText}
             seedNonce={coachChatNonce}
-            onBack={onCloseCoachChat ?? noop}
-            autoScrollIntoView={coachChatOpen && isMobile}
+            onBack={showMobileCoachPanel ? (onShowWorkoutDetails ?? noop) : (onCloseCoachChat ?? noop)}
+            backButtonText={showMobileCoachPanel ? "Workout details" : undefined}
+            chatAreaClassName={showMobileCoachPanel ? "max-h-none flex-1" : undefined}
+            isHidden={hideMobileCoachChat}
+            isPanelView={showMobileCoachPanel}
           />
         ) : null}
       </div>
