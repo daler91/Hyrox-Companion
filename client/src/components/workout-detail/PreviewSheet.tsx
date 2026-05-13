@@ -4,6 +4,7 @@ import { CalendarClock, MessageSquare, Pencil, SkipForward } from "lucide-react"
 import { Button } from "@/components/ui/button";
 import { ResponsiveSheet } from "@/components/ui/responsive-sheet";
 import { Separator } from "@/components/ui/separator";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { formatScheduledDate } from "@/lib/timelineEntryFormat";
 
 import { buildWorkoutCoachSeedMessage, EmbeddedWorkoutCoachChat } from "./EmbeddedWorkoutCoachChat";
@@ -40,6 +41,8 @@ export function PreviewSheet({
   onSkip,
   onEditWorkout,
 }: PreviewSheetProps) {
+  const isMobile = useIsMobile();
+
   if (!entry) return null;
   const currentCoachSeedText = buildWorkoutCoachSeedMessage(entry, entry.exerciseSets ?? []);
 
@@ -117,6 +120,7 @@ export function PreviewSheet({
             seedText={coachSeedText ?? currentCoachSeedText}
             seedNonce={coachChatNonce}
             onBack={onCloseCoachChat ?? noop}
+            autoScrollIntoView={coachChatOpen && isMobile}
           />
         ) : null}
       </div>

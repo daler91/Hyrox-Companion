@@ -1,7 +1,7 @@
 import type { ExerciseSet, TimelineEntry } from "@shared/schema";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   buildWorkoutCoachSeedMessage,
@@ -82,12 +82,19 @@ const exerciseSets = [
   },
 ] as ExerciseSet[];
 
+const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+
 describe("EmbeddedWorkoutCoachChat", () => {
   beforeEach(() => {
+    HTMLElement.prototype.scrollIntoView = vi.fn();
     chatMocks.sendMessage.mockReset();
     chatMocks.cancelStream.mockReset();
     chatMocks.updateAutoScrollMode.mockReset();
     chatMocks.sendMessage.mockResolvedValue(undefined);
+  });
+
+  afterAll(() => {
+    HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
   });
 
   it("seeds the chat input with workout context and returns to details", async () => {
@@ -107,9 +114,40 @@ describe("EmbeddedWorkoutCoachChat", () => {
     );
     expect(screen.getByTestId("embedded-workout-coach-chat")).toHaveClass("self-start");
     expect(screen.getByTestId("coach-chat-area")).toHaveClass("flex-none", "max-h-[320px]");
+    expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
 
     await user.click(screen.getByTestId("embedded-workout-coach-chat-back"));
 
     expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it("scrolls into view when mobile sheet context requests it", () => {
+    const { rerender } = render(
+      <EmbeddedWorkoutCoachChat
+        entry={entry}
+        seedText={buildWorkoutCoachSeedMessage(entry, exerciseSets)}
+        seedNonce={1}
+        onBack={vi.fn()}
+        autoScrollIntoView
+      />,
+    );
+
+    expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({
+      behavior: "smooth",
+      block: "start",
+      inline: "nearest",
+    });
+
+    rerender(
+      <EmbeddedWorkoutCoachChat
+        entry={entry}
+        seedText={buildWorkoutCoachSeedMessage(entry, exerciseSets)}
+        seedNonce={2}
+        onBack={vi.fn()}
+        autoScrollIntoView
+      />,
+    );
+
+    expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledTimes(2);
   });
 });
