@@ -9,9 +9,13 @@ import { Separator } from "@/components/ui/separator";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { formatScheduledDate } from "@/lib/timelineEntryFormat";
 
-import { buildWorkoutCoachSeedMessage, EmbeddedWorkoutCoachChat } from "./EmbeddedWorkoutCoachChat";
-import { MobileCoachToggle } from "./MobileCoachToggle";
+import { buildWorkoutCoachSeedMessage } from "./EmbeddedWorkoutCoachChat";
 import { WorkoutPrescriptionSummary } from "./shared/WorkoutPrescriptionSummary";
+import {
+  getWorkoutCoachPanelState,
+  WorkoutCoachChatPanel,
+  WorkoutCoachLayout,
+} from "./WorkoutCoachPanel";
 
 interface SkippedSheetProps {
   readonly entry: TimelineEntry | null;
@@ -72,13 +76,7 @@ export function SkippedSheet({
 
   if (!entry) return null;
   const currentCoachSeedText = buildWorkoutCoachSeedMessage(entry, entry.exerciseSets ?? []);
-  const showMobileCoachPanel = isMobile && coachChatOpen && mobileCoachPanelOpen;
-  const showReturnToCoachChat = isMobile && coachChatOpen && !mobileCoachPanelOpen;
-  const hideMobileCoachChat = isMobile && coachChatOpen && !mobileCoachPanelOpen;
-  const layoutClassName =
-    coachChatOpen && !isMobile
-      ? "grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)]"
-      : "space-y-4";
+  const coachPanel = getWorkoutCoachPanelState({ coachChatOpen, isMobile, mobileCoachPanelOpen });
 
   return (
     <ResponsiveSheet
@@ -94,74 +92,64 @@ export function SkippedSheet({
       contentClassName={coachChatOpen ? "sm:max-w-5xl" : undefined}
       testId={`skipped-sheet-${entry.id}`}
     >
-      <div className={layoutClassName}>
-        <div
-          className="min-w-0 space-y-4"
-          hidden={showMobileCoachPanel}
-          data-testid={`skipped-details-${entry.id}`}
-        >
-          <MobileCoachToggle
-            visible={showReturnToCoachChat}
-            onClick={onShowCoachPanel}
-            testId={`skipped-return-to-coach-${entry.id}`}
-          />
-          <WorkoutPrescriptionSummary entry={entry} rationaleVariant="open" />
-
-          <Separator />
-
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {onUndoSkip && entry.planDayId ? (
-              <Button
-                type="button"
-                variant="default"
-                onClick={() => onUndoSkip(entry)}
-                data-testid={`skipped-undo-${entry.id}`}
-              >
-                <RotateCcw className="mr-2 h-4 w-4" />
-                Undo skip
-              </Button>
-            ) : null}
-            {onAskCoach ? (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onAskCoach(entry, currentCoachSeedText)}
-                data-testid={`skipped-ask-coach-${entry.id}`}
-              >
-                <MessageSquare className="mr-2 h-4 w-4" />
-                Ask coach
-              </Button>
-            ) : null}
-            {onDelete ? (
-              <Button
-                type="button"
-                variant={confirmingDelete ? "destructive" : "ghost"}
-                onClick={handleDeleteClick}
-                data-testid={`skipped-delete-${entry.id}`}
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                {confirmingDelete ? "Tap again to confirm" : "Delete"}
-              </Button>
-            ) : null}
-          </div>
-        </div>
-        {coachChatOpen ? (
-          <EmbeddedWorkoutCoachChat
+      <WorkoutCoachLayout
+        panelState={coachPanel}
+        detailsTestId={`skipped-details-${entry.id}`}
+        returnTestId={`skipped-return-to-coach-${entry.id}`}
+        onShowCoachPanel={onShowCoachPanel}
+        chat={
+          <WorkoutCoachChatPanel
             entry={entry}
-            seedText={coachSeedText ?? currentCoachSeedText}
-            seedNonce={coachChatNonce}
-            onBack={showMobileCoachPanel ? (onShowWorkoutDetails ?? noop) : (onCloseCoachChat ?? noop)}
-            backButtonText={showMobileCoachPanel ? "Workout details" : undefined}
-            chatAreaClassName={showMobileCoachPanel ? "max-h-none flex-1" : undefined}
-            isHidden={hideMobileCoachChat}
-            isPanelView={showMobileCoachPanel}
+            coachChatOpen={coachChatOpen}
+            coachChatNonce={coachChatNonce}
+            coachSeedText={coachSeedText}
+            currentCoachSeedText={currentCoachSeedText}
+            panelState={coachPanel}
+            onCloseCoachChat={onCloseCoachChat}
+            onShowWorkoutDetails={onShowWorkoutDetails}
           />
-        ) : null}
-      </div>
+        }
+      >
+        <WorkoutPrescriptionSummary entry={entry} rationaleVariant="open" />
+
+        <Separator />
+
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {onUndoSkip && entry.planDayId ? (
+            <Button
+              type="button"
+              variant="default"
+              onClick={() => onUndoSkip(entry)}
+              data-testid={`skipped-undo-${entry.id}`}
+            >
+              <RotateCcw className="mr-2 h-4 w-4" />
+              Undo skip
+            </Button>
+          ) : null}
+          {onAskCoach ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onAskCoach(entry, currentCoachSeedText)}
+              data-testid={`skipped-ask-coach-${entry.id}`}
+            >
+              <MessageSquare className="mr-2 h-4 w-4" />
+              Ask coach
+            </Button>
+          ) : null}
+          {onDelete ? (
+            <Button
+              type="button"
+              variant={confirmingDelete ? "destructive" : "ghost"}
+              onClick={handleDeleteClick}
+              data-testid={`skipped-delete-${entry.id}`}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              {confirmingDelete ? "Tap again to confirm" : "Delete"}
+            </Button>
+          ) : null}
+        </div>
+      </WorkoutCoachLayout>
     </ResponsiveSheet>
   );
-}
-
-function noop(): undefined {
-  return undefined;
 }

@@ -266,6 +266,52 @@ function renderTimeline(queryClient = new QueryClient()) {
   );
 }
 
+function renderFuturePreview({
+  aiCoachEnabled = true,
+  isMobile = false,
+}: {
+  readonly aiCoachEnabled?: boolean;
+  readonly isMobile?: boolean;
+} = {}) {
+  const user = userEvent.setup();
+  const queryClient = new QueryClient();
+  authState.aiCoachEnabled = aiCoachEnabled;
+  viewportState.isMobile = isMobile;
+  timelineData = [makeEntry({ date: "2099-01-01" })];
+
+  renderTimeline(queryClient);
+
+  return { user };
+}
+
+async function askCoachFromPreview(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(await screen.findByTestId("preview-ask"));
+}
+
+async function acceptAIConsent(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByText("Enable"));
+
+  await waitFor(() =>
+    expect(apiMocks.updatePreferences).toHaveBeenCalledWith({ aiCoachEnabled: true }),
+  );
+}
+
+function expectEmbeddedCoachOpen() {
+  expect(screen.getByTestId("preview-sheet")).toBeInTheDocument();
+  expect(screen.getByTestId("embedded-chat")).toBeInTheDocument();
+}
+
+function expectMobileCoachPanelOpen() {
+  expect(screen.getByTestId("preview-sheet")).toBeInTheDocument();
+  expect(screen.queryByTestId("preview-details")).not.toBeInTheDocument();
+  expect(screen.getByTestId("embedded-chat")).toHaveAttribute("data-visible", "true");
+}
+
+function expectGlobalCoachRemainsClosed() {
+  expect(timelineMocks.setCoachOpen).toHaveBeenCalledWith(false);
+  expect(timelineMocks.setCoachOpen).not.toHaveBeenCalledWith(true);
+}
+
 describe("Timeline surface sync", () => {
   beforeEach(() => {
     setOpenWorkoutId.mockReset();
@@ -297,12 +343,8 @@ describe("Timeline surface sync", () => {
   });
 
   it("opens future workout edit mode without changing the scheduled date", async () => {
-    const user = userEvent.setup();
-    const qc = new QueryClient();
     openWorkoutId = "pd1";
-    timelineData = [makeEntry({ date: "2099-01-01" })];
-
-    renderTimeline(qc);
+    const { user } = renderFuturePreview();
 
     await user.click(await screen.findByTestId("preview-edit"));
 
@@ -311,16 +353,11 @@ describe("Timeline surface sync", () => {
   });
 
   it("opens embedded coach chat from the workout detail without closing the sheet", async () => {
-    const user = userEvent.setup();
-    const qc = new QueryClient();
-    timelineData = [makeEntry({ date: "2099-01-01" })];
+    const { user } = renderFuturePreview();
 
-    renderTimeline(qc);
+    await askCoachFromPreview(user);
 
-    await user.click(await screen.findByTestId("preview-ask"));
-
-    expect(screen.getByTestId("preview-sheet")).toBeInTheDocument();
-    expect(screen.getByTestId("embedded-chat")).toBeInTheDocument();
+    expectEmbeddedCoachOpen();
     expect(timelineMocks.setCoachOpen).toHaveBeenCalledWith(false);
 
     await user.click(screen.getByTestId("embedded-back"));
@@ -330,20 +367,12 @@ describe("Timeline surface sync", () => {
   });
 
   it("swaps mobile workout detail to a workout coach panel and back", async () => {
-    const user = userEvent.setup();
-    const qc = new QueryClient();
-    viewportState.isMobile = true;
-    timelineData = [makeEntry({ date: "2099-01-01" })];
+    const { user } = renderFuturePreview({ isMobile: true });
 
-    renderTimeline(qc);
+    await askCoachFromPreview(user);
 
-    await user.click(await screen.findByTestId("preview-ask"));
-
-    expect(screen.getByTestId("preview-sheet")).toBeInTheDocument();
-    expect(screen.queryByTestId("preview-details")).not.toBeInTheDocument();
-    expect(screen.getByTestId("embedded-chat")).toHaveAttribute("data-visible", "true");
-    expect(timelineMocks.setCoachOpen).toHaveBeenCalledWith(false);
-    expect(timelineMocks.setCoachOpen).not.toHaveBeenCalledWith(true);
+    expectMobileCoachPanelOpen();
+    expectGlobalCoachRemainsClosed();
 
     await user.click(screen.getByTestId("embedded-back"));
 
@@ -351,63 +380,39 @@ describe("Timeline surface sync", () => {
     expect(screen.getByTestId("embedded-chat")).toHaveAttribute("data-visible", "false");
     expect(screen.getByTestId("embedded-chat")).toHaveAttribute("data-nonce", "1");
 
-    await user.click(screen.getByTestId("preview-ask"));
+    await askCoachFromPreview(user);
 
-    expect(screen.queryByTestId("preview-details")).not.toBeInTheDocument();
-    expect(screen.getByTestId("embedded-chat")).toHaveAttribute("data-visible", "true");
+    expectMobileCoachPanelOpen();
     expect(screen.getByTestId("embedded-chat")).toHaveAttribute("data-nonce", "1");
 
     await user.click(screen.getByTestId("embedded-back"));
     await user.click(screen.getByTestId("return-to-coach-chat"));
 
-    expect(screen.queryByTestId("preview-details")).not.toBeInTheDocument();
-    expect(screen.getByTestId("embedded-chat")).toHaveAttribute("data-visible", "true");
+    expectMobileCoachPanelOpen();
     expect(timelineMocks.setCoachOpen).not.toHaveBeenCalledWith(true);
   });
 
   it("opens embedded coach chat after AI consent instead of the global panel", async () => {
-    const user = userEvent.setup();
-    const qc = new QueryClient();
-    authState.aiCoachEnabled = false;
-    timelineData = [makeEntry({ date: "2099-01-01" })];
+    const { user } = renderFuturePreview({ aiCoachEnabled: false });
 
-    renderTimeline(qc);
-
-    await user.click(await screen.findByTestId("preview-ask"));
+    await askCoachFromPreview(user);
     expect(screen.getByTestId("ai-consent-dialog")).toBeInTheDocument();
 
-    await user.click(screen.getByText("Enable"));
+    await acceptAIConsent(user);
 
-    await waitFor(() =>
-      expect(apiMocks.updatePreferences).toHaveBeenCalledWith({ aiCoachEnabled: true }),
-    );
-    expect(screen.getByTestId("preview-sheet")).toBeInTheDocument();
-    expect(screen.getByTestId("embedded-chat")).toBeInTheDocument();
-    expect(timelineMocks.setCoachOpen).toHaveBeenCalledWith(false);
-    expect(timelineMocks.setCoachOpen).not.toHaveBeenCalledWith(true);
+    expectEmbeddedCoachOpen();
+    expectGlobalCoachRemainsClosed();
   });
 
   it("opens the mobile workout coach panel after AI consent instead of the global panel", async () => {
-    const user = userEvent.setup();
-    const qc = new QueryClient();
-    viewportState.isMobile = true;
-    authState.aiCoachEnabled = false;
-    timelineData = [makeEntry({ date: "2099-01-01" })];
+    const { user } = renderFuturePreview({ aiCoachEnabled: false, isMobile: true });
 
-    renderTimeline(qc);
-
-    await user.click(await screen.findByTestId("preview-ask"));
+    await askCoachFromPreview(user);
     expect(screen.getByTestId("ai-consent-dialog")).toBeInTheDocument();
 
-    await user.click(screen.getByText("Enable"));
+    await acceptAIConsent(user);
 
-    await waitFor(() =>
-      expect(apiMocks.updatePreferences).toHaveBeenCalledWith({ aiCoachEnabled: true }),
-    );
-    expect(screen.getByTestId("preview-sheet")).toBeInTheDocument();
-    expect(screen.queryByTestId("preview-details")).not.toBeInTheDocument();
-    expect(screen.getByTestId("embedded-chat")).toHaveAttribute("data-visible", "true");
-    expect(timelineMocks.setCoachOpen).toHaveBeenCalledWith(false);
-    expect(timelineMocks.setCoachOpen).not.toHaveBeenCalledWith(true);
+    expectMobileCoachPanelOpen();
+    expectGlobalCoachRemainsClosed();
   });
 });

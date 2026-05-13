@@ -11,14 +11,18 @@ import { usePlanDayExercises } from "@/hooks/usePlanDayExercises";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { formatScheduledDate } from "@/lib/timelineEntryFormat";
 
-import { buildWorkoutCoachSeedMessage, EmbeddedWorkoutCoachChat } from "./EmbeddedWorkoutCoachChat";
+import { buildWorkoutCoachSeedMessage } from "./EmbeddedWorkoutCoachChat";
 import { ExerciseTable } from "./ExerciseTable";
-import { MobileCoachToggle } from "./MobileCoachToggle";
 import { SaveStatePill } from "./SaveStatePill";
 import type { PrescriptionTextPayload } from "./shared/PrescriptionEditor";
 import { PrescriptionEditor } from "./shared/PrescriptionEditor";
 import { RpePrompt } from "./shared/RpePrompt";
 import { WorkoutPrescriptionSummary } from "./shared/WorkoutPrescriptionSummary";
+import {
+  getWorkoutCoachPanelState,
+  WorkoutCoachChatPanel,
+  WorkoutCoachLayout,
+} from "./WorkoutCoachPanel";
 
 interface LogSheetBaseProps {
   readonly entry: TimelineEntry | null;
@@ -369,13 +373,7 @@ export function LogSheet({
   const handleAskCoach = onAskCoach
     ? (target: TimelineEntry) => onAskCoach(target, currentCoachSeedText)
     : undefined;
-  const showMobileCoachPanel = isMobile && coachChatOpen && mobileCoachPanelOpen;
-  const showReturnToCoachChat = isMobile && coachChatOpen && !mobileCoachPanelOpen;
-  const hideMobileCoachChat = isMobile && coachChatOpen && !mobileCoachPanelOpen;
-  const layoutClassName =
-    coachChatOpen && !isMobile
-      ? "grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)]"
-      : "space-y-4";
+  const coachPanel = getWorkoutCoachPanelState({ coachChatOpen, isMobile, mobileCoachPanelOpen });
 
   return (
     <ResponsiveSheet
@@ -386,61 +384,51 @@ export function LogSheet({
       contentClassName={coachChatOpen ? "sm:max-w-5xl" : "sm:max-w-2xl"}
       testId={`log-sheet-${entry.id}`}
     >
-      <div className={layoutClassName}>
-        <div
-          className="min-w-0 space-y-4"
-          hidden={showMobileCoachPanel}
-          data-testid={`log-details-${entry.id}`}
-        >
-          <MobileCoachToggle
-            visible={showReturnToCoachChat}
-            onClick={onShowCoachPanel}
-            testId={`log-return-to-coach-${entry.id}`}
-          />
-          {entry.planDayId ? (
-            <PlannedPrescription
-              entry={entry}
-              planSets={planSets}
-              weightUnit={weightUnit}
-              distanceUnit={distanceUnit}
-              parseHelperVisible={parseHelperVisible}
-            />
-          ) : (
-            <WorkoutPrescriptionSummary entry={entry} rationaleVariant="collapsed" />
-          )}
-
-          {isEditMode ? (
-            <EditSecondaryActions entry={entry} onAskCoach={handleAskCoach} onSkip={onSkip} />
-          ) : (
-            <LogCompletionControls
-              entry={entry}
-              rpe={rpe}
-              setRpe={setRpe}
-              onLog={handleLog}
-              isLogging={isLogging}
-              isSaving={planSets.isSaving}
-              onAskCoach={handleAskCoach}
-              onSkip={onSkip}
-            />
-          )}
-        </div>
-        {coachChatOpen ? (
-          <EmbeddedWorkoutCoachChat
+      <WorkoutCoachLayout
+        panelState={coachPanel}
+        detailsTestId={`log-details-${entry.id}`}
+        returnTestId={`log-return-to-coach-${entry.id}`}
+        onShowCoachPanel={onShowCoachPanel}
+        chat={
+          <WorkoutCoachChatPanel
             entry={entry}
-            seedText={coachSeedText ?? currentCoachSeedText}
-            seedNonce={coachChatNonce}
-            onBack={showMobileCoachPanel ? (onShowWorkoutDetails ?? noop) : (onCloseCoachChat ?? noop)}
-            backButtonText={showMobileCoachPanel ? "Workout details" : undefined}
-            chatAreaClassName={showMobileCoachPanel ? "max-h-none flex-1" : undefined}
-            isHidden={hideMobileCoachChat}
-            isPanelView={showMobileCoachPanel}
+            coachChatOpen={coachChatOpen}
+            coachChatNonce={coachChatNonce}
+            coachSeedText={coachSeedText}
+            currentCoachSeedText={currentCoachSeedText}
+            panelState={coachPanel}
+            onCloseCoachChat={onCloseCoachChat}
+            onShowWorkoutDetails={onShowWorkoutDetails}
           />
-        ) : null}
-      </div>
+        }
+      >
+        {entry.planDayId ? (
+          <PlannedPrescription
+            entry={entry}
+            planSets={planSets}
+            weightUnit={weightUnit}
+            distanceUnit={distanceUnit}
+            parseHelperVisible={parseHelperVisible}
+          />
+        ) : (
+          <WorkoutPrescriptionSummary entry={entry} rationaleVariant="collapsed" />
+        )}
+
+        {isEditMode ? (
+          <EditSecondaryActions entry={entry} onAskCoach={handleAskCoach} onSkip={onSkip} />
+        ) : (
+          <LogCompletionControls
+            entry={entry}
+            rpe={rpe}
+            setRpe={setRpe}
+            onLog={handleLog}
+            isLogging={isLogging}
+            isSaving={planSets.isSaving}
+            onAskCoach={handleAskCoach}
+            onSkip={onSkip}
+          />
+        )}
+      </WorkoutCoachLayout>
     </ResponsiveSheet>
   );
-}
-
-function noop(): undefined {
-  return undefined;
 }
