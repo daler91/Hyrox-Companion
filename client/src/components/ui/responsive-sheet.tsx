@@ -24,6 +24,7 @@ interface ResponsiveSheetProps {
   readonly description?: React.ReactNode;
   readonly children: React.ReactNode;
   readonly contentClassName?: string;
+  readonly mobileFullHeight?: boolean;
   readonly testId?: string;
 }
 
@@ -34,6 +35,7 @@ export function ResponsiveSheet({
   description,
   children,
   contentClassName,
+  mobileFullHeight = false,
   testId,
 }: ResponsiveSheetProps) {
   const isMobile = useIsMobile();
@@ -44,20 +46,24 @@ export function ResponsiveSheet({
         <SheetContent
           side="bottom"
           className={cn(
-            "max-h-[90vh] overflow-y-auto rounded-t-2xl px-4 pb-6 pt-5",
+            mobileFullHeight
+              ? "flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden rounded-none p-0"
+              : "max-h-[90vh] overflow-y-auto rounded-t-2xl px-4 pb-6 pt-5",
             contentClassName,
           )}
           data-testid={testId}
         >
-          <div
-            className="mx-auto mb-2 h-1 w-10 rounded-full bg-muted-foreground/40"
-            aria-hidden="true"
-          />
-          <SheetHeader className="text-left">
+          {!mobileFullHeight ? (
+            <div
+              className="mx-auto mb-2 h-1 w-10 rounded-full bg-muted-foreground/40"
+              aria-hidden="true"
+            />
+          ) : null}
+          <SheetHeader className={cn("shrink-0 text-left", mobileFullHeight && "sr-only")}>
             <SheetTitle>{title}</SheetTitle>
             {description ? <SheetDescription>{description}</SheetDescription> : null}
           </SheetHeader>
-          <div className="mt-4">{children}</div>
+          <div className={mobileFullHeight ? "min-h-0 flex-1" : "mt-4"}>{children}</div>
         </SheetContent>
       </Sheet>
     );

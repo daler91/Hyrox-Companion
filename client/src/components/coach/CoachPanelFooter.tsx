@@ -17,7 +17,7 @@ export function CoachPanelFooter({
   isProcessing,
 }: Readonly<CoachPanelFooterProps>) {
   return (
-    <div className="flex-shrink-0 p-2 border-t space-y-2">
+    <div className="flex-shrink-0 space-y-2 border-t p-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
       <QuickActions actions={quickActions} onSelect={onQuickAction} disabled={isProcessing} />
       <ChatInput onSend={onSendMessage} onStop={onStopMessage} isLoading={isProcessing} />
     </div>

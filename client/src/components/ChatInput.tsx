@@ -78,8 +78,8 @@ export function ChatInput({ onSend, onStop, isLoading, placeholder = "Ask about 
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex gap-2 items-end" data-testid="form-chat">
-      <div className="flex-1 relative">
+    <form onSubmit={handleSubmit} className="flex min-w-0 items-end gap-2" data-testid="form-chat">
+      <div className="relative min-w-0 flex-1">
         <Textarea
           value={message}
           onChange={(e) => setMessage(e.target.value)}

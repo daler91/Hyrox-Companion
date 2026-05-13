@@ -124,12 +124,12 @@ describe("EmbeddedWorkoutCoachChat", () => {
         seedNonce={1}
         onBack={onBack}
         backButtonText="Workout details"
-        chatAreaClassName="max-h-none flex-1"
+        chatAreaClassName="min-h-0 max-h-none flex-1"
         isPanelView
       />,
     );
 
-    expect(screen.getByTestId("embedded-workout-coach-chat")).toHaveClass("min-h-[65vh]");
+    expect(screen.getByTestId("embedded-workout-coach-chat")).toHaveClass("min-h-0");
     expect(screen.getByTestId("embedded-workout-coach-chat-back")).toHaveTextContent(
       "Workout details",
     );
