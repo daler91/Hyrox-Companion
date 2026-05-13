@@ -59,6 +59,15 @@ type TimelineData = TimelineState["data"];
 type TimelineFiltersState = TimelineState["filters"];
 type PlanImportState = TimelineState["planImport"];
 
+function isMobileCoachPanelActive(
+  isMobile: boolean,
+  entry: TimelineEntry | null,
+  embeddedCoachEntryId: string | null,
+  mobileCoachPanelOpen: boolean,
+): boolean {
+  return Boolean(isMobile && mobileCoachPanelOpen && embeddedCoachEntryId === entry?.id);
+}
+
 interface TimelineContentProps {
   timelineLoading: TimelineData["timelineLoading"];
   filterStatus: TimelineFiltersState["filterStatus"];
@@ -370,11 +379,14 @@ export default function Timeline() {
     embeddedCoachEntryId,
     embeddedCoachSeedText,
     embeddedCoachSeedNonce,
+    mobileCoachPanelOpen,
     handleCoachToggle,
     openEmbeddedCoach,
     closeEmbeddedCoach,
     closeWorkoutSurfaces,
     openTimelineSurface,
+    showMobileCoachPanel,
+    showWorkoutDetails,
     clearPendingCoachIntent,
     handleAIConsentAccept,
   } = useEmbeddedCoachRouting({
@@ -574,7 +586,10 @@ export default function Timeline() {
               coachChatOpen={embeddedCoachEntryId === logEntry?.id}
               coachChatNonce={embeddedCoachSeedNonce}
               coachSeedText={embeddedCoachSeedText}
+              mobileCoachPanelOpen={isMobileCoachPanelActive(isMobile, logEntry, embeddedCoachEntryId, mobileCoachPanelOpen)}
               onCloseCoachChat={closeEmbeddedCoach}
+              onShowCoachPanel={showMobileCoachPanel}
+              onShowWorkoutDetails={showWorkoutDetails}
             />
 
             <LogSheet
@@ -590,7 +605,10 @@ export default function Timeline() {
               coachChatOpen={embeddedCoachEntryId === futureEditEntry?.id}
               coachChatNonce={embeddedCoachSeedNonce}
               coachSeedText={embeddedCoachSeedText}
+              mobileCoachPanelOpen={isMobileCoachPanelActive(isMobile, futureEditEntry, embeddedCoachEntryId, mobileCoachPanelOpen)}
               onCloseCoachChat={closeEmbeddedCoach}
+              onShowCoachPanel={showMobileCoachPanel}
+              onShowWorkoutDetails={showWorkoutDetails}
             />
 
             <SkippedSheet
@@ -601,7 +619,10 @@ export default function Timeline() {
               coachChatOpen={embeddedCoachEntryId === skippedEntry?.id}
               coachChatNonce={embeddedCoachSeedNonce}
               coachSeedText={embeddedCoachSeedText}
+              mobileCoachPanelOpen={isMobileCoachPanelActive(isMobile, skippedEntry, embeddedCoachEntryId, mobileCoachPanelOpen)}
               onCloseCoachChat={closeEmbeddedCoach}
+              onShowCoachPanel={showMobileCoachPanel}
+              onShowWorkoutDetails={showWorkoutDetails}
               onUndoSkip={(entry) => {
                 closeEmbeddedCoach();
                 setSkippedEntry(null);
@@ -622,7 +643,10 @@ export default function Timeline() {
               coachChatOpen={embeddedCoachEntryId === reviewEntry?.id}
               coachChatNonce={embeddedCoachSeedNonce}
               coachSeedText={embeddedCoachSeedText}
+              mobileCoachPanelOpen={isMobileCoachPanelActive(isMobile, reviewEntry, embeddedCoachEntryId, mobileCoachPanelOpen)}
               onCloseCoachChat={closeEmbeddedCoach}
+              onShowCoachPanel={showMobileCoachPanel}
+              onShowWorkoutDetails={showWorkoutDetails}
               onMarkPlanned={(entry) => {
                 closeEmbeddedCoach();
                 setReviewEntry(null);
@@ -642,7 +666,10 @@ export default function Timeline() {
               coachChatOpen={embeddedCoachEntryId === previewEntry?.id}
               coachChatNonce={embeddedCoachSeedNonce}
               coachSeedText={embeddedCoachSeedText}
+              mobileCoachPanelOpen={isMobileCoachPanelActive(isMobile, previewEntry, embeddedCoachEntryId, mobileCoachPanelOpen)}
               onCloseCoachChat={closeEmbeddedCoach}
+              onShowCoachPanel={showMobileCoachPanel}
+              onShowWorkoutDetails={showWorkoutDetails}
               onMove={() => {
                 closeEmbeddedCoach();
                 setPreviewEntry(null);

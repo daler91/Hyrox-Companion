@@ -1,6 +1,6 @@
 import type { ExerciseSet, TimelineEntry } from "@shared/schema";
 import { ArrowLeft, Sparkles } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useMemo } from "react";
 
 import { ChatInput, type ChatInputSeed } from "@/components/ChatInput";
 import { CoachPanelChatArea } from "@/components/coach/CoachPanelChatArea";
@@ -8,13 +8,18 @@ import { Button } from "@/components/ui/button";
 import { useChatSession } from "@/hooks/useChatSession";
 import { groupExerciseSets } from "@/lib/exerciseUtils";
 import { formatScheduledDate } from "@/lib/timelineEntryFormat";
+import { cn } from "@/lib/utils";
 
 interface EmbeddedWorkoutCoachChatProps {
   readonly entry: TimelineEntry;
   readonly seedText: string;
   readonly seedNonce?: number;
   readonly onBack: () => void;
-  readonly autoScrollIntoView?: boolean;
+  readonly backButtonText?: string;
+  readonly chatAreaClassName?: string;
+  readonly className?: string;
+  readonly isHidden?: boolean;
+  readonly isPanelView?: boolean;
 }
 
 export function buildWorkoutCoachSeedMessage(
@@ -37,9 +42,12 @@ export function EmbeddedWorkoutCoachChat({
   seedText,
   seedNonce = 1,
   onBack,
-  autoScrollIntoView = false,
+  backButtonText,
+  chatAreaClassName,
+  className,
+  isHidden = false,
+  isPanelView = false,
 }: EmbeddedWorkoutCoachChatProps) {
-  const sectionRef = useRef<HTMLElement>(null);
   const seed = useMemo<ChatInputSeed>(
     () => ({ text: seedText, nonce: seedNonce }),
     [seedNonce, seedText],
@@ -64,19 +72,14 @@ export function EmbeddedWorkoutCoachChat({
     [sendMessage],
   );
 
-  useEffect(() => {
-    if (!autoScrollIntoView) return;
-    sectionRef.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-      inline: "nearest",
-    });
-  }, [autoScrollIntoView, seedNonce]);
-
   return (
     <section
-      ref={sectionRef}
-      className="flex w-full min-w-0 self-start flex-col rounded-lg border border-border bg-card"
+      hidden={isHidden}
+      className={cn(
+        "flex w-full min-w-0 self-start flex-col rounded-lg border border-border bg-card",
+        isPanelView && "min-h-[65vh]",
+        className,
+      )}
       aria-label="Coach chat about this workout"
       data-testid="embedded-workout-coach-chat"
     >
@@ -84,13 +87,14 @@ export function EmbeddedWorkoutCoachChat({
         <Button
           type="button"
           variant="ghost"
-          size="icon"
-          className="size-7 text-muted-foreground"
+          size={backButtonText ? "sm" : "icon"}
+          className={cn("text-muted-foreground", backButtonText ? "h-8 px-2" : "size-7")}
           onClick={onBack}
           aria-label="Back to workout details"
           data-testid="embedded-workout-coach-chat-back"
         >
           <ArrowLeft className="size-4" aria-hidden="true" />
+          {backButtonText ? <span>{backButtonText}</span> : null}
         </Button>
         <Sparkles className="size-3.5 text-primary" aria-hidden="true" />
         <div className="min-w-0 text-xs font-medium uppercase text-muted-foreground">
@@ -105,7 +109,7 @@ export function EmbeddedWorkoutCoachChat({
         pendingSuggestions={[]}
         applyingId={null}
         isProcessing={isLoading}
-        className="max-h-[320px] flex-none"
+        className={cn("max-h-[320px] flex-none", chatAreaClassName)}
         onViewportScroll={updateAutoScrollMode}
         onApplySuggestion={noopSuggestion}
         onDismissSuggestion={noopId}

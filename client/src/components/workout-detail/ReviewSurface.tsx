@@ -16,11 +16,16 @@ import { apiRequest } from "@/lib/queryClient";
 import { formatScheduledDate } from "@/lib/timelineEntryFormat";
 
 import { AthleteNoteInput } from "./AthleteNoteInput";
-import { buildWorkoutCoachSeedMessage, EmbeddedWorkoutCoachChat } from "./EmbeddedWorkoutCoachChat";
+import { buildWorkoutCoachSeedMessage } from "./EmbeddedWorkoutCoachChat";
 import { ExerciseTable } from "./ExerciseTable";
 import { SaveStatePill } from "./SaveStatePill";
 import type { PrescriptionTextPayload } from "./shared/PrescriptionEditor";
 import { PrescriptionEditor } from "./shared/PrescriptionEditor";
+import {
+  getWorkoutCoachPanelState,
+  WorkoutCoachChatPanel,
+  WorkoutCoachLayout,
+} from "./WorkoutCoachPanel";
 
 interface ReviewSurfaceProps {
   readonly entry: TimelineEntry | null;
@@ -29,7 +34,10 @@ interface ReviewSurfaceProps {
   readonly coachChatOpen?: boolean;
   readonly coachChatNonce?: number;
   readonly coachSeedText?: string;
+  readonly mobileCoachPanelOpen?: boolean;
   readonly onCloseCoachChat?: () => void;
+  readonly onShowCoachPanel?: () => void;
+  readonly onShowWorkoutDetails?: () => void;
   readonly onMarkPlanned?: (entry: TimelineEntry) => void;
   readonly onDelete?: (entry: TimelineEntry) => void;
 }
@@ -102,7 +110,10 @@ export function ReviewSurface({
   coachChatOpen = false,
   coachChatNonce,
   coachSeedText,
+  mobileCoachPanelOpen = false,
   onCloseCoachChat,
+  onShowCoachPanel,
+  onShowWorkoutDetails,
   onMarkPlanned,
   onDelete,
 }: ReviewSurfaceProps) {
@@ -134,7 +145,7 @@ export function ReviewSurface({
   const canEditActuals = !isStrava && !!workoutLogId;
   const currentCoachSeedText = buildWorkoutCoachSeedMessage(entry, exerciseSets);
   const sheetContentClassName = getReviewSheetContentClassName(coachChatOpen);
-  const layoutClassName = getReviewLayoutClassName(coachChatOpen);
+  const coachPanel = getWorkoutCoachPanelState({ coachChatOpen, isMobile, mobileCoachPanelOpen });
 
   const handleRpeChange = (next: number | null) => {
     if (!workoutLogId) return;
@@ -178,7 +189,24 @@ export function ReviewSurface({
       contentClassName={sheetContentClassName}
       testId={`review-surface-${entry.id}`}
     >
-      <div className={layoutClassName}>
+      <WorkoutCoachLayout
+        panelState={coachPanel}
+        detailsTestId={`review-details-${entry.id}`}
+        returnTestId={`review-return-to-coach-${entry.id}`}
+        onShowCoachPanel={onShowCoachPanel}
+        chat={
+          <WorkoutCoachChatPanel
+            entry={entry}
+            coachChatOpen={coachChatOpen}
+            coachChatNonce={coachChatNonce}
+            coachSeedText={coachSeedText}
+            currentCoachSeedText={currentCoachSeedText}
+            panelState={coachPanel}
+            onCloseCoachChat={onCloseCoachChat}
+            onShowWorkoutDetails={onShowWorkoutDetails}
+          />
+        }
+      >
         <ReviewDetailsColumn
           entry={entry}
           detail={detail}
@@ -203,16 +231,7 @@ export function ReviewSurface({
           onDeleteClick={handleDeleteClick}
           onResolveReview={resolveReview}
         />
-        <ReviewCoachChat
-          entry={entry}
-          currentCoachSeedText={currentCoachSeedText}
-          coachChatOpen={coachChatOpen}
-          coachChatNonce={coachChatNonce}
-          coachSeedText={coachSeedText}
-          onCloseCoachChat={onCloseCoachChat}
-          autoScrollIntoView={coachChatOpen && isMobile}
-        />
-      </div>
+      </WorkoutCoachLayout>
     </ResponsiveSheet>
   );
 }
@@ -267,7 +286,7 @@ function ReviewDetailsColumn({
   onResolveReview,
 }: ReviewDetailsColumnProps) {
   return (
-    <div className="min-w-0 space-y-4">
+    <>
       <ReviewStravaSection entry={entry} distanceUnit={distanceUnit} isStrava={isStrava} />
       <ReviewEffortSection isStrava={isStrava} rpe={rpe} onRpeChange={onRpeChange} />
       <ReviewActualsSection
@@ -296,7 +315,7 @@ function ReviewDetailsColumn({
         onDelete={onDelete}
         onDeleteClick={onDeleteClick}
       />
-    </div>
+    </>
   );
 }
 
@@ -588,38 +607,6 @@ function ReviewActionButtons({
   );
 }
 
-interface ReviewCoachChatProps {
-  readonly entry: TimelineEntry;
-  readonly currentCoachSeedText: string;
-  readonly coachChatOpen: boolean;
-  readonly coachChatNonce?: number;
-  readonly coachSeedText?: string;
-  readonly onCloseCoachChat?: () => void;
-  readonly autoScrollIntoView: boolean;
-}
-
-function ReviewCoachChat({
-  entry,
-  currentCoachSeedText,
-  coachChatOpen,
-  coachChatNonce,
-  coachSeedText,
-  onCloseCoachChat,
-  autoScrollIntoView,
-}: ReviewCoachChatProps) {
-  if (!coachChatOpen) return null;
-
-  return (
-    <EmbeddedWorkoutCoachChat
-      entry={entry}
-      seedText={coachSeedText ?? currentCoachSeedText}
-      seedNonce={coachChatNonce}
-      onBack={onCloseCoachChat ?? noop}
-      autoScrollIntoView={autoScrollIntoView}
-    />
-  );
-}
-
 function getWeightUnit(prefWeightUnit: "kg" | "lbs"): WeightUnit {
   if (prefWeightUnit === "kg") return "kg";
   return "lb";
@@ -630,22 +617,11 @@ function getReviewSheetContentClassName(coachChatOpen: boolean): string {
   return "sm:max-w-2xl";
 }
 
-function getReviewLayoutClassName(coachChatOpen: boolean): string {
-  if (coachChatOpen) {
-    return "grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)]";
-  }
-  return "space-y-4";
-}
-
 function getResolvedReviewStatus(action: MigrationReviewAction): string {
   if (action === "reject") return "needs_manual_review";
   return "resolved";
 }
 
 function ignoreAsyncError(): undefined {
-  return undefined;
-}
-
-function noop(): undefined {
   return undefined;
 }
