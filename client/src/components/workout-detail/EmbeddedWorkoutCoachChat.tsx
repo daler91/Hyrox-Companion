@@ -1,6 +1,6 @@
 import type { ExerciseSet, TimelineEntry } from "@shared/schema";
 import { ArrowLeft, Sparkles } from "lucide-react";
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { ChatInput, type ChatInputSeed } from "@/components/ChatInput";
 import { CoachPanelChatArea } from "@/components/coach/CoachPanelChatArea";
@@ -14,6 +14,7 @@ interface EmbeddedWorkoutCoachChatProps {
   readonly seedText: string;
   readonly seedNonce?: number;
   readonly onBack: () => void;
+  readonly autoScrollIntoView?: boolean;
 }
 
 export function buildWorkoutCoachSeedMessage(
@@ -36,7 +37,9 @@ export function EmbeddedWorkoutCoachChat({
   seedText,
   seedNonce = 1,
   onBack,
+  autoScrollIntoView = false,
 }: EmbeddedWorkoutCoachChatProps) {
+  const sectionRef = useRef<HTMLElement>(null);
   const seed = useMemo<ChatInputSeed>(
     () => ({ text: seedText, nonce: seedNonce }),
     [seedNonce, seedText],
@@ -61,8 +64,18 @@ export function EmbeddedWorkoutCoachChat({
     [sendMessage],
   );
 
+  useEffect(() => {
+    if (!autoScrollIntoView) return;
+    sectionRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+      inline: "nearest",
+    });
+  }, [autoScrollIntoView, seedNonce]);
+
   return (
     <section
+      ref={sectionRef}
       className="flex w-full min-w-0 self-start flex-col rounded-lg border border-border bg-card"
       aria-label="Coach chat about this workout"
       data-testid="embedded-workout-coach-chat"

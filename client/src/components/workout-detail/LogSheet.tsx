@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ResponsiveSheet } from "@/components/ui/responsive-sheet";
 import { Separator } from "@/components/ui/separator";
 import { StructureBlocksEditor } from "@/components/workout-structure";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { usePlanDayExercises } from "@/hooks/usePlanDayExercises";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { formatScheduledDate } from "@/lib/timelineEntryFormat";
@@ -334,6 +335,7 @@ export function LogSheet({
   isLogging,
   mode = "log",
 }: LogSheetProps) {
+  const isMobile = useIsMobile();
   const { weightUnit: prefWeightUnit, distanceUnit } = useUnitPreferences();
   const weightUnit: "kg" | "lb" = prefWeightUnit === "kg" ? "kg" : "lb";
   const { rpe, setRpe } = useEntryRpe(entry);
@@ -411,6 +413,7 @@ export function LogSheet({
             seedText={coachSeedText ?? currentCoachSeedText}
             seedNonce={coachChatNonce}
             onBack={onCloseCoachChat ?? noop}
+            autoScrollIntoView={coachChatOpen && isMobile}
           />
         ) : null}
       </div>

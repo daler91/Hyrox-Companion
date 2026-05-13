@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { ResponsiveSheet } from "@/components/ui/responsive-sheet";
 import { Separator } from "@/components/ui/separator";
 import { StructureBlocksEditor } from "@/components/workout-structure";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { useWorkoutDetail } from "@/hooks/useWorkoutDetail";
 import { apiRequest } from "@/lib/queryClient";
@@ -105,6 +106,7 @@ export function ReviewSurface({
   onMarkPlanned,
   onDelete,
 }: ReviewSurfaceProps) {
+  const isMobile = useIsMobile();
   const { weightUnit: prefWeightUnit, distanceUnit, showAdherenceInsights } = useUnitPreferences();
   const weightUnit = getWeightUnit(prefWeightUnit);
 
@@ -208,6 +210,7 @@ export function ReviewSurface({
           coachChatNonce={coachChatNonce}
           coachSeedText={coachSeedText}
           onCloseCoachChat={onCloseCoachChat}
+          autoScrollIntoView={coachChatOpen && isMobile}
         />
       </div>
     </ResponsiveSheet>
@@ -592,6 +595,7 @@ interface ReviewCoachChatProps {
   readonly coachChatNonce?: number;
   readonly coachSeedText?: string;
   readonly onCloseCoachChat?: () => void;
+  readonly autoScrollIntoView: boolean;
 }
 
 function ReviewCoachChat({
@@ -601,6 +605,7 @@ function ReviewCoachChat({
   coachChatNonce,
   coachSeedText,
   onCloseCoachChat,
+  autoScrollIntoView,
 }: ReviewCoachChatProps) {
   if (!coachChatOpen) return null;
 
@@ -610,6 +615,7 @@ function ReviewCoachChat({
       seedText={coachSeedText ?? currentCoachSeedText}
       seedNonce={coachChatNonce}
       onBack={onCloseCoachChat ?? noop}
+      autoScrollIntoView={autoScrollIntoView}
     />
   );
 }

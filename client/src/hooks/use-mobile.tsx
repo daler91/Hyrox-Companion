@@ -14,6 +14,8 @@ export function useIsMobile() {
   const [isMobile, setIsMobile] = React.useState<boolean | undefined>(readIsMobile)
 
   React.useEffect(() => {
+    if (typeof globalThis.matchMedia !== "function") return
+
     const mql = globalThis.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`)
     const onChange = () => {
       setIsMobile(globalThis.innerWidth < MOBILE_BREAKPOINT)
