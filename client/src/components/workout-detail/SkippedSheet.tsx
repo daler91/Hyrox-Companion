@@ -3,31 +3,17 @@ import { MessageSquare, RotateCcw, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { getStatusBadge } from "@/components/timeline/timeline-workout-card/utils";
-import { Button } from "@/components/ui/button";
-import { ResponsiveSheet } from "@/components/ui/responsive-sheet";
-import { Separator } from "@/components/ui/separator";
-import { useIsMobile } from "@/hooks/use-mobile";
-import { formatScheduledDate } from "@/lib/timelineEntryFormat";
 
-import { buildWorkoutCoachSeedMessage } from "./EmbeddedWorkoutCoachChat";
-import { WorkoutPrescriptionSummary } from "./shared/WorkoutPrescriptionSummary";
 import {
-  getWorkoutCoachPanelState,
-  WorkoutCoachChatPanel,
-  WorkoutCoachLayout,
-} from "./WorkoutCoachPanel";
+  ReadOnlyWorkoutActionGrid,
+  ReadOnlyWorkoutDetailSheet,
+  type WorkoutCoachSheetProps,
+} from "./ReadOnlyWorkoutDetailSheet";
 
-interface SkippedSheetProps {
+interface SkippedSheetProps extends WorkoutCoachSheetProps {
   readonly entry: TimelineEntry | null;
   readonly onClose: () => void;
   readonly onAskCoach?: (entry: TimelineEntry, seedText: string) => void;
-  readonly coachChatOpen?: boolean;
-  readonly coachChatNonce?: number;
-  readonly coachSeedText?: string;
-  readonly mobileCoachPanelOpen?: boolean;
-  readonly onCloseCoachChat?: () => void;
-  readonly onShowCoachPanel?: () => void;
-  readonly onShowWorkoutDetails?: () => void;
   /** Flip the entry's status back to "planned" so the user can log it. */
   readonly onUndoSkip?: (entry: TimelineEntry) => void;
   readonly onDelete?: (entry: TimelineEntry) => void;
@@ -46,18 +32,11 @@ export function SkippedSheet({
   entry,
   onClose,
   onAskCoach,
-  coachChatOpen = false,
-  coachChatNonce,
-  coachSeedText,
-  mobileCoachPanelOpen = false,
-  onCloseCoachChat,
-  onShowCoachPanel,
-  onShowWorkoutDetails,
   onUndoSkip,
   onDelete,
+  ...coachProps
 }: SkippedSheetProps) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const isMobile = useIsMobile();
 
   const handleSheetOpenChange = (open: boolean) => {
     if (open) return;
@@ -75,12 +54,11 @@ export function SkippedSheet({
   };
 
   if (!entry) return null;
-  const currentCoachSeedText = buildWorkoutCoachSeedMessage(entry, entry.exerciseSets ?? []);
-  const coachPanel = getWorkoutCoachPanelState({ coachChatOpen, isMobile, mobileCoachPanelOpen });
 
   return (
-    <ResponsiveSheet
-      open={!!entry}
+    <ReadOnlyWorkoutDetailSheet
+      {...coachProps}
+      entry={entry}
       onOpenChange={handleSheetOpenChange}
       title={
         <span className="flex flex-wrap items-center gap-2">
@@ -88,68 +66,68 @@ export function SkippedSheet({
           <span>{entry.focus || "Skipped workout"}</span>
         </span>
       }
-      description={formatScheduledDate(entry.date)}
-      contentClassName={coachChatOpen ? "sm:max-w-5xl" : undefined}
-      testId={`skipped-sheet-${entry.id}`}
-    >
-      <WorkoutCoachLayout
-        panelState={coachPanel}
-        detailsTestId={`skipped-details-${entry.id}`}
-        returnTestId={`skipped-return-to-coach-${entry.id}`}
-        onShowCoachPanel={onShowCoachPanel}
-        chat={
-          <WorkoutCoachChatPanel
-            entry={entry}
-            coachChatOpen={coachChatOpen}
-            coachChatNonce={coachChatNonce}
-            coachSeedText={coachSeedText}
-            currentCoachSeedText={currentCoachSeedText}
-            panelState={coachPanel}
-            onCloseCoachChat={onCloseCoachChat}
-            onShowWorkoutDetails={onShowWorkoutDetails}
-          />
-        }
-      >
-        <WorkoutPrescriptionSummary entry={entry} rationaleVariant="open" />
+      sheetTestId={`skipped-sheet-${entry.id}`}
+      detailsTestId={`skipped-details-${entry.id}`}
+      returnTestId={`skipped-return-to-coach-${entry.id}`}
+      renderActions={(seedText) => (
+        <SkippedActions
+          confirmingDelete={confirmingDelete}
+          entry={entry}
+          seedText={seedText}
+          onAskCoach={onAskCoach}
+          onDelete={onDelete}
+          onDeleteClick={handleDeleteClick}
+          onUndoSkip={onUndoSkip}
+        />
+      )}
+    />
+  );
+}
 
-        <Separator />
+interface SkippedActionsProps {
+  readonly confirmingDelete: boolean;
+  readonly entry: TimelineEntry;
+  readonly seedText: string;
+  readonly onAskCoach?: (entry: TimelineEntry, seedText: string) => void;
+  readonly onDelete?: (entry: TimelineEntry) => void;
+  readonly onDeleteClick: () => void;
+  readonly onUndoSkip?: (entry: TimelineEntry) => void;
+}
 
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {onUndoSkip && entry.planDayId ? (
-            <Button
-              type="button"
-              variant="default"
-              onClick={() => onUndoSkip(entry)}
-              data-testid={`skipped-undo-${entry.id}`}
-            >
-              <RotateCcw className="mr-2 h-4 w-4" />
-              Undo skip
-            </Button>
-          ) : null}
-          {onAskCoach ? (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onAskCoach(entry, currentCoachSeedText)}
-              data-testid={`skipped-ask-coach-${entry.id}`}
-            >
-              <MessageSquare className="mr-2 h-4 w-4" />
-              Ask coach
-            </Button>
-          ) : null}
-          {onDelete ? (
-            <Button
-              type="button"
-              variant={confirmingDelete ? "destructive" : "ghost"}
-              onClick={handleDeleteClick}
-              data-testid={`skipped-delete-${entry.id}`}
-            >
-              <Trash2 className="mr-2 h-4 w-4" />
-              {confirmingDelete ? "Tap again to confirm" : "Delete"}
-            </Button>
-          ) : null}
-        </div>
-      </WorkoutCoachLayout>
-    </ResponsiveSheet>
+function SkippedActions({
+  confirmingDelete,
+  entry,
+  seedText,
+  onAskCoach,
+  onDelete,
+  onDeleteClick,
+  onUndoSkip,
+}: SkippedActionsProps) {
+  return (
+    <ReadOnlyWorkoutActionGrid
+      actions={[
+        {
+          icon: RotateCcw,
+          label: "Undo skip",
+          onClick: onUndoSkip && entry.planDayId ? () => onUndoSkip(entry) : undefined,
+          testId: `skipped-undo-${entry.id}`,
+          variant: "default",
+        },
+        {
+          icon: MessageSquare,
+          label: "Ask coach",
+          onClick: onAskCoach ? () => onAskCoach(entry, seedText) : undefined,
+          testId: `skipped-ask-coach-${entry.id}`,
+          variant: "outline",
+        },
+        {
+          icon: Trash2,
+          label: confirmingDelete ? "Tap again to confirm" : "Delete",
+          onClick: onDelete ? onDeleteClick : undefined,
+          testId: `skipped-delete-${entry.id}`,
+          variant: confirmingDelete ? "destructive" : "ghost",
+        },
+      ]}
+    />
   );
 }

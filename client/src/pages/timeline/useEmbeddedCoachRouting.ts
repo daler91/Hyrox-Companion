@@ -56,15 +56,13 @@ export function useEmbeddedCoachRouting({
         setShowAIConsent(true);
         return;
       }
-      if (embeddedCoachEntryId !== entry.id) {
-        setEmbeddedCoachEntryId(entry.id);
-        setEmbeddedCoachSeedText(seedText);
-        setEmbeddedCoachSeedNonce((nonce) => nonce + 1);
-      }
+      setEmbeddedCoachEntryId(entry.id);
+      setEmbeddedCoachSeedText(seedText);
+      setEmbeddedCoachSeedNonce((nonce) => nonce + 1);
       setMobileCoachPanelOpen(true);
       setCoachOpen(false);
     },
-    [aiCoachEnabled, embeddedCoachEntryId, isAuthUserLoaded, setCoachOpen, setShowAIConsent],
+    [aiCoachEnabled, isAuthUserLoaded, setCoachOpen, setShowAIConsent],
   );
 
   const closeEmbeddedCoach = useCallback(() => {

@@ -358,7 +358,12 @@ describe("Timeline surface sync", () => {
     await askCoachFromPreview(user);
 
     expectEmbeddedCoachOpen();
+    expect(screen.getByTestId("embedded-chat")).toHaveAttribute("data-nonce", "1");
     expect(timelineMocks.setCoachOpen).toHaveBeenCalledWith(false);
+
+    await askCoachFromPreview(user);
+
+    expect(screen.getByTestId("embedded-chat")).toHaveAttribute("data-nonce", "2");
 
     await user.click(screen.getByTestId("embedded-back"));
 
@@ -383,12 +388,13 @@ describe("Timeline surface sync", () => {
     await askCoachFromPreview(user);
 
     expectMobileCoachPanelOpen();
-    expect(screen.getByTestId("embedded-chat")).toHaveAttribute("data-nonce", "1");
+    expect(screen.getByTestId("embedded-chat")).toHaveAttribute("data-nonce", "2");
 
     await user.click(screen.getByTestId("embedded-back"));
     await user.click(screen.getByTestId("return-to-coach-chat"));
 
     expectMobileCoachPanelOpen();
+    expect(screen.getByTestId("embedded-chat")).toHaveAttribute("data-nonce", "2");
     expect(timelineMocks.setCoachOpen).not.toHaveBeenCalledWith(true);
   });
 
