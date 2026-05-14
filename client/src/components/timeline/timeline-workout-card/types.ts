@@ -21,6 +21,10 @@ export interface TimelineWorkoutCardProps {
   readonly onMove?: (entry: TimelineEntry, newDate: string) => void;
   /** Whether a reschedule mutation is currently in flight for this user. */
   readonly isMoving?: boolean;
+  readonly isBulkSelectMode?: boolean;
+  readonly isBulkSelected?: boolean;
+  readonly canBulkSelect?: boolean;
+  readonly onBulkSelectToggle?: (entry: TimelineEntry) => void;
 }
 
 export interface WorkoutStravaStatsProps {

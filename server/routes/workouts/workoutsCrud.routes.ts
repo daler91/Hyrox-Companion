@@ -18,6 +18,11 @@ import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from "../../constants";
 import { db } from "../../db";
 import { AppError, ErrorCode } from "../../errors";
 import { asyncHandler, parsePagination, rateLimiter, sendNotFound, validateBody } from "../../routeUtils";
+import {
+  BULK_DELETE_WORKOUTS_NOT_FOUND,
+  bulkDeleteWorkouts,
+  isBulkDeleteWorkoutsNotFoundError,
+} from "../../services/bulkDeleteWorkouts";
 import { deriveMissingWorkoutSetsFromStructure, updateWorkoutStructureBlockScore } from "../../services/workoutService";
 import { createWorkout, updateWorkoutUseCase } from "../../services/workoutUseCases";
 import { storage } from "../../storage";
@@ -44,9 +49,33 @@ const combineWorkoutsSchema = z.object({
   skipPlanDayIds: z.array(z.string().min(1)).max(10).optional(),
 });
 
+const MAX_BULK_DELETE_TARGETS = 100;
+const bulkDeleteWorkoutsSchema = z.object({
+  workoutLogIds: z.array(z.string().min(1)).max(MAX_BULK_DELETE_TARGETS).default([]),
+  planDayIds: z.array(z.string().min(1)).max(MAX_BULK_DELETE_TARGETS).default([]),
+}).superRefine((payload, ctx) => {
+  const total = payload.workoutLogIds.length + payload.planDayIds.length;
+  if (total === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Select at least one workout to delete",
+    });
+  }
+  if (total > MAX_BULK_DELETE_TARGETS) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `Select no more than ${MAX_BULK_DELETE_TARGETS} workouts at once`,
+    });
+  }
+});
+
 const updateBlockScoreBodySchema = z.object({
   score: structureBlockScoreSchema.nullable(),
 });
+
+function uniqueIds(ids: readonly string[]): string[] {
+  return Array.from(new Set(ids));
+}
 
 export function registerWorkoutCrudRoutes(router: Router): void {
   router.get("/api/v1/custom-exercises", isAuthenticated, rateLimiter("customExercise", 60), asyncHandler(async (req: Request, res: Response) => {
@@ -165,6 +194,23 @@ export function registerWorkoutCrudRoutes(router: Router): void {
       return sendNotFound(res, WORKOUT_NOT_FOUND);
     }
     res.json({ success: true });
+  });
+
+  protectedPost(router, "/api/v1/workouts/bulk-delete", { limiter: rateLimiter("workoutBulkDelete", 20), middleware: [validateBody(bulkDeleteWorkoutsSchema)] }, async (req: Request, res: Response) => {
+    const userId = getUserId(req);
+    const body = req.body as z.infer<typeof bulkDeleteWorkoutsSchema>;
+    const workoutLogIds = uniqueIds(body.workoutLogIds);
+    const planDayIds = uniqueIds(body.planDayIds);
+
+    try {
+      const result = await bulkDeleteWorkouts({ userId, workoutLogIds, planDayIds });
+      res.json(result);
+    } catch (error) {
+      if (isBulkDeleteWorkoutsNotFoundError(error)) {
+        return sendNotFound(res, BULK_DELETE_WORKOUTS_NOT_FOUND);
+      }
+      throw error;
+    }
   });
 
   protectedPost(router, "/api/v1/workouts/combine", { limiter: rateLimiter("workout", 10), middleware: [validateBody(combineWorkoutsSchema)] }, async (req: Request, res: Response) => {

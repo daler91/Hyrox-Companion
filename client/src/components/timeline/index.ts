@@ -1,4 +1,6 @@
 export { AnnotationsDialog } from "./AnnotationsDialog";
+export { BulkDeleteControls } from "./BulkDeleteControls";
+export { BulkDeleteToolbar } from "./BulkDeleteToolbar";
 export { CoachReviewingIndicator } from "./CoachReviewingIndicator";
 export { CombineWorkoutsDialog } from "./combine-workouts-dialog";
 export type { EditFormState } from "./EditWorkoutDialog";

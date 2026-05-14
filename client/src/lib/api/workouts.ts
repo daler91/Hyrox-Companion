@@ -20,6 +20,18 @@ export interface BatchReparseResponse {
   failed: number;
 }
 
+export interface BulkDeleteWorkoutsPayload {
+  workoutLogIds?: string[];
+  planDayIds?: string[];
+}
+
+export interface BulkDeleteWorkoutsResponse {
+  success: boolean;
+  deletedWorkoutLogIds: string[];
+  deletedPlanDayIds: string[];
+  deletedCount: number;
+}
+
 /**
  * Response from POST /api/v1/workouts/:id/reparse. `saved` is false when
  * the server couldn't extract any exercises from the free text — callers
@@ -87,6 +99,9 @@ export const workouts = {
     ),
 
   delete: (id: string) => typedRequest<{ success: boolean }>("DELETE", `/api/v1/workouts/${id}`),
+
+  bulkDelete: (data: BulkDeleteWorkoutsPayload) =>
+    typedRequest<BulkDeleteWorkoutsResponse>("POST", "/api/v1/workouts/bulk-delete", data),
 
   combine: (data: { newWorkout: Record<string, unknown>; deleteWorkoutIds: string[]; skipPlanDayIds?: string[] }) =>
     typedRequest<WorkoutLog>("POST", "/api/v1/workouts/combine", data),

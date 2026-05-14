@@ -31,6 +31,10 @@ vi.mock("../../storage", () => ({
       deleteWorkoutLog: vi.fn(),
       updateWorkoutLog: vi.fn(),
     },
+    plans: {
+      getPlanDay: vi.fn(),
+      deletePlanDay: vi.fn(),
+    },
     timeline: {
       getTimeline: vi.fn(),
     },
@@ -53,6 +57,16 @@ vi.mock("../../services/workoutService", () => ({
   autoHydrateExerciseSetsFromTextIfNeeded: vi.fn(),
   updateWorkoutStructureBlockScore: vi.fn(),
 }));
+
+vi.mock("../../services/bulkDeleteWorkouts", () => {
+  const notFoundMessage = "One or more workouts were not found";
+  return {
+    BULK_DELETE_WORKOUTS_NOT_FOUND: notFoundMessage,
+    bulkDeleteWorkouts: vi.fn(),
+    isBulkDeleteWorkoutsNotFoundError: (error: unknown) =>
+      error instanceof Error && error.message === notFoundMessage,
+  };
+});
 
 vi.mock("../../services/structuredExerciseHealth", () => ({ incrementStructuredExerciseCounter: vi.fn().mockResolvedValue(undefined) }));
 
@@ -100,6 +114,8 @@ describe("Workouts Routes", () => {
     vi.mocked(storage.workouts.getWorkoutStructureByWorkoutLog).mockResolvedValue([] as never);
     vi.mocked(storage.workouts.deleteWorkoutLog).mockResolvedValue(true);
     vi.mocked(storage.workouts.updateWorkoutLog).mockResolvedValue({ id: "workout-1", notes: "updated" } as never);
+    vi.mocked(storage.plans.getPlanDay).mockResolvedValue({ id: "day-1", planId: "plan-1", focus: "Engine" } as never);
+    vi.mocked(storage.plans.deletePlanDay).mockResolvedValue(true);
     vi.mocked(storage.timeline.getTimeline).mockResolvedValue([{ id: "timeline-1", type: "workout", date: "2026-01-02" }] as never);
     vi.mocked(storage.users.getUser).mockResolvedValue({ id: "test_user_id", weightUnit: "kg" } as never);
     vi.mocked(storage.users.getCustomExercises).mockResolvedValue([] as never);
@@ -108,6 +124,14 @@ describe("Workouts Routes", () => {
     vi.mocked(updateWorkoutUseCase).mockResolvedValue({ id: "workout-1", notes: "updated" } as never);
     vi.mocked(reparseWorkout).mockResolvedValue({ exercises: [{ exerciseName: "row" }], setCount: 1 } as never);
     vi.mocked(updateWorkoutStructureBlockScore).mockResolvedValue([{ id: "block-1", sectionType: "main", formatType: "amrap", timeCapMinutes: 10, score: { type: "amrap", rounds: 4 }, steps: [{ stepNumber: 1, stepType: "work", exerciseName: "rowing" }] }] as never);
+
+    const { bulkDeleteWorkouts } = await import("../../services/bulkDeleteWorkouts");
+    vi.mocked(bulkDeleteWorkouts).mockResolvedValue({
+      success: true,
+      deletedWorkoutLogIds: ["workout-1"],
+      deletedPlanDayIds: [],
+      deletedCount: 1,
+    });
 
     vi.mocked(generateCSV).mockResolvedValue("id,date\nworkout-1,2026-01-02");
     vi.mocked(generateJSON).mockResolvedValue({ exportedAt: "2026-01-02T10:00:00.000Z", workouts: [{ id: "workout-1" }] } as never);
@@ -127,6 +151,59 @@ describe("Workouts Routes", () => {
         expect(response.body, `${testCase.name} field ${fieldPath}`).toHaveProperty(fieldPath);
       }
     }
+  });
+
+  it("bulk deletes workout logs and plan days after validating ownership", async () => {
+    const { bulkDeleteWorkouts } = await import("../../services/bulkDeleteWorkouts");
+    vi.mocked(bulkDeleteWorkouts).mockResolvedValueOnce({
+      success: true,
+      deletedWorkoutLogIds: ["workout-1", "workout-2"],
+      deletedPlanDayIds: ["day-1"],
+      deletedCount: 3,
+    });
+
+    const response = await request(app)
+      .post("/api/v1/workouts/bulk-delete")
+      .send({ workoutLogIds: ["workout-1", "workout-2"], planDayIds: ["day-1"] });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      success: true,
+      deletedWorkoutLogIds: ["workout-1", "workout-2"],
+      deletedPlanDayIds: ["day-1"],
+      deletedCount: 3,
+    });
+    expect(bulkDeleteWorkouts).toHaveBeenCalledWith({
+      userId: "test_user_id",
+      workoutLogIds: ["workout-1", "workout-2"],
+      planDayIds: ["day-1"],
+    });
+  });
+
+  it("rejects incomplete bulk delete targets before deleting anything", async () => {
+    const [{ storage }, { bulkDeleteWorkouts, BULK_DELETE_WORKOUTS_NOT_FOUND }] = await Promise.all([
+      import("../../storage"),
+      import("../../services/bulkDeleteWorkouts"),
+    ]);
+    vi.mocked(bulkDeleteWorkouts).mockRejectedValueOnce(new Error(BULK_DELETE_WORKOUTS_NOT_FOUND));
+
+    const response = await request(app)
+      .post("/api/v1/workouts/bulk-delete")
+      .send({ workoutLogIds: ["workout-1", "missing-workout"] });
+
+    expect(response.status).toBe(404);
+    expect(response.body).toEqual({ error: "One or more workouts were not found", code: "NOT_FOUND" });
+    expect(storage.workouts.deleteWorkoutLog).not.toHaveBeenCalled();
+    expect(storage.plans.deletePlanDay).not.toHaveBeenCalled();
+  });
+
+  it("rejects empty bulk delete requests", async () => {
+    const response = await request(app)
+      .post("/api/v1/workouts/bulk-delete")
+      .send({});
+
+    expect(response.status).toBe(400);
+    expect(response.body.code).toBe("VALIDATION_ERROR");
   });
 
   it("preserves shared error contract for key regression paths", async () => {

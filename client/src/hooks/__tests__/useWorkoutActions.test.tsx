@@ -237,6 +237,26 @@ describe('useWorkoutActions', () => {
         });
       });
     });
+
+    describe('handleBulkDelete', () => {
+      it('sends standalone workout ids and plan-day ids in one request', async () => {
+        const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
+        const standalone = createMockTimelineEntry({ id: 'log-w-1', workoutLogId: 'w-1', planDayId: null, date: '2024-01-01', focus: 'strength' });
+        const planEntry = createMockTimelineEntry({ id: 'plan-pd-1', planDayId: 'pd-1', workoutLogId: null, date: '2024-01-02', focus: 'conditioning' });
+        const linkedEntry = createMockTimelineEntry({ id: 'log-w-2', planDayId: 'pd-2', workoutLogId: 'w-2', date: '2024-01-03', focus: 'hyrox' });
+
+        act(() => {
+          result.current.handleBulkDelete([standalone, planEntry, linkedEntry]);
+        });
+
+        await waitFor(() => {
+          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('POST', '/api/v1/workouts/bulk-delete', {
+            workoutLogIds: ['w-1'],
+            planDayIds: ['pd-1', 'pd-2'],
+          }, expect.any(AbortSignal));
+        });
+      });
+    });
   });
 
   describe('API Callbacks and Toast notifications', () => {

@@ -6,6 +6,7 @@ import React, { forwardRef } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { getBulkDeleteSelectionKey, isTimelineEntryBulkDeletable } from "@/hooks/workout-actions/bulkDelete";
 import { cn } from "@/lib/utils";
 
 import TimelineWorkoutCard from "./timeline-workout-card";
@@ -29,6 +30,9 @@ interface TimelineDateGroupProps {
   isAnnotationDeleting?: boolean;
   onMoveEntry?: (entry: TimelineEntry, newDate: string) => void;
   isMovingEntry?: boolean;
+  isBulkSelectMode?: boolean;
+  selectedBulkEntryKeys?: ReadonlySet<string>;
+  onBulkSelectToggle?: (entry: TimelineEntry) => void;
 }
 
 function getDateLabel(dateObj: Date) {
@@ -65,6 +69,9 @@ const TimelineDateGroupComponent = forwardRef<HTMLDivElement, TimelineDateGroupP
       isAnnotationDeleting,
       onMoveEntry,
       isMovingEntry,
+      isBulkSelectMode,
+      selectedBulkEntryKeys,
+      onBulkSelectToggle,
     },
     ref,
   ) => {
@@ -184,6 +191,12 @@ const TimelineDateGroupComponent = forwardRef<HTMLDivElement, TimelineDateGroupP
               isAutoCoaching={isAutoCoaching}
               onMove={onMoveEntry}
               isMoving={isMovingEntry}
+              isBulkSelectMode={isBulkSelectMode}
+              isBulkSelected={Boolean(
+                selectedBulkEntryKeys?.has(getBulkDeleteSelectionKey(entry) ?? ""),
+              )}
+              canBulkSelect={isTimelineEntryBulkDeletable(entry)}
+              onBulkSelectToggle={onBulkSelectToggle}
             />
           ))}
         </div>

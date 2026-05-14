@@ -140,4 +140,23 @@ describe("TimelineDateGroup", () => {
     await user.click(screen.getByTestId("button-add-annotation-2030-01-15"));
     expect(onAddAnnotation).toHaveBeenCalledWith("2030-01-15");
   });
+
+  it("uses card clicks for bulk selection instead of opening the workout", async () => {
+    const onClick = vi.fn();
+    const onBulkSelectToggle = vi.fn();
+    const entry = makeEntry({ id: "entry-1", planDayId: "pd-1" });
+    renderGroup({
+      entries: [entry],
+      onClick,
+      isBulkSelectMode: true,
+      selectedBulkEntryKeys: new Set(),
+      onBulkSelectToggle,
+    });
+
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId("card-timeline-entry-entry-1"));
+
+    expect(onBulkSelectToggle).toHaveBeenCalledWith(entry);
+    expect(onClick).not.toHaveBeenCalled();
+  });
 });

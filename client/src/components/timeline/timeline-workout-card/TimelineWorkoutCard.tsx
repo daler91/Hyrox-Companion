@@ -9,6 +9,7 @@ import {
   FileText,
   Loader2,
   Move,
+  Square,
 } from "lucide-react";
 import React, { useMemo, useState } from "react";
 
@@ -48,14 +49,19 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
   isAutoCoaching,
   onMove,
   isMoving,
+  isBulkSelectMode,
+  isBulkSelected,
+  canBulkSelect,
+  onBulkSelectToggle,
 }: Readonly<TimelineWorkoutCardProps>) {
   const { distanceUnit, weightLabel, showAdherenceInsights } = useUnitPreferences();
   const [movePickerOpen, setMovePickerOpen] = useState(false);
 
   const isBeingCombined = combiningEntryId === entry.id;
   const isSameDate = combiningEntryDate === entry.date;
-  const canBeCombinedWith = isCombining && !isBeingCombined && isSameDate;
+  const canBeCombinedWith = isCombining && !isBulkSelectMode && !isBeingCombined && isSameDate;
   const isPlanned = entry.status === "planned" && entry.planDayId;
+  const canToggleBulkSelect = Boolean(isBulkSelectMode && canBulkSelect && onBulkSelectToggle);
   const adherenceBadge = showAdherenceInsights
     ? getAdherenceBadge(entry.compliancePct ?? null)
     : null;
@@ -66,7 +72,7 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
   // We only allow moving entries that have a stable anchor — either a plan
   // day (reschedule prescription) or a workout log (change date). Ad-hoc
   // rows without either (e.g. header placeholders) can't be moved.
-  const canMove = Boolean(onMove) && (entry.planDayId || entry.workoutLogId) && !isCombining;
+  const canMove = Boolean(onMove) && (entry.planDayId || entry.workoutLogId) && !isCombining && !isBulkSelectMode;
 
   const {
     attributes: dragAttributes,
@@ -80,6 +86,12 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
   });
 
   const handleCardClick = (_e: React.MouseEvent) => {
+    if (isBulkSelectMode) {
+      if (canToggleBulkSelect) {
+        onBulkSelectToggle?.(entry);
+      }
+      return;
+    }
     if (canBeCombinedWith) {
       onCombineSelect?.(entry);
     } else {
@@ -90,6 +102,12 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
   const handleCardKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
+      if (isBulkSelectMode) {
+        if (canToggleBulkSelect) {
+          onBulkSelectToggle?.(entry);
+        }
+        return;
+      }
       if (canBeCombinedWith) {
         onCombineSelect?.(entry);
       } else {
@@ -101,6 +119,13 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
   const handleCompleteClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     onMarkComplete(entry);
+  };
+
+  const handleBulkSelectClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (canToggleBulkSelect) {
+      onBulkSelectToggle?.(entry);
+    }
   };
 
   // ⚡ Bolt Performance Optimization:
@@ -134,15 +159,24 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
         baseCardClasses,
         aiCoachClasses,
         dragClasses,
+        isBulkSelectMode && canBulkSelect && "hover:border-destructive/50",
+        isBulkSelectMode && !canBulkSelect && "cursor-not-allowed opacity-60",
+        isBulkSelected && "border-destructive/60 bg-destructive/5 ring-2 ring-destructive/25",
       )}
       onClick={handleCardClick}
       onKeyDown={handleCardKeyDown}
-      role="button"
+      role={isBulkSelectMode && canBulkSelect ? "checkbox" : "button"}
       tabIndex={0}
       // Label uses only the visible focus + status badge text (date sits in
       // the parent date-group heading) so the accessible name matches what
       // the user can read on screen — WCAG 2.5.3 Label in Name.
-      aria-label={`${entry.focus || "Workout"}, ${entry.status}`}
+      aria-label={
+        isBulkSelectMode
+          ? `${isBulkSelected ? "Deselect" : "Select"} ${entry.focus || "workout"}, ${entry.status}`
+          : `${entry.focus || "Workout"}, ${entry.status}`
+      }
+      aria-checked={isBulkSelectMode && canBulkSelect ? Boolean(isBulkSelected) : undefined}
+      aria-disabled={isBulkSelectMode && !canBulkSelect ? true : undefined}
       data-testid={`card-timeline-entry-${entry.id}`}
     >
       {isTargetedByCoach && (
@@ -169,7 +203,25 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
           />
         )}
         <div className="flex items-start gap-3">
-          {isPlanned && (
+          {isBulkSelectMode && (
+            <button
+              type="button"
+              className={cn(
+                "shrink-0 mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-md border text-muted-foreground transition-colors",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                canBulkSelect && "hover:bg-destructive/10 hover:text-destructive",
+                isBulkSelected && "border-destructive bg-destructive/10 text-destructive",
+              )}
+              onClick={handleBulkSelectClick}
+              disabled={!canToggleBulkSelect}
+              aria-label={`${isBulkSelected ? "Deselect" : "Select"} ${entry.focus || "workout"}`}
+              data-testid={`button-bulk-select-${entry.id}`}
+            >
+              {isBulkSelected ? <CheckCircle2 className="h-5 w-5" /> : <Square className="h-5 w-5" />}
+            </button>
+          )}
+
+          {!isBulkSelectMode && isPlanned && (
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>

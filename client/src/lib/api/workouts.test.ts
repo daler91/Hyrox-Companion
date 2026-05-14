@@ -55,6 +55,12 @@ describe('workouts API client', () => {
     expect(typedRequest).toHaveBeenCalledWith('DELETE', '/api/v1/workouts/123');
   });
 
+  it('bulkDelete() posts workout and plan-day targets', () => {
+    const payload = { workoutLogIds: ['w-1'], planDayIds: ['pd-1'] };
+    workouts.bulkDelete(payload);
+    expect(typedRequest).toHaveBeenCalledWith('POST', '/api/v1/workouts/bulk-delete', payload);
+  });
+
   it('getUnstructured() calls typedRequest with GET', () => {
     workouts.getUnstructured();
     expect(typedRequest).toHaveBeenCalledWith('GET', '/api/v1/workouts/unstructured');
