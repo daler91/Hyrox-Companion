@@ -249,6 +249,29 @@ describe("buildSuggestionsPrompt — input inclusion regression guard", () => {
     expect(prompt).not.toContain("FINGERPRINT_PLAN_NOTES");
   });
 
+  it("formats table-backed prompt distances with the user's distance preference", () => {
+    const prompt = buildSuggestionsPrompt(
+      createMockTrainingContext({ weightUnit: "lbs", distanceUnit: "miles" }),
+      [
+        createMockUpcomingWorkout({
+          id: "miles-table-day",
+          exerciseDetails: [
+            {
+              exerciseName: "sled_push",
+              category: "functional",
+              setNumber: 1,
+              distance: 164,
+              weight: 225,
+              sortOrder: 0,
+            },
+          ],
+        }),
+      ],
+    );
+
+    expect(prompt).toContain("Exercises: Sled Push: 225 lbs, 164ft");
+  });
+
   it("includes completed exercise rows and athlete note in recent workout context", () => {
     const prompt = buildSuggestionsPrompt(
       createMockTrainingContext({

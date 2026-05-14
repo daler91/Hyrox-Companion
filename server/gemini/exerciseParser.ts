@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { exerciseSetSchema, type ParsedExercise, type StructureBlockInput,structureBlockSchema } from "@shared/schema";
 import { EXERCISE_DEFINITIONS } from "@shared/schema/exercises";
+import { normalizeParsedDistance, normalizeParsedWeight, standardizeDistanceUnit, standardizeWeightUnit, type UnitPreferences } from "@shared/unitConversion";
 import { z } from "zod";
 
 import { AppError, ErrorCode } from "../errors";
@@ -20,7 +21,11 @@ import { GEMINI_MODEL, GEMINI_VISION_MODEL, getAiClient, retryWithBackoff, track
 // parse quality" telemetry in production. We coerce a default 1-set stub so
 // the row survives validation; downstream `mapValidatedExercise` already
 // handles missing per-set fields.
-const defaultSetsForLenience: z.infer<typeof exerciseSetSchema>[] = [{ setNumber: 1 }];
+const parserExerciseSetSchema = exerciseSetSchema.and(z.object({
+  weightUnit: z.string().max(32).optional().nullable(),
+  distanceUnit: z.string().max(32).optional().nullable(),
+}));
+const defaultSetsForLenience: z.infer<typeof parserExerciseSetSchema>[] = [{ setNumber: 1 }];
 
 function inferCategoryFromExerciseName(name: unknown): string {
   if (typeof name !== "string") return "conditioning";
@@ -47,7 +52,7 @@ export const parsedExerciseSchema = z.preprocess((raw) => {
   customLabel: z.string().optional().nullable(),
   confidence: z.number().min(0).max(100).optional().nullable(),
   missingFields: z.array(z.string()).optional().nullable(),
-  sets: z.array(exerciseSetSchema).min(1),
+  sets: z.array(parserExerciseSetSchema).min(1),
 }));
 
 const parserResponseSchema = z.object({
@@ -370,6 +375,23 @@ interface MappedCustomFields {
   missingName: boolean;
 }
 
+export interface ParseUnitPreferences extends UnitPreferences {
+  readonly weightUnit?: string | null;
+  readonly distanceUnit?: string | null;
+}
+
+type ParseUnitInput = string | ParseUnitPreferences | undefined | null;
+
+function resolveParseUnitPreferences(input: ParseUnitInput): Required<ParseUnitPreferences> {
+  if (typeof input === "string") {
+    return { weightUnit: standardizeWeightUnit(input), distanceUnit: "km" };
+  }
+  return {
+    weightUnit: standardizeWeightUnit(input?.weightUnit),
+    distanceUnit: standardizeDistanceUnit(input?.distanceUnit),
+  };
+}
+
 function resolveCustomFields(
   ex: z.infer<typeof parsedExerciseSchema>,
   isKnown: boolean,
@@ -402,6 +424,7 @@ function resolveCustomFields(
 function mapValidatedExercise(
   ex: z.infer<typeof parsedExerciseSchema>,
   sourceText: string,
+  unitPreferences: UnitPreferences = {},
 ): ParsedExercise {
   const isKnown = VALID_EXERCISE_NAMES.has(ex.exerciseName) && ex.exerciseName !== "custom";
   const validCategory = VALID_CATEGORIES.has(ex.category);
@@ -424,8 +447,8 @@ function mapValidatedExercise(
     sets: ex.sets.map((s, i) => ({
       setNumber: s.setNumber || i + 1,
       ...(s.reps != null && { reps: s.reps }),
-      ...(s.weight != null && { weight: s.weight }),
-      ...(s.distance != null && { distance: s.distance }),
+      ...(s.weight != null && { weight: normalizeParsedWeight(s.weight, s.weightUnit, unitPreferences) }),
+      ...(s.distance != null && { distance: normalizeParsedDistance(s.distance, s.distanceUnit, unitPreferences) }),
       ...(s.time != null && { time: s.time }),
     })),
   };
@@ -657,13 +680,17 @@ function validateRows(rawArray: unknown[]): z.infer<typeof parsedExerciseSchema>
   return validateRowsDetailed(rawArray).acceptedRows;
 }
 
-function buildUnitNote(weightUnit: string): string {
-  if (weightUnit === "lbs") {
-    return `\nIMPORTANT: The user uses pounds (lbs) for weight. If they write "70" assume lbs. \
-If they explicitly say "kg", convert to lbs (multiply by 2.2 and round). Return all weights in lbs.`;
-  }
-  return `\nThe user uses kilograms (kg) for weight. If they write "70" assume kg. \
-If they explicitly say "lbs", convert to kg (divide by 2.2 and round). Return all weights in kg.`;
+function buildUnitNote(units: Required<ParseUnitPreferences>): string {
+  const targetDistanceUnit = units.distanceUnit === "miles" ? "feet (ft)" : "meters (m)";
+  const distanceExample = units.distanceUnit === "miles"
+    ? `"50m sled push" -> distance=50, distanceUnit="m"; "5km run" -> distance=5, distanceUnit="km"; "sled push 50" -> distance=50, distanceUnit="ft"`
+    : `"50m sled push" -> distance=50, distanceUnit="m"; "5km run" -> distance=5, distanceUnit="km"; "sled push 50" -> distance=50, distanceUnit="m"`;
+  const weightInstruction = units.weightUnit === "lbs"
+    ? `The user uses pounds (lbs) for weight. If they write "70" with no unit, assume lbs and include weightUnit="lbs". If they explicitly say "kg", return that numeric value with weightUnit="kg"; the server will convert it.`
+    : `The user uses kilograms (kg) for weight. If they write "70" with no unit, assume kg and include weightUnit="kg". If they explicitly say "lbs", return that numeric value with weightUnit="lbs"; the server will convert it.`;
+  return `\nIMPORTANT UNIT RULES:
+${weightInstruction}
+The user's distance preference is ${units.distanceUnit}. If a distance has an explicit unit, return the numeric value with that exact distanceUnit so the server can convert it. If no distance unit is written, assume the table storage unit (${targetDistanceUnit}). ${distanceExample}. Include distanceUnit whenever distance is present.`;
 }
 
 function buildCustomNote(customExerciseNames?: string[]): string {
@@ -675,12 +702,12 @@ and use the matching name as customLabel: ${customExerciseNames.join(", ")}`;
 
 async function callGeminiParse(
   text: string,
-  weightUnit: string,
+  units: Required<ParseUnitPreferences>,
   customExerciseNames: string[] | undefined,
   userId: string | undefined,
 ): Promise<string> {
   const systemInstruction =
-    PARSE_EXERCISES_PROMPT + buildUnitNote(weightUnit) + buildCustomNote(customExerciseNames);
+    PARSE_EXERCISES_PROMPT + buildUnitNote(units) + buildCustomNote(customExerciseNames);
   const response = await retryWithBackoff(
     () =>
       getAiClient().models.generateContent({
@@ -731,14 +758,14 @@ const IMAGE_PARSE_PREAMBLE =
 async function callGeminiParseImage(
   imageBase64: string,
   mimeType: string,
-  weightUnit: string,
+  units: Required<ParseUnitPreferences>,
   customExerciseNames: string[] | undefined,
   userId: string | undefined,
 ): Promise<string> {
   const systemInstruction =
     PARSE_EXERCISES_PROMPT +
     IMAGE_PARSE_PREAMBLE +
-    buildUnitNote(weightUnit) +
+    buildUnitNote(units) +
     buildCustomNote(customExerciseNames);
   const response = await retryWithBackoff(
     () =>
@@ -771,7 +798,7 @@ async function callGeminiParseImage(
 
 export async function parseExercisesFromText(
   text: string,
-  weightUnit: string = "kg",
+  unitsInput: ParseUnitInput = "kg",
   customExerciseNames?: string[],
   userId?: string,
 ): Promise<ParsedExercise[]> {
@@ -782,8 +809,9 @@ export async function parseExercisesFromText(
   if (!text || text.trim().length === 0) {
     return [];
   }
+  const units = resolveParseUnitPreferences(unitsInput);
   try {
-    const responseText = await callGeminiParse(text, weightUnit, customExerciseNames, userId);
+    const responseText = await callGeminiParse(text, units, customExerciseNames, userId);
     const raw = parseRawResponse(responseText);
     const rawArray = Array.isArray(raw) ? raw : [];
     const normalized = normalizeParserPayload(raw);
@@ -793,13 +821,13 @@ export async function parseExercisesFromText(
       const fallbackValidated = validateRows(heuristicFallbackRowsFromText(text));
       if (fallbackValidated.length > 0) {
         logger.warn({ rawExerciseCount: normalized.exercises.length, fallbackCount: fallbackValidated.length, rawTopLevelType: Array.isArray(raw) ? "array" : typeof raw }, "[gemini] exercise-parse recovered rows with heuristic fallback");
-        return fallbackValidated.map((ex) => mapValidatedExercise(ex, text));
+        return fallbackValidated.map((ex) => mapValidatedExercise(ex, text, units));
       }
       logger.warn({ rawExerciseCount: normalized.exercises.length, rawTopLevelType: Array.isArray(raw) ? "array" : typeof raw }, "[gemini] exercise-parse no valid rows after validation");
       return [];
     }
 
-    const mapped = validated.map((ex) => mapValidatedExercise(ex, text));
+    const mapped = validated.map((ex) => mapValidatedExercise(ex, text, units));
     const structureWarnings = (normalized.warnings ?? []).filter((w) => typeof w === "string" && w.trim().length > 0);
     const emomMapped = normalized.structureBlocks.map((b) => mapMinuteRestStepsForEmom(text, b));
     for (const mapped of emomMapped) structureWarnings.push(...mapped.warnings);
@@ -826,14 +854,15 @@ export async function parseExercisesFromText(
 
 export async function parseWorkoutStructureFromText(
   text: string,
-  weightUnit: string = "kg",
+  unitsInput: ParseUnitInput = "kg",
   customExerciseNames?: string[],
   userId?: string,
 ): Promise<ParsedWorkoutStructure> {
   if (!text || text.trim().length === 0) {
     return { exercises: [], structureBlocks: [], warnings: [], confidence: null };
   }
-  const responseText = await callGeminiParse(text, weightUnit, customExerciseNames, userId);
+  const units = resolveParseUnitPreferences(unitsInput);
+  const responseText = await callGeminiParse(text, units, customExerciseNames, userId);
   const raw = parseRawResponse(responseText);
   const rawArray = Array.isArray(raw) ? raw : [];
   const normalized = normalizeParserPayload(raw);
@@ -843,7 +872,7 @@ export async function parseWorkoutStructureFromText(
   const structureWarnings = (normalized.warnings ?? []).filter((w) => typeof w === "string" && w.trim().length > 0);
   const { structureBlocks, warnings } = normalizeParserBlocks(text, normalized.structureBlocks);
   const rows = linkRowsToStructureBlocks(
-    (validated.length > 0 ? validated : fallbackRows).map((ex) => mapValidatedExercise(ex, text)),
+    (validated.length > 0 ? validated : fallbackRows).map((ex) => mapValidatedExercise(ex, text, units)),
     structureBlocks,
   );
   return {
@@ -868,23 +897,24 @@ export interface ParseWorkoutStructureWithDiagnosticsResult extends ParseExercis
 
 export async function parseExercisesFromTextWithDiagnostics(
   text: string,
-  weightUnit: string = "kg",
+  unitsInput: ParseUnitInput = "kg",
   customExerciseNames?: string[],
   userId?: string,
 ): Promise<ParseExercisesWithDiagnosticsResult> {
   if (!text || text.trim().length === 0) return { acceptedRows: [], rejectedRows: [], fallbackUsed: false };
-  const responseText = await callGeminiParse(text, weightUnit, customExerciseNames, userId);
+  const units = resolveParseUnitPreferences(unitsInput);
+  const responseText = await callGeminiParse(text, units, customExerciseNames, userId);
   const raw = parseRawResponse(responseText);
   const rawArray = Array.isArray(raw) ? raw : [];
   const normalized = normalizeParserPayload(raw);
   const validated = validateRowsDetailed(normalized.exercises ?? rawArray);
   if (validated.acceptedRows.length > 0) {
-    return { acceptedRows: validated.acceptedRows.map((ex) => mapValidatedExercise(ex, text)), rejectedRows: validated.rejectedRows, fallbackUsed: false };
+    return { acceptedRows: validated.acceptedRows.map((ex) => mapValidatedExercise(ex, text, units)), rejectedRows: validated.rejectedRows, fallbackUsed: false };
   }
 
   const fallbackValidated = validateRowsDetailed(heuristicFallbackRowsFromText(text));
   if (fallbackValidated.acceptedRows.length > 0) {
-    return { acceptedRows: fallbackValidated.acceptedRows.map((ex) => mapValidatedExercise(ex, text)), rejectedRows: [...validated.rejectedRows, ...fallbackValidated.rejectedRows], fallbackUsed: true };
+    return { acceptedRows: fallbackValidated.acceptedRows.map((ex) => mapValidatedExercise(ex, text, units)), rejectedRows: [...validated.rejectedRows, ...fallbackValidated.rejectedRows], fallbackUsed: true };
   }
 
   return { acceptedRows: [], rejectedRows: validated.rejectedRows, fallbackUsed: false };
@@ -892,14 +922,15 @@ export async function parseExercisesFromTextWithDiagnostics(
 
 export async function parseWorkoutStructureFromTextWithDiagnostics(
   text: string,
-  weightUnit: string = "kg",
+  unitsInput: ParseUnitInput = "kg",
   customExerciseNames?: string[],
   userId?: string,
 ): Promise<ParseWorkoutStructureWithDiagnosticsResult> {
   if (!text || text.trim().length === 0) {
     return { acceptedRows: [], rejectedRows: [], fallbackUsed: false, structureBlocks: [], warnings: [], confidence: null };
   }
-  const responseText = await callGeminiParse(text, weightUnit, customExerciseNames, userId);
+  const units = resolveParseUnitPreferences(unitsInput);
+  const responseText = await callGeminiParse(text, units, customExerciseNames, userId);
   const raw = parseRawResponse(responseText);
   const rawArray = Array.isArray(raw) ? raw : [];
   const normalized = normalizeParserPayload(raw);
@@ -909,7 +940,7 @@ export async function parseWorkoutStructureFromTextWithDiagnostics(
   if (validated.acceptedRows.length > 0) {
     return {
       acceptedRows: linkRowsToStructureBlocks(
-        validated.acceptedRows.map((ex) => mapValidatedExercise(ex, text)),
+        validated.acceptedRows.map((ex) => mapValidatedExercise(ex, text, units)),
         structureBlocks,
       ),
       rejectedRows: validated.rejectedRows,
@@ -923,7 +954,7 @@ export async function parseWorkoutStructureFromTextWithDiagnostics(
   const fallbackValidated = validateRowsDetailed(heuristicFallbackRowsFromText(text));
   return {
     acceptedRows: linkRowsToStructureBlocks(
-      fallbackValidated.acceptedRows.map((ex) => mapValidatedExercise(ex, text)),
+      fallbackValidated.acceptedRows.map((ex) => mapValidatedExercise(ex, text, units)),
       structureBlocks,
     ),
     rejectedRows: [...validated.rejectedRows, ...fallbackValidated.rejectedRows],
@@ -938,6 +969,7 @@ export interface ParseExercisesFromImageInput {
   readonly imageBase64: string;
   readonly mimeType: string;
   readonly weightUnit?: string;
+  readonly distanceUnit?: string;
   readonly customExerciseNames?: string[];
   readonly userId?: string;
 }
@@ -949,14 +981,16 @@ export async function parseExercisesFromImage(
     imageBase64,
     mimeType,
     weightUnit = "kg",
+    distanceUnit = "km",
     customExerciseNames,
     userId,
   } = input;
+  const units = resolveParseUnitPreferences({ weightUnit, distanceUnit });
   try {
     const responseText = await callGeminiParseImage(
       imageBase64,
       mimeType,
-      weightUnit,
+      units,
       customExerciseNames,
       userId,
     );
@@ -982,7 +1016,7 @@ export async function parseExercisesFromImage(
     }
     const structureConfidence = normalized.confidence?.structureQuality;
     return validated.map((ex, idx) => {
-      const mapped = mapValidatedExercise(ex, "");
+      const mapped = mapValidatedExercise(ex, "", units);
       if (idx > 0) return mapped;
       const addWarnings: string[] = [...(mapped.missingFields ?? []), ...structureWarnings];
       if (typeof structureConfidence === "number" && structureConfidence < 70) {
@@ -1006,13 +1040,15 @@ export async function parseWorkoutStructureFromImage(
     imageBase64,
     mimeType,
     weightUnit = "kg",
+    distanceUnit = "km",
     customExerciseNames,
     userId,
   } = input;
+  const units = resolveParseUnitPreferences({ weightUnit, distanceUnit });
   const responseText = await callGeminiParseImage(
     imageBase64,
     mimeType,
-    weightUnit,
+    units,
     customExerciseNames,
     userId,
   );
@@ -1023,7 +1059,7 @@ export async function parseWorkoutStructureFromImage(
   const structureWarnings = (normalized.warnings ?? []).filter((w) => typeof w === "string" && w.trim().length > 0);
   const { structureBlocks, warnings } = normalizeParserBlocks("", normalized.structureBlocks);
   const rows = linkRowsToStructureBlocks(
-    validated.map((ex) => mapValidatedExercise(ex, "")),
+    validated.map((ex) => mapValidatedExercise(ex, "", units)),
     structureBlocks,
   );
   return {
@@ -1037,20 +1073,22 @@ export async function parseWorkoutStructureFromImage(
 export async function parseExercisesFromImageWithDiagnostics(
   input: ParseExercisesFromImageInput,
 ): Promise<ParseExercisesWithDiagnosticsResult> {
-  const { imageBase64, mimeType, weightUnit = "kg", customExerciseNames, userId } = input;
-  const responseText = await callGeminiParseImage(imageBase64, mimeType, weightUnit, customExerciseNames, userId);
+  const { imageBase64, mimeType, weightUnit = "kg", distanceUnit = "km", customExerciseNames, userId } = input;
+  const units = resolveParseUnitPreferences({ weightUnit, distanceUnit });
+  const responseText = await callGeminiParseImage(imageBase64, mimeType, units, customExerciseNames, userId);
   const raw = parseRawResponse(responseText);
   const rawArray = Array.isArray(raw) ? raw : [];
   const normalized = normalizeParserPayload(raw);
   const validated = validateRowsDetailed(normalized.exercises ?? rawArray);
-  return { acceptedRows: validated.acceptedRows.map((ex) => mapValidatedExercise(ex, "")), rejectedRows: validated.rejectedRows, fallbackUsed: false };
+  return { acceptedRows: validated.acceptedRows.map((ex) => mapValidatedExercise(ex, "", units)), rejectedRows: validated.rejectedRows, fallbackUsed: false };
 }
 
 export async function parseWorkoutStructureFromImageWithDiagnostics(
   input: ParseExercisesFromImageInput,
 ): Promise<ParseWorkoutStructureWithDiagnosticsResult> {
-  const { imageBase64, mimeType, weightUnit = "kg", customExerciseNames, userId } = input;
-  const responseText = await callGeminiParseImage(imageBase64, mimeType, weightUnit, customExerciseNames, userId);
+  const { imageBase64, mimeType, weightUnit = "kg", distanceUnit = "km", customExerciseNames, userId } = input;
+  const units = resolveParseUnitPreferences({ weightUnit, distanceUnit });
+  const responseText = await callGeminiParseImage(imageBase64, mimeType, units, customExerciseNames, userId);
   const raw = parseRawResponse(responseText);
   const rawArray = Array.isArray(raw) ? raw : [];
   const normalized = normalizeParserPayload(raw);
@@ -1059,7 +1097,7 @@ export async function parseWorkoutStructureFromImageWithDiagnostics(
   const { structureBlocks, warnings } = normalizeParserBlocks("", normalized.structureBlocks);
   return {
     acceptedRows: linkRowsToStructureBlocks(
-      validated.acceptedRows.map((ex) => mapValidatedExercise(ex, "")),
+      validated.acceptedRows.map((ex) => mapValidatedExercise(ex, "", units)),
       structureBlocks,
     ),
     rejectedRows: validated.rejectedRows,

@@ -17,6 +17,7 @@ import {
   workoutStructureBlocks,
   workoutStructureSteps,
 } from "@shared/schema";
+import type { UnitPreferences } from "@shared/unitConversion";
 import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import pLimit from "p-limit";
 
@@ -292,14 +293,14 @@ export function expandExercisesToPlanDaySetRows(
 
 export async function prepareParsedWorkout(
   workout: { id: string; mainWorkout?: string | null; accessory?: string | null },
-  weightUnit: string,
+  unitPreferences: UnitPreferences,
 ): Promise<{ exercises: ParsedExercise[]; setRows: InsertExerciseSet[] } | null> {
   const { parseExercisesFromText } = await import("../gemini");
 
   const textToParse = [workout.mainWorkout, workout.accessory].filter(Boolean).join("\n");
   if (!textToParse.trim()) return null;
 
-  const exercises = await parseExercisesFromText(textToParse.trim(), weightUnit);
+  const exercises = await parseExercisesFromText(textToParse.trim(), unitPreferences);
   if (exercises.length === 0) return null;
 
   const setRows = expandExercisesToSetRows(exercises, workout.id);
@@ -420,7 +421,7 @@ async function resolveCounterSource(owner: SetOwner, fallback: CounterSource = "
 export async function autoHydrateExerciseSetsFromTextIfNeeded(
   target: ReparseTarget,
   owner: SetOwner,
-  weightUnit: string,
+  unitPreferences: UnitPreferences,
   context: "workout" | "plan",
 ): Promise<{ exercises: ParsedExercise[]; setCount: number; saved: true; rejectedCount: number; rejectionReasons: string[] } | null> {
   const existingCount = await db
@@ -448,7 +449,7 @@ export async function autoHydrateExerciseSetsFromTextIfNeeded(
       .catch((err: unknown) => {
         logger.warn({ context: "health-metrics", event: "auto_hydration_attempt_counter_failed", lockKey, err }, "Auto hydration attempt telemetry increment failed");
       });
-    return reparseFromText(target, owner, weightUnit, context, source)
+    return reparseFromText(target, owner, unitPreferences, context, source)
       .then((result) => {
         const acceptedRowCount = result?.exercises.length ?? 0;
         const rejectedRowCount = result?.rejectedCount ?? 0;
@@ -487,7 +488,7 @@ export async function autoHydrateExerciseSetsFromTextIfNeeded(
 async function reparseFromText(
   target: ReparseTarget,
   owner: SetOwner,
-  weightUnit: string,
+  unitPreferences: UnitPreferences,
   context: "workout" | "plan",
   source: CounterSource = "manual",
 ): Promise<ReparseWriteThroughResult | null> {
@@ -496,7 +497,7 @@ async function reparseFromText(
   if (!textToParse.trim()) return null;
 
   const { acceptedRows, rejectedRows, fallbackUsed, structureBlocks } =
-    await parseWorkoutStructureFromTextWithDiagnostics(textToParse.trim(), weightUnit);
+    await parseWorkoutStructureFromTextWithDiagnostics(textToParse.trim(), unitPreferences);
   if (acceptedRows.length === 0 && structureBlocks.length === 0) return null;
 
   const setRows = acceptedRows.length > 0 ? expandExercisesToRows(acceptedRows, owner, context) : [];
@@ -529,9 +530,9 @@ function buildReparseWriteThroughResult(
 
 export function reparseWorkout(
   workout: { id: string; mainWorkout?: string | null; accessory?: string | null },
-  weightUnit: string,
+  unitPreferences: UnitPreferences,
 ): Promise<{ exercises: ParsedExercise[]; setCount: number; saved: true; rejectedCount: number; rejectionReasons: string[] } | null> {
-  return reparseFromText(workout, { workoutLogId: workout.id }, weightUnit, "workout", "manual");
+  return reparseFromText(workout, { workoutLogId: workout.id }, unitPreferences, "workout", "manual");
 }
 
 /**
@@ -547,9 +548,9 @@ export function reparseWorkout(
  */
 export function reparsePlanDay(
   planDay: { id: string; mainWorkout?: string | null; accessory?: string | null },
-  weightUnit: string,
+  unitPreferences: UnitPreferences,
 ): Promise<{ exercises: ParsedExercise[]; setCount: number; saved: true; rejectedCount: number; rejectionReasons: string[] } | null> {
-  return reparseFromText(planDay, { planDayId: planDay.id }, weightUnit, "plan", "manual");
+  return reparseFromText(planDay, { planDayId: planDay.id }, unitPreferences, "plan", "manual");
 }
 
 export interface ReparseFromImageInput {
@@ -561,7 +562,7 @@ export interface ReparseFromImageInput {
 async function reparseFromImage(
   owner: SetOwner,
   image: ReparseFromImageInput,
-  weightUnit: string,
+  unitPreferences: UnitPreferences,
   userId: string,
   context: "workout" | "plan",
   customExerciseNames?: string[],
@@ -571,7 +572,8 @@ async function reparseFromImage(
   const { acceptedRows, rejectedRows, structureBlocks } = await parseWorkoutStructureFromImageWithDiagnostics({
     imageBase64: image.imageBase64,
     mimeType: image.mimeType,
-    weightUnit,
+    weightUnit: unitPreferences.weightUnit ?? "kg",
+    distanceUnit: unitPreferences.distanceUnit ?? "km",
     customExerciseNames,
     userId,
   });
@@ -599,14 +601,14 @@ async function reparseFromImage(
 export function reparseWorkoutFromImage(
   workout: { id: string },
   image: ReparseFromImageInput,
-  weightUnit: string,
+  unitPreferences: UnitPreferences,
   userId: string,
   customExerciseNames?: string[],
 ): Promise<{ exercises: ParsedExercise[]; setCount: number; saved: true; rejectedCount: number; rejectionReasons: string[] } | null> {
   return reparseFromImage(
     { workoutLogId: workout.id },
     image,
-    weightUnit,
+    unitPreferences,
     userId,
     "workout",
     customExerciseNames,
@@ -617,14 +619,14 @@ export function reparseWorkoutFromImage(
 export function reparsePlanDayFromImage(
   planDay: { id: string },
   image: ReparseFromImageInput,
-  weightUnit: string,
+  unitPreferences: UnitPreferences,
   userId: string,
   customExerciseNames?: string[],
 ): Promise<{ exercises: ParsedExercise[]; setCount: number; saved: true; rejectedCount: number; rejectionReasons: string[] } | null> {
   return reparseFromImage(
     { planDayId: planDay.id },
     image,
-    weightUnit,
+    unitPreferences,
     userId,
     "plan",
     customExerciseNames,
@@ -1553,7 +1555,7 @@ function maybeEnqueueAutoCoachOnDateChange(
 
 export async function processBatchChunk(
   chunk: { id: string; mainWorkout?: string | null; accessory?: string | null }[],
-  weightUnit: string,
+  unitPreferences: UnitPreferences,
 ): Promise<{ parsed: number; failed: number }> {
   let parsed = 0;
   let failed = 0;
@@ -1563,7 +1565,7 @@ export async function processBatchChunk(
   // GEMINI_PARSE_CONCURRENCY in-flight calls regardless of chunk size.
   const limit = pLimit(GEMINI_PARSE_CONCURRENCY);
   const chunkResults = await Promise.allSettled(
-    chunk.map((workout) => limit(() => prepareParsedWorkout(workout, weightUnit))),
+    chunk.map((workout) => limit(() => prepareParsedWorkout(workout, unitPreferences))),
   );
 
   const successfulParses: { workoutId: string; setRows: InsertExerciseSet[] }[] = [];
@@ -1602,7 +1604,7 @@ export async function batchReparseWorkouts(
 ): Promise<{ total: number; parsed: number; failed: number }> {
   const workouts = await storage.workouts.getWorkoutsWithoutExerciseSets(userId);
   const user = await storage.users.getUser(userId);
-  const weightUnit = user?.weightUnit || "kg";
+  const unitPreferences = { weightUnit: user?.weightUnit || "kg", distanceUnit: user?.distanceUnit || "km" };
 
   let totalParsed = 0;
   let totalFailed = 0;
@@ -1612,7 +1614,7 @@ export async function batchReparseWorkouts(
   const CONCURRENCY_LIMIT = 5;
   for (let i = 0; i < workouts.length; i += CONCURRENCY_LIMIT) {
     const chunk = workouts.slice(i, i + CONCURRENCY_LIMIT);
-    const { parsed, failed } = await processBatchChunk(chunk, weightUnit);
+    const { parsed, failed } = await processBatchChunk(chunk, unitPreferences);
     totalParsed += parsed;
     totalFailed += failed;
   }

@@ -35,7 +35,12 @@ export async function createWorkout(input: {
     const textToParse = [workoutData.mainWorkout, workoutData.accessory].filter(Boolean).join("\n").trim();
     if (textToParse) {
       const user = await storage.users.getUser(input.userId);
-      structured = await parseExercisesFromText(textToParse, user?.weightUnit || "kg", undefined, input.userId);
+      structured = await parseExercisesFromText(
+        textToParse,
+        { weightUnit: user?.weightUnit || "kg", distanceUnit: user?.distanceUnit || "km" },
+        undefined,
+        input.userId,
+      );
       if (structured.length === 0) {
         throw new AppError(ErrorCode.VALIDATION_ERROR, "Text/voice/photo workout content must produce structured exercise sets.", 400);
       }

@@ -23,13 +23,13 @@ export function registerWorkoutAiRoutes(router: Router): void {
     const workoutId = req.params.id;
     const [workout, user] = await Promise.all([storage.workouts.getWorkoutLog(workoutId, userId), storage.users.getUser(userId)]);
     if (!workout) return sendNotFound(res, "Workout not found");
-    const weightUnit = user?.weightUnit || "kg";
+    const unitPreferences = { weightUnit: user?.weightUnit || "kg", distanceUnit: user?.distanceUnit || "km" };
     const referencePatch: Partial<z.infer<typeof updateWorkoutLogSchema>> = {};
     const parseTarget: { id: string; mainWorkout?: string | null; accessory?: string | null } = { id: workout.id, mainWorkout: workout.prescribedMainWorkout ?? workout.mainWorkout, accessory: workout.prescribedAccessory ?? workout.accessory };
     if (req.body.prescribedMainWorkout !== undefined) { referencePatch.prescribedMainWorkout = req.body.prescribedMainWorkout; parseTarget.mainWorkout = req.body.prescribedMainWorkout; }
     if (req.body.prescribedAccessory !== undefined) { referencePatch.prescribedAccessory = req.body.prescribedAccessory; parseTarget.accessory = req.body.prescribedAccessory; }
     void incrementStructuredExerciseCounter("workout_log", "voice", "parse_text_attempted").catch(() => undefined);
-    const result = await reparseWorkout(parseTarget, weightUnit);
+    const result = await reparseWorkout(parseTarget, unitPreferences);
     if (!result || result.setCount === 0) {
       void incrementStructuredExerciseCounter("workout_log", "voice", "parse_text_failed").catch(() => undefined);
       return res.status(422).json({ error: "Parsing did not produce persisted exercise sets.", code: "PARSE_WRITE_THROUGH_REQUIRED" });
@@ -49,7 +49,13 @@ export function registerWorkoutAiRoutes(router: Router): void {
     const [workout, user, customExercises] = await Promise.all([storage.workouts.getWorkoutLog(req.params.id, userId), storage.users.getUser(userId), storage.users.getCustomExercises(userId)]);
     if (!workout) return sendNotFound(res, "Workout not found");
     void incrementStructuredExerciseCounter("workout_log", "photo", "parse_photo_attempted").catch(() => undefined);
-    const result = await reparseWorkoutFromImage(workout, req.body, user?.weightUnit || "kg", userId, customExercises.map((e) => e.name));
+    const result = await reparseWorkoutFromImage(
+      workout,
+      req.body,
+      { weightUnit: user?.weightUnit || "kg", distanceUnit: user?.distanceUnit || "km" },
+      userId,
+      customExercises.map((e) => e.name),
+    );
     if (!result || result.setCount === 0) {
       void incrementStructuredExerciseCounter("workout_log", "photo", "parse_photo_failed").catch(() => undefined);
       return res.status(422).json({ error: "Parsing did not produce persisted exercise sets.", code: "PARSE_WRITE_THROUGH_REQUIRED" });

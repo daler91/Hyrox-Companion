@@ -1,9 +1,9 @@
+import { exerciseSets, planDays, structuredExerciseBackfillReviews, trainingPlans, workoutLogs } from "@shared/schema";
 import { and, asc, desc, eq, gt, isNull, or, sql } from "drizzle-orm";
 
-import { exerciseSets, planDays, structuredExerciseBackfillReviews, trainingPlans, workoutLogs } from "@shared/schema";
 import { db } from "../db";
-import { logger } from "../logger";
 import { parseExercisesFromText } from "../gemini";
+import { logger } from "../logger";
 import { expandExercisesToPlanDaySetRows, expandExercisesToSetRows } from "./workoutService/parsing";
 
 type OwnerType = "workoutLog" | "planDay";
@@ -62,7 +62,7 @@ export async function runAssistedMigrationBackfill(userId: string) {
   let processed = 0;
   for (const item of queue) {
     try {
-      const parsed = await parseExercisesFromText(item.text, "kg", undefined, item.userId ?? undefined);
+      const parsed = await parseExercisesFromText(item.text, { weightUnit: "kg", distanceUnit: "km" }, undefined, item.userId ?? undefined);
       if (!parsed.length) {
         await upsertReviewFlag({ ownerType: item.ownerType, ownerId: item.ownerId, userId: item.userId, status: "needs_manual_review", reason: "parse_returned_no_rows" });
         continue;

@@ -7,6 +7,7 @@ import {
   type ParsedExercise,
   type TrainingPlanWithDays,
 } from "@shared/schema";
+import { getStoredDistanceUnit, normalizeParsedDistance, normalizeParsedWeight, normalizeWorkoutTextUnits, standardizeDistanceUnit, standardizeWeightUnit, type UnitPreferences } from "@shared/unitConversion";
 import pLimit from "p-limit";
 import { z } from "zod";
 
@@ -23,12 +24,17 @@ const PLAN_GENERATION_CHUNK_CONCURRENCY = 3;
 const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] as const;
 
 // Structured exercises the model must include for non-rest generated days.
+const generatedExerciseSetSchema = exerciseSetSchema.and(z.object({
+  weightUnit: z.string().max(32).optional().nullable(),
+  distanceUnit: z.string().max(32).optional().nullable(),
+}));
+
 const generatedExerciseSchema = z.object({
   exerciseName: z.string().min(1),
   category: z.string(),
   customLabel: z.string().optional().nullable(),
   confidence: z.number().min(0).max(100).optional().nullable(),
-  sets: z.array(exerciseSetSchema).min(1).max(50),
+  sets: z.array(generatedExerciseSetSchema).min(1).max(50),
 });
 
 // Exercises are validated separately (below) rather than inside this schema
@@ -70,7 +76,26 @@ function formatWeekRange(range: WeekRange): string {
     : `weeks ${range.startWeek}-${range.endWeek}`;
 }
 
-function buildGenerationPrompt(input: GeneratePlanInput, range: WeekRange): string {
+function buildGenerationUnitLines(unitPreferences: Required<UnitPreferences>): string[] {
+  const weightUnit = standardizeWeightUnit(unitPreferences.weightUnit);
+  const distanceUnit = standardizeDistanceUnit(unitPreferences.distanceUnit);
+  const storedDistanceUnit = getStoredDistanceUnit(distanceUnit);
+  const distanceTextInstruction = distanceUnit === "miles"
+    ? "Use miles/mi in mainWorkout/accessory for running distances and feet/ft for short station distances."
+    : "Use kilometers/km for longer running distances and meters/m for station distances.";
+  const structuredDistanceInstruction = storedDistanceUnit === "ft"
+    ? "Structured exercise distance values should use feet (ft) unless mirroring an explicit text unit; if a row uses km/mi/m/ft, label the numeric value with its actual distanceUnit so the server can normalize it."
+    : "Structured exercise distance values should use meters (m) unless mirroring an explicit text unit; if a row uses km/mi/m/ft, label the numeric value with its actual distanceUnit so the server can normalize it.";
+  return [
+    ``,
+    `ATHLETE UNIT PREFERENCES:`,
+    `- Weight: ${weightUnit}. Use ${weightUnit} in mainWorkout/accessory. Include weightUnit on every structured weight, matching the numeric value's actual unit.`,
+    `- Distance preference: ${distanceUnit}. ${distanceTextInstruction}`,
+    `- ${structuredDistanceInstruction}`,
+  ];
+}
+
+function buildGenerationPrompt(input: GeneratePlanInput, range: WeekRange, unitPreferences: Required<UnitPreferences>): string {
   const weeksInChunk = range.endWeek - range.startWeek + 1;
   const lines: string[] = [
     `Generate ${formatWeekRange(range)} of a ${input.totalWeeks}-week training plan with ${input.daysPerWeek} training days per week.`,
@@ -82,6 +107,8 @@ function buildGenerationPrompt(input: GeneratePlanInput, range: WeekRange): stri
     `- Training Days Per Week: ${input.daysPerWeek}`,
     `- Total Weeks: ${input.totalWeeks}`,
   ];
+
+  lines.push(...buildGenerationUnitLines(unitPreferences));
 
   if (input.raceDate) {
     lines.push(`- Race Date: ${input.raceDate} (structure phases to peak for this date)`);
@@ -133,7 +160,7 @@ function resolveGeneratedConfidence(raw: GeneratedExercise, isKnown: boolean): n
   return defaultConfidence(isKnown);
 }
 
-function normalizeGeneratedExercise(raw: GeneratedExercise): ParsedExercise {
+function normalizeGeneratedExercise(raw: GeneratedExercise, unitPreferences: UnitPreferences): ParsedExercise {
   const isKnown = VALID_EXERCISE_NAMES.has(raw.exerciseName) && raw.exerciseName !== "custom";
   const validCategory = VALID_CATEGORIES.has(raw.category);
   let confidence = resolveGeneratedConfidence(raw, isKnown);
@@ -160,8 +187,8 @@ function normalizeGeneratedExercise(raw: GeneratedExercise): ParsedExercise {
     sets: raw.sets.map((s, i) => ({
       setNumber: s.setNumber ?? i + 1,
       ...(s.reps != null && { reps: s.reps }),
-      ...(s.weight != null && { weight: s.weight }),
-      ...(s.distance != null && { distance: s.distance }),
+      ...(s.weight != null && { weight: normalizeParsedWeight(s.weight, s.weightUnit, unitPreferences) }),
+      ...(s.distance != null && { distance: normalizeParsedDistance(s.distance, s.distanceUnit, unitPreferences) }),
       ...(s.time != null && { time: s.time }),
       ...(s.notes != null && { notes: sanitizeLabel(s.notes) }),
     })),
@@ -308,8 +335,9 @@ async function generatePlanChunk(
   input: GeneratePlanInput,
   userId: string,
   range: WeekRange,
+  unitPreferences: Required<UnitPreferences>,
 ): Promise<GeneratedDay[]> {
-  const prompt = buildGenerationPrompt(input, range);
+  const prompt = buildGenerationPrompt(input, range, unitPreferences);
   const label = `planGeneration:w${range.startWeek}-${range.endWeek}`;
 
   const response = await retryWithBackoff(
@@ -332,11 +360,15 @@ async function generatePlanChunk(
   return parseAndValidateDays(text);
 }
 
-async function generatePlanDays(input: GeneratePlanInput, userId: string): Promise<GeneratedDay[]> {
+async function generatePlanDays(
+  input: GeneratePlanInput,
+  userId: string,
+  unitPreferences: Required<UnitPreferences>,
+): Promise<GeneratedDay[]> {
   const ranges = buildWeekRanges(input.totalWeeks);
   const limit = pLimit(PLAN_GENERATION_CHUNK_CONCURRENCY);
   const dayChunks = await Promise.all(
-    ranges.map((range) => limit(() => generatePlanChunk(input, userId, range))),
+    ranges.map((range) => limit(() => generatePlanChunk(input, userId, range, unitPreferences))),
   );
   const days = validateAndOrderGeneratedDays(dayChunks.flat(), input.totalWeeks);
   if (days.length === 0) {
@@ -355,7 +387,12 @@ export async function generatePlan(
     "[planGen] Generating AI training plan",
   );
 
-  const days = await generatePlanDays(input, userId);
+  const user = await storage.users.getUser(userId);
+  const unitPreferences = {
+    weightUnit: standardizeWeightUnit(user?.weightUnit),
+    distanceUnit: standardizeDistanceUnit(user?.distanceUnit),
+  };
+  const days = await generatePlanDays(input, userId, unitPreferences);
 
   // Plan, plan days, and their structured exercise sets are written inside
   // a single transaction so a failure in any step rolls the whole plan back.
@@ -376,8 +413,8 @@ export async function generatePlan(
       weekNumber: day.weekNumber,
       dayName: day.dayName,
       focus: day.focus,
-      mainWorkout: day.mainWorkout,
-      accessory: day.accessory || null,
+      mainWorkout: normalizeWorkoutTextUnits(day.mainWorkout, unitPreferences) ?? day.mainWorkout,
+      accessory: normalizeWorkoutTextUnits(day.accessory || null, unitPreferences) || null,
       notes: day.notes || null,
       status: "planned" as const,
       aiSource: "generated" as const,
@@ -406,7 +443,7 @@ export async function generatePlan(
       const day = days[i];
       if (!day.exercises || day.exercises.length === 0) continue;
       const pd = createdPlanDays[i];
-      const normalised = day.exercises.map(normalizeGeneratedExercise);
+      const normalised = day.exercises.map((exercise) => normalizeGeneratedExercise(exercise, unitPreferences));
       allSetRows.push(...expandExercisesToPlanDaySetRows(normalised, pd.id));
       dwe++;
     }

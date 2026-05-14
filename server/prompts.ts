@@ -167,7 +167,7 @@ Return ONLY valid JSON (no markdown) using this contract:
       "confidence": <0-100>,
       "missingFields": ["<names of fields the user did not specify, e.g. 'Weight', 'Reps', 'Time', 'Distance'>"],
       "sets": [
-        { "setNumber": 1, "reps": <number or null>, "weight": <kg or null>, "distance": <meters or null>, "time": <minutes or null> }
+        { "setNumber": 1, "reps": <number or null>, "weight": <number or null>, "weightUnit": "<kg|lbs|null>", "distance": <number or null>, "distanceUnit": "<m|ft|km|mi|miles|null>", "time": <minutes or null> }
       ]
     }
   ],
@@ -211,8 +211,8 @@ CONFIDENCE SCORING:
 IMPORTANT RULES:
 1. For "4x8 back squat at 70kg", create 4 set objects each with reps=8, weight=70
 2. For "3x10 at 60/65/70kg", create 3 sets with different weights
-3. Weight should be in kg (the user's input unit will be handled separately)
-4. Distance for running should be in meters (convert km to m: 5km = 5000m)
+3. Weight must follow the appended user-unit rules. Include weightUnit whenever weight is present.
+4. Distance must follow the appended user-unit rules. Include distanceUnit whenever distance is present.
 5. Time should be in minutes
 6. If someone says "5 sets of 5 reps" that means 5 set objects each with reps=5
 7. For running like "30 min easy run" create 1 set with time=30
@@ -277,7 +277,7 @@ RETURN FORMAT: Return ONLY a valid JSON array. Each element:
       "category": "<functional|running|strength|conditioning>",
       "customLabel": "<clean human-readable name — required when exerciseName is 'custom', omit otherwise>",
       "sets": [
-        { "setNumber": 1, "reps": <number or null>, "weight": <kg or null>, "distance": <meters or null>, "time": <minutes or null> }
+        { "setNumber": 1, "reps": <number or null>, "weight": <number or null>, "weightUnit": "<kg|lbs|null>", "distance": <number or null>, "distanceUnit": "<m|ft|km|mi|miles|null>", "time": <minutes or null> }
       ]
     }
   ]
@@ -286,8 +286,8 @@ RETURN FORMAT: Return ONLY a valid JSON array. Each element:
 STRUCTURED EXERCISES REQUIREMENTS:
 - ALWAYS populate the "exercises" array with one entry per distinct exercise prescribed for that day. The array mirrors what appears in mainWorkout and accessory so the app can render an editable exercises table.
 - Use the EXERCISE KEYS list exactly. If none fits, use "custom" with a clear customLabel (e.g., "Turkish Get-Up").
-- Expand sets explicitly: "4x8 back squat at 60kg" produces 4 set objects each with reps=8, weight=60.
-- For running prescriptions include distance (meters) or time (minutes). "5km easy run in 30min" → one set with distance=5000, time=30.
+- Expand sets explicitly: "4x8 back squat at 60kg" produces 4 set objects each with reps=8, weight=60, weightUnit="kg".
+- For running prescriptions include distance or time (minutes), using the appended user-unit rules for the distance value and distanceUnit.
 - For rest days, return an empty "exercises": [] array.
 - exerciseName and customLabel must never be empty. If you cannot confidently name an exercise, omit it from the exercises array (keep it in the free-text mainWorkout summary only).
 
@@ -298,7 +298,7 @@ RULES:
 1. Each week MUST have exactly the requested number of training days (with remaining days as rest). If specific rest days are provided in the athlete profile, those days MUST be rest days every week.
 2. Include at least 3 running sessions per week for Hyrox goals.
 3. Balance grip-intensive exercises across the week (don't stack farmers carry, sled pull, rowing on consecutive days).
-4. Be SPECIFIC with prescriptions: "4x8 back squat at 60kg" not just "squats".
+4. Be SPECIFIC with prescriptions: "4x8 back squat at a specific load in the athlete's weight unit" not just "squats".
 5. Rest days should have dayName but focus="Rest", mainWorkout="Complete rest or light walk", accessory=null.
 6. Deload week should have reduced volume but similar exercise selection.
 7. Progressive overload: weights/distances should increase across weeks during BUILD/PEAK phases.

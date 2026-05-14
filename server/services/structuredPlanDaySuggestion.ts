@@ -1,4 +1,5 @@
 import { exerciseSets, type InsertExerciseSet, type WorkoutSuggestion } from "@shared/schema";
+import type { UnitPreferences } from "@shared/unitConversion";
 import { eq, sql } from "drizzle-orm";
 
 import type { DbExecutor } from "../db";
@@ -9,12 +10,12 @@ type StructuredSuggestionLike = Pick<WorkoutSuggestion, "workoutId" | "action" |
 
 export async function parseStructuredPlanDaySuggestionRows(
   suggestion: Pick<StructuredSuggestionLike, "workoutId" | "recommendation">,
-  weightUnit: string,
+  unitPreferences: UnitPreferences,
   userId: string,
 ): Promise<InsertExerciseSet[]> {
   const parsedExercises = await parseExercisesFromText(
     suggestion.recommendation,
-    weightUnit,
+    unitPreferences,
     undefined,
     userId,
   );

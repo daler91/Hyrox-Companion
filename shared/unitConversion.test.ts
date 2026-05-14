@@ -9,9 +9,16 @@ import {
   formatPace,
   formatSpeed,
   formatWeight,
+  getStoredDistanceUnit,
   kgToUserWeight,
   metersToUserDistance,
+  normalizeParsedDistance,
+  normalizeParsedWeight,
+  normalizeWorkoutTextUnits,
+  roundStoredDistance,
+  roundStoredWeight,
   standardizeDistanceUnit,
+  standardizeParsedDistanceUnit,
   standardizeWeightUnit,
   userDistanceToMeters,
   userWeightToKg,
@@ -70,6 +77,23 @@ describe("standardizeDistanceUnit", () => {
   it("is case-insensitive and trims whitespace", () => {
     expect(standardizeDistanceUnit(" MILES ")).toBe("miles");
     expect(standardizeDistanceUnit("  kM ")).toBe("km");
+  });
+});
+
+describe("standardizeParsedDistanceUnit", () => {
+  it("keeps meters and feet distinct from preference units", () => {
+    expect(standardizeParsedDistanceUnit("m")).toBe("m");
+    expect(standardizeParsedDistanceUnit("meters")).toBe("m");
+    expect(standardizeParsedDistanceUnit("ft")).toBe("ft");
+    expect(standardizeParsedDistanceUnit("feet")).toBe("ft");
+    expect(standardizeParsedDistanceUnit("km")).toBe("km");
+    expect(standardizeParsedDistanceUnit("mi")).toBe("miles");
+  });
+
+  it("returns null for missing or unknown inputs", () => {
+    expect(standardizeParsedDistanceUnit(undefined)).toBeNull();
+    expect(standardizeParsedDistanceUnit(null)).toBeNull();
+    expect(standardizeParsedDistanceUnit("yards")).toBeNull();
   });
 });
 
@@ -258,6 +282,49 @@ describe("userWeightToKg", () => {
 
   it("converts from lbs for lbs users", () => {
     expect(userWeightToKg(220.462, "lbs")).toBeCloseTo(100, 1);
+  });
+});
+
+describe("AI write unit normalization", () => {
+  it("rounds weights for structured storage", () => {
+    expect(roundStoredWeight(165.3465, "lbs")).toBe(165);
+    expect(roundStoredWeight(74.77, "kg")).toBe(75);
+    expect(roundStoredWeight(74.24, "kg")).toBe(74);
+    expect(roundStoredWeight(74.26, "kg")).toBe(74.5);
+  });
+
+  it("rounds distances for structured storage", () => {
+    expect(roundStoredDistance(164.042)).toBe(164);
+  });
+
+  it("chooses the table storage distance unit from user preference", () => {
+    expect(getStoredDistanceUnit("km")).toBe("m");
+    expect(getStoredDistanceUnit("miles")).toBe("ft");
+  });
+
+  it("normalizes explicit parser weights into the user's preferred unit", () => {
+    expect(normalizeParsedWeight(75, "kg", { weightUnit: "lbs" })).toBe(165);
+    expect(normalizeParsedWeight(165, "lb", { weightUnit: "kg" })).toBe(75);
+    expect(normalizeParsedWeight(75, undefined, { weightUnit: "lbs" })).toBe(75);
+  });
+
+  it("normalizes explicit parser distances into the table storage unit", () => {
+    expect(normalizeParsedDistance(50, "m", { distanceUnit: "miles" })).toBe(164);
+    expect(normalizeParsedDistance(1, "mi", { distanceUnit: "km" })).toBe(1609);
+    expect(normalizeParsedDistance(5, "km", { distanceUnit: "miles" })).toBe(16404);
+    expect(normalizeParsedDistance(164, "ft", { distanceUnit: "km" })).toBe(50);
+  });
+
+  it("normalizes explicit AI-authored text units for the user's preferences", () => {
+    expect(normalizeWorkoutTextUnits("Back squat 3x5 at 75kg", { weightUnit: "lbs", distanceUnit: "miles" })).toBe(
+      "Back squat 3x5 at 165 lbs",
+    );
+    expect(normalizeWorkoutTextUnits("Run 5km then sled push 50m", { weightUnit: "lbs", distanceUnit: "miles" })).toBe(
+      "Run 3.11 mi then sled push 164 ft",
+    );
+    expect(normalizeWorkoutTextUnits("Bench 165 lb and run 1 mile", { weightUnit: "kg", distanceUnit: "km" })).toBe(
+      "Bench 75 kg and run 1.61 km",
+    );
   });
 });
 

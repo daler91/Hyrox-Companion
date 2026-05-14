@@ -38,9 +38,9 @@ protectedPost(router, "/api/v1/parse-exercises", { limiter: rateLimiter("parse",
       storage.users.getUser(userId),
       storage.users.getCustomExercises(userId),
     ]);
-    const weightUnit = user?.weightUnit || "kg";
+    const unitPreferences = { weightUnit: user?.weightUnit || "kg", distanceUnit: user?.distanceUnit || "km" };
     const customNames = userCustomExercises.map(e => e.name);
-    const exercises = await parseExercisesFromText(text.trim(), weightUnit, customNames, userId);
+    const exercises = await parseExercisesFromText(text.trim(), unitPreferences, customNames, userId);
     res.json(exercises);
   });
 
@@ -51,9 +51,9 @@ protectedPost(router, "/api/v1/parse-workout-structure", { limiter: rateLimiter(
       storage.users.getUser(userId),
       storage.users.getCustomExercises(userId),
     ]);
-    const weightUnit = user?.weightUnit || "kg";
+    const unitPreferences = { weightUnit: user?.weightUnit || "kg", distanceUnit: user?.distanceUnit || "km" };
     const customNames = userCustomExercises.map(e => e.name);
-    const parsed = await parseWorkoutStructureFromText(text.trim(), weightUnit, customNames, userId);
+    const parsed = await parseWorkoutStructureFromText(text.trim(), unitPreferences, customNames, userId);
     res.json(parsed);
   });
 
@@ -68,12 +68,12 @@ protectedPost(router, "/api/v1/parse-exercises-from-image", { limiter: rateLimit
       storage.users.getUser(userId),
       storage.users.getCustomExercises(userId),
     ]);
-    const weightUnit = user?.weightUnit || "kg";
+    const unitPreferences = { weightUnit: user?.weightUnit || "kg", distanceUnit: user?.distanceUnit || "km" };
     const customNames = userCustomExercises.map(e => e.name);
     const exercises = await parseExercisesFromImage({
       imageBase64,
       mimeType,
-      weightUnit,
+      ...unitPreferences,
       customExerciseNames: customNames,
       userId,
     });
@@ -87,12 +87,12 @@ protectedPost(router, "/api/v1/parse-workout-structure-from-image", { limiter: r
       storage.users.getUser(userId),
       storage.users.getCustomExercises(userId),
     ]);
-    const weightUnit = user?.weightUnit || "kg";
+    const unitPreferences = { weightUnit: user?.weightUnit || "kg", distanceUnit: user?.distanceUnit || "km" };
     const customNames = userCustomExercises.map(e => e.name);
     const parsed = await parseWorkoutStructureFromImage({
       imageBase64,
       mimeType,
-      weightUnit,
+      ...unitPreferences,
       customExerciseNames: customNames,
       userId,
     });

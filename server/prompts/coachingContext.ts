@@ -52,6 +52,7 @@ export function buildRecentWorkouts(trainingContext: TrainingContext): string {
   for (const workout of trainingContext.recentWorkouts.slice(0, 7)) {
     const exerciseSummary = formatExerciseSetsForPrompt(workout.exerciseDetails, {
       weightUnit: trainingContext.weightUnit,
+      distanceUnit: trainingContext.distanceUnit,
     });
     const workoutDetails = exerciseSummary
       ? `Exercises: ${exerciseSummary}`
@@ -70,6 +71,7 @@ export function buildUpcomingWorkouts(trainingContext: TrainingContext): string 
   for (const workout of trainingContext.upcomingWorkouts) {
     const exerciseSummary = formatExerciseSetsForPrompt(workout.exerciseDetails, {
       weightUnit: trainingContext.weightUnit,
+      distanceUnit: trainingContext.distanceUnit,
     });
     let line = `\n- ${workout.date}: ${workout.focus || "General"} - `;
     if (exerciseSummary) {

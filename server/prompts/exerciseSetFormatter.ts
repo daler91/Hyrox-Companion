@@ -15,6 +15,7 @@ export interface PromptExerciseSet {
 
 interface FormatOptions {
   readonly weightUnit?: string | null;
+  readonly distanceUnit?: string | null;
 }
 
 interface ExerciseGroup {
@@ -77,11 +78,15 @@ function formatNumber(value: number): string {
   return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(2)));
 }
 
-function formatSetMeasurements(set: PromptExerciseSet, weightUnit?: string | null): string {
+function distanceSuffix(distanceUnit?: string | null): "m" | "ft" {
+  return distanceUnit === "miles" ? "ft" : "m";
+}
+
+function formatSetMeasurements(set: PromptExerciseSet, options: FormatOptions): string {
   const parts: string[] = [];
   if (set.reps != null) parts.push(`${set.reps} reps`);
-  if (set.weight != null) parts.push(`${formatNumber(set.weight)} ${weightUnit || "kg"}`);
-  if (set.distance != null) parts.push(`${formatNumber(set.distance)}m`);
+  if (set.weight != null) parts.push(`${formatNumber(set.weight)} ${options.weightUnit || "kg"}`);
+  if (set.distance != null) parts.push(`${formatNumber(set.distance)}${distanceSuffix(options.distanceUnit)}`);
   if (set.time != null) parts.push(`${formatNumber(set.time)} min`);
   if (set.notes?.trim()) parts.push(`note: ${set.notes.trim()}`);
   return parts.join(", ");
@@ -101,17 +106,17 @@ function formatGroup(group: ExerciseGroup, options: FormatOptions): string {
   const canCollapse = sets.length > 1 && allSameReps && allSameWeight && allSameDistance && allSameTime && allSameNotes;
 
   if (canCollapse) {
-    const measurements = formatSetMeasurements(first, options.weightUnit);
+    const measurements = formatSetMeasurements(first, options);
     return measurements ? `${name}: ${sets.length} sets x ${measurements}` : `${name}: ${sets.length} sets`;
   }
 
   if (sets.length === 1) {
-    const measurements = formatSetMeasurements(first, options.weightUnit);
+    const measurements = formatSetMeasurements(first, options);
     return measurements ? `${name}: ${measurements}` : name;
   }
 
   const setParts = sets.map((set) => {
-    const measurements = formatSetMeasurements(set, options.weightUnit);
+    const measurements = formatSetMeasurements(set, options);
     return measurements ? `set ${set.setNumber ?? "?"}: ${measurements}` : `set ${set.setNumber ?? "?"}`;
   });
   return `${name}: ${setParts.join("; ")}`;

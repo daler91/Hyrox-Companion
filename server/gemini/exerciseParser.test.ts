@@ -35,6 +35,69 @@ describe("parseExercisesFromText", () => {
     expect(result[0].sets[0].reps).toBe(5);
   });
 
+  it("normalizes explicit kg parser weights into lbs for pounds users", async () => {
+    vi.mocked(retryWithBackoff).mockResolvedValueOnce({
+      text: JSON.stringify({
+        exercises: [
+          {
+            exerciseName: "back_squat",
+            category: "strength",
+            sets: [{ setNumber: 1, reps: 5, weight: 75, weightUnit: "kg" }],
+          },
+        ],
+      }),
+    });
+
+    const result = await parseExercisesFromText(
+      "Back squat 1x5 at 75kg",
+      { weightUnit: "lbs", distanceUnit: "miles" },
+    );
+
+    expect(result[0].sets[0].weight).toBe(165);
+  });
+
+  it("normalizes explicit lb parser weights into kg for kilogram users", async () => {
+    vi.mocked(retryWithBackoff).mockResolvedValueOnce({
+      text: JSON.stringify({
+        exercises: [
+          {
+            exerciseName: "back_squat",
+            category: "strength",
+            sets: [{ setNumber: 1, reps: 5, weight: 165, weightUnit: "lb" }],
+          },
+        ],
+      }),
+    });
+
+    const result = await parseExercisesFromText(
+      "Back squat 1x5 at 165lb",
+      { weightUnit: "kg", distanceUnit: "km" },
+    );
+
+    expect(result[0].sets[0].weight).toBe(75);
+  });
+
+  it("normalizes explicit distance units into the user's table distance unit", async () => {
+    vi.mocked(retryWithBackoff).mockResolvedValueOnce({
+      text: JSON.stringify({
+        exercises: [
+          {
+            exerciseName: "sled_push",
+            category: "functional",
+            sets: [{ setNumber: 1, distance: 50, distanceUnit: "m" }],
+          },
+        ],
+      }),
+    });
+
+    const result = await parseExercisesFromText(
+      "Sled push 50m",
+      { weightUnit: "lbs", distanceUnit: "miles" },
+    );
+
+    expect(result[0].sets[0].distance).toBe(164);
+  });
+
   it("should throw a specific error when AI returns invalid JSON", async () => {
     const mockResponse = {
       text: "This is not JSON",
