@@ -6,7 +6,7 @@ import { api, QUERY_KEYS } from "@/lib/api";
 
 import { SCROLL_TO_TODAY_DELAY_MS } from "./constants";
 
-export function useTimelineData(selectedPlanId: string | null) {
+export function useTimelineData(selectedPlanId: string | null, isAuthUserLoaded = true) {
   const todayRef = useRef<HTMLDivElement>(null);
 
   const scrollToToday = useCallback(() => {
@@ -15,15 +15,18 @@ export function useTimelineData(selectedPlanId: string | null) {
 
   const { data: plans = [], isLoading: plansLoading } = useQuery<TrainingPlan[]>({
     queryKey: QUERY_KEYS.plans,
+    enabled: isAuthUserLoaded,
   });
 
   const { data: personalRecords } = useQuery<Record<string, PersonalRecord>>({
     queryKey: QUERY_KEYS.personalRecords,
+    enabled: isAuthUserLoaded,
   });
 
-  const { data: timelineData = [], isLoading: timelineLoading } = useQuery<TimelineEntry[]>({
+  const { data: timelineData = [], isLoading } = useQuery<TimelineEntry[]>({
     queryKey: [...QUERY_KEYS.timeline, selectedPlanId],
     queryFn: () => api.timeline.get(selectedPlanId),
+    enabled: isAuthUserLoaded,
   });
 
   // Annotations are user-scoped (not plan-scoped), so this query has no
@@ -33,7 +36,10 @@ export function useTimelineData(selectedPlanId: string | null) {
   const { data: annotations = [] } = useQuery<TimelineAnnotation[]>({
     queryKey: QUERY_KEYS.timelineAnnotations,
     queryFn: () => api.timelineAnnotations.list(),
+    enabled: isAuthUserLoaded,
   });
+
+  const timelineLoading = !isAuthUserLoaded || isLoading;
 
   useEffect(() => {
     if (!timelineLoading && todayRef.current) {
@@ -44,7 +50,7 @@ export function useTimelineData(selectedPlanId: string | null) {
     }
   }, [timelineLoading]);
 
-  const isNewUser = !plansLoading && !timelineLoading && plans.length === 0 && timelineData.length === 0;
+  const isNewUser = isAuthUserLoaded && !plansLoading && !timelineLoading && plans.length === 0 && timelineData.length === 0;
 
   return {
     plans,

@@ -103,6 +103,7 @@ function useClerkAuthImpl() {
     } as User : undefined),
     isLoading: !isLoaded || (isSignedIn && isDbLoading),
     isAuthenticated: !!isSignedIn,
+    isAppUserLoaded: !!dbUser,
   };
 }
 
@@ -121,6 +122,7 @@ function useTestAuthImpl() {
     user: dbUser,
     isLoading,
     isAuthenticated: !!dbUser,
+    isAppUserLoaded: !!dbUser,
   };
 }
 
@@ -158,14 +160,13 @@ export function useIsAiCoachEnabled(): boolean {
 }
 
 /**
- * True once the auth-user query has data. Cheap subscription that
- * doesn't churn on every poll — the boolean only flips on sign-in /
- * sign-out, not on every refetch.
+ * True once the initial auth-user query has settled. Auth-user errors count as
+ * settled so timeline queries can recover instead of staying disabled forever.
  */
 export function useIsAuthUserLoaded(): boolean {
-  const { data } = useQuery<User, Error, boolean>({
+  const { data, isPending } = useQuery<User, Error, true>({
     queryKey: QUERY_KEYS.authUser,
-    select: (user) => !!user,
+    select: () => true,
   });
-  return data ?? false;
+  return data ?? !isPending;
 }
